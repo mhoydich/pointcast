@@ -50,6 +50,11 @@ import { RESIDENTS } from '../data/residents';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 const KIT_JSON = JSON.stringify(DOCK_KIT);
+const FED_PEERS_COUNT = FEDERATION_PEERS.length;
+
+// Lookup so each tray can pull its declarative `actions` row without
+// re-iterating DOCK_KIT in five places. (v4.1, Mike's "buttons" sprint.)
+const KIT_BY_ID = Object.fromEntries(DOCK_KIT.map((k) => [k.id, k]));
 
 function dailyNounId(): number {
   const day = Math.floor(Date.now() / (24 * 3600 * 1000));
@@ -159,6 +164,20 @@ const pingable = RESIDENTS.filter(
       <button type="button" class="fb__tray-close" aria-label="Close">×</button>
     </header>
     <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Room actions">
+        {KIT_BY_ID.room.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="room"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
       <p class="fb__tray-blurb">See your noun cursor and chat with whoever else is on the cast right now.</p>
       <button
         type="button"
@@ -183,6 +202,20 @@ const pingable = RESIDENTS.filter(
       <button type="button" class="fb__tray-close" aria-label="Close">×</button>
     </header>
     <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Ask templates">
+        {KIT_BY_ID.ask.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="ask"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
       <p class="fb__tray-blurb">Goes to the residents inbox. One of us — Claude, Codex, Manus, or Mike — replies on the next session.</p>
       <form class="fb-ask" id="fb-ask-form">
         <label class="fb-ask__row">
@@ -205,6 +238,9 @@ const pingable = RESIDENTS.filter(
         ></textarea>
         <div class="fb-ask__foot">
           <span class="fb-ask__count mono" id="fb-ask-count">0 / 2000</span>
+          <span class="fb-ask__seat fb-ask__seat--ai mono" id="fb-ai-seat" data-state="off" title="AI answer mode — wire-up in next sprint. The seat is here; the model isn't plugged in yet.">
+            <span aria-hidden="true">🤖</span> ai · soon
+          </span>
           <button type="submit" class="fb-btn fb-btn--send" id="fb-ask-send">
             <span aria-hidden="true">↗</span> Send
           </button>
@@ -229,28 +265,55 @@ const pingable = RESIDENTS.filter(
       <button type="button" class="fb__tray-close" aria-label="Close">×</button>
     </header>
     <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Agent filters">
+        {KIT_BY_ID.agent.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="agent"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
       <p class="fb__tray-blurb">Three builders, one director, two open slots. Click a card to ping that agent directly.</p>
-      <ul class="fb-residents">
+      <ul class="fb-residents" id="fb-residents-list">
         {RESIDENTS.map((r) => (
-          <li class={`fb-resident fb-resident--${r.status}`} style={`--res-color: ${r.color}`}>
-            <button
-              type="button"
-              class="fb-resident__btn"
-              data-ping-slug={r.status === 'resident' || r.status === 'director' ? r.slug : ''}
-              data-status={r.status}
-              aria-label={`Ping ${r.name}`}
-            >
-              <span class="fb-resident__chip mono">{r.slug.toUpperCase()}</span>
-              <span class="fb-resident__body">
-                <span class="fb-resident__name">{r.name}</span>
-                <span class="fb-resident__role mono">{r.role}</span>
-              </span>
-              <span class="fb-resident__status mono" data-state={r.status}>
-                {r.status === 'resident' ? '● live' :
-                 r.status === 'director' ? '★ mh' :
-                 r.status === 'open' ? '○ open' : '· quiet'}
-              </span>
-            </button>
+          <li class={`fb-resident fb-resident--${r.status}`} data-status={r.status} style={`--res-color: ${r.color}`}>
+            <div class="fb-resident__row">
+              <button
+                type="button"
+                class="fb-resident__btn"
+                data-ping-slug={r.status === 'resident' || r.status === 'director' ? r.slug : ''}
+                data-status={r.status}
+                aria-label={`Ping ${r.name}`}
+              >
+                <span class="fb-resident__chip mono">{r.slug.toUpperCase()}</span>
+                <span class="fb-resident__body">
+                  <span class="fb-resident__name">{r.name}</span>
+                  <span class="fb-resident__role mono">{r.role}</span>
+                </span>
+                <span class="fb-resident__status mono" data-state={r.status}>
+                  {r.status === 'resident' ? '● live' :
+                   r.status === 'director' ? '★ mh' :
+                   r.status === 'open' ? '○ open' : '· quiet'}
+                </span>
+              </button>
+              <div class="fb-resident__actions" aria-label={`${r.name} comms`}>
+                {r.voice && (
+                  <a class="fb-resident__link mono" href={r.voice} target="_blank" rel="noopener" title={`${r.name}'s voice doc`}>voice ↗</a>
+                )}
+                {r.logs && (
+                  <a class="fb-resident__link mono" href={r.logs} target="_blank" rel="noopener" title={`${r.name}'s logs`}>logs ↗</a>
+                )}
+                {r.firstTaskBrief && (
+                  <a class="fb-resident__link mono" href={r.firstTaskBrief} target="_blank" rel="noopener" title="First-task brief">brief ↗</a>
+                )}
+              </div>
+            </div>
           </li>
         ))}
       </ul>
@@ -266,13 +329,27 @@ const pingable = RESIDENTS.filter(
       <button type="button" class="fb__tray-close" aria-label="Close">×</button>
     </header>
     <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Federation actions">
+        {KIT_BY_ID.fed.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="fed"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
       <p class="fb__tray-blurb">
         <code>xyz.pointcast.block</code> — the lexicon that lets PointCast cast across the AT network. RFC at <a href="/federation/preview">/federation/preview</a>.
       </p>
-      <ul class="fb-peers">
+      <ul class="fb-peers" id="fb-peers-list">
         {FEDERATION_PEERS.map((p) => (
-          <li class="fb-peer" data-status={p.status} style={`--peer-accent: ${p.accent}`}>
-            <a class="fb-peer__btn" href={p.baseUrl} target={p.baseUrl.startsWith('http') ? '_blank' : '_self'} rel="noopener">
+          <li class="fb-peer" data-status={p.status} data-handle={p.handle} data-base={p.baseUrl} style={`--peer-accent: ${p.accent}`}>
+            <div class="fb-peer__row">
               <img
                 class="fb-peer__noun"
                 src={`https://noun.pics/${p.nounSeed}.svg`}
@@ -286,10 +363,88 @@ const pingable = RESIDENTS.filter(
                 <span class="fb-peer__kicker">{p.kicker}</span>
               </span>
               <span class="fb-peer__status mono" data-state={p.status}>{p.status}</span>
-            </a>
+            </div>
+            <div class="fb-peer__actions" aria-label={`${p.handle} comms`}>
+              <a class="fb-peer__link mono" href={p.baseUrl} target="_blank" rel="noopener">visit ↗</a>
+              <button
+                type="button"
+                class="fb-peer__link fb-peer__link--btn mono"
+                data-cross-ping={p.baseUrl}
+                data-handle={p.handle}
+                title={`Cross-cast a ping to ${p.handle} — POSTs to ${p.baseUrl}/api/ping`}
+              >cross-ping</button>
+              <span class="fb-peer__link fb-peer__link--ghost mono" title="Follow this peer — feed subscription, wiring next sprint">follow · soon</span>
+            </div>
           </li>
         ))}
       </ul>
+    </div>
+  </div>
+
+  <!-- 05 BROADCAST tray — read-only studio glimpse, the "what's playing now" panel. -->
+  <div class="fb__tray" id="fb-tray-broadcast" role="dialog" aria-modal="false" aria-label="Broadcast — what's playing now" hidden>
+    <div class="fb__tray-arrow" aria-hidden="true"></div>
+    <header class="fb__tray-head">
+      <span class="fb__tray-num mono">05</span>
+      <h3 class="fb__tray-title">Broadcast</h3>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
+    <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Broadcast actions">
+        {KIT_BY_ID.broadcast.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}${a.director ? ' fb__action--director' : ''}`}
+            data-tray="broadcast"
+            data-action={a.id}
+            data-director={a.director ? 'true' : 'false'}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
+      <p class="fb__tray-blurb">The studio glimpse. What's on air, who's tuned in, today's mood. Director controls light up when a known wallet is connected.</p>
+
+      <div class="fb-bcast">
+        <div class="fb-bcast__row">
+          <span class="fb-bcast__kicker mono">NOW PLAYING</span>
+          <span class="fb-bcast__time mono" id="fb-bcast-time">—</span>
+        </div>
+        <a class="fb-bcast__now" id="fb-bcast-now" href="/" title="Open the latest live block">
+          <span class="fb-bcast__now-id mono" id="fb-bcast-now-id">№ ----</span>
+          <span class="fb-bcast__now-title" id="fb-bcast-now-title">loading the front door…</span>
+          <span class="fb-bcast__now-channel mono" id="fb-bcast-now-channel"></span>
+        </a>
+
+        <div class="fb-bcast__grid">
+          <div class="fb-bcast__cell">
+            <span class="fb-bcast__cell-label mono">AUDIENCE</span>
+            <span class="fb-bcast__cell-value" id="fb-bcast-here">—</span>
+            <span class="fb-bcast__cell-sub mono">here right now</span>
+          </div>
+          <div class="fb-bcast__cell">
+            <span class="fb-bcast__cell-label mono">MOOD</span>
+            <span class="fb-bcast__cell-value" id="fb-bcast-mood">—</span>
+            <span class="fb-bcast__cell-sub mono">today's setting</span>
+          </div>
+          <div class="fb-bcast__cell">
+            <span class="fb-bcast__cell-label mono">PEERS</span>
+            <span class="fb-bcast__cell-value" id="fb-bcast-peers">—</span>
+            <span class="fb-bcast__cell-sub mono">cast network</span>
+          </div>
+          <div class="fb-bcast__cell">
+            <span class="fb-bcast__cell-label mono">NEXT</span>
+            <span class="fb-bcast__cell-value" id="fb-bcast-next">queue stub</span>
+            <span class="fb-bcast__cell-sub mono">director schedules later</span>
+          </div>
+        </div>
+
+        <p class="fb-bcast__director-note mono" id="fb-bcast-director-note">
+          ★ director controls light when wallet is recognized — wiring next sprint.
+        </p>
+      </div>
     </div>
   </div>
 
@@ -336,7 +491,7 @@ const pingable = RESIDENTS.filter(
       <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
 
       <section class="fb-binder">
-        <p class="fb-binder__label mono">KIT — 4 / 4 collected</p>
+        <p class="fb-binder__label mono">KIT — {DOCK_KIT.length} / {DOCK_KIT.length} collected</p>
         <ul class="fb-binder__grid">
           {DOCK_KIT.map((item) => (
             <li class="fb-binder__card" style={`--stamp-accent: ${item.accent}`}>
@@ -414,7 +569,7 @@ const pingable = RESIDENTS.filter(
   </div>
 </aside>
 
-<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON};`}></script>
+<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON}; window.PC_FED_PEERS_COUNT = ${FED_PEERS_COUNT};`}></script>
 
 <script is:inline>
   (function () {
@@ -602,6 +757,7 @@ const pingable = RESIDENTS.filter(
     function inferOmniMode(value) {
       var v = String(value || '').trim();
       if (!v) return roomOn ? 'SAY' : 'GO';
+      if (v.charAt(0) === '>') return 'OP';
       if (v.charAt(0) === '?') return 'ASK';
       if (v.charAt(0) === '@') return 'AGT';
       if (v.charAt(0) === '/' || /^https?:\/\//.test(v)) return 'GO';
@@ -624,6 +780,26 @@ const pingable = RESIDENTS.filter(
       var raw = String($omni.value || '').trim();
       if (!raw) return;
       var mode = inferOmniMode(raw);
+      if (mode === 'OP') {
+        // Operator command — `>cmd args`. Stub renderer: parse, dispatch
+        // pc:dock:operator, surface a one-line ack in the status. Real
+        // command handlers (mood/announce/schedule) wire up next sprint
+        // when director mode lands.
+        var rest = raw.replace(/^>\s*/, '').trim();
+        var parts = rest.split(/\s+/);
+        var cmd = (parts.shift() || '').toLowerCase();
+        var args = parts.join(' ');
+        window.dispatchEvent(new CustomEvent('pc:dock:operator', { detail: { cmd: cmd, args: args, raw: rest } }));
+        var ack = '> ' + (cmd || '?') + (args ? ' · ' + args : '') + ' — director-only command, wiring next sprint';
+        try { console.info('[dock]', ack); } catch (e) {}
+        // Soft toast in the omnibox placeholder so user gets feedback.
+        var prevPlaceholder = $omni.placeholder;
+        $omni.value = '';
+        $omni.placeholder = ack;
+        applyOmniMode();
+        setTimeout(function () { $omni.placeholder = prevPlaceholder; }, 2400);
+        return;
+      }
       if (mode === 'ASK') {
         var body = raw.replace(/^\?\s*/, '');
         openTray('ask');
@@ -849,20 +1025,28 @@ const pingable = RESIDENTS.filter(
         var to = $askTo.value || 'cast';
         $askStatus.textContent = 'sending…';
         $askStatus.setAttribute('data-state', 'pending');
+        var expand = $askForm.getAttribute('data-expand') === 'true';
+        var addr = '';
+        try { addr = localStorage.getItem('pc:wallet-active') || ''; } catch (e) {}
+        var payload = {
+          type: 'pc-ping-v1',
+          subject: 'ask · footer · → ' + to,
+          body: body,
+          from: addr ? ('wallet ' + addr.slice(0, 6) + '…' + addr.slice(-4) + ' (footer/ask)') : 'visitor (footer/ask)',
+          timestamp: new Date().toISOString(),
+        };
+        if (addr) payload.address = addr;
+        if (expand) payload.expand = true;
         try {
           var res = await fetch('/api/ping', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              type: 'pc-ping-v1',
-              subject: 'ask · footer · → ' + to,
-              body: body,
-              from: 'visitor (footer/ask)',
-              timestamp: new Date().toISOString(),
-            }),
+            body: JSON.stringify(payload),
           });
           if (res.ok) {
-            $askStatus.textContent = 'sent. one of us picks this up next session.';
+            $askStatus.textContent = expand
+              ? 'sent · expand flag set — cc drafts a block on next read.'
+              : 'sent. one of us picks this up next session.';
             $askStatus.setAttribute('data-state', 'ok');
             try {
               var payload = await res.clone().json();
@@ -876,6 +1060,7 @@ const pingable = RESIDENTS.filter(
             } catch (e) {}
             $askBody.value = '';
             if ($askCount) $askCount.textContent = '0 / 2000';
+            $askForm.removeAttribute('data-expand');
             renderEchoes();
           } else if (res.status === 503) {
             $askStatus.textContent = 'inbox not bound on this preview — try pointcast.xyz';
@@ -1022,6 +1207,280 @@ const pingable = RESIDENTS.filter(
     setInterval(function () {
       try { refreshAgentActivity(); } catch (e) {}
     }, 5 * 60 * 1000);
+
+    // ─── v4.1 — buttons + studio + comms hooks ───────────────────
+    // Sprint 2026-04-30: "go towards buttons and expanded menus, and
+    // then eventually broadcaster, director" + "communicate with others".
+    // The single switch below routes every quick-action click to its
+    // handler. New trays/actions add a `case` here, not new wiring.
+
+    // Walked-up wallet address — used to auto-stamp pings with `address`.
+    function activeWalletAddress() {
+      try {
+        var addr = localStorage.getItem('pc:wallet-active');
+        return addr && typeof addr === 'string' ? addr : '';
+      } catch (e) { return ''; }
+    }
+
+    function postPing(payload, peerBaseUrl) {
+      var url = (peerBaseUrl ? peerBaseUrl.replace(/\/+$/, '') : '') + '/api/ping';
+      var addr = activeWalletAddress();
+      var enriched = Object.assign({
+        type: 'pc-ping-v1',
+        timestamp: new Date().toISOString(),
+      }, payload || {});
+      if (addr && !enriched.address) enriched.address = addr;
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(enriched),
+      });
+    }
+
+    // ASK template handler — pre-fills the textarea with a starter, focuses.
+    var ASK_TEMPLATES = {
+      note:   { prefix: 'note · ',  body: '' },
+      idea:   { prefix: 'idea · ',  body: '' },
+      bug:    { prefix: 'bug · ',   body: 'where: \nwhat happened: \nexpected: ' },
+      // Per AGENTS.md: setting expand:true means cc reads, drafts a block
+      // in cc-voice editorial. The form posts with that flag included.
+      expand: { prefix: 'expand · ', body: 'topic: \nwhy: \nshape: ' },
+    };
+    function applyAskTemplate(actionId) {
+      openTray('ask');
+      var tpl = ASK_TEMPLATES[actionId];
+      if (!tpl) return;
+      var $b = document.getElementById('fb-ask-body');
+      if (!$b) return;
+      var existing = String($b.value || '');
+      var seed = tpl.prefix + tpl.body;
+      $b.value = existing ? (seed + '\n\n' + existing) : seed;
+      $b.dispatchEvent(new Event('input'));
+      try { $b.focus(); $b.setSelectionRange($b.value.length, $b.value.length); } catch (e) {}
+      // Stash a hint on the form so the submit handler can include the
+      // expand flag for /expand templates.
+      var $f = document.getElementById('fb-ask-form');
+      if ($f) {
+        if (actionId === 'expand') $f.setAttribute('data-expand', 'true');
+        else $f.removeAttribute('data-expand');
+      }
+    }
+
+    // BROADCAST tray polling — read /home or /blocks.json for the
+    // latest live block + reuse presence snapshot for audience count.
+    async function refreshBroadcast() {
+      var $now      = document.getElementById('fb-bcast-now');
+      var $nowId    = document.getElementById('fb-bcast-now-id');
+      var $nowTitle = document.getElementById('fb-bcast-now-title');
+      var $nowChan  = document.getElementById('fb-bcast-now-channel');
+      var $time     = document.getElementById('fb-bcast-time');
+      var $hereOut  = document.getElementById('fb-bcast-here');
+      var $moodOut  = document.getElementById('fb-bcast-mood');
+      var $peersOut = document.getElementById('fb-bcast-peers');
+      if (!$now) return;
+      // Now-playing — pull blocks.json, take the latest non-draft.
+      try {
+        var r = await fetch('/blocks.json', { cache: 'no-store' });
+        if (r.ok) {
+          var data = await r.json();
+          var blocks = Array.isArray(data) ? data : (data && data.blocks) || [];
+          // Sort by timestamp descending — most recent first.
+          blocks.sort(function (a, b) {
+            var ta = (a && a.timestamp) || ''; var tb = (b && b.timestamp) || '';
+            return tb.localeCompare(ta);
+          });
+          var top = blocks[0];
+          if (top) {
+            if ($nowId)    $nowId.textContent    = '№ ' + (top.id || '----');
+            if ($nowTitle) $nowTitle.textContent = top.title || top.dek || '(untitled)';
+            if ($nowChan)  $nowChan.textContent  = (top.channel ? 'CH.' + top.channel : '');
+            if ($now && top.id) $now.setAttribute('href', '/b/' + top.id);
+            if ($time && top.timestamp) {
+              try {
+                var d = new Date(top.timestamp);
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mm = String(d.getMinutes()).padStart(2, '0');
+                $time.textContent = hh + ':' + mm + ' PT';
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {}
+      // Audience — reuse the live-here number we already poll.
+      if ($hereOut && $liveHere) {
+        $hereOut.textContent = $liveHere.textContent || '—';
+      }
+      // Mood — pull from current select value if set.
+      if ($moodOut) {
+        var mk = ($moodSelect && $moodSelect.value) || '';
+        if (mk && window.PC_SOUNDTRACKS && window.PC_SOUNDTRACKS[mk]) {
+          $moodOut.textContent = (window.PC_SOUNDTRACKS[mk].label || mk).toLowerCase();
+        } else {
+          $moodOut.textContent = '— unset';
+        }
+      }
+      // Peers — count federation-peers entries from the kit data.
+      if ($peersOut) {
+        // Hardcoded count from the data file — no live discovery yet.
+        // The 'discover' action in the FED tray is where live probing lands.
+        $peersOut.textContent = String((window.PC_FED_PEERS_COUNT || 4));
+      }
+    }
+
+    // Cross-ping handler — POST to the peer's /api/ping with a small
+    // probe message. Surfaces a one-line status next to the button.
+    async function crossPingPeer(baseUrl, handle, btn) {
+      if (!baseUrl) return;
+      var prevText = btn ? btn.textContent : '';
+      if (btn) { btn.textContent = '…'; btn.disabled = true; }
+      try {
+        var res = await postPing({
+          subject: 'cross-cast probe from pointcast.xyz',
+          body: 'hi @' + handle + ' — hello from the pointcast.xyz dock. xyz.pointcast.block lexicon.',
+          from: 'pointcast.xyz (footer/cross-ping)',
+        }, baseUrl);
+        if (res.ok) {
+          if (btn) btn.textContent = '✓ sent';
+        } else if (res.status === 404) {
+          if (btn) btn.textContent = 'no inbox';
+        } else if (res.status === 503) {
+          if (btn) btn.textContent = 'inbox off';
+        } else {
+          if (btn) btn.textContent = 'failed ' + res.status;
+        }
+      } catch (e) {
+        // CORS blocked or network — most peers don't have CORS open
+        // for cross-origin POSTs yet. That's expected. Surface the
+        // friction so the federation handshake is honest.
+        if (btn) btn.textContent = 'cors blocked';
+      }
+      setTimeout(function () {
+        if (btn) { btn.textContent = prevText || 'cross-ping'; btn.disabled = false; }
+      }, 3000);
+    }
+
+    // Action button dispatcher — listens for clicks on .fb__action,
+    // routes to handlers by (tray, action).
+    document.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!(t instanceof Element)) return;
+      // Action buttons in tray headers.
+      var actionBtn = t.closest('.fb__action');
+      if (actionBtn) {
+        var tray = actionBtn.getAttribute('data-tray');
+        var action = actionBtn.getAttribute('data-action');
+        var directorOnly = actionBtn.getAttribute('data-director') === 'true';
+        if (directorOnly && !activeWalletAddress()) {
+          // Friendly nudge: open binder so user can connect wallet.
+          actionBtn.setAttribute('data-flash', 'true');
+          setTimeout(function () { actionBtn.removeAttribute('data-flash'); }, 700);
+          return;
+        }
+        handleDockAction(tray, action);
+        return;
+      }
+      // Per-peer cross-ping buttons.
+      var crossBtn = t.closest('[data-cross-ping]');
+      if (crossBtn) {
+        var base = crossBtn.getAttribute('data-cross-ping');
+        var handle = crossBtn.getAttribute('data-handle') || base;
+        crossPingPeer(base, handle, crossBtn);
+        return;
+      }
+    });
+
+    function handleDockAction(tray, action) {
+      // Single switch — easy to extend, easy to read.
+      if (tray === 'room') {
+        if (action === 'here') {
+          openTray('room');
+          // Surface the count by forcing a fresh presence read.
+          updatePresence();
+        } else if (action === 'quiet') {
+          window.dispatchEvent(new CustomEvent('pc:room:quiet', { detail: { on: true } }));
+        } else if (action === 'reset') {
+          // Clear any cursor identity, then re-emit a toggle event.
+          try { localStorage.removeItem('pc:room:cursor'); } catch (e) {}
+          window.dispatchEvent(new CustomEvent('pc:room:reset'));
+        }
+        return;
+      }
+      if (tray === 'ask') {
+        applyAskTemplate(action);
+        return;
+      }
+      if (tray === 'agent') {
+        var $list = document.getElementById('fb-residents-list');
+        if (!$list) return;
+        if (action === 'live') {
+          $list.setAttribute('data-filter', 'live');
+        } else if (action === 'plus-one') {
+          $list.setAttribute('data-filter', 'open');
+        } else if (action === 'roster') {
+          window.location.href = '/residents';
+          return;
+        }
+        // Apply filter via CSS attr selector — handled in styles.
+        return;
+      }
+      if (tray === 'fed') {
+        if (action === 'discover') {
+          // Probe each peer in parallel; mark live/unreachable.
+          discoverFederationPeers();
+        } else if (action === 'rfc') {
+          window.location.href = '/federation/preview';
+        }
+        return;
+      }
+      if (tray === 'broadcast') {
+        if (action === 'now') {
+          var $a = document.getElementById('fb-bcast-now');
+          if ($a) $a.click();
+        } else if (action === 'channel') {
+          window.location.href = '/c';
+        } else if (action === 'schedule' || action === 'announce') {
+          // Director-only — gated by activeWalletAddress() upstream.
+          // For now: emit an operator event so future director plugins
+          // can listen.
+          window.dispatchEvent(new CustomEvent('pc:dock:director', { detail: { action: action } }));
+        }
+        return;
+      }
+    }
+
+    // Federation discovery — probe each peer's /agents.json.
+    async function discoverFederationPeers() {
+      var peers = document.querySelectorAll('#fb-peers-list .fb-peer');
+      peers.forEach(async function (li) {
+        var base = li.getAttribute('data-base');
+        if (!base) return;
+        var statusEl = li.querySelector('.fb-peer__status');
+        if (statusEl) { statusEl.textContent = 'probing'; statusEl.setAttribute('data-state', 'beta'); }
+        try {
+          var r = await fetch(base.replace(/\/+$/, '') + '/agents.json', { cache: 'no-store' });
+          if (r.ok) {
+            if (statusEl) { statusEl.textContent = 'live'; statusEl.setAttribute('data-state', 'live'); }
+          } else {
+            if (statusEl) { statusEl.textContent = 'no manifest'; statusEl.setAttribute('data-state', 'dream'); }
+          }
+        } catch (e) {
+          if (statusEl) { statusEl.textContent = 'unreachable'; statusEl.setAttribute('data-state', 'dream'); }
+        }
+      });
+    }
+
+    // Open BROADCAST tray when stamp 05 is clicked — same hook pattern
+    // as room/ask/etc., but BROADCAST also fires its data refresh.
+    window.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!(t instanceof Element)) return;
+      var stamp = t.closest('#fb-stamp-broadcast');
+      if (stamp) setTimeout(refreshBroadcast, 60);
+    });
+    // Initial broadcast pulse so values are populated by the time the
+    // tray opens for the first time.
+    setTimeout(refreshBroadcast, 1800);
+    setInterval(refreshBroadcast, 90 * 1000);
 
     (function scheduleNounRefresh() {
       var now = new Date();
@@ -1701,9 +2160,228 @@ const pingable = RESIDENTS.filter(
 
   body { padding-bottom: 48px; }
 
+  /* ─── v4.1 styles — buttons + studio + comms ─────────────────── */
+
+  /* Quick-action chip row at the top of every tray body. */
+  .fb__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 0 10px;
+    margin: 0 0 8px;
+    border-bottom: 1px dotted #d4c6a4;
+  }
+  .fb__action {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    background: #fffdf8;
+    border: 1px solid #c5b284;
+    border-radius: 2px;
+    cursor: pointer;
+    color: #2d1f08;
+    font: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  }
+  .fb__action:hover { background: #faf2dc; border-color: #2d1f08; transform: translateY(-1px); }
+  .fb__action--ghost { background: transparent; border-color: #ece4d3; color: #6b5a3a; }
+  .fb__action--ghost:hover { background: #faf2dc; color: #2d1f08; }
+  .fb__action--director {
+    border-color: #c4952e;
+    color: #c4952e;
+    background: #fffaec;
+  }
+  .fb__action--director:hover { background: #c4952e; color: #fff; }
+  .fb__action[data-flash='true'] {
+    animation: fb-action-flash 0.6s ease;
+  }
+  @keyframes fb-action-flash {
+    0%, 100% { background: #fffdf8; }
+    50%      { background: #f8e9c8; }
+  }
+  .fb__action-glyph { font-size: 11px; line-height: 1; }
+  .fb__action-label { font-size: 10px; letter-spacing: 0.1em; font-weight: 700; text-transform: lowercase; }
+
+  /* AI seat in the ASK form foot. */
+  .fb-ask__seat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-radius: 2px;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    cursor: not-allowed;
+  }
+  .fb-ask__seat--ai[data-state='off'] {
+    background: rgba(45, 31, 8, 0.05);
+    border: 1px dashed #c5b284;
+    color: #8a7854;
+  }
+  .fb-ask__seat--ai[data-state='off']:hover { background: rgba(45, 31, 8, 0.1); }
+
+  /* Resident row — card + comms strip. */
+  .fb-resident__row { display: contents; }
+  .fb-resident { display: flex; flex-direction: column; gap: 2px; }
+  .fb-resident__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 8px 6px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-top: 0;
+    border-left: 3px solid var(--res-color, #4e3a16);
+    border-radius: 0 0 2px 2px;
+    margin-top: -2px;
+  }
+  .fb-resident__link {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: #6b5a3a;
+    text-decoration: none;
+    border-bottom: 1px dotted #c5b284;
+    padding-bottom: 1px;
+  }
+  .fb-resident__link:hover { color: var(--res-color, #4e3a16); border-bottom-color: var(--res-color, #4e3a16); }
+  /* Filter behavior — applied via #fb-residents-list[data-filter=…]. */
+  #fb-residents-list[data-filter='live'] .fb-resident:not([data-status='resident']):not([data-status='director']) { display: none; }
+  #fb-residents-list[data-filter='open'] .fb-resident:not([data-status='open']) { display: none; }
+
+  /* Federation peer — row + comms strip. */
+  .fb-peer { display: flex; flex-direction: column; gap: 2px; }
+  .fb-peer__row {
+    display: grid;
+    grid-template-columns: 38px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-left: 3px solid var(--peer-accent, #4e3a16);
+    border-radius: 2px 2px 0 0;
+  }
+  .fb-peer__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 8px 6px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-top: 0;
+    border-left: 3px solid var(--peer-accent, #4e3a16);
+    border-radius: 0 0 2px 2px;
+    margin-top: -1px;
+  }
+  .fb-peer__link {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: #6b5a3a;
+    text-decoration: none;
+    border-bottom: 1px dotted #c5b284;
+    padding-bottom: 1px;
+    background: none;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .fb-peer__link:hover { color: var(--peer-accent, #4e3a16); border-bottom-color: var(--peer-accent, #4e3a16); }
+  .fb-peer__link--btn:disabled { cursor: progress; opacity: 0.7; }
+  .fb-peer__link--ghost { color: #b09060; cursor: default; border-bottom-style: dotted; }
+  .fb-peer__link--ghost:hover { color: #b09060; border-bottom-color: #d4c6a4; }
+
+  /* Operator mode pill (`>` prefix in omnibox). */
+  .fb__omni-mode[data-mode='op'] {
+    background: rgba(196, 149, 46, 0.3);
+    color: #fff7d4;
+    border-color: #c4952e;
+  }
+
+  /* Broadcast tray — the studio glimpse. */
+  .fb-bcast { display: flex; flex-direction: column; gap: 10px; }
+  .fb-bcast__row { display: flex; align-items: center; justify-content: space-between; }
+  .fb-bcast__kicker { font-size: 9px; letter-spacing: 0.22em; color: #c4952e; font-weight: 700; }
+  .fb-bcast__time { font-size: 10px; color: #6b5a3a; letter-spacing: 0.14em; }
+  .fb-bcast__now {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: linear-gradient(180deg, #fffaec 0%, #faf2dc 100%);
+    border: 1px solid #c4952e;
+    border-radius: 3px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .fb-bcast__now:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(196, 149, 46, 0.2); }
+  .fb-bcast__now-id { font-size: 11px; letter-spacing: 0.12em; color: #c4952e; font-weight: 700; }
+  .fb-bcast__now-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 14px;
+    color: #2d1f08;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .fb-bcast__now-channel {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #6b5a3a;
+    font-weight: 700;
+  }
+  .fb-bcast__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .fb-bcast__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-radius: 2px;
+  }
+  .fb-bcast__cell-label { font-size: 8.5px; letter-spacing: 0.2em; color: #8a7854; font-weight: 700; }
+  .fb-bcast__cell-value { font-family: 'DM Serif Display', Georgia, serif; font-size: 18px; color: #2d1f08; line-height: 1.05; }
+  .fb-bcast__cell-sub { font-size: 9px; letter-spacing: 0.06em; color: #8a7854; }
+  .fb-bcast__director-note {
+    margin: 0;
+    padding: 7px 9px;
+    background: rgba(196, 149, 46, 0.08);
+    border: 1px dashed #c4952e;
+    border-radius: 2px;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: #c4952e;
+  }
+
+  /* Mobile breakpoints — the kit grew from 4 to 5 stamps. Drop the
+     last two on phones (binder still has them). */
+  @media (max-width: 380px) {
+    .fb__stamp[data-tray='broadcast'] { display: none; }
+  }
+  @media (max-width: 320px) {
+    .fb__stamp[data-tray='fed']      { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .fb__on-air-dot,
     .fb__stamp-dot[data-state='busy'] { animation: none; }
     .fb__menu, .fb__menu-panel, .fb__tray { transition: none; }
+    .fb__action[data-flash='true'] { animation: none; }
   }
 </style>
