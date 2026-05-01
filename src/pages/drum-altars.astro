@@ -1,0 +1,787 @@
+---
+/**
+ * /drum-altars — Noun Tribute Altars.
+ *
+ * Per Mike 2026-05-01 (after /drum-quintet shipped):
+ *   "very fun, make some nouns drums tribute alters"
+ *
+ * Five altars in a row. Each altar is dedicated to a deterministic
+ * Noun (seed derived from the ISO week, rotates every Monday). Each
+ * altar has its own tone — bell, bowl, chime, gong, drone — five
+ * distinct timbres so the chamber sounds like a temple when several
+ * visitors are tapping.
+ *
+ * Tap RING to leave a tribute. Plays the altar's tone, increments the
+ * count, lights the candle. State lives at /api/altar (KV-backed,
+ * week-scoped, 14-day TTL).
+ *
+ * Aesthetic: dark velvet purple shrine + brass-gold trim + pixel-art
+ * candles. Geocities-cathedral, not Sketchfab-cathedral. Per
+ * MEMORY.md: pixel-art iso town, late-90s web chrome, saturated
+ * colors — avoid Sparrow's polished stack.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'Noun Altar · Tribute Chamber · PointCast';
+const description =
+  'Five Noun altars rotating weekly. Ring the bell, leave a tribute. Bell, bowl, chime, gong, drone — five timbres in a velvet shrine.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Noun Tribute Altar',
+  url: 'https://pointcast.xyz/drum-altars',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+// Static placeholder seeds for SSR — the page hydrates with the
+// real seeds from /api/altar on mount. Picking five visually
+// distinct Nouns so the SSR view doesn't look broken on slow nets.
+const SSR_SEEDS = [42, 156, 411, 678, 805];
+const ALTAR_META = [
+  { idx: 0, instrument: 'bell',  glyph: '✦', subtitle: 'long brass'  },
+  { idx: 1, instrument: 'bowl',  glyph: '◉', subtitle: 'singing'     },
+  { idx: 2, instrument: 'chime', glyph: '✧', subtitle: 'three-note'  },
+  { idx: 3, instrument: 'gong',  glyph: '◈', subtitle: 'low strike'  },
+  { idx: 4, instrument: 'drone', glyph: '✦', subtitle: 'sustained'   },
+];
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="da" id="da-main">
+    <DrumNav current="altars" />
+    <RoomPresenceChip surface="altars" />
+
+    <header class="da__header">
+      <div class="da__chrome">
+        <span class="da__week-label">WEEK</span>
+        <span class="da__week" id="da-week">—</span>
+        <span class="da__sep">·</span>
+        <span class="da__total-label">TRIBUTES</span>
+        <span class="da__total" id="da-total">—</span>
+      </div>
+      <h1 class="da__title">NOUN ALTAR</h1>
+      <p class="da__tagline">
+        tribute chamber · five altars rotating weekly · ring the bell, leave a beat
+      </p>
+    </header>
+
+    <section class="da__altars" id="da-altars">
+      {ALTAR_META.map((m, i) => (
+        <article class="da__altar" data-altar-idx={m.idx} data-seed={SSR_SEEDS[i]}>
+          <div class="da__pediment" aria-hidden="true">{m.glyph}</div>
+          <div class="da__frame">
+            <div class="da__frame-inner">
+              <img class="da__noun" src={`https://noun.pics/${SSR_SEEDS[i]}.svg`} alt={`Noun #${SSR_SEEDS[i]}`} loading="lazy" />
+            </div>
+          </div>
+          <div class="da__nameplate">
+            NOUN <span class="da__nameplate-num" data-seed-text>{String(SSR_SEEDS[i]).padStart(4, '0')}</span>
+          </div>
+          <div class="da__instrument">
+            <span class="da__inst-name">{m.instrument.toUpperCase()}</span>
+            <span class="da__inst-sub">{m.subtitle}</span>
+          </div>
+          <div class="da__count" data-count="0">
+            <span class="da__count-num" data-count-text>—</span>
+            <span class="da__count-label">tributes offered</span>
+          </div>
+          <button class="da__ring" type="button" data-ring>RING</button>
+          <div class="da__candle" aria-hidden="true">
+            <div class="da__flame"></div>
+            <div class="da__wax"></div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="da__feed">
+      <header class="da__feed-header">
+        <span class="da__feed-title">RECENT TRIBUTES</span>
+        <span class="da__feed-sub">live · last 8</span>
+      </header>
+      <ol class="da__feed-list" id="da-feed">
+        <li class="da__feed-empty">— waiting for the first ring —</li>
+      </ol>
+    </section>
+
+    <section class="da__how">
+      <h2>HOW THIS WORKS</h2>
+      <ol class="da__how-list">
+        <li>
+          Five altars rotate every Monday. Seeds are deterministic from the ISO
+          week — predictable but distinct each week.
+        </li>
+        <li>
+          Tap <span class="da__kbd">RING</span> to leave a tribute. The altar's
+          tone plays, the candle flares, the count goes up for everyone watching.
+        </li>
+        <li>
+          Counts persist 14 days. Each week is its own shrine. Rate-limited to
+          one tribute per altar per 5 seconds.
+        </li>
+        <li>
+          Five timbres — <em>bell, bowl, chime, gong, drone</em> — pitched to
+          stack pleasantly when more than one visitor rings at the same time.
+        </li>
+      </ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  /* Reset BlockLayout's cream paper for this page. The shrine is
+     velvet purple; we draw our own background underneath the layout. */
+  body:has(#da-main) {
+    background: #1a0820;
+  }
+
+  .da {
+    --da-velvet: #1a0820;
+    --da-velvet-deep: #0c0410;
+    --da-velvet-mid: #2c0d36;
+    --da-brass: #d4a437;
+    --da-brass-soft: #b8862c;
+    --da-brass-deep: #6b4d12;
+    --da-flame: #f6c15e;
+    --da-flame-tip: #ff6b3a;
+    --da-ink-light: #f4e7c8;
+    --da-ink-mid: #c9b78c;
+    --da-ink-dim: #8a7a55;
+    --da-rule: rgba(212, 164, 55, 0.45);
+    --da-rule-soft: rgba(212, 164, 55, 0.18);
+    --da-velvet-glow: rgba(212, 164, 55, 0.08);
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 32px 80px;
+    color: var(--da-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(212, 164, 55, 0.10), transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(180, 60, 80, 0.08), transparent 70%),
+      linear-gradient(180deg, var(--da-velvet) 0%, var(--da-velvet-deep) 100%);
+  }
+
+  /* Damask-ish overlay — small repeating ornament, very low opacity */
+  .da::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 20px 20px, var(--da-velvet-glow) 1px, transparent 1.5px),
+      radial-gradient(circle at 60px 60px, var(--da-velvet-glow) 1px, transparent 1.5px);
+    background-size: 80px 80px;
+    opacity: 0.5;
+    z-index: -1;
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  .da__header {
+    text-align: center;
+    padding: 36px 16px 28px;
+    border-bottom: 1px solid var(--da-rule-soft);
+    margin-bottom: 36px;
+  }
+
+  .da__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border: 1.5px solid var(--da-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--da-ink-mid);
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .da__week-label, .da__total-label { color: var(--da-ink-dim); }
+  .da__week, .da__total { color: var(--da-brass); font-weight: 700; }
+  .da__sep { color: var(--da-brass-deep); }
+
+  .da__title {
+    margin: 14px 0 8px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(38px, 6vw, 72px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: var(--da-brass);
+    text-shadow:
+      0 0 24px rgba(212, 164, 55, 0.35),
+      0 2px 0 var(--da-velvet-deep);
+  }
+
+  .da__tagline {
+    margin: 0 auto;
+    max-width: 680px;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(15px, 1.6vw, 19px);
+    color: var(--da-ink-mid);
+  }
+
+  /* ── Altars row ───────────────────────────────────────── */
+  .da__altars {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(180px, 1fr));
+    gap: 16px;
+    padding: 0 8px;
+  }
+  @media (max-width: 980px) {
+    .da__altars { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .da__altars { grid-template-columns: 1fr; max-width: 320px; margin-inline: auto; }
+  }
+
+  .da__altar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 20px;
+    background: linear-gradient(180deg, rgba(44, 13, 54, 0.6), rgba(12, 4, 16, 0.8));
+    border: 1.5px solid var(--da-brass-deep);
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 0 rgba(212, 164, 55, 0.25),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+      0 6px 20px rgba(0, 0, 0, 0.5);
+    position: relative;
+  }
+
+  .da__pediment {
+    font-size: 22px;
+    color: var(--da-brass);
+    line-height: 1;
+    margin-bottom: 8px;
+    text-shadow: 0 0 12px rgba(212, 164, 55, 0.45);
+  }
+
+  /* Brass frame around the Noun — pixel-stepped border */
+  .da__frame {
+    width: 144px;
+    height: 144px;
+    padding: 6px;
+    background:
+      linear-gradient(135deg, var(--da-brass) 0%, var(--da-brass-soft) 50%, var(--da-brass-deep) 100%);
+    box-shadow:
+      0 0 0 2px var(--da-velvet-deep),
+      0 0 0 4px var(--da-brass-deep),
+      0 4px 12px rgba(0, 0, 0, 0.6);
+    margin-bottom: 12px;
+  }
+  .da__frame-inner {
+    width: 100%;
+    height: 100%;
+    background: var(--da-velvet-deep);
+    overflow: hidden;
+    position: relative;
+  }
+  .da__noun {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    display: block;
+  }
+
+  .da__nameplate {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--da-ink-mid);
+    margin-bottom: 4px;
+  }
+  .da__nameplate-num { color: var(--da-brass); font-weight: 700; }
+
+  .da__instrument {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 10px;
+  }
+  .da__inst-name {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: 18px;
+    color: var(--da-ink-light);
+    letter-spacing: 0.08em;
+  }
+  .da__inst-sub {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--da-ink-dim);
+  }
+
+  .da__count {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .da__count-num {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--da-flame);
+    letter-spacing: 0.06em;
+    line-height: 1.05;
+    text-shadow: 0 0 8px rgba(246, 193, 94, 0.35);
+  }
+  .da__count-label {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--da-ink-dim);
+    margin-top: 2px;
+  }
+
+  /* Big chunky pixel-style ring button */
+  .da__ring {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 12px 22px;
+    margin-bottom: 14px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: var(--da-velvet-deep);
+    background: linear-gradient(180deg, var(--da-brass) 0%, var(--da-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--da-velvet-deep),
+      0 4px 0 0 var(--da-brass-deep),
+      0 4px 12px rgba(212, 164, 55, 0.25);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .da__ring:hover {
+    background: linear-gradient(180deg, #efbb46 0%, var(--da-brass) 100%);
+  }
+  .da__ring:active,
+  .da__ring.da__ring--ringing {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--da-velvet-deep),
+      0 1px 0 0 var(--da-brass-deep),
+      0 0 16px rgba(246, 193, 94, 0.6);
+  }
+  .da__ring:disabled {
+    cursor: wait;
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+
+  /* Candle */
+  .da__candle {
+    width: 14px;
+    height: 36px;
+    position: relative;
+    margin-top: 4px;
+  }
+  .da__wax {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 24px;
+    background: linear-gradient(180deg, #f4e7c8 0%, #c9b78c 100%);
+    box-shadow:
+      inset -1px 0 0 rgba(0,0,0,0.25),
+      inset 1px 0 0 rgba(255,255,255,0.4);
+  }
+  .da__wax::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 4px;
+    background: #2a1a08;
+  }
+  .da__flame {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 14px;
+    background: radial-gradient(ellipse 4px 8px at 50% 70%, var(--da-flame-tip) 0%, var(--da-flame) 50%, transparent 75%);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    filter: blur(0.4px);
+    animation: da-flicker 1.6s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+  .da__altar.da__altar--lit .da__flame {
+    animation: da-flare 0.9s ease-out;
+  }
+  @keyframes da-flicker {
+    0%,100% { transform: translateX(-50%) scale(1, 1) rotate(0deg); opacity: 0.85; }
+    25%     { transform: translateX(-50%) scale(0.96, 1.06) rotate(-2deg); opacity: 1; }
+    50%     { transform: translateX(-50%) scale(1.04, 0.94) rotate(1deg); opacity: 0.9; }
+    75%     { transform: translateX(-50%) scale(0.98, 1.02) rotate(-1deg); opacity: 1; }
+  }
+  @keyframes da-flare {
+    0%   { transform: translateX(-50%) scale(1, 1); filter: blur(0.4px) brightness(1); }
+    20%  { transform: translateX(-50%) scale(1.5, 1.8); filter: blur(0.8px) brightness(1.6); }
+    100% { transform: translateX(-50%) scale(1, 1); filter: blur(0.4px) brightness(1); }
+  }
+
+  /* Halo on tribute */
+  .da__altar::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 8px;
+    background: radial-gradient(ellipse at center, rgba(246, 193, 94, 0.22), transparent 60%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease-out;
+  }
+  .da__altar.da__altar--lit::after { opacity: 1; }
+
+  /* ── Recent feed ──────────────────────────────────────── */
+  .da__feed {
+    margin-top: 48px;
+    padding: 24px 16px;
+    border-top: 1px solid var(--da-rule-soft);
+    border-bottom: 1px solid var(--da-rule-soft);
+  }
+  .da__feed-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .da__feed-title {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.30em;
+    color: var(--da-brass);
+    text-transform: uppercase;
+  }
+  .da__feed-sub {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--da-ink-dim);
+  }
+  .da__feed-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .da__feed-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    color: var(--da-ink-mid);
+    border-left: 2px solid transparent;
+    transition: border-color 200ms, background 200ms;
+  }
+  .da__feed-list li.da__feed-fresh {
+    border-left-color: var(--da-flame);
+    background: rgba(246, 193, 94, 0.05);
+  }
+  .da__feed-list .da__feed-thumb {
+    width: 24px;
+    height: 24px;
+    background: var(--da-velvet-deep);
+    border: 1px solid var(--da-brass-deep);
+    flex-shrink: 0;
+    image-rendering: pixelated;
+  }
+  .da__feed-list .da__feed-thumb img {
+    width: 100%; height: 100%; display: block; image-rendering: pixelated;
+  }
+  .da__feed-empty {
+    color: var(--da-ink-dim) !important;
+    font-style: italic;
+    font-family: 'Lora', Georgia, serif !important;
+    border-left: 0 !important;
+  }
+
+  /* ── How ──────────────────────────────────────────────── */
+  .da__how {
+    margin-top: 48px;
+    padding: 24px 16px;
+    max-width: 820px;
+    margin-inline: auto;
+  }
+  .da__how h2 {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: 24px;
+    color: var(--da-brass);
+    letter-spacing: 0.04em;
+    margin-bottom: 16px;
+  }
+  .da__how-list {
+    list-style: decimal;
+    padding-left: 22px;
+    margin: 0;
+  }
+  .da__how-list li {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--da-ink-mid);
+    margin-bottom: 10px;
+  }
+  .da__how-list em {
+    color: var(--da-flame);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .da__kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--da-velvet-deep);
+    background: var(--da-brass);
+    border-radius: 2px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+</style>
+
+<script>
+  // ── Identity ─────────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) {
+        sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(SID_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return 'sid-anon-' + Date.now();
+    }
+  }
+  const SID = ensureSid();
+
+  // ── Audio (the five tones) ───────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  function playBell() {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 880;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 880 * 2.76; // brass partial
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.10, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.9); o2.start(t); o2.stop(t + 1.5);
+  }
+  function playBowl() {
+    const a = ctx(); const t = a.currentTime;
+    const f1 = 220, f2 = 220 * 1.5946; // perfect-fourth-ish ratio for tibetan-bowl shimmer
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = f1;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f2;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.30, t + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+    o1.connect(g); o2.connect(g); g.connect(a.destination);
+    o1.start(t); o1.stop(t + 2.7); o2.start(t); o2.stop(t + 2.7);
+  }
+  function playChime() {
+    const a = ctx(); const base = a.currentTime;
+    const notes = [523.25, 659.25, 783.99]; // C5 E5 G5
+    notes.forEach((f, i) => {
+      const t = base + i * 0.085;
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 1.3);
+    });
+  }
+  function playGong() {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 110;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 55;
+    const o3 = a.createOscillator(); o3.type = 'triangle'; o3.frequency.value = 220;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.0);
+    o.connect(g); o2.connect(g); o3.connect(g); g.connect(a.destination);
+    o.start(t); o2.start(t); o3.start(t);
+    o.stop(t + 3.1); o2.stop(t + 3.1); o3.stop(t + 3.1);
+  }
+  function playDrone() {
+    const a = ctx(); const t = a.currentTime;
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 440;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 660;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1400;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.18, t + 0.30); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    o1.connect(filt); o2.connect(filt); filt.connect(g); g.connect(a.destination);
+    o1.start(t); o2.start(t); o1.stop(t + 1.6); o2.stop(t + 1.6);
+  }
+
+  const TONES = [playBell, playBowl, playChime, playGong, playDrone];
+
+  // ── State ─────────────────────────────────────────────────
+  let LATEST = null; // last GET response
+
+  function fmt(n) { return String(n).padStart(4, '0'); }
+  function fmtCount(n) { return n > 9999 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+  function setNounImage(altarEl, seed) {
+    const img = altarEl.querySelector('.da__noun');
+    if (img && img.dataset.currentSeed !== String(seed)) {
+      img.src = `https://noun.pics/${seed}.svg`;
+      img.alt = `Noun #${seed}`;
+      img.dataset.currentSeed = String(seed);
+    }
+    const txt = altarEl.querySelector('[data-seed-text]');
+    if (txt) txt.textContent = fmt(seed);
+    altarEl.dataset.seed = String(seed);
+  }
+
+  function paintAltars(state) {
+    const altars = document.querySelectorAll('.da__altar');
+    altars.forEach((el, i) => {
+      const seed = state.seeds?.[i];
+      if (typeof seed === 'number') setNounImage(el, seed);
+      const count = state.counts?.[String(seed)] ?? 0;
+      const num = el.querySelector('[data-count-text]');
+      if (num) num.textContent = fmtCount(count);
+      el.dataset.count = String(count);
+    });
+  }
+
+  function paintFeed(state) {
+    const list = document.getElementById('da-feed');
+    if (!list) return;
+    const recent = state.recent ?? [];
+    if (!recent.length) {
+      list.innerHTML = '<li class="da__feed-empty">— waiting for the first ring —</li>';
+      return;
+    }
+    list.innerHTML = '';
+    const now = Date.now();
+    recent.forEach((r, idx) => {
+      const li = document.createElement('li');
+      const isFresh = (now - r.t) < 8000 && idx === 0;
+      if (isFresh) li.classList.add('da__feed-fresh');
+      const ago = Math.max(0, Math.floor((now - r.t) / 1000));
+      const agoStr = ago < 5 ? 'just now' : ago < 60 ? `${ago}s ago` : `${Math.floor(ago/60)}m ago`;
+      const thumb = document.createElement('span');
+      thumb.className = 'da__feed-thumb';
+      const img = document.createElement('img');
+      img.src = `https://noun.pics/${r.seed}.svg`;
+      img.alt = '';
+      thumb.appendChild(img);
+      const txt = document.createElement('span');
+      txt.textContent = `noun ${fmt(r.seed)} · ${r.pid.slice(0, 6)}… · ${agoStr}`;
+      li.appendChild(thumb); li.appendChild(txt);
+      list.appendChild(li);
+    });
+  }
+
+  function paintHeader(state) {
+    const wkEl = document.getElementById('da-week');
+    if (wkEl) wkEl.textContent = String(state.week ?? '—');
+    const totEl = document.getElementById('da-total');
+    if (totEl) totEl.textContent = fmtCount(state.totalThisWeek ?? 0);
+  }
+
+  // ── Network ───────────────────────────────────────────────
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/altar', { cache: 'no-store' });
+      const j = await r.json();
+      if (j && j.ok) {
+        LATEST = j;
+        paintHeader(j); paintAltars(j); paintFeed(j);
+      }
+    } catch {
+      /* offline — keep current state */
+    }
+  }
+
+  async function postTribute(seed) {
+    try {
+      const r = await fetch('/api/altar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SID, seed }),
+      });
+      const j = await r.json();
+      return j;
+    } catch {
+      return { ok: false, reason: 'network' };
+    }
+  }
+
+  // ── Wire up rings ─────────────────────────────────────────
+  function lightAltar(altarEl) {
+    altarEl.classList.add('da__altar--lit');
+    setTimeout(() => altarEl.classList.remove('da__altar--lit'), 900);
+  }
+
+  document.querySelectorAll('.da__altar').forEach((altarEl) => {
+    const btn = altarEl.querySelector('[data-ring]');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(altarEl.dataset.altarIdx ?? '0', 10);
+      const seed = parseInt(altarEl.dataset.seed ?? '0', 10);
+      // Optimistic — fire tone immediately, then POST
+      try { TONES[idx]?.(); } catch {}
+      lightAltar(altarEl);
+      btn.classList.add('da__ring--ringing');
+      btn.disabled = true;
+      const j = await postTribute(seed);
+      btn.disabled = false;
+      btn.classList.remove('da__ring--ringing');
+      if (j?.ok) {
+        // Update count + total locally
+        const num = altarEl.querySelector('[data-count-text]');
+        if (num) num.textContent = fmtCount(j.count);
+        altarEl.dataset.count = String(j.count);
+        const totEl = document.getElementById('da-total');
+        if (totEl) totEl.textContent = fmtCount(j.totalThisWeek);
+      } else if (j?.reason === 'rate-limited') {
+        // Subtle nudge — disable for the retryAfter window
+        btn.disabled = true;
+        setTimeout(() => { btn.disabled = false; }, (j.retryAfterSec ?? 5) * 1000);
+      }
+    });
+  });
+
+  // ── Polling ───────────────────────────────────────────────
+  fetchState();
+  setInterval(fetchState, 2200);
+
+  // Refresh on visibility regain
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchState();
+  });
+</script>
