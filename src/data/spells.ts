@@ -157,6 +157,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#b8d4f0',
   },
+
+  // ─── BURSTS (batch 4) ─────────────────────────────────────────
+  {
+    id: 'shout',
+    label: 'shout',
+    blurb: 'Punctuation bursts outward from center. Pure typographic energy.',
+    glyph: '📣',
+    kind: 'burst',
+    durationMs: 2200,
+    accent: '#8a2432',
+  },
+  {
+    id: 'wave',
+    label: 'wave',
+    blurb: 'A wave of hands sweeps across the screen. Hello!',
+    glyph: '👋',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#c4952e',
+  },
+
+  // ─── COMPANIONS (batch 4) ─────────────────────────────────────
+  {
+    id: 'firefly',
+    label: 'firefly',
+    blurb: 'A soft-glowing firefly drifts by, pulsing gold.',
+    glyph: '🪲',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#d4a437',
+  },
+
+  // ─── AMBIENT (batch 4) ────────────────────────────────────────
+  {
+    id: 'chimes',
+    label: 'chimes',
+    blurb: 'Wind chimes hang in the corner, swaying quietly.',
+    glyph: '🎐',
+    kind: 'ambient',
+    accent: '#2f8f5f',
+  },
 ];
 
 /** Lookup helper. */

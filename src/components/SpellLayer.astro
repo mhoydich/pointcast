@@ -462,6 +462,131 @@
       active.byId.snow = snow;
     }
 
+    // ─── shout (burst) ───────────────────────────────────────────
+    // Typographic burst: punctuation fans radially from viewport center.
+    // Reuses the firework dx/dy CSS-custom-prop trick on text nodes.
+    function castShout(durationMs) {
+      if (reduce()) return;
+      var chars = ['!', '!', '?', '!!', '!', '?!', '!', '!!', '!', '?', '!', '!!', '!', '?', '!'];
+      var count = 15;
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-shout-char';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 80 + Math.random() * 120;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var dur = (durationMs || 2200) - Math.floor(Math.random() * 400);
+        var fontSize = 16 + Math.floor(Math.random() * 22);
+        s.textContent = chars[i % chars.length];
+        s.style.cssText =
+          'left:50vw;top:45vh;font-size:' + fontSize + 'px;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          'animation:spell-shout-fly ' + dur + 'ms ease-out forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(s);
+      }
+    }
+
+    // ─── wave (burst) ────────────────────────────────────────────
+    // 14 hands stagger across the screen L→R with a delay ramp —
+    // gives the classic stadium-wave ripple effect.
+    function castWave(durationMs) {
+      if (reduce()) return;
+      var count = 14;
+      var dur = durationMs || 3000;
+      for (var i = 0; i < count; i++) {
+        var w = document.createElement('span');
+        w.className = 'spell-wave-hand';
+        w.textContent = '👋';
+        var leftPct = (i / (count - 1)) * 88 + 6;
+        var bottomPct = 18 + Math.random() * 16;
+        var delay = Math.round((i / count) * 550);
+        var waveDur = 1100 + Math.floor(Math.random() * 300);
+        w.style.cssText =
+          'left:' + leftPct.toFixed(1) + '%;bottom:' + bottomPct.toFixed(1) + '%;' +
+          'animation:spell-wave-appear ' + waveDur + 'ms ease-in-out ' + delay + 'ms forwards;';
+        $layer.appendChild(w);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(w);
+      }
+    }
+
+    // ─── firefly (companion) ─────────────────────────────────────
+    // A single glowing dot drifts at a random height (30–70vh) on a
+    // slow ease-in-out path. The glow child pulses independently.
+    function castFirefly(durationMs) {
+      if (active.byId.firefly) {
+        var prev = active.byId.firefly;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var fly = document.createElement('button');
+      fly.className = 'spell-firefly';
+      fly.type = 'button';
+      fly.setAttribute('aria-label', 'A firefly drifting by. Click to release it.');
+      fly.title = 'click to release the firefly';
+      fly.innerHTML = '<span class="spell-firefly__glow" aria-hidden="true"></span>';
+      var ltr = Math.random() < 0.5;
+      fly.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 40000;
+      var heightPct = (30 + Math.random() * 40).toFixed(1);
+      var driftSeconds = Math.max(12, Math.min(35, window.innerWidth / 40));
+      fly.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-firefly-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + driftSeconds + 's ease-in-out infinite;';
+      fly.addEventListener('click', function () {
+        if (fly.parentNode) fly.parentNode.removeChild(fly);
+        active.byId.firefly = null;
+      });
+      $layer.appendChild(fly);
+      active.byId.firefly = fly;
+      setTimeout(function () {
+        if (fly && fly.parentNode) fly.parentNode.removeChild(fly);
+        if (active.byId.firefly === fly) active.byId.firefly = null;
+      }, dur);
+    }
+
+    // ─── chimes (ambient) ────────────────────────────────────────
+    // 5 metallic pipes hang from the top-right corner. Each sways at
+    // a slightly different period — staggered delays vary the rhythm.
+    function castChimes() {
+      if (active.byId.chimes) return;
+      var ch = document.createElement('button');
+      ch.className = 'spell-chimes';
+      ch.type = 'button';
+      ch.setAttribute('aria-label', 'Wind chimes. Click to still them.');
+      ch.title = 'click to still the chimes';
+      var lengths = [62, 48, 72, 54, 68];
+      var html = '';
+      for (var i = 0; i < 5; i++) {
+        var delay = (i * 0.38 + Math.random() * 0.25).toFixed(2);
+        var pipeDur = (1.9 + Math.random() * 1.4).toFixed(2);
+        html += '<span class="spell-chimes__pipe" style="' +
+          'height:' + lengths[i] + 'px;' +
+          'animation-delay:' + delay + 's;' +
+          'animation-duration:' + pipeDur + 's;' +
+          '"></span>';
+      }
+      ch.innerHTML = html;
+      ch.addEventListener('click', function () {
+        if (ch.parentNode) ch.parentNode.removeChild(ch);
+        active.byId.chimes = null;
+      });
+      $layer.appendChild(ch);
+      active.byId.chimes = ch;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -477,6 +602,10 @@
         case 'fish':      castFish(45000); break;
         case 'moth':      castMoth(55000); break;
         case 'snow':      castSnow(); break;
+        case 'shout':     castShout(2200); break;
+        case 'wave':      castWave(3000); break;
+        case 'firefly':   castFirefly(40000); break;
+        case 'chimes':    castChimes(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -930,6 +1059,117 @@
     100% { top: 105vh;  transform: translateX(var(--spell-snow-drift, 0px)); }
   }
 
+  /* ── shout (burst) ───────────────────────────────────────── */
+  .spell-shout-char {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 700;
+    color: #fdf2d6;
+    text-shadow: 0 0 8px rgba(212, 164, 55, 0.9);
+    pointer-events: none;
+    will-change: transform, opacity;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+  }
+  @keyframes spell-shout-fly {
+    0% {
+      transform: translate(-50%, -50%) scale(0.4);
+      opacity: 1;
+    }
+    60% { opacity: 1; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-fw-dx, 0px)),
+        calc(-50% + var(--spell-fw-dy, 0px))
+      ) scale(1.3);
+      opacity: 0;
+    }
+  }
+
+  /* ── wave (burst) ─────────────────────────────────────────── */
+  .spell-wave-hand {
+    position: absolute;
+    font-size: 28px;
+    pointer-events: none;
+    opacity: 0;
+    transform-origin: 50% 100%;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-wave-appear {
+    0%   { opacity: 0; transform: translateY(12px) rotate(-25deg); }
+    20%  { opacity: 1; transform: translateY(-14px) rotate(18deg); }
+    45%  { opacity: 1; transform: translateY(-6px) rotate(-12deg); }
+    70%  { opacity: 1; transform: translateY(-10px) rotate(14deg); }
+    100% { opacity: 0; transform: translateY(-22px) rotate(0deg); }
+  }
+
+  /* ── firefly (companion) ─────────────────────────────────── */
+  .spell-firefly {
+    position: fixed;
+    left: -20px;
+    width: 20px;
+    height: 20px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spell-firefly__glow {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #d4ff80;
+    box-shadow: 0 0 8px 4px rgba(180, 240, 60, 0.8), 0 0 20px 8px rgba(180, 240, 60, 0.35);
+    animation: spell-firefly-pulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spell-firefly-pulse {
+    0%, 100% { opacity: 0.15; box-shadow: 0 0 4px 2px rgba(180, 240, 60, 0.2); }
+    50%      { opacity: 1; box-shadow: 0 0 14px 7px rgba(180, 240, 60, 0.9), 0 0 28px 12px rgba(180, 240, 60, 0.4); }
+  }
+  @keyframes spell-firefly-drift-ltr {
+    0%   { left: -20px; }
+    100% { left: calc(100vw + 20px); }
+  }
+  @keyframes spell-firefly-drift-rtl {
+    0%   { left: calc(100vw + 20px); }
+    100% { left: -20px; }
+  }
+
+  /* ── chimes (ambient) ────────────────────────────────────── */
+  .spell-chimes {
+    position: fixed;
+    top: 0;
+    right: 48px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 0 8px;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+  }
+  .spell-chimes__pipe {
+    display: block;
+    width: 4px;
+    background: linear-gradient(180deg, #b8d4f0 0%, #6aacdf 55%, #2f6faf 100%);
+    border-radius: 0 0 2px 2px;
+    transform-origin: 50% 0;
+    animation: spell-chimes-sway ease-in-out infinite alternate;
+  }
+  @keyframes spell-chimes-sway {
+    0%   { transform: rotate(-9deg); }
+    100% { transform: rotate(9deg); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -937,25 +1177,32 @@
     .spell-penguin,
     .spell-fish,
     .spell-moth,
+    .spell-firefly,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
     .spell-rain__drop,
     .spell-starfield__star,
-    .spell-snow__flake { animation: none; }
+    .spell-snow__flake,
+    .spell-firefly__glow,
+    .spell-chimes__pipe { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
     .spell-fish,
-    .spell-moth { left: 50%; transform: translateX(-50%); }
+    .spell-moth,
+    .spell-firefly { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
-    .spell-moth[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-moth[data-dir='rtl'],
+    .spell-firefly[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
     .spell-snow__flake { display: none; } /* snow motion-only */
     .spell-starfield__star { opacity: 0.7; }
+    .spell-firefly__glow { opacity: 0.7; }
+    .spell-chimes__pipe { transform: rotate(0deg); }
   }
 </style>
