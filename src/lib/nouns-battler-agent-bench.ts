@@ -142,6 +142,132 @@ export const NOUNS_BATTLER_AGENT_PROMPTS = [
   },
 ] as const;
 
+export const NOUNS_BATTLER_AGENT_PROMPT_KIT = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-prompts/',
+  sourceGuidance: 'https://developers.openai.com/api/docs/guides/prompt-guidance?model=gpt-5.5',
+  posture:
+    'Outcome-first prompts for visiting agents: one role, one artifact, one evidence budget, one stop rule, and one validation line.',
+  principles: [
+    'Name the artifact before the steps.',
+    'Give the agent a small evidence budget so it stops reading and starts producing.',
+    'Separate factual claims from creative copy.',
+    'Require exact URLs, Noun numbers, gang names, or field names when the output makes a claim.',
+    'Tell the agent when to stop: return the artifact once success criteria are met.',
+    'Keep private identity out of the loop; use public Noun numbers and opt-in presence only.',
+  ],
+  prompts: [
+    {
+      id: 'mobile-watch-qa',
+      role: 'mobile QA watcher',
+      goal: 'Make the phone-first match view easier to watch.',
+      startHere: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      evidenceBudget: 'Open Mobile Cast and one linked Battler surface. Do not browse more than two pages.',
+      prompt:
+        'You are the mobile QA watcher for Nouns Nation Battler. Open Mobile Cast, watch one match beat, and return three fixes that would make phone viewing clearer. Separate factual observations from creative suggestions.',
+      successCriteria: [
+        'Names the tested URL.',
+        'Mentions one actual visible control, panel, Noun number, gang, or field state.',
+        'Returns exactly three prioritized fixes.',
+      ],
+      stopRule: 'Stop once you have one observed issue, one polish opportunity, and one shareability idea.',
+      outputFormat:
+        'MOBILE QA: url {url}; observed {fact}; fix1 {must}; fix2 {should}; fix3 {could}; confidence {low|medium|high}.',
+      validation: 'Do not invent controls or stats. If a detail is not visible, say so.',
+    },
+    {
+      id: 'scorebook-recap',
+      role: 'scorebook recap writer',
+      goal: 'Turn a Desk Wall snapshot or recap into a watchable sports note.',
+      startHere: 'https://pointcast.xyz/games/nouns-nation-battler/desk/#view=agent',
+      evidenceBudget: 'Use one Desk Wall frame, snapshot URL, pasted snapshot JSON, or recap text.',
+      prompt:
+        'You are the scorebook recap writer. Use the Agent Scorebook Frame or nouns_battler_result_tracker, then produce one compact recap with the final, MVP angle, next fixture, and a rooting hook.',
+      successCriteria: [
+        'Includes source type: frame, snapshotUrl, snapshotJson, or recapText.',
+        'Keeps the recap to five lines or fewer.',
+        'Includes one next-watch URL.',
+      ],
+      stopRule: 'Stop after producing the recap and next-watch hook; do not keep simming.',
+      outputFormat:
+        'SCOREBOOK: source {source}; final {winner} over {loser}; angle {mvpOrMoment}; next {url}; root {why}.',
+      validation: 'If no final is available, report current leader and mark result as pending.',
+    },
+    {
+      id: 'sponsor-package-builder',
+      role: 'sponsor package builder',
+      goal: 'Package one reservation-only sponsor idea without payment or investment language.',
+      startHere: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+      evidenceBudget: 'Use the Sponsorship Desk plus one related route: TV Cast, Mobile Cast, Poster Wall, or Claim Board.',
+      prompt:
+        'You are the sponsor package builder. Build one no-money-yet sponsorship reservation card for a human or agent. Keep it brand-safe, weird-sports, and explicit that human approval is required.',
+      successCriteria: [
+        'Names the package type and public surface.',
+        'Includes sponsor card, ticker line, proof requirement, and participant-credit route.',
+        'Avoids promised returns, wallet signing, checkout language, or private identity capture.',
+      ],
+      stopRule: 'Stop when the sponsor card can be copied into the Sponsorship Desk.',
+      outputFormat:
+        'SPONSOR INTENT: package {id}; surface {route}; card {copy}; ticker {line}; proof {requirement}; credit {route}; guardrail {text}.',
+      validation: 'Use “reservation intent only” and “human approval required” in the answer.',
+    },
+    {
+      id: 'poster-drop-director',
+      role: 'poster drop director',
+      goal: 'Make one shareable poster/ad/product prompt from a real Battler surface.',
+      startHere: 'https://pointcast.xyz/nouns-nation-battler-posters/',
+      evidenceBudget: 'Use the Poster Wall and either Live Desk or TV Cast.',
+      prompt:
+        'You are the poster drop director. Pick one gang, field, Noun number, or Bowl beat and turn it into a poster headline, social caption, product hook, and image prompt.',
+      successCriteria: [
+        'Includes an actual gang, Noun number, field type, or Battler route.',
+        'Separates copy from visual prompt.',
+        'Includes one watch CTA.',
+      ],
+      stopRule: 'Stop after one polished drop package; do not make a full campaign.',
+      outputFormat:
+        'DROP: source {url}; headline {text}; caption {text}; product {hook}; prompt {visual}; CTA {url}.',
+      validation: 'Avoid generic fantasy sports art; include Nouns, noggles, and match-broadcast energy.',
+    },
+    {
+      id: 'route-integrity-auditor',
+      role: 'route integrity auditor',
+      goal: 'Find broken Battler links before people share them.',
+      startHere: 'https://pointcast.xyz/nouns-nation/',
+      evidenceBudget: 'Check the hub plus three Battler routes. Use HEAD/status when possible.',
+      prompt:
+        'You are the route integrity auditor. Check the Nouns Nation hub and three Battler surfaces for stale links, missing unfurls, or JSON route gaps. Return only actionable findings.',
+      successCriteria: [
+        'Lists checked URLs.',
+        'Reports status for each route.',
+        'Includes either zero findings or clear reproduction steps.',
+      ],
+      stopRule: 'Stop after four checked URLs or the first P1 blocker.',
+      outputFormat:
+        'ROUTE AUDIT: checked {urls}; P1 {issue|none}; P2 {issue|none}; missing {jsonOrUnfurl|none}; next {fix}.',
+      validation: 'Do not flag aesthetic preferences as bugs unless they block watching or sharing.',
+    },
+    {
+      id: 'tv-host-rundown',
+      role: 'TV host',
+      goal: 'Give a human host a one-match watch script.',
+      startHere: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+      evidenceBudget: 'Use TV Cast and optionally Mobile Cast. Watch or infer only one match beat.',
+      prompt:
+        'You are the TV host for Nouns Nation Battler. Produce a one-match rundown with open, stakes, two callouts, replay line, and signoff. Keep it playable by a human in under 45 seconds.',
+      successCriteria: [
+        'Includes one open line and one signoff.',
+        'Names one surface to show next.',
+        'Does not claim live facts unless observed.',
+      ],
+      stopRule: 'Stop after one complete rundown.',
+      outputFormat:
+        'TV RUNDOWN: open {line}; stakes {line}; call1 {line}; call2 {line}; replay {line}; signoff {line}; next {url}.',
+      validation: 'Mark unobserved match details as “host fill-in” rather than fact.',
+    },
+  ],
+} as const;
+
 export const NOUNS_BATTLER_AGENT_TASK_PACKS = [
   {
     id: 'scorekeeper-open-slate',
@@ -1730,6 +1856,157 @@ export const NOUNS_BATTLER_SEASON_6_MISSION_PACKS = [
   },
 ] as const;
 
+export const NOUNS_BATTLER_WIKI = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
+  json: 'https://pointcast.xyz/nouns-nation-battler-wiki.json',
+  stance:
+    'A public field guide for humans and agents learning the Nouns Nation Battler sport, surfaces, teams, seasons, sponsor loop, and contribution paths.',
+  quickStart: [
+    {
+      label: 'Watch live',
+      href: 'https://pointcast.xyz/nouns-nation-battler/',
+      note: 'Best all-around desk for standings, scorebug, live calls, top Nouns, and controls.',
+    },
+    {
+      label: 'Watch on phone',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      note: 'Compact one-handed cast tuned for match viewing and quick sharing.',
+    },
+    {
+      label: 'Cast to TV',
+      href: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+      note: 'Fullscreen broadcast mode for lunch rooms, living rooms, and watch parties.',
+    },
+    {
+      label: 'Read the machine manifest',
+      href: 'https://pointcast.xyz/nouns-nation-battler.json',
+      note: 'Canonical JSON for routes, rules, battle types, systems, assets, and agent economy.',
+    },
+  ],
+  glossary: [
+    {
+      term: 'Nouns Nation Battler',
+      definition:
+        'An automated 30 vs 30 browser sport where numbered Nouns fight for eight gangs across a two-week league and Nouns Bowl final.',
+    },
+    {
+      term: 'Gang',
+      definition:
+        'A team identity with colors, lore, generated Noun roster energy, standings, rivalries, and sponsor or fan hooks.',
+    },
+    {
+      term: 'Battle type',
+      definition:
+        'A field ruleset such as Open Field Clash, Amplifier Rift, Crown Rush, Lava Audit, Cloud Court, Trash Planet, or Fog Bowl.',
+    },
+    {
+      term: 'Season challenge',
+      definition:
+        'A rotating watch objective such as KO Race, Mint Window, Amp Hunt, Captain Call, Field Claim, Last Stand, or Underdog Audit.',
+    },
+    {
+      term: 'Desk Wall',
+      definition:
+        'Snapshot-backed recaps, scoreboard frames, story desk cards, and agent scorebook views for preserving match memory.',
+    },
+    {
+      term: 'Agent Bench',
+      definition:
+        'The task board and MCP handoff layer for visiting Claude, ChatGPT, Codex, Cursor, and other agents.',
+    },
+    {
+      term: 'Participant credits',
+      definition:
+        'A no-money-yet accounting metaphor for routing credit to accepted human or agent contributions. It is not an investment return.',
+    },
+    {
+      term: 'Nouns Bowl',
+      definition:
+        'The final-week championship package with countdown, hype cards, sponsor inventory, and media-week tasks.',
+    },
+  ],
+  teams: [
+    { name: 'Antenna Union', code: 'ANT', identity: 'Signal callers, late rotations, broadcast-read energy.' },
+    { name: 'Noggles Brigade', code: 'NOG', identity: 'Classic Nouns pressure, center-field swagger, heavy replay moments.' },
+    { name: 'Pixel Foundry', code: 'PIX', identity: 'Productive chaos, poster-friendly stars, and craft-table tactics.' },
+    { name: 'Builder League', code: 'BLD', identity: 'System-first gang with rally calls, proof trails, and season design hooks.' },
+    { name: 'Meme Assembly', code: 'MEM', identity: 'Momentum swings, crowd heat, and strange sponsor reads.' },
+    { name: 'Auction House', code: 'AUC', identity: 'Big-number pressure, comeback bids, and market-pulse storylines.' },
+    { name: 'Fork Club', code: 'FRK', identity: 'Upset hunters, rule mutations, and rivalry-night bite.' },
+    { name: 'Public Goods', code: 'PGD', identity: 'Support plays, healing arcs, and clean watch-party energy.' },
+  ],
+  featuredNouns: [3, 7, 12, 19, 27, 34, 41, 52, 58, 88, 421, 557],
+  watchModes: [
+    {
+      name: 'Battle Desk',
+      href: 'https://pointcast.xyz/nouns-nation-battler/',
+      useFor: 'Default watch desk, standings, controls, top performers, rooting, and live calls.',
+    },
+    {
+      name: 'Mobile Cast',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      useFor: 'Phone-first watching, lunch-line sharing, and quick viewer review.',
+    },
+    {
+      name: 'TV Cast',
+      href: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+      useFor: 'Big-screen looping, watch parties, keyboard hosting, and hands-off broadcast.',
+    },
+    {
+      name: 'Desk Wall',
+      href: 'https://pointcast.xyz/nouns-nation-battler-desk/',
+      useFor: 'Recaps, scoreboards, story frames, agent scorebook evidence, and share cards.',
+    },
+    {
+      name: 'Poster Wall',
+      href: 'https://pointcast.xyz/nouns-nation-battler-posters/',
+      useFor: 'Type-heavy poster series, campaign concepts, product prompts, and ad inspiration.',
+    },
+  ],
+  seasonArc: [
+    'Two-week regular season with daily slate energy.',
+    'Eight gangs build standings, rivalry heat, MVP cases, and highlight memory.',
+    'Late-season boss fields mutate the watch story.',
+    'Top teams move into playoffs and the Nouns Bowl final.',
+    'Desk Wall, Production Desk, and Agent Bench preserve the receipts.',
+  ],
+  contributionPaths: [
+    {
+      lane: 'Watch',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      output: 'One useful viewer note, bug report, or rooting hook.',
+    },
+    {
+      lane: 'Create',
+      href: 'https://pointcast.xyz/nouns-nation-battler-posters/',
+      output: 'Poster, ad, art prompt, product concept, or campaign copy.',
+    },
+    {
+      lane: 'Sponsor',
+      href: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+      output: 'Reservation-only sponsor card, ticker copy, proof requirement, and credit route.',
+    },
+    {
+      lane: 'Produce',
+      href: 'https://pointcast.xyz/nouns-nation-battler-production/',
+      output: 'Accepted-work ledger card, broadcast queue item, rooting card, or Bowl hype card.',
+    },
+    {
+      lane: 'Agent task',
+      href: 'https://pointcast.xyz/nouns-nation-battler-prompts/',
+      output: 'Outcome-first prompt result with source URL, artifact, stop rule, and validation.',
+    },
+  ],
+  guardrails: [
+    'Use actual public Nouns numbers or visible Battler surfaces when making factual claims.',
+    'Do not capture private identity, emails, wallet secrets, or private prompts.',
+    'Sponsorships are reservation intent only until a human accepts the work.',
+    'Participant credits are contribution accounting, not promised investment yield.',
+    'Keep agent tasks scoped to one artifact and one validation line.',
+  ],
+} as const;
+
 export const NOUNS_BATTLER_AGENT_BENCH = {
   $schema: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
   version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
@@ -1746,6 +2023,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   entryPoints: {
     human: 'https://pointcast.xyz/nouns-nation-battler-agents/',
     sidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
+    promptKit: 'https://pointcast.xyz/nouns-nation-battler-prompts/',
+    wiki: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
     sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
     season6SprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     season6SprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
@@ -1815,6 +2094,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'A local-first claim/report/asset studio for assigning an Agent Noun identity, opening the right watch frame, and generating copyable outputs.',
     outputs: ['agent report card', 'TV ticker line', 'asset brief', 'sponsor slot', 'product concept', 'participant yield loop'],
   },
+  promptKit: NOUNS_BATTLER_AGENT_PROMPT_KIT,
+  wiki: NOUNS_BATTLER_WIKI,
   season6SprintRoom: {
     route: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     manifest: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',

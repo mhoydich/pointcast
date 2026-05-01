@@ -14,6 +14,7 @@ import {
   NOUNS_BATTLER_SEASON_ARCHIVE,
   NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   NOUNS_BATTLER_SPONSORSHIP_MARKET,
+  NOUNS_BATTLER_WIKI,
   NOUNS_BATTLER_WORK_CONTRIBUTION_TYPES,
 } from '../lib/nouns-battler-agent-bench';
 
@@ -27,6 +28,8 @@ const payload = {
   playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
   mobile: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
   tv: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+  wikiHuman: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
+  wikiJson: 'https://pointcast.xyz/nouns-nation-battler-wiki.json',
   image: 'https://pointcast.xyz/images/og/nouns-battler-live.png',
   intent: 'A watchable Nouns auto-battler where numbered Nouns players and eight rotating gangs play a two-week 30 vs 30 league into a Nouns Bowl final, with a PointCast Battle Desk hub, phone-first Mobile Cast, Battle Desk V3 federation operating room, a Season 6 Sprint Room for expansion combine, media week, rights inventory, rival-league scouting, and proof artifacts, snapshot-backed Desk Wall watch frames, a Results Desk MCP that turns Desk Wall snapshots and Recap Studio text into a Claude/Cowork scorebook, an Agent Bench for Claude/ChatGPT/Codex task handoffs, a Sideline Desk for claim/report workflows, an agent asset factory for posters, ads, art prompts, products, and sponsor reads, a Sponsorship Desk for reservation-only sponsor cards, featured Nouns, first-four-season highlights, TV tickers, agent task briefs, proof requirements, and participant-credit routing, a v38 Production Desk for accepted-work ledger cards, broadcast director queues, rooting cards, season archive cards, and Nouns Bowl hype week, a v39 public Claim Board for sponsor reservations, agent bounties, poster/product drops, QA audits, watch-party proof, broadcast run sheets, and Nouns Bowl hype cards, a prototype participant rewards model, a claim queue of timeboxed agent tasks, MCP tools for Battler tasks and manifests, opt-in anonymous agent presence, a Watch Now rail, league-integrity score coverage, canonical shareable report card links, an in-session Report Gallery, downloadable Season Report cards, printable Season Reports, portable Season Desk Wall snapshot links, copyable Commissioner Desk interstitials and archive, a TV Bowl Countdown card, rivalry heat, head-to-head records, late-season boss field mutations, a rookie Watch Guide, live storyline engine, Watch Party Kit, Recap Studio, Season 2 scope board, scout cards, sim controls, rotating season challenges, Director Mode TV, Noun-heavy overview interstitials, Amplifier Rift, Crown Rush, weird terrain battle types, a 20-poster type-heavy Nouns series, unique Noun-heavy unfurls for every public Battler surface, GTM strategy, and recaps.',
   broadcastDesk: {
@@ -211,6 +214,7 @@ const payload = {
     businessModel: NOUNS_BATTLER_BUSINESS_MODEL,
     participantYield: NOUNS_BATTLER_PARTICIPANT_YIELD,
   },
+  wiki: NOUNS_BATTLER_WIKI,
   nounsAssets: {
     source: 'Local nouns-assets image-data plus Nouns buildSVG renderer',
     sprites: 60,
@@ -264,6 +268,9 @@ const payload = {
     deskStoryFrame: 'https://pointcast.xyz/games/nouns-nation-battler/desk/#view=story',
     deskAgentFrame: 'https://pointcast.xyz/games/nouns-nation-battler/desk/#view=agent',
     agentBench: 'https://pointcast.xyz/nouns-nation-battler-agents/',
+    agentPromptKit: 'https://pointcast.xyz/nouns-nation-battler-prompts/',
+    wiki: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
+    wikiJson: 'https://pointcast.xyz/nouns-nation-battler-wiki.json',
     agentSidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
     sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
     productionDesk: 'https://pointcast.xyz/nouns-nation-battler-production/',

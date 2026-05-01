@@ -330,6 +330,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Extend Agent Bench to v1.7.0 with Claim Board data and a claim-board operator task pack.
 - Add MCP tool `nouns_battler_claim_board` and resource `nouns-battler://claim-board`.
 
+## V40 Agent Prompt Kit Additions
+
+- Add `/nouns-nation-battler-prompts/` as a public prompt kit for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents.
+- Shape prompts around GPT-5.5-style agent handoffs: one role, one artifact, one evidence budget, one stop rule, one validation line.
+- Include prompt cards for Mobile Cast QA, scorebook recaps, sponsor package building, poster/product drops, route integrity audits, and TV host rundowns.
+- Expose the prompt kit through `/nouns-nation-battler-agents.json`, `/agents.json`, `/nouns-nation.json`, `/nouns-nation-battler.json`, the Agent Bench, and the Nouns Nation hub.
+- Keep the kit read-only and public: no accounts, no private identity capture, no task submission backend.
+
 ## Persistence
 
 - Store league state in `localStorage` under `pc:nouns-nation-league-v4`.
@@ -351,6 +359,14 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Store Production Desk rooting cards in browser localStorage only under `pc:nouns-battler-rooting-v1`.
 - Store Claim Board cards in browser localStorage only under `pc:nouns-battler-claim-board-v1`.
 - Watch frame links remain URL-hash snapshots and do not mutate the local Desk Wall unless the viewer explicitly chooses local state.
+
+## V41 Battler Wiki Additions
+
+- Add `/nouns-nation-battler-wiki/` as the human-readable field guide for the sport.
+- Add `/nouns-nation-battler-wiki.json` so agents can read the same wiki map directly.
+- Cover quick-start watch links, glossary, eight gangs, featured Noun numbers, watch modes, season arc, participation lanes, and guardrails.
+- Expose the wiki through Nouns Nation, Battler manifests, Agent Bench, `/agents.json`, and `/for-agents`.
+- Keep wiki claims tied to public routes, visible Noun numbers, and no-money-yet participant-credit guardrails.
 
 ## Acceptance Criteria
 
@@ -411,5 +427,8 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - The Season Desk Wall can save up to six in-session report cards, then copy or re-download each one.
 - The Season Desk Wall can copy a focused report-card link from the current card or a saved gallery card.
 - The Season Desk Wall copies public PointCast card links when generated from localhost.
+- `/nouns-nation-battler-wiki/` renders a human-readable field guide for rules, gangs, watch modes, seasons, agents, sponsorships, and contribution paths.
+- `/nouns-nation-battler-wiki.json` returns the same wiki map for agents with CORS-open JSON.
+- Nouns Nation, Battler, Agent Bench, `/agents.json`, and `/for-agents` link to the wiki route.
 - `npm run build` succeeds.
 - The game remains playable inside the Pointcast iframe.
