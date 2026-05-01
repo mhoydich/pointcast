@@ -48,9 +48,24 @@ const blocks = defineCollection({
     // edition is the on-chain identity of the artifact (Tezos);
     // spend is the off-chain receipt of what funded it (Stripe Link).
     // Populated by the Link webhook on settled spend requests.
+    //
+    // 2026-05-01 future-think additions:
+    //   - `payee_agent` field — for the +12-18mo agent-to-agent payment
+    //     primitive (my Codex pays your Codex for a packaged service).
+    //     Today every spend has agent (who paid) and merchant (who got paid,
+    //     a third-party). Tomorrow some spends will have payee_agent
+    //     (who got paid, another agent-as-economic-subject).
+    //   - `mcp_server_id` field — for the same era when residents call
+    //     payments natively as MCP tools (link-cli mcp add) rather than
+    //     shelling out via this script. Carries the agent's MCP identity.
     spend: z
       .object({
         agent: z.enum(['claude', 'codex', 'manus', 'cc']),
+        // payee_agent — present when this spend was an agent-to-agent payment
+        // rather than agent-to-merchant. agent and payee_agent both being set
+        // means the spend has no third-party merchant; merchant = the recipient
+        // agent's identity. The +12-18mo inversion lives in this field.
+        payee_agent: z.enum(['claude', 'codex', 'manus', 'cc']).optional(),
         loop: z.string().min(1),                                 // see src/lib/agent-value.ts loop ids
         amount_usd: z.number().nonnegative().max(500),           // link-cli max is $500/req
         currency: z.string().default('usd'),
@@ -73,6 +88,44 @@ const blocks = defineCollection({
         card_valid_until: z.string().optional(),                 // ISO timestamp; credential expiration
         mode: z.enum(['test', 'live']).default('test'),          // v0 ships in test mode
         context: z.string().optional(),                          // user-facing approval blurb (>=100 chars per CLI)
+        // mcp_server_id — set when the spend was initiated through link-cli's
+        // MCP server integration rather than this script's shell-out. v0+1
+        // residents will register link-cli as an MCP server (link-cli mcp add)
+        // and call spend tools natively. We capture the server id so receipts
+        // can be attributed to the integration surface that fired them.
+        mcp_server_id: z.string().optional(),
+      })
+      .optional(),
+
+    // Payouts — added 2026-05-01 as forward-thinking scaffolding. The
+    // +18-24mo end-state from the agent-payments proposal: when an artifact
+    // *earns* (sponsorship, mint sale, ad), an automatic split fires across
+    // the human + the agents that contributed.
+    //
+    // Today no Block on PointCast carries this field — we don't earn revenue
+    // on individual artifacts yet. Schema landed early so the day a Block
+    // does, we don't need a migration. A Block carrying `spend` AND `edition`
+    // AND `payouts` is the fully-realized loop: cost is recorded, identity
+    // is on-chain, revenue split is programmable.
+    //
+    // Validation: shares must sum to <= 1.0 (allows future fee/treasury cut
+    // to absorb the residual). Each entry has either a human handle or an
+    // agent identity, plus the share fraction.
+    payouts: z
+      .array(
+        z.object({
+          to: z.string().min(1),                                 // 'mike' / 'codex' / 'manus' / 'mh+cc' / arbitrary handle
+          to_kind: z.enum(['human', 'agent', 'treasury', 'external']).default('agent'),
+          share: z.number().min(0).max(1),                       // fraction 0.0-1.0
+          rationale: z.string().optional(),                      // e.g. "scouted the lead", "wrote the prose", "minted the art"
+          paid_out: z.boolean().default(false),                  // true once the split has fired
+          paid_at: z.string().optional(),                        // ISO timestamp when split fired
+          link_session_id: z.string().optional(),                // future: split lands as its own spend-request when that's the rail
+        }),
+      )
+      .max(8)                                                    // generous; most splits will be 2-4 way
+      .refine((items) => items.reduce((s, x) => s + x.share, 0) <= 1.0001, {
+        message: 'payout shares must sum to <= 1.0',
       })
       .optional(),
 

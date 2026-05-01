@@ -46,6 +46,16 @@ export const GET: APIRoute = async () => {
         card_last4: s.card_last4 ?? null,
         card_brand: s.card_brand ?? null,
         card_valid_until: s.card_valid_until ?? null,
+        // Future-think fields (2026-05-01). Today every receipt has
+        // payee_agent: null and payouts: null. When the +12-18mo agent-
+        // earns inversion lands, payee_agent becomes who-the-agent-paid
+        // (another agent). When the +18-24mo programmable splits land,
+        // payouts becomes the ordered split for when this artifact earns.
+        payee_agent: s.payee_agent ?? null,
+        is_a2a: !!s.payee_agent,
+        mcp_server_id: s.mcp_server_id ?? null,
+        payouts: (b.data as any).payouts ?? null,
+        has_payouts: Array.isArray((b.data as any).payouts) && (b.data as any).payouts.length > 0,
         dual_rail: !!(b.data as any).edition,
         // Context is the user-facing approval blurb; safe to expose.
         context: s.context ?? null,
@@ -70,7 +80,7 @@ export const GET: APIRoute = async () => {
 
   const body = {
     generatedAt: new Date().toISOString(),
-    schema: 'pointcast.money/v1',
+    schema: 'pointcast.money/v2',
     site: 'https://pointcast.xyz',
     total_count: receipts.length,
     total_usd: Number(total.toFixed(2)),
@@ -78,11 +88,18 @@ export const GET: APIRoute = async () => {
     totals_by_agent: totalsByAgent,
     totals_by_status: totalsByStatus,
     dual_rail_count: receipts.filter((r) => r.dual_rail).length,
+    a2a_count: receipts.filter((r) => r.is_a2a).length,
+    payout_count: receipts.filter((r) => r.has_payouts).length,
     receipts,
     references: {
       human: 'https://pointcast.xyz/money',
       issue: 'https://github.com/mhoydich/pointcast/issues/262',
       proposal: 'https://github.com/mhoydich/pointcast/blob/main/docs/proposals/2026-04-30-link-agent-payments.md',
+    },
+    // Schema notes for future-thinking integrators.
+    schema_notes: {
+      v1: 'Initial receipt feed. spend metadata, totals.',
+      v2: 'Adds payee_agent + is_a2a (agent-to-agent), mcp_server_id, payouts + has_payouts (programmable revenue splits). All optional; today every receipt has them null/false.',
     },
   };
 
