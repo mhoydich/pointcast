@@ -81,6 +81,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--dry-run') { args.dryRun = true; continue; }
     if (a === '--commit')  { args.commit  = true; continue; }
+    if (a === '--live')    { args.live    = true; continue; }
     if (a.startsWith('--')) {
       args[a.slice(2)] = argv[++i];
     }
@@ -113,8 +114,13 @@ function validate(args) {
   if (!args.context || args.context.length < 100) {
     die(3, `--context required, min 100 chars (link-cli requirement). Got ${args.context?.length ?? 0}.`);
   }
-  if (args.live) die(2, '--live not supported in v0. Test mode only.');
-  return { ...args, amountUsd, channel: args.channel || 'FD' };
+  // --live is opt-in; without it we default to --test. Hard cap on live amount
+  // is intentionally lower than the per-purchase cap until the loop is proven.
+  const isLive = args.live === true;
+  if (isLive && amountUsd > 2.0) {
+    die(2, `--live capped at $2.00/req for v0 proving runs. Got $${amountUsd}. Raise the cap explicitly when ready.`);
+  }
+  return { ...args, amountUsd, channel: args.channel || 'FD', isLive };
 }
 
 // ─── link-cli shell-out ─────────────────────────────────────────────────────
@@ -131,10 +137,11 @@ function runLinkCli(args) {
       '--merchant-url',      args['merchant-url'],
       '--context',           args.context,
       '--request-approval',
-      '--test',
       '--format',            'json',
     ];
-    process.stdout.write(`→ link-cli ${cliArgs.slice(0, 2).join(' ')}  (test mode, $${args.amountUsd.toFixed(2)} → ${args.merchant})\n`);
+    if (!args.isLive) cliArgs.push('--test');
+    const modeLabel = args.isLive ? 'LIVE — REAL MONEY' : 'test mode';
+    process.stdout.write(`→ link-cli ${cliArgs.slice(0, 2).join(' ')}  (${modeLabel}, $${args.amountUsd.toFixed(2)} → ${args.merchant})\n`);
     process.stdout.write(`  awaiting approval push on Mike's phone…\n`);
 
     const proc = spawn('link-cli', cliArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -164,7 +171,7 @@ async function nextBlockId() {
   return String(Math.max(...ids) + 1).padStart(4, '0');
 }
 
-async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel }) {
+async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel, isLive }) {
   // link-cli's response shape uses camelCase; older docs sometimes show snake_case.
   // Try both so we capture the spend-request id wherever it lands.
   const spendRequestId =
@@ -187,8 +194,8 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
     id,
     channel,
     type: 'NOTE',
-    title: `${agent} ${loop} — ${merchant} — $${amountUsd.toFixed(2)} (testmode)`,
-    dek: `Test-mode receipt of a ${loop} loop. Approved by Mike via Stripe Link. Spend-request ${spendRequestId || 'unknown'}.`,
+    title: `${agent} ${loop} — ${merchant} — $${amountUsd.toFixed(2)}${isLive ? '' : ' (testmode)'}`,
+    dek: `${isLive ? 'Live' : 'Test-mode'} receipt of a ${loop} loop. Approved by Mike via Stripe Link. Spend-request ${spendRequestId || 'unknown'}.`,
     timestamp: new Date().toISOString(),
     size: '1x1',
     noun: Number(id),
@@ -203,7 +210,7 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       status,
       link_session_id: spendRequestId,
       receipt_url: receiptUrl,
-      mode: 'test',
+      mode: isLive ? 'live' : 'test',
       context,
     },
     author: agent === 'cc' ? 'cc' : agent,
@@ -235,6 +242,7 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
 
   if (args.dryRun) {
     process.stdout.write('— DRY RUN — no link-cli call, no Block written.\n');
+    process.stdout.write(`  mode:         ${args.isLive ? 'LIVE — REAL MONEY' : 'test'}\n`);
     process.stdout.write(`  agent:        ${args.agent}\n`);
     process.stdout.write(`  loop:         ${args.loop}\n`);
     process.stdout.write(`  amount:       $${args.amountUsd.toFixed(2)}\n`);
@@ -267,6 +275,7 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       context: args.context,
       settled,
       channel: args.channel,
+      isLive: args.isLive,
     });
   } catch (err) {
     die(4, `block write failed: ${err.message}`);
