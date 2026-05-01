@@ -5,7 +5,10 @@
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
-import { NOUNS_BATTLER_SEASON_6_MISSION_PACKS } from '../lib/nouns-battler-agent-bench';
+import {
+  NOUNS_BATTLER_SEASON_6_FAST_PASS,
+  NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
+} from '../lib/nouns-battler-agent-bench';
 
 const ch = CHANNELS.BTL;
 
@@ -15,6 +18,7 @@ const tickerItems = [
   'Nations, teams, gangs, clubs, crews, DAOs, shops, schools, and local leagues can bring identity',
   'PointCast supplies the desk, schedule grammar, result envelope, and agent-readable rails',
   'Sprint Room now packages Season 6 launch work: expansion, media week, rights inventory, and proof artifacts',
+  'Fast Pass gives agents copyable claim, share, and audit handoffs before the room cools',
   'Signed: Michael Hoydich x Codex 5.5 extra-high',
 ];
 
@@ -289,6 +293,7 @@ const outputLinks = [
   { label: 'Hub', title: 'Nouns Nation', href: '/nouns-nation/' },
   { label: 'Recap', title: 'Season Archive', href: '#season-recap' },
   { label: 'Sprint', title: 'Season 6 Room', href: '#sprint-room' },
+  { label: 'Claim', title: 'Fast Pass', href: '#claim-pass' },
   { label: 'V2', title: 'Battle Desk V2', href: '/nouns-nation-battler-v2/' },
   { label: 'Strategy', title: 'Federation', href: '/nouns-nation/federation/' },
   { label: 'Intake', title: 'Bring a Nation', href: '/nouns-nation/join/' },
@@ -317,7 +322,7 @@ const jsonLd = {
   '@type': 'VideoGame',
   name: 'PointCast Battle Desk V3: Nouns Nation Federation Desk',
   description:
-    'A federation-minded V3 control room for Nouns Nation Battler with live match feed, season recap archive, MVP board, media coverage slate, next-season preview, rival league preview, Season 6 Sprint Room, operating thought, signed posture, and bring-your-own-nation rails.',
+    'A federation-minded V3 control room for Nouns Nation Battler with live match feed, season recap archive, MVP board, media coverage slate, next-season preview, rival league preview, Season 6 Sprint Room, Fast Pass claim/share/audit handoffs, operating thought, signed posture, and bring-your-own-nation rails.',
   url: 'https://pointcast.xyz/nouns-nation-battler-v3/',
   gamePlatform: 'Web browser',
   genre: 'Auto battler',
@@ -327,7 +332,7 @@ const jsonLd = {
 
 <BlockLayout
   title="PointCast Battle Desk V3"
-  description="A federation-minded V3 desk for Nouns Nation Battler: live match feed, season recap archive, MVP board, media angles, next-season and rival-league previews, Season 6 Sprint Room, portable receipts, bring-your-own-nation rails, and a signed Michael Hoydich x Codex 5.5 extra-high operating thought."
+  description="A federation-minded V3 desk for Nouns Nation Battler: live match feed, season recap archive, MVP board, media angles, next-season and rival-league previews, Season 6 Sprint Room, Fast Pass claim/share/audit handoffs, portable receipts, bring-your-own-nation rails, and a signed Michael Hoydich x Codex 5.5 extra-high operating thought."
   image="/images/og/nouns-battler-v3.png"
   jsonLd={jsonLd}
   alternates={[
@@ -390,6 +395,7 @@ const jsonLd = {
           <a class="primary" href="#live">Watch live</a>
           <a href="#season-recap">Season recap</a>
           <a href="#sprint-room">Sprint room</a>
+          <a href="#claim-pass">Fast pass</a>
           <a href="/nouns-nation/federation/">Read strategy</a>
           <a href="/nouns-nation/join/">Bring a nation</a>
         </nav>
@@ -596,6 +602,30 @@ const jsonLd = {
           </p>
         </aside>
       </div>
+
+      <section id="claim-pass" class="claim-pass" aria-labelledby="claim-pass-title">
+        <div>
+          <p class="kicker">Fast pass</p>
+          <h3 id="claim-pass-title">Copy the next action before the room cools.</h3>
+          <p>{NOUNS_BATTLER_SEASON_6_FAST_PASS.guardrail}</p>
+        </div>
+        <div class="claim-pass__cards">
+          {NOUNS_BATTLER_SEASON_6_FAST_PASS.cards.map((card) => (
+            <article>
+              <span>{card.label}</span>
+              <strong>{card.title}</strong>
+              <p>{card.body}</p>
+              <div class="claim-pass__actions">
+                <a href={card.href}>Open</a>
+                <button type="button" data-copy-action data-copy-text={card.copyText}>
+                  <span>{card.cta}</span>
+                  <small data-copy-status>Ready</small>
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <div class="sprint-scoreboard" aria-label="Sprint scorecard">
         {sprintScoreboard.map((item) => (
@@ -823,6 +853,46 @@ const jsonLd = {
     return '/games/nouns-nation-battler/' + asset.replace(/^\.?\//, '');
   }
 
+  function updateCopyState(button, label) {
+    var status = button.querySelector('[data-copy-status]');
+    if (status) status.textContent = label;
+    button.setAttribute('data-copy-state', label.toLowerCase());
+    window.setTimeout(function () {
+      if (status) status.textContent = 'Ready';
+      button.removeAttribute('data-copy-state');
+    }, 1600);
+  }
+
+  function fallbackCopy(text) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand('copy');
+      return true;
+    } catch (error) {
+      return false;
+    } finally {
+      document.body.removeChild(area);
+    }
+  }
+
+  function copyAction(button) {
+    var text = button.getAttribute('data-copy-text') || '';
+    if (!text) return;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(function () { updateCopyState(button, 'Copied'); })
+        .catch(function () { updateCopyState(button, fallbackCopy(text) ? 'Copied' : 'Failed'); });
+      return;
+    }
+    updateCopyState(button, fallbackCopy(text) ? 'Copied' : 'Failed');
+  }
+
   function postCommand(command, extra) {
     if (!frame.contentWindow) return;
     frame.contentWindow.postMessage(Object.assign({
@@ -929,6 +999,11 @@ const jsonLd = {
   desk.addEventListener('click', function (event) {
     var target = event.target;
     if (!target || !target.closest) return;
+    var copyButton = target.closest('[data-copy-action]');
+    if (copyButton && desk.contains(copyButton)) {
+      copyAction(copyButton);
+      return;
+    }
     var button = target.closest('[data-desk-command]');
     if (!button || !desk.contains(button)) return;
     var command = button.dataset.deskCommand;
@@ -1033,6 +1108,8 @@ const jsonLd = {
   .rival-league em,
   .sprint-brief span,
   .sprint-brief em,
+  .claim-pass span,
+  .claim-pass small,
   .sprint-scoreboard span,
   .sprint-timeline span,
   .combine-card span,
@@ -1064,6 +1141,7 @@ const jsonLd = {
   .next-season-panel,
   .preview-grid article,
   .sprint-brief,
+  .claim-pass,
   .sprint-scoreboard article,
   .sprint-timeline,
   .combine-card,
@@ -1743,6 +1821,107 @@ const jsonLd = {
     color: #d8ddea;
   }
 
+  .claim-pass {
+    display: grid;
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    background: #151922;
+    color: #fffaf0;
+    scroll-margin-top: 96px;
+  }
+
+  .claim-pass > div:first-child {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+  }
+
+  .claim-pass .kicker,
+  .claim-pass__cards span {
+    color: #f6d365;
+  }
+
+  .claim-pass h3 {
+    margin: 0;
+    font-size: clamp(1.5rem, 3vw, 2.8rem);
+    line-height: 0.92;
+  }
+
+  .claim-pass p {
+    color: #d8ddea;
+    line-height: 1.42;
+  }
+
+  .claim-pass__cards {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .claim-pass__cards article {
+    min-width: 0;
+    min-height: 196px;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    border: 1px solid rgba(255, 250, 240, 0.24);
+    background: rgba(255, 255, 255, 0.07);
+    padding: 12px;
+  }
+
+  .claim-pass__cards strong {
+    font-size: 1.16rem;
+    line-height: 1;
+  }
+
+  .claim-pass__actions {
+    align-self: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .claim-pass__actions a,
+  .claim-pass__actions button {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 2px solid #fffaf0;
+    border-radius: 4px;
+    background: #fffaf0;
+    color: #151922;
+    box-shadow: 2px 2px 0 #f6d365;
+    font-weight: 800;
+    padding: 8px 10px;
+  }
+
+  .claim-pass__actions button {
+    width: auto;
+    cursor: pointer;
+  }
+
+  .claim-pass__actions small {
+    color: rgba(21, 25, 34, 0.62);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .claim-pass__actions button[data-copy-state="copied"] {
+    background: var(--mint);
+    color: var(--ink);
+  }
+
+  .claim-pass__actions button[data-copy-state="failed"] {
+    background: #ffe4e6;
+    color: #8a2432;
+  }
+
   .sprint-scoreboard,
   .media-products {
     display: grid;
@@ -2196,6 +2375,7 @@ const jsonLd = {
     .recap-layout,
     .next-season-panel,
     .sprint-brief,
+    .claim-pass,
     .sprint-grid,
     .agent-sprint,
     .rival-scout,
@@ -2243,6 +2423,7 @@ const jsonLd = {
     .lane-grid,
     .coverage-slate,
     .preview-grid,
+    .claim-pass__cards,
     .sprint-scoreboard,
     .media-products,
     .agent-sprint > div:last-child,
@@ -2289,6 +2470,7 @@ const jsonLd = {
     .lane-grid,
     .coverage-slate,
     .preview-grid,
+    .claim-pass__cards,
     .sprint-scoreboard,
     .media-products,
     .agent-sprint > div:last-child,
@@ -2522,6 +2704,7 @@ const jsonLd = {
     .next-season-panel,
     .preview-grid article,
     .sprint-brief,
+    .claim-pass,
     .sprint-scoreboard article,
     .sprint-timeline,
     .combine-card,
@@ -2577,6 +2760,7 @@ const jsonLd = {
 
     .next-season-panel,
     .sprint-grid,
+    .claim-pass,
     .agent-sprint,
     .rival-scout,
     .operator-loop {
@@ -2616,6 +2800,7 @@ const jsonLd = {
 
     .sprint-timeline,
     .combine-card,
+    .claim-pass,
     .agent-sprint,
     .mission-board,
     .rival-scout,
@@ -2627,6 +2812,7 @@ const jsonLd = {
 
     .sprint-timeline h3,
     .combine-card h3,
+    .claim-pass h3,
     .agent-sprint h3,
     .mission-board__head h3,
     .rival-scout h3 {
@@ -2647,6 +2833,7 @@ const jsonLd = {
     }
 
     .media-products,
+    .claim-pass__cards,
     .agent-sprint > div:last-child,
     .mission-pack-grid {
       max-width: 100%;
@@ -2660,6 +2847,7 @@ const jsonLd = {
     }
 
     .media-products::-webkit-scrollbar,
+    .claim-pass__cards::-webkit-scrollbar,
     .agent-sprint > div:last-child::-webkit-scrollbar,
     .mission-pack-grid::-webkit-scrollbar {
       display: none;
@@ -2667,6 +2855,27 @@ const jsonLd = {
 
     .media-products {
       padding-bottom: 6px;
+    }
+
+    .claim-pass {
+      gap: 10px;
+      scroll-margin-top: 150px;
+    }
+
+    .claim-pass__cards {
+      padding: 0 2px 8px;
+    }
+
+    .claim-pass__cards article {
+      flex: 0 0 min(84vw, 340px);
+      min-height: auto;
+      padding: 12px;
+      scroll-snap-align: start;
+    }
+
+    .claim-pass__actions a,
+    .claim-pass__actions button {
+      min-height: 44px;
     }
 
     .media-products article {
@@ -2762,6 +2971,7 @@ const jsonLd = {
       font-size: 1.85rem;
     }
 
+    .claim-pass__cards article,
     .mission-pack-grid article {
       flex-basis: 88vw;
     }

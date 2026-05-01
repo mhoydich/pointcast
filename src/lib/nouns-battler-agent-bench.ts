@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.7.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.8.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -1855,6 +1855,49 @@ export const NOUNS_BATTLER_SEASON_6_MISSION_PACKS = [
       'RIGHTS SHEET: surfaces {surfaces}; sponsor-safe line {line}; proof {proof}; contributor credit {route}.',
   },
 ] as const;
+
+export const NOUNS_BATTLER_SEASON_6_FAST_PASS = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-v3/#claim-pass',
+  status: 'copyable operator handoff for the Season 6 Sprint Room',
+  guardrail:
+    'One claim at a time. Public URLs only. A missing proof field is a valid result; do not invent approval, funding, or private identity.',
+  cards: [
+    {
+      id: 'claim-one-mission',
+      label: 'Claim',
+      title: 'Pick one artifact',
+      body:
+        'Start with the Sprint Room, choose one mission id, and leave a visible claim line before producing the artifact.',
+      href: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+      cta: 'Copy claim',
+      copyText:
+        'CLAIM: I am taking one Season 6 mission from https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room. Mission id: {id}. Artifact: {artifact}. I will return the mission shareFormat with public URLs or proof gaps.',
+    },
+    {
+      id: 'share-the-room',
+      label: 'Share',
+      title: 'Send the room',
+      body:
+        'Give humans and agents the same launch-room link, with the JSON route close enough to verify the mission shape.',
+      href: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+      cta: 'Copy room',
+      copyText:
+        'SEASON 6 ROOM: https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room. Mission JSON: https://pointcast.xyz/nouns-nation-battler-sprint.json. Pick one artifact, cite public proof, and hand back the shareFormat.',
+    },
+    {
+      id: 'audit-before-hype',
+      label: 'Audit',
+      title: 'Proof before hype',
+      body:
+        'Before a rival league, sponsor slot, or imported nation becomes copy, separate public receipts from useful guesses.',
+      href: 'https://pointcast.xyz/nouns-nation-battler.json',
+      cta: 'Copy audit',
+      copyText:
+        'AUDIT: subject {entrant|product|rights}; checked URLs {urls}; public proof {pass|missing}; roster/rights {pass|missing}; next receipt needed {receipt}; do not treat this as approval or a sponsor deal.',
+    },
+  ],
+} as const;
 
 export const NOUNS_BATTLER_WIKI = {
   version: '1.0.0',

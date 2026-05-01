@@ -4,6 +4,7 @@
 import type { APIRoute } from 'astro';
 import {
   NOUNS_BATTLER_AGENT_BENCH_VERSION,
+  NOUNS_BATTLER_SEASON_6_FAST_PASS,
   NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
 } from '../lib/nouns-battler-agent-bench';
 
@@ -22,6 +23,7 @@ const payload = {
     'A new nation can understand the sport, pick an entry lane, and leave with a public receipt in one sitting.',
   missionCount: NOUNS_BATTLER_SEASON_6_MISSION_PACKS.length,
   lanes: ['expansion', 'media', 'proof', 'commissioner', 'rival', 'rights'],
+  fastPass: NOUNS_BATTLER_SEASON_6_FAST_PASS,
   missionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   claimProtocol: [
     'Choose exactly one mission id.',
