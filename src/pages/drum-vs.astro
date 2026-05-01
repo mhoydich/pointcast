@@ -360,6 +360,8 @@ const jsonLd = {
     // by spoofing the local DOM — the server validates).
     var optimisticP1 = 0;
     var optimisticP2 = 0;
+    var WIN_TAPS_LOCAL = 50;
+    var localVictoryClaimed = false;
 
     var nounImg1 = document.getElementById('dv-noun-1');
     var nounImg2 = document.getElementById('dv-noun-2');
@@ -427,6 +429,20 @@ const jsonLd = {
       setRopeNoun(leadId);
     }
 
+    function claimLocalVictory(mySideClaim) {
+      if (winner !== 0) return; // server already decided; respect it
+      var nameEl = document.getElementById('dv-victory-name');
+      var p1El = document.getElementById('dv-victory-p1');
+      var p2El = document.getElementById('dv-victory-p2');
+      var ov = document.getElementById('dv-victory');
+      if (nameEl) nameEl.textContent = (mySideClaim === mySide) ? 'you' : 'they';
+      if (p1El) p1El.textContent = String(Math.max(p1Score, optimisticP1));
+      if (p2El) p2El.textContent = String(Math.max(p2Score, optimisticP2));
+      if (ov) ov.hidden = false;
+      try { if (navigator.vibrate) navigator.vibrate([20, 60, 30, 60]); } catch (e) {}
+      if (strap) strap.textContent = 'room ' + room + ' · final pull · waiting for server confirm…';
+    }
+
     function applyServerState(state) {
       if (mode === 'duel') applyDuelState(state);
 
@@ -439,6 +455,13 @@ const jsonLd = {
       // Reconcile optimistic — never go backward from server truth
       if (optimisticP1 < p1Score) optimisticP1 = p1Score;
       if (optimisticP2 < p2Score) optimisticP2 = p2Score;
+      // Clamp once server declares winner — prevents the "77-22 with no
+      // overlay" bug where rapid in-flight taps left the local display
+      // running past the canonical cap.
+      if (winner !== 0) {
+        optimisticP1 = p1Score;
+        optimisticP2 = p2Score;
+      }
 
       // Render side info
       if (p1Pid) {
@@ -929,10 +952,23 @@ const jsonLd = {
     // ─── Tap broadcast ─────────────────────────────────────────────────
     function fireTap(side) {
       if (mySide !== side || winner !== 0) return;
+      // Hard local cap — can't out-tap our own win.
+      if (mode === 'tug' || mode === 'race') {
+        var myCount = side === 1 ? optimisticP1 : optimisticP2;
+        if (myCount >= WIN_TAPS_LOCAL) return;
+      }
       try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
       // Optimistic local
       if (side === 1) optimisticP1 += 1;
       else optimisticP2 += 1;
+      // Provisional local victory — server confirms within ~400ms.
+      if ((mode === 'tug' || mode === 'race') && !localVictoryClaimed) {
+        var meCount = side === 1 ? optimisticP1 : optimisticP2;
+        if (meCount >= WIN_TAPS_LOCAL) {
+          localVictoryClaimed = true;
+          claimLocalVictory(side);
+        }
+      }
       updateUI();
       var btn = side === 1 ? tap1 : tap2;
       btn.classList.remove('dv__tap--hit');
@@ -1068,6 +1104,7 @@ const jsonLd = {
             if (data && data.ok) {
               optimisticP1 = 0;
               optimisticP2 = 0;
+              localVictoryClaimed = false;
               duelLocalReady = false;
               duelLocalTap = false;
               applyServerState(data.state);
