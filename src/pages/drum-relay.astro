@@ -1,0 +1,751 @@
+---
+/**
+ * /drum-relay — async-social rhythm chain.
+ *
+ * Per Mike 2026-04-30 (late, "keep building"). One visitor taps 4
+ * beats. The next visitor hears those 4 beats, then taps their own
+ * 4 to extend the chain. Over time the chain grows into a
+ * collective composition — each link tagged with a Noun, browsable
+ * as a feed, playable end-to-end as a Web Audio sequence.
+ *
+ * Distinct shape on the hub:
+ *   /drum         — open jam (real-time)
+ *   /drum-vs      — 1v1 (real-time, dual-bus WebRTC + KV)
+ *   /drum-league  — community counter (cooperative)
+ *   /drum-solo    — Guitar-Hero campaign (solo)
+ *   /drum-portrait— generative fingerprint (solo, take-home)
+ *   /drum-relay   — async-social rhythm chain (this page)
+ *
+ * Page shape (single page, three sections):
+ *   1. CHAIN — last ~24 links displayed as a horizontal scroll of
+ *      cards. Each card shows the contributor's Noun, BPM, and a
+ *      mini-visualization of their 4 beats. A "play the chain"
+ *      button cues all links in sequence.
+ *   2. YOUR TURN — a 4-beat capture pad. Tap 4 times. The page
+ *      records the timings, shows a preview, and POSTs to
+ *      /api/drum-relay. After a successful POST, your link
+ *      appears at the end of the chain.
+ *   3. ABOUT — short editorial pinning the metaphor.
+ *
+ * Identity: each visitor's Noun is hashed from sessionId. The same
+ * person tapping over multiple visits keeps their Noun. Server
+ * also derives + persists nounId per link so historical browsing
+ * stays consistent.
+ *
+ * Audio: each tap fires a synthesized triangle tone. The "play the
+ * chain" button schedules each link's beats as a tight phrase with
+ * a brief gap between contributors, so the chain feels like a
+ * conversation of rhythms.
+ *
+ * Aesthetic: warm publishing-house cream + ink + magenta + the
+ * noun art. Slight zine vibe consistent with the rest of the hub.
+ *
+ * IMPORTANT: literal '{' / '}' in body text MUST be escaped as
+ * &#123; / &#125; (PR #222 lesson).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'DRUM RELAY — async-social rhythm chain';
+const description = 'A community rhythm chain. Tap 4 beats; they get appended to the chain. The next visitor extends with 4 more. Listen end-to-end. Each link tagged with a Noun. A composition that grows by visit, not by minute.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/drum-relay',
+  name: 'PointCast Drum Relay · Async Rhythm Chain',
+  url: 'https://pointcast.xyz/drum-relay',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <main class="dr" id="dr-main">
+    <DrumNav current="relay" />
+    <RoomPresenceChip surface="relay" />
+
+    <header class="dr__head">
+      <p class="dr__kicker mono">★ DRUM HUB · RELAY · A CHAIN OF FOUR-BEAT LINKS ★</p>
+      <h1 class="dr__title">drum <em>relay</em></h1>
+      <p class="dr__strap mono">tap four beats · pass the rhythm · the next visitor extends · the chain grows</p>
+    </header>
+
+    {/* ─── CHAIN ─────────────────────────────────────────────── */}
+    <section class="dr__chain" aria-label="The chain so far">
+      <div class="dr__chain-head">
+        <p class="dr__eyebrow mono">▌ THE CHAIN · <strong id="dr-chain-count">—</strong> LINKS</p>
+        <button type="button" class="dr__btn dr__btn--magenta" id="dr-chain-play">
+          ▸ play the chain
+        </button>
+      </div>
+
+      <ol class="dr__chain-list" id="dr-chain-list" role="list">
+        <li class="dr__chain-empty mono">— loading chain —</li>
+      </ol>
+
+      <p class="dr__chain-foot mono">
+        ▸ chain holds the last 60 links · 7-day TTL · 30s cooldown between contributions per visitor
+      </p>
+    </section>
+
+    {/* ─── YOUR TURN ─────────────────────────────────────────── */}
+    <section class="dr__turn" aria-label="Your turn">
+      <p class="dr__eyebrow mono">☞ YOUR TURN</p>
+      <div class="dr__turn-card">
+        <div class="dr__turn-noun-wrap">
+          <img class="dr__turn-noun" id="dr-turn-noun" src="" alt="Your Noun" width="80" height="80" />
+        </div>
+        <div class="dr__turn-body">
+          <p class="dr__turn-line">
+            Tap the pad <strong>four times</strong>. Any rhythm — clipped, sparse, urgent.
+            The four taps become a link in the chain.
+          </p>
+          <p class="dr__turn-status mono" id="dr-turn-status">— ready · 0 / 4 beats —</p>
+        </div>
+      </div>
+
+      <button type="button" class="dr__pad" id="dr-pad" aria-label="Tap pad — 4 beats">
+        <span class="dr__pad-cap">
+          <span class="dr__pad-glyph" aria-hidden="true">▣</span>
+          <span class="dr__pad-label mono">TAP</span>
+          <span class="dr__pad-kbd mono">SPACE / RETURN</span>
+          <span class="dr__pad-counter mono"><strong id="dr-pad-count">0</strong> / 4</span>
+        </span>
+      </button>
+
+      <div class="dr__turn-actions">
+        <button type="button" class="dr__btn dr__btn--magenta" id="dr-submit" disabled>
+          ▸ add to the chain
+        </button>
+        <button type="button" class="dr__btn dr__btn--ghost" id="dr-reset">▸ start over</button>
+      </div>
+
+      <p class="dr__submit-status mono" id="dr-submit-status">&nbsp;</p>
+    </section>
+
+    {/* ─── ABOUT ─────────────────────────────────────────────── */}
+    <section class="dr__about" aria-label="About">
+      <p class="dr__eyebrow mono">¶ ABOUT</p>
+      <p class="dr__about-body">
+        Drum Relay is the <em>slow</em> drum surface. There's no real-time multiplayer, no race against
+        anyone. You arrive, you hear what previous visitors left, you contribute four beats, and you leave.
+        Tomorrow someone else will hear yours. The chain grows by visit, not by minute.
+      </p>
+      <p class="dr__about-body">
+        The only data we keep is timing — four numbers per visitor, in milliseconds. No words, no images,
+        nothing to moderate. Just rhythm, in a long line.
+      </p>
+    </section>
+
+    <footer class="dr__foot">
+      <p class="mono">DRUM RELAY · v0.1 · 2026-04-30 · pointcast.xyz/drum-relay · part of <a href="/drum-press">drum press</a></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── Identity ───────────────────────────────────────────────
+    function getSid() {
+      try {
+        var s = localStorage.getItem('pc:sid');
+        if (s) return s;
+        s = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+        localStorage.setItem('pc:sid', s);
+        return s;
+      } catch (e) { return 'anon-' + Date.now(); }
+    }
+    function nounIdFromString(s) {
+      var h = 0;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+      return Math.abs(h) % 1200;
+    }
+    var sid = getSid();
+    var myNoun = nounIdFromString(sid);
+
+    var nounEl = document.getElementById('dr-turn-noun');
+    if (nounEl) {
+      nounEl.src = 'https://noun.pics/' + myNoun + '.svg';
+      nounEl.alt = 'Your Noun ' + myNoun;
+      nounEl.style.imageRendering = 'pixelated';
+    }
+
+    // ─── Web Audio ──────────────────────────────────────────────
+    var actx = null;
+    function ensureAudio() {
+      if (actx) return actx;
+      try { actx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { actx = null; }
+      return actx;
+    }
+    // Each link plays at a slightly different pitch derived from its
+    // nounId so the chain has melodic variation. Same noun → same pitch.
+    function pitchForNoun(nounId) {
+      var DEGREES = [0, 3, 5, 7, 10, 12, 14, 17];
+      var deg = DEGREES[nounId % DEGREES.length];
+      return 220 * Math.pow(2, deg / 12);
+    }
+    function playNote(freq, atTime, dur) {
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      var t = atTime || ctx.currentTime;
+      var d = dur || 0.18;
+      var osc = ctx.createOscillator();
+      var g = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + d);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.16, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(g).connect(ctx.destination);
+      osc.start(t); osc.stop(t + d + 0.05);
+    }
+
+    // ─── 4-beat capture ─────────────────────────────────────────
+    var capture = []; // ms-since-first-tap
+    var captureStart = 0;
+    var statusEl = document.getElementById('dr-turn-status');
+    var countEl = document.getElementById('dr-pad-count');
+    var submitBtn = document.getElementById('dr-submit');
+    var resetBtn = document.getElementById('dr-reset');
+    var submitStatusEl = document.getElementById('dr-submit-status');
+
+    function updateCaptureUI() {
+      countEl.textContent = String(capture.length);
+      if (capture.length === 0) {
+        statusEl.textContent = '— ready · 0 / 4 beats —';
+        submitBtn.disabled = true;
+      } else if (capture.length < 4) {
+        statusEl.textContent = '… ' + capture.length + ' / 4 · keep tapping';
+        submitBtn.disabled = true;
+      } else {
+        var intervals = [];
+        for (var i = 1; i < capture.length; i++) intervals.push(capture[i] - capture[i - 1]);
+        intervals.sort(function (a, b) { return a - b; });
+        var median = intervals[Math.floor(intervals.length / 2)];
+        var bpm = median > 0 ? Math.round(60000 / median) : 0;
+        statusEl.textContent = '✓ 4 / 4 · ' + (bpm ? bpm + ' BPM · ' : '') + 'tap submit when ready';
+        submitBtn.disabled = false;
+      }
+    }
+    function captureTap() {
+      if (capture.length >= 4) return;
+      ensureAudio();
+      var now = performance.now();
+      if (capture.length === 0) captureStart = now;
+      var delta = Math.round(now - captureStart);
+      capture.push(delta);
+      playNote(pitchForNoun(myNoun));
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
+      var pad = document.getElementById('dr-pad');
+      if (pad) { pad.classList.remove('dr__pad--hit'); void pad.offsetWidth; pad.classList.add('dr__pad--hit'); }
+      updateCaptureUI();
+    }
+    function resetCapture() {
+      capture = [];
+      captureStart = 0;
+      submitStatusEl.textContent = ' ';
+      updateCaptureUI();
+    }
+
+    document.getElementById('dr-pad').addEventListener('mousedown', function (e) { captureTap(); e.preventDefault(); });
+    document.getElementById('dr-pad').addEventListener('touchstart', function (e) { captureTap(); e.preventDefault(); }, { passive: false });
+
+    window.addEventListener('keydown', function (e) {
+      if (e.repeat) return;
+      var ae = document.activeElement;
+      var tag = ae && ae.tagName ? ae.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        captureTap();
+        e.preventDefault();
+      }
+    });
+
+    resetBtn.addEventListener('click', resetCapture);
+
+    submitBtn.addEventListener('click', function () {
+      if (capture.length !== 4) return;
+      submitBtn.disabled = true;
+      submitStatusEl.textContent = '… sending …';
+      fetch('/api/drum-relay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beats: capture, sessionId: sid, nounId: myNoun }),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+        .then(function (res) {
+          var d = res.body;
+          if (res.status === 200 && d && d.ok) {
+            submitStatusEl.textContent = '✓ added · the chain is now ' + (d.count || '?') + ' links long';
+            capture = [];
+            updateCaptureUI();
+            loadChain();
+          } else if (res.status === 429 && d && d.retryAfterSec) {
+            submitStatusEl.textContent = '⏳ wait ' + d.retryAfterSec + 's · only one link per visitor every 30s';
+            submitBtn.disabled = false;
+          } else {
+            submitStatusEl.textContent = '✗ ' + (d && d.reason ? d.reason : 'submit failed');
+            submitBtn.disabled = false;
+          }
+        })
+        .catch(function () {
+          submitStatusEl.textContent = '✗ offline';
+          submitBtn.disabled = false;
+        });
+    });
+
+    // ─── Render the chain ───────────────────────────────────────
+    var chainListEl = document.getElementById('dr-chain-list');
+    var chainCountEl = document.getElementById('dr-chain-count');
+    var chainData = [];
+    function renderChain(chain) {
+      chainData = chain;
+      chainCountEl.textContent = String(chain.length);
+      if (!chain.length) {
+        chainListEl.innerHTML = '<li class="dr__chain-empty mono">— no links yet · be the first to tap four —</li>';
+        return;
+      }
+      // Show last 24 links, newest on the right
+      var visible = chain.slice(-24);
+      chainListEl.innerHTML = visible.map(function (link, idx) {
+        var pos = chain.length - visible.length + idx + 1;
+        var bpm = link.bpm || 0;
+        // Beats viz — 4 dots positioned by their relative time within the link
+        var beats = Array.isArray(link.beats) ? link.beats : [0, 0, 0, 0];
+        var span = beats[beats.length - 1] || 1;
+        var dots = beats.map(function (b) {
+          var x = span > 0 ? (b / span) * 100 : 0;
+          return '<span class="dr__beat-dot" style="left: ' + x + '%"></span>';
+        }).join('');
+        // Time "since" formatter
+        var ago = ((Date.now() - link.t) / 1000) | 0;
+        var agoStr = ago < 60 ? ago + 's ago' :
+                     ago < 3600 ? Math.floor(ago / 60) + 'm ago' :
+                     ago < 86400 ? Math.floor(ago / 3600) + 'h ago' :
+                     Math.floor(ago / 86400) + 'd ago';
+        return '<li class="dr__link" data-idx="' + (chain.length - visible.length + idx) + '">' +
+               '<span class="dr__link-pos mono">№ ' + String(pos).padStart(3, '0') + '</span>' +
+               '<img class="dr__link-noun" src="https://noun.pics/' + (link.nounId | 0) + '.svg" ' +
+               'alt="" width="44" height="44" loading="lazy" />' +
+               '<span class="dr__link-bpm mono">' + (bpm || '—') + ' bpm</span>' +
+               '<span class="dr__link-beats" aria-hidden="true">' + dots + '</span>' +
+               '<span class="dr__link-ago mono">' + agoStr + '</span>' +
+               '</li>';
+      }).join('');
+    }
+
+    function loadChain() {
+      fetch('/api/drum-relay', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.chain)) return;
+          renderChain(d.chain);
+        }).catch(function () {});
+    }
+    loadChain();
+    // Refresh every 12s so new links from other visitors show up
+    setInterval(loadChain, 12_000);
+
+    // Click a chain link to play its 4 beats individually
+    chainListEl.addEventListener('click', function (e) {
+      var li = e.target.closest && e.target.closest('.dr__link');
+      if (!li) return;
+      var idx = Number(li.dataset.idx);
+      if (!chainData[idx]) return;
+      var link = chainData[idx];
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      var t0 = ctx.currentTime + 0.05;
+      var freq = pitchForNoun(link.nounId | 0);
+      var beats = link.beats || [];
+      beats.forEach(function (b) {
+        playNote(freq, t0 + (b / 1000));
+      });
+      li.classList.remove('dr__link--playing');
+      void li.offsetWidth;
+      li.classList.add('dr__link--playing');
+    });
+
+    // ─── Play the whole chain ─────────────────────────────────
+    var chainPlayBtn = document.getElementById('dr-chain-play');
+    var chainPlaying = false;
+    chainPlayBtn.addEventListener('click', function () {
+      if (chainPlaying || !chainData.length) return;
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      chainPlaying = true;
+      chainPlayBtn.disabled = true;
+      chainPlayBtn.textContent = '… playing …';
+      var t = ctx.currentTime + 0.1;
+      var GAP_MS = 600; // pause between contributors
+      var totalMs = 0;
+      chainData.forEach(function (link, idx) {
+        var freq = pitchForNoun(link.nounId | 0);
+        var span = link.beats[link.beats.length - 1] || 0;
+        var startSec = t + totalMs / 1000;
+        link.beats.forEach(function (b) {
+          playNote(freq, startSec + b / 1000);
+        });
+        // Highlight the link DOM at the right time
+        setTimeout(function () {
+          var li = chainListEl.querySelector('.dr__link[data-idx="' + idx + '"]');
+          if (li) {
+            li.classList.remove('dr__link--playing');
+            void li.offsetWidth;
+            li.classList.add('dr__link--playing');
+            li.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+          }
+        }, totalMs);
+        totalMs += span + GAP_MS;
+      });
+      setTimeout(function () {
+        chainPlaying = false;
+        chainPlayBtn.disabled = false;
+        chainPlayBtn.textContent = '▸ play the chain';
+      }, totalMs + 400);
+    });
+
+    // Initial UI
+    updateCaptureUI();
+  })();
+</script>
+
+<style>
+  .dr {
+    --dr-paper: #fff5d8;
+    --dr-deep: #f8e8c0;
+    --dr-cream: #fffaef;
+    --dr-ink: #11100c;
+    --dr-mute: #5b5347;
+    --dr-magenta: #d6346a;
+    --dr-yellow: #f0c431;
+    --dr-cyan: #3aa9c4;
+
+    background: var(--dr-paper);
+    color: var(--dr-ink);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.55;
+  }
+  .dr .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Head */
+  .dr__head { text-align: center; margin: 14px auto 28px; max-width: 880px; }
+  .dr__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--dr-magenta);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  .dr__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+  }
+  .dr__title em {
+    font-style: italic;
+    color: var(--dr-magenta);
+    font-weight: 500;
+  }
+  .dr__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dr-mute);
+    margin: 14px 0 0;
+  }
+
+  .dr__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--dr-magenta);
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+  .dr__eyebrow strong { color: var(--dr-ink); font-weight: 800; }
+
+  /* ─── Chain ─────────────────────────────────────────── */
+  .dr__chain { max-width: 1080px; margin: 0 auto 36px; }
+  .dr__chain-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .dr__chain-list {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 14px 16px;
+    background: var(--dr-cream);
+    border: 1.5px solid var(--dr-ink);
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    min-height: 120px;
+  }
+  .dr__chain-empty {
+    font-size: 12px;
+    color: var(--dr-mute);
+    text-align: center;
+    padding: 24px;
+    width: 100%;
+  }
+  .dr__link {
+    flex: 0 0 200px;
+    scroll-snap-align: start;
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 4px 10px;
+    padding: 10px 12px;
+    background: var(--dr-paper);
+    border: 1.5px solid var(--dr-ink);
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms;
+  }
+  .dr__link:hover { border-color: var(--dr-magenta); }
+  .dr__link--playing {
+    background: linear-gradient(180deg, rgba(214, 52, 106, 0.18) 0%, var(--dr-paper) 100%);
+    border-color: var(--dr-magenta);
+    animation: dr-link-pulse 0.6s ease-out;
+  }
+  @keyframes dr-link-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.5); }
+    100% { box-shadow: 0 0 0 12px rgba(214, 52, 106, 0); }
+  }
+  .dr__link-pos {
+    grid-column: 1 / 3;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--dr-mute);
+    text-transform: uppercase;
+  }
+  .dr__link-noun {
+    grid-row: 2 / 4;
+    width: 44px;
+    height: 44px;
+    border: 1.5px solid var(--dr-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dr__link-bpm {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--dr-magenta);
+    font-variant-numeric: tabular-nums;
+  }
+  .dr__link-beats {
+    position: relative;
+    height: 12px;
+    background: var(--dr-deep);
+    border-radius: 1.5px;
+    overflow: hidden;
+  }
+  .dr__beat-dot {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    background: var(--dr-magenta);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .dr__link-ago {
+    grid-column: 2 / 3;
+    font-size: 9px;
+    color: var(--dr-mute);
+    letter-spacing: 0.12em;
+  }
+  .dr__chain-foot {
+    font-size: 10px;
+    color: var(--dr-mute);
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  /* ─── Your turn ─────────────────────────────────────── */
+  .dr__turn { max-width: 720px; margin: 0 auto 28px; }
+  .dr__turn-card {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--dr-cream);
+    border: 2px solid var(--dr-ink);
+    border-left: 6px solid var(--dr-magenta);
+    margin-bottom: 12px;
+  }
+  .dr__turn-noun {
+    width: 80px;
+    height: 80px;
+    border: 2px solid var(--dr-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dr__turn-line {
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 6px;
+  }
+  .dr__turn-line strong { color: var(--dr-magenta); font-weight: 700; }
+  .dr__turn-status {
+    font-size: 11px;
+    color: var(--dr-mute);
+    margin: 0;
+    letter-spacing: 0.1em;
+  }
+
+  /* Pad */
+  .dr__pad {
+    appearance: none;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+  .dr__pad-cap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 28px 24px;
+    background: var(--dr-yellow);
+    color: var(--dr-ink);
+    border: 3px solid var(--dr-ink);
+    box-shadow: 6px 7px 0 0 var(--dr-ink);
+    transition: transform 60ms, box-shadow 60ms, filter 60ms;
+  }
+  .dr__pad:hover .dr__pad-cap {
+    filter: brightness(1.05);
+    transform: translate(-1px, -1px);
+    box-shadow: 7px 8px 0 0 var(--dr-ink);
+  }
+  .dr__pad:active .dr__pad-cap,
+  .dr__pad--hit .dr__pad-cap {
+    transform: translate(3px, 4px);
+    box-shadow: 3px 4px 0 0 var(--dr-ink);
+    animation: dr-pad-thump 0.12s ease-out;
+  }
+  @keyframes dr-pad-thump {
+    0% { filter: brightness(1.4); }
+    100% { filter: brightness(1); }
+  }
+  .dr__pad-glyph { font-size: 44px; line-height: 1; }
+  .dr__pad-label { font-size: 22px; font-weight: 800; letter-spacing: 0.32em; }
+  .dr__pad-kbd { font-size: 9px; letter-spacing: 0.22em; padding: 2px 8px; background: rgba(17,16,12,0.16); border-radius: 3px; }
+  .dr__pad-counter { font-size: 14px; font-weight: 700; }
+  .dr__pad-counter strong { color: var(--dr-magenta); font-size: 18px; font-variant-numeric: tabular-nums; }
+
+  .dr__turn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  .dr__submit-status {
+    font-size: 11px;
+    color: var(--dr-mute);
+    text-align: center;
+    margin: 0;
+    min-height: 14px;
+  }
+
+  /* ─── Buttons ──────────────────────────────────────── */
+  .dr__btn {
+    appearance: none;
+    cursor: pointer;
+    background: var(--dr-cream);
+    border: 2.5px solid var(--dr-ink);
+    color: var(--dr-ink);
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 var(--dr-ink);
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dr__btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 var(--dr-ink);
+  }
+  .dr__btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--dr-ink);
+  }
+  .dr__btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .dr__btn--magenta { background: var(--dr-magenta); color: var(--dr-paper); }
+  .dr__btn--magenta:hover:not(:disabled) { background: var(--dr-ink); color: var(--dr-paper); }
+  .dr__btn--ghost { background: transparent; box-shadow: none; }
+
+  /* ─── About ────────────────────────────────────────── */
+  .dr__about { max-width: 720px; margin: 0 auto; }
+  .dr__about-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--dr-ink);
+    margin: 0 0 14px;
+  }
+  .dr__about-body em {
+    font-style: italic;
+    color: var(--dr-magenta);
+  }
+
+  /* ─── Foot ────────────────────────────────────────── */
+  .dr__foot {
+    max-width: 920px;
+    margin: 36px auto 0;
+    padding: 14px 0;
+    border-top: 1px dotted var(--dr-mute);
+    text-align: center;
+  }
+  .dr__foot p {
+    font-size: 10px;
+    color: var(--dr-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .dr__foot a { color: var(--dr-magenta); }
+
+  /* ─── Mobile ───────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .dr__chain-head { flex-direction: column; align-items: flex-start; }
+    .dr__link { flex: 0 0 160px; }
+    .dr__turn-card { grid-template-columns: 64px 1fr; gap: 10px; padding: 12px 14px; }
+    .dr__turn-noun { width: 64px; height: 64px; }
+    .dr__pad-cap { padding: 22px 16px; }
+    .dr__pad-glyph { font-size: 36px; }
+    .dr__pad-label { font-size: 18px; letter-spacing: 0.24em; }
+  }
+</style>
