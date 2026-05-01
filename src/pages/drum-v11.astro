@@ -244,10 +244,21 @@ const BELLS = [
 
     function broadcast(hz, id) {
       try {
+        // /api/sounds only persists {type, seed, t, pid}; the bare `hz`
+        // body field gets DROPPED on the server. Pack hz into `seed` so
+        // it round-trips and other visitors can ring the right pitch.
+        // Per Mike 2026-04-30: "can't hear kana making the sounds, do
+        // see her moving" — the listener needs hz to ring remotely.
         fetch('/api/sounds', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'bells', sessionId: getSession(), hz: Math.round(hz), bellId: id }),
+          body: JSON.stringify({
+            type: 'bells',
+            sessionId: getSession(),
+            seed: Math.round(hz),   // <-- hz packed into seed for round-trip
+            hz: Math.round(hz),     // <-- kept for any future consumer
+            bellId: id,
+          }),
         });
         const el = document.getElementById('be-broadcast');
         if (el) el.textContent = `broadcast: ${id} · ${Math.round(hz)} Hz`;
@@ -310,6 +321,62 @@ const BELLS = [
         windInterval = null;
       }
     });
+
+    // ─── Listen for OTHER visitors' bells ───────────────────────────
+    // Per Mike 2026-04-30 (testing v11 with Kana): "can't hear kana
+    // making the sounds, do see her moving." The page broadcasts
+    // type=bells events but never polled them back, so cross-device
+    // chimes were silent. Poll /api/sounds every 1s, ring locally for
+    // any non-self event of type=bells. Self-filter on a derived
+    // shortPid so we don't double-ring our own taps.
+    let _listenLastTs = Date.now() - 5000;
+    let _listenSelfPid = '';
+    (async () => {
+      try {
+        const enc = new TextEncoder().encode(getSession());
+        const buf = await crypto.subtle.digest('SHA-256', enc);
+        const arr = Array.from(new Uint8Array(buf));
+        _listenSelfPid = arr.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+      } catch {}
+    })();
+
+    function pollIncomingBells() {
+      fetch('/api/sounds?since=' + _listenLastTs, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data || !Array.isArray(data.events)) return;
+          if (data.events.length === 0) return;
+          _listenLastTs = data.now || Date.now();
+          data.events.forEach((e) => {
+            if (e.type !== 'bells') return;
+            // Self-filter: server sets pid = sha256(sessionId).slice(0,10).
+            // Skip events from our own session — we already rang them locally.
+            if (_listenSelfPid && e.pid === _listenSelfPid) return;
+            // Resolve hz: prefer event.seed (server stores numeric `seed`,
+            // not the original `hz`). Map seed → matching bell button so
+            // we use the canonical pitch + flash the right glyph.
+            const hz = Number(e.seed) || 440;
+            ringBell(hz, { amp: 0.85 });
+            // Find the matching bell DOM and trigger its swing class so
+            // the visitor SEES which bell rang remotely.
+            const bell = Array.from(document.querySelectorAll('.be__bell'))
+              .find((btn) => Math.round(Number(btn.getAttribute('data-hz') || 0)) === Math.round(hz));
+            if (bell) {
+              bell.classList.remove('be__bell--swing');
+              void bell.offsetWidth;
+              bell.classList.add('be__bell--swing');
+            }
+            // Update the broadcast readout so it's clear it came from elsewhere
+            const readout = document.getElementById('be-broadcast');
+            if (readout) {
+              readout.textContent = `received: ${Math.round(hz)} Hz · pid ${(e.pid || '').slice(0, 6)}`;
+            }
+          });
+        })
+        .catch(() => {});
+    }
+    setInterval(pollIncomingBells, 1000);
+    pollIncomingBells();
   })();
 </script>
 
