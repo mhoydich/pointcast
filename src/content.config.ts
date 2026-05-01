@@ -58,7 +58,7 @@ const blocks = defineCollection({
         merchant_url: z.string().url().optional(),
         credential_type: z.enum(['card', 'shared_payment_token']).default('shared_payment_token'),
         status: z.enum(['pending', 'approved', 'denied', 'expired', 'settled', 'refunded']),
-        link_session_id: z.string().min(1),                      // spend_request id from link-cli
+        link_session_id: z.string().default(''),                 // spendRequestId from link-cli (camelCase). may be '' if cli output shape changes — see scripts/agent-spend.mjs parser.
         receipt_url: z.string().url().optional(),                // Stripe-hosted receipt
         approved_by: z.string().optional(),                      // future: visitor handle when v1 multi-tenant
         mode: z.enum(['test', 'live']).default('test'),          // v0 ships in test mode
