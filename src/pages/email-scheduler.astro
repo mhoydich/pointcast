@@ -1,0 +1,507 @@
+---
+/**
+ * /email-scheduler - PointCast Daily email scheduler ops surface.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  POINTCAST_DAILY_EMAIL_GUARDRAILS,
+  POINTCAST_DAILY_EMAIL_SCHEDULE,
+  POINTCAST_DAILY_EMAIL_SECTIONS,
+  POINTCAST_DAILY_EMAIL_SEND_CONTRACT,
+  POINTCAST_DAILY_EMAIL_SOURCES,
+  POINTCAST_DAILY_EMAIL_TASKS,
+  POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
+  buildDailyEmailPreview,
+} from '../lib/daily-email-scheduler';
+
+const preview = buildDailyEmailPreview();
+
+const statusStats = [
+  { label: 'Cadence', value: 'Daily', note: POINTCAST_DAILY_EMAIL_SCHEDULE.utcLabel },
+  { label: 'Mode', value: 'Dry-run first', note: 'Live requires provider, audience, and send-mode env.' },
+  { label: 'Audience', value: 'Opt-in only', note: 'KV subscribers or DAILY_EMAIL_TO.' },
+  { label: 'Version', value: POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION, note: 'Standalone worker scaffold.' },
+];
+
+const setupRows = [
+  {
+    key: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.apiKeyEnv,
+    value: 'Resend API key secret',
+    note: 'Required before any live send.',
+  },
+  {
+    key: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.sendModeEnv,
+    value: 'dry-run | live',
+    note: 'Defaults to dry-run. Use live only after preview approval.',
+  },
+  {
+    key: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.envFallback,
+    value: 'comma-separated recipients',
+    note: 'Small operator-curated opt-in list.',
+  },
+  {
+    key: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.audienceKvBinding,
+    value: 'KV subscriber namespace',
+    note: 'Optional larger list with sub:<email> records.',
+  },
+  {
+    key: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.opsTokenEnv,
+    value: 'bearer token',
+    note: 'Required for test-send route.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/email-scheduler',
+  name: 'PointCast Daily Email Scheduler',
+  description:
+    'Operational surface and JSON contract for the PointCast Daily email scheduler.',
+  url: 'https://pointcast.xyz/email-scheduler',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout
+  title="Email Scheduler"
+  description="Operational surface and JSON contract for the PointCast Daily email scheduler."
+  image="/images/og/subscribe.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/email-scheduler.json', title: 'PointCast Daily Email Scheduler JSON' },
+  ]}
+>
+  <div class="scheduler-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>Email scheduler</span>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="kicker">OPS / POINTCAST DAILY</p>
+        <h1>Daily Email Scheduler</h1>
+        <p class="dek">
+          A deployable daily update lane for PointCast: Nouns Nation coverage,
+          fresh blocks, sprint receipts, and next actions. It previews by default
+          and only sends when the provider, audience, and live-mode switch are set.
+        </p>
+      </div>
+      <div class="hero__actions" aria-label="Scheduler links">
+        <a href="/email-scheduler.json">JSON contract</a>
+        <a href="/nouns-nation-battler-v3/#sprint-room">Sprint room</a>
+        <a href="/sprints.json">Sprint feed</a>
+      </div>
+    </header>
+
+    <section class="stat-grid" aria-label="Scheduler status">
+      {statusStats.map((stat) => (
+        <article>
+          <span>{stat.label}</span>
+          <strong>{stat.value}</strong>
+          <p>{stat.note}</p>
+        </article>
+      ))}
+    </section>
+
+    <section class="band schedule-band" aria-labelledby="schedule-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Schedule</p>
+          <h2 id="schedule-title">One morning packet, every day.</h2>
+        </div>
+        <code>{POINTCAST_DAILY_EMAIL_SCHEDULE.cronUtc}</code>
+      </div>
+      <div class="schedule-copy">
+        <p>
+          Cloudflare Worker cron runs at <strong>{POINTCAST_DAILY_EMAIL_SCHEDULE.utcLabel}</strong>,
+          which is <strong>{POINTCAST_DAILY_EMAIL_SCHEDULE.localLabel}</strong>.
+        </p>
+        <p>{POINTCAST_DAILY_EMAIL_SCHEDULE.note}</p>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="preview-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Preview payload</p>
+          <h2 id="preview-title">The email has a stable desk shape.</h2>
+        </div>
+        <code>{preview.subject}</code>
+      </div>
+      <div class="section-grid">
+        {POINTCAST_DAILY_EMAIL_SECTIONS.map((section) => (
+          <article class="slot">
+            <span>{section.label}</span>
+            <strong>{section.title}</strong>
+            <p>{section.prompt}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="sources-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Content sources</p>
+          <h2 id="sources-title">Daily coverage pulls from public receipts.</h2>
+        </div>
+      </div>
+      <div class="source-list">
+        {POINTCAST_DAILY_EMAIL_SOURCES.map((source) => (
+          <article>
+            <div>
+              <span>{source.cadence}</span>
+              <strong>{source.label}</strong>
+              <p>{source.coverage}</p>
+            </div>
+            <nav aria-label={`${source.label} links`}>
+              <a href={source.human}>HTML</a>
+              <a href={source.json}>JSON</a>
+            </nav>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="band ops-band" aria-labelledby="ops-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Operator contract</p>
+          <h2 id="ops-title">Sending stays locked until the rails are real.</h2>
+        </div>
+        <a href="https://github.com/mhoydich/pointcast/blob/main/docs/setup/daily-email-scheduler.md">Setup doc</a>
+      </div>
+
+      <div class="ops-layout">
+        <div class="setup-table" aria-label="Environment setup">
+          {setupRows.map((row) => (
+            <article>
+              <code>{row.key}</code>
+              <strong>{row.value}</strong>
+              <p>{row.note}</p>
+            </article>
+          ))}
+        </div>
+
+        <aside class="guardrail-list" aria-label="Send guardrails">
+          <p class="kicker">Guardrails</p>
+          <ul>
+            {POINTCAST_DAILY_EMAIL_GUARDRAILS.map((rule) => (
+              <li>{rule}</li>
+            ))}
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="tasks-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Launch tasks</p>
+          <h2 id="tasks-title">What needs to happen before live daily sends.</h2>
+        </div>
+      </div>
+      <div class="task-grid">
+        {POINTCAST_DAILY_EMAIL_TASKS.map((task) => (
+          <article>
+            <span>{task.status}</span>
+            <strong>{task.label}</strong>
+            <p>{task.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  </div>
+</BlockLayout>
+
+<style>
+  .scheduler-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 18px 16px 84px;
+  }
+
+  .crumb,
+  .kicker,
+  .stat-grid span,
+  .slot span,
+  .source-list span,
+  .task-grid span,
+  .hero__actions,
+  .setup-table code,
+  .section-head code {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+
+  .kicker {
+    color: #8a4b10;
+    margin: 0 0 8px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+    gap: 24px;
+    align-items: end;
+    border-bottom: 2px solid var(--pc-ink);
+    padding-bottom: 22px;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.4rem, 7vw, 5.7rem);
+    line-height: 0.93;
+    font-weight: 500;
+    margin: 0 0 14px;
+    max-width: 9ch;
+  }
+
+  .dek {
+    margin: 0;
+    max-width: 64ch;
+    color: var(--pc-ink-soft);
+    line-height: 1.55;
+    font-size: 16px;
+  }
+
+  .hero__actions {
+    display: grid;
+    gap: 8px;
+  }
+
+  .hero__actions a,
+  .section-head a,
+  .source-list nav a {
+    border: 1px solid var(--pc-rule);
+    color: var(--pc-ink);
+    padding: 10px 12px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    background: #fff;
+  }
+
+  .hero__actions a:hover,
+  .section-head a:hover,
+  .source-list nav a:hover {
+    border-color: var(--pc-ink);
+    background: #f6faf7;
+    text-decoration: none;
+  }
+
+  .stat-grid,
+  .section-grid,
+  .task-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .stat-grid article,
+  .slot,
+  .task-grid article {
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    padding: 14px;
+    min-height: 134px;
+  }
+
+  .stat-grid span,
+  .slot span,
+  .source-list span,
+  .task-grid span {
+    color: #185fa5;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .stat-grid strong,
+  .slot strong,
+  .source-list strong,
+  .task-grid strong,
+  .setup-table strong {
+    display: block;
+    font-size: 18px;
+    line-height: 1.18;
+    margin-bottom: 8px;
+  }
+
+  .stat-grid p,
+  .slot p,
+  .source-list p,
+  .task-grid p,
+  .setup-table p,
+  .guardrail-list li,
+  .schedule-copy p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.45;
+    font-size: 13.5px;
+  }
+
+  .band {
+    border-top: 1px solid var(--pc-rule);
+    padding: 22px 0;
+  }
+
+  .schedule-band {
+    border-top: 2px solid var(--pc-ink);
+  }
+
+  .section-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+
+  .section-head h2 {
+    margin: 0;
+    font-size: clamp(1.6rem, 3.2vw, 2.55rem);
+    line-height: 1;
+    font-weight: 500;
+    max-width: 17ch;
+  }
+
+  .section-head code {
+    display: inline-flex;
+    align-items: center;
+    max-width: 360px;
+    padding: 10px 12px;
+    border: 1px solid var(--pc-rule);
+    color: var(--pc-ink-soft);
+    background: #f7f2e8;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  .schedule-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .source-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .source-list article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    border: 1px solid var(--pc-rule);
+    padding: 14px;
+    background: #fff;
+  }
+
+  .source-list nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ops-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
+    gap: 14px;
+  }
+
+  .setup-table {
+    display: grid;
+    gap: 8px;
+  }
+
+  .setup-table article {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 12px;
+    align-items: start;
+    border: 1px solid var(--pc-rule);
+    padding: 12px;
+    background: #fff;
+  }
+
+  .setup-table code {
+    color: #185fa5;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .guardrail-list {
+    border: 1px solid var(--pc-rule);
+    background: #f6faf7;
+    padding: 14px;
+  }
+
+  .guardrail-list ul {
+    margin: 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .task-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 860px) {
+    .hero,
+    .schedule-copy,
+    .ops-layout,
+    .source-list article {
+      grid-template-columns: 1fr;
+    }
+
+    .stat-grid,
+    .section-grid,
+    .task-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .setup-table article {
+      grid-template-columns: 1fr;
+    }
+
+    .section-head {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .scheduler-page {
+      padding-inline: 12px;
+    }
+
+    .stat-grid,
+    .section-grid,
+    .task-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+    }
+  }
+</style>

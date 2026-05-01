@@ -112,6 +112,7 @@ $ curl -X POST https://pointcast.xyz/api/send-note \
 
 - Write retros to `docs/sprints/` (already happening).
 - Write the stub `functions/api/send-note.ts` with the Resend integration, so it's ready the moment `RESEND_API_KEY` is bound. (Can ship next tick if you want.)
+- Run the dry-run-first PointCast Daily scheduler surface at `/email-scheduler` and `/email-scheduler.json`, plus the deployable worker in `workers/pointcast-daily-email`. See `docs/setup/daily-email-scheduler.md`.
 - Add a `mailto:hello@pointcast.xyz` link in `/for-agents` and `/about` so visitors can contact the site once routing is active.
 
 ## What cc cannot do
