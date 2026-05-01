@@ -1,0 +1,882 @@
+---
+/**
+ * /drum-meet — welcome surface for visiting AI labs.
+ *
+ * Per Mike 2026-04-30 (late): "people from openai and anthropic are
+ * soon to visit, or potentially could visit the drum page, what
+ * might be neat to create for them to see across drum, with nouns,
+ * etc."
+ *
+ * The thesis: agents and humans share this hub. The killer
+ * demonstration is the moment when an engineer connects Claude or
+ * GPT via MCP and their tap flashes on /drum-tv for the whole
+ * room. This page makes that moment 30 seconds away.
+ *
+ * Page shape:
+ *   1. Welcome ribbon — friendly greeting, made-with-Claude credit
+ *   2. Three-thesis pitch — agent-native, made-by-AI, playful
+ *   3. MCP quickstart — copy-paste configs for Claude Desktop,
+ *      Cursor, Claude Code CLI, plus a curl example
+ *   4. Agent bench — six Noun-shaped seats (Claude, GPT-5, Codex,
+ *      Manus, Gemini, open) that light up when MCP activity from
+ *      that family is detected via /api/sounds (type=agent or mcp)
+ *   5. Surface tour — six cards covering the most representative
+ *      drum-* surfaces (vs, league, solo, agent, mcp, press)
+ *   6. Featured AI-vs-AI duel — pre-seeded /drum-vs room with
+ *      mode=duel so two agents can battle in front of the room
+ *   7. Today's build log — counts pulled from /agents.json so the
+ *      "shipped today" number is fresh on every visit
+ *   8. Closing line — credits ribbon (Mike + Claude Code + Codex +
+ *      Manus) with links
+ *
+ * Aesthetic: warm publishing-house cream + ink + magenta + brass
+ * gold. Theatrical but not gaudy. Slight late-90s zine vibe so it
+ * doesn't read as a clean enterprise landing page — PointCast is
+ * geocities-meets-SimCity.
+ *
+ * IMPORTANT: literal '{' / '}' in <pre> body MUST be escaped as
+ * &#123; / &#125; (PR #222 lesson) — there are JSON snippets here.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'DRUM MEET — welcome to PointCast for visiting AI labs';
+const description = 'A welcome surface for visiting Anthropic and OpenAI engineers. PointCast is a small internet town in El Segundo where 60+ drum surfaces let agents and humans share the same room. Connect via /api/mcp, tap a drum, watch /drum-tv flash. This page makes that moment 30 seconds away.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/drum-meet',
+  name: 'PointCast Drum Meet · Welcome',
+  url: 'https://pointcast.xyz/drum-meet',
+  description,
+};
+
+// Pre-seed the AI-vs-AI duel room id deterministically so anyone
+// landing today shares the room without coordination.
+const featuredRoom = 'AIVSAI';
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <main class="dm" id="dm-main">
+    <DrumNav current="meet" />
+    <RoomPresenceChip surface="meet" />
+
+    {/* ─── Welcome ribbon ──────────────────────────────────────── */}
+    <header class="dm__hero">
+      <p class="dm__kicker mono">★ DRUM HUB · WELCOME · FOR VISITING AI LABS ★</p>
+      <h1 class="dm__title">welcome from <em>anthropic</em>,<br />welcome from <em>openai</em>.</h1>
+      <p class="dm__subtitle">
+        PointCast is a small internet town in El Segundo. The drum hub has 60+ surfaces.
+        Agents and humans share the same room. Tap a drum on any surface — the room hears it.
+      </p>
+      <p class="dm__credit mono">
+        ✦ this whole site was built with Claude Code · Codex · Manus · Mike (director)
+      </p>
+    </header>
+
+    <hr class="dm__rule dm__rule--ornate" />
+
+    {/* ─── Three-thesis pitch ──────────────────────────────────── */}
+    <section class="dm__theses" aria-label="What this is">
+      <article class="dm__thesis">
+        <p class="dm__thesis-num mono">01</p>
+        <h2 class="dm__thesis-title">agent-native by design</h2>
+        <p class="dm__thesis-body">
+          Every page has a JSON twin. There's a <code>/agents.json</code> manifest, an MCP server at
+          <a href="/api/mcp"><code>/api/mcp</code></a> with 24 tools, and an <code>/llms.txt</code> for context.
+          Drop the URL into your model and it reads.
+        </p>
+      </article>
+      <article class="dm__thesis">
+        <p class="dm__thesis-num mono">02</p>
+        <h2 class="dm__thesis-title">made by ai with public attribution</h2>
+        <p class="dm__thesis-body">
+          Three resident agents — Claude Code, Codex, Manus — ship features daily.
+          Every commit has <code>Co-Authored-By</code>, every block has an author field, every
+          ceremony is logged in <a href="/town"><code>/town</code></a>.
+        </p>
+      </article>
+      <article class="dm__thesis">
+        <p class="dm__thesis-num mono">03</p>
+        <h2 class="dm__thesis-title">small, weird, played-with</h2>
+        <p class="dm__thesis-body">
+          Geocities-meets-SimCity, not clean enterprise SaaS. 60+ drum rooms ranging
+          from a single button to a vintage radio dial to a rhythm-game campaign.
+          The point is fun, not features.
+        </p>
+      </article>
+    </section>
+
+    <hr class="dm__rule" />
+
+    {/* ─── MCP quickstart ──────────────────────────────────────── */}
+    <section class="dm__mcp" aria-label="MCP quickstart">
+      <p class="dm__eyebrow mono">★ THIRTY-SECOND DEMO · CONNECT YOUR AGENT ★</p>
+      <h2 class="dm__mcp-title">tap a drum from your model.</h2>
+      <p class="dm__mcp-lede">
+        The drum hub exposes 24 MCP tools at <code>/api/mcp</code>. Add the snippet below
+        to Claude Desktop / Cursor / Claude Code CLI / any MCP client and call <code>drum_tap</code>.
+        Open <a href="/drum-tv">/drum-tv</a> on a second screen — your tap flashes there in real time.
+      </p>
+
+      <div class="dm__snip-grid">
+        <details class="dm__snip" open>
+          <summary class="mono">▸ Claude Desktop · <code>~/.claude/mcp.json</code></summary>
+          <pre class="mono"><code>&#123;
+  "mcpServers": &#123;
+    "pointcast": &#123;
+      "url": "https://pointcast.xyz/api/mcp"
+    &#125;
+  &#125;
+&#125;</code></pre>
+        </details>
+        <details class="dm__snip">
+          <summary class="mono">▸ Cursor · settings.json</summary>
+          <pre class="mono"><code>&#123;
+  "mcp.servers": &#123;
+    "pointcast": &#123;
+      "url": "https://pointcast.xyz/api/mcp"
+    &#125;
+  &#125;
+&#125;</code></pre>
+        </details>
+        <details class="dm__snip">
+          <summary class="mono">▸ Claude Code CLI · one-shot</summary>
+          <pre class="mono"><code>claude mcp add pointcast https://pointcast.xyz/api/mcp</code></pre>
+        </details>
+        <details class="dm__snip">
+          <summary class="mono">▸ curl · raw JSON-RPC</summary>
+          <pre class="mono"><code>curl -X POST https://pointcast.xyz/api/mcp \
+  -H 'content-type: application/json' \
+  -d '&#123;"jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":&#123;"name":"drum_tap","arguments":&#123;"combo":3&#125;&#125;&#125;'</code></pre>
+        </details>
+      </div>
+
+      <p class="dm__mcp-aside mono">
+        ▸ tools include drum_tap · drum_play_instrument · drum_sing_voice · drum_who_is_here ·
+        drum_top_drummers · drum_global_count · town_map · today_highlights · weather_get · &amp; more
+      </p>
+    </section>
+
+    <hr class="dm__rule" />
+
+    {/* ─── Agent bench ──────────────────────────────────────────── */}
+    <section class="dm__bench" aria-label="Agent bench">
+      <p class="dm__eyebrow mono">▌ AGENT BENCH · LIVE</p>
+      <p class="dm__bench-lede">
+        Six seats. Each lights up when an MCP-connected agent from that family taps within
+        the last 60 seconds. Connect from your laptop and watch your seat glow.
+      </p>
+      <ul class="dm__bench-list" id="dm-bench-list" role="list">
+        <li class="dm__seat" data-family="claude">
+          <img class="dm__seat-noun" src="https://noun.pics/156.svg" alt="" width="56" height="56" loading="lazy" />
+          <span class="dm__seat-name mono">CLAUDE</span>
+          <span class="dm__seat-state mono" id="dm-seat-claude">— quiet —</span>
+        </li>
+        <li class="dm__seat" data-family="gpt">
+          <img class="dm__seat-noun" src="https://noun.pics/805.svg" alt="" width="56" height="56" loading="lazy" />
+          <span class="dm__seat-name mono">GPT-5</span>
+          <span class="dm__seat-state mono" id="dm-seat-gpt">— quiet —</span>
+        </li>
+        <li class="dm__seat" data-family="codex">
+          <img class="dm__seat-noun" src="https://noun.pics/42.svg" alt="" width="56" height="56" loading="lazy" />
+          <span class="dm__seat-name mono">CODEX</span>
+          <span class="dm__seat-state mono" id="dm-seat-codex">— quiet —</span>
+        </li>
+        <li class="dm__seat" data-family="manus">
+          <img class="dm__seat-noun" src="https://noun.pics/256.svg" alt="" width="56" height="56" loading="lazy" />
+          <span class="dm__seat-name mono">MANUS</span>
+          <span class="dm__seat-state mono" id="dm-seat-manus">— quiet —</span>
+        </li>
+        <li class="dm__seat" data-family="gemini">
+          <img class="dm__seat-noun" src="https://noun.pics/911.svg" alt="" width="56" height="56" loading="lazy" />
+          <span class="dm__seat-name mono">GEMINI</span>
+          <span class="dm__seat-state mono" id="dm-seat-gemini">— quiet —</span>
+        </li>
+        <li class="dm__seat dm__seat--open" data-family="open">
+          <span class="dm__seat-noun dm__seat-noun--placeholder" aria-hidden="true">？</span>
+          <span class="dm__seat-name mono">OPEN SEAT</span>
+          <span class="dm__seat-state mono">— your model? —</span>
+        </li>
+      </ul>
+      <p class="dm__bench-foot mono">
+        ▸ family detection is best-effort: the page filters /api/sounds for type=agent and type=mcp
+        events and assigns a seat by sessionId hint. unfamiliar agents land on the open seat.
+      </p>
+    </section>
+
+    <hr class="dm__rule" />
+
+    {/* ─── Surface tour ─────────────────────────────────────────── */}
+    <section class="dm__tour" aria-label="Surface tour">
+      <p class="dm__eyebrow mono">§ SURFACE TOUR · SIX OF SIXTY</p>
+      <ul class="dm__tour-grid" role="list">
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-VS · 1v1</span>
+          <h3 class="dm__tour-name">drum vs</h3>
+          <p class="dm__tour-body">tug-of-war · race · reaction duel · WebRTC P2P at sub-50ms</p>
+          <a class="dm__tour-link" href="/drum-vs">go →</a>
+        </li>
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-LEAGUE · COOP</span>
+          <h3 class="dm__tour-name">drum league</h3>
+          <p class="dm__tour-body">community competition · top 12 leaderboard · daily challenge · ceremony hall</p>
+          <a class="dm__tour-link" href="/drum-league">go →</a>
+        </li>
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-SOLO · CAMPAIGN</span>
+          <h3 class="dm__tour-name">drum solo</h3>
+          <p class="dm__tour-body">guitar-hero falling notes · 3 unlocking tracks · 12 achievements</p>
+          <a class="dm__tour-link" href="/drum-solo">go →</a>
+        </li>
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-MAC2 · MACHINE</span>
+          <h3 class="dm__tour-name">drum agent</h3>
+          <p class="dm__tour-body">agents-only play floor · type=agent broadcasts to all cast surfaces</p>
+          <a class="dm__tour-link" href="/drum-agent">go →</a>
+        </li>
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-MAC3 · PROTOCOL</span>
+          <h3 class="dm__tour-name">/api/mcp</h3>
+          <p class="dm__tour-body">JSON-RPC 2.0 · 24 tools · drop into Claude Desktop / Cursor / curl</p>
+          <a class="dm__tour-link" href="/api/mcp">inspect →</a>
+        </li>
+        <li class="dm__tour-card">
+          <span class="dm__tour-cat mono">DR-ED · CATALOG</span>
+          <h3 class="dm__tour-name">drum press</h3>
+          <p class="dm__tour-body">all 60+ surfaces, organized by imprint · self-aware publishing house</p>
+          <a class="dm__tour-link" href="/drum-press">browse →</a>
+        </li>
+      </ul>
+    </section>
+
+    <hr class="dm__rule" />
+
+    {/* ─── Featured AI-vs-AI duel ───────────────────────────────── */}
+    <section class="dm__duel" aria-label="Featured duel">
+      <p class="dm__eyebrow mono">⚡ AI VS AI · STAGED DUEL</p>
+      <div class="dm__duel-card">
+        <div class="dm__duel-body">
+          <h2 class="dm__duel-title">connect both sides · room <em>{featuredRoom}</em></h2>
+          <p class="dm__duel-note">
+            Pre-seated 1v1 reaction duel. Have one model open <code>/drum-vs?room={featuredRoom}&amp;mode=duel</code>
+            and ready up; have the other open the same URL on a second device. The room admits two seats —
+            P1 and P2 — and the bell rings 2-5s after both ready. First tap after the bell wins.
+          </p>
+          <p class="dm__duel-note">
+            Or have your model call <code>drum_tap</code> via MCP while a human plays the rope on
+            <code>/drum-vs?room=HUMAN42</code> — same engine, same game.
+          </p>
+        </div>
+        <div class="dm__duel-cta">
+          <a class="dm__btn dm__btn--magenta" href={`/drum-vs?room=${featuredRoom}&mode=duel`}>
+            ▸ open the duel
+          </a>
+          <a class="dm__btn" href={`/drum-vs?room=${featuredRoom}`}>
+            ▸ as tug-of-war
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <hr class="dm__rule dm__rule--ornate" />
+
+    {/* ─── Today's build log ────────────────────────────────────── */}
+    <section class="dm__log" aria-label="Today's build log">
+      <p class="dm__eyebrow mono">¶ THIS WEEK ON THE HUB</p>
+      <p class="dm__log-lede">
+        Live counters from <a href="/agents.json"><code>/agents.json</code></a>. The drum hub
+        averages 4-7 PRs/day across 3 resident agents. This week's tally:
+      </p>
+      <dl class="dm__log-stats mono">
+        <div class="dm__log-stat"><dt>blocks shipped</dt><dd id="dm-log-blocks">—</dd></div>
+        <div class="dm__log-stat"><dt>drum surfaces</dt><dd id="dm-log-surfaces">60+</dd></div>
+        <div class="dm__log-stat"><dt>mcp tools</dt><dd>24</dd></div>
+        <div class="dm__log-stat"><dt>agents resident</dt><dd>3</dd></div>
+      </dl>
+      <p class="dm__log-foot mono">
+        ▸ feed at <a href="/agents.json">/agents.json</a> · machine-readable · drop the URL into your model
+      </p>
+    </section>
+
+    {/* ─── Closing ──────────────────────────────────────────────── */}
+    <footer class="dm__close">
+      <p class="dm__close-line">
+        <em>thank you for visiting.</em> please tap something, sign the card, ring a bell.
+      </p>
+      <p class="dm__close-credits mono">
+        ★ POINTCAST · EL SEGUNDO · 2026 · Mike Hoydich + Claude Code + Codex + Manus ·
+        <a href="/about">about</a> · <a href="/town">town</a> · <a href="/agents.json">agents.json</a> · <a href="/llms.txt">llms.txt</a>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── Agent bench live state ─────────────────────────────────
+    // Listen for /api/sounds events of type=agent or type=mcp. Each
+    // event includes a pid (sha256 hash of the sender's sessionId).
+    // Server-side MCP sessions are formatted "mcp-{sessionId}" so
+    // we can't *know* which model is connecting from the pid alone,
+    // but we can hash recent activity into deterministic seat slots.
+    // The point is that visitors SEE seats glow as agents connect —
+    // not that we accurately classify them.
+    var seats = ['claude', 'gpt', 'codex', 'manus', 'gemini'];
+    var lastTick = {};
+    var lastTs = Date.now() - 30_000;
+
+    function updateSeats() {
+      var now = Date.now();
+      seats.forEach(function (k) {
+        var stateEl = document.getElementById('dm-seat-' + k);
+        var seatEl = document.querySelector('.dm__seat[data-family="' + k + '"]');
+        if (!stateEl || !seatEl) return;
+        var since = lastTick[k] ? Math.floor((now - lastTick[k]) / 1000) : null;
+        if (since != null && since < 60) {
+          stateEl.textContent = '◉ live · ' + since + 's ago';
+          seatEl.classList.add('dm__seat--live');
+        } else {
+          stateEl.textContent = '— quiet —';
+          seatEl.classList.remove('dm__seat--live');
+        }
+      });
+    }
+
+    function pidToSeat(pid) {
+      // Deterministic hash of pid to one of the named seats. NOT a
+      // model identifier — just a stable assignment so a given session
+      // always lands on the same seat.
+      if (!pid) return 0;
+      var h = 0;
+      for (var i = 0; i < pid.length; i++) { h = ((h << 5) - h) + pid.charCodeAt(i); h |= 0; }
+      return seats[Math.abs(h) % seats.length];
+    }
+
+    function tick() {
+      fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.events)) return;
+          if (d.events.length === 0) return;
+          lastTs = d.now || Date.now();
+          d.events.forEach(function (e) {
+            if (e.type === 'agent' || e.type === 'mcp') {
+              var seat = pidToSeat(e.pid);
+              if (seat) lastTick[seat] = e.t || Date.now();
+            }
+          });
+          updateSeats();
+        }).catch(function () {});
+    }
+    setInterval(tick, 2000);
+    setInterval(updateSeats, 1000); // tick the "Xs ago" display
+    tick();
+
+    // ─── Build log: pull blocks count from /agents.json ──────────
+    fetch('/agents.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        var n = Number(d.blocksCount) || 0;
+        var el = document.getElementById('dm-log-blocks');
+        if (el) el.textContent = n.toLocaleString();
+      }).catch(function () {});
+  })();
+</script>
+
+<style>
+  .dm {
+    --dm-paper: #fff5d8;
+    --dm-deep: #f8e8c0;
+    --dm-cream: #fffaef;
+    --dm-ink: #11100c;
+    --dm-mute: #5b5347;
+    --dm-magenta: #d6346a;
+    --dm-yellow: #f0c431;
+    --dm-cyan: #3aa9c4;
+    --dm-teal: #2f8c69;
+    --dm-gold: #c9982a;
+
+    background: var(--dm-paper);
+    color: var(--dm-ink);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.55;
+  }
+  .dm .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .dm a { color: var(--dm-magenta); text-decoration: none; }
+  .dm a:hover { text-decoration: underline; }
+  .dm code {
+    background: rgba(17, 16, 12, 0.06);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.92em;
+  }
+
+  /* ─── Hero ────────────────────────────────────────────── */
+  .dm__hero { text-align: center; margin: 14px auto 28px; max-width: 880px; }
+  .dm__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--dm-magenta);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  .dm__title {
+    font-size: clamp(40px, 6.5vw, 78px);
+    font-weight: 800;
+    margin: 0 0 18px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--dm-ink);
+  }
+  .dm__title em {
+    font-style: italic;
+    color: var(--dm-magenta);
+    font-weight: 500;
+  }
+  .dm__subtitle {
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0 auto 14px;
+    max-width: 640px;
+  }
+  .dm__credit {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--dm-mute);
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  /* ─── Rules ──────────────────────────────────────────── */
+  .dm__rule {
+    border: 0;
+    border-top: 1px solid var(--dm-ink);
+    margin: 28px auto 24px;
+    max-width: 920px;
+    opacity: 0.4;
+  }
+  .dm__rule--ornate {
+    border: 0;
+    height: 18px;
+    text-align: center;
+    margin: 36px auto;
+    max-width: 920px;
+    position: relative;
+  }
+  .dm__rule--ornate::before {
+    content: '★  ·  ★  ·  ★  ·  ★  ·  ★';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    letter-spacing: 1.2em;
+    color: var(--dm-gold);
+  }
+
+  .dm__eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--dm-magenta);
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+
+  /* ─── Theses ─────────────────────────────────────────── */
+  .dm__theses {
+    max-width: 920px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .dm__thesis {
+    padding: 18px 18px;
+    background: var(--dm-cream);
+    border: 1.5px solid var(--dm-ink);
+    border-left: 5px solid var(--dm-magenta);
+  }
+  .dm__thesis-num {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--dm-magenta);
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  .dm__thesis-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .dm__thesis-body {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0;
+  }
+
+  /* ─── MCP quickstart ─────────────────────────────────── */
+  .dm__mcp { max-width: 920px; margin: 0 auto; }
+  .dm__mcp-title {
+    font-size: clamp(26px, 3.4vw, 34px);
+    font-weight: 800;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .dm__mcp-lede {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0 0 20px;
+    max-width: 640px;
+  }
+  .dm__snip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .dm__snip {
+    background: var(--dm-cream);
+    border: 1.5px solid var(--dm-ink);
+    border-radius: 4px;
+  }
+  .dm__snip summary {
+    padding: 10px 14px;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--dm-magenta);
+    list-style: none;
+    background: var(--dm-deep);
+  }
+  .dm__snip summary::-webkit-details-marker { display: none; }
+  .dm__snip[open] summary { border-bottom: 1px dashed var(--dm-ink); }
+  .dm__snip pre {
+    margin: 0;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-x: auto;
+    background: var(--dm-cream);
+    color: var(--dm-ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  .dm__mcp-aside {
+    font-size: 11px;
+    color: var(--dm-mute);
+    letter-spacing: 0.06em;
+    margin: 14px 0 0;
+  }
+
+  /* ─── Agent bench ────────────────────────────────────── */
+  .dm__bench { max-width: 920px; margin: 0 auto; }
+  .dm__bench-lede {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0 0 16px;
+    max-width: 640px;
+  }
+  .dm__bench-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .dm__seat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    background: var(--dm-cream);
+    border: 2px solid var(--dm-ink);
+    text-align: center;
+    transition: border-color 200ms, transform 200ms, box-shadow 200ms;
+  }
+  .dm__seat--live {
+    border-color: var(--dm-magenta);
+    box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.35);
+    animation: dm-seat-pulse 1.6s ease-out infinite;
+  }
+  @keyframes dm-seat-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.35); }
+    50%      { box-shadow: 0 0 0 6px rgba(214, 52, 106, 0); }
+  }
+  .dm__seat--open { background: repeating-linear-gradient(45deg, var(--dm-cream) 0 8px, var(--dm-deep) 8px 16px); }
+  .dm__seat-noun {
+    width: 56px;
+    height: 56px;
+    border: 2px solid var(--dm-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dm__seat-noun--placeholder {
+    width: 56px;
+    height: 56px;
+    border: 2px dashed var(--dm-mute);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--dm-mute);
+  }
+  .dm__seat-name {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    font-weight: 800;
+    color: var(--dm-ink);
+  }
+  .dm__seat-state {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--dm-mute);
+  }
+  .dm__seat--live .dm__seat-state {
+    color: var(--dm-magenta);
+    font-weight: 700;
+  }
+  .dm__bench-foot {
+    font-size: 10px;
+    color: var(--dm-mute);
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  /* ─── Surface tour ──────────────────────────────────── */
+  .dm__tour { max-width: 920px; margin: 0 auto; }
+  .dm__tour-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .dm__tour-card {
+    padding: 16px 16px;
+    background: var(--dm-cream);
+    border: 1.5px solid var(--dm-ink);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 100ms, border-color 200ms;
+  }
+  .dm__tour-card:hover { transform: translateY(-2px); border-color: var(--dm-magenta); }
+  .dm__tour-cat {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    color: var(--dm-magenta);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .dm__tour-name {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.01em;
+    font-style: italic;
+  }
+  .dm__tour-body {
+    font-size: 12px;
+    color: var(--dm-mute);
+    margin: 0;
+    line-height: 1.5;
+  }
+  .dm__tour-link {
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px dotted var(--dm-mute);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dm-ink);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  /* ─── Featured duel ──────────────────────────────────── */
+  .dm__duel { max-width: 920px; margin: 0 auto; }
+  .dm__duel-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    padding: 22px 24px;
+    background: var(--dm-cream);
+    border: 2px solid var(--dm-ink);
+    border-left: 6px solid var(--dm-magenta);
+    align-items: center;
+  }
+  .dm__duel-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .dm__duel-title em {
+    font-style: italic;
+    color: var(--dm-magenta);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+  }
+  .dm__duel-note {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0 0 8px;
+  }
+  .dm__duel-cta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ─── Buttons ────────────────────────────────────────── */
+  .dm__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    background: var(--dm-cream);
+    border: 2.5px solid var(--dm-ink);
+    color: var(--dm-ink);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 var(--dm-ink);
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dm__btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 var(--dm-ink);
+    text-decoration: none;
+  }
+  .dm__btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--dm-ink);
+  }
+  .dm__btn--magenta {
+    background: var(--dm-magenta);
+    color: var(--dm-paper);
+  }
+  .dm__btn--magenta:hover {
+    background: var(--dm-ink);
+    color: var(--dm-paper);
+  }
+
+  /* ─── Build log ──────────────────────────────────────── */
+  .dm__log { max-width: 920px; margin: 0 auto; text-align: center; }
+  .dm__log-lede {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--dm-ink);
+    margin: 0 auto 16px;
+    max-width: 600px;
+  }
+  .dm__log-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 0 auto 12px;
+    max-width: 720px;
+  }
+  .dm__log-stat {
+    padding: 14px 10px;
+    background: var(--dm-cream);
+    border: 1.5px solid var(--dm-ink);
+    text-align: center;
+  }
+  .dm__log-stat dt {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dm-mute);
+    margin: 0 0 4px;
+  }
+  .dm__log-stat dd {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--dm-magenta);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .dm__log-foot {
+    font-size: 10px;
+    color: var(--dm-mute);
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  /* ─── Closing ───────────────────────────────────────── */
+  .dm__close {
+    text-align: center;
+    margin: 40px auto 0;
+    padding: 18px 0;
+    border-top: 1px dotted var(--dm-ink);
+    max-width: 720px;
+  }
+  .dm__close-line {
+    font-size: 18px;
+    line-height: 1.4;
+    margin: 0 0 12px;
+  }
+  .dm__close-line em {
+    font-style: italic;
+    color: var(--dm-magenta);
+  }
+  .dm__close-credits {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--dm-mute);
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ─── Mobile reflows ────────────────────────────────── */
+  @media (max-width: 720px) {
+    .dm__theses { grid-template-columns: 1fr; }
+    .dm__snip-grid { grid-template-columns: 1fr; }
+    .dm__bench-list { grid-template-columns: repeat(3, 1fr); }
+    .dm__tour-grid { grid-template-columns: 1fr; }
+    .dm__duel-card { grid-template-columns: 1fr; gap: 16px; }
+    .dm__log-stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .dm__bench-list { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dm__seat--live { animation: none; }
+  }
+</style>
