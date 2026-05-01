@@ -41,6 +41,7 @@
  *   drum_play_instrument  ({inst})     fire a v4/v7 orchestra instrument
  *   drum_sing_voice       ({voice})    fire a v6 choir voice
  *   drum_set_track        ({trackId})  set the v3 room Spotify track
+ *   drum_altar_ring       ({instrument}) ring an altar on /drum-altars
  *
  * Whole-site tools
  *   town_map              (no input)   12-building iso town map
@@ -135,6 +136,7 @@ const WRITE_TOOL_NAMES = new Set([
   'drum_play_instrument',
   'drum_sing_voice',
   'drum_set_track',
+  'drum_altar_ring',
 ]);
 
 function toolTitle(name: string): string {
@@ -254,6 +256,23 @@ const TOOL_DEFINITIONS = [
         },
       },
       required: ['trackId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'drum_altar_ring',
+    description:
+      'Ring one of the five altars on /drum-altars and leave a tribute. Five timbres rotate weekly: bell, bowl, chime, gong, drone. Each altar is dedicated to a specific Noun seed for the current ISO week. Counts persist 14 days. Rate-limited to one tribute per altar per 5 seconds per session — agents that hammer get HTTP 429.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instrument: {
+          type: 'string',
+          enum: ['bell', 'bowl', 'chime', 'gong', 'drone'],
+          description: 'Which altar to ring. bell (long brass), bowl (singing), chime (three-note), gong (low strike), drone (sustained).',
+        },
+      },
+      required: ['instrument'],
       additionalProperties: false,
     },
   },
@@ -1087,6 +1106,65 @@ async function dispatchTool(
         `✓ set the room track to spotify:track:${trackId}. open https://pointcast.xyz/drum-v3 to drum along.`,
       );
     }
+    case 'drum_altar_ring': {
+      // Five altars in fixed lane order on /drum-altars: bell, bowl,
+      // chime, gong, drone. Each lane is bound to a deterministic Noun
+      // seed for the current ISO week. We GET /api/altar to learn the
+      // current week's seeds, then POST the seed for the requested
+      // instrument. Reasonably cheap — one extra hop, no client-side
+      // ISO-week math required from the agent.
+      const ALTAR_LANES = ['bell', 'bowl', 'chime', 'gong', 'drone'] as const;
+      const instrument = String(args.instrument || '').toLowerCase();
+      const idx = ALTAR_LANES.indexOf(instrument as typeof ALTAR_LANES[number]);
+      if (idx < 0) {
+        return {
+          content: [{ type: 'text', text: 'instrument must be one of: bell, bowl, chime, gong, drone' }],
+          isError: true,
+        };
+      }
+      const stateRes = await fetch(`${base}/api/altar`, { headers: { 'Cache-Control': 'no-cache' } });
+      if (!stateRes.ok) {
+        return { content: [{ type: 'text', text: `altar state unavailable (${stateRes.status})` }], isError: true };
+      }
+      const state = (await stateRes.json()) as { ok?: boolean; seeds?: number[]; week?: number };
+      if (!state.ok || !Array.isArray(state.seeds) || state.seeds.length !== 5) {
+        return { content: [{ type: 'text', text: 'altar state malformed' }], isError: true };
+      }
+      const seed = state.seeds[idx];
+      const r = await fetch(`${base}/api/altar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed, sessionId: `mcp-${sessionId}` }),
+      });
+      const result = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        count?: number;
+        totalThisWeek?: number;
+        reason?: string;
+        retryAfterSec?: number;
+      };
+      if (!r.ok || !result.ok) {
+        if (result.reason === 'rate-limited') {
+          return {
+            content: [{ type: 'text', text: `rate-limited — try again in ${result.retryAfterSec ?? 5}s` }],
+            isError: true,
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `failed to ring altar (${r.status} ${result.reason ?? ''})` }],
+          isError: true,
+        };
+      }
+      // Mirror to /api/sounds as type=agent so the agent bench + cast surfaces light up
+      await fetch(`${base}/api/sounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'agent', seed: idx, sessionId: `mcp-${sessionId}` }),
+      });
+      return textContent(
+        `✓ rang the ${instrument} altar (Noun #${String(seed).padStart(4, '0')}, week ${state.week}) — count is now ${result.count}, total this week ${result.totalThisWeek}. open https://pointcast.xyz/drum-altars to watch the candles flicker.`,
+      );
+    }
     // ── Whole-site tool dispatch ─────────────────────────────────────
     case 'town_map': {
       const data = await callJson(`${base}/town.json`);
@@ -1890,6 +1968,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum_play_instrument</code> — fire an orchestra instrument</li>
   <li><code>drum_sing_voice</code> — sing a choir voice</li>
   <li><code>drum_set_track</code> — set the v3 room Spotify track</li>
+  <li><code>drum_altar_ring</code> — ring an altar on /drum-altars (bell / bowl / chime / gong / drone)</li>
 </ul>
 
 <h2>Tools — whole site</h2>
