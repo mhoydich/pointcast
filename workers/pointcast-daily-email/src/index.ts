@@ -40,7 +40,17 @@ interface DailyUpdate {
   subject: string;
   preheader: string;
   sections: DailySection[];
-  sourceStatus: Record<string, 'ok' | 'unavailable'>;
+  sourceStatus: Record<string, string>;
+}
+
+interface DailyWirePreview {
+  version: string;
+  generatedAt: string;
+  datePT: string;
+  subject: string;
+  preheader: string;
+  emailSections: DailySection[];
+  sourceHealth?: Array<{ id: string; status: string }>;
 }
 
 interface SendMessage {
@@ -57,18 +67,11 @@ interface SendResult {
   error?: string;
 }
 
-const VERSION = 'v0.1.0';
+const VERSION = 'v0.2.0';
 const PREFIX = 'sub:';
 const DEFAULT_ORIGIN = 'https://pointcast.xyz';
 const DEFAULT_FROM = 'hello@pointcast.xyz';
 const DEFAULT_FROM_NAME = 'PointCast';
-
-const SOURCE_PATHS = {
-  blocks: '/blocks.json',
-  sprints: '/sprints.json',
-  battler: '/nouns-nation-battler.json',
-  nation: '/nouns-nation.json',
-};
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body, null, 2), {
@@ -126,114 +129,70 @@ async function fetchJson(origin: string, path: string): Promise<unknown | null> 
   }
 }
 
-function pickBlockLines(payload: unknown): string[] {
-  const anyPayload = payload as any;
-  const list = Array.isArray(anyPayload?.blocks)
-    ? anyPayload.blocks
-    : Array.isArray(anyPayload)
-      ? anyPayload
-      : [];
-  return list.slice(0, 3).map((block: any) => {
-    const id = block?.id || block?.data?.id || block?.slug || 'block';
-    const title = block?.title || block?.data?.title || block?.headline || `Block ${id}`;
-    const channel = block?.channel || block?.data?.channel || block?.type || 'PointCast';
-    return `${title} (${channel}, ${id})`;
-  });
+function sourceStatusFromWire(wire: DailyWirePreview): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const source of wire.sourceHealth || []) {
+    out[source.id] = source.status;
+  }
+  return out;
 }
 
-function pickSprintLines(payload: unknown): string[] {
-  const anyPayload = payload as any;
-  const list = Array.isArray(anyPayload?.sprints) ? anyPayload.sprints : [];
-  return list.slice(0, 3).map((sprint: any) => {
-    const title = sprint?.title || sprint?.sprintId || 'Sprint receipt';
-    const status = sprint?.status || sprint?.trigger || 'logged';
-    return `${title} - ${status}`;
-  });
-}
-
-function firstString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-async function buildDailyUpdate(env: Env, now = new Date()): Promise<DailyUpdate> {
+async function fetchDailyWirePreview(env: Env): Promise<DailyWirePreview | null> {
   const origin = siteOrigin(env);
-  const [blocks, sprints, battler, nation] = await Promise.all([
-    fetchJson(origin, SOURCE_PATHS.blocks),
-    fetchJson(origin, SOURCE_PATHS.sprints),
-    fetchJson(origin, SOURCE_PATHS.battler),
-    fetchJson(origin, SOURCE_PATHS.nation),
-  ]);
+  const payload = await fetchJson(origin, '/email-daily-preview.json');
+  const wire = payload as Partial<DailyWirePreview> | null;
+  if (!wire || !Array.isArray(wire.emailSections)) return null;
+  if (typeof wire.subject !== 'string' || typeof wire.preheader !== 'string') return null;
+  return {
+    version: typeof wire.version === 'string' ? wire.version : VERSION,
+    generatedAt: typeof wire.generatedAt === 'string' ? wire.generatedAt : new Date().toISOString(),
+    datePT: typeof wire.datePT === 'string' ? wire.datePT : todayPT(new Date()),
+    subject: wire.subject,
+    preheader: wire.preheader,
+    emailSections: wire.emailSections,
+    sourceHealth: Array.isArray(wire.sourceHealth) ? wire.sourceHealth : [],
+  };
+}
 
+function buildFallbackDailyWire(env: Env, now = new Date()): DailyWirePreview {
+  const origin = siteOrigin(env);
   const datePT = todayPT(now);
-  const blockLines = pickBlockLines(blocks);
-  const sprintLines = pickSprintLines(sprints);
-  const battlerAny = battler as any;
-  const nationAny = nation as any;
-  const battlerStatus = firstString(battlerAny?.status, 'Battle Desk V3 federation coverage is ready.');
-  const nationSummary = firstString(nationAny?.summary, 'Nouns Nation federation manifest is ready.');
-
-  const lead = blockLines[0] || 'Nouns Nation and sprint wire';
-  const subject = `PointCast Daily - ${datePT} - ${lead.slice(0, 72)}`;
+  const subject = `PointCast Daily Wire - ${datePT} - fallback preview`;
 
   return {
     version: VERSION,
     generatedAt: now.toISOString(),
     datePT,
-    origin,
     subject,
-    preheader:
-      'Nouns Nation coverage, fresh PointCast blocks, shipped sprint receipts, and the next operator move.',
-    sourceStatus: {
-      blocks: blocks ? 'ok' : 'unavailable',
-      sprints: sprints ? 'ok' : 'unavailable',
-      battler: battler ? 'ok' : 'unavailable',
-      nation: nation ? 'ok' : 'unavailable',
-    },
-    sections: [
+    preheader: 'Fallback preview. The worker could not read the public Daily Wire JSON route.',
+    emailSections: [
       {
         label: 'Topline',
-        title: lead,
-        body:
-          blockLines.length > 1
-            ? blockLines.join(' / ')
-            : 'PointCast Daily is ready to send once provider and opt-in audience settings are configured.',
+        title: 'Daily Wire fallback preview',
+        body: 'The worker will not invent coverage when /email-daily-preview.json is unavailable.',
         links: [
-          { label: 'Archive', href: `${origin}/archive` },
-          { label: 'Blocks JSON', href: `${origin}/blocks.json` },
-        ],
-      },
-      {
-        label: 'Nouns Desk',
-        title: 'Nouns Nation battler and federation wire',
-        body: `${battlerStatus} ${nationSummary}`,
-        links: [
-          { label: 'Battle Desk V3', href: `${origin}/nouns-nation-battler-v3/` },
-          { label: 'Nouns Nation', href: `${origin}/nouns-nation/` },
-        ],
-      },
-      {
-        label: 'Sprint Log',
-        title: sprintLines[0] || 'No new sprint receipts surfaced',
-        body:
-          sprintLines.length > 0
-            ? sprintLines.join(' / ')
-            : 'The scheduler could not read /sprints.json on this tick. Keep the email useful by linking the public sprint log.',
-        links: [
-          { label: 'Sprints', href: `${origin}/sprints` },
-          { label: 'Sprints JSON', href: `${origin}/sprints.json` },
-        ],
-      },
-      {
-        label: 'Next Action',
-        title: 'Preview, then switch live mode only after setup',
-        body:
-          'Confirm the preview, bind RESEND_API_KEY, set DAILY_EMAIL_SEND_MODE=live, and keep recipients limited to explicit opt-in addresses.',
-        links: [
+          { label: 'Daily Wire JSON', href: `${origin}/email-daily-preview.json` },
           { label: 'Scheduler', href: `${origin}/email-scheduler` },
-          { label: 'Scheduler JSON', href: `${origin}/email-scheduler.json` },
         ],
       },
     ],
+    sourceHealth: [{ id: 'daily-wire', status: 'unavailable' }],
+  };
+}
+
+async function buildDailyUpdate(env: Env, now = new Date()): Promise<DailyUpdate> {
+  const origin = siteOrigin(env);
+  const wire = (await fetchDailyWirePreview(env)) || buildFallbackDailyWire(env, now);
+
+  return {
+    version: wire.version || VERSION,
+    generatedAt: wire.generatedAt,
+    datePT: wire.datePT,
+    origin,
+    subject: wire.subject,
+    preheader: wire.preheader,
+    sections: wire.emailSections,
+    sourceStatus: sourceStatusFromWire(wire),
   };
 }
 

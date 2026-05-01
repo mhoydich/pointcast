@@ -3,24 +3,53 @@
  * /email-scheduler - PointCast Daily email scheduler ops surface.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
 import {
   POINTCAST_DAILY_EMAIL_GUARDRAILS,
   POINTCAST_DAILY_EMAIL_SCHEDULE,
-  POINTCAST_DAILY_EMAIL_SECTIONS,
   POINTCAST_DAILY_EMAIL_SEND_CONTRACT,
   POINTCAST_DAILY_EMAIL_SOURCES,
   POINTCAST_DAILY_EMAIL_TASKS,
   POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
   buildDailyEmailPreview,
+  buildDailyWirePreview,
 } from '../lib/daily-email-scheduler';
+import { readAllRecaps } from '../lib/sprint-recap';
 
-const preview = buildDailyEmailPreview();
+const now = new Date();
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+  .slice(0, 6)
+  .map((block) => {
+    const channel = CHANNELS[block.data.channel];
+    return {
+      id: block.data.id,
+      title: block.data.title,
+      dek: block.data.dek,
+      url: `https://pointcast.xyz/b/${block.data.id}`,
+      jsonUrl: `https://pointcast.xyz/b/${block.data.id}.json`,
+      channel: `${channel.code} / ${channel.name}`,
+      timestamp: block.data.timestamp.toISOString(),
+    };
+  });
+const sprints = readAllRecaps().slice(0, 6).map((sprint) => ({
+  id: sprint.sprintId,
+  title: sprint.title,
+  status: sprint.status ?? null,
+  firedAt: sprint.firedAt || null,
+  anchor: `https://pointcast.xyz/sprints#${sprint.sprintId}`,
+  shippedAs: sprint.shippedAs ?? null,
+}));
+const dailyWire = buildDailyWirePreview({ now, blocks, sprints });
+const preview = buildDailyEmailPreview(now, dailyWire);
+const sourceHealthById = Object.fromEntries(dailyWire.sourceHealth.map((source) => [source.id, source]));
 
 const statusStats = [
   { label: 'Cadence', value: 'Daily', note: POINTCAST_DAILY_EMAIL_SCHEDULE.utcLabel },
   { label: 'Mode', value: 'Dry-run first', note: 'Live requires provider, audience, and send-mode env.' },
   { label: 'Audience', value: 'Opt-in only', note: 'KV subscribers or DAILY_EMAIL_TO.' },
-  { label: 'Version', value: POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION, note: 'Standalone worker scaffold.' },
+  { label: 'Version', value: POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION, note: 'Daily Wire preview shared by site and worker.' },
 ];
 
 const setupRows = [
@@ -71,6 +100,7 @@ const jsonLd = {
   jsonLd={jsonLd}
   alternates={[
     { type: 'application/json', href: '/email-scheduler.json', title: 'PointCast Daily Email Scheduler JSON' },
+    { type: 'application/json', href: '/email-daily-preview.json', title: 'PointCast Daily Wire Preview JSON' },
   ]}
 >
   <div class="scheduler-page">
@@ -92,6 +122,7 @@ const jsonLd = {
       </div>
       <div class="hero__actions" aria-label="Scheduler links">
         <a href="/email-scheduler.json">JSON contract</a>
+        <a href="/email-daily-preview.json">Daily preview</a>
         <a href="/nouns-nation-battler-v3/#sprint-room">Sprint room</a>
         <a href="/sprints.json">Sprint feed</a>
       </div>
@@ -124,20 +155,48 @@ const jsonLd = {
       </div>
     </section>
 
+    <section class="band wire-band" aria-labelledby="wire-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">Daily Wire preview</p>
+          <h2 id="wire-title">The public preview now matches the email shape.</h2>
+        </div>
+        <code>{dailyWire.routes.previewJson}</code>
+      </div>
+      <article class="wire-preview-card" aria-label="Daily Wire email preview">
+        <p class="wire-meta">POINTCAST DAILY WIRE / {dailyWire.datePT}</p>
+        <h3>{dailyWire.subject}</h3>
+        <p>{dailyWire.preheader}</p>
+        <div class="wire-section-list">
+          {dailyWire.emailSections.map((section) => (
+            <section>
+              <span>{section.label}</span>
+              <strong>{section.title}</strong>
+              <p>{section.body}</p>
+              <nav aria-label={`${section.label} links`}>
+                {section.links.map((link) => <a href={link.href}>{link.label}</a>)}
+              </nav>
+            </section>
+          ))}
+        </div>
+      </article>
+    </section>
+
     <section class="band" aria-labelledby="preview-title">
       <div class="section-head">
         <div>
-          <p class="kicker">Preview payload</p>
-          <h2 id="preview-title">The email has a stable desk shape.</h2>
+          <p class="kicker">Preview contract</p>
+          <h2 id="preview-title">Agents can consume the same wire without touching the worker.</h2>
         </div>
         <code>{preview.subject}</code>
       </div>
-      <div class="section-grid">
-        {POINTCAST_DAILY_EMAIL_SECTIONS.map((section) => (
+      <div class="health-grid" aria-label="Daily Wire source health">
+        {dailyWire.sourceHealth.map((source) => (
           <article class="slot">
-            <span>{section.label}</span>
-            <strong>{section.title}</strong>
-            <p>{section.prompt}</p>
+            <span>{source.status}</span>
+            <strong>{source.label}</strong>
+            <p>{source.detail}</p>
+            <a href={source.route}>Open source</a>
           </article>
         ))}
       </div>
@@ -154,7 +213,7 @@ const jsonLd = {
         {POINTCAST_DAILY_EMAIL_SOURCES.map((source) => (
           <article>
             <div>
-              <span>{source.cadence}</span>
+              <span>{sourceHealthById[source.id]?.status || source.cadence}</span>
               <strong>{source.label}</strong>
               <p>{source.coverage}</p>
             </div>
@@ -177,6 +236,16 @@ const jsonLd = {
       </div>
 
       <div class="ops-layout">
+        <div class="gate-grid" aria-label="Send gates">
+          {dailyWire.setupStatus.map((gate) => (
+            <article>
+              <span>{gate.status}</span>
+              <strong>{gate.label}</strong>
+              <p>{gate.detail}</p>
+            </article>
+          ))}
+        </div>
+
         <div class="setup-table" aria-label="Environment setup">
           {setupRows.map((row) => (
             <article>
@@ -399,6 +468,96 @@ const jsonLd = {
     gap: 14px;
   }
 
+  .wire-preview-card {
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    padding: clamp(16px, 2.4vw, 26px);
+  }
+
+  .wire-preview-card h3 {
+    max-width: 18ch;
+    margin: 0 0 10px;
+    font-size: clamp(1.8rem, 4.2vw, 3.7rem);
+    font-weight: 500;
+    line-height: 0.95;
+  }
+
+  .wire-preview-card > p {
+    max-width: 68ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.5;
+  }
+
+  .wire-meta {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8a4b10;
+    margin-bottom: 10px !important;
+  }
+
+  .wire-section-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .wire-section-list section {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-height: 190px;
+    border-top: 4px solid #185fa5;
+    background: #f8faf9;
+    padding: 12px;
+  }
+
+  .wire-section-list span,
+  .gate-grid span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #185fa5;
+  }
+
+  .wire-section-list strong,
+  .gate-grid strong {
+    font-size: 16px;
+    line-height: 1.1;
+  }
+
+  .wire-section-list p,
+  .gate-grid p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.42;
+  }
+
+  .wire-section-list nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+  }
+
+  .wire-section-list a,
+  .health-grid a {
+    color: #185fa5;
+    font-size: 12px;
+  }
+
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
   .source-list {
     display: grid;
     gap: 10px;
@@ -424,6 +583,23 @@ const jsonLd = {
     display: grid;
     grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
     gap: 14px;
+  }
+
+  .gate-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .gate-grid article {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    border: 1px solid var(--pc-rule);
+    background: #fffdf8;
+    padding: 12px;
+    min-height: 128px;
   }
 
   .setup-table {
@@ -475,11 +651,17 @@ const jsonLd = {
 
     .stat-grid,
     .section-grid,
-    .task-grid {
+    .task-grid,
+    .health-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .setup-table article {
+      grid-template-columns: 1fr;
+    }
+
+    .wire-section-list,
+    .gate-grid {
       grid-template-columns: 1fr;
     }
 
@@ -496,7 +678,8 @@ const jsonLd = {
 
     .stat-grid,
     .section-grid,
-    .task-grid {
+    .task-grid,
+    .health-grid {
       grid-template-columns: 1fr;
     }
 

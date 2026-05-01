@@ -2,7 +2,7 @@
 
 Daily email update worker for PointCast.
 
-It reads public PointCast JSON surfaces, builds a daily update, and sends via Resend only when live mode is explicitly enabled. The default deployment is a dry-run preview so the cron can be tested without emailing anyone.
+It reads the public PointCast Daily Wire preview at `/email-daily-preview.json`, builds a daily update, and sends via Resend only when live mode is explicitly enabled. The default deployment is a dry-run preview so the cron can be tested without emailing anyone.
 
 ## Schedule
 
@@ -41,9 +41,11 @@ For a larger opt-in list, bind `DAILY_EMAIL_AUDIENCE_KV` and store records as `s
 ## Routes
 
 - `GET /health` - mode, provider, and audience status.
-- `GET /preview` - daily update payload without sending.
+- `GET /preview` - daily update payload without sending or exposing recipient data.
 - `GET /dry-run` - bearer-token gated full run with dry-run send results.
 - `POST /send-test?to=email@example.com` - bearer-token gated test send.
+
+The worker preview renders the same section shape as `https://pointcast.xyz/email-daily-preview.json`. If that route is unavailable, the worker falls back to a single safe preview section and still does not invent coverage.
 
 ## Safety
 

@@ -5,16 +5,17 @@ import type { APIRoute } from 'astro';
 import {
   POINTCAST_DAILY_EMAIL_SCHEDULE,
   POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
+  POINTCAST_DAILY_WIRE_VERSION,
 } from '../lib/daily-email-scheduler';
 
 const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation',
-  status: 'standalone PointCast area with federation strategy v0, Battle Desk V3, and PointCast Daily scheduler',
+  status: 'standalone PointCast area with federation strategy v0, Battle Desk V3, Daily Wire V2, and PointCast Daily scheduler',
   human: 'https://pointcast.xyz/nouns-nation/',
   summary:
-    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, PointCast Daily email scheduler, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
+    'A standalone PointCast area for Nouns Nation Battler, Battle Desk V3, season recap archive, Season 6 Sprint Room, Daily Wire V2, PointCast Daily email scheduler, Battle Desk V2, TV cast, Desk Wall, Agent Bench, blocks, and a federation path for people bringing their own nations, teams, gangs, clubs, crews, DAOs, schools, shops, and local leagues.',
   latestVersion: {
     name: 'Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
@@ -38,6 +39,7 @@ const payload = {
     nextSprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
     dailyEmailScheduler: 'https://pointcast.xyz/email-scheduler',
     dailyEmailSchedulerJson: 'https://pointcast.xyz/email-scheduler.json',
+    dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
     battleDeskV2: 'https://pointcast.xyz/nouns-nation-battler-v2/',
     battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
     tvCast: 'https://pointcast.xyz/nouns-nation-battler-tv/',
@@ -94,10 +96,16 @@ const payload = {
     name: 'PointCast Daily',
     human: 'https://pointcast.xyz/email-scheduler',
     manifest: 'https://pointcast.xyz/email-scheduler.json',
+    dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
     version: POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
+    wireVersion: POINTCAST_DAILY_WIRE_VERSION,
     schedule: POINTCAST_DAILY_EMAIL_SCHEDULE,
     purpose:
       'A daily morning email wire for Nouns Nation, fresh PointCast blocks, shipped sprint receipts, and next operator actions.',
+    editorialTarget:
+      '9:30 AM Pacific Daily Wire built from the same public preview payload the worker renders.',
+    seasonSixPrompt:
+      'Write tomorrow\'s Daily Wire lead from one Season 6 expansion, media, proof, rival, or rights mission.',
     defaultMode: 'dry-run preview until Resend, live mode, and opt-in audience are configured',
   },
   blocks: [

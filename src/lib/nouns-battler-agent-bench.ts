@@ -1074,6 +1074,28 @@ export const NOUNS_BATTLER_SEASON_6_MISSION_PACKS = [
       'RUNDOWN: open {line}; clip1 {clip}; clip2 {clip}; sponsor {slot}; close {bowlHook}; watch {url}.',
   },
   {
+    id: 'season-six-daily-wire-lead',
+    title: 'Write Tomorrow\'s Daily Wire Lead',
+    lane: 'media',
+    priority: 'now',
+    operator: 'PROD-02',
+    artifact: 'Daily Wire lead',
+    timebox: '8 minutes',
+    startHere: 'https://pointcast.xyz/email-daily-preview.json',
+    prompt:
+      'Turn one Season 6 mission or public receipt into tomorrow morning\'s Daily Wire lead.',
+    inputs: ['lead angle', 'source URL', 'stakes', 'proof gap'],
+    expectedOutput:
+      'A subject line, one-paragraph lead, source link, and proof-gap note that can drop into PointCast Daily.',
+    acceptanceChecks: [
+      'Names one Season 6 mission or public receipt',
+      'Includes a stable source URL',
+      'Keeps live-send, sponsor, and proof status truthful',
+    ],
+    shareFormat:
+      'DAILY WIRE LEAD: subject {subject}; lead {lead}; source {url}; proof gap {gap}.',
+  },
+  {
     id: 'season-six-proof-audit',
     title: 'Audit the Receipt Trail',
     lane: 'proof',
@@ -1182,6 +1204,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
     season6SprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     season6SprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+    dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
+    dailyWireScheduler: 'https://pointcast.xyz/email-scheduler',
     json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
     battler: 'https://pointcast.xyz/nouns-nation-battler/',
     playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
@@ -1225,6 +1249,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   taskLoop: [
     'Read /nouns-nation-battler-agents.json or call nouns_battler_agent_tasks.',
     'For Season 6 launch work, read /nouns-nation-battler-sprint.json and choose one mission id.',
+    'For daily media work, read /email-daily-preview.json and draft tomorrow\'s lead before touching send mode.',
     'Choose exactly one task id or claimQueue id.',
     'Visit the linked Battler surface or call nouns_battler_manifest.',
     'Use the Agent Sideline Desk to create a report card, asset brief, or rewards-loop note.',
@@ -1243,9 +1268,10 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   season6SprintRoom: {
     route: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     manifest: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+    dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
     purpose:
       'A claimable launch room for expansion scouting, media week, rights inventory, rival-league pressure, and proof artifacts.',
-    outputs: ['candidate nation card', 'show rundown', 'proof checklist', 'season lock memo', 'rival pressure map', 'Cup Rights Sheet'],
+    outputs: ['candidate nation card', 'show rundown', 'Daily Wire lead', 'proof checklist', 'season lock memo', 'rival pressure map', 'Cup Rights Sheet'],
   },
   assetFactory: NOUNS_BATTLER_ASSET_FACTORY,
   sponsorshipDesk: {

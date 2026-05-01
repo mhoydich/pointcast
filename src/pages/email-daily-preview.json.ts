@@ -1,10 +1,10 @@
 /**
- * /email-scheduler.json - machine-readable PointCast Daily email contract.
+ * /email-daily-preview.json - exact public Daily Wire payload.
  */
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
-import { buildDailyEmailPreview, buildDailyWirePreview } from '../lib/daily-email-scheduler';
+import { buildDailyWirePreview } from '../lib/daily-email-scheduler';
 import { readAllRecaps } from '../lib/sprint-recap';
 
 export const GET: APIRoute = async () => {
@@ -23,6 +23,7 @@ export const GET: APIRoute = async () => {
         timestamp: block.data.timestamp.toISOString(),
       };
     });
+
   const sprints = readAllRecaps().slice(0, 6).map((sprint) => ({
     id: sprint.sprintId,
     title: sprint.title,
@@ -31,9 +32,8 @@ export const GET: APIRoute = async () => {
     anchor: `https://pointcast.xyz/sprints#${sprint.sprintId}`,
     shippedAs: sprint.shippedAs ?? null,
   }));
-  const dailyWire = buildDailyWirePreview({ blocks, sprints });
 
-  return new Response(JSON.stringify(buildDailyEmailPreview(new Date(), dailyWire), null, 2), {
+  return new Response(JSON.stringify(buildDailyWirePreview({ blocks, sprints }), null, 2), {
     status: 200,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',

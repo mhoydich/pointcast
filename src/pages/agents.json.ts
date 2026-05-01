@@ -23,6 +23,7 @@ import {
   POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
   POINTCAST_DAILY_EMAIL_SEND_CONTRACT,
   POINTCAST_DAILY_EMAIL_SOURCES,
+  POINTCAST_DAILY_WIRE_VERSION,
 } from '../lib/daily-email-scheduler';
 import {
   AGENT_VALUE_SURFACE,
@@ -109,6 +110,7 @@ export const GET: APIRoute = async () => {
         investmentThesisJson: 'https://pointcast.xyz/investment-thesis.json',
         dailyEmailScheduler: 'https://pointcast.xyz/email-scheduler',
         dailyEmailSchedulerJson: 'https://pointcast.xyz/email-scheduler.json',
+        dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
         nounsNationRoadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
         nounsNationRoadmapJson: 'https://pointcast.xyz/nouns-nation/roadmap.json',
         nounsNationRoadmapDeck: 'https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx',
@@ -198,6 +200,7 @@ export const GET: APIRoute = async () => {
         family: 'https://pointcast.xyz/family',
         today: 'https://pointcast.xyz/today',
         dailyEmailScheduler: 'https://pointcast.xyz/email-scheduler',
+        dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
         nature: 'https://pointcast.xyz/nature',
@@ -243,6 +246,7 @@ export const GET: APIRoute = async () => {
         nounsNationBattler: 'https://pointcast.xyz/nouns-nation-battler.json',
         nounsNationBattlerAgents: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
         dailyEmailScheduler: 'https://pointcast.xyz/email-scheduler.json',
+        dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
         town: 'https://pointcast.xyz/town.json',
         battle: 'https://pointcast.xyz/battle.json',
         timeline: 'https://pointcast.xyz/timeline.json',
@@ -425,8 +429,10 @@ export const GET: APIRoute = async () => {
       dailyEmailScheduler: {
         html: 'https://pointcast.xyz/email-scheduler',
         json: 'https://pointcast.xyz/email-scheduler.json',
+        dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
         worker: 'workers/pointcast-daily-email',
         version: POINTCAST_DAILY_EMAIL_SCHEDULER_VERSION,
+        wireVersion: POINTCAST_DAILY_WIRE_VERSION,
         schedule: POINTCAST_DAILY_EMAIL_SCHEDULE,
         provider: POINTCAST_DAILY_EMAIL_SEND_CONTRACT.provider,
         sendContract: POINTCAST_DAILY_EMAIL_SEND_CONTRACT,
@@ -438,7 +444,7 @@ export const GET: APIRoute = async () => {
           cadence: source.cadence,
         })),
         guardrails: POINTCAST_DAILY_EMAIL_GUARDRAILS,
-        note: 'Daily PointCast update lane for Nouns Nation, fresh blocks, sprint receipts, and next actions. Default mode is dry-run; live sends require Resend, DAILY_EMAIL_SEND_MODE=live, and explicit opt-in recipients.',
+        note: 'Daily PointCast update lane for Nouns Nation, fresh blocks, sprint receipts, and next actions. /email-daily-preview.json is the public Daily Wire source of truth; default mode is dry-run; live sends require Resend, DAILY_EMAIL_SEND_MODE=live, and explicit opt-in recipients.',
       },
       nounsNationBattlerAgentBench: {
         hub: 'https://pointcast.xyz/nouns-nation/',

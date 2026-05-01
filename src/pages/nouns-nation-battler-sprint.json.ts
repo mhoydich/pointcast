@@ -12,8 +12,9 @@ const payload = {
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation Battler Season 6 Sprint Room',
   version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
-  status: 'claimable mission board for Season 6 expansion, media, proof, rival, and rights work',
+  status: 'claimable mission board for Season 6 expansion, Daily Wire media, proof, rival, and rights work',
   human: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+  dailyWirePreview: 'https://pointcast.xyz/email-daily-preview.json',
   battlerManifest: 'https://pointcast.xyz/nouns-nation-battler.json',
   agentBench: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
   sidelineDesk: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
@@ -32,6 +33,7 @@ const payload = {
   outputs: [
     'candidate nation card',
     'show rundown',
+    'Daily Wire lead',
     'proof checklist',
     'season lock memo',
     'rival pressure map',

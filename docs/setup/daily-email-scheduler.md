@@ -2,7 +2,8 @@
 
 This is the daily update lane for PointCast. It is intentionally two pieces:
 
-- `/email-scheduler` and `/email-scheduler.json` on the main site define the public contract.
+- `/email-scheduler` and `/email-scheduler.json` on the main site define the public operator contract.
+- `/email-daily-preview.json` is the public Daily Wire source of truth consumed by the operator page, agents, and the worker render.
 - `workers/pointcast-daily-email` is the scheduled sender.
 
 The worker defaults to dry-run. It only sends live email when a provider key, send-mode flag, and opt-in audience are all present.
@@ -52,6 +53,7 @@ That is 16:30 UTC daily. On April 30, 2026, it is 9:30 AM in `America/Los_Angele
 
 ```bash
 curl https://pointcast.xyz/email-scheduler.json
+curl https://pointcast.xyz/email-daily-preview.json
 curl https://pointcast-daily-email.<account>.workers.dev/health
 curl https://pointcast-daily-email.<account>.workers.dev/preview
 curl https://pointcast-daily-email.<account>.workers.dev/dry-run \
@@ -62,7 +64,7 @@ curl https://pointcast-daily-email.<account>.workers.dev/dry-run \
 
 - Provider: Resend.
 - From: `hello@pointcast.xyz` by default.
-- Source surfaces: `/blocks.json`, `/sprints.json`, `/nouns-nation-battler.json`, `/nouns-nation.json`.
+- Source surfaces: `/email-daily-preview.json`, backed by `/blocks.json`, `/sprints.json`, `/nouns-nation-battler.json`, and `/nouns-nation.json`.
 - Audience: explicit opt-in only.
 - No provider or no live flag means no send.
 
