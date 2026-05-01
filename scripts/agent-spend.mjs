@@ -40,6 +40,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +48,17 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BLOCKS_DIR = path.join(REPO_ROOT, 'src/content/blocks');
+const ENV_FILE = path.join(REPO_ROOT, '.env.local');
+
+// Source .env.local on startup (matches scripts/manus.mjs convention).
+// Repo-local secrets land in .env.local which is gitignored.
+(function loadEnv() {
+  if (!existsSync(ENV_FILE)) return;
+  for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  }
+})();
 
 // Must mirror src/lib/link.ts. If you change one, change the other.
 const LINK_CAPS = {
