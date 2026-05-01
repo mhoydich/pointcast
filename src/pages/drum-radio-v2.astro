@@ -1,0 +1,850 @@
+---
+/**
+ * /drum-radio-v2 — the dial · multi-station drum radio.
+ *
+ * Per Mike 2026-04-30: "and another radio when chance, very fun, v2
+ * https://pointcast.xyz/drum-radio, have toggle."
+ *
+ * V1 (/drum-radio) is a single auto-DJ station — every /api/sounds
+ * event turns into a synth hit. V2 adds the FUN: a vintage-style
+ * dial with four themed stations + an auto-tune toggle that sweeps
+ * stations every 30s. Each station filters /api/sounds to a different
+ * slice of the hub and has its own audio palette.
+ *
+ * Stations:
+ *   96.1  · ALL ROOMS    — everything (default; v1 behavior)
+ *   100.5 · BIRTHDAY     — birthday/cake/card/pinata/sign events
+ *   102.3 · INSTRUMENTS  — orchestra/choir/lounge/theremin/bells/etc.
+ *   104.7 · COMMS        — shout/applause/walkie/letter/pin/heart/graffiti
+ *
+ * Toggle: AUTO TUNE flips stations every 30s with a quick frequency
+ * sweep animation; MANUAL holds whatever you picked.
+ *
+ * Each station has its own:
+ *   - Background color gradient
+ *   - Synth oscillator / filter palette
+ *   - "Now playing" tagline that hints at the genre
+ *
+ * Aesthetic: vintage tube radio in a wood cabinet. Big circular dial
+ * with frequency markings, glowing needle, four chunky preset buttons.
+ * Yellow "ON AIR" sign in the corner. VU meters on each side bouncing
+ * to incoming events.
+ *
+ * Distinct from v1: v1 is functional ("the tab never goes silent"),
+ * v2 is theatrical ("dial in, lean back, listen to the room").
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'DRUM RADIO V2 — the dial · multi-station drum radio';
+const description = 'A vintage-style multi-station radio for the drum hub. Tune the dial across four themed stations: All Rooms · Birthday · Instruments · Comms. Toggle auto-tune to let the radio pick. Every /api/sounds event becomes a synth hit.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/drum-radio-v2',
+  name: 'PointCast Drum Radio v2 · The Dial',
+  url: 'https://pointcast.xyz/drum-radio-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <main class="rd2" id="rd2-main" data-station="all">
+    <DrumNav current="radio" />
+
+    <header class="rd2__head">
+      <p class="rd2__kicker mono">★ DRUM HUB · RADIO V2 · THE DIAL · 4 STATIONS ★</p>
+      <h1 class="rd2__title">drum <em>radio</em></h1>
+      <p class="rd2__strap mono">tune the dial · let the room play to you · auto-tune for the long haul</p>
+    </header>
+
+    <section class="rd2__cabinet" aria-label="Radio cabinet">
+
+      {/* Top brass strip — ON AIR + station label */}
+      <div class="rd2__brass">
+        <span class="rd2__brass-on-air">
+          <span class="rd2__brass-dot" aria-hidden="true"></span>
+          ON AIR
+        </span>
+        <span class="rd2__brass-station mono" id="rd2-station-name">96.1 · ALL ROOMS</span>
+        <span class="rd2__brass-tag mono" id="rd2-station-tag">— everything from the hub —</span>
+      </div>
+
+      {/* The dial */}
+      <div class="rd2__dial-wrap" aria-label="Tuning dial">
+        <div class="rd2__dial" id="rd2-dial">
+          <div class="rd2__dial-face">
+            {/* frequency markings */}
+            <span class="rd2__dial-tick" style="--a: -90deg" data-f="96.1">96.1</span>
+            <span class="rd2__dial-tick" style="--a: -30deg" data-f="100.5">100.5</span>
+            <span class="rd2__dial-tick" style="--a: 30deg" data-f="102.3">102.3</span>
+            <span class="rd2__dial-tick" style="--a: 90deg" data-f="104.7">104.7</span>
+            {/* center hub */}
+            <span class="rd2__dial-hub" aria-hidden="true">
+              <span class="rd2__dial-hub-glyph mono" id="rd2-dial-freq">96.1</span>
+              <span class="rd2__dial-hub-mhz mono">MHz</span>
+            </span>
+            {/* needle */}
+            <span class="rd2__dial-needle" id="rd2-dial-needle" aria-hidden="true"></span>
+          </div>
+        </div>
+
+        {/* VU meters */}
+        <div class="rd2__vu rd2__vu--l" aria-hidden="true">
+          <span class="rd2__vu-bar" id="rd2-vu-l-1"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-l-2"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-l-3"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-l-4"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-l-5"></span>
+        </div>
+        <div class="rd2__vu rd2__vu--r" aria-hidden="true">
+          <span class="rd2__vu-bar" id="rd2-vu-r-1"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-r-2"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-r-3"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-r-4"></span>
+          <span class="rd2__vu-bar" id="rd2-vu-r-5"></span>
+        </div>
+      </div>
+
+      {/* Station presets — 4 chunky buttons */}
+      <div class="rd2__presets" role="radiogroup" aria-label="Station presets">
+        <button type="button" class="rd2__preset rd2__preset--active" role="radio" aria-checked="true"
+                data-station="all" data-freq="96.1" data-name="ALL ROOMS"
+                data-tag="— everything from the hub —">
+          <span class="rd2__preset-num mono">96.1</span>
+          <span class="rd2__preset-label">all rooms</span>
+        </button>
+        <button type="button" class="rd2__preset" role="radio" aria-checked="false"
+                data-station="bd" data-freq="100.5" data-name="BIRTHDAY"
+                data-tag="— cakes, cards, piñatas, candles —">
+          <span class="rd2__preset-num mono">100.5</span>
+          <span class="rd2__preset-label">birthday</span>
+        </button>
+        <button type="button" class="rd2__preset" role="radio" aria-checked="false"
+                data-station="inst" data-freq="102.3" data-name="INSTRUMENTS"
+                data-tag="— orchestra, choir, hang, organ —">
+          <span class="rd2__preset-num mono">102.3</span>
+          <span class="rd2__preset-label">instruments</span>
+        </button>
+        <button type="button" class="rd2__preset" role="radio" aria-checked="false"
+                data-station="comms" data-freq="104.7" data-name="COMMS"
+                data-tag="— shouts, applause, letters, pins —">
+          <span class="rd2__preset-num mono">104.7</span>
+          <span class="rd2__preset-label">comms</span>
+        </button>
+      </div>
+
+      {/* Controls — auto-tune toggle, volume, on/off */}
+      <div class="rd2__controls">
+        <label class="rd2__toggle">
+          <input type="checkbox" id="rd2-auto-tune" />
+          <span class="rd2__toggle-track" aria-hidden="true"><span class="rd2__toggle-thumb"></span></span>
+          <span class="rd2__toggle-label mono">auto tune · 30s sweep</span>
+        </label>
+
+        <label class="rd2__vol">
+          <span class="rd2__vol-label mono">vol</span>
+          <input type="range" id="rd2-volume" min="0" max="100" value="60" />
+          <span class="rd2__vol-out mono" id="rd2-vol-out">60</span>
+        </label>
+
+        <label class="rd2__toggle">
+          <input type="checkbox" id="rd2-power" checked />
+          <span class="rd2__toggle-track" aria-hidden="true"><span class="rd2__toggle-thumb"></span></span>
+          <span class="rd2__toggle-label mono">power · on air</span>
+        </label>
+      </div>
+
+      {/* Now-playing ticker */}
+      <div class="rd2__now" aria-label="Now playing">
+        <p class="rd2__now-label mono">▌ NOW PLAYING</p>
+        <ul class="rd2__now-list" id="rd2-now-list" aria-live="polite">
+          <li class="rd2__now-empty mono">— stream open · waiting for the first event —</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="rd2__foot">
+      <p class="mono">
+        DRUM RADIO V2 · v0.1 · 2026-04-30 · pointcast.xyz/drum-radio-v2 · sister to <a href="/drum-radio">96.1 v1</a> · part of the <a href="/drum-press">drum press</a>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ─── State ──────────────────────────────────────────────────
+    var STATION_FILTERS = {
+      all:   null, // null = no filter (everything)
+      bd:    new Set(['birthday', 'cake-light', 'cake-blow', 'sign', 'pinata', 'pinata-burst']),
+      inst:  new Set(['drum', 'orchestra', 'choir', 'choir-chord', 'lounge', 'theremin', 'bells', 'organ', 'strings', 'marimba', 'hang', 'tr808', 'harp', 'rhodes', 'symphony', 'button']),
+      comms: new Set(['shout', 'applause', 'walkie', 'letter', 'pin', 'heart', 'graffiti', 'confessional', 'soft']),
+    };
+    // Per-station audio palette
+    var STATION_AUDIO = {
+      all:   { osc: 'triangle', filt: 1800, gain: 0.18, decay: 0.40 },
+      bd:    { osc: 'sine',     filt: 2400, gain: 0.20, decay: 0.55 },
+      inst:  { osc: 'sawtooth', filt: 1400, gain: 0.16, decay: 0.50 },
+      comms: { osc: 'square',   filt: 1100, gain: 0.14, decay: 0.30 },
+    };
+    // Per-station base note (MIDI)
+    var STATION_BASE = { all: 48, bd: 55, inst: 50, comms: 45 }; // C3, G3, D3, A2
+
+    var view = {
+      station: 'all',
+      power: true,
+      autoTune: false,
+      volume: 0.6,
+    };
+
+    // ─── DOM ─────────────────────────────────────────────────────
+    var main = document.getElementById('rd2-main');
+    var nameEl = document.getElementById('rd2-station-name');
+    var tagEl = document.getElementById('rd2-station-tag');
+    var freqEl = document.getElementById('rd2-dial-freq');
+    var needle = document.getElementById('rd2-dial-needle');
+    var presets = Array.from(document.querySelectorAll('.rd2__preset'));
+    var nowList = document.getElementById('rd2-now-list');
+    var vuLeft = ['rd2-vu-l-1','rd2-vu-l-2','rd2-vu-l-3','rd2-vu-l-4','rd2-vu-l-5'].map(function (id) { return document.getElementById(id); });
+    var vuRight = ['rd2-vu-r-1','rd2-vu-r-2','rd2-vu-r-3','rd2-vu-r-4','rd2-vu-r-5'].map(function (id) { return document.getElementById(id); });
+    var autoTuneEl = document.getElementById('rd2-auto-tune');
+    var powerEl = document.getElementById('rd2-power');
+    var volumeEl = document.getElementById('rd2-volume');
+    var volOut = document.getElementById('rd2-vol-out');
+
+    // Needle angle per station
+    var STATION_ANGLE = { all: -75, bd: -25, inst: 25, comms: 75 };
+
+    function setStation(key, opts) {
+      if (!STATION_FILTERS.hasOwnProperty(key)) return;
+      view.station = key;
+      main.dataset.station = key;
+      var btn = presets.find(function (b) { return b.dataset.station === key; });
+      presets.forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle('rd2__preset--active', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+      if (btn) {
+        var freq = btn.dataset.freq || '—';
+        var name = btn.dataset.name || '—';
+        var tag = btn.dataset.tag || '—';
+        if (nameEl) nameEl.textContent = freq + ' · ' + name;
+        if (tagEl) tagEl.textContent = tag;
+        if (freqEl) freqEl.textContent = freq;
+      }
+      if (needle) needle.style.transform = 'translate(-50%, -100%) rotate(' + STATION_ANGLE[key] + 'deg)';
+      // Audible "tune" click
+      if (!opts || !opts.silent) tuneClick();
+    }
+
+    presets.forEach(function (b) {
+      b.addEventListener('click', function () {
+        // Manual click cancels auto-tune
+        if (autoTuneEl && autoTuneEl.checked) autoTuneEl.checked = false;
+        view.autoTune = false;
+        setStation(b.dataset.station);
+      });
+    });
+
+    if (powerEl) {
+      powerEl.addEventListener('change', function () {
+        view.power = !!powerEl.checked;
+        main.dataset.power = view.power ? 'on' : 'off';
+        if (!view.power) for (var i = 0; i < vuLeft.length; i++) {
+          if (vuLeft[i]) vuLeft[i].style.height = '8%';
+          if (vuRight[i]) vuRight[i].style.height = '8%';
+        }
+      });
+    }
+    if (volumeEl) {
+      volumeEl.addEventListener('input', function () {
+        view.volume = Number(volumeEl.value) / 100;
+        if (volOut) volOut.textContent = String(volumeEl.value);
+      });
+    }
+    if (autoTuneEl) {
+      autoTuneEl.addEventListener('change', function () {
+        view.autoTune = !!autoTuneEl.checked;
+      });
+    }
+
+    // Auto-tune sweep
+    var STATION_ORDER = ['all', 'bd', 'inst', 'comms'];
+    setInterval(function () {
+      if (!view.autoTune) return;
+      var idx = STATION_ORDER.indexOf(view.station);
+      var next = STATION_ORDER[(idx + 1) % STATION_ORDER.length];
+      setStation(next);
+    }, 30000);
+
+    // ─── Web Audio ──────────────────────────────────────────────
+    var actx = null;
+    var masterGain = null;
+    function ensureAudio() {
+      if (actx) return actx;
+      try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = actx.createGain();
+        masterGain.gain.value = view.volume;
+        masterGain.connect(actx.destination);
+      } catch (e) { actx = null; }
+      return actx;
+    }
+    document.body.addEventListener('pointerdown', ensureAudio, { once: true });
+    document.body.addEventListener('keydown', ensureAudio, { once: true });
+
+    function midiToHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+    function playStationHit(velocity) {
+      if (!view.power) return;
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      // Tune master to current volume
+      if (masterGain) masterGain.gain.setValueAtTime(view.volume, ctx.currentTime);
+      var pal = STATION_AUDIO[view.station] || STATION_AUDIO.all;
+      var base = STATION_BASE[view.station] || 48;
+      // A pleasing scale degree
+      var DEGREES = [0, 4, 7, 12, 14, 16, 19];
+      var degree = DEGREES[Math.floor(Math.random() * DEGREES.length)];
+      var freq = midiToHz(base + degree);
+      var t0 = ctx.currentTime;
+
+      var osc = ctx.createOscillator();
+      osc.type = pal.osc;
+      osc.frequency.setValueAtTime(freq, t0);
+      var lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.setValueAtTime(pal.filt * 1.6, t0);
+      lpf.frequency.exponentialRampToValueAtTime(pal.filt * 0.5, t0 + pal.decay);
+      var g = ctx.createGain();
+      var amp = pal.gain * (velocity || 1);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(amp, t0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + pal.decay);
+      osc.connect(lpf).connect(g).connect(masterGain);
+      osc.start(t0);
+      osc.stop(t0 + pal.decay + 0.05);
+    }
+
+    // Tune click — quick low blip when changing stations
+    function tuneClick() {
+      if (!view.power) return;
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      var t0 = ctx.currentTime;
+      var osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(120, t0);
+      osc.frequency.exponentialRampToValueAtTime(60, t0 + 0.08);
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.07, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      osc.connect(g).connect(masterGain);
+      osc.start(t0); osc.stop(t0 + 0.13);
+    }
+
+    // ─── VU meters ──────────────────────────────────────────────
+    var vuLevel = 0;
+    function pulseVU(amount) {
+      vuLevel = Math.max(vuLevel, 0.4 + Math.random() * 0.6 * (amount || 1));
+    }
+    function tickVU() {
+      vuLevel *= 0.86;
+      if (vuLevel < 0.06) vuLevel = 0.06;
+      var cap = view.power ? 100 : 8;
+      var base = vuLevel * cap;
+      for (var i = 0; i < 5; i++) {
+        var jitter = (Math.random() - 0.5) * 8;
+        var v = Math.max(8, Math.min(100, base + jitter - i * 5));
+        if (vuLeft[i]) vuLeft[i].style.height = v + '%';
+        if (vuRight[i]) vuRight[i].style.height = (Math.max(8, Math.min(100, base + (Math.random() - 0.5) * 8 - i * 5))) + '%';
+      }
+    }
+    setInterval(tickVU, 80);
+
+    // ─── Now playing ticker ─────────────────────────────────────
+    var nowSeen = {};
+    function pushNow(e) {
+      var key = (e.t || 0) + ':' + (e.pid || '') + ':' + (e.type || '');
+      if (nowSeen[key]) return;
+      nowSeen[key] = 1;
+      var li = document.createElement('li');
+      li.className = 'rd2__now-row mono';
+      var t = new Date(e.t || Date.now());
+      var time = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + ':' + String(t.getSeconds()).padStart(2, '0');
+      li.innerHTML =
+        '<span class="rd2__now-time">' + time + '</span>' +
+        '<span class="rd2__now-type">[' + (e.type || 'event') + ']</span>' +
+        '<span class="rd2__now-pid">pid ' + ((e.pid || '').slice(0, 8) || '—') + '</span>';
+      // Clear empty placeholder
+      var empty = nowList.querySelector('.rd2__now-empty');
+      if (empty) empty.remove();
+      nowList.prepend(li);
+      // Cap to last 8
+      var rows = nowList.querySelectorAll('.rd2__now-row');
+      for (var i = 8; i < rows.length; i++) rows[i].remove();
+    }
+
+    // ─── Poll /api/sounds, filter by station, play ──────────────
+    var lastTs = Date.now() - 8000;
+    function poll() {
+      fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !Array.isArray(d.events)) return;
+          if (d.events.length === 0) return;
+          lastTs = d.now || Date.now();
+          var filt = STATION_FILTERS[view.station];
+          d.events.forEach(function (e) {
+            // Skip events that don't match the current station's filter
+            if (filt && !filt.has(e.type)) return;
+            playStationHit(0.7 + Math.random() * 0.3);
+            pulseVU(0.9);
+            pushNow(e);
+          });
+        }).catch(function () {});
+    }
+    setInterval(poll, 1500);
+    poll();
+
+    // Initial render
+    setStation('all', { silent: true });
+  })();
+</script>
+
+<style>
+  .rd2 {
+    /* Per-station palette — set on .rd2 root via data-station */
+    --rd2-paper: #fff5d8;
+    --rd2-deep: #f8e8c0;
+    --rd2-cabinet: #2a1d12;
+    --rd2-cabinet-deep: #1a1108;
+    --rd2-brass: #c9982a;
+    --rd2-brass-glow: #ffc845;
+    --rd2-needle: #d6346a;
+    --rd2-glow: rgba(214, 52, 106, 0.28);
+    --rd2-ink: #11100c;
+    --rd2-mute: #b8a679;
+
+    background: linear-gradient(180deg, #0a0612 0%, #1a1028 100%);
+    color: var(--rd2-paper);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.5;
+    transition: background 600ms;
+  }
+  .rd2[data-station="bd"]    { background: linear-gradient(180deg, #2a0612 0%, #4a0a26 100%); }
+  .rd2[data-station="inst"]  { background: linear-gradient(180deg, #061a2a 0%, #0a2a4a 100%); }
+  .rd2[data-station="comms"] { background: linear-gradient(180deg, #0a1f10 0%, #1a3a26 100%); }
+
+  .rd2 .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Head ──────────────────────────────────────────────── */
+  .rd2__head { text-align: center; margin: 14px auto 28px; max-width: 880px; }
+  .rd2__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--rd2-brass-glow);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  .rd2__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    color: var(--rd2-paper);
+  }
+  .rd2__title em {
+    font-style: italic;
+    color: var(--rd2-brass-glow);
+    font-weight: 500;
+  }
+  .rd2__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--rd2-mute);
+    margin: 14px 0 0;
+  }
+
+  /* ─── Cabinet ──────────────────────────────────────────── */
+  .rd2__cabinet {
+    max-width: 900px;
+    margin: 0 auto;
+    background:
+      radial-gradient(ellipse at center top, #3a2818 0%, var(--rd2-cabinet) 50%, var(--rd2-cabinet-deep) 100%);
+    border: 6px solid #1a1108;
+    border-radius: 18px;
+    box-shadow:
+      inset 0 2px 0 rgba(255, 220, 150, 0.3),
+      inset 0 -2px 0 rgba(0,0,0,0.6),
+      0 12px 30px rgba(0,0,0,0.4);
+    padding: 24px;
+  }
+
+  /* ─── Brass strip ──────────────────────────────────────── */
+  .rd2__brass {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 12px 18px;
+    background: linear-gradient(180deg, #f0c845 0%, var(--rd2-brass) 50%, #8a6818 100%);
+    border: 2px solid #1a1108;
+    border-radius: 4px;
+    margin-bottom: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,220,150,0.5), inset 0 -1px 0 rgba(0,0,0,0.4);
+    color: var(--rd2-cabinet-deep);
+  }
+  .rd2__brass-on-air {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    color: var(--rd2-cabinet-deep);
+  }
+  .rd2[data-power="off"] .rd2__brass-on-air { color: rgba(26, 17, 8, 0.4); }
+  .rd2__brass-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--rd2-needle);
+    box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.6);
+    animation: rd2-pulse 1.6s ease-out infinite;
+  }
+  .rd2[data-power="off"] .rd2__brass-dot { background: rgba(26, 17, 8, 0.3); animation: none; }
+  @keyframes rd2-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(214, 52, 106, 0.6); }
+    50%      { box-shadow: 0 0 0 6px rgba(214, 52, 106, 0); }
+  }
+  .rd2__brass-station {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: var(--rd2-cabinet-deep);
+  }
+  .rd2__brass-tag {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: rgba(26, 17, 8, 0.7);
+  }
+
+  /* ─── Dial ────────────────────────────────────────────── */
+  .rd2__dial-wrap {
+    display: grid;
+    grid-template-columns: 60px 1fr 60px;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 22px;
+  }
+  .rd2__dial {
+    aspect-ratio: 1.6 / 1;
+    background:
+      radial-gradient(ellipse at center, #2a1d12 0%, #1a1108 100%);
+    border: 4px solid #0a0604;
+    border-radius: 8px;
+    box-shadow:
+      inset 0 4px 12px rgba(0,0,0,0.7),
+      inset 0 -1px 0 rgba(255,220,150,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .rd2__dial-face {
+    position: absolute;
+    inset: 12px;
+    background:
+      radial-gradient(ellipse at 50% 100%, var(--rd2-glow) 0%, transparent 50%),
+      linear-gradient(180deg, rgba(255, 200, 70, 0.04) 0%, transparent 100%);
+    border-radius: 4px;
+  }
+  .rd2__dial-tick {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform-origin: 50% 200%;
+    transform: translateX(-50%) rotate(var(--a, 0));
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--rd2-brass-glow);
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 4px rgba(255, 200, 70, 0.6);
+  }
+  .rd2__dial-hub {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    z-index: 2;
+  }
+  .rd2__dial-hub-glyph {
+    font-size: clamp(24px, 4vw, 36px);
+    font-weight: 800;
+    color: var(--rd2-brass-glow);
+    text-shadow: 0 0 12px rgba(255, 200, 70, 0.6), 0 0 4px rgba(255, 200, 70, 0.4);
+    letter-spacing: 0.12em;
+    transition: color 600ms;
+  }
+  .rd2__dial-hub-mhz {
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: var(--rd2-mute);
+    text-transform: uppercase;
+  }
+  .rd2__dial-needle {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    width: 3px;
+    height: 65%;
+    background: linear-gradient(180deg, transparent 0%, var(--rd2-needle) 30%, var(--rd2-needle) 100%);
+    transform-origin: 50% 100%;
+    transform: translate(-50%, 0) rotate(-75deg);
+    transition: transform 600ms cubic-bezier(0.4, 1.6, 0.5, 1);
+    box-shadow: 0 0 8px var(--rd2-needle);
+    border-radius: 2px;
+  }
+
+  /* ─── VU meters ───────────────────────────────────────── */
+  .rd2__vu {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    height: 100%;
+    justify-content: flex-end;
+    padding: 6px;
+    background: #0a0604;
+    border: 2px solid #1a1108;
+    border-radius: 4px;
+    min-height: 120px;
+  }
+  .rd2__vu-bar {
+    width: 100%;
+    height: 8%;
+    background: linear-gradient(180deg, #5fdb6e 0%, var(--rd2-brass-glow) 60%, var(--rd2-needle) 100%);
+    transition: height 80ms linear;
+    border-radius: 1px;
+  }
+
+  /* ─── Presets ─────────────────────────────────────────── */
+  .rd2__presets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .rd2__preset {
+    appearance: none;
+    cursor: pointer;
+    background: linear-gradient(180deg, #3a2818 0%, var(--rd2-cabinet) 100%);
+    border: 2px solid #1a1108;
+    color: var(--rd2-paper);
+    padding: 12px 8px;
+    text-align: center;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 0 rgba(255,220,150,0.18), 0 4px 0 rgba(0,0,0,0.4);
+    transition: transform 80ms, box-shadow 80ms, background 200ms;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .rd2__preset:hover {
+    background: linear-gradient(180deg, #4a3220 0%, #3a281a 100%);
+  }
+  .rd2__preset:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 0 rgba(255,220,150,0.18), 0 2px 0 rgba(0,0,0,0.4);
+  }
+  .rd2__preset--active {
+    background: linear-gradient(180deg, var(--rd2-brass) 0%, #8a6818 100%);
+    color: var(--rd2-cabinet-deep);
+    border-color: var(--rd2-brass-glow);
+    box-shadow:
+      inset 0 1px 0 rgba(255,220,150,0.5),
+      0 0 0 2px var(--rd2-brass-glow),
+      0 0 12px rgba(255, 200, 70, 0.4);
+  }
+  .rd2__preset-num {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+  }
+  .rd2__preset-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+  }
+
+  /* ─── Controls ────────────────────────────────────────── */
+  .rd2__controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 2px solid #1a1108;
+    border-radius: 4px;
+    margin-bottom: 22px;
+  }
+  .rd2__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .rd2__toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .rd2__toggle-track {
+    width: 44px;
+    height: 22px;
+    background: #0a0604;
+    border: 2px solid #1a1108;
+    border-radius: 11px;
+    position: relative;
+    transition: background 200ms;
+    flex-shrink: 0;
+  }
+  .rd2__toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--rd2-mute);
+    border-radius: 50%;
+    transition: transform 200ms, background 200ms;
+  }
+  .rd2__toggle input:checked + .rd2__toggle-track {
+    background: var(--rd2-brass);
+    border-color: var(--rd2-brass-glow);
+  }
+  .rd2__toggle input:checked + .rd2__toggle-track .rd2__toggle-thumb {
+    transform: translateX(22px);
+    background: var(--rd2-brass-glow);
+    box-shadow: 0 0 4px var(--rd2-brass-glow);
+  }
+  .rd2__toggle-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--rd2-paper);
+  }
+
+  .rd2__vol {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .rd2__vol-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--rd2-mute);
+  }
+  .rd2__vol input[type="range"] {
+    width: 100px;
+    accent-color: var(--rd2-brass);
+  }
+  .rd2__vol-out {
+    font-size: 11px;
+    color: var(--rd2-brass-glow);
+    min-width: 28px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Now playing ─────────────────────────────────────── */
+  .rd2__now {
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid #1a1108;
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .rd2__now-label {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--rd2-brass-glow);
+    margin: 0 0 10px;
+    font-weight: 700;
+  }
+  .rd2__now-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rd2__now-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--rd2-paper);
+    padding: 4px 0;
+    border-bottom: 1px dotted rgba(184, 166, 121, 0.18);
+  }
+  .rd2__now-row:last-child { border-bottom: 0; }
+  .rd2__now-time { color: var(--rd2-mute); letter-spacing: 0.1em; }
+  .rd2__now-type { color: var(--rd2-brass-glow); font-weight: 700; letter-spacing: 0.08em; }
+  .rd2__now-pid { color: var(--rd2-mute); letter-spacing: 0.1em; }
+  .rd2__now-empty {
+    font-size: 11px;
+    color: var(--rd2-mute);
+    text-align: center;
+    padding: 14px;
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Foot ────────────────────────────────────────────── */
+  .rd2__foot {
+    max-width: 920px;
+    margin: 28px auto 0;
+    padding: 14px 0 0;
+    border-top: 1px dotted rgba(184, 166, 121, 0.2);
+    text-align: center;
+  }
+  .rd2__foot p {
+    font-size: 10px;
+    color: var(--rd2-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .rd2__foot a { color: var(--rd2-brass-glow); }
+
+  /* ─── Mobile ──────────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .rd2__cabinet { padding: 14px; border-radius: 12px; }
+    .rd2__brass { padding: 10px 12px; gap: 8px; }
+    .rd2__brass-station { font-size: 14px; }
+    .rd2__brass-tag { font-size: 10px; }
+    .rd2__dial-wrap { grid-template-columns: 36px 1fr 36px; gap: 10px; }
+    .rd2__vu { min-height: 100px; padding: 4px; }
+    .rd2__presets { grid-template-columns: repeat(2, 1fr); }
+    .rd2__controls { flex-direction: column; align-items: stretch; gap: 10px; }
+    .rd2__vol input[type="range"] { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rd2__brass-dot { animation: none; }
+    .rd2__dial-needle { transition: none; }
+  }
+</style>
