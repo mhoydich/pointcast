@@ -1,0 +1,1519 @@
+---
+/**
+ * /drum-solo — solo rhythm campaign · 2026-04-30 PT.
+ *
+ * Per Mike: "try another version which is very solo, like a campaign,
+ * achievements, etc lots of animations, interesting haptic, rythym,
+ * all some guitar hero like some, pattern like stationary, a bunch
+ * of nouns, neat, building, fufilling, uplifting, share accomplishments."
+ *
+ * Sister to /drum-vs (1v1) and /drum-league (community). Where those
+ * are social, this is private practice — a personal rhythm game with
+ * progression, achievements, and a shareable end-card. Every visit
+ * should feel like progress, even a short one.
+ *
+ * Page shape (single SPA-style page with three view states):
+ *   1. HUB — track list, your achievements grid, total stats,
+ *      noun "team" earned by clearing tracks
+ *   2. GAME — the actual rhythm game. 4 lanes, falling notes,
+ *      hit zone, score + combo + accuracy meter
+ *   3. RESULT — score recap, accuracy ring, achievements unlocked,
+ *      share row + retry/next-track buttons
+ *
+ * Data model (all client-side, stored in localStorage as 'pc:solo'):
+ *   {
+ *     totalTaps: number,
+ *     totalHits: number,
+ *     bestCombo: number,
+ *     daysPlayed: string[],     // 'YYYY-MM-DD'
+ *     tracks: {
+ *       [trackId]: { cleared: bool, bestScore: number, bestAccuracy: number, perfect: bool }
+ *     },
+ *     achievements: { [id]: { earnedAt: ts } },
+ *   }
+ *
+ * Identity: each visitor's "main noun" is hashed from sessionId
+ * (consistent with /drum-vs and /drum-league). Earned tracks add
+ * additional nouns to the team display.
+ *
+ * Sounds: Web Audio. Each lane has a distinct tone (low/mid/high/bell)
+ * synthesized from oscillators + envelopes — no audio files to load.
+ *
+ * IMPORTANT: literal '{' / '}' in body text MUST be escaped as
+ * &#123; / &#125; (PR #222 lesson).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'DRUM SOLO — solo rhythm campaign with achievements';
+const description = 'A Guitar-Hero-style rhythm campaign on PointCast. Tap the lanes as notes fall, build combos, clear tracks, unlock achievements, share your accomplishments. Solo practice for the drum hub.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/drum-solo',
+  name: 'PointCast Drum Solo · Rhythm Campaign',
+  url: 'https://pointcast.xyz/drum-solo',
+  description,
+  applicationCategory: 'GameApplication',
+  genre: 'Rhythm game',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <main class="ds" id="ds-main" data-view="hub">
+    <DrumNav current="solo" />
+
+    <header class="ds__head">
+      <p class="ds__kicker mono">★ DRUM HUB · SOLO CAMPAIGN · YOUR PRIVATE PRACTICE ★</p>
+      <h1 class="ds__title">drum <em>solo</em></h1>
+      <p class="ds__strap mono">tap the lanes · clear the tracks · earn the nouns · share the win</p>
+    </header>
+
+    {/* ─── HUB VIEW (default) ──────────────────────────────────── */}
+    <section class="ds__hub" id="ds-hub">
+
+      {/* Identity card — your noun + total stats */}
+      <div class="ds__id">
+        <div class="ds__id-noun-wrap">
+          <img class="ds__id-noun" id="ds-id-noun" src="" alt="Your Noun" width="96" height="96" />
+        </div>
+        <div class="ds__id-body">
+          <p class="ds__id-tag mono">YOU · NOUN <strong id="ds-id-noun-id">—</strong></p>
+          <p class="ds__id-stats mono">
+            <span><strong id="ds-id-taps">0</strong> taps</span>
+            <span class="ds__id-sep">·</span>
+            <span><strong id="ds-id-combo">0</strong> best combo</span>
+            <span class="ds__id-sep">·</span>
+            <span><strong id="ds-id-cleared">0</strong>/3 tracks cleared</span>
+          </p>
+          <p class="ds__id-streak mono" id="ds-id-streak">— first session —</p>
+        </div>
+      </div>
+
+      {/* Tracks — the campaign */}
+      <section class="ds__tracks" aria-label="Tracks">
+        <p class="ds__eyebrow mono">▌ CAMPAIGN · 3 TRACKS</p>
+        <ol class="ds__track-list" role="list">
+          <li class="ds__track" data-track="pebble">
+            <div class="ds__track-noun-wrap">
+              <img class="ds__track-noun" src="https://noun.pics/156.svg" alt="" width="64" height="64" loading="lazy" />
+            </div>
+            <div class="ds__track-body">
+              <p class="ds__track-tag mono">★ TRACK 1 · WARM-UP</p>
+              <h3 class="ds__track-name">Pebble</h3>
+              <p class="ds__track-desc">Eight quiet notes. Find the pulse. Anyone clears this.</p>
+              <p class="ds__track-meta mono">
+                <span>60 BPM · 16 notes · 1 lane</span>
+                <span class="ds__track-result" id="ds-track-pebble-result">— not yet played —</span>
+              </p>
+            </div>
+            <button type="button" class="ds__track-go ds__btn ds__btn--magenta" data-go="pebble">▸ play</button>
+          </li>
+          <li class="ds__track ds__track--locked" data-track="river" id="ds-track-river">
+            <div class="ds__track-noun-wrap">
+              <img class="ds__track-noun" src="https://noun.pics/805.svg" alt="" width="64" height="64" loading="lazy" />
+            </div>
+            <div class="ds__track-body">
+              <p class="ds__track-tag mono">★ TRACK 2 · BUILDING</p>
+              <h3 class="ds__track-name">River</h3>
+              <p class="ds__track-desc">Four lanes. A loop. Find the river. Two minutes long.</p>
+              <p class="ds__track-meta mono">
+                <span>90 BPM · 48 notes · 4 lanes</span>
+                <span class="ds__track-result" id="ds-track-river-result">— locked · clear Pebble first —</span>
+              </p>
+            </div>
+            <button type="button" class="ds__track-go ds__btn" data-go="river" disabled>▸ locked</button>
+          </li>
+          <li class="ds__track ds__track--locked" data-track="wave" id="ds-track-wave">
+            <div class="ds__track-noun-wrap">
+              <img class="ds__track-noun" src="https://noun.pics/42.svg" alt="" width="64" height="64" loading="lazy" />
+            </div>
+            <div class="ds__track-body">
+              <p class="ds__track-tag mono">★ TRACK 3 · WAVE</p>
+              <h3 class="ds__track-name">Wave</h3>
+              <p class="ds__track-desc">Polyrhythm. Big patterns. Hold your breath.</p>
+              <p class="ds__track-meta mono">
+                <span>120 BPM · 96 notes · 4 lanes</span>
+                <span class="ds__track-result" id="ds-track-wave-result">— locked · clear River first —</span>
+              </p>
+            </div>
+            <button type="button" class="ds__track-go ds__btn" data-go="wave" disabled>▸ locked</button>
+          </li>
+        </ol>
+      </section>
+
+      {/* Achievements grid */}
+      <section class="ds__ach" aria-label="Achievements">
+        <p class="ds__eyebrow mono">★ ACHIEVEMENTS · <span id="ds-ach-count">0</span> / 12</p>
+        <ul class="ds__ach-grid" id="ds-ach-grid" role="list">
+          {/* populated by JS */}
+        </ul>
+      </section>
+
+      {/* Team — nouns earned by clearing tracks */}
+      <section class="ds__team" aria-label="Your team">
+        <p class="ds__eyebrow mono">☞ YOUR TEAM · NOUNS YOU'VE EARNED</p>
+        <div class="ds__team-row" id="ds-team-row">
+          <span class="ds__team-empty mono">— clear a track to earn a noun —</span>
+        </div>
+      </section>
+
+      <p class="ds__hub-foot mono">
+        progress saves locally · clear with 90%+ accuracy for a perfect ★
+      </p>
+    </section>
+
+    {/* ─── GAME VIEW ─────────────────────────────────────────── */}
+    <section class="ds__game" id="ds-game" hidden>
+
+      <div class="ds__hud">
+        <button type="button" class="ds__hud-back" id="ds-hud-back" aria-label="Back to hub">← hub</button>
+        <p class="ds__hud-track" id="ds-hud-track-name">Pebble</p>
+        <p class="ds__hud-score mono"><strong id="ds-hud-score">0</strong></p>
+      </div>
+
+      <div class="ds__hud-line">
+        <p class="ds__hud-meter mono">
+          <span>combo <strong id="ds-hud-combo" aria-live="polite">0</strong></span>
+          <span class="ds__hud-sep">·</span>
+          <span>hits <strong id="ds-hud-hits">0</strong></span>
+          <span class="ds__hud-sep">·</span>
+          <span>misses <strong id="ds-hud-misses">0</strong></span>
+          <span class="ds__hud-sep">·</span>
+          <span>acc <strong id="ds-hud-acc">100%</strong></span>
+        </p>
+        <p class="ds__hud-time mono"><strong id="ds-hud-time">0:00</strong></p>
+      </div>
+
+      <div class="ds__stage" id="ds-stage" aria-label="Falling notes">
+        <canvas class="ds__canvas" id="ds-canvas" width="800" height="700"></canvas>
+        <div class="ds__lane-keys" aria-hidden="true">
+          <span class="ds__lane-key mono" data-lane="0">A</span>
+          <span class="ds__lane-key mono" data-lane="1">S</span>
+          <span class="ds__lane-key mono" data-lane="2">K</span>
+          <span class="ds__lane-key mono" data-lane="3">L</span>
+        </div>
+      </div>
+
+      <div class="ds__pads" id="ds-pads">
+        <button type="button" class="ds__pad ds__pad--0" data-lane="0" aria-label="Lane A"></button>
+        <button type="button" class="ds__pad ds__pad--1" data-lane="1" aria-label="Lane S"></button>
+        <button type="button" class="ds__pad ds__pad--2" data-lane="2" aria-label="Lane K"></button>
+        <button type="button" class="ds__pad ds__pad--3" data-lane="3" aria-label="Lane L"></button>
+      </div>
+
+      <div class="ds__floaters" id="ds-floaters" aria-hidden="true"></div>
+    </section>
+
+    {/* ─── RESULT VIEW ─────────────────────────────────────────── */}
+    <section class="ds__result" id="ds-result" hidden>
+      <div class="ds__result-card">
+        <p class="ds__eyebrow mono" id="ds-result-status">★ TRACK CLEARED ★</p>
+        <h2 class="ds__result-track" id="ds-result-track">Pebble</h2>
+
+        <div class="ds__result-ring-wrap">
+          <svg class="ds__result-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" stroke="rgba(255,255,255,0.15)" stroke-width="10" fill="none"/>
+            <circle id="ds-result-ring-fill" cx="60" cy="60" r="52" stroke="#5fdb6e" stroke-width="10" fill="none"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7" stroke-linecap="round"
+                    transform="rotate(-90 60 60)" />
+          </svg>
+          <div class="ds__result-ring-num">
+            <strong id="ds-result-acc">0%</strong>
+            <span class="mono">accuracy</span>
+          </div>
+        </div>
+
+        <dl class="ds__result-stats mono">
+          <div class="ds__result-stat"><dt>score</dt><dd id="ds-result-score">0</dd></div>
+          <div class="ds__result-stat"><dt>best combo</dt><dd id="ds-result-combo">0</dd></div>
+          <div class="ds__result-stat"><dt>hits / total</dt><dd><span id="ds-result-hits">0</span> / <span id="ds-result-total">0</span></dd></div>
+          <div class="ds__result-stat"><dt>perfect ★</dt><dd id="ds-result-perfect">no</dd></div>
+        </dl>
+
+        <ul class="ds__result-ach" id="ds-result-ach" role="list"></ul>
+
+        <div class="ds__result-row">
+          <button type="button" class="ds__btn ds__btn--magenta" id="ds-result-retry">▸ retry</button>
+          <button type="button" class="ds__btn" id="ds-result-next" hidden>▸ next track</button>
+          <button type="button" class="ds__btn" id="ds-result-share">▸ share</button>
+          <button type="button" class="ds__btn ds__btn--ghost" id="ds-result-hub">← hub</button>
+        </div>
+        <p class="ds__result-share-status mono" id="ds-result-share-status">&nbsp;</p>
+      </div>
+    </section>
+
+    <footer class="ds__foot">
+      <p class="mono">DRUM SOLO · v0.1 · 2026-04-30 · pointcast.xyz/drum-solo · progress saves locally · part of <a href="/drum-press">drum press</a></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    // ───────────────────────────────────────────────────────────────
+    // Identity + persistence
+    // ───────────────────────────────────────────────────────────────
+    function getSid() {
+      try {
+        var s = localStorage.getItem('pc:sid');
+        if (s) return s;
+        s = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+        localStorage.setItem('pc:sid', s);
+        return s;
+      } catch (e) { return 'anon-' + Date.now(); }
+    }
+    function nounIdFromString(s) {
+      var h = 0;
+      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+      return Math.abs(h) % 1200;
+    }
+    var sid = getSid();
+    var myNoun = nounIdFromString(sid);
+
+    var DEFAULT_STATE = {
+      totalTaps: 0,
+      totalHits: 0,
+      bestCombo: 0,
+      daysPlayed: [],
+      tracks: {
+        pebble: { cleared: false, bestScore: 0, bestAccuracy: 0, perfect: false },
+        river:  { cleared: false, bestScore: 0, bestAccuracy: 0, perfect: false },
+        wave:   { cleared: false, bestScore: 0, bestAccuracy: 0, perfect: false },
+      },
+      achievements: {},
+    };
+    function loadState() {
+      try {
+        var raw = localStorage.getItem('pc:solo');
+        if (!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+        var parsed = JSON.parse(raw);
+        return Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), parsed);
+      } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+    }
+    function saveState() {
+      try { localStorage.setItem('pc:solo', JSON.stringify(state)); } catch (e) {}
+    }
+    var state = loadState();
+    // Mark today's session day
+    var todayKey = new Date().toISOString().slice(0, 10);
+    if (state.daysPlayed.indexOf(todayKey) === -1) {
+      state.daysPlayed.push(todayKey);
+      saveState();
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // Achievements
+    // ───────────────────────────────────────────────────────────────
+    var ACHIEVEMENTS = [
+      { id: 'first-tap',     glyph: '👆',  name: 'First Tap',           hint: 'play a single note' },
+      { id: 'combo-10',      glyph: '🔥',  name: 'Combo 10',            hint: '10 hits in a row' },
+      { id: 'combo-25',      glyph: '⚡',  name: 'Combo 25',            hint: '25 hits in a row' },
+      { id: 'combo-50',      glyph: '🌟',  name: 'Combo 50',            hint: '50 hits in a row' },
+      { id: 'pebble-clear',  glyph: '🪨',  name: 'Pebble Cleared',      hint: 'finish track 1' },
+      { id: 'river-clear',   glyph: '🏞️',  name: 'River Cleared',       hint: 'finish track 2' },
+      { id: 'wave-clear',    glyph: '🌊',  name: 'Wave Cleared',        hint: 'finish track 3' },
+      { id: 'perfect-track', glyph: '💎',  name: 'Perfect Track',       hint: '90%+ accuracy on any track' },
+      { id: 'hundred-taps',  glyph: '💯',  name: '100 Total Taps',      hint: 'across all sessions' },
+      { id: 'thousand-taps', glyph: '🎯',  name: '1,000 Total Taps',    hint: 'across all sessions' },
+      { id: 'three-days',    glyph: '🗓️',  name: 'Three Days Played',   hint: 'come back, build a habit' },
+      { id: 'campaign',      glyph: '🏆',  name: 'Campaign Cleared',    hint: 'all three tracks cleared' },
+    ];
+
+    function awardAchievement(id) {
+      if (state.achievements[id]) return false;
+      state.achievements[id] = { earnedAt: Date.now() };
+      saveState();
+      return true;
+    }
+
+    function checkAchievements(ctx) {
+      var newly = [];
+      // first-tap
+      if (state.totalTaps >= 1 && awardAchievement('first-tap')) newly.push('first-tap');
+      if (state.bestCombo >= 10 && awardAchievement('combo-10')) newly.push('combo-10');
+      if (state.bestCombo >= 25 && awardAchievement('combo-25')) newly.push('combo-25');
+      if (state.bestCombo >= 50 && awardAchievement('combo-50')) newly.push('combo-50');
+      if (state.totalTaps >= 100 && awardAchievement('hundred-taps')) newly.push('hundred-taps');
+      if (state.totalTaps >= 1000 && awardAchievement('thousand-taps')) newly.push('thousand-taps');
+      if (state.daysPlayed.length >= 3 && awardAchievement('three-days')) newly.push('three-days');
+      if (ctx && ctx.cleared) {
+        var clearMap = { pebble: 'pebble-clear', river: 'river-clear', wave: 'wave-clear' };
+        var cid = clearMap[ctx.trackId];
+        if (cid && awardAchievement(cid)) newly.push(cid);
+        if (ctx.accuracy >= 0.9 && awardAchievement('perfect-track')) newly.push('perfect-track');
+      }
+      var allClear = state.tracks.pebble.cleared && state.tracks.river.cleared && state.tracks.wave.cleared;
+      if (allClear && awardAchievement('campaign')) newly.push('campaign');
+      return newly;
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // Tracks (deterministic patterns)
+    // ───────────────────────────────────────────────────────────────
+    var TRACKS = {
+      pebble: {
+        id: 'pebble', name: 'Pebble', bpm: 60, lanes: [2], // single lane (K)
+        notes: (function () {
+          var arr = [];
+          var beatMs = 60000 / 60;
+          for (var i = 0; i < 16; i++) arr.push({ lane: 2, t: i * beatMs + 1500 });
+          return arr;
+        })(),
+        durationMs: 16 * 1000 + 2500,
+        nounSeed: 156,
+      },
+      river: {
+        id: 'river', name: 'River', bpm: 90, lanes: [0, 1, 2, 3],
+        notes: (function () {
+          var arr = [];
+          var beatMs = 60000 / 90;
+          // 12 bars × 4 beats each = 48 notes, alternating-ish pattern
+          var pattern = [0, 2, 1, 3, 0, 2, 1, 3, 1, 2, 0, 3];
+          for (var bar = 0; bar < 12; bar++) {
+            for (var b = 0; b < 4; b++) {
+              arr.push({ lane: pattern[(bar + b) % pattern.length], t: (bar * 4 + b) * beatMs + 1500 });
+            }
+          }
+          return arr;
+        })(),
+        durationMs: 12 * 4 * (60000 / 90) + 2500,
+        nounSeed: 805,
+      },
+      wave: {
+        id: 'wave', name: 'Wave', bpm: 120, lanes: [0, 1, 2, 3],
+        notes: (function () {
+          var arr = [];
+          var beatMs = 60000 / 120;
+          // 96 notes — polyrhythmic-ish pattern with eighths
+          var pattern = [0, 1, 2, 3, 1, 2, 0, 3, 2, 0, 3, 1, 0, 2, 1, 3];
+          for (var i = 0; i < 96; i++) {
+            arr.push({ lane: pattern[i % pattern.length], t: i * (beatMs * 0.5) + 1500 });
+          }
+          return arr;
+        })(),
+        durationMs: 96 * (60000 / 120) * 0.5 + 2500,
+        nounSeed: 42,
+      },
+    };
+
+    // ───────────────────────────────────────────────────────────────
+    // Web Audio engine — synthesized lane sounds + clock
+    // ───────────────────────────────────────────────────────────────
+    var audioCtx = null;
+    function ensureAudio() {
+      if (audioCtx) return audioCtx;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { audioCtx = null; }
+      return audioCtx;
+    }
+    var LANE_FREQS = [110, 165, 220, 330]; // A2, E3, A3, E4 — simple fifths
+    var LANE_TYPES = ['triangle', 'square', 'sawtooth', 'sine'];
+    function playLaneTone(lane, duration) {
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      var now = ctx.currentTime;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = LANE_TYPES[lane % LANE_TYPES.length];
+      osc.frequency.setValueAtTime(LANE_FREQS[lane % LANE_FREQS.length], now);
+      // Quick pitch drop for a percussive feel
+      osc.frequency.exponentialRampToValueAtTime(LANE_FREQS[lane] * 0.5, now + (duration || 0.18));
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.18, now + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + (duration || 0.2));
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + (duration || 0.22));
+    }
+    function playMissBeep() {
+      var ctx = ensureAudio();
+      if (!ctx) return;
+      var now = ctx.currentTime;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(80, now);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.13);
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // Game engine
+    // ───────────────────────────────────────────────────────────────
+    var view = 'hub'; // 'hub' | 'game' | 'result'
+    var canvas = document.getElementById('ds-canvas');
+    var ctx2d = canvas.getContext('2d');
+    var stage = document.getElementById('ds-stage');
+    var floaters = document.getElementById('ds-floaters');
+    var hud = {
+      score: document.getElementById('ds-hud-score'),
+      combo: document.getElementById('ds-hud-combo'),
+      hits: document.getElementById('ds-hud-hits'),
+      misses: document.getElementById('ds-hud-misses'),
+      acc: document.getElementById('ds-hud-acc'),
+      time: document.getElementById('ds-hud-time'),
+      track: document.getElementById('ds-hud-track-name'),
+    };
+    var pads = Array.from(document.querySelectorAll('.ds__pad'));
+
+    // Lane palette
+    var LANE_COLORS = ['#ff5cd5', '#ffd400', '#22d3ee', '#7cf26b'];
+
+    var game = null;     // current game state
+    var raf = null;
+    var startTs = 0;     // performance.now() at game start
+    var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    function resizeCanvas() {
+      if (!canvas) return;
+      var rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * pixelRatio);
+      canvas.height = Math.floor(rect.height * pixelRatio);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function startGame(trackId) {
+      var t = TRACKS[trackId];
+      if (!t) return;
+      view = 'game';
+      document.getElementById('ds-main').dataset.view = 'game';
+      document.getElementById('ds-hub').hidden = true;
+      document.getElementById('ds-game').hidden = false;
+      document.getElementById('ds-result').hidden = true;
+      hud.track.textContent = t.name;
+      // Reset HUD
+      hud.score.textContent = '0';
+      hud.combo.textContent = '0';
+      hud.hits.textContent = '0';
+      hud.misses.textContent = '0';
+      hud.acc.textContent = '100%';
+      hud.time.textContent = '0:00';
+      // Build game state
+      game = {
+        track: t,
+        // Notes: copy + add `state` ('pending' | 'hit' | 'miss')
+        notes: t.notes.map(function (n, i) {
+          return { lane: n.lane, t: n.t, idx: i, status: 'pending', hitDelta: 0 };
+        }),
+        score: 0,
+        combo: 0,
+        bestCombo: 0,
+        hits: 0,
+        misses: 0,
+        startedAt: 0,    // set on first frame
+        lastFrameAt: 0,
+        ended: false,
+      };
+      ensureAudio();
+      resizeCanvas();
+      raf = requestAnimationFrame(loop);
+    }
+
+    function endGame() {
+      if (!game || game.ended) return;
+      game.ended = true;
+      cancelAnimationFrame(raf);
+      raf = null;
+      var totalNotes = game.notes.length;
+      var hits = game.hits;
+      var misses = game.misses + game.notes.filter(function (n) { return n.status === 'pending'; }).length;
+      var accuracy = totalNotes > 0 ? hits / totalNotes : 0;
+      // Cleared = at least 50% hit rate (lenient — campaign is uplifting)
+      var cleared = accuracy >= 0.5;
+      var perfect = accuracy >= 0.9;
+      // Persist
+      state.totalTaps += hits + misses; // any user input we registered
+      state.totalHits += hits;
+      if (game.bestCombo > state.bestCombo) state.bestCombo = game.bestCombo;
+      var rec = state.tracks[game.track.id];
+      if (rec) {
+        if (cleared) rec.cleared = true;
+        if (game.score > rec.bestScore) rec.bestScore = game.score;
+        if (accuracy > rec.bestAccuracy) rec.bestAccuracy = accuracy;
+        if (perfect) rec.perfect = true;
+      }
+      saveState();
+      var newAchievements = checkAchievements({ trackId: game.track.id, cleared: cleared, accuracy: accuracy });
+      // Show result
+      showResult({
+        trackId: game.track.id,
+        trackName: game.track.name,
+        score: game.score,
+        bestCombo: game.bestCombo,
+        hits: hits,
+        total: totalNotes,
+        accuracy: accuracy,
+        cleared: cleared,
+        perfect: perfect,
+        newAchievements: newAchievements,
+      });
+    }
+
+    function showResult(r) {
+      view = 'result';
+      document.getElementById('ds-main').dataset.view = 'result';
+      document.getElementById('ds-hub').hidden = true;
+      document.getElementById('ds-game').hidden = true;
+      document.getElementById('ds-result').hidden = false;
+      document.getElementById('ds-result-status').textContent = r.cleared
+        ? (r.perfect ? '★ PERFECT TRACK ★' : '✓ TRACK CLEARED')
+        : '✗ TRY AGAIN';
+      document.getElementById('ds-result-track').textContent = r.trackName;
+      var accPct = Math.round(r.accuracy * 100);
+      document.getElementById('ds-result-acc').textContent = accPct + '%';
+      document.getElementById('ds-result-score').textContent = r.score.toLocaleString();
+      document.getElementById('ds-result-combo').textContent = String(r.bestCombo);
+      document.getElementById('ds-result-hits').textContent = String(r.hits);
+      document.getElementById('ds-result-total').textContent = String(r.total);
+      document.getElementById('ds-result-perfect').textContent = r.perfect ? '★ yes' : 'no';
+      // Animate the ring
+      var ring = document.getElementById('ds-result-ring-fill');
+      var circ = 326.7;
+      ring.style.transition = 'stroke-dashoffset 1100ms cubic-bezier(0.2, 0.8, 0.4, 1), stroke 600ms';
+      ring.style.stroke = r.perfect ? '#ffd400' : r.cleared ? '#5fdb6e' : '#d6346a';
+      requestAnimationFrame(function () {
+        ring.style.strokeDashoffset = String(circ - circ * Math.min(1, r.accuracy));
+      });
+      // Achievements list
+      var achList = document.getElementById('ds-result-ach');
+      if (achList) {
+        if (r.newAchievements && r.newAchievements.length) {
+          achList.innerHTML = '<li class="ds__result-ach-head mono">★ NEW ACHIEVEMENTS</li>' +
+            r.newAchievements.map(function (id) {
+              var a = ACHIEVEMENTS.find(function (x) { return x.id === id; });
+              return a ? '<li class="ds__result-ach-row"><span class="ds__result-ach-glyph">' + a.glyph + '</span><span><strong>' + a.name + '</strong> · <span class="mono">' + a.hint + '</span></span></li>' : '';
+            }).join('');
+        } else {
+          achList.innerHTML = '';
+        }
+      }
+      // Show "next track" button if applicable
+      var next = nextTrackId(r.trackId);
+      var nextBtn = document.getElementById('ds-result-next');
+      if (nextBtn) {
+        if (r.cleared && next && state.tracks[next]) {
+          nextBtn.hidden = false;
+          nextBtn.dataset.next = next;
+        } else {
+          nextBtn.hidden = true;
+        }
+      }
+      // Triumphant haptic
+      try {
+        if (navigator.vibrate) {
+          if (r.perfect) navigator.vibrate([20, 60, 30, 60, 80]);
+          else if (r.cleared) navigator.vibrate([20, 80, 40]);
+          else navigator.vibrate(20);
+        }
+      } catch (e) {}
+      // Refresh hub data so when user navigates back it reflects
+      renderHub();
+    }
+    function nextTrackId(id) {
+      if (id === 'pebble') return 'river';
+      if (id === 'river') return 'wave';
+      return null;
+    }
+
+    function backToHub() {
+      view = 'hub';
+      document.getElementById('ds-main').dataset.view = 'hub';
+      document.getElementById('ds-hub').hidden = false;
+      document.getElementById('ds-game').hidden = true;
+      document.getElementById('ds-result').hidden = true;
+      renderHub();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Tap input ────────────────────────────────────────────────
+    function tapLane(lane, eventTs) {
+      if (view !== 'game' || !game || game.ended) return;
+      var pad = pads[lane];
+      if (pad) {
+        pad.classList.remove('ds__pad--hit'); void pad.offsetWidth;
+        pad.classList.add('ds__pad--hit');
+      }
+      // Find the closest active note in this lane within ±200ms of the
+      // hit zone.
+      var now = (eventTs || performance.now()) - game.startedAt;
+      var bestNote = null;
+      var bestDelta = Infinity;
+      for (var i = 0; i < game.notes.length; i++) {
+        var n = game.notes[i];
+        if (n.status !== 'pending' || n.lane !== lane) continue;
+        var delta = Math.abs(n.t - now);
+        if (delta < bestDelta) { bestDelta = delta; bestNote = n; }
+      }
+      if (bestNote && bestDelta <= 220) {
+        bestNote.status = 'hit';
+        bestNote.hitDelta = bestDelta;
+        var grade = bestDelta <= 60 ? 'perfect' : bestDelta <= 130 ? 'good' : 'late';
+        var pts = grade === 'perfect' ? 100 : grade === 'good' ? 60 : 30;
+        game.score += pts + Math.floor(game.combo * 1.5);
+        game.combo += 1;
+        game.bestCombo = Math.max(game.bestCombo, game.combo);
+        game.hits += 1;
+        playLaneTone(lane);
+        floatText((grade === 'perfect' ? '★ PERFECT' : grade === 'good' ? '✓ GOOD' : '· late ·') + ' +' + pts, lane, grade);
+        try { if (navigator.vibrate) navigator.vibrate(grade === 'perfect' ? [12, 8, 12] : 8); } catch (e) {}
+        // Combo milestones
+        if (game.combo === 10 || game.combo === 25 || game.combo === 50) {
+          floatText('🔥 ' + game.combo + ' COMBO', lane, 'combo');
+          try { if (navigator.vibrate) navigator.vibrate([20, 30, 20]); } catch (e) {}
+        }
+      } else {
+        // No matching note → record a miss
+        game.misses += 1;
+        game.combo = 0;
+        playMissBeep();
+        floatText('· miss ·', lane, 'miss');
+        try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}
+      }
+      updateHud();
+    }
+
+    function updateHud() {
+      if (!game) return;
+      hud.score.textContent = game.score.toLocaleString();
+      hud.combo.textContent = String(game.combo);
+      hud.hits.textContent = String(game.hits);
+      hud.misses.textContent = String(game.misses);
+      var attempts = game.hits + game.misses;
+      var acc = attempts > 0 ? Math.round((game.hits / attempts) * 100) : 100;
+      hud.acc.textContent = acc + '%';
+    }
+
+    function floatText(txt, lane, kind) {
+      var div = document.createElement('div');
+      div.className = 'ds__floater ds__floater--' + (kind || 'good');
+      div.style.setProperty('--lane', String(lane));
+      div.textContent = txt;
+      floaters.appendChild(div);
+      setTimeout(function () { if (div.parentNode) div.parentNode.removeChild(div); }, 1100);
+    }
+
+    // ── Render loop ──────────────────────────────────────────────
+    function loop(ts) {
+      if (!game || game.ended) return;
+      if (game.startedAt === 0) game.startedAt = ts;
+      var elapsed = ts - game.startedAt;
+      // Time HUD
+      hud.time.textContent = (function (ms) {
+        var s = Math.floor(ms / 1000);
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      })(elapsed);
+      // Auto-miss notes that have passed the hit window without being tapped
+      for (var i = 0; i < game.notes.length; i++) {
+        var n = game.notes[i];
+        if (n.status === 'pending' && n.t + 220 < elapsed) {
+          n.status = 'miss';
+          game.misses += 1;
+          game.combo = 0;
+        }
+      }
+      updateHud();
+      drawStage(elapsed);
+      // End condition: all notes resolved AND elapsed > duration
+      var allResolved = game.notes.every(function (n) { return n.status !== 'pending'; });
+      if (allResolved && elapsed > game.track.durationMs) {
+        endGame();
+        return;
+      }
+      raf = requestAnimationFrame(loop);
+    }
+
+    function drawStage(elapsed) {
+      var W = canvas.width;
+      var H = canvas.height;
+      ctx2d.clearRect(0, 0, W, H);
+      // Background gradient
+      var bg = ctx2d.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#0a0612');
+      bg.addColorStop(1, '#1a1028');
+      ctx2d.fillStyle = bg;
+      ctx2d.fillRect(0, 0, W, H);
+
+      var laneCount = 4;
+      var laneWidth = W / laneCount;
+      // Fall time = how long a note takes to travel from spawn to hit zone.
+      var FALL_MS = 1500;
+      var hitY = H - 80 * pixelRatio;
+      var spawnY = -40 * pixelRatio;
+
+      // Draw lane dividers
+      ctx2d.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx2d.lineWidth = 1;
+      for (var l = 1; l < laneCount; l++) {
+        ctx2d.beginPath();
+        ctx2d.moveTo(l * laneWidth, 0);
+        ctx2d.lineTo(l * laneWidth, H);
+        ctx2d.stroke();
+      }
+      // Draw hit zone
+      ctx2d.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx2d.fillRect(0, hitY - 28 * pixelRatio, W, 56 * pixelRatio);
+      ctx2d.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx2d.lineWidth = 2;
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, hitY);
+      ctx2d.lineTo(W, hitY);
+      ctx2d.stroke();
+
+      // Draw notes
+      for (var i = 0; i < game.notes.length; i++) {
+        var n = game.notes[i];
+        if (n.status !== 'pending') continue;
+        var msUntilHit = n.t - elapsed;
+        if (msUntilHit > FALL_MS) continue; // not yet visible
+        if (msUntilHit < -300) continue;     // gone already
+        var progress = 1 - (msUntilHit / FALL_MS); // 0..1
+        var y = spawnY + (hitY - spawnY) * progress;
+        var x = n.lane * laneWidth + laneWidth / 2;
+        var noteH = 36 * pixelRatio;
+        var noteW = laneWidth * 0.7;
+        // Note body
+        ctx2d.fillStyle = LANE_COLORS[n.lane];
+        ctx2d.fillRect(x - noteW / 2, y - noteH / 2, noteW, noteH);
+        // Note border
+        ctx2d.strokeStyle = '#0a0612';
+        ctx2d.lineWidth = 3;
+        ctx2d.strokeRect(x - noteW / 2, y - noteH / 2, noteW, noteH);
+        // Glow when near hit zone
+        if (Math.abs(y - hitY) < 50 * pixelRatio) {
+          ctx2d.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx2d.fillRect(x - noteW / 2, y - noteH / 2, noteW, noteH);
+        }
+      }
+    }
+
+    // ── Inputs ──────────────────────────────────────────────────
+    var KEY_TO_LANE = { 'a': 0, 's': 1, 'k': 2, 'l': 3 };
+    window.addEventListener('keydown', function (e) {
+      if (view !== 'game') return;
+      if (e.repeat) return;
+      var lane = KEY_TO_LANE[e.key.toLowerCase()];
+      if (lane !== undefined) {
+        tapLane(lane, performance.now());
+        e.preventDefault();
+      }
+    });
+    pads.forEach(function (pad) {
+      var lane = Number(pad.dataset.lane);
+      pad.addEventListener('mousedown', function (e) { tapLane(lane, performance.now()); e.preventDefault(); });
+      pad.addEventListener('touchstart', function (e) { tapLane(lane, performance.now()); e.preventDefault(); }, { passive: false });
+    });
+
+    // ── HUD back button + result actions ───────────────────────
+    document.getElementById('ds-hud-back').addEventListener('click', function () {
+      cancelAnimationFrame(raf); raf = null;
+      if (game) game.ended = true;
+      backToHub();
+    });
+    document.getElementById('ds-result-retry').addEventListener('click', function () {
+      if (!game) return;
+      var t = game.track.id;
+      startGame(t);
+    });
+    document.getElementById('ds-result-next').addEventListener('click', function (e) {
+      var n = e.currentTarget.dataset.next;
+      if (n) startGame(n);
+    });
+    document.getElementById('ds-result-hub').addEventListener('click', backToHub);
+    document.getElementById('ds-result-share').addEventListener('click', function () {
+      if (!game) return;
+      var attempts = game.hits + game.misses;
+      var acc = attempts > 0 ? Math.round((game.hits / attempts) * 100) : 0;
+      var msg = '🥁 cleared ' + game.track.name + ' on Drum Solo · ' + acc + '% · best combo ' + game.bestCombo + ' · pointcast.xyz/drum-solo';
+      var url = window.location.origin + '/drum-solo';
+      var statusEl = document.getElementById('ds-result-share-status');
+      function setStatus(s) {
+        if (statusEl) statusEl.textContent = s || ' ';
+        if (s) setTimeout(function () { if (statusEl.textContent === s) statusEl.textContent = ' '; }, 2200);
+      }
+      if (navigator.share) {
+        navigator.share({ title: 'Drum Solo', text: msg, url: url })
+          .then(function () { setStatus('✓ shared'); })
+          .catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            try { navigator.clipboard.writeText(msg + ' ' + url); setStatus('✓ copied'); } catch (e) { setStatus('✗ unavailable'); }
+          });
+      } else {
+        try { navigator.clipboard.writeText(msg + ' ' + url); setStatus('✓ copied'); } catch (e) { setStatus('✗ unavailable'); }
+      }
+    });
+
+    // ── Hub rendering ──────────────────────────────────────────
+    function renderHub() {
+      // Identity
+      var idNoun = document.getElementById('ds-id-noun');
+      if (idNoun) {
+        idNoun.src = 'https://noun.pics/' + myNoun + '.svg';
+        idNoun.alt = 'Your Noun ' + myNoun;
+        idNoun.style.imageRendering = 'pixelated';
+      }
+      document.getElementById('ds-id-noun-id').textContent = String(myNoun);
+      document.getElementById('ds-id-taps').textContent = String(state.totalTaps);
+      document.getElementById('ds-id-combo').textContent = String(state.bestCombo);
+      var clearedCount = ['pebble','river','wave'].filter(function (id) { return state.tracks[id].cleared; }).length;
+      document.getElementById('ds-id-cleared').textContent = String(clearedCount);
+      // Streak
+      var streakEl = document.getElementById('ds-id-streak');
+      if (streakEl) {
+        var n = state.daysPlayed.length;
+        streakEl.textContent = n === 1 ? '— first session —' : '★ ' + n + ' days played';
+      }
+      // Track results + unlocks
+      ['pebble','river','wave'].forEach(function (id, idx) {
+        var rec = state.tracks[id];
+        var resultEl = document.getElementById('ds-track-' + id + '-result');
+        if (resultEl) {
+          if (rec.cleared) {
+            var pct = Math.round((rec.bestAccuracy || 0) * 100);
+            resultEl.textContent = (rec.perfect ? '★ ' : '✓ ') + 'cleared · ' + pct + '% · ' + rec.bestScore.toLocaleString() + ' pts';
+          } else {
+            // locked unless previous track is cleared (or this is pebble)
+            var prereq = idx === 0 ? null : (idx === 1 ? 'pebble' : 'river');
+            var locked = prereq && !state.tracks[prereq].cleared;
+            resultEl.textContent = locked ? '— locked · clear ' + prereq + ' first —' : '— not yet played —';
+          }
+        }
+        var li = document.getElementById('ds-track-' + id);
+        var btn = document.querySelector('[data-go="' + id + '"]');
+        var prereq2 = idx === 0 ? null : (idx === 1 ? 'pebble' : 'river');
+        var locked2 = prereq2 && !state.tracks[prereq2].cleared;
+        if (li && id !== 'pebble') {
+          li.classList.toggle('ds__track--locked', !!locked2);
+        }
+        if (btn) {
+          btn.disabled = !!locked2;
+          btn.textContent = locked2 ? '▸ locked' : (rec.cleared ? '▸ replay' : '▸ play');
+        }
+      });
+      // Achievements
+      var achGrid = document.getElementById('ds-ach-grid');
+      var earnedIds = Object.keys(state.achievements);
+      document.getElementById('ds-ach-count').textContent = String(earnedIds.length);
+      if (achGrid) {
+        achGrid.innerHTML = ACHIEVEMENTS.map(function (a) {
+          var earned = !!state.achievements[a.id];
+          return '<li class="ds__ach-cell' + (earned ? ' ds__ach-cell--earned' : '') + '">' +
+                 '<span class="ds__ach-glyph">' + (earned ? a.glyph : '🔒') + '</span>' +
+                 '<span class="ds__ach-name">' + a.name + '</span>' +
+                 '<span class="ds__ach-hint mono">' + a.hint + '</span>' +
+                 '</li>';
+        }).join('');
+      }
+      // Team
+      var teamRow = document.getElementById('ds-team-row');
+      if (teamRow) {
+        var teamSeeds = [];
+        if (state.tracks.pebble.cleared) teamSeeds.push(156);
+        if (state.tracks.river.cleared) teamSeeds.push(805);
+        if (state.tracks.wave.cleared) teamSeeds.push(42);
+        if (teamSeeds.length === 0) {
+          teamRow.innerHTML = '<span class="ds__team-empty mono">— clear a track to earn a noun —</span>';
+        } else {
+          teamRow.innerHTML = teamSeeds.map(function (n) {
+            return '<span class="ds__team-cell">' +
+                   '<img src="https://noun.pics/' + n + '.svg" alt="Noun ' + n + '" width="56" height="56" loading="lazy" />' +
+                   '<span class="ds__team-cell-tag mono">noun ' + n + '</span>' +
+                   '</span>';
+          }).join('');
+        }
+      }
+    }
+
+    // ── Hook up track "go" buttons (initial + after re-render) ──
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-go]');
+      if (!btn || btn.disabled) return;
+      startGame(btn.dataset.go);
+    });
+
+    // Initial render
+    renderHub();
+    checkAchievements();
+    renderHub();
+  })();
+</script>
+
+<style>
+  .ds {
+    --ds-paper: #0a0612;
+    --ds-deep: #15082a;
+    --ds-card: #1a1028;
+    --ds-ink: #f5f0ff;
+    --ds-mute: #b3a8d8;
+    --ds-magenta: #ff5cd5;
+    --ds-yellow: #ffd400;
+    --ds-cyan: #22d3ee;
+    --ds-green: #7cf26b;
+
+    background: linear-gradient(180deg, var(--ds-paper) 0%, var(--ds-deep) 100%);
+    color: var(--ds-ink);
+    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: 'Iowan Old Style', 'Palatino', 'Times New Roman', Times, serif;
+    line-height: 1.5;
+  }
+  .ds .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Head ────────────────────────────────────────────── */
+  .ds__head { text-align: center; margin: 14px auto 28px; max-width: 880px; }
+  .ds__kicker {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--ds-magenta);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  .ds__title {
+    font-size: clamp(54px, 11vw, 128px);
+    font-weight: 800;
+    margin: 0;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    color: var(--ds-ink);
+  }
+  .ds__title em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ds-yellow);
+  }
+  .ds__strap {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ds-mute);
+    margin: 14px 0 0;
+  }
+
+  .ds__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--ds-yellow);
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+
+  /* ─── Hub: identity card ─────────────────────────────── */
+  .ds__hub { max-width: 980px; margin: 0 auto; }
+  .ds__id {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 18px;
+    align-items: center;
+    padding: 18px 22px;
+    background: var(--ds-card);
+    border: 2px solid var(--ds-magenta);
+    margin-bottom: 28px;
+    box-shadow: 4px 4px 0 0 var(--ds-yellow);
+  }
+  .ds__id-noun {
+    width: 96px;
+    height: 96px;
+    border: 2px solid var(--ds-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 6px;
+  }
+  .ds__id-tag {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--ds-mute);
+    margin: 0 0 8px;
+  }
+  .ds__id-tag strong { color: var(--ds-ink); }
+  .ds__id-stats {
+    font-size: 14px;
+    color: var(--ds-ink);
+    margin: 0 0 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ds__id-stats strong { color: var(--ds-magenta); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ds__id-sep { color: var(--ds-mute); }
+  .ds__id-streak {
+    font-size: 11px;
+    color: var(--ds-yellow);
+    margin: 0;
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Hub: tracks ─────────────────────────────────────── */
+  .ds__tracks { margin-bottom: 32px; }
+  .ds__track-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .ds__track {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--ds-card);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    transition: border-color 200ms;
+  }
+  .ds__track:not(.ds__track--locked):hover { border-color: var(--ds-magenta); }
+  .ds__track--locked { opacity: 0.55; }
+  .ds__track-noun {
+    width: 64px;
+    height: 64px;
+    border: 2px solid var(--ds-ink);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .ds__track-tag {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    color: var(--ds-yellow);
+    margin: 0 0 4px;
+  }
+  .ds__track-name {
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .ds__track-desc {
+    font-size: 13px;
+    color: var(--ds-mute);
+    margin: 0 0 6px;
+    line-height: 1.45;
+  }
+  .ds__track-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 10px;
+    color: var(--ds-mute);
+    margin: 0;
+    letter-spacing: 0.1em;
+  }
+  .ds__track-result { color: var(--ds-green); }
+
+  /* ─── Buttons ──────────────────────────────────────── */
+  .ds__btn {
+    appearance: none;
+    cursor: pointer;
+    background: rgba(255,255,255,0.06);
+    color: var(--ds-ink);
+    border: 2px solid var(--ds-ink);
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 0 rgba(0,0,0,0.4);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ds__btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 0 rgba(0,0,0,0.4);
+    background: rgba(255,255,255,0.12);
+  }
+  .ds__btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 rgba(0,0,0,0.4);
+  }
+  .ds__btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .ds__btn--magenta {
+    background: var(--ds-magenta);
+    color: #0a0612;
+    border-color: var(--ds-magenta);
+  }
+  .ds__btn--magenta:hover:not(:disabled) {
+    background: var(--ds-yellow);
+    border-color: var(--ds-yellow);
+    color: #0a0612;
+  }
+  .ds__btn--ghost {
+    background: transparent;
+    border-color: rgba(255,255,255,0.3);
+    box-shadow: none;
+  }
+
+  /* ─── Achievements grid ─────────────────────────────── */
+  .ds__ach { margin-bottom: 32px; }
+  .ds__ach-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .ds__ach-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    background: var(--ds-card);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    transition: transform 200ms, border-color 200ms;
+  }
+  .ds__ach-cell--earned {
+    border-color: var(--ds-yellow);
+    background: linear-gradient(180deg, rgba(255, 212, 0, 0.10) 0%, var(--ds-card) 100%);
+    animation: ds-ach-shimmer 3s ease-in-out infinite;
+  }
+  @keyframes ds-ach-shimmer {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 212, 0, 0); }
+    50%      { box-shadow: 0 0 0 4px rgba(255, 212, 0, 0.18); }
+  }
+  .ds__ach-glyph {
+    font-size: 28px;
+    line-height: 1;
+  }
+  .ds__ach-cell:not(.ds__ach-cell--earned) .ds__ach-glyph { filter: grayscale(0.9) opacity(0.5); }
+  .ds__ach-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ds-ink);
+  }
+  .ds__ach-cell:not(.ds__ach-cell--earned) .ds__ach-name { color: var(--ds-mute); }
+  .ds__ach-hint {
+    font-size: 9px;
+    color: var(--ds-mute);
+    letter-spacing: 0.06em;
+  }
+
+  /* ─── Team ───────────────────────────────────────────── */
+  .ds__team { margin-bottom: 28px; }
+  .ds__team-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    background: var(--ds-card);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+  }
+  .ds__team-empty { color: var(--ds-mute); font-size: 11px; }
+  .ds__team-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .ds__team-cell img {
+    width: 56px;
+    height: 56px;
+    border: 2px solid var(--ds-yellow);
+    background: #fff;
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .ds__team-cell-tag {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--ds-mute);
+  }
+
+  .ds__hub-foot {
+    text-align: center;
+    margin: 0;
+    font-size: 10px;
+    color: var(--ds-mute);
+    letter-spacing: 0.16em;
+  }
+
+  /* ─── Game view ────────────────────────────────────── */
+  .ds__game { max-width: 980px; margin: 0 auto; }
+  .ds__hud {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--ds-card);
+    border: 1.5px solid var(--ds-magenta);
+    border-bottom: 0;
+  }
+  .ds__hud-back {
+    appearance: none;
+    cursor: pointer;
+    background: transparent;
+    color: var(--ds-mute);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  .ds__hud-back:hover { color: var(--ds-ink); border-color: var(--ds-ink); }
+  .ds__hud-track {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+  .ds__hud-score strong {
+    font-size: 28px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ds-yellow);
+    font-weight: 800;
+  }
+  .ds__hud-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 14px;
+    background: var(--ds-card);
+    border-left: 1.5px solid var(--ds-magenta);
+    border-right: 1.5px solid var(--ds-magenta);
+  }
+  .ds__hud-meter, .ds__hud-time {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--ds-mute);
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .ds__hud-meter strong { color: var(--ds-ink); font-variant-numeric: tabular-nums; }
+  .ds__hud-time strong { color: var(--ds-cyan); font-variant-numeric: tabular-nums; font-size: 14px; }
+  .ds__hud-sep { color: rgba(255,255,255,0.2); }
+
+  .ds__stage {
+    position: relative;
+    background: #050310;
+    border: 2px solid var(--ds-magenta);
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    max-height: 64vh;
+    margin: 0 auto;
+  }
+  .ds__canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .ds__lane-keys {
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    pointer-events: none;
+  }
+  .ds__lane-key {
+    text-align: center;
+    color: rgba(255,255,255,0.45);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.4em;
+  }
+
+  .ds__pads {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .ds__pad {
+    appearance: none;
+    cursor: pointer;
+    border: 2px solid var(--ds-ink);
+    height: 56px;
+    transition: filter 80ms, transform 80ms;
+  }
+  .ds__pad--0 { background: var(--ds-magenta); }
+  .ds__pad--1 { background: var(--ds-yellow); }
+  .ds__pad--2 { background: var(--ds-cyan); }
+  .ds__pad--3 { background: var(--ds-green); }
+  .ds__pad--hit {
+    filter: brightness(1.4) saturate(1.3);
+    transform: scale(0.98);
+    animation: ds-pad-hit 0.18s ease-out;
+  }
+  @keyframes ds-pad-hit {
+    0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.6); }
+    100% { box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+  }
+
+  /* Floating text feedback */
+  .ds__floaters {
+    position: relative;
+    height: 0;
+    pointer-events: none;
+  }
+  .ds__floater {
+    position: absolute;
+    bottom: 60px;
+    left: calc(((var(--lane) + 0.5) / 4) * 100%);
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 800;
+    font-size: 14px;
+    text-shadow: 0 2px 0 #050310;
+    animation: ds-float 1.1s ease-out forwards;
+    pointer-events: none;
+  }
+  .ds__floater--perfect { color: var(--ds-yellow); font-size: 16px; }
+  .ds__floater--good    { color: var(--ds-green); }
+  .ds__floater--late    { color: var(--ds-cyan); font-size: 12px; opacity: 0.85; }
+  .ds__floater--miss    { color: var(--ds-magenta); font-size: 12px; }
+  .ds__floater--combo   { color: #ff8a4a; font-size: 18px; }
+  @keyframes ds-float {
+    0%   { transform: translate(-50%, 0); opacity: 0; }
+    20%  { transform: translate(-50%, -20px); opacity: 1; }
+    100% { transform: translate(-50%, -100px); opacity: 0; }
+  }
+
+  /* ─── Result view ──────────────────────────────────── */
+  .ds__result { max-width: 720px; margin: 0 auto; }
+  .ds__result-card {
+    padding: 28px 24px 24px;
+    background: var(--ds-card);
+    border: 2px solid var(--ds-yellow);
+    box-shadow: 6px 6px 0 0 var(--ds-magenta);
+    text-align: center;
+  }
+  .ds__result-track {
+    font-size: 36px;
+    font-weight: 800;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .ds__result-ring-wrap {
+    position: relative;
+    display: inline-block;
+    width: 160px;
+    height: 160px;
+    margin-bottom: 18px;
+  }
+  .ds__result-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .ds__result-ring-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .ds__result-ring-num strong {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--ds-yellow);
+    font-variant-numeric: tabular-nums;
+  }
+  .ds__result-ring-num span {
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    color: var(--ds-mute);
+  }
+  .ds__result-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin: 0 0 18px;
+    font-size: 12px;
+    text-align: left;
+  }
+  .ds__result-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: rgba(255,255,255,0.04); border-left: 2px solid var(--ds-magenta); }
+  .ds__result-stat dt { font-size: 9px; color: var(--ds-mute); letter-spacing: 0.18em; text-transform: uppercase; margin: 0; }
+  .ds__result-stat dd { font-size: 16px; font-weight: 800; color: var(--ds-ink); margin: 0; font-variant-numeric: tabular-nums; }
+  .ds__result-ach {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 12px;
+    background: rgba(255, 212, 0, 0.08);
+    border: 1.5px solid var(--ds-yellow);
+    text-align: left;
+  }
+  .ds__result-ach:empty { display: none; }
+  .ds__result-ach-head {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--ds-yellow);
+    margin: 0 0 8px;
+  }
+  .ds__result-ach-row {
+    display: flex; align-items: center; gap: 10px;
+    margin: 4px 0;
+  }
+  .ds__result-ach-glyph { font-size: 24px; }
+  .ds__result-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .ds__result-share-status {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--ds-mute);
+    min-height: 14px;
+  }
+
+  /* Foot */
+  .ds__foot {
+    max-width: 920px;
+    margin: 36px auto 0;
+    padding: 14px 0;
+    border-top: 1px dotted rgba(255,255,255,0.15);
+    text-align: center;
+  }
+  .ds__foot p {
+    font-size: 10px;
+    color: var(--ds-mute);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .ds__foot a { color: var(--ds-magenta); }
+
+  /* ─── Mobile ───────────────────────────────────────── */
+  @media (max-width: 720px) {
+    .ds__id { grid-template-columns: 80px 1fr; gap: 12px; padding: 14px 16px; }
+    .ds__id-noun { width: 80px; height: 80px; }
+    .ds__track { grid-template-columns: 56px 1fr; gap: 12px; }
+    .ds__track-go { grid-column: 1 / 3; justify-self: stretch; }
+    .ds__track-noun { width: 56px; height: 56px; }
+    .ds__track-name { font-size: 22px; }
+    .ds__ach-grid { grid-template-columns: repeat(3, 1fr); }
+    .ds__pad { height: 64px; }
+    .ds__hud-track { font-size: 14px; }
+  }
+  @media (max-width: 480px) {
+    .ds__ach-grid { grid-template-columns: repeat(2, 1fr); }
+    .ds__result-stats { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ds__ach-cell--earned { animation: none; }
+    .ds__floater { animation-duration: 0.4s; }
+  }
+</style>
