@@ -43,10 +43,13 @@ export const GET: APIRoute = async () => {
       { id: 'mesh',         reference: '/b/0240', status: 'proposed' },
       { id: 'third-spaces', reference: '/b/0242', status: 'proposed' },
       { id: 'dao-re',       reference: '/b/0241', status: 'vote-open · /dao/PC-0001' },
+      { id: 'areas',        reference: '/areas',  status: 'seeded · paddle-exchange · meetups · UES · honey-league' },
       { id: 'cross-prog',   reference: null,      status: 'emerging' },
     ],
     links: {
       human: 'https://pointcast.xyz/beacon',
+      areas: 'https://pointcast.xyz/areas',
+      areasJson: 'https://pointcast.xyz/areas.json',
       dao: 'https://pointcast.xyz/dao',
       narrative: 'https://pointcast.xyz/b/0244',
     },

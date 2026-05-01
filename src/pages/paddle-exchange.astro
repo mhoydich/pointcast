@@ -1,0 +1,565 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  LOCAL_AREA_RADIUS,
+  PADDLE_EXCHANGE_MODES,
+  PADDLE_LIBRARY_SLOTS,
+  PADDLE_PROFILE_FIELDS,
+} from '../lib/localAreas';
+
+const title = 'Paddle Tide Exchange';
+const description =
+  'A local pickleball paddle exchange and library for the 25-mile PointCast participation radius, with profile registration, DUPR handle field, and trade or loan intent.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  '@id': 'https://pointcast.xyz/paddle-exchange',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/paddle-exchange',
+  areaServed: {
+    '@type': 'GeoCircle',
+    geoMidpoint: {
+      '@type': 'GeoCoordinates',
+      latitude: LOCAL_AREA_RADIUS.anchor.coords.latitude,
+      longitude: LOCAL_AREA_RADIUS.anchor.coords.longitude,
+    },
+    geoRadius: LOCAL_AREA_RADIUS.radiusMeters,
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <a href="/areas">areas</a>
+      <span>/</span>
+      <span>paddle-exchange</span>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="kicker">PADDLE TIDE · LOCAL LIBRARY · {LOCAL_AREA_RADIUS.radiusMiles} MI</p>
+        <h1>Register the paddle you use, then make the shelf visible.</h1>
+        <p>
+          Players can list their profile, DUPR handle or link, usual court,
+          current paddle, and what they would trade, lend, try, or donate into
+          a neighborhood library. First pass stays close and simple.
+        </p>
+      </div>
+      <div class="shelf" aria-label="Paddle library shelf">
+        <span class="shelf__label">NOUN BUOY SHELF</span>
+        <div class="shelf__rail">
+          <span class="paddle paddle--one"></span>
+          <span class="paddle paddle--two"></span>
+          <span class="paddle paddle--three"></span>
+          <span class="paddle paddle--four"></span>
+        </div>
+        <p>trial, loan, trade, return</p>
+      </div>
+    </header>
+
+    <section class="section modes" aria-label="Exchange modes">
+      {PADDLE_EXCHANGE_MODES.map((mode) => (
+        <article class="mode">
+          <span>{mode.label}</span>
+          <p>{mode.promise}</p>
+          <small>{mode.signal}</small>
+        </article>
+      ))}
+    </section>
+
+    <section class="section register" aria-labelledby="register-heading">
+      <div class="register__copy">
+        <p class="kicker">PROFILE REGISTRY</p>
+        <h2 id="register-heading">A v0 profile you can fill out now.</h2>
+        <p>
+          This stores only in this browser for the prototype. The shape is the
+          useful part: the eventual backend can lift these exact fields into a
+          shared roster after the first real profiles exist.
+        </p>
+        <div class="profile-card" data-profile-card hidden></div>
+      </div>
+
+      <form class="form" data-paddle-form>
+        {PADDLE_PROFILE_FIELDS.map((field) => (
+          <label class={field.kind === 'textarea' ? 'field field--wide' : 'field'}>
+            <span>{field.label}{field.required ? ' *' : ''}</span>
+            {field.kind === 'textarea' ? (
+              <textarea name={field.id} rows="4" required={field.required}></textarea>
+            ) : (
+              <input name={field.id} type="text" required={field.required} />
+            )}
+          </label>
+        ))}
+
+        <fieldset class="checks">
+          <legend>Open to</legend>
+          <label><input type="checkbox" name="openTo" value="trade" /> Trade</label>
+          <label><input type="checkbox" name="openTo" value="loan" /> Loan</label>
+          <label><input type="checkbox" name="openTo" value="try" /> Try</label>
+          <label><input type="checkbox" name="openTo" value="library" /> Library donation</label>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit">Save local profile</button>
+          <button type="button" data-clear-profile>Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="section" aria-labelledby="library-heading">
+      <div class="section__head">
+        <p class="kicker">LIBRARY TARGETS</p>
+        <h2 id="library-heading">Start with feels, not brands.</h2>
+      </div>
+      <div class="library">
+        {PADDLE_LIBRARY_SLOTS.map((slot) => (
+          <article class="slot">
+            <span>{slot.status}</span>
+            <h3>{slot.name}</h3>
+            <p>{slot.feel}</p>
+            <small>steward: {slot.steward}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <aside class="related">
+      <a href="/meetups">Open meetup calendar</a>
+      <a href="/university-of-el-segundo">Court Craft at UES</a>
+      <a href="/honey-league">Score a helpful act</a>
+      <a href="/areas.json">JSON mirror</a>
+    </aside>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var key = 'pc:paddle-exchange-profile';
+      var form = document.querySelector('[data-paddle-form]');
+      var card = document.querySelector('[data-profile-card]');
+      var clear = document.querySelector('[data-clear-profile]');
+      if (!form || !card) return;
+
+      function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char];
+        });
+      }
+
+      function render(profile) {
+        if (!profile || !profile.name) {
+          card.hidden = true;
+          card.innerHTML = '';
+          return;
+        }
+        card.hidden = false;
+        card.innerHTML =
+          '<p class="profile-card__label">saved locally</p>' +
+          '<h3>' + escapeHtml(profile.name) + '</h3>' +
+          '<p>' + escapeHtml(profile.neighborhood) + ' · ' + escapeHtml(profile.currentPaddle) + '</p>' +
+          '<dl>' +
+          '<div><dt>DUPR</dt><dd>' + escapeHtml(profile.dupr || 'not listed') + '</dd></div>' +
+          '<div><dt>Court</dt><dd>' + escapeHtml(profile.court || 'open') + '</dd></div>' +
+          '<div><dt>Open to</dt><dd>' + escapeHtml((profile.openTo || []).join(', ') || 'not specified') + '</dd></div>' +
+          '</dl>';
+      }
+
+      function readSaved() {
+        try {
+          return JSON.parse(localStorage.getItem(key) || 'null');
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function fill(profile) {
+        if (!profile) return;
+        Array.from(form.elements).forEach(function (element) {
+          if (!element.name) return;
+          if (element.type === 'checkbox') {
+            element.checked = (profile.openTo || []).includes(element.value);
+          } else if (profile[element.name]) {
+            element.value = profile[element.name];
+          }
+        });
+      }
+
+      var saved = readSaved();
+      render(saved);
+      fill(saved);
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var data = new FormData(form);
+        var profile = {
+          name: data.get('name') || '',
+          neighborhood: data.get('neighborhood') || '',
+          dupr: data.get('dupr') || '',
+          currentPaddle: data.get('currentPaddle') || '',
+          openPaddles: data.get('openPaddles') || '',
+          court: data.get('court') || '',
+          notes: data.get('notes') || '',
+          openTo: data.getAll('openTo'),
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(key, JSON.stringify(profile));
+        render(profile);
+      });
+
+      if (clear) {
+        clear.addEventListener('click', function () {
+          localStorage.removeItem(key);
+          form.reset();
+          render(null);
+        });
+      }
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 20px 20px 88px;
+  }
+
+  .crumb,
+  .kicker,
+  .shelf__label,
+  .mode span,
+  .slot span,
+  .profile-card__label {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    color: var(--pc-ink-muted);
+    margin-bottom: 24px;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #0f6258;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 34px;
+    align-items: center;
+    padding-bottom: 30px;
+    border-bottom: 2px solid var(--pc-ink);
+  }
+
+  h1 {
+    font-size: 46px;
+    line-height: 1;
+    letter-spacing: 0;
+    font-weight: 500;
+    margin: 0 0 16px;
+    max-width: 13ch;
+  }
+
+  .hero p,
+  .register__copy p {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+    margin: 0;
+  }
+
+  .shelf {
+    border: 1px solid #8fc9bd;
+    background: #e7f4ef;
+    padding: 18px;
+  }
+
+  .shelf__label {
+    color: #0f6258;
+  }
+
+  .shelf__rail {
+    height: 190px;
+    display: flex;
+    align-items: end;
+    justify-content: space-around;
+    gap: 12px;
+    border-bottom: 8px solid #8b5a2b;
+    margin: 14px 0 10px;
+  }
+
+  .paddle {
+    display: block;
+    width: 42px;
+    height: 126px;
+    border-radius: 22px 22px 16px 16px;
+    border: 2px solid #12110e;
+    position: relative;
+  }
+
+  .paddle::after {
+    content: '';
+    position: absolute;
+    left: 15px;
+    bottom: -52px;
+    width: 10px;
+    height: 54px;
+    background: #12110e;
+    border-radius: 8px;
+  }
+
+  .paddle--one { background: #f6e27f; }
+  .paddle--two { background: #78c6d4; height: 142px; }
+  .paddle--three { background: #f08c65; height: 116px; }
+  .paddle--four { background: #c7d86b; height: 136px; }
+
+  .shelf p {
+    color: #0f6258;
+    font-size: 13px;
+  }
+
+  .section {
+    padding: 34px 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .modes,
+  .library {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .mode,
+  .slot {
+    border-top: 3px solid #0f6258;
+    padding-top: 12px;
+  }
+
+  .mode span,
+  .slot span {
+    color: #0f6258;
+  }
+
+  .mode p,
+  .slot p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 8px 0;
+  }
+
+  .mode small,
+  .slot small {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--pc-ink-muted);
+  }
+
+  .register {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  h2 {
+    font-size: 28px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+
+  .form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--pc-rule);
+    background: #fbfbf8;
+  }
+
+  .field,
+  .checks {
+    display: grid;
+    gap: 6px;
+  }
+
+  .field--wide,
+  .checks,
+  .actions {
+    grid-column: 1 / -1;
+  }
+
+  .field span,
+  .checks legend {
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 10px 11px;
+    border-radius: 0;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  .checks {
+    border: 1px solid var(--pc-rule);
+    padding: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .checks legend {
+    padding: 0 6px;
+  }
+
+  .checks label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .checks input {
+    width: auto;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  button,
+  .related a {
+    border: 1px solid #0f6258;
+    background: #0f6258;
+    color: #fff;
+    font: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+
+  button[type='button'] {
+    background: #fff;
+    color: #0f6258;
+  }
+
+  .profile-card {
+    margin-top: 18px;
+    border: 1px solid #8fc9bd;
+    background: #e7f4ef;
+    padding: 14px;
+  }
+
+  .profile-card h3 {
+    margin: 4px 0 6px;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .profile-card p {
+    font-size: 14px;
+  }
+
+  .profile-card dl {
+    margin: 12px 0 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .profile-card div {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .profile-card dt,
+  .profile-card__label {
+    color: #0f6258;
+  }
+
+  .profile-card dd {
+    margin: 0;
+  }
+
+  .section__head {
+    margin-bottom: 16px;
+  }
+
+  .slot h3 {
+    font-size: 19px;
+    font-weight: 500;
+    margin: 8px 0;
+  }
+
+  .related {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  .related a {
+    background: #fff;
+    color: #0f6258;
+  }
+
+  @media (max-width: 900px) {
+    .hero,
+    .register {
+      grid-template-columns: 1fr;
+    }
+
+    .shelf {
+      max-width: 360px;
+    }
+
+    .modes,
+    .library {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .page {
+      padding-inline: 16px;
+    }
+
+    h1 {
+      font-size: 34px;
+      max-width: 100%;
+    }
+
+    .modes,
+    .library,
+    .form,
+    .checks {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

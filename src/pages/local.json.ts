@@ -102,6 +102,12 @@ export const GET: APIRoute = async () => {
     adjacent: {
       beacon: 'https://pointcast.xyz/beacon',
       beaconJson: 'https://pointcast.xyz/beacon.json',
+      areas: 'https://pointcast.xyz/areas',
+      areasJson: 'https://pointcast.xyz/areas.json',
+      paddleExchange: 'https://pointcast.xyz/paddle-exchange',
+      meetups: 'https://pointcast.xyz/meetups',
+      universityOfElSegundo: 'https://pointcast.xyz/university-of-el-segundo',
+      honeyLeague: 'https://pointcast.xyz/honey-league',
       nameDropsEditorial: 'https://pointcast.xyz/b/0276',
       radiusEditorial: 'https://pointcast.xyz/b/0254',
       nature: 'https://pointcast.xyz/nature',

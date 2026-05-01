@@ -1,0 +1,451 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { LOCAL_AREA_RADIUS, MEETUP_SERIES } from '../lib/localAreas';
+
+const title = 'Mike-led Meetups';
+const description =
+  'A community meetup page for Mike Hoydich led events inside the 25-mile PointCast participation radius.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/meetups',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/meetups',
+  hasPart: MEETUP_SERIES.map((series) => ({
+    '@type': 'EventSeries',
+    name: series.title,
+    description: series.format,
+    location: series.where,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <a href="/areas">areas</a>
+      <span>/</span>
+      <span>meetups</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">MIKE-LED EVENTS · SOUTH BAY TABLES</p>
+      <h1>A public call sheet for small useful gatherings.</h1>
+      <p>
+        Court windows, beach walks, build nights, honey tables, and the first
+        University of El Segundo sessions can all land here. The promise is
+        lightweight: one place, one reason to show up, one receipt afterward.
+      </p>
+    </header>
+
+    <section class="section" aria-labelledby="series-heading">
+      <div class="section__head">
+        <p class="kicker">SEED SERIES</p>
+        <h2 id="series-heading">The first four formats.</h2>
+      </div>
+      <div class="series">
+        {MEETUP_SERIES.map((series, index) => (
+          <article class="event" data-series={series.slug}>
+            <div class="event__date">
+              <span>0{index + 1}</span>
+              <small>{series.cadence}</small>
+            </div>
+            <div class="event__body">
+              <h3>{series.title}</h3>
+              <p>{series.format}</p>
+              <dl>
+                <div><dt>Where</dt><dd>{series.where}</dd></div>
+                <div><dt>Connects</dt><dd>{series.connectedArea}</dd></div>
+              </dl>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section signup" aria-labelledby="signup-heading">
+      <div>
+        <p class="kicker">RSVP NOTE</p>
+        <h2 id="signup-heading">Raise your hand for the next one.</h2>
+        <p>
+          This is a browser-local call sheet until the identity layer is ready.
+          It gives Mike and PointCast the exact shape of a future RSVP: who,
+          which series, where from, and what they can bring.
+        </p>
+        <div class="saved" data-meetup-saved hidden></div>
+      </div>
+
+      <form class="form" data-meetup-form>
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" required />
+        </label>
+        <label>
+          <span>Neighborhood</span>
+          <input name="neighborhood" type="text" required />
+        </label>
+        <label>
+          <span>Series</span>
+          <select name="series" required>
+            {MEETUP_SERIES.map((series) => <option value={series.slug}>{series.title}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>What you can bring</span>
+          <textarea name="bring" rows="4"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Save RSVP note</button>
+          <button type="button" data-clear-meetup>Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="section split" aria-labelledby="radius-heading">
+      <div>
+        <p class="kicker">WHY 25 MILES</p>
+        <h2 id="radius-heading">A meetup radius should feel repeatable.</h2>
+      </div>
+      <p>
+        {LOCAL_AREA_RADIUS.policy} A meetup is not content until people can
+        return, recognize each other, and bring the next person.
+      </p>
+    </section>
+
+    <aside class="related">
+      <a href="/paddle-exchange">Paddle Tide</a>
+      <a href="/university-of-el-segundo">University of El Segundo</a>
+      <a href="/honey-league">Honey League</a>
+      <a href="/areas.json">/areas.json</a>
+    </aside>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var key = 'pc:meetup-rsvp';
+      var form = document.querySelector('[data-meetup-form]');
+      var saved = document.querySelector('[data-meetup-saved]');
+      var clear = document.querySelector('[data-clear-meetup]');
+      if (!form || !saved) return;
+
+      function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char];
+        });
+      }
+
+      function titleFor(slug) {
+        var option = form.querySelector('option[value="' + slug + '"]');
+        return option ? option.textContent : slug;
+      }
+
+      function render(note) {
+        if (!note || !note.name) {
+          saved.hidden = true;
+          saved.innerHTML = '';
+          return;
+        }
+        saved.hidden = false;
+        saved.innerHTML =
+          '<p>saved locally</p>' +
+          '<h3>' + escapeHtml(note.name) + '</h3>' +
+          '<span>' + escapeHtml(note.neighborhood) + ' · ' + escapeHtml(titleFor(note.series)) + '</span>' +
+          '<small>' + escapeHtml(note.bring || 'bring note open') + '</small>';
+      }
+
+      function readSaved() {
+        try {
+          return JSON.parse(localStorage.getItem(key) || 'null');
+        } catch (error) {
+          return null;
+        }
+      }
+
+      var note = readSaved();
+      if (note) {
+        Array.from(form.elements).forEach(function (element) {
+          if (element.name && note[element.name]) element.value = note[element.name];
+        });
+      }
+      render(note);
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var data = new FormData(form);
+        var next = {
+          name: data.get('name') || '',
+          neighborhood: data.get('neighborhood') || '',
+          series: data.get('series') || '',
+          bring: data.get('bring') || '',
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(key, JSON.stringify(next));
+        render(next);
+      });
+
+      if (clear) {
+        clear.addEventListener('click', function () {
+          localStorage.removeItem(key);
+          form.reset();
+          render(null);
+        });
+      }
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 20px 20px 88px;
+  }
+
+  .crumb,
+  .kicker,
+  .event__date,
+  .saved p {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--pc-ink-muted);
+    margin-bottom: 24px;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #185fa5;
+  }
+
+  .hero {
+    padding-bottom: 30px;
+    border-bottom: 2px solid var(--pc-ink);
+  }
+
+  h1 {
+    font-size: 48px;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0;
+    margin: 0 0 16px;
+    max-width: 13ch;
+  }
+
+  .hero p,
+  .signup p,
+  .split p {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 68ch;
+  }
+
+  .section {
+    padding: 34px 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .section__head {
+    margin-bottom: 18px;
+  }
+
+  h2 {
+    font-size: 28px;
+    line-height: 1.12;
+    font-weight: 500;
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .series {
+    display: grid;
+    gap: 12px;
+  }
+
+  .event {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 18px;
+    padding: 16px 0;
+    border-top: 1px solid var(--pc-rule);
+  }
+
+  .event__date {
+    color: #185fa5;
+  }
+
+  .event__date span {
+    display: block;
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: 0;
+    color: var(--pc-ink);
+  }
+
+  .event__date small {
+    display: block;
+    margin-top: 6px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .event h3 {
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+
+  .event p {
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0 0 12px;
+  }
+
+  .event dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+  }
+
+  .event dt {
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  .event dd {
+    margin: 2px 0 0;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .signup,
+  .split {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: 30px;
+    align-items: start;
+  }
+
+  .form {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--pc-rule);
+    background: #f8fbff;
+  }
+
+  label {
+    display: grid;
+    gap: 6px;
+  }
+
+  label span {
+    font-size: 12px;
+    color: var(--pc-ink-muted);
+  }
+
+  input,
+  textarea,
+  select {
+    width: 100%;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 10px 11px;
+    border-radius: 0;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  button,
+  .related a {
+    border: 1px solid #185fa5;
+    background: #185fa5;
+    color: #fff;
+    font: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+
+  button[type='button'],
+  .related a {
+    background: #fff;
+    color: #185fa5;
+  }
+
+  .saved {
+    margin-top: 18px;
+    padding: 14px;
+    border: 1px solid #9dc2e0;
+    background: #eef4fa;
+  }
+
+  .saved p {
+    margin: 0 0 5px;
+    color: #185fa5;
+  }
+
+  .saved h3 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .saved span,
+  .saved small {
+    display: block;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .related {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  @media (max-width: 760px) {
+    .signup,
+    .split,
+    .event {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: 34px;
+      max-width: 100%;
+    }
+
+    .event dl {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

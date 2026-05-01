@@ -1,0 +1,134 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+
+interface Props {
+  blocks: CollectionEntry<'blocks'>[];
+  blockCount: number;
+}
+
+const { blocks, blockCount } = Astro.props;
+const latest = blocks[0] ?? null;
+const recent = blocks.slice(0, 6);
+
+const channelCounts = recent.reduce<Record<string, number>>((acc, block) => {
+  acc[block.data.channel] = (acc[block.data.channel] ?? 0) + 1;
+  return acc;
+}, {});
+
+const dominantChannel = Object.entries(channelCounts)
+  .sort((a, b) => b[1] - a[1])
+  .map(([channel]) => channel)[0];
+
+const dominant = dominantChannel ? CHANNELS[dominantChannel] : null;
+
+const latestTime = latest
+  ? new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/Los_Angeles',
+      timeZoneName: 'short',
+    }).format(latest.data.timestamp)
+  : 'no blocks yet';
+---
+
+<aside class="now-line" aria-label="PointCast now line">
+  <div class="now-line__pulse" aria-hidden="true"></div>
+  <div class="now-line__copy">
+    <p class="now-line__kicker">NOW LINE</p>
+    <h2>
+      {latest ? latest.data.title : 'PointCast is ready.'}
+    </h2>
+    <p>
+      {blockCount} blocks live
+      {latest && <> · latest {latestTime}</>}
+      {dominant && <> · recent center: {dominant.name}</>}
+    </p>
+  </div>
+  <nav class="now-line__links" aria-label="Now line links">
+    {latest && <a href={`/b/${latest.data.id}`}>latest block</a>}
+    <a href="/status">status</a>
+    <a href="/wire">wire</a>
+  </nav>
+</aside>
+
+<style>
+  .now-line {
+    margin: 18px 0;
+    border: 1px solid var(--pc-rule);
+    background: #fbfbf8;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+  }
+
+  .now-line__pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #c95c2e;
+    box-shadow: 0 0 0 4px #fbe7dc;
+  }
+
+  .now-line__copy {
+    min-width: 0;
+  }
+
+  .now-line__kicker {
+    margin: 0 0 4px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .now-line h2 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--pc-ink);
+  }
+
+  .now-line p {
+    margin: 4px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .now-line__links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .now-line__links a {
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    color: var(--pc-accent);
+    padding: 7px 9px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 720px) {
+    .now-line {
+      grid-template-columns: 12px minmax(0, 1fr);
+    }
+
+    .now-line__links {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+    }
+  }
+</style>
