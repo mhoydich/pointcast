@@ -110,6 +110,7 @@ const requiredFiles = [
   'src/pages/feed.xml.ts',
   'src/pages/editions.json.ts',
   'src/pages/local.json.ts',
+  'src/pages/areas.json.ts',
   'src/pages/ai-stack.json.ts',
   'public/llms.txt',
   'public/llms-full.txt',
@@ -136,8 +137,8 @@ const jsonDupes = duplicates(jsonKeys);
 failed = !item(!humanDupes.length, 'human endpoint keys are unique', humanDupes.join(', ')) || failed;
 failed = !item(!jsonDupes.length, 'json endpoint keys are unique', jsonDupes.join(', ')) || failed;
 
-const requiredHuman = ['forAgents', 'aiStack', 'editions', 'local', 'now'];
-const requiredJson = ['agents', 'aiStack', 'editions', 'feed', 'local'];
+const requiredHuman = ['forAgents', 'aiStack', 'editions', 'local', 'areas', 'now'];
+const requiredJson = ['agents', 'aiStack', 'editions', 'feed', 'local', 'areas'];
 
 for (const key of requiredHuman) {
   failed = !item(humanKeys.includes(key), `human endpoint exposes ${key}`) || failed;
@@ -154,6 +155,7 @@ const agentMentions = [
   '/llms-full.txt',
   '/feed.xml',
   '/feed.json',
+  '/areas.json',
 ];
 
 for (const mention of agentMentions) {

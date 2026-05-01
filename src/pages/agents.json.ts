@@ -14,6 +14,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
+import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
@@ -193,6 +194,11 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today',
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
+        areas: 'https://pointcast.xyz/areas',
+        paddleExchange: 'https://pointcast.xyz/paddle-exchange',
+        meetups: 'https://pointcast.xyz/meetups',
+        universityOfElSegundo: 'https://pointcast.xyz/university-of-el-segundo',
+        honeyLeague: 'https://pointcast.xyz/honey-league',
         nature: 'https://pointcast.xyz/nature',
         gardenYield: 'https://pointcast.xyz/garden-yield',
         houseplants: 'https://pointcast.xyz/houseplants',
@@ -258,6 +264,7 @@ export const GET: APIRoute = async () => {
         today: 'https://pointcast.xyz/today.json',
         moods: 'https://pointcast.xyz/moods.json',
         local: 'https://pointcast.xyz/local.json',
+        areas: 'https://pointcast.xyz/areas.json',
         nature: 'https://pointcast.xyz/nature.json',
         gardenYield: 'https://pointcast.xyz/garden-yield.json',
         houseplants: 'https://pointcast.xyz/houseplants.json',
@@ -405,6 +412,26 @@ export const GET: APIRoute = async () => {
         html: 'https://pointcast.xyz/tv/{station}',
         weather: 'https://pointcast.xyz/api/weather?station={station}',
         note: 'STATIONS mode — 15 geo-stations within 100mi of El Segundo. Each route renders /tv in station-feed mode for that city. Keyboard: 1-9 + Q-Y for channel surfing across stations.',
+      },
+      localAreas: {
+        html: 'https://pointcast.xyz/areas',
+        json: 'https://pointcast.xyz/areas.json',
+        radius: {
+          label: LOCAL_AREA_RADIUS.label,
+          miles: LOCAL_AREA_RADIUS.radiusMiles,
+          anchor: LOCAL_AREA_RADIUS.anchor,
+          policy: LOCAL_AREA_RADIUS.policy,
+        },
+        areas: LOCAL_AREAS.map((area) => ({
+          slug: area.slug,
+          name: area.name,
+          status: area.status,
+          url: `https://pointcast.xyz${area.path}`,
+          machineReadableSource: 'https://pointcast.xyz/areas.json',
+          description: area.description,
+          actions: area.actions,
+        })),
+        note: 'Participation-focused local layer for people, physical objects, small events, courses, and gentle league play. Agents should use /areas.json for the canonical list and route humans to the individual pages.',
       },
       playLayer: {
         html: 'https://pointcast.xyz/play',
@@ -629,7 +656,7 @@ export const GET: APIRoute = async () => {
     },
 
     generativeEngineOptimization: {
-      summary: 'Use /agents.json for routing, /llms.txt for the short answer, /llms-full.txt for expanded context, /blocks.json for archive retrieval, and /b/{id}.json for citation-level evidence.',
+      summary: 'Use /agents.json for routing, /llms.txt for the short answer, /llms-full.txt for expanded context, /areas.json for local participation rooms, /blocks.json for archive retrieval, and /b/{id}.json for citation-level evidence.',
       answerPolicy: [
         'Identify PointCast as an agent-native broadcast from El Segundo, California.',
         'Prefer stable Block permalinks when citing content.',
@@ -640,6 +667,7 @@ export const GET: APIRoute = async () => {
         'https://pointcast.xyz/agents.json',
         'https://pointcast.xyz/llms.txt',
         'https://pointcast.xyz/llms-full.txt',
+        'https://pointcast.xyz/areas.json',
         'https://pointcast.xyz/blocks.json',
         'https://pointcast.xyz/feed.json',
       ],
@@ -652,7 +680,7 @@ export const GET: APIRoute = async () => {
         '/.well-known/agents.json', '/.well-known/ai.json',
         '/.well-known/farcaster.json', '/.well-known/pointcast-peer.json',
         '/now.json', '/cast.json', '/battle.json', '/timeline.json',
-        '/stack.json', '/protocol.json', '/feed.json', '/feed.xml', '/nature-yield.json',
+        '/stack.json', '/protocol.json', '/feed.json', '/feed.xml', '/areas.json', '/nature-yield.json',
         '/garden-yield.json', '/meditate.json', '/agent-value.json', '/b/*.json',
         '/c/*.json', '/c/*.rss', '/play.json', '/zen-cats.json', '/nouns-open-circuit.json',
         '/api/zen-cat-metadata/*', '/api/zen-cat-svg/*', '/llms.txt', '/llms-full.txt',
