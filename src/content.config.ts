@@ -88,6 +88,16 @@ const blocks = defineCollection({
         // forward receipts auto-populate via scripts/agent-spend.mjs.
         agent_id: z.string().regex(/^pcr_[a-z0-9]{8,}$/).optional(),
         payee_agent_id: z.string().regex(/^pcr_[a-z0-9]{8,}$/).optional(), // when the spend is agent-to-agent
+        // Cryptographic signature over the canonical manifest (per spec
+        // pointcast.agent-payments/v1). Ed25519. Public key resolved from
+        // src/data/agent-identities.json via spend.agent_id. Verifies that
+        // the signer holds the private key matching the claimed identity.
+        // Optional (older receipts unsigned); forward receipts auto-sign
+        // via scripts/agent-spend.mjs when the resident has a key minted.
+        // Manifest fields signed: see src/lib/agent-signing.mjs MANIFEST_FIELDS.
+        signature: z.string().optional(),
+        signing_alg: z.literal('ed25519').optional(),
+        spec: z.string().optional(),
         // Card-credential metadata captured from `retrieve --include card`.
         // Never store the full PAN here — that lives only in ~/.link-cli-receipts/{id}.json (0600).
         card_last4: z.string().regex(/^\d{4}$/).optional(),
