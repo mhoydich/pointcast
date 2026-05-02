@@ -77,8 +77,10 @@ const inputsJson = JSON.stringify(inputs);
 <script is:inline>
 (function () {
   'use strict';
-  var root = document.querySelector('.now-line');
-  if (!root) return;
+  // Scope to the instance immediately preceding this <script> so the
+  // component is safe to render more than once on a page.
+  var root = (document.currentScript && document.currentScript.previousElementSibling) || document.querySelector('.now-line');
+  if (!root || !root.classList || !root.classList.contains('now-line')) return;
   var raw = root.getAttribute('data-inputs') || '{}';
   var inputs;
   try { inputs = JSON.parse(raw); } catch (e) { return; }
@@ -202,7 +204,26 @@ const inputsJson = JSON.stringify(inputs);
   render(0);
 
   if (facts.length > 1) {
-    setInterval(function () { render((i + 1) % facts.length); }, 6000);
+    var INTERVAL_MS = 6000;
+    var timer = null;
+    var paused = false;
+    function tick() { if (!paused) render((i + 1) % facts.length); }
+    function start() { if (!timer) timer = setInterval(tick, INTERVAL_MS); }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+    start();
+
+    // Pause rotation while a visitor is hovering or has keyboard focus
+    // inside the strip — swapping a focused link mid-read drops focus
+    // and is jarring. Resume on leave / blur.
+    function pause() { paused = true; stop(); }
+    function resume() { paused = false; start(); }
+    root.addEventListener('mouseenter', pause);
+    root.addEventListener('mouseleave', resume);
+    root.addEventListener('focusin', pause);
+    root.addEventListener('focusout', function (e) {
+      if (!root.contains(e.relatedTarget)) resume();
+    });
+
     pagerEl.addEventListener('click', function () { render((i + 1) % facts.length); });
   } else {
     pagerEl.style.display = 'none';
