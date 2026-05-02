@@ -91,6 +91,9 @@ const pingable = RESIDENTS.filter(
         <span class="fb__you-label mono" id="fb-you-label">visitor</span>
         <span class="fb__mood-label mono" id="fb-mood-label">set mood →</span>
       </span>
+      <!-- Director badge — visible when localStorage[pc:director]='1'.
+           Real wallet-address recognition lands in a follow-up sprint. -->
+      <span class="fb__dir-badge mono" id="fb-dir-badge" data-on="false" aria-hidden="true">★ DIR</span>
     </button>
 
     <!-- ─── Speech bubble — Mike 2026-04-30 ──────────────────────
@@ -458,9 +461,50 @@ const pingable = RESIDENTS.filter(
           </div>
         </div>
 
+        <!-- Director note (visible when DIR mode is OFF) — replaced by
+             the inline forms below when DIR mode is ON. -->
         <p class="fb-bcast__director-note mono" id="fb-bcast-director-note">
-          ★ director controls light when wallet is recognized — wiring next sprint.
+          ★ director controls light when <code>localStorage[pc:director]='1'</code> (or a recognized wallet).
+          Try <code>&gt;director on</code> in the omnibox.
         </p>
+
+        <!-- Director-only inline forms. Hidden by default; shown when
+             body[data-director='true'] (toggled by isDirector() at boot
+             and by >director on/off). -->
+        <div class="fb-dir-controls" id="fb-dir-controls" hidden>
+          <form class="fb-dir-form" id="fb-dir-announce-form">
+            <span class="fb-dir-form__label mono">★ ANNOUNCE</span>
+            <input
+              class="fb-dir-form__input mono"
+              type="text"
+              id="fb-dir-announce-input"
+              maxlength="120"
+              placeholder="one-line announcement to the cast…"
+              aria-label="Announcement message"
+            />
+            <button type="submit" class="fb-btn fb-btn--send fb-btn--dir">
+              <span aria-hidden="true">📢</span> send
+            </button>
+          </form>
+          <form class="fb-dir-form" id="fb-dir-schedule-form">
+            <span class="fb-dir-form__label mono">★ SCHEDULE</span>
+            <input
+              class="fb-dir-form__input mono"
+              type="text"
+              id="fb-dir-schedule-input"
+              maxlength="200"
+              placeholder="e.g. 0412 09:00 — block id and time"
+              aria-label="Schedule a future block"
+            />
+            <button type="submit" class="fb-btn fb-btn--send fb-btn--dir">
+              <span aria-hidden="true">🎬</span> queue
+            </button>
+          </form>
+          <p class="fb-dir-form__status mono" id="fb-dir-status" aria-live="polite"></p>
+          <p class="fb-dir-form__note mono">
+            posts to <code>/api/ping</code> with a <code>subject</code> tag — residents pick it up next session and either ship it as a block (announce) or honor the schedule. Real broadcast-to-all is a worker sprint.
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -810,23 +854,21 @@ const pingable = RESIDENTS.filter(
       if (!raw) return;
       var mode = inferOmniMode(raw);
       if (mode === 'OP') {
-        // Operator command — `>cmd args`. Stub renderer: parse, dispatch
-        // pc:dock:operator, surface a one-line ack in the status. Real
-        // command handlers (mood/announce/schedule) wire up next sprint
-        // when director mode lands.
+        // Operator command — `>cmd args`. Mike 2026-05-01: director mode
+        // kickoff. Recognized commands run for real; unrecognized soft-
+        // toast in the placeholder so the user sees the parse.
         var rest = raw.replace(/^>\s*/, '').trim();
         var parts = rest.split(/\s+/);
         var cmd = (parts.shift() || '').toLowerCase();
         var args = parts.join(' ');
+        var ack = runOperatorCommand(cmd, args);
         window.dispatchEvent(new CustomEvent('pc:dock:operator', { detail: { cmd: cmd, args: args, raw: rest } }));
-        var ack = '> ' + (cmd || '?') + (args ? ' · ' + args : '') + ' — director-only command, wiring next sprint';
-        try { console.info('[dock]', ack); } catch (e) {}
         // Soft toast in the omnibox placeholder so user gets feedback.
         var prevPlaceholder = $omni.placeholder;
         $omni.value = '';
         $omni.placeholder = ack;
         applyOmniMode();
-        setTimeout(function () { $omni.placeholder = prevPlaceholder; }, 2400);
+        setTimeout(function () { $omni.placeholder = prevPlaceholder; }, 3000);
         return;
       }
       if (mode === 'ASK') {
@@ -1318,6 +1360,153 @@ const pingable = RESIDENTS.filter(
         var addr = localStorage.getItem('pc:wallet-active');
         return addr && typeof addr === 'string' ? addr : '';
       } catch (e) { return ''; }
+    }
+
+    // ─── Director mode (Mike 2026-05-01) ──────────────────────────
+    // Recognized via localStorage[pc:director]='1' for now. Real
+    // wallet-address recognition (matching MH's tz address) is a
+    // follow-up sprint. The flag flips body[data-director='true'],
+    // which CSS uses to show the gold inline forms in the BROADCAST
+    // tray + the ★ DIR badge on the YOU chip.
+    function isDirector() {
+      try {
+        if (localStorage.getItem('pc:director') === '1') return true;
+      } catch (e) {}
+      // Future: also return true if activeWalletAddress() matches a
+      // configured director list. Empty for now.
+      return false;
+    }
+
+    function applyDirectorUI() {
+      var on = isDirector();
+      try { document.body.setAttribute('data-director', on ? 'true' : 'false'); } catch (e) {}
+      var $badge = document.getElementById('fb-dir-badge');
+      if ($badge) $badge.setAttribute('data-on', on ? 'true' : 'false');
+      var $note = document.getElementById('fb-bcast-director-note');
+      var $controls = document.getElementById('fb-dir-controls');
+      if ($note) $note.hidden = on;
+      if ($controls) $controls.hidden = !on;
+    }
+
+    function setDirector(on) {
+      try { localStorage.setItem('pc:director', on ? '1' : '0'); } catch (e) {}
+      applyDirectorUI();
+    }
+
+    // Boot: apply director UI once on load. Check again on
+    // pc:wallet-change so wallet-driven recognition lights up live.
+    setTimeout(applyDirectorUI, 0);
+    window.addEventListener('pc:wallet-change', applyDirectorUI);
+    window.addEventListener('pc:director-change', applyDirectorUI);
+
+    // Director-only ping POST helper. Always tags from='director' and
+    // includes the active wallet address if present.
+    async function postDirectorPing(subject, body) {
+      if (!isDirector()) return { ok: false, reason: 'not-director' };
+      try {
+        var res = await postPing({
+          subject: subject,
+          body: body,
+          from: 'director (footer/dir)',
+        });
+        return { ok: res.ok, status: res.status };
+      } catch (e) {
+        return { ok: false, error: String((e && e.message) || e) };
+      }
+    }
+
+    // Operator-command runner. Returns a one-line ack string for the
+    // omnibox placeholder. Recognized commands: director, mood,
+    // announce, schedule. Unrecognized → "?" toast.
+    function runOperatorCommand(cmd, args) {
+      if (cmd === 'director') {
+        var v = (args || '').trim().toLowerCase();
+        if (v === 'on' || v === '1' || v === 'enable')   { setDirector(true);  return '> director on · ★ DIR mode lit'; }
+        if (v === 'off' || v === '0' || v === 'disable') { setDirector(false); return '> director off · back to visitor'; }
+        return '> director on/off — toggles ★ DIR mode locally';
+      }
+      if (cmd === 'mood') {
+        var key = (args || '').trim().toLowerCase();
+        if (!key) return '> mood <key> — dispatch a mood (' + Object.keys(window.PC_SOUNDTRACKS || {}).join(', ').slice(0, 60) + '…)';
+        if (window.PC_SOUNDTRACKS && window.PC_SOUNDTRACKS[key]) {
+          window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: key } }));
+          try { localStorage.setItem('pc:music:mood', key); } catch (e) {}
+          return '> mood · ' + key + ' set';
+        }
+        return '> mood · "' + key + '" not in soundtracks';
+      }
+      if (cmd === 'announce') {
+        if (!isDirector()) return '> announce — director only (try >director on)';
+        var msg = (args || '').trim();
+        if (!msg) return '> announce <msg> — one-line cast announcement';
+        postDirectorPing('cast announce', msg);
+        return '> announce · queued for residents · ' + msg.slice(0, 40) + (msg.length > 40 ? '…' : '');
+      }
+      if (cmd === 'schedule') {
+        if (!isDirector()) return '> schedule — director only';
+        var sched = (args || '').trim();
+        if (!sched) return '> schedule <id> <when> — e.g. >schedule 0420 09:00';
+        postDirectorPing('schedule', sched);
+        return '> schedule · queued · ' + sched.slice(0, 50);
+      }
+      // Unknown — soft toast.
+      return '> ' + (cmd || '?') + (args ? ' · ' + args : '') + ' — unknown command';
+    }
+
+    // BROADCAST tray inline forms — wire submit to postDirectorPing.
+    var $dirAnnounceForm = document.getElementById('fb-dir-announce-form');
+    var $dirAnnounceInput = document.getElementById('fb-dir-announce-input');
+    var $dirScheduleForm = document.getElementById('fb-dir-schedule-form');
+    var $dirScheduleInput = document.getElementById('fb-dir-schedule-input');
+    var $dirStatus = document.getElementById('fb-dir-status');
+
+    function dirToast(text, state) {
+      if (!$dirStatus) return;
+      $dirStatus.textContent = text;
+      $dirStatus.setAttribute('data-state', state || 'pending');
+      setTimeout(function () {
+        if ($dirStatus.textContent === text) {
+          $dirStatus.textContent = '';
+          $dirStatus.removeAttribute('data-state');
+        }
+      }, 4000);
+    }
+
+    if ($dirAnnounceForm && $dirAnnounceInput) {
+      $dirAnnounceForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var msg = String($dirAnnounceInput.value || '').trim();
+        if (!msg) return;
+        dirToast('queueing announcement…', 'pending');
+        var res = await postDirectorPing('cast announce', msg);
+        if (res.ok) {
+          dirToast('★ queued for residents — appears as a banner block next session', 'ok');
+          $dirAnnounceInput.value = '';
+        } else if (res.reason === 'not-director') {
+          dirToast('director only — set localStorage[pc:director]=\'1\' or run >director on', 'warn');
+        } else if (res.status === 503) {
+          dirToast('inbox not bound on this preview — try pointcast.xyz', 'warn');
+        } else {
+          dirToast('send failed (' + (res.status || 'network') + ')', 'err');
+        }
+      });
+    }
+    if ($dirScheduleForm && $dirScheduleInput) {
+      $dirScheduleForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var sched = String($dirScheduleInput.value || '').trim();
+        if (!sched) return;
+        dirToast('queueing schedule…', 'pending');
+        var res = await postDirectorPing('schedule', sched);
+        if (res.ok) {
+          dirToast('★ schedule queued — residents will honor on next session', 'ok');
+          $dirScheduleInput.value = '';
+        } else if (res.reason === 'not-director') {
+          dirToast('director only', 'warn');
+        } else {
+          dirToast('send failed (' + (res.status || 'network') + ')', 'err');
+        }
+      });
     }
 
     function postPing(payload, peerBaseUrl) {
@@ -2465,6 +2654,110 @@ const pingable = RESIDENTS.filter(
     font-size: 9.5px;
     letter-spacing: 0.06em;
     color: #c4952e;
+  }
+  .fb-bcast__director-note code {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px;
+    background: rgba(45, 31, 8, 0.08);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: #2d1f08;
+  }
+
+  /* ─── Director badge on the YOU chip ─────────────────────────
+     Only visible when body[data-director='true']. Gold pill, sits
+     to the right of the noun-text column. */
+  .fb__dir-badge {
+    display: none;
+    margin-left: 4px;
+    padding: 2px 5px;
+    background: linear-gradient(180deg, #f8e9c8 0%, #d4a437 100%);
+    color: #2d1f08;
+    border: 1px solid #2d1f08;
+    border-radius: 2px;
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+    align-self: center;
+  }
+  body[data-director='true'] .fb__dir-badge { display: inline-block; }
+  /* Hide on tiny screens — the YOU chip already collapses. */
+  @media (max-width: 480px) { .fb__dir-badge { display: none !important; } }
+
+  /* ─── Director inline forms inside the BROADCAST tray ─────── */
+  .fb-dir-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .fb-dir-form {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 9px;
+    background: linear-gradient(180deg, #fffaec 0%, #faf2dc 100%);
+    border: 1px solid #c4952e;
+    border-radius: 3px;
+  }
+  .fb-dir-form__label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: #c4952e;
+    white-space: nowrap;
+  }
+  .fb-dir-form__input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-radius: 2px;
+    color: #2d1f08;
+    font-size: 12px;
+    font-family: Georgia, serif;
+  }
+  .fb-dir-form__input:focus { outline: 2px solid #d4a437; outline-offset: 1px; }
+  .fb-btn--dir {
+    background: #c4952e;
+    border-color: #c4952e;
+    color: #fff;
+    flex: none;
+    padding: 6px 10px;
+    font-size: 9.5px;
+  }
+  .fb-btn--dir:hover { background: #2d1f08; }
+  .fb-dir-form__status {
+    margin: 2px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    min-height: 1em;
+  }
+  .fb-dir-form__status[data-state='ok']      { color: #2f8f5f; }
+  .fb-dir-form__status[data-state='warn']    { color: #c4952e; }
+  .fb-dir-form__status[data-state='err']     { color: #8a2432; }
+  .fb-dir-form__status[data-state='pending'] { color: #6b5a3a; }
+  .fb-dir-form__note {
+    margin: 0;
+    padding: 6px 8px;
+    background: rgba(45, 31, 8, 0.04);
+    border-radius: 2px;
+    font-size: 9px;
+    color: #6b5a3a;
+    line-height: 1.4;
+  }
+  .fb-dir-form__note code {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 9px;
+    background: rgba(196, 149, 46, 0.18);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: #2d1f08;
   }
 
   /* Mobile breakpoints — the kit grew from 4 to 5 stamps. Drop the
