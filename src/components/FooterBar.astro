@@ -44,11 +44,13 @@
  *   pc:room:toggle, pc:room:chat, pc:mood-changed, pc:wallet-change.
  */
 import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
+import { MOOD_SPELLS, AUTO_CAST_KEY } from '../data/mood-spells';
 import { DOCK_KIT } from '../data/dock-kit';
 import { FEDERATION_PEERS } from '../data/federation-peers';
 import { RESIDENTS } from '../data/residents';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
+const MOOD_SPELLS_JSON = JSON.stringify(MOOD_SPELLS);
 const KIT_JSON = JSON.stringify(DOCK_KIT);
 const FED_PEERS_COUNT = FEDERATION_PEERS.length;
 
@@ -503,6 +505,13 @@ const pingable = RESIDENTS.filter(
           <span class="fb-btn__glyph" aria-hidden="true">▶</span>
           <span id="fb-soundtrack-label">Soundtrack off</span>
         </button>
+        <!-- Mood casts: when on, picking a mood also casts a thematic
+             ambient spell on the page. See src/data/mood-spells.ts. -->
+        <label class="fb-ctrl fb-ctrl--row">
+          <input type="checkbox" id="fb-auto-cast" class="fb-ctrl__check" checked />
+          <span class="fb-ctrl__name mono">AUTO-CAST ON MOOD</span>
+          <span class="fb-ctrl__hint mono" id="fb-auto-cast-hint">marine layer → +rain · quiet → +breath · …</span>
+        </label>
       </section>
 
       <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
@@ -586,7 +595,7 @@ const pingable = RESIDENTS.filter(
   </div>
 </aside>
 
-<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON}; window.PC_FED_PEERS_COUNT = ${FED_PEERS_COUNT};`}></script>
+<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON}; window.PC_FED_PEERS_COUNT = ${FED_PEERS_COUNT}; window.PC_MOOD_SPELLS = ${MOOD_SPELLS_JSON};`}></script>
 
 <script is:inline>
   (function () {
@@ -1181,13 +1190,87 @@ const pingable = RESIDENTS.filter(
       $moodSelect.value = k;
       var st = (window.PC_SOUNDTRACKS || {})[k];
       if (st && st.label) $moodLabel.textContent = String(st.label).toLowerCase();
+      // Mike 2026-05-02: mood-spells. Cast a thematically-matched
+      // spell when the mood changes. Silent no-op if SpellLayer
+      // isn't mounted on this page or if auto-cast is off. Clears
+      // any current ambient first so we don't pile candles + rain
+      // on top of each other.
+      try { castMoodSpell(k, /* fromUserChange */ true); } catch (err) {}
     });
+
+    // Read auto-cast pref. Defaults ON for first-time visitors —
+    // the whole point is "the dock becomes a room dial". Visitors
+    // who want a quiet page flip it off in the binder.
+    function autoCastEnabled() {
+      try {
+        var v = localStorage.getItem('pc:dock:auto-cast');
+        if (v === '0') return false;
+        return true; // default '1' (also covers null on first visit)
+      } catch (e) { return true; }
+    }
+    function setAutoCast(on) {
+      try { localStorage.setItem('pc:dock:auto-cast', on ? '1' : '0'); } catch (e) {}
+      var $cb = document.getElementById('fb-auto-cast');
+      if ($cb) $cb.checked = !!on;
+      // If turning off, clear any active ambient. If turning on, cast
+      // the current mood's spell (if any) so the page reflects state.
+      if (!on) {
+        window.dispatchEvent(new CustomEvent('pc:spell:clear'));
+      } else {
+        try {
+          var mid = localStorage.getItem('pc:music:mood');
+          if (mid) castMoodSpell(mid, false);
+        } catch (e) {}
+      }
+    }
+    // Wire the checkbox + initial sync.
+    (function () {
+      var $cb = document.getElementById('fb-auto-cast');
+      if (!$cb) return;
+      $cb.checked = autoCastEnabled();
+      $cb.addEventListener('change', function () { setAutoCast($cb.checked); });
+    })();
+
+    // Operator command: `>autocast on/off`. Listen on pc:dock:operator
+    // so this stays decoupled from runOperatorCommand (which lives in
+    // PR #318's director mode work). When #318 merges, the case can
+    // also be added there for placeholder-toast accuracy.
+    window.addEventListener('pc:dock:operator', function (e) {
+      var d = e && e.detail;
+      if (!d || d.cmd !== 'autocast') return;
+      var v = String(d.args || '').trim().toLowerCase();
+      if (v === 'on' || v === '1' || v === 'enable')   setAutoCast(true);
+      else if (v === 'off' || v === '0' || v === 'disable') setAutoCast(false);
+      else setAutoCast(!autoCastEnabled()); // bare `>autocast` toggles
+      // Override the stub ack with something honest.
+      try {
+        var prev = $omni.placeholder;
+        $omni.placeholder = '> autocast ' + (autoCastEnabled() ? 'on · mood drives spells' : 'off · spells stay silent');
+        setTimeout(function () { $omni.placeholder = prev; }, 2400);
+      } catch (er) {}
+    });
+    function castMoodSpell(moodId, fromUserChange) {
+      if (!autoCastEnabled()) return;
+      var spellId = (window.PC_MOOD_SPELLS || {})[moodId];
+      if (!spellId) return;
+      // Clear any currently-cast ambient so the new mood takes over
+      // rather than stacking.
+      window.dispatchEvent(new CustomEvent('pc:spell:clear'));
+      // Tiny delay so the clear-all completes its DOM removals before
+      // the new spell renders. Smoother visual transition.
+      setTimeout(function () {
+        window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: spellId, source: fromUserChange ? 'mood-change' : 'mood-replay' } }));
+      }, fromUserChange ? 240 : 0);
+    }
 
     try {
       var prior = localStorage.getItem('pc:music:mood');
       if (prior && (window.PC_SOUNDTRACKS || {})[prior]) {
         $moodSelect.value = prior;
         $moodLabel.textContent = (window.PC_SOUNDTRACKS[prior].label || prior).toLowerCase();
+        // Replay the mood's spell on page load (if auto-cast is on).
+        // Delay long enough for SpellLayer to register its listeners.
+        setTimeout(function () { try { castMoodSpell(prior, false); } catch (e) {} }, 1800);
       }
     } catch (e) {}
 
@@ -2164,6 +2247,36 @@ const pingable = RESIDENTS.filter(
     border-radius: 3px;
     background: #fffdf8;
     color: #2d1f08;
+  }
+
+  /* Mood-cast toggle row — checkbox + label + hint, all on one line. */
+  .fb-ctrl--row {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    background: rgba(167, 139, 250, 0.08);
+    border: 1px dashed rgba(167, 139, 250, 0.4);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .fb-ctrl--row:hover { background: rgba(167, 139, 250, 0.14); }
+  .fb-ctrl__check {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: #a78bfa;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .fb-ctrl--row .fb-ctrl__name { color: #5b3fa3; }
+  .fb-ctrl__hint {
+    flex: 1 1 100%;
+    font-size: 9px;
+    color: #6b5a3a;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
   }
 
   .fb__soundtrack { margin-bottom: 14px; background: #000; border-radius: 3px; overflow: hidden; }
