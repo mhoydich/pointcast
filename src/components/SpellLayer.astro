@@ -314,17 +314,186 @@
       active.byId.starfield = sky;
     }
 
+    // ─── firework (burst) ───────────────────────────────────────
+    // 3 shells launch from near-bottom to staggered heights, then each
+    // explodes into 16 color sparks that fly outward and fade.
+    function castFirework(durationMs) {
+      if (reduce()) return;
+      var palette = ['#f97316', '#fbbf24', '#ef4444', '#a78bfa', '#4A9EFF', '#fdf2d6', '#2f8f5f', '#fb7185'];
+      var shellCount = 3;
+      for (var s = 0; s < shellCount; s++) {
+        (function (idx) {
+          var startX = (0.18 + Math.random() * 0.64) * window.innerWidth;
+          var startY = window.innerHeight * 0.88;
+          var riseAmt = (0.42 + Math.random() * 0.3) * window.innerHeight;
+          var riseMs = 500 + idx * 220 + Math.floor(Math.random() * 180);
+          var shellColor = palette[Math.floor(Math.random() * palette.length)];
+
+          var shell = document.createElement('span');
+          shell.className = 'spell-firework__shell';
+          shell.style.cssText =
+            'left:' + startX + 'px;' +
+            'top:' + startY + 'px;' +
+            'background:' + shellColor + ';' +
+            '--spell-rise-amt:' + riseAmt + 'px;' +
+            'animation:spell-firework-rise ' + riseMs + 'ms cubic-bezier(.22,.61,.36,1) forwards;';
+          $layer.appendChild(shell);
+
+          setTimeout(function () {
+            if (shell && shell.parentNode) shell.parentNode.removeChild(shell);
+            var explodeY = startY - riseAmt;
+            var sparkCount = 16;
+            for (var i = 0; i < sparkCount; i++) {
+              var angle = (i / sparkCount) * Math.PI * 2;
+              var dist = 38 + Math.random() * 56;
+              var dx = (Math.cos(angle) * dist).toFixed(1);
+              var dy = (Math.sin(angle) * dist).toFixed(1);
+              var sparkDur = (580 + Math.random() * 380).toFixed(0);
+              var spark = document.createElement('span');
+              spark.className = 'spell-firework__spark';
+              spark.style.cssText =
+                'left:' + startX + 'px;' +
+                'top:' + explodeY + 'px;' +
+                'background:' + shellColor + ';' +
+                '--spell-spark-dx:' + dx + 'px;' +
+                '--spell-spark-dy:' + dy + 'px;' +
+                'animation:spell-firework-spark ' + sparkDur + 'ms cubic-bezier(.22,.61,.36,1) forwards;';
+              $layer.appendChild(spark);
+              (function (el) {
+                setTimeout(function () {
+                  if (el && el.parentNode) el.parentNode.removeChild(el);
+                }, +sparkDur + 80);
+              })(spark);
+            }
+          }, riseMs);
+        })(s);
+      }
+    }
+
+    // ─── fish (companion) ────────────────────────────────────────
+    // Same ltr/rtl walk pattern as the other companions. The fish bobs
+    // gently up and down — a slower wave than the pup's bounce.
+    function castFish(durationMs) {
+      if (active.byId.fish) {
+        var prevF = active.byId.fish;
+        if (prevF && prevF.parentNode) prevF.parentNode.removeChild(prevF);
+      }
+      var fish = document.createElement('button');
+      fish.className = 'spell-fish';
+      fish.type = 'button';
+      fish.setAttribute('aria-label', 'A swimming fish. Click to release it.');
+      fish.title = 'click to release the fish';
+      fish.textContent = '🐟';
+      var ltr = Math.random() < 0.5;
+      fish.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var swimSeconds = Math.max(9, Math.min(28, window.innerWidth / 85));
+      fish.style.cssText =
+        'animation:spell-fish-swim-' + (ltr ? 'ltr' : 'rtl') + ' ' + swimSeconds + 's linear infinite,' +
+        'spell-fish-wave 1.1s ease-in-out infinite;';
+      fish.addEventListener('click', function () {
+        if (fish.parentNode) fish.parentNode.removeChild(fish);
+        active.byId.fish = null;
+      });
+      $layer.appendChild(fish);
+      active.byId.fish = fish;
+      setTimeout(function () {
+        if (fish && fish.parentNode) fish.parentNode.removeChild(fish);
+        if (active.byId.fish === fish) active.byId.fish = null;
+      }, dur);
+    }
+
+    // ─── firefly (companion) ─────────────────────────────────────
+    // A glowing dot drifts across the screen at a random height,
+    // bobbing and blinking on staggered cycles. Rendered as a styled
+    // div rather than an emoji so we can control the glow precisely.
+    function castFirefly(durationMs) {
+      if (active.byId.firefly) {
+        var prevFly = active.byId.firefly;
+        if (prevFly && prevFly.parentNode) prevFly.parentNode.removeChild(prevFly);
+      }
+      var fly = document.createElement('button');
+      fly.className = 'spell-firefly';
+      fly.type = 'button';
+      fly.setAttribute('aria-label', 'A glowing firefly. Click to release it.');
+      fly.title = 'click to release the firefly';
+      fly.innerHTML = '<span class="spell-firefly__glow" aria-hidden="true"></span>';
+      var ltr = Math.random() < 0.5;
+      fly.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 45000);
+      var startBottomPct = 18 + Math.floor(Math.random() * 44); // float 18–62% from bottom
+      var driftSeconds = Math.max(12, Math.min(36, window.innerWidth / 58));
+      var bobSeconds = (2.0 + Math.random() * 1.4).toFixed(1);
+      var blinkSeconds = (1.8 + Math.random() * 2.2).toFixed(1);
+      fly.style.cssText =
+        'bottom:' + startBottomPct + '%;' +
+        'animation:spell-firefly-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + driftSeconds + 's linear infinite,' +
+        'spell-firefly-bob ' + bobSeconds + 's ease-in-out infinite,' +
+        'spell-firefly-blink ' + blinkSeconds + 's ease-in-out infinite;';
+      fly.addEventListener('click', function () {
+        if (fly.parentNode) fly.parentNode.removeChild(fly);
+        active.byId.firefly = null;
+      });
+      $layer.appendChild(fly);
+      active.byId.firefly = fly;
+      setTimeout(function () {
+        if (fly && fly.parentNode) fly.parentNode.removeChild(fly);
+        if (active.byId.firefly === fly) active.byId.firefly = null;
+      }, dur);
+    }
+
+    // ─── snow (ambient) ──────────────────────────────────────────
+    // Like rain but larger, slower, and with a lateral drift per flake.
+    // 60 translucent white circles fall on staggered timings.
+    function castSnow() {
+      if (active.byId.snow) return;
+      var snow = document.createElement('button');
+      snow.className = 'spell-snow';
+      snow.type = 'button';
+      snow.setAttribute('aria-label', 'Snow overlay. Click to dismiss.');
+      snow.title = 'click to clear the snow';
+      var html = '';
+      for (var i = 0; i < 60; i++) {
+        var leftPct = (Math.random() * 106 - 3).toFixed(1);
+        var delay = (Math.random() * 4).toFixed(2);
+        var dur = (3.5 + Math.random() * 3.5).toFixed(2);
+        var size = (5 + Math.random() * 8).toFixed(1);
+        var op = (0.4 + Math.random() * 0.45).toFixed(2);
+        var drift = ((Math.random() - 0.5) * 70).toFixed(1);
+        html += '<span class="spell-snow__flake" style="' +
+          'left:' + leftPct + '%;' +
+          'width:' + size + 'px;' +
+          'height:' + size + 'px;' +
+          'opacity:' + op + ';' +
+          'animation-delay:' + delay + 's;' +
+          'animation-duration:' + dur + 's;' +
+          '--spell-snow-drift:' + drift + 'px;' +
+          '"></span>';
+      }
+      snow.innerHTML = html;
+      snow.addEventListener('click', function () {
+        if (snow.parentNode) snow.parentNode.removeChild(snow);
+        active.byId.snow = null;
+      });
+      $layer.appendChild(snow);
+      active.byId.snow = snow;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
         case 'confetti':  castConfetti(4500); break;
+        case 'firework':  castFirework(3200); break;
         case 'cat':       castCat(60000); break;
         case 'pup':       castPup(50000); break;
         case 'penguin':   castPenguin(70000); break;
+        case 'fish':      castFish(55000); break;
+        case 'firefly':   castFirefly(45000); break;
         case 'breath':    castBreath(); break;
         case 'candle':    castCandle(); break;
         case 'rain':      castRain(); break;
         case 'starfield': castStarfield(); break;
+        case 'snow':      castSnow(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -636,24 +805,167 @@
     50%      { opacity: 1; transform: scale(1.2); }
   }
 
+  /* ── firework (burst) ───────────────────────────────────── */
+  .spell-firework__shell {
+    position: fixed;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+    will-change: transform, opacity;
+  }
+  @keyframes spell-firework-rise {
+    0%   { transform: translateY(0); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(calc(-1 * var(--spell-rise-amt))); opacity: 0; }
+  }
+  .spell-firework__spark {
+    position: fixed;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform, opacity;
+    box-shadow: 0 0 3px 1px currentColor;
+  }
+  @keyframes spell-firework-spark {
+    0%   { transform: translate(0, 0); opacity: 1; }
+    60%  { opacity: 0.8; }
+    100% { transform: translate(var(--spell-spark-dx), var(--spell-spark-dy)); opacity: 0; }
+  }
+
+  /* ── fish (companion) ───────────────────────────────────── */
+  .spell-fish {
+    position: fixed;
+    bottom: 62px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 3px rgba(34, 211, 238, 0.5));
+  }
+  .spell-fish[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-fish-swim-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-fish-swim-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-fish-wave {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+  }
+  .spell-fish[data-dir='rtl'] {
+    animation-name: spell-fish-swim-rtl, spell-fish-wave-rtl !important;
+  }
+  @keyframes spell-fish-wave-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-8px); }
+  }
+
+  /* ── firefly (companion) ────────────────────────────────── */
+  .spell-firefly {
+    position: fixed;
+    bottom: 30%; /* overridden per-instance by JS */
+    left: -20px;
+    width: 20px;
+    height: 20px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spell-firefly__glow {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fef08a;
+    box-shadow: 0 0 6px 3px rgba(254, 240, 138, 0.65), 0 0 14px 7px rgba(254, 240, 138, 0.2);
+  }
+  @keyframes spell-firefly-drift-ltr {
+    0%   { left: -20px; }
+    100% { left: calc(100vw + 20px); }
+  }
+  @keyframes spell-firefly-drift-rtl {
+    0%   { left: calc(100vw + 20px); }
+    100% { left: -20px; }
+  }
+  @keyframes spell-firefly-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-20px); }
+  }
+  @keyframes spell-firefly-blink {
+    0%, 28%, 72%, 100% { opacity: 1; }
+    50%                 { opacity: 0.1; }
+  }
+
+  /* ── snow (ambient) ─────────────────────────────────────── */
+  .spell-snow {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-snow__flake {
+    position: absolute;
+    top: -20px;
+    background: rgba(219, 234, 254, 0.88);
+    border-radius: 50%;
+    animation: spell-snow-fall linear infinite;
+  }
+  @keyframes spell-snow-fall {
+    0%   { top: -20px; transform: translateX(0); }
+    100% { top: 105vh;  transform: translateX(var(--spell-snow-drift, 0)); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
     .spell-pup,
     .spell-penguin,
+    .spell-fish,
+    .spell-firefly,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
     .spell-rain__drop,
+    .spell-snow__flake,
     .spell-starfield__star { animation: none; }
     .spell-cat,
     .spell-pup,
-    .spell-penguin { left: 50%; transform: translateX(-50%); }
+    .spell-penguin,
+    .spell-fish { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
-    .spell-penguin[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-penguin[data-dir='rtl'],
+    .spell-fish[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-firefly { left: 50%; bottom: 40%; transform: translateX(-50%); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
-    .spell-rain__drop { display: none; } /* rain motion-only */
+    .spell-rain__drop { display: none; } /* motion-only */
+    .spell-snow__flake { display: none; } /* motion-only */
     .spell-starfield__star { opacity: 0.7; }
   }
 </style>

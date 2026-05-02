@@ -83,6 +83,36 @@ export const SPELLS: Spell[] = [
     accent: '#1b3a5b',
   },
 
+  {
+    id: 'firework',
+    label: 'firework',
+    blurb: 'Three shells launch and burst into colored sparks overhead.',
+    glyph: '🎆',
+    kind: 'burst',
+    durationMs: 3200,
+    accent: '#f97316',
+  },
+
+  // ─── COMPANIONS ──────────────────────────────────────────────
+  {
+    id: 'fish',
+    label: 'fish',
+    blurb: 'A little fish swims across the bottom with a gentle tail-wave.',
+    glyph: '🐟',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#22d3ee',
+  },
+  {
+    id: 'firefly',
+    label: 'firefly',
+    blurb: 'A single firefly drifts across the screen, blinking softly.',
+    glyph: '✦',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#fef08a',
+  },
+
   // ─── AMBIENT (persistent) ────────────────────────────────────
   {
     id: 'breath',
@@ -115,6 +145,14 @@ export const SPELLS: Spell[] = [
     glyph: '✨',
     kind: 'ambient',
     accent: '#a78bfa',
+  },
+  {
+    id: 'snow',
+    label: 'snow',
+    blurb: 'Soft snowflakes drift down the page. Quiet, patient.',
+    glyph: '❄️',
+    kind: 'ambient',
+    accent: '#93c5fd',
   },
 ];
 
