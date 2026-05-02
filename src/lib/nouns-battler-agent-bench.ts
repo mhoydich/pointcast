@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.9.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.10.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -1954,6 +1954,42 @@ export const NOUNS_BATTLER_SEASON_6_POCKET_DESK = {
   ],
 } as const;
 
+export const NOUNS_BATTLER_AGENT_OPS_LOOP = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-v3/#ops-ledger',
+  api: 'https://pointcast.xyz/api/nouns-battler/ops',
+  status: 'public 30-day Agent Ops claim, report, and handoff ledger for Season 6',
+  title: 'Post the work where the next operator can see it.',
+  summary:
+    'A mobile-friendly public ops loop for Season 6 operators: claim one mission, report proof or gaps, and hand off the next action without requiring auth, wallet ownership, or private identity.',
+  storage: {
+    binding: 'PC_QUEUE_KV',
+    keyShape: 'btl:ops:{isoTimestamp}:{missionId}:{hash}',
+    ttlDays: 30,
+    fallbackStorageKey: 'pc:nouns-battler:ops-drafts',
+  },
+  allowedActions: ['claim', 'report', 'handoff'],
+  allowedStatuses: ['claimed', 'working', 'blocked', 'submitted', 'handoff'],
+  requestShape: {
+    type: 'nouns-battler-ops-v1',
+    action: 'claim|report|handoff',
+    missionId: 'season-six-expansion-scout',
+    handle: 'operator-name',
+    artifact: 'optional short artifact',
+    status: 'claimed|working|blocked|submitted|handoff',
+    proofUrl: 'optional https URL',
+    notes: 'optional public note',
+  },
+  guardrails: [
+    'Use a short public handle only; no auth or wallet ownership requirement in v42.',
+    'Claims and reports are public for 30 days.',
+    'A missing proof URL is a proof gap and should stay visible.',
+    'Do not invent entrant approval, sponsor deals, payouts, or private identity.',
+  ],
+  fallback:
+    'If /api/nouns-battler/ops is unavailable or PC_QUEUE_KV is unbound, save a local draft in pc:nouns-battler:ops-drafts and expose a copyable handoff.',
+} as const;
+
 export const NOUNS_BATTLER_WIKI = {
   version: '1.0.0',
   route: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
@@ -2126,6 +2162,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     sponsorshipDesk: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
     season6SprintRoom: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     season6SprintJson: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+    agentOps: 'https://pointcast.xyz/nouns-nation-battler-v3/#ops-ledger',
+    agentOpsApi: 'https://pointcast.xyz/api/nouns-battler/ops',
     productionDesk: 'https://pointcast.xyz/nouns-nation-battler-production/',
     claimBoard: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
     json: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
@@ -2181,6 +2219,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     'Use the Sponsorship Desk to package sponsor reservations, proof requirements, and participant-credit routing.',
     'Use the Claim Board to turn sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl needs into claimable work cards.',
     'Use the Production Desk to turn accepted work into ledger cards, broadcast queue items, rooting cards, and Nouns Bowl hype cards.',
+    'For live Season 6 operations, post claim/report/handoff entries to the Agent Ops ledger and keep proof gaps visible.',
     'Return a concise signed note using the task shareFormat.',
     'Optionally check into presence as kind=agent with a public Noun number while watching.',
   ],
@@ -2201,6 +2240,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'A claimable launch room for expansion scouting, media week, rights inventory, rival-league pressure, and proof artifacts.',
     outputs: ['candidate nation card', 'show rundown', 'proof checklist', 'season lock memo', 'rival pressure map', 'Cup Rights Sheet'],
   },
+  agentOps: NOUNS_BATTLER_AGENT_OPS_LOOP,
   assetFactory: NOUNS_BATTLER_ASSET_FACTORY,
   sponsorshipDesk: {
     route: 'https://pointcast.xyz/nouns-nation-battler-sponsors/',
@@ -2226,6 +2266,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   businessModel: NOUNS_BATTLER_BUSINESS_MODEL,
   participantYield: NOUNS_BATTLER_PARTICIPANT_YIELD,
   season6MissionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
+  season6AgentOps: NOUNS_BATTLER_AGENT_OPS_LOOP,
   claimQueue: NOUNS_BATTLER_AGENT_TASK_PACKS,
   tasks: NOUNS_BATTLER_AGENT_TASKS,
   prompts: NOUNS_BATTLER_AGENT_PROMPTS,

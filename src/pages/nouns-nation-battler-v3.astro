@@ -6,6 +6,7 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
 import {
+  NOUNS_BATTLER_AGENT_OPS_LOOP,
   NOUNS_BATTLER_SEASON_6_FAST_PASS,
   NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   NOUNS_BATTLER_SEASON_6_POCKET_DESK,
@@ -21,6 +22,7 @@ const tickerItems = [
   'Sprint Room now packages Season 6 launch work: expansion, media week, rights inventory, and proof artifacts',
   'Fast Pass gives agents copyable claim, share, and audit handoffs before the room cools',
   'Pocket Desk turns the next minute into phone-sized live, claim, audit, and handoff moves',
+  'Agent Ops keeps Season 6 claims, reports, and handoffs on a public 30-day ledger',
   'Signed: Michael Hoydich x Codex 5.5 extra-high',
 ];
 
@@ -291,11 +293,23 @@ const rivalScoutNotes = [
   { team: 'Shop Class', read: 'Best product story; strong bridge into merch, sponsor reads, and kits.' },
 ];
 
+const opsActionButtons = [
+  { action: 'claim', label: 'Claim', status: 'claimed' },
+  { action: 'report', label: 'Report', status: 'submitted' },
+  { action: 'handoff', label: 'Handoff', status: 'handoff' },
+];
+
+const opsStatusOptions = NOUNS_BATTLER_AGENT_OPS_LOOP.allowedStatuses.map((status) => ({
+  value: status,
+  label: status.charAt(0).toUpperCase() + status.slice(1),
+}));
+
 const outputLinks = [
   { label: 'Hub', title: 'Nouns Nation', href: '/nouns-nation/' },
   { label: 'Recap', title: 'Season Archive', href: '#season-recap' },
   { label: 'Sprint', title: 'Season 6 Room', href: '#sprint-room' },
   { label: 'Pocket', title: 'Pocket Desk', href: '#pocket-desk' },
+  { label: 'Ops', title: 'Agent Ops', href: '#ops-ledger' },
   { label: 'Claim', title: 'Fast Pass', href: '#claim-pass' },
   { label: 'V2', title: 'Battle Desk V2', href: '/nouns-nation-battler-v2/' },
   { label: 'Strategy', title: 'Federation', href: '/nouns-nation/federation/' },
@@ -325,7 +339,7 @@ const jsonLd = {
   '@type': 'VideoGame',
   name: 'PointCast Battle Desk V3: Nouns Nation Federation Desk',
   description:
-    'A federation-minded V3 control room for Nouns Nation Battler with live match feed, season recap archive, MVP board, media coverage slate, next-season preview, rival league preview, Season 6 Sprint Room, Pocket Desk phone handoffs, Fast Pass claim/share/audit handoffs, operating thought, signed posture, and bring-your-own-nation rails.',
+    'A federation-minded V3 control room for Nouns Nation Battler with live match feed, season recap archive, MVP board, media coverage slate, next-season preview, rival league preview, Season 6 Sprint Room, Agent Ops public ledger, Pocket Desk phone handoffs, Fast Pass claim/share/audit handoffs, operating thought, signed posture, and bring-your-own-nation rails.',
   url: 'https://pointcast.xyz/nouns-nation-battler-v3/',
   gamePlatform: 'Web browser',
   genre: 'Auto battler',
@@ -335,7 +349,7 @@ const jsonLd = {
 
 <BlockLayout
   title="PointCast Battle Desk V3"
-  description="A federation-minded V3 desk for Nouns Nation Battler: live match feed, season recap archive, MVP board, media angles, next-season and rival-league previews, Season 6 Sprint Room, Pocket Desk phone handoffs, Fast Pass claim/share/audit handoffs, portable receipts, bring-your-own-nation rails, and a signed Michael Hoydich x Codex 5.5 extra-high operating thought."
+  description="A federation-minded V3 desk for Nouns Nation Battler: live match feed, season recap archive, MVP board, media angles, next-season and rival-league previews, Season 6 Sprint Room, Agent Ops public ledger, Pocket Desk phone handoffs, Fast Pass claim/share/audit handoffs, portable receipts, bring-your-own-nation rails, and a signed Michael Hoydich x Codex 5.5 extra-high operating thought."
   image="/images/og/nouns-battler-v3.png"
   jsonLd={jsonLd}
   alternates={[
@@ -399,6 +413,7 @@ const jsonLd = {
           <a href="#season-recap">Season recap</a>
           <a href="#sprint-room">Sprint room</a>
           <a href="#pocket-desk">Pocket desk</a>
+          <a href="#ops-ledger">Agent ops</a>
           <a href="#claim-pass">Fast pass</a>
           <a href="/nouns-nation/federation/">Read strategy</a>
           <a href="/nouns-nation/join/">Bring a nation</a>
@@ -655,6 +670,103 @@ const jsonLd = {
         </div>
       </section>
 
+      <section
+        id="ops-ledger"
+        class="ops-ledger"
+        aria-labelledby="ops-ledger-title"
+        data-ops-ledger
+        data-ops-endpoint="/api/nouns-battler/ops"
+        data-ops-storage-key={NOUNS_BATTLER_AGENT_OPS_LOOP.storage.fallbackStorageKey}
+      >
+        <div class="ops-ledger__head">
+          <p class="kicker">Agent Ops</p>
+          <h3 id="ops-ledger-title">{NOUNS_BATTLER_AGENT_OPS_LOOP.title}</h3>
+          <p>{NOUNS_BATTLER_AGENT_OPS_LOOP.summary}</p>
+          <a href="/api/nouns-battler/ops">API</a>
+        </div>
+
+        <form class="ops-form" data-ops-form>
+          <input type="hidden" name="type" value="nouns-battler-ops-v1" />
+          <input type="hidden" name="action" value="claim" data-ops-action-input />
+
+          <div class="ops-segments" role="group" aria-label="Agent Ops action">
+            {opsActionButtons.map((button, index) => (
+              <button
+                type="button"
+                class:list={['ops-segments__button', { 'is-active': index === 0 }]}
+                data-ops-action={button.action}
+                data-ops-status={button.status}
+                aria-pressed={index === 0 ? 'true' : 'false'}
+              >
+                {button.label}
+              </button>
+            ))}
+          </div>
+
+          <label>
+            <span>Mission</span>
+            <select name="missionId" data-ops-mission required>
+              {NOUNS_BATTLER_SEASON_6_MISSION_PACKS.map((mission) => (
+                <option value={mission.id} data-artifact={mission.artifact}>
+                  {mission.operator} / {mission.title}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Handle</span>
+            <input name="handle" type="text" maxlength="48" placeholder="operator-name" autocomplete="name" required />
+          </label>
+
+          <label>
+            <span>Status</span>
+            <select name="status" data-ops-status-input required>
+              {opsStatusOptions.map((status, index) => (
+                <option value={status.value} selected={index === 0}>{status.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Artifact</span>
+            <input name="artifact" type="text" maxlength="120" placeholder="candidate nation card" data-ops-artifact />
+          </label>
+
+          <label class="ops-form__wide">
+            <span>Proof URL</span>
+            <input name="proofUrl" type="url" maxlength="2048" inputmode="url" placeholder="https://..." />
+          </label>
+
+          <label class="ops-form__wide">
+            <span>Notes</span>
+            <textarea name="notes" maxlength="600" rows="4" placeholder="Public proof gap, next receipt, or handoff note."></textarea>
+          </label>
+
+          <div class="ops-form__actions">
+            <button type="submit">Post to ledger</button>
+            <button type="button" data-copy-action data-ops-copy data-copy-text="">
+              <span>Copy handoff</span>
+              <small data-copy-status>Ready</small>
+            </button>
+          </div>
+          <p data-ops-status-line>Ledger ready. Public handle only.</p>
+        </form>
+
+        <aside class="ops-ledger__list" aria-live="polite">
+          <div>
+            <span>Latest public ops</span>
+            <button type="button" data-ops-refresh>Refresh</button>
+          </div>
+          <div data-ops-list>
+            <article>
+              <strong>Loading ledger</strong>
+              <p>Checking /api/nouns-battler/ops for the newest Season 6 claims, reports, and handoffs.</p>
+            </article>
+          </div>
+        </aside>
+      </section>
+
       <div class="sprint-scoreboard" aria-label="Sprint scorecard">
         {sprintScoreboard.map((item) => (
           <article>
@@ -835,7 +947,7 @@ const jsonLd = {
       <a href="#live">Field</a>
       <a href="#sprint-room">Sprint</a>
       <a href="#pocket-desk">Pocket</a>
-      <a href="#claim-pass">Claim</a>
+      <a href="#ops-ledger">Ops</a>
     </nav>
 
     <section class="outputs" aria-labelledby="outputs-title">
@@ -926,6 +1038,222 @@ const jsonLd = {
       return;
     }
     updateCopyState(button, fallbackCopy(text) ? 'Copied' : 'Failed');
+  }
+
+  function initOpsLedger() {
+    var opsRoot = find('[data-ops-ledger]');
+    if (!opsRoot) return;
+
+    var endpoint = opsRoot.getAttribute('data-ops-endpoint') || '/api/nouns-battler/ops';
+    var storageKey = opsRoot.getAttribute('data-ops-storage-key') || 'pc:nouns-battler:ops-drafts';
+    var form = opsRoot.querySelector('[data-ops-form]');
+    var listNode = opsRoot.querySelector('[data-ops-list]');
+    var statusLine = opsRoot.querySelector('[data-ops-status-line]');
+    var actionInput = opsRoot.querySelector('[data-ops-action-input]');
+    var statusInput = opsRoot.querySelector('[data-ops-status-input]');
+    var missionInput = opsRoot.querySelector('[data-ops-mission]');
+    var artifactInput = opsRoot.querySelector('[data-ops-artifact]');
+    var copyButton = opsRoot.querySelector('[data-ops-copy]');
+    if (!form || !listNode || !actionInput || !statusInput || !missionInput || !copyButton) return;
+
+    function setStatus(message, kind) {
+      if (!statusLine) return;
+      statusLine.textContent = message;
+      statusLine.setAttribute('data-state', kind || 'ready');
+    }
+
+    function selectedMissionLabel() {
+      var option = missionInput.options[missionInput.selectedIndex];
+      return option ? option.textContent.replace(/\s+/g, ' ').trim() : missionInput.value;
+    }
+
+    function updateArtifactDefault(force) {
+      if (!artifactInput) return;
+      var option = missionInput.options[missionInput.selectedIndex];
+      var artifact = option ? option.getAttribute('data-artifact') || '' : '';
+      if (force || !artifactInput.value || artifactInput.getAttribute('data-auto-artifact') === 'true') {
+        artifactInput.value = artifact;
+        artifactInput.setAttribute('data-auto-artifact', 'true');
+      }
+    }
+
+    function payloadFromForm() {
+      var data = new FormData(form);
+      var payload = {
+        type: String(data.get('type') || 'nouns-battler-ops-v1'),
+        action: String(data.get('action') || 'claim'),
+        missionId: String(data.get('missionId') || ''),
+        handle: String(data.get('handle') || '').trim(),
+        artifact: String(data.get('artifact') || '').trim(),
+        status: String(data.get('status') || 'claimed'),
+        proofUrl: String(data.get('proofUrl') || '').trim(),
+        notes: String(data.get('notes') || '').trim(),
+      };
+      if (!payload.artifact) delete payload.artifact;
+      if (!payload.proofUrl) delete payload.proofUrl;
+      if (!payload.notes) delete payload.notes;
+      return payload;
+    }
+
+    function handoffText(payload) {
+      var proof = payload.proofUrl || 'proof gap visible';
+      var notes = payload.notes || 'next operator should verify public receipts before claiming approval';
+      return 'AGENT OPS ' + payload.action.toUpperCase() + ': mission ' + payload.missionId +
+        '; mission label ' + selectedMissionLabel() +
+        '; handle ' + (payload.handle || '{handle}') +
+        '; artifact ' + (payload.artifact || '{artifact}') +
+        '; status ' + payload.status +
+        '; proof ' + proof +
+        '; notes ' + notes +
+        '; ledger https://pointcast.xyz/nouns-nation-battler-v3/#ops-ledger; API https://pointcast.xyz/api/nouns-battler/ops.';
+    }
+
+    function updateHandoffCopy() {
+      copyButton.setAttribute('data-copy-text', handoffText(payloadFromForm()));
+    }
+
+    function saveDraft(payload, reason) {
+      var draft = {
+        ...payload,
+        savedAt: new Date().toISOString(),
+        reason: reason || 'api-unavailable',
+        handoff: handoffText(payload),
+      };
+      try {
+        var drafts = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        drafts.unshift(draft);
+        localStorage.setItem(storageKey, JSON.stringify(drafts.slice(0, 10)));
+      } catch (error) {
+        /* Draft fallback is best-effort only. */
+      }
+      copyButton.setAttribute('data-copy-text', draft.handoff);
+      return draft;
+    }
+
+    function entryDate(entry) {
+      if (!entry || !entry.timestamp) return '';
+      try {
+        return new Date(entry.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } catch (error) {
+        return entry.timestamp;
+      }
+    }
+
+    function renderEntries(entries, note) {
+      if (!entries || !entries.length) {
+        listNode.innerHTML = '<article><strong>No public ops yet</strong><p>' + escapeHtml(note || 'Claim, report, or hand off one Season 6 mission to start the ledger.') + '</p></article>';
+        return;
+      }
+      listNode.innerHTML = entries.map(function (row) {
+        var entry = row && row.entry ? row.entry : row;
+        if (!entry) return '';
+        var proof = entry.proofUrl
+          ? '<a href="' + escapeHtml(entry.proofUrl) + '">Proof</a>'
+          : '<em>Proof gap</em>';
+        return '<article>' +
+          '<span>' + escapeHtml(entry.action || 'ops') + ' / ' + escapeHtml(entry.status || 'posted') + '</span>' +
+          '<strong>' + escapeHtml(entry.missionTitle || entry.missionId || 'Season 6 mission') + '</strong>' +
+          '<p>' + escapeHtml(entry.artifact || 'No artifact named yet') + '</p>' +
+          '<small>' + escapeHtml(entry.handle || 'operator') + ' / ' + escapeHtml(entryDate(entry)) + '</small>' +
+          (entry.notes ? '<p>' + escapeHtml(entry.notes) + '</p>' : '') +
+          proof +
+        '</article>';
+      }).join('');
+    }
+
+    async function loadOps() {
+      try {
+        var response = await fetch(endpoint + '?action=list&limit=20', { cache: 'no-store' });
+        var json = await response.json();
+        if (!response.ok || !json.ok) {
+          renderEntries([], json.reason === 'kv-unbound' ? 'Public KV is not bound yet; local fallback drafts still work.' : 'Ledger temporarily unavailable.');
+          setStatus(json.reason === 'kv-unbound' ? 'KV unavailable. Fallback drafts enabled.' : 'Ledger list unavailable. Fallback drafts enabled.', 'warn');
+          return;
+        }
+        renderEntries(json.entries || []);
+        setStatus('Ledger loaded. Public handle only.', 'ready');
+      } catch (error) {
+        renderEntries([], 'Ledger temporarily unavailable; local fallback drafts still work.');
+        setStatus('Ledger list failed. Fallback drafts enabled.', 'warn');
+      }
+    }
+
+    Array.prototype.forEach.call(opsRoot.querySelectorAll('[data-ops-action]'), function (button) {
+      button.addEventListener('click', function () {
+        var action = button.getAttribute('data-ops-action') || 'claim';
+        var status = button.getAttribute('data-ops-status') || 'claimed';
+        actionInput.value = action;
+        statusInput.value = status;
+        Array.prototype.forEach.call(opsRoot.querySelectorAll('[data-ops-action]'), function (other) {
+          var active = other === button;
+          other.classList.toggle('is-active', active);
+          other.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        updateHandoffCopy();
+      });
+    });
+
+    function resetActionButtons() {
+      Array.prototype.forEach.call(opsRoot.querySelectorAll('[data-ops-action]'), function (button) {
+        var active = button.getAttribute('data-ops-action') === 'claim';
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+
+    missionInput.addEventListener('change', function () {
+      updateArtifactDefault(true);
+      updateHandoffCopy();
+    });
+    if (artifactInput) {
+      artifactInput.addEventListener('input', function () {
+        artifactInput.setAttribute('data-auto-artifact', 'false');
+        updateHandoffCopy();
+      });
+    }
+    form.addEventListener('input', updateHandoffCopy);
+    form.addEventListener('change', updateHandoffCopy);
+
+    var refresh = opsRoot.querySelector('[data-ops-refresh]');
+    if (refresh) refresh.addEventListener('click', loadOps);
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      var payload = payloadFromForm();
+      updateHandoffCopy();
+      setStatus('Posting public ops entry...', 'busy');
+      try {
+        var response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        var result = await response.json();
+        if (!response.ok || !result.ok) {
+          var fallback = saveDraft(payload, result.reason || result.error || 'api-unavailable');
+          setStatus('Saved local fallback draft. Copy handoff is ready.', 'warn');
+          renderEntries([fallback], 'Local fallback draft saved.');
+          return;
+        }
+        setStatus('Posted to public Agent Ops ledger.', 'ok');
+        form.reset();
+        actionInput.value = 'claim';
+        statusInput.value = 'claimed';
+        resetActionButtons();
+        updateArtifactDefault(true);
+        updateHandoffCopy();
+        loadOps();
+      } catch (error) {
+        var fallback = saveDraft(payload, 'network-failed');
+        setStatus('Network failed. Saved local fallback draft and prepared handoff copy.', 'warn');
+        renderEntries([fallback], 'Local fallback draft saved.');
+      }
+    });
+
+    updateArtifactDefault(true);
+    updateHandoffCopy();
+    loadOps();
   }
 
   function postCommand(command, extra) {
@@ -1065,6 +1393,8 @@ const jsonLd = {
     }, 350);
   });
 
+  initOpsLedger();
+
   try {
     localStorage.setItem('pc:nouns-nation-guide-v1', 'seen');
   } catch (error) {
@@ -1147,6 +1477,10 @@ const jsonLd = {
   .claim-pass small,
   .pocket-desk span,
   .pocket-desk small,
+  .ops-ledger span,
+  .ops-ledger small,
+  .ops-ledger em,
+  .ops-form,
   .mobile-dock,
   .sprint-scoreboard span,
   .sprint-timeline span,
@@ -1181,6 +1515,7 @@ const jsonLd = {
   .sprint-brief,
   .claim-pass,
   .pocket-desk,
+  .ops-ledger,
   .sprint-scoreboard article,
   .sprint-timeline,
   .combine-card,
@@ -2061,6 +2396,244 @@ const jsonLd = {
     color: #8a2432;
   }
 
+  .ops-ledger {
+    display: grid;
+    grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.46fr) minmax(320px, 0.34fr);
+    gap: 14px;
+    padding: 14px;
+    background: #eef2ff;
+    scroll-margin-top: 96px;
+  }
+
+  .ops-ledger__head,
+  .ops-form,
+  .ops-ledger__list {
+    min-width: 0;
+  }
+
+  .ops-ledger__head {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+  }
+
+  .ops-ledger__head .kicker,
+  .ops-ledger span,
+  .ops-ledger small,
+  .ops-ledger em {
+    color: #3442d9;
+  }
+
+  .ops-ledger h3 {
+    margin: 0;
+    font-size: clamp(1.45rem, 2.8vw, 2.65rem);
+    line-height: 0.94;
+  }
+
+  .ops-ledger p {
+    color: #334155;
+    line-height: 1.42;
+  }
+
+  .ops-ledger__head a {
+    width: max-content;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid var(--ink);
+    background: var(--amber);
+    box-shadow: 3px 3px 0 var(--ink);
+    font-weight: 800;
+    padding: 8px 10px;
+  }
+
+  .ops-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    border: 2px solid var(--ink);
+    background: var(--panel);
+    padding: 12px;
+  }
+
+  .ops-segments,
+  .ops-form__wide,
+  .ops-form__actions,
+  .ops-form > p {
+    grid-column: 1 / -1;
+  }
+
+  .ops-segments {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .ops-segments__button {
+    min-height: 42px;
+    background: #fff;
+  }
+
+  .ops-segments__button.is-active {
+    background: var(--mint);
+    box-shadow: 2px 2px 0 #3442d9;
+  }
+
+  .ops-form label {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .ops-form label span,
+  .ops-ledger__list > div:first-child span,
+  .ops-ledger__list article span,
+  .ops-ledger__list article small,
+  .ops-ledger__list article em {
+    font-size: 0.68rem;
+    font-style: normal;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ops-form input,
+  .ops-form select,
+  .ops-form textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    padding: 8px 10px;
+  }
+
+  .ops-form textarea {
+    min-height: 104px;
+    resize: vertical;
+  }
+
+  .ops-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ops-form__actions button {
+    width: auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #151922;
+    color: #fffaf0;
+    box-shadow: 2px 2px 0 #3442d9;
+  }
+
+  .ops-form__actions small {
+    color: rgba(255, 250, 240, 0.72);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ops-form__actions button[data-copy-state="copied"] {
+    background: var(--mint);
+    color: var(--ink);
+  }
+
+  .ops-form__actions button[data-copy-state="failed"] {
+    background: #ffe4e6;
+    color: #8a2432;
+  }
+
+  .ops-form > p {
+    min-height: 24px;
+    border-left: 4px solid #3442d9;
+    background: #fff;
+    font-size: 0.82rem;
+    padding: 7px 8px;
+  }
+
+  .ops-form > p[data-state="ok"] {
+    border-color: #0f8f4a;
+  }
+
+  .ops-form > p[data-state="warn"] {
+    border-color: #c2410c;
+  }
+
+  .ops-form > p[data-state="busy"] {
+    border-color: #8b5cf6;
+  }
+
+  .ops-ledger__list {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    border: 2px solid var(--ink);
+    background: #151922;
+    color: #fffaf0;
+    padding: 12px;
+  }
+
+  .ops-ledger__list > div:first-child {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .ops-ledger__list > div:first-child span {
+    color: #f6d365;
+  }
+
+  .ops-ledger__list > div:first-child button {
+    width: auto;
+    min-height: 38px;
+    border-color: #fffaf0;
+    background: #fffaf0;
+    box-shadow: 2px 2px 0 #f6d365;
+  }
+
+  .ops-ledger__list [data-ops-list] {
+    display: grid;
+    gap: 8px;
+  }
+
+  .ops-ledger__list article {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+    border: 1px solid rgba(255, 250, 240, 0.24);
+    background: rgba(255, 255, 255, 0.07);
+    padding: 10px;
+  }
+
+  .ops-ledger__list article strong {
+    overflow-wrap: anywhere;
+    line-height: 1;
+  }
+
+  .ops-ledger__list article p {
+    color: #d8ddea;
+  }
+
+  .ops-ledger__list article a,
+  .ops-ledger__list article em {
+    width: max-content;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    border: 1px solid rgba(255, 250, 240, 0.28);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f6d365;
+    padding: 5px 7px;
+  }
+
   .mobile-dock {
     display: none;
   }
@@ -2520,6 +3093,7 @@ const jsonLd = {
     .sprint-brief,
     .claim-pass,
     .pocket-desk,
+    .ops-ledger,
     .sprint-grid,
     .agent-sprint,
     .rival-scout,
@@ -2569,6 +3143,7 @@ const jsonLd = {
     .preview-grid,
     .claim-pass__cards,
     .pocket-desk__rail,
+    .ops-form,
     .sprint-scoreboard,
     .media-products,
     .agent-sprint > div:last-child,
@@ -2617,6 +3192,7 @@ const jsonLd = {
     .preview-grid,
     .claim-pass__cards,
     .pocket-desk__rail,
+    .ops-form,
     .sprint-scoreboard,
     .media-products,
     .agent-sprint > div:last-child,
@@ -2882,6 +3458,7 @@ const jsonLd = {
     .sprint-brief,
     .claim-pass,
     .pocket-desk,
+    .ops-ledger,
     .sprint-scoreboard article,
     .sprint-timeline,
     .combine-card,
@@ -2939,6 +3516,7 @@ const jsonLd = {
     .sprint-grid,
     .claim-pass,
     .pocket-desk,
+    .ops-ledger,
     .agent-sprint,
     .rival-scout,
     .operator-loop {
@@ -2980,6 +3558,7 @@ const jsonLd = {
     .combine-card,
     .claim-pass,
     .pocket-desk,
+    .ops-ledger,
     .agent-sprint,
     .mission-board,
     .rival-scout,
@@ -2993,6 +3572,7 @@ const jsonLd = {
     .combine-card h3,
     .claim-pass h3,
     .pocket-desk h3,
+    .ops-ledger h3,
     .agent-sprint h3,
     .mission-board__head h3,
     .rival-scout h3 {
@@ -3047,6 +3627,36 @@ const jsonLd = {
     .pocket-desk {
       gap: 10px;
       scroll-margin-top: 150px;
+    }
+
+    .ops-ledger {
+      gap: 10px;
+      scroll-margin-top: 150px;
+    }
+
+    .ops-form,
+    .ops-ledger__list {
+      padding: 10px;
+    }
+
+    .ops-segments,
+    .ops-form__actions {
+      gap: 6px;
+    }
+
+    .ops-segments__button,
+    .ops-form__actions button,
+    .ops-ledger__list > div:first-child button {
+      min-height: 44px;
+    }
+
+    .ops-form__actions button {
+      flex: 1 1 140px;
+    }
+
+    .ops-ledger__list > div:first-child {
+      align-items: stretch;
+      flex-direction: column;
     }
 
     .claim-pass__cards,
