@@ -49,6 +49,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BLOCKS_DIR = path.join(REPO_ROOT, 'src/content/blocks');
 const ENV_FILE = path.join(REPO_ROOT, '.env.local');
+const IDENTITIES_FILE = path.join(REPO_ROOT, 'src/data/agent-identities.json');
 
 // Source .env.local on startup (matches scripts/manus.mjs convention).
 // Repo-local secrets land in .env.local which is gitignored.
@@ -59,6 +60,17 @@ const ENV_FILE = path.join(REPO_ROOT, '.env.local');
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
   }
 })();
+
+// Resolve a resident's stable agent_id from src/data/agent-identities.json.
+// Lazily loaded; missing file is non-fatal — the receipt just won't carry an
+// agent_id (older behavior). Format pcr_<base32>; matches schema regex.
+function lookupAgentId(name) {
+  try {
+    if (!existsSync(IDENTITIES_FILE)) return null;
+    const j = JSON.parse(readFileSync(IDENTITIES_FILE, 'utf8'));
+    return j.instances?.[name]?.agent_id ?? null;
+  } catch { return null; }
+}
 
 // Must mirror src/lib/link.ts. If you change one, change the other.
 const LINK_CAPS = {
@@ -123,7 +135,18 @@ function validate(args) {
   if (isLive && amountUsd > LINK_CAPS.perPurchaseUsd) {
     die(2, `--live capped at $${LINK_CAPS.perPurchaseUsd.toFixed(2)}/req for v0 proving runs. Got $${amountUsd}. Raise the cap explicitly when ready.`);
   }
-  return { ...args, amountUsd, channel: args.channel || 'FD', isLive };
+  // --payee-agent (optional) marks an agent-to-agent payment. Today the
+  // amount still goes to merchant via Stripe Link card; payee_agent records
+  // who the work was for. When real a2a rails ship, this becomes the
+  // routing target.
+  const payeeAgent = args['payee-agent'] || null;
+  if (payeeAgent && !ALLOWED_AGENTS.includes(payeeAgent)) {
+    die(3, `--payee-agent must be one of ${ALLOWED_AGENTS.join(', ')} (or unset)`);
+  }
+  if (payeeAgent && payeeAgent === args.agent) {
+    die(3, `--payee-agent cannot equal --agent (${args.agent} can't pay themselves)`);
+  }
+  return { ...args, amountUsd, channel: args.channel || 'FD', isLive, payeeAgent };
 }
 
 // ─── link-cli shell-out ─────────────────────────────────────────────────────
@@ -239,7 +262,7 @@ async function nextBlockId() {
   return String(Math.max(...ids) + 1).padStart(4, '0');
 }
 
-async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel, isLive }) {
+async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, context, settled, channel, isLive, payeeAgent }) {
   // Verified shape from `link-cli spend-request retrieve --include card --format json`
   // (2026-04-30 night): top-level `id` (lsrq_xxx prefix), `status`, `card` object
   // with { number, cvc, exp_month, exp_year, brand, valid_until, billing_address }.
@@ -267,6 +290,15 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
     noun: Number(id),
     spend: {
       agent,
+      // Stamp the spender's stable identity if known. Sprint A landed
+      // src/data/agent-identities.json; this stamps from there. Optional —
+      // if the identity isn't registered, agent_id stays undefined.
+      agent_id: lookupAgentId(agent) ?? undefined,
+      // payee_agent + payee_agent_id only set on agent-to-agent payments
+      // (the +12-18mo inversion). Today nothing uses this; the schema is
+      // ready when the first a2a receipt fires.
+      payee_agent: payeeAgent ?? undefined,
+      payee_agent_id: payeeAgent ? lookupAgentId(payeeAgent) ?? undefined : undefined,
       loop,
       amount_usd: amountUsd,
       currency: 'usd',
@@ -311,9 +343,14 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
   }
 
   if (args.dryRun) {
+    const agentId = lookupAgentId(args.agent);
+    const payeeId = args.payeeAgent ? lookupAgentId(args.payeeAgent) : null;
     process.stdout.write('— DRY RUN — no link-cli call, no Block written.\n');
     process.stdout.write(`  mode:         ${args.isLive ? 'LIVE — REAL MONEY' : 'test'}\n`);
-    process.stdout.write(`  agent:        ${args.agent}\n`);
+    process.stdout.write(`  agent:        ${args.agent}${agentId ? ` (${agentId})` : ' (no pcr_id registered)'}\n`);
+    if (args.payeeAgent) {
+      process.stdout.write(`  payee_agent:  ${args.payeeAgent}${payeeId ? ` (${payeeId})` : ' (no pcr_id registered)'}\n`);
+    }
     process.stdout.write(`  loop:         ${args.loop}\n`);
     process.stdout.write(`  amount:       $${args.amountUsd.toFixed(2)}\n`);
     process.stdout.write(`  merchant:     ${args.merchant} (${args['merchant-url']})\n`);
@@ -380,6 +417,7 @@ async function writeBlock({ id, agent, loop, amountUsd, merchant, merchantUrl, c
       settled,
       channel: args.channel,
       isLive: args.isLive,
+      payeeAgent: args.payeeAgent,
     });
   } catch (err) {
     die(4, `block write failed: ${err.message}`);
