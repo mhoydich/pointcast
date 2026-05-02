@@ -268,6 +268,37 @@ const frame = {
       />
     )}
 
+    {/* Payouts surface — when this Block carries a `payouts` array (the
+        +18-24mo programmable-revenue-split primitive from #306), render the
+        split here so /b/{id} self-documents. Today only Block 0420 carries
+        this as a synthetic demo. When real artifact-earnings ship, this
+        section becomes the pay table for what landed when the artifact
+        last earned (paid_at) or what would land if it earns next. */}
+    {(block.data as any).payouts && (block.data as any).payouts.length > 0 && (
+      <section class="payouts" aria-label="Programmable payouts">
+        <p class="payouts__kicker mono">PAYOUTS · PROGRAMMABLE REVENUE SPLIT</p>
+        <p class="payouts__dek">
+          When this artifact earns — sponsorship, mint sale, ad — these splits fire automatically.
+          {(block.data as any).payouts.every((p: any) => p.paid_out === false) && (
+            <span class="payouts__pending"> Currently a forward-look; nothing has earned yet.</span>
+          )}
+        </p>
+        <ul class="payouts__list">
+          {(block.data as any).payouts.map((p: any) => (
+            <li class="payouts__row">
+              <span class={`payouts__chip payouts__chip--${p.to_kind ?? 'agent'}`}>{p.to_kind ?? 'agent'}</span>
+              <span class="payouts__name mono">{p.to}</span>
+              <span class="payouts__share mono">{(p.share * 100).toFixed(0)}%</span>
+              {p.rationale && <span class="payouts__rationale">{p.rationale}</span>}
+              <span class={`payouts__state ${p.paid_out ? 'payouts__state--paid' : 'payouts__state--pending'}`}>
+                {p.paid_out ? `paid ${p.paid_at ? new Date(p.paid_at).toISOString().slice(0,10) : ''}` : 'pending earnings'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
     {(prev || next) && (
       <nav class="block-nav" aria-label="Adjacent blocks">
         {prev ? (
@@ -731,4 +762,45 @@ const frame = {
     flex-wrap: wrap;
     gap: 12px;
   }
+  /* Programmable payouts surface — see #306 + #309. Today only Block 0420
+     populates this. When real artifact-earnings ship, this is the pay table. */
+  .payouts {
+    margin-top: 2rem;
+    background: #E7F3EC;
+    border: 1px solid #0B6B3A;
+    border-left: 6px solid #0B6B3A;
+    padding: 1rem 1.25rem;
+  }
+  .payouts__kicker { font-size: 0.7rem; letter-spacing: 0.18em; color: #06451F; margin: 0 0 0.4rem; }
+  .payouts__dek { font-style: italic; color: #555; font-size: 0.95rem; margin: 0 0 0.75rem; line-height: 1.4; }
+  .payouts__pending { color: #BA7517; font-style: italic; }
+  .payouts__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .payouts__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.4rem 0.6rem;
+    background: white;
+    border: 1px solid #D4CBB6;
+    font-size: 0.9rem;
+  }
+  .payouts__chip {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    background: #6b6358; color: white;
+  }
+  .payouts__chip--human    { background: #534AB7; }
+  .payouts__chip--agent    { background: #0B6B3A; }
+  .payouts__chip--treasury { background: #BA7517; }
+  .payouts__chip--external { background: #993556; }
+  .payouts__name { font-weight: 600; color: #1A1A1A; }
+  .payouts__share { color: #06451F; font-weight: 700; min-width: 3.2em; }
+  .payouts__rationale { color: #555; font-size: 0.85rem; flex: 1 1 auto; }
+  .payouts__state { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 0.7rem; margin-left: auto; }
+  .payouts__state--pending { color: #BA7517; }
+  .payouts__state--paid    { color: #06451F; }
 </style>
