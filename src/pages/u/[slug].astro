@@ -1,0 +1,303 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  absoluteImage,
+  absoluteUrl,
+  getMiniShrineDescription,
+  getShrineSet,
+  SITE_URL,
+  UNFURL_SHRINES,
+} from '../../lib/unfurl-shrines';
+
+export function getStaticPaths() {
+  return UNFURL_SHRINES.map((shrine) => ({
+    params: { slug: shrine.slug },
+    props: { shrine },
+  }));
+}
+
+const { shrine } = Astro.props;
+const shrineSet = getShrineSet(shrine.slug);
+const targetUrl = absoluteUrl(shrine.path);
+const pageUrl = absoluteUrl(shrine.miniPath);
+const imageUrl = absoluteImage(shrine.image);
+const title = `${shrine.title} · mini shrine`;
+const description = getMiniShrineDescription(shrine);
+const shrineBackground = shrineSet?.background ?? shrine.image;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': pageUrl,
+  name: title,
+  description,
+  url: pageUrl,
+  image: imageUrl,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: SITE_URL },
+  about: {
+    '@type': 'WebPage',
+    name: shrine.title,
+    url: targetUrl,
+    image: imageUrl,
+    description: shrine.description,
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={shrine.image}
+  imageAlt={`${shrine.title} mini shrine preview`}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/unfurls.json', title: 'PointCast unfurl shrine manifest' },
+    { type: 'text/html', href: shrine.path, title: shrine.title },
+  ]}
+  frame={{
+    image: imageUrl,
+    buttons: [
+      { label: 'Open URL', action: 'link', target: targetUrl },
+      { label: 'Shrine wall', action: 'link', target: absoluteUrl('/unfurls') },
+      { label: 'Manifest', action: 'link', target: absoluteUrl('/unfurls.json') },
+    ],
+  }}
+>
+  <article class="mini-shrine" style={`--shrine-bg: url('${shrineBackground}')`}>
+    <nav class="mini-shrine__crumb mono" aria-label="Breadcrumb">
+      <a href="/unfurls">Unfurls</a>
+      <span>/</span>
+      <span>{shrine.slug}</span>
+      <a href={shrine.path}>Open URL</a>
+    </nav>
+
+    <div class="mini-shrine__stage">
+      <img class="mini-shrine__background" src={shrineBackground} alt="" width="1400" height="788" />
+      <div class="mini-shrine__shade"></div>
+      <div class="mini-shrine__card">
+        <div class="mini-shrine__media">
+          <img src={shrine.image} alt="" width="1200" height="630" />
+        </div>
+        <div class="mini-shrine__copy">
+          <p class="kicker mono">{shrineSet?.title ?? 'URL Shrine'} · {shrine.kind}</p>
+          <h1>{shrine.title}</h1>
+          <p>{shrine.description}</p>
+          <dl>
+            <div>
+              <dt>Target</dt>
+              <dd><a href={shrine.path}>{shrine.path}</a></dd>
+            </div>
+            <div>
+              <dt>Audience</dt>
+              <dd>{shrine.audience}</dd>
+            </div>
+            <div>
+              <dt>Ritual</dt>
+              <dd>{shrine.ritual}</dd>
+            </div>
+          </dl>
+          <div class="mini-shrine__actions">
+            <a href={shrine.path}>Open URL</a>
+            <a href="/unfurls">Shrine Wall</a>
+            <a href="/shrines">Sets</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</BlockLayout>
+
+<style>
+  .mini-shrine {
+    min-height: calc(100vh - 60px);
+    color: #fff;
+    background: #12110E;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mini-shrine__crumb {
+    position: fixed;
+    top: 18px;
+    left: 20px;
+    right: 20px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .mini-shrine__crumb a {
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .mini-shrine__crumb a:last-child {
+    margin-left: auto;
+  }
+
+  .mini-shrine__stage {
+    position: relative;
+    min-height: calc(100vh - 60px);
+    display: grid;
+    place-items: center;
+    padding: 82px 20px 42px;
+    overflow: hidden;
+  }
+
+  .mini-shrine__background,
+  .mini-shrine__shade {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .mini-shrine__background {
+    object-fit: cover;
+    filter: saturate(0.95) contrast(1.04);
+  }
+
+  .mini-shrine__shade {
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.82), rgba(18, 17, 14, 0.22) 48%, rgba(18, 17, 14, 0.7)),
+      linear-gradient(180deg, rgba(18, 17, 14, 0.46), rgba(18, 17, 14, 0.9));
+  }
+
+  .mini-shrine__card {
+    position: relative;
+    z-index: 1;
+    width: min(1040px, 100%);
+    display: grid;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1fr);
+    background: rgba(18, 17, 14, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(16px);
+  }
+
+  .mini-shrine__media {
+    min-height: 100%;
+    border-right: 1px solid rgba(255, 255, 255, 0.24);
+  }
+
+  .mini-shrine__media img {
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .mini-shrine__copy {
+    padding: clamp(24px, 5vw, 48px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .kicker {
+    color: #F5B45F;
+    font-size: 12px;
+    margin: 0 0 16px;
+  }
+
+  h1 {
+    font-size: clamp(42px, 7vw, 76px);
+    line-height: 0.95;
+    font-weight: 500;
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .mini-shrine__copy > p {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 18px;
+    line-height: 1.45;
+    margin: 20px 0 0;
+  }
+
+  dl {
+    display: grid;
+    gap: 11px;
+    margin: 24px 0 0;
+    padding: 18px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  dl div {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 12px;
+  }
+
+  dt {
+    color: #F5B45F;
+    font: 11px var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  dd {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.35;
+  }
+
+  dd a {
+    color: #fff;
+  }
+
+  .mini-shrine__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 26px;
+  }
+
+  .mini-shrine__actions a {
+    min-height: 40px;
+    padding: 0 13px;
+    border: 1px solid rgba(255, 255, 255, 0.46);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font: 12px var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .mini-shrine__actions a:first-child {
+    background: #fff;
+    color: #12110E;
+  }
+
+  @media (max-width: 760px) {
+    .mini-shrine__card {
+      grid-template-columns: 1fr;
+    }
+
+    .mini-shrine__media {
+      border-right: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+    }
+
+    .mini-shrine__media img {
+      min-height: 0;
+      aspect-ratio: 1200 / 630;
+    }
+
+    dl div {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
+</style>

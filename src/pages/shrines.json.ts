@@ -28,6 +28,7 @@ export const GET: APIRoute = async () => {
         .map((shrine) => ({
           ...shrine,
           url: absoluteUrl(shrine!.path),
+          miniUrl: absoluteUrl(shrine!.miniPath),
           image: absoluteImage(shrine!.image),
           proof: shrine!.proof.map(absoluteUrl),
         })),

@@ -1,6 +1,7 @@
 export interface UnfurlShrine {
   slug: string;
   path: string;
+  miniPath: string;
   title: string;
   description: string;
   image: string;
@@ -8,6 +9,7 @@ export interface UnfurlShrine {
   audience: string;
   ritual: string;
   proof: string[];
+  shrineSet?: string;
 }
 
 export interface ShrineSet {
@@ -31,7 +33,7 @@ export function absoluteImage(path: string): string {
   return path.startsWith('http') ? path : absoluteUrl(path);
 }
 
-export const UNFURL_SHRINES: UnfurlShrine[] = [
+const SHRINE_ITEMS = [
   {
     slug: 'home',
     path: '/',
@@ -274,7 +276,7 @@ export const UNFURL_SHRINES: UnfurlShrine[] = [
     ritual: 'Use when the best preview is the contract of the archive itself.',
     proof: ['/feed.json', '/archive.json', '/sitemap-blocks.xml'],
   },
-];
+] satisfies Omit<UnfurlShrine, 'miniPath' | 'shrineSet'>[];
 
 export const SHRINE_SETS: ShrineSet[] = [
   {
@@ -329,3 +331,24 @@ export const SHRINE_SETS: ShrineSet[] = [
     slugs: ['nouns-cola', 'share-kit'],
   },
 ];
+
+const shrineSetBySlug = new Map<string, string>();
+
+SHRINE_SETS.forEach((set) => {
+  set.slugs.forEach((slug) => shrineSetBySlug.set(slug, set.slug));
+});
+
+export const UNFURL_SHRINES: UnfurlShrine[] = SHRINE_ITEMS.map((shrine) => ({
+  ...shrine,
+  miniPath: `/u/${shrine.slug}`,
+  shrineSet: shrineSetBySlug.get(shrine.slug),
+}));
+
+export function getShrineSet(slug: string): ShrineSet | undefined {
+  const setSlug = shrineSetBySlug.get(slug);
+  return SHRINE_SETS.find((set) => set.slug === setSlug);
+}
+
+export function getMiniShrineDescription(shrine: UnfurlShrine): string {
+  return `Mini shrine for ${shrine.title}: ${shrine.description}`;
+}
