@@ -1,0 +1,606 @@
+---
+/**
+ * /blow — a single candle you blow out by tapping fast.
+ *
+ * One candle on the page. Tap it to "blow" — each tap weakens the
+ * flame. Tap fast enough (5 taps in 2 seconds) and you blow it out:
+ * confetti, "make a wish" message, candle relights after a beat.
+ *
+ * Pure static. No API. No KV. No localStorage required (one optional
+ * counter for "candles you've blown out today" stays local). Pages-
+ * agnostic — no Cloudflare Function dependency, no branch coupling
+ * with /api/*, /cake, /wish, /decades, /year, /parties.
+ *
+ * Mike chat 2026-05-02 ~late: "you lead go" — picked the smallest
+ * possible birthday-themed surface that ships clean even if every
+ * other thing gets lost in branch chaos again.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/blow — blow out the candle';
+const description = "One candle on the page. Tap it five times fast to blow it out, make a wish, get confetti. Single-player, pure static, no wallet, no signup. The simplest birthday ritual on PointCast.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/blow',
+  name: '/blow',
+  alternateName: 'blow out the candle',
+  description,
+  url: 'https://pointcast.xyz/blow',
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Any (browser)',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="blow">
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>blow</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">★ BLOW · ONE CANDLE, ONE WISH</p>
+      <h1 class="head__title">Blow out the candle.</h1>
+      <p class="head__lede">
+        Tap the candle five times in two seconds to blow it out. Make a
+        wish. The candle relights. <strong>Pure single-player</strong> —
+        no wallet, no signup, no nothing. The simplest birthday ritual
+        on the site.
+      </p>
+    </header>
+
+    <section class="stage" aria-label="The candle">
+      <div class="candle" id="candle" role="button" tabindex="0" aria-label="Tap the candle to blow on it">
+        <div class="candle__halo" id="halo"></div>
+        <div class="candle__flame" id="flame">
+          <div class="candle__flame-inner"></div>
+        </div>
+        <div class="candle__wick"></div>
+        <div class="candle__stick"></div>
+        <div class="candle__cake"></div>
+      </div>
+
+      <p class="status mono" id="status">· tap the candle to blow</p>
+
+      <div class="meter mono" id="meter">
+        <span class="meter__label">BREATH</span>
+        <span class="meter__bar"><span class="meter__fill" id="meter-fill" style="width:0%"></span></span>
+      </div>
+
+      <p class="counter mono" id="counter">· 0 candles blown out today</p>
+    </section>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW TO PLAY.</strong> Tap or click the candle. Each tap
+        adds to your "breath" meter. Reach 100% within 2 seconds and you
+        blow the candle out — confetti fires, the page says "make a
+        wish", the candle relights after 4 seconds. If you stop tapping
+        before 100%, the meter slowly decays back to zero.
+      </p>
+      <p class="foot__line mono">
+        <strong>WHY SO SIMPLE.</strong> The other birthday rooms (/cake,
+        /cake/register, and the cluster I'm rebuilding) all carry state.
+        This one carries nothing. It's the smallest possible birthday
+        ritual: one candle, one wish, one tap-flurry. Refreshes the page
+        and you start over.
+      </p>
+      <p class="foot__brief mono">
+        related: <a href="/cake">/cake</a> · the curated room
+        <span class="foot__sep">·</span>
+        <a href="/sing">/sing</a> · tap to sing happy birthday
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  const STORAGE_KEY = 'pc:blow:count';
+  const candle = document.getElementById('candle');
+  const flame = document.getElementById('flame');
+  const halo = document.getElementById('halo');
+  const status = document.getElementById('status');
+  const meterFill = document.getElementById('meter-fill');
+  const counter = document.getElementById('counter');
+
+  // ── State ─────────────────────────────────────────────────────────────
+  let breath = 0;          // 0..100
+  let lit = true;
+  let lastTapAt = 0;
+  let decayTimer: ReturnType<typeof setInterval> | null = null;
+  let count = 0;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) count = parseInt(raw, 10) || 0;
+  } catch {}
+
+  function paintCounter() {
+    if (counter) counter.textContent = `· ${count} candle${count === 1 ? '' : 's'} blown out on this device`;
+  }
+  paintCounter();
+
+  function setStatus(text: string) {
+    if (status) status.textContent = text;
+  }
+
+  function paintMeter() {
+    if (meterFill) meterFill.style.width = breath + '%';
+  }
+
+  // ── Decay loop ────────────────────────────────────────────────────────
+  function startDecay() {
+    if (decayTimer) return;
+    decayTimer = setInterval(() => {
+      // Only decay if no tap in the last ~150ms (gives the visitor the
+      // chance to keep adding before the meter drains).
+      if (Date.now() - lastTapAt < 150) return;
+      breath = Math.max(0, breath - 4);
+      paintMeter();
+      if (breath <= 0 && decayTimer) {
+        clearInterval(decayTimer);
+        decayTimer = null;
+      }
+    }, 90);
+  }
+
+  // ── Tap handler ──────────────────────────────────────────────────────
+  function tap() {
+    if (!lit) return;
+    const now = Date.now();
+    // If gap > 2s, reset the meter — otherwise add to current breath.
+    if (now - lastTapAt > 2000) {
+      breath = 0;
+    }
+    lastTapAt = now;
+    breath = Math.min(100, breath + 22);
+    paintMeter();
+
+    // Visual flicker on flame.
+    if (flame) {
+      flame.classList.remove('candle__flame--flicker');
+      void flame.offsetWidth; // restart animation
+      flame.classList.add('candle__flame--flicker');
+    }
+
+    if (breath >= 100) {
+      blowOut();
+    } else {
+      setStatus(`· keep tapping · ${breath}/100`);
+      startDecay();
+    }
+  }
+
+  function blowOut() {
+    if (!lit) return;
+    lit = false;
+    if (decayTimer) { clearInterval(decayTimer); decayTimer = null; }
+
+    // Visual: flame goes out, halo fades, wisp of smoke rises.
+    if (flame) flame.classList.add('candle__flame--out');
+    if (halo) halo.classList.add('candle__halo--out');
+    if (candle) candle.classList.add('candle--blown');
+
+    // Smoke wisp.
+    spawnSmoke();
+
+    // Counter + persist.
+    count++;
+    try { localStorage.setItem(STORAGE_KEY, String(count)); } catch {}
+    paintCounter();
+
+    setStatus('★ MAKE A WISH · candle relights in 4s');
+    burst();
+
+    // Relight after a beat.
+    setTimeout(() => {
+      lit = true;
+      breath = 0;
+      paintMeter();
+      if (flame) flame.classList.remove('candle__flame--out');
+      if (halo) halo.classList.remove('candle__halo--out');
+      if (candle) candle.classList.remove('candle--blown');
+      setStatus('· tap the candle to blow');
+    }, 4000);
+  }
+
+  // ── Smoke ─────────────────────────────────────────────────────────────
+  function spawnSmoke() {
+    if (!candle) return;
+    for (let i = 0; i < 4; i++) {
+      const s = document.createElement('span');
+      s.className = 'smoke';
+      s.style.left = (45 + Math.random() * 10) + '%';
+      s.style.animationDelay = (i * 120) + 'ms';
+      candle.appendChild(s);
+      setTimeout(() => s.remove(), 1800);
+    }
+  }
+
+  // ── Confetti ──────────────────────────────────────────────────────────
+  function burst() {
+    const overlay = document.createElement('div');
+    overlay.className = 'confetti-overlay';
+    document.body.appendChild(overlay);
+    const colors = ['#C8102E', '#E36F1E', '#F2C94C', '#2F8B3C', '#1F4FA5', '#7C3AA0', '#FF2E93', '#FBEAEA'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', ((Math.random() - 0.5) * 240) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 720) + 'deg');
+      p.style.animationDuration = (1500 + Math.random() * 1500) + 'ms';
+      p.style.animationDelay = (Math.random() * 200) + 'ms';
+      overlay.appendChild(p);
+    }
+    setTimeout(() => overlay.remove(), 4000);
+  }
+
+  // ── Bind ──────────────────────────────────────────────────────────────
+  candle?.addEventListener('click', tap);
+  candle?.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      tap();
+    }
+  });
+  // Spacebar from anywhere also works (handy for fast tapping).
+  document.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === ' ') {
+      e.preventDefault();
+      tap();
+    }
+  });
+</script>
+
+<style>
+  .blow {
+    --paper: #F5EFE3;
+    --ink: #1A1A1A;
+    --ink-soft: #5C5751;
+    --rule: rgba(26,26,26,0.12);
+    --accent: #FF2E93;
+    --flame: #FFB347;
+    --flame-hot: #FFE066;
+    --wax: #FBEAEA;
+    --wax-deep: #C8102E;
+
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    color: var(--ink);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  /* Crumb */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Head */
+  .head {
+    border-top: 4px solid var(--accent);
+    padding-top: 22px;
+    margin-bottom: 24px;
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 64px);
+    line-height: 0.95;
+    margin: 0 0 12px;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+  .head__lede {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--ink);
+    max-width: 56ch;
+  }
+  .head__lede strong { color: var(--accent); font-weight: 600; }
+
+  /* Stage */
+  .stage {
+    background: var(--paper);
+    border: 1.5px solid var(--rule);
+    border-radius: 6px;
+    padding: 36px 24px 24px;
+    margin-bottom: 24px;
+    text-align: center;
+    background-image:
+      radial-gradient(circle at 50% 30%, rgba(255,179,71,0.15) 0, transparent 60%);
+  }
+
+  /* Candle (cake-mounted) */
+  .candle {
+    position: relative;
+    width: 200px;
+    height: 280px;
+    margin: 0 auto 20px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+  }
+  .candle:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 4px; }
+
+  /* Halo glow behind everything */
+  .candle__halo {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -10%);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,224,102,0.55) 0%, rgba(255,179,71,0.18) 30%, transparent 65%);
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    animation: halo-pulse 2.4s ease-in-out infinite;
+  }
+  .candle__halo--out { opacity: 0; animation: none; }
+  @keyframes halo-pulse {
+    0%, 100% { transform: translate(-50%, -10%) scale(1); opacity: 0.85; }
+    50%      { transform: translate(-50%, -10%) scale(1.08); opacity: 1; }
+  }
+
+  /* Flame */
+  .candle__flame {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 36px;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: linear-gradient(to top, var(--flame) 0%, var(--flame-hot) 60%, #fff 100%);
+    box-shadow: 0 0 24px rgba(255, 224, 102, 0.7);
+    transform-origin: bottom center;
+    animation: flame-flicker 1.6s ease-in-out infinite;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .candle__flame-inner {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 10px;
+    height: 18px;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: linear-gradient(to top, #FF6B35 0%, #FFB347 60%, #FFE066 100%);
+  }
+  .candle__flame--flicker { animation: flame-flicker 0.4s ease-in-out 1; }
+  .candle__flame--out {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(0.1);
+  }
+  @keyframes flame-flicker {
+    0%, 100% { transform: translateX(-50%) rotate(0deg) scale(1); }
+    25%      { transform: translateX(-50%) rotate(-3deg) scale(1.04); }
+    75%      { transform: translateX(-50%) rotate(3deg)  scale(0.97); }
+  }
+
+  /* Wick */
+  .candle__wick {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 16px;
+    background: #1A1A1A;
+    border-radius: 2px;
+  }
+
+  /* Wax stick */
+  .candle__stick {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 130px;
+    background: linear-gradient(180deg, var(--wax) 0%, #fff 30%, var(--wax) 100%);
+    border: 2px solid var(--wax-deep);
+    border-radius: 6px 6px 4px 4px;
+    box-shadow: inset -3px 0 0 rgba(200,16,46,0.15);
+  }
+  /* Wax drip on the side */
+  .candle__stick::before {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    right: -1px;
+    width: 6px;
+    height: 24px;
+    background: var(--wax);
+    border-right: 2px solid var(--wax-deep);
+    border-bottom: 2px solid var(--wax-deep);
+    border-radius: 0 0 4px 4px;
+  }
+
+  /* Cake base */
+  .candle__cake {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    height: 60px;
+    background: var(--wax);
+    border: 2px solid var(--wax-deep);
+    border-radius: 4px 4px 6px 6px;
+    background-image: linear-gradient(180deg, transparent 0, transparent 50%, rgba(200,16,46,0.05) 100%);
+  }
+  .candle__cake::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 12px;
+    width: 12px;
+    height: 12px;
+    background: #C8102E;
+    border-radius: 50%;
+    box-shadow:
+      40px 4px 0 #C9A227,
+      80px -2px 0 #1F4FA5,
+      120px 4px 0 #2F8B3C,
+      150px -2px 0 #7C3AA0;
+  }
+
+  /* Smoke wisps after blow-out */
+  .smoke {
+    position: absolute;
+    top: 30px;
+    width: 8px;
+    height: 8px;
+    background: rgba(60,60,60,0.4);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: smoke-rise 1.6s ease-out forwards;
+  }
+  @keyframes smoke-rise {
+    0%   { transform: translate(-50%, 0) scale(0.6); opacity: 0.7; }
+    50%  { transform: translate(-50%, -50px) scale(1.2); opacity: 0.4; }
+    100% { transform: translate(-50%, -120px) scale(2);  opacity: 0;   }
+  }
+
+  /* Status */
+  .status {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+    min-height: 1.2em;
+  }
+
+  /* Meter */
+  .meter {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+    max-width: 280px;
+    margin: 0 auto 18px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+  }
+  .meter__bar {
+    display: block;
+    height: 10px;
+    background: rgba(26,26,26,0.08);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .meter__fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--flame) 0%, var(--flame-hot) 50%, var(--accent) 100%);
+    transition: width 90ms linear;
+  }
+
+  .counter {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  /* Foot */
+  .foot {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .foot__line {
+    font-size: 11.5px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 6px;
+  }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__sep { margin: 0 6px; opacity: 0.5; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .candle__halo, .candle__flame { animation: none; }
+    .smoke, .meter__fill { transition: none; }
+  }
+</style>
+
+<style is:global>
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>
