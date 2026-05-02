@@ -1,0 +1,621 @@
+---
+/**
+ * /next-sprint - current PointCast build sprint.
+ *
+ * Current sprint command board. The content lives in src/lib/next-sprint.ts
+ * so the page can rotate without rebuilding the layout every time.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { NEXT_SPRINT } from '../lib/next-sprint';
+
+const palette = ['#E84D6A', '#185FA5', '#2CC5A0', '#BA7517', '#12110E'];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Project',
+  '@id': 'https://pointcast.xyz/next-sprint#project',
+  name: NEXT_SPRINT.title,
+  description: NEXT_SPRINT.goal,
+  url: 'https://pointcast.xyz/next-sprint',
+  sameAs: [
+    NEXT_SPRINT.related.operatingBoard,
+    NEXT_SPRINT.related.builder,
+    NEXT_SPRINT.related.manifest,
+    NEXT_SPRINT.related.sprintPicker,
+  ].filter(Boolean),
+};
+
+const pageDescription = `${NEXT_SPRINT.title}: ${NEXT_SPRINT.goal}`;
+const heroImage = NEXT_SPRINT.heroImage ?? '/images/og/next-sprint.png';
+const heroImageAbs = heroImage.startsWith('http') ? heroImage : `https://pointcast.xyz${heroImage}`;
+const primaryLinks = [
+  { label: NEXT_SPRINT.related.operatingBoardLabel ?? 'Operating board', href: NEXT_SPRINT.related.operatingBoard },
+  { label: NEXT_SPRINT.related.builderLabel ?? 'Builder', href: NEXT_SPRINT.related.builder },
+  { label: 'Agent JSON', href: '/next-sprint.json' },
+];
+---
+
+<BlockLayout
+  title="Next Sprint"
+  description={pageDescription}
+  image={heroImage}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/next-sprint.json', title: 'Next sprint plan (JSON)' }]}
+  frame={{
+    image: heroImageAbs,
+    buttons: [
+      { label: 'Open sprint', action: 'link', target: 'https://pointcast.xyz/next-sprint' },
+      { label: NEXT_SPRINT.related.operatingBoardLabel ?? 'Board', action: 'link', target: NEXT_SPRINT.related.operatingBoard },
+      { label: NEXT_SPRINT.related.builderLabel ?? 'Builder', action: 'link', target: NEXT_SPRINT.related.builder },
+      { label: 'Sprint JSON', action: 'link', target: 'https://pointcast.xyz/next-sprint.json' },
+    ],
+  }}
+>
+  <div class="sprint-page" data-next-sprint>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>Next Sprint</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">NEXT SPRINT / {NEXT_SPRINT.id}</p>
+        <h1>{NEXT_SPRINT.title}</h1>
+        <p class="dek">{NEXT_SPRINT.goal}</p>
+        <div class="hero__actions" aria-label="Primary actions">
+          <a class="btn btn--primary" href="#lanes">Run lanes</a>
+          {primaryLinks.map((link) => <a class="btn" href={link.href}>{link.label}</a>)}
+        </div>
+      </div>
+      <figure class="hero__visual">
+        <img src={heroImage} alt={NEXT_SPRINT.heroImageAlt ?? NEXT_SPRINT.title} width="1672" height="941" />
+        <figcaption>
+          <span class="mono">HORIZON</span>
+          <strong>{NEXT_SPRINT.horizon}</strong>
+        </figcaption>
+      </figure>
+    </header>
+
+    <section class="scoreboard" aria-label="Sprint scoreboard">
+      {NEXT_SPRINT.scoreboard.map((item) => (
+        <article>
+          <span class="mono">{item.label}</span>
+          <strong>{item.target}</strong>
+          <small>{item.unit}</small>
+        </article>
+      ))}
+    </section>
+
+    <section class="band band--intro">
+      <div>
+        <p class="kicker">WHY THIS SPRINT</p>
+        <h2>Make the ritual repeatable.</h2>
+      </div>
+      <p>
+        The shrine gallery and builder are live. The next sprint makes them
+        operational: expand the route catalog, validate the metadata, tighten
+        the builder presets, and package the right URL for the right audience.
+      </p>
+    </section>
+
+    <section class="lanes" id="lanes" aria-label="Sprint lanes">
+      <div class="section-head">
+        <p class="kicker">LANES</p>
+        <h2>Five workstreams, one board.</h2>
+      </div>
+      <div class="lane-grid">
+        {NEXT_SPRINT.lanes.map((lane, index) => (
+          <article class="lane" style={`--lane: ${palette[index % palette.length]};`}>
+            <div class="lane__head">
+              <span class="mono">{lane.owner}</span>
+              <strong>{lane.label}</strong>
+              <p>{lane.target}</p>
+            </div>
+            <ul>
+              {lane.tasks.map((task) => <li>{task}</li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="band" id="plan">
+      <div class="section-head">
+      <p class="kicker">SPRINT SHAPE</p>
+      <h2>Four checkpoints before the next ritual.</h2>
+      </div>
+      <ol class="days">
+        {NEXT_SPRINT.days.map((day) => (
+          <li>
+            <span class="mono">{day.label}</span>
+            <strong>{day.title}</strong>
+            <p>{day.deliverable}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="band checklist" aria-label="Local sprint checklist">
+      <div class="section-head">
+        <p class="kicker">LOCAL CHECKLIST</p>
+        <h2>Track the work in this browser.</h2>
+        <p>
+          This checklist is local-only. It helps Mike or an agent keep a working
+          tab during the sprint without creating server state.
+        </p>
+      </div>
+      <div class="progress" aria-live="polite">
+        <span class="mono" data-progress-label>0 of 0 done</span>
+        <div class="progress__bar"><span data-progress-bar></span></div>
+      </div>
+      <div class="check-grid">
+        {NEXT_SPRINT.nextBuilds.map((build) => (
+          <label class="check-item">
+            <input type="checkbox" data-check={build.id} />
+            <span>
+              <strong>{build.title}</strong>
+              <em class="mono">~{build.estMin}m</em>
+              <small>{build.output}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+    </section>
+
+    <section class="band gates">
+      <div class="section-head">
+        <p class="kicker">GATES</p>
+        <h2>Ship fast, keep the line bright.</h2>
+      </div>
+      <ul>
+        {NEXT_SPRINT.gates.map((gate) => <li>{gate}</li>)}
+      </ul>
+    </section>
+
+    <section class="links">
+      <a href="/shrines">/shrines</a>
+      <a href="/unfurls">/unfurls</a>
+      <a href="/shrines.json">/shrines.json</a>
+      <a href="/unfurls.json">/unfurls.json</a>
+      <a href="/sprint">/sprint</a>
+    </section>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const root = document.querySelector('[data-next-sprint]');
+      if (!root) return;
+
+      const checks = Array.from(root.querySelectorAll('[data-check]'));
+      const label = root.querySelector('[data-progress-label]');
+      const bar = root.querySelector('[data-progress-bar]');
+      const key = 'pc:next-sprint:checks';
+
+      function readState() {
+        try {
+          return JSON.parse(localStorage.getItem(key) || '{}') || {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function writeState(state) {
+        try {
+          localStorage.setItem(key, JSON.stringify(state));
+        } catch (error) {}
+      }
+
+      function render() {
+        const done = checks.filter((check) => check.checked).length;
+        const total = checks.length;
+        if (label) label.textContent = done + ' of ' + total + ' done';
+        if (bar) bar.style.width = total ? ((done / total) * 100).toFixed(0) + '%' : '0%';
+      }
+
+      const state = readState();
+      checks.forEach((check) => {
+        check.checked = Boolean(state[check.getAttribute('data-check')]);
+        check.addEventListener('change', () => {
+          state[check.getAttribute('data-check')] = check.checked;
+          writeState(state);
+          render();
+        });
+      });
+      render();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .sprint-page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 18px 86px;
+  }
+
+  .mono,
+  .kicker,
+  .crumb,
+  .btn,
+  .links a {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .mono {
+    font-size: 10px;
+    color: var(--pc-ink-muted);
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    font-size: 10px;
+    color: #8a2432;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 10px;
+    color: var(--pc-ink-muted);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 0.98fr) minmax(340px, 1.02fr);
+    gap: clamp(24px, 5vw, 58px);
+    align-items: center;
+    min-height: min(720px, calc(100vh - 44px));
+    padding: 18px 0 34px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__copy,
+  .hero__visual,
+  .lane,
+  .check-item > span {
+    min-width: 0;
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    max-width: 9ch;
+    font-size: clamp(4rem, 13vw, 9.7rem);
+    font-weight: 520;
+    line-height: 0.88;
+    letter-spacing: 0;
+  }
+
+  .dek {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 17px;
+    line-height: 1.55;
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    font-size: 10px;
+  }
+
+  .btn:hover,
+  .links a:hover {
+    text-decoration: none;
+    background: #f7c325;
+  }
+
+  .btn--primary {
+    color: #fff;
+    background: #12110e;
+  }
+
+  .hero__visual {
+    margin: 0;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .hero__visual img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .hero__visual figcaption {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .hero__visual strong {
+    font-size: clamp(22px, 4vw, 34px);
+    line-height: 1;
+  }
+
+  .scoreboard {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .scoreboard article {
+    min-height: 104px;
+    padding: 12px;
+    border-right: 1px solid var(--pc-rule);
+  }
+
+  .scoreboard article:last-child {
+    border-right: 0;
+  }
+
+  .scoreboard strong {
+    display: block;
+    margin-top: 8px;
+    font-size: clamp(30px, 5vw, 52px);
+    line-height: 0.95;
+  }
+
+  .scoreboard small {
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+  }
+
+  .band,
+  .lanes,
+  .links {
+    padding: 44px 0;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .band--intro {
+    display: grid;
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .band--intro p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.55;
+  }
+
+  .section-head {
+    margin-bottom: 22px;
+  }
+
+  .section-head h2,
+  .band--intro h2 {
+    margin: 0 0 10px;
+    font-size: clamp(2rem, 6vw, 4.5rem);
+    font-weight: 520;
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .section-head p:not(.kicker) {
+    max-width: 68ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 15.5px;
+    line-height: 1.58;
+  }
+
+  .lane-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .lane {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    min-height: 380px;
+    padding: 14px;
+    border: 1.5px solid var(--lane);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .lane__head strong {
+    display: block;
+    margin-top: 10px;
+    font-size: clamp(24px, 4vw, 36px);
+    line-height: 0.98;
+  }
+
+  .lane__head p,
+  .lane li,
+  .days p,
+  .check-item small,
+  .gates li {
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.48;
+  }
+
+  .lane ul,
+  .gates ul {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .days {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .days li,
+  .check-item {
+    border: 1.5px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fff;
+  }
+
+  .days li {
+    min-height: 184px;
+    padding: 14px;
+  }
+
+  .days strong {
+    display: block;
+    margin-top: 16px;
+    font-size: 22px;
+    line-height: 1.08;
+  }
+
+  .progress {
+    display: grid;
+    gap: 8px;
+    max-width: 560px;
+    margin-bottom: 16px;
+  }
+
+  .progress__bar {
+    height: 10px;
+    border: 1.5px solid var(--pc-ink);
+    background: #fff;
+  }
+
+  .progress__bar span {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background: #2cc5a0;
+    transition: width 160ms ease;
+  }
+
+  .check-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  .check-item {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 10px;
+    min-height: 154px;
+    padding: 14px;
+    cursor: pointer;
+  }
+
+  .check-item input {
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0;
+    accent-color: #2cc5a0;
+  }
+
+  .check-item strong,
+  .check-item small,
+  .check-item em {
+    display: block;
+  }
+
+  .check-item strong {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .check-item em {
+    margin: 8px 0;
+    font-style: normal;
+    color: var(--pc-ink);
+  }
+
+  .gates ul {
+    max-width: 920px;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .links a {
+    min-height: 42px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    color: var(--pc-ink);
+    font-size: 10px;
+  }
+
+  @media (max-width: 980px) {
+    .hero,
+    .band--intro {
+      grid-template-columns: 1fr;
+    }
+
+    .scoreboard,
+    .lane-grid,
+    .days,
+    .check-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .lane {
+      min-height: 0;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .sprint-page {
+      padding-inline: 12px;
+    }
+
+    h1 {
+      font-size: clamp(3.2rem, 20vw, 5.3rem);
+    }
+
+    .scoreboard,
+    .lane-grid,
+    .days,
+    .check-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .scoreboard article {
+      border-right: 0;
+      border-bottom: 1px solid var(--pc-rule);
+    }
+
+    .scoreboard article:last-child {
+      border-bottom: 0;
+    }
+  }
+</style>

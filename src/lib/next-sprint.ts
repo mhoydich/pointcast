@@ -1,0 +1,152 @@
+export const NEXT_SPRINT = {
+  id: 'url-shrine-distribution-sprint',
+  title: 'URL Shrine Distribution Sprint',
+  slug: 'next-sprint',
+  status: 'ready',
+  owner: 'codex',
+  horizon: '48 hours to a repeatable unfurl ritual',
+  startsAt: '2026-05-02T10:30:00-07:00',
+  human: 'https://pointcast.xyz/next-sprint',
+  json: 'https://pointcast.xyz/next-sprint.json',
+  archiveBlock: null,
+  heroImage: '/images/shrines/element-shrine-background-sheet.png',
+  heroImageAlt: 'Generated element shrine interiors for PointCast URL unfurls',
+  related: {
+    operatingBoard: 'https://pointcast.xyz/shrines',
+    operatingBoardLabel: 'Shrine Gallery',
+    builder: 'https://pointcast.xyz/unfurls#builder',
+    builderLabel: 'Unfurl Builder',
+    manifest: 'https://pointcast.xyz/shrines.json',
+    manifestLabel: 'Shrine JSON',
+    sprintPicker: 'https://pointcast.xyz/sprint',
+  },
+  goal:
+    'Turn the live shrine gallery, unfurl wall, and builder into a repeatable distribution system: every important PointCast URL gets a visual set, a validator pass, an audience packet, and a machine-readable manifest.',
+  scoreboard: [
+    { label: 'Priority URLs', target: 32, unit: 'shrines' },
+    { label: 'Element sets', target: 4, unit: 'background modes' },
+    { label: 'Validator passes', target: 3, unit: 'surfaces per URL' },
+    { label: 'Share packets', target: 8, unit: 'audiences' },
+    { label: 'Builder presets', target: 5, unit: 'ready templates' },
+  ],
+  lanes: [
+    {
+      id: 'catalog',
+      label: 'Catalog',
+      owner: 'Codex',
+      target: '32 priority URLs grouped into clear shrine sets',
+      tasks: [
+        'Extend the shrine manifest with the routes that now matter most: shrines, unfurls, next-sprint, workbench, treasury, Sparrow, and current block specimens.',
+        'Give each route a job: who it is for, when to share it, and which proof links validate it.',
+        'Keep /shrines.json and /unfurls.json aligned so agents can read the same structure humans browse.',
+      ],
+    },
+    {
+      id: 'builder',
+      label: 'Builder',
+      owner: 'Codex + Mike',
+      target: 'five presets that make a new unfurl easy to draft',
+      tasks: [
+        'Add presets for block, room, system, campaign, and element shrines.',
+        'Make the builder output the exact meta tags, manifest object, and validator links for a drafted route.',
+        'Let a generated background be chosen from the shrine set without hand-editing JSON.',
+      ],
+    },
+    {
+      id: 'visuals',
+      label: 'Visuals',
+      owner: 'Imagegen + Codex',
+      target: 'an elemental visual language that feels lived-in and useful',
+      tasks: [
+        'Generate one more cozy set if the Element Shrine wants a second pass: water, smoke, paper, moon, and desk mess.',
+        'Compress or convert the shrine background assets if page weight starts to feel heavy.',
+        'Make sure every visual background still leaves clean negative space for overlaid text and cards.',
+      ],
+    },
+    {
+      id: 'validation',
+      label: 'Validation',
+      owner: 'Codex',
+      target: 'every priority URL survives common unfurl surfaces',
+      tasks: [
+        'Run Open Graph, Twitter card, and direct HTML metadata checks against the priority URLs.',
+        'Catch broken images, wrong dimensions, stale titles, missing alternates, and route redirects.',
+        'Record the validation contract in the JSON manifests so the next pass is scriptable.',
+      ],
+    },
+    {
+      id: 'distribution',
+      label: 'Distribution',
+      owner: 'Mike + PointCast',
+      target: 'share packets that make posting feel obvious',
+      tasks: [
+        'Write short packets for Farcaster, iMessage, X, Slack, agent readers, local collaborators, and Nouns people.',
+        'Route each packet to the right shrine instead of always pointing people at the homepage.',
+        'Publish a sprint receipt that names what changed and what URL should be used first.',
+      ],
+    },
+  ],
+  days: [
+    {
+      label: 'Hour 0',
+      title: 'Lock the current board',
+      deliverable: '/next-sprint and /next-sprint.json point at the shrine distribution sprint.',
+    },
+    {
+      label: 'Hour 12',
+      title: 'Expand the shrine catalog',
+      deliverable: 'At least 32 priority routes grouped across element, block, room, system, campaign, feed, and builder sets.',
+    },
+    {
+      label: 'Hour 24',
+      title: 'Make the builder useful',
+      deliverable: 'Presets, background choices, and copyable validator links are live in /unfurls#builder.',
+    },
+    {
+      label: 'Hour 48',
+      title: 'Publish the ritual',
+      deliverable: 'A public receipt names the recommended URLs, packets, validation results, and next visual set.',
+    },
+  ],
+  gates: [
+    'No shrine enters the priority set without a real target URL and a working image.',
+    'No generated background is referenced from outside public/images/shrines.',
+    'No validator claim is listed unless it can be reproduced from a URL.',
+    'No builder output ships if it can produce malformed JSON or raw Astro braces in markup.',
+    'No broad share packet points only at the homepage when a sharper route exists.',
+  ],
+  nextBuilds: [
+    {
+      id: 'catalog-expand',
+      title: 'Expand priority shrine catalog',
+      output: 'Add 10 more real URL shrines and regroup the sets where needed.',
+      estMin: 35,
+    },
+    {
+      id: 'builder-presets',
+      title: 'Builder presets',
+      output: 'Preset selector for block, room, system, campaign, and element shrine drafts.',
+      estMin: 50,
+    },
+    {
+      id: 'validator-script',
+      title: 'Unfurl validator script',
+      output: 'Scripted metadata/image checks for every route in /unfurls.json and /shrines.json.',
+      estMin: 45,
+    },
+    {
+      id: 'share-packets',
+      title: 'Audience share packets',
+      output: 'Copy blocks for Farcaster, iMessage, X, Slack, agents, local, and Nouns audiences.',
+      estMin: 40,
+    },
+    {
+      id: 'element-v2',
+      title: 'Element visual set v2',
+      output: 'Second lived-in shrine background set with water, smoke, moon, paper, and stones.',
+      estMin: 30,
+    },
+  ],
+};
+
+export type NextSprint = typeof NEXT_SPRINT;
