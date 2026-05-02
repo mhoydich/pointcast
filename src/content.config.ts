@@ -81,6 +81,13 @@ const blocks = defineCollection({
         approval_url: z.string().url().optional(),               // app.link.com/activity/approve/{id} — present while pending_approval
         receipt_url: z.string().url().optional(),                // Stripe-hosted receipt
         approved_by: z.string().optional(),                      // future: visitor handle when v1 multi-tenant
+        // agent_id — globally-unique stable identity for the agent that fired
+        // this spend. Format: pcr_<10-char-base32>. Source-of-truth at
+        // src/data/agent-identities.json. The +6-12mo reputation primitive
+        // from Block 0420. Optional today (older receipts won't have it);
+        // forward receipts auto-populate via scripts/agent-spend.mjs.
+        agent_id: z.string().regex(/^pcr_[a-z0-9]{8,}$/).optional(),
+        payee_agent_id: z.string().regex(/^pcr_[a-z0-9]{8,}$/).optional(), // when the spend is agent-to-agent
         // Card-credential metadata captured from `retrieve --include card`.
         // Never store the full PAN here — that lives only in ~/.link-cli-receipts/{id}.json (0600).
         card_last4: z.string().regex(/^\d{4}$/).optional(),
