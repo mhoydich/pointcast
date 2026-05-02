@@ -227,6 +227,8 @@ export const GET: APIRoute = async () => {
         builders: 'https://pointcast.xyz/builders',
         civic: 'https://pointcast.xyz/civic',
         pet: 'https://pointcast.xyz/pet',
+        pets: 'https://pointcast.xyz/pets',
+        sitePetNamePoll: 'https://pointcast.xyz/poll/site-pet-name',
         zenCats: 'https://pointcast.xyz/zen-cats',
       },
       json: {
@@ -283,6 +285,7 @@ export const GET: APIRoute = async () => {
         scoreboard: 'https://pointcast.xyz/scoreboard.json',
         taproom: 'https://pointcast.xyz/taproom.json',
         play: 'https://pointcast.xyz/play.json',
+        pets: 'https://pointcast.xyz/pets.json',
         zenCats: 'https://pointcast.xyz/zen-cats.json',
       },
       api: {
@@ -293,6 +296,7 @@ export const GET: APIRoute = async () => {
         queue: 'https://pointcast.xyz/api/queue',
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
+        sitePetNamePoll: 'https://pointcast.xyz/api/poll?slug=site-pet-name',
         talk: 'https://pointcast.xyz/api/talk',
         wireEvents: 'https://pointcast.xyz/api/wire-events',
         room: 'wss://pointcast.xyz/api/room',

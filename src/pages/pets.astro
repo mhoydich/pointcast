@@ -1,0 +1,667 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  POINTCAST_PETS_DECISIONS,
+  POINTCAST_PETS_DESCRIPTION,
+  POINTCAST_PETS_PHASES,
+  POINTCAST_PETS_QUEUE,
+  POINTCAST_PETS_ROSTER,
+  POINTCAST_PETS_SURFACES,
+  POINTCAST_PETS_VERSION,
+  POINTCAST_SITE_PET_MOOD_LADDER,
+  POINTCAST_SITE_PET_NAME_POLL,
+} from '../lib/pets';
+
+const title = 'PointCast Pets';
+const description = POINTCAST_PETS_DESCRIPTION;
+
+const statusCounts = POINTCAST_PETS_ROSTER.reduce<Record<string, number>>((acc, pet) => {
+  acc[pet.status] = (acc[pet.status] ?? 0) + 1;
+  return acc;
+}, {});
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/pets#plan',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/pets',
+  inLanguage: 'en-US',
+  hasPart: POINTCAST_PETS_ROSTER.map((pet) => ({
+    '@type': 'CreativeWork',
+    name: pet.name,
+    url: `https://pointcast.xyz${pet.habitat}`,
+    description: pet.careLoop,
+  })),
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/pets.json', title: 'PointCast Pets manifest' },
+    { type: 'application/json', href: '/play.json', title: 'PointCast play layer manifest' },
+    { type: 'application/json', href: '/zen-cats.json', title: 'Zen Cats manifest' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    buttons: [
+      { label: 'Open Pets', action: 'link', target: 'https://pointcast.xyz/pets' },
+      { label: 'Pets JSON', action: 'link', target: 'https://pointcast.xyz/pets.json' },
+      { label: 'Site Pet', action: 'link', target: 'https://pointcast.xyz/pet' },
+    ],
+  }}
+>
+  <main class="pets-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/play">play</a>
+      <span aria-hidden="true">/</span>
+      <span>pets</span>
+    </nav>
+
+    <header class="pets-hero">
+      <div class="pets-hero__copy">
+        <p class="kicker">POINTCAST PETS / v{POINTCAST_PETS_VERSION} / PUBLIC PLAN</p>
+        <h1>Pets become a small, readable layer of the site.</h1>
+        <p>
+          The existing <a href="/pet">site pet</a> stays local-first. <a href="/zen-cats">Zen Cats</a>
+          keep the daily collectible lane. The rest of the plan turns room companions,
+          care receipts, and mint decisions into one coherent surface.
+        </p>
+        <div class="hero-actions" aria-label="Primary pet routes">
+          <a href="/pet">Site Pet</a>
+          <a href={POINTCAST_SITE_PET_NAME_POLL.href}>Name Poll</a>
+          <a href="/zen-cats">Zen Cats</a>
+          <a href="/pets.json">JSON</a>
+        </div>
+      </div>
+
+      <aside class="pets-signal" aria-label="Pets system status">
+        <img src="https://noun.pics/404.svg" alt="Noun 404 visual anchor for the PointCast site pet" width="116" height="116" />
+        <dl>
+          <div><dt>Live</dt><dd>{statusCounts.live ?? 0}</dd></div>
+          <div><dt>Planned</dt><dd>{statusCounts.planned ?? 0}</dd></div>
+          <div><dt>Storage</dt><dd>local-first</dd></div>
+          <div><dt>Name poll</dt><dd>{POINTCAST_SITE_PET_NAME_POLL.status}</dd></div>
+          <div><dt>Archive</dt><dd>Block 0399</dd></div>
+        </dl>
+      </aside>
+    </header>
+
+    <section class="system-strip" aria-label="Pets routes">
+      {POINTCAST_PETS_SURFACES.map((surface) => (
+        <a href={surface.href} class="surface-tile">
+          <span>{surface.status}</span>
+          <strong>{surface.title}</strong>
+          <em>{surface.role}</em>
+          <small>{surface.jsonHref}</small>
+        </a>
+      ))}
+    </section>
+
+    <section class="phase-one-strip" aria-labelledby="phase-one-title">
+      <div class="phase-one-strip__copy">
+        <p class="kicker">PHASE 1 / SHIPPING</p>
+        <h2 id="phase-one-title">The site pet now has a live name vote and a richer local mood loop.</h2>
+        <p>
+          The vote offers {POINTCAST_SITE_PET_NAME_POLL.options.map((option) => option.label).join(', ')}.
+          The winner can become the public label after review; browser-local care stays private.
+        </p>
+        <nav aria-label="Phase 1 pet routes">
+          <a href="/pet">Open /pet</a>
+          <a href={POINTCAST_SITE_PET_NAME_POLL.href}>Vote on name</a>
+          <a href="/pets.json">Read JSON</a>
+        </nav>
+      </div>
+      <ol class="mood-ladder" aria-label="Site pet mood ladder">
+        {POINTCAST_SITE_PET_MOOD_LADDER.map((mood) => (
+          <li>
+            <span>{mood.min}-{mood.max}</span>
+            <strong>{mood.label}</strong>
+            <small>{mood.summary}</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="section" aria-labelledby="roster-title">
+      <div class="section-head">
+        <p class="kicker">ROSTER</p>
+        <h2 id="roster-title">Start with what is alive. Plan only what earns return visits.</h2>
+      </div>
+      <div class="roster-grid">
+        {POINTCAST_PETS_ROSTER.map((pet) => (
+          <article class={`pet-card pet-card--${pet.status}`}>
+            <div class="pet-card__media">
+              <img src={pet.image} alt={`${pet.name} visual marker`} width="84" height="84" loading="lazy" />
+              <span>{pet.status}</span>
+            </div>
+            <div class="pet-card__copy">
+              <h3>{pet.name}</h3>
+              <p>{pet.careLoop}</p>
+              <dl>
+                <div><dt>Habitat</dt><dd><a href={pet.habitat}>{pet.habitat}</a></dd></div>
+                <div><dt>Storage</dt><dd>{pet.storage}</dd></div>
+                <div><dt>Mint path</dt><dd>{pet.mintPath}</dd></div>
+              </dl>
+              <strong>{pet.nextMove}</strong>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="phase-title">
+      <div class="section-head">
+        <p class="kicker">PLAN</p>
+        <h2 id="phase-title">Four phases keep the cut small and honest.</h2>
+      </div>
+      <ol class="phase-list">
+        {POINTCAST_PETS_PHASES.map((phase) => (
+          <li>
+            <span>{phase.label}</span>
+            <div>
+              <strong>{phase.title}</strong>
+              <p>{phase.summary}</p>
+              <small>{phase.deliverables.join(' / ')}</small>
+            </div>
+            <em>{phase.status}</em>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="section split-section" aria-label="Pets queue and decisions">
+      <div>
+        <div class="section-head">
+          <p class="kicker">QUEUE</p>
+          <h2>Next useful moves</h2>
+        </div>
+        <div class="queue-list">
+          {POINTCAST_PETS_QUEUE.map((item) => (
+            <article>
+              <span>{item.priority} / {item.owner} / {item.status}</span>
+              <strong>{item.task}</strong>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div class="section-head">
+          <p class="kicker">DECISIONS</p>
+          <h2>Open calls</h2>
+        </div>
+        <div class="decision-list">
+          {POINTCAST_PETS_DECISIONS.map((decision) => (
+            <article>
+              <span>{decision.owner} / {decision.status}</span>
+              <strong>{decision.question}</strong>
+              <p>{decision.recommendation}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="agent-contract" aria-labelledby="agent-title">
+      <div>
+        <p class="kicker">AGENT CONTRACT</p>
+        <h2 id="agent-title">Read the plan, do not invent ownership.</h2>
+        <p>
+          Agents can cite public routes, rules, storage keys, and queue status. Browser-local
+          care history is private unless a visitor supplies it directly.
+        </p>
+      </div>
+      <ul>
+        <li><a href="/pets.json">/pets.json</a> is the planning manifest.</li>
+        <li><a href="/play.json">/play.json</a> defines the current site pet care actions.</li>
+        <li><a href="/zen-cats.json">/zen-cats.json</a> defines daily cat metadata and PCCAT status.</li>
+      </ul>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .pets-page {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 18px 20px 96px;
+    color: var(--pc-ink);
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .pets-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+    gap: 18px;
+    align-items: stretch;
+    padding: 22px 0 18px;
+    border-top: 1.5px solid var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .pets-hero h1 {
+    max-width: 980px;
+    margin: 0;
+    font-size: clamp(42px, 7vw, 96px);
+    line-height: 0.92;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .pets-hero p {
+    max-width: 760px;
+    margin: 14px 0 0;
+    color: var(--pc-ink-soft);
+    font-size: 18px;
+    line-height: 1.45;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .hero-actions a,
+  .surface-tile,
+  .agent-contract a {
+    color: var(--pc-ink);
+  }
+
+  .hero-actions a {
+    min-height: 36px;
+    border: 1px solid var(--pc-ink);
+    padding: 9px 11px;
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .hero-actions a:hover,
+  .surface-tile:hover {
+    background: #eef4fa;
+    text-decoration: none;
+  }
+
+  .pets-signal {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+    padding: 16px;
+    border: 1px solid var(--pc-ink);
+    background:
+      repeating-linear-gradient(135deg, rgba(24, 95, 165, 0.1) 0 2px, transparent 2px 16px),
+      #fbfcf9;
+  }
+
+  .pets-signal img,
+  .pet-card img {
+    image-rendering: pixelated;
+  }
+
+  .pets-signal dl,
+  .pet-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .pets-signal div,
+  .pet-card dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  dt {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .system-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    margin: 14px 0 0;
+    border: 1px solid var(--pc-rule);
+    background: var(--pc-rule);
+  }
+
+  .surface-tile {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    padding: 12px;
+    background: #fff;
+  }
+
+  .surface-tile span,
+  .surface-tile small,
+  .queue-list span,
+  .decision-list span,
+  .phase-list span,
+  .phase-list em,
+  .pet-card__media span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .surface-tile strong,
+  .queue-list strong,
+  .decision-list strong {
+    font-size: 16px;
+    line-height: 1.15;
+    font-weight: 500;
+  }
+
+  .surface-tile em {
+    color: var(--pc-ink-soft);
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  .phase-one-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(280px, 0.6fr);
+    gap: 16px;
+    margin: 16px 0 0;
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    background:
+      linear-gradient(135deg, rgba(47, 143, 95, 0.1), transparent 48%),
+      #fbfcf6;
+  }
+
+  .phase-one-strip h2 {
+    max-width: 820px;
+    margin: 0;
+    font-size: clamp(28px, 4vw, 50px);
+    line-height: 1;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .phase-one-strip p {
+    max-width: 760px;
+    margin: 10px 0 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.45;
+  }
+
+  .phase-one-strip nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .phase-one-strip nav a {
+    min-height: 34px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .phase-one-strip nav a:hover {
+    background: #eef4fa;
+    text-decoration: none;
+  }
+
+  .mood-ladder {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .mood-ladder li {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .mood-ladder span,
+  .mood-ladder small {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .mood-ladder strong {
+    font-size: 16px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .section {
+    padding: 26px 0 0;
+  }
+
+  .section-head {
+    margin-bottom: 14px;
+  }
+
+  .section-head h2 {
+    max-width: 880px;
+    margin: 0;
+    font-size: clamp(28px, 4vw, 50px);
+    line-height: 1;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .roster-grid,
+  .split-section {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .pet-card {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 14px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-top: 5px solid #185fa5;
+    background: #fff;
+  }
+
+  .pet-card--planned {
+    border-top-color: #ba7517;
+    background: #fffaf2;
+  }
+
+  .pet-card__media {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: 8px;
+  }
+
+  .pet-card h3 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  .pet-card p,
+  .decision-list p,
+  .phase-list p,
+  .agent-contract p {
+    margin: 8px 0 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.45;
+  }
+
+  .pet-card__copy > strong {
+    display: block;
+    margin-top: 10px;
+    color: #0f6e56;
+    font-weight: 500;
+  }
+
+  .phase-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .phase-list li {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr) 88px;
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .phase-list strong {
+    display: block;
+    font-size: 18px;
+    line-height: 1.1;
+    font-weight: 500;
+  }
+
+  .phase-list small {
+    display: block;
+    margin-top: 8px;
+    color: #185fa5;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .queue-list,
+  .decision-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .queue-list article,
+  .decision-list article {
+    display: grid;
+    gap: 7px;
+    padding: 12px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+  }
+
+  .agent-contract {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+    gap: 18px;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+
+  .agent-contract h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 46px);
+    line-height: 1;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  .agent-contract ul {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 18px;
+    color: var(--pc-ink-soft);
+  }
+
+  @media (max-width: 900px) {
+    .pets-hero,
+    .phase-one-strip,
+    .roster-grid,
+    .split-section,
+    .agent-contract {
+      grid-template-columns: 1fr;
+    }
+
+    .system-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .pets-page {
+      padding-inline: 14px;
+    }
+
+    .pets-hero h1 {
+      font-size: clamp(40px, 13vw, 56px);
+      line-height: 0.95;
+    }
+
+    .system-strip,
+    .pet-card,
+    .phase-list li {
+      grid-template-columns: 1fr;
+    }
+
+    dd {
+      text-align: left;
+    }
+  }
+</style>
