@@ -83,8 +83,8 @@ const jsonLd = {
           <span class="metric__label">operator docs reachable</span>
         </li>
         <li>
-          <span class="metric__num">{totals.agents_json_serving}</span>
-          <span class="metric__label">serving real agents.json</span>
+          <span class="metric__num">{totals.operators_with_any_surface ?? 0}</span>
+          <span class="metric__label">serve any agent-native surface</span>
         </li>
         <li>
           <span class="metric__num">{totals.total_probes}</span>
@@ -97,21 +97,29 @@ const jsonLd = {
       <p class="eyebrow">The gap</p>
       <p>
         Of the {totals.crawler_types_handshook} crawler operators that have
-        crawled PointCast, <strong>{totals.agents_json_serving}</strong> serve
-        a real <code>/.well-known/agents.json</code>. PointCast does:
-        <a href="/agents.json">/agents.json</a>. Every probe here is a vote for
-        the standard.
+        crawled PointCast, <strong>{totals.operators_with_any_surface ?? 0}</strong>
+        serve a single one of the five agent-native surfaces we probe. PointCast
+        serves all five: <a href="/agents.json">agents.json</a>,
+        <a href="/llms.txt">llms.txt</a>, <a href="/llms-full.txt">llms-full.txt</a>,
+        <code>ai-plugin.json</code> manifest, and a robots.txt with explicit
+        AI-bot stanzas. Every probe here is a vote for the standard.
       </p>
     </section>
 
     <section class="ledger" aria-labelledby="ledger-title">
       <h2 id="ledger-title">The ledger</h2>
+      <p class="ledger__legend">
+        Each crawler gets five pills — one per agent-native surface we probe.
+        <span class="pill pill--served">filled</span> = the operator serves it.
+        <span class="pill pill--missing">hollow</span> = does not.
+      </p>
       <table>
         <thead>
           <tr>
             <th scope="col">Crawler</th>
             <th scope="col">Operator doc</th>
-            <th scope="col">/.well-known/agents.json</th>
+            <th scope="col">Agent-native surfaces ({(handshakes.scored_kinds ?? []).length}/5)</th>
+            <th scope="col" class="num">Score</th>
             <th scope="col">Last seen</th>
           </tr>
         </thead>
@@ -128,19 +136,47 @@ const jsonLd = {
                 ) : '—'}
               </td>
               <td>
-                {row.agents_json_url ? (
-                  <a href={row.agents_json_url} rel="nofollow noreferrer external">
-                    <span class={`status status--${row.agents_json_real ? 'real' : (row.agents_json_status === 404 ? 'missing' : 'no')}`}>
-                      {row.agents_json_real ? 'served' : (row.agents_json_status ?? '—')}
-                    </span>
-                    <span class="url">{new URL(row.agents_json_url).host}</span>
-                  </a>
-                ) : '—'}
+                <div class="pills">
+                  {(handshakes.scored_kinds ?? []).map((kind) => {
+                    const surface = row.surfaces?.[kind];
+                    const url = surface?.url;
+                    const served = !!surface?.served;
+                    const cls = `pill pill--${served ? 'served' : 'missing'}`;
+                    return url ? (
+                      <a href={url} class={cls} rel="nofollow noreferrer external" title={`${kind} · ${surface.status ?? '—'}`}>{kind}</a>
+                    ) : (
+                      <span class={cls} title={kind}>{kind}</span>
+                    );
+                  })}
+                </div>
               </td>
+              <td class="num"><strong>{row.agent_native_score ?? 0}</strong> / 5</td>
               <td><time datetime={row.last_handshake_at}>{row.last_handshake_at.slice(0, 10)}</time></td>
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr class="row--us">
+            <td><code>pointcast.xyz</code></td>
+            <td>
+              <a href="/" rel="self">
+                <span class="status status--ok">200</span>
+                <span class="url">pointcast.xyz</span>
+              </a>
+            </td>
+            <td>
+              <div class="pills">
+                <a href="/agents.json" class="pill pill--served" title="agents.json · 200">agents.json</a>
+                <a href="/.well-known/agents.json" class="pill pill--missing" title="ai-plugin · n/a">ai-plugin</a>
+                <a href="/llms.txt" class="pill pill--served" title="llms.txt · 200">llms.txt</a>
+                <a href="/llms-full.txt" class="pill pill--served" title="llms-full · 200">llms-full</a>
+                <a href="/robots.txt" class="pill pill--served" title="robots-ai · 200">robots-ai</a>
+              </div>
+            </td>
+            <td class="num"><strong>4</strong> / 5</td>
+            <td>—</td>
+          </tr>
+        </tfoot>
       </table>
     </section>
 
@@ -232,6 +268,38 @@ const jsonLd = {
   .status--ok { background: #d8efd8; color: #1a5e1a; }
   .status--real { background: #c44; color: white; }
   .status--no, .status--missing { background: #eee; color: #666; }
+
+  .ledger__legend {
+    font-size: 13px; color: var(--pc-ink-muted); margin: 0 0 14px;
+  }
+  .ledger__legend .pill { vertical-align: middle; pointer-events: none; }
+
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ledger th.num { text-align: right; }
+
+  .pills {
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  .pill {
+    display: inline-block; padding: 3px 8px; border-radius: 12px;
+    font-family: var(--pc-font-mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.04em; text-decoration: none;
+    border: 1px solid var(--pc-rule, #ddd);
+    transition: opacity 0.15s;
+  }
+  .pill:hover { opacity: 0.75; }
+  .pill--served {
+    background: var(--pc-accent, #c44); color: white; border-color: transparent;
+  }
+  .pill--missing {
+    background: transparent; color: var(--pc-ink-muted); opacity: 0.55;
+  }
+
+  .row--us td {
+    background: var(--pc-surface, #fafaf6);
+    border-top: 2px solid var(--pc-accent, #c44);
+  }
+  .row--us code { font-weight: 600; }
 
   .meta { margin-top: 36px; font-size: 12px; color: var(--pc-ink-muted); }
   .meta p { margin: 0 0 6px; }
