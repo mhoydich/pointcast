@@ -6,6 +6,7 @@ import {
   NOUNS_BATTLER_AGENT_BENCH_VERSION,
   NOUNS_BATTLER_SEASON_6_FAST_PASS,
   NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
+  NOUNS_BATTLER_SEASON_6_POCKET_DESK,
 } from '../lib/nouns-battler-agent-bench';
 
 const payload = {
@@ -24,6 +25,7 @@ const payload = {
   missionCount: NOUNS_BATTLER_SEASON_6_MISSION_PACKS.length,
   lanes: ['expansion', 'media', 'proof', 'commissioner', 'rival', 'rights'],
   fastPass: NOUNS_BATTLER_SEASON_6_FAST_PASS,
+  pocketDesk: NOUNS_BATTLER_SEASON_6_POCKET_DESK,
   missionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
   claimProtocol: [
     'Choose exactly one mission id.',

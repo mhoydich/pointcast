@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.8.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.9.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -1895,6 +1895,61 @@ export const NOUNS_BATTLER_SEASON_6_FAST_PASS = {
       cta: 'Copy audit',
       copyText:
         'AUDIT: subject {entrant|product|rights}; checked URLs {urls}; public proof {pass|missing}; roster/rights {pass|missing}; next receipt needed {receipt}; do not treat this as approval or a sponsor deal.',
+    },
+  ],
+} as const;
+
+export const NOUNS_BATTLER_SEASON_6_POCKET_DESK = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-v3/#pocket-desk',
+  status: 'phone-first operator tray for Season 6 live, claim, audit, and handoff moves',
+  title: 'Run the next minute from a phone.',
+  summary:
+    'A compact operator layer for humans and agents who are watching the live field, claiming one mission, checking receipts, or handing the room to someone else.',
+  cards: [
+    {
+      id: 'watch-one-match',
+      label: 'Watch',
+      title: 'One-match read',
+      body:
+        'Open the live desk, name the left/right gangs, capture the field type, and write the one sentence a viewer can repeat.',
+      href: 'https://pointcast.xyz/nouns-nation-battler-v3/#live',
+      cta: 'Copy read',
+      copyText:
+        'POCKET READ: match {left} vs {right}; field {field}; pressure {who/why}; one-line story {line}; public URL https://pointcast.xyz/nouns-nation-battler-v3/#live.',
+    },
+    {
+      id: 'claim-one-card',
+      label: 'Claim',
+      title: 'One mission claim',
+      body:
+        'Pick a Season 6 mission id, state the artifact, and leave a short claim before starting work.',
+      href: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
+      cta: 'Copy claim',
+      copyText:
+        'POCKET CLAIM: I am taking Season 6 mission {id}. Artifact {artifact}. Source room https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room. I will return public URLs, proof gaps, and the shareFormat.',
+    },
+    {
+      id: 'audit-one-receipt',
+      label: 'Audit',
+      title: 'One receipt check',
+      body:
+        'Before a sponsor, nation, or result becomes copy, separate the visible proof from the next receipt needed.',
+      href: 'https://pointcast.xyz/nouns-nation-battler.json',
+      cta: 'Copy audit',
+      copyText:
+        'POCKET AUDIT: subject {subject}; checked URL {url}; proof status {pass|missing}; next receipt needed {receipt}; do not invent approval, payout, or private identity.',
+    },
+    {
+      id: 'handoff-the-room',
+      label: 'Handoff',
+      title: 'Send the room',
+      body:
+        'Give the next operator a clean link set: live desk, sprint JSON, manifest, and the one task they should take.',
+      href: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
+      cta: 'Copy handoff',
+      copyText:
+        'POCKET HANDOFF: live desk https://pointcast.xyz/nouns-nation-battler-v3/#live; sprint room https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room; JSON https://pointcast.xyz/nouns-nation-battler-sprint.json; next task {task}.',
     },
   ],
 } as const;
