@@ -1,0 +1,436 @@
+---
+/**
+ * /drum-bell-fall — ambient bell-rain page.
+ *
+ * Mike 2026-05-02 (after the altars stall cleared overnight): "ok
+ * back lets keep going" — pairs with the altars chamber as a
+ * quieter, kinetic companion. Click anywhere on the velvet field
+ * and a bell falls from where you clicked. When it hits the
+ * bottom, it chimes a pentatonic note (pitch derived from the x
+ * position so the field is its own keyboard). Auto-rain mode drops
+ * a bell every 4-8s when idle so the room is musical even with
+ * nobody clicking.
+ *
+ * No API. Pure static page. LocalStorage stores per-session count
+ * so visitors see their own running tally over visits.
+ *
+ * Aesthetic per MEMORY: saturated velvet + brass, pixel-art bells,
+ * late-90s web chrome. Cathedral but kinetic.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Bell Fall · Pentatonic Bell-Rain · PointCast';
+const description =
+  'Click anywhere on the velvet field. A bell falls and chimes when it lands. Pentatonic — every position is its own note. Pure ambient, sized for any screen.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Bell Fall',
+  url: 'https://pointcast.xyz/drum-bell-fall',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="bf" id="bf-main">
+    <DrumNav current="bell-fall" />
+
+    <header class="bf__header">
+      <div class="bf__chrome">
+        <span class="bf__chrome-label">PENTATONIC</span>
+        <span class="bf__chrome-sep">·</span>
+        <span class="bf__chrome-label">CLICK ANYWHERE</span>
+        <span class="bf__chrome-sep">·</span>
+        <span class="bf__chrome-label">RAINS WHEN IDLE</span>
+      </div>
+      <h1 class="bf__title">BELL FALL</h1>
+      <p class="bf__tagline">tap the velvet · the bell rings when it lands</p>
+    </header>
+
+    <section class="bf__field" id="bf-field" aria-label="Bell-fall canvas — click anywhere to drop a bell">
+      <!-- Background tower silhouettes -->
+      <svg class="bf__tower bf__tower--left" viewBox="0 0 100 600" preserveAspectRatio="xMinYMax meet" aria-hidden="true">
+        <rect x="20" y="200" width="60" height="400" fill="#3a1240" opacity="0.4"/>
+        <rect x="32" y="180" width="36" height="20" fill="#3a1240" opacity="0.4"/>
+        <polygon points="14,200 50,140 86,200" fill="#3a1240" opacity="0.4"/>
+        <rect x="42" y="280" width="16" height="40" fill="#0c0410" opacity="0.55"/>
+        <rect x="42" y="380" width="16" height="40" fill="#0c0410" opacity="0.55"/>
+      </svg>
+      <svg class="bf__tower bf__tower--right" viewBox="0 0 100 600" preserveAspectRatio="xMaxYMax meet" aria-hidden="true">
+        <rect x="20" y="240" width="60" height="360" fill="#3a1240" opacity="0.4"/>
+        <rect x="32" y="220" width="36" height="20" fill="#3a1240" opacity="0.4"/>
+        <polygon points="14,240 50,180 86,240" fill="#3a1240" opacity="0.4"/>
+        <rect x="42" y="320" width="16" height="40" fill="#0c0410" opacity="0.55"/>
+      </svg>
+
+      <!-- Floor "ring line" — bells chime when they cross this line -->
+      <div class="bf__floor"></div>
+    </section>
+
+    <footer class="bf__readout">
+      <div class="bf__stat">
+        <span class="bf__stat-num" id="bf-count">0</span>
+        <span class="bf__stat-label">bells fallen</span>
+      </div>
+      <div class="bf__stat">
+        <span class="bf__stat-num" id="bf-streak">0</span>
+        <span class="bf__stat-label">recent streak</span>
+      </div>
+      <div class="bf__stat">
+        <span class="bf__stat-num" id="bf-active">0</span>
+        <span class="bf__stat-label">in flight</span>
+      </div>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#bf-main) {
+    background: #0c0410;
+  }
+
+  .bf {
+    --bf-velvet: #1a0820;
+    --bf-velvet-deep: #0c0410;
+    --bf-velvet-mid: #2c0d36;
+    --bf-brass: #d4a437;
+    --bf-brass-soft: #b8862c;
+    --bf-brass-deep: #6b4d12;
+    --bf-flame: #f6c15e;
+    --bf-flame-tip: #ff6b3a;
+    --bf-ink-light: #f4e7c8;
+    --bf-ink-mid: #c9b78c;
+    --bf-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 0;
+    color: var(--bf-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(212, 164, 55, 0.16), transparent 55%),
+      radial-gradient(ellipse at 50% 110%, rgba(180, 60, 80, 0.10), transparent 70%),
+      linear-gradient(180deg, var(--bf-velvet) 0%, var(--bf-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+  }
+  .bf::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 24px 24px, rgba(212, 164, 55, 0.10) 1.5px, transparent 2px),
+      radial-gradient(circle at 80px 80px, rgba(212, 164, 55, 0.10) 1.5px, transparent 2px);
+    background-size: 110px 110px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+
+  .bf .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  /* Header */
+  .bf__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(8px, 1vh, 18px);
+  }
+  .bf__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 14px;
+    border: 1.5px solid var(--bf-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--bf-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .bf__chrome-sep { color: var(--bf-brass-deep); }
+  .bf__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 78px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--bf-brass);
+    text-shadow:
+      0 0 28px rgba(212, 164, 55, 0.40),
+      0 2px 0 var(--bf-velvet-deep);
+  }
+  .bf__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--bf-ink-mid);
+  }
+
+  /* Field — the click target */
+  .bf__field {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+    border-bottom: 1px solid rgba(212, 164, 55, 0.18);
+    margin-top: clamp(8px, 1vh, 14px);
+    cursor: crosshair;
+    min-height: clamp(420px, 60vh, 800px);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .bf__field:active { cursor: grabbing; }
+
+  .bf__tower {
+    position: absolute;
+    bottom: 0;
+    width: clamp(80px, 10vw, 140px);
+    height: 100%;
+    pointer-events: none;
+  }
+  .bf__tower--left { left: clamp(4px, 1vw, 24px); }
+  .bf__tower--right { right: clamp(4px, 1vw, 24px); }
+
+  .bf__floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212, 164, 55, 0.6), transparent);
+    pointer-events: none;
+  }
+
+  /* Falling bell sprite */
+  .bf__bell {
+    position: absolute;
+    width: 28px;
+    height: 36px;
+    pointer-events: none;
+    will-change: transform;
+    transform: translate(-50%, 0);
+    transition: filter 220ms;
+  }
+  .bf__bell svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .bf__bell.bf__bell--ring {
+    animation: bf-ring 700ms ease-out forwards;
+  }
+  @keyframes bf-ring {
+    0%   { transform: translate(-50%, 0) scale(1); filter: drop-shadow(0 0 0 transparent); }
+    20%  { transform: translate(-50%, -3px) scale(1.4); filter: drop-shadow(0 0 14px rgba(246, 193, 94, 0.85)); }
+    100% { transform: translate(-50%, 6px) scale(0.85); filter: drop-shadow(0 0 0 transparent); opacity: 0; }
+  }
+
+  /* Footer readout */
+  .bf__readout {
+    display: flex;
+    justify-content: center;
+    gap: clamp(20px, 3vw, 60px);
+    padding: clamp(14px, 2vh, 28px) 0;
+    flex-shrink: 0;
+  }
+  .bf__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .bf__stat-num {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(22px, 2.4vw, 36px);
+    font-weight: 800;
+    color: var(--bf-flame);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-shadow: 0 0 12px rgba(246, 193, 94, 0.4);
+  }
+  .bf__stat-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(9px, 0.8vw, 12px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--bf-ink-dim);
+  }
+</style>
+
+<script>
+  // ── Audio: pentatonic chime per x-position band ────────
+  let actx = null;
+  function ctx() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // C major pentatonic, 5 notes (C5 D5 E5 G5 A5)
+  const NOTES = [523.25, 587.33, 659.25, 783.99, 880.00];
+
+  function noteForX(xRatio) {
+    // xRatio in [0,1] → index in [0,4]
+    const idx = Math.min(NOTES.length - 1, Math.max(0, Math.floor(xRatio * NOTES.length)));
+    return NOTES[idx];
+  }
+
+  function playBell(freq, gain = 0.22) {
+    const a = ctx(); const t = a.currentTime;
+    // Fundamental + brass partial for bell timbre
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.5); o2.start(t); o2.stop(t + 1.1);
+  }
+
+  // ── Bell sprite (inline SVG, brass) ──────────────────────
+  const BELL_SVG = `
+    <svg viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+      <!-- yoke -->
+      <rect x="13" y="0" width="2" height="3" fill="#6b4d12"/>
+      <rect x="11" y="3" width="6" height="2" fill="#6b4d12"/>
+      <!-- bell body -->
+      <path d="M 6 8 L 22 8 L 23 28 L 5 28 Z" fill="#d4a437"/>
+      <path d="M 7 9 L 21 9 L 22 27 L 6 27 Z" fill="none" stroke="#f0c855" stroke-width="0.5"/>
+      <rect x="5" y="28" width="18" height="2" fill="#b8862c"/>
+      <rect x="4" y="30" width="20" height="2" fill="#6b4d12"/>
+      <!-- clapper -->
+      <rect x="13" y="32" width="2" height="3" fill="#3a2410"/>
+      <!-- highlight -->
+      <rect x="8" y="11" width="2" height="10" fill="#fff5c0" opacity="0.5"/>
+    </svg>`;
+
+  // ── Falling bells engine ─────────────────────────────────
+  const COUNT_KEY = 'pc:bellfall:count';
+  const STREAK_KEY = 'pc:bellfall:streak';
+  let bells = []; // { el, x, y, vy, ringedAt, freq }
+  let totalCount = 0;
+  let recentRings = []; // timestamps for streak
+
+  // Restore total
+  try {
+    const raw = localStorage.getItem(COUNT_KEY);
+    if (raw) totalCount = parseInt(raw, 10) || 0;
+  } catch {}
+
+  const field = document.getElementById('bf-field');
+  const countEl = document.getElementById('bf-count');
+  const streakEl = document.getElementById('bf-streak');
+  const activeEl = document.getElementById('bf-active');
+
+  function fmt(n) { return n > 9999 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+  function paintReadout() {
+    if (countEl) countEl.textContent = fmt(totalCount);
+    // streak = rings in last 5 seconds
+    const now = performance.now();
+    recentRings = recentRings.filter((t) => now - t < 5000);
+    if (streakEl) streakEl.textContent = fmt(recentRings.length);
+    if (activeEl) activeEl.textContent = fmt(bells.length);
+  }
+
+  function spawnBell(x, y) {
+    if (!field) return;
+    const el = document.createElement('div');
+    el.className = 'bf__bell';
+    el.innerHTML = BELL_SVG;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    field.appendChild(el);
+    const xRatio = x / field.clientWidth;
+    bells.push({
+      el,
+      x,
+      y,
+      vy: 0,
+      gravity: 0.5 + Math.random() * 0.18, // px / frame²
+      ringedAt: 0,
+      freq: noteForX(xRatio),
+    });
+  }
+
+  function tick() {
+    if (!field) return;
+    const floorY = field.clientHeight - 18; // a bit above the very bottom
+    for (let i = bells.length - 1; i >= 0; i--) {
+      const b = bells[i];
+      if (b.ringedAt) {
+        // Ring animation runs for 700ms; cleanup after
+        if (performance.now() - b.ringedAt > 720) {
+          b.el.remove();
+          bells.splice(i, 1);
+        }
+        continue;
+      }
+      b.vy += b.gravity;
+      b.y += b.vy;
+      if (b.y >= floorY) {
+        b.y = floorY;
+        b.el.style.top = b.y + 'px';
+        b.el.classList.add('bf__bell--ring');
+        b.ringedAt = performance.now();
+        try { playBell(b.freq); } catch {}
+        totalCount += 1;
+        recentRings.push(performance.now());
+        try { localStorage.setItem(COUNT_KEY, String(totalCount)); } catch {}
+        paintReadout();
+      } else {
+        b.el.style.top = b.y + 'px';
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ── Click handler ───────────────────────────────────────
+  field?.addEventListener('click', (e) => {
+    const rect = field.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    spawnBell(x, -40);
+  });
+
+  // Touch support
+  field?.addEventListener('touchstart', (e) => {
+    const rect = field.getBoundingClientRect();
+    for (const t of Array.from(e.touches)) {
+      spawnBell(t.clientX - rect.left, -40);
+    }
+  }, { passive: true });
+
+  // ── Auto-rain mode (idle ambient) ───────────────────────
+  let lastInteractionAt = performance.now();
+  field?.addEventListener('click', () => { lastInteractionAt = performance.now(); });
+  field?.addEventListener('touchstart', () => { lastInteractionAt = performance.now(); }, { passive: true });
+
+  function autoRain() {
+    if (!field) return;
+    const now = performance.now();
+    // Idle if no click in last 8s
+    if (now - lastInteractionAt > 8000) {
+      const x = Math.random() * field.clientWidth;
+      spawnBell(x, -40);
+    }
+    setTimeout(autoRain, 4000 + Math.random() * 4000);
+  }
+  setTimeout(autoRain, 6000);
+
+  // Initial readout
+  paintReadout();
+  setInterval(paintReadout, 1000);
+</script>
