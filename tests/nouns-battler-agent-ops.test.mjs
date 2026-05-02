@@ -24,7 +24,7 @@ test('Agent Ops API stores public ops entries in PC_QUEUE_KV', async () => {
 test('Agent Ops contract is exposed through shared Battler agent data', async () => {
   const source = await readFile(BENCH_PATH, 'utf8');
 
-  assert.match(source, /NOUNS_BATTLER_AGENT_BENCH_VERSION = '1\.10\.0'/);
+  assert.match(source, /NOUNS_BATTLER_AGENT_BENCH_VERSION = '2\.0\.0'/);
   assert.match(source, /export const NOUNS_BATTLER_AGENT_OPS_LOOP/);
   assert.match(source, /route: 'https:\/\/pointcast\.xyz\/nouns-nation-battler-v3\/#ops-ledger'/);
   assert.match(source, /api: 'https:\/\/pointcast\.xyz\/api\/nouns-battler\/ops'/);

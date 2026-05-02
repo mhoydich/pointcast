@@ -368,6 +368,66 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - Expose the wiki through Nouns Nation, Battler manifests, Agent Bench, `/agents.json`, and `/for-agents`.
 - Keep wiki claims tied to public routes, visible Noun numbers, and no-money-yet participant-credit guardrails.
 
+## V42 Wiki MCP Additions
+
+- Extend Agent Bench to v1.8.0 with MCP-readable wiki context for visiting agents.
+- Add MCP tool `nouns_battler_wiki` with `topic` and `audience` inputs for viewer, agent, sponsor, producer, and contributor briefs.
+- Add MCP resource `nouns-battler://wiki` so Claude, ChatGPT, Codex, Cursor, and other clients can read the public field guide without scraping the page.
+- Return watch links, glossary/gang/season context, contribution paths, featured Nouns, and guardrails in one copyable handoff.
+- Keep the wiki MCP surface read-only and public: no private identity capture, no task submission backend, no sponsor payment flow.
+
+## V43 Watch This Next Additions
+
+- Extend Agent Bench to v1.9.0 with `watchNext`, a routing kit for the live desk, Mobile Cast, TV Cast, Nouns Kingdom, Battler Wiki, Desk Wall, and Claim Board.
+- Add a visible Watch This Next strip to the public Battle Desk above the embedded field feed.
+- Use actual local Battler Noun sprites for every route card so the chooser feels like part of the broadcast, not a link list.
+- Expose the same routing kit in `/nouns-nation-battler.json` under `broadcastDesk.watchNext` and top-level `watchNext`.
+- Keep the route kit read-only: it links humans and agents to existing public surfaces without adding persistence or private identity capture.
+
+## V44 Nouns Kingdom Visual Mode Additions
+
+- Add `type=kingdom` as a direct TV/play route for a 25 vs 25 Nouns siege variant.
+- Render noggle keeps, proposal/auction/meme lane bands, tower zones, a center Noun Gate ring, and gate-pressure pulses so the mode reads differently from the open-field scrum.
+- Keep the same automated roles, specials, season challenges, standings, rooting, recaps, and TV Director Mode.
+- Let Nouns Kingdom tune the sim with lane pull, tower guard, forward special charge, Noun Gate pressure scoring, and 25-unit stat totals.
+- Expose Nouns Kingdom in `/nouns-nation-battler.json` with a direct `kingdomRush` route for humans and agents.
+
+## V45 Nouns Kingdom V2 Fun Times Additions
+
+- Rotate Nouns Kingdom field beats between proposal waves, auction tower volleys, and meme lane floods.
+- Give each beat visible pop labels, move-feed calls, and tactical effects: guards for proposal waves, special charge for auction towers, and haste/cooldown pressure for meme floods.
+- Add lane-call specials so individual Nouns can call prop, auction, or meme lane fun from the live battle.
+- Keep v2 client-only and automatic: no new controls, backend state, payments, or player micromanagement.
+
+## V46 Nouns Kingdom Launch Rail Additions
+
+- Add a featured Nouns Kingdom v2 strip to the public Battle Desk so the newest visual mode is discoverable before the live iframe.
+- Use actual Battler Noun sprites in the strip and link directly to `#mode=tv&type=kingdom`.
+- Add the proposal wave, auction tower volley, meme lane flood, and Noun Gate beats as compact public-page labels.
+- Expose the same featured mode object in `/nouns-nation-battler.json` for agents, unfurls, and route pickers.
+
+## V47 Kingdom Share Card Additions
+
+- Add Copy Invite and Copy TV Link actions to the Nouns Kingdom v2 launch rail.
+- Keep the copy local to the browser clipboard: no analytics event, backend write, identity capture, or share API dependency.
+- Expose the same invite copy under `/nouns-nation-battler.json` as `featuredMode.shareCard` for agents and route-pickers.
+
+## V48 Pocket Cast Share Kit Additions
+
+- Promote `/nouns-nation-battler-mobile/` from hidden iframe wrapper to Pocket Cast: a phone-first, query-aware watch route with a small copy drawer.
+- Let `?type=kingdom` and future battle-type params open directly into the mobile field view, so shared phone links preserve the intended visual mode.
+- Add copyable Pocket Cast invite language for standard mobile viewing and Nouns Kingdom mobile viewing.
+- Extend Agent Bench to v2.0.0 with `mobileShareKit`, including mobile live, mobile Kingdom, savvy-review routes, unfurl notes, and mobile guardrails.
+- Expose the same mobile share kit in `/nouns-nation-battler.json` under `broadcastDesk.mobileShareKit` and top-level `mobileShareKit`.
+
+## V49 Pocket Cast Live Snapshot Overlay Additions
+
+- Upgrade the Pocket Cast drawer into a live match card using the existing same-origin `pointcast:nouns-nation-battler` snapshot feed.
+- Show matchup/league line, gang short names, alive counts, field, challenge, and latest call without adding backend state or local persistence.
+- Request snapshots from the embedded field on load and every 2500ms with the existing `pointcast:battle-desk` command contract.
+- Add Copy Live Invite and Copy Kingdom Invite actions; live-score and matchup details only appear in copied text after an observed snapshot.
+- Expose the overlay contract in `mobileShareKit.liveSnapshotOverlay` for agents and route pickers.
+
 ## Acceptance Criteria
 
 - A fresh browser can run from Day 1 through the Nouns Bowl without user input.
@@ -405,7 +465,23 @@ Nouns Nation Battler should evolve from a single-match watch toy into a tiny aut
 - `/nouns-nation-battler-tasks/` renders a public Claim Board with claim cards, proof checklists, production handoffs, and participant-credit previews.
 - `/nouns-nation-battler-tasks/` stores recent claims locally without transmitting private identity data.
 - `/api/mcp-v2` exposes `nouns_battler_claim_board` and `nouns-battler://claim-board`.
-- `/nouns-nation-battler-agents.json` exposes Agent Bench version `1.7.0` with production desk data, Claim Board data, production task packs, and claim-board task packs.
+- `/api/mcp-v2` exposes `nouns_battler_wiki` and `nouns-battler://wiki`.
+- `/nouns-nation-battler/` shows a Watch This Next strip that routes viewers to live desk, Mobile Cast, TV Cast, Nouns Kingdom, wiki, Desk Wall, and Claim Board.
+- `/nouns-nation-battler.json` exposes `watchNext` and `broadcastDesk.watchNext` with the same route cards.
+- `#mode=tv&type=kingdom` runs a visibly distinct 25 vs 25 Nouns Kingdom match with noggle keeps, proposal/auction/meme lanes, tower zones, Noun Gate pressure events, and 25-unit stat labels.
+- Nouns Kingdom v2 emits proposal wave, auction tower volley, meme lane flood, and lane-call events in the move feed and field pop labels.
+- `/nouns-nation-battler/` shows a featured Nouns Kingdom v2 launch rail with real Noun sprites and a direct Kingdom TV link.
+- `/nouns-nation-battler.json` exposes `featuredMode.id = nouns-kingdom-v2`.
+- `/nouns-nation-battler/` lets viewers copy the Nouns Kingdom v2 invite and direct TV link from the launch rail.
+- `/nouns-nation-battler.json` exposes `featuredMode.shareCard.copyText`.
+- `/nouns-nation-battler-mobile/?type=kingdom` opens the phone-first field route with `mode=mobile&type=kingdom`.
+- `/nouns-nation-battler-mobile/` includes a Pocket Cast drawer with live, Kingdom, TV, and copy-invite actions.
+- `/nouns-nation-battler-mobile/` updates the Pocket Cast drawer from postMessage snapshots with gangs, alive counts, field, challenge, league line, and latest call.
+- `/nouns-nation-battler-mobile/` can copy a live invite after a snapshot and a static Kingdom invite at any time.
+- `/nouns-nation-battler/` lets viewers copy a Nouns Kingdom phone invite from the featured mode rail.
+- `/nouns-nation-battler.json` exposes `mobileShareKit` and `broadcastDesk.mobileShareKit`.
+- `/nouns-nation-battler.json` exposes `mobileShareKit.liveSnapshotOverlay`.
+- `/nouns-nation-battler-agents.json` exposes Agent Bench version `2.0.0` with wiki, Watch This Next, mobile share kit, production desk, Claim Board, production task packs, and claim-board task packs.
 - Agent presence remains opt-in and anonymous; no raw session ids or personal identifiers are broadcast.
 - `/api/mcp-v2` can turn a Desk Wall snapshot URL, snapshot JSON, or Recap Studio text into standings, latest recaps, parsed final score, and Cowork cards.
 - The Season Desk Wall can open snapshot-backed card, scoreboard, story, and agent scorebook frames with dedicated `view=` modes.

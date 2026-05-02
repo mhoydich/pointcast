@@ -353,7 +353,7 @@ export const GET: APIRoute = async () => {
         transport: 'http',
         protocol: 'json-rpc-2.0',
         protocolVersion: '2025-06-18',
-        server: { name: 'pointcast-v2', version: '2.6.0' },
+        server: { name: 'pointcast-v2', version: '2.7.0' },
         install: {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
@@ -374,8 +374,8 @@ export const GET: APIRoute = async () => {
           'contracts_status', 'channels_list', 'agents_manifest',
           // client install layer (v0.3.0)
           'connector_links', 'apps_list',
-          // Nouns Nation Battler agent bench (v0.4.0 / v2.1.0)
-          'nouns_battler_manifest', 'nouns_battler_agent_tasks', 'nouns_battler_presence',
+          // Nouns Nation Battler agent bench + wiki (v0.11.0 / v2.7.0)
+          'nouns_battler_wiki', 'nouns_battler_manifest', 'nouns_battler_agent_tasks', 'nouns_battler_presence',
           // Nouns Nation Battler results desk (v0.5.0 / v2.2.0)
           'nouns_battler_result_tracker', 'nouns_battler_cowork_brief',
           // Nouns Nation Battler claim + production desk (v0.10.0 / v2.6.0)
@@ -387,11 +387,11 @@ export const GET: APIRoute = async () => {
           'pointcast://map', 'pointcast://now', 'pointcast://feed',
           'pointcast://contracts', 'pointcast://channels',
           'pointcast://connectors', 'pointcast://apps',
-          'nouns-battler://agent-bench', 'nouns-battler://manifest', 'nouns-battler://results-kit',
+          'nouns-battler://wiki', 'nouns-battler://agent-bench', 'nouns-battler://manifest', 'nouns-battler://results-kit',
           'nouns-battler://asset-factory', 'nouns-battler://sponsorship-desk', 'nouns-battler://production-desk',
           'nouns-battler://claim-board',
         ],
-        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
+        note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',

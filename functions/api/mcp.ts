@@ -21,6 +21,8 @@
  *          queue briefs, rooting cards, and Nouns Bowl hype packaging.
  * v0.10.0 — Battler Claim Board with public task cards, proof checklists,
  *           production handoffs, and participant-credit routing.
+ * v0.11.0 — Battler Wiki MCP with topic briefs, watch links, contribution
+ *           paths, and guardrails for visiting agents.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -61,6 +63,7 @@
  *   agents_manifest       (no input)   full /agents.json
  *   connector_links       (no input)   addable MCP links for AI clients
  *   apps_list             (no input)   PointCast app shelf for clients
+ *   nouns_battler_wiki ({topic?, audience?}) field guide brief for agents
  *   nouns_battler_manifest (no input)  Nouns Nation Battler manifest
  *   nouns_battler_agent_tasks ({taskId?, role?, lane?}) visiting-agent tasks
  *   nouns_battler_asset_factory ({assetType?, gang?, tone?}) asset/business kit
@@ -87,6 +90,7 @@
  *   pointcast://channels  9 PointCast channels
  *   pointcast://connectors addable MCP connector links
  *   pointcast://apps      PointCast app shelf
+ *   nouns-battler://wiki         Battler public field guide
  *   nouns-battler://agent-bench  task board for visiting agents
  *   nouns-battler://manifest     Battler game manifest
  *   nouns-battler://results-kit  result tracking schema + prompts + watch frames
@@ -109,6 +113,7 @@ import {
   buildNounsBattlerClaimBrief,
   buildNounsBattlerProductionBrief,
   buildNounsBattlerSponsorBrief,
+  buildNounsBattlerWikiBrief,
   filterNounsBattlerAgentTaskPacks,
   filterNounsBattlerAgentTasks,
   findNounsBattlerAgentTaskPack,
@@ -118,9 +123,9 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.10.0';
+const SERVER_VERSION = '0.11.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.6.0';
+const V2_SERVER_VERSION = '2.7.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -399,6 +404,26 @@ const TOOL_DEFINITIONS = [
     name: 'apps_list',
     description: 'List PointCast apps for the client shelf: internal tools, satellite rooms, collectible consoles, and connector apps.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'nouns_battler_wiki',
+    description:
+      'Return a Nouns Nation Battler field-guide brief for a viewer, agent, sponsor, producer, or contributor. Covers watch links, glossary, gangs, season arc, contribution paths, and guardrails.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          enum: ['overview', 'watch', 'glossary', 'gangs', 'season', 'participate', 'sponsor', 'agents', 'guardrails'],
+          description: 'Wiki topic to emphasize. Default overview.',
+        },
+        audience: {
+          type: 'string',
+          description: 'Who the brief is for, such as viewer, visiting-agent, sponsor, watch-party-host, or producer.',
+        },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'nouns_battler_manifest',
@@ -718,6 +743,12 @@ const RESOURCES = [
     uri: 'pointcast://apps',
     name: 'Apps',
     description: 'PointCast app shelf. Mirror of /apps.json.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://wiki',
+    name: 'Nouns Nation Battler Wiki',
+    description: 'Public field guide with watch links, glossary, gangs, season arc, contribution paths, and guardrails.',
     mimeType: 'application/json',
   },
   {
@@ -1620,6 +1651,26 @@ async function dispatchTool(
         ],
       };
     }
+    case 'nouns_battler_wiki': {
+      const topic = String(args.topic || 'overview').trim();
+      const audience = String(args.audience || 'viewer').trim();
+      const brief = buildNounsBattlerWikiBrief({ topic, audience });
+      const summary = [
+        `Nouns Battler wiki brief · ${brief.topic} · ${brief.audience}`,
+        brief.wiki.stance,
+        '',
+        brief.agentHandoff,
+        '',
+        `Wiki: ${brief.wiki.route}`,
+        `JSON: ${brief.wiki.json}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(brief, null, 2) },
+        ],
+      };
+    }
     case 'nouns_battler_presence': {
       const data = await callJson(`${base}/api/presence/snapshot`);
       const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -1675,7 +1726,7 @@ async function dispatchTool(
       const brief = {
         name: 'Nouns Nation Battler Claude Cowork Results Desk',
         endpoint: `${base}/api/mcp-v2`,
-        tools: ['nouns_battler_result_tracker', 'nouns_battler_cowork_brief', 'nouns_battler_manifest'],
+        tools: ['nouns_battler_wiki', 'nouns_battler_result_tracker', 'nouns_battler_cowork_brief', 'nouns_battler_manifest'],
         modes,
         resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
         watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
@@ -1752,6 +1803,24 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
           uri,
           mimeType: 'application/json',
           text: JSON.stringify({ ...NOUNS_BATTLER_AGENT_BENCH, generatedAt: new Date().toISOString() }, null, 2),
+        },
+      ],
+    };
+  }
+  if (uri === 'nouns-battler://wiki') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({
+            wiki: NOUNS_BATTLER_AGENT_BENCH.wiki,
+            quickStart: NOUNS_BATTLER_AGENT_BENCH.wiki.quickStart,
+            watchNext: NOUNS_BATTLER_AGENT_BENCH.watchNext,
+            watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+            contributionPaths: NOUNS_BATTLER_AGENT_BENCH.wiki.contributionPaths,
+            guardrails: NOUNS_BATTLER_AGENT_BENCH.wiki.guardrails,
+          }, null, 2),
         },
       ],
     };
@@ -1946,6 +2015,7 @@ const DISCOVERY_HTML = `<!doctype html>
 
 <h2>Tools — Nouns Nation Battler</h2>
 <ul>
+  <li><code>nouns_battler_wiki</code> — field guide briefs with watch links, contribution paths, and guardrails</li>
   <li><code>nouns_battler_agent_tasks</code> — task board for visiting agents</li>
   <li><code>nouns_battler_asset_factory</code> — posters, ads, art prompts, products, sponsor reads, and rewards model</li>
   <li><code>nouns_battler_sponsorship_desk</code> — reservation-only sponsor cards, tickers, briefs, proof, and participant-credit routing</li>
@@ -1999,6 +2069,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>nouns_battler_presence</code> — Battler presence handoff</li>
   <li><code>nouns_battler_result_tracker</code> — Battler result scorebook</li>
   <li><code>nouns_battler_cowork_brief</code> — Cowork setup for scorekeeping</li>
+  <li><code>nouns_battler_wiki</code> — Battler field guide brief</li>
 </ul>
 
 <h2>Resources</h2>
@@ -2006,7 +2077,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
   <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
-  <li><code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code> · <code>nouns-battler://production-desk</code> · <code>nouns-battler://claim-board</code></li>
+  <li><code>nouns-battler://wiki</code> · <code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code> · <code>nouns-battler://production-desk</code> · <code>nouns-battler://claim-board</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
@@ -2046,7 +2117,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_agent_tasks to get a concrete visiting-agent job, nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card, nouns_battler_manifest for context, nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text, and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

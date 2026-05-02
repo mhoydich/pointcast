@@ -4,8 +4,10 @@
  */
 const title = 'Nouns Nation Battler Mobile Cast';
 const description =
-  'A phone-first Nouns Nation Battler match viewer with a compact score strip, full-height field, quick match controls, move feed, and Noun-heavy mobile share card.';
+  'Pocket Cast for Nouns Nation Battler: phone-first match viewing, query-aware Kingdom links, compact controls, move feed, and Noun-heavy mobile share copy.';
 const image = 'https://pointcast.xyz/images/og/nouns-battler-mobile.png';
+const defaultInvite =
+  'Watch Nouns Nation Battler Pocket Cast: one-handed Nouns matches, quick score strip, and a field that fits a phone. https://pointcast.xyz/nouns-nation-battler-mobile/';
 ---
 
 <!doctype html>
@@ -72,16 +74,351 @@ const image = 'https://pointcast.xyz/images/og/nouns-battler-mobile.png';
       .fallback a {
         color: #d7ff3f;
       }
+
+      .pocket-drawer {
+        position: fixed;
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        z-index: 3;
+        width: min(290px, calc(100vw - 20px));
+        color: #fffdf5;
+        font: 800 12px ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .pocket-drawer summary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        float: right;
+        min-height: 42px;
+        padding: 0 14px;
+        border: 2px solid #fffdf5;
+        border-radius: 999px;
+        background: #15100c;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+        cursor: pointer;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .pocket-drawer[open] summary {
+        float: none;
+        width: 100%;
+        border-radius: 14px 14px 0 0;
+      }
+
+      .pocket-panel {
+        clear: both;
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 2px solid #fffdf5;
+        border-top: 0;
+        border-radius: 0 0 14px 14px;
+        background: #15100c;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+      }
+
+      .pocket-panel strong {
+        font-size: 14px;
+      }
+
+      .pocket-status {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .pocket-team,
+      .pocket-meta,
+      .pocket-call {
+        border: 1px solid rgba(255, 253, 245, 0.24);
+        border-radius: 10px;
+        background: rgba(255, 253, 245, 0.08);
+      }
+
+      .pocket-team {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        padding: 8px;
+      }
+
+      .pocket-team span,
+      .pocket-meta span,
+      .pocket-call span {
+        color: #a9a49a;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .pocket-team b {
+        overflow: hidden;
+        color: #fffdf5;
+        font-size: 18px;
+        line-height: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pocket-team em {
+        color: #d7ff3f;
+        font-style: normal;
+      }
+
+      .pocket-meta,
+      .pocket-call {
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+      }
+
+      .pocket-meta {
+        grid-template-columns: 1fr;
+      }
+
+      .pocket-meta strong,
+      .pocket-call strong {
+        overflow-wrap: anywhere;
+        line-height: 1.2;
+      }
+
+      .pocket-call strong {
+        color: #d7ff3f;
+      }
+
+      .pocket-panel p {
+        margin: 0;
+        color: #d9d4c8;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .pocket-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .pocket-actions a,
+      .pocket-actions button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        border: 2px solid #fffdf5;
+        border-radius: 10px;
+        background: #fffdf5;
+        color: #15100c;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .pocket-actions button.copied {
+        background: #d7ff3f;
+      }
     </style>
   </head>
   <body>
     <iframe
+      id="mobileFrame"
       src="/games/nouns-nation-battler/#mode=mobile"
       title="Nouns Nation Battler mobile match viewer"
       loading="eager"
     ></iframe>
+    <details class="pocket-drawer">
+      <summary>Pocket Cast</summary>
+      <div class="pocket-panel">
+        <strong id="pocketTitle">Phone-first Nouns match</strong>
+        <p id="pocketCopy">One-handed watch mode with compact controls, score strip, and the live Nouns field.</p>
+        <div class="pocket-status" aria-label="Live Pocket Cast status">
+          <div class="pocket-team" style="--team: #d7ff3f">
+            <span id="pocketLeftName">Left gang</span>
+            <b id="pocketLeftShort">--</b>
+            <em><span id="pocketLeftAlive">--</span> alive</em>
+          </div>
+          <div class="pocket-team" style="--team: #72c6ff">
+            <span id="pocketRightName">Right gang</span>
+            <b id="pocketRightShort">--</b>
+            <em><span id="pocketRightAlive">--</span> alive</em>
+          </div>
+        </div>
+        <div class="pocket-meta" aria-label="Pocket Cast match details">
+          <span>Now</span>
+          <strong id="pocketLeague">Waiting for match feed</strong>
+          <strong id="pocketField">Field loading</strong>
+          <strong id="pocketChallenge">Challenge loading</strong>
+        </div>
+        <div class="pocket-call" aria-label="Latest Pocket Cast call">
+          <span>Latest Call</span>
+          <strong id="pocketCall">The first live call will appear after the field sends a snapshot.</strong>
+        </div>
+        <div class="pocket-actions">
+          <a id="pocketLive" href="/nouns-nation-battler-mobile/">Live</a>
+          <a id="pocketKingdom" href="/nouns-nation-battler-mobile/?type=kingdom">Kingdom</a>
+          <a href="/nouns-nation-battler-tv/">TV</a>
+          <button type="button" id="pocketCopyButton" data-copy-text={defaultInvite}>Copy Live Invite</button>
+          <button type="button" id="pocketKingdomCopyButton">Copy Kingdom Invite</button>
+        </div>
+      </div>
+    </details>
     <noscript class="fallback">
       JavaScript is required. <a href="/games/nouns-nation-battler/#mode=mobile">Open mobile cast</a>.
     </noscript>
+    <script>
+      (() => {
+        const frame = document.getElementById('mobileFrame');
+        const copyButton = document.getElementById('pocketCopyButton');
+        const kingdomCopyButton = document.getElementById('pocketKingdomCopyButton');
+        const title = document.getElementById('pocketTitle');
+        const copy = document.getElementById('pocketCopy');
+        const liveLink = document.getElementById('pocketLive');
+        const kingdomLink = document.getElementById('pocketKingdom');
+        const leftName = document.getElementById('pocketLeftName');
+        const leftShort = document.getElementById('pocketLeftShort');
+        const leftAlive = document.getElementById('pocketLeftAlive');
+        const rightName = document.getElementById('pocketRightName');
+        const rightShort = document.getElementById('pocketRightShort');
+        const rightAlive = document.getElementById('pocketRightAlive');
+        const league = document.getElementById('pocketLeague');
+        const field = document.getElementById('pocketField');
+        const challengeEl = document.getElementById('pocketChallenge');
+        const call = document.getElementById('pocketCall');
+        const DESK_SOURCE = 'pointcast:battle-desk';
+        const GAME_SOURCE = 'pointcast:nouns-nation-battler';
+        const url = new URL(window.location.href);
+        const query = new URLSearchParams(url.search);
+        const hash = new URLSearchParams(url.hash.replace(/^#\/?/, ''));
+        const routeValue = (name) => query.get(name) || hash.get(name) || '';
+        const type = routeValue('type');
+        const challengeParam = routeValue('challenge');
+        const gameHash = new URLSearchParams({ mode: 'mobile' });
+        if (type) gameHash.set('type', type);
+        if (challengeParam) gameHash.set('challenge', challengeParam);
+        frame.src = `/games/nouns-nation-battler/#${gameHash.toString()}`;
+
+        const shareUrl = new URL('/nouns-nation-battler-mobile/', window.location.origin);
+        if (type) shareUrl.searchParams.set('type', type);
+        if (challengeParam) shareUrl.searchParams.set('challenge', challengeParam);
+        liveLink.href = shareUrl.pathname + shareUrl.search;
+        kingdomLink.href = '/nouns-nation-battler-mobile/?type=kingdom';
+        const kingdomShareUrl = new URL('/nouns-nation-battler-mobile/', window.location.origin);
+        kingdomShareUrl.searchParams.set('type', 'kingdom');
+
+        const isKingdom = type === 'kingdom';
+        const headline = isKingdom ? 'Nouns Kingdom Pocket Cast' : 'Phone-first Nouns match';
+        const body = isKingdom
+          ? '25 vs 25 Nouns siege viewing with proposal waves, auction towers, meme lanes, and Noun Gate pressure.'
+          : 'One-handed watch mode with compact controls, score strip, and the live Nouns field.';
+        const invite = isKingdom
+          ? `Watch Nouns Kingdom Pocket Cast: 25 vs 25 Nouns siege, proposal waves, auction towers, and Noun Gate pressure. ${shareUrl.href}`
+          : `Watch Nouns Nation Battler Pocket Cast: one-handed Nouns matches, quick score strip, and a field that fits a phone. ${shareUrl.href}`;
+        title.textContent = headline;
+        copy.textContent = body;
+        copyButton.dataset.copyText = invite;
+        kingdomCopyButton.dataset.copyText =
+          `Watch Nouns Kingdom Pocket Cast: 25 vs 25 Nouns siege, proposal waves, auction towers, and Noun Gate pressure. ${kingdomShareUrl.href}`;
+
+        function fieldLabel(payload) {
+          if (payload?.field?.boss) return payload.field.boss;
+          return payload?.field?.name || 'Open Field';
+        }
+
+        function challengeLabel(payload) {
+          if (!payload?.challenge) return 'Challenge loading';
+          return `${payload.challenge.name}: ${payload.challenge.line || payload.challenge.rule || 'live objective'}`;
+        }
+
+        function liveInvite(payload) {
+          if (!payload) return invite;
+          const matchup = payload?.league?.matchup || headline;
+          const leagueLine = payload?.league?.line || 'Nouns Nation live slate';
+          return [
+            `Watch ${matchup} on Pocket Cast.`,
+            `${fieldLabel(payload)}.`,
+            challengeLabel(payload),
+            leagueLine,
+            shareUrl.href,
+          ].filter(Boolean).join(' ');
+        }
+
+        function renderSnapshot(payload) {
+          if (!payload) return;
+          const leftGang = payload.gangs?.[0] || {};
+          const rightGang = payload.gangs?.[1] || {};
+          const latestCall = Array.isArray(payload.logs) && payload.logs.length
+            ? payload.logs[0]
+            : payload.review?.pulse || 'Live field is warming up.';
+          title.textContent = payload.league?.matchup || headline;
+          copy.textContent = payload.league?.line || body;
+          leftName.textContent = leftGang.name || 'Left gang';
+          leftShort.textContent = leftGang.short || 'L';
+          leftAlive.textContent = String(payload.alive?.left ?? '--');
+          rightName.textContent = rightGang.name || 'Right gang';
+          rightShort.textContent = rightGang.short || 'R';
+          rightAlive.textContent = String(payload.alive?.right ?? '--');
+          league.textContent = payload.league?.line || 'League loading';
+          field.textContent = fieldLabel(payload);
+          challengeEl.textContent = challengeLabel(payload);
+          call.textContent = latestCall;
+          copyButton.dataset.copyText = liveInvite(payload);
+        }
+
+        function requestSnapshot() {
+          if (!frame.contentWindow) return;
+          frame.contentWindow.postMessage({
+            source: DESK_SOURCE,
+            type: 'command',
+            command: 'snapshot',
+          }, window.location.origin);
+        }
+
+        async function copyText(button, fallback) {
+          const value = button.dataset.copyText || fallback;
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch {
+            const scratch = document.createElement('textarea');
+            scratch.value = value;
+            scratch.style.position = 'fixed';
+            scratch.style.opacity = '0';
+            document.body.appendChild(scratch);
+            scratch.select();
+            document.execCommand('copy');
+            scratch.remove();
+          }
+          const previous = button.textContent;
+          button.textContent = 'Copied';
+          button.classList.add('copied');
+          window.setTimeout(() => {
+            button.textContent = previous;
+            button.classList.remove('copied');
+          }, 1200);
+        }
+
+        copyButton.addEventListener('click', () => {
+          copyText(copyButton, shareUrl.href);
+        });
+
+        kingdomCopyButton.addEventListener('click', () => {
+          copyText(kingdomCopyButton, kingdomShareUrl.href);
+        });
+
+        window.addEventListener('message', (event) => {
+          if (event.origin !== window.location.origin) return;
+          const message = event.data || {};
+          if (message.source !== GAME_SOURCE || message.type !== 'snapshot') return;
+          renderSnapshot(message.payload);
+        });
+
+        frame.addEventListener('load', () => {
+          window.setTimeout(requestSnapshot, 350);
+        });
+
+        window.setInterval(requestSnapshot, 2500);
+      })();
+    </script>
   </body>
 </html>

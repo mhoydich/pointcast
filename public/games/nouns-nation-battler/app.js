@@ -208,6 +208,14 @@ const battleTypes = [
     weather: ["fog", "clear"],
     log: "Fog Bowl rules: ranged shots lose bite while close-range ambushes become louder.",
   },
+  {
+    id: "kingdom",
+    name: "Nouns Kingdom",
+    fieldClass: "kingdom-field",
+    weather: ["royal", "dust"],
+    unitCount: 25,
+    log: "Nouns Kingdom v2 rules: 25 vs 25 Nouns, noggle keeps, auction towers, prop lanes, meme waves, and Noun Gate pressure decide the match.",
+  },
 ];
 
 const bossFieldDeck = [
@@ -870,7 +878,7 @@ function currentBattleType() {
   if (forcedBoss) return battleTypes.find((type) => type.id === forcedBoss.base) || battleTypes[0];
   const league = state.league;
   if (league.phase === "playoffs") return league.playoffSlot === 2 ? battleTypes[2] : battleTypes[1];
-  const rotation = ["open", "lava", "rift", "cloud", "trash", "crown", "fog", "rift", "lava", "cloud"];
+  const rotation = ["open", "lava", "rift", "cloud", "trash", "kingdom", "crown", "fog", "rift", "lava", "cloud"];
   const id = rotation[(league.day * DAILY_SLOTS + league.slot) % rotation.length];
   return battleTypes.find((type) => type.id === id) || battleTypes[0];
 }
@@ -1027,12 +1035,40 @@ function fieldBounds() {
   };
 }
 
+function matchUnitCount(type = state.battleType) {
+  return type?.unitCount || 30;
+}
+
+function kingdomLaneY(unit, bounds) {
+  const lanes = [0.31, 0.5, 0.69];
+  return bounds.height * lanes[unit.kingdomLane ?? unit.index % lanes.length];
+}
+
+function kingdomGate(team, bounds) {
+  return {
+    x: bounds.width * (team === 0 ? 0.14 : 0.86),
+    y: bounds.height * 0.5,
+    width: bounds.width * 0.12,
+    height: bounds.height * 0.54,
+  };
+}
+
+function kingdomLaneName(unit) {
+  return ["Prop", "Auction", "Meme"][unit.kingdomLane ?? unit.index % 3] || "Noun";
+}
+
 function createUnit(team, index, bounds) {
   const role = roles[index % roles.length];
-  const row = index % 10;
-  const rank = Math.floor(index / 10);
-  const xBase = team === 0 ? 0.18 + rank * 0.075 : 0.82 - rank * 0.075;
-  const yBase = 0.22 + row * 0.062;
+  const isKingdom = state.battleType?.id === "kingdom";
+  const row = isKingdom ? index % 5 : index % 10;
+  const rank = isKingdom ? Math.floor(index / 5) : Math.floor(index / 10);
+  const kingdomLane = index % 3;
+  const xBase = isKingdom
+    ? team === 0 ? 0.16 + rank * 0.034 : 0.84 - rank * 0.034
+    : team === 0 ? 0.18 + rank * 0.075 : 0.82 - rank * 0.075;
+  const yBase = isKingdom
+    ? [0.31, 0.5, 0.69][kingdomLane] + ((Math.floor(index / 3) % 3) - 1) * 0.025
+    : 0.22 + row * 0.062;
   const maxHp = Math.round(role.hp + rand(-10, 16));
   return {
     id: `${team}-${index}`,
@@ -1055,6 +1091,7 @@ function createUnit(team, index, bounds) {
     amplified: 0,
     special: rand(70, 160),
     element: null,
+    kingdomLane,
     minted: false,
     targetId: null,
     stats: { hits: 0, damage: 0, heals: 0, kos: 0, deaths: 0, specials: 0, amps: 0 },
@@ -1151,8 +1188,9 @@ function resetMatch() {
   renderAmplifierZones(bounds);
   renderCrownZone(bounds);
   renderTerrainZones(bounds);
+  const count = matchUnitCount();
   for (let team = 0; team < 2; team += 1) {
-    for (let index = 0; index < 30; index += 1) {
+    for (let index = 0; index < count; index += 1) {
       const unit = createUnit(team, index, bounds);
       unit.element = state.battleType.id === "rift" ? elementForUnit(unit) : null;
       createNode(unit);
@@ -1160,13 +1198,13 @@ function resetMatch() {
     }
   }
 
-  addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, 30 strong on each side.`);
+  addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, ${count} strong on each side.`);
   addLog(state.battleType.log);
   if (state.bossField) addLog(`Boss field: ${state.bossField.rule}`);
   addLog(`Season challenge: ${state.challenge.name}. ${state.challenge.rule}`);
   addLog(`Rivalry desk: ${rivalryWatchLine(currentRivalry())}`);
-  recordMove(state.league.phase === "playoffs" ? "BOWL" : "V30", `${fieldName()} + ${state.challenge.name}`);
-  showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : "30 vs 30. League match is live.");
+  recordMove(state.league.phase === "playoffs" ? "BOWL" : `V${count}`, `${fieldName()} + ${state.challenge.name}`);
+  showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : `${count} vs ${count}. League match is live.`);
   render();
   state.match += 1;
   broadcastSnapshot(true);
@@ -1383,9 +1421,10 @@ function resultScore(winnerSide, leftAlive, rightAlive, scoreOverride = null) {
     };
   }
   const winnerAlive = winnerSide === 0 ? leftAlive : rightAlive;
+  const count = matchUnitCount();
   return {
     winnerScore: Math.max(1, Math.round(winnerAlive || 0)),
-    loserScore: Math.max(0, Math.round(30 - (winnerAlive || 0))),
+    loserScore: Math.max(0, Math.round(count - (winnerAlive || 0))),
   };
 }
 
@@ -1736,6 +1775,16 @@ function terrainZones(bounds) {
     }
     return zones;
   }
+  if (state.battleType.id === "kingdom") {
+    return [
+      { id: "kingdom-top", label: "Prop Lane", x: bounds.width * 0.5, y: bounds.height * 0.31, width: bounds.width * 0.62, height: minSide * 0.12, shape: "lane" },
+      { id: "kingdom-mid", label: "Auction Lane", x: bounds.width * 0.5, y: bounds.height * 0.5, width: bounds.width * 0.68, height: minSide * 0.13, shape: "lane" },
+      { id: "kingdom-bot", label: "Meme Lane", x: bounds.width * 0.5, y: bounds.height * 0.69, width: bounds.width * 0.62, height: minSide * 0.12, shape: "lane" },
+      { id: "kingdom-left-tower", label: gangs[0].short, x: bounds.width * 0.24, y: bounds.height * 0.5, width: minSide * 0.13, height: minSide * 0.38, shape: "tower" },
+      { id: "kingdom-right-tower", label: gangs[1].short, x: bounds.width * 0.76, y: bounds.height * 0.5, width: minSide * 0.13, height: minSide * 0.38, shape: "tower" },
+      { id: "kingdom-siege", label: "Noun Gate", x: bounds.width * 0.5, y: bounds.height * 0.5, width: minSide * 0.2, height: minSide * 0.18, shape: "keep" },
+    ];
+  }
   return [];
 }
 
@@ -1802,6 +1851,22 @@ function applyTerrainRules(unit, dt, bounds) {
 
   if (state.battleType.id === "fog" && unit.role.name !== "slinger") {
     unit.guard = Math.max(unit.guard, 6);
+    return;
+  }
+
+  if (state.battleType.id === "kingdom") {
+    const laneY = kingdomLaneY(unit, bounds);
+    unit.vy += clamp((laneY - unit.y) / Math.max(1, bounds.height), -0.04, 0.04) * dt;
+    const advanceLine = unit.team === 0 ? unit.x / bounds.width : 1 - unit.x / bounds.width;
+    if (advanceLine > 0.42) unit.special = Math.max(0, unit.special - 0.18 * dt);
+    if (advanceLine > 0.58) unit.morale = Math.min(1.52, unit.morale + 0.0012 * dt);
+    const homeGate = kingdomGate(unit.team, bounds);
+    if (
+      Math.abs(unit.x - homeGate.x) < homeGate.width * 0.7 &&
+      Math.abs(unit.y - homeGate.y) < homeGate.height * 0.52
+    ) {
+      unit.guard = Math.max(unit.guard, 14);
+    }
   }
 }
 
@@ -1884,8 +1949,63 @@ function challengePulse() {
 }
 
 function terrainPulse(bounds) {
-  if (!["lava", "cloud", "trash", "fog"].includes(state.battleType.id)) return;
+  if (!["lava", "cloud", "trash", "fog", "kingdom"].includes(state.battleType.id)) return;
   const zones = terrainZones(bounds);
+  if (state.battleType.id === "kingdom") {
+    const fronts = [0, 1].map((team) => {
+      return aliveUnits(team).filter((unit) => {
+        const push = team === 0 ? unit.x / bounds.width : 1 - unit.x / bounds.width;
+        return push > 0.56;
+      });
+    });
+    const team = fronts[0].length >= fronts[1].length ? 0 : 1;
+    const gate = kingdomGate(1 - team, bounds);
+    const attackers = fronts[team].slice(0, 8);
+    const defenders = aliveUnits(1 - team)
+      .filter((unit) => Math.abs(unit.x - gate.x) < gate.width * 1.8)
+      .slice(0, 5);
+    const beat = Math.floor(state.tick / 140) % 3;
+    attackers.forEach((unit) => {
+      unit.haste = Math.max(unit.haste, 46);
+      unit.guard = Math.max(unit.guard, 42);
+      unit.special = Math.max(0, unit.special - 26);
+    });
+    defenders.forEach((unit, index) => {
+      const damage = beat === 1 ? 5 : beat === 2 && index < 2 ? 6 : 3;
+      dealDamage(terrainAttacker(unit), unit, damage);
+      spark(unit.x, unit.y);
+      if (unit.hp <= 0) downUnit(unit, nearestEnemy(unit) || terrainAttacker(unit), 24);
+    });
+    if (beat === 0) {
+      attackers.slice(0, 5).forEach((unit) => {
+        unit.guard = Math.max(unit.guard, 84);
+        unit.morale = Math.min(1.58, unit.morale + 0.08);
+        creditAmp(unit, "proposal lane");
+        pop(unit.x, unit.y - 30, "prop", gangs[team].accent);
+      });
+    } else if (beat === 1) {
+      const towerNouns = aliveUnits(team)
+        .filter((unit) => unit.role.name === "slinger" || unit.role.name === "captain")
+        .slice(0, 6);
+      towerNouns.forEach((unit) => {
+        unit.special = Math.max(0, unit.special - 44);
+        unit.haste = Math.max(unit.haste, 36);
+        pop(unit.x, unit.y - 30, "auction", gangs[team].accent);
+      });
+    } else {
+      attackers.slice(0, 7).forEach((unit) => {
+        unit.haste = Math.max(unit.haste, 88);
+        unit.cooldown = Math.max(0, unit.cooldown - 14);
+        pop(unit.x, unit.y - 30, "meme", gangs[team].accent);
+      });
+    }
+    scoreChallenge(team, 1, "field", "Noun gate pressure");
+    const beatLine = beat === 0 ? "proposal wave" : beat === 1 ? "auction tower volley" : "meme lane flood";
+    recordMove(gangs[team].short, attackers.length ? `${beatLine}: ${attackers.length} Nouns at the gate` : "Noggle tower reset");
+    pop(gate.x, gate.y - 48, attackers.length ? beatLine : "hold", gangs[team].accent);
+    flashField("kingdom-burst");
+    return;
+  }
   if (state.battleType.id === "lava") {
     const targets = aliveUnits().filter((unit) => zones.some((zone) => inTerrainZone(unit, zone))).slice(0, 6);
     targets.forEach((unit) => {
@@ -2034,6 +2154,14 @@ function stepUnit(unit, dt, bounds) {
       }
     }
   }
+  if (state.battleType.id === "kingdom") {
+    const laneY = kingdomLaneY(unit, bounds);
+    const lanePull = clamp((laneY - unit.y) / Math.max(1, bounds.height), -0.08, 0.08);
+    unit.vy += lanePull * dt;
+    const enemyGate = kingdomGate(1 - unit.team, bounds);
+    const dxGate = (enemyGate.x - unit.x) / Math.max(1, Math.abs(enemyGate.x - unit.x));
+    unit.vx += dxGate * unit.role.speed * 0.035 * dt;
+  }
 
   if (unit.role.name === "healer") {
     const friend = weakestFriend(unit);
@@ -2078,6 +2206,32 @@ function stepUnit(unit, dt, bounds) {
 }
 
 function maybeUseAdvancedMove(unit, target, d, bounds) {
+  if (state.battleType.id === "kingdom" && d < 150 && Math.random() > 0.64) {
+    const lane = kingdomLaneName(unit);
+    const allies = aliveUnits(unit.team)
+      .filter((ally) => ally.kingdomLane === unit.kingdomLane && distance(unit, ally) < 128)
+      .slice(0, 6);
+    allies.forEach((ally) => {
+      ally.guard = Math.max(ally.guard, lane === "Prop" ? 100 : 64);
+      ally.haste = Math.max(ally.haste, lane === "Meme" ? 92 : 42);
+      ally.special = Math.max(0, ally.special - (lane === "Auction" ? 32 : 16));
+    });
+    const enemies = nearbyUnits(target, 1 - unit.team, lane === "Auction" ? 72 : 52).slice(0, lane === "Auction" ? 4 : 2);
+    enemies.forEach((enemy) => {
+      dealDamage(unit, enemy, lane === "Auction" ? 7 : 4);
+      spark(enemy.x, enemy.y);
+      if (enemy.hp <= 0) downUnit(enemy, unit, distance(unit, enemy));
+    });
+    unit.cooldown = Math.max(20, unit.role.cadence - 18);
+    unit.special = rand(240, 370);
+    unit.stats.specials += 1;
+    creditAmp(unit, `${lane.toLowerCase()} lane call`);
+    recordMove(gangs[unit.team].short, `${unit.name} calls ${lane.toLowerCase()} lane fun`);
+    pop(unit.x, unit.y - 32, lane.toLowerCase(), gangs[unit.team].accent);
+    flashField("kingdom-burst", 650);
+    return true;
+  }
+
   const amp = matchedAmplifier(unit, bounds);
   if (amp && d < 170 && Math.random() > 0.72) {
     const enemies = nearbyUnits(target, 1 - unit.team, amp.boost === "special" ? 76 : 58).slice(0, 4);
@@ -2587,7 +2741,8 @@ function render() {
   }
   renderRivalryBadge();
   el.field.classList.toggle("challenge-won", Boolean(state.challengeProgress?.winner));
-  const momentum = left + right === 0 ? 0 : (right - left) / 30;
+  const count = matchUnitCount();
+  const momentum = left + right === 0 ? 0 : (right - left) / count;
   el.momentumBar.style.transform = `scaleX(${clamp(Math.abs(momentum), 0.04, 1)})`;
   el.momentumBar.style.marginLeft = momentum >= 0 ? "50%" : `${50 - Math.abs(momentum) * 50}%`;
 
@@ -2610,8 +2765,8 @@ function render() {
   const healLeader = statLeader("heals");
   const liveLeader = statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp);
   el.statStrip.innerHTML = `
-    <div class="stat"><span>Left standing</span><strong>${left}/30</strong></div>
-    <div class="stat"><span>Right standing</span><strong>${right}/30</strong></div>
+    <div class="stat"><span>Left standing</span><strong>${left}/${count}</strong></div>
+    <div class="stat"><span>Right standing</span><strong>${right}/${count}</strong></div>
     <div class="stat"><span>Damage leader</span><strong>${unitStatLine(damageLeader, "damage")}</strong></div>
     <div class="stat"><span>KO leader</span><strong>${unitStatLine(koLeader, "kos")}</strong></div>
     <div class="stat"><span>Heal leader</span><strong>${unitStatLine(healLeader, "heals")}</strong></div>
@@ -2754,7 +2909,7 @@ function interstitialDeck(left, right) {
       variant: "field",
       title: fieldName(),
       body: battleTypeOverview(),
-      meta: `${gangs[0].short} ${left}/30 standing · ${gangs[1].short} ${right}/30 standing · ${fieldStatLabel()}: ${fieldStatLine(statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp))}`,
+      meta: `${gangs[0].short} ${left}/${matchUnitCount()} standing · ${gangs[1].short} ${right}/${matchUnitCount()} standing · ${fieldStatLabel()}: ${fieldStatLine(statLeader("hp", (unit) => unit.down ? -1 : unit.morale * unit.hp))}`,
     },
   ];
 }
@@ -2997,6 +3152,7 @@ function battleTvLine() {
   if (state.battleType.id === "cloud") return "cloud court";
   if (state.battleType.id === "trash") return "trash planet";
   if (state.battleType.id === "fog") return "fog bowl";
+  if (state.battleType.id === "kingdom") return "nouns kingdom";
   return state.weather === "dust" ? "dust field" : "open field";
 }
 
@@ -3121,6 +3277,7 @@ function fieldStatLabel() {
   if (state.battleType.id === "cloud") return "Cloud lift";
   if (state.battleType.id === "trash") return "Scrap tech";
   if (state.battleType.id === "fog") return "Fog cover";
+  if (state.battleType.id === "kingdom") return "Gate push";
   return "Hot noun";
 }
 
@@ -3141,6 +3298,12 @@ function fieldStatLine(liveLeader) {
   if (state.battleType.id === "cloud") return `${aliveUnits().filter((unit) => unit.haste > 0).length} lifted`;
   if (state.battleType.id === "trash") return `${aliveUnits().filter((unit) => unit.guard > 0).length} guarded`;
   if (state.battleType.id === "fog") return `${aliveUnits().filter((unit) => unit.guard > 0).length} concealed`;
+  if (state.battleType.id === "kingdom") {
+    const bounds = fieldBounds();
+    const fronts = [0, 1].map((team) => aliveUnits(team).filter((unit) => (team === 0 ? unit.x / bounds.width : 1 - unit.x / bounds.width) > 0.56).length);
+    const lane = ["prop", "auction", "meme"][Math.floor(state.tick / 140) % 3];
+    return `${gangs[fronts[0] >= fronts[1] ? 0 : 1].short} ${Math.max(...fronts)} at gate · ${lane}`;
+  }
   return unitStatLine(liveLeader, "live");
 }
 
@@ -3223,7 +3386,7 @@ function renderRooting(left, right) {
       const rivalryWins = rivalry?.wins?.[gang.name] || 0;
       const rivalryLosses = Math.max(0, (rivalry?.meetings || 0) - rivalryWins);
       const alive = index === 0 ? left : right;
-      const power = Math.round((alive / 30) * 60 + record.wins * 8 + rivalryWins * 10 + record.takedowns * 0.4);
+      const power = Math.round((alive / matchUnitCount()) * 60 + record.wins * 8 + rivalryWins * 10 + record.takedowns * 0.4);
       return `
         <div class="root-card" style="border-color:${gang.color}">
           <b>${gang.name}</b>

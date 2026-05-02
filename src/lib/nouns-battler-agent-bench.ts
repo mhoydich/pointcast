@@ -1,4 +1,4 @@
-export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '1.10.0';
+export const NOUNS_BATTLER_AGENT_BENCH_VERSION = '2.0.0';
 
 export const NOUNS_BATTLER_AGENT_TASKS = [
   {
@@ -2141,6 +2141,128 @@ export const NOUNS_BATTLER_WIKI = {
   ],
 } as const;
 
+export const NOUNS_BATTLER_WATCH_NEXT = [
+  {
+    id: 'live-desk',
+    label: 'Start Watching',
+    title: 'Live Battle Desk',
+    href: 'https://pointcast.xyz/nouns-nation-battler/',
+    noun: 12,
+    useFor: 'The default sports desk: scorebug, field feed, calls, table, top Nouns, and controls.',
+    agentPrompt: 'Use this when a viewer asks what is happening right now.',
+  },
+  {
+    id: 'mobile-cast',
+    label: 'Phone First',
+    title: 'Mobile Cast',
+    href: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+    noun: 34,
+    useFor: 'One-handed match viewing, fast sharing, lunch-line review, and quick sanity checks.',
+    agentPrompt: 'Use this when a viewer is on a phone or needs the least-friction watch route.',
+  },
+  {
+    id: 'tv-cast',
+    label: 'Big Screen',
+    title: 'TV Cast',
+    href: 'https://pointcast.xyz/nouns-nation-battler-tv/',
+    noun: 58,
+    useFor: 'Fullscreen broadcast mode for watch parties, office TVs, and hands-off viewing.',
+    agentPrompt: 'Use this when someone wants to cast, host, or keep the match on in the background.',
+  },
+  {
+    id: 'kingdom-rush',
+    label: 'New Mode',
+    title: 'Nouns Kingdom',
+    href: 'https://pointcast.xyz/games/nouns-nation-battler/#mode=tv&type=kingdom',
+    noun: 44,
+    useFor: 'A visual 25 vs 25 Nouns siege variant with noggle keeps, proposal waves, auction tower volleys, meme lane floods, and Noun Gate reads.',
+    agentPrompt: 'Use this when a viewer wants the most visually different Nouns-native match format.',
+  },
+  {
+    id: 'wiki-brief',
+    label: 'Need Context',
+    title: 'Battler Wiki',
+    href: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
+    noun: 7,
+    useFor: 'Rules, glossary, gangs, watch modes, season arc, contribution paths, and guardrails.',
+    agentPrompt: 'Use this before explaining the sport or routing a new participant.',
+  },
+  {
+    id: 'desk-wall',
+    label: 'Receipts',
+    title: 'Desk Wall',
+    href: 'https://pointcast.xyz/nouns-nation-battler-desk/',
+    noun: 3,
+    useFor: 'Scoreboards, report cards, story frames, snapshots, and shareable recaps.',
+    agentPrompt: 'Use this when a viewer wants memory, proof, or a result card.',
+  },
+  {
+    id: 'claim-board',
+    label: 'Do A Task',
+    title: 'Claim Board',
+    href: 'https://pointcast.xyz/nouns-nation-battler-tasks/',
+    noun: 52,
+    useFor: 'Sponsor, bounty, poster, QA, watch-party, production, and Nouns Bowl work cards.',
+    agentPrompt: 'Use this when an agent or human wants one concrete contribution with proof requirements.',
+  },
+] as const;
+
+export const NOUNS_BATTLER_MOBILE_SHARE_KIT = {
+  version: '1.0.0',
+  route: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+  image: 'https://pointcast.xyz/images/og/nouns-battler-mobile.png',
+  stance:
+    'Pocket Cast is the phone-first viewing lane: one-handed match watching, compact score strip, quick invite copy, and query-aware handoffs into visual battle types.',
+  liveSnapshotOverlay: {
+    source: 'pointcast:nouns-nation-battler',
+    deskSource: 'pointcast:battle-desk',
+    cadenceMs: 2500,
+    fields: ['matchup', 'league line', 'gang short names', 'alive counts', 'field', 'challenge', 'latest call'],
+    copyActions: ['Copy Live Invite', 'Copy Kingdom Invite'],
+    note:
+      'Pocket Cast can report current match context from same-origin postMessage snapshots, but public OG/unfurl copy stays evergreen and avoids live-score claims.',
+  },
+  routes: [
+    {
+      id: 'pocket-live',
+      label: 'Pocket Live',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/',
+      noun: 34,
+      copy:
+        'Watch Nouns Nation Battler Pocket Cast: one-handed Nouns matches, quick score strip, and a field that fits a phone.',
+      useFor: 'Fastest phone link for a new viewer.',
+    },
+    {
+      id: 'pocket-kingdom',
+      label: 'Kingdom Pocket',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/?type=kingdom',
+      noun: 44,
+      copy:
+        'Watch Nouns Kingdom Pocket Cast: 25 vs 25 Nouns siege, proposal waves, auction towers, and Noun Gate pressure.',
+      useFor: 'Best phone link when the viewer should see the new visual mode first.',
+    },
+    {
+      id: 'pocket-review',
+      label: 'Savvy Review',
+      href: 'https://pointcast.xyz/nouns-nation-battler-mobile/?type=kingdom&challenge=ko-race',
+      noun: 7,
+      copy:
+        'Review Nouns Kingdom on mobile: rate watchability, legibility, shareability, then pick the next battle type.',
+      useFor: 'Send this to a smart friend or visiting agent who has five minutes.',
+    },
+  ],
+  unfurlNotes: [
+    'Use the dedicated mobile OG image instead of the live desk card.',
+    'Keep the title short enough for message previews: Nouns Battler Pocket Cast.',
+    'Use query params for battle-type routing so shared links can open directly into Kingdom or future visual modes.',
+  ],
+  guardrails: [
+    'Do not claim a live score in the unfurl copy.',
+    'Use public Noun numbers, visible battle types, and public routes only.',
+    'Keep review asks lightweight: one match beat, three ratings, one feature idea.',
+  ],
+} as const;
+
 export const NOUNS_BATTLER_AGENT_BENCH = {
   $schema: 'https://pointcast.xyz/nouns-nation-battler-agents.json',
   version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
@@ -2178,6 +2300,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
     endpoint: 'https://pointcast.xyz/api/mcp-v2',
     alias: 'https://pointcast.xyz/api/mcp',
     tools: [
+      'nouns_battler_wiki',
       'nouns_battler_manifest',
       'nouns_battler_agent_tasks',
       'nouns_battler_asset_factory',
@@ -2189,6 +2312,7 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
       'nouns_battler_cowork_brief',
     ],
     resources: [
+      'nouns-battler://wiki',
       'nouns-battler://agent-bench',
       'nouns-battler://manifest',
       'nouns-battler://results-kit',
@@ -2225,6 +2349,8 @@ export const NOUNS_BATTLER_AGENT_BENCH = {
   ],
   resultTracking: NOUNS_BATTLER_RESULT_TRACKING,
   watchFrames: NOUNS_BATTLER_WATCH_FRAMES,
+  watchNext: NOUNS_BATTLER_WATCH_NEXT,
+  mobileShareKit: NOUNS_BATTLER_MOBILE_SHARE_KIT,
   sidelineDesk: {
     route: 'https://pointcast.xyz/nouns-nation-battler-agents/desk/',
     purpose:
@@ -2372,6 +2498,96 @@ export function buildNounsBattlerAssetBrief({
       `ASSET DROP: ${selected.label} for ${selectedGang}; tone ${selectedTone}; headline "${selectedGang.toUpperCase()} OWN THE NEXT SLATE"; ${cta}`,
     rewardsNote:
       'If accepted, credit the agent/human contributor in the participant pool score before any payout or bounty allocation.',
+  };
+}
+
+export function buildNounsBattlerWikiBrief({
+  topic = 'overview',
+  audience = 'viewer',
+}: {
+  topic?: string;
+  audience?: string;
+} = {}) {
+  const selectedTopic = topic.trim().toLowerCase() || 'overview';
+  const selectedAudience = audience.trim().toLowerCase() || 'viewer';
+  const wiki = NOUNS_BATTLER_WIKI;
+
+  const topicMap: Record<string, unknown> = {
+    overview: {
+      quickStart: wiki.quickStart,
+      watchNext: NOUNS_BATTLER_WATCH_NEXT,
+      seasonArc: wiki.seasonArc,
+      watchModes: wiki.watchModes,
+    },
+    watch: {
+      quickStart: wiki.quickStart,
+      watchNext: NOUNS_BATTLER_WATCH_NEXT,
+      watchModes: wiki.watchModes,
+      featuredNouns: wiki.featuredNouns,
+    },
+    glossary: {
+      glossary: wiki.glossary,
+      guardrails: wiki.guardrails,
+    },
+    gangs: {
+      teams: wiki.teams,
+      featuredNouns: wiki.featuredNouns,
+    },
+    season: {
+      seasonArc: wiki.seasonArc,
+      watchModes: wiki.watchModes,
+    },
+    participate: {
+      contributionPaths: wiki.contributionPaths,
+      guardrails: wiki.guardrails,
+    },
+    sponsor: {
+      contributionPaths: wiki.contributionPaths.filter((path) => path.lane === 'Sponsor' || path.lane === 'Produce'),
+      guardrails: wiki.guardrails,
+    },
+    agents: {
+      contributionPaths: wiki.contributionPaths,
+      guardrails: wiki.guardrails,
+      mcpTools: NOUNS_BATTLER_AGENT_BENCH.mcp.tools,
+    },
+    guardrails: {
+      guardrails: wiki.guardrails,
+      contributionPaths: wiki.contributionPaths,
+    },
+  };
+
+  const selected = topicMap[selectedTopic] ?? topicMap.overview;
+  const primaryWatch = wiki.quickStart[0];
+  const agentHandoff = [
+    `Audience: ${selectedAudience}`,
+    `Topic: ${selectedTopic}`,
+    `Open the wiki: ${wiki.route}`,
+    `Start with: ${primaryWatch.label} (${primaryWatch.href})`,
+    'Use one visible Noun number, one public route, one concrete output, and one validation line.',
+    'Keep sponsor and participant-credit language reservation-only until human approval.',
+  ].join('\n');
+
+  return {
+    version: NOUNS_BATTLER_AGENT_BENCH_VERSION,
+    wiki: {
+      route: wiki.route,
+      json: wiki.json,
+      stance: wiki.stance,
+      sourceVersion: wiki.version,
+    },
+    topic: selectedTopic,
+    audience: selectedAudience,
+    selected,
+    quickStart: wiki.quickStart,
+    watchNext: NOUNS_BATTLER_WATCH_NEXT,
+    featuredNouns: wiki.featuredNouns,
+    guardrails: wiki.guardrails,
+    nextBestLinks: [
+      ...NOUNS_BATTLER_WATCH_NEXT.map((item) => item.href),
+      NOUNS_BATTLER_AGENT_BENCH.entryPoints.sponsorshipDesk,
+      NOUNS_BATTLER_AGENT_BENCH.entryPoints.json,
+    ],
+    agentHandoff,
   };
 }
 
