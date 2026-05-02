@@ -1,0 +1,433 @@
+---
+/**
+ * /spells — the spells catalog page.
+ *
+ * Mike 2026-05-02 sprint: a discovery surface for the magic words.
+ * Lists every spell from src/data/spells.ts grouped by kind (burst /
+ * companion / ambient), each with a "cast" button that dispatches
+ * pc:spell:cast — the same event the dock fires from the CAST tray
+ * (slot 06) and the omnibox `+` mode.
+ *
+ * Why a page (not just the dock tray):
+ *   - The tray is for in-context casting while you're reading
+ *     something else. /spells is for browsing the whole library.
+ *   - When the catalog grows past ~20 spells the tray gets crowded.
+ *     A real page scales.
+ *   - Becomes a cite-able URL — share /spells with someone, deep-link
+ *     /spells#confetti to a single spell, etc.
+ *
+ * SpellLayer is mounted via BlockLayout, so casting works in-place
+ * on this page exactly as it does on /home.
+ *
+ * (Note: the dock SLOT is named "Cast" but the URL is /spells because
+ * /cast is already taken by the PrizeCast lottery page.)
+ *
+ * Each card has:
+ *   - the spell glyph (large, framed in a noun-stamp style)
+ *   - id (mono, the +token you'd type in the omnibox)
+ *   - kind pill (burst / companion / ambient)
+ *   - blurb (the descriptive line from the catalog)
+ *   - a cast button that fires pc:spell:cast
+ *   - a copy button that copies the +id syntax to clipboard
+ *
+ * No data layer, no JS framework — pure Astro + a tiny inline script
+ * for the buttons.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SPELLS } from '../data/spells';
+
+const burstSpells     = SPELLS.filter((s) => s.kind === 'burst');
+const companionSpells = SPELLS.filter((s) => s.kind === 'companion');
+const ambientSpells   = SPELLS.filter((s) => s.kind === 'ambient');
+
+const totalCount = SPELLS.length;
+---
+
+<BlockLayout
+  title="Spells — magic words"
+  description="The PointCast spell catalog. Click cast or type +id in the dock omnibox."
+>
+  <main class="spells-page">
+    <header class="spells-page__head">
+      <p class="spells-page__kicker mono">06 · CAST · {totalCount} SPELLS COLLECTED</p>
+      <h1 class="spells-page__title">Magic words.</h1>
+      <p class="spells-page__lede">
+        Type <code>+confetti</code> in the dock above. Or click any cast button below.
+        Spells are page elements that appear, do a thing, and then go.
+        Some are bursts (one-shot), some are companions (a creature walks across),
+        some are ambient (they stay until you dismiss them).
+      </p>
+      <p class="spells-page__meta mono">
+        Adding a spell = one row in <code>src/data/spells.ts</code> + one renderer in
+        <code>SpellLayer.astro</code>. The hourly bot is appending to this catalog autonomously.
+      </p>
+      <div class="spells-page__actions">
+        <button type="button" class="spells-btn spells-btn--clear" id="spells-clear-all">
+          🌪 clear all
+        </button>
+        <button type="button" class="spells-btn spells-btn--all" id="spells-everything">
+          ✨ cast everything (be reasonable)
+        </button>
+      </div>
+    </header>
+
+    {burstSpells.length > 0 && (
+      <section class="spells-page__group">
+        <header class="spells-page__group-head">
+          <h2 class="spells-page__group-title">Bursts</h2>
+          <p class="spells-page__group-blurb">One-shot. They appear, do their thing, clean up after themselves.</p>
+        </header>
+        <ul class="spells-grid">
+          {burstSpells.map((s) => (
+            <li id={s.id} class="spells-card" style={`--spells-accent: ${s.accent}`}>
+              <div class="spells-card__glyph" aria-hidden="true">{s.glyph}</div>
+              <div class="spells-card__body">
+                <p class="spells-card__id mono">+{s.id}</p>
+                <p class="spells-card__blurb">{s.blurb}</p>
+                <p class="spells-card__meta mono">
+                  <span class="spells-kind" data-kind={s.kind}>{s.kind}</span>
+                  {s.durationMs && (
+                    <span class="spells-dur"> · {Math.round(s.durationMs / 1000)}s</span>
+                  )}
+                </p>
+              </div>
+              <div class="spells-card__actions">
+                <button type="button" class="spells-btn spells-btn--cast" data-cast={s.id}>cast</button>
+                <button type="button" class="spells-btn spells-btn--copy" data-copy={`+${s.id}`}>copy</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {companionSpells.length > 0 && (
+      <section class="spells-page__group">
+        <header class="spells-page__group-head">
+          <h2 class="spells-page__group-title">Companions</h2>
+          <p class="spells-page__group-blurb">Small creatures that walk through. Click them to send them home.</p>
+        </header>
+        <ul class="spells-grid">
+          {companionSpells.map((s) => (
+            <li id={s.id} class="spells-card" style={`--spells-accent: ${s.accent}`}>
+              <div class="spells-card__glyph" aria-hidden="true">{s.glyph}</div>
+              <div class="spells-card__body">
+                <p class="spells-card__id mono">+{s.id}</p>
+                <p class="spells-card__blurb">{s.blurb}</p>
+                <p class="spells-card__meta mono">
+                  <span class="spells-kind" data-kind={s.kind}>{s.kind}</span>
+                  {s.durationMs && (
+                    <span class="spells-dur"> · auto-dismiss {Math.round(s.durationMs / 1000)}s</span>
+                  )}
+                </p>
+              </div>
+              <div class="spells-card__actions">
+                <button type="button" class="spells-btn spells-btn--cast" data-cast={s.id}>cast</button>
+                <button type="button" class="spells-btn spells-btn--copy" data-copy={`+${s.id}`}>copy</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {ambientSpells.length > 0 && (
+      <section class="spells-page__group">
+        <header class="spells-page__group-head">
+          <h2 class="spells-page__group-title">Ambient</h2>
+          <p class="spells-page__group-blurb">Persistent. They stay until you dismiss them. Directionally pleasant.</p>
+        </header>
+        <ul class="spells-grid">
+          {ambientSpells.map((s) => (
+            <li id={s.id} class="spells-card" style={`--spells-accent: ${s.accent}`}>
+              <div class="spells-card__glyph" aria-hidden="true">{s.glyph}</div>
+              <div class="spells-card__body">
+                <p class="spells-card__id mono">+{s.id}</p>
+                <p class="spells-card__blurb">{s.blurb}</p>
+                <p class="spells-card__meta mono">
+                  <span class="spells-kind" data-kind={s.kind}>{s.kind}</span>
+                </p>
+              </div>
+              <div class="spells-card__actions">
+                <button type="button" class="spells-btn spells-btn--cast" data-cast={s.id}>cast</button>
+                <button type="button" class="spells-btn spells-btn--copy" data-copy={`+${s.id}`}>copy</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <footer class="spells-page__foot">
+      <p class="spells-page__foot-line mono">
+        catalog defined in <code>src/data/spells.ts</code> ·
+        renderers in <code>src/components/SpellLayer.astro</code> ·
+        dispatched via <code>pc:spell:cast</code> events ·
+        cleared via <code>pc:spell:clear</code>
+      </p>
+      <p class="spells-page__foot-line mono">
+        the dock has a CAST tile (slot 06) — same library, in-context cast while you read elsewhere
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var $clear = document.getElementById('spells-clear-all');
+    if ($clear) {
+      $clear.addEventListener('click', function () {
+        window.dispatchEvent(new CustomEvent('pc:spell:clear'));
+      });
+    }
+    var $all = document.getElementById('spells-everything');
+    if ($all) {
+      $all.addEventListener('click', function () {
+        // Cast each spell on a 250ms stagger so the page doesn't melt.
+        var btns = document.querySelectorAll('[data-cast]');
+        btns.forEach(function (btn, i) {
+          var id = btn.getAttribute('data-cast');
+          if (!id) return;
+          setTimeout(function () {
+            window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: id } }));
+          }, i * 250);
+        });
+      });
+    }
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!(t instanceof Element)) return;
+      var castBtn = t.closest('[data-cast]');
+      if (castBtn) {
+        var id = castBtn.getAttribute('data-cast');
+        if (id) {
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: id } }));
+          // Tiny visual ack on the button.
+          castBtn.setAttribute('data-flash', 'true');
+          setTimeout(function () { castBtn.removeAttribute('data-flash'); }, 600);
+        }
+        return;
+      }
+      var copyBtn = t.closest('[data-copy]');
+      if (copyBtn) {
+        var s = copyBtn.getAttribute('data-copy') || '';
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(s);
+          } else {
+            // Fallback — tiny textarea trick.
+            var ta = document.createElement('textarea');
+            ta.value = s; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (er) {}
+            document.body.removeChild(ta);
+          }
+          var prev = copyBtn.textContent;
+          copyBtn.textContent = '✓ copied';
+          setTimeout(function () { copyBtn.textContent = prev; }, 1400);
+        } catch (er) {}
+      }
+    });
+  })();
+</script>
+
+<style>
+  .spells-page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+    color: #2d1f08;
+  }
+  .spells-page__head { margin-bottom: 32px; }
+  .spells-page__kicker {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: #a78bfa;
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+  .spells-page__title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1.05;
+    margin: 0 0 14px;
+    color: #2d1f08;
+  }
+  .spells-page__lede {
+    font-family: Georgia, serif;
+    font-size: 17px;
+    line-height: 1.5;
+    color: #4e3a16;
+    margin: 0 0 12px;
+    max-width: 60ch;
+  }
+  .spells-page__lede code,
+  .spells-page__meta code,
+  .spells-page__foot-line code {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.92em;
+    background: rgba(167, 139, 250, 0.15);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: #5b3fa3;
+  }
+  .spells-page__meta {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: #6b5a3a;
+    line-height: 1.5;
+    margin: 0 0 18px;
+    max-width: 60ch;
+  }
+  .spells-page__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .spells-btn {
+    appearance: none;
+    padding: 8px 14px;
+    background: #2d1f08;
+    color: #fdf2d6;
+    border: 1px solid #2d1f08;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .spells-btn:hover { background: #4e3a16; transform: translateY(-1px); }
+  .spells-btn[data-flash='true'] {
+    background: var(--spells-accent, #a78bfa) !important;
+    color: #fff !important;
+  }
+  .spells-btn--cast { background: var(--spells-accent, #a78bfa); border-color: var(--spells-accent, #a78bfa); color: #fff; }
+  .spells-btn--cast:hover { background: #2d1f08; border-color: #2d1f08; }
+  .spells-btn--copy { background: transparent; color: #2d1f08; border-color: #c5b284; }
+  .spells-btn--copy:hover { background: #faf2dc; border-color: #2d1f08; }
+  .spells-btn--clear { background: #8a2432; border-color: #8a2432; }
+  .spells-btn--all { background: linear-gradient(120deg, #d4a437 0%, #a78bfa 50%, #4A9EFF 100%); border-color: #2d1f08; color: #fff; }
+
+  .spells-page__group { margin-top: 36px; }
+  .spells-page__group-head { margin-bottom: 14px; }
+  .spells-page__group-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 28px;
+    margin: 0 0 4px;
+    color: #2d1f08;
+  }
+  .spells-page__group-blurb {
+    font-size: 13px;
+    color: #6b5a3a;
+    margin: 0;
+    font-family: Georgia, serif;
+    font-style: italic;
+  }
+  .spells-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .spells-card {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    grid-template-rows: auto auto;
+    gap: 12px;
+    padding: 14px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-left: 4px solid var(--spells-accent, #a78bfa);
+    border-radius: 4px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+    scroll-margin-top: 80px;
+  }
+  .spells-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--spells-accent, #a78bfa);
+    box-shadow: 0 4px 12px rgba(45, 31, 8, 0.08);
+  }
+  .spells-card__glyph {
+    grid-column: 1;
+    grid-row: 1;
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(180deg, #fffdf6 0%, #f6e6b8 100%);
+    border: 1px solid #d4a437;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  }
+  .spells-card__body {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .spells-card__id {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--spells-accent, #a78bfa);
+    letter-spacing: 0.04em;
+  }
+  .spells-card__blurb {
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: #4e3a16;
+    margin: 0;
+    font-family: Georgia, serif;
+  }
+  .spells-card__meta {
+    font-size: 9.5px;
+    color: #8a7854;
+    letter-spacing: 0.1em;
+  }
+  .spells-kind {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 1px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .spells-kind[data-kind='burst']     { background: #f8e9c8; color: #c4952e; }
+  .spells-kind[data-kind='companion'] { background: #f5e0e5; color: #8a2432; }
+  .spells-kind[data-kind='ambient']   { background: #e2eef5; color: #4A9EFF; }
+  .spells-card__actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    gap: 6px;
+  }
+  .spells-card__actions .spells-btn {
+    flex: 1;
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+
+  .spells-page__foot {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px dashed #d4c6a4;
+    color: #6b5a3a;
+  }
+  .spells-page__foot-line {
+    font-size: 10px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    margin: 0 0 4px;
+  }
+
+  @media (max-width: 480px) {
+    .spells-page { padding: 20px 14px 60px; }
+    .spells-grid { grid-template-columns: 1fr; }
+    .spells-card { grid-template-columns: 44px 1fr; }
+    .spells-card__glyph { width: 44px; height: 44px; font-size: 26px; }
+  }
+</style>
