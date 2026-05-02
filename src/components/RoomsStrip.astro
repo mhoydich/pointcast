@@ -1,0 +1,215 @@
+---
+/**
+ * RoomsStrip — cross-room snapshot for the booth + cb + lobby.
+ *
+ * Sprint 2026-05-02: surfaces the three room JSONs in a single horizontal
+ * strip so a visitor on /now (or any embedding surface) sees what's
+ * happening in each room at a glance and can deep-link in.
+ *
+ * Imports the JSON files directly (build-time, no fetch). Updates when
+ * any of those files change + the site rebuilds. If we wire a Worker
+ * later for live data, swap the imports for fetch() in a wrapper.
+ */
+import booth from '../data/spotify-booth.json';
+import cb from '../data/cb-traffic.json';
+import lobby from '../data/lobby.json';
+
+const spinningCount = booth.residents.filter(r => r.track.spotifyId).length;
+const totalResidents = booth.residents.length;
+
+const cbCommentary = cb.operators.filter(o => o.phase === 'commentary').length;
+const cbOperators = cb.operators.length;
+const latestPreamble = [...cb.operators]
+  .sort((a, b) => new Date(b.since).getTime() - new Date(a.since).getTime())[0];
+
+const seatsFilled = lobby.currentlyHere.length;
+const seatsTotal = lobby.house.seatsTotal;
+const latestGuest = lobby.guestbook[0];
+---
+
+<section class="rooms-strip" aria-label="Rooms — live snapshot">
+  <div class="rooms-strip__head">
+    <p class="rooms-strip__kicker">ROOMS · LIVE SNAPSHOT</p>
+    <span class="rooms-strip__count">3 open</span>
+  </div>
+
+  <div class="rooms-strip__cards">
+    <a href="/booth" class="room-card room-card--booth" style="--accent: #c46734">
+      <header class="room-card__head">
+        <span class="room-card__icon" aria-hidden="true">♪</span>
+        <span class="room-card__name">THE BOOTH</span>
+        <span class="room-card__phase">spinning</span>
+      </header>
+      <p class="room-card__lede">
+        {spinningCount === 0
+          ? 'placeholders queued — drop in a track'
+          : `${spinningCount} of ${totalResidents} residents on deck`}
+      </p>
+      <p class="room-card__meta">today's mix · {booth.todaysMix.note}</p>
+    </a>
+
+    <a href="/cb" class="room-card room-card--cb" style="--accent: #185FA5">
+      <header class="room-card__head">
+        <span class="room-card__icon" aria-hidden="true">⌭</span>
+        <span class="room-card__name">CB · CH.{cb.channel}</span>
+        <span class={`room-card__phase ${cbCommentary > 0 ? 'is-live' : ''}`}>
+          {cbCommentary > 0 ? `${cbCommentary} chatter` : 'all clear'}
+        </span>
+      </header>
+      <p class="room-card__lede">
+        {cbOperators} operators on frequency
+      </p>
+      {latestPreamble && (
+        <p class="room-card__meta">
+          <strong>{latestPreamble.handle}</strong> · {latestPreamble.preamble.slice(0, 80)}{latestPreamble.preamble.length > 80 ? '…' : ''}
+        </p>
+      )}
+    </a>
+
+    <a href="/lobby" class="room-card room-card--lobby" style="--accent: #ff6b6b">
+      <header class="room-card__head">
+        <span class="room-card__icon" aria-hidden="true">✦</span>
+        <span class="room-card__name">THE LOBBY</span>
+        <span class={`room-card__phase ${seatsFilled > 0 ? 'is-live' : ''}`}>
+          {seatsFilled} / {seatsTotal} seated
+        </span>
+      </header>
+      <p class="room-card__lede">
+        visitor #{lobby.visitorCount.toLocaleString()}
+      </p>
+      {latestGuest && (
+        <p class="room-card__meta">
+          last entry · <em>{latestGuest.message.slice(0, 80)}{latestGuest.message.length > 80 ? '…' : ''}</em>
+        </p>
+      )}
+    </a>
+  </div>
+</section>
+
+<style>
+  .rooms-strip {
+    margin: 1.75rem 0 1.25rem;
+  }
+
+  .rooms-strip__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+  }
+
+  .rooms-strip__kicker {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5F5E5A;
+  }
+
+  .rooms-strip__count {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: #c46734;
+    background: #fff8ed;
+    border: 1px solid #c46734;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    letter-spacing: 0.1em;
+  }
+
+  .rooms-strip__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .room-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    background: #f8f4ec;
+    border: 2px solid #1a1208;
+    border-radius: 10px;
+    box-shadow: 4px 4px 0 0 var(--accent);
+    padding: 0.75rem 0.9rem;
+    text-decoration: none;
+    color: #1a1208;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .room-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 var(--accent);
+  }
+
+  .room-card__head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .room-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    border: 2px solid #1a1208;
+    line-height: 1;
+  }
+
+  .room-card__name {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    flex: 1 1 auto;
+  }
+
+  .room-card__phase {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.65rem;
+    color: #5F5E5A;
+    background: #ece5d2;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: lowercase;
+  }
+  .room-card__phase.is-live {
+    color: #fff;
+    background: var(--accent);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+
+  .room-card__lede {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    color: #1a1208;
+  }
+
+  .room-card__meta {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #5F5E5A;
+  }
+  .room-card__meta strong {
+    color: #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+</style>
