@@ -1,0 +1,638 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { absoluteImage, absoluteUrl, SHRINE_SETS, SITE_URL, UNFURL_SHRINES } from '../lib/unfurl-shrines';
+
+const title = 'PointCast Shrine Sets';
+const description = 'A visual gallery of PointCast URL unfurl shrines: element, block, room, system, and campaign sets with generated background art.';
+const pageUrl = absoluteUrl('/shrines');
+const shrinesBySlug = new Map(UNFURL_SHRINES.map((shrine) => [shrine.slug, shrine]));
+const featuredShrines = ['breathe-0304', 'listening-room', 'agents', 'nouns-cola']
+  .map((slug) => shrinesBySlug.get(slug))
+  .filter(Boolean);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': pageUrl,
+      name: title,
+      description,
+      url: pageUrl,
+      isPartOf: { '@type': 'WebSite', name: 'PointCast', url: SITE_URL },
+      image: absoluteImage('/images/shrines/shrine-background-sheet.png'),
+    },
+    {
+      '@type': 'ItemList',
+      '@id': `${pageUrl}#sets`,
+      name: 'PointCast shrine sets',
+      itemListElement: SHRINE_SETS.map((set, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: absoluteUrl(`/shrines#${set.slug}`),
+        name: set.title,
+        description: set.description,
+        image: absoluteImage(set.background),
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/shrines/shrine-background-sheet.png"
+  imageAlt="Four generated PointCast URL shrine backgrounds"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/shrines.json', title: 'PointCast shrine sets JSON' },
+    { type: 'application/json', href: '/unfurls.json', title: 'PointCast unfurl shrine manifest' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/shrines/shrine-background-sheet.png',
+    buttons: [
+      { label: 'Open shrines', action: 'link', target: pageUrl },
+      { label: 'Build shrine', action: 'link', target: absoluteUrl('/unfurls#builder') },
+      { label: 'Shrine JSON', action: 'link', target: absoluteUrl('/shrines.json') },
+    ],
+  }}
+>
+  <div class="shrines-page">
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <span>shrines</span>
+      <a href="/shrines.json">JSON</a>
+    </nav>
+
+    <header class="hero">
+      <img
+        class="hero__art"
+        src="/images/shrines/shrine-background-sheet.png"
+        alt="Four generated visual backgrounds for PointCast URL shrines"
+        width="1672"
+        height="941"
+        loading="eager"
+        decoding="async"
+      />
+      <div class="hero__shade"></div>
+      <div class="hero__copy">
+        <p class="kicker mono">POINTCAST URL SHRINES</p>
+        <h1>Shrines for the URLs that need to arrive intact.</h1>
+        <p>
+          Generated settings for the unfurl system: natural rooms, block
+          plinths, ambient rooms, agent-readable grids, and campaign desks.
+          Each set points at real PointCast routes with images, proof links,
+          and a job.
+        </p>
+        <div class="hero__actions">
+          <a href="#sets">Browse Sets</a>
+          <a href="/unfurls#builder">Build Shrine</a>
+          <a href="/unfurls">Unfurl Wall</a>
+        </div>
+      </div>
+      <div class="hero__rail" aria-label="Featured shrine routes">
+        {featuredShrines.map((shrine) => (
+          <a href={shrine!.path}>
+            <span class="mono">{shrine!.kind}</span>
+            <strong>{shrine!.title}</strong>
+          </a>
+        ))}
+      </div>
+    </header>
+
+    <section class="intro" aria-label="Shrine system summary">
+      <div>
+        <span class="mono">{SHRINE_SETS.length} SETS</span>
+        <strong>generated backgrounds</strong>
+        <p>Each visual set has its own raster scene in `public/images/shrines`.</p>
+      </div>
+      <div>
+        <span class="mono">{UNFURL_SHRINES.length} URLS</span>
+        <strong>real routes</strong>
+        <p>The page reuses the same canonical shrine manifest as `/unfurls`.</p>
+      </div>
+      <div>
+        <span class="mono">V2 BUILDER</span>
+        <strong>ready to extend</strong>
+        <p>The shrine builder lives at `/unfurls#builder` for quick drafts.</p>
+      </div>
+    </section>
+
+    <section class="sets" id="sets" aria-label="Shrine sets">
+      {SHRINE_SETS.map((set) => {
+        const setShrines = set.slugs.map((slug) => shrinesBySlug.get(slug)).filter(Boolean);
+        return (
+          <article class="set" id={set.slug}>
+            <img
+              class="set__background"
+              src={set.background}
+              alt=""
+              width="1400"
+              height="788"
+              loading="lazy"
+              decoding="async"
+            />
+            <div class="set__shade"></div>
+            <div class="set__copy">
+              <p class="kicker mono">{set.label}</p>
+              <h2>{set.title}</h2>
+              <p>{set.description}</p>
+              <div class="set__tags">
+                {set.kinds.map((kind) => <span>{kind}</span>)}
+              </div>
+              {set.backgroundVariants && (
+                <div class="set__variants" aria-label={`${set.title} generated background variants`}>
+                  {set.backgroundVariants.map((background) => (
+                    <img src={background} alt="" width="1400" height="788" loading="lazy" decoding="async" />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div class="set__links" aria-label={`${set.title} routes`}>
+              {setShrines.map((shrine) => (
+                <a href={shrine!.path}>
+                  <img src={shrine!.image} alt="" width="1200" height="630" loading="lazy" decoding="async" />
+                  <span>
+                    <small class="mono">{shrine!.path}</small>
+                    <strong>{shrine!.title}</strong>
+                  </span>
+                </a>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </section>
+
+    <section class="builder-callout" aria-label="Shrine builder">
+      <div>
+        <p class="kicker mono">NEXT SHRINE</p>
+        <h2>Draft the next URL unfurl from the builder.</h2>
+        <p>
+          The builder composes title, description, image, audience, ritual, and
+          proof links, then previews the share object before it becomes permanent.
+        </p>
+      </div>
+      <div class="builder-callout__actions">
+        <a href="/unfurls#builder">Open Builder</a>
+        <a href="/shrines.json">Shrine Sets JSON</a>
+        <a href="/unfurls.json">Unfurl Manifest</a>
+      </div>
+    </section>
+  </div>
+
+  <style>
+    .shrines-page {
+      --paper: #f8f5ef;
+      --ink: #17140f;
+      --muted: #615d54;
+      --line: rgba(23, 20, 15, 0.14);
+      --blue: #1762a3;
+      --green: #1f6f55;
+      --rust: #a34d2f;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .mono {
+      font-family: var(--pc-font-mono);
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .crumb {
+      position: absolute;
+      z-index: 5;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255, 255, 255, 0.76);
+      font-size: 11px;
+    }
+
+    .crumb a {
+      color: #fff;
+    }
+
+    .crumb a:last-child {
+      margin-left: auto;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 92vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+      align-items: end;
+      gap: 28px;
+      overflow: hidden;
+      padding: 88px 24px 28px;
+      color: #fff;
+      isolation: isolate;
+    }
+
+    .hero__art,
+    .set__background {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -3;
+    }
+
+    .hero__shade,
+    .set__shade {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background:
+        linear-gradient(90deg, rgba(8, 7, 6, 0.76), rgba(8, 7, 6, 0.26) 58%, rgba(8, 7, 6, 0.62)),
+        linear-gradient(0deg, rgba(8, 7, 6, 0.74), rgba(8, 7, 6, 0.08) 48%);
+    }
+
+    .hero__copy {
+      max-width: 780px;
+      padding-bottom: 8vh;
+    }
+
+    .kicker {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    .hero h1,
+    .set h2,
+    .builder-callout h2 {
+      margin: 0;
+      font-weight: 500;
+      letter-spacing: 0;
+      line-height: 0.98;
+    }
+
+    .hero h1 {
+      max-width: 760px;
+      font-size: 72px;
+    }
+
+    .hero p:not(.kicker) {
+      max-width: 650px;
+      margin: 20px 0 0;
+      color: rgba(255, 255, 255, 0.84);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .hero__actions,
+    .builder-callout__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .hero__actions a,
+    .builder-callout__actions a {
+      display: inline-flex;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      border-radius: 999px;
+      padding: 0 16px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      font-size: 14px;
+    }
+
+    .hero__rail {
+      display: grid;
+      gap: 10px;
+      align-self: end;
+      padding-bottom: 6vh;
+    }
+
+    .hero__rail a {
+      display: grid;
+      gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 8px;
+      padding: 14px;
+      color: #fff;
+      background: rgba(13, 12, 11, 0.44);
+      backdrop-filter: blur(16px);
+    }
+
+    .hero__rail span {
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 10px;
+    }
+
+    .hero__rail strong {
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .intro div {
+      background: var(--paper);
+      padding: 22px 24px;
+    }
+
+    .intro span,
+    .intro p {
+      color: var(--muted);
+    }
+
+    .intro span {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+
+    .intro strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.15;
+    }
+
+    .intro p {
+      max-width: 360px;
+      margin: 10px 0 0;
+      line-height: 1.45;
+    }
+
+    .sets {
+      display: grid;
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .set {
+      position: relative;
+      min-height: 660px;
+      display: grid;
+      grid-template-columns: minmax(0, 0.86fr) minmax(330px, 0.64fr);
+      gap: 26px;
+      align-items: end;
+      overflow: hidden;
+      border-radius: 8px;
+      padding: 28px;
+      color: #fff;
+      isolation: isolate;
+    }
+
+    .set__shade {
+      background:
+        linear-gradient(90deg, rgba(7, 7, 6, 0.78), rgba(7, 7, 6, 0.34) 54%, rgba(7, 7, 6, 0.7)),
+        linear-gradient(0deg, rgba(7, 7, 6, 0.72), rgba(7, 7, 6, 0.04) 46%);
+    }
+
+    .set__copy {
+      max-width: 620px;
+    }
+
+    .set h2,
+    .builder-callout h2 {
+      font-size: 52px;
+    }
+
+    .set__copy p:not(.kicker),
+    .builder-callout p {
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+
+    .set__tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .set__tags span {
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+    }
+
+    .set__variants {
+      display: grid;
+      grid-template-columns: repeat(4, 68px);
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .set__variants img {
+      width: 68px;
+      height: 46px;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .set__links {
+      display: grid;
+      gap: 10px;
+      max-height: 560px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .set__links a {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 8px;
+      padding: 10px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(18px);
+    }
+
+    .set__links img {
+      width: 92px;
+      height: 48px;
+      aspect-ratio: 1.91;
+      object-fit: cover;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    .set__links span {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+
+    .set__links small {
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    .set__links strong {
+      font-size: 15px;
+      line-height: 1.22;
+    }
+
+    .builder-callout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: center;
+      margin: 0 18px 18px;
+      border-radius: 8px;
+      padding: 28px;
+      color: #fff;
+      background: #15130f;
+    }
+
+    .builder-callout .kicker {
+      color: #9cc6ff;
+    }
+
+    .builder-callout p {
+      max-width: 680px;
+      margin: 14px 0 0;
+    }
+
+    .builder-callout__actions {
+      justify-content: flex-end;
+      margin-top: 0;
+    }
+
+    @media (max-width: 920px) {
+      .hero {
+        min-height: 900px;
+        grid-template-columns: 1fr;
+      }
+
+      .hero h1 {
+        font-size: 48px;
+      }
+
+      .hero__copy,
+      .hero__rail {
+        padding-bottom: 0;
+      }
+
+      .intro,
+      .set,
+      .builder-callout {
+        grid-template-columns: 1fr;
+      }
+
+      .set {
+        min-height: auto;
+      }
+
+      .set h2,
+      .builder-callout h2 {
+        font-size: 38px;
+      }
+
+      .set__links {
+        max-height: none;
+      }
+
+      .builder-callout__actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .crumb {
+        font-size: 10px;
+      }
+
+      .hero {
+        min-height: 820px;
+        padding: 76px 14px 18px;
+      }
+
+      .hero h1 {
+        font-size: 40px;
+      }
+
+      .hero p:not(.kicker),
+      .set__copy p:not(.kicker),
+      .builder-callout p {
+        font-size: 15px;
+      }
+
+      .intro,
+      .sets {
+        display: block;
+      }
+
+      .intro div + div {
+        border-top: 1px solid var(--line);
+      }
+
+      .sets {
+        padding: 10px;
+      }
+
+      .set,
+      .builder-callout {
+        border-radius: 6px;
+        padding: 18px;
+      }
+
+      .set + .set {
+        margin-top: 10px;
+      }
+
+      .set h2,
+      .builder-callout h2 {
+        font-size: 32px;
+      }
+
+      .set__links a {
+        grid-template-columns: 74px minmax(0, 1fr);
+      }
+
+      .set__links img {
+        width: 74px;
+        height: 39px;
+      }
+
+      .set__variants {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .set__variants img {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1.48;
+      }
+
+      .builder-callout {
+        margin: 0 10px 10px;
+      }
+    }
+  </style>
+</BlockLayout>

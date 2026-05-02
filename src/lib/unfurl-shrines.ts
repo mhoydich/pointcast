@@ -10,6 +10,17 @@ export interface UnfurlShrine {
   proof: string[];
 }
 
+export interface ShrineSet {
+  slug: string;
+  title: string;
+  label: string;
+  description: string;
+  background: string;
+  backgroundVariants?: string[];
+  kinds: UnfurlShrine['kind'][];
+  slugs: string[];
+}
+
 export const SITE_URL = 'https://pointcast.xyz';
 
 export function absoluteUrl(path: string): string {
@@ -176,6 +187,61 @@ export const UNFURL_SHRINES: UnfurlShrine[] = [
     proof: ['/garden-yield.json', '/nature-yield.json', '/b/0331'],
   },
   {
+    slug: 'nature',
+    path: '/nature',
+    title: 'Nature · El Segundo field guide',
+    description: 'A local field guide for dunes, native plants, seasonal signals, and the El Segundo blue butterfly.',
+    image: '/images/og/nature.png',
+    kind: 'page',
+    audience: 'local nature people, native plant readers, field-guide browsers, and agent crawlers',
+    ritual: 'Use when the share should feel grounded in place, plants, and living local context.',
+    proof: ['/nature.json', '/local.json', '/nature-yield.json'],
+  },
+  {
+    slug: 'houseplants',
+    path: '/houseplants',
+    title: 'Houseplants · Learning lab',
+    description: 'An indoor plant learning module for light, watering, roots, soil, humidity, feeding, repotting, and symptoms.',
+    image: '/images/og/houseplants.png',
+    kind: 'page',
+    audience: 'indoor gardeners, plant learners, cozy tool users, and practical care readers',
+    ritual: 'Use when the link needs to feel like a lived-in care desk instead of a static article.',
+    proof: ['/houseplants.json', '/nature.json', '/garden-yield'],
+  },
+  {
+    slug: 'meditate',
+    path: '/meditate',
+    title: 'Ocean Meditation',
+    description: 'A quiet PointCast room for timed breathing, ocean focus, tide logging, and an optional ambient tone.',
+    image: '/images/og/meditate.png',
+    kind: 'room',
+    audience: 'overloaded readers, ocean people, quiet-mode visitors, and anyone needing a softer route',
+    ritual: 'Use when the share should offer a reset rather than another feed surface.',
+    proof: ['/meditate.json', '/nature', '/b/0304'],
+  },
+  {
+    slug: 'local',
+    path: '/local',
+    title: 'Local · 100 miles from El Segundo',
+    description: 'PointCast’s 100-mile lens: name-drops, stations, in-range blocks, nature notes, and adjacent local surfaces.',
+    image: '/images/og/og-home-v2.png',
+    kind: 'page',
+    audience: 'local collaborators, station readers, place-based agents, and South Bay wanderers',
+    ritual: 'Use when the route should situate PointCast in place before it asks for attention.',
+    proof: ['/local.json', '/nature', '/beacon'],
+  },
+  {
+    slug: 'beacon',
+    path: '/beacon',
+    title: 'PointCast Beacon',
+    description: 'A neighborhood signal surface for nearby routes, local orientation, and place-aware discovery.',
+    image: '/images/og/beacon.png',
+    kind: 'system',
+    audience: 'nearby readers, place-aware agents, local systems people, and collaborators entering through geography',
+    ritual: 'Use when the unfurl needs to behave like a small signal fire for the neighborhood.',
+    proof: ['/beacon.json', '/local.json', '/for-nodes'],
+  },
+  {
     slug: 'share-kit',
     path: '/share',
     title: 'Share kit',
@@ -207,5 +273,59 @@ export const UNFURL_SHRINES: UnfurlShrine[] = [
     audience: 'agents, indexers, scripts, and anyone building on top of the archive',
     ritual: 'Use when the best preview is the contract of the archive itself.',
     proof: ['/feed.json', '/archive.json', '/sitemap-blocks.xml'],
+  },
+];
+
+export const SHRINE_SETS: ShrineSet[] = [
+  {
+    slug: 'element',
+    title: 'Element Shrine',
+    label: 'nature · fire · stones · gems',
+    description: 'A lived-in, cozy shrine for natural tools and quiet rooms: wood, paper, plants, embers, stones, gems, and soft local signal.',
+    background: '/images/shrines/element-balance-shrine-bg.png',
+    backgroundVariants: [
+      '/images/shrines/element-nature-shrine-bg.png',
+      '/images/shrines/element-fire-shrine-bg.png',
+      '/images/shrines/element-stone-shrine-bg.png',
+      '/images/shrines/element-balance-shrine-bg.png',
+    ],
+    kinds: ['page', 'room', 'system'],
+    slugs: ['nature', 'garden-yield', 'houseplants', 'meditate', 'local', 'beacon'],
+  },
+  {
+    slug: 'block',
+    title: 'Block Shrine',
+    label: 'single-url proof',
+    description: 'A clean plinth for one canonical page: stable art, readable metadata, proof links, and a URL that survives the chat preview.',
+    background: '/images/shrines/block-shrine-bg.png',
+    kinds: ['home', 'block', 'page'],
+    slugs: ['breathe-0304', 'home', 'now', 'archive', 'manifesto', 'garden-yield'],
+  },
+  {
+    slug: 'room',
+    title: 'Room Shrine',
+    label: 'ambient surfaces',
+    description: 'A spatial unfurl for places people should enter: listening rooms, TV modes, live tools, and playable corners.',
+    background: '/images/shrines/room-shrine-bg.png',
+    kinds: ['room', 'game'],
+    slugs: ['listening-room', 'tv', 'battle', 'drum'],
+  },
+  {
+    slug: 'system',
+    title: 'System Shrine',
+    label: 'agent-readable signal',
+    description: 'A stricter shrine for software readers: JSON feeds, graph edges, labels, validators, and crawlable contracts.',
+    background: '/images/shrines/system-shrine-bg.png',
+    kinds: ['system', 'feed'],
+    slugs: ['agents', 'mesh', 'tag-signal', 'feed-json', 'blocks-json'],
+  },
+  {
+    slug: 'campaign',
+    title: 'Campaign Shrine',
+    label: 'launch packets',
+    description: 'A bright desk for launch work: object pages, share kits, sponsorship context, and URLs built to move between people.',
+    background: '/images/shrines/campaign-shrine-bg.png',
+    kinds: ['campaign'],
+    slugs: ['nouns-cola', 'share-kit'],
   },
 ];
