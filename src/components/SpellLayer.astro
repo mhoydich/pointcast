@@ -818,6 +818,131 @@
       active.byId.fog = fog;
     }
 
+    // ─── balloon (burst) ─────────────────────────────────────────
+    // 10 balloons float up from the bottom, each drifting laterally.
+    // Uses translateY so the starting position (bottom:-60px) stays
+    // correct without animating `bottom` directly.
+    function castBalloon(durationMs) {
+      if (reduce()) return;
+      var count = 10;
+      for (var i = 0; i < count; i++) {
+        var b = document.createElement('span');
+        b.className = 'spell-balloon';
+        var startX = Math.random() * (window.innerWidth - 40) + 20;
+        var drift = ((Math.random() - 0.5) * 180).toFixed(1);
+        var size = 28 + Math.floor(Math.random() * 20);
+        var dur = (durationMs || 4200) - Math.floor(Math.random() * 900);
+        var delay = Math.floor(Math.random() * 500);
+        b.style.cssText =
+          'left:' + startX + 'px;' +
+          'font-size:' + size + 'px;' +
+          '--spell-balloon-drift:' + drift + 'px;' +
+          'animation-duration:' + dur + 'ms;' +
+          'animation-delay:' + delay + 'ms;';
+        b.textContent = '🎈';
+        $layer.appendChild(b);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(b);
+      }
+    }
+
+    // ─── turtle (companion) ──────────────────────────────────────
+    // Slowest companion — ~30px/s. The charm is in the patience.
+    // Gentle head-nod (small vertical) on a separate slow cycle.
+    function castTurtle(durationMs) {
+      if (active.byId.turtle) {
+        var prevT = active.byId.turtle;
+        if (prevT && prevT.parentNode) prevT.parentNode.removeChild(prevT);
+      }
+      var tur = document.createElement('button');
+      tur.className = 'spell-turtle';
+      tur.type = 'button';
+      tur.setAttribute('aria-label', 'A slow turtle. Click to let it be.');
+      tur.title = 'click to let the turtle be';
+      tur.textContent = '🐢';
+      var ltr = Math.random() < 0.5;
+      tur.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 90000;
+      var walkSeconds = Math.max(22, Math.min(60, window.innerWidth / 28));
+      tur.style.cssText =
+        'animation:spell-turtle-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-turtle-nod' + (ltr ? '' : '-rtl') + ' 2.4s ease-in-out infinite;';
+      tur.addEventListener('click', function () {
+        if (tur.parentNode) tur.parentNode.removeChild(tur);
+        active.byId.turtle = null;
+      });
+      $layer.appendChild(tur);
+      active.byId.turtle = tur;
+      setTimeout(function () {
+        if (tur && tur.parentNode) tur.parentNode.removeChild(tur);
+        if (active.byId.turtle === tur) active.byId.turtle = null;
+      }, dur);
+    }
+
+    // ─── ghost (companion) ───────────────────────────────────────
+    // Friendly 👻 drifts at mid-screen height (35–65vh from bottom)
+    // with a slow sinusoidal float. Translucent, non-threatening.
+    function castGhost(durationMs) {
+      if (active.byId.ghost) {
+        var prevG = active.byId.ghost;
+        if (prevG && prevG.parentNode) prevG.parentNode.removeChild(prevG);
+      }
+      var g = document.createElement('button');
+      g.className = 'spell-ghost';
+      g.type = 'button';
+      g.setAttribute('aria-label', 'A friendly ghost drifting by. Click to send it on.');
+      g.title = 'click to send the ghost on';
+      g.textContent = '👻';
+      var ltr = Math.random() < 0.5;
+      g.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 50000;
+      var flySeconds = Math.max(12, Math.min(36, window.innerWidth / 58));
+      var heightPct = (35 + Math.random() * 30).toFixed(1);
+      g.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-ghost-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-ghost-float' + (ltr ? '' : '-rtl') + ' 3.2s ease-in-out infinite;';
+      g.addEventListener('click', function () {
+        if (g.parentNode) g.parentNode.removeChild(g);
+        active.byId.ghost = null;
+      });
+      $layer.appendChild(g);
+      active.byId.ghost = g;
+      setTimeout(function () {
+        if (g && g.parentNode) g.parentNode.removeChild(g);
+        if (active.byId.ghost === g) active.byId.ghost = null;
+      }, dur);
+    }
+
+    // ─── campfire (ambient) ──────────────────────────────────────
+    // Two overlaid flame glyphs + a log + a radial glow ellipse.
+    // Sits bottom-left (distinct from candle at bottom-right).
+    // Recasting is a no-op while active.
+    function castCampfire() {
+      if (active.byId.campfire) return;
+      var cf = document.createElement('button');
+      cf.className = 'spell-campfire';
+      cf.type = 'button';
+      cf.setAttribute('aria-label', 'A campfire. Click to put it out.');
+      cf.title = 'click to put out the fire';
+      cf.innerHTML =
+        '<span class="spell-campfire__glow" aria-hidden="true"></span>' +
+        '<span class="spell-campfire__flame spell-campfire__flame--side" aria-hidden="true">🔥</span>' +
+        '<span class="spell-campfire__flame spell-campfire__flame--main" aria-hidden="true">🔥</span>' +
+        '<span class="spell-campfire__log" aria-hidden="true">🪵</span>';
+      cf.addEventListener('click', function () {
+        if (cf.parentNode) cf.parentNode.removeChild(cf);
+        active.byId.campfire = null;
+      });
+      $layer.appendChild(cf);
+      active.byId.campfire = cf;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -845,6 +970,10 @@
         case 'dice':      castDice(2500); break;
         case 'bee':       castBee(35000); break;
         case 'fog':       castFog(); break;
+        case 'balloon':   castBalloon(4200); break;
+        case 'turtle':    castTurtle(90000); break;
+        case 'ghost':     castGhost(50000); break;
+        case 'campfire':  castCampfire(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -1681,6 +1810,163 @@
     100% { transform: translateX(-12%); }
   }
 
+  /* ── balloon (burst) ─────────────────────────────────────── */
+  .spell-balloon {
+    position: fixed;
+    bottom: -60px;
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation: spell-balloon-rise ease-out forwards;
+    line-height: 1;
+  }
+  @keyframes spell-balloon-rise {
+    0%   { transform: translateY(0) translateX(0); opacity: 1; }
+    70%  { opacity: 1; }
+    100% {
+      transform: translateY(-120vh) translateX(var(--spell-balloon-drift, 0px));
+      opacity: 0;
+    }
+  }
+
+  /* ── turtle (companion) ──────────────────────────────────── */
+  .spell-turtle {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  }
+  @keyframes spell-turtle-walk-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-turtle-walk-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-turtle-nod {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
+  @keyframes spell-turtle-nod-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-3px); }
+  }
+
+  /* ── ghost (companion) ───────────────────────────────────── */
+  /* Floats mid-screen (35–65vh) at ~58px/s. Translucent, soft. */
+  .spell-ghost {
+    position: fixed;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 32px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    opacity: 0.85;
+    filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.55));
+  }
+  @keyframes spell-ghost-fly-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-ghost-fly-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-ghost-float {
+    0%, 100% { transform: translateY(0); }
+    28%      { transform: translateY(-16px); }
+    72%      { transform: translateY(12px); }
+  }
+  @keyframes spell-ghost-float-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    28%      { transform: scaleX(-1) translateY(-16px); }
+    72%      { transform: scaleX(-1) translateY(12px); }
+  }
+
+  /* ── campfire (ambient) ──────────────────────────────────── */
+  /* Bottom-left corner — distinct from candle (bottom-right). */
+  .spell-campfire {
+    position: fixed;
+    left: 24px;
+    bottom: 60px;
+    width: 56px;
+    height: 68px;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+  }
+  .spell-campfire__glow {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 72px;
+    height: 36px;
+    background: radial-gradient(ellipse at 50% 100%, rgba(255, 130, 20, 0.45) 0%, rgba(255, 80, 10, 0) 70%);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    animation: spell-campfire-glow 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .spell-campfire__log {
+    font-size: 22px;
+    line-height: 1;
+    z-index: 1;
+  }
+  .spell-campfire__flame--main {
+    font-size: 28px;
+    line-height: 1;
+    animation: spell-campfire-flicker 0.85s ease-in-out infinite;
+    transform-origin: 50% 100%;
+    z-index: 2;
+  }
+  .spell-campfire__flame--side {
+    font-size: 18px;
+    line-height: 1;
+    position: absolute;
+    bottom: 22px;
+    left: 4px;
+    opacity: 0.72;
+    animation: spell-campfire-flicker 1.25s ease-in-out infinite;
+    transform-origin: 50% 100%;
+    z-index: 1;
+  }
+  @keyframes spell-campfire-flicker {
+    0%, 100% { transform: scale(1) rotate(-4deg); }
+    22%      { transform: scale(1.07) rotate(5deg); }
+    50%      { transform: scale(0.93) rotate(-6deg); }
+    76%      { transform: scale(1.05) rotate(3deg); }
+  }
+  @keyframes spell-campfire-glow {
+    0%, 100% { opacity: 0.6; transform: translateX(-50%) scaleX(1); }
+    50%      { opacity: 1; transform: translateX(-50%) scaleX(1.18); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -1690,6 +1976,8 @@
     .spell-moth,
     .spell-firefly,
     .spell-bee,
+    .spell-turtle,
+    .spell-ghost,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -1702,20 +1990,27 @@
     .spell-aurora::before,
     .spell-aurora::after,
     .spell-mood,
-    .spell-fog__wisp { animation: none; }
+    .spell-fog__wisp,
+    .spell-campfire__flame--main,
+    .spell-campfire__flame--side,
+    .spell-campfire__glow { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
     .spell-fish,
     .spell-moth,
     .spell-firefly,
-    .spell-bee { left: 50%; transform: translateX(-50%); }
+    .spell-bee,
+    .spell-turtle,
+    .spell-ghost { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
     .spell-moth[data-dir='rtl'],
     .spell-firefly[data-dir='rtl'],
-    .spell-bee[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-bee[data-dir='rtl'],
+    .spell-turtle[data-dir='rtl'],
+    .spell-ghost[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -1728,5 +2023,6 @@
     .spell-aurora::after  { opacity: 0.6; transform: none; }
     .spell-mood { filter: hue-rotate(60deg); } /* fixed warm amber */
     .spell-fog__wisp { transform: none; } /* static wisps */
+    .spell-campfire__glow { opacity: 0.5; } /* static glow */
   }
 </style>

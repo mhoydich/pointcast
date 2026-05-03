@@ -278,6 +278,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#b8d4f0',
   },
+
+  // ─── BURSTS (batch 7) ─────────────────────────────────────────
+  {
+    id: 'balloon',
+    label: 'balloon',
+    blurb: 'Colorful balloons float up from the bottom, drifting apart as they rise.',
+    glyph: '🎈',
+    kind: 'burst',
+    durationMs: 4200,
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 7) ─────────────────────────────────────
+  {
+    id: 'turtle',
+    label: 'turtle',
+    blurb: 'The slowest companion. A turtle ambles across, unbothered, without urgency.',
+    glyph: '🐢',
+    kind: 'companion',
+    durationMs: 90_000,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'ghost',
+    label: 'ghost',
+    blurb: 'A friendly ghost drifts by mid-screen, oscillating gently. Hello there.',
+    glyph: '👻',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#a78bfa',
+  },
+
+  // ─── AMBIENT (batch 7) ────────────────────────────────────────
+  {
+    id: 'campfire',
+    label: 'campfire',
+    blurb: 'A warm campfire crackles in the corner. Cozier than a candle.',
+    glyph: '🔥',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
