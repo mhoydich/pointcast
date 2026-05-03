@@ -1,0 +1,585 @@
+---
+/**
+ * /cheers — clink glasses with a Noun.
+ *
+ * Two glasses on the page: yours (with your Noun avatar in the bowl)
+ * and a friend's (with a different Noun, rotates by date). Tap to clink.
+ * Brief animation + a "tink" tone via Web Audio. Counter for total
+ * clinks today.
+ *
+ * Pure single-player. No API. No KV. Locks in only that you visited
+ * (clink count cached in localStorage). Sibling to /blow + /sing —
+ * the trio of single-player birthday rituals: light it (well, /blow's
+ * the inverse), sing it, toast it.
+ *
+ * Mike chat 2026-05-02 ~late: "you lead go" — picked /cheers as the
+ * next atomic surface in the resilient-shipping pattern that survived
+ * the branch chaos.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/cheers — clink glasses with a Noun';
+const description = "Two glasses, two Nouns, one clink. Tap to toast — short animation + a synthesized tink tone. Pure single-player, no wallet, no signup, no KV. Sibling to /blow and /sing.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/cheers',
+  name: '/cheers',
+  alternateName: 'clink glasses with a Noun',
+  description,
+  url: 'https://pointcast.xyz/cheers',
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Any (browser)',
+};
+
+// Friend's Noun rotates by UTC date — same Noun for everyone on the same
+// day, so two visitors hitting /cheers at the same moment toast the same
+// stranger. (You can re-roll your own Noun via the input.)
+function dailyNoun(): number {
+  const today = new Date();
+  const dayIndex = Math.floor(today.getTime() / 86_400_000);
+  // Modulo 1200 to stay in noun.pics CC0 range.
+  return ((dayIndex * 47) % 1200 + 1200) % 1200;
+}
+const FRIEND_NOUN = dailyNoun();
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="cheers">
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>cheers</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">★ CHEERS · CLINK WITH A NOUN</p>
+      <h1 class="head__title">To you.</h1>
+      <p class="head__lede">
+        Two glasses, two Nouns, one clink. Tap the table (or press space)
+        to toast. <strong>Today's friend Noun rotates daily</strong> — same
+        stranger for every visitor on the same day. Re-roll your own
+        Noun via the input below.
+      </p>
+    </header>
+
+    <section class="stage" aria-label="The toast">
+      <div class="table" id="table" role="button" tabindex="0" aria-label="Tap the table to clink glasses">
+        <div class="glass glass--yours" id="glass-yours">
+          <img class="glass__noun" id="noun-yours" src={`https://noun.pics/888.svg`} alt="Your Noun" width="48" height="48" loading="lazy"/>
+          <div class="glass__bowl"></div>
+          <div class="glass__stem"></div>
+          <div class="glass__base"></div>
+          <p class="glass__label mono">YOU</p>
+        </div>
+        <div class="glass glass--friend" id="glass-friend">
+          <img class="glass__noun" id="noun-friend" src={`https://noun.pics/${FRIEND_NOUN}.svg`} alt="Friend Noun" width="48" height="48" loading="lazy"/>
+          <div class="glass__bowl"></div>
+          <div class="glass__stem"></div>
+          <div class="glass__base"></div>
+          <p class="glass__label mono">TODAY'S FRIEND · NOUN {FRIEND_NOUN}</p>
+        </div>
+      </div>
+
+      <p class="status mono" id="status">· tap the table to clink</p>
+
+      <div class="form" aria-label="Pick your Noun">
+        <label for="noun-input" class="form__label mono">YOUR NOUN · 0–1199</label>
+        <div class="form__row">
+          <input id="noun-input" type="number" min="0" max="1199" value="888" inputmode="numeric"/>
+          <button type="button" id="noun-random" class="form__mini mono">RANDOM ↻</button>
+        </div>
+      </div>
+
+      <p class="counter mono" id="counter">· 0 clinks on this device</p>
+    </section>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW IT WORKS.</strong> Tap the table — both glasses tilt
+        toward each other, the rims meet, a synthesized "tink" tone
+        plays, a small ripple radiates from the contact point, and the
+        glasses settle back. ~700ms cooldown so visitors can't keyboard-
+        mash the toast.
+      </p>
+      <p class="foot__line mono">
+        <strong>WHY A FRIEND ROTATES.</strong> The friend Noun is picked
+        deterministically from today's UTC date — every visitor on the
+        same day toasts the same stranger. Tomorrow it'll be someone
+        else. The act is a little less alone if everyone clinks the same
+        glass.
+      </p>
+      <p class="foot__brief mono">
+        related: <a href="/sing">/sing</a> · tap to sing
+        <span class="foot__sep">·</span>
+        <a href="/blow">/blow</a> · blow out the candle
+        <span class="foot__sep">·</span>
+        <a href="/cake">/cake</a> · the curated room
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  const STORAGE_KEY = 'pc:cheers:count';
+  const NOUN_KEY = 'pc:cheers:noun';
+  const COOLDOWN_MS = 700;
+
+  const table = document.getElementById('table');
+  const glassY = document.getElementById('glass-yours');
+  const glassF = document.getElementById('glass-friend');
+  const status = document.getElementById('status');
+  const counterEl = document.getElementById('counter');
+  const nounInput = document.getElementById('noun-input') as HTMLInputElement | null;
+  const nounYoursImg = document.getElementById('noun-yours') as HTMLImageElement | null;
+  const nounRandomBtn = document.getElementById('noun-random');
+
+  let lastClinkAt = 0;
+  let count = 0;
+  let audioCtx: AudioContext | null = null;
+
+  try {
+    const c = localStorage.getItem(STORAGE_KEY);
+    if (c) count = parseInt(c, 10) || 0;
+    const n = localStorage.getItem(NOUN_KEY);
+    if (n && nounInput) nounInput.value = n;
+  } catch {}
+
+  function updateNoun() {
+    if (!nounInput || !nounYoursImg) return;
+    let n = parseInt(nounInput.value, 10);
+    if (!Number.isFinite(n)) n = 888;
+    n = Math.max(0, Math.min(1199, n));
+    nounInput.value = String(n);
+    nounYoursImg.src = `https://noun.pics/${n}.svg`;
+    nounYoursImg.alt = `Your Noun ${n}`;
+    try { localStorage.setItem(NOUN_KEY, String(n)); } catch {}
+  }
+  updateNoun();
+  nounInput?.addEventListener('input', updateNoun);
+  nounRandomBtn?.addEventListener('click', () => {
+    if (!nounInput) return;
+    nounInput.value = String(Math.floor(Math.random() * 1200));
+    updateNoun();
+  });
+
+  function paintCounter() {
+    if (counterEl) counterEl.textContent = `· ${count} clink${count === 1 ? '' : 's'} on this device`;
+  }
+  paintCounter();
+
+  function setStatus(text: string) {
+    if (status) status.textContent = text;
+  }
+
+  // Tink tone — synthesized via Web Audio. Two short bell-like partials
+  // that decay quickly so the result sounds like glass-on-glass.
+  function ensureAudio(): AudioContext {
+    if (!audioCtx) {
+      const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioCtx = new Ctor() as AudioContext;
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    return audioCtx!;
+  }
+
+  function tink() {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    const fundamental = 1760; // A6 — bright glass-like
+    const partial = 2640;     // perfect-ish 5th above
+
+    function tone(freq: number, gain: number, dur: number) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.value = 0;
+      g.gain.linearRampToValueAtTime(gain, now + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.05);
+    }
+
+    tone(fundamental, 0.18, 0.6);
+    tone(partial, 0.08, 0.45);
+  }
+
+  function spawnRipple() {
+    if (!table) return;
+    const r = document.createElement('span');
+    r.className = 'ripple';
+    table.appendChild(r);
+    setTimeout(() => r.remove(), 800);
+  }
+
+  function clink() {
+    const now = Date.now();
+    if (now - lastClinkAt < COOLDOWN_MS) return;
+    lastClinkAt = now;
+
+    glassY?.classList.remove('glass--clinking');
+    glassF?.classList.remove('glass--clinking');
+    void glassY?.offsetWidth; // restart animation
+    glassY?.classList.add('glass--clinking');
+    glassF?.classList.add('glass--clinking');
+
+    tink();
+    spawnRipple();
+
+    count++;
+    try { localStorage.setItem(STORAGE_KEY, String(count)); } catch {}
+    paintCounter();
+
+    setStatus('★ TINK · to you');
+    setTimeout(() => setStatus('· tap the table to clink'), 900);
+  }
+
+  table?.addEventListener('click', clink);
+  table?.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      clink();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === ' ') { e.preventDefault(); clink(); }
+  });
+</script>
+
+<style>
+  .cheers {
+    --paper: #F5EFE3;
+    --ink: #1A1A1A;
+    --ink-soft: #5C5751;
+    --rule: rgba(26,26,26,0.12);
+    --accent: #C9A227;
+    --gold: #C9A227;
+    --gold-dark: #7B5614;
+    --glass: rgba(220, 235, 245, 0.55);
+    --glass-edge: rgba(80, 110, 130, 0.6);
+
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    color: var(--ink);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  /* Crumb */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Head */
+  .head {
+    border-top: 4px solid var(--gold);
+    padding-top: 22px;
+    margin-bottom: 24px;
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--gold-dark);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 80px);
+    line-height: 0.92;
+    margin: 0 0 12px;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+  .head__lede {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--ink);
+    max-width: 56ch;
+  }
+  .head__lede strong { color: var(--gold-dark); font-weight: 600; }
+
+  /* Stage */
+  .stage {
+    background: var(--paper);
+    border: 1.5px solid var(--rule);
+    border-radius: 6px;
+    padding: 32px 24px 24px;
+    margin-bottom: 24px;
+    text-align: center;
+    background-image:
+      radial-gradient(circle at 50% 30%, rgba(201,162,39,0.12) 0, transparent 60%);
+  }
+
+  /* Table = the tap zone (whole rectangle) */
+  .table {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 0;
+    height: 240px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    margin: 0 auto 18px;
+    border-bottom: 4px solid var(--gold-dark);
+  }
+  .table:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; border-radius: 4px; }
+
+  /* Glass — wine-glass shape, drawn in CSS */
+  .glass {
+    position: relative;
+    width: 90px;
+    height: 200px;
+    transform-origin: 50% 100%;
+    transition: transform 0.3s ease;
+  }
+  .glass--yours { transform: rotate(0deg) translateX(20px); }
+  .glass--friend { transform: rotate(0deg) translateX(-20px); }
+
+  /* Bowl */
+  .glass__bowl {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 76px;
+    height: 110px;
+    background: var(--glass);
+    border: 2.5px solid var(--glass-edge);
+    border-radius: 38px 38px 50% 50% / 50% 50% 50% 50%;
+    box-shadow: inset -8px 4px 0 rgba(255,255,255,0.4), inset 8px -8px 0 rgba(80,110,130,0.15);
+    backdrop-filter: blur(2px);
+  }
+  /* Drink (gold) */
+  .glass__bowl::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 6px;
+    right: 6px;
+    height: 60%;
+    background: linear-gradient(180deg, rgba(255,217,108,0.7) 0%, rgba(201,162,39,0.85) 100%);
+    border-radius: 0 0 50% 50% / 0 0 50% 50%;
+  }
+  /* Drink surface highlight */
+  .glass__bowl::after {
+    content: '';
+    position: absolute;
+    top: calc(40% - 3px);
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 50%;
+  }
+
+  /* Stem */
+  .glass__stem {
+    position: absolute;
+    top: 124px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 50px;
+    background: var(--glass);
+    border-left: 1.5px solid var(--glass-edge);
+    border-right: 1.5px solid var(--glass-edge);
+  }
+  /* Base */
+  .glass__base {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 56px;
+    height: 8px;
+    background: var(--glass);
+    border: 2px solid var(--glass-edge);
+    border-radius: 50%;
+  }
+  /* Noun avatar floats above the bowl */
+  .glass__noun {
+    position: absolute;
+    top: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--gold-dark);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+  /* Label below */
+  .glass__label {
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  /* Clink animation — both glasses tilt inward + meet */
+  .glass--yours.glass--clinking { animation: clink-yours 380ms ease-out; }
+  .glass--friend.glass--clinking { animation: clink-friend 380ms ease-out; }
+  @keyframes clink-yours {
+    0%   { transform: rotate(0deg) translateX(20px); }
+    40%  { transform: rotate(-15deg) translateX(0px); }
+    60%  { transform: rotate(-12deg) translateX(0px); }
+    100% { transform: rotate(0deg) translateX(20px); }
+  }
+  @keyframes clink-friend {
+    0%   { transform: rotate(0deg) translateX(-20px); }
+    40%  { transform: rotate(15deg) translateX(0px); }
+    60%  { transform: rotate(12deg) translateX(0px); }
+    100% { transform: rotate(0deg) translateX(-20px); }
+  }
+
+  /* Ripple from contact point */
+  .ripple {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--gold);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: ripple-out 700ms ease-out forwards;
+  }
+  @keyframes ripple-out {
+    0%   { width: 12px; height: 12px; opacity: 0.7; }
+    100% { width: 90px; height: 90px; opacity: 0; }
+  }
+
+  /* Status */
+  .status {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+    margin: 0 0 18px;
+    min-height: 1.2em;
+  }
+
+  /* Pick-your-noun form */
+  .form {
+    display: grid;
+    gap: 8px;
+    max-width: 320px;
+    margin: 0 auto 14px;
+  }
+  .form__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold-dark);
+  }
+  .form__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+  .form input[type='number'] {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    padding: 8px 10px;
+    border: 1.5px solid var(--ink);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--ink);
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .form input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,162,39,0.15); }
+  .form__mini {
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    color: var(--ink-soft);
+    font-size: 10.5px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .form__mini:hover { border-color: var(--gold); color: var(--gold-dark); }
+
+  .counter {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  /* Foot */
+  .foot {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .foot__line {
+    font-size: 11.5px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--gold-dark);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 6px;
+  }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--gold-dark); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__sep { margin: 0 6px; opacity: 0.5; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass--clinking, .ripple { animation: none; }
+  }
+</style>
