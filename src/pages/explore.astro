@@ -1,0 +1,445 @@
+---
+/**
+ * /explore — the PointCast Feature Explorer.
+ *
+ * One page that surfaces every public room/surface in the site, bucketed
+ * by mental geography (Drum, Nouns Battler, Agents, Sing, Visit, etc.),
+ * the 10 channels, and the 4 external apps. Search + filter chips are
+ * client-only so the page works without JS as a flat directory.
+ *
+ * Auto-built — see src/lib/explore.ts. Adding a new src/pages/*.astro
+ * file shows up here on the next build.
+ *
+ * Aesthetic: chunky pixel-card tiles, saturated CRT-y colors, monospace
+ * everywhere — geocities-meets-simcity, intentionally not the polished
+ * Sparrow stack. Keyboard "/" focuses search, "?" hits a random door.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { FEATURES, CATEGORIES, countByCategory } from '../lib/explore';
+import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import { CHANNELS } from '../lib/channels';
+
+const counts = countByCategory();
+const total = FEATURES.length;
+const channelList = Object.values(CHANNELS);
+
+const orderedCategories = CATEGORIES.filter((c) => (counts[c.key] ?? 0) > 0).concat([
+  { key: 'misc', label: 'Other Rooms', blurb: 'Everything else — the long tail.', match: () => true },
+]);
+
+const featuresByCat: Record<string, typeof FEATURES> = {};
+for (const c of orderedCategories) featuresByCat[c.key] = [];
+for (const f of FEATURES) (featuresByCat[f.category] ??= []).push(f);
+
+const slugList = JSON.stringify(FEATURES.map((f) => f.slug));
+
+const title = 'PointCast Feature Explorer';
+const description =
+  'One directory of every PointCast surface — drum hub, Nouns Battler, agent lanes, Sing, Visit log, sprints, local rooms, channels, apps. Filter, search, click. Auto-built from the page tree.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/explore',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/explore',
+  numberOfItems: total,
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/explore.json', title: 'PointCast Explorer (JSON)' }]}
+>
+  <main class="explorer">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>explore</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">▓▒░ FEATURE EXPLORER · {total} ROOMS ░▒▓</p>
+      <h1>Every door in PointCast, on one street.</h1>
+      <p class="lede">
+        PointCast has grown into a small internet town. This is the directory:
+        every public surface, bucketed by neighborhood, searchable, walkable.
+        Press <kbd>/</kbd> to search, <kbd>?</kbd> for a random door, <kbd>Esc</kbd> to clear.
+      </p>
+      <p class="agent-link">
+        Agents: see <a href="/explore.json">/explore.json</a> for the structured manifest.
+      </p>
+    </header>
+
+    <section class="controls" aria-label="Filter">
+      <div class="row">
+        <label class="search">
+          <span class="srlbl">Search</span>
+          <input
+            id="explorer-search"
+            type="search"
+            placeholder="search rooms, e.g. drum, nouns, sing…"
+            autocomplete="off"
+          />
+        </label>
+        <button id="random-door" type="button" class="random" title="Random door (?)">
+          <span aria-hidden="true">⚀</span> random
+        </button>
+      </div>
+      <div class="chips" role="tablist" aria-label="Category filter">
+        <button class="chip is-on" data-cat="all" type="button">
+          All <em>{total}</em>
+        </button>
+        {orderedCategories.map((c) => (
+          <button class="chip" data-cat={c.key} type="button">
+            {c.label} <em>{counts[c.key] ?? featuresByCat[c.key]?.length ?? 0}</em>
+          </button>
+        ))}
+      </div>
+    </section>
+
+    <section class="channels">
+      <header class="bucket-head">
+        <h2><span class="dot dot--ch"></span>Channels</h2>
+        <p>The 10 BLOCKS.md primitives — every block belongs to one.</p>
+        <span class="bucket-count">{channelList.length}</span>
+      </header>
+      <ul class="ch-grid">
+        {channelList.map((ch) => (
+          <li class="ch-tile" style={`--ch-600: ${ch.color600}; --ch-50: ${ch.color50}`}>
+            <a href={`/c/${ch.slug}`}>
+              <span class="ch-code">{ch.code}</span>
+              <span class="ch-name">{ch.name}</span>
+              <span class="ch-purpose">{ch.purpose}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {orderedCategories.map((c) => {
+      const items = featuresByCat[c.key];
+      if (!items || items.length === 0) return null;
+      return (
+        <section class="bucket" data-cat={c.key}>
+          <header class="bucket-head">
+            <h2><span class="dot"></span>{c.label}</h2>
+            <p>{c.blurb}</p>
+            <span class="bucket-count">{items.length}</span>
+          </header>
+          <ul class="grid">
+            {items.map((f) => (
+              <li class="tile" data-haystack={`${f.slug} ${f.title} ${f.description}`.toLowerCase()}>
+                <a href={f.slug}>
+                  <span class="slug">{f.slug}</span>
+                  <span class="title">{f.title}</span>
+                  {f.description && <span class="dek">{f.description}</span>}
+                  <span class="cta">enter →</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    })}
+
+    <section class="apps" data-cat="apps">
+      <header class="bucket-head">
+        <h2><span class="dot dot--apps"></span>External Apps</h2>
+        <p>Standalone surfaces that live outside this repo but flag up here.</p>
+        <span class="bucket-count">{POINTCAST_APPS.length}</span>
+      </header>
+      <ul class="grid">
+        {POINTCAST_APPS.map((a) => (
+          <li class="tile tile--ext" data-haystack={`${a.name} ${a.url} ${a.description}`.toLowerCase()}>
+            <a href={a.url} target="_blank" rel="noopener">
+              <span class="slug">{a.url.replace(/^https?:\/\//, '')}</span>
+              <span class="title">{a.name}</span>
+              <span class="dek">{a.description}</span>
+              <span class="cta">launch ↗</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <p id="empty" class="empty" hidden>No rooms match — try another word.</p>
+
+    <footer class="ex-foot">
+      <span>·</span><span>·</span><span>·</span>
+      <p>{total} rooms · {channelList.length} channels · {POINTCAST_APPS.length} apps</p>
+      <span>·</span><span>·</span><span>·</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ slugList }}>
+  (function () {
+    var search = document.getElementById('explorer-search');
+    var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+    var tiles = Array.prototype.slice.call(document.querySelectorAll('.tile'));
+    var sections = Array.prototype.slice.call(document.querySelectorAll('.bucket, .apps'));
+    var empty = document.getElementById('empty');
+    var random = document.getElementById('random-door');
+
+    var activeCat = 'all';
+    var query = '';
+    var slugs = [];
+    try { slugs = JSON.parse(slugList); } catch (e) { slugs = []; }
+
+    function apply() {
+      var q = query.trim().toLowerCase();
+      var visible = 0;
+      tiles.forEach(function (tile) {
+        var section = tile.closest('.bucket') || tile.closest('.apps');
+        var tileCat = 'misc';
+        if (section) {
+          if (section.classList.contains('apps')) tileCat = 'apps';
+          else if (section.dataset && section.dataset.cat) tileCat = section.dataset.cat;
+        }
+        var hay = tile.dataset.haystack || (tile.textContent || '').toLowerCase();
+        var catOk = activeCat === 'all' || tileCat === activeCat;
+        var qOk = q === '' || hay.indexOf(q) !== -1;
+        var show = catOk && qOk;
+        tile.classList.toggle('is-hidden', !show);
+        if (show) visible++;
+      });
+      sections.forEach(function (section) {
+        var anyVisible = !!section.querySelector('.tile:not(.is-hidden)');
+        section.classList.toggle('is-hidden', !anyVisible);
+      });
+      if (empty) empty.hidden = visible !== 0;
+    }
+
+    if (search) {
+      search.addEventListener('input', function (e) {
+        query = e.target.value;
+        apply();
+      });
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        chips.forEach(function (c) { c.classList.remove('is-on'); });
+        chip.classList.add('is-on');
+        activeCat = chip.dataset.cat || 'all';
+        apply();
+      });
+    });
+
+    function rollDoor() {
+      if (!slugs.length) return;
+      var pick = slugs[Math.floor(Math.random() * slugs.length)];
+      window.location.href = pick;
+    }
+    if (random) random.addEventListener('click', rollDoor);
+
+    document.addEventListener('keydown', function (e) {
+      var tag = (e.target && e.target.tagName) || '';
+      var inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === '/' && !inField) {
+        e.preventDefault();
+        if (search) search.focus();
+      } else if (e.key === '?' && !inField) {
+        e.preventDefault();
+        rollDoor();
+      } else if (e.key === 'Escape' && inField && search && e.target === search) {
+        search.value = '';
+        query = '';
+        apply();
+        search.blur();
+      }
+    });
+  })();
+</script>
+
+<style>
+  .explorer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px clamp(16px, 4vw, 36px) 96px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #131110;
+  }
+
+  .crumb { font-size: 12px; color: #5a554f; margin-bottom: 18px; }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px dotted; }
+
+  .hero { padding: 18px 0 28px; border-bottom: 3px double #131110; margin-bottom: 24px; }
+  .kicker { font-size: 12px; letter-spacing: 0.12em; color: #b04a1c; margin: 0 0 10px; }
+  .hero h1 {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 800;
+    margin: 0 0 12px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .lede { max-width: 680px; color: #3b3833; font-size: 14px; line-height: 1.55; margin: 0 0 8px; }
+  .lede kbd {
+    background: #131110; color: #fbf7ee;
+    font-family: inherit; font-size: 11px;
+    padding: 1px 6px; border-radius: 0;
+    box-shadow: 2px 2px 0 #b04a1c;
+  }
+  .agent-link { font-size: 12px; color: #5a554f; margin: 0; }
+  .agent-link a { color: #185fa5; }
+
+  .controls {
+    position: sticky; top: 0; z-index: 5;
+    background: #fbf7ee;
+    padding: 14px 0;
+    border-bottom: 2px solid #131110;
+    margin-bottom: 28px;
+    display: grid; gap: 12px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .search { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .srlbl { font-size: 11px; letter-spacing: 0.16em; color: #6a6258; }
+  #explorer-search {
+    flex: 1; min-width: 0;
+    font: inherit; font-size: 14px;
+    padding: 10px 12px;
+    border: 2px solid #131110;
+    background: #fffef9;
+    box-shadow: 3px 3px 0 #131110;
+    border-radius: 0;
+  }
+  #explorer-search:focus { outline: none; background: #fff8d9; }
+  .random {
+    font: inherit; font-size: 12px;
+    padding: 10px 14px;
+    border: 2px solid #131110;
+    background: #ffd84a;
+    box-shadow: 3px 3px 0 #131110;
+    cursor: pointer;
+    white-space: nowrap;
+    border-radius: 0;
+  }
+  .random:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 #b04a1c; background: #ffe070; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font: inherit; font-size: 12px;
+    padding: 6px 10px;
+    border: 2px solid #131110;
+    background: #fffef9;
+    color: #131110;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #131110;
+    transition: transform 80ms ease;
+    border-radius: 0;
+  }
+  .chip em { font-style: normal; color: #777; margin-left: 4px; }
+  .chip:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 #131110; }
+  .chip.is-on { background: #ffd84a; }
+  .chip.is-on em { color: #5a4a00; }
+
+  .bucket, .channels, .apps { margin: 32px 0; }
+  .bucket-head {
+    display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 1px dashed #131110; padding-bottom: 8px; margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .bucket-head h2 {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 20px; font-weight: 800; margin: 0;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .bucket-head p { color: #5a554f; font-size: 12px; margin: 0; flex: 1; }
+  .bucket-count {
+    font-size: 11px; padding: 2px 8px;
+    background: #131110; color: #fffef9;
+  }
+  .dot { width: 14px; height: 14px; background: #b04a1c; display: inline-block; box-shadow: 2px 2px 0 #131110; }
+  .dot--apps { background: #185fa5; }
+  .dot--ch { background: #6a3fb5; }
+
+  .grid {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .tile {
+    background: #fffef9;
+    border: 2px solid #131110;
+    box-shadow: 4px 4px 0 #131110;
+    transition: transform 90ms ease, box-shadow 90ms ease;
+  }
+  .tile:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #b04a1c; }
+  .tile a {
+    display: grid; gap: 4px;
+    padding: 12px 12px 10px;
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+    grid-template-rows: auto auto 1fr auto;
+  }
+  .tile .slug { font-size: 11px; color: #b04a1c; letter-spacing: 0.04em; }
+  .tile .title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700; font-size: 15px; line-height: 1.25;
+  }
+  .tile .dek { font-size: 12px; color: #45413c; line-height: 1.45; }
+  .tile .cta {
+    font-size: 11px; color: #131110; margin-top: 6px;
+    border-top: 1px dotted #131110; padding-top: 6px;
+  }
+  .tile--ext { background: #f0f6ff; }
+  .tile--ext .slug { color: #185fa5; }
+
+  .ch-grid {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  .ch-tile {
+    background: var(--ch-50);
+    border: 2px solid var(--ch-600);
+    box-shadow: 3px 3px 0 var(--ch-600);
+    transition: transform 90ms ease;
+  }
+  .ch-tile:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #131110; }
+  .ch-tile a {
+    display: grid; gap: 4px;
+    padding: 10px 12px;
+    text-decoration: none;
+    color: #131110;
+  }
+  .ch-code {
+    font-size: 11px; letter-spacing: 0.12em;
+    color: var(--ch-600); font-weight: 700;
+  }
+  .ch-name {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 800; font-size: 16px;
+  }
+  .ch-purpose { font-size: 12px; color: #45413c; line-height: 1.4; }
+
+  .empty {
+    text-align: center; padding: 40px; font-size: 14px;
+    border: 2px dashed #131110; background: #fff8d9;
+  }
+
+  .ex-foot {
+    margin-top: 64px;
+    border-top: 3px double #131110;
+    padding-top: 18px;
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    color: #5a554f; font-size: 12px;
+  }
+  .ex-foot p { margin: 0; }
+  .ex-foot span { color: #b04a1c; }
+
+  .tile.is-hidden, .bucket.is-hidden, .apps.is-hidden { display: none; }
+
+  @media (max-width: 600px) {
+    .controls { position: static; }
+    .grid { grid-template-columns: 1fr; }
+    .row { flex-direction: column; align-items: stretch; }
+    .random { width: 100%; }
+  }
+</style>
