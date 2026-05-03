@@ -33,8 +33,20 @@ interface FreshRoom {
 // Curated set of internal rooms worth surfacing. Ordered roughly by
 // recency of ship / importance. Day-rotated picks keep it fresh.
 const INTERNAL_ROOMS: FreshRoom[] = [
+  { slug: 'observatory', name: 'The Observatory', kicker: 'CONSTELLATIONS · LOCAL STATE',  channel: 'CH.SKY',   href: '/observatory', kind: 'internal' },
+  { slug: 'cabinet',     name: 'The Cabinet',    kicker: 'LOCAL SHELF · RECEIPTS',        channel: 'CH.SHELF', href: '/cabinet',    kind: 'internal' },
+  { slug: 'signal-garden', name: 'Signal Garden', kicker: 'LOCAL ACTIVITY · GROWTH',      channel: 'CH.SIGNAL', href: '/signal-garden', kind: 'internal' },
+  { slug: 'gallery-wall', name: 'Gallery Wall',  kicker: 'CURATION · SHOW CARDS',         channel: 'CH.CURATE', href: '/gallery-wall', kind: 'internal' },
+  { slug: 'ritual-clock', name: 'Ritual Clock',  kicker: 'DAILY CADENCE · MARKS',          channel: 'CH.TIME', href: '/ritual-clock', kind: 'internal' },
+  { slug: 'exchange-table', name: 'Exchange Table', kicker: 'WISHLIST · OFFERS',           channel: 'CH.SWAP', href: '/exchange-table', kind: 'internal' },
+  { slug: 'provenance-ledger', name: 'Provenance Ledger', kicker: 'LOCAL PROOFS · EXPORTS', channel: 'CH.PROOF', href: '/provenance-ledger', kind: 'internal' },
+  { slug: 'world-atlas', name: 'World Atlas',    kicker: 'LANDMARKS · GEMS · ROUTES',      channel: 'CH.WORLD', href: '/world-atlas', kind: 'internal' },
+  { slug: 'mint-studio', name: 'Mint Studio',    kicker: 'ART BRIEF · METADATA',          channel: 'CH.MINT', href: '/mint-studio', kind: 'internal' },
+  { slug: 'harbor-log',  name: 'Harbor Log',     kicker: 'MORNING OCEAN · WATCHLIST',     channel: 'CH.OCEAN', href: '/harbor-log',  kind: 'internal' },
+  { slug: 'cat-passport', name: 'Cat Passport',  kicker: 'ZEN CATS · GEMS · LANDMARKS',   channel: 'CH.CAT',  href: '/cat-passport', kind: 'internal' },
+  { slug: 'referral-garden', name: 'Referral Garden', kicker: 'INVITES · DISCLOSURE',     channel: 'CH.GROW', href: '/referral-garden', kind: 'internal' },
+  { slug: 'sats-path',   name: 'Sats Path',      kicker: 'BITCOIN READINESS · MAP',       channel: 'CH.SATS', href: '/sats-path',   kind: 'internal' },
   { slug: 'wire',        name: 'PointCast Wire', kicker: 'LIVE TICKER · EVENTS',        channel: 'CH.FD',  href: '/wire',        kind: 'internal' },
-  { slug: 'nouns-open-circuit', name: 'Nouns Open Circuit', kicker: 'AGENT LEAGUE · NOUNS', channel: 'CH.BTL', href: '/nouns-open-circuit', kind: 'internal' },
   { slug: 'farm',        name: 'Sam\u2019s Plot', kicker: 'FARMING GAME · 9 TILES',      channel: 'CH.GDN', href: '/farm',        kind: 'internal' },
   { slug: 'agent-derby', name: 'Agent Derby',    kicker: 'DETERMINISTIC RACING · GAME',  channel: 'CH.BTL', href: '/agent-derby', kind: 'internal' },
   { slug: 'room',        name: 'Listening Room', kicker: 'SPOTIFY COMPANION · CURSORS',  channel: 'CH.SPN', href: '/room',        kind: 'internal' },
@@ -46,9 +58,8 @@ const INTERNAL_ROOMS: FreshRoom[] = [
 ];
 
 // Day-seeded deterministic pick — same viewers on same day see same
-// lineup, but the selection rotates daily. Fisher-Yates-ish with a
-// seeded RNG so we just pick 3 internal rooms to surface alongside
-// the two satellites.
+// lineup, but the selection rotates daily. Keep the newest collector
+// rooms pinned, then rotate one internal room alongside the two satellites.
 function daySeed(): number {
   const day = Math.floor(Date.now() / (24 * 3600 * 1000));
   return ((day * 2654435761) >>> 0) || 1;
@@ -66,13 +77,15 @@ function pickN<T>(items: T[], n: number, seed: number): T[] {
 }
 
 const seed = daySeed();
-const internalPicks = pickN(INTERNAL_ROOMS, 3, seed);
-const satellites: FreshRoom[] = POINTCAST_APPS.map((a) => ({
+const pinnedRooms = INTERNAL_ROOMS.filter((room) => room.slug === 'observatory' || room.slug === 'cabinet');
+const rotatingRooms = INTERNAL_ROOMS.filter((room) => room.slug !== 'observatory' && room.slug !== 'cabinet');
+const internalPicks = [...pinnedRooms, ...pickN(rotatingRooms, 1, seed)];
+const satellites: FreshRoom[] = POINTCAST_APPS.filter((a) => a.kind === 'satellite').map((a) => ({
   slug: a.slug,
   name: a.name,
   kicker: a.kicker,
   channel: a.channel,
-  href: `/${a.slug}`,
+  href: a.path,
   kind: 'external',
 }));
 

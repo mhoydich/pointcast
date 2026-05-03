@@ -1,0 +1,274 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { CURATOR_THEMES, FEATURED_COLLECTIBLE_IMAGES } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('gallery-wall')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(0, 6).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+const starterWorks = FEATURED_COLLECTIBLE_IMAGES.slice(0, 12);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/gallery-wall',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Curate the collection into small rooms."
+    dek="A wall builder for cats, ocean cards, route memories, and receipts. Each saved wall becomes a local show card that the Cabinet can keep and the Observatory can turn into a star."
+    images={heroImages}
+    stats={[
+      { label: 'Themes', value: CURATOR_THEMES.length },
+      { label: 'Works', value: starterWorks.length },
+      { label: 'Storage', value: 'local' },
+      { label: 'Output', value: 'show' },
+    ]}
+    links={[
+      { href: '/cabinet', label: 'Cabinet' },
+      { href: '/observatory', label: 'Sky' },
+      { href: '/world-atlas', label: 'Atlas' },
+    ]}
+  >
+    <section class="app-section gallery-wall" data-gallery-wall>
+      <div class="gallery-layout">
+        <section class="wall-stage" aria-label="Curated wall preview">
+          <div class="wall-stage__head">
+            <div>
+              <p class="mono-note" data-wall-kicker>{CURATOR_THEMES[0].mood}</p>
+              <h2 data-wall-title>{CURATOR_THEMES[0].title}</h2>
+            </div>
+            <span data-wall-count>4 works</span>
+          </div>
+          <div class="wall-grid" data-wall-grid>
+            {starterWorks.slice(0, 4).map((work) => (
+              <article>
+                <img src={work.imageUrl} alt={`${work.title} artwork`} width="1024" height="1024" loading="eager" decoding="async" />
+                <span>{work.collection}</span>
+                <strong>{work.title}</strong>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <aside class="tool-panel wall-controls">
+          <p class="mono-note">Curator Desk</p>
+          <label>
+            Wall theme
+            <select data-theme-select>
+              {CURATOR_THEMES.map((theme) => (
+                <option value={theme.id}>{theme.title}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Show title
+            <input data-show-title value="Pacific Proof Room" maxlength="64" />
+          </label>
+          <label>
+            Wall note
+            <textarea data-show-note>Four pieces, one quiet thesis.</textarea>
+          </label>
+          <div class="button-row">
+            <button type="button" data-build-wall>Assemble wall</button>
+            <button type="button" data-save-wall>Save show</button>
+          </div>
+        </aside>
+      </div>
+
+      <section class="show-ledger" aria-labelledby="show-ledger-title">
+        <div>
+          <p class="mono-note">Saved Shows</p>
+          <h2 id="show-ledger-title">Local show cards</h2>
+        </div>
+        <ol class="ledger-list" data-show-list></ol>
+      </section>
+    </section>
+  </MicroAppShell>
+  <script id="gallery-themes" type="application/json" is:inline set:html={JSON.stringify(CURATOR_THEMES)}></script>
+  <script id="gallery-works" type="application/json" is:inline set:html={JSON.stringify(starterWorks)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-gallery-wall]');
+    const themeEl = document.querySelector('#gallery-themes');
+    const worksEl = document.querySelector('#gallery-works');
+    if (!root || !themeEl || !worksEl) return;
+
+    const themes = JSON.parse(themeEl.textContent || '[]');
+    const works = JSON.parse(worksEl.textContent || '[]');
+    const storageKey = 'pc:gallery-wall:shows';
+    let currentWorks = works.slice(0, 4);
+
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+    const readShows = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { return []; }
+    };
+    const themeById = (id) => themes.find((theme) => theme.id === id) || themes[0];
+    const selectedTheme = () => themeById(root.querySelector('[data-theme-select]')?.value);
+    const renderWall = () => {
+      const theme = selectedTheme();
+      root.querySelector('[data-wall-kicker]').textContent = theme.mood;
+      root.querySelector('[data-wall-title]').textContent = root.querySelector('[data-show-title]').value || theme.title;
+      root.querySelector('[data-wall-count]').textContent = `${currentWorks.length} works`;
+      root.querySelector('[data-wall-grid]').innerHTML = currentWorks.map((work) => `
+        <article>
+          <img src="${escapeHtml(work.imageUrl)}" alt="${escapeHtml(work.title)} artwork" width="1024" height="1024" loading="lazy" decoding="async">
+          <span>${escapeHtml(work.collection)}</span>
+          <strong>${escapeHtml(work.title)}</strong>
+        </article>
+      `).join('');
+    };
+    const buildWall = () => {
+      const theme = selectedTheme();
+      const seed = Array.from(`${theme.id}-${Date.now()}`).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      const shuffled = works.slice().sort((a, b) => ((a.id.charCodeAt(0) + seed) % 17) - ((b.id.charCodeAt(0) + seed) % 17));
+      currentWorks = shuffled.slice(0, 4);
+      renderWall();
+    };
+    const renderShows = () => {
+      const shows = readShows().slice(-8).reverse();
+      root.querySelector('[data-show-list]').innerHTML = shows.length ? shows.map((show) => `
+        <li>
+          <strong>${escapeHtml(show.title)}</strong>
+          <span>${escapeHtml(show.theme)} - ${escapeHtml(show.works.length)} works - ${escapeHtml(show.savedAt)}</span>
+        </li>
+      `).join('') : '<li><strong>No walls saved yet.</strong><span>The first show card will appear here.</span></li>';
+    };
+
+    root.querySelector('[data-theme-select]')?.addEventListener('change', () => {
+      const theme = selectedTheme();
+      root.querySelector('[data-show-note]').value = `${theme.wall}. ${theme.mood}.`;
+      renderWall();
+    });
+    root.querySelector('[data-show-title]')?.addEventListener('input', renderWall);
+    root.querySelector('[data-build-wall]')?.addEventListener('click', buildWall);
+    root.querySelector('[data-save-wall]')?.addEventListener('click', () => {
+      const theme = selectedTheme();
+      const shows = readShows();
+      shows.push({
+        id: `show-${Date.now()}`,
+        title: root.querySelector('[data-show-title]').value || theme.title,
+        theme: theme.title,
+        note: root.querySelector('[data-show-note]').value,
+        works: currentWorks,
+        savedAt: new Date().toLocaleString(),
+      });
+      localStorage.setItem(storageKey, JSON.stringify(shows.slice(-24)));
+      renderShows();
+    });
+
+    renderWall();
+    renderShows();
+  })();
+</script>
+
+<style>
+  .gallery-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    gap: 12px;
+  }
+  .wall-stage {
+    border: 1px solid var(--pc-rule-soft);
+    background:
+      linear-gradient(90deg, rgba(18, 17, 14, 0.04) 1px, transparent 1px),
+      #f9f6ee;
+    background-size: 34px 34px;
+    padding: 14px;
+    min-width: 0;
+  }
+  .wall-stage__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .wall-stage__head span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .wall-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: end;
+  }
+  .wall-grid article {
+    display: grid;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid rgba(18, 17, 14, 0.12);
+    padding: 8px;
+    min-width: 0;
+  }
+  .wall-grid article:nth-child(2),
+  .wall-grid article:nth-child(4) {
+    transform: translateY(22px);
+  }
+  .wall-grid img {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    background: #eee7dc;
+  }
+  .wall-grid span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .wall-grid strong {
+    font-size: 15px;
+    line-height: 1.05;
+  }
+  .show-ledger {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .show-ledger .ledger-list li span {
+    display: block;
+    margin-top: 5px;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+  }
+  @media (max-width: 880px) {
+    .gallery-layout,
+    .show-ledger {
+      grid-template-columns: 1fr;
+    }
+    .wall-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wall-grid article:nth-child(2),
+    .wall-grid article:nth-child(4) {
+      transform: none;
+    }
+  }
+</style>

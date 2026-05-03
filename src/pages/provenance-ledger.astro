@@ -1,0 +1,315 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { COLLECTION_SOURCES, FEATURED_COLLECTIBLE_IMAGES } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('provenance-ledger')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(2, 8).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/provenance-ledger',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'UtilityApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Make the local collection legible."
+    dek="A proof desk that reads browser-held receipts across PointCast rooms, normalizes them, and saves a provenance sheet with a checksum-style marker."
+    images={heroImages}
+    stats={[
+      { label: 'Sources', value: COLLECTION_SOURCES.length },
+      { label: 'Export', value: 'JSON' },
+      { label: 'Custody', value: 'local' },
+      { label: 'Chain', value: 'manual' },
+    ]}
+    links={[
+      { href: '/cabinet', label: 'Cabinet' },
+      { href: '/exchange-table', label: 'Exchange' },
+      { href: '/mint-studio', label: 'Mint' },
+    ]}
+  >
+    <section class="app-section provenance-ledger" data-provenance-ledger>
+      <div class="proof-layout">
+        <section class="proof-sheet">
+          <div class="proof-sheet__head">
+            <div>
+              <p class="mono-note">Proof Sheet</p>
+              <h2 data-proof-title>Unscanned cabinet</h2>
+            </div>
+            <strong data-proof-id>PC-LOCAL-0000</strong>
+          </div>
+          <div class="proof-stats">
+            <article><span>Entries</span><strong data-proof-count>0</strong></article>
+            <article><span>Sources</span><strong data-proof-sources>0</strong></article>
+            <article><span>Checksum</span><strong data-proof-short>0000</strong></article>
+          </div>
+          <ol class="proof-entries" data-proof-entries></ol>
+        </section>
+
+        <aside class="tool-panel tool-panel--ink proof-controls">
+          <p class="mono-note">Ledger Controls</p>
+          <h2 data-proof-reading>Ready to scan</h2>
+          <p data-proof-copy>Local receipts from PointCast apps will resolve into a compact proof card.</p>
+          <div class="button-row">
+            <button type="button" data-scan-proof>Scan local receipts</button>
+            <button type="button" data-save-proof>Save proof sheet</button>
+          </div>
+          <pre data-proof-json>{'{}'}</pre>
+        </aside>
+      </div>
+
+      <section class="source-grid" aria-label="Provenance sources">
+        {COLLECTION_SOURCES.map((source) => (
+          <article style={`--source-color:${source.color}`} data-source-card={source.id}>
+            <span></span>
+            <p class="mono-note">{source.label}</p>
+            <strong data-source-count={source.id}>0</strong>
+            <a href={source.href}>Open</a>
+          </article>
+        ))}
+      </section>
+    </section>
+  </MicroAppShell>
+  <script id="provenance-sources" type="application/json" is:inline set:html={JSON.stringify(COLLECTION_SOURCES)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-provenance-ledger]');
+    const dataEl = document.querySelector('#provenance-sources');
+    if (!root || !dataEl) return;
+
+    const sources = JSON.parse(dataEl.textContent || '[]');
+    const storageKey = 'pc:provenance-ledger:exports';
+    let currentProof = { id: 'PC-LOCAL-0000', entries: [], checksum: '0000', generatedAt: '' };
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+    const readArray = (key) => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && typeof parsed === 'object') return Object.values(parsed);
+      } catch {}
+      return [];
+    };
+    const itemName = (item) => {
+      if (item == null) return 'local receipt';
+      if (typeof item === 'string' || typeof item === 'number') return String(item);
+      return item.title || item.name || item.alias || item.subject || item.label || item.id || 'local receipt';
+    };
+    const itemDetail = (item) => {
+      if (!item || typeof item !== 'object') return '';
+      return [
+        item.collection,
+        item.city && item.country ? `${item.city}, ${item.country}` : item.country,
+        item.vessel,
+        item.rarity,
+        item.savedAt || item.date || item.time,
+      ].filter(Boolean).slice(0, 3).join(' - ');
+    };
+    const checksum = (value) => {
+      let hash = 2166136261;
+      for (let index = 0; index < value.length; index++) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(16).toUpperCase().padStart(8, '0');
+    };
+    const scan = () => {
+      const entries = [];
+      sources.forEach((source) => {
+        const items = readArray(source.key);
+        root.querySelector(`[data-source-count="${source.id}"]`).textContent = String(items.length);
+        items.forEach((item, index) => {
+          entries.push({
+            source: source.label,
+            sourceId: source.id,
+            index,
+            name: itemName(item),
+            detail: itemDetail(item),
+          });
+        });
+      });
+      const generatedAt = new Date().toISOString();
+      const body = JSON.stringify({ generatedAt, entries });
+      const sum = checksum(body);
+      currentProof = {
+        id: `PC-LOCAL-${sum.slice(0, 6)}`,
+        entries,
+        checksum: sum,
+        generatedAt,
+      };
+      renderProof();
+    };
+    const renderProof = () => {
+      const activeSources = new Set(currentProof.entries.map((entry) => entry.sourceId)).size;
+      root.querySelector('[data-proof-title]').textContent = currentProof.entries.length ? 'Local provenance sheet' : 'Unscanned cabinet';
+      root.querySelector('[data-proof-id]').textContent = currentProof.id;
+      root.querySelector('[data-proof-count]').textContent = String(currentProof.entries.length);
+      root.querySelector('[data-proof-sources]').textContent = String(activeSources);
+      root.querySelector('[data-proof-short]').textContent = currentProof.checksum.slice(0, 4);
+      root.querySelector('[data-proof-reading]').textContent = currentProof.entries.length ? 'Proof sheet ready' : 'Ready to scan';
+      root.querySelector('[data-proof-copy]').textContent = currentProof.entries.length ? `${currentProof.entries.length} local receipts resolved.` : 'Local receipts from PointCast apps will resolve into a compact proof card.';
+      root.querySelector('[data-proof-json]').textContent = JSON.stringify(currentProof, null, 2);
+      root.querySelector('[data-proof-entries]').innerHTML = currentProof.entries.slice(0, 18).map((entry) => `
+        <li>
+          <span>${escapeHtml(entry.source)}</span>
+          <strong>${escapeHtml(entry.name)}</strong>
+          <small>${escapeHtml(entry.detail || 'local')}</small>
+        </li>
+      `).join('') || '<li><span>local</span><strong>No entries yet.</strong><small>scan the cabinet</small></li>';
+    };
+    const readExports = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { return []; }
+    };
+
+    root.querySelector('[data-scan-proof]')?.addEventListener('click', scan);
+    root.querySelector('[data-save-proof]')?.addEventListener('click', () => {
+      scan();
+      const exports = readExports();
+      exports.push(currentProof);
+      localStorage.setItem(storageKey, JSON.stringify(exports.slice(-24)));
+    });
+    scan();
+  })();
+</script>
+
+<style>
+  .proof-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 12px;
+  }
+  .proof-sheet {
+    border: 1px solid var(--pc-ink);
+    background: #fffaf0;
+    padding: 14px;
+    min-width: 0;
+  }
+  .proof-sheet__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    padding-bottom: 12px;
+  }
+  .proof-sheet__head > strong {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: #8A2432;
+  }
+  .proof-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .proof-stats article {
+    border: 1px solid rgba(18, 17, 14, 0.12);
+    background: #fff;
+    padding: 10px;
+  }
+  .proof-stats span,
+  .proof-entries span,
+  .proof-entries small {
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .proof-stats strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 25px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .proof-entries {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .proof-entries li {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr) minmax(120px, 0.6fr);
+    gap: 8px;
+    align-items: baseline;
+    border-bottom: 1px dotted rgba(18, 17, 14, 0.22);
+    padding-bottom: 8px;
+  }
+  .proof-controls pre {
+    overflow: auto;
+    max-height: 440px;
+    border: 1px solid rgba(246, 241, 228, 0.18);
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    color: #f6f1e4;
+    font-size: 12px;
+  }
+  .source-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .source-grid article {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--pc-rule-soft);
+    background: #fff;
+    padding: 10px;
+    overflow: hidden;
+  }
+  .source-grid article > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--source-color);
+  }
+  .source-grid strong {
+    font-size: 24px;
+    font-weight: 500;
+  }
+  .source-grid a {
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  @media (max-width: 900px) {
+    .proof-layout,
+    .source-grid {
+      grid-template-columns: 1fr;
+    }
+    .proof-entries li {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

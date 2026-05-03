@@ -1,0 +1,237 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { ATLAS_STOPS, FEATURED_COLLECTIBLE_IMAGES } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('world-atlas')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(1, 7).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+const firstStop = ATLAS_STOPS[0];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/world-atlas',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Plot the Zen Cats around the world."
+    dek="A route map for the luxury world-cat series: landmarks, gemstones, city moods, and local stamps that make the collection feel traveled before it ever leaves your browser."
+    images={heroImages}
+    stats={[
+      { label: 'Stops', value: ATLAS_STOPS.length },
+      { label: 'Gems', value: 'mapped' },
+      { label: 'Mode', value: 'travel' },
+      { label: 'Stamps', value: 'local' },
+    ]}
+    links={[
+      { href: '/cat-passport', label: 'Passport' },
+      { href: '/gallery-wall', label: 'Gallery' },
+      { href: '/zen-cats', label: 'Cats' },
+    ]}
+  >
+    <section class="app-section world-atlas" data-world-atlas>
+      <div class="atlas-layout">
+        <section class="atlas-map" aria-label="Zen Cat world route map">
+          <svg viewBox="0 0 1000 620" role="img" aria-labelledby="atlas-title atlas-desc">
+            <title id="atlas-title">Zen Cat world atlas map</title>
+            <desc id="atlas-desc">A stylized route map with collectible city stops.</desc>
+            <defs>
+              <linearGradient id="atlas-sea" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#d7e4df" />
+                <stop offset="100%" stop-color="#8fb2ba" />
+              </linearGradient>
+            </defs>
+            <rect width="1000" height="620" fill="url(#atlas-sea)" />
+            <path d="M100 160 C230 92 346 118 426 178 C526 252 658 192 742 142 C820 96 910 120 954 178" fill="none" stroke="#f8f1dd" stroke-width="18" stroke-linecap="round" opacity="0.72" />
+            <path d="M96 406 C218 348 314 380 410 420 C544 476 642 400 750 374 C850 350 912 390 956 452" fill="none" stroke="#f8f1dd" stroke-width="20" stroke-linecap="round" opacity="0.65" />
+            <path d="M154 232 C294 208 396 250 526 270 C666 292 766 268 880 224" fill="none" stroke="#274b5a" stroke-width="2" stroke-dasharray="5 10" opacity="0.38" />
+            <path d="M184 468 C314 408 456 392 584 416 C708 438 800 502 904 504" fill="none" stroke="#274b5a" stroke-width="2" stroke-dasharray="5 10" opacity="0.34" />
+            {ATLAS_STOPS.map((stop) => (
+              <g class="atlas-stop" data-stop-dot={stop.id} style={`--stop-color:${stop.color}`}>
+                <circle cx={stop.x} cy={stop.y} r="13" fill={stop.color} opacity="0.86" />
+                <circle cx={stop.x} cy={stop.y} r="5" fill="#fffaf0" />
+              </g>
+            ))}
+          </svg>
+        </section>
+
+        <aside class="tool-panel stop-card">
+          <img data-stop-image src={firstStop.imageUrl} alt={`${firstStop.title} style reference`} width="1024" height="1024" />
+          <p class="mono-note" data-stop-number>No. {String(firstStop.number).padStart(2, '0')} · {firstStop.rarity}</p>
+          <h2 data-stop-title>{firstStop.title}</h2>
+          <p data-stop-copy>{firstStop.city}, {firstStop.country} · {firstStop.gem} · {firstStop.mood}</p>
+          <dl>
+            <div><dt>Landmark</dt><dd data-stop-landmark>{firstStop.landmark}</dd></div>
+            <div><dt>Cat</dt><dd data-stop-cat>{firstStop.cat}</dd></div>
+            <div><dt>Gem</dt><dd data-stop-gem>{firstStop.gem}</dd></div>
+          </dl>
+          <div class="button-row">
+            <button type="button" data-stamp-stop>Stamp route</button>
+            <button type="button" data-next-stop>Next stop</button>
+          </div>
+        </aside>
+      </div>
+
+      <section class="atlas-ledger" aria-labelledby="atlas-ledger-title">
+        <div>
+          <p class="mono-note">Route Passport</p>
+          <h2 id="atlas-ledger-title"><span data-stamp-count>0</span> stamped</h2>
+        </div>
+        <ol class="ledger-list" data-atlas-stamps></ol>
+      </section>
+    </section>
+  </MicroAppShell>
+  <script id="atlas-stops" type="application/json" is:inline set:html={JSON.stringify(ATLAS_STOPS)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-world-atlas]');
+    const dataEl = document.querySelector('#atlas-stops');
+    if (!root || !dataEl) return;
+
+    const stops = JSON.parse(dataEl.textContent || '[]');
+    const storageKey = 'pc:world-atlas:stamps';
+    let selectedIndex = 0;
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+    const readStamps = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { return []; }
+    };
+    const saveStamps = (items) => localStorage.setItem(storageKey, JSON.stringify(items.slice(-80)));
+    const renderStop = () => {
+      const stop = stops[selectedIndex] || stops[0];
+      root.querySelector('[data-stop-image]').src = stop.imageUrl;
+      root.querySelector('[data-stop-image]').alt = `${stop.title} style reference`;
+      root.querySelector('[data-stop-number]').textContent = `No. ${String(stop.number).padStart(2, '0')} - ${stop.rarity}`;
+      root.querySelector('[data-stop-title]').textContent = stop.title;
+      root.querySelector('[data-stop-copy]').textContent = `${stop.city}, ${stop.country} - ${stop.gem} - ${stop.mood}`;
+      root.querySelector('[data-stop-landmark]').textContent = stop.landmark;
+      root.querySelector('[data-stop-cat]').textContent = stop.cat;
+      root.querySelector('[data-stop-gem]').textContent = stop.gem;
+      root.querySelectorAll('[data-stop-dot]').forEach((dot) => dot.classList.toggle('is-active', dot.dataset.stopDot === stop.id));
+    };
+    const renderStamps = () => {
+      const stamps = readStamps();
+      root.querySelector('[data-stamp-count]').textContent = String(stamps.length);
+      root.querySelector('[data-atlas-stamps]').innerHTML = stamps.slice(-12).reverse().map((stamp) => `
+        <li><strong>${escapeHtml(stamp.title)}</strong><span>${escapeHtml(stamp.city)}, ${escapeHtml(stamp.country)} - ${escapeHtml(stamp.gem)} - ${escapeHtml(stamp.savedAt)}</span></li>
+      `).join('') || '<li><strong>No atlas stamps yet.</strong><span>The first route will appear here.</span></li>';
+    };
+    root.querySelectorAll('[data-stop-dot]').forEach((dot) => {
+      dot.addEventListener('click', () => {
+        const index = stops.findIndex((stop) => stop.id === dot.dataset.stopDot);
+        selectedIndex = Math.max(0, index);
+        renderStop();
+      });
+    });
+    root.querySelector('[data-next-stop]')?.addEventListener('click', () => {
+      selectedIndex = (selectedIndex + 1) % stops.length;
+      renderStop();
+    });
+    root.querySelector('[data-stamp-stop]')?.addEventListener('click', () => {
+      const stop = stops[selectedIndex] || stops[0];
+      const stamps = readStamps().filter((stamp) => stamp.id !== stop.id);
+      stamps.push({ ...stop, savedAt: new Date().toLocaleString() });
+      saveStamps(stamps);
+      renderStamps();
+    });
+    renderStop();
+    renderStamps();
+  })();
+</script>
+
+<style>
+  .atlas-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+    gap: 12px;
+  }
+  .atlas-map {
+    border: 1px solid var(--pc-rule-soft);
+    background: #d7e4df;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .atlas-map svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 460px;
+  }
+  .atlas-stop {
+    cursor: pointer;
+  }
+  .atlas-stop circle {
+    transition: r 0.12s, opacity 0.12s;
+  }
+  .atlas-stop.is-active circle:first-child {
+    r: 19;
+    opacity: 1;
+    stroke: #fffaf0;
+    stroke-width: 3;
+  }
+  .stop-card img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--pc-rule-soft);
+    background: #f3eee4;
+    margin-bottom: 12px;
+  }
+  .stop-card dl {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 0;
+  }
+  .stop-card dt {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .stop-card dd {
+    margin: 4px 0 0;
+  }
+  .atlas-ledger {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .atlas-ledger .ledger-list li span {
+    display: block;
+    margin-top: 5px;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+  }
+  @media (max-width: 900px) {
+    .atlas-layout,
+    .atlas-ledger {
+      grid-template-columns: 1fr;
+    }
+    .atlas-map svg {
+      min-height: 320px;
+    }
+  }
+</style>

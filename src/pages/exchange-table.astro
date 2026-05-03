@@ -1,0 +1,245 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { EXCHANGE_LANES, FEATURED_COLLECTIBLE_IMAGES } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('exchange-table')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(8, 14).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+const promptCards = [
+  'Paris Moon Salon for a harbor rare',
+  'Eclipse Carrier watch signal',
+  'Genesis black cat wall slot',
+  'World Atlas Tokyo route',
+  'Mint Studio proof review',
+  'Morning Ocean epic reserve',
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/exchange-table',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Put collector intent on the table."
+    dek="A private board for wants, possible offers, and watch signals. It keeps the tone clean before anything graduates into a real sale, swap, or mint decision."
+    images={heroImages}
+    stats={[
+      { label: 'Lanes', value: EXCHANGE_LANES.length },
+      { label: 'Mode', value: 'private' },
+      { label: 'Custody', value: 'none' },
+      { label: 'Terms', value: 'manual' },
+    ]}
+    links={[
+      { href: '/gallery-wall', label: 'Gallery' },
+      { href: '/provenance-ledger', label: 'Ledger' },
+      { href: '/sats-path', label: 'Sats' },
+    ]}
+  >
+    <section class="app-section exchange-table" data-exchange-table>
+      <div class="exchange-layout">
+        <section class="table-surface" aria-label="Exchange lanes">
+          {EXCHANGE_LANES.map((lane) => (
+            <article class="exchange-lane" data-lane={lane.id}>
+              <p class="mono-note">{lane.label}</p>
+              <span>{lane.tone}</span>
+              <ol data-lane-list={lane.id}></ol>
+            </article>
+          ))}
+        </section>
+
+        <aside class="tool-panel exchange-form">
+          <p class="mono-note">Intent Card</p>
+          <h2>New note</h2>
+          <label>
+            Lane
+            <select data-exchange-lane>
+              {EXCHANGE_LANES.map((lane) => (
+                <option value={lane.id}>{lane.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Subject
+            <input data-exchange-subject value={promptCards[0]} maxlength="80" />
+          </label>
+          <label>
+            Note
+            <textarea data-exchange-note>Keep it friendly, disclosed, and small.</textarea>
+          </label>
+          <div class="prompt-grid">
+            {promptCards.map((prompt) => (
+              <button type="button" data-prompt={prompt}>{prompt}</button>
+            ))}
+          </div>
+          <div class="button-row">
+            <button type="button" data-add-note>Add note</button>
+            <button type="button" data-clear-table>Clear table</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </MicroAppShell>
+  <script id="exchange-lanes" type="application/json" is:inline set:html={JSON.stringify(EXCHANGE_LANES)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-exchange-table]');
+    const dataEl = document.querySelector('#exchange-lanes');
+    if (!root || !dataEl) return;
+
+    const lanes = JSON.parse(dataEl.textContent || '[]');
+    const storageKey = 'pc:exchange-table:wishes';
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+    const readNotes = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { return []; }
+    };
+    const saveNotes = (items) => localStorage.setItem(storageKey, JSON.stringify(items.slice(-60)));
+    const render = () => {
+      const notes = readNotes();
+      lanes.forEach((lane) => {
+        const list = root.querySelector(`[data-lane-list="${lane.id}"]`);
+        const laneNotes = notes.filter((note) => note.lane === lane.id).slice(-8).reverse();
+        list.innerHTML = laneNotes.length ? laneNotes.map((note) => `
+          <li>
+            <strong>${escapeHtml(note.subject)}</strong>
+            <span>${escapeHtml(note.note)}</span>
+            <small>${escapeHtml(note.savedAt)}</small>
+          </li>
+        `).join('') : '<li><strong>Open slot</strong><span>Nothing resting here yet.</span><small>local</small></li>';
+      });
+    };
+    root.querySelectorAll('[data-prompt]').forEach((button) => {
+      button.addEventListener('click', () => {
+        root.querySelector('[data-exchange-subject]').value = button.dataset.prompt;
+      });
+    });
+    root.querySelector('[data-add-note]')?.addEventListener('click', () => {
+      const subject = root.querySelector('[data-exchange-subject]').value.trim();
+      const note = root.querySelector('[data-exchange-note]').value.trim();
+      if (!subject) return;
+      const notes = readNotes();
+      notes.push({
+        id: `intent-${Date.now()}`,
+        lane: root.querySelector('[data-exchange-lane]').value,
+        subject,
+        note,
+        savedAt: new Date().toLocaleString(),
+      });
+      saveNotes(notes);
+      render();
+    });
+    root.querySelector('[data-clear-table]')?.addEventListener('click', () => {
+      localStorage.removeItem(storageKey);
+      render();
+    });
+    render();
+  })();
+</script>
+
+<style>
+  .exchange-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+    gap: 12px;
+  }
+  .table-surface {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    border: 1px solid var(--pc-rule-soft);
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.22), transparent),
+      #24342f;
+    padding: 12px;
+    min-width: 0;
+  }
+  .exchange-lane {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-height: 420px;
+    border: 1px solid rgba(246, 241, 228, 0.2);
+    background: rgba(246, 241, 228, 0.92);
+    padding: 12px;
+  }
+  .exchange-lane > span {
+    color: var(--pc-ink-muted);
+    line-height: 1.4;
+    min-height: 58px;
+  }
+  .exchange-lane ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .exchange-lane li {
+    display: grid;
+    gap: 5px;
+    border: 1px solid rgba(18, 17, 14, 0.12);
+    background: #fffaf1;
+    padding: 9px;
+  }
+  .exchange-lane strong {
+    line-height: 1.1;
+  }
+  .exchange-lane li span,
+  .exchange-lane small {
+    color: var(--pc-ink-muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .exchange-lane small {
+    font-family: var(--pc-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .prompt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .prompt-grid button {
+    justify-content: flex-start;
+    min-height: 54px;
+    text-align: left;
+  }
+  @media (max-width: 960px) {
+    .exchange-layout,
+    .table-surface {
+      grid-template-columns: 1fr;
+    }
+    .exchange-lane {
+      min-height: 0;
+    }
+  }
+  @media (max-width: 560px) {
+    .prompt-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

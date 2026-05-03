@@ -1,0 +1,298 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { FEATURED_COLLECTIBLE_IMAGES, RITUAL_SLOTS } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('ritual-clock')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(4, 10).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/ritual-clock',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'ProductivityApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Give the collection a daily pulse."
+    dek="A quiet collector clock for cat calm, harbor watching, studio receipts, and the night-sky read. Marks stay in this browser and become another object for the Cabinet."
+    images={heroImages}
+    stats={[
+      { label: 'Slots', value: RITUAL_SLOTS.length },
+      { label: 'Cadence', value: 'daily' },
+      { label: 'Sync', value: 'none' },
+      { label: 'Proof', value: 'local' },
+    ]}
+    links={[
+      { href: '/zen-cats', label: 'Cats' },
+      { href: '/harbor-log', label: 'Harbor' },
+      { href: '/observatory', label: 'Sky' },
+    ]}
+  >
+    <section class="app-section ritual-clock" data-ritual-clock>
+      <div class="clock-layout">
+        <section class="clock-face" aria-label="Daily ritual clock">
+          <div class="clock-face__core">
+            <p class="mono-note">Today</p>
+            <strong data-ritual-date>--</strong>
+            <span><b data-ritual-done>0</b> / {RITUAL_SLOTS.length} marked</span>
+          </div>
+          {RITUAL_SLOTS.map((slot, index) => (
+            <article class={`clock-slot clock-slot--${index + 1}`} style={`--slot-color:${slot.color}`} data-slot-card={slot.id}>
+              <span>{slot.hour}</span>
+              <strong>{slot.label}</strong>
+              <small>{slot.action}</small>
+            </article>
+          ))}
+        </section>
+
+        <aside class="tool-panel ritual-panel">
+          <p class="mono-note">Ritual Marks</p>
+          <h2 data-ritual-title>Open day</h2>
+          <p data-ritual-copy>Four small marks make a local cycle.</p>
+          <div class="ritual-buttons">
+            {RITUAL_SLOTS.map((slot) => (
+              <button type="button" data-mark-slot={slot.id}>
+                <span>{slot.hour}</span>
+                {slot.label}
+              </button>
+            ))}
+          </div>
+          <div class="button-row">
+            <button type="button" data-complete-cycle>Complete cycle</button>
+            <button type="button" data-clear-today>Clear today</button>
+          </div>
+        </aside>
+      </div>
+
+      <section class="ritual-ledger" aria-labelledby="ritual-ledger-title">
+        <div>
+          <p class="mono-note">Streak Ledger</p>
+          <h2 id="ritual-ledger-title"><span data-ritual-streak>0</span> full days</h2>
+        </div>
+        <ol class="ledger-list" data-ritual-list></ol>
+      </section>
+    </section>
+  </MicroAppShell>
+  <script id="ritual-slots" type="application/json" is:inline set:html={JSON.stringify(RITUAL_SLOTS)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-ritual-clock]');
+    const dataEl = document.querySelector('#ritual-slots');
+    if (!root || !dataEl) return;
+
+    const slots = JSON.parse(dataEl.textContent || '[]');
+    const storageKey = 'pc:ritual-clock:marks';
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+    const readMarks = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { return []; }
+    };
+    const saveMarks = (items) => localStorage.setItem(storageKey, JSON.stringify(items.slice(-120)));
+    const todayMarks = () => readMarks().filter((mark) => mark.date === dayKey);
+    const fullDays = (items) => {
+      const byDay = items.reduce((map, mark) => {
+        map[mark.date] = map[mark.date] || new Set();
+        map[mark.date].add(mark.slotId);
+        return map;
+      }, {});
+      return Object.values(byDay).filter((set) => set.size >= slots.length).length;
+    };
+    const render = () => {
+      const marks = readMarks();
+      const today = todayMarks();
+      const done = new Set(today.map((mark) => mark.slotId));
+      root.querySelector('[data-ritual-date]').textContent = dayKey;
+      root.querySelector('[data-ritual-done]').textContent = String(done.size);
+      root.querySelector('[data-ritual-streak]').textContent = String(fullDays(marks));
+      root.querySelector('[data-ritual-title]').textContent = done.size >= slots.length ? 'Cycle complete' : `${slots.length - done.size} marks open`;
+      root.querySelector('[data-ritual-copy]').textContent = done.size >= slots.length ? 'The day has a clean collector receipt.' : 'The clock is still taking shape.';
+      slots.forEach((slot) => {
+        const active = done.has(slot.id);
+        root.querySelector(`[data-slot-card="${slot.id}"]`)?.classList.toggle('is-marked', active);
+        root.querySelector(`[data-mark-slot="${slot.id}"]`)?.setAttribute('aria-pressed', String(active));
+      });
+      root.querySelector('[data-ritual-list]').innerHTML = marks.slice(-10).reverse().map((mark) => `
+        <li><strong>${escapeHtml(mark.label)}</strong><span>${escapeHtml(mark.date)} - ${escapeHtml(mark.time)}</span></li>
+      `).join('') || '<li><strong>No marks yet.</strong><span>The first quiet mark will land here.</span></li>';
+    };
+    const markSlot = (slot) => {
+      const marks = readMarks().filter((mark) => !(mark.date === dayKey && mark.slotId === slot.id));
+      marks.push({
+        id: `${dayKey}-${slot.id}`,
+        date: dayKey,
+        slotId: slot.id,
+        label: slot.label,
+        action: slot.action,
+        time: new Date().toLocaleTimeString(),
+      });
+      saveMarks(marks);
+      render();
+    };
+
+    slots.forEach((slot) => {
+      root.querySelector(`[data-mark-slot="${slot.id}"]`)?.addEventListener('click', () => markSlot(slot));
+    });
+    root.querySelector('[data-complete-cycle]')?.addEventListener('click', () => slots.forEach(markSlot));
+    root.querySelector('[data-clear-today]')?.addEventListener('click', () => {
+      saveMarks(readMarks().filter((mark) => mark.date !== dayKey));
+      render();
+    });
+    render();
+  })();
+</script>
+
+<style>
+  .clock-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.05fr);
+    gap: 12px;
+  }
+  .clock-face {
+    position: relative;
+    min-height: 560px;
+    border: 1px solid var(--pc-rule-soft);
+    background:
+      radial-gradient(circle at 50% 50%, rgba(245, 231, 189, 0.82), transparent 19%),
+      radial-gradient(circle at 50% 50%, transparent 34%, rgba(18, 17, 14, 0.08) 35%, transparent 36%),
+      linear-gradient(135deg, #f7f2e6, #e7eee9);
+    overflow: hidden;
+  }
+  .clock-face__core {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: 190px;
+    aspect-ratio: 1;
+    border: 1px solid var(--pc-ink);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    background: #fffaf0;
+    text-align: center;
+  }
+  .clock-face__core strong {
+    font-size: 22px;
+    font-weight: 500;
+  }
+  .clock-face__core span {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .clock-slot {
+    position: absolute;
+    width: 172px;
+    min-height: 116px;
+    border: 1px solid rgba(18, 17, 14, 0.18);
+    background: rgba(255, 255, 255, 0.78);
+    padding: 12px;
+    display: grid;
+    gap: 5px;
+    box-shadow: inset 4px 0 0 var(--slot-color);
+  }
+  .clock-slot.is-marked {
+    background: color-mix(in srgb, var(--slot-color) 18%, #fff);
+    border-color: var(--pc-ink);
+  }
+  .clock-slot span,
+  .clock-slot small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .clock-slot strong {
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 500;
+  }
+  .clock-slot--1 { top: 32px; left: 50%; transform: translateX(-50%); }
+  .clock-slot--2 { top: 50%; right: 26px; transform: translateY(-50%); }
+  .clock-slot--3 { bottom: 32px; left: 50%; transform: translateX(-50%); }
+  .clock-slot--4 { top: 50%; left: 26px; transform: translateY(-50%); }
+  .ritual-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .ritual-buttons button {
+    display: grid;
+    justify-items: start;
+    min-height: 74px;
+  }
+  .ritual-buttons button[aria-pressed="true"] {
+    background: #171510;
+    color: #fff;
+  }
+  .ritual-buttons span {
+    color: inherit;
+    opacity: 0.72;
+  }
+  .ritual-ledger {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .ritual-ledger .ledger-list li span {
+    display: block;
+    margin-top: 5px;
+    color: var(--pc-ink-muted);
+    font-size: 13px;
+  }
+  @media (max-width: 900px) {
+    .clock-layout,
+    .ritual-ledger {
+      grid-template-columns: 1fr;
+    }
+    .clock-face {
+      min-height: 520px;
+    }
+  }
+  @media (max-width: 560px) {
+    .clock-face {
+      min-height: auto;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .clock-face__core,
+    .clock-slot {
+      position: static;
+      transform: none;
+      width: auto;
+      aspect-ratio: auto;
+      border-radius: 0;
+    }
+    .ritual-buttons {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
