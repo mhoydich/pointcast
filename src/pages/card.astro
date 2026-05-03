@@ -1,0 +1,741 @@
+---
+/**
+ * /card — a shareable birthday card.
+ *
+ * Visit /card → see a form (TO, FROM, AGE).
+ * Submit → URL becomes /card?to=Sarah&from=Mike&age=30 + the page
+ * renders the filled-in card with confetti, a Noun derived from the
+ * recipient's name, and a "copy link" button.
+ *
+ * The recipient visits the URL → confetti fires on load, sees their
+ * personalized card, and gets a "send one back" button that generates
+ * the reverse URL with their name in FROM.
+ *
+ * Pure URL-based "messaging" — no server needed. Card content lives
+ * in query params, so the URL IS the card. Every send is a sharable
+ * artifact — a tweet, a text, an iMessage.
+ *
+ * Mike chat 2026-05-02: "you lead go" / "ok go when ready". Picked
+ * /card as the next move because it's the first multiplayer-by-default
+ * room in the cluster — sender + recipient, no signup needed by either.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/card — send a birthday card via URL';
+const description = "Type a name, get a shareable URL. The URL IS the card — no server, no signup, no app. The recipient visits the URL and sees their card with confetti. They can send one back. Pure URL-based birthday messaging.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/card',
+  name: '/card',
+  alternateName: 'send a birthday card via URL',
+  description,
+  url: 'https://pointcast.xyz/card',
+  applicationCategory: 'CommunicationApplication',
+  operatingSystem: 'Any (browser)',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="card-page">
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>card</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">★ CARD · A SHAREABLE BIRTHDAY CARD</p>
+      <h1 class="head__title">Type a name. Send the URL.</h1>
+      <p class="head__lede">
+        The URL <em>is</em> the card. No server, no signup, no app. Type
+        someone's name below — the URL updates with their card baked in.
+        Send the URL anywhere. They visit, see confetti, see their card,
+        and can send one back. <strong>Pure URL-based birthday
+        messaging.</strong>
+      </p>
+    </header>
+
+    <!-- Form view (shown when no recipient param) -->
+    <section class="form" id="form-view" aria-label="Compose a card">
+      <h2 class="form__title mono">+ COMPOSE</h2>
+      <div class="form__row">
+        <label for="to-input" class="form__label mono">TO *</label>
+        <input
+          id="to-input"
+          type="text"
+          maxlength="40"
+          placeholder="Sarah"
+          aria-describedby="to-help"
+        />
+        <p id="to-help" class="form__help">Required. Their first name or whatever they go by.</p>
+      </div>
+      <div class="form__row">
+        <label for="from-input" class="form__label mono">FROM · OPTIONAL</label>
+        <input
+          id="from-input"
+          type="text"
+          maxlength="40"
+          placeholder="Mike"
+        />
+      </div>
+      <div class="form__row">
+        <label for="age-input" class="form__label mono">AGE · OPTIONAL</label>
+        <input
+          id="age-input"
+          type="number"
+          min="1"
+          max="120"
+          placeholder="30"
+          inputmode="numeric"
+        />
+      </div>
+      <div class="form__row">
+        <label for="note-input" class="form__label mono">NOTE · OPTIONAL · ≤120 CHARS</label>
+        <input
+          id="note-input"
+          type="text"
+          maxlength="120"
+          placeholder="have a real Tuesday"
+        />
+      </div>
+      <button type="button" id="make-btn" class="form__btn mono">MAKE THE CARD →</button>
+    </section>
+
+    <!-- Card view (shown when ?to= is present, or after submit) -->
+    <section class="card-view" id="card-view" hidden aria-label="The card">
+      <article class="card" id="card">
+        <div class="card__noun-wrap">
+          <img class="card__noun" id="card-noun" src="" alt="" width="120" height="120" loading="lazy"/>
+          <div class="card__hat"></div>
+        </div>
+        <p class="card__greeting mono" id="card-greeting">HAPPY BIRTHDAY</p>
+        <h2 class="card__name" id="card-name">—</h2>
+        <p class="card__age mono" id="card-age" hidden>—</p>
+        <p class="card__note" id="card-note" hidden>—</p>
+        <p class="card__from mono" id="card-from" hidden>—</p>
+      </article>
+
+      <div class="actions">
+        <button type="button" id="copy-btn" class="action mono">📋 COPY LINK</button>
+        <button type="button" id="reply-btn" class="action mono action--accent" hidden>SEND ONE BACK →</button>
+        <button type="button" id="edit-btn" class="action mono">✎ EDIT</button>
+      </div>
+      <p class="card-status mono" id="card-status">·</p>
+    </section>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW IT WORKS.</strong> Submit the form → page rewrites the
+        URL to <code>/card?to=Sarah&from=Mike&age=30&note=…</code>. The
+        URL is the card. Send it via text, Slack, email, anywhere.
+        Recipient opens it → confetti fires, card fills in, "send one
+        back" button generates the reverse URL with their name in FROM.
+      </p>
+      <p class="foot__line mono">
+        <strong>WHY URL-ONLY.</strong> No server means no privacy
+        question — the page never sees the message. The URL goes straight
+        from sender to recipient via whatever channel they picked. No
+        moderation, no logs, no "your message was sent at 3:42pm." Just
+        a card.
+      </p>
+      <p class="foot__brief mono">
+        related: <a href="/sing">/sing</a>
+        <span class="foot__sep">·</span>
+        <a href="/blow">/blow</a>
+        <span class="foot__sep">·</span>
+        <a href="/cheers">/cheers</a>
+        <span class="foot__sep">·</span>
+        <a href="/wrapped">/wrapped</a>
+        <span class="foot__sep">·</span>
+        <a href="/cake">/cake</a>
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  // ── DOM ───────────────────────────────────────────────────────────────
+  const formView = document.getElementById('form-view');
+  const cardView = document.getElementById('card-view');
+  const toInput = document.getElementById('to-input') as HTMLInputElement | null;
+  const fromInput = document.getElementById('from-input') as HTMLInputElement | null;
+  const ageInput = document.getElementById('age-input') as HTMLInputElement | null;
+  const noteInput = document.getElementById('note-input') as HTMLInputElement | null;
+  const makeBtn = document.getElementById('make-btn') as HTMLButtonElement | null;
+  const cardEl = document.getElementById('card');
+  const cardNoun = document.getElementById('card-noun') as HTMLImageElement | null;
+  const cardName = document.getElementById('card-name');
+  const cardAge = document.getElementById('card-age');
+  const cardNote = document.getElementById('card-note');
+  const cardFrom = document.getElementById('card-from');
+  const copyBtn = document.getElementById('copy-btn') as HTMLButtonElement | null;
+  const replyBtn = document.getElementById('reply-btn') as HTMLButtonElement | null;
+  const editBtn = document.getElementById('edit-btn') as HTMLButtonElement | null;
+  const cardStatus = document.getElementById('card-status');
+
+  function escapeHtml(s: string) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  }
+
+  // ── Noun derivation from name ────────────────────────────────────────
+  // Hash the name → 0-1199. Same name always gets the same Noun.
+  function nounForName(name: string): number {
+    const s = (name || '').toLowerCase().trim();
+    if (!s) return 888;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return (h >>> 0) % 1200;
+  }
+
+  // ── URL handling ─────────────────────────────────────────────────────
+  type CardData = { to: string; from?: string; age?: string; note?: string };
+
+  function readUrl(): CardData | null {
+    const p = new URLSearchParams(window.location.search);
+    const to = (p.get('to') || '').trim().slice(0, 40);
+    if (!to) return null;
+    return {
+      to,
+      from: (p.get('from') || '').trim().slice(0, 40) || undefined,
+      age: (p.get('age') || '').trim() || undefined,
+      note: (p.get('note') || '').trim().slice(0, 120) || undefined,
+    };
+  }
+
+  function writeUrl(data: CardData) {
+    const p = new URLSearchParams();
+    p.set('to', data.to);
+    if (data.from) p.set('from', data.from);
+    if (data.age) p.set('age', data.age);
+    if (data.note) p.set('note', data.note);
+    const newUrl = `${window.location.pathname}?${p.toString()}`;
+    window.history.pushState({}, '', newUrl);
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────
+  function showForm() {
+    if (!formView || !cardView) return;
+    formView.hidden = false;
+    cardView.hidden = true;
+    toInput?.focus();
+  }
+
+  function showCard(data: CardData, opts: { burst?: boolean } = {}) {
+    if (!formView || !cardView || !cardName) return;
+    formView.hidden = true;
+    cardView.hidden = false;
+
+    const noun = nounForName(data.to);
+    if (cardNoun) {
+      cardNoun.src = `https://noun.pics/${noun}.svg`;
+      cardNoun.alt = `Noun ${noun} for ${data.to}`;
+    }
+    cardName.textContent = data.to;
+
+    if (cardAge) {
+      if (data.age) {
+        const a = parseInt(data.age, 10);
+        cardAge.textContent = Number.isFinite(a) ? `TURNING ${a}` : '';
+        cardAge.hidden = !Number.isFinite(a);
+      } else {
+        cardAge.hidden = true;
+      }
+    }
+    if (cardNote) {
+      if (data.note) {
+        cardNote.textContent = `“${data.note}”`;
+        cardNote.hidden = false;
+      } else {
+        cardNote.hidden = true;
+      }
+    }
+    if (cardFrom) {
+      if (data.from) {
+        cardFrom.textContent = `— from ${data.from}`;
+        cardFrom.hidden = false;
+      } else {
+        cardFrom.hidden = true;
+      }
+    }
+
+    // "Send one back" only makes sense if the recipient knows who sent it.
+    if (replyBtn) replyBtn.hidden = !data.from;
+
+    // Pre-fill the form with a reverse-card if you click EDIT or REPLY.
+    if (cardStatus) cardStatus.textContent = '·';
+
+    if (opts.burst) burst();
+  }
+
+  // ── Form submit ──────────────────────────────────────────────────────
+  function makeCardFromForm() {
+    const to = (toInput?.value || '').trim();
+    if (!to) {
+      toInput?.focus();
+      if (cardStatus) cardStatus.textContent = '✗ to is required';
+      return;
+    }
+    const data: CardData = {
+      to,
+      from: (fromInput?.value || '').trim() || undefined,
+      age: (ageInput?.value || '').trim() || undefined,
+      note: (noteInput?.value || '').trim() || undefined,
+    };
+    writeUrl(data);
+    showCard(data, { burst: true });
+  }
+
+  makeBtn?.addEventListener('click', makeCardFromForm);
+  // Enter in any form field also submits.
+  [toInput, fromInput, ageInput, noteInput].forEach((el) => {
+    el?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        makeCardFromForm();
+      }
+    });
+  });
+
+  // ── Copy link ────────────────────────────────────────────────────────
+  copyBtn?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      if (cardStatus) cardStatus.textContent = '✓ link copied — paste it in a text or DM';
+      copyBtn.textContent = '✓ COPIED';
+      setTimeout(() => { copyBtn.textContent = '📋 COPY LINK'; }, 2000);
+    } catch {
+      if (cardStatus) cardStatus.textContent = '✗ couldn\'t copy — select the URL bar manually';
+    }
+  });
+
+  // ── Reply (send one back) ────────────────────────────────────────────
+  replyBtn?.addEventListener('click', () => {
+    const cur = readUrl();
+    if (!cur) return;
+    // Swap to/from, clear age + note for the recipient to fill in.
+    if (toInput) toInput.value = cur.from || '';
+    if (fromInput) fromInput.value = cur.to;
+    if (ageInput) ageInput.value = '';
+    if (noteInput) noteInput.value = '';
+    // Clear the URL so the form view is fresh.
+    window.history.pushState({}, '', window.location.pathname);
+    showForm();
+    if (cardStatus) cardStatus.textContent = '·';
+  });
+
+  // ── Edit ─────────────────────────────────────────────────────────────
+  editBtn?.addEventListener('click', () => {
+    const cur = readUrl();
+    if (cur) {
+      if (toInput) toInput.value = cur.to;
+      if (fromInput) fromInput.value = cur.from || '';
+      if (ageInput) ageInput.value = cur.age || '';
+      if (noteInput) noteInput.value = cur.note || '';
+    }
+    window.history.pushState({}, '', window.location.pathname);
+    showForm();
+  });
+
+  // ── Confetti ─────────────────────────────────────────────────────────
+  function burst() {
+    const overlay = document.createElement('div');
+    overlay.className = 'confetti-overlay';
+    document.body.appendChild(overlay);
+    const colors = ['#C8102E', '#E36F1E', '#F2C94C', '#2F8B3C', '#1F4FA5', '#7C3AA0', '#FF2E93', '#FBEAEA'];
+    for (let i = 0; i < 100; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', ((Math.random() - 0.5) * 280) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 720) + 'deg');
+      p.style.animationDuration = (1500 + Math.random() * 1800) + 'ms';
+      p.style.animationDelay = (Math.random() * 250) + 'ms';
+      overlay.appendChild(p);
+    }
+    setTimeout(() => overlay.remove(), 4500);
+  }
+
+  // ── Initial state ────────────────────────────────────────────────────
+  const initial = readUrl();
+  if (initial) {
+    showCard(initial, { burst: true });
+  } else {
+    showForm();
+  }
+
+  // Browser back/forward updates the view.
+  window.addEventListener('popstate', () => {
+    const d = readUrl();
+    if (d) showCard(d);
+    else showForm();
+  });
+</script>
+
+<style>
+  .card-page {
+    --paper: #F5EFE3;
+    --ink: #1A1A1A;
+    --ink-soft: #5C5751;
+    --rule: rgba(26,26,26,0.12);
+    --accent: #C8102E;
+    --accent-deep: #7B0E1F;
+    --gold: #C9A227;
+
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    color: var(--ink);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  /* Crumb */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Head */
+  .head {
+    border-top: 4px solid var(--accent);
+    padding-top: 22px;
+    margin-bottom: 24px;
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(36px, 6vw, 56px);
+    line-height: 1.0;
+    margin: 0 0 12px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .head__lede {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--ink);
+    max-width: 60ch;
+  }
+  .head__lede strong { color: var(--accent); font-weight: 600; }
+  .head__lede em { font-style: italic; color: var(--accent-deep); }
+
+  /* Form */
+  .form {
+    background: #fff;
+    border: 1.5px solid var(--rule);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-bottom: 24px;
+    display: grid;
+    gap: 14px;
+  }
+  .form[hidden] { display: none; }
+  .form__title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    margin: 0;
+  }
+  .form__row { display: grid; gap: 6px; }
+  .form__label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+  .form input[type='text'],
+  .form input[type='number'] {
+    font-family: var(--pc-font-sans);
+    font-size: 16px;
+    padding: 10px 12px;
+    border: 1.5px solid var(--ink);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--ink);
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #FBEAEA; }
+  .form__help {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .form__btn {
+    padding: 14px 20px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.08s;
+    align-self: start;
+  }
+  .form__btn:hover { background: var(--accent-deep); transform: translateY(-1px); }
+
+  /* Card view */
+  .card-view[hidden] { display: none; }
+
+  .card {
+    background: #fff;
+    border: 2.5px solid var(--accent);
+    border-radius: 6px;
+    padding: 36px 28px 32px;
+    text-align: center;
+    margin-bottom: 18px;
+    position: relative;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(255,46,147,0.06) 0, transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(201,162,39,0.08) 0, transparent 40%);
+    box-shadow: 0 6px 0 rgba(200,16,46,0.15);
+  }
+
+  /* Noun + party hat composition */
+  .card__noun-wrap {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 18px;
+  }
+  .card__noun {
+    width: 120px;
+    height: 120px;
+    border: 3px solid var(--accent);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 4px 0 rgba(200,16,46,0.18);
+    display: block;
+  }
+  /* Party hat — CSS triangle on top of the Noun */
+  .card__hat {
+    position: absolute;
+    top: -38px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-12deg);
+    width: 0;
+    height: 0;
+    border-left: 28px solid transparent;
+    border-right: 28px solid transparent;
+    border-bottom: 56px solid var(--accent);
+    filter: drop-shadow(2px 2px 0 rgba(123,14,31,0.3));
+  }
+  .card__hat::before {
+    /* pom-pom on top */
+    content: '';
+    position: absolute;
+    top: -64px;
+    left: -8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--accent-deep);
+    transform: rotate(12deg);
+  }
+  .card__hat::after {
+    /* stripes via radial overlay */
+    content: '';
+    position: absolute;
+    top: 18px;
+    left: -22px;
+    width: 44px;
+    height: 6px;
+    background: var(--gold);
+    border-top: 1px solid var(--accent-deep);
+    border-bottom: 1px solid var(--accent-deep);
+    transform: rotate(0deg);
+  }
+
+  .card__greeting {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.24em;
+    color: var(--accent);
+    margin: 0 0 8px;
+    font-weight: 600;
+  }
+  .card__name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 88px);
+    line-height: 1.0;
+    margin: 0 0 12px;
+    color: var(--accent-deep);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .card__age {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--gold);
+    margin: 0 0 16px;
+    background: rgba(201,162,39,0.12);
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 2px;
+    border: 1px solid var(--gold);
+  }
+  .card__age[hidden] { display: none; }
+  .card__note {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 18px;
+    font-style: italic;
+    color: var(--ink);
+    line-height: 1.45;
+    margin: 18px auto 12px;
+    max-width: 36ch;
+  }
+  .card__note[hidden] { display: none; }
+  .card__from {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    margin: 12px 0 0;
+  }
+  .card__from[hidden] { display: none; }
+
+  /* Actions row */
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  .action {
+    padding: 10px 16px;
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .action:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .action--accent {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .action--accent:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+  .action[hidden] { display: none; }
+
+  .card-status {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 8px 0 0;
+    text-align: center;
+    min-height: 1.2em;
+  }
+
+  /* Foot */
+  .foot {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .foot__line {
+    font-size: 11.5px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 6px;
+  }
+  .foot__line code {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    background: rgba(26,26,26,0.06);
+    padding: 1px 4px;
+    border-radius: 2px;
+    word-break: break-all;
+  }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__sep { margin: 0 6px; opacity: 0.5; }
+</style>
+
+<style is:global>
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>
