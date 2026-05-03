@@ -22,6 +22,7 @@ export const GET: APIRoute = async () => {
       ...shrine,
       url: absoluteUrl(shrine.path),
       miniUrl: absoluteUrl(shrine.miniPath),
+      miniImage: absoluteUrl(`${shrine.miniPath}/og.png`),
       miniTitle: `${shrine.title} · mini shrine`,
       miniDescription: getMiniShrineDescription(shrine),
       image: absoluteImage(shrine.image),
