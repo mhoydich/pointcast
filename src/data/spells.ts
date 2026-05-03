@@ -116,6 +116,127 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#a78bfa',
   },
+
+  // ─── BURSTS (continued) ──────────────────────────────────────
+  {
+    id: 'firework',
+    label: 'firework',
+    blurb: 'Three colorful bursts shoot outward. Good for any occasion.',
+    glyph: '🎆',
+    kind: 'burst',
+    durationMs: 3500,
+    accent: '#d4a437',
+  },
+
+  // ─── COMPANIONS (continued) ──────────────────────────────────
+  {
+    id: 'fish',
+    label: 'fish',
+    blurb: 'A fish glides past, unhurried. Gentle bob.',
+    glyph: '🐟',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'moth',
+    label: 'moth',
+    blurb: 'A moth flutters mid-screen, drawn toward the light.',
+    glyph: '🦋',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (continued) ─────────────────────────────────────
+  {
+    id: 'snow',
+    label: 'snow',
+    blurb: 'Soft snowflakes drift down. Quiet company.',
+    glyph: '❄️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
+
+  // ─── BURSTS (batch 4) ─────────────────────────────────────────
+  {
+    id: 'shout',
+    label: 'shout',
+    blurb: 'Punctuation bursts outward from center. Pure typographic energy.',
+    glyph: '📣',
+    kind: 'burst',
+    durationMs: 2200,
+    accent: '#8a2432',
+  },
+  {
+    id: 'wave',
+    label: 'wave',
+    blurb: 'A wave of hands sweeps across the screen. Hello!',
+    glyph: '👋',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#c4952e',
+  },
+
+  // ─── COMPANIONS (batch 4) ─────────────────────────────────────
+  {
+    id: 'firefly',
+    label: 'firefly',
+    blurb: 'A soft-glowing firefly drifts by, pulsing gold.',
+    glyph: '🪲',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#d4a437',
+  },
+
+  // ─── AMBIENT (batch 4) ────────────────────────────────────────
+  {
+    id: 'chimes',
+    label: 'chimes',
+    blurb: 'Wind chimes hang in the corner, swaying quietly.',
+    glyph: '🎐',
+    kind: 'ambient',
+    accent: '#2f8f5f',
+  },
+
+  // ─── BURSTS (batch 5) ─────────────────────────────────────────
+  {
+    id: 'bloom',
+    label: 'bloom',
+    blurb: 'A garden erupts from center — flowers scatter outward in all directions.',
+    glyph: '🌸',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 5) ────────────────────────────────────────
+  {
+    id: 'aurora',
+    label: 'aurora',
+    blurb: 'Northern lights ripple across the top of the viewport. Slow, shifting.',
+    glyph: '🌌',
+    kind: 'ambient',
+    accent: '#2f8f5f',
+  },
+
+  // ─── IDENTITY (batch 5) ───────────────────────────────────────
+  {
+    id: 'here',
+    label: 'here',
+    blurb: 'You are here. A pulsing beacon in the center of the screen.',
+    glyph: '📍',
+    kind: 'ambient',
+    accent: '#8a2432',
+  },
+  {
+    id: 'mood',
+    label: 'mood',
+    blurb: 'A color-shifting orb that broadcasts the current vibe. No words needed.',
+    glyph: '🎨',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
