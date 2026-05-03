@@ -1,0 +1,674 @@
+---
+/**
+ * /sing — tap to sing happy birthday.
+ *
+ * Six tap-zones, one per syllable group. Tap a zone, hear the note;
+ * tap through the song to sing it. Synthesized via Web Audio API — no
+ * audio file deps. Single-player works alone (you sing, the page sings
+ * back). Multiplayer additive: when others tap on the page within the
+ * last few seconds, you hear theirs as a soft chorus underneath.
+ *
+ * The notes for "Happy Birthday To You" in C major:
+ *   line 1: G  G  A  G  C  B          (Hap-py birth-day to you)
+ *   line 2: G  G  A  G  D  C          (Hap-py birth-day to you)
+ *   line 3: G  G  G' E  C  B  A       (Hap-py birth-day dear NAME)
+ *   line 4: F  F  E  C  D  C          (Hap-py birth-day to you)
+ *
+ * Mike chat 2026-05-02 hour-plan: 6th room in the birthday cluster.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/sing — tap to sing happy birthday';
+const description = "Tap through the syllables to sing happy birthday. Single-player at N=1: you sing, the page sings back. Multiplayer at N>1: hear other people's taps as a soft chorus underneath. Web Audio synthesized — no audio files, works offline.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/sing',
+  name: '/sing',
+  alternateName: 'tap to sing happy birthday',
+  description,
+  url: 'https://pointcast.xyz/sing',
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Any (browser with Web Audio)',
+};
+
+// 6 tap-zone definitions. Each zone advances the song state by one syllable
+// of the current line. The actual note that plays comes from the song
+// sequence based on which line + syllable index you're on.
+const ZONES = [
+  { id: 1, color: '#C8102E', label: 'HAP'   },
+  { id: 2, color: '#E36F1E', label: 'PY'    },
+  { id: 3, color: '#F2C94C', label: 'BIRTH' },
+  { id: 4, color: '#2F8B3C', label: 'DAY'   },
+  { id: 5, color: '#1F4FA5', label: 'TO'    },
+  { id: 6, color: '#7C3AA0', label: 'YOU'   },
+];
+
+const LINES = [
+  { name: 'line 1 — happy birthday to you',     notes: ['G4', 'G4', 'A4', 'G4', 'C5', 'B4'] },
+  { name: 'line 2 — happy birthday to you',     notes: ['G4', 'G4', 'A4', 'G4', 'D5', 'C5'] },
+  { name: 'line 3 — happy birthday dear ___',   notes: ['G4', 'G4', 'G5', 'E5', 'C5', 'B4'] },
+  { name: 'line 4 — happy birthday to you',     notes: ['F5', 'F5', 'E5', 'C5', 'D5', 'C5'] },
+];
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="sing">
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>sing</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">★ SING · TAP TO SING HAPPY BIRTHDAY</p>
+      <h1 class="head__title">Tap to sing.</h1>
+      <p class="head__lede">
+        Six tap-zones, one per syllable. Tap through the song to sing it
+        — the notes are synthesized in your browser. <strong>Works alone</strong>
+        — your taps are the song. <strong>Better with friends</strong> — when
+        others tap at the same time on the same page, you hear theirs as a
+        soft chorus underneath.
+      </p>
+      <p class="head__sub mono">
+        <span id="status-line">· web audio loads on first tap</span>
+      </p>
+    </header>
+
+    <section class="board" aria-label="Sing board">
+      <div class="line-strip" id="line-strip">
+        {LINES.map((line, i) => (
+          <div class={`line${i === 0 ? ' line--current' : ''}`} data-line-idx={i}>
+            <p class="line__lyric">{line.name.toUpperCase()}</p>
+            <div class="line__progress">
+              {line.notes.map((_, j) => (
+                <span class="line__dot" data-syl-idx={j}></span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div class="zones" role="group" aria-label="Tap zones">
+        {ZONES.map((z) => (
+          <button
+            type="button"
+            class="zone"
+            data-zone-id={z.id}
+            style={`background: ${z.color};`}
+            aria-label={`Tap zone ${z.id}, syllable ${z.label}`}
+          >
+            <span class="zone__num mono">{z.id}</span>
+            <span class="zone__label mono">{z.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div class="controls">
+        <button type="button" id="reset-btn" class="control mono">↺ RESET</button>
+        <button type="button" id="auto-btn" class="control mono">▶ AUTO-PLAY</button>
+        <span class="controls__chorus mono" id="chorus-line">· chorus offline</span>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW IT WORKS.</strong> Each tap-zone advances the song by one
+        syllable. The note that plays depends on which line you're on (top
+        strip shows your position). After completing all 4 lines the page
+        celebrates briefly and resets so you can sing it again.
+      </p>
+      <p class="foot__line mono">
+        <strong>WHY NO RECORDING.</strong> The act of tapping is the artifact.
+        No "save your rendition" button — the singer is the human, not the
+        page. Local cache only remembers your line position so the page
+        picks up where you left off.
+      </p>
+      <p class="foot__brief mono">
+        related: <a href="/parties">/parties</a> · all birthday rooms
+        <span class="foot__sep">·</span>
+        <a href="/wish">/wish</a> · <a href="/decades">/decades</a> · <a href="/year">/year</a> · <a href="/cake">/cake</a>
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  // ── Song data ─────────────────────────────────────────────────────────
+  // Mirror of LINES[] in frontmatter — bundled into the script so the
+  // tap handler can read it without a fetch.
+  const LINES_NOTES: string[][] = [
+    ['G4', 'G4', 'A4', 'G4', 'C5', 'B4'],
+    ['G4', 'G4', 'A4', 'G4', 'D5', 'C5'],
+    ['G4', 'G4', 'G5', 'E5', 'C5', 'B4'],
+    ['F5', 'F5', 'E5', 'C5', 'D5', 'C5'],
+  ];
+  const SYLLABLES = ['hap', 'py', 'birth', 'day', 'to', 'you'];
+
+  // Note frequencies (Hz) — equal-temperament, A4 = 440.
+  const NOTE_HZ: Record<string, number> = {
+    'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88,
+    'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99,
+  };
+
+  // ── State ─────────────────────────────────────────────────────────────
+  const STORAGE_KEY = 'pc:sing:line';
+  let currentLine = 0;
+  let currentSyl = 0;
+  let audioCtx: AudioContext | null = null;
+  let lastChorusFetch = new Date(0).toISOString();
+
+  try {
+    const prior = localStorage.getItem(STORAGE_KEY);
+    if (prior) currentLine = Math.max(0, Math.min(3, parseInt(prior, 10) || 0));
+  } catch {}
+
+  // ── DOM refs ──────────────────────────────────────────────────────────
+  const zones = Array.from(document.querySelectorAll<HTMLButtonElement>('.zone[data-zone-id]'));
+  const lines = Array.from(document.querySelectorAll<HTMLElement>('.line[data-line-idx]'));
+  const statusLine = document.getElementById('status-line');
+  const chorusLine = document.getElementById('chorus-line');
+  const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement | null;
+  const autoBtn = document.getElementById('auto-btn') as HTMLButtonElement | null;
+
+  function setStatus(text: string, kind: 'ok' | 'soft' | '' = '') {
+    if (!statusLine) return;
+    statusLine.textContent = text;
+    if (kind) statusLine.setAttribute('data-kind', kind); else statusLine.removeAttribute('data-kind');
+  }
+
+  // ── Web Audio ─────────────────────────────────────────────────────────
+  function ensureAudio(): AudioContext {
+    if (!audioCtx) {
+      const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioCtx = new Ctor() as AudioContext;
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx!;
+  }
+
+  function playNote(noteName: string, gain: number = 0.18, durMs: number = 460): void {
+    const hz = NOTE_HZ[noteName];
+    if (!hz) return;
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+
+    // Two oscillators slightly detuned for a warmer tone — not a sine
+    // alone (too clean) and not a square (too buzzy).
+    const o1 = ctx.createOscillator();
+    const o2 = ctx.createOscillator();
+    o1.type = 'triangle';
+    o2.type = 'sine';
+    o1.frequency.value = hz;
+    o2.frequency.value = hz * 1.005; // ~9 cents up
+
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    // Quick attack + slow release for a "celebratory" sound.
+    g.gain.linearRampToValueAtTime(gain, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, now + durMs / 1000);
+
+    o1.connect(g); o2.connect(g);
+    g.connect(ctx.destination);
+
+    o1.start(now); o2.start(now);
+    o1.stop(now + durMs / 1000 + 0.05);
+    o2.stop(now + durMs / 1000 + 0.05);
+  }
+
+  // ── UI updates ────────────────────────────────────────────────────────
+  function paintProgress() {
+    lines.forEach((l, i) => {
+      l.classList.toggle('line--current', i === currentLine);
+      l.classList.toggle('line--done', i < currentLine);
+      const dots = l.querySelectorAll<HTMLElement>('.line__dot');
+      dots.forEach((d, j) => {
+        if (i < currentLine) {
+          d.classList.add('line__dot--lit');
+        } else if (i === currentLine && j < currentSyl) {
+          d.classList.add('line__dot--lit');
+        } else {
+          d.classList.remove('line__dot--lit');
+        }
+      });
+    });
+    try { localStorage.setItem(STORAGE_KEY, String(currentLine)); } catch {}
+  }
+  paintProgress();
+
+  function flashZone(zoneIdx: number) {
+    const z = zones[zoneIdx];
+    if (!z) return;
+    z.classList.add('zone--hit');
+    setTimeout(() => z.classList.remove('zone--hit'), 220);
+  }
+
+  function celebrate() {
+    // Cycle through all lines lit, brief pause, then reset.
+    setStatus('★ DONE — give yourself a beat then sing again', 'ok');
+    burst();
+    setTimeout(() => {
+      currentLine = 0;
+      currentSyl = 0;
+      paintProgress();
+      setStatus('· tap a zone to start');
+    }, 2400);
+  }
+
+  // ── Tap handler ──────────────────────────────────────────────────────
+  function handleTap(zoneIdx: number) {
+    flashZone(zoneIdx);
+    const sylInLine = currentSyl;
+    const note = LINES_NOTES[currentLine][sylInLine];
+    const syllable = SYLLABLES[zoneIdx] || 'you';
+    playNote(note);
+
+    currentSyl++;
+    if (currentSyl >= 6) {
+      currentSyl = 0;
+      currentLine++;
+      if (currentLine >= LINES_NOTES.length) {
+        celebrate();
+        return;
+      }
+    }
+    paintProgress();
+    setStatus(`· line ${currentLine + 1} of 4 · syllable ${currentSyl + 1} of 6`);
+
+    // Fire-and-forget POST to /api/sing — failure is fine, single-player
+    // path doesn't depend on it.
+    fetch('/api/sing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'pc-sing-v1', note, syllable,
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+  }
+
+  zones.forEach((z, i) => {
+    z.addEventListener('click', () => handleTap(i));
+  });
+
+  // ── Keyboard: 1-6 maps to zones ───────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    const k = parseInt(e.key, 10);
+    if (Number.isFinite(k) && k >= 1 && k <= 6) {
+      handleTap(k - 1);
+    }
+  });
+
+  // ── Auto-play ─────────────────────────────────────────────────────────
+  let autoActive = false;
+  autoBtn?.addEventListener('click', async () => {
+    if (autoActive) return;
+    autoActive = true;
+    autoBtn.disabled = true;
+    autoBtn.textContent = '▶ PLAYING…';
+    setStatus('· auto-play running');
+    // Reset state for a clean playthrough.
+    currentLine = 0; currentSyl = 0; paintProgress();
+    for (let li = 0; li < LINES_NOTES.length; li++) {
+      for (let si = 0; si < LINES_NOTES[li].length; si++) {
+        // Wait for the note duration before stepping.
+        handleTap(si);
+        await new Promise((r) => setTimeout(r, 460));
+      }
+      // Pause between lines.
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    autoActive = false;
+    autoBtn.disabled = false;
+    autoBtn.textContent = '▶ AUTO-PLAY';
+  });
+
+  // ── Reset ─────────────────────────────────────────────────────────────
+  resetBtn?.addEventListener('click', () => {
+    currentLine = 0; currentSyl = 0;
+    paintProgress();
+    setStatus('· reset · tap zone 1 to start');
+  });
+
+  // ── Confetti ──────────────────────────────────────────────────────────
+  function burst() {
+    const overlay = document.createElement('div');
+    overlay.className = 'confetti-overlay';
+    document.body.appendChild(overlay);
+    const colors = ['#C8102E', '#E36F1E', '#F2C94C', '#2F8B3C', '#1F4FA5', '#7C3AA0', '#FF2E93'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', ((Math.random() - 0.5) * 240) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 720) + 'deg');
+      p.style.animationDuration = (1500 + Math.random() * 1500) + 'ms';
+      p.style.animationDelay = (Math.random() * 200) + 'ms';
+      overlay.appendChild(p);
+    }
+    setTimeout(() => overlay.remove(), 4000);
+  }
+
+  // ── Chorus poll ──────────────────────────────────────────────────────
+  // Every 3.5s, fetch other visitors' taps from the last 4s and play
+  // them as quieter overlapping notes — the soft chorus underneath.
+  const CHORUS_INTERVAL_MS = 3500;
+  const CHORUS_WINDOW_MS = 4500;
+
+  async function pollChorus() {
+    try {
+      const since = new Date(Date.now() - CHORUS_WINDOW_MS).toISOString();
+      const res = await fetch(`/api/sing?since=${encodeURIComponent(since)}`);
+      const j = await res.json();
+      if (!j.ok) {
+        if (j.reason === 'kv-unbound') {
+          if (chorusLine) { chorusLine.textContent = '· chorus offline (server KV not bound)'; chorusLine.setAttribute('data-kind', 'soft'); }
+          return;
+        }
+        if (chorusLine) chorusLine.textContent = '· chorus unavailable';
+        return;
+      }
+      const taps = (j.taps || []) as Array<{ note: string; syllable: string; fp: string; at: string }>;
+      const total24h = j.total24h ?? 0;
+      // Filter to entries strictly newer than our last fetch so we don't
+      // replay the same tap twice.
+      const fresh = taps.filter((t) => t.at > lastChorusFetch);
+      if (taps.length > 0) lastChorusFetch = taps[taps.length - 1].at;
+      // Play each fresh tap as a quieter overlay.
+      fresh.forEach((t, idx) => {
+        setTimeout(() => playNote(t.note, 0.07, 360), idx * 80);
+      });
+      if (chorusLine) {
+        chorusLine.textContent = total24h === 0
+          ? '· no chorus yet — be the first'
+          : `· ${total24h} ${total24h === 1 ? 'tap' : 'taps'} sung in the last 24h`;
+        chorusLine.removeAttribute('data-kind');
+      }
+    } catch {
+      if (chorusLine) { chorusLine.textContent = '· chorus offline (network)'; chorusLine.setAttribute('data-kind', 'soft'); }
+    }
+  }
+  pollChorus();
+  setInterval(pollChorus, CHORUS_INTERVAL_MS);
+</script>
+
+<style>
+  .sing {
+    --ink: #1A1A1A;
+    --ink-soft: #5C5751;
+    --paper: #F5EFE3;
+    --rule: rgba(26,26,26,0.12);
+    --accent: #FF2E93;
+
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    color: var(--ink);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Header */
+  .head {
+    border-top: 4px solid var(--accent);
+    padding-top: 22px;
+    margin-bottom: 24px;
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 88px);
+    line-height: 0.92;
+    margin: 0 0 12px;
+    color: var(--ink);
+    letter-spacing: -0.035em;
+    font-weight: 600;
+  }
+  .head__lede {
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0 0 12px;
+    color: var(--ink);
+    max-width: 64ch;
+  }
+  .head__lede strong { color: var(--accent); font-weight: 600; }
+  .head__sub {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+  .head__sub[data-kind='ok'] { color: #1B4E2B; }
+  .head__sub[data-kind='soft'] { color: var(--accent); }
+
+  /* Board */
+  .board {
+    background: #fff;
+    border: 1.5px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px;
+    margin-bottom: 28px;
+  }
+
+  /* Line progress strip */
+  .line-strip {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .line {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 2px;
+    background: rgba(26,26,26,0.02);
+    transition: background 0.15s, color 0.15s;
+  }
+  .line--current {
+    background: rgba(255,46,147,0.08);
+    border-left: 3px solid var(--accent);
+  }
+  .line--done {
+    color: var(--ink-soft);
+    background: rgba(123,176,52,0.06);
+  }
+  .line__lyric {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0;
+    color: inherit;
+  }
+  .line__progress { display: flex; gap: 6px; }
+  .line__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(26,26,26,0.12);
+    transition: background 0.2s, transform 0.15s;
+  }
+  .line__dot--lit {
+    background: var(--accent);
+    transform: scale(1.15);
+  }
+  .line--done .line__dot--lit { background: #2F8B3C; }
+
+  /* Tap zones */
+  .zones {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 600px) {
+    .zones { grid-template-columns: repeat(3, 1fr); }
+  }
+  .zone {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    padding: 24px 12px 18px;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.08s ease, box-shadow 0.12s ease, filter 0.12s;
+    min-height: 96px;
+  }
+  .zone:hover { transform: translateY(-2px); filter: brightness(1.08); }
+  .zone:active { transform: translateY(0); filter: brightness(0.95); }
+  .zone--hit {
+    animation: zone-flash 220ms ease-out;
+  }
+  @keyframes zone-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.85), inset 0 0 0 0 rgba(255,255,255,0); transform: translateY(-3px); }
+    50%  { box-shadow: 0 0 0 8px rgba(255,255,255,0.0),   inset 0 0 0 4px rgba(255,255,255,0.5); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); transform: translateY(0); }
+  }
+  .zone__num {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.65);
+    text-transform: uppercase;
+  }
+  .zone__label {
+    font-size: clamp(18px, 2.6vw, 26px);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    align-self: center;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .zone, .zone--hit { transition: none; animation: none; }
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .control {
+    padding: 10px 14px;
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .control:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .control:disabled { opacity: 0.5; cursor: wait; }
+  .controls__chorus {
+    margin-left: auto;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+  }
+  .controls__chorus[data-kind='soft'] { color: var(--accent); }
+
+  /* Foot */
+  .foot {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .foot__line {
+    font-size: 11.5px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 6px;
+  }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__sep { margin: 0 6px; opacity: 0.5; }
+</style>
+
+<style is:global>
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>
