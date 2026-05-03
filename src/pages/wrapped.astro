@@ -1,0 +1,685 @@
+---
+/**
+ * /wrapped — open a wrapped birthday present.
+ *
+ * Big wrapped present centered on page. Each click peels a layer:
+ *   stage 0: bow + tag, fully wrapped
+ *   stage 1: pull the bow off
+ *   stage 2: fold one paper flap back
+ *   stage 3: fold the other flap back
+ *   stage 4: lid lifts off the box
+ *   stage 5: Noun reveal + confetti + "happy birthday"
+ *
+ * Click "rewrap" to roll back to stage 0 with a fresh random Noun.
+ *
+ * Pure single-player. No API. No KV. localStorage caches the noun id
+ * between visits so coming back keeps your present.
+ *
+ * Mike chat 2026-05-02 ~late: "you lead go" — fourth of the atomic
+ * single-player birthday rituals (after /sing, /blow, /cheers).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = '/wrapped — open a wrapped present';
+const description = "A wrapped birthday present on the page. Click to peel each layer — bow, two paper flaps, lid, Noun reveal. Five clicks to unwrap, one click to rewrap with a fresh Noun. Pure single-player.";
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/wrapped',
+  name: '/wrapped',
+  alternateName: 'open a wrapped birthday present',
+  description,
+  url: 'https://pointcast.xyz/wrapped',
+  applicationCategory: 'EntertainmentApplication',
+  operatingSystem: 'Any (browser)',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="wrapped">
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <span>wrapped</span>
+    </nav>
+
+    <header class="head">
+      <p class="head__kicker mono">★ WRAPPED · OPEN A PRESENT</p>
+      <h1 class="head__title">Open it.</h1>
+      <p class="head__lede">
+        A wrapped birthday present, sitting on the page. Click to peel
+        each layer: <strong>bow off, paper flaps back, lid up,
+        Noun reveal</strong>. Five clicks. Then rewrap with a fresh
+        Noun and do it again.
+      </p>
+    </header>
+
+    <section class="stage" aria-label="The present">
+      <div class="present" id="present" data-stage="0" role="button" tabindex="0" aria-label="Click to peel a layer">
+        <!-- The box -->
+        <div class="present__box">
+          <div class="present__noun-wrap">
+            <img class="present__noun" id="noun-img" src="" alt="" width="100" height="100" loading="lazy"/>
+            <p class="present__noun-label mono" id="noun-label">NOUN —</p>
+          </div>
+        </div>
+
+        <!-- The lid -->
+        <div class="present__lid">
+          <div class="present__lid-skirt"></div>
+        </div>
+
+        <!-- Wrapping paper, two flaps -->
+        <div class="present__paper present__paper--left"></div>
+        <div class="present__paper present__paper--right"></div>
+
+        <!-- Ribbon (vertical + horizontal) -->
+        <div class="present__ribbon present__ribbon--v"></div>
+        <div class="present__ribbon present__ribbon--h"></div>
+
+        <!-- Bow -->
+        <div class="present__bow">
+          <div class="present__bow-loop present__bow-loop--l"></div>
+          <div class="present__bow-loop present__bow-loop--r"></div>
+          <div class="present__bow-knot"></div>
+          <div class="present__bow-tail present__bow-tail--l"></div>
+          <div class="present__bow-tail present__bow-tail--r"></div>
+        </div>
+
+        <!-- Tag -->
+        <div class="present__tag">
+          <p class="present__tag-line mono">TO YOU</p>
+          <p class="present__tag-line present__tag-line--from mono">FROM /WRAPPED</p>
+        </div>
+      </div>
+
+      <p class="status mono" id="status">· click the present to peel a layer</p>
+
+      <div class="controls">
+        <button type="button" id="rewrap-btn" class="control mono">↺ REWRAP · FRESH NOUN</button>
+        <span class="counter mono" id="counter">· 0 presents opened</span>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p class="foot__line mono">
+        <strong>HOW IT WORKS.</strong> Each click advances the unwrap by one
+        stage. Stage 1 unties the bow. Stage 2 folds the left paper flap
+        back. Stage 3 folds the right one. Stage 4 lifts the lid off the
+        box. Stage 5 fades in the Noun inside + fires confetti.
+      </p>
+      <p class="foot__line mono">
+        <strong>WHAT'S INSIDE.</strong> A random Noun (0–1199) from the
+        Nouns DAO CC0 collection via noun.pics. Each rewrap rolls a new
+        one. The Noun is cached locally so the page remembers your
+        unwrapped present between visits.
+      </p>
+      <p class="foot__brief mono">
+        related: <a href="/sing">/sing</a>
+        <span class="foot__sep">·</span>
+        <a href="/blow">/blow</a>
+        <span class="foot__sep">·</span>
+        <a href="/cheers">/cheers</a>
+        <span class="foot__sep">·</span>
+        <a href="/cake">/cake</a>
+      </p>
+    </footer>
+
+  </div>
+</BlockLayout>
+
+<script>
+  const STORAGE_KEY = 'pc:wrapped:state';
+  const COUNT_KEY = 'pc:wrapped:count';
+  const present = document.getElementById('present');
+  const status = document.getElementById('status');
+  const rewrapBtn = document.getElementById('rewrap-btn');
+  const counterEl = document.getElementById('counter');
+  const nounImg = document.getElementById('noun-img') as HTMLImageElement | null;
+  const nounLabel = document.getElementById('noun-label');
+
+  let stage = 0;     // 0..5
+  let nounId = randomNoun();
+  let count = 0;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.stage === 'number') stage = Math.max(0, Math.min(5, parsed.stage));
+      if (typeof parsed.nounId === 'number') nounId = parsed.nounId;
+    }
+    const c = localStorage.getItem(COUNT_KEY);
+    if (c) count = parseInt(c, 10) || 0;
+  } catch {}
+
+  function randomNoun(): number {
+    return Math.floor(Math.random() * 1200);
+  }
+
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ stage, nounId })); } catch {}
+  }
+
+  function paint() {
+    if (!present) return;
+    present.dataset.stage = String(stage);
+    if (nounImg) {
+      nounImg.src = `https://noun.pics/${nounId}.svg`;
+      nounImg.alt = `Noun ${nounId}`;
+    }
+    if (nounLabel) nounLabel.textContent = `NOUN ${nounId}`;
+    if (counterEl) counterEl.textContent = `· ${count} present${count === 1 ? '' : 's'} opened on this device`;
+
+    if (status) {
+      const messages = [
+        '· click the present to peel a layer',
+        '· bow off — keep going',
+        '· left flap folded — one to go',
+        '· right flap folded — almost there',
+        '· lid up — peek inside',
+        '★ HAPPY BIRTHDAY · click rewrap for another',
+      ];
+      status.textContent = messages[stage] || messages[0];
+    }
+  }
+  paint();
+
+  function advance() {
+    if (stage >= 5) return;
+    stage++;
+    if (stage === 5) {
+      // Reveal moment: count + confetti.
+      count++;
+      try { localStorage.setItem(COUNT_KEY, String(count)); } catch {}
+      burst();
+    }
+    persist();
+    paint();
+  }
+
+  function rewrap() {
+    stage = 0;
+    nounId = randomNoun();
+    persist();
+    paint();
+  }
+
+  present?.addEventListener('click', advance);
+  present?.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      advance();
+    }
+  });
+  rewrapBtn?.addEventListener('click', rewrap);
+
+  function burst() {
+    const overlay = document.createElement('div');
+    overlay.className = 'confetti-overlay';
+    document.body.appendChild(overlay);
+    const colors = ['#C8102E', '#E36F1E', '#F2C94C', '#2F8B3C', '#1F4FA5', '#7C3AA0', '#FF2E93', '#FBEAEA'];
+    for (let i = 0; i < 90; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', ((Math.random() - 0.5) * 240) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 720) + 'deg');
+      p.style.animationDuration = (1500 + Math.random() * 1500) + 'ms';
+      p.style.animationDelay = (Math.random() * 200) + 'ms';
+      overlay.appendChild(p);
+    }
+    setTimeout(() => overlay.remove(), 4000);
+  }
+</script>
+
+<style>
+  .wrapped {
+    --paper: #F5EFE3;
+    --ink: #1A1A1A;
+    --ink-soft: #5C5751;
+    --rule: rgba(26,26,26,0.12);
+    --accent: #C8102E;
+    --gift-paper: #E36F1E;
+    --gift-paper-dark: #B0531A;
+    --ribbon: #C9A227;
+    --ribbon-dark: #7B5614;
+    --box: #5C3A1A;
+
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+    color: var(--ink);
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+
+  /* Crumb */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  .crumb a:hover { border-bottom-color: currentColor; }
+
+  /* Head */
+  .head {
+    border-top: 4px solid var(--accent);
+    padding-top: 22px;
+    margin-bottom: 24px;
+  }
+  .head__kicker {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  .head__title {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 80px);
+    line-height: 0.92;
+    margin: 0 0 12px;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+  .head__lede {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+    color: var(--ink);
+    max-width: 60ch;
+  }
+  .head__lede strong { color: var(--accent); font-weight: 600; }
+
+  /* Stage */
+  .stage {
+    background: var(--paper);
+    border: 1.5px solid var(--rule);
+    border-radius: 6px;
+    padding: 36px 24px 24px;
+    margin-bottom: 24px;
+    text-align: center;
+    background-image:
+      radial-gradient(circle at 50% 30%, rgba(255,200,150,0.15) 0, transparent 60%);
+  }
+
+  /* The present — fixed-size stage so all the layered absolute boxes
+     position cleanly */
+  .present {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 0 auto 24px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+  }
+  .present:focus-visible { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 4px; }
+
+  /* Box (cardboard) — always visible underneath everything */
+  .present__box {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    height: 160px;
+    background: linear-gradient(180deg, #8B5A2B 0%, var(--box) 100%);
+    border: 2px solid #3A2515;
+    border-radius: 4px;
+    overflow: hidden;
+    z-index: 1;
+  }
+  .present__noun-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: linear-gradient(180deg, #FBEAEA 0%, #fff 100%);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .present__noun {
+    width: 100px;
+    height: 100px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 4px 0 rgba(200,16,46,0.25);
+  }
+  .present__noun-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  /* Lid — sits on top of the box; lifts off at stage 4 */
+  .present__lid {
+    position: absolute;
+    top: 88px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    height: 28px;
+    background: linear-gradient(180deg, #A86B30 0%, #6B3F18 100%);
+    border: 2px solid #3A2515;
+    border-radius: 3px;
+    z-index: 4;
+    transition: transform 0.45s ease, opacity 0.45s ease;
+  }
+  .present__lid-skirt {
+    position: absolute;
+    bottom: -6px;
+    left: 4px;
+    right: 4px;
+    height: 6px;
+    background: #6B3F18;
+    border-radius: 0 0 3px 3px;
+  }
+
+  /* Paper flaps — wrap around the box; fold back at stages 2 and 3 */
+  .present__paper {
+    position: absolute;
+    bottom: 20px;
+    width: 110px;
+    height: 160px;
+    background: var(--gift-paper);
+    border: 2px solid var(--gift-paper-dark);
+    background-image:
+      radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15) 0, transparent 30%),
+      repeating-linear-gradient(45deg, transparent 0, transparent 12px, rgba(176,83,26,0.18) 12px, rgba(176,83,26,0.18) 13px);
+    z-index: 6;
+    transition: transform 0.45s ease, opacity 0.45s ease;
+    transform-origin: 50% 100%;
+  }
+  .present__paper--left {
+    left: calc(50% - 110px);
+    border-radius: 4px 0 0 4px;
+    transform-origin: right center;
+  }
+  .present__paper--right {
+    right: calc(50% - 110px);
+    border-radius: 0 4px 4px 0;
+    transform-origin: left center;
+  }
+
+  /* Ribbon — sits on top of the paper */
+  .present__ribbon {
+    position: absolute;
+    background: var(--ribbon);
+    border: 1.5px solid var(--ribbon-dark);
+    z-index: 8;
+    box-shadow: inset 0 -2px 0 rgba(123,86,20,0.3);
+  }
+  .present__ribbon--v {
+    top: 60px;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+  }
+  .present__ribbon--h {
+    top: 138px;
+    left: calc(50% - 110px);
+    right: calc(50% - 110px);
+    height: 22px;
+  }
+
+  /* Bow — sits at the top intersection of the ribbon */
+  .present__bow {
+    position: absolute;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 50px;
+    z-index: 10;
+    transition: transform 0.5s ease, opacity 0.5s ease;
+  }
+  .present__bow-loop {
+    position: absolute;
+    top: 6px;
+    width: 36px;
+    height: 36px;
+    background: var(--ribbon);
+    border: 2px solid var(--ribbon-dark);
+    border-radius: 50%;
+    box-shadow: inset 0 -3px 0 rgba(123,86,20,0.3);
+  }
+  .present__bow-loop--l { left: 0; }
+  .present__bow-loop--r { right: 0; }
+  .present__bow-knot {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 26px;
+    background: var(--ribbon-dark);
+    border: 2px solid var(--ribbon-dark);
+    border-radius: 4px;
+    z-index: 1;
+  }
+  .present__bow-tail {
+    position: absolute;
+    top: 38px;
+    width: 16px;
+    height: 18px;
+    background: var(--ribbon);
+    border: 2px solid var(--ribbon-dark);
+    z-index: 0;
+  }
+  .present__bow-tail--l { left: 28px; transform: rotate(-25deg); border-radius: 0 0 0 50%; }
+  .present__bow-tail--r { right: 28px; transform: rotate(25deg);  border-radius: 0 0 50% 0; }
+
+  /* Tag — small paper tag hanging from the ribbon */
+  .present__tag {
+    position: absolute;
+    top: 20px;
+    right: 36px;
+    width: 64px;
+    padding: 6px 8px;
+    background: #fff;
+    border: 1.5px solid #1A1A1A;
+    border-radius: 2px;
+    transform: rotate(-8deg);
+    z-index: 11;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+    transition: transform 0.5s ease, opacity 0.5s ease;
+  }
+  .present__tag-line {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--ink);
+    margin: 0;
+    text-transform: uppercase;
+  }
+  .present__tag-line--from {
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  /* ── Stage transitions ──────────────────────────────────────────────── */
+
+  /* Stage 1: bow + tag fly off */
+  .present[data-stage='1'] .present__bow,
+  .present[data-stage='2'] .present__bow,
+  .present[data-stage='3'] .present__bow,
+  .present[data-stage='4'] .present__bow,
+  .present[data-stage='5'] .present__bow {
+    transform: translate(-50%, -100px) rotate(45deg);
+    opacity: 0;
+  }
+  .present[data-stage='1'] .present__tag,
+  .present[data-stage='2'] .present__tag,
+  .present[data-stage='3'] .present__tag,
+  .present[data-stage='4'] .present__tag,
+  .present[data-stage='5'] .present__tag {
+    transform: translate(60px, 30px) rotate(20deg);
+    opacity: 0;
+  }
+
+  /* Stage 2: ribbon + left paper folds back */
+  .present[data-stage='2'] .present__paper--left,
+  .present[data-stage='3'] .present__paper--left,
+  .present[data-stage='4'] .present__paper--left,
+  .present[data-stage='5'] .present__paper--left {
+    transform: rotateY(-180deg);
+    opacity: 0.3;
+  }
+  .present[data-stage='2'] .present__ribbon,
+  .present[data-stage='3'] .present__ribbon,
+  .present[data-stage='4'] .present__ribbon,
+  .present[data-stage='5'] .present__ribbon {
+    opacity: 0;
+    transition: opacity 0.4s ease 0.1s;
+  }
+
+  /* Stage 3: right paper folds back */
+  .present[data-stage='3'] .present__paper--right,
+  .present[data-stage='4'] .present__paper--right,
+  .present[data-stage='5'] .present__paper--right {
+    transform: rotateY(180deg);
+    opacity: 0.3;
+  }
+
+  /* Stage 4: lid lifts up and to the side */
+  .present[data-stage='4'] .present__lid,
+  .present[data-stage='5'] .present__lid {
+    transform: translate(40px, -70px) rotate(15deg);
+    opacity: 0.85;
+  }
+
+  /* Stage 5: noun fades in */
+  .present[data-stage='5'] .present__noun-wrap {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Status */
+  .status {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
+    margin: 0 0 18px;
+    min-height: 1.2em;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .control {
+    padding: 10px 14px;
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .control:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .counter {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+  }
+
+  /* Foot */
+  .foot {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .foot__line {
+    font-size: 11.5px;
+    line-height: 1.65;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
+    max-width: 70ch;
+    margin: 0 0 12px;
+  }
+  .foot__line strong {
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    margin-right: 6px;
+  }
+  .foot__brief {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    margin: 16px 0 0;
+  }
+  .foot__brief a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+  .foot__sep { margin: 0 6px; opacity: 0.5; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .present__bow, .present__tag, .present__paper, .present__lid, .present__noun-wrap, .present__ribbon {
+      transition: none;
+    }
+  }
+</style>
+
+<style is:global>
+  .confetti-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-particle {
+    position: absolute;
+    top: -20px;
+    width: 9px;
+    height: 14px;
+    border-radius: 1px;
+    animation: confetti-fall linear forwards;
+    transform-origin: 50% 50%;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+</style>
