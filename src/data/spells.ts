@@ -319,6 +319,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#c4952e',
   },
+
+  // ─── BURSTS (batch 8) ─────────────────────────────────────────
+  {
+    id: 'hearts',
+    label: 'hearts',
+    blurb: 'Hearts scatter upward from center. Warm, unironic.',
+    glyph: '❤️',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 8) ─────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite soars across mid-screen with a gentle, wind-carried glide.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The most patient companion. No rush at all.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 8) ────────────────────────────────────────
+  {
+    id: 'lantern',
+    label: 'lantern',
+    blurb: 'A paper lantern hangs in the corner, swaying softly.',
+    glyph: '🏮',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
