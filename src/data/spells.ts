@@ -237,6 +237,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#a78bfa',
   },
+
+  // ─── BURSTS (batch 6) ─────────────────────────────────────────
+  {
+    id: 'bubble',
+    label: 'bubble',
+    blurb: 'Soap bubbles drift upward and quietly pop. Gentle, iridescent.',
+    glyph: '🫧',
+    kind: 'burst',
+    durationMs: 3200,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'dice',
+    label: 'dice',
+    blurb: 'Six dice tumble outward from center. Roll the vibe.',
+    glyph: '🎲',
+    kind: 'burst',
+    durationMs: 2500,
+    accent: '#2f8f5f',
+  },
+
+  // ─── COMPANIONS (batch 6) ─────────────────────────────────────
+  {
+    id: 'bee',
+    label: 'bee',
+    blurb: 'A bee zigzags across the screen, busy with invisible business.',
+    glyph: '🐝',
+    kind: 'companion',
+    durationMs: 35_000,
+    accent: '#d4a437',
+  },
+
+  // ─── AMBIENT (batch 6) ────────────────────────────────────────
+  {
+    id: 'fog',
+    label: 'fog',
+    blurb: 'Low mist rolls across the bottom of the viewport. Quiet and cool.',
+    glyph: '🌫️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
 ];
 
 /** Lookup helper. */

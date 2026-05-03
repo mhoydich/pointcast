@@ -679,6 +679,145 @@
       active.byId.mood = m;
     }
 
+    // ─── bubble (burst) ──────────────────────────────────────────
+    // 18 iridescent circles float upward from a random bottom band
+    // and pop (scale + fade) at staggered heights. Each bubble gets
+    // a random lateral drift — the overall feel is champagne-cork gentle.
+    function castBubble(durationMs) {
+      if (reduce()) return;
+      var count = 18;
+      var dur = durationMs || 3200;
+      for (var i = 0; i < count; i++) {
+        var b = document.createElement('span');
+        b.className = 'spell-bubble';
+        var size = 10 + Math.floor(Math.random() * 22);
+        var startX = 5 + Math.random() * 90; // vw
+        var drift = ((Math.random() - 0.5) * 80).toFixed(1);
+        var rise = Math.floor(dur * (0.6 + Math.random() * 0.4));
+        var delay = Math.floor(Math.random() * (dur * 0.3));
+        b.style.cssText =
+          'left:' + startX + 'vw;' +
+          'bottom:8%;' +
+          'width:' + size + 'px;' +
+          'height:' + size + 'px;' +
+          '--spell-bubble-drift:' + drift + 'px;' +
+          'animation:spell-bubble-rise ' + rise + 'ms ease-in ' + delay + 'ms forwards;';
+        $layer.appendChild(b);
+        active.bursts++;
+        (function (el, t, d) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, t + d + 100);
+        })(b, rise, delay);
+      }
+    }
+
+    // ─── dice (burst) ─────────────────────────────────────────────
+    // 6 dice scatter radially from viewport center, each tumbling
+    // (rotate) as they fly. Reuses the firework dx/dy custom-prop trick.
+    function castDice(durationMs) {
+      if (reduce()) return;
+      var faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+      var count = 6;
+      var dur = durationMs || 2500;
+      for (var i = 0; i < count; i++) {
+        var d = document.createElement('span');
+        d.className = 'spell-dice-face';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 70 + Math.random() * 90;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var rot = (-180 + Math.floor(Math.random() * 360));
+        var faceDur = dur - Math.floor(Math.random() * 300);
+        var size = 22 + Math.floor(Math.random() * 14);
+        d.textContent = faces[i];
+        d.style.cssText =
+          'left:50vw;top:45vh;font-size:' + size + 'px;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          '--spell-dice-rot:' + rot + 'deg;' +
+          'animation:spell-dice-tumble ' + faceDur + 'ms ease-out forwards;';
+        $layer.appendChild(d);
+        active.bursts++;
+        (function (el, t) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, t + 100);
+        })(d, faceDur);
+      }
+    }
+
+    // ─── bee (companion) ──────────────────────────────────────────
+    // A bee crosses the screen at ~55vh height with an erratic zigzag
+    // flutter — rapid vertical oscillation overlaid on the horizontal
+    // walk. Faster than moth, more purposeful (it has somewhere to be).
+    function castBee(durationMs) {
+      if (active.byId.bee) {
+        var prev = active.byId.bee;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var bee = document.createElement('button');
+      bee.className = 'spell-bee';
+      bee.type = 'button';
+      bee.setAttribute('aria-label', 'A busy bee. Click to shoo it away.');
+      bee.title = 'click to shoo the bee';
+      bee.textContent = '🐝';
+      var ltr = Math.random() < 0.5;
+      bee.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 35000;
+      var flySeconds = Math.max(8, Math.min(22, window.innerWidth / 75));
+      bee.style.cssText =
+        'animation:spell-bee-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-bee-zigzag 0.28s ease-in-out infinite;';
+      bee.addEventListener('click', function () {
+        if (bee.parentNode) bee.parentNode.removeChild(bee);
+        active.byId.bee = null;
+      });
+      $layer.appendChild(bee);
+      active.byId.bee = bee;
+      setTimeout(function () {
+        if (bee && bee.parentNode) bee.parentNode.removeChild(bee);
+        if (active.byId.bee === bee) active.byId.bee = null;
+      }, dur);
+    }
+
+    // ─── fog (ambient) ────────────────────────────────────────────
+    // 8 translucent wisps drift laterally across the bottom quarter of
+    // the viewport at different speeds and opacity. The combined effect
+    // reads as low morning mist. Click anywhere on the overlay to lift.
+    function castFog() {
+      if (active.byId.fog) return;
+      var fog = document.createElement('button');
+      fog.className = 'spell-fog';
+      fog.type = 'button';
+      fog.setAttribute('aria-label', 'Fog overlay. Click to lift the mist.');
+      fog.title = 'click to lift the fog';
+      var html = '';
+      var wispCount = 8;
+      for (var i = 0; i < wispCount; i++) {
+        var heightPct = (12 + Math.random() * 22).toFixed(1);
+        var widthPct = (90 + Math.random() * 40).toFixed(1);
+        var opacity = (0.12 + Math.random() * 0.2).toFixed(2);
+        var driftDir = Math.random() < 0.5 ? 'ltr' : 'rtl';
+        var driftDur = (18 + Math.random() * 20).toFixed(1);
+        var delay = (Math.random() * 8).toFixed(2);
+        html += '<span class="spell-fog__wisp" style="' +
+          'height:' + heightPct + 'vh;' +
+          'width:' + widthPct + '%;' +
+          'opacity:' + opacity + ';' +
+          'animation:spell-fog-drift-' + driftDir + ' ' + driftDur + 's ease-in-out ' + delay + 's infinite alternate;' +
+          '"></span>';
+      }
+      fog.innerHTML = html;
+      fog.addEventListener('click', function () {
+        if (fog.parentNode) fog.parentNode.removeChild(fog);
+        active.byId.fog = null;
+      });
+      $layer.appendChild(fog);
+      active.byId.fog = fog;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -702,6 +841,10 @@
         case 'aurora':    castAurora(); break;
         case 'here':      castHere(); break;
         case 'mood':      castMood(); break;
+        case 'bubble':    castBubble(3200); break;
+        case 'dice':      castDice(2500); break;
+        case 'bee':       castBee(35000); break;
+        case 'fog':       castFog(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -1405,6 +1548,139 @@
     100% { filter: hue-rotate(360deg); }
   }
 
+  /* ── bubble (burst) ─────────────────────────────────────── */
+  .spell-bubble {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(
+      circle at 35% 30%,
+      rgba(255, 255, 255, 0.75) 0%,
+      rgba(74, 158, 255, 0.22) 45%,
+      rgba(167, 139, 250, 0.18) 70%,
+      rgba(74, 158, 255, 0.08) 100%
+    );
+    border: 1px solid rgba(74, 158, 255, 0.35);
+    box-shadow: inset 0 -2px 4px rgba(74, 158, 255, 0.15);
+    will-change: transform, opacity, bottom;
+  }
+  @keyframes spell-bubble-rise {
+    0%   { transform: translateX(0) scale(1); opacity: 0.9; }
+    70%  { opacity: 0.85; }
+    88%  { transform: translateX(var(--spell-bubble-drift, 0px)) scale(1.12); opacity: 0.6; }
+    100% { transform: translateX(var(--spell-bubble-drift, 0px)) scale(1.4) translateY(-55vh); opacity: 0; }
+  }
+
+  /* ── dice (burst) ────────────────────────────────────────── */
+  .spell-dice-face {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform, opacity;
+    transform: translate(-50%, -50%);
+    line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  }
+  @keyframes spell-dice-tumble {
+    0% {
+      transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+      opacity: 1;
+    }
+    60% { opacity: 0.9; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-fw-dx, 0px)),
+        calc(-50% + var(--spell-fw-dy, 0px))
+      ) scale(1.05) rotate(var(--spell-dice-rot, 270deg));
+      opacity: 0;
+    }
+  }
+
+  /* ── bee (companion) ─────────────────────────────────────── */
+  .spell-bee {
+    position: fixed;
+    bottom: 45vh;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 26px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 0 3px rgba(212, 164, 55, 0.5));
+  }
+  .spell-bee[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-bee-fly-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-bee-fly-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  /* Rapid zigzag — asymmetric heights mimic the real thing. */
+  @keyframes spell-bee-zigzag {
+    0%   { transform: translateY(0); }
+    25%  { transform: translateY(-14px); }
+    75%  { transform: translateY(10px); }
+    100% { transform: translateY(0); }
+  }
+  .spell-bee[data-dir='rtl'] {
+    animation-name: spell-bee-fly-rtl, spell-bee-zigzag-rtl !important;
+  }
+  @keyframes spell-bee-zigzag-rtl {
+    0%   { transform: scaleX(-1) translateY(0); }
+    25%  { transform: scaleX(-1) translateY(-14px); }
+    75%  { transform: scaleX(-1) translateY(10px); }
+    100% { transform: scaleX(-1) translateY(0); }
+  }
+
+  /* ── fog (ambient) ───────────────────────────────────────── */
+  .spell-fog {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40vh;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .spell-fog__wisp {
+    position: absolute;
+    bottom: 0;
+    left: -20%;
+    border-radius: 50%;
+    background: radial-gradient(
+      ellipse at 50% 80%,
+      rgba(220, 232, 248, 0.9) 0%,
+      rgba(200, 218, 240, 0.5) 40%,
+      rgba(180, 200, 230, 0) 100%
+    );
+    filter: blur(18px);
+    pointer-events: none;
+  }
+  @keyframes spell-fog-drift-ltr {
+    0%   { transform: translateX(-8%); }
+    100% { transform: translateX(12%); }
+  }
+  @keyframes spell-fog-drift-rtl {
+    0%   { transform: translateX(8%); }
+    100% { transform: translateX(-12%); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -1413,6 +1689,7 @@
     .spell-fish,
     .spell-moth,
     .spell-firefly,
+    .spell-bee,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -1424,18 +1701,21 @@
     .spell-here__ring,
     .spell-aurora::before,
     .spell-aurora::after,
-    .spell-mood { animation: none; }
+    .spell-mood,
+    .spell-fog__wisp { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
     .spell-fish,
     .spell-moth,
-    .spell-firefly { left: 50%; transform: translateX(-50%); }
+    .spell-firefly,
+    .spell-bee { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
     .spell-moth[data-dir='rtl'],
-    .spell-firefly[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-firefly[data-dir='rtl'],
+    .spell-bee[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -1447,5 +1727,6 @@
     .spell-aurora::before { opacity: 0.8; transform: none; } /* static band */
     .spell-aurora::after  { opacity: 0.6; transform: none; }
     .spell-mood { filter: hue-rotate(60deg); } /* fixed warm amber */
+    .spell-fog__wisp { transform: none; } /* static wisps */
   }
 </style>
