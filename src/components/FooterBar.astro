@@ -1062,15 +1062,48 @@ const pingable = RESIDENTS.filter(
       if ($echoesCount) {
         $echoesCount.textContent = answered + ' / ' + arr.length + ' answered';
       }
+      function escapeHtml(str) {
+        return String(str || '').replace(/[<>&"]/g, function (c) {
+          return c === '<' ? '&lt;'
+               : c === '>' ? '&gt;'
+               : c === '&' ? '&amp;'
+               : '&quot;';
+        });
+      }
       $echoesList.innerHTML = arr.slice().reverse().map(function (e) {
         var pill = e.status === 'answered'
           ? ('<a class="fb-echo__pill fb-echo__pill--answered mono" href="' + (e.blockHref || '#') + '">✓ answered</a>')
           : '<span class="fb-echo__pill fb-echo__pill--sent mono">● sent</span>';
+        // Mike 2026-05-02: when a block has answered an ASK, render the
+        // reply text inline as a parchment quote — closes the round-trip
+        // loop visually all the way around. Body cap at 220 chars; click
+        // through to the block for the rest.
+        var reply = '';
+        if (e.status === 'answered' && (e.blockBody || e.blockTitle)) {
+          var title = escapeHtml(e.blockTitle || '');
+          var bodyText = String(e.blockBody || '');
+          var truncated = bodyText.length > 220;
+          var bodyEsc = escapeHtml(bodyText.slice(0, 220)) + (truncated ? '…' : '');
+          var author = escapeHtml(e.blockAuthor || 'cast');
+          var blockId = escapeHtml(e.blockId || '');
+          reply =
+            '<div class="fb-echo__reply">' +
+              '<a class="fb-echo__reply-link" href="' + (e.blockHref || '#') + '">' +
+                '<span class="fb-echo__reply-kicker mono">' + author + ' replied · № ' + blockId + '</span>' +
+                (title ? '<span class="fb-echo__reply-title">' + title + '</span>' : '') +
+                '<span class="fb-echo__reply-body">' + bodyEsc + '</span>' +
+                (truncated ? '<span class="fb-echo__reply-more mono">read full block ↗</span>' : '') +
+              '</a>' +
+            '</div>';
+        }
         return '<li class="fb-echo">' +
-          '<span class="fb-echo__time mono">' + shortTime(e.ts) + '</span>' +
-          '<span class="fb-echo__to mono">→ ' + (e.to || 'cast') + '</span>' +
-          '<span class="fb-echo__body">' + (e.body ? e.body.replace(/[<>&]/g, function (c) { return c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;'; }) : '') + '</span>' +
-          pill +
+          '<div class="fb-echo__row">' +
+            '<span class="fb-echo__time mono">' + shortTime(e.ts) + '</span>' +
+            '<span class="fb-echo__to mono">→ ' + escapeHtml(e.to || 'cast') + '</span>' +
+            '<span class="fb-echo__body">' + escapeHtml(e.body || '') + '</span>' +
+            pill +
+          '</div>' +
+          reply +
           '</li>';
       }).join('');
     }
@@ -1118,7 +1151,14 @@ const pingable = RESIDENTS.filter(
     var echoBlocksCache = { ts: 0, data: null };
     async function reconcileEchoes() {
       var arr = loadEchoes();
-      var pending = arr.filter(function (e) { return e.status !== 'answered' && e.key; });
+      // Mike 2026-05-02: also re-process answered-but-missing-body echoes
+      // so old localStorage entries from before reply-rendering shipped
+      // get backfilled with title/body/author on next load.
+      var pending = arr.filter(function (e) {
+        if (!e.key) return false;
+        if (e.status !== 'answered') return true;
+        return !e.blockBody && !e.blockTitle;
+      });
       if (!pending.length) return;
       try {
         var now = Date.now();
@@ -1135,7 +1175,9 @@ const pingable = RESIDENTS.filter(
         var changed = false;
         for (var i = 0; i < arr.length; i++) {
           var echo = arr[i];
-          if (echo.status === 'answered' || !echo.key) continue;
+          if (!echo.key) continue;
+          // Skip echoes that are already fully answered with body data.
+          if (echo.status === 'answered' && (echo.blockBody || echo.blockTitle)) continue;
           for (var j = 0; j < blocks.length; j++) {
             var b = blocks[j];
             var src = (b && b.source) || '';
@@ -1143,6 +1185,12 @@ const pingable = RESIDENTS.filter(
               echo.status = 'answered';
               echo.blockId = b.id;
               echo.blockHref = '/b/' + b.id;
+              // Mike 2026-05-02: stash enough of the reply to render
+              // it inline in the echo card. Cap body at 320 chars in
+              // storage; render-time truncates further.
+              echo.blockTitle = String(b.title || '').slice(0, 80);
+              echo.blockBody = String(b.body || b.dek || '').slice(0, 320);
+              echo.blockAuthor = String(b.author || 'cast').slice(0, 20);
               changed = true;
               break;
             }
@@ -2200,16 +2248,21 @@ const pingable = RESIDENTS.filter(
   .fb-echoes__counts { color: #2f8f5f; font-weight: 700; }
   .fb-echoes__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   .fb-echo {
-    display: grid;
-    grid-template-columns: auto auto 1fr auto;
-    align-items: center;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
     padding: 5px 7px;
     background: #fffdf8;
     border: 1px solid #ece4d3;
     border-radius: 2px;
     font-size: 11px;
     line-height: 1.3;
+  }
+  .fb-echo__row {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    align-items: center;
+    gap: 8px;
   }
   .fb-echo__time { font-size: 9.5px; color: #8a7854; letter-spacing: 0.04em; }
   .fb-echo__to   { font-size: 9.5px; color: #6b5a3a; letter-spacing: 0.06em; }
@@ -2233,6 +2286,66 @@ const pingable = RESIDENTS.filter(
   .fb-echo__pill--sent     { background: #f8e9c8; color: #c4952e; }
   .fb-echo__pill--answered { background: #d8f0e2; color: #2f8f5f; }
   .fb-echo__pill--answered:hover { background: #2f8f5f; color: #fff; }
+
+  /* Mike 2026-05-02: when an ASK is answered with a real published
+     block, the echo grows an inline parchment quote of the reply.
+     Closes the round-trip loop visually. Whole quote is a clickable
+     link to /b/{id}. */
+  .fb-echo__reply {
+    margin-top: 5px;
+    padding-left: 14px;
+    border-left: 2px solid #2f8f5f;
+  }
+  .fb-echo__reply-link {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 9px;
+    background: linear-gradient(180deg, #fffdf6 0%, #faf2dc 100%);
+    border: 1px solid #d4c6a4;
+    border-left: 0;
+    border-radius: 0 2px 2px 0;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .fb-echo__reply-link:hover {
+    background: #faf2dc;
+    border-color: #2f8f5f;
+  }
+  .fb-echo__reply-kicker {
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    color: #2f8f5f;
+    font-weight: 700;
+    text-transform: lowercase;
+  }
+  .fb-echo__reply-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 13px;
+    color: #2d1f08;
+    line-height: 1.15;
+  }
+  .fb-echo__reply-body {
+    font-family: Georgia, serif;
+    font-size: 12px;
+    color: #4e3a16;
+    line-height: 1.45;
+    /* Cap to ~3 lines — the truncation is also handled in JS via the
+       220-char slice + ellipsis. CSS clamp is the visual fallback. */
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .fb-echo__reply-more {
+    align-self: flex-end;
+    font-size: 8.5px;
+    letter-spacing: 0.14em;
+    color: #2f8f5f;
+    text-transform: lowercase;
+    margin-top: 2px;
+  }
 
   .fb-residents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .fb-resident { margin: 0; }
