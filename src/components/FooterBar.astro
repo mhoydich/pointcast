@@ -47,6 +47,7 @@ import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
 import { DOCK_KIT } from '../data/dock-kit';
 import { FEDERATION_PEERS } from '../data/federation-peers';
 import { RESIDENTS } from '../data/residents';
+import { SPELLS } from '../data/spells';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 const KIT_JSON = JSON.stringify(DOCK_KIT);
@@ -465,6 +466,49 @@ const pingable = RESIDENTS.filter(
     </div>
   </div>
 
+  <!-- 06 CAST tray — Peach-style magic words. Type a name or click a chip,
+       a spell renders into the SpellLayer overlay. -->
+  <div class="fb__tray" id="fb-tray-cast" role="dialog" aria-modal="false" aria-label="Cast — magic words" hidden>
+    <div class="fb__tray-arrow" aria-hidden="true"></div>
+    <header class="fb__tray-head">
+      <span class="fb__tray-num mono">06</span>
+      <h3 class="fb__tray-title">Cast</h3>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
+    <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Spells">
+        {KIT_BY_ID.cast.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="cast"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
+      <p class="fb__tray-blurb">Peach-style magic words. Click a chip, or type <code>+confetti</code> in the bar above. Spells live in <code>src/data/spells.ts</code>.</p>
+      <ul class="fb-spells">
+        {SPELLS.map((s) => (
+          <li class="fb-spell" data-kind={s.kind} style={`--spell-accent: ${s.accent}`}>
+            <button type="button" class="fb-spell__btn" data-tray="cast" data-action={s.id} title={`+${s.id}`}>
+              <span class="fb-spell__glyph" aria-hidden="true">{s.glyph}</span>
+              <span class="fb-spell__body">
+                <span class="fb-spell__label">+{s.id}</span>
+                <span class="fb-spell__blurb mono">{s.blurb}</span>
+              </span>
+              <span class="fb-spell__kind mono" data-kind={s.kind}>{s.kind}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p class="fb__tray-meta mono">type <code>+&lt;name&gt;</code> in the bar · companions auto-dismiss · click ambient surfaces to snuff</p>
+    </div>
+  </div>
+
   <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast kit binder" hidden>
     <div class="fb__menu-scrim" id="fb-menu-scrim" aria-hidden="true"></div>
     <div class="fb__menu-panel" id="fb-menu-panel" tabindex="-1">
@@ -774,6 +818,7 @@ const pingable = RESIDENTS.filter(
     function inferOmniMode(value) {
       var v = String(value || '').trim();
       if (!v) return roomOn ? 'SAY' : 'GO';
+      if (v.charAt(0) === '+') return 'CAST';
       if (v.charAt(0) === '>') return 'OP';
       if (v.charAt(0) === '?') return 'ASK';
       if (v.charAt(0) === '@') return 'AGT';
@@ -809,6 +854,19 @@ const pingable = RESIDENTS.filter(
       var raw = String($omni.value || '').trim();
       if (!raw) return;
       var mode = inferOmniMode(raw);
+      if (mode === 'CAST') {
+        // Magic word — `+confetti`, `+cat`, `+breath`, `+candle`, `+clear`.
+        // Strip the prefix, take first word, emit pc:spell:cast.
+        var spellId = raw.replace(/^\+\s*/, '').split(/\s+/)[0].toLowerCase();
+        if (spellId === 'clear') {
+          window.dispatchEvent(new CustomEvent('pc:spell:clear'));
+        } else if (spellId) {
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: spellId } }));
+        }
+        $omni.value = '';
+        applyOmniMode();
+        return;
+      }
       if (mode === 'OP') {
         // Operator command — `>cmd args`. Stub renderer: parse, dispatch
         // pc:dock:operator, surface a one-line ack in the status. Real
@@ -1541,6 +1599,15 @@ const pingable = RESIDENTS.filter(
           // For now: emit an operator event so future director plugins
           // can listen.
           window.dispatchEvent(new CustomEvent('pc:dock:director', { detail: { action: action } }));
+        }
+        return;
+      }
+      if (tray === 'cast') {
+        // Magic word chips. The action id IS the spell id (or 'clear').
+        if (action === 'clear') {
+          window.dispatchEvent(new CustomEvent('pc:spell:clear'));
+        } else {
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: action } }));
         }
         return;
       }
@@ -2401,6 +2468,48 @@ const pingable = RESIDENTS.filter(
     color: #fff7d4;
     border-color: #c4952e;
   }
+  /* Cast mode pill (`+` prefix in omnibox) — Peach-style magic words. */
+  .fb__omni-mode[data-mode='cast'] {
+    background: rgba(167, 139, 250, 0.35);
+    color: #f0e8ff;
+    border-color: #a78bfa;
+  }
+
+  /* Spell list inside the CAST tray — kind-tinted left rail, glyph,
+     short description, and a small `kind` pill on the right. */
+  .fb-spells { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .fb-spell { margin: 0; }
+  .fb-spell__btn {
+    appearance: none;
+    width: 100%;
+    text-align: left;
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    background: #fffdf8;
+    border: 1px solid #d4c6a4;
+    border-left: 3px solid var(--spell-accent, #4e3a16);
+    border-radius: 2px;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  }
+  .fb-spell__btn:hover {
+    background: #faf2dc;
+    border-color: var(--spell-accent, #4e3a16);
+    transform: translateY(-1px);
+  }
+  .fb-spell__glyph { font-size: 18px; line-height: 1; text-align: center; }
+  .fb-spell__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fb-spell__label { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; font-size: 11px; color: var(--spell-accent, #2d1f08); font-weight: 700; letter-spacing: 0.05em; }
+  .fb-spell__blurb { font-size: 10px; color: #6b5a3a; line-height: 1.3; letter-spacing: 0.02em; }
+  .fb-spell__kind { font-size: 8.5px; letter-spacing: 0.16em; font-weight: 700; padding: 2px 5px; border-radius: 1px; text-transform: uppercase; }
+  .fb-spell__kind[data-kind='burst']     { background: #f8e9c8; color: #c4952e; }
+  .fb-spell__kind[data-kind='companion'] { background: #f5e0e5; color: #8a2432; }
+  .fb-spell__kind[data-kind='ambient']   { background: #e2eef5; color: #4A9EFF; }
 
   /* Broadcast tray — the studio glimpse. */
   .fb-bcast { display: flex; flex-direction: column; gap: 10px; }
