@@ -1,0 +1,237 @@
+---
+/**
+ * StreakCounter — Day N streak badge for the homepage.
+ *
+ * Local-first: tracks unique-day visits in localStorage. No server,
+ * no account, no telemetry. The day boundary is America/Los_Angeles
+ * because every other PointCast surface clocks in LA time.
+ *
+ * Storage keys (pc:streak:*):
+ *   firstSeenDate    — YYYY-MM-DD (LA), the day the visitor showed up
+ *   lastVisitDate    — YYYY-MM-DD (LA), most recent day counted
+ *   current          — number, days in the current run
+ *   longest          — number, all-time max
+ *   totalVisits      — number, count of unique days seen
+ *
+ * Server render is a placeholder so the layout doesn't shift; the
+ * client script fills in the real numbers on hydration.
+ */
+---
+
+<aside class="streak" aria-label="Daily streak">
+  <div class="streak__badge" data-streak-badge>
+    <span class="streak__big" data-streak-count>—</span>
+    <span class="streak__tag">DAY STREAK</span>
+  </div>
+  <div class="streak__meta">
+    <p class="streak__kicker mono">PRESENCE LEDGER · LOCAL-FIRST</p>
+    <p class="streak__line" data-streak-line>setting up your trail…</p>
+  </div>
+  <a class="streak__more mono" href="/profile">/profile →</a>
+</aside>
+
+<script is:inline>
+  (function () {
+    function laDate(d) {
+      // YYYY-MM-DD in America/Los_Angeles
+      var fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return fmt.format(d);
+    }
+    function ymdToDate(s) {
+      // Treat YYYY-MM-DD as LA-local midnight; we only need day diffs.
+      var p = s.split('-').map(function (n) { return parseInt(n, 10); });
+      return new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    }
+    function daysBetween(a, b) {
+      var ms = ymdToDate(b).getTime() - ymdToDate(a).getTime();
+      return Math.round(ms / 86400000);
+    }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) {
+      try {
+        if (v === null || v === undefined) localStorage.removeItem(k);
+        else localStorage.setItem(k, String(v));
+      } catch (e) {}
+    }
+    function fmtSince(s) {
+      try {
+        var d = ymdToDate(s);
+        return new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }).format(d);
+      } catch (e) { return s; }
+    }
+
+    var today = laDate(new Date());
+    var first = lsGet('pc:streak:firstSeenDate');
+    var last = lsGet('pc:streak:lastVisitDate');
+    var current = parseInt(lsGet('pc:streak:current') || '0', 10) || 0;
+    var longest = parseInt(lsGet('pc:streak:longest') || '0', 10) || 0;
+    var total = parseInt(lsGet('pc:streak:totalVisits') || '0', 10) || 0;
+
+    if (!first) {
+      first = today;
+      lsSet('pc:streak:firstSeenDate', first);
+    }
+
+    if (last !== today) {
+      // New day for this visitor — update streak.
+      if (!last) {
+        current = 1;
+      } else {
+        var diff = daysBetween(last, today);
+        if (diff === 1) current = current + 1;
+        else if (diff <= 0) current = Math.max(1, current); // clock skew safety
+        else current = 1; // gap broke the streak
+      }
+      total = total + 1;
+      if (current > longest) longest = current;
+      lsSet('pc:streak:lastVisitDate', today);
+      lsSet('pc:streak:current', current);
+      lsSet('pc:streak:longest', longest);
+      lsSet('pc:streak:totalVisits', total);
+    }
+
+    var countEl = document.querySelector('[data-streak-count]');
+    var lineEl = document.querySelector('[data-streak-line]');
+    var badgeEl = document.querySelector('[data-streak-badge]');
+    if (countEl) countEl.textContent = String(current);
+    if (lineEl) {
+      var bits = [
+        total + (total === 1 ? ' visit' : ' visits'),
+        'longest ' + longest + (longest === 1 ? ' day' : ' days'),
+      ];
+      if (first) bits.push('since ' + fmtSince(first));
+      lineEl.textContent = bits.join(' · ');
+    }
+    if (badgeEl && current >= 7) badgeEl.classList.add('streak__badge--hot');
+    if (badgeEl && current >= 30) badgeEl.classList.add('streak__badge--blaze');
+
+    // Hide redundant /profile link when this strip is rendered on /profile.
+    if (location.pathname.replace(/\/$/, '') === '/profile') {
+      var moreEl = document.querySelector('.streak__more');
+      if (moreEl) moreEl.remove();
+    }
+  })();
+</script>
+
+<style>
+  .streak {
+    margin: 14px 0 18px;
+    padding: 14px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #fff5d6;
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.04) 0,
+        rgba(0, 0, 0, 0.04) 2px,
+        transparent 2px,
+        transparent 6px
+      );
+    box-shadow: 4px 4px 0 var(--pc-ink, #1a1a1a);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .streak__badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 84px;
+    padding: 10px 12px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #ffffff;
+    color: var(--pc-ink, #1a1a1a);
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+  }
+
+  .streak__badge--hot {
+    background: #ff7a3d;
+    color: #1a1a1a;
+  }
+
+  .streak__badge--blaze {
+    background: #d11149;
+    color: #fff5d6;
+  }
+
+  .streak__big {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .streak__tag {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .streak__meta {
+    min-width: 0;
+  }
+
+  .streak__kicker {
+    margin: 0 0 4px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .streak__line {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .streak__more {
+    border: 1px solid var(--pc-ink, #1a1a1a);
+    background: #fff;
+    color: var(--pc-ink, #1a1a1a);
+    padding: 7px 9px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .streak__more:hover {
+    background: var(--pc-ink, #1a1a1a);
+    color: #fff5d6;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .streak {
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+    }
+    .streak__more {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
+    .streak__big {
+      font-size: 26px;
+    }
+  }
+</style>
