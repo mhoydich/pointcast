@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'pointcast-native-shell',
+    name: 'PointCast Native Shell',
+    kicker: 'PWA · NOW · ROOMS',
+    description: 'The installable PointCast home screen: Now, Rooms, Drum, Profile, Collect, and Agents in one mobile-first app shell.',
+    url: 'https://pointcast.xyz/app',
+    path: '/app',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'moodygold',
     name: 'MoodyGold',
     kicker: 'ARTWORK · SOUND · GALLERY',

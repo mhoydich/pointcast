@@ -1,0 +1,575 @@
+---
+/**
+ * /app — PointCast Native Shell.
+ *
+ * Installable PWA home screen for the existing web app. It is intentionally
+ * static and accountless: build-time state plus browser-local hints only.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const latest = blocks[0];
+const recent = blocks.slice(0, 4);
+const blockCount = blocks.length;
+
+const appTabs = [
+  { href: '/now', label: 'Now', note: 'live state', glyph: 'N' },
+  { href: '/rooms', label: 'Rooms', note: 'town map', glyph: 'R' },
+  { href: '/drum-fives', label: 'Drum', note: 'wing hub', glyph: 'D' },
+  { href: '/profile', label: 'Profile', note: 'passport', glyph: 'P' },
+  { href: '/editions', label: 'Collect', note: 'mint shelf', glyph: 'C' },
+  { href: '/for-agents', label: 'Agents', note: 'manifest', glyph: 'A' },
+];
+
+const roomCards = [
+  { href: '/drum-fives', title: 'Fives & Bells', meta: 'eight drum surfaces', state: 'live' },
+  { href: '/rooms', title: 'Rooms', meta: 'small internet town', state: 'map' },
+  { href: '/now', title: 'Now', meta: 'latest block + contracts', state: 'fresh' },
+  { href: '/profile', title: 'Profile', meta: 'wallet-local passport', state: 'local' },
+];
+
+const todayAction = latest
+  ? {
+      label: 'Open latest receipt',
+      href: `/b/${latest.data.id}`,
+      title: latest.data.title,
+      note: latest.data.dek,
+    }
+  : {
+      label: 'Open Now',
+      href: '/now',
+      title: 'See what is current',
+      note: 'PointCast exposes the live snapshot at /now and /now.json.',
+    };
+
+const generatedAt = new Date();
+const generatedLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+  timeZoneName: 'short',
+}).format(generatedAt);
+
+const description =
+  'PointCast Native Shell: an installable app home for Now, Rooms, Drum, Profile, Collect, and Agents.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/app',
+  name: 'PointCast Native Shell',
+  url: 'https://pointcast.xyz/app',
+  description,
+  applicationCategory: 'LifestyleApplication',
+  operatingSystem: 'Any modern browser',
+};
+---
+
+<BlockLayout title="App" description={description} image="/images/og/og-home-v2.png" jsonLd={jsonLd}>
+  <main class="native-shell" id="native-shell">
+    <header class="app-top">
+      <a class="app-top__brand" href="/">POINTCAST</a>
+      <div class="app-top__meta">
+        <span>{blockCount} blocks</span>
+        <span>{generatedLabel}</span>
+      </div>
+    </header>
+
+    <section class="phone-hero" aria-labelledby="app-title">
+      <div class="phone-hero__copy">
+        <p class="kicker">POINTCAST NATIVE · PWA SHELL</p>
+        <h1 id="app-title">One home screen for the live broadcast.</h1>
+        <p>
+          Install this route and come back to the useful doors: what is live,
+          where the rooms are, what to collect, and what agents can read.
+        </p>
+      </div>
+      <aside class="install-card" aria-label="Install status">
+        <span class="install-card__dot" aria-hidden="true"></span>
+        <strong id="install-title">Installable web app</strong>
+        <span id="install-note">Use your browser's Add to Home Screen or Install command.</span>
+      </aside>
+    </section>
+
+    <nav class="app-tabs" aria-label="PointCast app tabs">
+      {appTabs.map((tab) => (
+        <a href={tab.href} class="app-tab">
+          <span class="app-tab__glyph" aria-hidden="true">{tab.glyph}</span>
+          <span>
+            <strong>{tab.label}</strong>
+            <em>{tab.note}</em>
+          </span>
+        </a>
+      ))}
+    </nav>
+
+    <section class="action-card" aria-labelledby="today-action-title">
+      <div>
+        <p class="kicker">TODAY'S APP ACTION</p>
+        <h2 id="today-action-title">{todayAction.title}</h2>
+        <p>{todayAction.note}</p>
+      </div>
+      <a href={todayAction.href}>{todayAction.label}</a>
+    </section>
+
+    <section class="dashboard" aria-label="Native dashboard">
+      <article class="panel panel--latest">
+        <p class="kicker">LATEST RECEIPTS</p>
+        <ol class="receipt-list">
+          {recent.map((block) => (
+            <li>
+              <a href={`/b/${block.data.id}`}>
+                <span>№{block.data.id} · CH.{block.data.channel}</span>
+                <strong>{block.data.title}</strong>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </article>
+
+      <article class="panel">
+        <p class="kicker">RESUME</p>
+        <h2 id="resume-title">Pick up where this browser left off.</h2>
+        <p id="resume-note">Local memory appears here after you visit rooms, connect a wallet, or save a daily drop.</p>
+        <div class="mini-stats" aria-label="Browser-local profile hints">
+          <span><strong id="visited-count">—</strong><em>rooms</em></span>
+          <span><strong id="wallet-count">—</strong><em>wallets</em></span>
+          <span><strong id="daily-count">—</strong><em>drops</em></span>
+        </div>
+      </article>
+    </section>
+
+    <section class="room-grid" aria-label="App rooms">
+      {roomCards.map((room) => (
+        <a class="room-card" href={room.href}>
+          <span>{room.state}</span>
+          <strong>{room.title}</strong>
+          <em>{room.meta}</em>
+        </a>
+      ))}
+    </section>
+
+    <footer class="app-foot">
+      <a href="/apps.json">/apps.json</a>
+      <a href="/now.json">/now.json</a>
+      <a href="/agents.json">/agents.json</a>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  const installTitle = document.getElementById('install-title');
+  const installNote = document.getElementById('install-note');
+  const resumeTitle = document.getElementById('resume-title');
+  const resumeNote = document.getElementById('resume-note');
+  const visitedCount = document.getElementById('visited-count');
+  const walletCount = document.getElementById('wallet-count');
+  const dailyCount = document.getElementById('daily-count');
+
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+  if (isStandalone && installTitle && installNote) {
+    installTitle.textContent = 'Running as an app';
+    installNote.textContent = 'You are in the installed PointCast shell.';
+  }
+
+  function parseList(key: string): unknown[] {
+    try {
+      const value = localStorage.getItem(key);
+      if (!value) return [];
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  const visited = parseList('pc:rooms:visited');
+  const wallets = parseList('pc:wallets');
+  const drops = parseList('pc:daily:collected');
+
+  if (visitedCount) visitedCount.textContent = String(visited.length);
+  if (walletCount) walletCount.textContent = String(wallets.length);
+  if (dailyCount) dailyCount.textContent = String(drops.length);
+
+  const lastRoom = visited[visited.length - 1];
+  if (typeof lastRoom === 'string' && resumeTitle && resumeNote) {
+    resumeTitle.textContent = 'Resume your last room.';
+    resumeNote.innerHTML = `<a href="${lastRoom}">${lastRoom}</a> is remembered on this browser.`;
+  }
+
+  try {
+    const nextVisited = Array.from(new Set([...visited, '/app']));
+    localStorage.setItem('pc:rooms:visited', JSON.stringify(nextVisited));
+  } catch {}
+</script>
+
+<style>
+  :global(body:has(#native-shell)) {
+    background: #f2efe7;
+  }
+
+  .native-shell {
+    --app-ink: #14120f;
+    --app-muted: #686157;
+    --app-paper: #fffdf5;
+    --app-soft: #ece4d5;
+    --app-blue: #185fa5;
+    --app-red: #8a2432;
+    --app-green: #0f6e56;
+    --app-gold: #ba7517;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 14px 14px 72px;
+    color: var(--app-ink);
+  }
+
+  .app-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    background: rgba(242, 239, 231, 0.92);
+    backdrop-filter: blur(14px);
+  }
+
+  .app-top__brand {
+    color: var(--app-ink);
+    font: 800 15px/1 var(--pc-font-mono);
+    letter-spacing: 0.16em;
+    text-decoration: none;
+  }
+
+  .app-top__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    font: 700 10px/1 var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+  }
+
+  .phone-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.6fr);
+    gap: 14px;
+    align-items: stretch;
+    margin-top: 10px;
+  }
+
+  .phone-hero__copy,
+  .install-card,
+  .action-card,
+  .panel,
+  .room-card {
+    border: 1.5px solid var(--app-ink);
+    background: var(--app-paper);
+    box-shadow: 4px 4px 0 var(--app-ink);
+  }
+
+  .phone-hero__copy {
+    padding: clamp(18px, 3vw, 32px);
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    color: var(--app-red);
+    font: 800 10px/1 var(--pc-font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 0;
+    font-size: clamp(42px, 8vw, 86px);
+    line-height: 0.92;
+    letter-spacing: 0;
+    font-weight: 650;
+  }
+
+  .phone-hero p,
+  .action-card p,
+  .panel p {
+    max-width: 680px;
+    color: var(--app-muted);
+    font-size: 17px;
+    line-height: 1.5;
+  }
+
+  .install-card {
+    display: grid;
+    align-content: center;
+    gap: 10px;
+    min-height: 180px;
+    padding: 18px;
+  }
+
+  .install-card__dot {
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--app-ink);
+    background: var(--app-green);
+    box-shadow: 3px 3px 0 var(--app-ink);
+  }
+
+  .install-card strong {
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .install-card span:last-child {
+    color: var(--app-muted);
+    line-height: 1.45;
+  }
+
+  .app-tabs {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 16px 0;
+  }
+
+  .app-tab {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 9px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--app-ink);
+    background: #fff;
+    color: var(--app-ink);
+    text-decoration: none;
+  }
+
+  .app-tab__glyph {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    background: var(--app-blue);
+    color: #fff;
+    font: 800 13px/1 var(--pc-font-mono);
+  }
+
+  .app-tab strong,
+  .app-tab em {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .app-tab strong {
+    font-size: 15px;
+  }
+
+  .app-tab em {
+    margin-top: 2px;
+    color: var(--app-muted);
+    font: 700 9px/1.2 var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .action-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+
+  .action-card h2,
+  .panel h2 {
+    margin: 0;
+    font-size: clamp(26px, 4vw, 44px);
+    line-height: 0.98;
+  }
+
+  .action-card a,
+  .app-foot a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1.5px solid var(--app-ink);
+    background: var(--app-ink);
+    color: #fff;
+    font: 800 11px/1 var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 14px;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  .receipt-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .receipt-list a {
+    display: grid;
+    gap: 4px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(20, 18, 15, 0.14);
+    color: var(--app-ink);
+    text-decoration: none;
+  }
+
+  .receipt-list span {
+    color: var(--app-blue);
+    font: 800 10px/1 var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .receipt-list strong {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .mini-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .mini-stats span {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid rgba(20, 18, 15, 0.18);
+    background: #fff;
+  }
+
+  .mini-stats strong {
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .mini-stats em {
+    color: var(--app-muted);
+    font: 800 9px/1 var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .room-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .room-card {
+    display: grid;
+    gap: 8px;
+    min-height: 132px;
+    padding: 14px;
+    color: var(--app-ink);
+    text-decoration: none;
+  }
+
+  .room-card span {
+    width: max-content;
+    padding: 4px 7px;
+    background: var(--app-gold);
+    color: #fff;
+    font: 800 9px/1 var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .room-card strong {
+    font-size: 23px;
+    line-height: 1;
+  }
+
+  .room-card em {
+    align-self: end;
+    color: var(--app-muted);
+    font-style: normal;
+    line-height: 1.35;
+  }
+
+  .app-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  @media (max-width: 860px) {
+    .phone-hero,
+    .dashboard,
+    .action-card {
+      grid-template-columns: 1fr;
+    }
+    .app-tabs {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .room-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 520px) {
+    .native-shell {
+      padding-inline: 10px;
+    }
+    .app-top {
+      align-items: flex-start;
+    }
+    .app-top__meta {
+      max-width: 170px;
+    }
+    .app-tabs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .app-tab {
+      grid-template-columns: 28px minmax(0, 1fr);
+      padding: 9px 8px;
+    }
+    .app-tab__glyph {
+      width: 26px;
+      height: 26px;
+    }
+    .mini-stats,
+    .room-grid {
+      grid-template-columns: 1fr;
+    }
+    h1 {
+      font-size: clamp(38px, 14vw, 58px);
+    }
+  }
+</style>
