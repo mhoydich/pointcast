@@ -1,0 +1,409 @@
+---
+/**
+ * CircleStrip — your circle of named peoples + last-seen recency.
+ *
+ * Sits below VisitorHereStrip on the homepage. While VisitorHereStrip
+ * shows anonymous "PEOPLES HERE" slots, this strip names the ones that
+ * matter to you and shows when each was last around.
+ *
+ * Storage (all local-first):
+ *   pc:circle:list      — JSON array of { noun, name, addedAt }
+ *   pc:circle:lastSeen  — JSON map { [noun]: ISO timestamp }
+ *
+ * Recency is updated by a MutationObserver that watches the existing
+ * .here-slot--occupied slots in VisitorHereStrip. When a slot's
+ * dataset.session changes and its nounId matches a circle member, we
+ * stamp pc:circle:lastSeen[noun] = now.
+ *
+ * Empty state: a friendly prompt to add someone. Cap at 25 per the
+ * "25-mile radius" thesis in the engagement plan.
+ */
+---
+
+<aside class="circle" aria-label="Your circle">
+  <div class="circle__head">
+    <p class="circle__kicker mono">YOUR CIRCLE · LOCAL-FIRST · CAP 25</p>
+    <button class="circle__add mono" type="button" data-circle-add>
+      + ADD
+    </button>
+  </div>
+  <ol class="circle__list" data-circle-list aria-live="polite">
+    <li class="circle__empty mono" data-circle-empty>
+      Nobody added yet. Tap + ADD to put a Noun + name here. They show up with a recency stamp once their Noun appears in PEOPLES HERE.
+    </li>
+  </ol>
+</aside>
+
+<script is:inline>
+  (function () {
+    var LIST_KEY = 'pc:circle:list';
+    var SEEN_KEY = 'pc:circle:lastSeen';
+    var CAP = 25;
+
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+    function readList() {
+      try {
+        var raw = lsGet(LIST_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) { return []; }
+    }
+    function writeList(arr) { lsSet(LIST_KEY, JSON.stringify(arr || [])); }
+    function readSeen() {
+      try {
+        var raw = lsGet(SEEN_KEY);
+        var obj = raw ? JSON.parse(raw) : {};
+        return (obj && typeof obj === 'object') ? obj : {};
+      } catch (e) { return {}; }
+    }
+    function writeSeen(obj) { lsSet(SEEN_KEY, JSON.stringify(obj || {})); }
+
+    function nounUrl(id) { return 'https://noun.pics/' + id + '.svg'; }
+
+    function recencyLabel(iso) {
+      if (!iso) return 'never seen here';
+      var then = Date.parse(iso);
+      if (!then) return 'never seen here';
+      var diffMs = Date.now() - then;
+      if (diffMs < 60000) return 'just now';
+      var mins = Math.round(diffMs / 60000);
+      if (mins < 60) return mins + 'm ago';
+      var hrs = Math.round(diffMs / 3600000);
+      if (hrs < 24) return hrs + 'h ago';
+      var days = Math.round(diffMs / 86400000);
+      if (days === 1) return 'yesterday';
+      if (days < 14) return days + 'd ago';
+      var weeks = Math.round(days / 7);
+      if (weeks < 8) return weeks + 'w ago';
+      try {
+        return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(then));
+      } catch (e) { return iso.slice(0, 10); }
+    }
+
+    function recencyTone(iso) {
+      if (!iso) return 'cold';
+      var then = Date.parse(iso);
+      if (!then) return 'cold';
+      var diffMs = Date.now() - then;
+      if (diffMs < 5 * 60 * 1000) return 'live';     // last 5 min
+      if (diffMs < 24 * 60 * 60 * 1000) return 'warm'; // last day
+      if (diffMs < 7 * 24 * 60 * 60 * 1000) return 'fade'; // last week
+      return 'cold';
+    }
+
+    function render() {
+      var list = readList();
+      var seen = readSeen();
+      var ol = document.querySelector('[data-circle-list]');
+      if (!ol) return;
+      ol.innerHTML = '';
+      if (list.length === 0) {
+        var emptyLi = document.createElement('li');
+        emptyLi.className = 'circle__empty mono';
+        emptyLi.textContent = 'Nobody added yet. Tap + ADD to put a Noun + name here. They show up with a recency stamp once their Noun appears in PEOPLES HERE.';
+        ol.appendChild(emptyLi);
+        return;
+      }
+      list.forEach(function (m) {
+        var li = document.createElement('li');
+        li.className = 'circle__member';
+        li.dataset.noun = String(m.noun);
+        li.dataset.name = m.name;
+        var lastSeen = seen[String(m.noun)] || null;
+        li.dataset.tone = recencyTone(lastSeen);
+
+        var img = document.createElement('img');
+        img.className = 'circle__avatar';
+        img.src = nounUrl(m.noun);
+        img.alt = 'noun ' + m.noun;
+        img.loading = 'lazy';
+        li.appendChild(img);
+
+        var meta = document.createElement('div');
+        meta.className = 'circle__meta';
+        var nameEl = document.createElement('span');
+        nameEl.className = 'circle__name';
+        nameEl.textContent = m.name;
+        var subEl = document.createElement('span');
+        subEl.className = 'circle__sub mono';
+        subEl.textContent = '№' + m.noun + ' · ' + recencyLabel(lastSeen);
+        meta.appendChild(nameEl);
+        meta.appendChild(subEl);
+        li.appendChild(meta);
+
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'circle__rm mono';
+        rm.textContent = '×';
+        rm.title = 'remove ' + m.name;
+        rm.setAttribute('aria-label', 'remove ' + m.name + ' from your circle');
+        rm.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (!window.confirm('Remove ' + m.name + ' from your circle?')) return;
+          var next = readList().filter(function (x) { return Number(x.noun) !== Number(m.noun); });
+          writeList(next);
+          render();
+        });
+        li.appendChild(rm);
+
+        ol.appendChild(li);
+      });
+    }
+
+    function addMember() {
+      var list = readList();
+      if (list.length >= CAP) {
+        window.alert('Your circle is at the 25-person cap. Remove someone first.');
+        return;
+      }
+      var nameRaw = window.prompt('Name for this peoples? (e.g. "Morgan")');
+      if (!nameRaw) return;
+      var name = nameRaw.trim().slice(0, 40);
+      if (!name) return;
+      var nounRaw = window.prompt('Their Noun ID? (0-1199 — see noun.pics)');
+      if (!nounRaw) return;
+      var noun = parseInt(nounRaw.trim(), 10);
+      if (!(noun >= 0 && noun < 1200)) {
+        window.alert('Noun ID must be a number from 0 to 1199.');
+        return;
+      }
+      if (list.some(function (x) { return Number(x.noun) === noun; })) {
+        window.alert('That Noun is already in your circle.');
+        return;
+      }
+      list.push({ noun: noun, name: name, addedAt: new Date().toISOString() });
+      writeList(list);
+      render();
+    }
+
+    function stampSeen(noun) {
+      var list = readList();
+      if (!list.some(function (x) { return Number(x.noun) === Number(noun); })) return;
+      var seen = readSeen();
+      seen[String(noun)] = new Date().toISOString();
+      writeSeen(seen);
+      render();
+    }
+
+    function watchHereStrip() {
+      var slots = document.querySelectorAll('.here-strip .here-slot');
+      if (!slots.length) return;
+      var list = readList();
+      // Initial sweep — stamp anyone already visible.
+      slots.forEach(function (slot) {
+        if (!slot.classList.contains('here-slot--occupied')) return;
+        var raw = slot.dataset && slot.dataset.session;
+        if (!raw) return;
+        try {
+          var s = JSON.parse(raw);
+          if (typeof s.nounId === 'number' && list.some(function (m) { return Number(m.noun) === s.nounId; })) {
+            stampSeen(s.nounId);
+          }
+        } catch (e) {}
+      });
+      // Live watch — when slots change, re-check.
+      var obs = new MutationObserver(function () {
+        var current = readList();
+        if (!current.length) return;
+        document.querySelectorAll('.here-strip .here-slot--occupied').forEach(function (slot) {
+          var raw = slot.dataset && slot.dataset.session;
+          if (!raw) return;
+          try {
+            var s = JSON.parse(raw);
+            if (typeof s.nounId === 'number' && current.some(function (m) { return Number(m.noun) === s.nounId; })) {
+              stampSeen(s.nounId);
+            }
+          } catch (e) {}
+        });
+      });
+      obs.observe(document.querySelector('.here-strip'), {
+        subtree: true, attributes: true, attributeFilter: ['data-session', 'class'],
+      });
+    }
+
+    document.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (t && (t.matches && t.matches('[data-circle-add]'))) {
+        addMember();
+      }
+    });
+
+    // Re-render every 60s so recency labels stay fresh while idle.
+    setInterval(render, 60000);
+
+    function init() { render(); watchHereStrip(); }
+    // Run immediately — the script is placed after <aside.circle> so the
+    // DOM up to here is already parsed.
+    try { init(); } catch (e) {}
+    // And re-init on Astro view transitions.
+    document.addEventListener('astro:page-load', function () { try { init(); } catch (e) {} });
+  })();
+</script>
+
+<style is:global>
+  .circle {
+    margin: 14px 0 18px;
+    padding: 12px 14px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #e9f6ff;
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
+      repeating-linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.04) 0,
+        rgba(0, 0, 0, 0.04) 2px,
+        transparent 2px,
+        transparent 6px
+      );
+    box-shadow: 4px 4px 0 var(--pc-ink, #1a1a1a);
+  }
+
+  .circle__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .circle__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .circle__add {
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #ffd166;
+    color: var(--pc-ink, #1a1a1a);
+    padding: 5px 9px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+    cursor: pointer;
+  }
+
+  .circle__add:hover {
+    background: #ff7a3d;
+  }
+
+  .circle__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
+  }
+
+  .circle__empty {
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px dashed var(--pc-rule, #d6d4cd);
+    color: var(--pc-ink-soft, #5b5b55);
+    font-size: 11px;
+    line-height: 1.45;
+    grid-column: 1 / -1;
+  }
+
+  .circle__member {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: #fff;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+    position: relative;
+  }
+
+  .circle__member[data-tone="live"]::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    right: 22px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2ec56b;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1a1a1a;
+  }
+
+  .circle__member[data-tone="warm"] {
+    background: #fff8e1;
+  }
+
+  .circle__member[data-tone="fade"] {
+    background: #f5f3ee;
+  }
+
+  .circle__member[data-tone="cold"] {
+    background: #efeee8;
+    color: var(--pc-ink-soft, #5b5b55);
+  }
+
+  .circle__avatar {
+    width: 36px;
+    height: 36px;
+    image-rendering: pixelated;
+    border: 1px solid var(--pc-ink, #1a1a1a);
+    background: #fbfbf8;
+  }
+
+  .circle__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .circle__name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--pc-ink, #1a1a1a);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle__sub {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .circle__rm {
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    background: transparent;
+    color: var(--pc-ink-muted, #5b5b55);
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .circle__rm:hover {
+    background: #d11149;
+    color: #fff5d6;
+    border-color: #d11149;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .circle__list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
