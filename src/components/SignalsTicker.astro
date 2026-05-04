@@ -1,0 +1,270 @@
+---
+/**
+ * SignalsTicker — economic glance: BTC, ETH, XTZ.
+ *
+ * Adapted from engagement plan §2.2 "Economic Signals":
+ *   "S&P 500, BTC, ETH — just the number and % change. No framing,
+ *    no takes. Just the ticker."
+ *
+ * Sub: replaced S&P 500 with Tezos (XTZ) because PointCast's Visit
+ * Nouns FA2 contract lives on Tezos — XTZ is more on-brand than SPX
+ * and there is no free, CORS-enabled, no-auth source for SPX in the
+ * browser. Adding S&P later means a tiny server-side proxy at
+ * /api/signals/spx — out of scope for this Week-3 ship.
+ *
+ * Source (no auth, browser-fetchable):
+ *   - CoinGecko simple/price for BTC + ETH + XTZ with 24h change
+ *     api.coingecko.com — generous public limit, all three in one fetch
+ *
+ * Cache 5min in sessionStorage. Refresh on astro:page-load. No
+ * price-target fantasies, no analysis, no commentary — just the number.
+ */
+---
+
+<aside class="signals" aria-label="Economic signals ticker">
+  <header class="signals__head">
+    <p class="signals__kicker mono">SIGNALS · BTC · ETH · XTZ</p>
+    <span class="signals__updated mono" data-signals-updated hidden></span>
+  </header>
+
+  <ol class="signals__list">
+    <li class="signals__cell" data-signals-id="btc" data-tone="idle">
+      <span class="signals__sym mono">BTC</span>
+      <span class="signals__price" data-signals-price="btc">—</span>
+      <span class="signals__chg mono" data-signals-chg="btc">—</span>
+      <span class="signals__sub mono">USD · 24h</span>
+    </li>
+    <li class="signals__cell" data-signals-id="eth" data-tone="idle">
+      <span class="signals__sym mono">ETH</span>
+      <span class="signals__price" data-signals-price="eth">—</span>
+      <span class="signals__chg mono" data-signals-chg="eth">—</span>
+      <span class="signals__sub mono">USD · 24h</span>
+    </li>
+    <li class="signals__cell" data-signals-id="xtz" data-tone="idle">
+      <span class="signals__sym mono">XTZ</span>
+      <span class="signals__price" data-signals-price="xtz">—</span>
+      <span class="signals__chg mono" data-signals-chg="xtz">—</span>
+      <span class="signals__sub mono">tezos · 24h</span>
+    </li>
+  </ol>
+</aside>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var root = document.querySelector('aside.signals');
+  if (!root) return;
+
+  var CG_KEY = 'pc:signals:cg:v2';
+  var TTL_MS = 5 * 60 * 1000;
+
+  function readCache(k) {
+    try {
+      var raw = sessionStorage.getItem(k);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.at || (Date.now() - p.at) > TTL_MS) return null;
+      return p.data;
+    } catch (e) { return null; }
+  }
+  function writeCache(k, d) {
+    try { sessionStorage.setItem(k, JSON.stringify({ at: Date.now(), data: d })); } catch (e) {}
+  }
+
+  function fmtPrice(n) {
+    if (n == null || !isFinite(n)) return '—';
+    if (n >= 10000) return '$' + Math.round(n).toLocaleString();
+    if (n >= 1000) return '$' + n.toFixed(0);
+    if (n >= 10) return '$' + n.toFixed(2);
+    if (n >= 1) return '$' + n.toFixed(3);
+    return '$' + n.toFixed(4);
+  }
+
+  function fmtChg(pct) {
+    if (pct == null || !isFinite(pct)) return '—';
+    var sign = pct > 0 ? '+' : (pct < 0 ? '−' : '·');
+    return sign + ' ' + Math.abs(pct).toFixed(2) + '%';
+  }
+
+  function setCell(id, price, pct) {
+    var priceEl = root.querySelector('[data-signals-price="' + id + '"]');
+    var chgEl = root.querySelector('[data-signals-chg="' + id + '"]');
+    var cell = root.querySelector('[data-signals-id="' + id + '"]');
+    if (priceEl) priceEl.textContent = fmtPrice(price);
+    if (chgEl) chgEl.textContent = fmtChg(pct);
+    if (cell) {
+      var tone = 'flat';
+      if (pct > 0.5) tone = 'up';
+      else if (pct < -0.5) tone = 'down';
+      else if (pct == null || !isFinite(pct)) tone = 'idle';
+      cell.setAttribute('data-tone', tone);
+    }
+  }
+
+  function stamp() {
+    var s = root.querySelector('[data-signals-updated]');
+    if (!s) return;
+    try {
+      s.textContent = 'updated ' + new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date());
+      s.hidden = false;
+    } catch (e) {}
+  }
+
+  function fetchAll() {
+    var cached = readCache(CG_KEY);
+    if (cached) {
+      setCell('btc', cached.btc.price, cached.btc.pct);
+      setCell('eth', cached.eth.price, cached.eth.pct);
+      setCell('xtz', cached.xtz.price, cached.xtz.pct);
+      stamp();
+      return;
+    }
+    var url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tezos&vs_currencies=usd&include_24hr_change=true';
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var btc = data.bitcoin || {};
+        var eth = data.ethereum || {};
+        var xtz = data.tezos || {};
+        var pack = {
+          btc: { price: Number(btc.usd), pct: Number(btc.usd_24h_change) },
+          eth: { price: Number(eth.usd), pct: Number(eth.usd_24h_change) },
+          xtz: { price: Number(xtz.usd), pct: Number(xtz.usd_24h_change) },
+        };
+        writeCache(CG_KEY, pack);
+        setCell('btc', pack.btc.price, pack.btc.pct);
+        setCell('eth', pack.eth.price, pack.eth.pct);
+        setCell('xtz', pack.xtz.price, pack.xtz.pct);
+        stamp();
+      })
+      .catch(function () {});
+  }
+
+  function init() {
+    fetchAll();
+  }
+  try { init(); } catch (e) {}
+  document.addEventListener('astro:page-load', function () { try { init(); } catch (e) {} });
+})();
+</script>
+
+<style is:global>
+  .signals {
+    margin: 14px 0 18px;
+    padding: 12px 14px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background:
+      linear-gradient(180deg, #1a1a1a 0%, #2a2520 100%);
+    color: #fff5d6;
+    box-shadow: 4px 4px 0 #ffd166;
+  }
+
+  .signals__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1.5px dashed #ffd166;
+    padding-bottom: 6px;
+  }
+  .signals__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #ffd166;
+    font-weight: 700;
+  }
+  .signals__updated {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: rgba(255, 245, 214, 0.6);
+    text-transform: uppercase;
+  }
+
+  .signals__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .signals__cell {
+    padding: 9px 11px;
+    border: 2px solid #ffd166;
+    background: rgba(255, 245, 214, 0.05);
+    box-shadow: 2px 2px 0 #ffd166;
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      "sym chg"
+      "price price"
+      "sub sub";
+    gap: 2px 8px;
+    align-items: baseline;
+  }
+  .signals__cell[data-tone="up"] {
+    background: rgba(46, 197, 107, 0.12);
+    border-color: #2ec56b;
+    box-shadow: 2px 2px 0 #2ec56b;
+  }
+  .signals__cell[data-tone="down"] {
+    background: rgba(209, 17, 73, 0.12);
+    border-color: #ff7a8a;
+    box-shadow: 2px 2px 0 #ff7a8a;
+  }
+  .signals__cell[data-tone="flat"] {
+    background: rgba(255, 245, 214, 0.06);
+    border-color: rgba(255, 245, 214, 0.6);
+  }
+
+  .signals__sym {
+    grid-area: sym;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: #ffd166;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .signals__chg {
+    grid-area: chg;
+    font-size: 10.5px;
+    text-align: right;
+    color: #fff5d6;
+    letter-spacing: 0.04em;
+  }
+  .signals__cell[data-tone="up"] .signals__chg { color: #5ce39a; }
+  .signals__cell[data-tone="down"] .signals__chg { color: #ff7a8a; }
+
+  .signals__price {
+    grid-area: price;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff5d6;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .signals__sub {
+    grid-area: sub;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: rgba(255, 245, 214, 0.55);
+    text-transform: uppercase;
+  }
+
+  .signals .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .signals__list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
