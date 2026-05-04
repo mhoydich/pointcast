@@ -1,0 +1,432 @@
+---
+/**
+ * TidesStrip — El Porto tide + surf glance.
+ *
+ * Engagement plan §2.2 "Tide + Surf":
+ *   "Current tide (high/low, time of next change). Surf height at
+ *    El Porto / Manhattan Beach. One line: 'Low tide 2:14p ·
+ *    2-3ft sets at El Porto'."
+ *
+ * Sources:
+ *   - NOAA tide predictions, station 9410660 (Los Angeles)
+ *     api.tidesandcurrents.noaa.gov — no auth, hi/lo intervals
+ *   - Open-Meteo Marine API for wave height + period + swell
+ *     marine-api.open-meteo.com — no auth
+ *
+ * Cache 30min in sessionStorage. Refresh on astro:page-load and on
+ * tab visibility return.
+ */
+
+const STATION = '9410660';
+const LAT = 33.9192;
+const LON = -118.4165;
+const SPOT = 'El Porto';
+---
+
+<aside class="tides" aria-label="Tide and surf glance" data-tides-station={STATION} data-tides-lat={LAT} data-tides-lon={LON}>
+  <header class="tides__head">
+    <p class="tides__kicker mono">TIDES + SURF · {SPOT.toUpperCase()}</p>
+    <span class="tides__updated mono" data-tides-updated hidden></span>
+  </header>
+
+  <div class="tides__grid">
+    <article class="tides__cell tides__cell--tides">
+      <p class="tides__label mono">TIDES TODAY</p>
+      <ol class="tides__list" data-tides-list>
+        <li class="tides__loading mono" data-tides-loading>fetching NOAA…</li>
+      </ol>
+      <p class="tides__next mono" data-tides-next hidden></p>
+    </article>
+
+    <article class="tides__cell tides__cell--surf">
+      <p class="tides__label mono">SURF</p>
+      <div class="tides__surf">
+        <div class="tides__surf-row">
+          <span class="tides__surf-key mono">WAVE</span>
+          <span class="tides__surf-val" data-tides-wave>—</span>
+        </div>
+        <div class="tides__surf-row">
+          <span class="tides__surf-key mono">PERIOD</span>
+          <span class="tides__surf-val" data-tides-period>—</span>
+        </div>
+        <div class="tides__surf-row">
+          <span class="tides__surf-key mono">SWELL</span>
+          <span class="tides__surf-val" data-tides-swell>—</span>
+        </div>
+        <div class="tides__surf-row">
+          <span class="tides__surf-key mono">DIR</span>
+          <span class="tides__surf-val" data-tides-dir>—</span>
+        </div>
+      </div>
+      <p class="tides__sub mono" data-tides-vibe hidden></p>
+    </article>
+  </div>
+</aside>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var root = document.querySelector('aside.tides');
+  if (!root) return;
+  var station = root.dataset.tidesStation;
+  var lat = root.dataset.tidesLat;
+  var lon = root.dataset.tidesLon;
+  if (!station || !lat || !lon) return;
+
+  var T_KEY = 'pc:tides:noaa:v1';
+  var S_KEY = 'pc:tides:marine:v1';
+  var TTL_MS = 30 * 60 * 1000;
+
+  function readCache(k) {
+    try {
+      var raw = sessionStorage.getItem(k);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.at || (Date.now() - p.at) > TTL_MS) return null;
+      return p.data;
+    } catch (e) { return null; }
+  }
+  function writeCache(k, d) {
+    try { sessionStorage.setItem(k, JSON.stringify({ at: Date.now(), data: d })); } catch (e) {}
+  }
+
+  function todayYmd() {
+    var fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    return fmt.format(new Date()).replace(/-/g, '');
+  }
+
+  // NOAA returns "YYYY-MM-DD HH:MM" in LST_LDT (local). Parse as a
+  // local-zone Date by treating the string as if it were already in
+  // Los Angeles time.
+  function parseNoaaLocal(s) {
+    if (!s) return null;
+    var parts = s.split(/[\s:-]/).map(Number);
+    if (parts.length < 5) return null;
+    // We can't construct a true LA-local Date from JS without
+    // hopping through Intl roundtrip. Approximate: assume the
+    // page is already viewed in Pacific or close-enough — for the
+    // purpose of choosing "next" vs "past" tide, comparing formatted
+    // hours is sufficient. So we just need the HH:MM for display
+    // and the absolute moment for ordering.
+    return {
+      ymd: parts[0] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[2]).padStart(2, '0'),
+      hhmm: String(parts[3]).padStart(2, '0') + ':' + String(parts[4]).padStart(2, '0'),
+      // For ordering, build a UTC-shaped Date from the parts. This
+      // ignores timezone offset, but since all events come from the
+      // same string format, relative ordering is preserved.
+      ord: Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4]),
+    };
+  }
+
+  function fmtHHMM(hhmm) {
+    if (!hhmm) return '—';
+    var p = hhmm.split(':');
+    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    if (!isFinite(h) || !isFinite(m)) return hhmm;
+    var period = h >= 12 ? 'p' : 'a';
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + String(m).padStart(2, '0') + period;
+  }
+
+  function paintTides(predictions) {
+    var listEl = root.querySelector('[data-tides-list]');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!predictions || !predictions.length) {
+      var emp = document.createElement('li');
+      emp.className = 'tides__loading mono';
+      emp.textContent = 'no NOAA data right now';
+      listEl.appendChild(emp);
+      return;
+    }
+    // Compute "now" as a UTC-shaped ord using LA wall clock.
+    var nowFmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date());
+    var part = function (type) {
+      var hit = nowFmt.find(function (x) { return x.type === type; });
+      return hit ? parseInt(hit.value, 10) : 0;
+    };
+    var nowOrd = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'));
+    var enriched = predictions.map(function (p) {
+      var parsed = parseNoaaLocal(p.t);
+      return parsed ? {
+        type: p.type, v: p.v,
+        ymd: parsed.ymd, hhmm: parsed.hhmm, ord: parsed.ord,
+        past: parsed.ord < nowOrd,
+      } : null;
+    }).filter(Boolean);
+    var nextIdx = enriched.findIndex(function (e) { return !e.past; });
+    enriched.forEach(function (e, idx) {
+      var li = document.createElement('li');
+      li.className = 'tides__row' + (e.past ? ' tides__row--past' : '') + (idx === nextIdx ? ' tides__row--next' : '');
+      var label = e.type === 'H' ? 'High' : 'Low';
+      var feet = parseFloat(e.v).toFixed(1) + ' ft';
+      li.innerHTML =
+        '<span class="tides__row-type">' + label + '</span>' +
+        '<span class="tides__row-time mono">' + fmtHHMM(e.hhmm) + '</span>' +
+        '<span class="tides__row-ft mono">' + feet + '</span>';
+      listEl.appendChild(li);
+    });
+    var nextEl = root.querySelector('[data-tides-next]');
+    if (nextEl && nextIdx >= 0) {
+      var n = enriched[nextIdx];
+      nextEl.textContent = 'NEXT: ' + (n.type === 'H' ? 'high' : 'low') + ' ' + fmtHHMM(n.hhmm);
+      nextEl.hidden = false;
+    } else if (nextEl) {
+      nextEl.textContent = 'no more tide changes today';
+      nextEl.hidden = false;
+    }
+    var stamp = root.querySelector('[data-tides-updated]');
+    if (stamp) {
+      try {
+        stamp.textContent = 'updated ' + new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date());
+        stamp.hidden = false;
+      } catch (e) {}
+    }
+  }
+
+  function paintMarine(data) {
+    if (!data || !data.current) return;
+    var c = data.current;
+    var setVal = function (sel, v) {
+      var el = root.querySelector(sel);
+      if (el) el.textContent = v;
+    };
+    var mToFt = function (m) { return (m * 3.281).toFixed(1) + ' ft'; };
+    if (c.wave_height != null) setVal('[data-tides-wave]', mToFt(Number(c.wave_height)));
+    if (c.wave_period != null) setVal('[data-tides-period]', Number(c.wave_period).toFixed(0) + 's');
+    if (c.swell_wave_height != null) setVal('[data-tides-swell]', mToFt(Number(c.swell_wave_height)));
+    if (c.wave_direction != null) {
+      var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      var idx = Math.round(((Number(c.wave_direction) % 360) / 22.5)) % 16;
+      setVal('[data-tides-dir]', Number(c.wave_direction).toFixed(0) + '° ' + dirs[idx]);
+    }
+    var vibe = root.querySelector('[data-tides-vibe]');
+    if (vibe && c.wave_height != null) {
+      var ft = Number(c.wave_height) * 3.281;
+      var label = '';
+      if (ft < 1) label = 'flat · gym day';
+      else if (ft < 2) label = 'small · longboard';
+      else if (ft < 3) label = 'fun · everyone happy';
+      else if (ft < 5) label = 'punchy · El Porto magic hour';
+      else if (ft < 8) label = 'overhead · respect the sets';
+      else label = 'big · stay out of the way';
+      vibe.textContent = label;
+      vibe.hidden = false;
+    }
+  }
+
+  function fetchTides() {
+    var cached = readCache(T_KEY);
+    if (cached) { paintTides(cached); return; }
+    var date = todayYmd();
+    var url = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter' +
+      '?begin_date=' + date +
+      '&end_date=' + date +
+      '&station=' + station +
+      '&product=predictions' +
+      '&datum=MLLW' +
+      '&time_zone=lst_ldt' +
+      '&interval=hilo' +
+      '&units=english' +
+      '&format=json' +
+      '&application=pointcast';
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.predictions) {
+          writeCache(T_KEY, data.predictions);
+          paintTides(data.predictions);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function fetchMarine() {
+    var cached = readCache(S_KEY);
+    if (cached) { paintMarine(cached); return; }
+    var url = 'https://marine-api.open-meteo.com/v1/marine' +
+      '?latitude=' + lat + '&longitude=' + lon +
+      '&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period' +
+      '&timezone=America/Los_Angeles';
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data) {
+          writeCache(S_KEY, data);
+          paintMarine(data);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function init() { fetchTides(); fetchMarine(); }
+  try { init(); } catch (e) {}
+  document.addEventListener('astro:page-load', function () { try { init(); } catch (e) {} });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') init(); });
+})();
+</script>
+
+<style is:global>
+  .tides {
+    margin: 14px 0 18px;
+    padding: 12px 14px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background:
+      linear-gradient(180deg, #f0fbff 0%, #d3eef5 100%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 4px);
+    box-shadow: 4px 4px 0 var(--pc-ink, #1a1a1a);
+  }
+
+  .tides__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1.5px dashed var(--pc-ink, #1a1a1a);
+    padding-bottom: 6px;
+  }
+  .tides__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink, #1a1a1a);
+    font-weight: 700;
+  }
+  .tides__updated {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5b5b55);
+    text-transform: uppercase;
+  }
+
+  .tides__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .tides__cell {
+    padding: 9px 10px 11px;
+    background: #fff;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tides__label {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .tides__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .tides__loading {
+    color: var(--pc-ink-muted, #5b5b55);
+    font-size: 11px;
+  }
+
+  .tides__row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+    padding: 3px 5px;
+    border-left: 3px solid transparent;
+  }
+  .tides__row--next {
+    background: #fff5d6;
+    border-left-color: #ff7a3d;
+    font-weight: 600;
+  }
+  .tides__row--past {
+    color: var(--pc-ink-muted, #5b5b55);
+    opacity: 0.78;
+  }
+
+  .tides__row-type {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .tides__row-time, .tides__row-ft {
+    font-size: 12px;
+  }
+
+  .tides__row-ft {
+    text-align: right;
+  }
+
+  .tides__next {
+    margin: 4px 0 0;
+    padding-top: 6px;
+    border-top: 1px dashed var(--pc-rule, #d6d4cd);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .tides__surf {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 10px;
+  }
+  .tides__surf-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .tides__surf-key {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--pc-ink-muted, #5b5b55);
+    text-transform: uppercase;
+  }
+  .tides__surf-val {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .tides__sub {
+    margin: 4px 0 0;
+    padding-top: 6px;
+    border-top: 1px dashed var(--pc-rule, #d6d4cd);
+    font-size: 11px;
+    color: var(--pc-ink-soft, #5b5b55);
+    font-style: italic;
+  }
+
+  .tides .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .tides__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
