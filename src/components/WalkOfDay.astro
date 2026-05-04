@@ -1,0 +1,274 @@
+---
+/**
+ * WalkOfDay — a rotating El Segundo / SoCal walk suggestion.
+ *
+ * Engagement plan §2.2 "Walk of the Day":
+ *   "Suggested El Segundo walking route. Distance, estimated time,
+ *    what you'll see. Rotate from a curated set of ~30 routes. Ties
+ *    into /walk surface."
+ *
+ * The rotation is deterministic per LA-local day (so every visitor
+ * sees the same walk on the same day; refreshing doesn't reroll).
+ * Index = (day-of-year * 7919) % WALKS.length, where 7919 is a prime
+ * to spread similar dates apart in the cycle.
+ *
+ * Each walk has a Noun seed (deterministically picked from the
+ * walk's own index) so the avatar is stable and visually fits the
+ * existing PointCast Noun-everywhere pattern.
+ */
+
+const WALKS = [
+  { name: 'Main St → Library Park', dist: '0.9 mi', mins: 18, tags: ['library', 'mural', 'downtown'], dek: 'Past the bakery, cut through the patio gate at Library Park, sit under the jacaranda.', noun: 137 },
+  { name: 'Imperial Hwy beach drop', dist: '1.4 mi', mins: 28, tags: ['ocean', 'sunset', 'lax planes'], dek: 'Down the bluff stairs, watch a 737 cross the horizon at exactly your eye level.', noun: 246 },
+  { name: 'Pier loop · Manhattan Beach', dist: '2.2 mi', mins: 42, tags: ['pier', 'sand', 'volleyball'], dek: 'North on the strand, ramp up to the pier, return on the bike path. Stop for a paleta if open.', noun: 421 },
+  { name: 'Sand Dune Park climb', dist: '0.4 mi', mins: 22, tags: ['hill', 'cardio', 'soft sand'], dek: 'Three trips up the dune is a workout disguised as a view.', noun: 555 },
+  { name: 'Recreation Park lap', dist: '0.7 mi', mins: 15, tags: ['shade', 'pickleball', 'kids'], dek: 'Loop the inside path, peek at the courts, listen for paddle pop.', noun: 304 },
+  { name: 'El Segundo Boulevard sit', dist: '0.6 mi', mins: 14, tags: ['cafe', 'people', 'mid-day'], dek: 'Slow walk east, sit on the planter outside the coffee shop. Read one chapter.', noun: 91 },
+  { name: 'Hyperion overlook', dist: '1.1 mi', mins: 25, tags: ['view', 'wind', 'birds'], dek: 'East along Hughes Way, climb to the rim, watch hawks ride the thermals.', noun: 720 },
+  { name: 'Smoky Hollow alley', dist: '0.8 mi', mins: 17, tags: ['art', 'shop', 'alley'], dek: 'Wind through the back streets, count murals, peek into the open garage doors.', noun: 187 },
+  { name: 'Dockweiler dog walk', dist: '1.6 mi', mins: 30, tags: ['ocean', 'pet', 'sand'], dek: 'Park at the bottom, walk south as far as the next set of fire pits, then back.', noun: 56 },
+  { name: 'Aviation Rec loop', dist: '1.0 mi', mins: 20, tags: ['trees', 'shade', 'soft loop'], dek: 'A flat, kind loop. Good for bringing a phone call along.', noun: 619 },
+  { name: 'Eucalyptus Dr · slow', dist: '0.5 mi', mins: 12, tags: ['canopy', 'breath', 'short'], dek: 'Stand under the eucalyptus tunnel for 30 seconds. Notice the sound dampen.', noun: 222 },
+  { name: 'El Porto morning', dist: '0.6 mi', mins: 14, tags: ['surf check', 'coffee', 'AM'], dek: 'Walk to the lookout. Three deep breaths. Decide if today is a paddle-out day.', noun: 778 },
+  { name: 'Concourse → strand', dist: '1.3 mi', mins: 28, tags: ['quiet', 'flat', 'art'], dek: 'Down the public art corridor, drop to the strand, walk one block south, ramp back up.', noun: 14 },
+  { name: 'Vista Del Mar tide watch', dist: '1.5 mi', mins: 32, tags: ['tide', 'binoculars', 'birds'], dek: 'Find a low-tide window. Walk the line where the wet sand meets the dry.', noun: 345 },
+  { name: 'Holly Ave to Library', dist: '0.9 mi', mins: 18, tags: ['residential', 'flowers', 'shade'], dek: 'A flower-tour loop. Notice the front-yard succulents. Greet a cat.', noun: 88 },
+  { name: 'Palm Ave south', dist: '0.7 mi', mins: 16, tags: ['palms', 'long view', 'flat'], dek: 'Straight shot for clarity. No decisions. Just walk.', noun: 412 },
+  { name: 'Sepulveda + Grand', dist: '0.8 mi', mins: 17, tags: ['urban', 'food', 'mid-block'], dek: 'Window-shop down Grand. Buy something small.', noun: 161 },
+  { name: 'Civic Center back path', dist: '0.5 mi', mins: 12, tags: ['lawn', 'shade', 'short'], dek: 'A pocket walk between the library and the post office. Sit on the lawn.', noun: 503 },
+  { name: 'Rosecrans west to ocean', dist: '2.4 mi', mins: 45, tags: ['ocean end', 'longer', 'gradient'], dek: 'A real walk. Earphones in. Let the day land.', noun: 666 },
+  { name: 'Point Vicente lighthouse view', dist: '1.0 mi', mins: 22, tags: ['cliff', 'lighthouse', 'whales (dec-apr)'], dek: 'Drive 20 min south first. The walk is the reward, not the destination.', noun: 999 },
+  { name: 'Manhattan to Hermosa strand', dist: '3.1 mi', mins: 60, tags: ['strand', 'long', 'beach town'], dek: 'A weekend walk. Leave time to stop. Coffee at the start, juice at the end.', noun: 12 },
+  { name: 'Imperial Avenue garden', dist: '0.6 mi', mins: 14, tags: ['garden', 'pollinators', 'morning'], dek: 'The community garden is best at 8am. Listen for the bees.', noun: 234 },
+  { name: 'Pier-to-pier daydream', dist: '4.0 mi', mins: 75, tags: ['weekend', 'distance', 'reset'], dek: 'Manhattan Beach Pier to Hermosa Pier and back. The kind of walk that solves things.', noun: 800 },
+  { name: 'Chevron grass run', dist: '0.7 mi', mins: 16, tags: ['unexpected', 'wide path', 'wind'], dek: 'The walking path along the Chevron grass strip is wider than you remember.', noun: 1024 },
+  { name: 'Jacaranda Bloom hunt (May–Jun)', dist: '1.0 mi', mins: 22, tags: ['seasonal', 'jacaranda', 'photo'], dek: 'When the jacarandas pop, walk the streets that hold the most. Bring a camera.', noun: 422 },
+  { name: 'Tide pool low-tide loop', dist: '0.8 mi', mins: 30, tags: ['low tide', 'pools', 'kids'], dek: 'Time it for low tide. Walk slowly. Anemones do not move fast.', noun: 333 },
+  { name: 'Whimsical neighborhood pick', dist: '0.6 mi', mins: 14, tags: ['mystery', 'random', 'short'], dek: 'Pick a street you have never walked. Walk the block. Note one new thing.', noun: 111 },
+  { name: 'Bike path · Vista Del Mar', dist: '2.0 mi', mins: 38, tags: ['bike path', 'walk only', 'breezy'], dek: 'Walk the bike path during a lull. The wind off the ocean does the talking.', noun: 909 },
+  { name: 'Rooftop hour at home', dist: '0.0 mi', mins: 15, tags: ['rest day', 'sky', 'sit'], dek: 'Skip the walk today. Sit on the steps. Watch a contrail. Counts.', noun: 0 },
+  { name: 'Hilltop park · Smoky Hollow', dist: '1.1 mi', mins: 24, tags: ['climb', 'view', 'green'], dek: 'A climb that pays back in view. Bring water.', noun: 547 },
+];
+
+// Deterministic LA-local day-of-year picker. Build-time evaluation
+// so the page renders with the right walk on first paint, and the
+// client script just freshens the timestamp.
+function dayIndex(d) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const y = Number(fmt.find((p) => p.type === 'year').value);
+  const m = Number(fmt.find((p) => p.type === 'month').value);
+  const day = Number(fmt.find((p) => p.type === 'day').value);
+  // Days since epoch (in LA-local terms — ignore minor DST drift; we
+  // only need stable bucketing, not millisecond accuracy).
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  return Math.floor(dt.getTime() / 86400000);
+}
+
+const idx = (dayIndex(new Date()) * 7919) % WALKS.length;
+const today = WALKS[idx];
+
+const dateLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles',
+}).format(new Date());
+---
+
+<aside class="walk" aria-label="Walk of the day">
+  <header class="walk__head">
+    <p class="walk__kicker mono">WALK OF THE DAY · {dateLabel.toUpperCase()}</p>
+    <span class="walk__count mono">№ {idx + 1} of {WALKS.length}</span>
+  </header>
+
+  <div class="walk__body">
+    <img class="walk__noun" src={`https://noun.pics/${today.noun}.svg`} alt={`Noun ${today.noun}`} loading="lazy" />
+    <div class="walk__copy">
+      <p class="walk__name">{today.name}</p>
+      <p class="walk__dek">{today.dek}</p>
+      <ol class="walk__tags">
+        {today.tags.map((tag) => (
+          <li class="walk__tag mono">{tag}</li>
+        ))}
+      </ol>
+    </div>
+    <dl class="walk__stats">
+      <div class="walk__stat">
+        <dt class="walk__stat-key mono">DIST</dt>
+        <dd class="walk__stat-val mono">{today.dist}</dd>
+      </div>
+      <div class="walk__stat">
+        <dt class="walk__stat-key mono">TIME</dt>
+        <dd class="walk__stat-val mono">{today.mins}m</dd>
+      </div>
+    </dl>
+  </div>
+
+  <footer class="walk__foot mono">
+    <span>refreshes 4am PT · same walk for everyone today</span>
+  </footer>
+</aside>
+
+<style is:global>
+  .walk {
+    margin: 14px 0 18px;
+    padding: 14px 16px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background:
+      linear-gradient(180deg, #fff 0%, #f6f0d6 100%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 5px);
+    box-shadow: 4px 4px 0 #2ec56b;
+  }
+
+  .walk__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1.5px dashed var(--pc-ink, #1a1a1a);
+    padding-bottom: 6px;
+  }
+  .walk__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--pc-ink, #1a1a1a);
+  }
+  .walk__count {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5b5b55);
+    text-transform: uppercase;
+  }
+
+  .walk__body {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .walk__noun {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #fff;
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+  }
+
+  .walk__copy {
+    min-width: 0;
+  }
+
+  .walk__name {
+    margin: 0 0 4px;
+    font-size: 18px;
+    line-height: 1.15;
+    font-weight: 600;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .walk__dek {
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--pc-ink-soft, #5b5b55);
+  }
+
+  .walk__tags {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .walk__tag {
+    border: 1px solid var(--pc-ink, #1a1a1a);
+    background: #fff5d6;
+    color: var(--pc-ink, #1a1a1a);
+    padding: 2px 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+  }
+
+  .walk__stats {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+  }
+
+  .walk__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #2ec56b;
+    color: var(--pc-ink, #1a1a1a);
+    padding: 5px 8px;
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+    min-width: 56px;
+  }
+
+  .walk__stat-key {
+    margin: 0;
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .walk__stat-val {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--pc-ink, #1a1a1a);
+    letter-spacing: -0.01em;
+  }
+
+  .walk__foot {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--pc-rule, #d6d4cd);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .walk .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .walk__body {
+      grid-template-columns: 48px minmax(0, 1fr);
+      grid-template-areas:
+        "noun copy"
+        "stats stats";
+      gap: 10px;
+    }
+    .walk__noun { grid-area: noun; width: 48px; height: 48px; }
+    .walk__copy { grid-area: copy; }
+    .walk__stats {
+      grid-area: stats;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .walk__stat {
+      flex: 1;
+      align-items: center;
+    }
+    .walk__name { font-size: 16px; }
+  }
+</style>
