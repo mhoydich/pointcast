@@ -1,0 +1,545 @@
+---
+/**
+ * /drum-saint — your patron Noun.
+ *
+ * Mike "ok keep going, run over next hour" — bell wing's identity
+ * surface. Every visitor gets a personal patron Noun deterministically
+ * derived from their sessionId, plus an altar-lane assignment for the
+ * current ISO week. Click MAKE OFFERING to ring your patron's altar
+ * via the live /api/altar endpoint.
+ *
+ * Two identity layers:
+ * - Patron Noun (constant for this browser): pid → mod 1200
+ * - Altar lane (rotates weekly): pid → mod 5 → bell/bowl/chime/gong/drone
+ *
+ * The patron Noun stays yours forever; the altar lane stays yours for
+ * the week and resolves to whatever Noun is enshrined on that lane
+ * THIS week. So your offering goes to a different specific altar each
+ * Monday morning.
+ *
+ * Generates a saint epithet: "Saint Noun 0XXXX of the [LANE] Lane —
+ * keeper of the [VIRTUE]". Virtue is procedurally generated from pid.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Your Patron Saint · PointCast';
+const description =
+  'Each visitor is assigned a patron Noun and an altar lane. Click to make an offering at your patron’s altar.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Patron Saint',
+  url: 'https://pointcast.xyz/drum-saint',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="ds" id="ds-main">
+    <DrumNav current="saint" />
+
+    <header class="ds__header">
+      <div class="ds__chrome">
+        <span>PATRON</span>
+        <span class="ds__chrome-sep">·</span>
+        <span id="ds-week-chip">WEEK ---</span>
+        <span class="ds__chrome-sep">·</span>
+        <span id="ds-lane-chip">— LANE</span>
+      </div>
+      <h1 class="ds__title">YOUR SAINT</h1>
+      <p class="ds__tagline">a single Noun assigned to you, kept by the chamber</p>
+    </header>
+
+    <section class="ds__altar">
+      <div class="ds__halo"></div>
+      <div class="ds__frame">
+        <div class="ds__frame-inner">
+          <img class="ds__noun" id="ds-noun" src="https://noun.pics/0.svg" alt="Your patron Noun" />
+        </div>
+      </div>
+
+      <div class="ds__plaque">
+        <div class="ds__plaque-rule"></div>
+        <div class="ds__epithet">
+          <div class="ds__line ds__line--major">SAINT NOUN <span id="ds-noun-num">0000</span></div>
+          <div class="ds__line ds__line--italic">of the <span id="ds-lane">—</span> Lane</div>
+          <div class="ds__line ds__line--minor">keeper of the <span id="ds-virtue">—</span></div>
+        </div>
+        <div class="ds__plaque-rule"></div>
+      </div>
+
+      <button class="ds__offer" id="ds-offer" type="button" disabled>MAKE OFFERING</button>
+      <div class="ds__hint" id="ds-hint">— assigning your saint —</div>
+    </section>
+
+    <section class="ds__readout">
+      <div class="ds__panel">
+        <div class="ds__panel-label">YOUR OFFERINGS</div>
+        <div class="ds__panel-value" id="ds-mine">0</div>
+      </div>
+      <div class="ds__panel">
+        <div class="ds__panel-label">ALTAR THIS WEEK</div>
+        <div class="ds__panel-value" id="ds-altar-count">—</div>
+      </div>
+      <div class="ds__panel">
+        <div class="ds__panel-label">CHAMBER TOTAL</div>
+        <div class="ds__panel-value" id="ds-total">—</div>
+      </div>
+    </section>
+
+    <section class="ds__how">
+      <p>
+        Two identities, one offering. Your <strong>patron Noun</strong> is yours forever — same browser,
+        same Noun. Your <strong>altar lane</strong> (one of bell, bowl, chime, gong, drone) rotates with
+        the ISO week and resolves to whichever Noun is enshrined there on Monday morning.
+      </p>
+      <p>
+        When you make an offering, your patron Noun appears in this room — but your tribute lands at
+        <a href="/drum-altars">the chamber</a>'s active altar for your lane. Your saint travels with you.
+        The altar belongs to the week.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#ds-main) {
+    background: #0c0410;
+  }
+
+  .ds {
+    --ds-velvet: #1a0820;
+    --ds-velvet-deep: #0c0410;
+    --ds-brass: #d4a437;
+    --ds-brass-soft: #b8862c;
+    --ds-brass-deep: #6b4d12;
+    --ds-flame: #f6c15e;
+    --ds-flame-tip: #ff6b3a;
+    --ds-ink-light: #f4e7c8;
+    --ds-ink-mid: #c9b78c;
+    --ds-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 32px;
+    color: var(--ds-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 12%, rgba(212, 164, 55, 0.12), transparent 55%),
+      linear-gradient(180deg, var(--ds-velvet) 0%, var(--ds-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .ds::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .ds .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .ds__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(8px, 1vh, 14px);
+  }
+  .ds__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--ds-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ds-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .ds__chrome-sep { color: var(--ds-brass-deep); }
+  #ds-week-chip, #ds-lane-chip { color: var(--ds-flame); font-weight: 700; }
+
+  .ds__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--ds-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--ds-velvet-deep);
+  }
+  .ds__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--ds-ink-mid);
+  }
+
+  /* Altar centerpiece */
+  .ds__altar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(12px, 1.6vh, 20px);
+    padding: clamp(20px, 3vh, 36px) 0;
+    position: relative;
+  }
+  .ds__halo {
+    position: absolute;
+    top: 16px;
+    width: clamp(280px, 32vw, 420px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(246, 193, 94, 0.30) 0%, rgba(212, 164, 55, 0.12) 36%, transparent 72%);
+    pointer-events: none;
+    animation: ds-halo 7s ease-in-out infinite;
+  }
+  @keyframes ds-halo {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%      { opacity: 1; transform: scale(1.06); }
+  }
+
+  .ds__frame {
+    position: relative;
+    width: clamp(220px, 26vw, 320px);
+    aspect-ratio: 1;
+    padding: 8px;
+    background: linear-gradient(135deg, var(--ds-brass) 0%, var(--ds-brass-soft) 50%, var(--ds-brass-deep) 100%);
+    box-shadow:
+      0 0 0 3px var(--ds-velvet-deep),
+      0 0 0 6px var(--ds-brass-deep),
+      0 12px 32px rgba(0, 0, 0, 0.7);
+  }
+  .ds__frame-inner {
+    width: 100%;
+    height: 100%;
+    background: var(--ds-velvet-deep);
+    overflow: hidden;
+  }
+  .ds__noun {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    display: block;
+    transition: opacity 220ms;
+  }
+
+  /* Plaque below the frame */
+  .ds__plaque {
+    text-align: center;
+    padding: 6px 24px;
+    max-width: 540px;
+  }
+  .ds__plaque-rule {
+    width: 80px;
+    height: 1px;
+    background: var(--ds-brass);
+    margin: 0 auto 12px;
+    opacity: 0.7;
+  }
+  .ds__plaque-rule + .ds__plaque-rule {
+    margin: 12px auto 0;
+  }
+  .ds__line {
+    line-height: 1.35;
+  }
+  .ds__line--major {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(13px, 1.3vw, 17px);
+    letter-spacing: 0.30em;
+    text-transform: uppercase;
+    color: var(--ds-ink-light);
+    margin-bottom: 4px;
+  }
+  #ds-noun-num { color: var(--ds-brass); font-weight: 700; }
+  .ds__line--italic {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(20px, 2.2vw, 30px);
+    color: var(--ds-flame);
+  }
+  .ds__line--italic span { font-weight: 600; text-transform: lowercase; }
+  .ds__line--minor {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(13px, 1.2vw, 16px);
+    color: var(--ds-ink-mid);
+    margin-top: 6px;
+  }
+
+  /* Offering button */
+  .ds__offer {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 14px 32px;
+    margin-top: 14px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    color: var(--ds-velvet-deep);
+    background: linear-gradient(180deg, var(--ds-brass) 0%, var(--ds-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--ds-velvet-deep),
+      0 4px 0 0 var(--ds-brass-deep),
+      0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .ds__offer:hover { background: linear-gradient(180deg, #efbb46 0%, var(--ds-brass) 100%); }
+  .ds__offer:active, .ds__offer:disabled {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--ds-velvet-deep),
+      0 1px 0 0 var(--ds-brass-deep),
+      0 0 18px rgba(246, 193, 94, 0.55);
+  }
+  .ds__offer:disabled { cursor: wait; opacity: 0.6; }
+
+  .ds__hint {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--ds-ink-dim);
+  }
+
+  /* Readout */
+  .ds__readout {
+    display: flex;
+    justify-content: center;
+    gap: clamp(12px, 2vw, 32px);
+    padding: clamp(8px, 1vh, 14px) 0 clamp(20px, 3vh, 32px);
+    flex-wrap: wrap;
+  }
+  .ds__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 18px;
+    border: 1px solid var(--ds-brass-deep);
+    background: rgba(0, 0, 0, 0.3);
+    min-width: 130px;
+  }
+  .ds__panel-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ds-ink-dim);
+  }
+  .ds__panel-value {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 800;
+    color: var(--ds-flame);
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(246, 193, 94, 0.35);
+  }
+
+  /* How section */
+  .ds__how {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: clamp(14px, 2vh, 24px) 16px 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .ds__how p {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(13px, 1.2vw, 16px);
+    line-height: 1.6;
+    color: var(--ds-ink-mid);
+    margin-bottom: 12px;
+  }
+  .ds__how strong {
+    color: var(--ds-flame);
+    font-weight: 600;
+  }
+  .ds__how a {
+    color: var(--ds-brass);
+    text-decoration: underline;
+    text-decoration-color: var(--ds-brass-deep);
+    text-underline-offset: 3px;
+  }
+</style>
+
+<script>
+  // ── Identity ─────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) {
+        sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(SID_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return 'sid-anon-' + Date.now();
+    }
+  }
+  const SID = ensureSid();
+
+  async function sha256(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function nounIdFromHash(hash) {
+    let n = 0;
+    for (let i = 0; i < Math.min(8, hash.length); i++) n = (n * 31 + hash.charCodeAt(i)) | 0;
+    return Math.abs(n) % 1200;
+  }
+  function laneFromHash(hash) {
+    let n = 0;
+    for (let i = 8; i < Math.min(16, hash.length); i++) n = (n * 31 + hash.charCodeAt(i)) | 0;
+    return Math.abs(n) % 5;
+  }
+
+  const LANES = ['bell', 'bowl', 'chime', 'gong', 'drone'];
+  const VIRTUES = [
+    'long brass', 'singing bowl', 'three-note chime', 'low strike', 'sustained drone',
+    'patient sustain', 'sudden clarity', 'echoing depth', 'morning ring', 'velvet quiet',
+    'tireless tongue', 'open throat', 'careful chime', 'tower watch', 'weekly rotation',
+    'deep keel', 'thin glass', 'small hammer', 'dark wood', 'long rope',
+    'first toll', 'last echo', 'visit-day calm', 'mid-week rest', 'evening pause',
+    'pixel-art heart', 'velvet cloister', 'cream-paper memory', 'ink-blot dignity', 'brass-band patience',
+  ];
+  function virtueFromHash(hash) {
+    let n = 0;
+    for (let i = 16; i < Math.min(24, hash.length); i++) n = (n * 31 + hash.charCodeAt(i)) | 0;
+    return VIRTUES[Math.abs(n) % VIRTUES.length];
+  }
+
+  // ── Audio (light bell for offering ack) ─────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playOfferingBell() {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 880;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 880 * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.10, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.9); o2.start(t); o2.stop(t + 1.5);
+  }
+
+  // ── State ────────────────────────────────────────────
+  const MINE_KEY = 'pc:saint:offerings';
+  let mine = 0;
+  try { mine = parseInt(localStorage.getItem(MINE_KEY) || '0', 10) || 0; } catch {}
+
+  const nounEl = document.getElementById('ds-noun');
+  const nounNumEl = document.getElementById('ds-noun-num');
+  const laneEl = document.getElementById('ds-lane');
+  const virtueEl = document.getElementById('ds-virtue');
+  const weekChipEl = document.getElementById('ds-week-chip');
+  const laneChipEl = document.getElementById('ds-lane-chip');
+  const offerBtn = document.getElementById('ds-offer');
+  const hintEl = document.getElementById('ds-hint');
+  const mineEl = document.getElementById('ds-mine');
+  const altarCountEl = document.getElementById('ds-altar-count');
+  const totalEl = document.getElementById('ds-total');
+
+  function pad(n) { return String(n).padStart(4, '0'); }
+  function paintMine() { if (mineEl) mineEl.textContent = String(mine); }
+  paintMine();
+
+  let MY_PATRON = null;     // your personal noun id (constant)
+  let MY_LANE_IDX = null;   // 0..4
+  let MY_VIRTUE = null;
+  let CURRENT_WEEK = null;
+  let CURRENT_SEEDS = null; // [s0..s4]
+  let MY_LANE_SEED = null;  // current week's noun for my lane
+
+  async function bootstrap() {
+    const hash = await sha256(SID);
+    MY_PATRON = nounIdFromHash(hash);
+    MY_LANE_IDX = laneFromHash(hash);
+    MY_VIRTUE = virtueFromHash(hash);
+
+    // Show your patron immediately
+    if (nounEl) nounEl.src = `https://noun.pics/${MY_PATRON}.svg`;
+    if (nounNumEl) nounNumEl.textContent = pad(MY_PATRON);
+    if (laneEl) laneEl.textContent = LANES[MY_LANE_IDX];
+    if (virtueEl) virtueEl.textContent = MY_VIRTUE;
+    if (laneChipEl) laneChipEl.textContent = `${LANES[MY_LANE_IDX].toUpperCase()} LANE`;
+
+    // Now fetch the altar state to learn the current week's seeds
+    await refreshAltar();
+    if (offerBtn) offerBtn.disabled = false;
+    if (hintEl) hintEl.textContent = 'one offering goes to your lane this week';
+  }
+
+  async function refreshAltar() {
+    try {
+      const r = await fetch('/api/altar', { cache: 'no-store' });
+      const j = await r.json();
+      if (j && j.ok) {
+        CURRENT_WEEK = j.week;
+        CURRENT_SEEDS = j.seeds;
+        MY_LANE_SEED = CURRENT_SEEDS?.[MY_LANE_IDX];
+        if (weekChipEl) weekChipEl.textContent = `WEEK ${CURRENT_WEEK}`;
+        if (totalEl) totalEl.textContent = String(j.totalThisWeek ?? 0);
+        if (altarCountEl) {
+          const c = j.counts?.[String(MY_LANE_SEED)] ?? 0;
+          altarCountEl.textContent = String(c);
+        }
+      }
+    } catch {}
+  }
+
+  async function makeOffering() {
+    if (offerBtn) offerBtn.disabled = true;
+    if (hintEl) hintEl.textContent = 'offering…';
+    try { playOfferingBell(); } catch {}
+    try {
+      const r = await fetch('/api/altar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SID, seed: MY_LANE_SEED }),
+      });
+      const j = await r.json();
+      if (j?.ok) {
+        mine += 1;
+        try { localStorage.setItem(MINE_KEY, String(mine)); } catch {}
+        paintMine();
+        if (altarCountEl) altarCountEl.textContent = String(j.count);
+        if (totalEl) totalEl.textContent = String(j.totalThisWeek);
+        if (hintEl) hintEl.textContent = `offering received · count is now ${j.count}`;
+      } else if (j?.reason === 'rate-limited') {
+        if (hintEl) hintEl.textContent = `the chamber is full — try again in ${j.retryAfterSec ?? 5}s`;
+      } else {
+        if (hintEl) hintEl.textContent = `offering refused: ${j?.reason ?? 'unknown'}`;
+      }
+    } catch {
+      if (hintEl) hintEl.textContent = 'offline — try again';
+    }
+    setTimeout(() => { if (offerBtn) offerBtn.disabled = false; }, 5500);
+  }
+
+  offerBtn?.addEventListener('click', makeOffering);
+  bootstrap();
+  setInterval(refreshAltar, 8000);
+</script>
