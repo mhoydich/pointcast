@@ -1,0 +1,266 @@
+---
+/**
+ * StrainOfDay — rotating Cannabis Atlas pick for the homepage.
+ *
+ * Engagement plan §2.2 "Cannabis Atlas Daily":
+ *   "Strain of the day from /cannabis. Terpene profile, suggested
+ *    pairing. Rotates daily from the existing atlas data."
+ *
+ * Mike's COO context — this is on-brand for Good Feels and useful as
+ * a soft brand signal on the homepage. No prices, no buy CTA — just
+ * a strain card.
+ *
+ * Data is duplicated from src/pages/cannabis.astro for now; can DRY
+ * to src/data/strains.ts in a follow-up that touches the cannabis
+ * page itself (out of scope here to avoid stepping on parallel agents
+ * who often have cannabis.astro dirty).
+ *
+ * Selection: deterministic per LA-local day, same prime-spaced picker
+ * as WalkOfDay (so consecutive days don't cluster on the same lane).
+ */
+
+const STRAINS = [
+  { brand: '710 Labs', name: 'Cake Crasher', lane: 'settle', laneTone: '#3a4f7c', profile: 'Wedding Cake x Wedding Crasher: vanilla, frosting, grape gas, plush body.', use: 'Dinner-to-couch, dessert run, late creative review.', tags: ['dessert', 'body', 'premium'], noun: 88 },
+  { brand: '710 Labs', name: 'Garlic Cocktail', lane: 'create', laneTone: '#b854b8', profile: 'GMO funk braided with mimosa citrus; savory, loud, strangely sunny.', use: 'Cooking, beat digging, weird-good brainstorms.', tags: ['gmo', 'citrus', 'savory'], noun: 234 },
+  { brand: '710 Labs', name: 'Moonbow', lane: 'connect', laneTone: '#d94d68', profile: 'Zkittlez family sweetness with soft cookie depth and a bright fruit finish.', use: 'Friend hangs, playlists, gallery walk, movie night.', tags: ['z', 'fruit', 'social'], noun: 422 },
+  { brand: '710 Labs', name: 'Papaya', lane: 'move', laneTone: '#e86f3a', profile: 'Tropical, ripe, resinous, and easygoing without being too sleepy.', use: 'Beach walk, stretching, farmers market loop.', tags: ['tropical', 'hash', 'sunny'], noun: 555 },
+  { brand: 'Cannabiotix', name: 'Cereal Milk', lane: 'connect', laneTone: '#d94d68', profile: 'Creamy berry cereal, vanilla sugar, balanced hybrid posture.', use: 'Brunch, conversation, low-stakes games.', tags: ['creamy', 'balanced', 'dessert'], noun: 304 },
+  { brand: 'Cannabiotix', name: 'L’Orange', lane: 'lift', laneTone: '#f5b441', profile: 'Orange peel, tang, daytime sparkle. Classic CBX citrus.', use: 'Coffee walk, inbox clearing, Sunday reset.', tags: ['orange', 'daytime', 'bright'], noun: 137 },
+  { brand: 'Cannabiotix', name: 'Kush Mountains', lane: 'settle', laneTone: '#3a4f7c', profile: 'Earth, pine, OG gravity, old-school SoCal exhale.', use: 'After-dinner decompression, body care, late album listen.', tags: ['og', 'pine', 'night'], noun: 720 },
+  { brand: 'Cannabiotix', name: 'Tropicanna', lane: 'move', laneTone: '#e86f3a', profile: 'Tangie-adjacent citrus, berry, and lift; good when the day still has legs.', use: 'Bike path, creative chores, beach volleyball spectating.', tags: ['citrus', 'active', 'fruit'], noun: 421 },
+  { brand: 'Fig Farms', name: 'Blue Face', lane: 'focus', laneTone: '#259e8a', profile: 'Fig Farms flagship-feeling gas, berry, and polished hybrid clarity.', use: 'Deep work, editing, vinyl sorting, focused hang.', tags: ['gas', 'berry', 'clarity'], noun: 619 },
+  { brand: 'Fig Farms', name: 'Dark Karma', lane: 'create', laneTone: '#b854b8', profile: 'Complex, dark fruit, spice, and incense — for following strange ideas.', use: 'Writing, drawing, ambient set, night-market wandering.', tags: ['spice', 'incense', 'visual'], noun: 222 },
+  { brand: 'Fig Farms', name: 'Holy Moly!', lane: 'lift', laneTone: '#f5b441', profile: 'Bright, expressive, aromatic; a lively counterpoint to heavier Fig lanes.', use: 'Morning notes, cafe work, thrift route.', tags: ['bright', 'aromatic', 'hybrid'], noun: 91 },
+  { brand: 'Fig Farms', name: 'Animal Face', lane: 'settle', laneTone: '#3a4f7c', profile: 'Dense gas and animal-cookie gravity with a confident evening shape.', use: 'Post-sport recovery, hot shower, documentary mode.', tags: ['gas', 'cookie', 'body'], noun: 778 },
+];
+
+function dayIndex(d) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const y = Number(fmt.find((p) => p.type === 'year').value);
+  const m = Number(fmt.find((p) => p.type === 'month').value);
+  const day = Number(fmt.find((p) => p.type === 'day').value);
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  return Math.floor(dt.getTime() / 86400000);
+}
+
+// Use 4441 (prime) for spacing; different from WalkOfDay's 7919 so
+// the strain pick and walk pick rotate independently.
+const idx = (dayIndex(new Date()) * 4441) % STRAINS.length;
+const today = STRAINS[idx];
+
+const dateLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles',
+}).format(new Date());
+---
+
+<aside class="strain" aria-label="Strain of the day" style={`--lane-tone: ${today.laneTone}`}>
+  <header class="strain__head">
+    <p class="strain__kicker mono">STRAIN OF THE DAY · CANNABIS ATLAS</p>
+    <span class="strain__date mono">{dateLabel.toUpperCase()}</span>
+  </header>
+
+  <div class="strain__body">
+    <img class="strain__noun" src={`https://noun.pics/${today.noun}.svg`} alt={`Noun ${today.noun}`} loading="lazy" />
+    <div class="strain__copy">
+      <p class="strain__brand mono">{today.brand}</p>
+      <p class="strain__name">{today.name}</p>
+      <p class="strain__profile">{today.profile}</p>
+      <p class="strain__use mono">USE · {today.use}</p>
+      <ol class="strain__tags">
+        {today.tags.map((tag) => (
+          <li class="strain__tag mono">{tag}</li>
+        ))}
+      </ol>
+    </div>
+    <div class="strain__lane-chip">
+      <span class="strain__lane-key mono">LANE</span>
+      <span class="strain__lane-val">{today.lane}</span>
+    </div>
+  </div>
+
+  <footer class="strain__foot mono">
+    <span>open the atlas</span>
+    <a class="strain__more" href="/cannabis">/cannabis →</a>
+  </footer>
+</aside>
+
+<style is:global>
+  .strain {
+    margin: 14px 0 18px;
+    padding: 14px 16px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background:
+      linear-gradient(180deg, #fff 0%, #f7eed6 100%),
+      repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.03) 0 2px, transparent 2px 7px);
+    box-shadow: 4px 4px 0 var(--lane-tone, #1a1a1a);
+  }
+
+  .strain__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1.5px dashed var(--pc-ink, #1a1a1a);
+    padding-bottom: 6px;
+  }
+  .strain__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--pc-ink, #1a1a1a);
+  }
+  .strain__date {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5b5b55);
+    text-transform: uppercase;
+  }
+
+  .strain__body {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .strain__noun {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: #fff;
+    box-shadow: 2px 2px 0 var(--lane-tone, #1a1a1a);
+  }
+
+  .strain__copy {
+    min-width: 0;
+  }
+
+  .strain__brand {
+    margin: 0 0 1px;
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+  }
+
+  .strain__name {
+    margin: 0 0 5px;
+    font-size: 19px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: var(--pc-ink, #1a1a1a);
+    letter-spacing: -0.005em;
+  }
+
+  .strain__profile {
+    margin: 0 0 5px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--pc-ink, #1a1a1a);
+  }
+
+  .strain__use {
+    margin: 0 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-soft, #5b5b55);
+    text-transform: uppercase;
+  }
+
+  .strain__tags {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .strain__tag {
+    border: 1px solid var(--pc-ink, #1a1a1a);
+    background: #fff5d6;
+    color: var(--pc-ink, #1a1a1a);
+    padding: 2px 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+  }
+
+  .strain__lane-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 2px solid var(--pc-ink, #1a1a1a);
+    background: var(--lane-tone, #1a1a1a);
+    color: #fff5d6;
+    box-shadow: 2px 2px 0 var(--pc-ink, #1a1a1a);
+    min-width: 64px;
+  }
+  .strain__lane-key {
+    font-size: 8.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 245, 214, 0.78);
+  }
+  .strain__lane-val {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff5d6;
+    text-transform: lowercase;
+  }
+
+  .strain__foot {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--pc-rule, #d6d4cd);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted, #5b5b55);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .strain__more {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--lane-tone, #1a1a1a);
+    text-decoration: none;
+    border-bottom: 1px solid var(--lane-tone, #1a1a1a);
+    padding-bottom: 1px;
+  }
+
+  .strain .mono {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  @media (max-width: 720px) {
+    .strain__body {
+      grid-template-columns: 48px minmax(0, 1fr);
+      grid-template-areas:
+        "noun copy"
+        "lane lane";
+      gap: 10px;
+    }
+    .strain__noun { grid-area: noun; width: 48px; height: 48px; }
+    .strain__copy { grid-area: copy; }
+    .strain__lane-chip {
+      grid-area: lane;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+    .strain__name { font-size: 17px; }
+  }
+</style>
