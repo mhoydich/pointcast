@@ -1,0 +1,512 @@
+---
+/**
+ * /drum-vespers — automatic bells on the hour.
+ *
+ * Mike 2026-05-02 afternoon "ok keep going, run over next hour" — the
+ * fourth surface in the bell wing after fall, jar, pendulum. This one
+ * is pure ambient: open the page, leave it open, and at every hour
+ * boundary the bell tower tolls a number of bells equal to the hour
+ * (12-hour clock — noon = 12 tolls, 5pm = 5 tolls, midnight = 12 tolls,
+ * 1am = 1 toll, etc.).
+ *
+ * Inter-toll spacing is 1.4s; total toll sequence ~17s for noon. The
+ * page also has a small "next toll" countdown and a manual "toll now"
+ * button that plays the current hour count for previewing.
+ *
+ * Pure static. No API. Designed for /drum-tv-meet companion projection
+ * — hour boundaries are theatrical.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Vespers · Bell on the Hour · PointCast';
+const description =
+  'A bell tower that tolls automatically on every hour boundary. Open it, leave it open, listen. Bell-wing ambient surface.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Vespers',
+  url: 'https://pointcast.xyz/drum-vespers',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dv" id="dv-main">
+    <DrumNav current="vespers" />
+
+    <header class="dv__header">
+      <div class="dv__chrome">
+        <span>BELLS ON THE HOUR</span>
+        <span class="dv__chrome-sep">·</span>
+        <span>12-COUNT</span>
+        <span class="dv__chrome-sep">·</span>
+        <span id="dv-clock">--:--</span>
+      </div>
+      <h1 class="dv__title">VESPERS</h1>
+      <p class="dv__tagline">a bell tower that remembers the hour for you</p>
+    </header>
+
+    <section class="dv__stage" aria-label="Vespers bell tower">
+      <!-- Tower silhouette + tolling bell -->
+      <div class="dv__tower">
+        <svg viewBox="0 0 240 320" shape-rendering="crispEdges" aria-hidden="true">
+          <!-- spire roof -->
+          <path d="M 100 12 L 140 12 L 145 22 L 95 22 Z" fill="#6b4d12"/>
+          <path d="M 90 22 L 150 22 L 155 30 L 85 30 Z" fill="#b8862c"/>
+          <!-- belfry housing -->
+          <rect x="78" y="30" width="84" height="76" fill="#3a2410"/>
+          <rect x="80" y="32" width="80" height="72" fill="#1a0820"/>
+          <!-- columns -->
+          <rect x="86" y="32" width="6" height="72" fill="#6b4d12"/>
+          <rect x="148" y="32" width="6" height="72" fill="#6b4d12"/>
+          <!-- belfry top trim -->
+          <rect x="76" y="106" width="88" height="6" fill="#d4a437"/>
+          <rect x="74" y="112" width="92" height="3" fill="#6b4d12"/>
+          <!-- main tower body -->
+          <rect x="78" y="115" width="84" height="180" fill="#2c0d36"/>
+          <rect x="80" y="115" width="80" height="180" fill="#1a0820"/>
+          <!-- vertical highlight -->
+          <rect x="84" y="115" width="2" height="180" fill="#6b4d12" opacity="0.6"/>
+          <rect x="154" y="115" width="2" height="180" fill="#6b4d12" opacity="0.6"/>
+          <!-- arched windows -->
+          <rect x="106" y="140" width="28" height="40" fill="#0c0410"/>
+          <path d="M 106 140 Q 120 132 134 140 Z" fill="#6b4d12"/>
+          <rect x="106" y="200" width="28" height="40" fill="#0c0410"/>
+          <path d="M 106 200 Q 120 192 134 200 Z" fill="#6b4d12"/>
+          <!-- base -->
+          <rect x="68" y="295" width="104" height="14" fill="#3a2410"/>
+          <rect x="64" y="309" width="112" height="6" fill="#6b4d12"/>
+        </svg>
+
+        <!-- The bell hangs in the belfry, animated when tolling -->
+        <div class="dv__bell" id="dv-bell">
+          <svg viewBox="0 0 60 70" shape-rendering="crispEdges" aria-hidden="true">
+            <path d="M 12 14 L 48 14 L 50 56 L 10 56 Z" fill="#d4a437"/>
+            <rect x="10" y="56" width="40" height="3" fill="#b8862c"/>
+            <rect x="8"  y="59" width="44" height="3" fill="#6b4d12"/>
+            <rect x="16" y="22" width="2" height="22" fill="#fff5c0" opacity="0.55"/>
+            <rect x="26" y="6"  width="8" height="2" fill="#6b4d12"/>
+            <rect x="24" y="8"  width="12" height="6" fill="#b8862c"/>
+            <rect x="29" y="62" width="2" height="6" fill="#3a2410"/>
+            <circle cx="30" cy="68" r="2" fill="#3a2410"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="dv__readout">
+      <div class="dv__panel">
+        <div class="dv__panel-label">NEXT TOLL</div>
+        <div class="dv__panel-value" id="dv-countdown">--:--</div>
+      </div>
+      <div class="dv__panel">
+        <div class="dv__panel-label">LAST TOLL</div>
+        <div class="dv__panel-value" id="dv-last">—</div>
+      </div>
+      <div class="dv__panel">
+        <div class="dv__panel-label">TOLLS TODAY</div>
+        <div class="dv__panel-value" id="dv-today">0</div>
+      </div>
+    </section>
+
+    <footer class="dv__footer">
+      <button class="dv__manual" id="dv-manual" type="button">TOLL NOW</button>
+      <p class="dv__footer-text">
+        Sound is muted until you click. Browsers don't allow audio without a gesture; click any toll button or anywhere in the page once to unlock the bells. After that, hourly tolls play on their own.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dv-main) {
+    background: #0c0410;
+  }
+
+  .dv {
+    --dv-velvet: #1a0820;
+    --dv-velvet-deep: #0c0410;
+    --dv-brass: #d4a437;
+    --dv-brass-soft: #b8862c;
+    --dv-brass-deep: #6b4d12;
+    --dv-flame: #f6c15e;
+    --dv-flame-tip: #ff6b3a;
+    --dv-ink-light: #f4e7c8;
+    --dv-ink-mid: #c9b78c;
+    --dv-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 0;
+    color: var(--dv-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 5%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dv-velvet) 0%, var(--dv-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+  }
+  .dv::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .dv .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .dv__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(12px, 1.5vh, 22px);
+  }
+  .dv__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--dv-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dv-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .dv__chrome-sep { color: var(--dv-brass-deep); }
+  #dv-clock { color: var(--dv-flame); font-weight: 700; }
+
+  .dv__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--dv-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dv-velvet-deep);
+  }
+  .dv__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--dv-ink-mid);
+  }
+
+  /* Stage holds the tower */
+  .dv__stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(14px, 2vh, 28px) 0;
+    min-height: 380px;
+  }
+
+  .dv__tower {
+    position: relative;
+    width: clamp(220px, 28vw, 360px);
+    aspect-ratio: 240 / 320;
+    filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.7));
+  }
+  .dv__tower > svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .dv__bell {
+    position: absolute;
+    top: 28%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32%;
+    aspect-ratio: 60 / 70;
+    transform-origin: 50% 0%;
+    filter: drop-shadow(0 0 12px rgba(212, 164, 55, 0.25));
+  }
+  .dv__bell svg {
+    width: 100%; height: 100%; display: block;
+  }
+  .dv__bell.dv__bell--ringing {
+    animation: dv-bell-swing 0.8s ease-in-out 1;
+  }
+  @keyframes dv-bell-swing {
+    0%, 100% { transform: translateX(-50%) rotate(0deg); }
+    25%      { transform: translateX(-50%) rotate(-14deg); }
+    50%      { transform: translateX(-50%) rotate(0deg); }
+    75%      { transform: translateX(-50%) rotate(12deg); }
+  }
+  .dv__bell.dv__bell--ringing svg { filter: drop-shadow(0 0 24px rgba(246, 193, 94, 0.5)); }
+
+  /* Readout panels */
+  .dv__readout {
+    display: flex;
+    justify-content: center;
+    gap: clamp(12px, 2vw, 32px);
+    padding: clamp(10px, 1.5vh, 18px) 0;
+    flex-wrap: wrap;
+  }
+  .dv__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 18px;
+    border: 1px solid var(--dv-brass-deep);
+    background: rgba(0, 0, 0, 0.3);
+    min-width: 130px;
+  }
+  .dv__panel-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dv-ink-dim);
+  }
+  .dv__panel-value {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 800;
+    color: var(--dv-flame);
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(246, 193, 94, 0.35);
+  }
+
+  .dv__footer {
+    text-align: center;
+    padding: clamp(14px, 2vh, 24px) 0 0;
+  }
+  .dv__manual {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 12px 28px;
+    margin: 0 0 14px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: var(--dv-velvet-deep);
+    background: linear-gradient(180deg, var(--dv-brass) 0%, var(--dv-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--dv-velvet-deep),
+      0 4px 0 0 var(--dv-brass-deep),
+      0 4px 12px rgba(212, 164, 55, 0.25);
+    transition: transform 80ms, box-shadow 80ms;
+  }
+  .dv__manual:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dv-brass) 100%); }
+  .dv__manual:active, .dv__manual:disabled {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--dv-velvet-deep),
+      0 1px 0 0 var(--dv-brass-deep),
+      0 0 16px rgba(246, 193, 94, 0.6);
+    cursor: wait;
+  }
+  .dv__footer-text {
+    margin: 0 auto;
+    max-width: 540px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--dv-ink-dim);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  function playTowerBell(when = 0) {
+    const a = ctx(); const t = a.currentTime + when;
+    // Big tower bell: low fundamental + brass partial + slight detune chorus
+    const f = 196; // G3 — solemn, low
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const o3 = a.createOscillator(); o3.type = 'sine'; o3.frequency.value = f * 1.005; // chorus
+    const g = a.createGain(); const g2 = a.createGain(); const g3 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.42, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.18, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);
+    g3.gain.setValueAtTime(0.0001, t); g3.gain.exponentialRampToValueAtTime(0.10, t + 0.02); g3.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+    o1.connect(g).connect(a.destination);
+    o2.connect(g2).connect(a.destination);
+    o3.connect(g3).connect(a.destination);
+    o1.start(t); o1.stop(t + 3.3);
+    o2.start(t); o2.stop(t + 2.1);
+    o3.start(t); o3.stop(t + 2.5);
+  }
+
+  // ── DOM ──────────────────────────────────────────────
+  const bellEl = document.getElementById('dv-bell');
+  const clockEl = document.getElementById('dv-clock');
+  const countdownEl = document.getElementById('dv-countdown');
+  const lastEl = document.getElementById('dv-last');
+  const todayEl = document.getElementById('dv-today');
+  const manualBtn = document.getElementById('dv-manual');
+
+  // ── State ────────────────────────────────────────────
+  const TODAY_KEY = 'pc:vespers:today';
+  const LAST_TOLL_KEY = 'pc:vespers:lastToll';
+  const TODAY_DATE_KEY = 'pc:vespers:todayDate';
+
+  let tollsToday = 0;
+  let lastTollAt = 0; // timestamp ms of last toll
+
+  function todayString() {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  try {
+    const storedDate = localStorage.getItem(TODAY_DATE_KEY) || '';
+    if (storedDate === todayString()) {
+      tollsToday = parseInt(localStorage.getItem(TODAY_KEY) || '0', 10) || 0;
+    } else {
+      // New day — reset
+      localStorage.setItem(TODAY_DATE_KEY, todayString());
+      localStorage.setItem(TODAY_KEY, '0');
+    }
+    lastTollAt = parseInt(localStorage.getItem(LAST_TOLL_KEY) || '0', 10) || 0;
+  } catch {}
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function fmtTime(d) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function fmtDuration(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${pad(m)}:${pad(s)}`;
+  }
+
+  // 12-hour count: 0 → 12, 1 → 1, ..., 12 → 12, 13 → 1, ...
+  function tollCountForHour(h) {
+    return h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  }
+
+  // ── Tolling sequence ─────────────────────────────────
+  let tolling = false;
+  function tollSequence(count, manual = false) {
+    if (tolling) return;
+    tolling = true;
+    if (manualBtn) manualBtn.disabled = true;
+
+    const interTollMs = 1400;
+    for (let i = 0; i < count; i++) {
+      const offsetSec = i * (interTollMs / 1000);
+      playTowerBell(offsetSec);
+      // Trigger visual swing on each toll
+      setTimeout(() => {
+        if (bellEl) {
+          bellEl.classList.remove('dv__bell--ringing');
+          // re-flow trick
+          void bellEl.offsetWidth;
+          bellEl.classList.add('dv__bell--ringing');
+        }
+      }, i * interTollMs);
+    }
+
+    const totalMs = count * interTollMs + 600;
+    setTimeout(() => {
+      tolling = false;
+      if (manualBtn) manualBtn.disabled = false;
+      if (bellEl) bellEl.classList.remove('dv__bell--ringing');
+    }, totalMs);
+
+    // Update counters (only for auto tolls or first manual)
+    if (!manual) {
+      tollsToday += count;
+      lastTollAt = Date.now();
+      try {
+        localStorage.setItem(TODAY_KEY, String(tollsToday));
+        localStorage.setItem(TODAY_DATE_KEY, todayString());
+        localStorage.setItem(LAST_TOLL_KEY, String(lastTollAt));
+      } catch {}
+      paintReadout();
+    } else if (lastTollAt === 0) {
+      // First click ever — record so countdown displays "—" rather than null
+      lastTollAt = Date.now();
+      try { localStorage.setItem(LAST_TOLL_KEY, String(lastTollAt)); } catch {}
+    }
+  }
+
+  manualBtn?.addEventListener('click', () => {
+    const now = new Date();
+    const count = tollCountForHour(now.getHours());
+    tollSequence(count, true);
+  });
+
+  // ── Hour-boundary scheduler ─────────────────────────
+  // Fires at the next :00 of every hour. Resilient to tab being
+  // backgrounded — checks every 30s and fires if we just crossed
+  // an hour boundary that we haven't tolled yet.
+  let lastTolledHourKey = null; // e.g. "2026-5-2-15"
+  function hourKey(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}`; }
+  // Initial: pretend we already tolled the current hour so we don't fire on load.
+  lastTolledHourKey = hourKey(new Date());
+
+  function checkBoundary() {
+    const now = new Date();
+    // Check: if we're within 60s after :00 and we haven't tolled this hour yet, do it.
+    if (now.getMinutes() === 0 && now.getSeconds() < 60) {
+      const key = hourKey(now);
+      if (key !== lastTolledHourKey) {
+        const count = tollCountForHour(now.getHours());
+        tollSequence(count, false);
+        lastTolledHourKey = key;
+      }
+    }
+  }
+
+  // Run boundary check every 5s; clock + countdown every 1s.
+  setInterval(checkBoundary, 5000);
+  function paintClock() {
+    const now = new Date();
+    if (clockEl) clockEl.textContent = fmtTime(now);
+    // Countdown to next :00
+    const next = new Date(now);
+    next.setMinutes(0, 0, 0);
+    next.setHours(now.getHours() + 1);
+    const ms = next.getTime() - now.getTime();
+    if (countdownEl) countdownEl.textContent = fmtDuration(ms);
+  }
+  function paintReadout() {
+    if (todayEl) todayEl.textContent = String(tollsToday);
+    if (lastEl) {
+      if (lastTollAt > 0) {
+        lastEl.textContent = fmtTime(new Date(lastTollAt));
+      } else {
+        lastEl.textContent = '—';
+      }
+    }
+  }
+  setInterval(paintClock, 1000);
+  paintClock();
+  paintReadout();
+</script>
