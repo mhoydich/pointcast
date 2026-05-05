@@ -23,6 +23,13 @@
  *           production handoffs, and participant-credit routing.
  * v0.11.0 — Battler Wiki MCP with topic briefs, watch links, contribution
  *           paths, and guardrails for visiting agents.
+ * v0.12.0 — Results Desk: agent-readable wrappers around the Bowl Path
+ *           and Moon Tournament JSON. Adds battler_bowl_state,
+ *           battler_moon_tournament, battler_seeds, and battler_trilogy
+ *           so agents can reason about live S6 lock math, the upcoming
+ *           full-moon knockout, championship-history seed ordering, and
+ *           the Sports Desk Thu→Sat→Mon cadence without re-implementing
+ *           any of it.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -77,6 +84,10 @@
  *   nouns_battler_result_tracker ({snapshotUrl?, snapshotJson?, recapText?, view?})
  *                                       parse/track Battler results
  *   nouns_battler_cowork_brief ({focus?}) Claude/Cowork scorebook kit
+ *   battler_bowl_state    (no input)   S6 Bowl path snapshot (D-day, calendar, gangs, lockStatus)
+ *   battler_moon_tournament (no input) upcoming Moon Tournament (named moon, seeds, bracket)
+ *   battler_seeds         ({top?})     championship-history seed ordering, top-N filter
+ *   battler_trilogy       ({beat?})    Sports Desk Thu→Sat→Mon beats (0411, 0422, 0434)
  *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
@@ -98,6 +109,9 @@
  *   nouns-battler://sponsorship-desk sponsor packages, inventory, guardrails
  *   nouns-battler://production-desk accepted-work ledgers and broadcast queue
  *   nouns-battler://claim-board  claimable work cards and proof routing
+ *   nouns-battler://bowl-state   S6 Bowl path snapshot
+ *   nouns-battler://moon-tournament upcoming Moon Tournament
+ *   nouns-battler://trilogy      Sports Desk Thu→Sat→Mon trilogy
  *
  * Discovery
  *   GET /api/mcp returns an HTML discovery page with config snippets.
@@ -123,7 +137,7 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.11.0';
+const SERVER_VERSION = '0.12.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.7.0';
 
@@ -668,6 +682,51 @@ const TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'battler_bowl_state',
+    description:
+      'Return the live snapshot for the S6 Bowl path: anchored season start, current sprint day, days-to-Bowl-lock, the 14-day Sprint Room calendar with the current day marked, all 8 founding gangs with championship history and lockStatus, and the live-status contract documenting how `pending` graduates to a real value. Pulls /nouns-nation-battler-bowl.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'battler_moon_tournament',
+    description:
+      'Return the upcoming Moon Tournament snapshot: named moon (e.g. Flower Moon Cup, Strawberry Moon Cup), full-moon date in PT, hours-away countdown, single-elim format, the 8-team seed list (ranked by championships → most recent year → defending → alphabetical), and the bracket pairings (4 QF, 2 SF, 1 Final) with `pending` outcomes. Pulls /nouns-nation-battler-moon.json.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'battler_seeds',
+    description:
+      'Return the championship-history-derived seed ordering used by both the Bowl bracket projection (top 4) and the Moon Tournament (all 8). Most championships → most recent title year → defending tiebreaker → alphabetical short-code for un-titled gangs. Single source of truth for any agent that wants to reason about seed math without re-implementing it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        top: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 8,
+          description: 'Optional top-N filter (e.g. 4 for the Bowl projection). Default 8.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'battler_trilogy',
+    description:
+      'Return the Sports Desk Thu→Sat→Mon cadence trilogy: blocks 0411 (Thursday open), 0422 (Saturday follow), and 0434 (Monday cap). For each beat: id, title, dek, timestamp, channel, type, reading time, and block URL. Use this to cite the cadence when writing the next beat or briefing a sponsor.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        beat: {
+          type: 'string',
+          enum: ['0411', '0422', '0434', 'all'],
+          description: 'Specific beat to fetch in detail, or "all" for the trilogy. Default all.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 const TOOLS = TOOL_DEFINITIONS.map((tool) => ({
@@ -791,6 +850,27 @@ const RESOURCES = [
     uri: 'nouns-battler://claim-board',
     name: 'Nouns Nation Battler Claim Board',
     description: 'Public claim cards, proof checklists, production handoffs, and participant-credit routing.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://bowl-state',
+    name: 'Nouns Nation Battler Bowl Path',
+    description:
+      'S6 Bowl path snapshot — anchored season start, current sprint day, days-to-Bowl-lock, 14-day calendar with the now-cursor, 8 founding gangs with championship history and lockStatus.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://moon-tournament',
+    name: 'Nouns Nation Battler Moon Tournament',
+    description:
+      'Upcoming Moon Tournament snapshot — named moon (Flower Moon Cup, etc.), full-moon time in PT, 8-team seed list, single-elim bracket with pending outcomes, Lunar Tide field details.',
+    mimeType: 'application/json',
+  },
+  {
+    uri: 'nouns-battler://trilogy',
+    name: 'Nouns Nation Battler Sports Desk Trilogy',
+    description:
+      'Thu→Sat→Mon cadence trilogy — blocks 0411, 0422, 0434. Reading order, titles, deks, timestamps, and block URLs.',
     mimeType: 'application/json',
   },
 ] as const;
@@ -1745,6 +1825,88 @@ async function dispatchTool(
         ],
       };
     }
+    case 'battler_bowl_state': {
+      const data = await callJson(`${base}/nouns-nation-battler-bowl.json`);
+      const today = data?.today?.day;
+      const daysToLock = data?.today?.daysToLock;
+      const summary = [
+        `${data?.name || 'Season 6'} Bowl path · D${today} · ${daysToLock} days to lock`,
+        `gangs: ${(data?.gangs || []).map((g: any) => `${g.short}${g.lockStatus !== 'pending' ? `(${g.lockStatus})` : ''}`).join(' · ')}`,
+        `live page: ${base}/nouns-nation-battler-bowl/`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'battler_moon_tournament': {
+      const data = await callJson(`${base}/nouns-nation-battler-moon.json`);
+      const upcoming = data?.upcoming || {};
+      const seedLine = (data?.seeds || []).map((s: any) => `#${s.seed} ${s.short}`).join(' · ');
+      const summary = [
+        `${upcoming.name || 'Moon Tournament'} · ${upcoming.fullMoonIso || 'TBD'} (${upcoming.daysAway ?? '?'}d away)`,
+        `field: ${data?.format?.field?.title || 'Lunar Tide'} · ${data?.format?.style || 'single-elimination'}`,
+        `seeds: ${seedLine}`,
+        `live page: ${base}/nouns-nation-battler-moon/`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'battler_seeds': {
+      const data = await callJson(`${base}/nouns-nation-battler-moon.json`);
+      const top = Math.min(8, Math.max(1, Number(args.top) || 8));
+      const seeds = (data?.seeds || []).slice(0, top);
+      const seedLines = seeds.map((s: any) =>
+        `  #${s.seed} ${s.short} · ${s.name}${s.defending ? ' (DEF)' : ''} · ${s.championships?.length ? s.championships.join(',') : 'no title'} · ${s.rationale}`,
+      );
+      const summary = [
+        `Top ${top} seeds (championships → most-recent → defending → alphabetical):`,
+        ...seedLines,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify({ top, seeds, source: data?.url }, null, 2) },
+        ],
+      };
+    }
+    case 'battler_trilogy': {
+      const beat = String(args.beat || 'all');
+      const ids = beat === 'all' ? ['0411', '0422', '0434'] : [beat];
+      if (beat !== 'all' && !['0411', '0422', '0434'].includes(beat)) {
+        return { content: [{ type: 'text', text: `unknown beat: ${beat} (use 0411, 0422, 0434, or all)` }], isError: true };
+      }
+      const beats = await Promise.all(
+        ids.map(async (id) => {
+          const blockData = await callJson(`${base}/b/${id}.json`).catch(() => null);
+          return {
+            id,
+            url: `${base}/b/${id}`,
+            title: blockData?.title || null,
+            dek: blockData?.dek || null,
+            timestamp: blockData?.timestamp || null,
+            channel: blockData?.channel || 'BTL',
+            type: blockData?.type || 'READ',
+            readingTime: blockData?.readingTime || null,
+          };
+        }),
+      );
+      const summary = beats
+        .map((b) => `${b.id} · ${b.timestamp ? new Date(b.timestamp).toISOString().slice(0, 10) : '?'} · ${b.title || 'untitled'} → ${b.url}`)
+        .join('\n');
+      return {
+        content: [
+          { type: 'text', text: `Sports Desk trilogy${beat !== 'all' ? ` — beat ${beat}` : ''}:\n${summary}` },
+          { type: 'text', text: JSON.stringify({ trilogy: beats, cadence: 'Thu→Sat→Mon' }, null, 2) },
+        ],
+      };
+    }
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
@@ -1904,6 +2066,39 @@ async function dispatchResource(uri: string, base: string): Promise<{ contents: 
             productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
             participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
           }, null, 2),
+        },
+      ],
+    };
+  }
+  if (uri === 'nouns-battler://bowl-state') {
+    const data = await callJson(`${base}/nouns-nation-battler-bowl.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'nouns-battler://moon-tournament') {
+    const data = await callJson(`${base}/nouns-nation-battler-moon.json`);
+    return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] };
+  }
+  if (uri === 'nouns-battler://trilogy') {
+    const ids = ['0411', '0422', '0434'];
+    const beats = await Promise.all(
+      ids.map(async (id) => {
+        const blockData = await callJson(`${base}/b/${id}.json`).catch(() => null);
+        return {
+          id,
+          url: `${base}/b/${id}`,
+          title: blockData?.title || null,
+          dek: blockData?.dek || null,
+          timestamp: blockData?.timestamp || null,
+          channel: blockData?.channel || 'BTL',
+        };
+      }),
+    );
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify({ cadence: 'Thu→Sat→Mon', trilogy: beats }, null, 2),
         },
       ],
     };
@@ -2077,7 +2272,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>drum://rooms</code> · <code>drum://now-playing</code> · <code>drum://leaderboard</code> · <code>drum://schema</code></li>
   <li><code>pointcast://map</code> · <code>pointcast://now</code> · <code>pointcast://feed</code> · <code>pointcast://contracts</code> · <code>pointcast://channels</code></li>
   <li><code>pointcast://connectors</code> · <code>pointcast://apps</code></li>
-  <li><code>nouns-battler://wiki</code> · <code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code> · <code>nouns-battler://production-desk</code> · <code>nouns-battler://claim-board</code></li>
+  <li><code>nouns-battler://wiki</code> · <code>nouns-battler://agent-bench</code> · <code>nouns-battler://manifest</code> · <code>nouns-battler://results-kit</code> · <code>nouns-battler://asset-factory</code> · <code>nouns-battler://sponsorship-desk</code> · <code>nouns-battler://production-desk</code> · <code>nouns-battler://claim-board</code> · <code>nouns-battler://bowl-state</code> · <code>nouns-battler://moon-tournament</code> · <code>nouns-battler://trilogy</code></li>
 </ul>
 
 <p style="margin-top: 40px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A;">
