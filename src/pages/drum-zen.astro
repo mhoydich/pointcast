@@ -1,0 +1,404 @@
+---
+/**
+ * /drum-zen — pixel-art zen rock garden.
+ *
+ * Mike: "go 5 more." First of five. A meditative interactive — three
+ * pixel-art rocks placed deterministically by your sessionId on a sand
+ * field. Click and drag to draw rake lines in the sand. Soft shaker
+ * sound per stroke. Lines persist for the session.
+ *
+ * Pure static, all client-side canvas drawing.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Zen Garden · Rake the Sand · PointCast';
+const description =
+  'A pixel-art zen rock garden. Drag to draw rake lines in the sand. Three rocks placed for you.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Zen Garden',
+  url: 'https://pointcast.xyz/drum-zen',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dz" id="dz-main">
+    <DrumNav current="zen" />
+
+    <header class="dz__header">
+      <div class="dz__chrome">
+        <span>ZEN GARDEN</span>
+        <span class="dz__chrome-sep">·</span>
+        <span>DRAG TO RAKE</span>
+        <span class="dz__chrome-sep">·</span>
+        <span id="dz-strokes">0 STROKES</span>
+      </div>
+      <h1 class="dz__title">ZEN</h1>
+      <p class="dz__tagline">three rocks · sand around them · drag your rake slowly</p>
+    </header>
+
+    <section class="dz__field">
+      <canvas id="dz-canvas" class="dz__canvas"></canvas>
+    </section>
+
+    <footer class="dz__controls">
+      <button class="dz__btn dz__btn--ghost" id="dz-clear" type="button">SMOOTH</button>
+      <p class="dz__instructions">
+        Lines persist this session. SMOOTH erases the sand and starts over. Rocks stay.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dz-main) { background: #0c0410; }
+
+  .dz {
+    --dz-velvet: #1a0820;
+    --dz-velvet-deep: #0c0410;
+    --dz-sand: #d4b885;
+    --dz-sand-deep: #b89866;
+    --dz-rock: #4a3826;
+    --dz-rock-deep: #2a1f14;
+    --dz-rake: #5a4628;
+    --dz-brass: #d4a437;
+    --dz-brass-deep: #6b4d12;
+    --dz-flame: #f6c15e;
+    --dz-ink-light: #f4e7c8;
+    --dz-ink-mid: #c9b78c;
+    --dz-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dz-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dz-velvet) 0%, var(--dz-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dz .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .dz__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(16px, 2vh, 28px);
+  }
+  .dz__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--dz-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dz-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .dz__chrome-sep { color: var(--dz-brass-deep); }
+  #dz-strokes { color: var(--dz-flame); font-weight: 700; }
+
+  .dz__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--dz-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dz-velvet-deep);
+  }
+  .dz__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--dz-ink-mid);
+  }
+
+  .dz__field {
+    max-width: 880px;
+    margin: 0 auto;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 4px solid #3a2410;
+    box-shadow:
+      inset 0 0 60px rgba(0, 0, 0, 0.4),
+      0 12px 32px rgba(0, 0, 0, 0.6);
+    background: var(--dz-sand);
+    cursor: crosshair;
+    overflow: hidden;
+  }
+  .dz__canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  .dz__controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: clamp(12px, 2vw, 24px);
+    flex-wrap: wrap;
+    padding: clamp(14px, 2vh, 24px) 0 0;
+    margin-top: clamp(20px, 3vh, 32px);
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .dz__btn {
+    appearance: none;
+    border: 1.5px solid var(--dz-brass-deep);
+    background: transparent;
+    color: var(--dz-ink-mid);
+    cursor: pointer;
+    padding: 10px 24px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .dz__btn:hover {
+    color: var(--dz-brass);
+    border-color: var(--dz-brass);
+    background: rgba(212, 164, 55, 0.06);
+  }
+  .dz__instructions {
+    margin: 0;
+    max-width: 480px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    color: var(--dz-ink-dim);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // ── Audio: shaker / sand-rake whoosh ──────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  let lastShakeAt = 0;
+  function playShaker() {
+    const now = performance.now();
+    if (now - lastShakeAt < 90) return; // throttle: max ~11 Hz
+    lastShakeAt = now;
+    const a = ctx(); const t = a.currentTime;
+    const bufferSize = a.sampleRate * 0.10;
+    const buffer = a.createBuffer(1, bufferSize, a.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const noise = a.createBufferSource(); noise.buffer = buffer;
+    const filt = a.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 2000;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
+    noise.connect(filt).connect(g).connect(a.destination);
+    noise.start(t);
+  }
+
+  // ── Identity ────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  function hash32(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+
+  // ── Canvas + draw state ──────────────────────────────
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('dz-canvas'));
+  const ctx2 = canvas?.getContext('2d');
+  const strokesEl = document.getElementById('dz-strokes');
+  const clearBtn = document.getElementById('dz-clear');
+  let strokes = 0;
+  let drawing = false;
+  let last = null;
+
+  // 3 rocks — positions deterministic from session
+  let rocks = [];
+
+  function fmtCount(n) { return String(n); }
+  function paintCount() {
+    if (strokesEl) strokesEl.textContent = `${fmtCount(strokes)} STROKES`;
+  }
+
+  function resize() {
+    if (!canvas || !ctx2) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * (window.devicePixelRatio || 1));
+    canvas.height = Math.floor(rect.height * (window.devicePixelRatio || 1));
+    ctx2.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    drawSandBase();
+    drawRocks();
+  }
+
+  function drawSandBase() {
+    if (!canvas || !ctx2) return;
+    const rect = canvas.getBoundingClientRect();
+    // Sand base — gradient + grain dots
+    const grad = ctx2.createLinearGradient(0, 0, 0, rect.height);
+    grad.addColorStop(0, '#d4b885');
+    grad.addColorStop(1, '#b89866');
+    ctx2.fillStyle = grad;
+    ctx2.fillRect(0, 0, rect.width, rect.height);
+    // Random grain (3% of pixels at ~rgba 0,0,0,0.05)
+    ctx2.fillStyle = 'rgba(0, 0, 0, 0.06)';
+    for (let i = 0; i < 1500; i++) {
+      const x = Math.random() * rect.width;
+      const y = Math.random() * rect.height;
+      ctx2.fillRect(x, y, 1, 1);
+    }
+  }
+
+  function drawRocks() {
+    if (!canvas || !ctx2 || !rocks.length) return;
+    rocks.forEach((r) => {
+      // Each rock: a chunky pixel-shape with a soft drop shadow
+      // Shadow
+      ctx2.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      ctx2.beginPath();
+      ctx2.ellipse(r.x + 4, r.y + r.h / 2 + 4, r.w / 2 + 2, r.h / 4 + 2, 0, 0, Math.PI * 2);
+      ctx2.fill();
+      // Rock body (irregular polygon)
+      ctx2.fillStyle = '#4a3826';
+      ctx2.beginPath();
+      const cx = r.x, cy = r.y;
+      const steps = 8;
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const wob = 1 + r.wobble[i] * 0.18;
+        const px = cx + Math.cos(a) * (r.w / 2) * wob;
+        const py = cy + Math.sin(a) * (r.h / 2) * wob;
+        if (i === 0) ctx2.moveTo(px, py);
+        else ctx2.lineTo(px, py);
+      }
+      ctx2.closePath();
+      ctx2.fill();
+      // Rock highlight (top-left)
+      ctx2.fillStyle = 'rgba(255, 245, 192, 0.10)';
+      ctx2.beginPath();
+      ctx2.ellipse(r.x - r.w / 6, r.y - r.h / 6, r.w / 5, r.h / 8, 0, 0, Math.PI * 2);
+      ctx2.fill();
+    });
+  }
+
+  function placeRocks() {
+    const sid = ensureSid();
+    const seed = hash32(sid);
+    rocks = [];
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect) return;
+    // 3 rocks, deterministic positions in three "thirds" of the field
+    for (let i = 0; i < 3; i++) {
+      const r = (seed + i * 137) >>> 0;
+      const xPct = 0.18 + ((r % 100) / 100) * 0.20 + i * 0.22;
+      const yPct = 0.30 + (((r >> 8) % 100) / 100) * 0.40;
+      const sizePct = 0.10 + (((r >> 16) % 100) / 100) * 0.05;
+      const wobble = [];
+      for (let k = 0; k < 8; k++) wobble.push((((r >> (k * 3)) & 0x7) - 3.5) / 7);
+      rocks.push({
+        x: xPct * rect.width,
+        y: yPct * rect.height,
+        w: sizePct * rect.width,
+        h: sizePct * rect.height * 0.8,
+        wobble,
+      });
+    }
+  }
+
+  // Drawing — rake line
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+  function startDraw(e) {
+    drawing = true;
+    last = pos(e);
+    strokes += 1;
+    paintCount();
+    e.preventDefault();
+  }
+  function moveDraw(e) {
+    if (!drawing || !ctx2 || !last) return;
+    const p = pos(e);
+    // Three parallel lines per rake (offset perpendicular to motion)
+    const dx = p.x - last.x;
+    const dy = p.y - last.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1) return;
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    const offsets = [-4, 0, 4];
+    ctx2.lineCap = 'round';
+    ctx2.lineWidth = 1.5;
+    offsets.forEach((off) => {
+      ctx2.strokeStyle = `rgba(120, 90, 50, ${0.6 + Math.random() * 0.2})`;
+      ctx2.beginPath();
+      ctx2.moveTo(last.x + nx * off, last.y + ny * off);
+      ctx2.lineTo(p.x + nx * off, p.y + ny * off);
+      ctx2.stroke();
+    });
+    // Subtle inner highlight (one line, lighter)
+    ctx2.strokeStyle = 'rgba(255, 245, 192, 0.20)';
+    ctx2.lineWidth = 0.8;
+    ctx2.beginPath();
+    ctx2.moveTo(last.x + nx * 1.5, last.y + ny * 1.5);
+    ctx2.lineTo(p.x + nx * 1.5, p.y + ny * 1.5);
+    ctx2.stroke();
+    last = p;
+    try { playShaker(); } catch {}
+  }
+  function endDraw() { drawing = false; last = null; }
+
+  function smooth() {
+    drawSandBase();
+    drawRocks();
+    strokes = 0;
+    paintCount();
+  }
+
+  if (canvas) {
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', moveDraw);
+    window.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchmove', moveDraw, { passive: false });
+    canvas.addEventListener('touchend', endDraw);
+  }
+  clearBtn?.addEventListener('click', smooth);
+
+  // Boot
+  if (canvas && ctx2) {
+    placeRocks();
+    resize();
+    window.addEventListener('resize', () => { placeRocks(); resize(); });
+  }
+  paintCount();
+</script>
