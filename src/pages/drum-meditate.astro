@@ -1,0 +1,354 @@
+---
+/**
+ * /drum-meditate — five minutes, one breath at a time.
+ *
+ * Mike: "ok go" continuing the meditative wing. The wing has a lot
+ * of aesthetics; this one's structured practice.
+ *
+ * Press START. Breathing circle expands 4s (inhale), contracts 6s
+ * (exhale) in a 10s cycle for 5 minutes. Soft mid-pitch bell every
+ * 30 seconds. Three-tone completion chord at the end (C5 E5 G5).
+ * PAUSE/RESUME/STOP buttons; spacebar toggles. Counter: lifetime
+ * minutes meditated (localStorage).
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Meditate · Five Minutes · PointCast';
+const description =
+  'A five-minute breathing meditation. Slow breath circle, soft chime every 30 seconds. Pure static.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Meditate',
+  url: 'https://pointcast.xyz/drum-meditate',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dm" id="dm-main">
+    <DrumNav current="meditate" />
+
+    <header class="dm__header">
+      <div class="dm__chrome">
+        <span>FIVE MINUTES</span>
+        <span class="dm__chrome-sep">·</span>
+        <span id="dm-state">READY</span>
+        <span class="dm__chrome-sep">·</span>
+        <span id="dm-elapsed">5:00</span>
+      </div>
+      <h1 class="dm__title">MEDITATE</h1>
+      <p class="dm__tagline">four-second inhale · six-second exhale · five minutes</p>
+    </header>
+
+    <section class="dm__field" aria-label="Breathing circle">
+      <div class="dm__breath" id="dm-breath" aria-hidden="true"></div>
+      <div class="dm__cue" id="dm-cue">PRESS START</div>
+    </section>
+
+    <footer class="dm__controls">
+      <button class="dm__btn dm__btn--primary" id="dm-start" type="button">START</button>
+      <button class="dm__btn dm__btn--ghost" id="dm-pause" type="button" hidden>PAUSE</button>
+      <button class="dm__btn dm__btn--ghost" id="dm-stop" type="button" hidden>STOP</button>
+      <div class="dm__lifetime">
+        <span class="dm__lifetime-label">LIFETIME</span>
+        <span class="dm__lifetime-value" id="dm-lifetime">0 MIN</span>
+      </div>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dm-main) { background: #0c0410; }
+  .dm {
+    --dm-velvet: #1a0820; --dm-velvet-deep: #0c0410;
+    --dm-brass: #d4a437; --dm-brass-soft: #b8862c; --dm-brass-deep: #6b4d12;
+    --dm-flame: #f6c15e; --dm-ink-light: #f4e7c8; --dm-ink-mid: #c9b78c; --dm-ink-dim: #8a7a55;
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dm-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dm-velvet) 0%, var(--dm-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex; flex-direction: column;
+  }
+  .dm::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px; opacity: 0.4; z-index: -1;
+  }
+  .dm .drum-nav { opacity: 0.45; transform: scale(0.9); transform-origin: top left; margin-bottom: clamp(6px, 0.8vh, 14px); }
+
+  .dm__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(12px, 1.5vh, 22px); flex-shrink: 0; }
+  .dm__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dm-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dm-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dm__chrome-sep { color: var(--dm-brass-deep); }
+  #dm-state, #dm-elapsed { color: var(--dm-flame); font-weight: 700; }
+
+  .dm__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dm-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dm-velvet-deep);
+  }
+  .dm__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dm-ink-mid);
+  }
+
+  .dm__field {
+    flex: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    padding: clamp(20px, 4vh, 60px) 0; min-height: 380px;
+  }
+  .dm__breath {
+    width: clamp(180px, 28vw, 320px); aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, oklch(0.70 0.20 60 / 0.55) 0%, oklch(0.55 0.18 80 / 0.30) 40%, transparent 75%);
+    box-shadow: 0 0 60px 20px rgba(212, 164, 55, 0.25), inset 0 0 30px rgba(255, 245, 192, 0.20);
+    transform: scale(0.55); transition: transform 100ms linear; will-change: transform;
+  }
+  .dm__breath.dm__breath--inhaling { animation: dm-inhale 4s ease-in-out 1 forwards; }
+  .dm__breath.dm__breath--exhaling { animation: dm-exhale 6s ease-in-out 1 forwards; }
+  @keyframes dm-inhale { from { transform: scale(0.55); } to { transform: scale(1); } }
+  @keyframes dm-exhale { from { transform: scale(1); } to { transform: scale(0.55); } }
+  .dm__cue {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(20px, 2.4vw, 30px); letter-spacing: 0.08em;
+    color: var(--dm-ink-light);
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.6);
+    pointer-events: none; transition: opacity 600ms ease-out;
+  }
+
+  .dm__controls {
+    display: flex; justify-content: center; align-items: center;
+    gap: clamp(12px, 2vw, 24px); flex-wrap: wrap;
+    padding: clamp(14px, 2vh, 28px) 0 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18); flex-shrink: 0;
+  }
+  .dm__btn {
+    appearance: none; border: 0; cursor: pointer; padding: 14px 32px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px; font-weight: 800; letter-spacing: 0.24em;
+  }
+  .dm__btn--primary {
+    color: var(--dm-velvet-deep);
+    background: linear-gradient(180deg, var(--dm-brass) 0%, var(--dm-brass-soft) 100%);
+    box-shadow: 0 0 0 2px var(--dm-velvet-deep), 0 4px 0 0 var(--dm-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .dm__btn--primary:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dm-brass) 100%); }
+  .dm__btn--primary:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 2px var(--dm-velvet-deep), 0 1px 0 0 var(--dm-brass-deep), 0 0 18px rgba(246, 193, 94, 0.55);
+  }
+  .dm__btn--ghost {
+    color: var(--dm-ink-mid); background: transparent;
+    border: 1.5px solid var(--dm-brass-deep); padding: 12px 24px;
+    font-size: 12px; font-weight: 700;
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .dm__btn--ghost:hover {
+    color: var(--dm-brass); border-color: var(--dm-brass);
+    background: rgba(212, 164, 55, 0.06);
+  }
+
+  .dm__lifetime {
+    display: inline-flex; align-items: center; gap: 10px; margin-left: auto;
+    padding: 6px 14px; border: 1px solid var(--dm-brass-deep); border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.20em; text-transform: uppercase;
+  }
+  .dm__lifetime-label { color: var(--dm-ink-dim); }
+  .dm__lifetime-value { color: var(--dm-flame); font-weight: 700; }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playPulseBell(freq = 587.33, gain = 0.18, decay = 1.8) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.32, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + decay * 0.7);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + decay + 0.1); o2.start(t); o2.stop(t + decay * 0.7 + 0.1);
+  }
+
+  const breathEl = document.getElementById('dm-breath');
+  const cueEl = document.getElementById('dm-cue');
+  const stateEl = document.getElementById('dm-state');
+  const elapsedEl = document.getElementById('dm-elapsed');
+  const startBtn = document.getElementById('dm-start');
+  const pauseBtn = document.getElementById('dm-pause');
+  const stopBtn = document.getElementById('dm-stop');
+  const lifetimeEl = document.getElementById('dm-lifetime');
+
+  const TOTAL_MS = 5 * 60 * 1000;
+  const INHALE_MS = 4000;
+  const EXHALE_MS = 6000;
+  const CHIME_INTERVAL_MS = 30000;
+
+  const LIFETIME_KEY = 'pc:meditate:lifetime-seconds';
+  let lifetimeSeconds = 0;
+  try { lifetimeSeconds = parseInt(localStorage.getItem(LIFETIME_KEY) || '0', 10) || 0; } catch {}
+
+  let phase = 'idle';
+  let startedAt = 0;
+  let accumulatedMs = 0;
+  let lastChimeAt = 0;
+  let breathTimer = null;
+  let tickInterval = null;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmt(sec) { return `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`; }
+  function paintLifetime() {
+    if (lifetimeEl) lifetimeEl.textContent = `${Math.floor(lifetimeSeconds / 60)} MIN`;
+  }
+  paintLifetime();
+  function elapsedMs() {
+    if (phase === 'idle' || phase === 'done') return 0;
+    if (phase === 'paused') return accumulatedMs;
+    return accumulatedMs + (Date.now() - startedAt);
+  }
+  function setCue(text) { if (cueEl) cueEl.textContent = text; }
+
+  function inhale() {
+    if (phase !== 'running') return;
+    setCue('inhale');
+    if (breathEl) {
+      breathEl.classList.remove('dm__breath--exhaling');
+      void breathEl.offsetWidth;
+      breathEl.classList.add('dm__breath--inhaling');
+    }
+    breathTimer = setTimeout(exhale, INHALE_MS);
+  }
+  function exhale() {
+    if (phase !== 'running') return;
+    setCue('exhale');
+    if (breathEl) {
+      breathEl.classList.remove('dm__breath--inhaling');
+      void breathEl.offsetWidth;
+      breathEl.classList.add('dm__breath--exhaling');
+    }
+    breathTimer = setTimeout(inhale, EXHALE_MS);
+  }
+  function maybeChime() {
+    if (phase !== 'running') return;
+    const ms = elapsedMs();
+    if (ms - lastChimeAt >= CHIME_INTERVAL_MS) {
+      lastChimeAt = Math.floor(ms / CHIME_INTERVAL_MS) * CHIME_INTERVAL_MS;
+      try { playPulseBell(587.33, 0.16, 1.6); } catch {}
+    }
+  }
+  function tick() {
+    const ms = elapsedMs();
+    if (ms >= TOTAL_MS) { complete(); return; }
+    const remainingSec = Math.max(0, Math.ceil((TOTAL_MS - ms) / 1000));
+    if (elapsedEl) elapsedEl.textContent = fmt(remainingSec);
+    maybeChime();
+  }
+
+  function start() {
+    if (phase === 'running') return;
+    if (phase === 'idle' || phase === 'done') {
+      accumulatedMs = 0; lastChimeAt = 0;
+    }
+    phase = 'running';
+    startedAt = Date.now();
+    if (stateEl) stateEl.textContent = 'BREATHING';
+    if (startBtn) startBtn.hidden = true;
+    if (pauseBtn) { pauseBtn.hidden = false; pauseBtn.textContent = 'PAUSE'; }
+    if (stopBtn) stopBtn.hidden = false;
+    try { playPulseBell(659.25, 0.20, 1.4); } catch {}
+    inhale();
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = setInterval(tick, 250);
+  }
+  function pause() {
+    if (phase !== 'running') return;
+    phase = 'paused';
+    accumulatedMs += Date.now() - startedAt;
+    if (breathTimer) { clearTimeout(breathTimer); breathTimer = null; }
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+    if (stateEl) stateEl.textContent = 'PAUSED';
+    if (pauseBtn) pauseBtn.textContent = 'RESUME';
+    setCue('paused');
+  }
+  function resume() {
+    if (phase !== 'paused') return;
+    phase = 'running';
+    startedAt = Date.now();
+    if (stateEl) stateEl.textContent = 'BREATHING';
+    if (pauseBtn) pauseBtn.textContent = 'PAUSE';
+    inhale();
+    tickInterval = setInterval(tick, 250);
+  }
+  function stop() {
+    phase = 'idle';
+    if (breathTimer) { clearTimeout(breathTimer); breathTimer = null; }
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+    accumulatedMs = 0; lastChimeAt = 0;
+    if (breathEl) breathEl.classList.remove('dm__breath--inhaling', 'dm__breath--exhaling');
+    if (stateEl) stateEl.textContent = 'READY';
+    if (elapsedEl) elapsedEl.textContent = '5:00';
+    if (startBtn) { startBtn.hidden = false; startBtn.textContent = 'START'; }
+    if (pauseBtn) pauseBtn.hidden = true;
+    if (stopBtn) stopBtn.hidden = true;
+    setCue('PRESS START');
+  }
+  function complete() {
+    phase = 'done';
+    if (breathTimer) { clearTimeout(breathTimer); breathTimer = null; }
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+    if (breathEl) breathEl.classList.remove('dm__breath--inhaling', 'dm__breath--exhaling');
+    if (stateEl) stateEl.textContent = 'COMPLETE';
+    if (elapsedEl) elapsedEl.textContent = '0:00';
+    if (startBtn) { startBtn.hidden = false; startBtn.textContent = 'AGAIN'; }
+    if (pauseBtn) pauseBtn.hidden = true;
+    if (stopBtn) stopBtn.hidden = true;
+    setCue('rest');
+    try {
+      playPulseBell(523.25, 0.18, 2.0);
+      setTimeout(() => playPulseBell(659.25, 0.18, 2.0), 250);
+      setTimeout(() => playPulseBell(783.99, 0.20, 2.6), 500);
+    } catch {}
+    lifetimeSeconds += 300;
+    try { localStorage.setItem(LIFETIME_KEY, String(lifetimeSeconds)); } catch {}
+    paintLifetime();
+  }
+
+  startBtn?.addEventListener('click', start);
+  pauseBtn?.addEventListener('click', () => {
+    if (phase === 'running') pause();
+    else if (phase === 'paused') resume();
+  });
+  stopBtn?.addEventListener('click', stop);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat) {
+      e.preventDefault();
+      if (phase === 'idle' || phase === 'done') start();
+      else if (phase === 'running') pause();
+      else if (phase === 'paused') resume();
+    }
+  });
+</script>
