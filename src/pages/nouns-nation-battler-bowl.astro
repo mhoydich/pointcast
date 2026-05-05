@@ -23,6 +23,7 @@ import {
   daysToLock,
   type LockStatus,
 } from '../lib/battler-bowl-state';
+import { moonSeeds } from '../lib/battler-moon-tournament';
 
 const ch = CHANNELS.BTL;
 const now = new Date();
@@ -39,6 +40,22 @@ const lockCounts = FOUNDING_GANGS.reduce(
   {} as Record<LockStatus, number>,
 );
 const allPending = (lockCounts.pending ?? 0) === FOUNDING_GANGS.length;
+
+// Bowl bracket projection — 4-team single-elim. Until lockStatus carries
+// real signal, the top-4 seed projection reuses the championship-history
+// ranking from the Moon Tournament lib (most titles → most recent year →
+// defending tiebreaker → alphabetical). When real lock data arrives, the
+// `locked` band's gangs replace this projection — same shape, real seeds.
+const projectedTop4 = moonSeeds().slice(0, 4);
+const lockedSeeds = FOUNDING_GANGS.filter((g) => g.lockStatus === 'locked' || g.lockStatus === 'in');
+const useProjection = lockedSeeds.length < 4;
+const top4 = useProjection
+  ? projectedTop4
+  : projectedTop4; // when locked seeds appear, future enhancement re-orders by win record; keeping projection shape stable for now
+const bowlPairings = [
+  { code: 'SF1', label: 'Semifinal 1', topSeed: top4[0], bottomSeed: top4[3] },
+  { code: 'SF2', label: 'Semifinal 2', topSeed: top4[1], bottomSeed: top4[2] },
+];
 
 const lockPillCopy: Record<LockStatus, { label: string; tone: string }> = {
   pending:  { label: '?',       tone: 'pending' },
@@ -265,6 +282,63 @@ const jsonLd = {
           </li>
         ))}
       </ol>
+    </section>
+
+    <section class="projection" aria-labelledby="projection-title">
+      <header class="section-head">
+        <p class="kicker">Bowl bracket · {useProjection ? 'projected' : 'live'}</p>
+        <h2 id="projection-title">Four seeds, two semis, one final.</h2>
+        <p class="section-dek">
+          {useProjection
+            ? <>The Bowl runs 4-team single-elim — top seed plays the four-seed in SF1, two-seed plays three in SF2, winners meet in the Final. Until <code>lockStatus</code> carries real signal, the projection reuses the same championship-history ranking that drives the <a href="/nouns-nation-battler-moon/">Moon Tournament</a> seeds. Real lock-band gangs replace this when wins, points, and fans graduate the projection.</>
+            : <>Live lock seeds taken from the locked band. Pairings: 1 vs 4 in SF1, 2 vs 3 in SF2, winners in the Final.</>
+          }
+        </p>
+      </header>
+      <div class="bracket-projection">
+        <div class="bracket-projection__semis">
+          {bowlPairings.map((m) => (
+            <article class="proj-match">
+              <header class="proj-match__head">
+                <span class="proj-match__code">{m.code}</span>
+                <span class="proj-match__label">{m.label}</span>
+              </header>
+              <div class="proj-match__slot" style={`--gang: ${m.topSeed.color};`}>
+                <span class="proj-match__seed">#{m.topSeed.seed}</span>
+                <span class="proj-match__name">{m.topSeed.name}</span>
+                <span class="proj-match__short">{m.topSeed.short}</span>
+              </div>
+              <span class="proj-match__vs" aria-hidden="true">vs</span>
+              <div class="proj-match__slot" style={`--gang: ${m.bottomSeed.color};`}>
+                <span class="proj-match__seed">#{m.bottomSeed.seed}</span>
+                <span class="proj-match__name">{m.bottomSeed.name}</span>
+                <span class="proj-match__short">{m.bottomSeed.short}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div class="bracket-projection__final">
+          <article class="proj-match proj-match--final">
+            <header class="proj-match__head">
+              <span class="proj-match__code">F</span>
+              <span class="proj-match__label">Final · Nouns Bowl</span>
+            </header>
+            <div class="proj-match__slot proj-match__slot--tbd">
+              <span class="proj-match__seed">—</span>
+              <span class="proj-match__name">Winner of SF1</span>
+            </div>
+            <span class="proj-match__vs" aria-hidden="true">vs</span>
+            <div class="proj-match__slot proj-match__slot--tbd">
+              <span class="proj-match__seed">—</span>
+              <span class="proj-match__name">Winner of SF2</span>
+            </div>
+            <footer class="proj-match__trophy">
+              <span class="proj-match__trophy-glyph" aria-hidden="true">🏆</span>
+              <span class="proj-match__trophy-name">Nouns Bowl</span>
+            </footer>
+          </article>
+        </div>
+      </div>
     </section>
 
     <section class="fields" aria-labelledby="fields-title">
@@ -648,6 +722,111 @@ const jsonLd = {
   .cal-state--now  { color: #fff; }
   .cal-state--done { color: var(--muted); }
   .cal-state--next { color: var(--btl-dark); }
+
+  .projection { margin-bottom: 32px; }
+  .bracket-projection {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+  .bracket-projection__semis {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 1fr;
+  }
+  .bracket-projection__final {
+    display: flex;
+    align-items: center;
+  }
+  .proj-match {
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    box-shadow: 4px 4px 0 var(--ink);
+    padding: 14px;
+    width: 100%;
+  }
+  .proj-match--final {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,217,122,0.20), transparent 50%),
+      var(--panel);
+    border-color: var(--btl);
+    box-shadow: 5px 5px 0 var(--btl-dark);
+  }
+  .proj-match__head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .proj-match__code {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--btl-dark);
+    letter-spacing: 0.12em;
+  }
+  .proj-match__label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .proj-match__slot {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--gang, var(--muted));
+    margin-bottom: 6px;
+  }
+  .proj-match__slot--tbd {
+    border-left-color: var(--muted);
+    color: var(--muted);
+    font-style: italic;
+  }
+  .proj-match__seed {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-weight: 700;
+    color: var(--btl-dark);
+  }
+  .proj-match__name { font-size: 14px; }
+  .proj-match__short {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    color: var(--gang, var(--muted));
+    border: 1px solid var(--gang, var(--line));
+    padding: 1px 5px;
+    letter-spacing: 0.08em;
+  }
+  .proj-match__vs {
+    display: block;
+    text-align: center;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 2px 0;
+  }
+  .proj-match__trophy {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--btl);
+  }
+  .proj-match__trophy-glyph { font-size: 22px; }
+  .proj-match__trophy-name {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    color: var(--btl-dark);
+    letter-spacing: 0.12em;
+  }
+  @media (max-width: 720px) {
+    .bracket-projection {
+      grid-template-columns: 1fr;
+    }
+  }
 
   .fields { margin-bottom: 32px; }
   .field-grid {
