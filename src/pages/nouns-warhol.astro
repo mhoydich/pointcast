@@ -1,0 +1,440 @@
+---
+/**
+ * /nouns-warhol — Warhol-style four-quadrant Noun posters.
+ *
+ * Mike: "plus nouns posters designed by warhol."
+ *
+ * Andy Warhol's serial pop-art treatment: same image, multiple
+ * panels, each in wildly different vibrant palettes. Marilyn
+ * (1962). Campbell's Soup. The classic four-up grid where each
+ * panel is the same silhouette but a totally different color
+ * relationship.
+ *
+ * Here: same Noun, four panels, four palette schemes from a
+ * 12-palette pool. Each panel mixes (background plate, mid plate,
+ * accent plate, eye plate) — applied via CSS filters + SVG color
+ * matrix to recolor the Noun.
+ *
+ * Click REFRESH for a new Noun. Click any panel to re-roll just
+ * that panel's palette.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Nouns × Warhol · Four-Up Pop-Art · PointCast';
+const description =
+  'Andy Warhol\'s serial pop-art treatment, applied to Nouns. Four panels, four palettes, one Noun.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Nouns × Warhol',
+  url: 'https://pointcast.xyz/nouns-warhol',
+  description,
+  applicationCategory: 'VisualArts',
+};
+
+// 12 Warhol-style palette plates. Each plate: bg, mid, accent.
+// Vibrant, high-contrast pop-art combinations.
+const PALETTES = [
+  { name: 'marilyn',  bg: '#ff61a6', mid: '#ffe347', accent: '#0a3a8a' },
+  { name: 'electric', bg: '#00e5d4', mid: '#ff5cb0', accent: '#0d0d0d' },
+  { name: 'soup',     bg: '#e74c3c', mid: '#ffffff', accent: '#1a1a1a' },
+  { name: 'orange',   bg: '#ff7a00', mid: '#3a1f7a', accent: '#fffae3' },
+  { name: 'mint',     bg: '#7be36a', mid: '#ff2dd1', accent: '#1a1a1a' },
+  { name: 'cobalt',   bg: '#0c5da8', mid: '#ffce00', accent: '#ffffff' },
+  { name: 'lemon',    bg: '#ffe347', mid: '#0a3a8a', accent: '#ff5cb0' },
+  { name: 'violet',   bg: '#5a2e8e', mid: '#ffa84a', accent: '#7be36a' },
+  { name: 'flamingo', bg: '#ff5cb0', mid: '#ffce00', accent: '#0c5da8' },
+  { name: 'jade',     bg: '#0d8c5e', mid: '#ffffff', accent: '#ff7a00' },
+  { name: 'crimson',  bg: '#c4351c', mid: '#fffae3', accent: '#3a1f7a' },
+  { name: 'aqua',     bg: '#00e5d4', mid: '#ffe347', accent: '#5a2e8e' },
+];
+
+// Static seed for SSR; JS overrides on hydrate
+const SSR_SEED = 42;
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="nw" id="nw-main">
+    <header class="nw__header">
+      <div class="nw__chrome">
+        <span>NOUNS × WARHOL</span>
+        <span class="nw__chrome-sep">·</span>
+        <span>FOUR-UP POP-ART</span>
+        <span class="nw__chrome-sep">·</span>
+        <span id="nw-noun-num">NOUN ----</span>
+      </div>
+      <h1 class="nw__title">SERIAL</h1>
+      <p class="nw__tagline">same Noun · four palettes · click any panel to re-roll · click refresh for a new Noun</p>
+    </header>
+
+    <section class="nw__grid" id="nw-grid">
+      {[0, 1, 2, 3].map((i) => (
+        <button class="nw__panel" type="button" data-panel={i} aria-label={`Panel ${i + 1}, click to re-roll palette`}>
+          <div class="nw__panel-bg"></div>
+          <div class="nw__panel-noun-wrap">
+            <img class="nw__panel-noun" src={`https://noun.pics/${SSR_SEED}.svg`} alt="" />
+            <!-- Color overlay layer for accent/mid blending -->
+            <div class="nw__panel-overlay nw__panel-overlay--mid"></div>
+            <div class="nw__panel-overlay nw__panel-overlay--accent"></div>
+          </div>
+          <div class="nw__panel-tag">
+            <span class="nw__panel-tag-num">{String(i + 1).padStart(2, '0')}</span>
+            <span class="nw__panel-tag-name" data-panel-name>—</span>
+          </div>
+        </button>
+      ))}
+    </section>
+
+    <footer class="nw__footer">
+      <button class="nw__btn nw__btn--primary" id="nw-refresh" type="button">REFRESH NOUN</button>
+      <button class="nw__btn nw__btn--ghost" id="nw-reroll-all" type="button">RE-ROLL ALL PALETTES</button>
+      <div class="nw__counter">
+        <span class="nw__counter-label">PRINTS PULLED</span>
+        <span class="nw__counter-value" id="nw-pulled">0</span>
+      </div>
+    </footer>
+
+    <p class="nw__note">
+      In the spirit of Warhol's screen-printing series — Marilyn, soup cans, Mao — this surface treats
+      each Noun as a print plate, then runs it through four different ink combinations. Click a panel
+      to re-roll just that panel's palette. Click REFRESH NOUN for a new subject. Twelve palettes in
+      the pool, so a typical four-up has 11,880 possible orderings per Noun.
+    </p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#nw-main) { background: #f4e7c8; }
+
+  .nw {
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 32px clamp(16px, 2vw, 56px) 48px;
+    color: #1a1a1a;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background: #f4e7c8;
+    min-height: calc(100vh - 80px);
+  }
+
+  .nw__header {
+    text-align: center;
+    margin-bottom: clamp(20px, 3vh, 36px);
+  }
+  .nw__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 5px 18px;
+    border: 2px solid #1a1a1a;
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  .nw__chrome-sep { color: #c4351c; }
+  #nw-noun-num { color: #c4351c; font-weight: 700; }
+
+  .nw__title {
+    margin: clamp(12px, 1.6vh, 18px) 0 8px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 9vw, 128px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: #1a1a1a;
+    line-height: 0.95;
+  }
+  .nw__tagline {
+    margin: 0 auto;
+    max-width: 640px;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: #5a5a5a;
+  }
+
+  /* Grid — 2x2, each cell a square poster */
+  .nw__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(8px, 1.5vw, 16px);
+    max-width: 880px;
+    margin: 0 auto;
+    aspect-ratio: 1;
+  }
+
+  .nw__panel {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1;
+    background: var(--bg, #fff);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    transition: transform 200ms, box-shadow 200ms;
+  }
+  .nw__panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.30);
+  }
+  .nw__panel:active {
+    transform: translateY(0);
+  }
+
+  .nw__panel-bg {
+    position: absolute;
+    inset: 0;
+    background: var(--bg, #fff);
+    z-index: 0;
+  }
+
+  .nw__panel-noun-wrap {
+    position: absolute;
+    inset: 8%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+  }
+  .nw__panel-noun {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    object-fit: contain;
+    /* Saturation + contrast tweaks for pop-art feel */
+    filter:
+      saturate(var(--saturate, 1.4))
+      contrast(var(--contrast, 1.15))
+      hue-rotate(var(--hue-rotate, 0deg));
+    transition: filter 360ms ease-out;
+  }
+
+  /* Mid overlay — colored layer with mix-blend-mode */
+  .nw__panel-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: background 360ms ease-out;
+  }
+  .nw__panel-overlay--mid {
+    background: var(--mid, transparent);
+    mix-blend-mode: multiply;
+    opacity: 0.30;
+  }
+  .nw__panel-overlay--accent {
+    background: radial-gradient(circle at 50% 50%, var(--accent, transparent) 0%, transparent 60%);
+    mix-blend-mode: screen;
+    opacity: 0.45;
+  }
+
+  /* Tag in corner */
+  .nw__panel-tag {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+  }
+  .nw__panel-tag-num { color: #ffce00; font-weight: 700; }
+  .nw__panel-tag-name { color: #ffffff; }
+
+  /* Footer */
+  .nw__footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(12px, 2vw, 24px);
+    flex-wrap: wrap;
+    margin: clamp(28px, 4vh, 44px) auto 18px;
+    max-width: 880px;
+  }
+  .nw__btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 14px 28px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .nw__btn--primary {
+    color: #fff;
+    background: #1a1a1a;
+    border: 2px solid #1a1a1a;
+    box-shadow: 4px 4px 0 0 #c4351c;
+  }
+  .nw__btn--primary:hover { background: #c4351c; box-shadow: 4px 4px 0 0 #1a1a1a; }
+  .nw__btn--primary:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 0 #c4351c; }
+  .nw__btn--ghost {
+    color: #1a1a1a;
+    background: transparent;
+    border: 2px solid #1a1a1a;
+    box-shadow: 4px 4px 0 0 #ffce00;
+  }
+  .nw__btn--ghost:hover { background: #ffce00; }
+  .nw__btn--ghost:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 0 #1a1a1a; }
+
+  .nw__counter {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    margin-left: auto;
+    padding: 4px 12px;
+    border: 2px solid #1a1a1a;
+    background: #ffffff;
+  }
+  .nw__counter-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: #5a5a5a;
+  }
+  .nw__counter-value {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 22px;
+    font-weight: 800;
+    color: #c4351c;
+    letter-spacing: 0.04em;
+  }
+
+  .nw__note {
+    max-width: 720px;
+    margin: 18px auto 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #5a5a5a;
+    text-align: center;
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // ── Palette pool (must match server-side, kept in sync manually) ──
+  const PALETTES = [
+    { name: 'marilyn',  bg: '#ff61a6', mid: '#ffe347', accent: '#0a3a8a' },
+    { name: 'electric', bg: '#00e5d4', mid: '#ff5cb0', accent: '#0d0d0d' },
+    { name: 'soup',     bg: '#e74c3c', mid: '#ffffff', accent: '#1a1a1a' },
+    { name: 'orange',   bg: '#ff7a00', mid: '#3a1f7a', accent: '#fffae3' },
+    { name: 'mint',     bg: '#7be36a', mid: '#ff2dd1', accent: '#1a1a1a' },
+    { name: 'cobalt',   bg: '#0c5da8', mid: '#ffce00', accent: '#ffffff' },
+    { name: 'lemon',    bg: '#ffe347', mid: '#0a3a8a', accent: '#ff5cb0' },
+    { name: 'violet',   bg: '#5a2e8e', mid: '#ffa84a', accent: '#7be36a' },
+    { name: 'flamingo', bg: '#ff5cb0', mid: '#ffce00', accent: '#0c5da8' },
+    { name: 'jade',     bg: '#0d8c5e', mid: '#ffffff', accent: '#ff7a00' },
+    { name: 'crimson',  bg: '#c4351c', mid: '#fffae3', accent: '#3a1f7a' },
+    { name: 'aqua',     bg: '#00e5d4', mid: '#ffe347', accent: '#5a2e8e' },
+  ];
+
+  const HUE_ROTATIONS = [0, 60, 120, 180, 240, 300, 30, 90, 150, 210, 270, 330];
+
+  function pickN(arr, n) {
+    const pool = arr.slice();
+    const out = [];
+    for (let i = 0; i < n && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      out.push(pool.splice(idx, 1)[0]);
+    }
+    return out;
+  }
+  function pad4(n) { return String(n).padStart(4, '0'); }
+
+  // ── State ────────────────────────────────────────────
+  const PULLED_KEY = 'pc:warhol:pulled';
+  let pulled = 0;
+  try { pulled = parseInt(localStorage.getItem(PULLED_KEY) || '0', 10) || 0; } catch {}
+
+  let currentNoun = 0;
+
+  const panelEls = Array.from(document.querySelectorAll('.nw__panel'));
+  const nounNumEl = document.getElementById('nw-noun-num');
+  const refreshBtn = document.getElementById('nw-refresh');
+  const rerollBtn = document.getElementById('nw-reroll-all');
+  const pulledEl = document.getElementById('nw-pulled');
+
+  function paintCounter() {
+    if (pulledEl) pulledEl.textContent = String(pulled);
+  }
+  paintCounter();
+
+  function applyPaletteToPanel(panelEl, palette) {
+    if (!panelEl) return;
+    const bg = panelEl.querySelector('.nw__panel-bg');
+    const overlayMid = panelEl.querySelector('.nw__panel-overlay--mid');
+    const overlayAccent = panelEl.querySelector('.nw__panel-overlay--accent');
+    const noun = panelEl.querySelector('.nw__panel-noun');
+    const tagName = panelEl.querySelector('[data-panel-name]');
+    if (bg) bg.style.background = palette.bg;
+    if (overlayMid) overlayMid.style.background = palette.mid;
+    if (overlayAccent) overlayAccent.style.background = palette.accent;
+    if (noun) {
+      // Random hue rotation for additional variation per panel
+      const hr = HUE_ROTATIONS[Math.floor(Math.random() * HUE_ROTATIONS.length)];
+      noun.style.setProperty('--hue-rotate', `${hr}deg`);
+      noun.style.setProperty('--saturate', String(1.3 + Math.random() * 0.6));
+      noun.style.setProperty('--contrast', String(1.1 + Math.random() * 0.25));
+    }
+    if (tagName) tagName.textContent = palette.name;
+    panelEl.dataset.paletteName = palette.name;
+  }
+
+  function rerollPanel(idx) {
+    const panelEl = panelEls[idx];
+    if (!panelEl) return;
+    const usedNames = panelEls
+      .filter((_, i) => i !== idx)
+      .map((el) => el.dataset.paletteName)
+      .filter(Boolean);
+    const candidates = PALETTES.filter((p) => !usedNames.includes(p.name));
+    const palette = candidates[Math.floor(Math.random() * candidates.length)] || PALETTES[0];
+    applyPaletteToPanel(panelEl, palette);
+  }
+
+  function rerollAll(noun) {
+    const palettes = pickN(PALETTES, 4);
+    panelEls.forEach((el, i) => {
+      const p = palettes[i] || PALETTES[i];
+      applyPaletteToPanel(el, p);
+      const nounEl = el.querySelector('.nw__panel-noun');
+      if (nounEl) nounEl.src = `https://noun.pics/${noun}.svg`;
+    });
+  }
+
+  function refreshNoun() {
+    currentNoun = Math.floor(Math.random() * 1200);
+    if (nounNumEl) nounNumEl.textContent = `NOUN ${pad4(currentNoun)}`;
+    rerollAll(currentNoun);
+    pulled += 1;
+    try { localStorage.setItem(PULLED_KEY, String(pulled)); } catch {}
+    paintCounter();
+  }
+
+  // Wire up
+  panelEls.forEach((el, i) => {
+    el.addEventListener('click', () => rerollPanel(i));
+  });
+  refreshBtn?.addEventListener('click', refreshNoun);
+  rerollBtn?.addEventListener('click', () => rerollAll(currentNoun));
+
+  // Boot — first refresh
+  refreshNoun();
+</script>
