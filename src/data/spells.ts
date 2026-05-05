@@ -400,6 +400,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#d4a437',
   },
+
+  // ─── BURSTS (batch 10) ────────────────────────────────────────
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'Three bright streaks fire across the sky, tails trailing behind.',
+    glyph: '☄️',
+    kind: 'burst',
+    durationMs: 2600,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 10) ────────────────────────────────────
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The most patient companion. Slower than the turtle, unhurried beyond reason.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'jellyfish',
+    label: 'jellyfish',
+    blurb: 'A jellyfish drifts through mid-screen, pulsing gently with each breath.',
+    glyph: '🪼',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#a78bfa',
+  },
+
+  // ─── AMBIENT (batch 10) ───────────────────────────────────────
+  {
+    id: 'embers',
+    label: 'embers',
+    blurb: 'Glowing sparks drift upward like a fire winding down. Warm, slow, peaceful.',
+    glyph: '🔸',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
