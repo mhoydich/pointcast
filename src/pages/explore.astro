@@ -15,7 +15,7 @@
  * Sparrow stack. Keyboard "/" focuses search, "?" hits a random door.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { FEATURES, CATEGORIES, countByCategory, recentFeatures } from '../lib/explore';
+import { FEATURES, CATEGORIES, countByCategory, recentFeatures, staleFeatures } from '../lib/explore';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
 import { CHANNELS } from '../lib/channels';
 
@@ -23,12 +23,22 @@ const counts = countByCategory();
 const total = FEATURES.length;
 const channelList = Object.values(CHANNELS);
 const recent = recentFeatures(7, 16);
+const stale = staleFeatures(90, 12);
 
 function howRecent(unix: number): string {
   const days = Math.floor((Date.now() / 1000 - unix) / 86400);
   if (days <= 0) return 'today';
   if (days === 1) return '1d ago';
   return `${days}d ago`;
+}
+
+function howStale(unix: number): string {
+  const days = Math.floor((Date.now() / 1000 - unix) / 86400);
+  if (days >= 365) {
+    const years = Math.floor(days / 365);
+    return `${years}y untouched`;
+  }
+  return `${days}d untouched`;
 }
 
 const orderedCategories = CATEGORIES.filter((c) => (counts[c.key] ?? 0) > 0).concat([
@@ -60,7 +70,10 @@ const jsonLd = {
   title={title}
   description={description}
   jsonLd={jsonLd}
-  alternates={[{ type: 'application/json', href: '/explore.json', title: 'PointCast Explorer (JSON)' }]}
+  alternates={[
+    { type: 'application/json', href: '/explore.json', title: 'PointCast Explorer (JSON)' },
+    { type: 'application/rss+xml', href: '/explore.rss', title: 'PointCast Explorer · New rooms (RSS)' },
+  ]}
 >
   <main class="explorer">
     <nav class="crumb" aria-label="Breadcrumb">
@@ -78,7 +91,8 @@ const jsonLd = {
         Press <kbd>/</kbd> to search, <kbd>?</kbd> for a random door, <kbd>Esc</kbd> to clear.
       </p>
       <p class="agent-link">
-        Agents: see <a href="/explore.json">/explore.json</a> for the structured manifest.
+        Agents: see <a href="/explore.json">/explore.json</a> for the structured manifest,
+        or <a href="/explore.rss">/explore.rss</a> to subscribe to new rooms.
       </p>
     </header>
 
@@ -194,6 +208,27 @@ const jsonLd = {
         ))}
       </ul>
     </section>
+
+    {stale.length > 0 && (
+      <section class="stale">
+        <header class="bucket-head">
+          <h2><span class="dot dot--stale"></span>Forgotten doors</h2>
+          <p>Pages with no commits in 90+ days. Maybe ripe for a revisit, a refresh, or a quiet retirement.</p>
+          <span class="bucket-count">{stale.length}</span>
+        </header>
+        <ul class="stale-list">
+          {stale.map((f) => (
+            <li class="stale-row">
+              <a href={f.slug}>
+                <span class="stale-when">{howStale(f.mtime)}</span>
+                <span class="stale-slug">{f.slug}</span>
+                <span class="stale-title">{f.title}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <p id="empty" class="empty" hidden>No rooms match — try another word.</p>
 
@@ -428,6 +463,43 @@ const jsonLd = {
   .strip-title {
     font-family: 'Inter Variable', system-ui, sans-serif;
     font-weight: 700; font-size: 14px; line-height: 1.25;
+  }
+
+  .stale { margin: 48px 0 24px; }
+  .dot--stale { background: #5a554f; }
+  .stale-list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; gap: 4px;
+  }
+  .stale-row {
+    background: #f4efe4;
+    border: 1px dashed #5a554f;
+    transition: background 90ms ease;
+  }
+  .stale-row:hover { background: #ece5d3; border-style: solid; }
+  .stale-row a {
+    display: grid;
+    grid-template-columns: 130px 160px 1fr;
+    gap: 12px;
+    padding: 8px 12px;
+    text-decoration: none; color: inherit;
+    align-items: baseline;
+  }
+  .stale-when {
+    font-size: 11px; color: #6a6258;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .stale-slug { font-size: 11px; color: #5a554f; }
+  .stale-title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 13px; color: #2d2a26;
+  }
+  @media (max-width: 720px) {
+    .stale-row a {
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
   }
 
   .grid {

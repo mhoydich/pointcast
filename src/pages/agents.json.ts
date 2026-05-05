@@ -404,6 +404,7 @@ export const GET: APIRoute = async () => {
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',
+        explore: 'https://pointcast.xyz/explore.rss',
       },
       indexnow: 'https://pointcast.xyz/api/indexnow',
       perBlock: {
@@ -698,7 +699,7 @@ export const GET: APIRoute = async () => {
         '/agents.json', '/blocks.json', '/archive.json', '/editions.json',
         '/.well-known/agents.json', '/.well-known/ai.json',
         '/.well-known/farcaster.json', '/.well-known/pointcast-peer.json',
-        '/now.json', '/cast.json', '/battle.json', '/timeline.json', '/explore.json',
+        '/now.json', '/cast.json', '/battle.json', '/timeline.json', '/explore.json', '/explore.rss',
         '/stack.json', '/protocol.json', '/feed.json', '/feed.xml', '/areas.json', '/nature-yield.json',
         '/garden-yield.json', '/meditate.json', '/agent-value.json', '/b/*.json',
         '/c/*.json', '/c/*.rss', '/play.json', '/zen-cats.json', '/nouns-open-circuit.json',
