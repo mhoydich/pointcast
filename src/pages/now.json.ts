@@ -10,6 +10,7 @@ import { getCollection } from 'astro:content';
 import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
 import { getPrizeCastSnapshot, getNextPrizeCastDrawAt } from '../lib/prize-cast';
 import contracts from '../data/contracts.json';
+import { walkOfDay, walkOfDayIndex, strainOfDay, strainOfDayIndex, WALKS, STRAINS } from '../data/daily-picks';
 import { execSync } from 'node:child_process';
 
 export const GET: APIRoute = async () => {
@@ -96,6 +97,42 @@ export const GET: APIRoute = async () => {
       editions: 'https://pointcast.xyz/editions.json',
       forAgents: 'https://pointcast.xyz/for-agents',
     },
+    daily: (() => {
+      const now = new Date();
+      const w = walkOfDay(now);
+      const s = strainOfDay(now);
+      return {
+        rotation: {
+          mode: 'deterministic-la-local-day',
+          walkPoolSize: WALKS.length,
+          strainPoolSize: STRAINS.length,
+        },
+        walk: {
+          index: walkOfDayIndex(now),
+          name: w.name,
+          dek: w.dek,
+          distance: w.dist,
+          minutes: w.mins,
+          tags: w.tags,
+          nounSeed: w.noun,
+          nounImage: `https://noun.pics/${w.noun}.svg`,
+          source: 'src/data/daily-picks.ts',
+        },
+        strain: {
+          index: strainOfDayIndex(now),
+          brand: s.brand,
+          name: s.name,
+          lane: s.lane,
+          profile: s.profile,
+          use: s.use,
+          tags: s.tags,
+          nounSeed: s.noun,
+          nounImage: `https://noun.pics/${s.noun}.svg`,
+          atlas: 'https://pointcast.xyz/cannabis',
+          source: 'src/data/daily-picks.ts',
+        },
+      };
+    })(),
   };
 
   return new Response(JSON.stringify(payload, null, 2), {
