@@ -1,0 +1,399 @@
+---
+/**
+ * /drum-zen-v2 — responsive sand garden.
+ *
+ * v1 (drum-zen): three rocks, drag to rake, three parallel lines per
+ * stroke, throttled shaker.
+ * v2: same field but — rake STROKES are painterly (5 lines per stroke
+ * with slight curl, opacity-jittered) — and SAND GRAINS drift slowly
+ * across the field on their own (a slow ambient drift), so the sand
+ * is always quietly alive even when you're not raking. ROCKS subtly
+ * cast shadows that shift over a 30-min sun arc.
+ *
+ * Header pill links back to /drum-zen.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Zen v2 · Living Sand · PointCast';
+const description =
+  'A zen garden where the sand is always quietly drifting. Rake painterly lines. Rocks cast moving shadows.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Zen v2',
+  url: 'https://pointcast.xyz/drum-zen-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="z2" id="z2-main">
+    <DrumNav current="zen" />
+
+    <header class="z2__header">
+      <div class="z2__chrome">
+        <span>ZEN</span>
+        <span class="z2__chrome-sep">·</span>
+        <span class="z2__chrome-version">v2 · LIVING SAND</span>
+        <a class="z2__prev-pill" href="/drum-zen">← v1</a>
+      </div>
+      <h1 class="z2__title">RAKE</h1>
+      <p class="z2__tagline">painterly strokes · sand drifts · rocks shadow-cast</p>
+    </header>
+
+    <section class="z2__field">
+      <canvas id="z2-canvas" class="z2__canvas"></canvas>
+    </section>
+
+    <footer class="z2__controls">
+      <button class="z2__btn" id="z2-clear" type="button">SMOOTH</button>
+      <p class="z2__instructions">
+        Sand grains drift on their own. Drag to add painterly rake lines. SMOOTH erases the strokes; rocks stay; the drift continues.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#z2-main) { background: #0c0410; }
+  .z2 {
+    --z2-velvet: #1a0820; --z2-velvet-deep: #0c0410;
+    --z2-brass: #d4a437; --z2-brass-deep: #6b4d12;
+    --z2-flame: #f6c15e;
+    --z2-ink-light: #f4e7c8; --z2-ink-mid: #c9b78c; --z2-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--z2-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background: linear-gradient(180deg, var(--z2-velvet) 0%, var(--z2-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .z2 .drum-nav { opacity: 0.45; transform: scale(0.9); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .z2__header { text-align: center; padding: clamp(8px, 1vh, 16px) 0 clamp(14px, 2vh, 22px); }
+  .z2__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--z2-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--z2-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .z2__chrome-sep { color: var(--z2-brass-deep); }
+  .z2__chrome-version { color: var(--z2-flame); font-weight: 700; }
+  .z2__prev-pill {
+    margin-left: 8px; padding: 2px 10px;
+    border: 1px solid var(--z2-brass-deep); border-radius: 999px;
+    color: var(--z2-ink-dim); text-decoration: none;
+    font-size: 10px; letter-spacing: 0.18em;
+    transition: color 160ms, border-color 160ms;
+  }
+  .z2__prev-pill:hover { color: var(--z2-brass); border-color: var(--z2-brass); }
+
+  .z2__title {
+    margin: clamp(8px, 1vh, 12px) 0 4px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--z2-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--z2-velvet-deep);
+  }
+  .z2__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--z2-ink-mid);
+  }
+
+  .z2__field {
+    max-width: 880px; margin: 0 auto; width: 100%; aspect-ratio: 16 / 9;
+    border: 4px solid #3a2410;
+    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.6);
+    cursor: crosshair; overflow: hidden;
+  }
+  .z2__canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .z2__controls {
+    display: flex; justify-content: center; align-items: center; gap: clamp(12px, 2vw, 24px);
+    flex-wrap: wrap; padding: clamp(14px, 2vh, 24px) 0 0;
+    margin-top: clamp(20px, 3vh, 32px);
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .z2__btn {
+    appearance: none; border: 1.5px solid var(--z2-brass-deep);
+    background: transparent; color: var(--z2-ink-mid); cursor: pointer;
+    padding: 10px 24px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .z2__btn:hover { color: var(--z2-brass); border-color: var(--z2-brass); background: rgba(212, 164, 55, 0.06); }
+  .z2__instructions {
+    margin: 0; max-width: 480px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px; color: var(--z2-ink-dim); font-style: italic;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  let lastShakeAt = 0;
+  function playShaker() {
+    const now = performance.now();
+    if (now - lastShakeAt < 90) return;
+    lastShakeAt = now;
+    const a = ctx(); const t = a.currentTime;
+    const buf = a.createBuffer(1, a.sampleRate * 0.10, a.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const noise = a.createBufferSource(); noise.buffer = buf;
+    const filt = a.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 2000;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
+    noise.connect(filt).connect(g).connect(a.destination);
+    noise.start(t);
+  }
+
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  function hash32(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('z2-canvas'));
+  const c2d = canvas?.getContext('2d');
+  const clearBtn = document.getElementById('z2-clear');
+
+  // Two-layer rendering: base sand layer (drifting grains, animated)
+  // + rake stroke layer (persistent until SMOOTH).
+  // We draw both into the same canvas every frame: clear + sand-base + drift-grains + rake-strokes.
+
+  let rocks = [];
+  let strokes = []; // each stroke is an array of points
+  let currentStroke = null;
+  let drifting = []; // grain particles
+  const NUM_DRIFT_GRAINS = 80;
+
+  function resize() {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * (window.devicePixelRatio || 1));
+    canvas.height = Math.floor(rect.height * (window.devicePixelRatio || 1));
+    c2d.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    placeRocks();
+    spawnDriftGrains();
+  }
+
+  function placeRocks() {
+    const sid = ensureSid();
+    const seed = hash32(sid);
+    rocks = [];
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    for (let i = 0; i < 3; i++) {
+      const r = (seed + i * 137) >>> 0;
+      const xPct = 0.18 + ((r % 100) / 100) * 0.20 + i * 0.22;
+      const yPct = 0.30 + (((r >> 8) % 100) / 100) * 0.40;
+      const sizePct = 0.10 + (((r >> 16) % 100) / 100) * 0.05;
+      const wobble = [];
+      for (let k = 0; k < 8; k++) wobble.push((((r >> (k * 3)) & 0x7) - 3.5) / 7);
+      rocks.push({
+        x: xPct * rect.width, y: yPct * rect.height,
+        w: sizePct * rect.width, h: sizePct * rect.height * 0.8,
+        wobble,
+      });
+    }
+  }
+
+  function spawnDriftGrains() {
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect) return;
+    drifting = [];
+    for (let i = 0; i < NUM_DRIFT_GRAINS; i++) {
+      drifting.push({
+        x: Math.random() * rect.width,
+        y: Math.random() * rect.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.15,
+        life: 1.0,
+        size: 0.6 + Math.random() * 1.0,
+      });
+    }
+  }
+
+  function drawSandBase() {
+    if (!canvas || !c2d) return;
+    const rect = canvas.getBoundingClientRect();
+    const grad = c2d.createLinearGradient(0, 0, 0, rect.height);
+    grad.addColorStop(0, '#d4b885');
+    grad.addColorStop(1, '#b89866');
+    c2d.fillStyle = grad;
+    c2d.fillRect(0, 0, rect.width, rect.height);
+    // baseline grain noise (static)
+    c2d.fillStyle = 'rgba(0, 0, 0, 0.05)';
+    for (let i = 0; i < 1000; i++) {
+      const x = (Math.random() * rect.width);
+      const y = (Math.random() * rect.height);
+      c2d.fillRect(x, y, 1, 1);
+    }
+  }
+
+  function drawDrift() {
+    if (!c2d || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    drifting.forEach((g) => {
+      g.x += g.vx;
+      g.y += g.vy;
+      // wrap
+      if (g.x < 0) g.x = rect.width;
+      if (g.x > rect.width) g.x = 0;
+      if (g.y < 0) g.y = rect.height;
+      if (g.y > rect.height) g.y = 0;
+      c2d.fillStyle = `rgba(0, 0, 0, ${0.04 + Math.sin(performance.now() / 800 + g.x) * 0.02})`;
+      c2d.fillRect(g.x, g.y, g.size, g.size);
+    });
+  }
+
+  function drawRocks() {
+    if (!c2d) return;
+    rocks.forEach((r) => {
+      // Shadow that shifts over a 30-min "sun arc" — simulate with a slow oscillation
+      const sunPhase = Math.sin(performance.now() / 1800000); // very slow, but ok in practice
+      const offX = sunPhase * 6;
+      c2d.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      c2d.beginPath();
+      c2d.ellipse(r.x + 4 + offX, r.y + r.h / 2 + 4, r.w / 2 + 2, r.h / 4 + 2, 0, 0, Math.PI * 2);
+      c2d.fill();
+      // Rock body
+      c2d.fillStyle = '#4a3826';
+      c2d.beginPath();
+      const cx = r.x, cy = r.y;
+      const steps = 8;
+      for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const wob = 1 + r.wobble[i] * 0.18;
+        const px = cx + Math.cos(a) * (r.w / 2) * wob;
+        const py = cy + Math.sin(a) * (r.h / 2) * wob;
+        if (i === 0) c2d.moveTo(px, py);
+        else c2d.lineTo(px, py);
+      }
+      c2d.closePath();
+      c2d.fill();
+      c2d.fillStyle = 'rgba(255, 245, 192, 0.10)';
+      c2d.beginPath();
+      c2d.ellipse(r.x - r.w / 6, r.y - r.h / 6, r.w / 5, r.h / 8, 0, 0, Math.PI * 2);
+      c2d.fill();
+    });
+  }
+
+  function drawStrokes() {
+    if (!c2d) return;
+    strokes.forEach((stroke) => {
+      drawStroke(stroke);
+    });
+    if (currentStroke) drawStroke(currentStroke);
+  }
+
+  function drawStroke(stroke) {
+    if (!c2d || stroke.length < 2) return;
+    // 5 painterly lines with slight cross-track variation
+    for (let lane = -2; lane <= 2; lane++) {
+      const offset = lane * 4;
+      c2d.strokeStyle = `rgba(120, 90, 50, ${0.45 + Math.abs(lane) * 0.08})`;
+      c2d.lineWidth = 1.2 + Math.random() * 0.6;
+      c2d.lineCap = 'round';
+      c2d.beginPath();
+      for (let i = 0; i < stroke.length; i++) {
+        const p = stroke[i];
+        const prev = stroke[i - 1];
+        if (!prev) {
+          c2d.moveTo(p.x + p.nx * offset, p.y + p.ny * offset);
+        } else {
+          // slight curl per lane
+          const curl = Math.sin((i + lane * 7) * 0.18) * (Math.abs(lane) * 0.6);
+          c2d.lineTo(p.x + p.nx * (offset + curl), p.y + p.ny * (offset + curl));
+        }
+      }
+      c2d.stroke();
+    }
+    // Inner highlight
+    c2d.strokeStyle = 'rgba(255, 245, 192, 0.18)';
+    c2d.lineWidth = 0.8;
+    c2d.beginPath();
+    stroke.forEach((p, i) => {
+      const px = p.x + p.nx * 1.5;
+      const py = p.y + p.ny * 1.5;
+      if (i === 0) c2d.moveTo(px, py);
+      else c2d.lineTo(px, py);
+    });
+    c2d.stroke();
+  }
+
+  function paint() {
+    drawSandBase();
+    drawDrift();
+    drawStrokes();
+    drawRocks();
+    requestAnimationFrame(paint);
+  }
+
+  // Drag tracking
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+  function startStroke(e) {
+    currentStroke = [];
+    const p = pos(e);
+    currentStroke.push({ x: p.x, y: p.y, nx: 0, ny: 1 });
+    e.preventDefault();
+  }
+  function moveStroke(e) {
+    if (!currentStroke) return;
+    const p = pos(e);
+    const last = currentStroke[currentStroke.length - 1];
+    const dx = p.x - last.x;
+    const dy = p.y - last.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 2) return;
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    currentStroke.push({ x: p.x, y: p.y, nx, ny });
+    try { playShaker(); } catch {}
+  }
+  function endStroke() {
+    if (currentStroke && currentStroke.length > 1) strokes.push(currentStroke);
+    currentStroke = null;
+  }
+
+  if (canvas) {
+    canvas.addEventListener('mousedown', startStroke);
+    canvas.addEventListener('mousemove', moveStroke);
+    window.addEventListener('mouseup', endStroke);
+    canvas.addEventListener('touchstart', startStroke, { passive: false });
+    canvas.addEventListener('touchmove', moveStroke, { passive: false });
+    canvas.addEventListener('touchend', endStroke);
+  }
+  clearBtn?.addEventListener('click', () => { strokes = []; });
+
+  if (canvas && c2d) {
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(paint);
+  }
+</script>
