@@ -1,0 +1,352 @@
+---
+/**
+ * /drum-mantra-v2 — typewriter mantra.
+ *
+ * v1 was static: type a phrase, page pulses it forever.
+ * v2 is generative: a phrase types itself one character at a time
+ * (with a soft typewriter tone per char), holds, then erases itself,
+ * then types another phrase. Cycles through a 12-phrase mantra
+ * library by default; visitors can substitute their own.
+ *
+ * Header pill links back to /drum-mantra.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Mantra v2 · Typewriter · PointCast';
+const description =
+  'A mantra types itself, holds, erases, types again. Soft tone per character. Cycles through twelve.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Mantra v2',
+  url: 'https://pointcast.xyz/drum-mantra-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="m2" id="m2-main">
+    <DrumNav current="mantra" />
+
+    <header class="m2__header">
+      <div class="m2__chrome">
+        <span>MANTRA</span>
+        <span class="m2__chrome-sep">·</span>
+        <span class="m2__chrome-version">v2 · TYPEWRITER</span>
+        <a class="m2__prev-pill" href="/drum-mantra">← v1</a>
+      </div>
+      <h1 class="m2__title">TYPE</h1>
+      <p class="m2__tagline">it types itself. holds. erases. types again.</p>
+    </header>
+
+    <section class="m2__stage">
+      <div class="m2__phrase" id="m2-phrase"><span id="m2-text"></span><span class="m2__caret" id="m2-caret"></span></div>
+    </section>
+
+    <footer class="m2__controls">
+      <button class="m2__btn m2__btn--ghost" id="m2-pause" type="button">PAUSE</button>
+      <input class="m2__input" id="m2-input" type="text" maxlength="80" placeholder="add your own (enter to queue)" />
+      <button class="m2__btn m2__btn--ghost" id="m2-clear" type="button">RESET QUEUE</button>
+    </footer>
+    <p class="m2__note">
+      Twelve default phrases cycle. Type your own + Enter to queue it; queued mantras play next, then
+      the cycle resumes. Audio gates on first interaction.
+    </p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#m2-main) { background: #0c0410; }
+
+  .m2 {
+    --m2-velvet: #1a0820;
+    --m2-velvet-deep: #0c0410;
+    --m2-brass: #d4a437;
+    --m2-brass-deep: #6b4d12;
+    --m2-flame: #f6c15e;
+    --m2-ink-light: #f4e7c8;
+    --m2-ink-mid: #c9b78c;
+    --m2-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--m2-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--m2-velvet) 0%, var(--m2-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex; flex-direction: column;
+  }
+  .m2 .drum-nav { opacity: 0.45; transform: scale(0.9); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .m2__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(16px, 2vh, 28px); }
+  .m2__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--m2-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--m2-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .m2__chrome-sep { color: var(--m2-brass-deep); }
+  .m2__chrome-version { color: var(--m2-flame); font-weight: 700; }
+  .m2__prev-pill {
+    margin-left: 8px; padding: 2px 10px;
+    border: 1px solid var(--m2-brass-deep); border-radius: 999px;
+    color: var(--m2-ink-dim); text-decoration: none;
+    font-size: 10px; letter-spacing: 0.18em;
+    transition: color 160ms, border-color 160ms;
+  }
+  .m2__prev-pill:hover { color: var(--m2-brass); border-color: var(--m2-brass); }
+
+  .m2__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--m2-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--m2-velvet-deep);
+  }
+  .m2__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--m2-ink-mid);
+  }
+
+  .m2__stage {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    padding: clamp(20px, 4vh, 60px) 16px;
+    min-height: 280px;
+  }
+  .m2__phrase {
+    display: inline;
+    max-width: 880px;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(28px, 5vw, 64px);
+    line-height: 1.35;
+    color: var(--m2-flame);
+    text-shadow: 0 0 24px rgba(246, 193, 94, 0.20);
+  }
+  .m2__caret {
+    display: inline-block;
+    width: 0.5ch;
+    height: 0.9em;
+    background: var(--m2-flame);
+    margin-left: 0.04em;
+    vertical-align: text-bottom;
+    box-shadow: 0 0 12px rgba(246, 193, 94, 0.55);
+    animation: m2-blink 1.0s step-end infinite;
+  }
+  @keyframes m2-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
+  }
+
+  .m2__controls {
+    display: flex; align-items: center; justify-content: center; gap: clamp(8px, 1.5vw, 16px);
+    flex-wrap: wrap; padding: clamp(14px, 2vh, 24px) 0 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .m2__btn {
+    appearance: none; cursor: pointer;
+    padding: 10px 22px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.22em;
+    color: var(--m2-ink-mid);
+    background: transparent;
+    border: 1.5px solid var(--m2-brass-deep);
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .m2__btn:hover { color: var(--m2-brass); border-color: var(--m2-brass); background: rgba(212, 164, 55, 0.06); }
+
+  .m2__input {
+    appearance: none;
+    flex: 1; max-width: 420px; min-width: 240px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1.5px solid var(--m2-brass-deep);
+    color: var(--m2-flame);
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 14px;
+    outline: none;
+  }
+  .m2__input:focus { border-color: var(--m2-brass); }
+  .m2__input::placeholder { color: var(--m2-ink-dim); opacity: 0.55; }
+
+  .m2__note {
+    margin: 14px auto 0;
+    max-width: 540px; text-align: center;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px; color: var(--m2-ink-dim); font-style: italic;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  // Soft typewriter tick — short noise burst + brief sine
+  function playTick(charCode) {
+    const a = ctx(); const t = a.currentTime;
+    // pitch: ascii position lightly modulates
+    const f = 200 + (charCode % 12) * 18;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.04, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + 0.10);
+
+    const buf = a.createBuffer(1, a.sampleRate * 0.025, a.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const noise = a.createBufferSource(); noise.buffer = buf;
+    const filt = a.createBiquadFilter(); filt.type = 'highpass'; filt.frequency.value = 3000;
+    const ng = a.createGain(); ng.gain.setValueAtTime(0.06, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+    noise.connect(filt).connect(ng).connect(a.destination);
+    noise.start(t);
+  }
+
+  // Twelve default phrases
+  const DEFAULTS = [
+    'be still',
+    'this too is light',
+    'one breath, one bell',
+    'arrive again',
+    'soft is also strong',
+    'slow is the way',
+    'the room is here',
+    'today is enough',
+    'this hour is yours',
+    'pace, then place',
+    'attention, attention, attention',
+    'small things, slowly',
+  ];
+  // Shuffle for variety per session
+  function shuffled(arr) {
+    const out = arr.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+  let queue = shuffled(DEFAULTS);
+  let queuedExtras = [];
+  let cursor = 0;
+
+  const textEl = document.getElementById('m2-text');
+  const inputEl = /** @type {HTMLInputElement} */(document.getElementById('m2-input'));
+  const pauseBtn = document.getElementById('m2-pause');
+  const clearBtn = document.getElementById('m2-clear');
+
+  let audioStarted = false;
+  let paused = false;
+  let cancelled = false;
+
+  function nextPhrase() {
+    if (queuedExtras.length > 0) return queuedExtras.shift();
+    if (cursor >= queue.length) {
+      queue = shuffled(DEFAULTS);
+      cursor = 0;
+    }
+    return queue[cursor++];
+  }
+
+  async function sleep(ms) {
+    return new Promise((res) => {
+      const t = setTimeout(res, ms);
+      // Allow cancellation
+      cancelTimers.push(t);
+    });
+  }
+  let cancelTimers = [];
+  function clearPending() {
+    cancelTimers.forEach((id) => clearTimeout(id));
+    cancelTimers = [];
+  }
+
+  async function typePhrase(phrase) {
+    if (!textEl) return;
+    textEl.textContent = '';
+    for (let i = 0; i < phrase.length; i++) {
+      if (cancelled) return;
+      while (paused) await sleep(120);
+      const ch = phrase[i];
+      textEl.textContent += ch;
+      if (audioStarted && ch !== ' ') {
+        try { playTick(ch.charCodeAt(0)); } catch {}
+      }
+      // Variable typing speed — shorter for spaces
+      const baseDelay = ch === ' ' ? 70 : (ch === ',' || ch === '.') ? 280 : 70 + Math.random() * 60;
+      await sleep(baseDelay);
+    }
+  }
+  async function holdPhrase(ms = 2400) {
+    let elapsed = 0;
+    while (elapsed < ms) {
+      if (cancelled) return;
+      while (paused) await sleep(120);
+      await sleep(80);
+      elapsed += 80;
+    }
+  }
+  async function erasePhrase() {
+    if (!textEl) return;
+    while (textEl.textContent && textEl.textContent.length > 0) {
+      if (cancelled) return;
+      while (paused) await sleep(120);
+      textEl.textContent = textEl.textContent.slice(0, -1);
+      await sleep(28);
+    }
+  }
+
+  async function loop() {
+    while (!cancelled) {
+      const phrase = nextPhrase();
+      await typePhrase(phrase);
+      if (cancelled) break;
+      await holdPhrase(2400 + Math.random() * 1400);
+      if (cancelled) break;
+      await erasePhrase();
+      if (cancelled) break;
+      await sleep(400);
+    }
+  }
+  loop();
+
+  // First interaction → start audio
+  function gateAudio() {
+    if (audioStarted) return;
+    audioStarted = true;
+  }
+  document.addEventListener('click', gateAudio, { once: true });
+  document.addEventListener('keydown', gateAudio, { once: true });
+
+  pauseBtn?.addEventListener('click', () => {
+    paused = !paused;
+    if (pauseBtn) pauseBtn.textContent = paused ? 'RESUME' : 'PAUSE';
+  });
+  clearBtn?.addEventListener('click', () => {
+    queuedExtras = [];
+    cursor = 0;
+    queue = shuffled(DEFAULTS);
+  });
+
+  inputEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const v = (inputEl.value || '').trim().slice(0, 80);
+      if (v) {
+        queuedExtras.push(v);
+        inputEl.value = '';
+      }
+    }
+  });
+</script>
