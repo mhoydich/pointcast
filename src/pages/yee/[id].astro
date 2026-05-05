@@ -4,14 +4,13 @@
  *
  * Static Guitar-Hero × karaoke-style rhythm game that overlays a beat
  * track on any WATCH-type block whose media contains a `beats` array.
- * v0 ships with just /b/0236 (the 11-min chakra tune-up) — LAM / VAM /
- * RAM / YAM / HAM / AUM / OM fall from the top of the track and the
- * player taps SPACE (or clicks the hit zone) as each bija reaches the
- * bottom line. Perfect ±150 ms, Good ±500 ms, Miss beyond that.
+ * Cued words fall from the top of the track while the player taps SPACE
+ * (or clicks the hit zone) as each cue reaches the bottom line. Perfect
+ * ±200 ms, Good ±650 ms, Miss beyond that.
  *
  * Entirely client-side: YouTube IFrame API supplies getCurrentTime(),
  * a requestAnimationFrame loop positions notes against the playhead,
- * Web Audio gives a soft hit-confirmation tone. No server. No saves.
+ * Web Audio gives a soft hit-confirmation tone. No server. Local best only.
  *
  * This is distinct from /b/{id} — that page stays the canonical,
  * agent-readable record. /yee/{id} is the playable companion.
@@ -37,6 +36,45 @@ const { block } = Astro.props;
 const data = block.data;
 const ch = CHANNELS[data.channel];
 const beats = (data.media as any).beats as Array<{ t: number; word: string; color?: string; key?: string; note?: string }>;
+const yeeMeta = (data.meta?.yeeplayer ?? {}) as {
+  cueName?: string;
+  legendTitle?: string;
+  legendNote?: string;
+  legend?: Array<{ label?: string; word?: string; color?: string }>;
+};
+
+function labelFromBeatNote(note: string | undefined, word: string): string {
+  if (!note) return word;
+  const cleaned = note.includes(':') ? note.split(':').slice(1).join(':') : note;
+  return cleaned
+    .split(/[-_:]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+const fallbackLegendMap = new Map<string, { label: string; word: string; color: string }>();
+for (const beat of beats) {
+  const key = beat.note || beat.word;
+  if (!fallbackLegendMap.has(key)) {
+    fallbackLegendMap.set(key, {
+      label: labelFromBeatNote(beat.note, beat.word),
+      word: beat.word,
+      color: beat.color || '#1864AB',
+    });
+  }
+}
+const legendItems = Array.isArray(yeeMeta.legend) && yeeMeta.legend.length > 0
+  ? yeeMeta.legend.map((item) => ({
+      label: item.label || item.word || 'Cue',
+      word: item.word || item.label || 'Cue',
+      color: item.color || '#1864AB',
+    }))
+  : Array.from(fallbackLegendMap.values()).slice(0, 10);
+const cueName = yeeMeta.cueName || 'cues';
+const legendTitle = yeeMeta.legendTitle || `BEAT MAP · ${beats.length} CUES`;
+const legendNote = yeeMeta.legendNote ||
+  'Cues fall from the top. Tap SPACE (or the TAP zone) when a cue reaches the dashed line at the bottom. The NEXT chip above the track shows what is coming and when. Perfect timing is a bonus; attention is the point.';
 
 /** Extract YouTube video id from the embed URL. Falls back to null if the
  *  src isn't a recognizable YouTube form — in that case we render the beat
@@ -67,7 +105,7 @@ const durationSec = data.meta?.duration
   : lastBeat + 30;
 
 const title = `YeePlayer · ${data.title}`;
-const description = `Tap the bija mantras as they fall. A static rhythm-game overlay on CH.${ch.code} № ${data.id} — ${data.title}. ${totalBeats} beats across ${Math.round(durationSec / 60)} minutes.`;
+const description = `Tap the cued words as they fall. A static rhythm-game overlay on CH.${ch.code} № ${data.id} — ${data.title}. ${totalBeats} beats across ${Math.round(durationSec / 60)} minutes.`;
 const ogImage = `/images/og/b/${data.id}.png`;
 
 const jsonLd = {
@@ -139,7 +177,7 @@ const alternates = [
       </div>
 
       {/* Beat track column */}
-      <div class="yee__track" id="yee-track" aria-label="Beat track — bija mantras fall from top, tap SPACE when they reach the line">
+      <div class="yee__track" id="yee-track" aria-label={`Beat track — ${cueName} fall from top, tap SPACE when they reach the line`}>
         <div class="track__zone" id="track-zone">
           {/* How-to-play overlay — shown before start, hidden once the
               player hits START. Per Mike 2026-04-19 morning: "wasn't
@@ -149,8 +187,8 @@ const alternates = [
             <p class="howto__eyebrow mono">HOW TO PLAY</p>
             <ol class="howto__list">
               <li><strong>Press ▶ START</strong> (or SPACE) to begin.</li>
-              <li>Colored <strong>bija mantras</strong> fall from the top toward the dashed line.</li>
-              <li>When a mantra reaches the line, <strong>tap SPACE</strong> (or the TAP zone below).</li>
+              <li>Colored <strong>{cueName}</strong> fall from the top toward the dashed line.</li>
+              <li>When a cue reaches the line, <strong>tap SPACE</strong> (or the TAP zone below).</li>
               <li>Center-hit = <strong>PERFECT</strong> (+100). Near-hit = <strong>GOOD</strong> (+50). Miss = combo breaks.</li>
             </ol>
             <p class="howto__note">
@@ -179,23 +217,13 @@ const alternates = [
     </section>
 
     <section class="yee__legend">
-      <p class="legend__title mono">BIJA LEGEND · 7 CHAKRAS · 21 BEATS</p>
+      <p class="legend__title mono">{legendTitle}</p>
       <ul class="legend__list">
-        <li><span class="swatch" style="background: #C92A2A"></span> Root · <strong>LAM</strong></li>
-        <li><span class="swatch" style="background: #E8590C"></span> Sacral · <strong>VAM</strong></li>
-        <li><span class="swatch" style="background: #F59F00"></span> Solar · <strong>RAM</strong></li>
-        <li><span class="swatch" style="background: #2B8A3E"></span> Heart · <strong>YAM</strong></li>
-        <li><span class="swatch" style="background: #1864AB"></span> Throat · <strong>HAM</strong></li>
-        <li><span class="swatch" style="background: #5F3DC4"></span> Third Eye · <strong>AUM</strong></li>
-        <li><span class="swatch" style="background: #862E9C"></span> Crown · <strong>OM</strong></li>
+        {legendItems.map((item) => (
+          <li><span class="swatch" style={`background: ${item.color}`}></span> {item.label} · <strong>{item.word}</strong></li>
+        ))}
       </ul>
-      <p class="legend__note">
-        Bija mantras fall from the top. Tap <strong>SPACE</strong> (or the <strong>TAP</strong> zone)
-        when a mantra reaches the dashed line at the bottom. The <strong>NEXT</strong> chip above
-        the track shows what's coming and when. Meditation tracks pace their beats to the
-        content, so there are long pauses between hits — that's the chant, not a speed run.
-        Music tracks are denser. Perfect timing bonus, but the bija itself is the point. Version 0, static, no save.
-      </p>
+      <p class="legend__note">{legendNote}</p>
     </section>
 
     <section class="yee__meta">
@@ -217,11 +245,11 @@ const alternates = [
      * Flow:
      * 1. Inject YouTube IFrame API.
      * 2. Create player in #yee-player; expose ready callback.
-     * 3. rAF loop polls player.getCurrentTime() → positions beats,
+     * 3. rAF loop polls player.getCurrentTime() → positions cues,
      *    flags hit window, emits miss when beat passes hit line.
      * 4. Keyboard (Space) + pointer (click hit zone) → attempt hit:
-     *    within ±150 ms of nearest active beat → PERFECT (+100),
-     *    within ±500 ms → GOOD (+50), else nothing (drag-through).
+     *    within ±200 ms of nearest active beat → PERFECT (+100),
+     *    within ±650 ms → GOOD (+50), else nothing (drag-through).
      * 5. Web Audio for a short sine confirmation (same synth family
      *    as /drum's taiko thump, but higher and softer).
      */
