@@ -6,11 +6,6 @@
  * token to type in the omnibox. URL is /spells because /cast is taken
  * by PrizeCast (the no-loss savings lottery). The dock slot is still
  * named CAST — these are the spells it casts.
- *
- * Exit-condition wrap-up: catalog hit ≥20 shipped spells, so this page
- * is the natural landing for "what magic words exist?" Live in PR #324
- * too, landing here when that merges. This page is the sketch; #324 is
- * the richer production pass.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { SPELLS } from '../data/spells';
@@ -62,7 +57,7 @@ const jsonLd = {
     </nav>
 
     <header class="head">
-      <p class="kicker">06 CAST · MAGIC WORDS · v1</p>
+      <p class="kicker">06 CAST · MAGIC WORDS · {SPELLS.length} SPELLS</p>
       <h1 class="display">Spells.</h1>
       <p class="dek">
         Type <code>+spell</code> in the omnibox, or click a chip in slot&nbsp;06&nbsp;CAST.
@@ -74,11 +69,34 @@ const jsonLd = {
       </div>
     </header>
 
+    <div class="stats" role="navigation" aria-label="Jump to kind">
+      <a href="#burst-section" class="stat stat--burst">
+        <span class="stat__count">{byKind.burst.length}</span>
+        <span class="stat__label">bursts</span>
+      </a>
+      <a href="#companion-section" class="stat stat--companion">
+        <span class="stat__count">{byKind.companion.length}</span>
+        <span class="stat__label">companions</span>
+      </a>
+      <a href="#ambient-section" class="stat stat--ambient">
+        <span class="stat__count">{byKind.ambient.length}</span>
+        <span class="stat__label">ambient</span>
+      </a>
+    </div>
+
     {(['burst', 'companion', 'ambient'] as const).map(kind => (
-      <section class="section" aria-label={kindLabel[kind]}>
+      <section class="section" id={kind + '-section'} aria-label={kindLabel[kind]}>
         <div class="section-head">
-          <p class="section-kicker">{kindLabel[kind]}</p>
-          <p class="section-note">{kindBlurb[kind]}</p>
+          <div class="section-head-left">
+            <p class="section-kicker">{kindLabel[kind]} · {byKind[kind].length}</p>
+            <p class="section-note">{kindBlurb[kind]}</p>
+          </div>
+          <button
+            class="btn btn--cast-kind"
+            type="button"
+            data-cast-kind={kind}
+            aria-label={`Cast all ${kindLabel[kind].toLowerCase()}`}
+          >cast all</button>
         </div>
         <div class="grid" role="list">
           {byKind[kind].map(spell => (
@@ -88,6 +106,7 @@ const jsonLd = {
               role="listitem"
               style={`--accent: ${spell.accent}`}
               data-spell-id={spell.id}
+              data-spell-kind={spell.kind}
             >
               <div class="card-top">
                 <span class="glyph" aria-hidden="true">{spell.glyph}</span>
@@ -145,10 +164,10 @@ const jsonLd = {
       document.addEventListener('click', function (e) {
         var t = e.target;
 
-        // cast button
-        var castId = t.closest('[data-cast]') && t.closest('[data-cast]').dataset.cast;
-        if (castId) {
-          dispatch(castId);
+        // cast single spell
+        var castEl = t.closest('[data-cast]');
+        if (castEl) {
+          dispatch(castEl.dataset.cast);
           return;
         }
 
@@ -183,13 +202,26 @@ const jsonLd = {
           return;
         }
 
-        // cast everything — stagger 250ms apart
+        // cast everything — stagger 220ms apart
         if (t.closest('#js-cast-all')) {
           var ids = Array.from(document.querySelectorAll('[data-cast]')).map(function (el) {
             return el.dataset.cast;
           });
           ids.forEach(function (id, i) {
-            setTimeout(function () { dispatch(id); }, i * 250);
+            setTimeout(function () { dispatch(id); }, i * 220);
+          });
+          return;
+        }
+
+        // cast all spells of a kind
+        var kindBtn = t.closest('[data-cast-kind]');
+        if (kindBtn) {
+          var kind = kindBtn.dataset.castKind;
+          var kindIds = Array.from(
+            document.querySelectorAll('[data-spell-kind="' + kind + '"] [data-cast]')
+          ).map(function (el) { return el.dataset.cast; });
+          kindIds.forEach(function (id, i) {
+            setTimeout(function () { dispatch(id); }, i * 300);
           });
           return;
         }
@@ -261,19 +293,80 @@ const jsonLd = {
     flex-wrap: wrap;
     padding-bottom: 28px;
     border-bottom: 1.5px solid var(--pc-ink);
-    margin-bottom: 32px;
+    margin-bottom: 24px;
   }
+
+  /* ─── stats bar ─── */
+  .stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 36px;
+  }
+
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--pc-rule, #d8d4cc);
+    border-radius: 2px;
+    background: #fff;
+    text-decoration: none;
+    transition: border-color 0.12s, background 0.12s;
+  }
+
+  .stat:hover {
+    background: #faf9f6;
+    border-color: var(--pc-ink-muted);
+  }
+
+  .stat__count {
+    font-family: var(--pc-font-sans);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--pc-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat__label {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .stat--burst   { border-left-color: #c4952e; border-left-width: 3px; }
+  .stat--companion { border-left-color: #4A9EFF; border-left-width: 3px; }
+  .stat--ambient { border-left-color: #2f8f5f; border-left-width: 3px; }
+
+  .stat--burst:hover   { border-color: #c4952e; border-left-width: 3px; }
+  .stat--companion:hover { border-color: #4A9EFF; border-left-width: 3px; }
+  .stat--ambient:hover { border-color: #2f8f5f; border-left-width: 3px; }
 
   /* ─── section ─── */
   .section {
     margin-bottom: 40px;
+    scroll-margin-top: 72px;
   }
 
   .section-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
+    justify-content: space-between;
     gap: 14px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .section-head-left {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   .section-kicker {
@@ -433,6 +526,18 @@ const jsonLd = {
     color: #fff;
   }
 
+  .btn--cast-kind {
+    border-color: var(--pc-rule, #d8d4cc);
+    color: var(--pc-ink-muted);
+    flex-shrink: 0;
+  }
+
+  .btn--cast-kind:hover {
+    border-color: var(--pc-ink);
+    color: var(--pc-ink);
+    background: #faf9f6;
+  }
+
   /* ─── footer ─── */
   .pg-footer {
     border-top: 1px solid var(--pc-rule, #d8d4cc);
@@ -467,6 +572,6 @@ const jsonLd = {
 
   @media (max-width: 400px) {
     .grid { grid-template-columns: 1fr; }
-    .section-head { flex-direction: column; gap: 4px; }
+    .section-head { flex-direction: column; align-items: flex-start; gap: 8px; }
   }
 </style>
