@@ -1,0 +1,544 @@
+---
+/**
+ * /shop — PointCast storefront front door.
+ *
+ * Shopify owns checkout. PointCast owns discovery, context, pairings, and
+ * machine-readable product routing.
+ */
+import { getCollection } from 'astro:content';
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const products = (await getCollection('products', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+
+const categories = Array.from(new Set(products.map((p) => p.data.category || 'catalog'))).sort();
+const hosts = Array.from(new Set(products.map((p) => {
+  try {
+    return new URL(p.data.url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'external shop';
+  }
+}))).sort();
+
+const title = 'Shop';
+const description = 'PointCast shop window: products, merch, and drop links routed to the canonical checkout surface.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Shop',
+  description,
+  url: 'https://pointcast.xyz/shop',
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: products.length,
+    itemListElement: products.map((product, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `https://pointcast.xyz/products/${product.data.slug}`,
+      item: {
+        '@type': 'Product',
+        name: product.data.name,
+        description: product.data.description,
+        brand: { '@type': 'Brand', name: product.data.brand },
+        url: product.data.url,
+        ...(product.data.image?.length ? { image: product.data.image } : {}),
+      },
+    })),
+  },
+};
+
+const alternates = [
+  { type: 'application/json', href: '/shop.json', title: 'Shop (JSON)' },
+  { type: 'application/json', href: '/products.json', title: 'Products (JSON)' },
+  { type: 'application/x-ndjson', href: '/api/products.jsonl', title: 'Products (JSONL)' },
+];
+
+function price(product: (typeof products)[number]): string {
+  if (product.data.priceUsd === undefined) return 'see shop';
+  return `$${product.data.priceUsd.toFixed(2)} ${product.data.currency}`;
+}
+
+function shopHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'shop';
+  }
+}
+---
+
+<BlockLayout title={title} description={description} image="/images/og/products.png" jsonLd={jsonLd} alternates={alternates}>
+  <main class="shop">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>shop</span>
+    </nav>
+
+    <header class="head">
+      <div>
+        <p class="kicker mono">POINTCAST SHOP</p>
+        <h1 class="title">Buy the things around the broadcast.</h1>
+        <p class="dek">
+          Products stay anchored to their source of truth. PointCast keeps the
+          catalog readable for people and agents; checkout happens at the shop
+          that owns the product.
+        </p>
+      </div>
+      <dl class="stats" aria-label="Shop summary">
+        <div>
+          <dt class="mono">PRODUCTS</dt>
+          <dd>{products.length}</dd>
+        </div>
+        <div>
+          <dt class="mono">CATEGORIES</dt>
+          <dd>{categories.length}</dd>
+        </div>
+        <div>
+          <dt class="mono">CHECKOUT</dt>
+          <dd>{hosts.length === 1 ? hosts[0] : 'external'}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <section class="lanes" aria-label="Shop lanes">
+      <a class="lane lane--live" href="#products">
+        <span class="lane__kicker mono">LIVE CATALOG</span>
+        <span class="lane__title">Products</span>
+        <span class="lane__meta mono">{products.length} entries</span>
+      </a>
+      <a class="lane" href="/postcards">
+        <span class="lane__kicker mono">DROP CANDIDATE</span>
+        <span class="lane__title">Postcards</span>
+        <span class="lane__meta mono">print lane</span>
+      </a>
+      <a class="lane" href="/coffee">
+        <span class="lane__kicker mono">DROP CANDIDATE</span>
+        <span class="lane__title">Mugs</span>
+        <span class="lane__meta mono">coffee lane</span>
+      </a>
+      <a class="lane" href="/products.json">
+        <span class="lane__kicker mono">MACHINE VIEW</span>
+        <span class="lane__title">JSON</span>
+        <span class="lane__meta mono">agent route</span>
+      </a>
+    </section>
+
+    <section id="products" class="products" aria-labelledby="products-title">
+      <div class="section-head">
+        <p class="kicker mono">CATALOG</p>
+        <h2 id="products-title">Available products</h2>
+      </div>
+
+      {products.length === 0 ? (
+        <div class="empty">
+          <p class="empty__title mono">NO PRODUCTS SYNCED YET</p>
+          <p>
+            Create Shopify products, run <code>npm run shopify:sync</code>, and
+            this grid becomes the storefront.
+          </p>
+        </div>
+      ) : (
+        <ul class="grid" role="list">
+          {products.map((product) => (
+            <li class="card">
+              <a class="card__media" href={`/products/${product.data.slug}`} aria-label={`Open ${product.data.name}`}>
+                {product.data.image?.[0] ? (
+                  <img src={product.data.image[0]} alt={product.data.name} loading="lazy" />
+                ) : (
+                  <span class="card__fallback mono">{product.data.brand}</span>
+                )}
+              </a>
+              <div class="card__body">
+                <p class="card__kicker mono">{product.data.category || 'product'} / {product.data.availability}</p>
+                <h3><a href={`/products/${product.data.slug}`}>{product.data.name}</a></h3>
+                {product.data.dek && <p class="card__dek">{product.data.dek}</p>}
+                <p class="card__price mono">{price(product)}</p>
+                <div class="card__actions">
+                  <a class="btn btn--primary mono" href={product.data.url} target="_blank" rel="noopener">Buy at {shopHost(product.data.url)}</a>
+                  <a class="btn mono" href={`/products/${product.data.slug}`}>Details</a>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/shop.json">/shop.json</a></li>
+        <li><a href="/products.json">/products.json</a></li>
+        <li><a href="/api/products.jsonl">/api/products.jsonl</a></li>
+        <li><a href="/pairings">/pairings</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .shop {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 24px 0 84px;
+    }
+
+    .mono {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .crumb {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7a7a72;
+    }
+
+    .crumb a,
+    .agent-strip a {
+      color: #a02c2c;
+      text-decoration: none;
+    }
+
+    .crumb a:hover,
+    .agent-strip a:hover {
+      text-decoration: underline;
+    }
+
+    .head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 22px;
+      align-items: end;
+      margin-bottom: 18px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #d6d4cd;
+    }
+
+    .kicker {
+      margin: 0 0 8px;
+      color: #993556;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+    }
+
+    .title {
+      max-width: 760px;
+      margin: 0 0 12px;
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      font-size: 72px;
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .dek {
+      max-width: 650px;
+      margin: 0;
+      color: #38373A;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 0;
+    }
+
+    .stats div {
+      min-height: 86px;
+      padding: 10px;
+      border: 1px solid #d6d4cd;
+      background: #fbfaf5;
+    }
+
+    .stats dt {
+      margin: 0 0 12px;
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .stats dd {
+      margin: 0;
+      color: #12110E;
+      font-size: 19px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 34px;
+    }
+
+    .lane {
+      display: grid;
+      min-height: 132px;
+      padding: 14px;
+      border: 1px solid #d6d4cd;
+      border-left: 5px solid #185FA5;
+      color: #12110E;
+      text-decoration: none;
+      background: #fff;
+    }
+
+    .lane:hover {
+      border-color: #185FA5;
+      background: #f5f9ff;
+    }
+
+    .lane--live {
+      border-left-color: #993556;
+      background: #fdf6f9;
+    }
+
+    .lane--live:hover {
+      border-color: #993556;
+      background: #fff2f7;
+    }
+
+    .lane__kicker,
+    .lane__meta {
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .lane__title {
+      align-self: end;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .products {
+      margin-top: 8px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .card {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100%;
+      border: 1px solid #d6d4cd;
+      background: #fff;
+    }
+
+    .card__media {
+      display: grid;
+      place-items: center;
+      min-height: 190px;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, #fdf6f9 0 24%, transparent 24% 28%, #f5f9ff 28% 54%, transparent 54% 58%, #fbfaf5 58% 100%);
+      color: #993556;
+      text-decoration: none;
+    }
+
+    .card__media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card__fallback {
+      padding: 12px;
+      border: 1px solid currentColor;
+      background: rgba(255, 255, 255, 0.78);
+      font-size: 10px;
+    }
+
+    .card__body {
+      display: grid;
+      gap: 9px;
+      padding: 14px;
+    }
+
+    .card__kicker,
+    .card__price {
+      margin: 0;
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+
+    .card h3 a {
+      color: #12110E;
+      text-decoration: none;
+    }
+
+    .card h3 a:hover {
+      text-decoration: underline;
+    }
+
+    .card__dek {
+      margin: 0;
+      color: #38373A;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .card__price {
+      color: #12110E;
+      font-weight: 800;
+    }
+
+    .card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-self: end;
+      margin-top: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border: 1px solid #d6d4cd;
+      color: #12110E;
+      background: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      border-color: #993556;
+    }
+
+    .btn--primary {
+      border-color: #993556;
+      color: #fff;
+      background: #993556;
+    }
+
+    .btn--primary:hover {
+      background: #6B2139;
+    }
+
+    .empty {
+      padding: 18px;
+      border: 1.5px dashed #993556;
+      background: #fdf6f9;
+    }
+
+    .empty__title {
+      margin: 0 0 8px;
+      color: #993556;
+      font-size: 10px;
+    }
+
+    .empty p {
+      margin: 0;
+      color: #38373A;
+      line-height: 1.5;
+    }
+
+    .empty code {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      background: #fff;
+      padding: 1px 5px;
+    }
+
+    .agent-strip {
+      margin-top: 28px;
+      padding-top: 12px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .agent-strip__label {
+      margin: 0 0 6px;
+      color: #5F5E5A;
+    }
+
+    .agent-strip ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .agent-strip a {
+      text-transform: lowercase;
+      letter-spacing: 0;
+    }
+
+    @media (max-width: 860px) {
+      .head {
+        grid-template-columns: 1fr;
+      }
+
+      .title {
+        font-size: 52px;
+      }
+
+      .stats,
+      .lanes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shop {
+        width: min(100% - 28px, 1120px);
+      }
+
+      .title {
+        font-size: 38px;
+      }
+
+      .stats,
+      .lanes {
+        grid-template-columns: 1fr;
+      }
+
+      .card__actions {
+        display: grid;
+      }
+    }
+  </style>
+</BlockLayout>
