@@ -1,0 +1,399 @@
+---
+/**
+ * /yeeee-v2 — fireworks instead of confetti.
+ *
+ * v1 was instant explosion: click → confetti burst from the click
+ * point. Visceral but immediate.
+ * v2 is a SHELL: click → a glowing rocket arcs upward from the click
+ * point with a launch whistle, reaches an apex over 0.6-1.0s, and
+ * BURSTS at the apex into a Noun shower with a low-pitch boom + chord.
+ * Bigger sound. Bigger sky. Bigger satisfaction.
+ *
+ * Header pill links back to /yeeee.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'YEEEE v2 · Fireworks · PointCast';
+const description =
+  'Click anywhere — a shell launches, arcs to the sky, and bursts into a Noun shower. Boom. Chord. Repeat.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'YEEEE v2',
+  url: 'https://pointcast.xyz/yeeee-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="ye2" id="ye2-main">
+    <div class="ye2__sky" id="ye2-sky"></div>
+    <div class="ye2__city"></div>
+
+    <header class="ye2__chrome">
+      <span class="ye2__chrome-label">YEEEE</span>
+      <span class="ye2__chrome-sep">·</span>
+      <span class="ye2__chrome-version">v2 · FIREWORKS</span>
+      <a class="ye2__prev-pill" href="/yeeee">← v1</a>
+    </header>
+
+    <h1 class="ye2__hero">YEEEE</h1>
+    <p class="ye2__tagline">click anywhere · shells launch · sky bursts</p>
+
+    <canvas id="ye2-canvas" class="ye2__canvas"></canvas>
+
+    <footer class="ye2__readout">
+      <div class="ye2__panel">
+        <span class="ye2__panel-label">SHELLS</span>
+        <span class="ye2__panel-value" id="ye2-shells">0</span>
+      </div>
+      <div class="ye2__panel">
+        <span class="ye2__panel-label">BURSTS</span>
+        <span class="ye2__panel-value" id="ye2-bursts">0</span>
+      </div>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#ye2-main) { background: #050810; overflow: hidden; }
+
+  .ye2 {
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0; width: 100vw;
+    height: calc(100vh - 80px); min-height: 600px;
+    overflow: hidden; cursor: crosshair; user-select: none;
+    color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+  }
+  .ye2__sky {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse at 50% 100%, oklch(0.18 0.10 280) 0%, oklch(0.08 0.05 290) 60%, oklch(0.04 0.02 310) 100%);
+  }
+  .ye2__sky::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(244, 231, 200, 0.6) 1px, transparent 1.5px),
+      radial-gradient(circle at 87% 22%, rgba(244, 231, 200, 0.5) 1px, transparent 1.5px),
+      radial-gradient(circle at 23% 67%, rgba(244, 231, 200, 0.4) 1px, transparent 1.5px),
+      radial-gradient(circle at 71% 78%, rgba(244, 231, 200, 0.6) 1px, transparent 1.5px),
+      radial-gradient(circle at 45% 12%, rgba(244, 231, 200, 0.55) 1px, transparent 1.5px),
+      radial-gradient(circle at 92% 55%, rgba(244, 231, 200, 0.4) 1px, transparent 1.5px),
+      radial-gradient(circle at 8% 88%, rgba(244, 231, 200, 0.45) 1px, transparent 1.5px),
+      radial-gradient(circle at 58% 41%, rgba(244, 231, 200, 0.5) 1px, transparent 1.5px);
+    opacity: 0.7;
+  }
+  /* Bottom city silhouette */
+  .ye2__city {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 18%;
+    z-index: 1;
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.6) 100%);
+  }
+  .ye2__city::before {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 60%;
+    background-image: repeating-linear-gradient(90deg,
+      #050810 0px, #050810 30px,
+      #0a1018 30px, #0a1018 32px,
+      #050810 32px, #050810 64px,
+      #0a1018 64px, #0a1018 70px);
+  }
+  .ye2__city::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 100%;
+    background:
+      linear-gradient(0deg, #050810 0%, #050810 35%, transparent 80%);
+    clip-path: polygon(
+      0 100%, 0 60%, 6% 60%, 6% 50%, 9% 50%, 9% 65%, 14% 65%, 14% 40%, 17% 40%,
+      17% 55%, 22% 55%, 22% 30%, 26% 30%, 26% 50%, 32% 50%, 32% 40%, 38% 40%,
+      38% 60%, 44% 60%, 44% 35%, 50% 35%, 50% 55%, 55% 55%, 55% 25%, 60% 25%,
+      60% 50%, 66% 50%, 66% 38%, 72% 38%, 72% 60%, 78% 60%, 78% 45%, 84% 45%,
+      84% 65%, 90% 65%, 90% 50%, 96% 50%, 96% 60%, 100% 60%, 100% 100%
+    );
+  }
+
+  .ye2__chrome {
+    position: absolute; top: 24px; right: 32px; z-index: 5;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 6px 16px; border: 2px solid #ffffff; border-radius: 999px;
+    backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.40);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .ye2__chrome-label { font-weight: 800; letter-spacing: 0.30em; color: #ffffff; }
+  .ye2__chrome-sep { color: rgba(255, 255, 255, 0.4); }
+  .ye2__chrome-version { color: oklch(0.85 0.20 80); font-weight: 700; }
+  .ye2__prev-pill {
+    margin-left: 6px; padding: 2px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 999px;
+    color: rgba(255, 255, 255, 0.8); text-decoration: none;
+    font-size: 10px; letter-spacing: 0.18em;
+    transition: color 160ms, border-color 160ms;
+  }
+  .ye2__prev-pill:hover { color: oklch(0.85 0.20 80); border-color: oklch(0.85 0.20 80); }
+
+  .ye2__hero {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -55%);
+    margin: 0; z-index: 2;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(80px, 18vw, 280px); font-weight: 400; letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 80px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.55);
+    pointer-events: none; line-height: 1;
+  }
+  .ye2__tagline {
+    position: absolute; top: calc(50% + clamp(60px, 10vw, 160px));
+    left: 50%; transform: translateX(-50%); margin: 0; z-index: 2;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.6vw, 22px);
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+    pointer-events: none; white-space: nowrap;
+  }
+
+  .ye2__canvas {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    width: 100%; height: 100%;
+  }
+
+  .ye2__readout {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px; z-index: 5;
+  }
+  .ye2__panel {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border: 1px solid rgba(255, 255, 255, 0.40);
+    border-radius: 999px; backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.40);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ye2__panel-label { color: rgba(255, 255, 255, 0.55); }
+  .ye2__panel-value { color: oklch(0.85 0.20 80); font-weight: 700; }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // Whistle as the shell rises — pitch glide upward
+  function playWhistle(durationSec = 0.7) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 700;
+    o.frequency.exponentialRampToValueAtTime(1500, t + durationSec);
+    const filt = a.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 1100; filt.Q.value = 6;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.07, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + durationSec);
+    o.connect(filt).connect(g).connect(a.destination);
+    o.start(t); o.stop(t + durationSec + 0.05);
+  }
+  // Burst boom + major triad chord at apex
+  function playBurst(rootIdx) {
+    const a = ctx(); const t = a.currentTime;
+    // Boom — short low thump
+    const b = a.createOscillator(); b.type = 'sine'; b.frequency.value = 90;
+    b.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+    const bg = a.createGain();
+    bg.gain.setValueAtTime(0.0001, t);
+    bg.gain.exponentialRampToValueAtTime(0.40, t + 0.005);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.30);
+    b.connect(bg).connect(a.destination);
+    b.start(t); b.stop(t + 0.32);
+
+    // Crackle noise burst
+    const buf = a.createBuffer(1, a.sampleRate * 0.30, a.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const noise = a.createBufferSource(); noise.buffer = buf;
+    const nf = a.createBiquadFilter(); nf.type = 'highpass'; nf.frequency.value = 2500;
+    const ng = a.createGain();
+    ng.gain.setValueAtTime(0.10, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.30);
+    noise.connect(nf).connect(ng).connect(a.destination);
+    noise.start(t);
+
+    // Major triad chord
+    const ROOTS = [261.63, 329.63, 392.00, 523.25, 659.25];
+    const root = ROOTS[rootIdx % ROOTS.length];
+    [1, 1.25, 1.5].forEach((ratio, i) => {
+      const f = root * ratio * 2;
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = a.createGain();
+      const off = 0.01 * i;
+      g.gain.setValueAtTime(0.0001, t + off);
+      g.gain.exponentialRampToValueAtTime(0.13, t + off + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 1.6);
+      o.connect(g).connect(a.destination);
+      o.start(t + off); o.stop(t + off + 1.7);
+    });
+  }
+
+  // ── Canvas ────────────────────────────────────────────
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('ye2-canvas'));
+  const c2d = canvas?.getContext('2d');
+  const shellsEl = document.getElementById('ye2-shells');
+  const burstsEl = document.getElementById('ye2-bursts');
+  let shellsCount = 0, burstsCount = 0;
+  let shells = []; // { x, y, vy, hue, target, started, kind }
+  let pieces = []; // burst pieces — Nouns + sparks
+
+  // Pre-load Noun bank
+  const NOUN_BANK_SIZE = 32;
+  const nounImages = [];
+  for (let i = 0; i < NOUN_BANK_SIZE; i++) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = `https://noun.pics/${Math.floor(Math.random() * 1200)}.svg`;
+    nounImages.push(img);
+  }
+
+  function resize() {
+    if (!canvas) return;
+    canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  function paint() {
+    if (!canvas) return;
+    if (shellsCount === 0 && burstsCount === 0) {
+      // gentle clear background until first shell
+      requestAnimationFrame(paint);
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    // Slight fade
+    c2d.globalCompositeOperation = 'destination-out';
+    c2d.fillStyle = 'rgba(0, 0, 0, 0.10)';
+    c2d.fillRect(0, 0, canvas.width, canvas.height);
+    c2d.globalCompositeOperation = 'lighter';
+
+    const now = performance.now();
+
+    // Shells
+    shells.forEach((s, idx) => {
+      const t = (now - s.started) / s.dur;
+      if (t >= 1) {
+        // Burst!
+        spawnBurst(s.target.x, s.target.y, s.hue);
+        try { playBurst(idx); } catch {}
+        burstsCount += 1;
+        if (burstsEl) burstsEl.textContent = String(burstsCount);
+      } else {
+        // Quadratic ease-out arc up
+        const x = s.start.x + (s.target.x - s.start.x) * t;
+        const y = s.start.y + (s.target.y - s.start.y) * (1 - (1 - t) ** 2);
+        // Bright trail dot
+        const grad = c2d.createRadialGradient(x, y, 0, x, y, 18 * dpr);
+        grad.addColorStop(0, `oklch(0.95 0.30 ${s.hue})`);
+        grad.addColorStop(1, 'transparent');
+        c2d.fillStyle = grad;
+        c2d.beginPath();
+        c2d.arc(x, y, 18 * dpr, 0, Math.PI * 2);
+        c2d.fill();
+      }
+    });
+    shells = shells.filter((s) => (now - s.started) / s.dur < 1);
+
+    // Burst pieces
+    const grav = 0.18 * dpr;
+    pieces.forEach((p) => {
+      p.vy += grav;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.rotSpeed;
+      p.life -= p.decay;
+      if (p.life <= 0) return;
+      c2d.save();
+      c2d.translate(p.x, p.y);
+      c2d.rotate(p.rot);
+      c2d.globalAlpha = Math.max(0, p.life);
+      if (p.kind === 'noun' && nounImages[p.nounIdx]?.complete) {
+        c2d.drawImage(nounImages[p.nounIdx], -p.size / 2, -p.size / 2, p.size, p.size);
+      } else {
+        c2d.fillStyle = `oklch(0.85 0.30 ${p.hue})`;
+        c2d.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      }
+      c2d.restore();
+    });
+    pieces = pieces.filter((p) => p.life > 0 && p.y < canvas.height + 100);
+    requestAnimationFrame(paint);
+  }
+  requestAnimationFrame(paint);
+
+  function spawnShell(x, y) {
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cx = x * dpr;
+    const cy = y * dpr;
+    const targetX = cx + (Math.random() - 0.5) * 200 * dpr;
+    const targetY = canvas.height * (0.20 + Math.random() * 0.20);
+    const dur = 600 + Math.random() * 400;
+    const hue = Math.floor(Math.random() * 360);
+    shells.push({
+      start: { x: cx, y: cy },
+      target: { x: targetX, y: targetY },
+      started: performance.now(),
+      dur,
+      hue,
+    });
+    try { playWhistle(dur / 1000); } catch {}
+    shellsCount += 1;
+    if (shellsEl) shellsEl.textContent = String(shellsCount);
+  }
+
+  function spawnBurst(x, y, hue) {
+    const dpr = window.devicePixelRatio || 1;
+    const count = 50 + Math.floor(Math.random() * 30);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (4 + Math.random() * 9) * dpr;
+      const isNoun = Math.random() < 0.55;
+      pieces.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.3,
+        size: (16 + Math.random() * 18) * dpr,
+        life: 1.0,
+        decay: 0.006 + Math.random() * 0.005,
+        hue: (hue + (Math.random() - 0.5) * 60 + 360) % 360,
+        kind: isNoun ? 'noun' : 'spark',
+        nounIdx: Math.floor(Math.random() * NOUN_BANK_SIZE),
+      });
+    }
+  }
+
+  // Click handler
+  const main = document.getElementById('ye2-main');
+  function onClick(e) {
+    if (!main) return;
+    const rect = main.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    spawnShell(t.clientX - rect.left, t.clientY - rect.top);
+  }
+  main?.addEventListener('mousedown', onClick);
+  main?.addEventListener('touchstart', onClick, { passive: true });
+
+  // Spacebar = launch from random ground point
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat) {
+      e.preventDefault();
+      if (!main) return;
+      const rect = main.getBoundingClientRect();
+      spawnShell(rect.width * (0.2 + Math.random() * 0.6), rect.height * 0.8);
+    }
+  });
+</script>
