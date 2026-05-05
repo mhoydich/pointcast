@@ -13,13 +13,13 @@ export const GET: APIRoute = async () => {
   const payload = {
     $schema: 'https://pointcast.xyz/products.json',
     name: 'PointCast products catalog',
-    description: 'Structured Good Feels product entries surfaced via PointCast for agent discovery. Checkout always at shop.getgoodfeels.com.',
+    description: 'Structured Good Feels product entries surfaced via PointCast for agent discovery. Checkout always at getgoodfeels.com.',
     generatedAt: new Date().toISOString(),
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
     seller: {
       name: 'Good Feels',
-      url: 'https://shop.getgoodfeels.com',
+      url: 'https://getgoodfeels.com',
     },
     products: products
       .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime())

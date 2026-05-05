@@ -7,20 +7,23 @@ import { getCollection } from 'astro:content';
 export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => !data.draft))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+  const countMatching = (pattern: RegExp) =>
+    products.filter((product) => pattern.test(product.data.category || product.data.name)).length;
 
   const payload = {
     $schema: 'https://pointcast.xyz/shop.json',
-    name: 'PointCast Shop',
-    description: 'Storefront index for PointCast-linked products. Checkout happens on each product source URL.',
+    name: 'Good Feels Shop Mirror',
+    description: 'PointCast mirror of the public Good Feels Shopify catalog. Checkout happens on each canonical Good Feels product URL.',
     generatedAt: new Date().toISOString(),
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
     count: products.length,
     lanes: [
-      { slug: 'products', label: 'Products', url: 'https://pointcast.xyz/shop#products', count: products.length },
-      { slug: 'postcards', label: 'Postcards', url: 'https://pointcast.xyz/postcards', status: 'drop-candidate' },
-      { slug: 'mugs', label: 'Mugs', url: 'https://pointcast.xyz/coffee', status: 'drop-candidate' },
+      { slug: 'good-feels', label: 'Good Feels', url: 'https://pointcast.xyz/shop#products', count: products.length, source: 'https://getgoodfeels.com' },
+      { slug: 'seltzers', label: 'Seltzers', url: 'https://pointcast.xyz/shop#products', count: countMatching(/seltzer|drink|mix seltzer/i) },
+      { slug: 'gummies', label: 'Gummies', url: 'https://pointcast.xyz/shop#products', count: countMatching(/gumm/i) },
+      { slug: 'enhancers', label: 'Enhancers', url: 'https://pointcast.xyz/shop#products', count: countMatching(/enhancer/i) },
     ],
     products: products.map((product) => ({
       slug: product.data.slug,

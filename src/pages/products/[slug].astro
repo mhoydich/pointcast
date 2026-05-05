@@ -4,8 +4,8 @@
  *
  * One page per file in src/content/products/. Schema.org Product markup
  * (top-level — not just nested in CollectionPage) so a single product
- * is independently citeable + indexable. Every CTA jumps to the shop
- * URL on shop.getgoodfeels.com.
+ * is independently citeable + indexable. Every CTA jumps to the canonical
+ * shop URL on the source storefront.
  */
 import { getCollection, type CollectionEntry } from 'astro:content';
 import BlockLayout from '../../layouts/BlockLayout.astro';
@@ -22,6 +22,9 @@ const d = product.data;
 const title = `${d.name} — ${d.brand}`;
 const description = d.dek || d.description.slice(0, 200);
 const ogImage = (d.image && d.image[0]) || `/images/og/products.png`;
+const sourceUrl = new URL(d.url);
+const sourceOrigin = sourceUrl.origin;
+const sourceHost = sourceUrl.hostname.replace(/^www\./, '');
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -40,7 +43,7 @@ const jsonLd = {
       priceCurrency: d.currency,
       availability: 'https://schema.org/' + (d.availability === 'in-stock' ? 'InStock' : d.availability === 'preorder' ? 'PreOrder' : d.availability === 'out-of-stock' ? 'OutOfStock' : 'Discontinued'),
       url: d.url,
-      seller: { '@type': 'Organization', name: d.brand, url: 'https://shop.getgoodfeels.com' },
+      seller: { '@type': 'Organization', name: d.brand, url: sourceOrigin },
     },
   } : {}),
   ...(d.ingredients && d.ingredients.length ? { material: d.ingredients.join(', ') } : {}),
@@ -91,10 +94,10 @@ const alternates = [
         </dl>
       </aside>
 
-      <a class="cta" href={d.url} target="_blank" rel="noopener">→ Buy on {new URL(d.url).hostname.replace(/^www\./, '')}</a>
+      <a class="cta" href={d.url} target="_blank" rel="noopener">→ Buy on {sourceHost}</a>
 
       <p class="disclaimer mono">
-        POINTCAST DOES NOT SELL OR FULFILL · CHECKOUT HAPPENS AT {new URL(d.url).hostname.replace(/^www\./, '').toUpperCase()}
+        POINTCAST DOES NOT SELL OR FULFILL · CHECKOUT HAPPENS AT {sourceHost.toUpperCase()}
       </p>
     </article>
 
