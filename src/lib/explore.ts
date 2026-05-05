@@ -129,6 +129,12 @@ export const CATEGORIES: Category[] = [
       s === 'dao',
   },
   {
+    key: 'ues',
+    label: 'UES Tracks',
+    blurb: 'University of El Segundo — small unaccredited curriculum.',
+    match: (s) => s === 'ues' || s.startsWith('ues/'),
+  },
+  {
     key: 'apps',
     label: 'Apps & Connectors',
     blurb: 'Surfaces, apps, and outbound rails.',
