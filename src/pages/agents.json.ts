@@ -153,6 +153,7 @@ export const GET: APIRoute = async () => {
         collection: 'https://pointcast.xyz/collection',
         cast: 'https://pointcast.xyz/cast',
         explore: 'https://pointcast.xyz/explore',
+        knock: 'https://pointcast.xyz/knock',
         drum: 'https://pointcast.xyz/drum',
         drumV2: 'https://pointcast.xyz/drum-v2',
         drumV3: 'https://pointcast.xyz/drum-v3',

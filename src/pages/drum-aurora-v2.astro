@@ -1,0 +1,311 @@
+---
+/**
+ * /drum-aurora-v2 — mouse-responsive aurora.
+ *
+ * v1 (drum-aurora) was time-based: bands accreted every 30s of stay.
+ * v2 is presence-based: a soft OKLCH light follows your cursor across
+ * the dark velvet field, smearing the aurora wherever you move. Stop
+ * moving and the light pools at your last position; move slow and
+ * the field swims behind you; move fast and you draw streaks.
+ *
+ * Audio: a soft Cmaj9 pad always playing (after first gesture). As
+ * you move, a high sine note plays, pitch-mapped to your y position
+ * (top = 880 Hz, bottom = 220 Hz). Move slow = soft, move fast =
+ * louder.
+ *
+ * Header pill links back to /drum-aurora.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Aurora v2 · Mouse-Responsive · PointCast';
+const description =
+  'A soft OKLCH light follows your cursor across velvet. Move slow to swim, move fast to streak.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Aurora v2',
+  url: 'https://pointcast.xyz/drum-aurora-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="av2" id="av2-main">
+    <DrumNav current="aurora" />
+
+    <div class="av2__field" id="av2-field">
+      <canvas id="av2-canvas" class="av2__canvas"></canvas>
+      <div class="av2__cursor" id="av2-cursor"></div>
+
+      <header class="av2__chrome">
+        <span>AURORA</span>
+        <span class="av2__chrome-sep">·</span>
+        <span class="av2__chrome-version">v2 · MOUSE</span>
+        <a class="av2__prev-pill" href="/drum-aurora">← v1</a>
+      </header>
+
+      <div class="av2__center">
+        <h1 class="av2__title">FOLLOW</h1>
+        <p class="av2__tagline">the light moves with your cursor · move slow to swim · fast to streak</p>
+      </div>
+    </div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#av2-main) { background: #0c0410; overflow: hidden; }
+
+  .av2 {
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0; color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+  }
+  .av2 .drum-nav {
+    position: absolute; top: 0; left: 32px; z-index: 4;
+    opacity: 0.40; transform: scale(0.85); transform-origin: top left;
+  }
+
+  .av2__field {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 80px);
+    min-height: 600px;
+    overflow: hidden;
+    background: linear-gradient(180deg, oklch(0.10 0.04 280) 0%, oklch(0.06 0.02 320) 100%);
+    cursor: none;
+  }
+
+  .av2__canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 1;
+  }
+
+  .av2__cursor {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(244, 231, 200, 0.90);
+    box-shadow: 0 0 16px rgba(244, 231, 200, 0.55);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 3;
+    will-change: transform;
+    mix-blend-mode: screen;
+  }
+
+  .av2__chrome {
+    position: absolute; top: clamp(16px, 2vh, 32px); right: clamp(20px, 3vw, 48px);
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 6px 16px; border: 1px solid rgba(244, 231, 200, 0.30);
+    border-radius: 999px; backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(244, 231, 200, 0.85); z-index: 4;
+  }
+  .av2__chrome-sep { color: rgba(244, 231, 200, 0.40); }
+  .av2__chrome-version { color: oklch(0.85 0.18 80); font-weight: 700; }
+  .av2__prev-pill {
+    margin-left: 6px; padding: 2px 10px;
+    border: 1px solid rgba(244, 231, 200, 0.40); border-radius: 999px;
+    color: rgba(244, 231, 200, 0.55); text-decoration: none;
+    font-size: 10px; letter-spacing: 0.18em;
+    transition: color 160ms, border-color 160ms;
+  }
+  .av2__prev-pill:hover { color: oklch(0.85 0.18 80); border-color: oklch(0.85 0.18 80); }
+
+  .av2__center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; z-index: 2; pointer-events: none;
+    transition: opacity 1500ms ease-out;
+    padding: 0 24px;
+  }
+  .av2__field.av2__field--touched .av2__center { opacity: 0.20; }
+  .av2__title {
+    margin: 0 0 12px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.04em;
+    color: rgba(244, 231, 200, 0.95);
+    text-shadow: 0 0 40px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+  .av2__tagline {
+    margin: 0 auto;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.4vw, 18px);
+    color: rgba(244, 231, 200, 0.75);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6); max-width: 540px;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // Cmaj9 pad — always-on, fades in slow
+  let padNodes = null;
+  function startPad() {
+    if (padNodes) return;
+    const a = ctx(); const t = a.currentTime;
+    const FREQS = [130.81, 196.00, 246.94, 293.66, 329.63];
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1600;
+    const master = a.createGain();
+    master.gain.setValueAtTime(0.0001, t);
+    master.gain.exponentialRampToValueAtTime(0.07, t + 30);
+    filt.connect(master); master.connect(a.destination);
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.06 + Math.random() * 0.04;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.5;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      lfo.start(t); o.connect(filt); o.start(t);
+      return { o, lfo };
+    });
+    padNodes = { oscs, filt, master };
+  }
+
+  // Motion-mapped sine — pitch from y, gain from speed
+  let motionGain = null;
+  let motionOsc = null;
+  let motionFilt = null;
+  function startMotionVoice() {
+    if (motionOsc) return;
+    const a = ctx(); const t = a.currentTime;
+    motionOsc = a.createOscillator(); motionOsc.type = 'sine'; motionOsc.frequency.value = 440;
+    motionFilt = a.createBiquadFilter(); motionFilt.type = 'lowpass'; motionFilt.frequency.value = 3000;
+    motionGain = a.createGain(); motionGain.gain.value = 0;
+    motionOsc.connect(motionFilt).connect(motionGain).connect(a.destination);
+    motionOsc.start(t);
+  }
+  function setMotion(yNorm /* 0..1 */, speedNorm /* 0..1 */) {
+    if (!motionOsc || !motionGain) return;
+    const a = ctx(); const now = a.currentTime;
+    // pitch: top = 880 Hz, bottom = 220 Hz
+    const f = 880 - yNorm * 660;
+    motionOsc.frequency.setTargetAtTime(f, now, 0.06);
+    // gain: 0..0.06 mapped from speed
+    motionGain.gain.setTargetAtTime(Math.min(0.07, speedNorm * 0.07), now, 0.08);
+  }
+
+  // ── Canvas + cursor light ───────────────────────────
+  const fieldEl = document.getElementById('av2-field');
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('av2-canvas'));
+  const c2d = canvas?.getContext('2d');
+  const cursorEl = document.getElementById('av2-cursor');
+
+  function resize() {
+    if (!canvas) return;
+    canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Fading trail painted on every frame:
+  //   - fade existing canvas slightly
+  //   - paint a glowing radial gradient at cursor position
+  //   - hue shifts with x position
+  let mouseX = 0, mouseY = 0;
+  let lastX = 0, lastY = 0;
+  let lastT = performance.now();
+  let speed = 0;
+  let started = false;
+
+  function step(now) {
+    if (!c2d || !canvas) return requestAnimationFrame(step);
+    const dpr = window.devicePixelRatio || 1;
+
+    // Slight fade to keep the field velvet but trails persist briefly
+    c2d.globalCompositeOperation = 'destination-out';
+    c2d.fillStyle = 'rgba(0, 0, 0, 0.04)';
+    c2d.fillRect(0, 0, canvas.width, canvas.height);
+    c2d.globalCompositeOperation = 'lighter';
+
+    if (started) {
+      // Compute speed from last frame
+      const dt = Math.max(8, now - lastT);
+      const dx = mouseX - lastX;
+      const dy = mouseY - lastY;
+      const dist = Math.hypot(dx, dy);
+      const inst = (dist / dt) * 100; // pixels per 100ms-ish
+      speed = speed * 0.85 + inst * 0.15; // smooth
+
+      // Hue mapped to x position 0..1 → 0..360
+      const w = canvas.width;
+      const h = canvas.height;
+      const hue = (mouseX * dpr / w) * 360;
+      const radius = 80 * dpr + Math.min(220 * dpr, speed * 4);
+
+      // Soft glow at cursor — multiple layered radial gradients
+      const cx = mouseX * dpr;
+      const cy = mouseY * dpr;
+      const grad = c2d.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      grad.addColorStop(0, `oklch(0.75 0.30 ${hue} / 0.55)`);
+      grad.addColorStop(0.5, `oklch(0.55 0.25 ${(hue + 60) % 360} / 0.18)`);
+      grad.addColorStop(1, 'transparent');
+      c2d.fillStyle = grad;
+      c2d.beginPath();
+      c2d.arc(cx, cy, radius, 0, Math.PI * 2);
+      c2d.fill();
+
+      // Streak — connect last to current with a fat blurred line if motion is fast enough
+      if (dist > 6 && speed > 5) {
+        c2d.strokeStyle = `oklch(0.80 0.30 ${(hue + 30) % 360} / 0.30)`;
+        c2d.lineWidth = Math.min(40 * dpr, 4 * dpr + speed * 0.4 * dpr);
+        c2d.lineCap = 'round';
+        c2d.beginPath();
+        c2d.moveTo(lastX * dpr, lastY * dpr);
+        c2d.lineTo(cx, cy);
+        c2d.stroke();
+      }
+
+      // Audio motion update
+      const yNorm = mouseY / (canvas.height / dpr);
+      const speedNorm = Math.min(1, speed / 30);
+      setMotion(yNorm, speedNorm);
+
+      // Cursor element
+      if (cursorEl) {
+        cursorEl.style.transform = `translate(${mouseX}px, ${mouseY}px) translate(-50%, -50%)`;
+        cursorEl.style.background = `oklch(0.85 0.30 ${hue})`;
+        cursorEl.style.boxShadow = `0 0 ${20 + speed * 0.5}px oklch(0.85 0.30 ${hue} / 0.65)`;
+      }
+    }
+
+    lastX = mouseX;
+    lastY = mouseY;
+    lastT = now;
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  function onPointer(e) {
+    if (!fieldEl) return;
+    const rect = fieldEl.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    mouseX = t.clientX - rect.left;
+    mouseY = t.clientY - rect.top;
+    if (!started) {
+      started = true;
+      try { startPad(); startMotionVoice(); } catch {}
+      lastX = mouseX; lastY = mouseY;
+      fieldEl.classList.add('av2__field--touched');
+    }
+  }
+
+  fieldEl?.addEventListener('mousemove', onPointer);
+  fieldEl?.addEventListener('touchmove', onPointer, { passive: true });
+  fieldEl?.addEventListener('touchstart', onPointer, { passive: true });
+  // Audio gate via click as fallback
+  fieldEl?.addEventListener('click', (e) => {
+    onPointer(e);
+    try { startPad(); startMotionVoice(); } catch {}
+  });
+</script>
