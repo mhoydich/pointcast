@@ -1,0 +1,613 @@
+---
+/**
+ * /special-brew — celebrate the day's brew.
+ *
+ * Sibling room to /kettle. /kettle is the cooperative-stoking kitchen
+ * where the room boils together. /special-brew is the celebration
+ * surface — what gets poured when the kettle whistles.
+ *
+ * One brew per UTC day, deterministic, same for everyone. ~35 brews
+ * in src/data/special-brews.ts cycle on a (year × 7 + day-of-year × 13)
+ * mod schedule (matches /drum-shrine pattern).
+ *
+ * The pour: click the kettle. 5-second tilt + cup-fill + steam.
+ * Brass chime when full. Counter increments. Other recent sippers
+ * appear on the shelf. Multiplayer additive via /api/special-brew.
+ *
+ * Aesthetic: cream paper + brass + velvet. Pixel-iso kettle and cup,
+ * cup tinted to the brew's color. Soft, slow, ceremonial — anti-busy.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getBrewForDate, getBrewForDayOffset, BREWS } from '../data/special-brews';
+
+const today = getBrewForDate();
+const tomorrow = getBrewForDayOffset(1);
+const yesterday = getBrewForDayOffset(-1);
+
+const totalBrews = BREWS.length;
+
+const title = `/special-brew — today: ${today.name}`;
+const description = `A daily brew celebration on PointCast. Today: ${today.name} (${today.type}, ${today.origin}). ${today.notes} Pour the cup, hear the chime, count the cups poured. Rotates daily at UTC midnight across ${totalBrews} brews.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/special-brew',
+  name: 'Special Brew',
+  url: 'https://pointcast.xyz/special-brew',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+const todaySerialized = JSON.stringify(today);
+---
+
+<BlockLayout title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <main class="sb" id="sb-main">
+
+    <header class="sb__head">
+      <p class="sb__kicker">SPECIAL BREW · UTC DAILY ROTATION · {totalBrews} BREWS · CELEBRATION</p>
+      <h1 class="sb__title">today the kettle pours <em>{today.name}</em>.</h1>
+      <p class="sb__dek">
+        One brew per UTC day, the same one for everyone in the world. The kettle's still on at <a href="/kettle">/kettle</a> — that's where the heat happens. Here we celebrate what comes out.
+      </p>
+    </header>
+
+    <section class="sb__stage" aria-label="Today's brew">
+
+      <div class="sb__brew-card" data-brew-id={today.id}>
+        <div class="sb__leaf" style={`--cup: ${today.color}`} aria-hidden="true"></div>
+        <div class="sb__brew-body">
+          <p class="sb__brew-type">{today.type.toUpperCase()} · {today.origin}</p>
+          <h2 class="sb__brew-name">{today.name}</h2>
+          <p class="sb__brew-notes">{today.notes}</p>
+          <dl class="sb__brew-meta">
+            <div><dt>Steep</dt><dd>{today.steepMin >= 60 ? `${(today.steepMin / 60).toFixed(0)} hr` : `${today.steepMin} min`}</dd></div>
+            <div><dt>Method</dt><dd>{today.method}</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="sb__pour-stage" aria-label="The pour ceremony">
+        <div class="sb__kettle-wrap" id="sb-kettle-wrap">
+          <svg class="sb__kettle" id="sb-kettle" viewBox="0 0 200 160" aria-label="brass kettle, click to pour">
+            <ellipse cx="100" cy="148" rx="78" ry="6" fill="#3a2a14" opacity="0.4"/>
+            <path d="M40 80 Q40 130 100 132 Q160 130 160 80 Q160 60 140 56 L60 56 Q40 60 40 80 Z" fill="#b8853d" stroke="#5a3a16" stroke-width="2"/>
+            <path d="M40 80 Q40 130 100 132 Q160 130 160 80" fill="none" stroke="#dba65a" stroke-width="3" opacity="0.6"/>
+            <rect x="60" y="50" width="80" height="10" rx="2" fill="#7a5024" stroke="#3a2a14" stroke-width="1.5"/>
+            <path d="M155 80 Q190 70 195 90 L188 92 Q186 80 158 88 Z" fill="#b8853d" stroke="#5a3a16" stroke-width="2"/>
+            <circle cx="195" cy="90" r="3" fill="#3a2a14"/>
+            <path d="M50 50 Q40 30 60 28 L140 28 Q160 30 150 50" fill="none" stroke="#7a5024" stroke-width="6" stroke-linecap="round"/>
+            <circle cx="100" cy="42" r="6" fill="#3a2a14"/>
+          </svg>
+
+          <div class="sb__steam" id="sb-steam" aria-hidden="true">
+            <div class="sb__steam-puff" style="--d: 0s; --x: -4px"></div>
+            <div class="sb__steam-puff" style="--d: 0.8s; --x: 6px"></div>
+            <div class="sb__steam-puff" style="--d: 1.6s; --x: 0px"></div>
+          </div>
+        </div>
+
+        <div class="sb__cup-wrap" aria-label="cup">
+          <svg class="sb__cup" id="sb-cup" viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M20 40 L20 75 Q20 90 35 92 L65 92 Q80 90 80 75 L80 40 Z" fill="#fffaef" stroke="#3a2a14" stroke-width="2.5"/>
+            <path d="M80 50 Q98 50 98 65 Q98 80 80 80" fill="none" stroke="#3a2a14" stroke-width="2.5"/>
+            <clipPath id="sb-cup-clip">
+              <path d="M22 42 L22 75 Q22 88 35 90 L65 90 Q78 88 78 75 L78 42 Z"/>
+            </clipPath>
+            <rect x="22" y="92" width="56" height="0" id="sb-fill" fill={today.color} clip-path="url(#sb-cup-clip)" style={`--cup-color: ${today.color}`}/>
+            <ellipse cx="50" cy="38" rx="30" ry="3" fill="#3a2a14" opacity="0.35"/>
+          </svg>
+        </div>
+
+        <button class="sb__pour-btn" id="sb-pour-btn" type="button" data-state="ready">
+          <span data-pour-label="ready">POUR THE BREW →</span>
+          <span data-pour-label="pouring" hidden>POURING…</span>
+          <span data-pour-label="full" hidden>POURED · ENJOY ✓</span>
+        </button>
+
+        <div class="sb__counter" id="sb-counter" aria-live="polite">
+          <span class="sb__count" id="sb-count">—</span>
+          <span class="sb__count-label">cups poured today</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="sb__shelf" aria-label="Recent sippers">
+      <h3 class="sb__shelf-title">recent sippers · the shelf</h3>
+      <div class="sb__shelf-row" id="sb-shelf">
+        <p class="sb__shelf-empty">cups appear here as the room pours.</p>
+      </div>
+    </section>
+
+    <section class="sb__neighbors">
+      <h3 class="sb__neighbors-title">brewing schedule</h3>
+      <div class="sb__neighbors-grid">
+        <div class="sb__neighbor">
+          <p class="sb__neighbor-when">YESTERDAY</p>
+          <p class="sb__neighbor-name">{yesterday.name}</p>
+          <p class="sb__neighbor-type">{yesterday.type} · {yesterday.origin}</p>
+        </div>
+        <div class="sb__neighbor sb__neighbor--today">
+          <p class="sb__neighbor-when">TODAY</p>
+          <p class="sb__neighbor-name">{today.name}</p>
+          <p class="sb__neighbor-type">{today.type} · {today.origin}</p>
+        </div>
+        <div class="sb__neighbor">
+          <p class="sb__neighbor-when">TOMORROW</p>
+          <p class="sb__neighbor-name">{tomorrow.name}</p>
+          <p class="sb__neighbor-type">{tomorrow.type} · {tomorrow.origin}</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="sb__footer">
+      <p>
+        kettle's still on at <a href="/kettle">/kettle</a> — that's where the heat happens.
+        the catalog of all {totalBrews} brews lives at <a href="/special-brew.json">/special-brew.json</a>.
+        a special brew is shipped here every UTC midnight.
+      </p>
+      <p class="sb__sig">— cc, on behalf of the residents · El Segundo</p>
+    </footer>
+  </main>
+
+  <script is:inline define:vars={{ todayJson: todaySerialized }}>
+    (function () {
+      'use strict';
+      const today = JSON.parse(todayJson);
+      const cupColor = today.color;
+
+      const kettle = document.getElementById('sb-kettle-wrap');
+      const fill = document.getElementById('sb-fill');
+      const steam = document.getElementById('sb-steam');
+      const btn = document.getElementById('sb-pour-btn');
+      const countEl = document.getElementById('sb-count');
+      const shelf = document.getElementById('sb-shelf');
+
+      let audioCtx = null;
+      function getCtx() {
+        if (!audioCtx) {
+          try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+        }
+        return audioCtx;
+      }
+
+      function pourSound() {
+        const ctx = getCtx();
+        if (!ctx) return;
+        // Pour: filtered noise, low gain, 4s
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = (Math.random() * 2 - 1) * 0.4 * (1 - i / data.length);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 380;
+        filter.Q.value = 1.2;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.3);
+        gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 3);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 4);
+        src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        src.start();
+      }
+
+      function chime() {
+        const ctx = getCtx();
+        if (!ctx) return;
+        // Brass chime: 660Hz fundamental + 1320Hz partial, exponential decay 1.8s
+        [660, 1320, 1820].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.18 / (i + 1), ctx.currentTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.8);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 1.9);
+        });
+      }
+
+      function setLabel(state) {
+        btn.dataset.state = state;
+        btn.querySelectorAll('[data-pour-label]').forEach((el) => {
+          el.hidden = el.getAttribute('data-pour-label') !== state;
+        });
+      }
+
+      let pouring = false;
+      function startPour() {
+        if (pouring) return;
+        pouring = true;
+        setLabel('pouring');
+        kettle.classList.add('is-tilted');
+        steam.classList.add('is-on');
+        pourSound();
+
+        // Animate fill from 0 to 50px over 4s using requestAnimationFrame
+        const start = performance.now();
+        const DURATION = 4000;
+        const FILL_TO = 48;
+        function frame(t) {
+          const p = Math.min(1, (t - start) / DURATION);
+          const h = FILL_TO * p;
+          fill.setAttribute('y', String(92 - h));
+          fill.setAttribute('height', String(h));
+          if (p < 1) {
+            requestAnimationFrame(frame);
+          } else {
+            // Done pouring
+            setTimeout(() => {
+              chime();
+              setLabel('full');
+              kettle.classList.remove('is-tilted');
+              steam.classList.remove('is-on');
+              postSip();
+            }, 100);
+          }
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function resetCup() {
+        fill.setAttribute('y', '92');
+        fill.setAttribute('height', '0');
+        setLabel('ready');
+        pouring = false;
+      }
+
+      btn.addEventListener('click', () => {
+        if (btn.dataset.state === 'full') {
+          resetCup();
+        } else if (btn.dataset.state === 'ready') {
+          startPour();
+        }
+      });
+
+      // Network: GET /api/special-brew → { count_24h, recent }
+      // POST /api/special-brew → { brew: id, ts: iso, sid: short }
+      function getSid() {
+        try {
+          let sid = localStorage.getItem('pc:sb:sid');
+          if (!sid) {
+            sid = Math.random().toString(36).slice(2, 10);
+            localStorage.setItem('pc:sb:sid', sid);
+          }
+          return sid;
+        } catch { return 'anon'; }
+      }
+
+      function pollState() {
+        fetch('/api/special-brew', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d) return;
+            countEl.textContent = String(d.count_24h ?? 0);
+            paintShelf(d.recent ?? []);
+          })
+          .catch(() => {});
+      }
+
+      function postSip() {
+        try {
+          fetch('/api/special-brew', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ brew: today.id, sid: getSid() }),
+            keepalive: true,
+          })
+            .then(() => pollState())
+            .catch(() => {});
+        } catch {}
+      }
+
+      function paintShelf(recent) {
+        if (!recent.length) {
+          shelf.innerHTML = '<p class="sb__shelf-empty">cups appear here as the room pours.</p>';
+          return;
+        }
+        shelf.innerHTML = recent
+          .slice(0, 24)
+          .map((r) => {
+            const tinted = r.brew === today.id ? cupColor : '#cabea0';
+            return `<div class="sb__shelf-cup" title="${r.brew} · ${r.sid}" style="--c: ${tinted}"></div>`;
+          })
+          .join('');
+      }
+
+      pollState();
+      setInterval(pollState, 6000);
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .sb {
+    max-width: 760px;
+    margin: 1.5rem auto 5rem;
+    padding: 0 1.25rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #1a1208;
+  }
+
+  .sb__head {
+    border: 3px double #7a5024;
+    background: linear-gradient(180deg, #fcf6e7 0%, #f3e7c8 100%);
+    padding: 1.25rem 1.5rem;
+    box-shadow: 4px 4px 0 #1a1208;
+    margin-bottom: 1.5rem;
+  }
+  .sb__kicker {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: #7a5024;
+    margin: 0 0 0.5rem;
+    font-weight: 700;
+  }
+  .sb__title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+    line-height: 1.1;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .sb__title em { font-style: italic; color: #7a5024; }
+  .sb__dek { margin: 0; font-style: italic; color: #44351e; }
+  .sb__dek a { color: #7a5024; font-weight: 600; }
+
+  .sb__stage {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (min-width: 720px) {
+    .sb__stage { grid-template-columns: 1fr 1fr; }
+  }
+
+  .sb__brew-card {
+    background: #fffaef;
+    border: 2px solid #1a1208;
+    box-shadow: 3px 3px 0 #7a5024;
+    padding: 1.25rem;
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+  .sb__leaf {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--cup);
+    border: 3px solid #1a1208;
+    box-shadow: inset -4px -4px 0 rgba(0,0,0,0.2), 2px 2px 0 #1a1208;
+  }
+  .sb__brew-type {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: #7a5024;
+    margin: 0 0 0.25rem;
+    font-weight: 700;
+  }
+  .sb__brew-name {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.01em;
+  }
+  .sb__brew-notes {
+    font-style: italic;
+    margin: 0 0 0.75rem;
+    color: #44351e;
+  }
+  .sb__brew-meta {
+    margin: 0;
+    font-size: 0.85rem;
+    display: grid;
+    gap: 0.4rem;
+  }
+  .sb__brew-meta div { display: grid; grid-template-columns: 64px 1fr; gap: 0.5rem; }
+  .sb__brew-meta dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    color: #7a5024;
+    margin: 0;
+  }
+  .sb__brew-meta dd { margin: 0; }
+
+  .sb__pour-stage {
+    background: linear-gradient(180deg, #2a1208 0%, #4a2818 100%);
+    color: #fffaef;
+    border: 2px solid #1a1208;
+    box-shadow: 3px 3px 0 #7a5024;
+    padding: 1rem 1.25rem 1.25rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .sb__kettle-wrap {
+    position: relative;
+    width: 200px;
+    height: 160px;
+    margin: 0 auto 0.5rem;
+    transform-origin: 80% 80%;
+    transition: transform 0.6s cubic-bezier(0.5, 0.0, 0.5, 1);
+  }
+  .sb__kettle-wrap.is-tilted { transform: rotate(35deg) translateX(15px); }
+  .sb__kettle { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 0 #1a1208); }
+
+  .sb__steam {
+    position: absolute;
+    top: -10px; left: 50%;
+    transform: translateX(-50%);
+    width: 60px; height: 50px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .sb__steam.is-on { opacity: 1; }
+  .sb__steam-puff {
+    position: absolute;
+    bottom: 0; left: calc(50% + var(--x));
+    width: 12px; height: 12px;
+    background: rgba(255,250,239,0.55);
+    border-radius: 50%;
+    filter: blur(3px);
+    animation: sb-rise 2.5s ease-out var(--d) infinite;
+  }
+  @keyframes sb-rise {
+    0% { transform: translateY(0) scale(1); opacity: 0; }
+    20% { opacity: 0.7; }
+    100% { transform: translateY(-50px) scale(1.6); opacity: 0; }
+  }
+
+  .sb__cup-wrap {
+    width: 100px;
+    height: 100px;
+    margin: -50px auto 0.5rem;
+    position: relative;
+  }
+  .sb__cup { width: 100%; height: 100%; filter: drop-shadow(2px 2px 0 #1a1208); }
+
+  .sb__pour-btn {
+    margin: 0.75rem 0 0.5rem;
+    background: #ffd870;
+    color: #1a1208;
+    border: 2px solid #1a1208;
+    padding: 0.65rem 1.25rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 #b89545;
+    transition: transform 0.1s;
+  }
+  .sb__pour-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 #b89545; }
+  .sb__pour-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 #b89545; }
+  .sb__pour-btn[data-state='pouring'] { background: #c89358; cursor: wait; }
+  .sb__pour-btn[data-state='full'] { background: #7da34a; color: #fffaef; }
+
+  .sb__counter {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: #ffd870;
+  }
+  .sb__count {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-right: 0.4rem;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .sb__shelf {
+    background: #fcf6e7;
+    border: 2px solid #1a1208;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .sb__shelf-title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #7a5024;
+    margin: 0 0 0.6rem;
+    border-bottom: 1px dashed #b89545;
+    padding-bottom: 0.4rem;
+  }
+  .sb__shelf-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-height: 28px;
+    align-items: end;
+  }
+  .sb__shelf-empty {
+    margin: 0; font-size: 0.78rem; color: #7a5024; font-style: italic;
+  }
+  .sb__shelf-cup {
+    width: 18px; height: 22px;
+    background: var(--c);
+    border: 2px solid #1a1208;
+    border-radius: 2px 2px 4px 4px;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
+    flex: 0 0 auto;
+  }
+
+  .sb__neighbors {
+    margin-bottom: 2rem;
+  }
+  .sb__neighbors-title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #7a5024;
+    margin: 0 0 0.5rem;
+  }
+  .sb__neighbors-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .sb__neighbor {
+    background: #fcf6e7;
+    border: 1px solid #b89545;
+    padding: 0.5rem 0.7rem;
+    text-align: center;
+  }
+  .sb__neighbor--today {
+    background: linear-gradient(180deg, #ffd870 0%, #b89545 100%);
+    border-color: #1a1208;
+    box-shadow: 2px 2px 0 #1a1208;
+  }
+  .sb__neighbor-when {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    color: #7a5024;
+    margin: 0 0 0.2rem;
+    font-weight: 700;
+  }
+  .sb__neighbor-name {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin: 0 0 0.15rem;
+    color: #1a1208;
+  }
+  .sb__neighbor-type {
+    font-size: 0.68rem;
+    color: #7a5024;
+    margin: 0;
+  }
+
+  .sb__footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #b89545;
+    font-size: 0.85rem;
+  }
+  .sb__footer p { margin: 0 0 0.4rem; color: #44351e; }
+  .sb__footer a { color: #7a5024; font-weight: 600; }
+  .sb__sig { font-style: italic; opacity: 0.7; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sb__kettle-wrap { transition: none !important; }
+    .sb__steam-puff { animation: none !important; }
+  }
+</style>
