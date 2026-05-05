@@ -319,6 +319,46 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#c4952e',
   },
+
+  // ─── BURSTS (batch 8) ─────────────────────────────────────────
+  {
+    id: 'spark',
+    label: 'spark',
+    blurb: 'Electric sparks scatter outward from a point. Sharp, quick, bright.',
+    glyph: '⚡',
+    kind: 'burst',
+    durationMs: 2000,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 8) ─────────────────────────────────────
+  {
+    id: 'frog',
+    label: 'frog',
+    blurb: 'A frog hops across the bottom in lazy arcs. No hurry at all.',
+    glyph: '🐸',
+    kind: 'companion',
+    durationMs: 35_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 8) ────────────────────────────────────────
+  {
+    id: 'leaves',
+    label: 'leaves',
+    blurb: 'Autumn leaves spin and drift down. A seasonal tumble.',
+    glyph: '🍂',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
+  {
+    id: 'lantern',
+    label: 'lantern',
+    blurb: 'A paper lantern glows in the top corner. Warm and quiet company.',
+    glyph: '🏮',
+    kind: 'ambient',
+    accent: '#8a2432',
+  },
 ];
 
 /** Lookup helper. */
