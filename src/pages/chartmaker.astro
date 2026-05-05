@@ -5,6 +5,7 @@ import { getChartmakerPacket } from '../lib/chartmaker';
 const packet = getChartmakerPacket();
 const nativeSources = packet.sources.filter((source) => source.status === 'native');
 const addableSources = packet.sources.filter((source) => source.status !== 'native');
+const todayCharts = packet.today.charts;
 const description = packet.description;
 
 const jsonLd = {
@@ -47,6 +48,48 @@ const jsonLd = {
         <strong>{packet.recipes.length}</strong>
         <em>starter recipes</em>
       </aside>
+    </section>
+
+    <section class="today-board" aria-labelledby="today-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker">TODAY BOARD · {packet.today.label}</p>
+          <h2 id="today-title">10 charts for today</h2>
+        </div>
+        <a href="/chartmaker.json">Open the data</a>
+      </div>
+      <div class="today-charts">
+        {todayCharts.map((chart, index) => {
+          const max = Math.max(1, ...chart.points.map((point) => point.value));
+          return (
+            <article class={`today-chart today-chart--${chart.mode}`}>
+              <div class="today-chart__top">
+                <span>{String(index + 1).padStart(2, '0')} · {chart.kicker}</span>
+                <strong>{chart.mode}</strong>
+              </div>
+              <h3>{chart.title}</h3>
+              <p>{chart.summary}</p>
+              <div class="mini-chart" aria-label={`${chart.title} chart values`}>
+                {chart.points.map((point) => {
+                  const height = Math.max(8, Math.round((point.value / max) * 100));
+                  return (
+                    <div class="mini-chart__item">
+                      <span class="mini-chart__value">{point.value}</span>
+                      <span class="mini-chart__bar" style={`height: ${height}%`}></span>
+                      <span class="mini-chart__label">{point.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p class="today-chart__read">{chart.read}</p>
+              <div class="chips" aria-label={`${chart.title} source`}>
+                <code>{chart.unit}</code>
+                <a href={chart.sourceUrl}>{chart.source}</a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
 
     <section class="recipe-board" aria-labelledby="recipes-title">
@@ -149,6 +192,9 @@ const jsonLd = {
   .kicker,
   .maker-score span,
   .maker-score em,
+  .today-chart__top,
+  .mini-chart__label,
+  .mini-chart__value,
   .recipe span,
   .source span,
   code,
@@ -167,6 +213,7 @@ const jsonLd = {
   }
 
   .maker-hero,
+  .today-board,
   .recipe-board,
   .source-grid,
   .next {
@@ -181,10 +228,12 @@ const jsonLd = {
 
   .maker-hero > div,
   .maker-score,
+  .today-board,
   .recipe-board,
   .source-grid,
   .next,
   .recipe,
+  .today-chart,
   .source {
     border: 1.5px solid var(--ink);
     background: var(--paper);
@@ -193,6 +242,7 @@ const jsonLd = {
 
   .maker-hero > div,
   .maker-score,
+  .today-board,
   .recipe-board,
   .source-grid,
   .next {
@@ -244,6 +294,11 @@ const jsonLd = {
     margin-bottom: 16px;
   }
 
+  .section-head > a {
+    color: var(--blue);
+    font-weight: 800;
+  }
+
   h2,
   h3,
   h4 {
@@ -257,23 +312,106 @@ const jsonLd = {
   }
 
   .recipes,
+  .today-charts,
   .sources {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
 
+  .today-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .recipe,
+  .today-chart,
   .source {
     box-shadow: 2px 2px 0 var(--ink);
     padding: 16px;
   }
 
   .recipe span,
+  .today-chart__top,
   .source span {
     color: var(--gold);
     font-size: 9px;
     font-weight: 800;
+  }
+
+  .today-chart {
+    display: grid;
+    gap: 12px;
+  }
+
+  .today-chart__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .today-chart h3 {
+    margin: 0;
+    font-size: clamp(26px, 3vw, 38px);
+    line-height: 0.98;
+  }
+
+  .today-chart p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .today-chart__read {
+    border-top: 1px solid rgba(23, 22, 16, 0.18);
+    padding-top: 10px;
+  }
+
+  .mini-chart {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(34px, 1fr);
+    align-items: end;
+    gap: 7px;
+    height: 156px;
+    overflow-x: auto;
+    border: 1px solid rgba(23, 22, 16, 0.18);
+    background: #fff;
+    padding: 10px;
+  }
+
+  .mini-chart__item {
+    display: grid;
+    grid-template-rows: 24px 1fr 24px;
+    align-items: end;
+    gap: 5px;
+    min-width: 34px;
+    height: 100%;
+  }
+
+  .mini-chart__value,
+  .mini-chart__label {
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .mini-chart__bar {
+    display: block;
+    min-height: 8px;
+    border: 1px solid var(--ink);
+    background: linear-gradient(180deg, #f1c45a, #155c9f);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+
+  .today-chart--line .mini-chart__bar {
+    background: linear-gradient(180deg, #7eb98a, #155c9f);
+  }
+
+  .today-chart--timeline .mini-chart__bar,
+  .today-chart--scorecard .mini-chart__bar {
+    background: linear-gradient(180deg, #f1c45a, #236b4e);
   }
 
   .recipe h3,
@@ -314,6 +452,19 @@ const jsonLd = {
     margin-top: 8px;
     color: var(--blue);
     font-weight: 700;
+  }
+
+  .today-chart .chips a {
+    border: 1px solid rgba(23, 22, 16, 0.22);
+    background: #fff;
+    padding: 5px 7px;
+    color: var(--blue);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
   }
 
   .chips {
@@ -364,6 +515,7 @@ const jsonLd = {
 
   @media (max-width: 860px) {
     .maker-hero,
+    .today-charts,
     .next,
     .recipes,
     .sources,

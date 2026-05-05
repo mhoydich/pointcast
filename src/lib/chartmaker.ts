@@ -1,7 +1,7 @@
 export interface ChartmakerSource {
   slug: string;
   name: string;
-  category: 'pointcast' | 'weather' | 'markets' | 'sports' | 'web' | 'local';
+  category: 'pointcast' | 'weather' | 'markets' | 'sports' | 'web' | 'local' | 'ocean' | 'earth' | 'culture';
   status: 'native' | 'addable' | 'candidate';
   endpoint: string;
   cadence: string;
@@ -17,6 +17,23 @@ export interface ChartmakerRecipe {
   sources: string[];
   question: string;
   output: string;
+}
+
+export interface ChartmakerTodayChart {
+  slug: string;
+  title: string;
+  kicker: string;
+  source: string;
+  sourceUrl: string;
+  mode: 'bar' | 'line' | 'scorecard' | 'timeline' | 'ranking';
+  unit: string;
+  summary: string;
+  read: string;
+  points: Array<{
+    label: string;
+    value: number;
+    note?: string;
+  }>;
 }
 
 export const CHARTMAKER_SOURCES: ChartmakerSource[] = [
@@ -76,6 +93,17 @@ export const CHARTMAKER_SOURCES: ChartmakerSource[] = [
     note: 'CSV watchlist adapter for equities and crypto-style symbols; good enough for public trend cards, not trading advice.',
   },
   {
+    slug: 'coingecko-crypto',
+    name: 'CoinGecko simple prices',
+    category: 'markets',
+    status: 'addable',
+    endpoint: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tezos&vs_currencies=usd&include_24hr_change=true',
+    cadence: 'near-real-time public quote',
+    measures: ['usd price', '24h change'],
+    joinKeys: ['asset', 'date'],
+    note: 'Crypto watchlist source for public price mood, collectible context, and treasury-adjacent charts.',
+  },
+  {
     slug: 'nba-scoreboard',
     name: 'NBA scoreboard',
     category: 'sports',
@@ -85,6 +113,61 @@ export const CHARTMAKER_SOURCES: ChartmakerSource[] = [
     measures: ['score', 'status', 'teams', 'start time'],
     joinKeys: ['date', 'team', 'league'],
     note: 'Candidate sports feed for live scoreboard strips and sports-versus-market/weather experiments.',
+  },
+  {
+    slug: 'open-meteo-air-quality',
+    name: 'El Segundo air quality',
+    category: 'weather',
+    status: 'addable',
+    endpoint: 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=33.9192&longitude=-118.4165&hourly=pm10,pm2_5,us_aqi&timezone=America%2FLos_Angeles',
+    cadence: 'hourly forecast',
+    measures: ['US AQI', 'PM2.5', 'PM10'],
+    joinKeys: ['date', 'hour', 'location'],
+    note: 'No-key air-quality lane for local comfort, outdoor-room readiness, and health-of-the-day overlays.',
+  },
+  {
+    slug: 'open-meteo-marine',
+    name: 'South Bay marine forecast',
+    category: 'ocean',
+    status: 'addable',
+    endpoint: 'https://marine-api.open-meteo.com/v1/marine?latitude=33.9192&longitude=-118.4165&hourly=wave_height,wave_period,sea_surface_temperature&timezone=America%2FLos_Angeles',
+    cadence: 'hourly forecast',
+    measures: ['wave height', 'wave period', 'sea surface temperature'],
+    joinKeys: ['date', 'hour', 'location'],
+    note: 'Ocean lane for tidepool, beach, and local field-note charts.',
+  },
+  {
+    slug: 'usgs-earthquakes',
+    name: 'USGS earthquakes',
+    category: 'earth',
+    status: 'addable',
+    endpoint: 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2026-05-05&endtime=2026-05-06&minmagnitude=4.5',
+    cadence: 'event stream',
+    measures: ['magnitude', 'place', 'time'],
+    joinKeys: ['date', 'place', 'magnitude'],
+    note: 'A global geology pulse that makes the daily board feel planetary without needing credentials.',
+  },
+  {
+    slug: 'nasa-apod',
+    name: 'NASA Astronomy Picture of the Day',
+    category: 'culture',
+    status: 'addable',
+    endpoint: 'https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY',
+    cadence: 'daily',
+    measures: ['title', 'media type', 'date'],
+    joinKeys: ['date'],
+    note: 'Daily sky image metadata for culture, mood, and visual prompt context.',
+  },
+  {
+    slug: 'hacker-news-frontpage',
+    name: 'Hacker News front page',
+    category: 'web',
+    status: 'addable',
+    endpoint: 'https://hn.algolia.com/api/v1/search_by_date?tags=front_page',
+    cadence: 'near-real-time feed',
+    measures: ['title', 'points', 'author', 'created time'],
+    joinKeys: ['date', 'story id', 'author'],
+    note: 'Ambient internet-intensity feed for tech/culture overlays.',
   },
   {
     slug: 'mlb-scoreboard',
@@ -118,6 +201,184 @@ export const CHARTMAKER_SOURCES: ChartmakerSource[] = [
     measures: ['visited rooms', 'saved blocks', 'wallet-local hints', 'collected drops'],
     joinKeys: ['route', 'date', 'local id'],
     note: 'Private, accountless overlay for personal timelines. Never shipped back to the server.',
+  },
+];
+
+export const CHARTMAKER_TODAY_CHARTS: ChartmakerTodayChart[] = [
+  {
+    slug: 'may-5-shipping-velocity',
+    title: 'PointCast Shipping Velocity',
+    kicker: 'LEDGER · TUESDAY MAY 5',
+    source: 'PointCast block ledger',
+    sourceUrl: '/blocks.json',
+    mode: 'bar',
+    unit: 'blocks',
+    summary: 'Block 0429 is live on the May 5 board, so today has a visible receipt to anchor the charts.',
+    read: 'Use this as the local truth lane: every other source can be compared against what PointCast actually shipped.',
+    points: [
+      { label: 'Fri', value: 3 },
+      { label: 'Sat', value: 3 },
+      { label: 'Sun', value: 0 },
+      { label: 'Mon', value: 3 },
+      { label: 'Tue', value: 1, note: '0429' },
+    ],
+  },
+  {
+    slug: 'el-segundo-weather-window',
+    title: 'El Segundo Weather Window',
+    kicker: 'OPEN-METEO · LOCAL',
+    source: 'Open-Meteo forecast',
+    sourceUrl: 'https://api.open-meteo.com/',
+    mode: 'line',
+    unit: 'deg C',
+    summary: 'May 5 is mild: 12.9-18.2 C with no forecast precipitation and max wind near 18.8 km/h.',
+    read: 'Good local-working weather: cool, dry, and a little breezy.',
+    points: [
+      { label: '00', value: 14.0 },
+      { label: '01', value: 14.6 },
+      { label: '02', value: 14.5 },
+      { label: '03', value: 13.4 },
+      { label: '04', value: 14.4 },
+      { label: '05', value: 13.6 },
+    ],
+  },
+  {
+    slug: 'air-quality-rise',
+    title: 'Air Quality Rise',
+    kicker: 'OPEN-METEO · AQI',
+    source: 'Open-Meteo air quality',
+    sourceUrl: 'https://air-quality-api.open-meteo.com/',
+    mode: 'line',
+    unit: 'US AQI',
+    summary: 'US AQI sits in the low-to-mid 30s in the early hours, with PM2.5 rising from 11.6 to 18.6.',
+    read: 'A calm air-quality lane for outdoor notes and walkable-room ideas.',
+    points: [
+      { label: '00', value: 35 },
+      { label: '01', value: 33 },
+      { label: '02', value: 32 },
+      { label: '03', value: 33 },
+      { label: '04', value: 35 },
+      { label: '05', value: 36 },
+    ],
+  },
+  {
+    slug: 'south-bay-wave-pulse',
+    title: 'South Bay Wave Pulse',
+    kicker: 'OPEN-METEO MARINE · OCEAN',
+    source: 'Open-Meteo marine forecast',
+    sourceUrl: 'https://marine-api.open-meteo.com/',
+    mode: 'line',
+    unit: 'm',
+    summary: 'Wave height is compact and steady around 0.54-0.58 m, with sea surface temperature at 16.6 C.',
+    read: 'A quiet ocean lane that pairs naturally with tidepool and local field notes.',
+    points: [
+      { label: '00', value: 0.56 },
+      { label: '01', value: 0.56 },
+      { label: '02', value: 0.54 },
+      { label: '03', value: 0.56 },
+      { label: '04', value: 0.56 },
+      { label: '05', value: 0.58 },
+    ],
+  },
+  {
+    slug: 'market-watchlist-range',
+    title: 'Market Watchlist Range',
+    kicker: 'STOOQ · PUBLIC CSV',
+    source: 'Stooq quote CSV',
+    sourceUrl: 'https://stooq.com/q/l/',
+    mode: 'bar',
+    unit: '% intraday range',
+    summary: 'AAPL shows the widest range in the quick watchlist, followed by TSLA, then SPY.',
+    read: 'Use this as market weather, not advice: it is a volatility texture for the daily board.',
+    points: [
+      { label: 'SPY', value: 0.49, note: '724.78 close' },
+      { label: 'AAPL', value: 2.91, note: '284.18 close' },
+      { label: 'TSLA', value: 3.32, note: '392.16 close' },
+    ],
+  },
+  {
+    slug: 'crypto-mood',
+    title: 'Crypto Mood',
+    kicker: 'COINGECKO · 24H CHANGE',
+    source: 'CoinGecko simple price',
+    sourceUrl: 'https://www.coingecko.com/en/api',
+    mode: 'bar',
+    unit: '% 24h',
+    summary: 'BTC, ETH, and XTZ are all green in the sampled 24h change feed.',
+    read: 'A useful collectible-context lane: crypto mood without turning PointCast into a trading desk.',
+    points: [
+      { label: 'BTC', value: 2.04, note: '$81,644' },
+      { label: 'ETH', value: 0.75, note: '$2,373.70' },
+      { label: 'XTZ', value: 1.75, note: '$0.371' },
+    ],
+  },
+  {
+    slug: 'nba-evening-slate',
+    title: 'NBA Evening Slate',
+    kicker: 'ESPN · SCOREBOARD',
+    source: 'ESPN NBA scoreboard',
+    sourceUrl: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+    mode: 'timeline',
+    unit: 'games',
+    summary: 'Two NBA games are scheduled for the May 5 evening slate: CLE at DET and LAL at OKC.',
+    read: 'A small, high-signal sports strip: perfect for a Now-card companion.',
+    points: [
+      { label: '4:00p', value: 1, note: 'CLE @ DET' },
+      { label: '5:30p', value: 1, note: 'LAL @ OKC' },
+    ],
+  },
+  {
+    slug: 'mlb-slate-density',
+    title: 'MLB Slate Density',
+    kicker: 'ESPN · SCOREBOARD',
+    source: 'ESPN MLB scoreboard',
+    sourceUrl: 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
+    mode: 'bar',
+    unit: 'games',
+    summary: 'The MLB board is dense today: 15 scheduled games, with the first wave clustered around 3:40p PT.',
+    read: 'Great candidate for a live scoreboard row once Chartmaker gets a fetch proxy.',
+    points: [
+      { label: '3p', value: 5 },
+      { label: '4p', value: 3 },
+      { label: '5p', value: 4 },
+      { label: '6p', value: 2 },
+      { label: '7p', value: 1 },
+    ],
+  },
+  {
+    slug: 'earthquake-pulse',
+    title: 'Earthquake Pulse',
+    kicker: 'USGS · GLOBAL',
+    source: 'USGS earthquake feed',
+    sourceUrl: 'https://earthquake.usgs.gov/fdsnws/event/1/',
+    mode: 'ranking',
+    unit: 'magnitude',
+    summary: 'The sampled May 5 global M4.5+ feed peaks at M5.1 on the Mid-Indian Ridge.',
+    read: 'This is the neat planetary lane: low friction, real-time-ish, and visually distinct from markets or sports.',
+    points: [
+      { label: 'Mid-Indian', value: 5.1 },
+      { label: 'Peru', value: 5.0 },
+      { label: 'Babar', value: 4.5 },
+      { label: 'Banda', value: 4.5 },
+      { label: 'NZ', value: 4.5 },
+    ],
+  },
+  {
+    slug: 'internet-sky-culture',
+    title: 'Internet + Sky Culture',
+    kicker: 'NASA APOD + HN',
+    source: 'NASA APOD and Hacker News Algolia',
+    sourceUrl: 'https://api.nasa.gov/',
+    mode: 'scorecard',
+    unit: 'signals',
+    summary: 'NASA APOD is "Orion over Mount Teide"; the sampled HN front page is led by Notepad++ trademark discussion at 106 points.',
+    read: 'A culture lane for prompt fuel: one sky image, one tech-discourse pulse, one daily mood.',
+    points: [
+      { label: 'APOD', value: 1, note: 'Orion over Mount Teide' },
+      { label: 'HN top', value: 106, note: 'Notepad++ trademark' },
+      { label: 'HN next', value: 82, note: 'Del Monte peaches' },
+      { label: 'AI item', value: 54, note: 'GLM-5V-Turbo' },
+    ],
   },
 ];
 
@@ -173,6 +434,11 @@ export function getChartmakerPacket(now = new Date()) {
     canonical: 'https://pointcast.xyz/chartmaker',
     sources: CHARTMAKER_SOURCES,
     recipes: CHARTMAKER_RECIPES,
+    today: {
+      date: '2026-05-05',
+      label: 'Tuesday, May 5, 2026',
+      charts: CHARTMAKER_TODAY_CHARTS,
+    },
     nextBuilds: [
       'Add a serverless /api/chartmaker/proxy allowlist for no-key feeds.',
       'Persist hand-picked feed definitions in content/chartmaker once the schema settles.',
