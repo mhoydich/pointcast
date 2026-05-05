@@ -34,6 +34,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'pointcast-chartmaker',
+    name: 'PointCast Chartmaker',
+    kicker: 'FEEDS · CROSS-CHARTS · TIMELINES',
+    description: 'A chart lab for combining PointCast-native data with weather, market, sports, feed, and browser-local sources.',
+    url: 'https://pointcast.xyz/chartmaker',
+    path: '/chartmaker',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DATA',
+    kind: 'pointcast',
+  },
+  {
     slug: 'moodygold',
     name: 'MoodyGold',
     kicker: 'ARTWORK · SOUND · GALLERY',
