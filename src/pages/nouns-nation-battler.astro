@@ -356,6 +356,62 @@ const jsonLd = {
         </div>
       </section>
 
+      <section class="panel panel--reenactor">
+        <header class="panel-head">
+          <p class="panel-label">Alt Sports Desk</p>
+          <h2>Result Reenactor</h2>
+        </header>
+        <div class="reenactor-controls" aria-label="Sports result reenactor controls">
+          <label>
+            League
+            <select data-reenactor-field="league">
+              <option>NBA</option>
+              <option>WNBA</option>
+              <option>NFL</option>
+              <option>MLB</option>
+              <option>NHL</option>
+              <option>EPL</option>
+            </select>
+          </label>
+          <label>
+            Winner
+            <input data-reenactor-field="winner" value="Celtics" />
+          </label>
+          <label>
+            Loser
+            <input data-reenactor-field="loser" value="Knicks" />
+          </label>
+          <label>
+            Final
+            <input data-reenactor-field="score" value="112-109" />
+          </label>
+          <label class="reenactor-controls__wide">
+            Shape
+            <select data-reenactor-field="shape">
+              <option value="close">Close finish</option>
+              <option value="comeback">Comeback</option>
+              <option value="blowout">Blowout</option>
+              <option value="upset">Upset</option>
+              <option value="overtime">Overtime</option>
+            </select>
+          </label>
+        </div>
+        <article class="reenactor-card" aria-label="Generated Nouns sports reenactment">
+          <span data-reenactor-output="kicker">NBA informational reenactment</span>
+          <strong data-reenactor-output="headline">Celtics survive the Nouns reenactment</strong>
+          <p data-reenactor-output="body">Celtics 112, Knicks 109 becomes an 11-8 survivor finish.</p>
+          <em data-reenactor-output="field">Field: Windy kingdom rush / Modifier: late-lane gust</em>
+        </article>
+        <div class="root-buttons">
+          <button type="button" data-reenactor-generate>Generate Reenactment</button>
+          <button type="button" data-reenactor-launch>Launch Battle Setup</button>
+          <button type="button" data-reenactor-copy>Copy Alt Receipt</button>
+        </div>
+        <p class="desk-copy" data-reenactor-output="status">
+          Informational only: no official score feed, no odds, no betting, no claim of a real replay.
+        </p>
+      </section>
+
       <section class="panel panel--features">
         <header class="panel-head">
           <p class="panel-label">NounCenter</p>
@@ -449,6 +505,122 @@ const jsonLd = {
       }
       document.body.removeChild(input);
     }
+  }
+
+  function parseScore(score) {
+    var parts = String(score || '').match(/\d+/g) || [];
+    var winner = Number(parts[0] || 0);
+    var loser = Number(parts[1] || 0);
+    if (winner < loser) {
+      var temp = winner;
+      winner = loser;
+      loser = temp;
+    }
+    return { winner: winner, loser: loser, margin: Math.max(0, winner - loser) };
+  }
+
+  function reenactorValue(name) {
+    var node = find('[data-reenactor-field="' + name + '"]');
+    return node ? node.value : '';
+  }
+
+  function reenactorSet(name, value) {
+    var node = find('[data-reenactor-output="' + name + '"]');
+    if (node) node.textContent = value;
+  }
+
+  function reenactorBlueprint() {
+    var league = reenactorValue('league') || 'Sports';
+    var winner = reenactorValue('winner') || 'Winner';
+    var loser = reenactorValue('loser') || 'Loser';
+    var score = parseScore(reenactorValue('score'));
+    var shape = reenactorValue('shape') || 'close';
+    var winnerAlive = Math.max(4, Math.min(24, 9 + Math.round(score.margin / 2)));
+    var loserAlive = Math.max(1, winnerAlive - Math.max(1, Math.min(12, score.margin || 3)));
+    var field = 'Windy kingdom rush';
+    var modifier = 'late-lane gust';
+    var verb = 'survive';
+
+    if (shape === 'comeback') {
+      field = 'Garden comeback field';
+      modifier = 'fourth-phase healing patch';
+      verb = 'flip';
+    } else if (shape === 'blowout') {
+      field = 'Lava lane rout';
+      modifier = 'bench-mob surge';
+      verb = 'overrun';
+      winnerAlive = Math.max(winnerAlive, 22);
+      loserAlive = Math.min(loserAlive, 5);
+    } else if (shape === 'upset') {
+      field = 'Auction floor upset';
+      modifier = 'belief meter spike';
+      verb = 'steal';
+    } else if (shape === 'overtime') {
+      field = 'Rift overtime field';
+      modifier = 'sudden-death blink';
+      verb = 'outlast';
+      winnerAlive = Math.max(6, winnerAlive - 2);
+      loserAlive = Math.max(3, winnerAlive - 1);
+    }
+
+    return {
+      league: league,
+      winner: winner,
+      loser: loser,
+      score: score,
+      shape: shape,
+      winnerAliveBias: winnerAlive,
+      loserAliveBias: loserAlive,
+      field: field,
+      modifier: modifier,
+      headline: winner + ' ' + verb + ' the Nouns reenactment',
+      body: winner + ' ' + score.winner + ', ' + loser + ' ' + score.loser + ' becomes a ' + winnerAlive + '-' + loserAlive + ' survivor finish.',
+    };
+  }
+
+  function renderReenactment() {
+    var next = reenactorBlueprint();
+    reenactorSet('kicker', next.league + ' informational reenactment');
+    reenactorSet('headline', next.headline);
+    reenactorSet('body', next.body);
+    reenactorSet('field', 'Field: ' + next.field + ' / Modifier: ' + next.modifier);
+    reenactorSet('status', 'Generated locally from a typed result shape. No official data feed used.');
+    return next;
+  }
+
+  function launchReenactment() {
+    var next = renderReenactment();
+    postCommand('reenactResult', {
+      reenactment: {
+        league: next.league,
+        winner: next.winner,
+        loser: next.loser,
+        score: next.score.winner + '-' + next.score.loser,
+        sourceResult: next.league + ': ' + next.winner + ' ' + next.score.winner + ', ' + next.loser + ' ' + next.score.loser,
+        shape: next.shape,
+        field: next.field,
+        modifier: next.modifier,
+        winnerAliveBias: next.winnerAliveBias,
+        loserAliveBias: next.loserAliveBias,
+        headline: next.headline,
+        guardrail: 'Informational alt-broadcast setup, not an official replay.',
+      },
+    });
+    reenactorSet('status', 'Launched themed Nouns battle setup in the embedded field.');
+  }
+
+  function reenactmentReceipt() {
+    var next = renderReenactment();
+    return [
+      'Nouns Nation Result Reenactor',
+      next.league + ': ' + next.winner + ' ' + next.score.winner + ', ' + next.loser + ' ' + next.score.loser,
+      next.headline,
+      next.body,
+      'Field: ' + next.field,
+      'Modifier: ' + next.modifier,
+      'Informational alt-broadcast receipt, not an official replay.',
+      new URL('/nouns-nation-battler/', window.location.origin).toString(),
+    ].join('\n');
   }
 
   function speedLabel(speed) {
@@ -556,6 +728,14 @@ const jsonLd = {
     setText('[data-live-field="root-line"]', payload.rootingFor ? 'Rooting for ' + payload.rootingFor : 'Pick a gang');
     setText('[data-live-field="challenge"]', challenge);
 
+    if (payload.reenactment && payload.reenactment.active) {
+      reenactorSet('kicker', payload.reenactment.league + ' live reenactment');
+      reenactorSet('headline', payload.reenactment.headline);
+      reenactorSet('body', payload.reenactment.sourceResult + ' is now driving the field setup.');
+      reenactorSet('field', 'Field: ' + payload.reenactment.field + ' / Modifier: ' + payload.reenactment.modifier);
+      reenactorSet('status', payload.reenactment.guardrail);
+    }
+
     Array.prototype.forEach.call(desk.querySelectorAll('[data-speed]'), function (button) {
       button.classList.toggle('is-active', Number(button.dataset.speed) === Number(payload.speed || 1));
     });
@@ -571,6 +751,21 @@ const jsonLd = {
     var copyButton = target.closest('[data-copy-text]');
     if (copyButton && desk.contains(copyButton)) {
       copyText(copyButton.dataset.copyText, copyButton);
+      return;
+    }
+    var reenactorGenerate = target.closest('[data-reenactor-generate]');
+    if (reenactorGenerate && desk.contains(reenactorGenerate)) {
+      renderReenactment();
+      return;
+    }
+    var reenactorLaunch = target.closest('[data-reenactor-launch]');
+    if (reenactorLaunch && desk.contains(reenactorLaunch)) {
+      launchReenactment();
+      return;
+    }
+    var reenactorCopy = target.closest('[data-reenactor-copy]');
+    if (reenactorCopy && desk.contains(reenactorCopy)) {
+      copyText(reenactmentReceipt(), reenactorCopy);
       return;
     }
     var button = target.closest('[data-desk-command]');
@@ -1305,6 +1500,10 @@ const jsonLd = {
     border-top: 8px solid var(--green);
   }
 
+  .panel--reenactor {
+    border-top: 8px solid #6f5cff;
+  }
+
   .desk-copy {
     margin-top: 12px;
     color: var(--muted);
@@ -1341,6 +1540,72 @@ const jsonLd = {
     font-size: 0.72rem;
     font-style: normal;
     text-transform: uppercase;
+  }
+
+  .reenactor-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .reenactor-controls label {
+    display: grid;
+    gap: 5px;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+  }
+
+  .reenactor-controls__wide {
+    grid-column: 1 / -1;
+  }
+
+  .reenactor-controls input,
+  .reenactor-controls select {
+    min-width: 0;
+    min-height: 36px;
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.82rem;
+    text-transform: none;
+  }
+
+  .reenactor-card {
+    display: grid;
+    gap: 7px;
+    margin: 12px 0;
+    padding: 11px;
+    border: 2px solid var(--ink);
+    background: #15171d;
+    color: #fffdf7;
+  }
+
+  .reenactor-card span {
+    color: #d7ff3f;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.64rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .reenactor-card strong {
+    font-size: 1.02rem;
+    line-height: 1.05;
+  }
+
+  .reenactor-card p,
+  .reenactor-card em {
+    color: #dce3ef;
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .reenactor-card em {
+    font-style: normal;
   }
 
   .feature-stack {
@@ -1484,7 +1749,8 @@ const jsonLd = {
 
   @media (max-width: 560px) {
     .stage-actions,
-    .root-buttons {
+    .root-buttons,
+    .reenactor-controls {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }

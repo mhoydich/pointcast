@@ -474,6 +474,7 @@ const state = {
   replayClock: 0,
   interstitialClock: 0,
   interstitialSignature: "",
+  reenactment: null,
   challenge: null,
   challengeProgress: null,
   challengeClock: 0,
@@ -575,6 +576,7 @@ function buildSnapshot() {
     finished: state.finished,
     speed: state.speed,
     weather: state.weather,
+    reenactment: state.reenactment,
     autoNext: state.autoNext,
     rootingFor: state.rootingFor,
     field: {
@@ -1001,6 +1003,9 @@ function weatherClass() {
           : state.weather === "cloud" ? "cloud-weather"
             : state.weather === "trash" ? "trash-weather"
               : state.weather === "fog" ? "fog-weather"
+                : state.weather === "wind" ? "wind-weather"
+                  : state.weather === "garden" ? "garden-weather"
+                    : state.weather === "auction" ? "auction-weather"
                 : "";
 }
 
@@ -1017,6 +1022,33 @@ function rand(min, max) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function hashText(text) {
+  return String(text || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function battleTypeForReenactment(shape) {
+  if (shape === "blowout") return battleTypes.find((type) => type.id === "lava") || battleTypes[0];
+  if (shape === "overtime") return battleTypes.find((type) => type.id === "rift") || battleTypes[0];
+  if (shape === "upset") return battleTypes.find((type) => type.id === "crown") || battleTypes[0];
+  if (shape === "close") return battleTypes.find((type) => type.id === "kingdom") || battleTypes[0];
+  return battleTypes.find((type) => type.id === "cloud") || battleTypes[0];
+}
+
+function fieldWeatherForShape(shape) {
+  if (shape === "comeback") return "garden";
+  if (shape === "blowout") return "heat";
+  if (shape === "upset") return "auction";
+  if (shape === "overtime") return "spark";
+  return "wind";
+}
+
+function pickReenactmentGangs(setup) {
+  const first = hashText(setup?.winner) % gangPool.length;
+  let second = hashText(setup?.loser) % gangPool.length;
+  if (second === first) second = (second + 3) % gangPool.length;
+  return [gangPool[first], gangPool[second]];
 }
 
 function distance(a, b) {
@@ -1036,6 +1068,7 @@ function fieldBounds() {
 }
 
 function matchUnitCount(type = state.battleType) {
+  if (state.reenactment?.active && state.reenactment.shape === "overtime") return 20;
   return type?.unitCount || 30;
 }
 
@@ -1130,7 +1163,27 @@ function unitTitle(unit) {
   return `#${unit.number} ${unit.name} (${unit.role.name}) — ${gangs[unit.team].name}. HP ${Math.max(0, Math.round(unit.hp))}/${unit.maxHp}.${element} ${s.kos} KO, ${s.damage} damage, ${s.heals} healed.`;
 }
 
-function resetMatch() {
+function applyReenactmentBias(setup) {
+  if (!setup) return;
+  state.units.forEach((unit) => {
+    if (setup.shape === "blowout" && unit.team === 0) unit.morale = 1.28;
+    if (setup.shape === "blowout" && unit.team === 1) unit.cooldown += 18;
+    if (setup.shape === "comeback" && unit.team === 0) unit.morale = 0.92;
+    if (setup.shape === "comeback" && unit.team === 1) unit.morale = 1.12;
+    if (setup.shape === "upset" && unit.team === 0) {
+      unit.morale = 1.2;
+      unit.guard = Math.max(unit.guard || 0, 40);
+    }
+    if (setup.shape === "overtime") {
+      unit.morale = 1.18;
+      unit.reenactDamageBoost = 2;
+    }
+  });
+  if (setup.shape === "upset" || setup.shape === "comeback") state.specialClock = 90;
+  if (setup.shape === "overtime") state.specialClock = 58;
+}
+
+function resetMatch(setup = null) {
   clearTimeout(state.nextTimer);
   state.units.forEach((unit) => unit.node?.remove());
   document.querySelectorAll(".hit-pop, .spark, .amp-zone, .crown-zone, .terrain-zone").forEach((node) => node.remove());
@@ -1153,10 +1206,23 @@ function resetMatch() {
   state.replayClock = 0;
   state.interstitialClock = isTvMode ? 560 : 0;
   state.interstitialSignature = "";
-  state.battleType = currentBattleType();
+  state.reenactment = setup ? {
+    active: true,
+    league: setup.league || "Sports",
+    winner: setup.winner || "Winner",
+    loser: setup.loser || "Loser",
+    score: setup.score || "",
+    sourceResult: setup.sourceResult || `${setup.league || "Sports"}: ${setup.winner || "Winner"} ${setup.score || ""} vs ${setup.loser || "Loser"}`,
+    shape: setup.shape || "close",
+    field: setup.field || "Windy kingdom rush",
+    modifier: setup.modifier || "late-lane gust",
+    headline: setup.headline || "Nouns reenactment launched",
+    guardrail: setup.guardrail || "Informational alt-broadcast setup, not an official replay.",
+  } : null;
+  state.battleType = setup ? battleTypeForReenactment(setup.shape) : currentBattleType();
   state.bossField = currentBossField(state.battleType);
   armChallenge();
-  state.weather = state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
+  state.weather = setup ? fieldWeatherForShape(setup.shape) : state.battleType.weather[Math.floor(Math.random() * state.battleType.weather.length)];
   state.moveHistory = [];
   state.selectedUnitId = "";
   state.recapSignature = "";
@@ -1167,7 +1233,7 @@ function resetMatch() {
     el.speedGroup.querySelectorAll("button").forEach((node) => node.classList.toggle("active", Number(node.dataset.speed) === 1.55));
   }
   const fixture = currentFixture();
-  gangs = fixture ? [gangPool[fixture[0]], gangPool[fixture[1]]] : [gangPool[0], gangPool[1]];
+  gangs = setup ? pickReenactmentGangs(setup) : (fixture ? [gangPool[fixture[0]], gangPool[fixture[1]]] : [gangPool[0], gangPool[1]]);
   document.documentElement.style.setProperty("--left-gang", gangs[0].color);
   document.documentElement.style.setProperty("--right-gang", gangs[1].color);
   el.field.classList.remove(...battleTypes.map((type) => type.fieldClass), "boss-field", ...bossFieldDeck.map((boss) => boss.className));
@@ -1197,14 +1263,20 @@ function resetMatch() {
       state.units.push(unit);
     }
   }
+  applyReenactmentBias(setup);
 
-  addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, ${count} strong on each side.`);
+  if (setup) {
+    addLog(`${setup.sourceResult || setup.winner + " " + setup.score} becomes ${gangs[0].name} vs ${gangs[1].name}.`);
+    addLog(`${setup.field}: ${setup.modifier}. ${setup.guardrail || "Informational setup only."}`);
+  } else {
+    addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, ${count} strong on each side.`);
+  }
   addLog(state.battleType.log);
   if (state.bossField) addLog(`Boss field: ${state.bossField.rule}`);
   addLog(`Season challenge: ${state.challenge.name}. ${state.challenge.rule}`);
   addLog(`Rivalry desk: ${rivalryWatchLine(currentRivalry())}`);
   recordMove(state.league.phase === "playoffs" ? "BOWL" : `V${count}`, `${fieldName()} + ${state.challenge.name}`);
-  showToast(state.league.phase === "champion" ? `${state.league.champion} are champions` : `${count} vs ${count}. League match is live.`);
+  showToast(setup ? "Sports reenactment battle launched." : (state.league.phase === "champion" ? `${state.league.champion} are champions` : `${count} vs ${count}. League match is live.`));
   render();
   state.match += 1;
   broadcastSnapshot(true);
@@ -2348,7 +2420,7 @@ function attack(unit, target, d) {
   const fogPenalty = state.battleType.id === "fog" && unit.role.name === "slinger" && d > 88 ? (isBossField("blackout-fog") ? 0.58 : 0.74) : 1;
   const damage = Math.round((unit.role.damage + rand(-3, 4)) * unit.morale * roleBoost * ampBoost * crownBoost * fogBoost * fogPenalty * (crit ? 1.8 : 1));
   const guarded = target.guard > 0 ? 0.64 : 1;
-  const dealt = dealDamage(unit, target, Math.max(1, Math.round(damage * guarded)));
+  const dealt = dealDamage(unit, target, Math.max(1, Math.round((damage + (unit.reenactDamageBoost || 0)) * guarded)));
   unit.stats.hits += 1;
   unit.cooldown = unit.role.cadence + rand(-8, 10);
   unit.node.classList.add("strike");
@@ -3608,6 +3680,8 @@ window.addEventListener("message", (event) => {
     setRooting(Number(message.team) === 1 ? 1 : 0);
   } else if (message.command === "resetLeague") {
     resetLeague();
+  } else if (message.command === "reenactResult") {
+    resetMatch(message.reenactment || null);
   } else if (message.command === "snapshot") {
     broadcastSnapshot(true);
   }

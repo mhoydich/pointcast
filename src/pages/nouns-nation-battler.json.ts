@@ -49,7 +49,7 @@ const payload = {
       gameToDeskSource: 'pointcast:nouns-nation-battler',
       deskToGameSource: 'pointcast:battle-desk',
       gameEvent: 'snapshot',
-      deskCommands: ['snapshot', 'newMatch', 'quickSim', 'simDay', 'togglePause', 'setSpeed', 'setAutoNext', 'root', 'resetLeague'],
+      deskCommands: ['snapshot', 'newMatch', 'quickSim', 'simDay', 'togglePause', 'setSpeed', 'setAutoNext', 'root', 'resetLeague', 'reenactResult'],
       snapshotFields: [
         'match',
         'running',
@@ -68,7 +68,18 @@ const payload = {
         'standings',
         'logs',
         'review',
+        'reenactment',
       ],
+      reenactmentFields: ['sourceResult', 'shape', 'field', 'modifier', 'headline', 'guardrail'],
+    },
+    resultReenactor: {
+      name: 'Result Reenactor',
+      mode: 'local informational translation',
+      dataPolicy: 'No official sports feed is required or implied; hosts type a result or use the defaults.',
+      inputs: ['league', 'winner', 'loser', 'final score', 'result shape'],
+      shapes: ['close', 'comeback', 'blowout', 'upset', 'overtime'],
+      outputs: ['Nouns survivor finish', 'field modifier', 'alt-broadcast headline', 'copyable informational receipt', 'launchable battle setup'],
+      guardrail: 'Receipts and launches are framed as alt-broadcast interpretation, not official replays, odds, or betting products.',
     },
   },
   broadcastDeskV2: {
