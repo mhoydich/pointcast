@@ -232,3 +232,16 @@ export function recentFeatures(days = 7, limit = 12): Feature[] {
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, limit);
 }
+
+/**
+ * Pages whose last commit is older than `days` days (default 90).
+ * Oldest first — the most-forgotten doors surface to the top. Pages
+ * without an mtime (mtime === 0) are skipped, not surfaced as "stale".
+ */
+export function staleFeatures(days = 90, limit = 12): Feature[] {
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400;
+  return FEATURES
+    .filter((f) => f.mtime > 0 && f.mtime < cutoff)
+    .sort((a, b) => a.mtime - b.mtime)
+    .slice(0, limit);
+}
