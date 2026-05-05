@@ -5,7 +5,7 @@
  * Static Guitar-Hero × karaoke-style rhythm game that overlays a beat
  * track on any WATCH-type block whose media contains a `beats` array.
  * Cued words fall from the top of the track while the player taps SPACE
- * (or clicks the hit zone) as each cue reaches the bottom line. Perfect
+ * (or clicks the hit zone) as each cue reaches the raised hit line. Perfect
  * ±200 ms, Good ±650 ms, Miss beyond that.
  *
  * Entirely client-side: YouTube IFrame API supplies getCurrentTime(),
@@ -74,7 +74,7 @@ const legendItems = Array.isArray(yeeMeta.legend) && yeeMeta.legend.length > 0
 const cueName = yeeMeta.cueName || 'cues';
 const legendTitle = yeeMeta.legendTitle || `BEAT MAP · ${beats.length} CUES`;
 const legendNote = yeeMeta.legendNote ||
-  'Cues fall from the top. Tap SPACE (or the TAP zone) when a cue reaches the dashed line at the bottom. The NEXT chip above the track shows what is coming and when. Perfect timing is a bonus; attention is the point.';
+  'Cues fall from the top. Tap SPACE (or the TAP zone) when a cue reaches the raised hit line. The NEXT chip above the track shows what is coming and when. Perfect timing is a bonus; attention is the point.';
 
 /** Extract YouTube video id from the embed URL. Falls back to null if the
  *  src isn't a recognizable YouTube form — in that case we render the beat
@@ -179,6 +179,11 @@ const alternates = [
       {/* Beat track column */}
       <div class="yee__track" id="yee-track" aria-label={`Beat track — ${cueName} fall from top, tap SPACE when they reach the line`}>
         <div class="track__zone" id="track-zone">
+          <div class="track__rails" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="track__target" aria-hidden="true"></div>
+          <div class="track__judgement mono" id="track-judgement" aria-live="polite"></div>
           {/* How-to-play overlay — shown before start, hidden once the
               player hits START. Per Mike 2026-04-19 morning: "wasn't
               totally clear what to do" — this card fixes that before
@@ -187,9 +192,9 @@ const alternates = [
             <p class="howto__eyebrow mono">HOW TO PLAY</p>
             <ol class="howto__list">
               <li><strong>Press ▶ START</strong> (or SPACE) to begin.</li>
-              <li>Colored <strong>{cueName}</strong> fall from the top toward the dashed line.</li>
-              <li>When a cue reaches the line, <strong>tap SPACE</strong> (or the TAP zone below).</li>
-              <li>Center-hit = <strong>PERFECT</strong> (+100). Near-hit = <strong>GOOD</strong> (+50). Miss = combo breaks.</li>
+              <li>Colored <strong>{cueName}</strong> fall down three lanes toward the raised hit line.</li>
+              <li>When a cue reaches the glow band, <strong>tap SPACE</strong> (or the TAP zone below).</li>
+              <li>Center-hit = <strong>PERFECT</strong>. Near-hit = <strong>GOOD</strong>. Combo builds GROOVE bonus.</li>
             </ol>
             <p class="howto__note">
               Track paces itself to the content. <strong>Meditation tracks</strong> have long gaps between beats (that's the point). <strong>Music tracks</strong> are denser. The chip above the track will tell you what's coming next and when.
@@ -197,6 +202,11 @@ const alternates = [
           </div>
         </div>
         <div class="track__label mono" id="track-label">PRESS ▶ TO START</div>
+        <div class="track__groove mono" id="track-groove">
+          <span class="track__groove-label">GROOVE</span>
+          <span class="track__groove-bar"><span id="track-groove-fill"></span></span>
+          <span class="track__groove-value" id="track-groove-value">0%</span>
+        </div>
         <div class="track__next mono" id="track-next" hidden>
           <span class="track__next-label">NEXT</span>
           <span class="track__next-word" id="track-next-word">—</span>
@@ -260,6 +270,7 @@ const alternates = [
       const mount = document.getElementById('yee-player');
       const ytId = mount ? mount.dataset.yt : null;
       const zone = document.getElementById('track-zone');
+      const stage = document.getElementById('yee-stage');
       const hitBtn = document.getElementById('track-hit');
       const hudTime = document.getElementById('hud-time');
       const hudScore = document.getElementById('hud-score');
@@ -268,6 +279,9 @@ const alternates = [
       const label = document.getElementById('track-label');
       const btnStart = document.getElementById('btn-start');
       const btnRestart = document.getElementById('btn-restart');
+      const grooveFill = document.getElementById('track-groove-fill');
+      const grooveValue = document.getElementById('track-groove-value');
+      const judgementEl = document.getElementById('track-judgement');
 
       // Per Mike 2026-04-19 morning ("wasn't totally clear what to do /
       // too slow"): give beats 6s of visible travel so players can see
@@ -277,6 +291,8 @@ const alternates = [
       const LEAD_MS = 6000;     // how far ahead of hit-time beats appear
       const PERFECT_MS = 200;
       const GOOD_MS = 650;
+      const LANES = ['24%', '50%', '76%'];
+      const LANE_PATTERN = [1, 0, 2, 1, 2, 0];
 
       const state = {
         player: null,
@@ -286,6 +302,8 @@ const alternates = [
         hits: 0,
         combo: 0,
         maxCombo: 0,
+        groove: 0,
+        judgementTimer: null,
         // Per-beat state: status = 'pending' | 'hit' | 'miss', plus a dom node.
         list: beats.map((b) => ({ ...b, status: 'pending', el: null, lastY: -9999 })),
       };
@@ -302,9 +320,10 @@ const alternates = [
         const el = document.createElement('div');
         el.className = 'beat';
         el.dataset.index = String(i);
+        el.style.setProperty('--lane-left', LANES[LANE_PATTERN[i % LANE_PATTERN.length]]);
         el.style.setProperty('--beat-color', b.color || '#1864AB');
+        el.style.setProperty('--beat-y', '-9999px');
         el.innerHTML = '<span class="beat__word">' + (b.word || '·') + '</span>';
-        el.style.transform = 'translateY(-9999px)';
         zone.appendChild(el);
         b.el = el;
       });
@@ -334,6 +353,21 @@ const alternates = [
       }
       function buzz(ms) {
         try { if (navigator.vibrate) navigator.vibrate(ms); } catch {}
+      }
+      function drum(freq, dur) {
+        const ctx = ensureAudio();
+        if (!ctx) return;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(freq, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.55), ctx.currentTime + dur);
+        g.gain.setValueAtTime(0.0005, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0005, ctx.currentTime + dur);
+        o.connect(g).connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + dur + 0.04);
       }
 
       /* ============== Best-run persistence ==============
@@ -435,6 +469,50 @@ const alternates = [
           else nextContainerEl.classList.remove('track__next--imminent');
         }
       }
+      function hitLineY() {
+        const raw = window.getComputedStyle(zone).getPropertyValue('--hit-line-offset');
+        const offset = Number.parseFloat(raw) || 88;
+        return Math.max(96, (zone.clientHeight || 1) - offset);
+      }
+      function hideBeat(b) {
+        if (!b || !b.el) return;
+        b.el.style.setProperty('--beat-y', '-9999px');
+      }
+      function flashJudgement(text, color) {
+        if (!judgementEl) return;
+        window.clearTimeout(state.judgementTimer);
+        judgementEl.textContent = text;
+        judgementEl.style.color = color || '#f1f1ee';
+        judgementEl.classList.remove('track__judgement--show');
+        void judgementEl.offsetWidth;
+        judgementEl.classList.add('track__judgement--show');
+        state.judgementTimer = window.setTimeout(() => {
+          judgementEl.classList.remove('track__judgement--show');
+        }, 620);
+      }
+      function setGroove(next) {
+        state.groove = Math.max(0, Math.min(100, next));
+        if (grooveFill) grooveFill.style.width = Math.round(state.groove) + '%';
+        if (grooveValue) grooveValue.textContent = Math.round(state.groove) + '%';
+        if (stage) {
+          stage.classList.toggle('yee__stage--flow', state.groove >= 80 || state.combo >= 5);
+        }
+      }
+      function scoreFor(kind) {
+        const base = kind === 'perfect' ? 100 : 50;
+        const comboBonus = Math.min(75, Math.max(0, state.combo - 1) * (kind === 'perfect' ? 6 : 3));
+        const grooveBonus = state.groove >= 80 ? (kind === 'perfect' ? 35 : 18) : 0;
+        return base + comboBonus + grooveBonus;
+      }
+      function missBeat(b) {
+        b.status = 'miss';
+        b.el.classList.add('beat--miss');
+        state.combo = 0;
+        setGroove(state.groove - 16);
+        flashJudgement('MISS', '#a9a7a2');
+        window.setTimeout(() => { hideBeat(b); }, 420);
+        updateHud();
+      }
 
       function loop() {
         if (!state.started) return;
@@ -442,7 +520,7 @@ const alternates = [
         hudTime.textContent = fmtTime(now) + ' / ' + hudTime.textContent.split(' / ')[1];
         paintNext(now);
 
-        const trackHeight = zone.clientHeight || 1;
+        const targetY = hitLineY();
         for (let i = 0; i < state.list.length; i++) {
           const b = state.list[i];
           if (b.status !== 'pending') continue;
@@ -450,28 +528,26 @@ const alternates = [
           const deltaMs = (b.t - now) * 1000;
           if (deltaMs > LEAD_MS) {
             // not yet visible
-            b.el.style.transform = 'translateY(-9999px)';
+            hideBeat(b);
             continue;
           }
           if (deltaMs < -GOOD_MS) {
             // passed — mark miss
-            b.status = 'miss';
-            b.el.classList.add('beat--miss');
-            state.combo = 0;
-            updateHud();
+            missBeat(b);
             continue;
           }
 
           // Position: at deltaMs = LEAD_MS → y = 0 (top of zone)
-          //           at deltaMs = 0      → y = trackHeight (hit line)
+          //           at deltaMs = 0      → y = raised hit line
           const progress = 1 - deltaMs / LEAD_MS;
-          const y = progress * trackHeight;
-          b.el.style.transform = 'translateY(' + Math.round(y) + 'px)';
+          const y = progress * targetY;
+          b.el.style.setProperty('--beat-y', Math.round(y) + 'px');
           b.lastY = y;
 
           // In-window glow
           const absDelta = Math.abs(deltaMs);
           if (absDelta < GOOD_MS) b.el.classList.add('beat--in-window');
+          else b.el.classList.remove('beat--in-window');
         }
 
         requestAnimationFrame(loop);
@@ -482,6 +558,7 @@ const alternates = [
         hudCombo.textContent = '×' + state.combo;
         hudHits.textContent = state.hits + ' / ' + total;
         if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+        setGroove(state.groove);
       }
 
       /* ============== Hit attempt ============== */
@@ -522,26 +599,38 @@ const alternates = [
         if (!best) {
           // stray tap — no penalty, just a small clack
           chime(180, 0.08);
+          flashJudgement('WAIT', '#8a8882');
           return;
         }
         const absDelta = bestAbs;
+        const timing = (best.t - now) > 0 ? 'EARLY' : 'LATE';
         if (absDelta <= PERFECT_MS) {
           best.status = 'hit';
           best.el.classList.add('beat--perfect');
-          state.score += 100;
           state.combo += 1;
           state.hits += 1;
+          setGroove(state.groove + 12 + Math.min(10, state.combo));
+          state.score += scoreFor('perfect');
           chime(880, 0.16);
+          setTimeout(() => chime(1320, 0.1), 24);
+          drum(160, 0.12);
           buzz(14);
+          flashJudgement('PERFECT', '#ffffff');
         } else {
           best.status = 'hit';
           best.el.classList.add('beat--good');
-          state.score += 50;
           state.combo += 1;
           state.hits += 1;
+          setGroove(state.groove + 7 + Math.min(6, Math.floor(state.combo / 2)));
+          state.score += scoreFor('good');
           chime(660, 0.16);
+          drum(120, 0.1);
           buzz(8);
+          flashJudgement('GOOD · ' + timing, best.color || '#f8c447');
         }
+        best.el.classList.remove('beat--in-window');
+        window.setTimeout(() => { best.el.classList.add('beat--judged'); }, 180);
+        window.setTimeout(() => { hideBeat(best); }, 320);
         updateHud();
       }
 
@@ -632,6 +721,10 @@ const alternates = [
       border-radius: 3px;
       min-height: 480px;
     }
+    .yee__stage--flow {
+      border-color: #f8c447;
+      box-shadow: 0 0 0 1px rgba(248, 196, 71, 0.25), 0 0 28px rgba(248, 196, 71, 0.12);
+    }
 
     /* Video column */
     .yee__video {
@@ -678,15 +771,71 @@ const alternates = [
       flex-direction: column;
       border: 1px solid #2a2a28;
       border-radius: 2px;
-      background: linear-gradient(to bottom, #15141a 0%, #1b1a22 50%, #0d0d12 100%);
+      background:
+        radial-gradient(circle at 50% 80%, rgba(248, 196, 71, 0.12), transparent 32%),
+        linear-gradient(to bottom, #15141a 0%, #1b1a22 50%, #0d0d12 100%);
       overflow: hidden;
       min-height: 440px;
     }
     .track__zone {
+      --hit-line-offset: 88px;
       position: relative;
       flex: 1;
       overflow: hidden;
-      border-bottom: 2px dashed rgba(255, 255, 255, 0.18);
+      background-image:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 100% 42px;
+    }
+    .track__rails {
+      position: absolute;
+      inset: 0 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      pointer-events: none;
+      opacity: 0.54;
+    }
+    .track__rails span {
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.03), transparent);
+    }
+    .track__target {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: var(--hit-line-offset);
+      height: 58px;
+      transform: translateY(50%);
+      border-top: 1px solid rgba(248, 196, 71, 0.22);
+      border-bottom: 1px solid rgba(248, 196, 71, 0.22);
+      background: linear-gradient(to bottom, transparent, rgba(248, 196, 71, 0.12), transparent);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .track__target::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-top: 2px dashed rgba(248, 196, 71, 0.92);
+      filter: drop-shadow(0 0 6px rgba(248, 196, 71, 0.72));
+    }
+    .track__target::before {
+      content: 'HIT';
+      position: absolute;
+      top: 50%;
+      left: 6px;
+      transform: translateY(-50%);
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      color: #f8c447;
+      background: #111015;
+      padding: 2px 5px;
+      border-radius: 2px;
+      z-index: 1;
     }
     .track__label {
       position: absolute;
@@ -755,6 +904,59 @@ const alternates = [
     }
     .track__next--imminent .track__next-eta { color: #2a1c00; font-weight: 700; }
 
+    .track__groove {
+      position: absolute;
+      top: 72px;
+      left: 14px;
+      right: 14px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      z-index: 2;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: #b8b6ae;
+      pointer-events: none;
+    }
+    .track__groove-bar {
+      height: 6px;
+      border: 1px solid rgba(241, 241, 238, 0.18);
+      background: rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+    .track__groove-bar span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0f6e56, #f8c447, #f1f1ee);
+      box-shadow: 0 0 12px rgba(248, 196, 71, 0.55);
+      transition: width 0.2s ease;
+    }
+    .track__groove-value { color: #f8c447; font-weight: 700; }
+    .track__judgement {
+      position: absolute;
+      left: 50%;
+      bottom: calc(var(--hit-line-offset) + 42px);
+      transform: translateX(-50%) translateY(8px) scale(0.96);
+      z-index: 4;
+      padding: 5px 10px;
+      border: 1px solid currentColor;
+      background: rgba(0, 0, 0, 0.72);
+      border-radius: 2px;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      font-weight: 800;
+      opacity: 0;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.1s ease, transform 0.16s ease;
+    }
+    .track__judgement--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+
     /* How-to-play overlay — covers the track before first start. Large
        type, numbered steps, explicit about what the player does. */
     .track__howto {
@@ -807,12 +1009,13 @@ const alternates = [
     .howto__note strong { color: #f1f1ee; font-weight: 600; }
     .beat {
       position: absolute;
-      left: 50%;
+      left: var(--lane-left, 50%);
       top: 0;
-      transform: translateY(-9999px);
+      transform: translate(-50%, var(--beat-y, -9999px)) translateY(-50%);
       --beat-color: #1864AB;
-      padding: 10px 14px;
-      min-width: 90px;
+      padding: 9px 10px;
+      min-width: 72px;
+      max-width: calc(100% - 22px);
       border: 1.5px solid var(--beat-color);
       border-radius: 4px;
       background: color-mix(in oklab, var(--beat-color) 22%, #0a0a0d);
@@ -820,14 +1023,21 @@ const alternates = [
       text-align: center;
       box-shadow: 0 0 18px color-mix(in oklab, var(--beat-color) 40%, transparent);
       font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
-      font-size: 12px;
-      letter-spacing: 0.1em;
+      font-size: 11px;
+      letter-spacing: 0.08em;
       font-weight: 600;
-      margin-left: -60px;
-      transition: box-shadow 0.12s, background 0.12s;
+      transition: box-shadow 0.12s, background 0.12s, opacity 0.16s;
       will-change: transform;
+      z-index: 2;
     }
-    .beat__word { display: inline-block; }
+    .beat__word {
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: bottom;
+    }
     .beat--in-window {
       box-shadow: 0 0 26px color-mix(in oklab, var(--beat-color) 72%, transparent);
     }
@@ -836,29 +1046,36 @@ const alternates = [
       color: #111;
       border-color: #fff;
       box-shadow: 0 0 36px #fff;
-      animation: pop 0.25s ease-out;
+    }
+    .beat--perfect .beat__word {
+      animation: word-pop 0.25s ease-out;
     }
     .beat--good {
       background: color-mix(in oklab, var(--beat-color) 60%, #fff);
       color: #111;
-      animation: pop 0.25s ease-out;
+    }
+    .beat--good .beat__word {
+      animation: word-pop 0.25s ease-out;
     }
     .beat--miss {
       opacity: 0.25;
       border-style: dashed;
       filter: grayscale(1);
     }
-    @keyframes pop {
-      0%   { transform: translateY(var(--pop-y, 0)) scale(1); }
-      50%  { transform: translateY(var(--pop-y, 0)) scale(1.18); }
-      100% { transform: translateY(var(--pop-y, 0)) scale(1); }
+    .beat--judged {
+      opacity: 0;
+    }
+    @keyframes word-pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.2); }
+      100% { transform: scale(1); }
     }
 
     .track__hit {
-      flex: 0 0 92px;
+      flex: 0 0 86px;
       background: #1b1a22;
       border: 0;
-      border-top: 2px solid #f1f1ee;
+      border-top: 1px solid rgba(241, 241, 238, 0.28);
       color: #f1f1ee;
       cursor: pointer;
       position: relative;
@@ -974,7 +1191,8 @@ const alternates = [
       .yee__stage {
         grid-template-columns: 1fr;
       }
-      .yee__track { min-height: 360px; }
+      .yee__track { min-height: 380px; }
+      .track__zone { --hit-line-offset: 72px; }
       .yee__hud {
         grid-template-columns: repeat(4, 1fr);
       }
