@@ -1,0 +1,456 @@
+---
+/**
+ * /drum-mantra — type a phrase, leave it pulsing.
+ *
+ * Mike: "ok go" continuing the meditative wing. Fresh shape: visitor
+ * types a short phrase (up to 120 chars), and the page becomes that
+ * phrase rendered as a giant italic Lora display, pulsing every ~4s
+ * with a soft bell underline. localStorage holds the last mantra so
+ * it persists across reloads.
+ *
+ * Pure static. The page is one big input until you submit, then it's
+ * one big mantra until you reset.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Mantra · Type, Set, Hold · PointCast';
+const description =
+  'Type a short phrase. The page becomes the phrase, pulsing slowly with a soft bell underline. Yours alone.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Mantra',
+  url: 'https://pointcast.xyz/drum-mantra',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dm" id="dm-main">
+    <DrumNav current="mantra" />
+
+    <header class="dm__header">
+      <div class="dm__chrome">
+        <span>YOUR MANTRA</span>
+        <span class="dm__chrome-sep">·</span>
+        <span id="dm-pulses">0 PULSES</span>
+        <span class="dm__chrome-sep">·</span>
+        <span id="dm-state">NEW</span>
+      </div>
+      <h1 class="dm__title">MANTRA</h1>
+      <p class="dm__tagline">type a phrase. let it sit.</p>
+    </header>
+
+    <!-- Set state — the input form -->
+    <section class="dm__set" id="dm-set">
+      <textarea
+        id="dm-input"
+        class="dm__input"
+        rows="3"
+        maxlength="120"
+        placeholder="be still"
+        aria-label="Type your mantra (max 120 characters)"></textarea>
+      <div class="dm__counter"><span id="dm-charcount">0</span> / 120</div>
+      <div class="dm__set-controls">
+        <button class="dm__btn" id="dm-set-btn" type="button" disabled>SET MANTRA</button>
+      </div>
+    </section>
+
+    <!-- Hold state — the pulsing display -->
+    <section class="dm__hold" id="dm-hold" hidden>
+      <div class="dm__phrase" id="dm-phrase">—</div>
+      <div class="dm__breath" id="dm-breath"></div>
+      <div class="dm__hold-controls">
+        <button class="dm__btn dm__btn--ghost" id="dm-pause-btn" type="button">PAUSE</button>
+        <button class="dm__btn dm__btn--ghost" id="dm-reset-btn" type="button">CHANGE</button>
+      </div>
+    </section>
+
+    <footer class="dm__footer">
+      <p>
+        Mantras are private — kept in your browser only, never sent. The bell underline plays once
+        per pulse, ~4 seconds apart, until you pause or change.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dm-main) {
+    background: #0c0410;
+  }
+
+  .dm {
+    --dm-velvet: #1a0820;
+    --dm-velvet-deep: #0c0410;
+    --dm-brass: #d4a437;
+    --dm-brass-soft: #b8862c;
+    --dm-brass-deep: #6b4d12;
+    --dm-flame: #f6c15e;
+    --dm-ink-light: #f4e7c8;
+    --dm-ink-mid: #c9b78c;
+    --dm-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dm-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dm-velvet) 0%, var(--dm-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex;
+    flex-direction: column;
+  }
+  .dm::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .dm .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .dm__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(16px, 2vh, 26px);
+    flex-shrink: 0;
+  }
+  .dm__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--dm-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dm-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .dm__chrome-sep { color: var(--dm-brass-deep); }
+  #dm-pulses, #dm-state { color: var(--dm-flame); font-weight: 700; }
+
+  .dm__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--dm-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dm-velvet-deep);
+  }
+  .dm__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--dm-ink-mid);
+  }
+
+  /* Set state — input form */
+  .dm__set {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: clamp(20px, 4vh, 40px) 16px;
+  }
+  .dm__input {
+    width: min(100%, 640px);
+    min-height: 120px;
+    padding: 18px 22px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1.5px solid var(--dm-brass-deep);
+    color: var(--dm-flame);
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(20px, 2.4vw, 30px);
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    transition: border-color 200ms;
+  }
+  .dm__input:focus {
+    border-color: var(--dm-brass);
+  }
+  .dm__input::placeholder {
+    color: var(--dm-ink-dim);
+    opacity: 0.5;
+  }
+  .dm__counter {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--dm-ink-dim);
+  }
+
+  .dm__btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 12px 30px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    color: var(--dm-velvet-deep);
+    background: linear-gradient(180deg, var(--dm-brass) 0%, var(--dm-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--dm-velvet-deep),
+      0 4px 0 0 var(--dm-brass-deep),
+      0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .dm__btn:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dm-brass) 100%); }
+  .dm__btn:active, .dm__btn:disabled {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--dm-velvet-deep),
+      0 1px 0 0 var(--dm-brass-deep),
+      0 0 18px rgba(246, 193, 94, 0.55);
+  }
+  .dm__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .dm__btn--ghost {
+    color: var(--dm-ink-mid);
+    background: transparent;
+    border: 1.5px solid var(--dm-brass-deep);
+    box-shadow: none;
+    padding: 10px 24px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .dm__btn--ghost:hover {
+    color: var(--dm-brass);
+    border-color: var(--dm-brass);
+    background: rgba(212, 164, 55, 0.06);
+  }
+  .dm__btn--ghost:active { transform: translateY(1px); box-shadow: none; }
+
+  .dm__set-controls {
+    display: flex;
+    gap: 12px;
+  }
+
+  /* Hold state — the pulsing phrase */
+  .dm__hold {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(20px, 3vh, 36px);
+    padding: clamp(20px, 4vh, 60px) 16px;
+    text-align: center;
+  }
+  .dm__phrase {
+    max-width: 880px;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(28px, 5vw, 64px);
+    line-height: 1.35;
+    color: var(--dm-flame);
+    text-shadow: 0 0 24px rgba(246, 193, 94, 0.20);
+    transition: opacity 1000ms ease-in-out, text-shadow 1000ms ease-in-out;
+  }
+  .dm__phrase.dm__phrase--peak {
+    text-shadow: 0 0 48px rgba(246, 193, 94, 0.55);
+  }
+
+  /* Breath line — a thin brass underline that swells with each pulse */
+  .dm__breath {
+    width: 60%;
+    max-width: 480px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--dm-brass-deep) 30%, var(--dm-brass) 50%, var(--dm-brass-deep) 70%, transparent 100%);
+    transform: scaleX(0.3);
+    transform-origin: 50% 50%;
+    opacity: 0.5;
+    transition: transform 1800ms ease-in-out, opacity 1800ms ease-in-out;
+  }
+  .dm__breath.dm__breath--peak {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  .dm__hold-controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  /* Footer */
+  .dm__footer {
+    text-align: center;
+    padding: clamp(14px, 2vh, 24px) 16px 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+    flex-shrink: 0;
+  }
+  .dm__footer p {
+    margin: 0 auto;
+    max-width: 540px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--dm-ink-dim);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playSoftBell() {
+    const a = ctx(); const t = a.currentTime;
+    // Quiet, low, calm pulse — F4 + G5 (soft major-second)
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 349.23;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 783.99;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 2400;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.14, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);
+    o.connect(filt); o2.connect(filt); filt.connect(g); g.connect(a.destination);
+    o.start(t); o2.start(t); o.stop(t + 2.1); o2.stop(t + 2.1);
+  }
+
+  // ── State ────────────────────────────────────────────
+  const MANTRA_KEY = 'pc:mantra:phrase';
+  const PULSES_KEY = 'pc:mantra:pulses';
+  let mantra = '';
+  let pulses = 0;
+  try {
+    mantra = localStorage.getItem(MANTRA_KEY) || '';
+    pulses = parseInt(localStorage.getItem(PULSES_KEY) || '0', 10) || 0;
+  } catch {}
+
+  const setEl = document.getElementById('dm-set');
+  const holdEl = document.getElementById('dm-hold');
+  const inputEl = document.getElementById('dm-input');
+  const charcountEl = document.getElementById('dm-charcount');
+  const setBtn = document.getElementById('dm-set-btn');
+  const phraseEl = document.getElementById('dm-phrase');
+  const breathEl = document.getElementById('dm-breath');
+  const pulsesEl = document.getElementById('dm-pulses');
+  const stateEl = document.getElementById('dm-state');
+  const pauseBtn = document.getElementById('dm-pause-btn');
+  const resetBtn = document.getElementById('dm-reset-btn');
+
+  function paint() {
+    if (pulsesEl) pulsesEl.textContent = `${pulses} PULSES`;
+    if (charcountEl && inputEl) charcountEl.textContent = String(inputEl.value.length);
+    if (setBtn && inputEl) setBtn.disabled = inputEl.value.trim().length === 0;
+  }
+
+  // ── Pulse loop ──────────────────────────────────────
+  let pulseTimer = null;
+  let paused = false;
+
+  function startPulsing() {
+    if (pulseTimer) return;
+    paused = false;
+    if (stateEl) stateEl.textContent = 'HOLDING';
+    if (pauseBtn) pauseBtn.textContent = 'PAUSE';
+    // Pulse every 4 seconds; the swell takes ~1.8s, then 2.2s of rest
+    function tick() {
+      try { playSoftBell(); } catch {}
+      if (phraseEl) {
+        phraseEl.classList.add('dm__phrase--peak');
+        setTimeout(() => phraseEl?.classList.remove('dm__phrase--peak'), 1800);
+      }
+      if (breathEl) {
+        breathEl.classList.add('dm__breath--peak');
+        setTimeout(() => breathEl?.classList.remove('dm__breath--peak'), 1800);
+      }
+      pulses += 1;
+      try { localStorage.setItem(PULSES_KEY, String(pulses)); } catch {}
+      paint();
+    }
+    // first pulse after 600ms so the phrase settles in
+    setTimeout(tick, 600);
+    pulseTimer = setInterval(tick, 4000);
+  }
+
+  function stopPulsing() {
+    if (pulseTimer) { clearInterval(pulseTimer); pulseTimer = null; }
+    paused = true;
+    if (stateEl) stateEl.textContent = 'PAUSED';
+    if (pauseBtn) pauseBtn.textContent = 'RESUME';
+  }
+
+  function showHold() {
+    if (setEl) setEl.hidden = true;
+    if (holdEl) holdEl.hidden = false;
+    if (phraseEl) phraseEl.textContent = mantra;
+    startPulsing();
+  }
+  function showSet() {
+    stopPulsing();
+    if (setEl) setEl.hidden = false;
+    if (holdEl) holdEl.hidden = true;
+    if (inputEl) {
+      inputEl.value = mantra;
+      inputEl.focus();
+    }
+    if (stateEl) stateEl.textContent = 'NEW';
+    paint();
+  }
+
+  // ── Wire up ─────────────────────────────────────────
+  inputEl?.addEventListener('input', paint);
+  inputEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      setBtn?.click();
+    }
+  });
+
+  setBtn?.addEventListener('click', () => {
+    const value = (inputEl?.value || '').trim().slice(0, 120);
+    if (!value) return;
+    mantra = value;
+    try { localStorage.setItem(MANTRA_KEY, mantra); } catch {}
+    showHold();
+  });
+
+  pauseBtn?.addEventListener('click', () => {
+    if (paused) startPulsing();
+    else stopPulsing();
+  });
+
+  resetBtn?.addEventListener('click', () => {
+    showSet();
+  });
+
+  // ── Boot ─────────────────────────────────────────────
+  if (mantra && mantra.length > 0) {
+    showHold();
+  } else {
+    showSet();
+  }
+  paint();
+</script>
