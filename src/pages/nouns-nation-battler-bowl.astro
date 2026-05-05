@@ -1,28 +1,61 @@
 ---
 /**
- * /nouns-nation-battler-bowl - The Bowl path: structural surface for
- * Nouns Nation Battler S6's two-week table as it rolls toward the Bowl.
+ * /nouns-nation-battler-bowl - The Bowl path: live-as-it-can-be surface
+ * for Nouns Nation Battler S6's two-week table.
  *
- * Reads off the same 8-gang founding roster used by Battle Desk and V3.
- * Does not duplicate the live scoreboard — points readers there for
- * current numbers. Shows the structural format (lock/bubble/out bands,
- * 14-day sprint calendar, Bowl bracket shape, boss-field rotation).
+ * Sources: src/lib/battler-bowl-state.ts (single source of truth for the
+ * 8 founding gangs, the 14-day calendar, championship history, and the
+ * lock-status contract). The calendar's "now" cursor is computed from
+ * the real anchored season start date — no hardcoded day pin.
+ *
+ * Lock status defaults to 'pending' until a real result source plugs in.
+ * When pending, the page falls back to structural commentary; when set
+ * (locked / bubble / out / in), the page renders a status pill on the
+ * gang card and rolls counts into the hero.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
+import {
+  FOUNDING_GANGS,
+  SEASON_6,
+  annotateCalendar,
+  dayNumber,
+  daysToLock,
+  type LockStatus,
+} from '../lib/battler-bowl-state';
 
 const ch = CHANNELS.BTL;
+const now = new Date();
+const today = dayNumber(now);
+const daysLeft = daysToLock(now);
+const sprintCalendar = annotateCalendar(now);
+const currentMilestone = sprintCalendar.find((m) => m.state === 'now') ?? sprintCalendar[0];
 
-const FOUNDING_GANGS = [
-  { short: 'TN', name: 'Tomato Noggles',     color: '#e45745', noun: 12, line: 'Face of the league since S01. Clean reads, fast starts; getting punished by weather in S6.' },
-  { short: 'CF', name: 'Cobalt Frames',      color: '#3677e0', noun: 41, line: 'Best structure, best captain tree. Cleanest paper path back to the Bowl.' },
-  { short: 'GN', name: 'Golden Nouncil',     color: '#d49b19', noun: 58, line: 'Quiet runs are easy to miss. Watch the points column, not the wins column.' },
-  { short: 'GS', name: 'Garden Stack',       color: '#3f9b54', noun: 27, line: 'Built for messy reads. Scrap Storm and Monsoon Rift turn that into a second-half lever.' },
-  { short: 'PU', name: 'Pixel Union',        color: '#8b5cf6', noun:  3, line: 'Chaos pick. If the fields skew weird, scrappy matchups become a meme season.' },
-  { short: 'NA', name: 'Night Auction',      color: '#2f3a4f', noun: 88, line: 'Heel run from S04. Auction-tower volleys still the most clip-friendly archetype in the league.' },
-  { short: 'SP', name: 'Sunset Prop House',  color: '#ef7d2d', noun: 62, line: 'S06 wildcard. Rivalry-test night format favors them; rights-receipt week does not.' },
-  { short: 'MC', name: 'Mint Condition',     color: '#13a6a1', noun:  9, line: 'Defending champ. No gang has gone back-to-back; the table has learned how to drag them late.' },
-];
+const lockCounts = FOUNDING_GANGS.reduce(
+  (acc, g) => {
+    acc[g.lockStatus] = (acc[g.lockStatus] ?? 0) + 1;
+    return acc;
+  },
+  {} as Record<LockStatus, number>,
+);
+const allPending = (lockCounts.pending ?? 0) === FOUNDING_GANGS.length;
+
+const lockPillCopy: Record<LockStatus, { label: string; tone: string }> = {
+  pending:  { label: '?',       tone: 'pending' },
+  in:       { label: 'IN',      tone: 'in' },
+  locked:   { label: 'LOCKED',  tone: 'lock' },
+  bubble:   { label: 'BUBBLE',  tone: 'bubble' },
+  out:      { label: 'OUT',     tone: 'out' },
+};
+
+const asOf = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+  timeZoneName: 'short',
+}).format(now);
 
 const BOWL_BANDS = [
   {
@@ -48,14 +81,6 @@ const BOWL_BANDS = [
   },
 ];
 
-const SPRINT_CALENDAR = [
-  { day: 'D0',  title: 'Commissioner kickoff', state: 'done',     note: 'Recap link pinned, intake lane published, season story named.' },
-  { day: 'D2',  title: 'Expansion combine',    state: 'done',     note: 'Imported nations submit colors, code, roster, home, proof, rivalry seed.' },
-  { day: 'D5',  title: 'Media week packet',    state: 'done',     note: 'Preview cards, MVP watch, upset watch, sponsor reads, repeatable rundown.' },
-  { day: 'D8',  title: 'Rivalry test night',   state: 'now',      note: 'Named exhibitions before promising a full season. Great rivalries graduate; weak ones stay clips.' },
-  { day: 'D12', title: 'Rights and receipts',  state: 'next',     note: 'Watch frames, JSON routes, score envelopes, archive pages, sponsor inventory.' },
-  { day: 'D14', title: 'Bowl lock',            state: 'next',     note: 'Slate freezes, the final gets promoted, agents pick up the postgame publishing checklist.' },
-];
 
 const BOSS_FIELDS = [
   { code: 'MR', title: 'Monsoon Rift',  effect: 'Wet, low-visibility lane fights. Healers over-perform. Punishes drafts that lean on clean range trades.' },
@@ -98,6 +123,7 @@ const jsonLd = {
   image="/images/og/nouns-battler-v3.png"
   jsonLd={jsonLd}
   alternates={[
+    { type: 'application/json', href: '/nouns-nation-battler-bowl.json', title: 'Nouns Nation Battler Bowl-path snapshot (JSON)' },
     { type: 'application/json', href: '/nouns-nation-battler.json', title: 'Nouns Nation Battler manifest (JSON)' },
     { type: 'application/json', href: '/nouns-nation-battler-sprint.json', title: 'Season 6 Sprint Room missions (JSON)' },
   ]}
@@ -127,21 +153,32 @@ const jsonLd = {
     </nav>
 
     <header class="hero">
-      <p class="kicker">CH.BTL / Season 6 / Bowl Path</p>
+      <p class="kicker">CH.BTL / {SEASON_6.name} / Bowl Path · as of {asOf}</p>
       <h1>The Bowl is no longer abstract.</h1>
       <p class="dek">
-        The two-week table is past its midpoint. This page is the structural read on top of the
-        live scoreboard — what the lock band looks like, who is on the bubble by structure, what
-        boss fields decide the second half, and where today sits inside the 14-day Sprint Room.
-        For current wins, points, and fan counts, the
-        <a href="/nouns-nation-battler/">Battle Desk</a> is the source of truth.
+        The two-week table is {today >= 7 ? 'past its midpoint' : 'opening'}. This page is the
+        structural read on top of the live scoreboard — what the lock band looks like, who is on
+        the bubble by structure, what boss fields decide the second half, and where today sits
+        inside the 14-day Sprint Room. For current wins, points, and fan counts, the
+        <a href="/nouns-nation-battler/">Battle Desk</a> is the source of truth; this page's
+        live state is also <a href="/nouns-nation-battler-bowl.json">readable as JSON</a>.
       </p>
       <div class="hero-strip">
-        <span class="pill pill--now">D8 · Rivalry test night</span>
+        <span class="pill pill--now">D{today} · {currentMilestone.title}</span>
+        <span class="pill">{daysLeft > 0 ? `${daysLeft} days to lock` : daysLeft === 0 ? 'Lock day' : `${Math.abs(daysLeft)} days past lock`}</span>
         <span class="pill">8 founding gangs</span>
-        <span class="pill">4 boss fields</span>
-        <span class="pill">14-day Sprint</span>
+        {!allPending && (
+          <span class="pill pill--ledger">
+            {(lockCounts.locked ?? 0)}L · {(lockCounts.in ?? 0)}I · {(lockCounts.bubble ?? 0)}B · {(lockCounts.out ?? 0)}O
+          </span>
+        )}
       </div>
+      {allPending && (
+        <p class="hero__note">
+          Lock status reads as <code>pending</code> until a beat brings real signal. The page
+          shows structural framing in the meantime — no fabricated records.
+        </p>
+      )}
     </header>
 
     <section class="bands" aria-labelledby="bands-title">
@@ -185,8 +222,24 @@ const jsonLd = {
                 onerror="this.style.visibility='hidden'"
               />
             </span>
-            <p class="gang-card__code"><span class="gang-card__short">{gang.short}</span></p>
+            <p class="gang-card__code">
+              <span class="gang-card__short">{gang.short}</span>
+              {gang.lockStatus !== 'pending' && (
+                <span class={`gang-card__lock gang-card__lock--${lockPillCopy[gang.lockStatus].tone}`}>
+                  {lockPillCopy[gang.lockStatus].label}
+                </span>
+              )}
+            </p>
             <h3>{gang.name}</h3>
+            {(gang.championships.length > 0 || gang.defending) && (
+              <p class="gang-card__history">
+                {gang.championships.map((s, i) => (
+                  <span class={`gang-card__champ ${gang.defending && i === gang.championships.length - 1 ? 'gang-card__champ--defending' : ''}`}>
+                    {s}{gang.defending && i === gang.championships.length - 1 ? ' · DEF' : ''}
+                  </span>
+                ))}
+              </p>
+            )}
             <p class="gang-card__line">{gang.line}</p>
           </li>
         ))}
@@ -202,7 +255,7 @@ const jsonLd = {
         <h2 id="calendar-title">Where today sits in the lock cycle.</h2>
       </header>
       <ol class="calendar-rail">
-        {SPRINT_CALENDAR.map((day) => (
+        {sprintCalendar.map((day) => (
           <li class={`cal-step cal-step--${day.state}`}>
             <p class="cal-step__day">{day.day}</p>
             <h3>{day.title}</h3>
@@ -385,6 +438,30 @@ const jsonLd = {
     color: #fff;
     border-color: var(--btl-dark);
   }
+  .pill--ledger {
+    background: #1a1a1a;
+    color: #ffd400;
+    border-color: #1a1a1a;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.12em;
+  }
+
+  .hero__note {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--btl);
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .hero__note code {
+    background: var(--btl-soft);
+    color: var(--btl-dark);
+    padding: 1px 5px;
+    border: 1px solid var(--btl);
+  }
 
   .section-head {
     margin-bottom: 16px;
@@ -463,13 +540,51 @@ const jsonLd = {
     color: var(--muted);
     margin-bottom: 4px;
   }
+  .gang-card__code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .gang-card__short {
     color: var(--gang);
     font-weight: 700;
   }
+  .gang-card__lock {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--ink);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+  }
+  .gang-card__lock--lock    { background: #d8f4df; color: #155724; }
+  .gang-card__lock--in      { background: #ffd400; color: #5a4400; }
+  .gang-card__lock--bubble  { background: #ffe9ad; color: #6a4900; }
+  .gang-card__lock--out     { background: #fde2e0; color: #7a1f15; }
   .gang-card h3 {
     font-size: 17px;
+    margin-bottom: 6px;
+  }
+  .gang-card__history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     margin-bottom: 8px;
+  }
+  .gang-card__champ {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+  }
+  .gang-card__champ--defending {
+    background: #ffd400;
+    color: #5a4400;
+    font-weight: 700;
   }
   .gang-card__line {
     font-size: 13px;
