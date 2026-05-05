@@ -1,0 +1,789 @@
+---
+/**
+ * /nouns-nation-battler-moon — Moon Tournament: a once-per-full-moon
+ * single-elimination knockout for the 8 founding gangs. Different
+ * format from the regular Bowl (14-day Sprint Room) — one night, one
+ * field (Lunar Tide), one trophy (Moon Cup, prefixed with the named
+ * moon for the month).
+ *
+ * Reads off src/lib/battler-moon-tournament.ts. Seeds are computed
+ * from real championship history. Bracket outcomes stay 'pending'
+ * until results land. Lunar timing uses mean-synodic-month math; the
+ * page surfaces the ±12h caveat in the kicker.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import {
+  moonSeeds,
+  bracketMatches,
+  nextFullMoon,
+  hoursToNextFullMoon,
+  namedMoonForDate,
+  LUNAR_TIDE_FIELD,
+  type BracketMatch,
+} from '../lib/battler-moon-tournament';
+
+const ch = CHANNELS.BTL;
+const now = new Date();
+const fullMoon = nextFullMoon(now);
+const hoursAway = hoursToNextFullMoon(now);
+const daysAway = Math.floor(hoursAway / 24);
+const namedMoon = namedMoonForDate(fullMoon);
+const tournamentName = `${namedMoon} Cup`;
+const seeds = moonSeeds();
+const seedByNumber = new Map(seeds.map((s) => [s.seed, s]));
+const matches = bracketMatches();
+const matchByCode = new Map(matches.map((m) => [m.code, m]));
+
+const fullMoonStamp = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+  timeZoneName: 'short',
+}).format(fullMoon);
+
+const asOf = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+  timeZoneName: 'short',
+}).format(now);
+
+function slotLabel(slot: BracketMatch['top']): { kind: 'seed' | 'winner'; primary: string; secondary?: string; color?: string; noun?: number; defending?: boolean } {
+  if (slot.kind === 'seed') {
+    const s = seedByNumber.get(slot.seed)!;
+    return {
+      kind: 'seed',
+      primary: s.name,
+      secondary: `#${s.seed} · ${s.short}`,
+      color: s.color,
+      noun: s.noun,
+      defending: s.defending,
+    };
+  }
+  return { kind: 'winner', primary: `Winner of ${slot.from}` };
+}
+
+const FAST_PATHS = [
+  { label: 'Bowl path',      href: '/nouns-nation-battler-bowl/',     note: 'Two-week table — the regular S6 lock cycle.' },
+  { label: 'Battle Desk',    href: '/nouns-nation-battler/',          note: 'Live scorebug, league standings, top Nouns.' },
+  { label: 'V3',             href: '/nouns-nation-battler-v3/',       note: 'Federation desk: Sprint Room, Recap Desk, Pocket.' },
+  { label: 'CH.BTL archive', href: '/c/battler/',                     note: 'Every Battler beat in one channel index.' },
+  { label: 'Moon JSON',      href: '/nouns-nation-battler-moon.json', note: 'Machine-readable tournament state.' },
+  { label: 'Bowl JSON',      href: '/nouns-nation-battler-bowl.json', note: 'Companion snapshot for the regular Bowl path.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsEvent',
+  name: `Nouns Nation Battler — ${tournamentName}`,
+  description:
+    `Once-per-full-moon single-elimination knockout for the 8 founding gangs of Nouns Nation Battler. One night, one boss field (Lunar Tide), one trophy (${tournamentName}). Seeded from real championship history.`,
+  startDate: fullMoon.toISOString(),
+  url: 'https://pointcast.xyz/nouns-nation-battler-moon/',
+  sport: 'Auto battler',
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout
+  title={`PointCast Battle Desk · Moon Tournament — ${tournamentName}`}
+  description={`Moon Tournament for Nouns Nation Battler S6: a one-night single-elimination knockout among the 8 founding gangs, run on the Lunar Tide field, on the night of the ${namedMoon}. Seeds from real championship history; bracket outcomes are pending until tournament night.`}
+  image="/images/og/nouns-battler-v3.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/nouns-nation-battler-moon.json', title: 'Moon Tournament snapshot (JSON)' },
+    { type: 'application/json', href: '/nouns-nation-battler-bowl.json', title: 'Bowl-path snapshot (JSON)' },
+    { type: 'application/json', href: '/nouns-nation-battler.json',      title: 'Nouns Nation Battler manifest (JSON)' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/nouns-battler-v3.png',
+    buttons: [
+      { label: 'Bowl path',    action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-bowl/' },
+      { label: 'Battle Desk',  action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler/' },
+      { label: 'Watch V3',     action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-v3/' },
+      { label: 'CH.BTL',       action: 'link', target: 'https://pointcast.xyz/c/battler/' },
+      { label: 'Moon JSON',    action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-moon.json' },
+    ],
+  }}
+>
+  <main
+    class="moon-tournament"
+    style={`--btl: ${ch.color600}; --btl-dark: ${ch.color800}; --btl-soft: ${ch.color50};`}
+  >
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/c/battler/">CH.BTL</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-nation-battler/">Battle Desk</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Moon Tournament</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__moon" aria-hidden="true">
+        <span class="moon-disc"></span>
+      </div>
+      <div class="hero__copy">
+        <p class="kicker">CH.BTL · Moon Tournament · {namedMoon} · as of {asOf}</p>
+        <h1>{tournamentName}.</h1>
+        <p class="dek">
+          One night. Eight gangs. Single elimination. The whole bracket runs on the
+          <strong>Lunar Tide</strong> field — the only night this boss appears. Trophy is the
+          <strong>{tournamentName}</strong>; winner of the regular Bowl carries it for the next
+          lunar cycle. Seeds are pinned to real championship history; bracket outcomes stay
+          pending until tournament night.
+        </p>
+        <div class="hero-strip">
+          <span class="pill pill--countdown">
+            {hoursAway > 24
+              ? `${daysAway} days · ${Math.round(hoursAway - daysAway * 24)}h to full moon`
+              : hoursAway > 0
+                ? `${Math.round(hoursAway)}h to full moon`
+                : 'Moon is up — tournament window open'}
+          </span>
+          <span class="pill">{fullMoonStamp}</span>
+          <span class="pill">8 seeds</span>
+          <span class="pill">7 matches</span>
+          <span class="pill pill--field">Lunar Tide</span>
+        </div>
+        <p class="hero__caveat">
+          Lunar timing computed from the mean synodic cycle. Real astronomical full moon may shift by ±12h.
+        </p>
+      </div>
+    </header>
+
+    <section class="format" aria-labelledby="format-title">
+      <header class="section-head">
+        <p class="kicker">Format</p>
+        <h2 id="format-title">Different shape than the Bowl.</h2>
+      </header>
+      <ul class="format-grid">
+        <li class="format-card">
+          <p class="format-card__code">CYCLE</p>
+          <h3>Once per full moon</h3>
+          <p>One night per ~29 days. Outside the Sprint Room calendar — moon time, not week time.</p>
+        </li>
+        <li class="format-card">
+          <p class="format-card__code">FORMAT</p>
+          <h3>Single elimination</h3>
+          <p>QF → SF → Final. Seven matches, one night, one trophy. No best-of, no replay.</p>
+        </li>
+        <li class="format-card">
+          <p class="format-card__code">FIELD</p>
+          <h3>Lunar Tide only</h3>
+          <p>Every match runs on the same boss. Tide pulse rewards healers timing the down-pull and ranged volleys near the peak.</p>
+        </li>
+        <li class="format-card">
+          <p class="format-card__code">SEEDS</p>
+          <h3>Title history first</h3>
+          <p>Most championships → most recent year → defending tiebreaker → alphabetical for un-titled gangs. Pure ranking from facts.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="seeds" aria-labelledby="seeds-title">
+      <header class="section-head">
+        <p class="kicker">Seeds 1–8</p>
+        <h2 id="seeds-title">Where each gang lines up.</h2>
+        <p class="section-dek">
+          Title count first, then most-recent title year, then defending tiebreaker, then
+          alphabetical short-code for the un-titled. The same lib that powers the Bowl path
+          drives this list — when a new title lands, the seed order recomputes.
+        </p>
+      </header>
+      <ol class="seed-list">
+        {seeds.map((s) => (
+          <li class="seed-row" style={`--gang: ${s.color};`}>
+            <span class="seed-row__num">#{s.seed}</span>
+            <span class="seed-row__noun-frame" aria-hidden="true">
+              <img
+                src={`https://noun.pics/${s.noun}.svg`}
+                alt=""
+                width="40"
+                height="40"
+                loading="lazy"
+                style="image-rendering: pixelated;"
+                onerror="this.style.visibility='hidden'"
+              />
+            </span>
+            <span class="seed-row__copy">
+              <strong>
+                {s.name}
+                <span class="seed-row__short">{s.short}</span>
+                {s.defending && <span class="seed-row__def">DEF</span>}
+              </strong>
+              <span class="seed-row__rationale">{s.rationale}</span>
+            </span>
+            <span class="seed-row__titles">
+              {s.championships.length === 0
+                ? <em>—</em>
+                : s.championships.map((t) => <span class="seed-row__title">{t}</span>)
+              }
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="bracket" aria-labelledby="bracket-title">
+      <header class="section-head">
+        <p class="kicker">Bracket</p>
+        <h2 id="bracket-title">Seven matches under the same moon.</h2>
+        <p class="section-dek">
+          Standard 8-team single-elim layout. 1v8, 4v5, 3v6, 2v7 in the quarters; QF1 vs QF4
+          and QF3 vs QF2 in the semis; semis winners in the final. Every cell stays
+          <code>pending</code> until tournament night flips it.
+        </p>
+      </header>
+      <div class="bracket-grid">
+        <div class="bracket-col bracket-col--qf">
+          <p class="bracket-col__label">Quarterfinals</p>
+          {matches.filter((m) => m.round === 'QF').map((m) => (
+            <article class={`match match--${m.round.toLowerCase()}`} data-match={m.code}>
+              <header class="match__head">
+                <span class="match__code">{m.code}</span>
+                <span class="match__pending">pending</span>
+              </header>
+              <div class="match__slots">
+                <div class={`slot slot--top ${slotLabel(m.top).kind}`} style={slotLabel(m.top).color ? `--gang: ${slotLabel(m.top).color};` : ''}>
+                  <span class="slot__primary">{slotLabel(m.top).primary}</span>
+                  {slotLabel(m.top).secondary && <span class="slot__secondary">{slotLabel(m.top).secondary}</span>}
+                </div>
+                <span class="match__vs" aria-hidden="true">vs</span>
+                <div class={`slot slot--bottom ${slotLabel(m.bottom).kind}`} style={slotLabel(m.bottom).color ? `--gang: ${slotLabel(m.bottom).color};` : ''}>
+                  <span class="slot__primary">{slotLabel(m.bottom).primary}</span>
+                  {slotLabel(m.bottom).secondary && <span class="slot__secondary">{slotLabel(m.bottom).secondary}</span>}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div class="bracket-col bracket-col--sf">
+          <p class="bracket-col__label">Semifinals</p>
+          {matches.filter((m) => m.round === 'SF').map((m) => (
+            <article class={`match match--${m.round.toLowerCase()}`} data-match={m.code}>
+              <header class="match__head">
+                <span class="match__code">{m.code}</span>
+                <span class="match__pending">pending</span>
+              </header>
+              <div class="match__slots">
+                <div class={`slot slot--top ${slotLabel(m.top).kind}`}>
+                  <span class="slot__primary">{slotLabel(m.top).primary}</span>
+                </div>
+                <span class="match__vs" aria-hidden="true">vs</span>
+                <div class={`slot slot--bottom ${slotLabel(m.bottom).kind}`}>
+                  <span class="slot__primary">{slotLabel(m.bottom).primary}</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div class="bracket-col bracket-col--f">
+          <p class="bracket-col__label">Final · {tournamentName}</p>
+          {matches.filter((m) => m.round === 'F').map((m) => (
+            <article class={`match match--${m.round.toLowerCase()}`} data-match={m.code}>
+              <header class="match__head">
+                <span class="match__code">{m.code}</span>
+                <span class="match__pending">pending</span>
+              </header>
+              <div class="match__slots">
+                <div class={`slot slot--top ${slotLabel(m.top).kind}`}>
+                  <span class="slot__primary">{slotLabel(m.top).primary}</span>
+                </div>
+                <span class="match__vs" aria-hidden="true">vs</span>
+                <div class={`slot slot--bottom ${slotLabel(m.bottom).kind}`}>
+                  <span class="slot__primary">{slotLabel(m.bottom).primary}</span>
+                </div>
+              </div>
+              <footer class="match__trophy">
+                <span class="match__trophy-glyph" aria-hidden="true">🌕</span>
+                <span class="match__trophy-name">{tournamentName}</span>
+              </footer>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="field" aria-labelledby="field-title">
+      <header class="section-head">
+        <p class="kicker">{LUNAR_TIDE_FIELD.code} · only on tournament night</p>
+        <h2 id="field-title">{LUNAR_TIDE_FIELD.title}.</h2>
+      </header>
+      <article class="field-card">
+        <p>{LUNAR_TIDE_FIELD.effect}</p>
+      </article>
+    </section>
+
+    <section class="paths" aria-labelledby="paths-title">
+      <header class="section-head">
+        <p class="kicker">Fast paths</p>
+        <h2 id="paths-title">Where to look next.</h2>
+      </header>
+      <ul class="path-grid">
+        {FAST_PATHS.map((path) => (
+          <li class="path-card">
+            <a href={path.href}>
+              <strong>{path.label}</strong>
+              <span>{path.note}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="signoff">
+      <p>
+        Filed from the <a href="/nouns-nation-battler/">Battle Desk</a>, El Segundo. Lunar
+        timing is computed from the mean synodic cycle and may drift up to half a day from
+        the real astronomical full moon. Bracket outcomes stay pending — the night flips them.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .moon-tournament {
+    --paper: #0a0e1f;
+    --ink: #f7f2e8;
+    --muted: #9aa3bf;
+    --line: rgba(247, 242, 232, 0.18);
+    --panel: #131a33;
+    --panel-2: #1d2647;
+    --glow: #ffd97a;
+    --tide: #4a9fd4;
+    --rose: #e76f7a;
+    min-height: 100vh;
+    padding: 16px clamp(12px, 2.5vw, 30px) 64px;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 86% 12%, rgba(255, 217, 122, 0.18), transparent 38%),
+      radial-gradient(circle at 12% 86%, rgba(74, 159, 212, 0.20), transparent 42%),
+      linear-gradient(180deg, #050717 0%, #0a0e1f 60%, #131a33 100%);
+    font-family: var(--pc-font-sans, ui-sans-serif, system-ui, sans-serif);
+  }
+
+  .moon-tournament * { box-sizing: border-box; }
+  .moon-tournament a { color: inherit; text-decoration: none; }
+  .moon-tournament p, .moon-tournament h1, .moon-tournament h2, .moon-tournament h3 { margin: 0; }
+
+  .crumb,
+  .kicker,
+  .pill,
+  .format-card__code,
+  .seed-row__num,
+  .seed-row__short,
+  .seed-row__title,
+  .match__code,
+  .match__pending,
+  .match__trophy-name,
+  .bracket-col__label,
+  .slot__secondary {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    letter-spacing: 0.06em;
+  }
+
+  .crumb {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+  .crumb a { border-bottom: 1px dotted currentColor; }
+  .crumb [aria-current] { color: var(--ink); }
+
+  .kicker {
+    color: var(--glow);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 32px clamp(16px, 3vw, 36px);
+    background:
+      radial-gradient(circle at 100% 0%, rgba(255, 217, 122, 0.10), transparent 45%),
+      var(--panel);
+    border: 2px solid var(--glow);
+    box-shadow: 6px 6px 0 rgba(255, 217, 122, 0.35), inset 0 0 60px rgba(74, 159, 212, 0.15);
+    margin-bottom: 32px;
+  }
+  .hero__moon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+  }
+  .moon-disc {
+    display: block;
+    width: 150px; height: 150px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, #fff7d6 0%, var(--glow) 40%, #c89c30 95%);
+    box-shadow:
+      0 0 60px rgba(255, 217, 122, 0.55),
+      inset -22px -22px 60px rgba(40, 25, 0, 0.55),
+      inset 8px 8px 30px rgba(255, 255, 255, 0.4);
+    position: relative;
+  }
+  .moon-disc::before,
+  .moon-disc::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(40, 25, 0, 0.18);
+  }
+  .moon-disc::before { width: 26px; height: 26px; top: 18%; left: 28%; }
+  .moon-disc::after  { width: 14px; height: 14px; top: 60%; left: 64%; }
+  .hero h1 {
+    font-size: clamp(34px, 5vw, 64px);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+    color: var(--glow);
+    text-shadow: 0 0 24px rgba(255, 217, 122, 0.35);
+  }
+  .hero .dek {
+    font-size: 16px;
+    line-height: 1.55;
+    color: #d6dbf0;
+    max-width: 64ch;
+  }
+  .hero .dek strong {
+    color: var(--tide);
+    font-weight: 600;
+  }
+  .hero-strip {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 5px 10px;
+    border: 1px solid var(--glow);
+    background: rgba(255, 217, 122, 0.06);
+    color: var(--glow);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .pill--countdown {
+    background: var(--glow);
+    color: #20180a;
+    font-weight: 700;
+  }
+  .pill--field {
+    border-color: var(--tide);
+    color: var(--tide);
+    background: rgba(74, 159, 212, 0.10);
+  }
+  .hero__caveat {
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.04em;
+  }
+
+  .section-head {
+    margin-bottom: 16px;
+    max-width: 70ch;
+  }
+  .section-head h2 {
+    font-size: clamp(22px, 3vw, 30px);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    color: var(--ink);
+  }
+  .section-dek {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .section-dek code {
+    background: rgba(255, 217, 122, 0.10);
+    color: var(--glow);
+    padding: 1px 5px;
+    border: 1px solid rgba(255, 217, 122, 0.4);
+  }
+
+  .format { margin-bottom: 36px; }
+  .format-grid {
+    list-style: none; padding: 0;
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .format-card {
+    padding: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 30px rgba(74, 159, 212, 0.06);
+  }
+  .format-card__code {
+    color: var(--tide);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    margin-bottom: 6px;
+  }
+  .format-card h3 {
+    font-size: 17px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  .format-card p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .seeds { margin-bottom: 36px; }
+  .seed-list {
+    list-style: none; padding: 0;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .seed-row {
+    display: grid;
+    grid-template-columns: 50px 50px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    border-left: 4px solid var(--gang);
+  }
+  .seed-row:last-child { border-bottom: none; }
+  .seed-row__num {
+    color: var(--glow);
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .seed-row__noun-frame {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 44px; height: 44px;
+    background: var(--gang);
+    border: 1.5px solid var(--ink);
+  }
+  .seed-row__copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .seed-row__copy strong { font-size: 15px; color: var(--ink); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .seed-row__short {
+    color: var(--gang);
+    font-size: 11px;
+    border: 1px solid var(--gang);
+    padding: 1px 5px;
+  }
+  .seed-row__def {
+    background: var(--glow);
+    color: #20180a;
+    font-size: 9px;
+    padding: 2px 5px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .seed-row__rationale {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .seed-row__titles {
+    display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;
+  }
+  .seed-row__title {
+    background: rgba(255, 217, 122, 0.10);
+    color: var(--glow);
+    border: 1px solid rgba(255, 217, 122, 0.4);
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+  .seed-row__titles em { color: var(--muted); font-style: normal; font-size: 12px; }
+
+  .bracket { margin-bottom: 36px; }
+  .bracket-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    align-items: start;
+  }
+  .bracket-col__label {
+    color: var(--tide);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .bracket-col--qf { display: flex; flex-direction: column; gap: 12px; }
+  .bracket-col--sf { display: flex; flex-direction: column; gap: 70px; padding-top: 38px; }
+  .bracket-col--f  { display: flex; flex-direction: column; gap: 12px; padding-top: 110px; }
+
+  .match {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+  }
+  .match--f {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255, 217, 122, 0.18), transparent 60%),
+      var(--panel-2);
+    border-color: var(--glow);
+    box-shadow: 4px 4px 0 var(--glow);
+  }
+  .match__head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+  .match__code {
+    color: var(--glow);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+  }
+  .match__pending {
+    color: var(--muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    background: rgba(247, 242, 232, 0.06);
+    padding: 1px 6px;
+    border: 1px solid var(--line);
+  }
+  .match__slots {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .slot {
+    padding: 6px 8px;
+    background: rgba(247, 242, 232, 0.04);
+    border-left: 3px solid var(--gang, var(--muted));
+  }
+  .slot.winner {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .slot__primary {
+    display: block;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .slot__secondary {
+    display: block;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .match__vs {
+    text-align: center;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .match__trophy {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 217, 122, 0.4);
+  }
+  .match__trophy-glyph { font-size: 22px; }
+  .match__trophy-name {
+    color: var(--glow);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+  }
+
+  .field { margin-bottom: 36px; }
+  .field-card {
+    padding: 18px;
+    background:
+      linear-gradient(120deg, rgba(74, 159, 212, 0.08), rgba(247, 242, 232, 0.03)),
+      var(--panel);
+    border: 1px solid var(--tide);
+    box-shadow: inset 0 0 40px rgba(74, 159, 212, 0.10);
+  }
+  .field-card p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #cdd5ee;
+  }
+
+  .paths { margin-bottom: 28px; }
+  .path-grid {
+    list-style: none; padding: 0;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .path-card a {
+    display: block;
+    padding: 14px;
+    background: var(--panel);
+    border: 1.5px solid var(--line);
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease;
+  }
+  .path-card a:hover {
+    transform: translate(-1px, -1px);
+    border-color: var(--glow);
+    box-shadow: 3px 3px 0 var(--glow);
+  }
+  .path-card strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+    color: var(--glow);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .path-card span {
+    display: block;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  .signoff {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    margin-top: 20px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 70ch;
+  }
+  .signoff a {
+    border-bottom: 1px dotted currentColor;
+    color: var(--tide);
+  }
+
+  @media (max-width: 900px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .hero__moon { min-height: 120px; }
+    .moon-disc { width: 110px; height: 110px; }
+    .bracket-grid { grid-template-columns: 1fr; }
+    .bracket-col--sf, .bracket-col--f { padding-top: 0; gap: 12px; }
+    .seed-row { grid-template-columns: 36px 44px 1fr; grid-template-areas: 'num noun copy' 'titles titles titles'; }
+    .seed-row__num    { grid-area: num; }
+    .seed-row__noun-frame { grid-area: noun; }
+    .seed-row__copy   { grid-area: copy; }
+    .seed-row__titles { grid-area: titles; justify-content: flex-start; }
+  }
+</style>
