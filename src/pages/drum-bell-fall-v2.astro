@@ -1,0 +1,298 @@
+---
+/**
+ * /drum-bell-fall-v2 — drag-trail bells.
+ *
+ * Mike: "go 2.0 on a bunch have a toggle to go to prior version."
+ * v1 was click-anywhere → bell falls from click point. v2 is drag —
+ * bells trail behind your cursor as you sweep across the field.
+ * You're literally raining bells with your finger.
+ *
+ * Each spawned bell takes a slightly different pitch based on the
+ * direction of motion (heading 0-360° → C-major-pentatonic note).
+ * Faster motion = more bells per unit length.
+ *
+ * v1 pill in chrome links back to /drum-bell-fall.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Bell Fall v2 · Drag Trail · PointCast';
+const description =
+  'Drag your cursor across the velvet field — bells fall along your path. Each direction picks a pitch.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Bell Fall v2',
+  url: 'https://pointcast.xyz/drum-bell-fall-v2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="bf2" id="bf2-main">
+    <DrumNav current="bell-fall" />
+
+    <header class="bf2__header">
+      <div class="bf2__chrome">
+        <span>BELL FALL</span>
+        <span class="bf2__chrome-sep">·</span>
+        <span class="bf2__chrome-version">v2 · DRAG TRAIL</span>
+        <a class="bf2__prev-pill" href="/drum-bell-fall">← v1</a>
+      </div>
+      <h1 class="bf2__title">DRAG ME</h1>
+      <p class="bf2__tagline">draw bell trails across the velvet · direction picks the note</p>
+    </header>
+
+    <section class="bf2__field" id="bf2-field" aria-label="Drag to drop bells along your path">
+      <div class="bf2__cue" id="bf2-cue">drag anywhere</div>
+    </section>
+
+    <footer class="bf2__readout">
+      <div class="bf2__panel">
+        <span class="bf2__panel-label">DROPPED</span>
+        <span class="bf2__panel-value" id="bf2-dropped">0</span>
+      </div>
+      <div class="bf2__panel">
+        <span class="bf2__panel-label">IN AIR</span>
+        <span class="bf2__panel-value" id="bf2-aloft">0</span>
+      </div>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#bf2-main) { background: #0c0410; overflow: hidden; }
+
+  .bf2 {
+    --bf2-velvet: #1a0820;
+    --bf2-velvet-deep: #0c0410;
+    --bf2-brass: #d4a437;
+    --bf2-brass-deep: #6b4d12;
+    --bf2-flame: #f6c15e;
+    --bf2-ink-mid: #c9b78c;
+    --bf2-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 28px;
+    color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--bf2-velvet) 0%, var(--bf2-velvet-deep) 100%);
+    height: calc(100vh - 80px);
+    min-height: 600px;
+    display: flex; flex-direction: column;
+  }
+  .bf2 .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .bf2__header { text-align: center; padding: clamp(8px, 1vh, 16px) 0 clamp(12px, 1.4vh, 18px); flex-shrink: 0; }
+  .bf2__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 12px);
+    padding: 4px 14px; border: 1.5px solid var(--bf2-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--bf2-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .bf2__chrome-sep { color: var(--bf2-brass-deep); }
+  .bf2__chrome-version { color: var(--bf2-flame); font-weight: 700; }
+  .bf2__prev-pill {
+    margin-left: 8px;
+    padding: 2px 10px;
+    border: 1px solid var(--bf2-brass-deep);
+    border-radius: 999px;
+    color: var(--bf2-ink-dim);
+    text-decoration: none;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    transition: color 160ms, border-color 160ms;
+  }
+  .bf2__prev-pill:hover { color: var(--bf2-brass); border-color: var(--bf2-brass); }
+
+  .bf2__title {
+    margin: clamp(8px, 1vh, 12px) 0 4px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--bf2-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--bf2-velvet-deep);
+  }
+  .bf2__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--bf2-ink-mid);
+  }
+
+  .bf2__field {
+    flex: 1; position: relative; cursor: crosshair;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+    border-bottom: 1px solid rgba(212, 164, 55, 0.18);
+    margin: 0 -clamp(16px, 2vw, 56px);
+    background:
+      radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.35) 100%);
+    overflow: hidden;
+  }
+  .bf2__cue {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    pointer-events: none; user-select: none;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4vw, 48px); letter-spacing: 0.06em;
+    color: rgba(244, 231, 200, 0.20);
+    transition: opacity 800ms;
+  }
+  .bf2__field.bf2__field--touched .bf2__cue { opacity: 0; }
+
+  .bf2__bell {
+    position: absolute;
+    width: 24px;
+    height: 30px;
+    pointer-events: none;
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+    will-change: transform, opacity;
+  }
+
+  .bf2__readout {
+    display: flex; justify-content: center; gap: clamp(20px, 3vw, 60px);
+    padding: clamp(10px, 1.4vh, 18px) 0 0; flex-shrink: 0;
+  }
+  .bf2__panel {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 6px 14px; border: 1px solid var(--bf2-brass-deep); border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bf2__panel-label { color: var(--bf2-ink-dim); }
+  .bf2__panel-value {
+    font-size: 16px; font-weight: 800; color: var(--bf2-flame);
+    text-shadow: 0 0 10px rgba(246, 193, 94, 0.35);
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // C major pentatonic over 3 octaves — direction maps to note
+  const NOTES = [
+    523.25, 587.33, 659.25, 783.99, 880.00,
+    1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    2093.00, 2349.32,
+  ];
+  function playBell(freq, gain = 0.16) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.1); o2.start(t); o2.stop(t + 0.8);
+  }
+
+  const fieldEl = document.getElementById('bf2-field');
+  const droppedEl = document.getElementById('bf2-dropped');
+  const aloftEl = document.getElementById('bf2-aloft');
+  let dropped = 0;
+  let aloft = 0;
+
+  // SVG bell sprite
+  const BELL_SVG = `<svg viewBox="0 0 24 30" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="0" width="4" height="2" fill="#6b4d12"/>
+    <rect x="8" y="2" width="8" height="3" fill="#b8862c"/>
+    <path d="M 4 6 L 20 6 L 22 24 L 2 24 Z" fill="#d4a437"/>
+    <rect x="2" y="24" width="20" height="2" fill="#b8862c"/>
+    <rect x="0" y="26" width="24" height="2" fill="#6b4d12"/>
+    <rect x="11" y="28" width="2" height="2" fill="#3a2410"/>
+    <rect x="6" y="9" width="1.5" height="10" fill="#fff5c0" opacity="0.5"/>
+  </svg>`;
+
+  function paint() {
+    if (droppedEl) droppedEl.textContent = String(dropped);
+    if (aloftEl) aloftEl.textContent = String(aloft);
+  }
+  paint();
+
+  function spawnBell(x, y, dx, dy) {
+    if (!fieldEl) return;
+    const heading = Math.atan2(dy, dx) + Math.PI; // 0..2π
+    const pitchIdx = Math.floor((heading / (Math.PI * 2)) * NOTES.length) % NOTES.length;
+    const freq = NOTES[pitchIdx];
+    try { playBell(freq, 0.12); } catch {}
+
+    const bell = document.createElement('div');
+    bell.className = 'bf2__bell';
+    bell.innerHTML = BELL_SVG;
+    bell.style.left = `${x}px`;
+    bell.style.top = `${y}px`;
+    const rot = (Math.random() - 0.5) * 30;
+    bell.style.setProperty('--rot', `${rot}deg`);
+    fieldEl.appendChild(bell);
+    dropped += 1; aloft += 1; paint();
+
+    // Animate fall with rAF — gravity + slight drift in motion direction
+    const startedAt = performance.now();
+    const driftX = (dx / Math.max(0.5, Math.hypot(dx, dy))) * 60;
+    const fallDuration = 1100 + Math.random() * 600;
+    function tick(now) {
+      const t = (now - startedAt) / fallDuration;
+      if (t >= 1 || !bell.parentElement) {
+        if (bell.parentElement) bell.remove();
+        aloft -= 1; paint();
+        return;
+      }
+      const fall = t * t * 320; // ease-in gravity
+      const drift = driftX * t;
+      const fade = Math.max(0, 1 - t * 1.4);
+      bell.style.transform = `translate(${-12 + drift}px, ${-15 + fall}px) rotate(${rot + t * 60}deg)`;
+      bell.style.opacity = String(fade);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // Drag tracking — spawn bells at sampled points along the path
+  let dragging = false;
+  let lastSpawn = { x: 0, y: 0, t: 0 };
+
+  function pos(e) {
+    const rect = fieldEl.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+  function onDown(e) {
+    if (!fieldEl) return;
+    fieldEl.classList.add('bf2__field--touched');
+    dragging = true;
+    const p = pos(e);
+    spawnBell(p.x, p.y, 1, 0);
+    lastSpawn = { x: p.x, y: p.y, t: performance.now() };
+  }
+  function onMove(e) {
+    if (!dragging || !fieldEl) return;
+    const p = pos(e);
+    const now = performance.now();
+    const dx = p.x - lastSpawn.x;
+    const dy = p.y - lastSpawn.y;
+    const dist = Math.hypot(dx, dy);
+    // Spawn one bell every ~28px traveled OR every 110ms whichever first
+    if (dist >= 28 || (now - lastSpawn.t > 110 && dist > 4)) {
+      spawnBell(p.x, p.y, dx, dy);
+      lastSpawn = { x: p.x, y: p.y, t: now };
+    }
+  }
+  function onUp() { dragging = false; }
+
+  if (fieldEl) {
+    fieldEl.addEventListener('mousedown', onDown);
+    fieldEl.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    fieldEl.addEventListener('touchstart', onDown, { passive: true });
+    fieldEl.addEventListener('touchmove', onMove, { passive: true });
+    fieldEl.addEventListener('touchend', onUp);
+  }
+</script>
