@@ -1,0 +1,469 @@
+---
+/**
+ * /spells — the magic words library.
+ *
+ * Browse every spell in the catalog, cast from the page, copy the +id
+ * token to type in the omnibox. URL is /spells because /cast is taken
+ * by PrizeCast (the no-loss savings lottery). The dock slot is still
+ * named CAST — these are the spells it casts.
+ *
+ * Exit-condition wrap-up: catalog hit ≥20 shipped spells, so this page
+ * is the natural landing for "what magic words exist?" Live in PR #324
+ * too, landing here when that merges. This page is the sketch; #324 is
+ * the richer production pass.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SPELLS } from '../data/spells';
+
+const byKind = {
+  burst:     SPELLS.filter(s => s.kind === 'burst'),
+  companion: SPELLS.filter(s => s.kind === 'companion'),
+  ambient:   SPELLS.filter(s => s.kind === 'ambient'),
+};
+
+const kindLabel: Record<string, string> = {
+  burst:     'BURSTS',
+  companion: 'COMPANIONS',
+  ambient:   'AMBIENT',
+};
+
+const kindBlurb: Record<string, string> = {
+  burst:     'One-shot — spawns, delights, self-cleans.',
+  companion: 'Small creatures that cross the screen, then wander off.',
+  ambient:   'Persistent — stays until you clear it.',
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type':    'CollectionPage',
+  '@id':      'https://pointcast.xyz/spells',
+  name:       'PointCast Spells — Magic Words',
+  description:'Every magic word in the PointCast dock. Type +spell in the omnibox or click Cast.',
+  url:        'https://pointcast.xyz/spells',
+  hasPart: SPELLS.map(s => ({
+    '@type': 'Thing',
+    name:  s.label,
+    description: s.blurb,
+    identifier: s.id,
+  })),
+};
+---
+
+<BlockLayout
+  title="Spells — Magic Words"
+  description="Every magic word in the PointCast dock. Type +spell in the omnibox or click a chip in slot 06 CAST."
+  jsonLd={jsonLd}
+>
+  <div class="pg">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>spells</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">06 CAST · MAGIC WORDS · v1</p>
+      <h1 class="display">Spells.</h1>
+      <p class="dek">
+        Type <code>+spell</code> in the omnibox, or click a chip in slot&nbsp;06&nbsp;CAST.
+        {SPELLS.length} magic words, three kinds.
+      </p>
+      <div class="head-actions">
+        <button class="btn btn--clear" id="js-clear-all" type="button">🌪 clear all</button>
+        <button class="btn btn--cast-all" id="js-cast-all" type="button">✨ cast everything</button>
+      </div>
+    </header>
+
+    {(['burst', 'companion', 'ambient'] as const).map(kind => (
+      <section class="section" aria-label={kindLabel[kind]}>
+        <div class="section-head">
+          <p class="section-kicker">{kindLabel[kind]}</p>
+          <p class="section-note">{kindBlurb[kind]}</p>
+        </div>
+        <div class="grid" role="list">
+          {byKind[kind].map(spell => (
+            <article
+              class="card"
+              id={spell.id}
+              role="listitem"
+              style={`--accent: ${spell.accent}`}
+              data-spell-id={spell.id}
+            >
+              <div class="card-top">
+                <span class="glyph" aria-hidden="true">{spell.glyph}</span>
+                <div class="card-meta">
+                  <p class="spell-id mono">+{spell.id}</p>
+                  <span class={`pill pill--${kind}`}>{kind}{spell.durationMs ? ` · ${(spell.durationMs / 1000).toFixed(0)}s` : ''}</span>
+                </div>
+              </div>
+              <p class="blurb">{spell.blurb}</p>
+              <div class="card-actions">
+                <button
+                  class="btn btn--cast"
+                  type="button"
+                  data-cast={spell.id}
+                  aria-label={`Cast ${spell.label}`}
+                >cast</button>
+                <button
+                  class="btn btn--copy"
+                  type="button"
+                  data-copy={spell.id}
+                  aria-label={`Copy +${spell.id} to clipboard`}
+                >copy</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <footer class="pg-footer">
+      <p class="pg-footer__note">
+        Type <code>+spellname</code> in the omnibox anywhere on PointCast.
+        Spells stack — cast as many as you like. Clear with the tray&rsquo;s
+        ✕ or <code>pc:spell:clear</code>.
+      </p>
+      <p class="pg-footer__note">
+        <a href="/cast">Prize Cast →</a>
+        &nbsp;·&nbsp;
+        <a href="/">Home →</a>
+      </p>
+    </footer>
+  </div>
+
+  <script is:inline>
+    (function () {
+      'use strict';
+
+      function dispatch(id) {
+        document.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: id } }));
+      }
+
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+
+        // cast button
+        var castId = t.closest('[data-cast]') && t.closest('[data-cast]').dataset.cast;
+        if (castId) {
+          dispatch(castId);
+          return;
+        }
+
+        // copy button
+        var copyEl = t.closest('[data-copy]');
+        if (copyEl) {
+          var id = copyEl.dataset.copy;
+          var text = '+' + id;
+          try {
+            navigator.clipboard.writeText(text).then(function () {
+              copyEl.textContent = '✓ copied';
+              setTimeout(function () { copyEl.textContent = 'copy'; }, 1800);
+            });
+          } catch (_) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            copyEl.textContent = '✓ copied';
+            setTimeout(function () { copyEl.textContent = 'copy'; }, 1800);
+          }
+          return;
+        }
+
+        // clear all
+        if (t.closest('#js-clear-all')) {
+          document.dispatchEvent(new CustomEvent('pc:spell:clear'));
+          return;
+        }
+
+        // cast everything — stagger 250ms apart
+        if (t.closest('#js-cast-all')) {
+          var ids = Array.from(document.querySelectorAll('[data-cast]')).map(function (el) {
+            return el.dataset.cast;
+          });
+          ids.forEach(function (id, i) {
+            setTimeout(function () { dispatch(id); }, i * 250);
+          });
+          return;
+        }
+      });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .pg {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
+  }
+
+  /* ─── crumb ─── */
+  .crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+  }
+  .crumb a { color: var(--pc-ink-soft); }
+
+  /* ─── head ─── */
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2.6rem, 10vw, 5.4rem);
+    font-weight: 500;
+    line-height: 0.92;
+    letter-spacing: -0.024em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    margin: 0 0 20px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    max-width: 48ch;
+  }
+
+  .dek code {
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    background: #f3f0eb;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .head-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 28px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    margin-bottom: 32px;
+  }
+
+  /* ─── section ─── */
+  .section {
+    margin-bottom: 40px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .section-kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .section-note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--pc-ink-muted);
+    line-height: 1.4;
+  }
+
+  /* ─── grid ─── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  /* ─── card ─── */
+  .card {
+    border: 1.5px solid var(--pc-rule, #d8d4cc);
+    border-radius: 3px;
+    background: #fff;
+    padding: 14px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-margin-top: 72px;
+    transition: border-color 0.15s;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .glyph {
+    font-size: 28px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+  }
+
+  .spell-id {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .pill--burst    { background: #fef2e2; color: #8a4a0a; }
+  .pill--companion{ background: #e8f4ff; color: #0a4a7a; }
+  .pill--ambient  { background: #edf7f0; color: #0a5a2a; }
+
+  .blurb {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    flex: 1;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 7px;
+  }
+
+  /* ─── buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 2px;
+    border: 1.5px solid;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.12s, color 0.12s;
+  }
+
+  .btn--cast {
+    border-color: var(--accent, var(--pc-ink));
+    color: var(--accent, var(--pc-ink));
+  }
+
+  .btn--cast:hover {
+    background: var(--accent, var(--pc-ink));
+    color: #fff;
+  }
+
+  .btn--copy {
+    border-color: var(--pc-rule, #d8d4cc);
+    color: var(--pc-ink-muted);
+  }
+
+  .btn--copy:hover {
+    border-color: var(--pc-ink-muted);
+    color: var(--pc-ink);
+  }
+
+  .btn--clear {
+    border-color: #8a2432;
+    color: #8a2432;
+  }
+
+  .btn--clear:hover {
+    background: #8a2432;
+    color: #fff;
+  }
+
+  .btn--cast-all {
+    border-color: var(--pc-ink);
+    color: var(--pc-ink);
+  }
+
+  .btn--cast-all:hover {
+    background: var(--pc-ink);
+    color: #fff;
+  }
+
+  /* ─── footer ─── */
+  .pg-footer {
+    border-top: 1px solid var(--pc-rule, #d8d4cc);
+    padding-top: 24px;
+    margin-top: 8px;
+  }
+
+  .pg-footer__note {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--pc-ink-muted);
+    line-height: 1.5;
+  }
+
+  .pg-footer__note code {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    background: #f3f0eb;
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .pg-footer__note a {
+    color: var(--pc-ink-soft);
+  }
+
+  /* ─── responsive ─── */
+  @media (min-width: 600px) {
+    .pg { padding-left: 24px; padding-right: 24px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  }
+
+  @media (max-width: 400px) {
+    .grid { grid-template-columns: 1fr; }
+    .section-head { flex-direction: column; gap: 4px; }
+  }
+</style>
