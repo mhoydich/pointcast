@@ -1,0 +1,327 @@
+---
+/**
+ * /ues — University of El Segundo · the hub.
+ *
+ * The landing page for UES. Lists every Track. Each Track is a 4-6
+ * week field study with a thesis, a reading list, and field trips
+ * to real surfaces on PointCast.
+ *
+ * UES is not accredited. UES does not award degrees in the conventional
+ * sense (see Track 05's coda: "There is no final. There is a Block.")
+ * UES is a posture — that the town itself is a curriculum, that
+ * software-as-place can be studied the way architecture is studied,
+ * that maintenance is a creative posture not a janitorial chore.
+ *
+ * Aesthetic: geocities + sim city, monospace catalog, brass-and-velvet
+ * track cards. Companion to /ues/track-05.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = 'University of El Segundo';
+const description =
+  'UES — a small, unaccredited, place-based curriculum at pointcast.xyz. Each Track is a field study in some aspect of the town. The classroom is the town itself.';
+
+interface Track {
+  code: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  weeks: number;
+  status: 'live' | 'forthcoming' | 'archive';
+  blurb: string;
+  fieldTrips: { week: number; theme: string; href?: string }[];
+}
+
+const tracks: Track[] = [
+  {
+    code: 'UES-05',
+    slug: '/ues/track-05',
+    title: 'The Rebuildable Town',
+    subtitle: 'A field study in inhabitable software',
+    weeks: 6,
+    status: 'live',
+    blurb:
+      'Six lessons drawn from one Sunday of building. Block IDs as commitments. Spells, not buttons. The visiting handbook. The hourly cron. Garbage collection as care. Geocities + sim city. The classroom is the town itself.',
+    fieldTrips: [
+      { week: 1, theme: 'Block IDs are Monotonic', href: '/blocks.json' },
+      { week: 2, theme: 'Spells, not Buttons', href: '/spells' },
+      { week: 3, theme: 'The Visiting Handbook', href: '/handshakes' },
+      { week: 4, theme: 'The Hourly Cron' },
+      { week: 5, theme: 'Garbage Collection as Care' },
+      { week: 6, theme: 'Geocities + SimCity', href: '/rooms' },
+    ],
+  },
+];
+
+// Earlier tracks referenced in conversation but not yet pages here.
+// Listed as "forthcoming" so the catalog is honest about what's
+// actually shipped vs. what's been mentioned.
+const forthcoming: { code: string; title: string; note: string }[] = [
+  { code: 'UES-04', title: 'Civic Layer', note: 'Lives at /civic-layer pending re-shelving under /ues' },
+  { code: 'UES-01', title: 'Inaugural — TBD', note: 'Track 01-03 reserved for back-fill if useful' },
+];
+
+const facultyNotes = [
+  'No tuition. No accreditation. No degree.',
+  'Tracks are open enrollment — read the page, do the field trip, write the Block.',
+  'The library is /blocks.json. The transcript is /handshakes.',
+  'If a Track grows, it splits. If a Track decays, it gets archived but its address (UES-NN) stays monotonic.',
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'EducationalOrganization',
+  '@id': 'https://pointcast.xyz/ues',
+  name: 'University of El Segundo',
+  description,
+  address: { '@type': 'PostalAddress', addressLocality: 'El Segundo', addressRegion: 'CA' },
+  hasOfferCatalog: {
+    '@type': 'OfferCatalog',
+    name: 'UES Tracks',
+    itemListElement: tracks.map((t, i) => ({
+      '@type': 'Course',
+      position: i + 1,
+      courseCode: t.code,
+      name: t.title,
+      description: t.blurb,
+      url: `https://pointcast.xyz${t.slug}`,
+    })),
+  },
+};
+---
+
+<BlockLayout title={title} description={description}>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <article class="ues-hub">
+    <header class="banner">
+      <div class="banner-meta">
+        <span>UES</span>
+        <span class="dot">·</span>
+        <span>EST. 2026 · EL SEGUNDO, CA</span>
+        <span class="dot">·</span>
+        <span>UNACCREDITED</span>
+      </div>
+      <h1>University of El Segundo</h1>
+      <p class="dek">
+        A small, place-based curriculum at pointcast.xyz. Each Track is a field study in some aspect
+        of the town. The classroom is the town itself. The library is <a href="/blocks.json">/blocks.json</a>.
+        The transcript is <a href="/handshakes">/handshakes</a>. There is no tuition.
+      </p>
+    </header>
+
+    <section class="tracks">
+      <h2>tracks · live</h2>
+      <ol class="track-list">
+        {tracks.map((t) => (
+          <li class="track">
+            <div class="track-meta">
+              <span class="track-code">{t.code}</span>
+              <span class="track-weeks">{t.weeks} weeks</span>
+              <span class="track-status track-status--live">{t.status}</span>
+            </div>
+            <h3 class="track-title"><a href={t.slug}>{t.title}</a></h3>
+            <p class="track-subtitle">{t.subtitle}</p>
+            <p class="track-blurb">{t.blurb}</p>
+            <details class="track-trips">
+              <summary>field trips ({t.fieldTrips.length})</summary>
+              <ul>
+                {t.fieldTrips.map((ft) => (
+                  <li>
+                    <span class="trip-week">week {ft.week}</span>
+                    <span class="trip-theme">{ft.theme}</span>
+                    {ft.href && <span class="trip-link">→ <a href={ft.href}>{ft.href}</a></span>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <p class="track-cta"><a href={t.slug}>open {t.code} →</a></p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="tracks">
+      <h2>tracks · forthcoming</h2>
+      <ul class="forthcoming">
+        {forthcoming.map((t) => (
+          <li>
+            <span class="track-code">{t.code}</span>
+            <span class="forth-title">{t.title}</span>
+            <span class="forth-note">{t.note}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="faculty">
+      <h2>faculty notes</h2>
+      <ul class="faculty-list">
+        {facultyNotes.map((n) => <li>{n}</li>)}
+      </ul>
+    </section>
+
+    <footer class="signoff">
+      <p>— ues, anchored in el segundo, 2026</p>
+      <nav class="footnav">
+        <a href="/ues/track-05">UES-05 · The Rebuildable Town</a>
+        <a href="/explore">/explore — directory</a>
+        <a href="/rooms">/rooms — town hub</a>
+        <a href="/handshakes">/handshakes — receipts</a>
+      </nav>
+    </footer>
+  </article>
+</BlockLayout>
+
+<style>
+  .ues-hub {
+    max-width: 760px;
+    margin: 2rem auto 6rem;
+    padding: 0 1.25rem;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #1a1a1a;
+    line-height: 1.6;
+  }
+  .banner {
+    border: 3px double #534ab7;
+    background: linear-gradient(180deg, #f6f1e7 0%, #efe4cc 100%);
+    padding: 1.5rem 1.5rem 1.25rem;
+    margin-bottom: 2rem;
+    box-shadow: 4px 4px 0 #1a1a1a;
+  }
+  .banner-meta {
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #534ab7;
+    margin-bottom: 0.5rem;
+  }
+  .banner-meta .dot { margin: 0 0.4rem; opacity: 0.5; }
+  .banner h1 {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    line-height: 1.1;
+    margin: 0 0 0.6rem;
+    letter-spacing: -0.02em;
+  }
+  .banner .dek { margin: 0; font-style: italic; color: #444; }
+  .banner a { color: #534ab7; }
+
+  .tracks h2, .faculty h2 {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #534ab7;
+    border-bottom: 2px solid #534ab7;
+    padding-bottom: 0.25rem;
+    margin: 2.25rem 0 1rem;
+  }
+
+  .track-list { list-style: none; padding: 0; margin: 0; }
+  .track {
+    border: 2px solid #1a1a1a;
+    background: #fff;
+    padding: 1rem 1.15rem 1.15rem;
+    margin: 0 0 1.25rem;
+    box-shadow: 3px 3px 0 #534ab7;
+  }
+  .track-meta {
+    display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem;
+  }
+  .track-code {
+    background: #534ab7; color: #fff; padding: 0.2rem 0.55rem; font-weight: 700;
+  }
+  .track-weeks { color: #777; }
+  .track-status--live {
+    background: #2a1f5c; color: #ffd870; padding: 0.18rem 0.5rem; font-weight: 600;
+  }
+  .track-title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.01em;
+  }
+  .track-title a { color: #1a1a1a; text-decoration: none; }
+  .track-title a:hover { color: #534ab7; }
+  .track-subtitle { font-style: italic; color: #534ab7; margin: 0 0 0.6rem; font-size: 0.92rem; }
+  .track-blurb { margin: 0 0 0.85rem; }
+  .track-trips {
+    border-top: 1px dashed #534ab7;
+    padding-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .track-trips summary {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #534ab7;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .track-trips ul { list-style: none; padding: 0.5rem 0 0; margin: 0; }
+  .track-trips li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.5rem 0.75rem;
+    padding: 0.25rem 0;
+    font-size: 0.85rem;
+    border-bottom: 1px dotted #ddd;
+    align-items: baseline;
+  }
+  .trip-week { font-weight: 700; color: #534ab7; font-size: 0.72rem; text-transform: uppercase; }
+  .trip-link a { color: #534ab7; font-size: 0.78rem; }
+  .track-cta {
+    margin: 0;
+    text-align: right;
+    font-size: 0.85rem;
+  }
+  .track-cta a {
+    color: #534ab7;
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 2px solid #534ab7;
+  }
+
+  .forthcoming { list-style: none; padding: 0; margin: 0; }
+  .forthcoming li {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: #f5f1e7;
+    border-left: 3px dashed #b89545;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    align-items: baseline;
+  }
+  .forth-title { font-weight: 600; }
+  .forth-note { color: #777; font-size: 0.78rem; font-style: italic; }
+
+  .faculty-list { list-style: none; padding: 0; margin: 0; }
+  .faculty-list li {
+    padding: 0.5rem 0 0.5rem 1rem;
+    border-left: 3px solid #534ab7;
+    margin-bottom: 0.5rem;
+    font-size: 0.92rem;
+    background: #fcfaf3;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .signoff {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid #1a1a1a;
+    font-size: 0.85rem;
+  }
+  .signoff p { margin: 0 0 0.75rem; opacity: 0.7; }
+  .footnav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+  .footnav a {
+    color: #534ab7;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.82rem;
+  }
+</style>
