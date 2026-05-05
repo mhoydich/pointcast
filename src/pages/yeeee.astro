@@ -1,0 +1,336 @@
+---
+/**
+ * /yeeee — celebration room.
+ *
+ * Mike: "lets ship peoples yeeee fun." A pop-art celebration surface.
+ * Click anywhere on the rainbow field — Noun-stamped confetti
+ * explodes from the click point with a major chord chime. Hold to
+ * fire continuous bursts every ~180ms. Confetti pieces spin, drift,
+ * catch gravity, fade.
+ *
+ * Pure static. Pure pop-art party. No API.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'YEEEE · Celebration Room · PointCast';
+const description =
+  'Click anywhere. Noun confetti explodes with a chord chime. Hold for continuous bursts. Pop-art pure.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'YEEEE',
+  url: 'https://pointcast.xyz/yeeee',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="ye" id="ye-main">
+    <div class="ye__bg" id="ye-bg"></div>
+
+    <header class="ye__chrome">
+      <span class="ye__chrome-label">YEEEE</span>
+      <span class="ye__chrome-sep">·</span>
+      <span id="ye-bursts">0 BURSTS</span>
+      <span class="ye__chrome-sep">·</span>
+      <span id="ye-confetti">0 IN AIR</span>
+    </header>
+
+    <h1 class="ye__hero">YEEEE</h1>
+    <p class="ye__tagline">click anywhere · hold to spray · turn it up</p>
+
+    <canvas id="ye-canvas" class="ye__canvas"></canvas>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#ye-main) {
+    background: #0c0410;
+    overflow: hidden;
+  }
+
+  .ye {
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0;
+    width: 100vw;
+    height: calc(100vh - 80px);
+    min-height: 600px;
+    overflow: hidden;
+    cursor: crosshair;
+    user-select: none;
+  }
+
+  .ye__bg {
+    position: absolute;
+    inset: -10%;
+    background:
+      conic-gradient(from 0deg at 50% 50%,
+        oklch(0.65 0.30 0),
+        oklch(0.70 0.30 60),
+        oklch(0.75 0.28 120),
+        oklch(0.70 0.30 180),
+        oklch(0.65 0.30 240),
+        oklch(0.70 0.30 300),
+        oklch(0.65 0.30 0));
+    filter: blur(40px) saturate(1.4);
+    animation: ye-bg-rotate 30s linear infinite;
+    z-index: 0;
+    will-change: transform;
+  }
+  @keyframes ye-bg-rotate {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .ye::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.35) 100%);
+    z-index: 1;
+  }
+
+  .ye__chrome {
+    position: absolute;
+    top: 24px;
+    right: 32px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 16px;
+    border: 2px solid #ffffff;
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.40);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .ye__chrome-label { font-weight: 800; letter-spacing: 0.30em; color: #ffffff; }
+  .ye__chrome-sep { color: rgba(255, 255, 255, 0.4); }
+  #ye-bursts, #ye-confetti { color: oklch(0.90 0.20 80); font-weight: 700; }
+
+  .ye__hero {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    z-index: 2;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(80px, 18vw, 280px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow:
+      0 0 80px rgba(0, 0, 0, 0.6),
+      0 8px 24px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .ye__tagline {
+    position: absolute;
+    top: calc(50% + clamp(60px, 10vw, 160px));
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    z-index: 2;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(14px, 1.6vw, 22px);
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .ye__canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // C major chord roots — pick one per burst, build major triad
+  const ROOTS = [261.63, 329.63, 392.00, 523.25, 659.25]; // C4 E4 G4 C5 E5
+  const TRIAD_RATIOS = [1, 1.25, 1.5]; // major third + fifth
+
+  function playBurst(rootIdx) {
+    const a = ctx(); const t = a.currentTime;
+    const root = ROOTS[rootIdx % ROOTS.length];
+    TRIAD_RATIOS.forEach((ratio, i) => {
+      const f = root * ratio;
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+      const g = a.createGain(); const g2 = a.createGain();
+      const startOff = i * 0.015;
+      g.gain.setValueAtTime(0.0001, t + startOff);
+      g.gain.exponentialRampToValueAtTime(0.18, t + startOff + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + startOff + 1.2);
+      g2.gain.setValueAtTime(0.0001, t + startOff);
+      g2.gain.exponentialRampToValueAtTime(0.06, t + startOff + 0.01);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + startOff + 0.8);
+      o.connect(g).connect(a.destination);
+      o2.connect(g2).connect(a.destination);
+      o.start(t + startOff); o.stop(t + startOff + 1.3);
+      o2.start(t + startOff); o2.stop(t + startOff + 0.9);
+    });
+  }
+
+  // ── Canvas + confetti pool ──────────────────────────
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('ye-canvas'));
+  const c2d = canvas?.getContext('2d');
+  const burstsEl = document.getElementById('ye-bursts');
+  const confettiEl = document.getElementById('ye-confetti');
+
+  let bursts = 0;
+  let pieces = [];
+  const MAX_PIECES = 600;
+
+  function resize() {
+    if (!canvas) return;
+    canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Pre-load a bank of Noun images so confetti can stamp them
+  const NOUN_BANK_SIZE = 24;
+  const nounImages = [];
+  let imagesLoaded = 0;
+  for (let i = 0; i < NOUN_BANK_SIZE; i++) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { imagesLoaded += 1; };
+    img.src = `https://noun.pics/${Math.floor(Math.random() * 1200)}.svg`;
+    nounImages.push(img);
+  }
+
+  function spawnBurst(x, y) {
+    const dpr = window.devicePixelRatio || 1;
+    const cx = x * dpr;
+    const cy = y * dpr;
+    const count = 28 + Math.floor(Math.random() * 12); // 28-40 per burst
+    for (let i = 0; i < count; i++) {
+      if (pieces.length >= MAX_PIECES) pieces.shift();
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (3 + Math.random() * 8) * dpr;
+      const isNoun = Math.random() < 0.5; // half Nouns, half geometric
+      pieces.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - speed * 0.3, // upward bias
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.3,
+        size: (12 + Math.random() * 16) * dpr,
+        life: 1.0,
+        decay: 0.008 + Math.random() * 0.006,
+        hue: Math.floor(Math.random() * 360),
+        kind: isNoun ? 'noun' : (Math.random() < 0.5 ? 'square' : 'circle'),
+        nounIdx: Math.floor(Math.random() * NOUN_BANK_SIZE),
+      });
+    }
+    bursts += 1;
+    if (burstsEl) burstsEl.textContent = `${bursts} BURSTS`;
+    try { playBurst(Math.floor(Math.random() * ROOTS.length)); } catch {}
+  }
+
+  function step() {
+    if (!c2d || !canvas) return requestAnimationFrame(step);
+    c2d.clearRect(0, 0, canvas.width, canvas.height);
+    const grav = 0.18 * (window.devicePixelRatio || 1);
+    pieces.forEach((p) => {
+      p.vy += grav;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.rotSpeed;
+      p.life -= p.decay;
+      if (p.life <= 0) return;
+      c2d.save();
+      c2d.translate(p.x, p.y);
+      c2d.rotate(p.rot);
+      c2d.globalAlpha = Math.max(0, p.life);
+      if (p.kind === 'noun' && nounImages[p.nounIdx]?.complete) {
+        c2d.drawImage(nounImages[p.nounIdx], -p.size / 2, -p.size / 2, p.size, p.size);
+      } else if (p.kind === 'square') {
+        c2d.fillStyle = `oklch(0.70 0.28 ${p.hue})`;
+        c2d.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      } else {
+        c2d.fillStyle = `oklch(0.75 0.30 ${p.hue})`;
+        c2d.beginPath();
+        c2d.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+        c2d.fill();
+      }
+      c2d.restore();
+    });
+    pieces = pieces.filter((p) => p.life > 0 && p.y < canvas.height + 100);
+    if (confettiEl) confettiEl.textContent = `${pieces.length} IN AIR`;
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  // ── Click + hold ────────────────────────────────────
+  const main = document.getElementById('ye-main');
+  let holding = false;
+  let holdInterval = null;
+
+  function clickAt(e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    const x = t.clientX - rect.left;
+    const y = t.clientY - rect.top;
+    spawnBurst(x, y);
+  }
+
+  function startHold(e) {
+    holding = true;
+    clickAt(e);
+    if (holdInterval) clearInterval(holdInterval);
+    let lastEv = e;
+    main?.addEventListener('mousemove', (ev) => { lastEv = ev; });
+    main?.addEventListener('touchmove', (ev) => { lastEv = ev; });
+    holdInterval = setInterval(() => {
+      if (holding && lastEv) clickAt(lastEv);
+    }, 180);
+  }
+  function stopHold() {
+    holding = false;
+    if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+  }
+
+  main?.addEventListener('mousedown', startHold);
+  main?.addEventListener('touchstart', startHold, { passive: true });
+  window.addEventListener('mouseup', stopHold);
+  window.addEventListener('touchend', stopHold);
+
+  // Spacebar = burst at center
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      spawnBurst(rect.width / 2, rect.height / 2);
+    }
+  });
+</script>
