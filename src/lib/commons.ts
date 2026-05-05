@@ -90,6 +90,11 @@ export const LEDGER_SEED: LedgerEntry[] = [
   { date: '2026-04-27', giver: 'B. (Library Quiet Hour)', kind: 'Custody', unit: '1 month', weight: 4, note: 'Stewarding the library quiet-hour calendar through May.', toward: 'Phase 1 · Steward' },
   { date: '2026-04-29', giver: 'J. (Court Craft)', kind: 'Objects', unit: '1 paddle', weight: 2, note: 'Donated a Sea Glass Control loaner to the library shelf.', toward: 'Phase 1 · Steward' },
   { date: '2026-05-01', giver: 'Marine Layer cohort', kind: 'Hours', unit: '6 sit-hours', weight: 6, note: 'First Sit attendance receipts, week of 4/27.', toward: 'First Bench' },
+  { date: '2026-05-02', giver: 'Mike H.', kind: 'Hours', unit: '12 hours framework', weight: 12, note: 'Built /marine-layer, /commons, /first-sit, /sponsor-a-bench, /civic-layer; published as UES Working Papers 2026-01 through 2026-03.', toward: 'UES infrastructure' },
+  { date: '2026-05-03', giver: 'Marine Layer cohort', kind: 'Custody', unit: '1 month', weight: 4, note: 'Stewarding the First Sit cycle and the eight-week Marine Layer calendar.', toward: 'Phase 1 · Steward' },
+  { date: '2026-05-04', giver: 'Mike H.', kind: 'Hours', unit: '8 hours research', weight: 8, note: 'Geology Track 08 expansion — stratigraphic column, Newport-Inglewood Fault deep-dive, deep-time markers, 226-stone catalog at /stones, STONE ENERGIES card game.', toward: 'UES Track 08' },
+  { date: '2026-05-05', giver: 'Mike H. + Marine Layer cohort', kind: 'Hours', unit: '4 hours writing', weight: 4, note: 'UES Working Paper 2026-04 — "Velcro and Memory: A Material History of the Mead Trapper Keeper, 1978–2001." Published at /trapper-keeper.', toward: 'UES Working Papers' },
+  { date: '2026-05-05', giver: 'Codex (requested)', kind: 'Expertise', unit: 'review pass · pending', weight: 0, note: 'Cross-route review pass requested for the spring UES surfaces — see docs/briefs/2026-05-05-codex-ues-spring-pass.md. Weight will land at +9 (3 hr × 3 weight) when log returns.', toward: 'Phase 0 · Map · pending' },
 ];
 
 export const COMMONS_ACQUISITION_THESIS = [
