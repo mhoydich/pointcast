@@ -7,6 +7,7 @@ import {
   DAILY_WALK_STEPS,
   PASSPORT_STAMPS,
   PET_CARE_ACTIONS,
+  POINTCAST_PETS,
   PLAY_LAYER_VERSION,
   PLAY_SURFACES,
   RADIO_BULLETINS,
@@ -24,6 +25,7 @@ const today = todayPT();
 const activeSurface = PLAY_SURFACES.find((surface) => surface.id === focus) ?? null;
 const totalPoints = PASSPORT_STAMPS.reduce((sum, stamp) => sum + stamp.points, 0);
 const stampById = new Map(PASSPORT_STAMPS.map((stamp) => [stamp.id, stamp]));
+const defaultPet = POINTCAST_PETS[0];
 
 const appData = {
   today,
@@ -32,12 +34,13 @@ const appData = {
   walkSteps: DAILY_WALK_STEPS,
   quests: AGENT_QUESTS,
   routes: COLLECTIBLE_ROUTES,
+  pets: POINTCAST_PETS,
   petActions: PET_CARE_ACTIONS,
   derbySeason: DERBY_SEASON,
 };
 ---
 
-<div class="play-layer" data-play-layer data-focus={focus} data-today={today}>
+<div class="play-layer" data-play-layer data-focus={focus} data-today={today} style={`--pet-accent: ${defaultPet.accent}`}>
   <nav class="crumb" aria-label="Breadcrumb">
     <a href="/">Home</a>
     <span aria-hidden="true">/</span>
@@ -56,12 +59,13 @@ const appData = {
       <h1>{activeSurface ? activeSurface.title : 'PointCast Play Layer'}</h1>
       <p>
         Passport, quests, daily walk, room weather, radio, routes, builder ghosts,
-        civic wishes, a site pet, Zen Cats, and the Derby league now share one local ritual layer.
+        civic wishes, site pets, Zen Cats, and the Derby league now share one local ritual layer.
       </p>
       <div class="play-hero__actions" aria-label="Primary play routes">
         <a href="/passport">Passport</a>
         <a href="/walk">Daily Walk</a>
         <a href="/quests">Quests</a>
+        <a href="/pet">Pets</a>
         <a href="/zen-cats">Zen Cats</a>
         <a href="/play.json">JSON</a>
       </div>
@@ -313,14 +317,51 @@ const appData = {
   <section id="pet" class="play-section play-section--pet" aria-labelledby="pet-title" data-play-section="pet">
     <div class="section-head">
       <p class="kicker">POINTCAST PET</p>
-      <h2 id="pet-title">It grows from what you do here.</h2>
+      <h2 id="pet-title">Pick the one that keeps you company on /pet.</h2>
     </div>
     <div class="pet-shell">
-      <div class="pet-stage">
-        <img src="https://noun.pics/404.svg" alt="" width="120" height="120" loading="lazy" />
-        <strong data-pet-state>sleepy signal</strong>
+      <div class="pet-stage" data-pet-stage style={`--pet-accent: ${defaultPet.accent}`}>
+        <div class="pet-stage__active" aria-live="polite">
+          <img data-pet-image src={`https://noun.pics/${defaultPet.nounId}.svg`} alt="" width="132" height="132" loading="lazy" />
+          <strong data-pet-name>{defaultPet.name}</strong>
+          <span data-pet-state>sleepy signal</span>
+          <em data-pet-kind>{defaultPet.kind}</em>
+          <p data-pet-line>{defaultPet.line}</p>
+        </div>
+        <div class="pet-companions" aria-label="Nouns companions on screen">
+          {POINTCAST_PETS.map((pet, index) => (
+            <button
+              type="button"
+              class:list={['pet-companion', index === 0 && 'is-active']}
+              data-pet-companion={pet.id}
+              style={`--pet-card-accent: ${pet.accent}`}
+              aria-pressed={index === 0 ? 'true' : 'false'}
+              title={pet.name}
+            >
+              <img src={`https://noun.pics/${pet.nounId}.svg`} alt="" width="56" height="56" loading="lazy" />
+              <span>{pet.name}</span>
+            </button>
+          ))}
+        </div>
       </div>
       <div class="pet-panel">
+        <div class="pet-roster" aria-label="PointCast pet roster">
+          {POINTCAST_PETS.map((pet, index) => (
+            <button
+              type="button"
+              class:list={['pet-card', index === 0 && 'is-active']}
+              data-pet-select={pet.id}
+              style={`--pet-card-accent: ${pet.accent}`}
+              aria-pressed={index === 0 ? 'true' : 'false'}
+            >
+              <img src={`https://noun.pics/${pet.nounId}.svg`} alt="" width="44" height="44" loading="lazy" />
+              <span>{pet.kind}</span>
+              <strong>{pet.name}</strong>
+              <em>{pet.line}</em>
+              <small data-pet-care-count={pet.id}>0 care</small>
+            </button>
+          ))}
+        </div>
         <div class="pet-gauges">
           {['signal', 'glow', 'calm', 'charge'].map((stat) => (
             <div class="pet-gauge" data-pet-gauge={stat}>
@@ -401,9 +442,12 @@ const appData = {
     var STAMP_KEY = 'pc:passport:stamps';
     var QUEST_KEY = 'pc:quests';
     var PET_KEY = 'pc:pet:care';
+    var PET_SELECTED_KEY = 'pc:pet:selected';
     var WALK_KEY = 'pc:walk:' + (DATA.today || 'today');
     var stampMeta = {};
+    var petMeta = {};
     (DATA.stamps || []).forEach(function (stamp) { stampMeta[stamp.id] = stamp; });
+    (DATA.pets || []).forEach(function (pet) { petMeta[pet.id] = pet; });
 
     function readJson(key, fallback) {
       try {
@@ -521,16 +565,63 @@ const appData = {
       return Array.isArray(raw) ? raw : [];
     }
 
+    function firstPet() {
+      return (DATA.pets && DATA.pets[0]) || null;
+    }
+
+    function selectedPet() {
+      var saved = readJson(PET_SELECTED_KEY, {});
+      var fallback = firstPet();
+      if (!fallback) return null;
+      return petMeta[saved.id] || fallback;
+    }
+
+    function petCareCount(care, pet) {
+      var fallback = firstPet();
+      if (!pet || !fallback) return 0;
+      return care.filter(function (entry) {
+        return (entry.petId || fallback.id) === pet.id;
+      }).length;
+    }
+
     function paintPet() {
       var current = stamps();
       var care = petCare();
+      var pet = selectedPet();
       var scores = { signal: 8, glow: 8, calm: 8, charge: 8 };
+      if (pet && scores[pet.affinity] !== undefined) scores[pet.affinity] += 10;
       (DATA.petActions || []).forEach(function (action) {
         if (current[action.stampId]) scores[action.stat] += Number(action.effect || 0);
       });
       care.forEach(function (entry) {
         var action = (DATA.petActions || []).find(function (candidate) { return candidate.id === entry.id; });
-        if (action) scores[action.stat] += 10;
+        var entryPet = firstPet() && (entry.petId || firstPet().id);
+        if (action && pet && entryPet === pet.id) scores[action.stat] += 10;
+      });
+
+      if (pet) {
+        root.style.setProperty('--pet-accent', pet.accent || '#2f8f5f');
+        var stage = root.querySelector('[data-pet-stage]');
+        if (stage) stage.style.setProperty('--pet-accent', pet.accent || '#2f8f5f');
+        root.querySelectorAll('[data-pet-image]').forEach(function (img) {
+          img.setAttribute('src', 'https://noun.pics/' + pet.nounId + '.svg');
+        });
+        root.querySelectorAll('[data-pet-name]').forEach(function (el) { el.textContent = pet.name; });
+        root.querySelectorAll('[data-pet-kind]').forEach(function (el) { el.textContent = pet.kind; });
+        root.querySelectorAll('[data-pet-line]').forEach(function (el) { el.textContent = pet.line; });
+      }
+
+      root.querySelectorAll('[data-pet-select], [data-pet-companion]').forEach(function (button) {
+        var id = button.getAttribute('data-pet-select') || button.getAttribute('data-pet-companion');
+        var active = !!pet && id === pet.id;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+
+      root.querySelectorAll('[data-pet-care-count]').forEach(function (el) {
+        var pet = petMeta[el.getAttribute('data-pet-care-count')];
+        var count = petCareCount(care, pet);
+        el.textContent = count + (count === 1 ? ' care' : ' cares');
       });
 
       Object.keys(scores).forEach(function (key) {
@@ -596,12 +687,23 @@ const appData = {
       });
     });
 
+    root.querySelectorAll('[data-pet-select], [data-pet-companion]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        writeJson(PET_SELECTED_KEY, {
+          id: button.getAttribute('data-pet-select') || button.getAttribute('data-pet-companion'),
+          at: new Date().toISOString(),
+        });
+        paint();
+      });
+    });
+
     root.querySelectorAll('[data-pet-action]').forEach(function (button) {
       button.addEventListener('click', function () {
         var id = button.getAttribute('data-pet-action');
         var care = petCare();
-        care.push({ id: id, at: new Date().toISOString() });
-        writeJson(PET_KEY, care.slice(-24));
+        var pet = selectedPet();
+        care.push({ id: id, petId: pet && pet.id, at: new Date().toISOString() });
+        writeJson(PET_KEY, care.slice(-60));
         setStamp('pet-care', 'pet');
         paint();
       });
@@ -726,7 +828,9 @@ const appData = {
 
   .passport-meter img,
   .ghost img,
-  .pet-stage img {
+  .pet-stage img,
+  .pet-companion img,
+  .pet-card img {
     image-rendering: pixelated;
   }
 
@@ -1218,27 +1322,191 @@ const appData = {
   }
 
   .pet-stage {
+    position: relative;
     display: grid;
     align-content: center;
     justify-items: center;
-    min-height: 320px;
+    min-height: 540px;
+    overflow: hidden;
+    padding: 18px;
     border: 1px solid var(--pc-ink);
     background:
-      repeating-linear-gradient(135deg, rgba(47, 143, 95, 0.12) 0 2px, transparent 2px 16px),
+      linear-gradient(180deg, transparent 0 66%, color-mix(in oklch, var(--pet-accent) 11%, #f8f3e7) 66% 100%),
+      radial-gradient(circle at 50% 22%, color-mix(in oklch, var(--pet-accent) 22%, transparent), transparent 110px),
+      repeating-linear-gradient(135deg, color-mix(in oklch, var(--pet-accent) 15%, transparent) 0 2px, transparent 2px 16px),
       #f4f8f4;
   }
 
+  .pet-stage::before {
+    content: '';
+    position: absolute;
+    inset: 14px;
+    border: 1px dashed color-mix(in oklch, var(--pet-accent) 42%, transparent);
+    pointer-events: none;
+  }
+
+  .pet-stage__active {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    width: min(100%, 270px);
+    margin: 0 auto 18px;
+    padding: 12px 12px 14px;
+    background: color-mix(in oklch, #fff 72%, transparent);
+    border: 1px solid color-mix(in oklch, var(--pet-accent) 44%, var(--pc-rule));
+  }
+
+  .pet-stage img {
+    width: 132px;
+    height: 132px;
+  }
+
   .pet-stage strong {
-    margin-top: 12px;
     font-family: var(--pc-font-mono);
-    font-size: 13px;
+    font-size: 18px;
     font-weight: 500;
     text-transform: uppercase;
+  }
+
+  .pet-stage span,
+  .pet-stage em {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .pet-stage p {
+    max-width: 260px;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .pet-companions {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+    gap: 8px;
+    width: min(100%, 640px);
+    align-self: end;
+    margin-top: 8px;
+  }
+
+  .pet-companion {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 86px;
+    padding: 7px 5px 6px;
+    border: 1px solid color-mix(in oklch, var(--pet-card-accent) 42%, var(--pc-rule));
+    background: color-mix(in oklch, var(--pet-card-accent) 10%, #fff);
+    color: var(--pc-ink);
+    text-align: center;
+  }
+
+  .pet-companion img {
+    width: clamp(40px, 5vw, 54px);
+    height: clamp(40px, 5vw, 54px);
+    transform: translateY(2px);
+    transition: transform 160ms ease;
+  }
+
+  .pet-companion span {
+    max-width: 100%;
+    color: var(--pc-ink-soft);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    text-transform: uppercase;
+  }
+
+  .pet-companion:hover img,
+  .pet-companion:focus-visible img,
+  .pet-companion.is-active img {
+    transform: translateY(-4px);
+  }
+
+  .pet-companion.is-active {
+    border-color: var(--pet-card-accent);
+    background: color-mix(in oklch, var(--pet-card-accent) 18%, #fff);
+    box-shadow: inset 0 -3px 0 var(--pet-card-accent);
   }
 
   .pet-panel {
     display: grid;
     gap: 12px;
+  }
+
+  .pet-roster {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pet-card {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 3px 9px;
+    align-items: center;
+    min-width: 0;
+    min-height: 118px;
+    padding: 10px;
+    border: 1px solid var(--pc-rule);
+    background: #fff;
+    text-align: left;
+  }
+
+  .pet-card img {
+    grid-row: 1 / span 4;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--pc-rule-soft);
+    background: #f8f3e7;
+  }
+
+  .pet-card span,
+  .pet-card small {
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .pet-card strong,
+  .pet-card em {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .pet-card strong {
+    font-size: 13px;
+    font-weight: 560;
+  }
+
+  .pet-card em {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--pc-ink-soft);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.2;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .pet-card.is-active {
+    border-color: var(--pet-card-accent);
+    background: color-mix(in oklch, var(--pet-card-accent) 9%, #fff);
+    box-shadow: inset 0 -3px 0 var(--pet-card-accent);
   }
 
   .pet-gauges,
@@ -1269,7 +1537,7 @@ const appData = {
   .pet-gauge i {
     display: block;
     height: 8px;
-    background: linear-gradient(90deg, #2f8f5f var(--pet-gauge), #ebe8df var(--pet-gauge));
+    background: linear-gradient(90deg, var(--pet-accent, #2f8f5f) var(--pet-gauge), #ebe8df var(--pet-gauge));
   }
 
   .pet-gauge strong,
@@ -1350,7 +1618,8 @@ const appData = {
     .weather-grid,
     .route-grid,
     .civic-grid,
-    .season-grid {
+    .season-grid,
+    .pet-roster {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -1358,6 +1627,15 @@ const appData = {
     .radio-board,
     .pet-shell {
       grid-template-columns: 1fr;
+    }
+
+    .pet-stage {
+      min-height: 650px;
+    }
+
+    .pet-companions {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      max-width: 420px;
     }
   }
 
@@ -1383,9 +1661,18 @@ const appData = {
     .ghost-grid,
     .civic-grid,
     .season-grid,
+    .pet-roster,
     .pet-gauges,
     .pet-actions {
       grid-template-columns: 1fr;
+    }
+
+    .pet-companions {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .pet-companion {
+      min-height: 78px;
     }
 
     .section-head--split {

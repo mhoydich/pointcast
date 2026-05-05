@@ -1,7 +1,7 @@
-export const PLAY_LAYER_VERSION = '0.1.0';
+export const PLAY_LAYER_VERSION = '0.2.1';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, a small site pet, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -65,7 +65,7 @@ export const PLAY_SURFACES = [
     code: 'PET',
     title: 'PointCast Pet',
     route: '/pet',
-    summary: 'A local, site-wide creature that changes as the visitor votes, collects, races, and rests.',
+    summary: 'A local pet roster that changes as the visitor votes, collects, races, and rests.',
   },
   {
     id: 'zen-cats',
@@ -546,10 +546,121 @@ export const CIVIC_WISHES = [
   },
   {
     id: 'pet-name',
-    title: 'Name the site pet',
+    title: 'Name the site pets',
     href: '/pet',
     status: 'draft',
-    outcome: 'Winning name replaces the placeholder in the pet module.',
+    outcome: 'Winning names rotate into the /pet roster.',
+  },
+] as const;
+
+export const POINTCAST_PETS = [
+  {
+    id: 'signal-pup',
+    name: 'Signal Pup',
+    kind: 'route runner',
+    nounId: 404,
+    affinity: 'signal',
+    accent: '#2f8f5f',
+    line: 'Likes votes, route cards, and the feeling of a clean handoff.',
+  },
+  {
+    id: 'drop-cat',
+    name: 'Drop Cat',
+    kind: 'daily shelf guard',
+    nounId: 137,
+    affinity: 'glow',
+    accent: '#185fa5',
+    line: 'Shows up around the daily drop and keeps the calendar warm.',
+  },
+  {
+    id: 'quiet-turtle',
+    name: 'Quiet Turtle',
+    kind: 'low-fire sitter',
+    nounId: 84,
+    affinity: 'calm',
+    accent: '#7d6f56',
+    line: 'Carries the Gandalf-room hush back into the busy parts of the site.',
+  },
+  {
+    id: 'derby-pony',
+    name: 'Derby Pony',
+    kind: 'track spark',
+    nounId: 33,
+    affinity: 'charge',
+    accent: '#c5513f',
+    line: 'Wakes up when race receipts and noisy little games hit the wire.',
+  },
+  {
+    id: 'garden-froggo',
+    name: 'Garden Froggo',
+    kind: 'wet-soil scout',
+    nounId: 222,
+    affinity: 'glow',
+    accent: '#208c4b',
+    line: 'Keeps one eye on the farm loops and one eye on the weather.',
+  },
+  {
+    id: 'ocean-otter',
+    name: 'Ocean Otter',
+    kind: 'shelf swimmer',
+    nounId: 612,
+    affinity: 'calm',
+    accent: '#0f766e',
+    line: 'Collects quiet ocean cards and leaves the room brighter than it found it.',
+  },
+  {
+    id: 'cola-cub',
+    name: 'Cola Cub',
+    kind: 'fizz runner',
+    nounId: 420,
+    affinity: 'charge',
+    accent: '#b54832',
+    line: 'Perks up when the loud games, snacks, and fast receipts arrive.',
+  },
+  {
+    id: 'beacon-bunny',
+    name: 'Beacon Bunny',
+    kind: 'ping listener',
+    nounId: 777,
+    affinity: 'signal',
+    accent: '#d97706',
+    line: 'Keeps ears open for fresh pings, station changes, and clean signals.',
+  },
+  {
+    id: 'archive-owl',
+    name: 'Archive Owl',
+    kind: 'receipt keeper',
+    nounId: 945,
+    affinity: 'signal',
+    accent: '#5b6f95',
+    line: 'Likes old blocks, tidy logs, and knowing where every receipt landed.',
+  },
+  {
+    id: 'window-crab',
+    name: 'Window Crab',
+    kind: 'sideways scout',
+    nounId: 808,
+    affinity: 'glow',
+    accent: '#d05a3f',
+    line: 'Walks the edge of the viewport and reports which rooms are glowing.',
+  },
+  {
+    id: 'moon-mouse',
+    name: 'Moon Mouse',
+    kind: 'late desk pal',
+    nounId: 1086,
+    affinity: 'calm',
+    accent: '#6c5dd3',
+    line: 'Gets calmer when the site settles into late notes and soft loops.',
+  },
+  {
+    id: 'node-newt',
+    name: 'Node Newt',
+    kind: 'mesh swimmer',
+    nounId: 205,
+    affinity: 'charge',
+    accent: '#0e7490',
+    line: 'Crosses between nodes, links, and tiny protocols with a bright tail.',
   },
 ] as const;
 
@@ -611,6 +722,8 @@ export function buildPlayLayerManifest() {
     civic: CIVIC_WISHES,
     pet: {
       storage: 'localStorage: pc:pet:care',
+      selectedStorage: 'localStorage: pc:pet:selected',
+      pets: POINTCAST_PETS,
       actions: PET_CARE_ACTIONS,
     },
   };
