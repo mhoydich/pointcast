@@ -6,7 +6,7 @@
  * to discover what exists without scraping HTML.
  */
 import type { APIRoute } from 'astro';
-import { FEATURES, CATEGORIES, countByCategory } from '../lib/explore';
+import { FEATURES, CATEGORIES, countByCategory, recentFeatures } from '../lib/explore';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
 import { CHANNELS } from '../lib/channels';
 
@@ -29,6 +29,13 @@ export const GET: APIRoute = () => {
       title: f.title,
       description: f.description,
       category: f.category,
+      lastCommit: f.mtime > 0 ? new Date(f.mtime * 1000).toISOString() : null,
+    })),
+    recent: recentFeatures(7, 16).map((f) => ({
+      slug: f.slug,
+      url: `https://pointcast.xyz${f.slug}`,
+      title: f.title,
+      lastCommit: new Date(f.mtime * 1000).toISOString(),
     })),
     channels: Object.values(CHANNELS).map((ch) => ({
       code: ch.code,

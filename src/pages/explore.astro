@@ -15,13 +15,21 @@
  * Sparrow stack. Keyboard "/" focuses search, "?" hits a random door.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { FEATURES, CATEGORIES, countByCategory } from '../lib/explore';
+import { FEATURES, CATEGORIES, countByCategory, recentFeatures } from '../lib/explore';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
 import { CHANNELS } from '../lib/channels';
 
 const counts = countByCategory();
 const total = FEATURES.length;
 const channelList = Object.values(CHANNELS);
+const recent = recentFeatures(7, 16);
+
+function howRecent(unix: number): string {
+  const days = Math.floor((Date.now() / 1000 - unix) / 86400);
+  if (days <= 0) return 'today';
+  if (days === 1) return '1d ago';
+  return `${days}d ago`;
+}
 
 const orderedCategories = CATEGORIES.filter((c) => (counts[c.key] ?? 0) > 0).concat([
   { key: 'misc', label: 'Other Rooms', blurb: 'Everything else — the long tail.', match: () => true },
@@ -100,6 +108,27 @@ const jsonLd = {
         ))}
       </div>
     </section>
+
+    {recent.length > 0 && (
+      <section class="recent" data-cat="recent">
+        <header class="bucket-head">
+          <h2><span class="dot dot--new"></span>New this week</h2>
+          <p>Pages whose latest commit landed in the last 7 days. Newest first.</p>
+          <span class="bucket-count">{recent.length}</span>
+        </header>
+        <ul class="recent-strip">
+          {recent.map((f) => (
+            <li class="strip-tile">
+              <a href={f.slug}>
+                <span class="strip-when">{howRecent(f.mtime)}</span>
+                <span class="strip-slug">{f.slug}</span>
+                <span class="strip-title">{f.title}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <section class="channels">
       <header class="bucket-head">
@@ -357,6 +386,49 @@ const jsonLd = {
   .dot { width: 14px; height: 14px; background: #b04a1c; display: inline-block; box-shadow: 2px 2px 0 #131110; }
   .dot--apps { background: #185fa5; }
   .dot--ch { background: #6a3fb5; }
+  .dot--new {
+    background: #d72631;
+    animation: blink 1.4s steps(2, end) infinite;
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0.35; }
+  }
+
+  .recent { margin: 24px 0 32px; }
+  .recent-strip {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 8px;
+  }
+  .strip-tile {
+    background: #fff8d9;
+    border: 2px solid #131110;
+    box-shadow: 3px 3px 0 #d72631;
+    scroll-snap-align: start;
+    transition: transform 90ms ease, box-shadow 90ms ease;
+  }
+  .strip-tile:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #d72631; }
+  .strip-tile a {
+    display: grid; gap: 4px;
+    padding: 10px 12px;
+    text-decoration: none; color: inherit;
+  }
+  .strip-when {
+    font-size: 10px; letter-spacing: 0.12em;
+    color: #d72631; font-weight: 700;
+    text-transform: uppercase;
+  }
+  .strip-slug { font-size: 11px; color: #b04a1c; }
+  .strip-title {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-weight: 700; font-size: 14px; line-height: 1.25;
+  }
 
   .grid {
     list-style: none; padding: 0; margin: 0;
