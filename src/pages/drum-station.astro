@@ -1,0 +1,670 @@
+---
+/**
+ * /drum-station — five-mode intention radio.
+ *
+ * Mike: "ok a drum radio station, with intention tones, state audio,
+ * function based, listen while, plus nouns posters designed by
+ * warhol."
+ *
+ * A pixel-art radio dial with five station markers. Each station is
+ * an INTENTION — focus, work, calm, energize, dream — and generates
+ * infinite ambient audio tuned to it: different chord stack, pulse
+ * rate, tone palette, and accent timing per station. Crossfade
+ * between modes (~1.2s).
+ *
+ * Designed for background listening. Listen while you work elsewhere.
+ *
+ * Pure static, all Web Audio synthesis. localStorage persists the
+ * last station chosen so reload picks up where you left.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Station · Five Intention Channels · PointCast';
+const description =
+  'A drum radio station. Five intention modes — focus, work, calm, energize, dream. Generative ambient. Listen while.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Station',
+  url: 'https://pointcast.xyz/drum-station',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+const STATIONS = [
+  { id: 'focus',    label: 'FOCUS',    sub: 'C drone · slow',     hue: 200, freq: '92.5' },
+  { id: 'work',     label: 'WORK',     sub: 'Cmaj9 · 60 bpm',     hue: 50,  freq: '94.3' },
+  { id: 'calm',     label: 'CALM',     sub: 'Em7 · breath',       hue: 280, freq: '96.1' },
+  { id: 'energize', label: 'ENERGIZE', sub: 'Bbmaj7 · 90 bpm',    hue: 22,  freq: '98.7' },
+  { id: 'dream',    label: 'DREAM',    sub: 'sine swells · arrhythmic', hue: 320, freq: '101.5' },
+];
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="ds" id="ds-main">
+    <DrumNav current="station" />
+
+    <header class="ds__header">
+      <div class="ds__chrome">
+        <span>STATION</span>
+        <span class="ds__chrome-sep">·</span>
+        <span class="ds__chrome-state" id="ds-state">OFF AIR</span>
+        <span class="ds__chrome-sep">·</span>
+        <span class="ds__chrome-time" id="ds-elapsed">--:--</span>
+      </div>
+      <h1 class="ds__title">STATION</h1>
+      <p class="ds__tagline">five intentions · listen while you work</p>
+    </header>
+
+    <section class="ds__dial" aria-label="Five station selector">
+      <div class="ds__dial-arc">
+        <svg viewBox="0 0 600 180" shape-rendering="crispEdges" aria-hidden="true" class="ds__dial-svg">
+          <!-- arc baseline -->
+          <path d="M 60 150 Q 300 -10 540 150" fill="none" stroke="#6b4d12" stroke-width="2"/>
+          <path d="M 60 150 Q 300 -10 540 150" fill="none" stroke="#d4a437" stroke-width="1" opacity="0.5" stroke-dasharray="2 6"/>
+          <!-- station ticks (5 evenly spaced) -->
+          {STATIONS.map((_s, i) => {
+            const t = i / 4;
+            const x = 60 + (480 * t);
+            const y = 150 - Math.sin(Math.PI * t) * 110;
+            return <circle cx={x} cy={y} r="3" fill="#d4a437"/>;
+          })}
+        </svg>
+        <!-- needle: positioned absolutely, JS sets transform -->
+        <div class="ds__needle" id="ds-needle"></div>
+      </div>
+
+      <div class="ds__buttons">
+        {STATIONS.map((s) => (
+          <button class="ds__station" type="button" data-station={s.id} aria-label={`Tune to ${s.label}`}>
+            <div class="ds__station-marker" style={`background: oklch(0.65 0.20 ${s.hue}); box-shadow: 0 0 16px oklch(0.65 0.22 ${s.hue} / 0.55);`}></div>
+            <div class="ds__station-text">
+              <div class="ds__station-freq">{s.freq}</div>
+              <div class="ds__station-label">{s.label}</div>
+              <div class="ds__station-sub">{s.sub}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+
+    <section class="ds__transport">
+      <button class="ds__btn ds__btn--ghost" id="ds-mute" type="button" hidden>MUTE</button>
+      <div class="ds__panel">
+        <span class="ds__panel-label">CURRENT</span>
+        <span class="ds__panel-value" id="ds-current">—</span>
+      </div>
+    </section>
+
+    <section class="ds__how">
+      <p>
+        Each station generates infinite ambient audio tuned to its intention. <strong>Focus</strong> is a
+        single low drone for sustained attention. <strong>Work</strong> is a 60bpm pulse over a Cmaj9 pad.
+        <strong>Calm</strong> breathes with you (Em7, 4s-in/6s-out). <strong>Energize</strong> brightens
+        the room with a Bbmaj7 stack at 90bpm. <strong>Dream</strong> drops rhythm entirely, layering slow
+        sine swells in arrhythmia.
+      </p>
+      <p>
+        Crossfade between stations is ~1.2 seconds. Open the page, pick a station, leave the tab in the
+        background. Audio gates on first click — browsers don't allow autoplay.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#ds-main) { background: #0c0410; }
+
+  .ds {
+    --ds-velvet: #1a0820;
+    --ds-velvet-deep: #0c0410;
+    --ds-velvet-mid: #2c0d36;
+    --ds-brass: #d4a437;
+    --ds-brass-soft: #b8862c;
+    --ds-brass-deep: #6b4d12;
+    --ds-flame: #f6c15e;
+    --ds-ink-light: #f4e7c8;
+    --ds-ink-mid: #c9b78c;
+    --ds-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--ds-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--ds-velvet) 0%, var(--ds-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .ds::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .ds .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .ds__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px);
+  }
+  .ds__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--ds-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ds-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .ds__chrome-sep { color: var(--ds-brass-deep); }
+  #ds-state { color: var(--ds-ink-dim); font-weight: 700; }
+  #ds-state[data-on='1'] { color: var(--ds-flame); }
+  #ds-elapsed { color: var(--ds-flame); font-weight: 700; }
+
+  .ds__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--ds-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--ds-velvet-deep);
+  }
+  .ds__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--ds-ink-mid);
+  }
+
+  /* Dial — visual only */
+  .ds__dial {
+    max-width: 720px;
+    margin: 0 auto clamp(20px, 3vh, 36px);
+  }
+  .ds__dial-arc {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 600 / 200;
+    margin-bottom: 22px;
+  }
+  .ds__dial-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .ds__needle {
+    position: absolute;
+    bottom: 16%;
+    left: 50%;
+    width: 3px;
+    height: 60%;
+    background: linear-gradient(180deg, var(--ds-flame) 0%, var(--ds-brass) 100%);
+    box-shadow: 0 0 12px rgba(246, 193, 94, 0.55);
+    transform-origin: 50% 100%;
+    transform: translateX(-50%) rotate(0deg);
+    transition: transform 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+
+  /* Buttons row */
+  .ds__buttons {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: clamp(8px, 1vw, 14px);
+  }
+  @media (max-width: 720px) {
+    .ds__buttons { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .ds__station {
+    appearance: none;
+    border: 1.5px solid var(--ds-brass-deep);
+    cursor: pointer;
+    padding: 14px 10px;
+    background: linear-gradient(180deg, rgba(44, 13, 54, 0.55), rgba(12, 4, 16, 0.78));
+    color: var(--ds-ink-light);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: transform 100ms, border-color 200ms, background 200ms, box-shadow 200ms;
+    box-shadow:
+      inset 0 1px 0 rgba(212, 164, 55, 0.20),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  }
+  .ds__station:hover {
+    transform: translateY(-1px);
+    border-color: var(--ds-brass);
+  }
+  .ds__station.ds__station--active {
+    border-color: var(--ds-flame);
+    background: linear-gradient(180deg, rgba(64, 18, 78, 0.65), rgba(20, 8, 24, 0.85));
+    box-shadow:
+      inset 0 1px 0 rgba(246, 193, 94, 0.30),
+      0 0 22px rgba(246, 193, 94, 0.30);
+  }
+
+  .ds__station-marker {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: transform 200ms;
+  }
+  .ds__station.ds__station--active .ds__station-marker {
+    transform: scale(1.4);
+  }
+  .ds__station-text { display: flex; flex-direction: column; gap: 1px; }
+  .ds__station-freq {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    color: var(--ds-ink-dim);
+  }
+  .ds__station-label {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(15px, 1.6vw, 20px);
+    color: var(--ds-flame);
+    letter-spacing: 0.06em;
+  }
+  .ds__station-sub {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--ds-ink-mid);
+    text-transform: uppercase;
+  }
+
+  /* Transport */
+  .ds__transport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(12px, 2vw, 24px);
+    padding: clamp(14px, 2vh, 24px) 0 clamp(20px, 3vh, 32px);
+    flex-wrap: wrap;
+  }
+  .ds__btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 10px 24px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+  }
+  .ds__btn--ghost {
+    color: var(--ds-ink-mid);
+    background: transparent;
+    border: 1.5px solid var(--ds-brass-deep);
+    transition: color 160ms, border-color 160ms;
+  }
+  .ds__btn--ghost:hover {
+    color: var(--ds-brass);
+    border-color: var(--ds-brass);
+  }
+
+  .ds__panel {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border: 1px solid var(--ds-brass-deep);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .ds__panel-label { color: var(--ds-ink-dim); }
+  .ds__panel-value { color: var(--ds-flame); font-weight: 700; }
+
+  /* How */
+  .ds__how {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 18px 16px 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .ds__how p {
+    font-family: 'Lora', Georgia, serif;
+    font-size: clamp(13px, 1.2vw, 16px);
+    line-height: 1.6;
+    color: var(--ds-ink-mid);
+    margin-bottom: 10px;
+  }
+  .ds__how strong { color: var(--ds-flame); font-weight: 600; }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // Each station builds its own audio graph. To switch, we crossfade
+  // out the current graph and crossfade in the next.
+
+  let currentGraph = null;
+  let currentStation = null;
+  const CROSSFADE_S = 1.2;
+
+  // Schedulable accent loops (bell hits, etc.) — kept as setTimeout chains
+  // for simplicity. Each station registers a scheduler that we tear down
+  // when we switch stations.
+  let activeSchedulers = [];
+
+  function clearSchedulers() {
+    activeSchedulers.forEach((id) => clearTimeout(id));
+    activeSchedulers = [];
+  }
+  function schedule(fn, ms) {
+    const id = setTimeout(() => {
+      activeSchedulers = activeSchedulers.filter((x) => x !== id);
+      fn();
+    }, ms);
+    activeSchedulers.push(id);
+    return id;
+  }
+
+  function fadeOut(graph) {
+    if (!graph) return;
+    const a = ctx(); const t = a.currentTime;
+    graph.master.gain.cancelScheduledValues(t);
+    graph.master.gain.setValueAtTime(graph.master.gain.value, t);
+    graph.master.gain.exponentialRampToValueAtTime(0.0001, t + CROSSFADE_S);
+    setTimeout(() => {
+      try {
+        graph.oscs?.forEach(({ o, lfo }) => { try { o.stop(); } catch {} try { lfo?.stop(); } catch {} });
+      } catch {}
+    }, (CROSSFADE_S + 0.2) * 1000);
+  }
+
+  function fadeIn(graph, target) {
+    const a = ctx(); const t = a.currentTime;
+    graph.master.gain.cancelScheduledValues(t);
+    graph.master.gain.setValueAtTime(0.0001, t);
+    graph.master.gain.exponentialRampToValueAtTime(target, t + CROSSFADE_S);
+  }
+
+  // ── Station builders ────────────────────────────────
+  // FOCUS — single C2 drone + occasional G2 fifth ramp
+  function buildFocus() {
+    const a = ctx(); const t = a.currentTime;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700;
+    const master = a.createGain(); master.gain.value = 0.0001;
+    filt.connect(master); master.connect(a.destination);
+    const FREQS = [65.41, 98.00]; // C2 + G2
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.04;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.5;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      o.connect(filt); o.start(t); lfo.start(t);
+      return { o, lfo };
+    });
+    return { master, oscs, target: 0.10 };
+  }
+
+  // WORK — Cmaj9 pad + 60bpm pulse with bell hit on the 1
+  function buildWork() {
+    const a = ctx(); const t = a.currentTime;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1600;
+    const master = a.createGain(); master.gain.value = 0.0001;
+    filt.connect(master); master.connect(a.destination);
+    const FREQS = [130.81, 196.00, 246.94, 293.66, 329.63]; // C3 G3 B3 D4 E4 — Cmaj9
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.05 + Math.random() * 0.04;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.6;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      o.connect(filt); o.start(t); lfo.start(t);
+      return { o, lfo };
+    });
+    function tick() {
+      const now = ctx().currentTime;
+      const o = ctx().createOscillator(); o.type = 'sine'; o.frequency.value = 783.99; // G5 bell on the 1
+      const g = ctx().createGain();
+      g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.06, now + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+      o.connect(g).connect(master);
+      o.start(now); o.stop(now + 1.1);
+      schedule(tick, 1000); // 60 bpm = 1s per beat (one bell per measure of 4 beats works too — keep simple)
+    }
+    schedule(tick, 1000);
+    return { master, oscs, target: 0.08 };
+  }
+
+  // CALM — Em7 pad, breath-rate pulse 4s-in/6s-out
+  function buildCalm() {
+    const a = ctx(); const t = a.currentTime;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 900;
+    const master = a.createGain(); master.gain.value = 0.0001;
+    filt.connect(master); master.connect(a.destination);
+    const FREQS = [82.41, 123.47, 146.83, 196.00]; // E2 B2 D3 G3 — Em7
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.04;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.7;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      o.connect(filt); o.start(t); lfo.start(t);
+      return { o, lfo };
+    });
+    // Breath swell every 10s — gentle gain bump on master
+    function breathe() {
+      const now = ctx().currentTime;
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(master.gain.value, now);
+      master.gain.exponentialRampToValueAtTime(0.10, now + 4); // inhale
+      master.gain.exponentialRampToValueAtTime(0.05, now + 10); // exhale
+      schedule(breathe, 10000);
+    }
+    schedule(breathe, 100);
+    return { master, oscs, target: 0.05 };
+  }
+
+  // ENERGIZE — Bbmaj7 pad + 90bpm pulse + brighter bell
+  function buildEnergize() {
+    const a = ctx(); const t = a.currentTime;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 2400;
+    const master = a.createGain(); master.gain.value = 0.0001;
+    filt.connect(master); master.connect(a.destination);
+    const FREQS = [116.54, 174.61, 220.00, 277.18]; // Bb2 F3 A3 D4 — Bbmaj7
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.08 + Math.random() * 0.06;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.8;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      o.connect(filt); o.start(t); lfo.start(t);
+      return { o, lfo };
+    });
+    let beat = 0;
+    function pulse() {
+      const now = ctx().currentTime;
+      const f = beat % 4 === 0 ? 932.33 : 698.46; // Bb5 on the 1, F5 on the rest
+      const o = ctx().createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const o2 = ctx().createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+      const g = ctx().createGain(); const g2 = ctx().createGain();
+      g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.07, now + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+      g2.gain.setValueAtTime(0.0001, now); g2.gain.exponentialRampToValueAtTime(0.025, now + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      o.connect(g).connect(master); o2.connect(g2).connect(master);
+      o.start(now); o.stop(now + 0.9); o2.start(now); o2.stop(now + 0.5);
+      beat += 1;
+      schedule(pulse, 667); // 90bpm
+    }
+    schedule(pulse, 667);
+    return { master, oscs, target: 0.07 };
+  }
+
+  // DREAM — slow sine swells, no rhythm. Notes drift in and out at random intervals.
+  function buildDream() {
+    const a = ctx(); const t = a.currentTime;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 600;
+    const master = a.createGain(); master.gain.value = 0.0001;
+    filt.connect(master); master.connect(a.destination);
+    // Always-on bed: A1 (55) + E2 (82.41)
+    const FREQS = [55.00, 82.41];
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.025;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 1.2;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      o.connect(filt); o.start(t); lfo.start(t);
+      return { o, lfo };
+    });
+    // Random swell notes — slow attack, slow release, random pitch from A-minor pentatonic
+    const PENT = [220.00, 261.63, 329.63, 440.00, 523.25];
+    function swell() {
+      const now = ctx().currentTime;
+      const f = PENT[Math.floor(Math.random() * PENT.length)];
+      const o = ctx().createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx().createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.04, now + 4);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 10);
+      o.connect(g).connect(master);
+      o.start(now); o.stop(now + 11);
+      // Next swell: 6-14 seconds out
+      schedule(swell, (6 + Math.random() * 8) * 1000);
+    }
+    schedule(swell, 2000);
+    return { master, oscs, target: 0.08 };
+  }
+
+  const BUILDERS = {
+    focus: buildFocus,
+    work: buildWork,
+    calm: buildCalm,
+    energize: buildEnergize,
+    dream: buildDream,
+  };
+
+  // ── DOM + state ──────────────────────────────────────
+  const stationEls = Array.from(document.querySelectorAll('.ds__station'));
+  const needleEl = document.getElementById('ds-needle');
+  const stateEl = document.getElementById('ds-state');
+  const elapsedEl = document.getElementById('ds-elapsed');
+  const currentEl = document.getElementById('ds-current');
+  const muteBtn = document.getElementById('ds-mute');
+
+  const STATION_KEY = 'pc:station:last';
+  let listenStartedAt = 0;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtElapsed(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${pad(m)}:${pad(s)}`;
+  }
+  function paintElapsed() {
+    if (!listenStartedAt) {
+      if (elapsedEl) elapsedEl.textContent = '--:--';
+      return;
+    }
+    const sec = Math.floor((Date.now() - listenStartedAt) / 1000);
+    if (elapsedEl) elapsedEl.textContent = fmtElapsed(sec);
+  }
+  setInterval(paintElapsed, 1000);
+
+  function setNeedle(idx) {
+    if (!needleEl) return;
+    // map idx 0..4 to angle -50deg..+50deg
+    const angle = -50 + (idx * 25);
+    needleEl.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+  }
+
+  function tuneTo(stationId) {
+    const idx = stationEls.findIndex((el) => el.dataset.station === stationId);
+    if (idx < 0) return;
+
+    // Visual: active class + needle
+    stationEls.forEach((el) => el.classList.remove('ds__station--active'));
+    stationEls[idx].classList.add('ds__station--active');
+    setNeedle(idx);
+
+    // Crossfade
+    const builder = BUILDERS[stationId];
+    if (!builder) return;
+    if (currentGraph) fadeOut(currentGraph);
+    clearSchedulers();
+    const graph = builder();
+    fadeIn(graph, graph.target);
+    currentGraph = graph;
+    currentStation = stationId;
+
+    // Persist
+    try { localStorage.setItem(STATION_KEY, stationId); } catch {}
+
+    // Chrome
+    if (stateEl) { stateEl.textContent = 'ON AIR'; stateEl.dataset.on = '1'; }
+    if (currentEl) currentEl.textContent = stationId.toUpperCase();
+    if (muteBtn) muteBtn.hidden = false;
+    if (!listenStartedAt) listenStartedAt = Date.now();
+    paintElapsed();
+  }
+
+  function mute() {
+    if (currentGraph) {
+      fadeOut(currentGraph);
+      currentGraph = null;
+    }
+    clearSchedulers();
+    stationEls.forEach((el) => el.classList.remove('ds__station--active'));
+    if (stateEl) { stateEl.textContent = 'OFF AIR'; stateEl.dataset.on = '0'; }
+    if (currentEl) currentEl.textContent = '—';
+    if (muteBtn) muteBtn.hidden = true;
+    listenStartedAt = 0;
+    paintElapsed();
+    try { localStorage.removeItem(STATION_KEY); } catch {}
+  }
+
+  // Wire up
+  stationEls.forEach((el) => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.station;
+      if (id) tuneTo(id);
+    });
+  });
+  muteBtn?.addEventListener('click', mute);
+
+  // Boot — restore last station as a "preview" (visual only) but don't
+  // autoplay. User must click to start audio.
+  try {
+    const last = localStorage.getItem(STATION_KEY);
+    if (last) {
+      const idx = stationEls.findIndex((el) => el.dataset.station === last);
+      if (idx >= 0) {
+        setNeedle(idx);
+        stationEls[idx].classList.add('ds__station--active');
+        if (currentEl) currentEl.textContent = `${last.toUpperCase()} (TAP TO RESUME)`;
+      }
+    }
+  } catch {}
+</script>
