@@ -1,0 +1,405 @@
+---
+/**
+ * /drum-bath — twelve-minute OKLCH daylight cycle.
+ *
+ * Mike: "very 2026, colors, audios, visuals, results, presence,
+ * peace, pace, flow." Third of three.
+ *
+ * Full-screen color wash that slowly cycles through 24 hours of
+ * OKLCH daylight in 12 minutes — sunrise → mid-morning → noon →
+ * golden-hour → sunset → twilight → night → predawn → sunrise. One
+ * sustained drone tone always plays; pitch shifts with the daylight
+ * curve (low at midnight, high at noon, blending in between).
+ *
+ * Hover anywhere to PAUSE the cycle (hold a single moment); release
+ * to resume. Counter: minutes bathed.
+ *
+ * Pure static. localStorage persists lifetime minutes.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Bath · Twelve-Minute Daylight Cycle · PointCast';
+const description =
+  'A 12-minute compressed daylight cycle. Slow drone tone shifts with the OKLCH light. Hover to pause the moment.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Bath',
+  url: 'https://pointcast.xyz/drum-bath',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="db" id="db-main">
+    <DrumNav current="bath" />
+
+    <div class="db__field" id="db-field">
+      <div class="db__wash" id="db-wash"></div>
+      <div class="db__sun" id="db-sun"></div>
+
+      <header class="db__chrome">
+        <span class="db__chrome-label">BATH</span>
+        <span class="db__chrome-sep">·</span>
+        <span class="db__chrome-time" id="db-cycle-time">06:00</span>
+        <span class="db__chrome-sep">·</span>
+        <span class="db__chrome-state" id="db-state">FLOWING</span>
+      </header>
+
+      <div class="db__center">
+        <h1 class="db__title">stay</h1>
+        <p class="db__tagline">12-minute compressed day · hover anywhere to pause the moment</p>
+      </div>
+
+      <footer class="db__readout">
+        <div class="db__panel">
+          <span class="db__panel-label">CYCLE</span>
+          <span class="db__panel-value" id="db-cycle-progress">0%</span>
+        </div>
+        <div class="db__panel">
+          <span class="db__panel-label">LIFETIME</span>
+          <span class="db__panel-value" id="db-lifetime">0 MIN</span>
+        </div>
+      </footer>
+    </div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#db-main) {
+    background: #000;
+    overflow: hidden;
+  }
+
+  .db {
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0;
+    color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+  }
+  .db .drum-nav {
+    position: absolute;
+    top: 0;
+    left: 32px;
+    z-index: 4;
+    opacity: 0.40;
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+
+  .db__field {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 80px);
+    min-height: 600px;
+    overflow: hidden;
+  }
+
+  /* Wash — JS sets the OKLCH gradient stops directly */
+  .db__wash {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, var(--sky, oklch(0.40 0.10 250)) 0%, var(--horizon, oklch(0.50 0.18 50)) 70%, var(--ground, oklch(0.30 0.10 30)) 100%);
+    transition: background 1500ms linear;
+    z-index: 1;
+  }
+
+  /* Sun/moon disk — moves in an arc; size + color set via JS */
+  .db__sun {
+    position: absolute;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--sun-bright, oklch(0.95 0.20 80)) 0%, var(--sun-mid, oklch(0.80 0.22 60)) 60%, var(--sun-edge, oklch(0.60 0.18 40)) 100%);
+    box-shadow: 0 0 60px 20px var(--sun-glow, rgba(246, 193, 94, 0.45));
+    transform: translate(-50%, -50%);
+    transition: background 1500ms linear, box-shadow 1500ms linear;
+    z-index: 2;
+    will-change: left, top;
+  }
+
+  /* Chrome */
+  .db__chrome {
+    position: absolute;
+    top: clamp(16px, 2vh, 32px);
+    right: clamp(20px, 3vw, 48px);
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 6px 16px;
+    border: 1px solid rgba(244, 231, 200, 0.30);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(244, 231, 200, 0.85);
+    z-index: 5;
+  }
+  .db__chrome-label { font-weight: 700; letter-spacing: 0.30em; }
+  .db__chrome-sep { color: rgba(244, 231, 200, 0.40); }
+  .db__chrome-time { color: oklch(0.85 0.15 80); font-weight: 700; min-width: 5em; }
+  .db__chrome-state { color: oklch(0.80 0.18 200); font-weight: 700; }
+
+  /* Center text — fades out after first paint */
+  .db__center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 3;
+    pointer-events: none;
+    transition: opacity 4000ms ease-out;
+    padding: 0 24px;
+  }
+  .db__field.db__field--seen .db__center {
+    opacity: 0;
+  }
+  .db__title {
+    margin: 0 0 12px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 8vw, 120px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: rgba(244, 231, 200, 0.95);
+    text-shadow: 0 0 50px rgba(0, 0, 0, 0.6);
+  }
+  .db__tagline {
+    margin: 0 auto;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(14px, 1.4vw, 18px);
+    color: rgba(244, 231, 200, 0.80);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+    max-width: 540px;
+  }
+
+  /* Readout */
+  .db__readout {
+    position: absolute;
+    bottom: clamp(16px, 2vh, 32px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 5;
+  }
+  .db__panel {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 16px;
+    border: 1px solid rgba(244, 231, 200, 0.20);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .db__panel-label { color: rgba(244, 231, 200, 0.55); }
+  .db__panel-value { color: oklch(0.85 0.18 80); font-weight: 700; }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  let droneNodes = null;
+  function startDrone() {
+    if (droneNodes) return;
+    const a = ctx(); const t = a.currentTime;
+    // Two sustained sines: a low fundamental + a 5th above. Both pitch-modulated
+    // by the cycle progress (low at midnight, high at noon).
+    const lpf = a.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 1400;
+    const masterGain = a.createGain();
+    masterGain.gain.setValueAtTime(0.0001, t);
+    masterGain.gain.exponentialRampToValueAtTime(0.13, t + 30); // 30s ramp-in
+    lpf.connect(masterGain); masterGain.connect(a.destination);
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 130.81; // C3
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 196.00; // G3
+    o1.connect(lpf); o2.connect(lpf);
+    o1.start(t); o2.start(t);
+    droneNodes = { o1, o2, lpf, masterGain, baseFreq: [130.81, 196.00] };
+  }
+  function setDronePitch(progress) {
+    if (!droneNodes) return;
+    // progress: 0..1 over the cycle. Map to a pitch curve: low at 0/0.5/1 (night),
+    // high in between (day).
+    // Hour: progress*24. Day apex at hour 12. Night nadir at hour 0 / 24.
+    const hour = progress * 24;
+    // Cosine-shaped: 1 at noon, 0 at midnight
+    const day = (1 - Math.cos((hour / 24) * Math.PI * 2)) / 2; // 0..1, peak at noon
+    // Pitch bend: ±50 cents max
+    const cents = (day - 0.5) * 100;
+    droneNodes.o1.detune.setTargetAtTime(cents, ctx().currentTime, 1.5);
+    droneNodes.o2.detune.setTargetAtTime(cents, ctx().currentTime, 1.5);
+    // Filter cutoff opens during day
+    droneNodes.lpf.frequency.setTargetAtTime(800 + day * 1800, ctx().currentTime, 1.5);
+  }
+
+  // ── DOM + state ──────────────────────────────────────
+  const fieldEl = document.getElementById('db-field');
+  const washEl = document.getElementById('db-wash');
+  const sunEl = document.getElementById('db-sun');
+  const cycleTimeEl = document.getElementById('db-cycle-time');
+  const stateEl = document.getElementById('db-state');
+  const cycleProgressEl = document.getElementById('db-cycle-progress');
+  const lifetimeEl = document.getElementById('db-lifetime');
+
+  const LIFETIME_KEY = 'pc:bath:lifetime-seconds';
+  let lifetimeSeconds = 0;
+  try { lifetimeSeconds = parseInt(localStorage.getItem(LIFETIME_KEY) || '0', 10) || 0; } catch {}
+
+  let sessionStartedAt = Date.now();
+  let cycleStartedAt = Date.now();
+  let pausedProgress = null; // when paused, holds progress 0..1
+  const CYCLE_MS = 12 * 60 * 1000; // 12 minutes per full cycle
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // ── Cycle painter ────────────────────────────────────
+  function getProgress() {
+    if (pausedProgress !== null) return pausedProgress;
+    const elapsed = (Date.now() - cycleStartedAt) % CYCLE_MS;
+    return elapsed / CYCLE_MS;
+  }
+
+  // Color stops: at each key hour, what's the (sky, horizon, ground) OKLCH?
+  // Phases in order: 0=midnight, 1=predawn, 2=sunrise, 3=morning, 4=midday,
+  // 5=golden, 6=sunset, 7=twilight (and wraps).
+  const KEYS = [
+    { hour: 0,  sky: 'oklch(0.10 0.06 270)', horizon: 'oklch(0.12 0.08 280)', ground: 'oklch(0.06 0.04 280)', sunHue: 'oklch(0.55 0.10 250)', sunGlow: 'rgba(150,150,200,0.10)' },
+    { hour: 5,  sky: 'oklch(0.18 0.10 280)', horizon: 'oklch(0.30 0.18 30)',  ground: 'oklch(0.18 0.10 320)', sunHue: 'oklch(0.70 0.18 30)',  sunGlow: 'rgba(220,140,80,0.30)' },
+    { hour: 7,  sky: 'oklch(0.55 0.16 220)', horizon: 'oklch(0.65 0.20 60)',  ground: 'oklch(0.40 0.14 50)',  sunHue: 'oklch(0.85 0.22 70)',  sunGlow: 'rgba(246,193,94,0.50)' },
+    { hour: 12, sky: 'oklch(0.75 0.14 220)', horizon: 'oklch(0.80 0.10 200)', ground: 'oklch(0.65 0.12 80)',  sunHue: 'oklch(0.95 0.18 90)',  sunGlow: 'rgba(255,235,180,0.55)' },
+    { hour: 17, sky: 'oklch(0.60 0.18 250)', horizon: 'oklch(0.65 0.22 40)',  ground: 'oklch(0.45 0.16 30)',  sunHue: 'oklch(0.85 0.24 50)',  sunGlow: 'rgba(246,140,80,0.55)' },
+    { hour: 19, sky: 'oklch(0.30 0.18 290)', horizon: 'oklch(0.45 0.22 20)',  ground: 'oklch(0.20 0.12 320)', sunHue: 'oklch(0.65 0.22 20)',  sunGlow: 'rgba(220,80,100,0.45)' },
+    { hour: 21, sky: 'oklch(0.15 0.14 300)', horizon: 'oklch(0.20 0.14 280)', ground: 'oklch(0.10 0.08 290)', sunHue: 'oklch(0.55 0.10 250)', sunGlow: 'rgba(120,140,200,0.20)' },
+    { hour: 24, sky: 'oklch(0.10 0.06 270)', horizon: 'oklch(0.12 0.08 280)', ground: 'oklch(0.06 0.04 280)', sunHue: 'oklch(0.55 0.10 250)', sunGlow: 'rgba(150,150,200,0.10)' },
+  ];
+
+  function lerpKeys(progress) {
+    // progress 0..1 → hour 0..24
+    const hour = progress * 24;
+    // find adjacent keys
+    let a = KEYS[0], b = KEYS[KEYS.length - 1];
+    for (let i = 0; i < KEYS.length - 1; i++) {
+      if (hour >= KEYS[i].hour && hour <= KEYS[i+1].hour) {
+        a = KEYS[i]; b = KEYS[i+1]; break;
+      }
+    }
+    return { a, b, hour };
+  }
+
+  function paintCycle() {
+    const progress = getProgress();
+    const { a, b, hour } = lerpKeys(progress);
+    // For OKLCH lerp, we just snap to nearest key (browser interpolates the gradient
+    // smoothly because of the transition: background 1500ms linear).
+    // To get smoother per-frame transitions, rotate between adjacent keys.
+    const useKey = (hour - a.hour) / Math.max(0.0001, (b.hour - a.hour)) > 0.5 ? b : a;
+    if (washEl) {
+      washEl.style.setProperty('--sky', useKey.sky);
+      washEl.style.setProperty('--horizon', useKey.horizon);
+      washEl.style.setProperty('--ground', useKey.ground);
+    }
+    if (sunEl) {
+      sunEl.style.setProperty('--sun-bright', useKey.sunHue);
+      sunEl.style.setProperty('--sun-mid', useKey.sunHue);
+      sunEl.style.setProperty('--sun-edge', useKey.sunHue);
+      sunEl.style.setProperty('--sun-glow', useKey.sunGlow);
+      // Sun position: arc across the sky over a "day" (6am-6pm visible).
+      // hour 6 = left; hour 12 = top; hour 18 = right. Otherwise hidden below horizon.
+      const visibleHour = hour;
+      let xPct, yPct;
+      if (visibleHour >= 6 && visibleHour <= 18) {
+        const t = (visibleHour - 6) / 12; // 0..1
+        xPct = t * 100;
+        // Cosine arc: y at peak (top) at t=0.5
+        yPct = 12 + (1 - Math.sin(t * Math.PI)) * 50;
+      } else {
+        // Below horizon — moon-like, lower position
+        const nightHour = visibleHour >= 18 ? visibleHour - 18 : visibleHour + 6;
+        const t = nightHour / 12;
+        xPct = t * 100;
+        yPct = 110; // off-screen
+      }
+      sunEl.style.left = `${xPct}%`;
+      sunEl.style.top = `${yPct}%`;
+    }
+    // Time chip (24h)
+    const h = Math.floor(hour);
+    const m = Math.floor((hour - h) * 60);
+    if (cycleTimeEl) cycleTimeEl.textContent = `${pad(h)}:${pad(m)}`;
+    if (cycleProgressEl) cycleProgressEl.textContent = `${Math.floor(progress * 100)}%`;
+
+    // Drone pitch tracks daylight
+    setDronePitch(progress);
+  }
+
+  // ── Lifetime + state painter ─────────────────────────
+  function paintLifetime() {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    const totalMin = Math.floor((lifetimeSeconds + sessionSec) / 60);
+    if (lifetimeEl) lifetimeEl.textContent = `${totalMin} MIN`;
+  }
+
+  // ── Hover-to-pause ───────────────────────────────────
+  fieldEl?.addEventListener('mouseenter', () => {
+    pausedProgress = getProgress();
+    if (stateEl) stateEl.textContent = 'STILL';
+  });
+  fieldEl?.addEventListener('mouseleave', () => {
+    if (pausedProgress !== null) {
+      // Adjust cycleStartedAt so resuming continues from the paused progress
+      cycleStartedAt = Date.now() - pausedProgress * CYCLE_MS;
+      pausedProgress = null;
+    }
+    if (stateEl) stateEl.textContent = 'FLOWING';
+  });
+
+  // ── Audio gate ───────────────────────────────────────
+  let audioStarted = false;
+  function onFirstGesture() {
+    if (audioStarted) return;
+    audioStarted = true;
+    try { startDrone(); } catch {}
+    fieldEl?.classList.add('db__field--seen');
+  }
+  fieldEl?.addEventListener('click', onFirstGesture);
+  window.addEventListener('keydown', onFirstGesture, { once: true });
+
+  // ── Persistence ──────────────────────────────────────
+  setInterval(() => {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    try { localStorage.setItem(LIFETIME_KEY, String(lifetimeSeconds + sessionSec)); } catch {}
+  }, 10000);
+  window.addEventListener('beforeunload', () => {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    try { localStorage.setItem(LIFETIME_KEY, String(lifetimeSeconds + sessionSec)); } catch {}
+  });
+
+  // ── Boot ─────────────────────────────────────────────
+  // Start the cycle at hour 6 (sunrise) for a pleasant entrance
+  cycleStartedAt = Date.now() - (6 / 24) * CYCLE_MS;
+  paintCycle();
+  paintLifetime();
+  setInterval(paintCycle, 2000);
+  setInterval(paintLifetime, 1000);
+</script>
