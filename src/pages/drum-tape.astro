@@ -1,0 +1,440 @@
+---
+/**
+ * /drum-tape — scrolling Noun tape, listen-while.
+ *
+ * Mike: "go 5 more." Third of five.
+ *
+ * A long horizontal tape auto-scrolls slowly. Each segment is a Noun
+ * with a number and a tone-tag — segments rotate through C-major
+ * pentatonic notes. Whichever segment passes under the center "head"
+ * plays its tone. Click any segment to JUMP the tape to it.
+ *
+ * Pure static. Designed for listening while you do other things.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Tape · Scrolling Noun Tape · PointCast';
+const description =
+  'A long tape of Nouns rolls past a tape head. Each segment plays its tone as it passes. Click to jump.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Tape',
+  url: 'https://pointcast.xyz/drum-tape',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+const TAPE_LEN = 60; // 60 segments
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dt" id="dt-main">
+    <DrumNav current="tape" />
+
+    <header class="dt__header">
+      <div class="dt__chrome">
+        <span>TAPE</span>
+        <span class="dt__chrome-sep">·</span>
+        <span id="dt-state">PAUSED</span>
+        <span class="dt__chrome-sep">·</span>
+        <span><span id="dt-position">--</span> / {TAPE_LEN}</span>
+      </div>
+      <h1 class="dt__title">TAPE</h1>
+      <p class="dt__tagline">a long tape of Nouns rolls past · the head plays the tone</p>
+    </header>
+
+    <section class="dt__deck">
+      <!-- Tape head — fixed in middle -->
+      <div class="dt__head">
+        <span class="dt__head-mark"></span>
+        <span class="dt__head-label">HEAD</span>
+      </div>
+
+      <!-- Tape -->
+      <div class="dt__viewport">
+        <div class="dt__strip" id="dt-strip">
+          {Array.from({ length: TAPE_LEN }, (_, i) => i).map((i) => (
+            <div class="dt__seg" data-idx={i}>
+              <div class="dt__seg-bg"></div>
+              <img class="dt__seg-noun" alt="" data-seg-noun loading="lazy" />
+              <div class="dt__seg-tag">
+                <span data-seg-num>—</span>
+                <span class="dt__seg-tone" data-seg-tone>—</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <footer class="dt__transport">
+      <button class="dt__btn dt__btn--primary" id="dt-toggle" type="button">PLAY</button>
+      <label class="dt__speed">
+        <span class="dt__speed-label">SPEED</span>
+        <input type="range" id="dt-speed" min="0.4" max="3" step="0.1" value="1" />
+      </label>
+      <p class="dt__instructions">
+        Each segment passes under the head and plays its tone. Click any segment to JUMP. Drag the speed
+        slider for slow brood (left) or quick patter (right).
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dt-main) { background: #0c0410; overflow-x: hidden; }
+  .dt {
+    --dt-velvet: #1a0820;
+    --dt-velvet-deep: #0c0410;
+    --dt-brass: #d4a437;
+    --dt-brass-soft: #b8862c;
+    --dt-brass-deep: #6b4d12;
+    --dt-flame: #f6c15e;
+    --dt-ink-light: #f4e7c8;
+    --dt-ink-mid: #c9b78c;
+    --dt-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dt-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dt-velvet) 0%, var(--dt-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dt .drum-nav { opacity: 0.45; transform: scale(0.9); transform-origin: top left; margin-bottom: clamp(6px, 0.8vh, 14px); }
+
+  .dt__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(16px, 2vh, 26px); }
+  .dt__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dt-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dt-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dt__chrome-sep { color: var(--dt-brass-deep); }
+  #dt-state { color: var(--dt-ink-dim); font-weight: 700; }
+  #dt-state[data-on='1'] { color: var(--dt-flame); }
+  #dt-position { color: var(--dt-flame); font-weight: 700; }
+
+  .dt__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dt-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dt-velvet-deep);
+  }
+  .dt__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dt-ink-mid);
+  }
+
+  /* Deck — frame around the moving tape */
+  .dt__deck {
+    position: relative;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1200px;
+    height: 160px;
+    background: linear-gradient(180deg, rgba(44, 13, 54, 0.55), rgba(12, 4, 16, 0.78));
+    border: 2px solid var(--dt-brass-deep);
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5), 0 8px 22px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+  .dt__head {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 100%;
+    width: 6px;
+    background: linear-gradient(180deg, var(--dt-flame) 0%, var(--dt-brass) 50%, var(--dt-brass-deep) 100%);
+    box-shadow: 0 0 20px rgba(246, 193, 94, 0.55);
+    z-index: 4;
+    pointer-events: none;
+  }
+  .dt__head-mark {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    background: var(--dt-flame);
+    border-radius: 50%;
+    box-shadow: 0 0 16px rgba(246, 193, 94, 0.75);
+  }
+  .dt__head-label {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--dt-brass);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    color: var(--dt-flame);
+    border-radius: 2px;
+  }
+  .dt__viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  .dt__strip {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    gap: 6px;
+    padding: 12px;
+    will-change: transform;
+    transition: transform 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dt__seg {
+    position: relative;
+    flex: 0 0 auto;
+    width: 110px;
+    height: 100%;
+    cursor: pointer;
+    border: 1.5px solid var(--dt-brass-deep);
+    background: var(--seg-bg, oklch(0.45 0.20 var(--seg-hue, 60)));
+    box-shadow: inset 0 1px 0 rgba(255, 245, 192, 0.20), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+    transition: transform 120ms, border-color 200ms;
+  }
+  .dt__seg:hover { transform: translateY(-2px); border-color: var(--dt-brass); }
+  .dt__seg.dt__seg--struck {
+    border-color: var(--dt-flame);
+    box-shadow: inset 0 1px 0 rgba(255, 245, 192, 0.40), 0 0 24px rgba(246, 193, 94, 0.55);
+  }
+  .dt__seg-bg {
+    position: absolute;
+    inset: 0;
+    background: var(--seg-bg, transparent);
+    z-index: 0;
+  }
+  .dt__seg-noun {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.30);
+  }
+  .dt__seg-tag {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    right: 6px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 2;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.10em;
+    color: var(--dt-velvet-deep);
+    text-transform: uppercase;
+    font-weight: 700;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
+  }
+
+  .dt__transport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(12px, 2vw, 24px);
+    flex-wrap: wrap;
+    padding: clamp(20px, 3vh, 32px) 0 0;
+  }
+  .dt__btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 12px 30px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+  }
+  .dt__btn--primary {
+    color: var(--dt-velvet-deep);
+    background: linear-gradient(180deg, var(--dt-brass) 0%, var(--dt-brass-soft) 100%);
+    box-shadow: 0 0 0 2px var(--dt-velvet-deep), 0 4px 0 0 var(--dt-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .dt__btn--primary:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dt-brass) 100%); }
+  .dt__btn--primary:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 2px var(--dt-velvet-deep), 0 1px 0 0 var(--dt-brass-deep), 0 0 18px rgba(246, 193, 94, 0.55);
+  }
+
+  .dt__speed { display: inline-flex; align-items: center; gap: 8px; }
+  .dt__speed-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; letter-spacing: 0.20em; color: var(--dt-ink-mid);
+  }
+  .dt__speed input { width: 140px; accent-color: var(--dt-brass); }
+
+  .dt__instructions {
+    flex-basis: 100%;
+    text-align: center;
+    margin: 14px auto 0;
+    max-width: 540px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    color: var(--dt-ink-dim);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // C major pentatonic across 4 octaves — 20 notes; recycle for 60 segments
+  const NOTES = [
+    261.63, 293.66, 329.63, 392.00, 440.00,
+    523.25, 587.33, 659.25, 783.99, 880.00,
+    1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    2093.00, 2349.32, 2637.02, 3135.96, 3520.00,
+  ];
+  const NOTE_NAMES = ['C4','D4','E4','G4','A4','C5','D5','E5','G5','A5','C6','D6','E6','G6','A6','C7','D7','E7','G7','A7'];
+
+  function playSeg(idx, gain = 0.16) {
+    const a = ctx(); const t = a.currentTime;
+    const f = NOTES[idx % NOTES.length];
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    const decay = idx % NOTES.length < 10 ? 1.4 : 0.8;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + decay * 0.7);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + decay + 0.1); o2.start(t); o2.stop(t + decay * 0.7 + 0.1);
+  }
+
+  // ── DOM + state ─────────────────────────────────────
+  const segEls = Array.from(document.querySelectorAll('.dt__seg'));
+  const stripEl = document.getElementById('dt-strip');
+  const toggleBtn = document.getElementById('dt-toggle');
+  const speedEl = /** @type {HTMLInputElement} */(document.getElementById('dt-speed'));
+  const stateEl = document.getElementById('dt-state');
+  const positionEl = document.getElementById('dt-position');
+
+  const SEG_W = 116; // 110px + 6px gap
+
+  // Init segments — pick a random Noun + assign the segment its note tag
+  segEls.forEach((el, i) => {
+    const noun = (i * 137 + Math.floor(Math.random() * 23)) % 1200;
+    const noteIdx = i % NOTE_NAMES.length;
+    const hue = (i * 23) % 360;
+    el.style.setProperty('--seg-hue', String(hue));
+    el.style.setProperty('--seg-bg', `oklch(0.50 0.20 ${hue})`);
+    const img = el.querySelector('[data-seg-noun]');
+    if (img) img.src = `https://noun.pics/${noun}.svg`;
+    const numEl = el.querySelector('[data-seg-num]');
+    if (numEl) numEl.textContent = String(noun).padStart(4, '0');
+    const toneEl = el.querySelector('[data-seg-tone]');
+    if (toneEl) toneEl.textContent = NOTE_NAMES[noteIdx];
+    el.addEventListener('click', () => jumpTo(i));
+  });
+
+  // ── Tape physics ────────────────────────────────────
+  let position = 0; // current strip offset in pixels (positive = scrolled left)
+  let lastIdxAtHead = -1;
+  let playing = false;
+  let lastFrameAt = 0;
+
+  function applyTransform(animate = false) {
+    if (!stripEl) return;
+    stripEl.style.transition = animate ? 'transform 600ms cubic-bezier(0.4, 0, 0.2, 1)' : 'transform 0ms';
+    // Strip is positioned so that center of segment 0 is at left edge of viewport at offset 0.
+    // Need to shift so that head (50% of viewport) lines up with current segment.
+    const viewportW = stripEl.parentElement?.clientWidth || 1000;
+    const headX = viewportW / 2;
+    stripEl.style.transform = `translateX(${headX - position - SEG_W / 2 - 12}px)`;
+  }
+
+  function indexAtHead() {
+    return Math.round(position / SEG_W);
+  }
+
+  function paintHeadHighlight() {
+    const idx = indexAtHead();
+    segEls.forEach((el, i) => {
+      if (i === idx) el.classList.add('dt__seg--struck');
+      else el.classList.remove('dt__seg--struck');
+    });
+    if (positionEl) positionEl.textContent = String(idx + 1).padStart(2, '0');
+  }
+
+  function step(now) {
+    if (!playing) return;
+    if (lastFrameAt === 0) lastFrameAt = now;
+    const dt = (now - lastFrameAt) / 1000;
+    lastFrameAt = now;
+
+    // Speed: pixels per second. At slider = 1, advance one segment per 2.5 sec.
+    const speedMul = parseFloat(speedEl?.value || '1');
+    const pxPerSec = (SEG_W / 2.5) * speedMul;
+    position += pxPerSec * dt;
+
+    // Wrap around at end
+    const totalLen = SEG_W * segEls.length;
+    if (position > totalLen) position = 0;
+
+    applyTransform(false);
+
+    const idx = indexAtHead();
+    if (idx !== lastIdxAtHead) {
+      lastIdxAtHead = idx;
+      paintHeadHighlight();
+      try { playSeg(idx); } catch {}
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  function jumpTo(idx) {
+    position = idx * SEG_W;
+    lastIdxAtHead = idx;
+    applyTransform(true);
+    paintHeadHighlight();
+    try { playSeg(idx, 0.20); } catch {}
+  }
+
+  toggleBtn?.addEventListener('click', () => {
+    playing = !playing;
+    if (stateEl) {
+      stateEl.textContent = playing ? 'PLAYING' : 'PAUSED';
+      stateEl.dataset.on = playing ? '1' : '0';
+    }
+    if (toggleBtn) toggleBtn.textContent = playing ? 'PAUSE' : 'PLAY';
+    if (playing) {
+      lastFrameAt = 0;
+      requestAnimationFrame(step);
+    }
+  });
+
+  // Initial paint
+  setTimeout(() => { applyTransform(false); paintHeadHighlight(); }, 50);
+  window.addEventListener('resize', () => applyTransform(false));
+</script>
