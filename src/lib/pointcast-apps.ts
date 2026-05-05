@@ -23,6 +23,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'chart-of-the-day',
+    name: 'Chart of the Day',
+    kicker: 'DAILY DATA · LEDGER PULSE',
+    description: 'A daily-rotating PointCast chart built from the block ledger, with a human view at /chart and a machine-readable packet at /chart.json.',
+    url: 'https://pointcast.xyz/chart',
+    path: '/chart',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'moodygold',
     name: 'MoodyGold',
     kicker: 'ARTWORK · SOUND · GALLERY',

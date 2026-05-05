@@ -8,6 +8,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
+import { getChartOfTheDay } from '../lib/chart-of-the-day';
 import { getPrizeCastSnapshot, getNextPrizeCastDrawAt } from '../lib/prize-cast';
 import contracts from '../data/contracts.json';
 import { execSync } from 'node:child_process';
@@ -17,6 +18,7 @@ export const GET: APIRoute = async () => {
     .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
   const todaysCard = pickCardOfTheDay();
+  const chartOfTheDay = getChartOfTheDay(blocks);
   const nextDraw = getNextPrizeCastDrawAt();
   const prizeCast = await getPrizeCastSnapshot();
   const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
@@ -56,6 +58,16 @@ export const GET: APIRoute = async () => {
         note: todaysCard.note,
         rosterIndex: todaysCard.rosterIndex,
         arenaUrl: 'https://pointcast.xyz/battle',
+      },
+      chartOfTheDay: {
+        title: chartOfTheDay.title,
+        date: chartOfTheDay.date,
+        metric: chartOfTheDay.metric,
+        value: chartOfTheDay.value,
+        trend: chartOfTheDay.trend,
+        trendLabel: chartOfTheDay.trendLabel,
+        url: 'https://pointcast.xyz/chart',
+        jsonUrl: 'https://pointcast.xyz/chart.json',
       },
       prizeCast: {
         status: prizeCastKt1.startsWith('KT1') ? 'live' : 'pending',
