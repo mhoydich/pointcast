@@ -1070,6 +1070,125 @@
       active.byId.lantern = l;
     }
 
+    // ─── dandelion (burst) ────────────────────────────────────────
+    // 28 seed elements scatter upward from a random point. Each seed is
+    // a slim vertical bar + dot (CSS ::before), drifting with an upward
+    // bias via a negative translateY baked into the keyframe. Same
+    // custom-property technique as firework / spark.
+    function castDandelion(durationMs) {
+      if (reduce()) return;
+      var cx = 15 + Math.random() * 70; // vw
+      var cy = 30 + Math.random() * 40; // vh
+      var count = 28;
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-dandelion-seed';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 50 + Math.random() * 110;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist - 80).toFixed(1); // bias seeds upward
+        var dur = (durationMs || 3500) - Math.floor(Math.random() * 700);
+        var delay = Math.floor(Math.random() * 180);
+        s.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          '--spell-seed-dx:' + dx + 'px;--spell-seed-dy:' + dy + 'px;' +
+          'animation:spell-dandelion-drift ' + dur + 'ms ease-out ' + delay + 'ms forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(s);
+      }
+    }
+
+    // ─── ripple (burst) ───────────────────────────────────────────
+    // 4 concentric rings expand from a random viewport point and fade.
+    // Each ring is a transparent circle with a colored border; staggered
+    // 300ms delays create the characteristic water-drop feel.
+    function castRipple(durationMs) {
+      if (reduce()) return;
+      var cx = 15 + Math.random() * 70; // vw
+      var cy = 15 + Math.random() * 60; // vh
+      var palette = ['#4A9EFF', '#a78bfa', '#2f8f5f', '#d4a437', '#4A9EFF'];
+      var color = palette[Math.floor(Math.random() * palette.length)];
+      var dur = durationMs || 2800;
+      for (var i = 0; i < 4; i++) {
+        var ring = document.createElement('span');
+        ring.className = 'spell-ripple-ring';
+        ring.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          'border-color:' + color + ';' +
+          'animation-delay:' + (i * 300) + 'ms;' +
+          'animation-duration:' + dur + 'ms;';
+        $layer.appendChild(ring);
+        active.bursts++;
+        (function (el, delay) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(ring, i * 300);
+      }
+    }
+
+    // ─── kite (companion) ─────────────────────────────────────────
+    // 🪁 glides at ~15% viewport height — high above the ground-level
+    // companions. A secondary drift animation shifts it ±5% vertically
+    // to mimic wind gusts on the string. Pattern is the same ltr/rtl
+    // flip as cat/fish; speed scaled to viewport at ~55px/s.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite gliding by. Click to release.');
+      kite.title = 'click to release the kite';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 55000;
+      var glideSeconds = Math.max(12, Math.min(35, window.innerWidth / 55));
+      kite.style.cssText =
+        'animation:spell-kite-glide-' + (ltr ? 'ltr' : 'rtl') + ' ' + glideSeconds + 's linear infinite,' +
+        'spell-kite-wind 5s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── sun (ambient) ────────────────────────────────────────────
+    // ☀️ peeks over the top-center of the viewport. The emoji rotates
+    // slowly (30s per turn) + a gentle pulse on the drop-shadow gives
+    // the impression of a warm, low-overhead sun. Idempotent recast.
+    function castSun() {
+      if (active.byId.sun) return;
+      var s = document.createElement('button');
+      s.className = 'spell-sun';
+      s.type = 'button';
+      s.setAttribute('aria-label', 'A warm sun. Click to set it.');
+      s.title = 'click to set the sun';
+      s.textContent = '☀️';
+      s.addEventListener('click', function () {
+        if (s.parentNode) s.parentNode.removeChild(s);
+        active.byId.sun = null;
+      });
+      $layer.appendChild(s);
+      active.byId.sun = s;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1105,6 +1224,10 @@
         case 'frog':      castFrog(35000); break;
         case 'leaves':    castLeaves(); break;
         case 'lantern':   castLantern(); break;
+        case 'dandelion': castDandelion(3500); break;
+        case 'ripple':    castRipple(2800); break;
+        case 'kite':      castKite(55000); break;
+        case 'sun':       castSun(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2232,6 +2355,116 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ── dandelion (burst) ───────────────────────────────────────── */
+  /* Slim stem + dot head; drifts along (--spell-seed-dx, --spell-seed-dy)
+     with an upward bias baked into the dy value computed in JS. */
+  .spell-dandelion-seed {
+    position: fixed;
+    width: 2px;
+    height: 11px;
+    background: rgba(253, 242, 214, 0.9);
+    border-radius: 1px 1px 0 0;
+    pointer-events: none;
+    transform-origin: bottom center;
+  }
+  .spell-dandelion-seed::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: radial-gradient(circle, #fdf2d6 25%, rgba(253,242,214,0.5) 60%, transparent 80%);
+    border-radius: 50%;
+  }
+  @keyframes spell-dandelion-drift {
+    0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    15%  { opacity: 1; }
+    100% {
+      transform:
+        translate(var(--spell-seed-dx), var(--spell-seed-dy))
+        rotate(calc(var(--spell-seed-dx) * 1.2));
+      opacity: 0;
+    }
+  }
+
+  /* ── ripple (burst) ──────────────────────────────────────────── */
+  /* Starts as a 4px dot, expands to ~160px diameter, fades out. */
+  .spell-ripple-ring {
+    position: fixed;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    border: 2px solid #4A9EFF;
+    transform: translate(-50%, -50%) scale(0);
+    pointer-events: none;
+    animation: spell-ripple-expand linear forwards;
+  }
+  @keyframes spell-ripple-expand {
+    0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.9; }
+    60%  { opacity: 0.4; }
+    100% { transform: translate(-50%, -50%) scale(40); opacity: 0; }
+  }
+
+  /* ── kite (companion) ────────────────────────────────────────── */
+  /* Floats at ~15% from top — above ground-level companions.
+     spell-kite-wind shifts it ±5vh on a slower cycle for gusts. */
+  .spell-kite {
+    position: fixed;
+    top: 15%;
+    font-size: 32px;
+    line-height: 1;
+    background: none;
+    border: 0;
+    padding: 4px;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    user-select: none;
+  }
+  @keyframes spell-kite-glide-ltr {
+    from { left: -60px; }
+    to   { left: calc(100vw + 60px); }
+  }
+  @keyframes spell-kite-glide-rtl {
+    from { left: calc(100vw + 60px); transform: scaleX(-1); }
+    to   { left: -60px;              transform: scaleX(-1); }
+  }
+  @keyframes spell-kite-wind {
+    0%, 100% { top: 15%; }
+    30%      { top: 20%; }
+    65%      { top: 10%; }
+  }
+
+  /* ── sun (ambient) ───────────────────────────────────────────── */
+  /* Peeks at the top-center, rotates slowly, pulses its warm glow.
+     transform-origin is center so the rotation looks natural. */
+  .spell-sun {
+    position: fixed;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 52px;
+    line-height: 1;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    filter: drop-shadow(0 0 14px rgba(255, 200, 50, 0.8)) drop-shadow(0 0 32px rgba(255, 160, 0, 0.45));
+    transform-origin: center;
+    animation: spell-sun-rotate 28s linear infinite, spell-sun-glow 5s ease-in-out infinite;
+  }
+  @keyframes spell-sun-rotate {
+    from { transform: translateX(-50%) rotate(0deg); }
+    to   { transform: translateX(-50%) rotate(360deg); }
+  }
+  @keyframes spell-sun-glow {
+    0%, 100% { filter: drop-shadow(0 0 14px rgba(255,200,50,0.8)) drop-shadow(0 0 32px rgba(255,160,0,0.45)); }
+    50%      { filter: drop-shadow(0 0 22px rgba(255,220,80,1))   drop-shadow(0 0 52px rgba(255,180,0,0.7)); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2260,7 +2493,9 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-kite,
+    .spell-sun { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2270,7 +2505,8 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2279,12 +2515,15 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
     .spell-snow__flake { display: none; } /* snow motion-only */
     .spell-leaves__leaf { display: none; } /* leaves motion-only */
+    .spell-dandelion-seed { display: none; } /* dandelion motion-only */
+    .spell-ripple-ring { display: none; } /* ripple motion-only */
     .spell-starfield__star { opacity: 0.7; }
     .spell-firefly__glow { opacity: 0.7; }
     .spell-chimes__pipe { transform: rotate(0deg); }
@@ -2295,5 +2534,6 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-sun { transform: translateX(-50%); } /* static sun, no rotation */
   }
 </style>
