@@ -1,0 +1,450 @@
+---
+/**
+ * /drum-rosary — twenty brass beads, walked in sequence.
+ *
+ * Mike: "more on nouns, alters, shrines, meditatives". Second of three.
+ *
+ * A wood-panel field with twenty brass beads arranged in an oval. Each
+ * bead is clickable but only in sequence — bead N is enabled only after
+ * beads 1..N-1 have been walked. Each bead plays a soft pentatonic note
+ * when tapped (rising scale across the 20 beads). Reaching the 20th
+ * bead triggers a completion ritual: a slow swell, all 20 beads light
+ * up brass, and the full sequence plays once as a blessing.
+ *
+ * Counter: total rosaries completed (localStorage). Reset button starts
+ * over. Pure static.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Rosary · Twenty Beads · PointCast';
+const description =
+  'Twenty brass beads on a wood field. Walk them in sequence; the twentieth completes a blessing.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Rosary',
+  url: 'https://pointcast.xyz/drum-rosary',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+// 20 beads
+const BEADS = Array.from({ length: 20 }, (_, i) => i);
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dr" id="dr-main">
+    <DrumNav current="rosary" />
+
+    <header class="dr__header">
+      <div class="dr__chrome">
+        <span>TWENTY BEADS</span>
+        <span class="dr__chrome-sep">·</span>
+        <span id="dr-progress">0 / 20</span>
+        <span class="dr__chrome-sep">·</span>
+        <span id="dr-completed">0 COMPLETED</span>
+      </div>
+      <h1 class="dr__title">ROSARY</h1>
+      <p class="dr__tagline">walk the beads in sequence — slowly</p>
+    </header>
+
+    <section class="dr__field" id="dr-field" aria-label="Twenty brass beads in a sequence">
+      <svg class="dr__path" viewBox="0 0 600 400" aria-hidden="true">
+        <!-- the path the beads sit on, drawn as a faint dotted ellipse -->
+        <ellipse cx="300" cy="200" rx="250" ry="160" fill="none" stroke="#6b4d12" stroke-width="2" stroke-dasharray="2 6" opacity="0.5"/>
+      </svg>
+      <div class="dr__beads">
+        {BEADS.map((i) => (
+          <button class="dr__bead" type="button" data-idx={i} aria-label={`Bead ${i + 1}`}>
+            <span class="dr__bead-num">{i + 1}</span>
+          </button>
+        ))}
+      </div>
+      <div class="dr__center">
+        <div class="dr__center-glyph" id="dr-center-glyph">✦</div>
+        <div class="dr__center-text" id="dr-center-text">walk slowly</div>
+      </div>
+    </section>
+
+    <footer class="dr__controls">
+      <button class="dr__reset" id="dr-reset" type="button">RESET</button>
+      <p class="dr__instructions">
+        Beads enable in order. Click bead 1 to begin. Each bead rises a step on the pentatonic scale.
+        When you reach bead 20, the sequence plays back as a blessing.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dr-main) {
+    background: #0c0410;
+  }
+
+  .dr {
+    --dr-velvet: #1a0820;
+    --dr-velvet-deep: #0c0410;
+    --dr-wood: #3a2410;
+    --dr-wood-light: #5a3618;
+    --dr-brass: #d4a437;
+    --dr-brass-soft: #b8862c;
+    --dr-brass-deep: #6b4d12;
+    --dr-flame: #f6c15e;
+    --dr-ink-light: #f4e7c8;
+    --dr-ink-mid: #c9b78c;
+    --dr-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dr-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dr-velvet) 0%, var(--dr-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dr::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .dr .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .dr__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px);
+  }
+  .dr__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--dr-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dr-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .dr__chrome-sep { color: var(--dr-brass-deep); }
+  #dr-progress, #dr-completed { color: var(--dr-flame); font-weight: 700; }
+
+  .dr__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--dr-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dr-velvet-deep);
+  }
+  .dr__tagline {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--dr-ink-mid);
+  }
+
+  /* Field — dark wood backdrop where the beads sit */
+  .dr__field {
+    position: relative;
+    width: min(100%, 720px);
+    aspect-ratio: 600 / 400;
+    margin: 0 auto;
+    background: linear-gradient(135deg, var(--dr-wood-light) 0%, var(--dr-wood) 100%);
+    border: 4px solid var(--dr-wood);
+    box-shadow:
+      inset 0 0 60px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 245, 192, 0.12),
+      0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+  .dr__field.dr__field--blessed {
+    animation: dr-bless 1.4s ease-in-out 1;
+  }
+  @keyframes dr-bless {
+    0%   { box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6), 0 12px 32px rgba(0, 0, 0, 0.6); }
+    40%  { box-shadow: inset 0 0 80px rgba(246, 193, 94, 0.50), 0 18px 48px rgba(212, 164, 55, 0.30); }
+    100% { box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.6), 0 12px 32px rgba(0, 0, 0, 0.6); }
+  }
+  .dr__path {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Beads — positioned on the ellipse via JS */
+  .dr__beads {
+    position: absolute;
+    inset: 0;
+  }
+  .dr__bead {
+    position: absolute;
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #4a3618 0%, #2a1a08 80%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 245, 192, 0.10),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+      0 2px 4px rgba(0, 0, 0, 0.4);
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 120ms, box-shadow 200ms, background 220ms;
+  }
+  .dr__bead:disabled { cursor: default; opacity: 0.55; }
+  .dr__bead-num {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--dr-ink-dim);
+  }
+
+  /* Active (next-up) bead pulses brass */
+  .dr__bead--active {
+    background: radial-gradient(circle at 30% 30%, var(--dr-brass) 0%, var(--dr-brass-soft) 60%, var(--dr-brass-deep) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 245, 192, 0.50),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+      0 0 16px rgba(246, 193, 94, 0.45);
+    animation: dr-bead-pulse 1.6s ease-in-out infinite;
+  }
+  .dr__bead--active .dr__bead-num { color: var(--dr-velvet-deep); }
+  @keyframes dr-bead-pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50%      { transform: translate(-50%, -50%) scale(1.10); }
+  }
+  .dr__bead--active:hover {
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+
+  /* Walked beads stay lit */
+  .dr__bead--walked {
+    background: radial-gradient(circle at 30% 30%, var(--dr-brass) 0%, var(--dr-brass-soft) 60%, var(--dr-brass-deep) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 245, 192, 0.40),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+      0 0 8px rgba(212, 164, 55, 0.30);
+  }
+  .dr__bead--walked .dr__bead-num { color: var(--dr-velvet-deep); opacity: 0.7; }
+
+  /* Center medallion */
+  .dr__center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  .dr__center-glyph {
+    font-size: 36px;
+    color: var(--dr-brass);
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(212, 164, 55, 0.55);
+    margin-bottom: 6px;
+    transition: transform 400ms, color 400ms;
+  }
+  .dr__field.dr__field--blessed .dr__center-glyph {
+    color: var(--dr-flame);
+    transform: scale(1.4);
+    text-shadow: 0 0 32px rgba(246, 193, 94, 0.85);
+  }
+  .dr__center-text {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--dr-ink-mid);
+  }
+
+  /* Controls */
+  .dr__controls {
+    text-align: center;
+    margin-top: clamp(20px, 3vh, 32px);
+  }
+  .dr__reset {
+    appearance: none;
+    border: 1.5px solid var(--dr-brass-deep);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--dr-ink-mid);
+    cursor: pointer;
+    padding: 10px 24px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .dr__reset:hover {
+    color: var(--dr-brass);
+    border-color: var(--dr-brass);
+    background: rgba(212, 164, 55, 0.08);
+  }
+  .dr__instructions {
+    margin: 14px auto 0;
+    max-width: 520px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--dr-ink-dim);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // 20 beads, pentatonic rising over 2.5 octaves: C-D-E-G-A across 4 octaves
+  // C4 D4 E4 G4 A4 C5 D5 E5 G5 A5 C6 D6 E6 G6 A6 C7 D7 E7 G7 A7
+  const NOTES = [
+    261.63, 293.66, 329.63, 392.00, 440.00,
+    523.25, 587.33, 659.25, 783.99, 880.00,
+    1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    2093.00, 2349.32, 2637.02, 3135.96, 3520.00,
+  ];
+
+  function playBeadTone(idx, gain = 0.18) {
+    const a = ctx(); const t = a.currentTime;
+    const f = NOTES[idx] ?? NOTES[0];
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    // Higher beads decay faster so the top doesn't get noisy
+    const decay = idx < 10 ? 1.4 : 0.9;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + decay * 0.7);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + decay + 0.1); o2.start(t); o2.stop(t + decay * 0.7 + 0.1);
+  }
+
+  // ── State ────────────────────────────────────────────
+  const COMPLETED_KEY = 'pc:rosary:completed';
+  let completed = 0;
+  try { completed = parseInt(localStorage.getItem(COMPLETED_KEY) || '0', 10) || 0; } catch {}
+
+  let progress = 0; // 0..20
+
+  const fieldEl = document.getElementById('dr-field');
+  const progressEl = document.getElementById('dr-progress');
+  const completedEl = document.getElementById('dr-completed');
+  const centerGlyphEl = document.getElementById('dr-center-glyph');
+  const centerTextEl = document.getElementById('dr-center-text');
+  const beadEls = Array.from(document.querySelectorAll('.dr__bead'));
+  const resetBtn = document.getElementById('dr-reset');
+
+  // ── Position beads on an ellipse ────────────────────
+  function positionBeads() {
+    const N = beadEls.length;
+    // Centered ellipse, half axes (% of field): rx=42, ry=38
+    beadEls.forEach((el, i) => {
+      // Start at top (12 o'clock), go clockwise
+      const angle = (-Math.PI / 2) + (2 * Math.PI * i / N);
+      const x = 50 + 42 * Math.cos(angle);
+      const y = 50 + 38 * Math.sin(angle);
+      el.style.left = `${x}%`;
+      el.style.top = `${y}%`;
+    });
+  }
+  positionBeads();
+  window.addEventListener('resize', positionBeads);
+
+  // ── Paint ────────────────────────────────────────────
+  function paint() {
+    if (progressEl) progressEl.textContent = `${progress} / 20`;
+    if (completedEl) completedEl.textContent = `${completed} COMPLETED`;
+
+    beadEls.forEach((el, i) => {
+      el.classList.remove('dr__bead--active', 'dr__bead--walked');
+      if (i < progress) {
+        el.classList.add('dr__bead--walked');
+        el.disabled = true;
+      } else if (i === progress) {
+        el.classList.add('dr__bead--active');
+        el.disabled = false;
+      } else {
+        el.disabled = true;
+      }
+    });
+
+    if (centerTextEl) {
+      if (progress === 0) centerTextEl.textContent = 'walk slowly';
+      else if (progress < 20) centerTextEl.textContent = `${20 - progress} to go`;
+      else centerTextEl.textContent = 'blessed';
+    }
+    if (centerGlyphEl) centerGlyphEl.textContent = progress < 20 ? '✦' : '✧';
+  }
+
+  // ── Walk handler ────────────────────────────────────
+  beadEls.forEach((el, i) => {
+    el.addEventListener('click', () => {
+      if (i !== progress) return;
+      try { playBeadTone(i); } catch {}
+      progress += 1;
+      paint();
+      if (progress === 20) {
+        // Completion ritual: replay full sequence as blessing, then increment counter
+        if (fieldEl) {
+          fieldEl.classList.remove('dr__field--blessed');
+          void fieldEl.offsetWidth;
+          fieldEl.classList.add('dr__field--blessed');
+        }
+        // Replay all 20 in 200ms steps
+        const a = ctx(); const start = a.currentTime + 0.2;
+        for (let k = 0; k < 20; k++) {
+          const t = start + k * 0.2;
+          const f = NOTES[k];
+          const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          const g = a.createGain();
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.13, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+          o.connect(g).connect(a.destination);
+          o.start(t); o.stop(t + 0.65);
+        }
+        completed += 1;
+        try { localStorage.setItem(COMPLETED_KEY, String(completed)); } catch {}
+        if (completedEl) completedEl.textContent = `${completed} COMPLETED`;
+        // Auto-reset after 6s so the next walk is ready
+        setTimeout(() => {
+          progress = 0;
+          paint();
+        }, 6000);
+      }
+    });
+  });
+
+  resetBtn?.addEventListener('click', () => {
+    progress = 0;
+    paint();
+  });
+
+  paint();
+</script>
