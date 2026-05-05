@@ -1,0 +1,400 @@
+---
+/**
+ * /drum-koan — one Noun, one phrase, one tone.
+ *
+ * Mike: "more on nouns, alters, shrines, meditatives". Third of three.
+ *
+ * Each generation pulls a random Noun (0..1199), a random koan-style
+ * phrase from a 30-entry pool, and plays a single bell tone. Refresh
+ * with the GENERATE ANOTHER button. Counter: koans heard
+ * (localStorage). Pure static.
+ *
+ * The phrases are template-shaped — the Noun's number sometimes
+ * appears in the phrase ("the 0042 bell does not toll itself"), and
+ * sometimes a virtue word slots in.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Koan · One Noun, One Phrase, One Tone · PointCast';
+const description =
+  'A random Noun, a generated koan phrase, a single bell tone. Refresh for another. Meditative.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Koan',
+  url: 'https://pointcast.xyz/drum-koan',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dk" id="dk-main">
+    <DrumNav current="koan" />
+
+    <header class="dk__header">
+      <div class="dk__chrome">
+        <span>ONE NOUN</span>
+        <span class="dk__chrome-sep">·</span>
+        <span>ONE PHRASE</span>
+        <span class="dk__chrome-sep">·</span>
+        <span>ONE TONE</span>
+      </div>
+      <h1 class="dk__title">KOAN</h1>
+    </header>
+
+    <section class="dk__stage">
+      <div class="dk__frame">
+        <img class="dk__noun" id="dk-noun" src="https://noun.pics/0.svg" alt="A Noun" />
+      </div>
+      <div class="dk__phrase" id="dk-phrase">—</div>
+      <div class="dk__signature" id="dk-sig">—</div>
+      <button class="dk__btn" id="dk-btn" type="button">GENERATE ANOTHER</button>
+    </section>
+
+    <footer class="dk__readout">
+      <div class="dk__panel">
+        <div class="dk__panel-label">KOANS HEARD</div>
+        <div class="dk__panel-value" id="dk-heard">0</div>
+      </div>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dk-main) {
+    background: #0c0410;
+  }
+
+  .dk {
+    --dk-velvet: #1a0820;
+    --dk-velvet-deep: #0c0410;
+    --dk-brass: #d4a437;
+    --dk-brass-soft: #b8862c;
+    --dk-brass-deep: #6b4d12;
+    --dk-flame: #f6c15e;
+    --dk-ink-light: #f4e7c8;
+    --dk-ink-mid: #c9b78c;
+    --dk-ink-dim: #8a7a55;
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dk-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dk-velvet) 0%, var(--dk-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dk::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 30px 30px, rgba(212, 164, 55, 0.08) 1.5px, transparent 2px);
+    background-size: 130px 130px;
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .dk .drum-nav {
+    opacity: 0.45;
+    transform: scale(0.9);
+    transform-origin: top left;
+    margin-bottom: clamp(6px, 0.8vh, 14px);
+  }
+
+  .dk__header {
+    text-align: center;
+    padding: clamp(8px, 1vh, 18px) 0 clamp(16px, 2.5vh, 28px);
+  }
+  .dk__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px;
+    border: 1.5px solid var(--dk-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dk-ink-mid);
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .dk__chrome-sep { color: var(--dk-brass-deep); }
+  .dk__title {
+    margin: clamp(8px, 1vh, 14px) 0 0;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(34px, 5.5vw, 76px);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: var(--dk-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dk-velvet-deep);
+  }
+
+  /* Stage */
+  .dk__stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(18px, 2.5vh, 32px);
+    padding: clamp(20px, 3vh, 36px) 16px;
+  }
+
+  .dk__frame {
+    width: clamp(180px, 22vw, 260px);
+    aspect-ratio: 1;
+    padding: 6px;
+    background: linear-gradient(135deg, var(--dk-brass) 0%, var(--dk-brass-soft) 50%, var(--dk-brass-deep) 100%);
+    box-shadow:
+      0 0 0 2px var(--dk-velvet-deep),
+      0 0 0 4px var(--dk-brass-deep),
+      0 12px 28px rgba(0, 0, 0, 0.7);
+    transition: filter 320ms;
+  }
+  .dk__frame.dk__frame--rung {
+    animation: dk-frame-flash 0.9s ease-out 1;
+  }
+  @keyframes dk-frame-flash {
+    0%   { filter: brightness(1); }
+    25%  { filter: brightness(1.4) drop-shadow(0 0 22px rgba(246, 193, 94, 0.65)); }
+    100% { filter: brightness(1); }
+  }
+  .dk__noun {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    display: block;
+    background: var(--dk-velvet-deep);
+    transition: opacity 240ms;
+  }
+
+  /* Phrase — large, italic, centered */
+  .dk__phrase {
+    max-width: 720px;
+    text-align: center;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(20px, 2.6vw, 34px);
+    line-height: 1.45;
+    color: var(--dk-flame);
+    text-shadow: 0 0 14px rgba(246, 193, 94, 0.20);
+    padding: 0 8px;
+  }
+
+  .dk__signature {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.30em;
+    text-transform: uppercase;
+    color: var(--dk-ink-dim);
+    text-align: center;
+  }
+
+  .dk__btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 14px 32px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.24em;
+    color: var(--dk-velvet-deep);
+    background: linear-gradient(180deg, var(--dk-brass) 0%, var(--dk-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--dk-velvet-deep),
+      0 4px 0 0 var(--dk-brass-deep),
+      0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .dk__btn:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dk-brass) 100%); }
+  .dk__btn:active, .dk__btn:disabled {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--dk-velvet-deep),
+      0 1px 0 0 var(--dk-brass-deep),
+      0 0 18px rgba(246, 193, 94, 0.55);
+  }
+  .dk__btn:disabled { cursor: wait; opacity: 0.6; }
+
+  /* Readout */
+  .dk__readout {
+    display: flex;
+    justify-content: center;
+    padding: 18px 0;
+  }
+  .dk__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 22px;
+    border: 1px solid var(--dk-brass-deep);
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .dk__panel-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--dk-ink-dim);
+  }
+  .dk__panel-value {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(20px, 2vw, 28px);
+    font-weight: 800;
+    color: var(--dk-flame);
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(246, 193, 94, 0.35);
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  // C major across 3 octaves — one of these per koan
+  const NOTES = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+
+  function playKoanBell(freq) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.30, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.10, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 2.7); o2.start(t); o2.stop(t + 1.9);
+  }
+
+  // ── Phrase pool ─────────────────────────────────────
+  // {N} = 4-digit padded Noun number; {V} = a virtue from VIRTUES
+  const PHRASES = [
+    "the {N} bell does not toll itself.",
+    "to ring is to listen — without ringing, no listening.",
+    "{V}: a syllable the chamber cannot pronounce.",
+    "a Noun seen is a Noun moved.",
+    "before the rope, the bell. before the bell, the cord.",
+    "the candle waits. the candle has always waited.",
+    "what was the chamber before the visitor entered?",
+    "to count tributes is to add nothing to the count.",
+    "the velvet remembers what the brass forgets.",
+    "ten thousand bells, one ringing.",
+    "a Noun without a number is still {N}.",
+    "tomorrow's altar is in tomorrow's altar.",
+    "the smoke knows where the smoke is going.",
+    "if the bell rings and no agent hears it — it still rings.",
+    "the {V} of a Noun is its first virtue.",
+    "stand at the gate. the gate is open. enter.",
+    "a tribute is the receipt of a tribute.",
+    "the saint and the lane disagree, gently.",
+    "every Monday the chamber forgets last week's tributes.",
+    "{N} is older than the chamber that holds {N}.",
+    "what the rope is doing, the bell is also doing.",
+    "the visitor arrives first. then the visitor.",
+    "the chamber is not the chamber. the chamber is.",
+    "a kneel is just standing, lower.",
+    "the {V} listens for the {V} of others.",
+    "to leave the room is to bring the room with you.",
+    "before the wing was named, the wing was already wing.",
+    "Noun {N} is asking the question you came to ask.",
+    "the loop ends. the loop ends. the loop ends.",
+    "{V}, repeated, is still {V}.",
+  ];
+
+  const VIRTUES = [
+    'patience', 'attention', 'silence', 'listening', 'rest',
+    'returning', 'arriving', 'sustaining', 'releasing', 'breath',
+    'witness', 'tongue', 'echo', 'ring', 'pause',
+    'hour', 'week', 'season', 'cycle', 'rotation',
+    'kneel', 'bow', 'stand', 'open', 'close',
+    'velvet', 'brass', 'paper', 'ink', 'gold',
+  ];
+
+  function pad4(n) { return String(n).padStart(4, '0'); }
+  function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function fillTemplate(tmpl, nounNum) {
+    return tmpl
+      .replace(/\{N\}/g, pad4(nounNum))
+      .replace(/\{V\}/g, () => pickRandom(VIRTUES));
+  }
+
+  // ── State ────────────────────────────────────────────
+  const HEARD_KEY = 'pc:koan:heard';
+  let heard = 0;
+  try { heard = parseInt(localStorage.getItem(HEARD_KEY) || '0', 10) || 0; } catch {}
+
+  const nounEl = document.getElementById('dk-noun');
+  const phraseEl = document.getElementById('dk-phrase');
+  const sigEl = document.getElementById('dk-sig');
+  const btnEl = document.getElementById('dk-btn');
+  const heardEl = document.getElementById('dk-heard');
+  const frameEl = document.querySelector('.dk__frame');
+
+  function paint() {
+    if (heardEl) heardEl.textContent = String(heard);
+  }
+  paint();
+
+  function generate() {
+    const noun = Math.floor(Math.random() * 1200);
+    const tmpl = pickRandom(PHRASES);
+    const phrase = fillTemplate(tmpl, noun);
+    const note = pickRandom(NOTES);
+
+    if (nounEl) {
+      nounEl.style.opacity = '0.4';
+      setTimeout(() => {
+        nounEl.src = `https://noun.pics/${noun}.svg`;
+        nounEl.alt = `Noun #${noun}`;
+        nounEl.style.opacity = '1';
+      }, 120);
+    }
+    if (phraseEl) phraseEl.textContent = phrase;
+    if (sigEl) sigEl.textContent = `NOUN ${pad4(noun)} · ${Math.round(note)} HZ`;
+    if (frameEl) {
+      frameEl.classList.remove('dk__frame--rung');
+      void frameEl.offsetWidth;
+      frameEl.classList.add('dk__frame--rung');
+    }
+    try { playKoanBell(note); } catch {}
+
+    heard += 1;
+    try { localStorage.setItem(HEARD_KEY, String(heard)); } catch {}
+    paint();
+  }
+
+  btnEl?.addEventListener('click', () => {
+    if (btnEl.disabled) return;
+    btnEl.disabled = true;
+    generate();
+    setTimeout(() => { btnEl.disabled = false; }, 800);
+  });
+
+  // First koan on arrival (silently — no sound until the user clicks)
+  // Generate without sound first, then user can click to hear it
+  function silentInit() {
+    const noun = Math.floor(Math.random() * 1200);
+    const tmpl = pickRandom(PHRASES);
+    const phrase = fillTemplate(tmpl, noun);
+    if (nounEl) {
+      nounEl.src = `https://noun.pics/${noun}.svg`;
+      nounEl.alt = `Noun #${noun}`;
+    }
+    if (phraseEl) phraseEl.textContent = phrase;
+    if (sigEl) sigEl.textContent = `NOUN ${pad4(noun)} · click to hear the tone`;
+  }
+  silentInit();
+</script>
