@@ -12,6 +12,9 @@
  * file is just the data plumbing.
  */
 
+import { execSync } from 'node:child_process';
+import path from 'node:path';
+
 const RAW_PAGES = import.meta.glob('../pages/*.astro', {
   query: '?raw',
   import: 'default',
@@ -24,7 +27,42 @@ export interface Feature {
   description: string;
   category: string;   // bucket key
   prefix: string;     // first slug segment, e.g. "drum"
+  /** Last-commit unix timestamp (seconds). 0 if untracked. */
+  mtime: number;
 }
+
+/**
+ * Read git mtimes for every src/pages/*.astro in one shell call.
+ * Format: "<unix>\0<relpath>" pairs, one per line — survives spaces/quotes.
+ * Falls back to 0 if git isn't available (e.g. shallow CI without .git).
+ */
+function readMtimes(): Record<string, number> {
+  try {
+    const out = execSync(
+      'git log --name-only --pretty=format:__COMMIT__%ct -- src/pages/*.astro',
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    );
+    const map: Record<string, number> = {};
+    let currentTs = 0;
+    for (const raw of out.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith('__COMMIT__')) {
+        currentTs = parseInt(line.slice('__COMMIT__'.length), 10) || 0;
+        continue;
+      }
+      // Only first-seen wins — git log walks newest→oldest, so first hit is latest.
+      if (line.startsWith('src/pages/') && line.endsWith('.astro') && !(line in map)) {
+        map[line] = currentTs;
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+const MTIMES = readMtimes();
 
 export interface Category {
   key: string;
@@ -158,12 +196,14 @@ export const FEATURES: Feature[] = Object.entries(RAW_PAGES)
     const titleRaw = pickConst(fm, 'title') ?? deriveTitleFromSlug(slug);
     const descRaw = pickConst(fm, 'description') ?? '';
     const cat = categorize(slug);
+    const rel = `src/pages/${slug}.astro`;
     return {
       slug: `/${slug}`,
       title: titleRaw.replace(/\s+/g, ' ').trim() || deriveTitleFromSlug(slug),
       description: descRaw.replace(/\s+/g, ' ').trim(),
       category: cat.key,
       prefix: slug.split('-')[0],
+      mtime: MTIMES[rel] ?? 0,
     } as Feature;
   })
   .filter((f): f is Feature => f !== null)
@@ -173,4 +213,16 @@ export function countByCategory(): Record<string, number> {
   const out: Record<string, number> = {};
   for (const f of FEATURES) out[f.category] = (out[f.category] ?? 0) + 1;
   return out;
+}
+
+/**
+ * Pages whose latest commit landed in the last `days` days (default 7).
+ * Newest first, capped at `limit`. Returns [] if mtimes are unavailable.
+ */
+export function recentFeatures(days = 7, limit = 12): Feature[] {
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400;
+  return FEATURES
+    .filter((f) => f.mtime > cutoff)
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, limit);
 }
