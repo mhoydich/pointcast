@@ -1,0 +1,461 @@
+---
+/**
+ * /drum-lantern — release pixel-art Noun lanterns into the sky.
+ *
+ * Mike: "more alters, shrines, prayer areas, not to existing for this
+ * pass, very 2026, colors, audios, visuals, results, presence, peace,
+ * pace, flow." Second of three.
+ *
+ * Tap anywhere on the dark velvet sky to release a paper lantern
+ * carrying your Noun. Lantern rises from where you tapped over 30
+ * seconds, drifting gently sideways with a slow sine sway. Soft
+ * chime on release; softer chime when it leaves the top of the
+ * frame.
+ *
+ * Ambient lanterns auto-spawn every 6-12 seconds with random Nouns,
+ * so the sky never feels empty. Up to 24 lanterns in flight at once.
+ *
+ * Pure static. localStorage tracks released count + your Noun seed.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Lantern · Release Into the Sky · PointCast';
+const description =
+  'Tap the velvet sky to release a paper lantern carrying your Noun. They drift up over 30 seconds.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Lantern',
+  url: 'https://pointcast.xyz/drum-lantern',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dl" id="dl-main">
+    <DrumNav current="lantern" />
+
+    <div class="dl__sky" id="dl-sky">
+      <!-- Ground gradient at bottom -->
+      <div class="dl__ground"></div>
+
+      <header class="dl__chrome">
+        <span class="dl__chrome-label">LANTERN</span>
+        <span class="dl__chrome-sep">·</span>
+        <span class="dl__chrome-stat" id="dl-released">0 RELEASED</span>
+        <span class="dl__chrome-sep">·</span>
+        <span class="dl__chrome-stat" id="dl-aloft">0 ALOFT</span>
+      </header>
+
+      <div class="dl__center">
+        <h1 class="dl__title">tap the sky</h1>
+        <p class="dl__tagline">a lantern with your Noun rises from where you tap</p>
+      </div>
+
+      <footer class="dl__readout">
+        <div class="dl__yours">
+          <span class="dl__yours-label">YOUR NOUN</span>
+          <span class="dl__yours-value" id="dl-your-noun">—</span>
+        </div>
+      </footer>
+    </div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dl-main) {
+    background: #0c0410;
+    overflow: hidden;
+  }
+
+  .dl {
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0;
+    color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+  }
+  .dl .drum-nav {
+    position: absolute;
+    top: 0;
+    left: 32px;
+    z-index: 4;
+    opacity: 0.40;
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+
+  .dl__sky {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 80px);
+    min-height: 600px;
+    overflow: hidden;
+    cursor: pointer;
+    background:
+      radial-gradient(ellipse at 50% 90%, oklch(0.18 0.06 280) 0%, oklch(0.10 0.04 290) 60%, oklch(0.06 0.02 310) 100%);
+  }
+
+  /* Faint stars */
+  .dl__sky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(244, 231, 200, 0.6) 1px, transparent 1.5px),
+      radial-gradient(circle at 87% 22%, rgba(244, 231, 200, 0.5) 1px, transparent 1.5px),
+      radial-gradient(circle at 23% 67%, rgba(244, 231, 200, 0.4) 1px, transparent 1.5px),
+      radial-gradient(circle at 71% 78%, rgba(244, 231, 200, 0.6) 1px, transparent 1.5px),
+      radial-gradient(circle at 45% 12%, rgba(244, 231, 200, 0.55) 1px, transparent 1.5px),
+      radial-gradient(circle at 92% 55%, rgba(244, 231, 200, 0.4) 1px, transparent 1.5px),
+      radial-gradient(circle at 8% 88%, rgba(244, 231, 200, 0.45) 1px, transparent 1.5px),
+      radial-gradient(circle at 58% 41%, rgba(244, 231, 200, 0.5) 1px, transparent 1.5px),
+      radial-gradient(circle at 33% 32%, rgba(244, 231, 200, 0.4) 1px, transparent 1.5px),
+      radial-gradient(circle at 78% 8%, rgba(244, 231, 200, 0.6) 1px, transparent 1.5px);
+    background-size: 100% 100%;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  /* Ground — soft fade at the bottom (where lanterns release from) */
+  .dl__ground {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 18%;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0.6) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Chrome — top */
+  .dl__chrome {
+    position: absolute;
+    top: clamp(16px, 2vh, 32px);
+    right: clamp(20px, 3vw, 48px);
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(6px, 0.8vw, 14px);
+    padding: 6px 16px;
+    border: 1px solid rgba(244, 231, 200, 0.30);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(244, 231, 200, 0.85);
+    z-index: 5;
+  }
+  .dl__chrome-label { font-weight: 700; letter-spacing: 0.30em; }
+  .dl__chrome-sep { color: rgba(244, 231, 200, 0.40); }
+  .dl__chrome-stat { color: oklch(0.85 0.18 80); font-weight: 700; }
+
+  /* Center text */
+  .dl__center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 1500ms ease-out;
+    padding: 0 24px;
+  }
+  .dl__sky.dl__sky--seeded .dl__center {
+    opacity: 0;
+  }
+  .dl__title {
+    margin: 0 0 12px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: rgba(244, 231, 200, 0.95);
+    text-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  }
+  .dl__tagline {
+    margin: 0 auto;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(14px, 1.4vw, 18px);
+    color: rgba(244, 231, 200, 0.75);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    max-width: 540px;
+  }
+
+  /* Readout */
+  .dl__readout {
+    position: absolute;
+    bottom: clamp(16px, 2vh, 32px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+  }
+  .dl__yours {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 16px;
+    border: 1px solid rgba(244, 231, 200, 0.20);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .dl__yours-label { color: rgba(244, 231, 200, 0.55); }
+  .dl__yours-value { color: oklch(0.85 0.20 60); font-weight: 700; }
+
+  /* Lantern — JS-positioned absolutely, animates upward */
+  .dl__lantern {
+    position: absolute;
+    width: 56px;
+    aspect-ratio: 1.15;
+    pointer-events: none;
+    will-change: transform, opacity;
+    z-index: 3;
+    opacity: 0;
+  }
+  .dl__lantern.dl__lantern--rising {
+    animation:
+      dl-rise var(--rise-dur, 30s) ease-out 1 forwards,
+      dl-sway 4s ease-in-out infinite,
+      dl-fade-in 1.2s ease-out 1 forwards;
+  }
+  @keyframes dl-rise {
+    0%   { transform: translate(var(--x), var(--y0)); }
+    100% { transform: translate(var(--x), -120px); }
+  }
+  @keyframes dl-sway {
+    0%, 100% { margin-left: 0; }
+    25%      { margin-left: 8px; }
+    75%      { margin-left: -8px; }
+  }
+  @keyframes dl-fade-in {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    100% { opacity: 1; }
+  }
+  /* Last 4 seconds: fade out */
+  .dl__lantern.dl__lantern--fading {
+    animation: dl-fade-out 4s ease-in 1 forwards;
+  }
+  @keyframes dl-fade-out {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .dl__lantern-svg {
+    position: relative;
+    z-index: 2;
+  }
+  .dl__lantern-noun {
+    position: absolute;
+    top: 22%;
+    left: 24%;
+    width: 52%;
+    aspect-ratio: 1;
+    image-rendering: pixelated;
+    z-index: 3;
+  }
+  .dl__lantern-glow {
+    position: absolute;
+    inset: -40%;
+    background: radial-gradient(circle, oklch(0.85 0.20 60 / 0.55) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 1;
+    filter: blur(8px);
+  }
+</style>
+
+<script>
+  // ── Audio ────────────────────────────────────────────
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playReleaseChime() {
+    const a = ctx(); const t = a.currentTime;
+    // Soft warm chime — A4 + E5
+    const f1 = 440.00, f2 = 659.25;
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = f1;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f2;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o1.connect(g); o2.connect(g); g.connect(a.destination);
+    o1.start(t); o2.start(t); o1.stop(t + 1.5); o2.stop(t + 1.5);
+  }
+  function playArrivalChime() {
+    // Softer, higher — when lantern leaves the top
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 880.00;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.10, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + 0.9);
+  }
+
+  // ── Identity ────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  async function sha256(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  function nounIdFromHash(hash) {
+    let n = 0;
+    for (let i = 0; i < Math.min(8, hash.length); i++) n = (n * 31 + hash.charCodeAt(i)) | 0;
+    return Math.abs(n) % 1200;
+  }
+
+  // ── State ────────────────────────────────────────────
+  const RELEASED_KEY = 'pc:lantern:released';
+  let releasedTotal = 0;
+  try { releasedTotal = parseInt(localStorage.getItem(RELEASED_KEY) || '0', 10) || 0; } catch {}
+
+  let myNoun = 0;
+  let inFlight = 0;
+  const MAX_IN_FLIGHT = 24;
+
+  const skyEl = document.getElementById('dl-sky');
+  const releasedEl = document.getElementById('dl-released');
+  const aloftEl = document.getElementById('dl-aloft');
+  const yourNounEl = document.getElementById('dl-your-noun');
+
+  function paint() {
+    if (releasedEl) releasedEl.textContent = `${releasedTotal} RELEASED`;
+    if (aloftEl) aloftEl.textContent = `${inFlight} ALOFT`;
+  }
+  paint();
+
+  // ── Lantern factory ─────────────────────────────────
+  function makeLanternSVG() {
+    // Pixel-art paper lantern: rectangular body with rounded bottom, brass cap,
+    // tassel below. Glow halo provided by separate div.
+    return `
+      <svg class="dl__lantern-svg" viewBox="0 0 56 64" shape-rendering="crispEdges" aria-hidden="true">
+        <!-- top brass cap -->
+        <rect x="20" y="0" width="16" height="3" fill="#b8862c"/>
+        <rect x="18" y="3" width="20" height="3" fill="#d4a437"/>
+        <!-- string up -->
+        <rect x="27" y="-12" width="2" height="12" fill="#6b4d12"/>
+        <!-- body — paper, with side ribs -->
+        <rect x="6" y="6" width="44" height="44" fill="oklch(0.65 0.20 60)" rx="2"/>
+        <rect x="6" y="6" width="44" height="3" fill="oklch(0.55 0.20 60)"/>
+        <rect x="6" y="47" width="44" height="3" fill="oklch(0.55 0.20 60)"/>
+        <!-- side ribs -->
+        <rect x="6" y="12" width="2" height="34" fill="oklch(0.45 0.18 60)"/>
+        <rect x="48" y="12" width="2" height="34" fill="oklch(0.45 0.18 60)"/>
+        <!-- bottom brass band -->
+        <rect x="14" y="50" width="28" height="4" fill="#d4a437"/>
+        <!-- tassel -->
+        <rect x="27" y="54" width="2" height="6" fill="#c4351c"/>
+        <rect x="25" y="60" width="6" height="3" fill="#c4351c"/>
+      </svg>
+    `;
+  }
+
+  function spawnLantern(originX, originY, seed) {
+    if (inFlight >= MAX_IN_FLIGHT) return;
+    if (!skyEl) return;
+
+    const lantern = document.createElement('div');
+    lantern.className = 'dl__lantern';
+    const rect = skyEl.getBoundingClientRect();
+    const startX = Math.max(20, Math.min(rect.width - 76, originX));
+    const startY = Math.max(60, Math.min(rect.height - 60, originY));
+    lantern.style.setProperty('--x', `${startX}px`);
+    lantern.style.setProperty('--y0', `${startY}px`);
+    lantern.style.setProperty('--rise-dur', `${28 + Math.random() * 6}s`);
+    lantern.style.transform = `translate(${startX}px, ${startY}px)`;
+    lantern.innerHTML = `
+      <div class="dl__lantern-glow"></div>
+      ${makeLanternSVG()}
+      <img class="dl__lantern-noun" src="https://noun.pics/${seed}.svg" alt="" />
+    `;
+    skyEl.appendChild(lantern);
+
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      lantern.classList.add('dl__lantern--rising');
+    });
+
+    inFlight += 1;
+    paint();
+    if (skyEl) skyEl.classList.add('dl__sky--seeded');
+
+    const riseDur = parseFloat(lantern.style.getPropertyValue('--rise-dur')) * 1000;
+
+    // Start fade-out animation 4 seconds before rise completes
+    const fadeAt = riseDur - 4000;
+    setTimeout(() => {
+      lantern.classList.add('dl__lantern--fading');
+    }, fadeAt);
+
+    // When lantern reaches top: arrival chime + remove
+    setTimeout(() => {
+      try { playArrivalChime(); } catch {}
+      lantern.remove();
+      inFlight -= 1;
+      paint();
+    }, riseDur);
+  }
+
+  // ── Click to release ────────────────────────────────
+  let audioStarted = false;
+  skyEl?.addEventListener('click', (e) => {
+    if (!audioStarted) audioStarted = true;
+    const rect = skyEl.getBoundingClientRect();
+    const x = e.clientX - rect.left - 28; // center-offset
+    const y = e.clientY - rect.top - 32;
+    spawnLantern(x, y, myNoun);
+    try { playReleaseChime(); } catch {}
+    releasedTotal += 1;
+    try { localStorage.setItem(RELEASED_KEY, String(releasedTotal)); } catch {}
+    paint();
+  });
+
+  // ── Ambient lanterns ────────────────────────────────
+  function spawnAmbient() {
+    if (!skyEl) return;
+    if (inFlight >= MAX_IN_FLIGHT - 4) return; // leave room for user
+    const rect = skyEl.getBoundingClientRect();
+    const x = Math.random() * (rect.width - 76);
+    const y = rect.height - 60 - Math.random() * 80;
+    const seed = Math.floor(Math.random() * 1200);
+    spawnLantern(x, y, seed);
+  }
+  // First ambient after 2s, then every 6-12s
+  setTimeout(spawnAmbient, 2000);
+  setInterval(() => {
+    if (Math.random() < 0.55) spawnAmbient();
+  }, 6500);
+
+  // ── Boot ─────────────────────────────────────────────
+  (async () => {
+    const sid = ensureSid();
+    const hash = await sha256(sid);
+    myNoun = nounIdFromHash(hash);
+    if (yourNounEl) yourNounEl.textContent = String(myNoun).padStart(4, '0');
+  })();
+</script>
