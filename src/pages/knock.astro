@@ -1,0 +1,331 @@
+---
+/**
+ * /knock — the door knocker.
+ *
+ * One pixel-art front door. One button. Click KNOCK and the door
+ * creaks open onto a random PointCast room. A cousin to the `?`
+ * keyboard shortcut on /explore, but a destination of its own —
+ * postable, screenshottable, dumb fun.
+ *
+ * Picks from /explore.json so the door always knows every room in
+ * town. Avoids opening to /knock or /explore (you came from one,
+ * the other would be cruel).
+ *
+ * Aesthetic: chunky pixel-art door rendered in CSS — no static
+ * images. Geocities-meets-simcity per the PointCast design memory.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Knock — the random door';
+const description =
+  'Click KNOCK and a random room in PointCast opens. A pixel-art front door for the small internet town. No login, no logic — just a door.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/knock',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/knock',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="knock">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>knock</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">▓▒░ THE DOOR KNOCKER ░▒▓</p>
+      <h1>Knock and a door opens.</h1>
+      <p class="lede">
+        One button. One random room. The pixel-art front door of the
+        small internet town. No login, no map, no plan — just a knock.
+      </p>
+    </header>
+
+    <section class="stage" aria-label="The door">
+      <div class="frame">
+        <div class="door" id="door" aria-hidden="true">
+          <span class="panel panel--top"></span>
+          <span class="panel panel--mid"></span>
+          <span class="panel panel--bot"></span>
+          <span class="knocker"></span>
+          <span class="knob"></span>
+          <span class="hinge hinge--top"></span>
+          <span class="hinge hinge--bot"></span>
+        </div>
+        <div class="welcome" aria-hidden="true">
+          <span>· · · WELCOME · · ·</span>
+        </div>
+      </div>
+
+      <button id="knock-btn" type="button" class="knock-btn" aria-live="polite">
+        <span id="knock-label">KNOCK</span>
+      </button>
+
+      <p id="knock-status" class="status" aria-live="polite">
+        Press the button. The town will answer.
+      </p>
+    </section>
+
+    <footer class="ex-foot">
+      <span>·</span><span>·</span><span>·</span>
+      <p>
+        a door · in the town · at <a href="https://pointcast.xyz">pointcast.xyz</a>
+      </p>
+      <span>·</span><span>·</span><span>·</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    var btn = document.getElementById('knock-btn');
+    var label = document.getElementById('knock-label');
+    var status = document.getElementById('knock-status');
+    var door = document.getElementById('door');
+    if (!btn || !door) return;
+
+    var rooms = [];
+    var loading = null;
+
+    var SKIP = ['/knock', '/explore', '/404'];
+
+    function loadRooms() {
+      if (rooms.length || loading) return loading || Promise.resolve();
+      loading = fetch('/explore.json', { cache: 'force-cache' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var all = (j.features || []).map(function (f) { return f.slug; });
+          rooms = all.filter(function (s) { return s && SKIP.indexOf(s) === -1; });
+        })
+        .catch(function () { rooms = ['/drum', '/cast', '/about', '/now']; });
+      return loading;
+    }
+
+    // Tiny Web Audio "knock" — wood-block thud, no asset needed.
+    var ctx = null;
+    function knockSound() {
+      try {
+        if (!ctx) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          ctx = new AC();
+        }
+        var now = ctx.currentTime;
+        for (var i = 0; i < 2; i++) {
+          var t = now + i * 0.18;
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(120 - i * 30, t);
+          osc.frequency.exponentialRampToValueAtTime(60, t + 0.08);
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.35, t + 0.005);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.13);
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function pickRoom() {
+      if (!rooms.length) return '/drum';
+      return rooms[Math.floor(Math.random() * rooms.length)];
+    }
+
+    function setStatus(text) { if (status) status.textContent = text; }
+    function setLabel(text) { if (label) label.textContent = text; }
+
+    var busy = false;
+
+    btn.addEventListener('click', function () {
+      if (busy) return;
+      busy = true;
+      btn.disabled = true;
+      door.classList.remove('is-open');
+      door.classList.add('is-knocking');
+      knockSound();
+      setLabel('…');
+      setStatus('Knocking…');
+
+      loadRooms().then(function () {
+        var dest = pickRoom();
+        // Two beats of knock, then the door opens, then nav.
+        setTimeout(function () {
+          door.classList.remove('is-knocking');
+          door.classList.add('is-open');
+          setStatus('A room opens: ' + dest);
+          setLabel('OPEN');
+        }, 600);
+        setTimeout(function () { window.location.href = dest; }, 1100);
+      });
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (document.activeElement === btn) return; // browser handles
+        e.preventDefault();
+        btn.click();
+      }
+    });
+
+    // Warm the cache without forcing it.
+    loadRooms();
+  })();
+</script>
+
+<style>
+  .knock {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px clamp(16px, 4vw, 36px) 96px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    color: #131110;
+    text-align: center;
+  }
+
+  .crumb { font-size: 12px; color: #5a554f; margin-bottom: 18px; text-align: left; }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px dotted; }
+
+  .hero { padding: 18px 0 28px; border-bottom: 3px double #131110; margin-bottom: 32px; text-align: left; }
+  .kicker { font-size: 12px; letter-spacing: 0.12em; color: #b04a1c; margin: 0 0 10px; }
+  .hero h1 {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 800;
+    margin: 0 0 12px;
+    line-height: 1.05;
+  }
+  .lede { color: #3b3833; font-size: 14px; line-height: 1.55; margin: 0; max-width: 56ch; }
+
+  .stage {
+    display: grid;
+    justify-items: center;
+    gap: 24px;
+    margin: 16px 0 32px;
+  }
+
+  .frame {
+    position: relative;
+    width: 220px;
+    height: 320px;
+    background: #fbf7ee;
+    border: 3px solid #131110;
+    box-shadow: 8px 8px 0 #131110;
+    padding: 16px;
+    image-rendering: pixelated;
+  }
+
+  .welcome {
+    position: absolute;
+    bottom: -28px; left: 0; right: 0;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: #b04a1c;
+  }
+
+  .door {
+    position: relative;
+    width: 100%; height: 100%;
+    background: #8a4b1f;
+    border: 4px solid #5a2d0e;
+    transform-origin: left center;
+    transition: transform 380ms cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  .door.is-open { transform: perspective(700px) rotateY(-78deg); }
+  .door.is-knocking { animation: shudder 280ms ease-in-out 0s 2; }
+
+  @keyframes shudder {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-2px, -1px); }
+    50% { transform: translate(2px, 1px); }
+    75% { transform: translate(-1px, 1px); }
+  }
+
+  .panel {
+    position: absolute;
+    left: 14px; right: 14px;
+    background: #6e3815;
+    border: 3px solid #41210a;
+    box-shadow: inset 0 0 0 4px #8a4b1f;
+  }
+  .panel--top { top: 14px; height: 90px; }
+  .panel--mid { top: 116px; height: 60px; }
+  .panel--bot { top: 188px; bottom: 14px; }
+
+  .knocker {
+    position: absolute;
+    top: 50px; left: 50%;
+    transform: translateX(-50%);
+    width: 22px; height: 22px;
+    background: #d8b34a;
+    border: 3px solid #6b4a0e;
+    border-radius: 50%;
+    box-shadow: 0 4px 0 #6b4a0e;
+  }
+
+  .knob {
+    position: absolute;
+    top: 50%; right: 22px;
+    width: 12px; height: 12px;
+    background: #f1cf63;
+    border: 2px solid #41210a;
+    border-radius: 50%;
+  }
+
+  .hinge {
+    position: absolute;
+    left: -2px;
+    width: 8px; height: 14px;
+    background: #41210a;
+    border: 2px solid #1d0d04;
+  }
+  .hinge--top { top: 24px; }
+  .hinge--bot { bottom: 24px; }
+
+  .knock-btn {
+    font: inherit;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 16px 36px;
+    border: 3px solid #131110;
+    background: #ffd84a;
+    color: #131110;
+    cursor: pointer;
+    box-shadow: 5px 5px 0 #131110;
+    border-radius: 0;
+    transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+  }
+  .knock-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 6px 6px 0 #b04a1c;
+    background: #ffe070;
+  }
+  .knock-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #131110; }
+  .knock-btn:disabled { background: #d8d2c1; cursor: wait; }
+
+  .status {
+    font-size: 13px;
+    color: #5a554f;
+    margin: 0;
+    min-height: 1.5em;
+  }
+
+  .ex-foot {
+    margin-top: 64px;
+    border-top: 3px double #131110;
+    padding-top: 18px;
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    color: #5a554f; font-size: 12px;
+  }
+  .ex-foot p { margin: 0; }
+  .ex-foot span { color: #b04a1c; }
+  .ex-foot a { color: #185fa5; }
+</style>
