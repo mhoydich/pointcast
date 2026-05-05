@@ -17,6 +17,27 @@ const payload = {
     manifest: 'https://pointcast.xyz/nouns-cola-crush.json',
     role: 'playable match-3 arcade surface for the Nouns Cola pilot',
   },
+  nextSprint: {
+    name: 'Nouns Cola launch sprint',
+    human: 'https://pointcast.xyz/next-sprint',
+    manifest: 'https://pointcast.xyz/next-sprint.json',
+    archiveBlock: 'https://pointcast.xyz/b/0338',
+    role: '72-hour sprint for taste-panel signal, preorder intent, sponsor leads, retail doors, co-packer quote paths, and public receipts',
+  },
+  fundableBrief: {
+    name: 'Nouns Cola Fundable Brief',
+    human: 'https://pointcast.xyz/nouns-cola-fundraise',
+    manifest: 'https://pointcast.xyz/nouns-cola-fundraise.json',
+    archiveBlock: 'https://pointcast.xyz/b/0392',
+    thesis: 'Classic cola first, adaptogen lane second.',
+  },
+  caseStudy: {
+    name: 'The Journey To A Nouns Beverage',
+    human: 'https://pointcast.xyz/nouns-cola-case-study',
+    manifest: 'https://pointcast.xyz/nouns-cola-case-study.json',
+    archiveBlock: 'https://pointcast.xyz/b/0394',
+    thesis: 'AI generation accelerated the narrative and campaign stack around the beverage before formulation and compliance work were final.',
+  },
   formulation: {
     product: '12 oz carbonated cola concept',
     targets: {
@@ -29,6 +50,7 @@ const payload = {
     notes: [
       'Recipe and nutrition details require beverage formulator and co-packer validation before sale.',
       'Brand language uses Nouns-inspired CC0 visual grammar.',
+      'Fundable recommendation: launch the classic cola pilot first and treat adaptogen work as a gated R&D branch.',
     ],
   },
   fundraising: {
@@ -150,6 +172,8 @@ const payload = {
   ],
   links: {
     human: 'https://pointcast.xyz/nouns-cola',
+    nextSprint: 'https://pointcast.xyz/next-sprint',
+    nextSprintManifest: 'https://pointcast.xyz/next-sprint.json',
     game: 'https://pointcast.xyz/nouns-cola-crush',
     gameManifest: 'https://pointcast.xyz/nouns-cola-crush.json',
     yieldSandbox: 'https://pointcast.xyz/yield',
