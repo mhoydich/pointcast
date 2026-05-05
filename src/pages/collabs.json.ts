@@ -49,6 +49,12 @@ export const GET: APIRoute = async () => {
       contact: 'hello@pointcast.xyz',
       ping: 'https://pointcast.xyz/ping',
     },
+    joinSystem: {
+      human: 'https://pointcast.xyz/join',
+      json: 'https://pointcast.xyz/join.json',
+      announcementBlock: 'https://pointcast.xyz/b/0435',
+      purpose: 'Turn startup and product ideas into claimable people tasks, agent tasks, and reviewable artifacts.',
+    },
     governance: {
       proposal: 'PC-0005',
       url: 'https://pointcast.xyz/dao#pc-0005',

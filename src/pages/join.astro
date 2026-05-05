@@ -1,0 +1,575 @@
+---
+/**
+ * /join - public build board for people + agent tasks.
+ *
+ * The route turns Mike's old startup/product idea thread into a live
+ * collaboration system: project cards, claimable tasks, and machine-readable
+ * JSON for agents. Companion endpoint: /join.json.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { JOIN_SYSTEM } from '../lib/join-system';
+
+const title = 'Join System - build with PointCast';
+const description =
+  'A public build board that turns BossList, Digital Identity Cartography, TrustCommons, Omni, image messaging, Vibely, and the idea machine into claimable people tasks and agent tasks.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Project',
+  '@id': 'https://pointcast.xyz/join#project',
+  name: JOIN_SYSTEM.title,
+  description,
+  url: 'https://pointcast.xyz/join',
+  dateModified: JOIN_SYSTEM.updatedAt,
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+};
+
+const taskCounts = JOIN_SYSTEM.claimableTasks.reduce(
+  (acc, task) => {
+    acc[task.lane] += 1;
+    return acc;
+  },
+  { agent: 0, people: 0 } as Record<'agent' | 'people', number>,
+);
+
+const primaryProject = JOIN_SYSTEM.projects.find((project) => project.id === 'cartography');
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/join.json', title: 'Join System (JSON)' }]}
+>
+  <main class="join-page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>Join</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker mono">JOIN SYSTEM · PEOPLE TASKS + AGENT TASKS</p>
+      <h1>Build the identity map in public.</h1>
+      <p class="dek">{JOIN_SYSTEM.thesis}</p>
+      <div class="hero__actions" aria-label="Primary links">
+        <a class="btn btn--primary" href="#tasks">Claim a task</a>
+        <a class="btn" href="/join.json">Agent JSON</a>
+        <a class="btn" href="/ping">Ping</a>
+      </div>
+    </header>
+
+    <section class="metrics" aria-label="Join system metrics">
+      <article>
+        <span class="mono">PROJECTS</span>
+        <strong>{JOIN_SYSTEM.projects.length}</strong>
+        <small>from Gmail + PointCast history</small>
+      </article>
+      <article>
+        <span class="mono">AGENT TASKS</span>
+        <strong>{taskCounts.agent}</strong>
+        <small>research, schema, prototype, briefs</small>
+      </article>
+      <article>
+        <span class="mono">PEOPLE TASKS</span>
+        <strong>{taskCounts.people}</strong>
+        <small>taste, intros, calls, permission</small>
+      </article>
+    </section>
+
+    {primaryProject && (
+      <section class="lead-project" id={primaryProject.id}>
+        <p class="kicker mono">PRIMARY WEDGE</p>
+        <div>
+          <h2>{primaryProject.name}</h2>
+          <p>{primaryProject.summary}</p>
+          <p><strong>First build:</strong> {primaryProject.firstWedge}</p>
+        </div>
+      </section>
+    )}
+
+    <section class="loop" aria-label="Operating loop">
+      <div class="section-head">
+        <p class="kicker mono">OPERATING LOOP</p>
+        <h2>Old idea -> claimable work -> shipped artifact.</h2>
+      </div>
+      <ol class="loop__steps">
+        {JOIN_SYSTEM.loop.map((step) => (
+          <li>
+            <span class="loop__num mono">{step.label}</span>
+            <strong>{step.summary}</strong>
+            <p>{step.outputs.join(' / ')}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="projects" aria-label="Project lanes">
+      <div class="section-head">
+        <p class="kicker mono">PROJECT LANES</p>
+        <h2>The old ideas become work surfaces.</h2>
+      </div>
+      <div class="project-list">
+        {JOIN_SYSTEM.projects.map((project) => (
+          <article class="project" id={project.id}>
+            <div class="project__head">
+              <p class="project__status mono">{project.status}</p>
+              <h3>{project.name}</h3>
+            </div>
+            <p class="project__origin mono">{project.origin}</p>
+            <p>{project.summary}</p>
+            <p><strong>First wedge:</strong> {project.firstWedge}</p>
+            <div class="task-columns">
+              <div>
+                <h4 class="mono">Agent tasks</h4>
+                <ul>
+                  {project.agentTasks.slice(0, 3).map((task) => <li>{task}</li>)}
+                </ul>
+              </div>
+              <div>
+                <h4 class="mono">People tasks</h4>
+                <ul>
+                  {project.peopleTasks.slice(0, 3).map((task) => <li>{task}</li>)}
+                </ul>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="tasks" id="tasks" aria-label="Claimable tasks">
+      <div class="section-head">
+        <p class="kicker mono">CLAIMABLE TASKS</p>
+        <h2>Pick one small thing.</h2>
+        <p>
+          A task is ready when it has an owner type, a tight ask, an expected
+          artifact, and a return path. People bring taste and permission.
+          Agents bring speed and structure.
+        </p>
+      </div>
+      <ul class="task-list">
+        {JOIN_SYSTEM.claimableTasks.map((task) => (
+          <li class={`task task--${task.lane}`}>
+            <div class="task__top">
+              <code>{task.id}</code>
+              <span class="mono">{task.lane}</span>
+            </div>
+            <h3>{task.ask}</h3>
+            <p><strong>Owner:</strong> {task.owner}</p>
+            <p><strong>Artifact:</strong> {task.artifact}</p>
+            <p class="task__meta mono">{task.project} · {task.estimate} · {task.status}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="protocol" aria-label="Claim protocol">
+      <div class="section-head">
+        <p class="kicker mono">CLAIM PROTOCOL</p>
+        <h2>How to join without ceremony.</h2>
+      </div>
+      <ol>
+        {JOIN_SYSTEM.claimProtocol.map((item) => <li>{item}</li>)}
+      </ol>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/join.json">/join.json</a></li>
+        <li><a href="/collabs">/collabs</a></li>
+        <li><a href="/briefs">/briefs</a></li>
+        <li><a href="/sprint">/sprint</a></li>
+        <li><a href="/agents.json">/agents.json</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .join-page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 18px 84px;
+    }
+
+    .mono {
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .crumb {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7a7a72;
+    }
+
+    .crumb a,
+    .agent-strip a {
+      color: #a02c2c;
+      text-decoration: none;
+    }
+
+    .crumb a:hover,
+    .agent-strip a:hover {
+      text-decoration: underline;
+    }
+
+    .hero {
+      margin-bottom: 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #d6d4cd;
+    }
+
+    .kicker {
+      margin: 0 0 10px;
+      color: #185FA5;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 780px;
+      margin: 0 0 12px;
+      font-size: clamp(32px, 7vw, 62px);
+      line-height: 0.98;
+    }
+
+    .dek {
+      max-width: 760px;
+      margin: 0;
+      color: #38373A;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid #12110E;
+      color: #12110E;
+      text-decoration: none;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .btn--primary {
+      background: #12110E;
+      color: #fffaf0;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 22px 0;
+    }
+
+    .metrics article {
+      padding: 12px 14px;
+      border: 1px dashed #d6d4cd;
+      background: #fbfaf5;
+    }
+
+    .metrics span {
+      display: block;
+      margin-bottom: 6px;
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .metrics strong {
+      display: block;
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .metrics small {
+      display: block;
+      margin-top: 6px;
+      color: #5F5E5A;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .lead-project {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 18px;
+      margin: 22px 0;
+      padding: 16px 18px;
+      border: 1px solid #185FA5;
+      border-left-width: 5px;
+      background: #EEF4FA;
+    }
+
+    .lead-project h2 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .lead-project p {
+      margin: 0 0 8px;
+      color: #38373A;
+      line-height: 1.5;
+    }
+
+    .section-head {
+      margin: 30px 0 12px;
+    }
+
+    .section-head h2 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .section-head p:not(.kicker) {
+      max-width: 720px;
+      margin: 0;
+      color: #5F5E5A;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .loop__steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .loop__steps li {
+      min-height: 150px;
+      padding: 12px;
+      border: 1px solid #d6d4cd;
+      background: #fff;
+    }
+
+    .loop__num {
+      display: block;
+      margin-bottom: 8px;
+      color: #a02c2c;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .loop__steps strong {
+      display: block;
+      font-size: 13.5px;
+      line-height: 1.35;
+    }
+
+    .loop__steps p {
+      margin: 8px 0 0;
+      color: #5F5E5A;
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+
+    .project-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .project {
+      padding: 15px 16px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #185FA5;
+      background: #fff;
+      scroll-margin-top: 64px;
+    }
+
+    .project__head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .project__head h3 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+
+    .project__status,
+    .project__origin {
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .project p {
+      margin: 8px 0 0;
+      color: #38373A;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .task-columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .task-columns h4 {
+      margin: 0 0 6px;
+      color: #185FA5;
+      font-size: 9.5px;
+    }
+
+    .task-columns ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #38373A;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .task-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .task {
+      padding: 13px 14px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #5F3DC4;
+      background: #faf9ff;
+    }
+
+    .task--people {
+      border-left-color: #0F6E56;
+      background: #f4fbf8;
+    }
+
+    .task__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .task code {
+      overflow-wrap: anywhere;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 11px;
+      color: #12110E;
+    }
+
+    .task__top span {
+      color: #5F5E5A;
+      font-size: 9px;
+    }
+
+    .task h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .task p {
+      margin: 5px 0 0;
+      color: #38373A;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .task__meta {
+      color: #7a7a72 !important;
+      font-size: 9px !important;
+    }
+
+    .protocol {
+      margin-top: 30px;
+      padding: 16px 18px;
+      border: 1px solid #12110E;
+      background: #fbfaf5;
+    }
+
+    .protocol ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #38373A;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .agent-strip {
+      margin-top: 26px;
+      padding-top: 14px;
+      border-top: 1px dashed #d6d4cd;
+      font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .agent-strip__label {
+      margin: 0 0 6px;
+      color: #5F5E5A;
+      font-weight: 500;
+    }
+
+    .agent-strip ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    @media (max-width: 780px) {
+      .metrics,
+      .loop__steps,
+      .task-list,
+      .task-columns,
+      .lead-project {
+        grid-template-columns: 1fr;
+      }
+
+      .loop__steps li {
+        min-height: auto;
+      }
+    }
+  </style>
+</BlockLayout>
