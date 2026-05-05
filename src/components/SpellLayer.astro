@@ -943,6 +943,133 @@
       active.byId.campfire = cf;
     }
 
+    // ─── spark (burst) ───────────────────────────────────────────
+    // 24 thin bright streaks fan radially from a random viewport point —
+    // like striking a flint. Each streak is a 2×12 rect rotated to align
+    // with its travel direction, using the fw dx/dy custom-prop pattern.
+    function castSpark(durationMs) {
+      if (reduce()) return;
+      var count = 24;
+      var cx = (12 + Math.random() * 76).toFixed(1); // vw
+      var cy = (15 + Math.random() * 55).toFixed(1); // vh
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-spark';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 35 + Math.random() * 90;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var rotateDeg = Math.round(angle * 180 / Math.PI + 90);
+        var dur = 500 + Math.floor(Math.random() * 600);
+        s.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          '--spell-spark-rot:' + rotateDeg + 'deg;' +
+          'animation:spell-spark-fly ' + dur + 'ms ease-out forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(s);
+      }
+    }
+
+    // ─── frog (companion) ─────────────────────────────────────────
+    // Hops across the bottom in parabolic arcs — a separate hop keyframe
+    // overlays on the horizontal walk, same composition as pup's bounce.
+    // Avg ~60px/s, hops about every 0.9s. The charm is the airtime.
+    function castFrog(durationMs) {
+      if (active.byId.frog) {
+        var prevFr = active.byId.frog;
+        if (prevFr && prevFr.parentNode) prevFr.parentNode.removeChild(prevFr);
+      }
+      var frog = document.createElement('button');
+      frog.className = 'spell-frog';
+      frog.type = 'button';
+      frog.setAttribute('aria-label', 'A hopping frog. Click to let it leap away.');
+      frog.title = 'click to let the frog hop away';
+      frog.textContent = '🐸';
+      var ltr = Math.random() < 0.5;
+      frog.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 35000;
+      var walkSeconds = Math.max(10, Math.min(30, window.innerWidth / 60));
+      frog.style.cssText =
+        'animation:spell-frog-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-frog-hop 0.9s cubic-bezier(.4,0,.6,1) infinite;';
+      frog.addEventListener('click', function () {
+        if (frog.parentNode) frog.parentNode.removeChild(frog);
+        active.byId.frog = null;
+      });
+      $layer.appendChild(frog);
+      active.byId.frog = frog;
+      setTimeout(function () {
+        if (frog && frog.parentNode) frog.parentNode.removeChild(frog);
+        if (active.byId.frog === frog) active.byId.frog = null;
+      }, dur);
+    }
+
+    // ─── leaves (ambient) ─────────────────────────────────────────
+    // 25 leaf emoji spin and drift down the viewport. Like snow but the
+    // fall keyframe also rotates each leaf — spin baked in proportionally
+    // to fall distance. Negative delay puts leaves mid-fall on cast.
+    function castLeaves() {
+      if (active.byId.leaves) return;
+      var lv = document.createElement('button');
+      lv.className = 'spell-leaves';
+      lv.type = 'button';
+      lv.setAttribute('aria-label', 'Falling leaves overlay. Click to dismiss.');
+      lv.title = 'click to clear the leaves';
+      var glyphs = ['🍂', '🍁', '🍂', '🍁', '🌿', '🍂', '🍁'];
+      var html = '';
+      for (var i = 0; i < 25; i++) {
+        var leftPct = (Math.random() * 106 - 3).toFixed(1);
+        var delay = (Math.random() * 11).toFixed(2);
+        var dur = (7 + Math.random() * 8).toFixed(2);
+        var size = 13 + Math.floor(Math.random() * 13);
+        var drift = ((Math.random() - 0.5) * 200).toFixed(1);
+        var spin = Math.random() < 0.5 ? 360 : -360;
+        var glyph = glyphs[Math.floor(Math.random() * glyphs.length)];
+        html += '<span class="spell-leaves__leaf" style="' +
+          'left:' + leftPct + '%;' +
+          'font-size:' + size + 'px;' +
+          'animation-delay:-' + delay + 's;' +
+          'animation-duration:' + dur + 's;' +
+          '--spell-leaves-drift:' + drift + 'px;' +
+          '--spell-leaves-spin:' + spin + 'deg;' +
+          '">' + glyph + '</span>';
+      }
+      lv.innerHTML = html;
+      lv.addEventListener('click', function () {
+        if (lv.parentNode) lv.parentNode.removeChild(lv);
+        active.byId.leaves = null;
+      });
+      $layer.appendChild(lv);
+      active.byId.leaves = lv;
+    }
+
+    // ─── lantern (ambient) ────────────────────────────────────────
+    // A paper lantern in the top-left corner — fills the last open corner
+    // (candle=BR, chimes=TR, campfire=BL). Swings on its hang-point via
+    // transform-origin at the top-center. Warm glow via drop-shadow.
+    function castLantern() {
+      if (active.byId.lantern) return;
+      var l = document.createElement('button');
+      l.className = 'spell-lantern';
+      l.type = 'button';
+      l.setAttribute('aria-label', 'A paper lantern. Click to extinguish.');
+      l.title = 'click to extinguish';
+      l.textContent = '🏮';
+      l.addEventListener('click', function () {
+        if (l.parentNode) l.parentNode.removeChild(l);
+        active.byId.lantern = null;
+      });
+      $layer.appendChild(l);
+      active.byId.lantern = l;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -974,6 +1101,10 @@
         case 'turtle':    castTurtle(90000); break;
         case 'ghost':     castGhost(50000); break;
         case 'campfire':  castCampfire(); break;
+        case 'spark':     castSpark(2000); break;
+        case 'frog':      castFrog(35000); break;
+        case 'leaves':    castLeaves(); break;
+        case 'lantern':   castLantern(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -1967,6 +2098,140 @@
     50%      { opacity: 1; transform: translateX(-50%) scaleX(1.18); }
   }
 
+  /* ── spark (burst) ──────────────────────────────────────────── */
+  /* Thin bright 2×12 streaks rotated to face their travel direction;
+     --spell-spark-rot aligns the streak; --spell-fw-dx/dy drive flight. */
+  .spell-spark {
+    position: absolute;
+    width: 2px;
+    height: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #ffe060 55%, rgba(255, 200, 40, 0) 100%);
+    border-radius: 1px;
+    pointer-events: none;
+    will-change: transform, opacity;
+    transform-origin: 50% 50%;
+  }
+  @keyframes spell-spark-fly {
+    0% {
+      transform: translate(-50%, -50%) rotate(var(--spell-spark-rot, 0deg));
+      opacity: 1;
+    }
+    45% { opacity: 0.9; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-fw-dx, 0px)),
+        calc(-50% + var(--spell-fw-dy, 0px))
+      ) rotate(var(--spell-spark-rot, 0deg));
+      opacity: 0;
+    }
+  }
+
+  /* ── frog (companion) ────────────────────────────────────────── */
+  /* Bottom companion with a separate hop keyframe — same composition
+     as pup bounce but shaped as a parabola: quick up, land, pause. */
+  .spell-frog {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 4px rgba(47, 143, 95, 0.4));
+  }
+  @keyframes spell-frog-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-frog-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  /* Up at 28%, land at 55%, pause on ground to 82%, then repeat. */
+  @keyframes spell-frog-hop {
+    0%, 100% { transform: translateY(0); }
+    28%      { transform: translateY(-22px); }
+    55%      { transform: translateY(0); }
+    82%      { transform: translateY(0); }
+  }
+  .spell-frog[data-dir='rtl'] {
+    animation-name: spell-frog-walk-rtl, spell-frog-hop-rtl !important;
+  }
+  @keyframes spell-frog-hop-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    28%      { transform: scaleX(-1) translateY(-22px); }
+    55%      { transform: scaleX(-1) translateY(0); }
+    82%      { transform: scaleX(-1) translateY(0); }
+  }
+
+  /* ── leaves (ambient) ────────────────────────────────────────── */
+  /* Full-viewport overlay; each leaf is an emoji that falls and spins.
+     Rotation is baked into the single fall keyframe — proportional to
+     fall distance, so faster leaves spin faster. Like snow but warmer. */
+  .spell-leaves {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-leaves__leaf {
+    position: absolute;
+    top: -30px;
+    line-height: 1;
+    pointer-events: none;
+    animation: spell-leaves-fall linear infinite;
+  }
+  @keyframes spell-leaves-fall {
+    0%   { top: -30px; transform: translateX(0) rotate(0deg); opacity: 0.95; }
+    85%  { opacity: 0.85; }
+    100% {
+      top: 108vh;
+      transform: translateX(var(--spell-leaves-drift, 0px)) rotate(var(--spell-leaves-spin, 360deg));
+      opacity: 0.2;
+    }
+  }
+
+  /* ── lantern (ambient) ───────────────────────────────────────── */
+  /* Top-left corner; swings from its hang-point (transform-origin top)
+     like a real hung lantern. Warm text-shadow + drop-shadow glow. */
+  .spell-lantern {
+    position: fixed;
+    top: 12px;
+    left: 24px;
+    width: 44px;
+    height: 52px;
+    font-size: 36px;
+    line-height: 52px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    text-shadow: 0 0 18px rgba(212, 80, 40, 0.75), 0 0 36px rgba(220, 120, 50, 0.4);
+    filter: drop-shadow(0 0 10px rgba(220, 100, 40, 0.6));
+    transform-origin: 50% 0;
+    animation: spell-lantern-swing 3.5s ease-in-out infinite;
+  }
+  @keyframes spell-lantern-swing {
+    0%, 100% { transform: rotate(-3deg) translateY(0); }
+    50%      { transform: rotate(3deg) translateY(-5px); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -1978,6 +2243,7 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
+    .spell-frog,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -1993,7 +2259,8 @@
     .spell-fog__wisp,
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
-    .spell-campfire__glow { animation: none; }
+    .spell-campfire__glow,
+    .spell-lantern { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2002,7 +2269,8 @@
     .spell-firefly,
     .spell-bee,
     .spell-turtle,
-    .spell-ghost { left: 50%; transform: translateX(-50%); }
+    .spell-ghost,
+    .spell-frog { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2010,11 +2278,13 @@
     .spell-firefly[data-dir='rtl'],
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
-    .spell-ghost[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-ghost[data-dir='rtl'],
+    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
     .spell-snow__flake { display: none; } /* snow motion-only */
+    .spell-leaves__leaf { display: none; } /* leaves motion-only */
     .spell-starfield__star { opacity: 0.7; }
     .spell-firefly__glow { opacity: 0.7; }
     .spell-chimes__pipe { transform: rotate(0deg); }
@@ -2024,5 +2294,6 @@
     .spell-mood { filter: hue-rotate(60deg); } /* fixed warm amber */
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
+    .spell-lantern { transform: rotate(0deg); } /* static lantern */
   }
 </style>
