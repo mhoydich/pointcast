@@ -1,0 +1,773 @@
+---
+/**
+ * /nouns-nation-battler-bowl - The Bowl path: live-as-it-can-be surface
+ * for Nouns Nation Battler S6's two-week table.
+ *
+ * Sources: src/lib/battler-bowl-state.ts (single source of truth for the
+ * 8 founding gangs, the 14-day calendar, championship history, and the
+ * lock-status contract). The calendar's "now" cursor is computed from
+ * the real anchored season start date — no hardcoded day pin.
+ *
+ * Lock status defaults to 'pending' until a real result source plugs in.
+ * When pending, the page falls back to structural commentary; when set
+ * (locked / bubble / out / in), the page renders a status pill on the
+ * gang card and rolls counts into the hero.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import {
+  FOUNDING_GANGS,
+  SEASON_6,
+  annotateCalendar,
+  dayNumber,
+  daysToLock,
+  type LockStatus,
+} from '../lib/battler-bowl-state';
+
+const ch = CHANNELS.BTL;
+const now = new Date();
+const today = dayNumber(now);
+const daysLeft = daysToLock(now);
+const sprintCalendar = annotateCalendar(now);
+const currentMilestone = sprintCalendar.find((m) => m.state === 'now') ?? sprintCalendar[0];
+
+const lockCounts = FOUNDING_GANGS.reduce(
+  (acc, g) => {
+    acc[g.lockStatus] = (acc[g.lockStatus] ?? 0) + 1;
+    return acc;
+  },
+  {} as Record<LockStatus, number>,
+);
+const allPending = (lockCounts.pending ?? 0) === FOUNDING_GANGS.length;
+
+const lockPillCopy: Record<LockStatus, { label: string; tone: string }> = {
+  pending:  { label: '?',       tone: 'pending' },
+  in:       { label: 'IN',      tone: 'in' },
+  locked:   { label: 'LOCKED',  tone: 'lock' },
+  bubble:   { label: 'BUBBLE',  tone: 'bubble' },
+  out:      { label: 'OUT',     tone: 'out' },
+};
+
+const asOf = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+  timeZoneName: 'short',
+}).format(now);
+
+const BOWL_BANDS = [
+  {
+    code: 'LOCK',
+    title: 'Lock band',
+    requirement: '8+ wins by D14',
+    population: 'top 4 of 8',
+    note: 'Earns a Bowl seed and the rights-receipt package. Win column does the work; tiebreakers fall to points, then fan count, then rivalry record.',
+  },
+  {
+    code: 'BUBBLE',
+    title: 'Bubble band',
+    requirement: '5–7 wins by D14',
+    population: 'middle 2–3',
+    note: 'Plays the play-in slate. One Sprint-Storm boss field decides at least one bubble seat every season. Re-staking the roster pre-lock is the move.',
+  },
+  {
+    code: 'OUT',
+    title: 'Out band',
+    requirement: '4 or fewer wins by D14',
+    population: 'bottom 1–2',
+    note: 'Builder Circuit relegation lane opens. Imported nations get a graduation slot if the bottom seat is structurally vacant.',
+  },
+];
+
+
+const BOSS_FIELDS = [
+  { code: 'MR', title: 'Monsoon Rift',  effect: 'Wet, low-visibility lane fights. Healers over-perform. Punishes drafts that lean on clean range trades.' },
+  { code: 'NC', title: 'Neon Crown',    effect: 'Clean field, no weather modifier. Paper advantages cash in. The "default" boss, but it is rarer than people remember.' },
+  { code: 'SS', title: 'Scrap Storm',   effect: 'Debris hazards and broken sightlines. Scrappy gangs and emergency-mint healers eat clean teams alive.' },
+  { code: 'BF', title: 'Blackout Fog',  effect: 'Reduced read distance. Auction-tower volleys and chant-based morale plays exit the meta; ambushes return.' },
+];
+
+const READING_ORDER = [
+  { tag: '0411', day: 'Thu Apr 30', kicker: 'Open',   line: 'Late-April leagues + Battler S6 checkpoint.' },
+  { tag: '0422', day: 'Sat May 2',  kicker: 'Follow', line: '48-hour follow. Boss-field rotation doing the heavy lifting.' },
+  { tag: '0434', day: 'Mon May 4',  kicker: 'Cap',    line: 'Trilogy capper. Cadence as the editorial product.' },
+  { tag: '——',   day: 'Thu May 7',  kicker: 'Next',   line: 'Bowl-path scoreboard if the table has tightened by then.' },
+];
+
+const FAST_PATHS = [
+  { label: 'Moon Tournament', href: '/nouns-nation-battler-moon/',    note: 'Once-per-full-moon knockout. Different format, same gangs.' },
+  { label: 'Battle Desk',     href: '/nouns-nation-battler/',         note: 'Live scorebug, league table, match queue, top Nouns.' },
+  { label: 'V3',              href: '/nouns-nation-battler-v3/',      note: 'Federation desk: Sprint Room, Recap Desk, Pocket Desk, Agent Ops.' },
+  { label: 'Sprint Room',     href: '/nouns-nation-battler-v3#sprint-room', note: 'S6 14-day calendar, scoreboard, agent queue.' },
+  { label: 'Recap Desk',      href: '/nouns-nation-battler-v3#season-recap', note: 'Champions, MVPs, story arcs, league memory.' },
+  { label: 'CH.BTL archive',  href: '/c/battler/',                    note: 'Every Battler beat in one channel index.' },
+  { label: 'Game JSON',       href: '/nouns-nation-battler.json',     note: 'Machine-readable league state for agents.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsEvent',
+  name: 'Nouns Nation Battler — Season 6 Bowl Path',
+  description:
+    'Structural surface for the Nouns Nation Battler S6 two-week table as it rolls toward the Bowl: lock/bubble/out bands across 8 founding gangs, a 14-day Sprint Room calendar, the boss-field rotation that decides the second half, and fast paths to the live Battle Desk.',
+  url: 'https://pointcast.xyz/nouns-nation-battler-bowl/',
+  sport: 'Auto battler',
+  inLanguage: 'en-US',
+};
+---
+
+<BlockLayout
+  title="PointCast Battle Desk · Bowl Path"
+  description="The Bowl path for Nouns Nation Battler S6: lock/bubble/out bands across 8 founding gangs, the 14-day Sprint Room calendar, the boss-field rotation that decides the second half, and fast paths to the live Battle Desk."
+  image="/images/og/nouns-battler-v3.png"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/nouns-nation-battler-bowl.json', title: 'Nouns Nation Battler Bowl-path snapshot (JSON)' },
+    { type: 'application/json', href: '/nouns-nation-battler.json', title: 'Nouns Nation Battler manifest (JSON)' },
+    { type: 'application/json', href: '/nouns-nation-battler-sprint.json', title: 'Season 6 Sprint Room missions (JSON)' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/nouns-battler-v3.png',
+    buttons: [
+      { label: 'Battle Desk',  action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler/' },
+      { label: 'Watch V3',     action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-v3/' },
+      { label: 'Sprint Room',  action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler-v3#sprint-room' },
+      { label: 'CH.BTL',       action: 'link', target: 'https://pointcast.xyz/c/battler/' },
+      { label: 'Game JSON',    action: 'link', target: 'https://pointcast.xyz/nouns-nation-battler.json' },
+    ],
+  }}
+>
+  <main
+    class="bowl-path"
+    style={`--btl: ${ch.color600}; --btl-dark: ${ch.color800}; --btl-soft: ${ch.color50};`}
+  >
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/c/battler/">CH.BTL</a>
+      <span aria-hidden="true">/</span>
+      <a href="/nouns-nation-battler/">Battle Desk</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Bowl Path</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CH.BTL / {SEASON_6.name} / Bowl Path · as of {asOf}</p>
+      <h1>The Bowl is no longer abstract.</h1>
+      <p class="dek">
+        The two-week table is {today >= 7 ? 'past its midpoint' : 'opening'}. This page is the
+        structural read on top of the live scoreboard — what the lock band looks like, who is on
+        the bubble by structure, what boss fields decide the second half, and where today sits
+        inside the 14-day Sprint Room. For current wins, points, and fan counts, the
+        <a href="/nouns-nation-battler/">Battle Desk</a> is the source of truth; this page's
+        live state is also <a href="/nouns-nation-battler-bowl.json">readable as JSON</a>.
+      </p>
+      <div class="hero-strip">
+        <span class="pill pill--now">D{today} · {currentMilestone.title}</span>
+        <span class="pill">{daysLeft > 0 ? `${daysLeft} days to lock` : daysLeft === 0 ? 'Lock day' : `${Math.abs(daysLeft)} days past lock`}</span>
+        <span class="pill">8 founding gangs</span>
+        {!allPending && (
+          <span class="pill pill--ledger">
+            {(lockCounts.locked ?? 0)}L · {(lockCounts.in ?? 0)}I · {(lockCounts.bubble ?? 0)}B · {(lockCounts.out ?? 0)}O
+          </span>
+        )}
+      </div>
+      {allPending && (
+        <p class="hero__note">
+          Lock status reads as <code>pending</code> until a beat brings real signal. The page
+          shows structural framing in the meantime — no fabricated records.
+        </p>
+      )}
+    </header>
+
+    <section class="bands" aria-labelledby="bands-title">
+      <header class="section-head">
+        <p class="kicker">Lock / bubble / out</p>
+        <h2 id="bands-title">Three bands by D14.</h2>
+      </header>
+      <div class="band-grid">
+        {BOWL_BANDS.map((band) => (
+          <article class={`band band--${band.code.toLowerCase()}`}>
+            <p class="band__code">{band.code}</p>
+            <h3>{band.title}</h3>
+            <p class="band__req"><strong>Requirement:</strong> {band.requirement}</p>
+            <p class="band__pop"><strong>Population:</strong> {band.population}</p>
+            <p class="band__note">{band.note}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="bracket" aria-labelledby="bracket-title">
+      <header class="section-head">
+        <p class="kicker">House league</p>
+        <h2 id="bracket-title">The eight gangs that fill the bracket.</h2>
+        <p class="section-dek">
+          Standings live; identities don't. Each gang has a stable color, a stable Noun, and a
+          structural reason it does or doesn't survive a given boss field.
+        </p>
+      </header>
+      <ol class="gang-grid">
+        {FOUNDING_GANGS.map((gang) => (
+          <li class="gang-card" style={`--gang: ${gang.color};`}>
+            <span class="gang-card__noun-frame" aria-hidden="true">
+              <img
+                src={`https://noun.pics/${gang.noun}.svg`}
+                alt=""
+                width="40"
+                height="40"
+                loading="lazy"
+                style="image-rendering: pixelated;"
+                onerror="this.style.visibility='hidden'"
+              />
+            </span>
+            <p class="gang-card__code">
+              <span class="gang-card__short">{gang.short}</span>
+              {gang.lockStatus !== 'pending' && (
+                <span class={`gang-card__lock gang-card__lock--${lockPillCopy[gang.lockStatus].tone}`}>
+                  {lockPillCopy[gang.lockStatus].label}
+                </span>
+              )}
+            </p>
+            <h3>{gang.name}</h3>
+            {(gang.championships.length > 0 || gang.defending) && (
+              <p class="gang-card__history">
+                {gang.championships.map((s, i) => (
+                  <span class={`gang-card__champ ${gang.defending && i === gang.championships.length - 1 ? 'gang-card__champ--defending' : ''}`}>
+                    {s}{gang.defending && i === gang.championships.length - 1 ? ' · DEF' : ''}
+                  </span>
+                ))}
+              </p>
+            )}
+            <p class="gang-card__line">{gang.line}</p>
+          </li>
+        ))}
+      </ol>
+      <p class="bracket__source">
+        Live wins, points, and fan count → <a href="/nouns-nation-battler/">Battle Desk</a> · <a href="/nouns-nation-battler.json">Game JSON</a>
+      </p>
+    </section>
+
+    <section class="calendar" aria-labelledby="calendar-title">
+      <header class="section-head">
+        <p class="kicker">Sprint Room · 14 days</p>
+        <h2 id="calendar-title">Where today sits in the lock cycle.</h2>
+      </header>
+      <ol class="calendar-rail">
+        {sprintCalendar.map((day) => (
+          <li class={`cal-step cal-step--${day.state}`}>
+            <p class="cal-step__day">{day.day}</p>
+            <h3>{day.title}</h3>
+            <p class="cal-step__note">{day.note}</p>
+            <span class={`cal-step__state cal-state--${day.state}`}>{day.state.toUpperCase()}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="fields" aria-labelledby="fields-title">
+      <header class="section-head">
+        <p class="kicker">Film room</p>
+        <h2 id="fields-title">Four boss fields decide the second half.</h2>
+        <p class="section-dek">
+          The boss-field rotation is the league's volatility engine. Same matchup, different
+          field, materially different result distributions. The reason you can't read a single
+          weekend in isolation — look at three.
+        </p>
+      </header>
+      <div class="field-grid">
+        {BOSS_FIELDS.map((field) => (
+          <article class="field-card">
+            <p class="field-card__code">{field.code}</p>
+            <h3>{field.title}</h3>
+            <p>{field.effect}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="cadence" aria-labelledby="cadence-title">
+      <header class="section-head">
+        <p class="kicker">Sports Desk cadence</p>
+        <h2 id="cadence-title">The desk shows up on a schedule.</h2>
+        <p class="section-dek">
+          A trilogy proved the Thu→Sat→Mon shape. The next beat lands Thursday, with this page
+          to point at if the table has tightened by then.
+        </p>
+      </header>
+      <ol class="cadence-list">
+        {READING_ORDER.map((beat) => (
+          <li class="cadence-row">
+            <span class="cadence-row__tag">
+              {beat.tag === '——' ? '——' : <a href={`/b/${beat.tag}`}>{beat.tag}</a>}
+            </span>
+            <span class="cadence-row__day">{beat.day}</span>
+            <span class="cadence-row__kicker">{beat.kicker}</span>
+            <span class="cadence-row__line">{beat.line}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="paths" aria-labelledby="paths-title">
+      <header class="section-head">
+        <p class="kicker">Fast paths</p>
+        <h2 id="paths-title">Where to look next.</h2>
+      </header>
+      <ul class="path-grid">
+        {FAST_PATHS.map((path) => (
+          <li class="path-card">
+            <a href={path.href}>
+              <strong>{path.label}</strong>
+              <span>{path.note}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="signoff">
+      <p>
+        Filed from the <a href="/nouns-nation-battler/">Battle Desk</a>, El Segundo. Format
+        notes are structural; live numbers live on the desk and in
+        <a href="/nouns-nation-battler.json">Game JSON</a>. The Bowl path is what you walk
+        when wins, points, and fan counts agree.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .bowl-path {
+    --paper: #f7f2e8;
+    --ink: #101216;
+    --muted: #5e6470;
+    --line: rgba(16, 18, 22, 0.16);
+    --panel: #fffdf8;
+    --mint: #d8f4df;
+    --blue: #dbeafe;
+    --amber: #ffe9ad;
+    --rose: #fde2e0;
+    min-height: 100vh;
+    padding: 16px clamp(12px, 2.5vw, 30px) 64px;
+    color: var(--ink);
+    background:
+      linear-gradient(90deg, rgba(16, 18, 22, 0.04) 1px, transparent 1px),
+      linear-gradient(rgba(16, 18, 22, 0.04) 1px, transparent 1px),
+      radial-gradient(circle at 12% 4%, rgba(216, 244, 223, 0.95), transparent 28%),
+      radial-gradient(circle at 92% 14%, rgba(255, 233, 173, 0.85), transparent 30%),
+      radial-gradient(circle at 50% 92%, rgba(253, 226, 224, 0.7), transparent 38%),
+      var(--paper);
+    background-size: 24px 24px, 24px 24px, auto, auto, auto, auto;
+    font-family: var(--pc-font-sans, ui-sans-serif, system-ui, sans-serif);
+  }
+
+  .bowl-path * { box-sizing: border-box; }
+  .bowl-path a { color: inherit; text-decoration: none; }
+  .bowl-path p, .bowl-path h1, .bowl-path h2, .bowl-path h3 { margin: 0; }
+
+  .crumb,
+  .kicker,
+  .pill,
+  .band__code,
+  .gang-card__code,
+  .cal-step__day,
+  .cal-step__state,
+  .field-card__code,
+  .cadence-row__tag,
+  .cadence-row__day,
+  .cadence-row__kicker {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+
+  .crumb {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .crumb a { border-bottom: 1px dotted currentColor; }
+  .crumb [aria-current] { color: var(--ink); }
+
+  .kicker {
+    color: var(--btl-dark);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .hero {
+    padding: 28px clamp(16px, 3vw, 32px);
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    box-shadow: 6px 6px 0 var(--ink);
+    margin-bottom: 28px;
+  }
+  .hero h1 {
+    font-size: clamp(32px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  .hero .dek {
+    font-size: 17px;
+    line-height: 1.5;
+    color: #2a2e36;
+    max-width: 70ch;
+  }
+  .hero .dek a { border-bottom: 1px solid var(--btl); }
+  .hero-strip {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 5px 10px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .pill--now {
+    background: var(--btl);
+    color: #fff;
+    border-color: var(--btl-dark);
+  }
+  .pill--ledger {
+    background: #1a1a1a;
+    color: #ffd400;
+    border-color: #1a1a1a;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.12em;
+  }
+
+  .hero__note {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--btl);
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .hero__note code {
+    background: var(--btl-soft);
+    color: var(--btl-dark);
+    padding: 1px 5px;
+    border: 1px solid var(--btl);
+  }
+
+  .section-head {
+    margin-bottom: 16px;
+    max-width: 70ch;
+  }
+  .section-head h2 {
+    font-size: clamp(22px, 3vw, 30px);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .section-dek {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .bands { margin-bottom: 32px; }
+  .band-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .band {
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    padding: 18px;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .band--lock   { background: var(--mint); }
+  .band--bubble { background: var(--amber); }
+  .band--out    { background: var(--rose); }
+  .band__code {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    margin-bottom: 6px;
+  }
+  .band h3 {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+  .band p {
+    font-size: 13px;
+    line-height: 1.45;
+    margin-bottom: 6px;
+  }
+  .band p:last-child { margin-bottom: 0; }
+  .band strong { font-weight: 600; }
+
+  .bracket { margin-bottom: 32px; }
+  .gang-grid {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .gang-card {
+    position: relative;
+    padding: 16px;
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    border-left: 8px solid var(--gang);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .gang-card__noun-frame {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 44px; height: 44px;
+    background: var(--gang);
+    border: 2px solid var(--ink);
+    margin-bottom: 10px;
+  }
+  .gang-card__code {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .gang-card__code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gang-card__short {
+    color: var(--gang);
+    font-weight: 700;
+  }
+  .gang-card__lock {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--ink);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+  }
+  .gang-card__lock--lock    { background: #d8f4df; color: #155724; }
+  .gang-card__lock--in      { background: #ffd400; color: #5a4400; }
+  .gang-card__lock--bubble  { background: #ffe9ad; color: #6a4900; }
+  .gang-card__lock--out     { background: #fde2e0; color: #7a1f15; }
+  .gang-card h3 {
+    font-size: 17px;
+    margin-bottom: 6px;
+  }
+  .gang-card__history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .gang-card__champ {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+  }
+  .gang-card__champ--defending {
+    background: #ffd400;
+    color: #5a4400;
+    font-weight: 700;
+  }
+  .gang-card__line {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #2a2e36;
+  }
+  .bracket__source {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .bracket__source a {
+    border-bottom: 1px dotted currentColor;
+    color: var(--btl-dark);
+  }
+
+  .calendar { margin-bottom: 32px; }
+  .calendar-rail {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .cal-step {
+    position: relative;
+    padding: 14px;
+    background: var(--panel);
+    border: 1.5px solid var(--ink);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .cal-step--done   { opacity: 0.7; background: #f0eee5; }
+  .cal-step--now    { background: var(--btl); color: #fff; border-color: var(--btl-dark); box-shadow: 4px 4px 0 var(--btl-dark); }
+  .cal-step--now h3 { color: #fff; }
+  .cal-step--now .cal-step__note { color: rgba(255,255,255,0.9); }
+  .cal-step--now .cal-step__day  { color: rgba(255,255,255,0.85); }
+  .cal-step__day {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .cal-step h3 {
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+  .cal-step__note {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #2a2e36;
+  }
+  .cal-step__state {
+    position: absolute;
+    top: 8px; right: 8px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    padding: 2px 5px;
+    border: 1px solid currentColor;
+  }
+  .cal-state--now  { color: #fff; }
+  .cal-state--done { color: var(--muted); }
+  .cal-state--next { color: var(--btl-dark); }
+
+  .fields { margin-bottom: 32px; }
+  .field-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .field-card {
+    padding: 16px;
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .field-card__code {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--btl-dark);
+    margin-bottom: 4px;
+  }
+  .field-card h3 {
+    font-size: 17px;
+    margin-bottom: 8px;
+  }
+  .field-card p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #2a2e36;
+  }
+
+  .cadence { margin-bottom: 32px; }
+  .cadence-list {
+    list-style: none; padding: 0; margin: 0;
+    border: 2px solid var(--ink);
+    background: var(--panel);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .cadence-row {
+    display: grid;
+    grid-template-columns: 70px 110px 80px 1fr;
+    gap: 12px;
+    align-items: baseline;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .cadence-row:last-child { border-bottom: none; }
+  .cadence-row__tag {
+    font-weight: 700;
+    color: var(--btl-dark);
+  }
+  .cadence-row__tag a {
+    border-bottom: 1px dotted currentColor;
+  }
+  .cadence-row__day,
+  .cadence-row__kicker {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .cadence-row__line {
+    color: #2a2e36;
+    line-height: 1.45;
+  }
+  @media (max-width: 640px) {
+    .cadence-row {
+      grid-template-columns: 60px 1fr;
+      grid-template-areas: 'tag kicker' 'day line' 'tag line';
+    }
+    .cadence-row__tag    { grid-area: tag; }
+    .cadence-row__day    { grid-area: day; }
+    .cadence-row__kicker { grid-area: kicker; }
+    .cadence-row__line   { grid-area: line; }
+  }
+
+  .paths { margin-bottom: 32px; }
+  .path-grid {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .path-card a {
+    display: block;
+    padding: 14px;
+    background: var(--panel);
+    border: 1.5px solid var(--ink);
+    box-shadow: 2px 2px 0 var(--ink);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .path-card a:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--btl-dark);
+  }
+  .path-card strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: var(--btl-dark);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.04em;
+  }
+  .path-card span {
+    display: block;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  .signoff {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    margin-top: 18px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 70ch;
+  }
+  .signoff a {
+    border-bottom: 1px dotted currentColor;
+    color: var(--btl-dark);
+  }
+</style>

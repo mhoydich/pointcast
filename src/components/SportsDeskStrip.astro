@@ -1,0 +1,316 @@
+---
+/**
+ * <SportsDeskStrip /> — homepage anchor for the BTL Sports Desk beat.
+ *
+ * Surfaces the latest BTL READ block (the most recent Sports Desk beat),
+ * the trilogy that established the Thu→Sat→Mon cadence, and the link to
+ * the Bowl path page. Lives on the home grid so the desk is a permanent
+ * fixture, not a tile that ages out.
+ *
+ * Per Mike 2026-05-04 sprint plan: "Bowl path visible, cadence kept" —
+ * deliverable 3 of 3 (after the Bowl page and the Monday beat).
+ */
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+
+const ch = CHANNELS.BTL;
+
+const btlBlocks = (await getCollection('blocks', ({ data }) =>
+  !data.draft && data.channel === 'BTL' && data.type === 'READ'
+)).sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const latest = btlBlocks[0] ?? null;
+const trilogyIds = ['0411', '0422', '0434'];
+const trilogy = trilogyIds
+  .map((id) => btlBlocks.find((b) => b.data.id === id))
+  .filter(Boolean);
+
+function shortDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  }).format(date);
+}
+---
+
+{latest && (
+  <aside class="sds" aria-labelledby="sds-title" style={`--btl: ${ch.color600}; --btl-dark: ${ch.color800}; --btl-soft: ${ch.color50};`}>
+    <div class="sds__head">
+      <p class="sds__kicker mono">CH.BTL · SPORTS DESK · CADENCE</p>
+      <h2 class="sds__title" id="sds-title">
+        The desk shows up on a schedule.
+      </h2>
+      <p class="sds__strap">
+        Three beats so far. Next one lands Thursday. The Bowl path now has a structural surface
+        to point at when the table tightens.
+      </p>
+    </div>
+
+    <a class="sds__latest" href={`/b/${latest.data.id}`} aria-label={`Latest beat: ${latest.data.title}`}>
+      <span class="sds__latest-noun" aria-hidden="true">
+        <img
+          src={`https://noun.pics/${latest.data.noun ?? Number(latest.data.id)}.svg`}
+          alt=""
+          width="44"
+          height="44"
+          loading="lazy"
+          style="image-rendering: pixelated;"
+          onerror="this.style.visibility='hidden'"
+        />
+      </span>
+      <span class="sds__latest-copy">
+        <span class="sds__latest-meta mono">
+          <span class="sds__latest-tag">{latest.data.id}</span>
+          <span class="sds__latest-date">{shortDate(latest.data.timestamp)}</span>
+          <span class="sds__latest-pill">LATEST</span>
+        </span>
+        <strong class="sds__latest-title">{latest.data.title}</strong>
+        <span class="sds__latest-dek">{latest.data.dek}</span>
+      </span>
+    </a>
+
+    <ol class="sds__trilogy" aria-label="Sports Desk trilogy">
+      {trilogy.map((b, i) => (
+        <li class={`sds__beat ${i === trilogy.length - 1 ? 'sds__beat--current' : ''}`}>
+          <a href={`/b/${b!.data.id}`}>
+            <span class="sds__beat-tag mono">{b!.data.id}</span>
+            <span class="sds__beat-day mono">{shortDate(b!.data.timestamp)}</span>
+            <span class="sds__beat-title">{b!.data.title.split('—')[0].trim()}</span>
+          </a>
+        </li>
+      ))}
+      <li class="sds__beat sds__beat--next">
+        <span>
+          <span class="sds__beat-tag mono">——</span>
+          <span class="sds__beat-day mono">Thu May 7</span>
+          <span class="sds__beat-title">Next beat · Bowl-path scoreboard if the table has tightened</span>
+        </span>
+      </li>
+    </ol>
+
+    <nav class="sds__paths mono" aria-label="Battler fast paths">
+      <a href="/nouns-nation-battler-bowl/" class="sds__path sds__path--primary">▸ Bowl path</a>
+      <a href="/nouns-nation-battler/">Battle Desk</a>
+      <a href="/nouns-nation-battler-v3/">V3</a>
+      <a href="/c/battler/">CH.BTL</a>
+    </nav>
+  </aside>
+)}
+
+<style>
+  .sds {
+    --paper: #fffdf8;
+    --ink: #101216;
+    --muted: #5e6470;
+    --line: rgba(16, 18, 22, 0.16);
+    margin: 14px 0;
+    padding: 18px clamp(14px, 2.5vw, 22px);
+    border: 2px solid var(--ink);
+    box-shadow: 5px 5px 0 var(--ink);
+    background:
+      linear-gradient(90deg, rgba(16, 18, 22, 0.04) 1px, transparent 1px),
+      linear-gradient(rgba(16, 18, 22, 0.04) 1px, transparent 1px),
+      radial-gradient(circle at 92% 6%, var(--btl-soft) 0%, transparent 38%),
+      radial-gradient(circle at 4% 96%, rgba(255, 233, 173, 0.55), transparent 32%),
+      var(--paper);
+    background-size: 24px 24px, 24px 24px, auto, auto, auto;
+    color: var(--ink);
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+    grid-template-areas:
+      'head     latest'
+      'trilogy  trilogy'
+      'paths    paths';
+    gap: 14px clamp(14px, 2.5vw, 22px);
+    font-family: var(--pc-font-sans, ui-sans-serif, system-ui, sans-serif);
+  }
+
+  .sds * { box-sizing: border-box; }
+  .sds a { color: inherit; text-decoration: none; }
+  .sds p, .sds h2, .sds ol { margin: 0; }
+  .sds .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    letter-spacing: 0.06em;
+  }
+
+  .sds__head { grid-area: head; }
+  .sds__kicker {
+    color: var(--btl-dark);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 6px;
+  }
+  .sds__title {
+    font-size: clamp(20px, 2.4vw, 28px);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .sds__strap {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .sds__latest {
+    grid-area: latest;
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    align-items: start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--btl);
+    color: #fff;
+    border: 2px solid var(--ink);
+    box-shadow: 3px 3px 0 var(--ink);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .sds__latest:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .sds__latest-noun {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 56px; height: 56px;
+    background: rgba(255,255,255,0.92);
+    border: 1.5px solid var(--ink);
+  }
+  .sds__latest-copy {
+    display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  }
+  .sds__latest-meta {
+    display: inline-flex; flex-wrap: wrap; gap: 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+  .sds__latest-tag {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 5px;
+    border: 1px solid rgba(255,255,255,0.4);
+    font-weight: 700;
+  }
+  .sds__latest-date {
+    color: rgba(255,255,255,0.85);
+    padding: 2px 0;
+  }
+  .sds__latest-pill {
+    background: #ffd400;
+    color: var(--btl-dark);
+    padding: 2px 6px;
+    border: 1px solid var(--ink);
+    font-weight: 700;
+  }
+  .sds__latest-title {
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 600;
+  }
+  .sds__latest-dek {
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(255,255,255,0.86);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+
+  .sds__trilogy {
+    grid-area: trilogy;
+    list-style: none; padding: 0;
+    display: grid;
+    gap: 0;
+    border: 1.5px solid var(--ink);
+    background: rgba(255, 253, 248, 0.85);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .sds__beat > a, .sds__beat > span {
+    display: grid;
+    grid-template-columns: 50px 64px 1fr;
+    align-items: baseline;
+    gap: 8px;
+    padding: 10px 12px;
+    border-right: 1px solid var(--line);
+    transition: background 0.08s ease;
+  }
+  .sds__beat:last-child > a, .sds__beat:last-child > span { border-right: none; }
+  .sds__beat > a:hover { background: var(--btl-soft); }
+  .sds__beat--current > a {
+    background: var(--btl-soft);
+    border-bottom: 3px solid var(--btl);
+  }
+  .sds__beat--next > span {
+    background: repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      rgba(16,18,22,0.04) 6px 12px
+    );
+    color: var(--muted);
+  }
+  .sds__beat-tag {
+    font-size: 11px;
+    color: var(--btl-dark);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .sds__beat--next .sds__beat-tag { color: var(--muted); }
+  .sds__beat-day {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .sds__beat-title {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+  .sds__beat--next .sds__beat-title { color: var(--muted); font-style: italic; }
+
+  .sds__paths {
+    grid-area: paths;
+    display: flex; flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .sds__path {
+    padding: 6px 10px;
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .sds__path:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--btl-dark);
+  }
+  .sds__path--primary {
+    background: var(--btl);
+    color: #fff;
+    border-color: var(--btl-dark);
+    font-weight: 700;
+  }
+  .sds__path--primary:hover { box-shadow: 2px 2px 0 var(--ink); }
+
+  @media (max-width: 800px) {
+    .sds {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        'head'
+        'latest'
+        'trilogy'
+        'paths';
+    }
+    .sds__trilogy { grid-template-columns: 1fr; }
+    .sds__beat > a, .sds__beat > span {
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+    }
+    .sds__beat:last-child > a, .sds__beat:last-child > span { border-bottom: none; }
+    .sds__beat--current > a {
+      border-bottom: 3px solid var(--btl);
+    }
+  }
+</style>
