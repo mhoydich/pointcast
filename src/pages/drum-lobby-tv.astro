@@ -1,0 +1,276 @@
+---
+/**
+ * /drum-lobby-tv — projection dashboard for the Presence Bus.
+ *
+ * Sprint 1, surface 5. Designed for a 60" TV in a lobby. Big chrome.
+ * Live data from /api/chamber across multiple kinds:
+ *   - lobby visitors (drum-room presence)
+ *   - now visitors (wing-wide presence)
+ *   - procession total + last 5 advances
+ *   - echo phrase count
+ *
+ * Auto-rotates highlight panel every 12s. No interaction required.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Lobby TV · Wing Presence Dashboard · PointCast';
+const description =
+  'Big-screen projection of the wing\'s live presence: room visitors, wing visitors, procession steps, echo phrases.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Lobby TV',
+  url: 'https://pointcast.xyz/drum-lobby-tv',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dlt" id="dlt-main">
+    <header class="dlt__chrome">
+      <span class="dlt__chrome-label">LOBBY TV</span>
+      <span class="dlt__chrome-sep">·</span>
+      <span class="dlt__chrome-time" id="dlt-time">--:--</span>
+      <span class="dlt__chrome-sep">·</span>
+      <span class="dlt__chrome-on">● ON AIR</span>
+    </header>
+
+    <section class="dlt__hero">
+      <div class="dlt__hero-num" id="dlt-hero-num">—</div>
+      <div class="dlt__hero-label" id="dlt-hero-label">VISITORS IN THE WING</div>
+    </section>
+
+    <section class="dlt__panels">
+      <div class="dlt__panel">
+        <div class="dlt__panel-label">DRUM-ROOM</div>
+        <div class="dlt__panel-num" id="dlt-room">—</div>
+        <div class="dlt__panel-sub">brass lights live</div>
+      </div>
+      <div class="dlt__panel">
+        <div class="dlt__panel-label">PROCESSION</div>
+        <div class="dlt__panel-num" id="dlt-procession">—</div>
+        <div class="dlt__panel-sub">total steps walked</div>
+      </div>
+      <div class="dlt__panel">
+        <div class="dlt__panel-label">ECHO</div>
+        <div class="dlt__panel-num" id="dlt-echo">—</div>
+        <div class="dlt__panel-sub">phrases in chamber</div>
+      </div>
+      <div class="dlt__panel">
+        <div class="dlt__panel-label">ALTARS</div>
+        <div class="dlt__panel-num" id="dlt-altars">—</div>
+        <div class="dlt__panel-sub">tributes this week</div>
+      </div>
+    </section>
+
+    <section class="dlt__feed">
+      <header class="dlt__feed-header">RECENT ACROSS THE WING</header>
+      <ol class="dlt__feed-list" id="dlt-feed">
+        <li class="dlt__feed-empty">— gathering —</li>
+      </ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dlt-main) { background: #0c0410; overflow: hidden; }
+  .dlt {
+    --dlt-velvet: #1a0820; --dlt-velvet-deep: #0c0410;
+    --dlt-brass: #d4a437; --dlt-brass-deep: #6b4d12;
+    --dlt-flame: #f6c15e;
+    --dlt-ink-light: #f4e7c8; --dlt-ink-mid: #c9b78c; --dlt-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: clamp(20px, 3vh, 40px) clamp(24px, 4vw, 64px);
+    color: var(--dlt-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(212, 164, 55, 0.08), transparent 60%),
+      linear-gradient(180deg, var(--dlt-velvet) 0%, var(--dlt-velvet-deep) 100%);
+    height: calc(100vh - 80px); min-height: 600px;
+    display: flex; flex-direction: column; gap: clamp(20px, 3vh, 36px);
+  }
+
+  .dlt__chrome {
+    display: inline-flex; align-items: center; gap: clamp(8px, 1vw, 18px);
+    padding: 6px 24px; border: 2px solid var(--dlt-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(12px, 1vw, 15px); letter-spacing: 0.30em; text-transform: uppercase;
+    color: var(--dlt-ink-mid); background: rgba(0, 0, 0, 0.40);
+    align-self: flex-start;
+  }
+  .dlt__chrome-label { color: var(--dlt-brass); font-weight: 800; }
+  .dlt__chrome-sep { color: var(--dlt-brass-deep); }
+  .dlt__chrome-time { color: var(--dlt-flame); font-weight: 700; }
+  .dlt__chrome-on { color: #ff5b5b; font-weight: 700; }
+
+  .dlt__hero { text-align: center; margin: clamp(20px, 3vh, 36px) 0; }
+  .dlt__hero-num {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(120px, 22vw, 360px); line-height: 0.95; font-weight: 400;
+    color: var(--dlt-flame);
+    text-shadow: 0 0 80px rgba(246, 193, 94, 0.45);
+    transition: transform 600ms;
+  }
+  .dlt__hero-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(14px, 1.4vw, 22px); letter-spacing: 0.30em;
+    color: var(--dlt-brass); text-transform: uppercase; margin-top: 8px;
+  }
+
+  .dlt__panels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(12px, 2vw, 24px);
+  }
+  @media (max-width: 720px) { .dlt__panels { grid-template-columns: repeat(2, 1fr); } }
+  .dlt__panel {
+    border: 1.5px solid var(--dlt-brass-deep);
+    background: rgba(0, 0, 0, 0.30);
+    padding: clamp(14px, 2vh, 20px);
+    text-align: center;
+  }
+  .dlt__panel-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.30em; color: var(--dlt-ink-dim);
+    text-transform: uppercase;
+  }
+  .dlt__panel-num {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 6vw, 84px); line-height: 1;
+    color: var(--dlt-flame);
+    margin: 8px 0;
+    text-shadow: 0 0 40px rgba(246, 193, 94, 0.30);
+  }
+  .dlt__panel-sub {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(11px, 1vw, 14px); color: var(--dlt-ink-dim);
+  }
+
+  .dlt__feed { flex: 1; min-height: 0; overflow: hidden; }
+  .dlt__feed-header {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; letter-spacing: 0.30em; color: var(--dlt-brass);
+    text-transform: uppercase; margin-bottom: 14px;
+  }
+  .dlt__feed-list {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .dlt__feed-list li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(11px, 1vw, 15px); color: var(--dlt-ink-mid);
+    border-left: 2px solid var(--dlt-brass);
+    background: rgba(212, 164, 55, 0.06);
+  }
+  .dlt__feed-empty { color: var(--dlt-ink-dim) !important; font-style: italic; font-family: 'Lora', Georgia, serif !important; border-left: 0 !important; background: none !important; }
+</style>
+
+<script>
+  const heroNumEl = document.getElementById('dlt-hero-num');
+  const heroLabelEl = document.getElementById('dlt-hero-label');
+  const roomEl = document.getElementById('dlt-room');
+  const processionEl = document.getElementById('dlt-procession');
+  const echoEl = document.getElementById('dlt-echo');
+  const altarsEl = document.getElementById('dlt-altars');
+  const timeEl = document.getElementById('dlt-time');
+  const feedEl = document.getElementById('dlt-feed');
+
+  let cachedRoom = null;
+  let cachedProcession = null;
+  let cachedEcho = null;
+  let cachedNow = null;
+
+  async function fetchKind(kind) {
+    try {
+      const r = await fetch(`/api/chamber?kind=${kind}`, { cache: 'no-store' });
+      return (await r.json())?.state || null;
+    } catch { return null; }
+  }
+  async function fetchAltar() {
+    try {
+      const r = await fetch('/api/altar', { cache: 'no-store' });
+      return (await r.json()) || null;
+    } catch { return null; }
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function paintFeed() {
+    if (!feedEl) return;
+    const items = [];
+    if (cachedProcession?.lastFiveSteps) {
+      cachedProcession.lastFiveSteps.forEach((s) => items.push({ t: s.t, txt: `procession · step ${s.step} · ${s.pid.slice(0, 6)}…` }));
+    }
+    if (cachedRoom?.rings) {
+      cachedRoom.rings.slice(0, 5).forEach((r) => items.push({ t: r.t, txt: `room · ring · ${r.pid.slice(0, 6)}…` }));
+    }
+    if (cachedEcho?.phrases) {
+      cachedEcho.phrases.slice(0, 3).forEach((p) => items.push({ t: p.t, txt: `echo · phrase ${p.id} · ${p.pid.slice(0, 6)}…` }));
+    }
+    items.sort((a, b) => b.t - a.t);
+    const top = items.slice(0, 8);
+    if (top.length === 0) { feedEl.innerHTML = '<li class="dlt__feed-empty">— gathering —</li>'; return; }
+    feedEl.innerHTML = '';
+    top.forEach((it) => {
+      const li = document.createElement('li');
+      const ago = Math.max(0, Math.floor((Date.now() - it.t) / 1000));
+      const agoStr = ago < 60 ? `${ago}s ago` : `${Math.floor(ago / 60)}m ago`;
+      li.innerHTML = `<span style="flex:1">${it.txt}</span><span style="color:var(--dlt-ink-dim);">${agoStr}</span>`;
+      feedEl.appendChild(li);
+    });
+  }
+
+  // Rotate hero between metrics every 12s
+  const HEROES = [
+    { fn: () => cachedNow?.visitors?.length || 0, label: 'VISITORS IN THE WING' },
+    { fn: () => cachedRoom?.visitors?.length || 0, label: 'BRASS LIGHTS IN /DRUM-ROOM' },
+    { fn: () => cachedProcession?.totalSteps || 0, label: 'PROCESSION STEPS' },
+    { fn: () => cachedEcho?.phrases?.length || 0, label: 'ECHO PHRASES' },
+  ];
+  let heroIdx = 0;
+  function paintHero() {
+    const h = HEROES[heroIdx % HEROES.length];
+    if (heroNumEl) heroNumEl.textContent = String(h.fn());
+    if (heroLabelEl) heroLabelEl.textContent = h.label;
+  }
+  function rotateHero() {
+    heroIdx = (heroIdx + 1) % HEROES.length;
+    paintHero();
+  }
+
+  function paintAll() {
+    if (roomEl) roomEl.textContent = String(cachedRoom?.visitors?.length || 0);
+    if (processionEl) processionEl.textContent = String(cachedProcession?.totalSteps || 0);
+    if (echoEl) echoEl.textContent = String(cachedEcho?.phrases?.length || 0);
+    paintHero();
+    paintFeed();
+  }
+
+  async function refresh() {
+    const [room, procession, echo, now] = await Promise.all([
+      fetchKind('lobby'), fetchKind('procession'), fetchKind('echo'), fetchKind('now'),
+    ]);
+    cachedRoom = room; cachedProcession = procession; cachedEcho = echo; cachedNow = now;
+    const altar = await fetchAltar();
+    if (altarsEl) altarsEl.textContent = String(altar?.totalThisWeek || 0);
+    paintAll();
+  }
+
+  function paintTime() {
+    const d = new Date();
+    if (timeEl) timeEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  refresh();
+  setInterval(refresh, 4000);
+  setInterval(rotateHero, 12000);
+  setInterval(paintTime, 1000);
+  paintTime();
+</script>

@@ -1,0 +1,290 @@
+---
+/**
+ * /drum-procession — collective ceremonial advance.
+ *
+ * Sprint 1, surface 3 of the Presence Bus. The chamber holds a
+ * single shared "step" counter. Every visit advances the procession
+ * by one step (max once per visitor every 30s). The page renders a
+ * long ceremonial path with the current step number; visitors see
+ * the step they took plus the last 5 steps (and which other pids
+ * advanced them). Bell tone per advance.
+ *
+ * Backed by /api/chamber kind=procession.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Procession · Collective Advance · PointCast';
+const description =
+  'A shared ceremonial path. Each visitor advances it one step. Watch others move it forward.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Procession',
+  url: 'https://pointcast.xyz/drum-procession',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dp" id="dp-main">
+    <DrumNav current="procession" />
+
+    <header class="dp__header">
+      <div class="dp__chrome">
+        <span>PROCESSION</span>
+        <span class="dp__chrome-sep">·</span>
+        <span><span id="dp-total">0</span> STEPS</span>
+        <span class="dp__chrome-sep">·</span>
+        <span id="dp-state">READY</span>
+      </div>
+      <h1 class="dp__title">PROCESSION</h1>
+      <p class="dp__tagline">advance the path · the chamber remembers your step</p>
+    </header>
+
+    <section class="dp__path">
+      <div class="dp__step-display">
+        <span class="dp__step-label">CURRENT STEP</span>
+        <span class="dp__step-num" id="dp-step">—</span>
+      </div>
+      <button class="dp__advance" id="dp-advance" type="button">ADVANCE</button>
+    </section>
+
+    <section class="dp__last">
+      <header class="dp__last-header">LAST FIVE STEPS</header>
+      <ol class="dp__last-list" id="dp-last-list">
+        <li class="dp__last-empty">— waiting for the first advance —</li>
+      </ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dp-main) { background: #0c0410; }
+  .dp {
+    --dp-velvet: #1a0820; --dp-velvet-deep: #0c0410;
+    --dp-brass: #d4a437; --dp-brass-deep: #6b4d12;
+    --dp-flame: #f6c15e;
+    --dp-ink-light: #f4e7c8; --dp-ink-mid: #c9b78c; --dp-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dp-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dp-velvet) 0%, var(--dp-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dp .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dp__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px); }
+  .dp__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dp-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dp-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dp__chrome-sep { color: var(--dp-brass-deep); }
+  #dp-total, #dp-state { color: var(--dp-flame); font-weight: 700; }
+
+  .dp__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dp-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dp-velvet-deep);
+  }
+  .dp__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dp-ink-mid);
+  }
+
+  .dp__path {
+    display: flex; flex-direction: column; align-items: center; gap: clamp(20px, 3vh, 32px);
+    padding: clamp(28px, 5vh, 60px) 0;
+  }
+  .dp__step-display { text-align: center; }
+  .dp__step-label {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.30em; color: var(--dp-ink-dim);
+    margin-bottom: 8px;
+  }
+  .dp__step-num {
+    display: block;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(72px, 12vw, 160px);
+    color: var(--dp-flame);
+    line-height: 1;
+    text-shadow: 0 0 60px rgba(246, 193, 94, 0.40);
+    letter-spacing: 0.04em;
+  }
+
+  .dp__advance {
+    appearance: none; border: 0; cursor: pointer;
+    padding: 16px 38px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px; font-weight: 800; letter-spacing: 0.24em;
+    color: var(--dp-velvet-deep);
+    background: linear-gradient(180deg, var(--dp-brass) 0%, oklch(0.62 0.18 60) 100%);
+    box-shadow: 0 0 0 2px var(--dp-velvet-deep), 0 4px 0 0 var(--dp-brass-deep), 0 4px 18px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .dp__advance:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dp-brass) 100%); }
+  .dp__advance:active, .dp__advance:disabled {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 2px var(--dp-velvet-deep), 0 1px 0 0 var(--dp-brass-deep), 0 0 22px rgba(246, 193, 94, 0.55);
+  }
+  .dp__advance:disabled { opacity: 0.5; cursor: wait; }
+
+  .dp__last {
+    max-width: 540px; margin: 0 auto;
+    padding: clamp(16px, 2vh, 24px) 16px 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .dp__last-header {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.30em; color: var(--dp-brass);
+    text-transform: uppercase; margin-bottom: 12px; text-align: center;
+  }
+  .dp__last-list {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .dp__last-list li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 6px 12px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; color: var(--dp-ink-mid);
+    border-left: 2px solid var(--dp-brass-deep);
+    background: rgba(0, 0, 0, 0.20);
+  }
+  .dp__last-list li.dp__last-mine { border-left-color: var(--dp-flame); background: rgba(246, 193, 94, 0.06); }
+  .dp__last-empty { color: var(--dp-ink-dim) !important; font-style: italic; font-family: 'Lora', Georgia, serif !important; border-left: 0 !important; }
+  .dp__last-step { color: var(--dp-flame); font-weight: 700; min-width: 4em; }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playStepBell(stepNum) {
+    const a = ctx(); const t = a.currentTime;
+    const f = 392 + ((stepNum * 7) % 12) * 30;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.20, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.07, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.7); o2.start(t); o2.stop(t + 1.1);
+  }
+
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  let MY_PID = '';
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+  }
+
+  const totalEl = document.getElementById('dp-total');
+  const stepEl = document.getElementById('dp-step');
+  const stateEl = document.getElementById('dp-state');
+  const advanceBtn = document.getElementById('dp-advance');
+  const lastListEl = document.getElementById('dp-last-list');
+
+  const LAST_ADVANCE_KEY = 'pc:procession:lastAdvance';
+  let lastAdvance = 0;
+  try { lastAdvance = parseInt(localStorage.getItem(LAST_ADVANCE_KEY) || '0', 10) || 0; } catch {}
+
+  function fmtAgo(t) {
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 5) return 'just now';
+    if (sec < 60) return `${sec}s ago`;
+    const m = Math.floor(sec / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m / 60)}h ago`;
+  }
+
+  function paint(state) {
+    if (!state) return;
+    if (totalEl) totalEl.textContent = String(state.totalSteps || 0);
+    if (stepEl) stepEl.textContent = String(state.totalSteps || '—');
+    if (lastListEl) {
+      const recent = state.lastFiveSteps || [];
+      if (recent.length === 0) {
+        lastListEl.innerHTML = '<li class="dp__last-empty">— waiting for the first advance —</li>';
+      } else {
+        lastListEl.innerHTML = '';
+        recent.forEach((s) => {
+          const li = document.createElement('li');
+          if (s.pid === MY_PID) li.classList.add('dp__last-mine');
+          li.innerHTML = `<span class="dp__last-step">${s.step}</span><span>${s.pid.slice(0, 6)}…</span><span style="margin-left:auto;color:var(--dp-ink-dim);">${fmtAgo(s.t)}</span>`;
+          lastListEl.appendChild(li);
+        });
+      }
+    }
+  }
+
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=procession', { cache: 'no-store' });
+      const j = await r.json();
+      if (j?.ok) paint(j.state);
+    } catch {}
+  }
+
+  async function advance() {
+    if (Date.now() - lastAdvance < 30000) {
+      if (stateEl) stateEl.textContent = 'WAITING';
+      const remaining = Math.ceil((30000 - (Date.now() - lastAdvance)) / 1000);
+      if (advanceBtn) {
+        advanceBtn.disabled = true;
+        advanceBtn.textContent = `WAIT ${remaining}S`;
+      }
+      return;
+    }
+    if (advanceBtn) { advanceBtn.disabled = true; advanceBtn.textContent = 'ADVANCING…'; }
+    try {
+      const r = await fetch('/api/chamber', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'procession', action: 'advance', sessionId: SID }),
+      });
+      const j = await r.json();
+      if (j?.ok) {
+        const myStep = j.state.totalSteps;
+        try { playStepBell(myStep); } catch {}
+        lastAdvance = Date.now();
+        try { localStorage.setItem(LAST_ADVANCE_KEY, String(lastAdvance)); } catch {}
+        paint(j.state);
+        if (stateEl) stateEl.textContent = `STEP ${myStep}`;
+      }
+    } catch {}
+    setTimeout(() => {
+      if (advanceBtn) { advanceBtn.disabled = false; advanceBtn.textContent = 'ADVANCE'; }
+      if (stateEl) stateEl.textContent = 'READY';
+    }, 30000);
+  }
+
+  advanceBtn?.addEventListener('click', advance);
+  (async () => { MY_PID = await sha256short(SID); fetchState(); })();
+  setInterval(fetchState, 5000);
+</script>
