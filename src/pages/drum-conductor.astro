@@ -1,0 +1,283 @@
+---
+/**
+ * /drum-conductor — ops console for the wing.
+ *
+ * Sprint 2 of overnight plan. Shows live operational state across
+ * the chamber-bus endpoints (altar, quintet, chamber-lobby/now/echo/
+ * procession), plus a curated "what's running" list. Read-only;
+ * intended for operator (Mike, codex, cc) glance during a sprint.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Conductor · Wing Ops Console · PointCast';
+const description =
+  'Live operational state across the wing\'s endpoints. Read-only ops glance for operators.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Conductor',
+  url: 'https://pointcast.xyz/drum-conductor',
+  description,
+  applicationCategory: 'OperationsConsole',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dc" id="dc-main">
+    <DrumNav current="conductor" />
+
+    <header class="dc__header">
+      <div class="dc__chrome">
+        <span>CONDUCTOR</span>
+        <span class="dc__chrome-sep">·</span>
+        <span id="dc-time">--:--:--</span>
+        <span class="dc__chrome-sep">·</span>
+        <span class="dc__chrome-on">● LIVE</span>
+      </div>
+      <h1 class="dc__title">CONDUCTOR</h1>
+      <p class="dc__tagline">live ops glance · all endpoints, one page</p>
+    </header>
+
+    <section class="dc__rows">
+      <div class="dc__row" data-endpoint="altar">
+        <div class="dc__row-label">/api/altar</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="quintet">
+        <div class="dc__row-label">/api/quintet</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="lobby">
+        <div class="dc__row-label">/api/chamber?kind=lobby</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="now">
+        <div class="dc__row-label">/api/chamber?kind=now</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="procession">
+        <div class="dc__row-label">/api/chamber?kind=procession</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="echo">
+        <div class="dc__row-label">/api/chamber?kind=echo</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+      <div class="dc__row" data-endpoint="scorebook">
+        <div class="dc__row-label">/scorebook.json</div>
+        <div class="dc__row-summary" data-summary>—</div>
+        <div class="dc__row-status" data-status>...</div>
+      </div>
+    </section>
+
+    <section class="dc__totals">
+      <div class="dc__panel">
+        <div class="dc__panel-label">VISITORS · NOW</div>
+        <div class="dc__panel-value" id="dc-now-count">—</div>
+      </div>
+      <div class="dc__panel">
+        <div class="dc__panel-label">RINGS · ALL TIME</div>
+        <div class="dc__panel-value" id="dc-rings">—</div>
+      </div>
+      <div class="dc__panel">
+        <div class="dc__panel-label">PROCESSION STEPS</div>
+        <div class="dc__panel-value" id="dc-steps">—</div>
+      </div>
+      <div class="dc__panel">
+        <div class="dc__panel-label">ALTAR TRIBUTES THIS WK</div>
+        <div class="dc__panel-value" id="dc-tributes">—</div>
+      </div>
+    </section>
+
+    <p class="dc__note">
+      Polls every 4 seconds. Status lights show response time bucket: ● green &lt; 200ms · ● amber &lt; 500ms · ● red ≥ 500ms or error.
+    </p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dc-main) { background: #0c0410; }
+  .dc {
+    --dc-velvet: #1a0820; --dc-velvet-deep: #0c0410;
+    --dc-brass: #d4a437; --dc-brass-deep: #6b4d12;
+    --dc-flame: #f6c15e;
+    --dc-green: #3aa96e; --dc-amber: #d4a437; --dc-red: #c4351c;
+    --dc-ink-light: #f4e7c8; --dc-ink-mid: #c9b78c; --dc-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dc-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dc-velvet) 0%, var(--dc-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dc .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dc__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(24px, 3vh, 36px); }
+  .dc__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dc-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dc-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dc__chrome-sep { color: var(--dc-brass-deep); }
+  .dc__chrome-on { color: var(--dc-green); font-weight: 700; }
+  #dc-time { color: var(--dc-flame); font-weight: 700; }
+
+  .dc__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dc-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dc-velvet-deep);
+  }
+  .dc__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dc-ink-mid);
+  }
+
+  .dc__rows {
+    max-width: 880px; margin: 0 auto clamp(28px, 4vh, 40px);
+    display: flex; flex-direction: column;
+  }
+  .dc__row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 2fr minmax(60px, auto);
+    gap: 14px;
+    align-items: center;
+    padding: 12px 16px;
+    border: 1px solid var(--dc-brass-deep);
+    border-bottom: 0;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .dc__row:last-child { border-bottom: 1px solid var(--dc-brass-deep); }
+  .dc__row-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; letter-spacing: 0.10em; color: var(--dc-flame); font-weight: 700;
+  }
+  .dc__row-summary {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 13px; color: var(--dc-ink-mid);
+  }
+  .dc__row-status {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    text-align: right;
+  }
+  .dc__row-status[data-bucket='green'] { color: var(--dc-green); }
+  .dc__row-status[data-bucket='amber'] { color: var(--dc-amber); }
+  .dc__row-status[data-bucket='red']   { color: var(--dc-red); }
+
+  .dc__totals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(10px, 1.5vw, 16px);
+    max-width: 880px; margin: 0 auto clamp(20px, 3vh, 32px);
+  }
+  @media (max-width: 720px) { .dc__totals { grid-template-columns: repeat(2, 1fr); } }
+  .dc__panel {
+    border: 1px solid var(--dc-brass-deep); padding: 12px 14px;
+    background: rgba(0, 0, 0, 0.30);
+    text-align: center;
+  }
+  .dc__panel-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px; letter-spacing: 0.22em; color: var(--dc-ink-dim); text-transform: uppercase;
+  }
+  .dc__panel-value {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4vw, 44px); color: var(--dc-flame);
+    text-shadow: 0 0 18px rgba(246, 193, 94, 0.30); margin-top: 4px;
+  }
+
+  .dc__note {
+    text-align: center; max-width: 540px; margin: 0 auto;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 13px; color: var(--dc-ink-dim);
+  }
+</style>
+
+<script>
+  const ENDPOINTS = [
+    { id: 'altar', url: '/api/altar', summarize: (j) => `week=${j.week} · total=${j.totalThisWeek} tributes` },
+    { id: 'quintet', url: '/api/quintet', summarize: (j) => {
+      const seats = j.state?.seats ?? {};
+      const filled = Object.values(seats).filter((v) => v).length;
+      return `${filled}/5 seats filled · bpm=${j.state?.bpm ?? '—'}`;
+    } },
+    { id: 'lobby', url: '/api/chamber?kind=lobby', summarize: (j) => `${j.state?.visitors?.length || 0} present · ${j.state?.ringCount || 0} rings all time` },
+    { id: 'now', url: '/api/chamber?kind=now', summarize: (j) => `${j.state?.visitors?.length || 0} in 30s window` },
+    { id: 'procession', url: '/api/chamber?kind=procession', summarize: (j) => `${j.state?.totalSteps || 0} total steps` },
+    { id: 'echo', url: '/api/chamber?kind=echo', summarize: (j) => `${j.state?.phrases?.length || 0} phrases stored` },
+    { id: 'scorebook', url: '/scorebook.json', summarize: (j) => `${j.counts?.surfaces || 0} surfaces · ${j.counts?.kvEndpoints || 0} kv · ${j.counts?.mcpTools || 0} mcp` },
+  ];
+
+  const timeEl = document.getElementById('dc-time');
+  const nowCountEl = document.getElementById('dc-now-count');
+  const ringsEl = document.getElementById('dc-rings');
+  const stepsEl = document.getElementById('dc-steps');
+  const tributesEl = document.getElementById('dc-tributes');
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function paintTime() {
+    const d = new Date();
+    if (timeEl) timeEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  setInterval(paintTime, 1000); paintTime();
+
+  function bucketFor(ms, ok) {
+    if (!ok) return 'red';
+    if (ms < 200) return 'green';
+    if (ms < 500) return 'amber';
+    return 'red';
+  }
+
+  async function poll() {
+    let now = null, lobby = null, procession = null, altar = null;
+    for (const ep of ENDPOINTS) {
+      const t0 = performance.now();
+      let json = null, ok = false;
+      try {
+        const r = await fetch(ep.url, { cache: 'no-store' });
+        ok = r.ok;
+        json = await r.json();
+      } catch {}
+      const t1 = performance.now();
+      const ms = Math.round(t1 - t0);
+      const row = document.querySelector(`[data-endpoint="${ep.id}"]`);
+      if (row) {
+        const summaryEl = row.querySelector('[data-summary]');
+        const statusEl = row.querySelector('[data-status]');
+        if (summaryEl) summaryEl.textContent = ok && json ? ep.summarize(json) : 'failed';
+        if (statusEl) {
+          const b = bucketFor(ms, ok);
+          statusEl.textContent = `● ${ms}ms`;
+          statusEl.dataset.bucket = b;
+        }
+      }
+      if (ep.id === 'now' && json) now = json;
+      if (ep.id === 'lobby' && json) lobby = json;
+      if (ep.id === 'procession' && json) procession = json;
+      if (ep.id === 'altar' && json) altar = json;
+    }
+    // Totals
+    if (nowCountEl) nowCountEl.textContent = String(now?.state?.visitors?.length || 0);
+    if (ringsEl) ringsEl.textContent = String(lobby?.state?.ringCount || 0);
+    if (stepsEl) stepsEl.textContent = String(procession?.state?.totalSteps || 0);
+    if (tributesEl) tributesEl.textContent = String(altar?.totalThisWeek || 0);
+  }
+  poll();
+  setInterval(poll, 4000);
+</script>
