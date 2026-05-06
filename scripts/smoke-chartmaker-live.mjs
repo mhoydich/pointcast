@@ -1,4 +1,8 @@
 const ORIGIN = process.env.POINTCAST_ORIGIN || 'https://pointcast.xyz';
+const REQUIRED_BLOCK_IDS = (process.env.POINTCAST_REQUIRED_BLOCK_IDS || '0437,0438')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
 
 async function fetchText(pathname) {
   const url = new URL(pathname, ORIGIN);
@@ -33,6 +37,12 @@ function latestBlockId(blocks) {
   assert(ids.length > 0, 'blocks.json did not expose numeric block ids');
 
   return String(Math.max(...ids)).padStart(4, '0');
+}
+
+function blockRecords(blocks) {
+  const records = Array.isArray(blocks) ? blocks : blocks.blocks;
+  assert(Array.isArray(records), 'blocks.json did not expose a blocks array');
+  return records;
 }
 
 const checks = [];
@@ -81,6 +91,14 @@ await check('latest receipt route returns 200', async () => {
   await fetchText(`/b/${id}/`);
   await fetchJson(`/b/${id}.json`);
   return `/b/${id}/`;
+});
+
+await check('blocks.json includes Chartmaker receipts', async () => {
+  const blocks = await fetchJson('/blocks.json');
+  const ids = new Set(blockRecords(blocks).map((block) => String(block.id).padStart(4, '0')));
+  const missing = REQUIRED_BLOCK_IDS.filter((id) => !ids.has(id));
+  assert(missing.length === 0, `blocks.json missing ${missing.join(', ')}`);
+  return REQUIRED_BLOCK_IDS.join(', ');
 });
 
 for (const item of checks) {
