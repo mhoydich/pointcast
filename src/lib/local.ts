@@ -51,6 +51,152 @@ export type NatureOverviewArea = {
   signals: string[];
 };
 
+export type FieldDeskSignal = {
+  slug: string;
+  label: string;
+  status: string;
+  read: string;
+  next: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+export type FieldDeskObservation = {
+  observedOn: string;
+  name: string;
+  scientific: string;
+  place: string;
+  sourceUrl: string;
+};
+
+export const FIELD_DESK_2026 = {
+  slug: 'el-segundo-nature-desk-may-2026',
+  asOf: '2026-05-06',
+  blockId: '0439',
+  title: 'El Segundo nature desk · May 2026',
+  dek:
+    'A current, source-backed field read for dunes, butterfly season, Ballona, grunion, and recent community observations around El Segundo.',
+  currentSignals: [
+    {
+      slug: 'buckwheat-summer',
+      label: 'Buckwheat summer',
+      status: 'coming into season',
+      read:
+        'Late spring is turning toward seacliff buckwheat bloom and the El Segundo blue butterfly flight window.',
+      next:
+        'Watch from public paths and protected-area edges; do not step into dune habitat or chase insects for photos.',
+      sourceLabel: 'El Segundo Blue Coalition',
+      sourceUrl: 'https://www.esbcoalition.org/',
+    },
+    {
+      slug: 'lax-dunes',
+      label: 'LAX Dunes',
+      status: 'protected remnant',
+      read:
+        'The dunes remain the signature local habitat: coastal sand, buckwheat, beach suncups, deerweed, and repair work beside the airport.',
+      next:
+        'Use public source pages for orientation and treat sensitive access as closed unless an official program opens it.',
+      sourceLabel: 'LAX Dunes Preserve',
+      sourceUrl: 'https://www.lawa.org/-/media/lawa-web/volunteer-opurtunities/lax-dunes-home-page.ashx',
+    },
+    {
+      slug: 'ballona',
+      label: 'Ballona Wetlands',
+      status: 'active restoration story',
+      read:
+        'Ballona is the nearby wetland counterpoint: access windows, restoration planning, and recent invasive iceplant removal reporting.',
+      next:
+        'Follow posted access guidance and keep the PointCast read focused on public trails, tours, reports, and stewardship.',
+      sourceLabel: 'CDFW Ballona Restoration Project',
+      sourceUrl: 'https://wildlife.ca.gov/Regions/5/Ballona-EIR',
+    },
+    {
+      slug: 'grunion',
+      label: 'Grunion nights',
+      status: 'closed season through June',
+      read:
+        'The May-June run window is observation-only under CDFW rules; July is the next open-season turn.',
+      next:
+        'If the beach gets a night note, frame it as watch-and-leave, not harvest, handling, or flash-lit spectacle.',
+      sourceLabel: 'CDFW grunion schedule',
+      sourceUrl: 'https://wildlife.ca.gov/Fishing/Ocean/Grunion',
+    },
+  ] satisfies FieldDeskSignal[],
+  observations: [
+    {
+      observedOn: '2026-05-05',
+      name: 'Brown Pelican',
+      scientific: 'Pelecanus occidentalis',
+      place: 'Dockweiler State Beach',
+      sourceUrl: 'https://www.inaturalist.org/observations/358694301',
+    },
+    {
+      observedOn: '2026-05-05',
+      name: 'Salt Marsh Moth',
+      scientific: 'Estigmene acrea',
+      place: 'Ballona Creek Bike Path',
+      sourceUrl: 'https://www.inaturalist.org/observations/358796039',
+    },
+    {
+      observedOn: '2026-05-05',
+      name: 'Yellow-faced Bumble Bee',
+      scientific: 'Bombus vosnesenskii',
+      place: 'Playa Vista / Ballona edge',
+      sourceUrl: 'https://www.inaturalist.org/observations/358760875',
+    },
+    {
+      observedOn: '2026-05-04',
+      name: 'Western Pygmy-Blue',
+      scientific: 'Brephidium exilis',
+      place: 'Ballona Wetlands Ecological Reserve',
+      sourceUrl: 'https://www.inaturalist.org/observations/358710735',
+    },
+    {
+      observedOn: '2026-05-05',
+      name: "Swainson's Thrush",
+      scientific: 'Catharus ustulatus',
+      place: 'Inglewood',
+      sourceUrl: 'https://www.inaturalist.org/observations/358755778',
+    },
+    {
+      observedOn: '2026-05-02',
+      name: 'Sacred Datura',
+      scientific: 'Datura wrightii',
+      place: 'Vista del Mar',
+      sourceUrl: 'https://www.inaturalist.org/observations/357712212',
+    },
+  ] satisfies FieldDeskObservation[],
+  fieldRules: [
+    'Stay on public paths and official access programs around protected dunes and wetlands.',
+    'Treat iNaturalist entries as community observations, not an official census.',
+    'During May and June grunion runs, observe only; do not handle or harvest fish.',
+    'If a field note involves sensitive habitat, publish the learning and source, not hidden access instructions.',
+  ],
+  sources: [
+    { label: 'CDFW grunion schedule', url: 'https://wildlife.ca.gov/Fishing/Ocean/Grunion' },
+    { label: 'CDFW Ballona Restoration Project', url: 'https://wildlife.ca.gov/Regions/5/Ballona-EIR' },
+    { label: 'Ballona access', url: 'https://ballona.org/access/' },
+    {
+      label: 'The Bay Foundation Ballona report',
+      url: 'https://www.santamonicabay.org/resources/ballona-wetlands-community-restoration-project-scc-18-121-final-report/?project=ballona-community-iceplant-removal-project',
+    },
+    { label: 'El Segundo Blue Coalition', url: 'https://www.esbcoalition.org/' },
+    {
+      label: 'LAX Dunes Preserve',
+      url: 'https://www.lawa.org/-/media/lawa-web/volunteer-opurtunities/lax-dunes-home-page.ashx',
+    },
+    {
+      label: 'iNaturalist observations',
+      url: 'https://www.inaturalist.org/observations?nelat=33.97&nelng=-118.35&swlat=33.86&swlng=-118.48',
+    },
+  ],
+  links: {
+    human: 'https://pointcast.xyz/nature#field-desk-2026',
+    json: 'https://pointcast.xyz/nature.json',
+    block: 'https://pointcast.xyz/b/0439',
+  },
+} as const;
+
 export const NATURE_OVERVIEW_AREAS: NatureOverviewArea[] = [
   {
     slug: 'ocean',

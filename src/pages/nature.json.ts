@@ -12,6 +12,7 @@ import {
 } from '../lib/garden-yield';
 import {
   ANCHOR,
+  FIELD_DESK_2026,
   NATURE_NOTES,
   NATURE_OVERVIEW_AREAS,
   NATIVE_PLANTING_PALETTE,
@@ -45,6 +46,7 @@ export const GET: APIRoute = async () => {
       url: 'https://pointcast.xyz/b/0330',
       jsonUrl: 'https://pointcast.xyz/b/0330.json',
     },
+    fieldDesk2026: FIELD_DESK_2026,
     overview: {
       title: 'El Segundo nature overview',
       description:
@@ -74,10 +76,20 @@ export const GET: APIRoute = async () => {
       sitePlans: PLANTING_YIELD_SITES,
     },
     seasonalSignals: SEASONAL_SIGNALS,
-    sources: [...new Map([...NATURE_NOTES, ...NATIVE_PLANTING_PALETTE].map((item) => [
-      item.sourceUrl,
-      { label: item.sourceLabel, url: item.sourceUrl },
-    ])).values()],
+    sources: [...new Map([
+      ...[...NATURE_NOTES, ...NATIVE_PLANTING_PALETTE].map((item) => [
+        item.sourceUrl,
+        { label: item.sourceLabel, url: item.sourceUrl },
+      ] as const),
+      ...FIELD_DESK_2026.sources.map((source) => [
+        source.url,
+        { label: source.label, url: source.url },
+      ] as const),
+      ...FIELD_DESK_2026.observations.map((observation) => [
+        observation.sourceUrl,
+        { label: `${observation.name} · iNaturalist`, url: observation.sourceUrl },
+      ] as const),
+    ]).values()],
     transect: [
       { step: 1, label: 'Sand', signal: 'Open dune, beach suncups, wind, sparse growth.' },
       { step: 2, label: 'Buckwheat', signal: 'Seacliff buckwheat anchors the butterfly story.' },
