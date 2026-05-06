@@ -36,6 +36,15 @@ export interface ChartmakerTodayChart {
   }>;
 }
 
+export interface ChartmakerRemix {
+  slug: string;
+  title: string;
+  lane: 'local' | 'market' | 'sports' | 'planet' | 'culture';
+  charts: string[];
+  why: string;
+  nextAction: string;
+}
+
 export const CHARTMAKER_SOURCES: ChartmakerSource[] = [
   {
     slug: 'pointcast-blocks',
@@ -425,6 +434,49 @@ export const CHARTMAKER_RECIPES: ChartmakerRecipe[] = [
   },
 ];
 
+export const CHARTMAKER_REMIXES: ChartmakerRemix[] = [
+  {
+    slug: 'marine-layer-shipping',
+    title: 'Marine Layer Shipping',
+    lane: 'local',
+    charts: ['may-5-shipping-velocity', 'el-segundo-weather-window', 'air-quality-rise', 'south-bay-wave-pulse'],
+    why: 'Local atmosphere plus PointCast output turns the day into a readable field note: cool air, clean enough sky, small waves, one shipped receipt.',
+    nextAction: 'Make a combined weather x shipping chart with blocks as bars and temperature, AQI, and wave height as small overlay lanes.',
+  },
+  {
+    slug: 'risk-on-collectibles',
+    title: 'Risk-On Collectibles',
+    lane: 'market',
+    charts: ['market-watchlist-range', 'crypto-mood', 'may-5-shipping-velocity'],
+    why: 'AAPL, TSLA, BTC, ETH, and XTZ give a quick public-market mood without turning the app into a finance product.',
+    nextAction: 'Add a non-advice market mood badge to /now and pair it with mint/collector surfaces only as context.',
+  },
+  {
+    slug: 'sports-evening-stack',
+    title: 'Sports Evening Stack',
+    lane: 'sports',
+    charts: ['nba-evening-slate', 'mlb-slate-density', 'internet-sky-culture'],
+    why: 'The evening has a clean sports rhythm: two NBA games, a dense MLB slate, and enough internet culture to make a watch-card feel alive.',
+    nextAction: 'Build a single live scoreboard strip that can choose NBA or MLB based on active games.',
+  },
+  {
+    slug: 'planetary-dashboard',
+    title: 'Planetary Dashboard',
+    lane: 'planet',
+    charts: ['earthquake-pulse', 'south-bay-wave-pulse', 'internet-sky-culture'],
+    why: 'USGS, marine forecast, and NASA APOD make Chartmaker feel bigger than local productivity: earth, ocean, sky.',
+    nextAction: 'Turn this into a calm “world pulse” card with one event, one ocean value, and one sky image.',
+  },
+  {
+    slug: 'agent-source-readiness',
+    title: 'Agent Source Readiness',
+    lane: 'culture',
+    charts: ['internet-sky-culture', 'may-5-shipping-velocity', 'crypto-mood'],
+    why: 'This lane tests whether agents can explain the day from mixed sources without overclaiming: ledger facts, public APIs, and cultural prompts.',
+    nextAction: 'Add confidence labels per chart: native, public no-key, sampled, candidate, local-only.',
+  },
+];
+
 export function getChartmakerPacket(now = new Date()) {
   return {
     slug: 'pointcast-chartmaker',
@@ -438,6 +490,12 @@ export function getChartmakerPacket(now = new Date()) {
       date: '2026-05-05',
       label: 'Tuesday, May 5, 2026',
       charts: CHARTMAKER_TODAY_CHARTS,
+      remixes: CHARTMAKER_REMIXES,
+      v3: {
+        name: 'Chartmaker v3',
+        thesis: 'A daily board should not just show isolated charts; it should suggest useful crossovers that can become tomorrow’s app surfaces.',
+        primaryAction: 'Promote one remix into a live Chart of the Day variant.',
+      },
     },
     nextBuilds: [
       'Add a serverless /api/chartmaker/proxy allowlist for no-key feeds.',
