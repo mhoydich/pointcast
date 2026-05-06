@@ -23,7 +23,10 @@ function assert(condition, message) {
 }
 
 function latestBlockId(blocks) {
-  const ids = blocks
+  const records = Array.isArray(blocks) ? blocks : blocks.blocks;
+  assert(Array.isArray(records), 'blocks.json did not expose a blocks array');
+
+  const ids = records
     .map((block) => Number(block.id))
     .filter((id) => Number.isInteger(id));
 
