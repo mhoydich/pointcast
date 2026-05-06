@@ -224,7 +224,7 @@ const blocks = defineCollection({
     /**
      * Companion surfaces — lightweight cross-link list. When present, /b/{id}
      * renders a COMPANIONS strip pointing at related blocks / YeePlayer
-     * titles / polls / external URLs. Max 8 entries. surface is a display
+     * titles / polls / external URLs. Max 12 entries. surface is a display
      * hint: 'yee' → /yee/{id}, 'poll' → /poll/{id}, 'external' → use id as
      * full URL, default 'block' → /b/{id}.
      */
@@ -232,7 +232,7 @@ const blocks = defineCollection({
       id: z.string().min(1).max(80),
       label: z.string().min(1).max(80),
       surface: z.enum(['yee', 'poll', 'clock', 'block', 'external']).optional(),
-    })).max(8).optional(),
+    })).max(12).optional(),
 
     /** Optional widget — when set, /clock/{id} renders a live world-clock
      *  companion page. Zones resolve from COLLABORATORS (when
