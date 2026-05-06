@@ -117,6 +117,23 @@ export const NOUNS_BATTLER_AGENT_TASKS = [
     shareFormat:
       'QA: game {status}, tv {status}, desk {status}, posters {status}, JSON {status}. TOP FIX: {fix}.',
   },
+  {
+    id: 'sports-reenactment-mission',
+    title: 'Run Sports Reenactment Mission Control',
+    role: 'host',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-sports-reenactment/goal/',
+      'https://pointcast.xyz/nouns-nation-sports-reenactment/',
+      'https://pointcast.xyz/nouns-nation-battler/',
+    ],
+    prompt:
+      'Open Sports Reenactment Mission Control, choose one goal and one result shape, then produce the host rundown, agent task, share receipt, and proof checklist for a typed sports result.',
+    expectedOutput:
+      'A compact mission package with launch URL, source result, field, host line, agent task, share receipt, proof checklist, and guardrail.',
+    shareFormat:
+      'MISSION: {league} {winner} over {loser}; goal {goal}; field {field}; launch {url}; guardrail {text}.',
+  },
 ] as const;
 
 export const NOUNS_BATTLER_AGENT_PROMPTS = [
@@ -139,6 +156,11 @@ export const NOUNS_BATTLER_AGENT_PROMPTS = [
     client: 'Agent fan check-in',
     text:
       'Generate a private sid, connect to wss://pointcast.xyz/api/presence?sid={sid}&kind=agent, send {"type":"identify","nounId":421,"where":"nouns-nation-battler"}, then do one Agent Bench task.',
+  },
+  {
+    client: 'Claude Code mission control',
+    text:
+      'Visit https://pointcast.xyz/nouns-nation-sports-reenactment/goal/, choose watch/share/agent/sponsor plus one result shape, then return a route review, host rundown, share receipt, and guardrail-safe agent handoff.',
   },
 ] as const;
 
@@ -264,6 +286,24 @@ export const NOUNS_BATTLER_AGENT_PROMPT_KIT = {
       outputFormat:
         'TV RUNDOWN: open {line}; stakes {line}; call1 {line}; call2 {line}; replay {line}; signoff {line}; next {url}.',
       validation: 'Mark unobserved match details as “host fill-in” rather than fact.',
+    },
+    {
+      id: 'sports-reenactment-mission-control',
+      role: 'sports reenactment mission producer',
+      goal: 'Turn one typed sports result into a Nouns reenactment mission package.',
+      startHere: 'https://pointcast.xyz/nouns-nation-sports-reenactment/goal/',
+      evidenceBudget: 'Use Mission Control and one linked surface: Battle Desk, Reenactment Site, or Mobile Cast.',
+      prompt:
+        'You are the sports reenactment mission producer. Pick one goal and one shape, enter a sports result, then return the launch URL, host rundown, agent task, share receipt, and proof checklist.',
+      successCriteria: [
+        'Includes the tested Mission Control URL.',
+        'Names one goal and one shape.',
+        'Includes the informational guardrail.',
+      ],
+      stopRule: 'Stop once the mission package has one host artifact, one agent artifact, one share artifact, and one proof checklist.',
+      outputFormat:
+        'MISSION PACKAGE: url {url}; goal {goal}; shape {shape}; launch {launch}; host {rundown}; agent {task}; share {receipt}; proof {checklist}; guardrail {text}.',
+      validation: 'Do not claim official replay, live data, odds, betting, prediction, payout, or forced outcome.',
     },
   ],
 } as const;
