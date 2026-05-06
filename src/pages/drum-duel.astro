@@ -1,0 +1,467 @@
+---
+/**
+ * /drum-duel — 1v1 rhythm tap race.
+ *
+ * Hour 1 of the 4-hour pulse sprint. Two visitors join a queue; when
+ * a second visitor joins, a 20-second match starts. Tap as fast as
+ * you can; whoever has more taps when the timer hits zero wins.
+ *
+ * Backed by /api/chamber kind=duel (extended in same PR).
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Duel · 1v1 Tap Race · PointCast';
+const description =
+  'Two visitors. One queue. Twenty seconds. Whoever has more taps wins. Tap fast.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Duel',
+  url: 'https://pointcast.xyz/drum-duel',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dd" id="dd-main">
+    <DrumNav current="duel" />
+
+    <header class="dd__header">
+      <div class="dd__chrome">
+        <span>DUEL</span>
+        <span class="dd__chrome-sep">·</span>
+        <span id="dd-status">IDLE</span>
+        <span class="dd__chrome-sep">·</span>
+        <span id="dd-timer">--</span>
+      </div>
+      <h1 class="dd__title">DUEL</h1>
+      <p class="dd__tagline">1v1 · 20 seconds · whoever taps more wins</p>
+    </header>
+
+    <section class="dd__stage">
+      <div class="dd__player dd__player--p1" id="dd-p1">
+        <div class="dd__player-noun-wrap">
+          <img class="dd__player-noun" id="dd-p1-noun" src="" alt="" />
+        </div>
+        <div class="dd__player-pid" id="dd-p1-pid">—</div>
+        <div class="dd__player-score" id="dd-p1-score">0</div>
+      </div>
+      <div class="dd__vs">vs</div>
+      <div class="dd__player dd__player--p2" id="dd-p2">
+        <div class="dd__player-noun-wrap">
+          <img class="dd__player-noun" id="dd-p2-noun" src="" alt="" />
+        </div>
+        <div class="dd__player-pid" id="dd-p2-pid">—</div>
+        <div class="dd__player-score" id="dd-p2-score">0</div>
+      </div>
+    </section>
+
+    <section class="dd__action">
+      <button class="dd__btn dd__btn--primary" id="dd-action" type="button">JOIN QUEUE</button>
+    </section>
+
+    <section class="dd__pad-wrap" id="dd-pad-wrap" hidden>
+      <button class="dd__pad" id="dd-pad" type="button" aria-label="Tap to score">
+        <svg viewBox="0 0 80 96" shape-rendering="crispEdges" aria-hidden="true">
+          <rect x="36" y="0" width="8" height="4" fill="#6b4d12"/>
+          <rect x="32" y="4" width="16" height="6" fill="#b8862c"/>
+          <path d="M 14 12 L 66 12 L 70 76 L 10 76 Z" fill="#d4a437"/>
+          <rect x="10" y="76" width="60" height="4" fill="#b8862c"/>
+          <rect x="6" y="80" width="68" height="4" fill="#6b4d12"/>
+          <rect x="38" y="84" width="4" height="8" fill="#3a2410"/>
+          <rect x="20" y="22" width="3" height="40" fill="#fff5c0" opacity="0.5"/>
+        </svg>
+      </button>
+      <p class="dd__pad-cue">tap fast · keyboard SPACE works too</p>
+    </section>
+
+    <section class="dd__recent" id="dd-recent">
+      <header>RECENT MATCHES</header>
+      <ol id="dd-recent-list"><li class="dd__empty">— no matches yet —</li></ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dd-main) { background: #0c0410; }
+  .dd {
+    --dd-velvet: #1a0820; --dd-velvet-deep: #0c0410;
+    --dd-brass: #d4a437; --dd-brass-deep: #6b4d12;
+    --dd-flame: #f6c15e; --dd-rose: #d6346a; --dd-cyan: #3aa9c4;
+    --dd-ink-light: #f4e7c8; --dd-ink-mid: #c9b78c; --dd-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dd-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dd-velvet) 0%, var(--dd-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dd .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dd__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px); }
+  .dd__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dd-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dd-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dd__chrome-sep { color: var(--dd-brass-deep); }
+  #dd-status, #dd-timer { color: var(--dd-flame); font-weight: 700; }
+
+  .dd__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dd-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dd-velvet-deep);
+  }
+  .dd__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dd-ink-mid);
+  }
+
+  .dd__stage {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: clamp(16px, 3vw, 40px);
+    align-items: center;
+    max-width: 880px; margin: 0 auto clamp(24px, 4vh, 36px);
+  }
+  .dd__player {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 18px 14px;
+    border: 1.5px solid var(--dd-brass-deep);
+    background: linear-gradient(180deg, rgba(44, 13, 54, 0.55), rgba(12, 4, 16, 0.78));
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .dd__player--mine { border-color: var(--dd-flame); box-shadow: 0 0 24px rgba(246, 193, 94, 0.30); }
+  .dd__player--win { border-color: var(--dd-flame); box-shadow: 0 0 40px rgba(246, 193, 94, 0.60); }
+  .dd__player-noun-wrap {
+    width: 96px; height: 96px;
+    border: 2px solid var(--dd-brass);
+    background: rgba(0, 0, 0, 0.40);
+  }
+  .dd__player-noun { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+  .dd__player-pid {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.18em; color: var(--dd-ink-mid);
+  }
+  .dd__player-score {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 7vw, 84px); color: var(--dd-flame); line-height: 1;
+    text-shadow: 0 0 30px rgba(246, 193, 94, 0.40);
+  }
+
+  .dd__vs {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(28px, 4vw, 48px); color: var(--dd-rose);
+    font-style: italic;
+  }
+
+  .dd__action {
+    text-align: center; margin-bottom: clamp(20px, 3vh, 32px);
+  }
+  .dd__btn {
+    appearance: none; border: 0; cursor: pointer;
+    padding: 14px 36px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px; font-weight: 800; letter-spacing: 0.24em;
+    color: var(--dd-velvet-deep);
+    background: linear-gradient(180deg, var(--dd-brass) 0%, oklch(0.62 0.18 60) 100%);
+    box-shadow: 0 0 0 2px var(--dd-velvet-deep), 0 4px 0 0 var(--dd-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+    transition: transform 80ms;
+  }
+  .dd__btn:hover { background: linear-gradient(180deg, #efbb46 0%, var(--dd-brass) 100%); }
+  .dd__btn:active { transform: translateY(3px); }
+  .dd__btn--primary[disabled] { opacity: 0.6; cursor: wait; }
+
+  .dd__pad-wrap { text-align: center; margin: 0 auto clamp(20px, 3vh, 32px); }
+  .dd__pad {
+    appearance: none; border: 0; cursor: pointer;
+    width: clamp(160px, 22vw, 220px); aspect-ratio: 80 / 96;
+    background: transparent; padding: 0;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.6));
+    transition: transform 60ms;
+  }
+  .dd__pad:active, .dd__pad.dd__pad--struck {
+    transform: translateY(2px) scale(0.98);
+  }
+  .dd__pad svg { width: 100%; height: 100%; display: block; }
+  .dd__pad-cue {
+    margin-top: 10px; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 13px; color: var(--dd-ink-dim);
+  }
+
+  .dd__recent {
+    max-width: 540px; margin: 0 auto;
+    padding-top: clamp(14px, 2vh, 22px);
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .dd__recent header {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.30em; color: var(--dd-brass);
+    text-transform: uppercase; margin-bottom: 12px; text-align: center;
+  }
+  #dd-recent-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  #dd-recent-list li {
+    display: flex; gap: 10px; align-items: center;
+    padding: 6px 10px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; color: var(--dd-ink-mid);
+    border-left: 2px solid var(--dd-brass-deep);
+    background: rgba(0, 0, 0, 0.20);
+  }
+  .dd__empty { color: var(--dd-ink-dim) !important; font-style: italic; font-family: 'Lora', Georgia, serif !important; border-left: 0 !important; background: none !important; }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playTap() {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 783.99;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.10, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.20);
+  }
+  function playStart() {
+    const a = ctx(); const t = a.currentTime;
+    [523.25, 659.25].forEach((f, i) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = a.createGain();
+      const off = i * 0.18;
+      g.gain.setValueAtTime(0.0001, t + off); g.gain.exponentialRampToValueAtTime(0.16, t + off + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.7);
+      o.connect(g).connect(a.destination);
+      o.start(t + off); o.stop(t + off + 0.8);
+    });
+  }
+  function playEnd(won) {
+    const a = ctx(); const t = a.currentTime;
+    const notes = won ? [659.25, 783.99, 1046.50] : [261.63, 220.00, 196.00];
+    notes.forEach((f, i) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = a.createGain();
+      const off = i * 0.20;
+      g.gain.setValueAtTime(0.0001, t + off); g.gain.exponentialRampToValueAtTime(0.18, t + off + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + off + 1.4);
+      o.connect(g).connect(a.destination);
+      o.start(t + off); o.stop(t + off + 1.5);
+    });
+  }
+
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  let MY_PID = '';
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+  }
+
+  const statusEl = document.getElementById('dd-status');
+  const timerEl = document.getElementById('dd-timer');
+  const p1Pid = document.getElementById('dd-p1-pid');
+  const p1Noun = document.getElementById('dd-p1-noun');
+  const p1Score = document.getElementById('dd-p1-score');
+  const p2Pid = document.getElementById('dd-p2-pid');
+  const p2Noun = document.getElementById('dd-p2-noun');
+  const p2Score = document.getElementById('dd-p2-score');
+  const p1El = document.getElementById('dd-p1');
+  const p2El = document.getElementById('dd-p2');
+  const actionBtn = document.getElementById('dd-action');
+  const padWrap = document.getElementById('dd-pad-wrap');
+  const padEl = document.getElementById('dd-pad');
+  const recentList = document.getElementById('dd-recent-list');
+
+  let inMatch = false;
+  let isP1 = false;
+  let endsAt = 0;
+  let lastEndedMatch = null;
+  let endedHandled = new Set();
+
+  async function api(action) {
+    try {
+      const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'duel', action, sessionId: SID }) });
+      return r.json();
+    } catch { return { ok: false }; }
+  }
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=duel', { cache: 'no-store' });
+      return r.json();
+    } catch { return null; }
+  }
+
+  function clearPlayer(side) {
+    const pid = side === 1 ? p1Pid : p2Pid;
+    const noun = side === 1 ? p1Noun : p2Noun;
+    const score = side === 1 ? p1Score : p2Score;
+    if (pid) pid.textContent = '—';
+    if (noun) noun.src = '';
+    if (score) score.textContent = '0';
+  }
+  function paintPlayer(side, p, score) {
+    const pidEl = side === 1 ? p1Pid : p2Pid;
+    const nounEl = side === 1 ? p1Noun : p2Noun;
+    const scoreEl = side === 1 ? p1Score : p2Score;
+    if (pidEl) pidEl.textContent = p.pid?.slice(0, 8) + '…' || '—';
+    if (nounEl && p.nounId) nounEl.src = `https://noun.pics/${p.nounId}.svg`;
+    if (scoreEl) scoreEl.textContent = String(score);
+  }
+
+  function paintRecent(recent) {
+    if (!recentList) return;
+    if (!recent || recent.length === 0) { recentList.innerHTML = '<li class="dd__empty">— no matches yet —</li>'; return; }
+    recentList.innerHTML = '';
+    recent.slice(0, 8).forEach((m) => {
+      const li = document.createElement('li');
+      const winner = m.winnerPid ? m.winnerPid.slice(0, 6) : 'tie';
+      li.textContent = `${m.p1Pid.slice(0, 6)}… ${m.p1Taps} – ${m.p2Taps} ${m.p2Pid.slice(0, 6)}… · win: ${winner}…`;
+      recentList.appendChild(li);
+    });
+  }
+
+  function paint(state) {
+    if (!state) return;
+    paintRecent(state.recent || []);
+    if (state.active) {
+      const m = state.active;
+      inMatch = m.p1Pid === MY_PID || m.p2Pid === MY_PID;
+      isP1 = m.p1Pid === MY_PID;
+      endsAt = m.startedAt + m.durationMs;
+      paintPlayer(1, { pid: m.p1Pid, nounId: m.p1Noun }, m.p1Taps);
+      paintPlayer(2, { pid: m.p2Pid, nounId: m.p2Noun }, m.p2Taps);
+      if (p1El) p1El.classList.toggle('dd__player--mine', isP1);
+      if (p2El) p2El.classList.toggle('dd__player--mine', !isP1 && inMatch);
+      if (statusEl) statusEl.textContent = inMatch ? 'YOUR MATCH' : 'IN PROGRESS';
+      if (padWrap) padWrap.hidden = !inMatch;
+      if (actionBtn) {
+        actionBtn.hidden = inMatch;
+        actionBtn.textContent = inMatch ? '' : 'WATCHING — JOIN QUEUE';
+      }
+    } else {
+      const wasInMatch = inMatch;
+      inMatch = false;
+      if (padWrap) padWrap.hidden = true;
+      if (state.waiting) {
+        const waiterIsMe = state.waiting.pid === MY_PID;
+        if (statusEl) statusEl.textContent = waiterIsMe ? 'WAITING FOR OPPONENT' : '1 IN QUEUE — JOIN TO START';
+        if (waiterIsMe) {
+          paintPlayer(1, { pid: state.waiting.pid, nounId: state.waiting.nounId }, 0);
+          if (p1El) p1El.classList.add('dd__player--mine');
+          clearPlayer(2);
+        } else {
+          paintPlayer(1, { pid: state.waiting.pid, nounId: state.waiting.nounId }, 0);
+          clearPlayer(2);
+        }
+        if (actionBtn) {
+          actionBtn.hidden = false;
+          actionBtn.textContent = waiterIsMe ? 'WAITING…' : 'JOIN AND START';
+          actionBtn.disabled = waiterIsMe;
+        }
+      } else {
+        clearPlayer(1); clearPlayer(2);
+        if (p1El) p1El.classList.remove('dd__player--mine', 'dd__player--win');
+        if (p2El) p2El.classList.remove('dd__player--mine', 'dd__player--win');
+        if (statusEl) statusEl.textContent = 'IDLE';
+        if (actionBtn) { actionBtn.hidden = false; actionBtn.disabled = false; actionBtn.textContent = 'JOIN QUEUE'; }
+      }
+      // Just-ended match — show winner glow + audio (once)
+      const newest = state.recent?.[0];
+      if (newest && wasInMatch && !endedHandled.has(newest.matchId)) {
+        endedHandled.add(newest.matchId);
+        const myWin = newest.winnerPid === MY_PID;
+        try { playEnd(myWin); } catch {}
+        if (newest.p1Pid === MY_PID && newest.winnerPid === MY_PID) p1El?.classList.add('dd__player--win');
+        if (newest.p2Pid === MY_PID && newest.winnerPid === MY_PID) p2El?.classList.add('dd__player--win');
+        setTimeout(() => {
+          p1El?.classList.remove('dd__player--win');
+          p2El?.classList.remove('dd__player--win');
+        }, 4000);
+      }
+    }
+    // Timer
+    if (inMatch && endsAt) {
+      const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      if (timerEl) timerEl.textContent = `${left}S`;
+    } else if (timerEl) {
+      timerEl.textContent = '--';
+    }
+  }
+
+  // Tap → optimistic + server
+  let lastTapAt = 0;
+  async function tap() {
+    if (!inMatch) return;
+    const now = performance.now();
+    if (now - lastTapAt < 30) return; // soft client throttle
+    lastTapAt = now;
+    try { playTap(); } catch {}
+    if (padEl) {
+      padEl.classList.remove('dd__pad--struck');
+      void padEl.offsetWidth;
+      padEl.classList.add('dd__pad--struck');
+      setTimeout(() => padEl?.classList.remove('dd__pad--struck'), 120);
+    }
+    // Optimistic local increment
+    const myEl = isP1 ? p1Score : p2Score;
+    if (myEl) myEl.textContent = String((parseInt(myEl.textContent || '0', 10) || 0) + 1);
+    // Fire and forget
+    fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'duel', action: 'tap', sessionId: SID }) }).catch(() => {});
+  }
+
+  padEl?.addEventListener('click', tap);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat && inMatch) {
+      e.preventDefault(); tap();
+    }
+  });
+
+  actionBtn?.addEventListener('click', async () => {
+    if (actionBtn) actionBtn.disabled = true;
+    const j = await api('join');
+    if (j?.ok) {
+      paint(j.state);
+      if (j.state?.active && (j.state.active.p1Pid === MY_PID || j.state.active.p2Pid === MY_PID)) {
+        try { playStart(); } catch {}
+      }
+    }
+    setTimeout(() => { if (actionBtn) actionBtn.disabled = false; }, 1500);
+  });
+
+  async function poll() {
+    const j = await fetchState();
+    if (j?.ok) paint(j.state);
+  }
+
+  (async () => { MY_PID = await sha256short(SID); poll(); })();
+  setInterval(poll, 1500);
+  // Update timer locally between polls
+  setInterval(() => {
+    if (inMatch && endsAt && timerEl) {
+      const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      timerEl.textContent = `${left}S`;
+    }
+  }, 250);
+</script>

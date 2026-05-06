@@ -39,7 +39,7 @@ function json(body: unknown, init?: ResponseInit): Response {
   });
 }
 
-const KINDS = ['lobby', 'echo', 'procession', 'now', 'threshold', 'offering'] as const;
+const KINDS = ['lobby', 'echo', 'procession', 'now', 'threshold', 'offering', 'duel', 'warhol', 'relay'] as const;
 type Kind = typeof KINDS[number];
 
 const TTL: Record<Kind, number> = {
@@ -49,6 +49,9 @@ const TTL: Record<Kind, number> = {
   now: 90,
   threshold: 24 * 3600,
   offering: 14 * 24 * 3600,
+  duel: 600,
+  warhol: 7 * 24 * 3600,
+  relay: 7 * 24 * 3600,
 };
 
 const PRESENCE_WINDOW_MS = 30000;
@@ -65,6 +68,27 @@ interface ProcessionState { totalSteps: number; lastFiveSteps: ProcessionStep[];
 interface NowState { visitors: Visitor[]; lastUpdated: number; }
 interface ThresholdState { candles: { pid: string; name: string; nounId: number; lit: number }[]; }
 interface OfferingState { offerings: Offering[]; }
+
+interface DuelMatch {
+  matchId: string;
+  p1Pid: string; p1Hue: number; p1Noun: number; p1Taps: number;
+  p2Pid: string; p2Hue: number; p2Noun: number; p2Taps: number;
+  startedAt: number;
+  durationMs: number;
+  endedAt?: number;
+  winnerPid?: string;
+}
+interface DuelState {
+  waiting: { pid: string; hue: number; nounId: number; joinedAt: number } | null;
+  active: DuelMatch | null;
+  recent: DuelMatch[];
+}
+
+interface WarholTile { idx: number; hue: number; pidShort: string; t: number; nounId: number; }
+interface WarholState { tiles: WarholTile[]; touchCount: number; }
+
+interface RelayLink { pid: string; t: number; pattern: number[]; hue: number; nounId: number; }
+interface RelayState { chain: RelayLink[]; }
 
 function nounIdFromString(s: string): number {
   let h = 0;
@@ -227,6 +251,98 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       state.offerings.unshift({ pid, t: now, nounId, intention, hue });
       state.offerings = state.offerings.slice(0, 60);
       await saveState(env, 'offering', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'duel') {
+    const state = (await loadState<DuelState>(env, 'duel')) ?? { waiting: null, active: null, recent: [] };
+    const DUEL_DUR_MS = 20000;
+    // End an expired active match before any action
+    if (state.active && now - state.active.startedAt >= state.active.durationMs) {
+      const m = state.active;
+      m.endedAt = now;
+      m.winnerPid = m.p1Taps === m.p2Taps ? '' : (m.p1Taps > m.p2Taps ? m.p1Pid : m.p2Pid);
+      state.recent.unshift(m);
+      state.recent = state.recent.slice(0, 10);
+      state.active = null;
+    }
+    if (action === 'join') {
+      // If pid is already in active, no-op
+      if (state.active && (state.active.p1Pid === pid || state.active.p2Pid === pid)) {
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      // If waiting and it's me, no-op (refresh joinedAt)
+      if (state.waiting && state.waiting.pid === pid) {
+        state.waiting.joinedAt = now;
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      // If waiting is someone else and there's no active match, start match
+      if (state.waiting && !state.active) {
+        const matchId = `m${now.toString(36).slice(-6)}${pid.slice(0, 4)}`;
+        const opp = state.waiting;
+        state.active = {
+          matchId,
+          p1Pid: opp.pid, p1Hue: opp.hue, p1Noun: nounIdFromString(opp.pid), p1Taps: 0,
+          p2Pid: pid, p2Hue: hue, p2Noun: nounId, p2Taps: 0,
+          startedAt: now,
+          durationMs: DUEL_DUR_MS,
+        };
+        state.waiting = null;
+      } else if (!state.waiting && !state.active) {
+        // Become the waiter
+        state.waiting = { pid, hue, nounId, joinedAt: now };
+      }
+      // Stale waiter: replace if older than 60s
+      if (state.waiting && now - state.waiting.joinedAt > 60000 && state.waiting.pid !== pid) {
+        state.waiting = { pid, hue, nounId, joinedAt: now };
+      }
+      await saveState(env, 'duel', state);
+      return json({ ok: true, state });
+    }
+    if (action === 'tap') {
+      if (state.active) {
+        if (state.active.p1Pid === pid) state.active.p1Taps += 1;
+        else if (state.active.p2Pid === pid) state.active.p2Taps += 1;
+        else return json({ ok: false, reason: 'not-in-match', state }, { status: 400 });
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      return json({ ok: false, reason: 'no-match', state }, { status: 400 });
+    }
+    if (action === 'leave') {
+      if (state.waiting && state.waiting.pid === pid) state.waiting = null;
+      await saveState(env, 'duel', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'warhol') {
+    const state = (await loadState<WarholState>(env, 'warhol')) ?? { tiles: [], touchCount: 0 };
+    if (action === 'paint') {
+      const idx = Number(body.intention) | 0; // overload: idx field reused as 0..23
+      if (idx < 0 || idx > 23) return json({ ok: false, reason: 'bad-tile' }, { status: 400 });
+      // Replace any existing tile for that idx
+      state.tiles = state.tiles.filter((t) => t.idx !== idx);
+      state.tiles.push({ idx, hue, pidShort: pid.slice(0, 6), t: now, nounId });
+      state.touchCount += 1;
+      await saveState(env, 'warhol', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'relay') {
+    const state = (await loadState<RelayState>(env, 'relay')) ?? { chain: [] };
+    if (action === 'link') {
+      const pattern = Array.isArray(body.pattern)
+        ? (body.pattern as unknown[]).slice(0, 3).map((n) => Math.max(0, Math.min(2000, Number(n) || 0)))
+        : [];
+      if (pattern.length !== 3) return json({ ok: false, reason: 'pattern-must-be-3' }, { status: 400 });
+      state.chain.unshift({ pid, t: now, pattern, hue, nounId });
+      state.chain = state.chain.slice(0, 12);
+      await saveState(env, 'relay', state);
       return json({ ok: true, state });
     }
   }
