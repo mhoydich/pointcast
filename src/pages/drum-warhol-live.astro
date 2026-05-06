@@ -1,0 +1,254 @@
+---
+/**
+ * /drum-warhol-live — shared pop-art wall.
+ *
+ * Hour 2 of the 4-hour pulse sprint. A 6×4 = 24-tile grid. Each tile
+ * holds a Noun. Click any tile to repaint it with YOUR hue. Every
+ * visitor sees the update on their next poll (2s). Tiles persist 7
+ * days. The wall is the chamber's collective Warhol piece.
+ *
+ * Backed by /api/chamber kind=warhol (added with hour-1 chamber edit).
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Warhol Live · Shared Pop-Art Wall · PointCast';
+const description =
+  'Twenty-four tiles, one shared wall. Click a tile to repaint it your color. Everyone sees it.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Warhol Live',
+  url: 'https://pointcast.xyz/drum-warhol-live',
+  description,
+  applicationCategory: 'VisualArts',
+};
+
+// Twenty-four base Nouns — fixed across visitors. Hue gets repainted live.
+const NOUNS = [42, 156, 411, 678, 805, 96, 234, 567, 1100, 808, 333, 777, 21, 88, 444, 999, 17, 250, 615, 1023, 4, 391, 752, 1180];
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dwl" id="dwl-main">
+    <DrumNav current="warhol-live" />
+
+    <header class="dwl__header">
+      <div class="dwl__chrome">
+        <span>WARHOL · LIVE</span>
+        <span class="dwl__chrome-sep">·</span>
+        <span><span id="dwl-touches">0</span> TOUCHES</span>
+        <span class="dwl__chrome-sep">·</span>
+        <span><span id="dwl-mine">0</span> MINE</span>
+      </div>
+      <h1 class="dwl__title">WALL</h1>
+      <p class="dwl__tagline">click a tile · paint it your color · everyone sees it</p>
+    </header>
+
+    <section class="dwl__grid" id="dwl-grid">
+      {NOUNS.map((seed, i) => (
+        <button class="dwl__tile" data-idx={i} data-seed={seed} type="button" aria-label={`Tile ${i + 1}`}>
+          <div class="dwl__tile-bg" style={`background: oklch(0.65 0.20 ${(i * 53) % 360})`}></div>
+          <img class="dwl__tile-noun" src={`https://noun.pics/${seed}.svg`} alt="" loading="lazy" />
+          <span class="dwl__tile-tag" data-tile-tag>—</span>
+        </button>
+      ))}
+    </section>
+
+    <p class="dwl__note">
+      The wall is shared across every visitor. Each visitor has a unique hue derived from their session;
+      tap any tile to repaint it your color. The chamber holds the wall for 7 days. Touch counter and
+      "mine" counter are live.
+    </p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dwl-main) { background: #f4e7c8; }
+  .dwl {
+    --dwl-paper: #f4e7c8;
+    --dwl-ink: #1a1a1a;
+    --dwl-rose: #c4351c;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 32px clamp(16px, 2vw, 56px) 48px;
+    color: var(--dwl-ink);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background: var(--dwl-paper);
+    min-height: calc(100vh - 80px);
+  }
+  .dwl .drum-nav { opacity: 0.55; }
+
+  .dwl__header { text-align: center; margin-bottom: clamp(24px, 4vh, 36px); }
+  .dwl__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 5px 18px; border: 2px solid var(--dwl-ink);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dwl-ink); background: #ffffff;
+  }
+  .dwl__chrome-sep { color: var(--dwl-rose); }
+  #dwl-touches, #dwl-mine { color: var(--dwl-rose); font-weight: 700; }
+
+  .dwl__title {
+    margin: clamp(12px, 1.6vh, 20px) 0 8px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 8vw, 108px); font-weight: 400; letter-spacing: 0.04em;
+    color: var(--dwl-ink); line-height: 0.95;
+  }
+  .dwl__tagline {
+    margin: 0 auto; max-width: 520px;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.3vw, 18px); color: #5a5a5a;
+  }
+
+  .dwl__grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: clamp(6px, 1vw, 14px);
+    max-width: 1080px; margin: 0 auto;
+    padding: 14px;
+    background: #d8c89e;
+    border: 2px solid var(--dwl-ink);
+  }
+  @media (max-width: 720px) { .dwl__grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .dwl__tile {
+    position: relative;
+    appearance: none; cursor: pointer;
+    aspect-ratio: 1;
+    background: transparent;
+    border: 0;
+    overflow: hidden;
+    box-shadow: 0 4px 0 0 #1a1a1a, 0 4px 14px rgba(0, 0, 0, 0.18);
+    transition: transform 100ms;
+  }
+  .dwl__tile:hover { transform: translateY(-1px); }
+  .dwl__tile:active { transform: translateY(2px); }
+  .dwl__tile-bg {
+    position: absolute; inset: 0;
+    transition: background 600ms ease-out;
+  }
+  .dwl__tile-noun {
+    position: absolute; inset: 6%;
+    width: 88%; height: 88%; object-fit: contain;
+    image-rendering: pixelated;
+    /* Pop-art saturate + contrast */
+    filter: saturate(1.4) contrast(1.15);
+  }
+  .dwl__tile-tag {
+    position: absolute; bottom: 4px; left: 4px;
+    padding: 1px 6px;
+    background: rgba(0, 0, 0, 0.75); color: #ffce00;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px; letter-spacing: 0.16em; font-weight: 700; text-transform: uppercase;
+  }
+  .dwl__tile.dwl__tile--mine {
+    box-shadow: 0 4px 0 0 var(--dwl-rose), 0 4px 14px rgba(196, 53, 28, 0.35);
+  }
+
+  .dwl__note {
+    max-width: 720px; margin: clamp(28px, 4vh, 40px) auto 0;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 14px; line-height: 1.6;
+    color: #3a3a3a; text-align: center;
+  }
+</style>
+
+<script>
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  let MY_PID = '';
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+  }
+
+  const tileEls = Array.from(document.querySelectorAll('.dwl__tile'));
+  const touchesEl = document.getElementById('dwl-touches');
+  const mineEl = document.getElementById('dwl-mine');
+
+  function paint(state) {
+    if (!state) return;
+    if (touchesEl) touchesEl.textContent = String(state.touchCount || 0);
+    const tiles = state.tiles || [];
+    const byIdx = new Map();
+    tiles.forEach((t) => byIdx.set(t.idx, t));
+    let mineCount = 0;
+    tileEls.forEach((el) => {
+      const idx = parseInt(el.dataset.idx || '0', 10);
+      const t = byIdx.get(idx);
+      const bg = el.querySelector('.dwl__tile-bg');
+      const tag = el.querySelector('[data-tile-tag]');
+      if (t) {
+        if (bg) bg.style.background = `oklch(0.65 0.22 ${t.hue})`;
+        if (tag) tag.textContent = t.pidShort.slice(0, 6);
+        const mine = MY_PID && t.pidShort.startsWith(MY_PID.slice(0, 6));
+        el.classList.toggle('dwl__tile--mine', mine);
+        if (mine) mineCount += 1;
+      } else {
+        // default OKLCH per index
+        if (bg) bg.style.background = `oklch(0.65 0.20 ${(idx * 53) % 360})`;
+        if (tag) tag.textContent = '—';
+        el.classList.remove('dwl__tile--mine');
+      }
+    });
+    if (mineEl) mineEl.textContent = String(mineCount);
+  }
+
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=warhol', { cache: 'no-store' });
+      const j = await r.json();
+      if (j?.ok) paint(j.state);
+    } catch {}
+  }
+
+  // Local audio: short pop on paint
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playPop() {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 660;
+    o.frequency.exponentialRampToValueAtTime(330, t + 0.08);
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.20);
+  }
+
+  async function paintTile(idx) {
+    try { playPop(); } catch {}
+    try {
+      const r = await fetch('/api/chamber', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        // Reuse the 'intention' field as the tile index (chamber accepts it)
+        body: JSON.stringify({ kind: 'warhol', action: 'paint', sessionId: SID, intention: idx }),
+      });
+      const j = await r.json();
+      if (j?.ok) paint(j.state);
+    } catch {}
+  }
+
+  tileEls.forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.idx || '0', 10);
+      paintTile(idx);
+    });
+  });
+
+  (async () => { MY_PID = await sha256short(SID); fetchState(); })();
+  setInterval(fetchState, 2000);
+</script>
