@@ -13,6 +13,7 @@ import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import {
   ANCHOR,
+  FIELD_DESK_2026,
   RADIUS_MILES,
   RADIUS_METERS,
   NAME_DROPS,
@@ -67,6 +68,7 @@ export const GET: APIRoute = async () => {
       valueYieldJson: 'https://pointcast.xyz/nature-yield.json',
       blockUrl: 'https://pointcast.xyz/b/0330',
       plantingBlockUrl: 'https://pointcast.xyz/b/0331',
+      fieldDesk2026: FIELD_DESK_2026,
       notes: NATURE_NOTES,
       plantingPalette: NATIVE_PLANTING_PALETTE,
       valueYieldSystem: {

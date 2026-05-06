@@ -14,6 +14,7 @@ import { CHANNELS } from '../lib/channels';
 import { GARDEN_YIELD_CONTEXT, GARDEN_YIELD_METRICS } from '../lib/garden-yield';
 import {
   ANCHOR,
+  FIELD_DESK_2026,
   NATURE_NOTES,
   NATURE_OVERVIEW_AREAS,
   NATIVE_PLANTING_PALETTE,
@@ -29,7 +30,10 @@ const relatedBlocks = filterInRangeBlocks(blocks)
   .slice(0, 10);
 
 const plantCount = NATURE_NOTES.filter((note) => note.kind === 'plant').length;
-const sourceCount = new Set(NATURE_NOTES.map((note) => note.sourceUrl)).size;
+const sourceCount = new Set([
+  ...NATURE_NOTES.map((note) => note.sourceUrl),
+  ...FIELD_DESK_2026.sources.map((source) => source.url),
+]).size;
 const paletteCount = NATIVE_PLANTING_PALETTE.length;
 const overviewSignals = NATURE_OVERVIEW_AREAS.flatMap((area) => area.signals);
 
@@ -106,6 +110,59 @@ const jsonLd = {
         </dl>
       </div>
     </header>
+
+    <section id="field-desk-2026" class="field-desk" aria-labelledby="field-desk-title">
+      <div class="field-desk__head">
+        <p class="kicker">2026 FIELD DESK · AS OF {FIELD_DESK_2026.asOf}</p>
+        <h2 id="field-desk-title">{FIELD_DESK_2026.title}</h2>
+        <p>{FIELD_DESK_2026.dek}</p>
+        <div class="field-desk__actions" aria-label="Field desk links">
+          <a href={`/b/${FIELD_DESK_2026.blockId}`}>Read block</a>
+          <a href="/nature.json">Open JSON</a>
+          <a href="https://wildlife.ca.gov/Fishing/Ocean/Grunion" target="_blank" rel="noopener">Grunion rules</a>
+        </div>
+      </div>
+
+      <div class="field-desk__signals" aria-label="Current field signals">
+        {FIELD_DESK_2026.currentSignals.map((signal) => (
+          <article>
+            <div>
+              <span class="field-desk__label mono">{signal.label}</span>
+              <span class="field-desk__status mono">{signal.status}</span>
+            </div>
+            <p>{signal.read}</p>
+            <small>{signal.next}</small>
+            <a href={signal.sourceUrl} target="_blank" rel="noopener" class="field-desk__source mono">
+              {signal.sourceLabel}
+            </a>
+          </article>
+        ))}
+      </div>
+
+      <div class="field-desk__lower">
+        <section class="field-desk__observations" aria-label="Recent community observations">
+          <p class="field-desk__subhead mono">RECENT COMMUNITY OBSERVATIONS</p>
+          <ul>
+            {FIELD_DESK_2026.observations.map((observation) => (
+              <li>
+                <a href={observation.sourceUrl} target="_blank" rel="noopener">
+                  <span>{observation.observedOn}</span>
+                  <strong>{observation.name}</strong>
+                  <em>{observation.scientific} · {observation.place}</em>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section class="field-desk__rules" aria-label="Low-impact field rules">
+          <p class="field-desk__subhead mono">LOW-IMPACT RULES</p>
+          <ol>
+            {FIELD_DESK_2026.fieldRules.map((rule) => <li>{rule}</li>)}
+          </ol>
+        </section>
+      </div>
+    </section>
 
     <section class="overview" aria-labelledby="overview-title">
       <div class="overview__intro">
@@ -441,6 +498,185 @@ const jsonLd = {
   .hero__signal dd {
     color: #12110E;
     font-weight: 500;
+  }
+
+  .field-desk {
+    display: grid;
+    gap: 14px;
+    margin: 24px 0;
+    padding: 16px;
+    border: 1.5px solid #1f7a8c;
+    border-radius: 2px;
+    background:
+      linear-gradient(90deg, rgba(31, 122, 140, 0.12) 1px, transparent 1px) 0 0 / 24px 24px,
+      linear-gradient(0deg, rgba(31, 122, 140, 0.1) 1px, transparent 1px) 0 0 / 24px 24px,
+      linear-gradient(135deg, #f4fbfb, #fffaf1 52%, #f8f7fc);
+  }
+
+  .field-desk__head {
+    display: grid;
+    gap: 10px;
+    max-width: 860px;
+  }
+
+  .field-desk__head h2 {
+    max-width: 12ch;
+    margin: 0;
+    color: #12110E;
+    font-size: clamp(42px, 8vw, 86px);
+    line-height: 0.92;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .field-desk__head p:not(.kicker) {
+    max-width: 68ch;
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 16px;
+    line-height: 1.52;
+  }
+
+  .field-desk__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .field-desk__actions a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid rgba(31, 122, 140, 0.32);
+    background: rgba(255, 255, 255, 0.78);
+    color: #074638;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .field-desk__actions a:hover,
+  .field-desk__source:hover,
+  .field-desk__observations a:hover {
+    color: #1f7a8c;
+    text-decoration: none;
+  }
+
+  .field-desk__signals {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .field-desk__signals article,
+  .field-desk__observations,
+  .field-desk__rules {
+    min-width: 0;
+    border: 1px solid rgba(18, 17, 14, 0.16);
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  .field-desk__signals article {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    min-height: 220px;
+    padding: 12px;
+  }
+
+  .field-desk__signals article div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: space-between;
+  }
+
+  .field-desk__label {
+    color: #074638;
+    font-weight: 700;
+  }
+
+  .field-desk__status {
+    color: #834f0a;
+  }
+
+  .field-desk__signals p {
+    margin: 0;
+    color: #12110E;
+    font-size: 15px;
+    line-height: 1.38;
+  }
+
+  .field-desk__signals small {
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.42;
+  }
+
+  .field-desk__source {
+    align-self: end;
+    color: #1f7a8c;
+    font-weight: 700;
+  }
+
+  .field-desk__lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    gap: 10px;
+  }
+
+  .field-desk__observations,
+  .field-desk__rules {
+    padding: 12px;
+  }
+
+  .field-desk__subhead {
+    margin: 0 0 10px;
+    color: #074638;
+    font-weight: 700;
+  }
+
+  .field-desk__observations ul,
+  .field-desk__rules ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .field-desk__observations a {
+    display: grid;
+    grid-template-columns: 86px minmax(140px, 0.6fr) minmax(0, 1fr);
+    gap: 8px;
+    color: var(--pc-ink);
+  }
+
+  .field-desk__observations span,
+  .field-desk__observations em {
+    color: var(--pc-ink-soft);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .field-desk__observations strong {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .field-desk__observations em {
+    font-style: normal;
+  }
+
+  .field-desk__rules li {
+    padding-left: 14px;
+    border-left: 3px solid rgba(31, 122, 140, 0.28);
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.42;
   }
 
   .overview {
@@ -986,6 +1222,8 @@ const jsonLd = {
   @media (max-width: 760px) {
     .hero,
     .overview,
+    .field-desk__signals,
+    .field-desk__lower,
     .houseplant-bridge,
     .value-bridge,
     .transect__steps,
@@ -1006,6 +1244,9 @@ const jsonLd = {
       grid-template-columns: 1fr;
       gap: 4px;
     }
+    .field-desk__observations a {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 560px) {
@@ -1013,7 +1254,8 @@ const jsonLd = {
       padding-inline: 14px;
     }
     .hero h1,
-    .overview__intro h2 {
+    .overview__intro h2,
+    .field-desk__head h2 {
       font-size: clamp(36px, 12vw, 48px);
       line-height: 0.96;
     }
