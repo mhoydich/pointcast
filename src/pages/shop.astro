@@ -9,7 +9,10 @@ import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import {
   CHECKOUT_POLICY,
+  commerceLane,
+  commerceLaneLabel,
   checkoutHost,
+  shopLaneUrl,
   sourceKind,
   sourceLabel,
 } from '../lib/commerce';
@@ -27,6 +30,11 @@ const seltzerCount = products.filter((p) => /seltzer|drink|mix seltzer/i.test(p.
 const gummyCount = products.filter((p) => /gumm/i.test(p.data.category || p.data.name)).length;
 const enhancerCount = products.filter((p) => /enhancer/i.test(p.data.category || p.data.name)).length;
 const hosts = Array.from(new Set(products.map((p) => checkoutHost(p.data.url)))).sort();
+const firstSlugByLane = new Map<string, string>();
+for (const product of products) {
+  const lane = commerceLane(product.data);
+  if (!firstSlugByLane.has(lane)) firstSlugByLane.set(lane, product.data.slug);
+}
 
 const title = 'PointCast Commerce';
 const description = 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.';
@@ -119,27 +127,27 @@ function price(product: ProductEntry): string {
     </dl>
 
     <section class="lanes" aria-label="Shop lanes">
-      <a class="lane lane--good-feels" href="#catalog">
+      <a class="lane lane--good-feels" href={shopLaneUrl('good-feels')}>
         <span class="lane__kicker mono">LIVE MIRROR</span>
         <span class="lane__title">Good Feels</span>
         <span class="lane__meta mono">{goodFeelsProducts.length} entries</span>
       </a>
-      <a class="lane lane--seltzers" href="#catalog">
+      <a class="lane lane--seltzers" href={shopLaneUrl('seltzers')}>
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Seltzers</span>
         <span class="lane__meta mono">{seltzerCount} entries</span>
       </a>
-      <a class="lane lane--gummies" href="#catalog">
+      <a class="lane lane--gummies" href={shopLaneUrl('gummies')}>
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Gummies</span>
         <span class="lane__meta mono">{gummyCount} entries</span>
       </a>
-      <a class="lane lane--enhancers" href="#catalog">
+      <a class="lane lane--enhancers" href={shopLaneUrl('enhancers')}>
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Enhancers</span>
         <span class="lane__meta mono">{enhancerCount} entries</span>
       </a>
-      <a class="lane lane--merch" href="#pointcast-merch">
+      <a class="lane lane--merch" href={shopLaneUrl('pointcast-merch')}>
         <span class="lane__kicker mono">COMING SOON</span>
         <span class="lane__title">PointCast Merch</span>
         <span class="lane__meta mono">{pointcastMerchProducts.length} public entries</span>
@@ -157,6 +165,7 @@ function price(product: ProductEntry): string {
     </section>
 
     <section id="catalog" class="products" aria-labelledby="products-title">
+      <span id="good-feels" class="anchor-target" aria-hidden="true"></span>
       <div class="section-head">
         <div>
           <p class="kicker mono">CATALOG · {categories.length} CATEGORIES</p>
@@ -178,9 +187,13 @@ function price(product: ProductEntry): string {
           {products.map((product) => {
             const kind = sourceKind(product.data);
             const host = checkoutHost(product.data.url);
+            const lane = commerceLane(product.data);
+            const cardId = firstSlugByLane.get(lane) === product.data.slug && ['seltzers', 'gummies', 'enhancers'].includes(lane)
+              ? lane
+              : undefined;
             const moods = product.data.pairsWithMood ?? [];
             return (
-              <li class="card">
+              <li class="card" id={cardId} data-commerce-lane={lane}>
                 <a class="card__media" href={`/products/${product.data.slug}`} aria-label={`Open ${product.data.name}`}>
                   {product.data.image?.[0] ? (
                     <img src={product.data.image[0]} alt={product.data.name} loading="lazy" />
@@ -191,7 +204,7 @@ function price(product: ProductEntry): string {
                 <div class="card__body">
                   <div class="card__topline mono">
                     <span class={`source source--${kind}`}>{sourceLabel(kind)}</span>
-                    <span>{product.data.category || 'product'}</span>
+                    <a class="lane-badge mono" href={shopLaneUrl(lane)}>{commerceLaneLabel(lane)}</a>
                     <span class={`availability availability--${product.data.availability}`}>{product.data.availability}</span>
                   </div>
                   <h3><a href={`/products/${product.data.slug}`}>{product.data.name}</a></h3>
@@ -461,6 +474,17 @@ function price(product: ProductEntry): string {
       margin-top: 8px;
     }
 
+    .anchor-target,
+    .card[id] {
+      scroll-margin-top: 18px;
+    }
+
+    .anchor-target {
+      display: block;
+      height: 0;
+      overflow: hidden;
+    }
+
     .section-head {
       display: flex;
       align-items: baseline;
@@ -542,6 +566,7 @@ function price(product: ProductEntry): string {
 
     .source,
     .availability,
+    .lane-badge,
     .mood,
     .pairing-chip {
       display: inline-flex;
@@ -557,6 +582,8 @@ function price(product: ProductEntry): string {
     .source--good-feels { border-color: #e6c8d6; color: #6B2139; background: #fdf6f9; }
     .source--pointcast-merch { border-color: #12110E; color: #12110E; background: #fbfaf5; }
     .source--external { border-color: #d6d4cd; color: #38373A; background: #fff; }
+    .lane-badge { border-color: #d6d4cd; color: #38373A; background: #fff; }
+    .lane-badge:hover { border-color: #993556; color: #6B2139; }
     .availability--in-stock { border-color: #BFE6CC; color: #1B4E2B; background: #E7F5EC; }
     .availability--out-of-stock { border-color: #F2BEC6; color: #8A2432; background: #FCE8EA; }
     .availability--preorder { border-color: #F6D29A; color: #6A3E05; background: #FFF4E5; }

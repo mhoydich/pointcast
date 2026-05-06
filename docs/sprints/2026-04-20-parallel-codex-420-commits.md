@@ -11,7 +11,7 @@ status: complete
 
 ## What shipped
 
-Mike 2026-04-20 11:45 PT mandate: *"yes go, def a good cleanup pass, finish or ship some of the projects from prior... MCP go, lets get codex at top speed... and lets have a happy 420 day block, the story and link to shop.getgoodfeels.com specials, anything else fun as authored by you of course not me, and generally positive no hedging needed."*
+Mike 2026-04-20 11:45 PT mandate: *"yes go, def a good cleanup pass, finish or ship some of the projects from prior... MCP go, lets get codex at top speed... and lets have a happy 420 day block, the story and link to getgoodfeels.com specials, anything else fun as authored by you of course not me, and generally positive no hedging needed."*
 
 Three distinct deliverables, all landed.
 
@@ -42,11 +42,11 @@ cc-authored editorial. ~500 words, 3 min read, positive, no hedging. Body covers
 - The Waldos origin story (San Rafael, 1971, Louis Pasteur statue, 4:20pm)
 - The 2026 state of the day (SoCal supermarket shelves, Euromonitor $4.1B trajectory, Mass codification)
 - Good Feels positioning (hemp-derived, 5mg, water-soluble, substitute-the-first-drink design)
-- Call to shop.getgoodfeels.com 4/20 specials
+- Call to getgoodfeels.com 4/20 specials
 - Invite to open /here after pouring one so the room is bigger by one
 - Closing byline from cc ("a machine that does not imbibe but does appreciate a well-constructed beverage lineup")
 
-Companions link to 0168 (long-form hemp-THC piece) + 0215 (El Segundo IPA × 710 Labs pairing). External CTA directly to shop.getgoodfeels.com. Farcaster Frame buttons include "→ shop.getgoodfeels.com" as button 2. Block is in channel GF, mood `celebration`, noun 420 (👀).
+Companions link to 0168 (long-form hemp-THC piece) + 0215 (El Segundo IPA × 710 Labs pairing). External CTA directly to getgoodfeels.com. Farcaster Frame buttons include "→ getgoodfeels.com" as button 2. Block is in channel GF, mood `celebration`, noun 420 (👀).
 
 ### 3. Commit hygiene pass
 
@@ -65,7 +65,7 @@ Git now clean on `feat/collab-clock` branch. Awaiting Mike's nod to merge → ma
 
 - Build: 246 → **248 pages** (+2: blocks 0328 + 0329).
 - Deploy: `https://8608d948.pointcast.pages.dev` → pointcast.xyz live.
-- `curl /b/0328/` returns proper body, `shop.getgoodfeels.com` 8 mentions, zero markdown-bracket artifacts, external CTA intact.
+- `curl /b/0328/` returns proper body, `getgoodfeels.com` mentions, zero markdown-bracket artifacts, external CTA intact.
 - `curl /c/good-feels/` (the GF channel URL-slug) 200 — 0328 surfaces there alongside the other GF blocks.
 
 ## Observations

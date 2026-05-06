@@ -7,6 +7,25 @@ export const CHECKOUT_POLICY = {
   pii: 'none-collected',
 };
 
+export type CommerceLaneSlug =
+  | 'good-feels'
+  | 'seltzers'
+  | 'gummies'
+  | 'enhancers'
+  | 'pointcast-merch'
+  | 'pairings'
+  | 'json-api';
+
+export const COMMERCE_LANE_LABELS: Record<CommerceLaneSlug, string> = {
+  'good-feels': 'Good Feels',
+  seltzers: 'Seltzers',
+  gummies: 'Gummies',
+  enhancers: 'Enhancers',
+  'pointcast-merch': 'PointCast Merch',
+  pairings: 'Pairings',
+  'json-api': 'JSON / API',
+};
+
 const SCHEMA_AVAILABILITY: Record<string, string> = {
   'in-stock': 'https://schema.org/InStock',
   'out-of-stock': 'https://schema.org/OutOfStock',
@@ -47,4 +66,24 @@ export function sourceLabel(kind: ReturnType<typeof sourceKind>): string {
   if (kind === 'good-feels') return 'Good Feels';
   if (kind === 'pointcast-merch') return 'PointCast Merch';
   return 'External Shop';
+}
+
+export function commerceLane(product: { brand?: string; url: string; category?: string; name?: string }): CommerceLaneSlug {
+  const kind = sourceKind(product);
+  if (kind === 'pointcast-merch') return 'pointcast-merch';
+
+  const searchable = `${product.category || ''} ${product.name || ''}`.toLowerCase();
+  if (/enhancer/.test(searchable)) return 'enhancers';
+  if (/gumm/.test(searchable)) return 'gummies';
+  if (/seltzer|drink|mix seltzer/.test(searchable)) return 'seltzers';
+  return 'good-feels';
+}
+
+export function commerceLaneLabel(slug: CommerceLaneSlug): string {
+  return COMMERCE_LANE_LABELS[slug];
+}
+
+export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
+  const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
+  return absolute ? `https://pointcast.xyz${path}` : path;
 }

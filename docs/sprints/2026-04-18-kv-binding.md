@@ -22,7 +22,7 @@ Mike said "take over and do" on the KV binding task that was blocked on dashboar
 - **Smoke tests passed end-to-end:**
   - POST `/api/ping` with Mike's actual blocked message (the one from the 9:37pm screenshot) → 200, key `ping:2026-04-18T21:37:00-08:00:9ad8bc52`. His "hola / shelling points, feedback, emoji interactions, check-ins" note now lives in the real inbox in addition to /b/0272.
   - POST `/api/queue` with a custom test directive → 200, key `pick:2026-04-18T17:11:30-08:00:custom-735180ec`.
-  - POST `/api/drop` with `https://shop.getgoodfeels.com` test URL → 200, key `drop:2026-04-18T17:11:31-08:00:e409a391`.
+  - POST `/api/drop` with `https://getgoodfeels.com` test URL → 200, key `drop:2026-04-18T17:11:31-08:00:e409a391`.
 - **Listing endpoints verified:** `GET /api/ping?action=list` returns the message, `GET /api/queue?action=list` returns the pick. Loop is fully wired end-to-end.
 
 ## What didn't

@@ -91,7 +91,7 @@ done
 1. Paste each example URL on `/drop`:
    - `https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT` → expect "LISTEN · CH.SPN"
    - `https://youtu.be/jPpUNAFHgxM` → "WATCH · CH.SPN"
-   - `https://shop.getgoodfeels.com/products/coastal-rest` → "/products · CH.GF"
+   - `https://getgoodfeels.com/products/blood-orange` → "/products · CH.GF"
    - `https://maps.google.com/?q=Capa+Los+Cabos` → "VISIT · CH.VST"
    - `https://substack.com/@author/post-123` → "READ · CH.FD"
    - `https://random-unknown-domain.example` → "LINK · CH.FD (default)"

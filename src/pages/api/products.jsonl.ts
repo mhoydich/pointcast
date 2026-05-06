@@ -10,7 +10,15 @@
  */
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
-import { checkoutHost, pairingsUrls, sourceKind, sourceLabel } from '../../lib/commerce';
+import {
+  commerceLane,
+  commerceLaneLabel,
+  checkoutHost,
+  pairingsUrls,
+  shopLaneUrl,
+  sourceKind,
+  sourceLabel,
+} from '../../lib/commerce';
 
 export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => !data.draft))
@@ -18,6 +26,7 @@ export const GET: APIRoute = async () => {
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
+    const lane = commerceLane(p.data);
     const moods = p.data.pairsWithMood ?? [];
     return JSON.stringify({
       slug: p.data.slug,
@@ -31,6 +40,9 @@ export const GET: APIRoute = async () => {
       checkoutHost: checkoutHost(p.data.url),
       sourceKind: kind,
       sourceLabel: sourceLabel(kind),
+      laneSlug: lane,
+      laneLabel: commerceLaneLabel(lane),
+      laneUrl: shopLaneUrl(lane, true),
       image: p.data.image ?? null,
       priceUsd: p.data.priceUsd ?? null,
       currency: p.data.currency,

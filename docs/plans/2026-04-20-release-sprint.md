@@ -119,7 +119,7 @@ See dedicated doc: `docs/gtm/2026-04-19-draft.md` (cc files alongside this plan)
 2. **Daily ritual**: `/today` daily drop + HELLO presence points + 7-chip TodayStrip rotation = reason to return.
 3. **Communal broadcast**: `/tv` with AirPlay / Chromecast / HDMI paths → phone-as-controller primitive. Novel shape.
 4. **Crypto-native**: Visit Nouns FA2 on Tezos mainnet (0-1199, free mint, gas only). Part of the nouns-verse economy.
-5. **Local + commerce tie**: El Segundo anchor + `shop.getgoodfeels.com` routed commerce. Real-place rooting.
+5. **Local + commerce tie**: El Segundo anchor + `getgoodfeels.com` routed commerce. Real-place rooting.
 
 **Launch moments (in order):**
 - **04-22 Wed:** Soft launch on Farcaster (Warpcast) with a Frame cast of `/tv`. Target: first 25 visitors via cast.

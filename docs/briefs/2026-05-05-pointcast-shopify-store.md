@@ -161,6 +161,6 @@ Best first PointCast-native lanes:
 Pick the store identity:
 
 - `shop.pointcast.xyz` for PointCast merch.
-- `shop.getgoodfeels.com` for Good Feels products surfaced through PointCast.
+- `getgoodfeels.com` for Good Feels products surfaced through PointCast.
 - Two stores if hemp products and ordinary merch should stay operationally
   separate.

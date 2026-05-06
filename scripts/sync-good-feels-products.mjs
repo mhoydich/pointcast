@@ -171,8 +171,7 @@ function isGoodFeelsEntry(data) {
   const brand = String(data.brand || '').toLowerCase();
   const url = String(data.url || '').toLowerCase();
   return brand === 'good feels'
-    || url.includes('getgoodfeels.com')
-    || url.includes('shop.getgoodfeels.com');
+    || url.includes('getgoodfeels.com');
 }
 
 function cleanDescription(value) {
