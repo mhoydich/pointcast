@@ -1,0 +1,396 @@
+---
+/**
+ * /drum-name-card — per-guest welcome card.
+ *
+ * Sprint 3, surface 5 of Guest Receivers. Visitor types a name + picks
+ * a tone (one of 5 from C major); the page becomes a printable card
+ * with their patron Noun (sha256-derived from name), the chosen tone
+ * with its frequency, and a small QR-ish brass medallion. Saves a
+ * shareable URL via querystring (?name=…&tone=…) so the URL is the
+ * card.
+ *
+ * Pure static.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Name Card · Per-Guest Welcome · PointCast';
+const description =
+  'Type a name, pick a tone — your custom welcome card with patron Noun, frequency, and shareable URL.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Name Card',
+  url: 'https://pointcast.xyz/drum-name-card',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dnc" id="dnc-main">
+    <DrumNav current="name-card" />
+
+    <header class="dnc__header">
+      <div class="dnc__chrome">
+        <span>NAME CARD</span>
+        <span class="dnc__chrome-sep">·</span>
+        <span>SHAREABLE URL</span>
+        <span class="dnc__chrome-sep">·</span>
+        <span id="dnc-mode">EDIT</span>
+      </div>
+      <h1 class="dnc__title">CARD</h1>
+      <p class="dnc__tagline">type a name · pick a tone · the URL is the card</p>
+    </header>
+
+    <section class="dnc__form" id="dnc-form">
+      <div class="dnc__form-row">
+        <label class="dnc__label" for="dnc-name">name (or group)</label>
+        <input class="dnc__input" id="dnc-name" type="text" maxlength="40" placeholder="e.g. anthropic-team" />
+      </div>
+      <div class="dnc__form-row">
+        <label class="dnc__label">tone</label>
+        <div class="dnc__tones" id="dnc-tones">
+          <button data-tone="0" data-freq="261.63">C — STILLNESS</button>
+          <button data-tone="1" data-freq="293.66">D — RISE</button>
+          <button data-tone="2" data-freq="329.63">E — OPEN</button>
+          <button data-tone="3" data-freq="392.00">G — CARRY</button>
+          <button data-tone="4" data-freq="440.00">A — KEEP</button>
+        </div>
+      </div>
+      <button class="dnc__btn dnc__btn--primary" id="dnc-make" type="button">MAKE THE CARD</button>
+    </section>
+
+    <section class="dnc__card" id="dnc-card" hidden>
+      <div class="dnc__card-bg"></div>
+      <header class="dnc__card-header">
+        <span class="dnc__card-eyebrow">POINTCAST · WELCOME</span>
+        <span class="dnc__card-id" id="dnc-card-id">—</span>
+      </header>
+      <div class="dnc__card-body">
+        <img class="dnc__card-noun" id="dnc-card-noun" src="" alt="" />
+        <div class="dnc__card-text">
+          <div class="dnc__card-name" id="dnc-card-name">—</div>
+          <div class="dnc__card-tone" id="dnc-card-tone">—</div>
+        </div>
+      </div>
+      <footer class="dnc__card-footer">
+        <span id="dnc-card-freq">—</span>
+        <span>·</span>
+        <span>PT</span>
+      </footer>
+      <button class="dnc__card-play" id="dnc-card-play" type="button" aria-label="Play tone">▶ PLAY</button>
+    </section>
+
+    <p class="dnc__share" id="dnc-share" hidden>
+      <span>Shareable URL:</span>
+      <input class="dnc__share-input" id="dnc-share-input" type="text" readonly />
+      <button class="dnc__btn" id="dnc-share-copy" type="button">COPY</button>
+    </p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dnc-main) { background: #0c0410; }
+  .dnc {
+    --dnc-velvet: #1a0820; --dnc-velvet-deep: #0c0410;
+    --dnc-brass: #d4a437; --dnc-brass-deep: #6b4d12;
+    --dnc-flame: #f6c15e;
+    --dnc-paper: #f4e7c8;
+    --dnc-ink-light: #f4e7c8; --dnc-ink-mid: #c9b78c; --dnc-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dnc-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dnc-velvet) 0%, var(--dnc-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dnc .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dnc__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px); }
+  .dnc__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dnc-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dnc-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dnc__chrome-sep { color: var(--dnc-brass-deep); }
+  #dnc-mode { color: var(--dnc-flame); font-weight: 700; }
+
+  .dnc__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dnc-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dnc-velvet-deep);
+  }
+  .dnc__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dnc-ink-mid);
+  }
+
+  .dnc__form {
+    max-width: 540px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 16px;
+    padding: clamp(20px, 3vh, 32px) 16px;
+  }
+  .dnc__form-row { display: flex; flex-direction: column; gap: 6px; }
+  .dnc__label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; letter-spacing: 0.20em; color: var(--dnc-ink-dim); text-transform: uppercase;
+  }
+  .dnc__input {
+    appearance: none; width: 100%;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1.5px solid var(--dnc-brass-deep);
+    color: var(--dnc-flame);
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 16px; outline: none;
+  }
+  .dnc__input:focus { border-color: var(--dnc-brass); }
+
+  .dnc__tones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dnc__tones button {
+    appearance: none; cursor: pointer;
+    padding: 8px 14px;
+    border: 1.5px solid var(--dnc-brass-deep);
+    background: transparent;
+    color: var(--dnc-ink-mid);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.20em; font-weight: 700;
+  }
+  .dnc__tones button:hover { color: var(--dnc-brass); border-color: var(--dnc-brass); }
+  .dnc__tones button.dnc__tones--active {
+    color: var(--dnc-velvet-deep); background: var(--dnc-flame); border-color: var(--dnc-flame);
+  }
+
+  .dnc__btn {
+    appearance: none; border: 0; cursor: pointer;
+    padding: 10px 22px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; font-weight: 800; letter-spacing: 0.22em;
+    color: var(--dnc-velvet-deep);
+    background: rgba(255, 255, 255, 0.85);
+    border: 1.5px solid var(--dnc-brass-deep);
+  }
+  .dnc__btn--primary {
+    color: var(--dnc-velvet-deep);
+    background: linear-gradient(180deg, var(--dnc-brass) 0%, oklch(0.62 0.18 60) 100%);
+    box-shadow: 0 0 0 2px var(--dnc-velvet-deep), 0 4px 0 0 var(--dnc-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+    border: 0;
+  }
+
+  /* The card itself */
+  .dnc__card {
+    position: relative;
+    max-width: 480px; margin: clamp(24px, 4vh, 40px) auto;
+    padding: 28px 32px;
+    background: var(--dnc-paper);
+    color: #1a1a1a;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 0 4px var(--dnc-brass), 0 0 0 6px var(--dnc-velvet-deep);
+    overflow: hidden;
+  }
+  .dnc__card-bg {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(0, 0, 0, 0.04) 1.5px, transparent 2px),
+      radial-gradient(circle at 70% 70%, rgba(0, 0, 0, 0.03) 1.5px, transparent 2px);
+    background-size: 80px 80px;
+    opacity: 0.5;
+  }
+
+  .dnc__card-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 18px;
+    position: relative; z-index: 1;
+  }
+  .dnc__card-eyebrow {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.30em; color: #1a1a1a; font-weight: 800;
+  }
+  .dnc__card-id {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.20em; color: #c4351c; font-weight: 700;
+  }
+  .dnc__card-body {
+    display: flex; gap: 18px; align-items: center;
+    margin-bottom: 18px; position: relative; z-index: 1;
+  }
+  .dnc__card-noun {
+    width: 96px; height: 96px; image-rendering: pixelated;
+    border: 3px solid #1a1a1a;
+    background: #ffffff;
+  }
+  .dnc__card-text { display: flex; flex-direction: column; gap: 2px; }
+  .dnc__card-name {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(24px, 3.5vw, 36px); color: #1a1a1a;
+    line-height: 1.05;
+  }
+  .dnc__card-tone {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.5vw, 18px); color: #c4351c; margin-top: 4px;
+  }
+  .dnc__card-footer {
+    display: flex; gap: 8px; align-items: baseline;
+    border-top: 1px solid rgba(0, 0, 0, 0.30); padding-top: 8px;
+    position: relative; z-index: 1;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; letter-spacing: 0.20em; color: #5a5a5a; text-transform: uppercase;
+  }
+  .dnc__card-play {
+    position: absolute; bottom: 14px; right: 16px;
+    appearance: none; cursor: pointer;
+    padding: 6px 14px;
+    background: #1a1a1a; color: #ffce00; border: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.20em;
+    z-index: 2;
+  }
+  .dnc__card-play:hover { background: #c4351c; color: #ffffff; }
+
+  .dnc__share {
+    display: flex; gap: 10px; align-items: center;
+    max-width: 540px; margin: 0 auto;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; letter-spacing: 0.18em; color: var(--dnc-ink-mid);
+  }
+  .dnc__share-input {
+    flex: 1; padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--dnc-brass-deep);
+    color: var(--dnc-flame);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playTone(freq) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.20, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.07, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.7); o2.start(t); o2.stop(t + 1.1);
+  }
+
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
+  }
+  async function nounIdFromName(name) {
+    const h = await sha256short(name.toLowerCase());
+    let n = 0;
+    for (let i = 0; i < h.length; i++) n = (n * 31 + h.charCodeAt(i)) | 0;
+    return Math.abs(n) % 1200;
+  }
+
+  const TONES = [
+    { idx: 0, freq: 261.63, label: 'C · STILLNESS' },
+    { idx: 1, freq: 293.66, label: 'D · RISE' },
+    { idx: 2, freq: 329.63, label: 'E · OPEN' },
+    { idx: 3, freq: 392.00, label: 'G · CARRY' },
+    { idx: 4, freq: 440.00, label: 'A · KEEP' },
+  ];
+
+  const formEl = document.getElementById('dnc-form');
+  const nameEl = document.getElementById('dnc-name');
+  const tonesEl = document.getElementById('dnc-tones');
+  const makeBtn = document.getElementById('dnc-make');
+  const cardEl = document.getElementById('dnc-card');
+  const cardNounEl = document.getElementById('dnc-card-noun');
+  const cardNameEl = document.getElementById('dnc-card-name');
+  const cardToneEl = document.getElementById('dnc-card-tone');
+  const cardFreqEl = document.getElementById('dnc-card-freq');
+  const cardIdEl = document.getElementById('dnc-card-id');
+  const cardPlayBtn = document.getElementById('dnc-card-play');
+  const shareEl = document.getElementById('dnc-share');
+  const shareInputEl = document.getElementById('dnc-share-input');
+  const shareCopyBtn = document.getElementById('dnc-share-copy');
+  const modeEl = document.getElementById('dnc-mode');
+
+  let selectedTone = 0;
+
+  tonesEl?.addEventListener('click', (e) => {
+    const btn = e.target;
+    if (!(btn instanceof HTMLButtonElement)) return;
+    selectedTone = parseInt(btn.dataset.tone || '0', 10);
+    Array.from(tonesEl.children).forEach((c) => c.classList.remove('dnc__tones--active'));
+    btn.classList.add('dnc__tones--active');
+    try { playTone(parseFloat(btn.dataset.freq || '261.63')); } catch {}
+  });
+  // Default tone selected
+  Array.from(tonesEl?.children || []).forEach((c, i) => { if (i === 0) c.classList.add('dnc__tones--active'); });
+
+  async function makeCard() {
+    const name = (nameEl?.value || '').trim().slice(0, 40);
+    if (!name) { if (nameEl) nameEl.focus(); return; }
+    const tone = TONES[selectedTone] || TONES[0];
+    const nounId = await nounIdFromName(name);
+    const cardId = (await sha256short(name + ':' + tone.idx)).toUpperCase();
+
+    if (cardNounEl) cardNounEl.src = `https://noun.pics/${nounId}.svg`;
+    if (cardNameEl) cardNameEl.textContent = name;
+    if (cardToneEl) cardToneEl.textContent = tone.label;
+    if (cardFreqEl) cardFreqEl.textContent = `${tone.freq.toFixed(2)} Hz`;
+    if (cardIdEl) cardIdEl.textContent = `№ ${cardId.slice(0, 8)}`;
+    if (cardEl) cardEl.hidden = false;
+    if (formEl) formEl.hidden = true;
+    if (modeEl) modeEl.textContent = 'CARD';
+
+    // Build shareable URL
+    const u = new URL(window.location.href);
+    u.searchParams.set('name', name);
+    u.searchParams.set('tone', String(tone.idx));
+    history.replaceState(null, '', u.toString());
+    if (shareEl) shareEl.hidden = false;
+    if (shareInputEl) shareInputEl.value = u.toString();
+
+    cardPlayBtn?.addEventListener('click', () => { try { playTone(tone.freq); } catch {} }, { once: false });
+    try { playTone(tone.freq); } catch {}
+  }
+
+  makeBtn?.addEventListener('click', makeCard);
+  shareCopyBtn?.addEventListener('click', () => {
+    if (shareInputEl) {
+      shareInputEl.select();
+      try {
+        navigator.clipboard.writeText(shareInputEl.value);
+        shareCopyBtn.textContent = 'COPIED';
+        setTimeout(() => { if (shareCopyBtn) shareCopyBtn.textContent = 'COPY'; }, 1500);
+      } catch {}
+    }
+  });
+
+  // Boot from URL params
+  (() => {
+    const u = new URL(window.location.href);
+    const name = u.searchParams.get('name');
+    const toneIdx = parseInt(u.searchParams.get('tone') || '-1', 10);
+    if (name && toneIdx >= 0 && toneIdx < TONES.length) {
+      if (nameEl) nameEl.value = name;
+      selectedTone = toneIdx;
+      Array.from(tonesEl?.children || []).forEach((c, i) => {
+        c.classList.toggle('dnc__tones--active', i === toneIdx);
+      });
+      makeCard();
+    }
+  })();
+</script>
