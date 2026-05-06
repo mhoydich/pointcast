@@ -48,6 +48,47 @@ export function hoursToNextFullMoon(now: Date = new Date()): number {
 }
 
 /**
+ * Phase fraction in [0, 1) — 0 = new moon, 0.5 = full, 0.25 = first
+ * quarter, 0.75 = last quarter. Computed from the mean synodic month
+ * relative to the same NEW_MOON_EPOCH_MS reference; same ±12h drift
+ * caveat as nextFullMoon().
+ */
+export function lunarPhase(now: Date = new Date()): number {
+  const elapsed = now.getTime() - NEW_MOON_EPOCH_MS;
+  const phase = (elapsed / SYNODIC_MONTH_MS) % 1;
+  return phase < 0 ? phase + 1 : phase;
+}
+
+/**
+ * Illumination fraction in [0, 1] — what portion of the visible disc is
+ * lit. Approximation: (1 - cos(2π · phase)) / 2. New = 0, full = 1.
+ */
+export function lunarIllumination(now: Date = new Date()): number {
+  const phase = lunarPhase(now);
+  return (1 - Math.cos(phase * 2 * Math.PI)) / 2;
+}
+
+/**
+ * Human-readable phase name. Boundaries are chosen to match what most
+ * almanacs call out: a ±~1.5d window for the four cardinal phases, the
+ * crescents/gibbous fill the rest. Waxing means lighting up (new → full),
+ * waning means dimming (full → new).
+ */
+export function lunarPhaseName(now: Date = new Date()): string {
+  const p = lunarPhase(now);
+  // Express as days into the cycle for readable thresholds.
+  const day = p * 29.530589;
+  if (day < 1.0 || day > 28.5) return 'new moon';
+  if (day < 6.5) return 'waxing crescent';
+  if (day < 8.5) return 'first quarter';
+  if (day < 13.5) return 'waxing gibbous';
+  if (day < 15.5) return 'full moon';
+  if (day < 21.0) return 'waning gibbous';
+  if (day < 23.0) return 'last quarter';
+  return 'waning crescent';
+}
+
+/**
  * Traditional Old Farmer's Almanac names for each calendar month's full
  * moon, in PT month order. The page prefixes the tournament name with
  * the named moon for the month containing the upcoming full moon — e.g.

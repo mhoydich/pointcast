@@ -6,8 +6,36 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
 import { NOUNS_BATTLER_WATCH_NEXT } from '../lib/nouns-battler-agent-bench';
+import { dayNumber, daysToLock, SEASON_6 } from '../lib/battler-bowl-state';
+import { nextFullMoon, hoursToNextFullMoon, namedMoonForDate } from '../lib/battler-moon-tournament';
 
 const ch = CHANNELS.BTL;
+const desk_now = new Date();
+const desk_today = dayNumber(desk_now);
+const desk_daysToLock = daysToLock(desk_now);
+const desk_fullMoon = nextFullMoon(desk_now);
+const desk_hoursToMoon = hoursToNextFullMoon(desk_now);
+const desk_daysToMoon = Math.floor(desk_hoursToMoon / 24);
+const desk_moonName = namedMoonForDate(desk_fullMoon);
+// Compute the upcoming Thursday at 18:00 PT (Sports Desk beat day).
+function nextSportsDeskThursday(from: Date): Date {
+  const d = new Date(from);
+  // Convert to PT to find the Thursday in the local week.
+  const ptOffsetMin = -7 * 60; // PDT
+  const localPT = new Date(d.getTime() + (ptOffsetMin - d.getTimezoneOffset()) * 60000);
+  const dayOfWeek = localPT.getUTCDay(); // 0..6 in shifted PT
+  // Days until next Thursday (4). If already Thu past 18:00 PT, advance one week.
+  let daysUntilThu = (4 - dayOfWeek + 7) % 7;
+  const ptHour = localPT.getUTCHours();
+  if (daysUntilThu === 0 && ptHour >= 18) daysUntilThu = 7;
+  const target = new Date(localPT.getTime());
+  target.setUTCDate(target.getUTCDate() + daysUntilThu);
+  target.setUTCHours(18, 0, 0, 0);
+  // Convert back to UTC by removing the PT offset.
+  return new Date(target.getTime() - (ptOffsetMin - d.getTimezoneOffset()) * 60000);
+}
+const desk_nextBeat = nextSportsDeskThursday(desk_now);
+const desk_daysToBeat = Math.max(0, Math.ceil((desk_nextBeat.getTime() - desk_now.getTime()) / 86400000));
 const kingdomTvUrl = 'https://pointcast.xyz/games/nouns-nation-battler/#mode=tv&type=kingdom';
 const kingdomMobileUrl = 'https://pointcast.xyz/nouns-nation-battler-mobile/?type=kingdom';
 const kingdomShareText = 'Watch Nouns Kingdom v2: 25 vs 25 Nouns, proposal waves, auction tower volleys, meme lane floods, and Noun Gate pressure. ' + kingdomTvUrl;
@@ -123,6 +151,33 @@ const jsonLd = {
       <span aria-hidden="true">/</span>
       <span>Battle Desk</span>
     </nav>
+
+    <aside class="whats-next" aria-label="What's next on the desk">
+      <p class="whats-next__kicker">CH.BTL · {SEASON_6.name} · what's next</p>
+      <ol class="whats-next__list">
+        <li class="whats-next__item">
+          <span class="whats-next__day">D{desk_today}</span>
+          <span class="whats-next__copy">
+            <strong><a href="/nouns-nation-battler-bowl/">Bowl path</a></strong>
+            <span>{desk_daysToLock > 0 ? `${desk_daysToLock} days to lock` : desk_daysToLock === 0 ? 'lock day' : `${Math.abs(desk_daysToLock)} days past lock`}</span>
+          </span>
+        </li>
+        <li class="whats-next__item">
+          <span class="whats-next__day">→</span>
+          <span class="whats-next__copy">
+            <strong>Next Sports Desk beat</strong>
+            <span>{desk_daysToBeat === 0 ? 'today' : `${desk_daysToBeat} day${desk_daysToBeat === 1 ? '' : 's'}`} · Thursday cadence</span>
+          </span>
+        </li>
+        <li class="whats-next__item whats-next__item--moon">
+          <span class="whats-next__day">🌕</span>
+          <span class="whats-next__copy">
+            <strong><a href="/nouns-nation-battler-moon/">{desk_moonName} Cup</a></strong>
+            <span>{desk_daysToMoon > 0 ? `${desk_daysToMoon}d` : desk_hoursToMoon > 0 ? `${Math.round(desk_hoursToMoon)}h` : 'tonight'} · Lunar Tide field</span>
+          </span>
+        </li>
+      </ol>
+    </aside>
 
     <section class="network-strip" aria-label="Battle desk ticker">
       <div class="network-brand">
@@ -846,6 +901,76 @@ const jsonLd = {
 </script>
 
 <style>
+  .whats-next {
+    margin: 0 0 14px;
+    padding: 12px 16px;
+    background: var(--panel, #fffdf7);
+    border: 2px solid var(--ink, #111318);
+    box-shadow: 4px 4px 0 var(--ink, #111318);
+  }
+  .whats-next__kicker {
+    margin: 0 0 10px;
+    color: var(--btl-dark, #551620);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .whats-next__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .whats-next__item {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--paper, #f7f3e7);
+    border: 1px solid var(--line, rgba(17, 19, 24, 0.14));
+    border-left: 4px solid var(--btl, #8A2432);
+  }
+  .whats-next__item--moon {
+    border-left-color: #1a1f3a;
+    background: linear-gradient(120deg, rgba(255, 217, 122, 0.10), var(--paper, #f7f3e7));
+  }
+  .whats-next__day {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-weight: 700;
+    color: var(--btl-dark, #551620);
+    text-align: center;
+    font-size: 18px;
+  }
+  .whats-next__item--moon .whats-next__day {
+    color: inherit;
+    font-size: 22px;
+  }
+  .whats-next__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .whats-next__copy strong {
+    font-size: 14px;
+    color: var(--ink, #111318);
+  }
+  .whats-next__copy strong a {
+    border-bottom: 1px dotted currentColor;
+    color: inherit;
+    text-decoration: none;
+  }
+  .whats-next__copy span {
+    font-size: 12px;
+    color: var(--muted, #5b6170);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0.04em;
+  }
+
   .battle-desk {
     --paper: #f7f3e7;
     --ink: #111318;
