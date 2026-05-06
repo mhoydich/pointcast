@@ -48,6 +48,15 @@ const shapes = [
   { id: 'overtime', label: 'Overtime', field: 'Rift overtime field', modifier: 'sudden-death pressure and high damage' },
 ];
 
+const sampleResults = [
+  { label: 'NBA close', league: 'NBA', winner: 'Celtics', loser: 'Knicks', score: '112-109', shape: 'close', goal: 'watch' },
+  { label: 'WNBA comeback', league: 'WNBA', winner: 'Aces', loser: 'Liberty', score: '88-84', shape: 'comeback', goal: 'share' },
+  { label: 'NFL overtime', league: 'NFL', winner: 'Chiefs', loser: 'Ravens', score: '27-24', shape: 'overtime', goal: 'watch' },
+  { label: 'MLB blowout', league: 'MLB', winner: 'Dodgers', loser: 'Padres', score: '11-3', shape: 'blowout', goal: 'sponsor' },
+  { label: 'EPL upset', league: 'EPL', winner: 'Brighton', loser: 'Arsenal', score: '2-1', shape: 'upset', goal: 'agent' },
+  { label: 'NHL late swing', league: 'NHL', winner: 'Kings', loser: 'Oilers', score: '4-3', shape: 'comeback', goal: 'share' },
+];
+
 const agentLanes = [
   {
     label: 'Claude Code lane',
@@ -162,6 +171,28 @@ const jsonLd = {
           </div>
         </fieldset>
 
+        <fieldset class="sample-slate">
+          <legend>Sample Slate</legend>
+          <div class="sample-grid">
+            {sampleResults.map((sample, index) => (
+              <button
+                type="button"
+                class={index === 0 ? 'is-active' : ''}
+                data-mission-sample={index}
+                data-league={sample.league}
+                data-winner={sample.winner}
+                data-loser={sample.loser}
+                data-score={sample.score}
+                data-shape={sample.shape}
+                data-goal={sample.goal}
+              >
+                <span>{sample.label}</span>
+                <strong>{sample.winner} {sample.score}</strong>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
         <fieldset>
           <legend>Shape</legend>
           <div class="button-grid button-grid--shape">
@@ -216,6 +247,11 @@ const jsonLd = {
           <span>Proof Checklist</span>
           <textarea data-artifact="proof" readonly></textarea>
           <button type="button" data-copy-artifact="proof">Copy proof</button>
+        </article>
+        <article class="artifact-grid__wide">
+          <span>Live Run Sheet</span>
+          <textarea data-artifact="runsheet" readonly></textarea>
+          <button type="button" data-copy-artifact="runsheet">Copy run sheet</button>
         </article>
       </div>
     </section>
@@ -310,6 +346,15 @@ ${guardrail}`;
 [ ] Artifact says informational, not official replay.
 [ ] Artifact avoids odds, betting, prediction, payout, and forced outcome language.
 [ ] Human approval is required for sponsor or participant-credit routing.`;
+      const runsheet = `LIVE RUN SHEET
+00:00 Cold open - ${resultLine} as ${state.field}.
+00:20 Guardrail - user-entered result, interpretive Nouns setup, no official replay.
+00:40 Field read - ${state.shapeLabel}: ${state.modifier}.
+01:10 Nouns focus - name two numbered players, one gang, and the first pressure swing.
+02:00 Agent lane - ask for headline, poster concept, sponsor-safe read, or QA note.
+03:00 Share beat - copy the receipt and send viewers to ${launchUrl}
+04:00 Proof check - confirm source result, shape, field, guardrail, and human approval path.
+Close - The battle is inspired by the result; the sim outcome is not forced.`;
 
       room.querySelector('[data-mission-field="goalLabel"]').textContent = state.goalLabel;
       room.querySelector('[data-mission-field="headline"]').textContent =
@@ -321,27 +366,53 @@ ${guardrail}`;
       room.querySelector('[data-artifact="agent"]').value = agent;
       room.querySelector('[data-artifact="share"]').value = share;
       room.querySelector('[data-artifact="proof"]').value = proof;
+      room.querySelector('[data-artifact="runsheet"]').value = runsheet;
+    }
+
+    function setGoal(goalId) {
+      const button = room.querySelector(`[data-goal-option="${goalId}"]`);
+      if (!button) return;
+      room.querySelectorAll('[data-goal-option]').forEach((item) => item.classList.toggle('is-active', item === button));
+      state.goal = button.dataset.goalOption || 'watch';
+      state.goalLabel = button.dataset.label || 'Watch';
+      state.goalTitle = button.dataset.title || state.goalTitle;
+      state.goalCopy = button.dataset.copy || state.goalCopy;
+      state.goalProof = button.dataset.proof || state.goalProof;
+    }
+
+    function setShape(shapeId) {
+      const button = room.querySelector(`[data-shape-option="${shapeId}"]`);
+      if (!button) return;
+      room.querySelectorAll('[data-shape-option]').forEach((item) => item.classList.toggle('is-active', item === button));
+      state.shape = button.dataset.shapeOption || 'close';
+      state.shapeLabel = button.dataset.label || 'Close';
+      state.field = button.dataset.field || state.field;
+      state.modifier = button.dataset.modifier || state.modifier;
     }
 
     room.querySelectorAll('[data-goal-option]').forEach((button) => {
       button.addEventListener('click', () => {
-        room.querySelectorAll('[data-goal-option]').forEach((item) => item.classList.toggle('is-active', item === button));
-        state.goal = button.dataset.goalOption || 'watch';
-        state.goalLabel = button.dataset.label || 'Watch';
-        state.goalTitle = button.dataset.title || state.goalTitle;
-        state.goalCopy = button.dataset.copy || state.goalCopy;
-        state.goalProof = button.dataset.proof || state.goalProof;
+        setGoal(button.dataset.goalOption || 'watch');
         renderMission();
       });
     });
 
     room.querySelectorAll('[data-shape-option]').forEach((button) => {
       button.addEventListener('click', () => {
-        room.querySelectorAll('[data-shape-option]').forEach((item) => item.classList.toggle('is-active', item === button));
-        state.shape = button.dataset.shapeOption || 'close';
-        state.shapeLabel = button.dataset.label || 'Close';
-        state.field = button.dataset.field || state.field;
-        state.modifier = button.dataset.modifier || state.modifier;
+        setShape(button.dataset.shapeOption || 'close');
+        renderMission();
+      });
+    });
+
+    room.querySelectorAll('[data-mission-sample]').forEach((button) => {
+      button.addEventListener('click', () => {
+        room.querySelectorAll('[data-mission-sample]').forEach((item) => item.classList.toggle('is-active', item === button));
+        room.querySelector('[data-result-league]').value = button.dataset.league || 'NBA';
+        room.querySelector('[data-result-winner]').value = button.dataset.winner || 'Celtics';
+        room.querySelector('[data-result-loser]').value = button.dataset.loser || 'Knicks';
+        room.querySelector('[data-result-score]').value = button.dataset.score || '112-109';
+        setGoal(button.dataset.goal || 'watch');
+        setShape(button.dataset.shape || 'close');
         renderMission();
       });
     });
@@ -590,6 +661,53 @@ ${guardrail}`;
     gap: 10px;
   }
 
+  .sample-slate {
+    grid-row: span 2;
+  }
+
+  .sample-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sample-grid button {
+    min-width: 0;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+    display: grid;
+    gap: 5px;
+    padding: 10px;
+    text-align: left;
+    font: inherit;
+  }
+
+  .sample-grid button.is-active {
+    background: #15171d;
+    color: #fffdf5;
+    box-shadow: inset 5px 0 0 #d7ff3f;
+  }
+
+  .sample-grid span {
+    color: #8a2432;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.64rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .sample-grid button.is-active span {
+    color: #d7ff3f;
+  }
+
+  .sample-grid strong {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
   .result-fields legend {
     grid-column: 1 / -1;
   }
@@ -610,6 +728,10 @@ ${guardrail}`;
 
   .artifact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .artifact-grid__wide {
+    grid-column: 1 / -1;
   }
 
   .artifact-grid article,
@@ -679,6 +801,7 @@ ${guardrail}`;
 
     .button-grid,
     .button-grid--shape,
+    .sample-grid,
     .result-fields,
     .artifact-grid,
     .lane-grid {

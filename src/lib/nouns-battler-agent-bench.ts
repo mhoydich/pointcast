@@ -128,9 +128,9 @@ export const NOUNS_BATTLER_AGENT_TASKS = [
       'https://pointcast.xyz/nouns-nation-battler/',
     ],
     prompt:
-      'Open Sports Reenactment Mission Control, choose one goal and one result shape, then produce the host rundown, agent task, share receipt, and proof checklist for a typed sports result.',
+      'Open Sports Reenactment Mission Control, choose one sample or typed result plus one goal and one result shape, then produce the host rundown, agent task, share receipt, proof checklist, and live run sheet.',
     expectedOutput:
-      'A compact mission package with launch URL, source result, field, host line, agent task, share receipt, proof checklist, and guardrail.',
+      'A compact mission package with launch URL, source result, field, host line, agent task, share receipt, proof checklist, live run sheet, and guardrail.',
     shareFormat:
       'MISSION: {league} {winner} over {loser}; goal {goal}; field {field}; launch {url}; guardrail {text}.',
   },
@@ -294,15 +294,15 @@ export const NOUNS_BATTLER_AGENT_PROMPT_KIT = {
       startHere: 'https://pointcast.xyz/nouns-nation-sports-reenactment/goal/',
       evidenceBudget: 'Use Mission Control and one linked surface: Battle Desk, Reenactment Site, or Mobile Cast.',
       prompt:
-        'You are the sports reenactment mission producer. Pick one goal and one shape, enter a sports result, then return the launch URL, host rundown, agent task, share receipt, and proof checklist.',
+        'You are the sports reenactment mission producer. Pick one sample or enter a sports result, choose one goal and one shape, then return the launch URL, host rundown, agent task, share receipt, proof checklist, and live run sheet.',
       successCriteria: [
         'Includes the tested Mission Control URL.',
         'Names one goal and one shape.',
         'Includes the informational guardrail.',
       ],
-      stopRule: 'Stop once the mission package has one host artifact, one agent artifact, one share artifact, and one proof checklist.',
+      stopRule: 'Stop once the mission package has one host artifact, one agent artifact, one share artifact, one proof checklist, and one live run sheet.',
       outputFormat:
-        'MISSION PACKAGE: url {url}; goal {goal}; shape {shape}; launch {launch}; host {rundown}; agent {task}; share {receipt}; proof {checklist}; guardrail {text}.',
+        'MISSION PACKAGE: url {url}; goal {goal}; shape {shape}; launch {launch}; host {rundown}; agent {task}; share {receipt}; proof {checklist}; runSheet {timeline}; guardrail {text}.',
       validation: 'Do not claim official replay, live data, odds, betting, prediction, payout, or forced outcome.',
     },
   ],
