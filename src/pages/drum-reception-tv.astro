@@ -1,0 +1,353 @@
+---
+/**
+ * /drum-reception-tv — hands-off projection mode for guest arrivals.
+ *
+ * Sprint 3, surface 3 of Guest Receivers. Auto-cycling big-screen
+ * projection: rotates between threshold candles, offerings archive,
+ * altars chamber state, and wing presence — every 12 seconds. No
+ * interaction needed. Designed for the projector at a visit.
+ *
+ * Polls /api/chamber + /api/altar.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Reception · Hands-Off Projection · PointCast';
+const description =
+  'Auto-cycling projection mode for guest arrivals. Rotates between candles, offerings, altars, presence.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Reception',
+  url: 'https://pointcast.xyz/drum-reception-tv',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dr" id="dr-main">
+    <header class="dr__chrome">
+      <span class="dr__chrome-label">RECEPTION</span>
+      <span class="dr__chrome-sep">·</span>
+      <span class="dr__chrome-time" id="dr-time">--:--</span>
+      <span class="dr__chrome-sep">·</span>
+      <span class="dr__chrome-on">● LIVE</span>
+    </header>
+
+    <section class="dr__stage">
+      <div class="dr__panel" data-panel="threshold">
+        <header class="dr__panel-header">
+          <span class="dr__panel-eyebrow">CANDLES LIT TODAY</span>
+          <span class="dr__panel-count" id="dr-threshold-count">—</span>
+        </header>
+        <div class="dr__panel-body" id="dr-threshold-body">
+          <div class="dr__loading">— gathering —</div>
+        </div>
+      </div>
+      <div class="dr__panel" data-panel="offering" hidden>
+        <header class="dr__panel-header">
+          <span class="dr__panel-eyebrow">RECENT OFFERINGS</span>
+          <span class="dr__panel-count" id="dr-offering-count">—</span>
+        </header>
+        <div class="dr__panel-body" id="dr-offering-body">
+          <div class="dr__loading">— gathering —</div>
+        </div>
+      </div>
+      <div class="dr__panel" data-panel="altar" hidden>
+        <header class="dr__panel-header">
+          <span class="dr__panel-eyebrow">CHAMBER · ALTARS THIS WEEK</span>
+          <span class="dr__panel-count" id="dr-altar-count">—</span>
+        </header>
+        <div class="dr__panel-body" id="dr-altar-body">
+          <div class="dr__loading">— gathering —</div>
+        </div>
+      </div>
+      <div class="dr__panel" data-panel="now" hidden>
+        <header class="dr__panel-header">
+          <span class="dr__panel-eyebrow">VISITORS · NOW</span>
+          <span class="dr__panel-count" id="dr-now-count">—</span>
+        </header>
+        <div class="dr__panel-body" id="dr-now-body">
+          <div class="dr__loading">— gathering —</div>
+        </div>
+      </div>
+    </section>
+
+    <p class="dr__footer">pointcast.xyz · welcome to the wing · the chamber is awake</p>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dr-main) { background: #0c0410; overflow: hidden; }
+  .dr {
+    --dr-velvet: #1a0820; --dr-velvet-deep: #0c0410;
+    --dr-brass: #d4a437; --dr-brass-deep: #6b4d12;
+    --dr-flame: #f6c15e; --dr-flame-tip: #ff6b3a;
+    --dr-ink-light: #f4e7c8; --dr-ink-mid: #c9b78c; --dr-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: clamp(20px, 3vh, 40px) clamp(24px, 4vw, 64px);
+    color: var(--dr-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(212, 164, 55, 0.10), transparent 60%),
+      linear-gradient(180deg, var(--dr-velvet) 0%, var(--dr-velvet-deep) 100%);
+    height: calc(100vh - 80px); min-height: 600px;
+    display: flex; flex-direction: column; gap: clamp(20px, 3vh, 36px);
+  }
+
+  .dr__chrome {
+    display: inline-flex; align-items: center; gap: clamp(8px, 1vw, 18px);
+    padding: 6px 24px; border: 2px solid var(--dr-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(12px, 1vw, 15px); letter-spacing: 0.30em; text-transform: uppercase;
+    color: var(--dr-ink-mid); background: rgba(0, 0, 0, 0.40);
+    align-self: flex-start;
+  }
+  .dr__chrome-label { color: var(--dr-brass); font-weight: 800; }
+  .dr__chrome-sep { color: var(--dr-brass-deep); }
+  .dr__chrome-time { color: var(--dr-flame); font-weight: 700; }
+  .dr__chrome-on { color: #ff5b5b; font-weight: 700; }
+
+  .dr__stage { flex: 1; position: relative; min-height: 0; }
+  .dr__panel {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; gap: 18px;
+    transition: opacity 1200ms ease-in-out;
+  }
+  .dr__panel[hidden] { display: flex !important; opacity: 0; pointer-events: none; }
+  .dr__panel:not([hidden]) { opacity: 1; }
+
+  .dr__panel-header { display: flex; align-items: baseline; gap: 18px; }
+  .dr__panel-eyebrow {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(13px, 1.2vw, 18px); letter-spacing: 0.30em;
+    color: var(--dr-brass); text-transform: uppercase;
+  }
+  .dr__panel-count {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(48px, 7vw, 96px); color: var(--dr-flame);
+    line-height: 0.95; text-shadow: 0 0 40px rgba(246, 193, 94, 0.30);
+  }
+
+  .dr__panel-body {
+    flex: 1; min-height: 0; overflow: hidden;
+    border-top: 1px solid rgba(212, 164, 55, 0.30);
+    padding-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    align-content: start;
+  }
+  .dr__loading {
+    grid-column: 1/-1;
+    text-align: center; padding: 40px;
+    font-family: 'Lora', Georgia, serif; font-style: italic; color: var(--dr-ink-dim);
+  }
+
+  /* threshold candles */
+  .dr__candle {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px;
+    text-align: center;
+  }
+  .dr__candle-flame {
+    width: 16px; height: 22px;
+    background: radial-gradient(ellipse 5px 11px at 50% 70%, var(--dr-flame-tip) 0%, var(--dr-flame) 50%, transparent 75%);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    filter: blur(0.5px);
+    animation: dr-flicker 1.6s ease-in-out infinite;
+  }
+  @keyframes dr-flicker {
+    0%,100% { transform: scale(1, 1); opacity: 0.85; }
+    50%     { transform: scale(1.04, 0.94); opacity: 0.95; }
+  }
+  .dr__candle-wax {
+    width: 12px; height: 30px;
+    background: linear-gradient(180deg, #f4e7c8 0%, #c9b78c 100%);
+    box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.25);
+  }
+  .dr__candle-noun {
+    width: 36px; height: 36px; image-rendering: pixelated; margin-top: 6px;
+    background: rgba(0, 0, 0, 0.30);
+    border: 1px solid var(--dr-brass-deep);
+  }
+  .dr__candle-name {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 13px; color: var(--dr-ink-light);
+  }
+
+  /* offering tiles */
+  .dr__off-tile {
+    display: flex; gap: 8px;
+    padding: 8px 10px;
+    border-left: 4px solid oklch(0.65 0.20 var(--tile-hue, 60));
+    background: rgba(212, 164, 55, 0.06);
+  }
+  .dr__off-tile img {
+    width: 32px; height: 32px; image-rendering: pixelated;
+    background: rgba(0, 0, 0, 0.30); border: 1px solid var(--dr-brass-deep);
+    flex-shrink: 0;
+  }
+  .dr__off-tile-text {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 13px; color: var(--dr-ink-light); line-height: 1.35;
+  }
+
+  /* altar count card */
+  .dr__altar-card {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 14px;
+    border: 1.5px solid var(--dr-brass-deep);
+    background: rgba(0, 0, 0, 0.30);
+  }
+  .dr__altar-card-noun {
+    width: 60px; height: 60px; image-rendering: pixelated;
+    border: 2px solid var(--dr-brass);
+    background: rgba(0, 0, 0, 0.40);
+  }
+  .dr__altar-card-instrument {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: 16px; color: var(--dr-flame); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .dr__altar-card-count {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.18em; color: var(--dr-ink-dim); text-transform: uppercase;
+  }
+
+  /* now visitor card */
+  .dr__now-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--dr-brass-deep);
+    background: rgba(0, 0, 0, 0.20);
+  }
+  .dr__now-card img {
+    width: 36px; height: 36px; image-rendering: pixelated;
+    background: rgba(0, 0, 0, 0.30); border: 1px solid var(--dr-brass-deep);
+  }
+  .dr__now-card-meta {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.16em; color: var(--dr-ink-mid);
+  }
+
+  .dr__footer {
+    text-align: center; margin: 0;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(11px, 1vw, 14px); color: var(--dr-ink-dim);
+  }
+</style>
+
+<script>
+  const PANELS = ['threshold', 'offering', 'altar', 'now'];
+  let currentIdx = 0;
+
+  const timeEl = document.getElementById('dr-time');
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function paintTime() {
+    const d = new Date();
+    if (timeEl) timeEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  paintTime(); setInterval(paintTime, 1000);
+
+  function rotate() {
+    const allPanels = Array.from(document.querySelectorAll('.dr__panel'));
+    allPanels.forEach((p, i) => { p.hidden = i !== currentIdx; });
+    currentIdx = (currentIdx + 1) % PANELS.length;
+  }
+  rotate();
+  setInterval(rotate, 12000);
+
+  function fmtAgo(t) {
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 60) return 'just now';
+    const m = Math.floor(sec / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m / 60)}h ago`;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+  }
+
+  async function fetchAll() {
+    try {
+      const [thresh, off, altar, now] = await Promise.all([
+        fetch('/api/chamber?kind=threshold', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/chamber?kind=offering', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/altar', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/chamber?kind=now', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      paintThreshold(thresh?.state);
+      paintOffering(off?.state);
+      paintAltar(altar);
+      paintNow(now?.state);
+    } catch {}
+  }
+
+  function paintThreshold(state) {
+    const candles = state?.candles || [];
+    document.getElementById('dr-threshold-count').textContent = String(candles.length);
+    const body = document.getElementById('dr-threshold-body');
+    if (!body) return;
+    if (candles.length === 0) { body.innerHTML = '<div class="dr__loading">— still — waiting for the first candle —</div>'; return; }
+    body.innerHTML = '';
+    candles.slice().sort((a, b) => b.lit - a.lit).slice(0, 18).forEach((c) => {
+      const w = document.createElement('div'); w.className = 'dr__candle';
+      w.innerHTML = `<div class="dr__candle-flame"></div><div class="dr__candle-wax"></div><img class="dr__candle-noun" src="https://noun.pics/${c.nounId}.svg" alt="" /><span class="dr__candle-name">${escapeHtml(c.name || '—')}</span>`;
+      body.appendChild(w);
+    });
+  }
+  function paintOffering(state) {
+    const offs = state?.offerings || [];
+    document.getElementById('dr-offering-count').textContent = String(offs.length);
+    const body = document.getElementById('dr-offering-body');
+    if (!body) return;
+    if (offs.length === 0) { body.innerHTML = '<div class="dr__loading">— offerings will appear here —</div>'; return; }
+    body.innerHTML = '';
+    offs.slice(0, 18).forEach((o) => {
+      const t = document.createElement('div'); t.className = 'dr__off-tile';
+      t.style.setProperty('--tile-hue', String(o.hue));
+      t.innerHTML = `<img src="https://noun.pics/${o.nounId}.svg" alt="" /><span class="dr__off-tile-text">${escapeHtml(o.intention)}</span>`;
+      body.appendChild(t);
+    });
+  }
+  function paintAltar(state) {
+    const total = state?.totalThisWeek || 0;
+    document.getElementById('dr-altar-count').textContent = String(total);
+    const body = document.getElementById('dr-altar-body');
+    if (!body) return;
+    const seeds = state?.seeds || [];
+    const counts = state?.counts || {};
+    const NAMES = ['BELL', 'BOWL', 'CHIME', 'GONG', 'DRONE'];
+    if (seeds.length === 0) { body.innerHTML = '<div class="dr__loading">— altar state unavailable —</div>'; return; }
+    body.innerHTML = '';
+    seeds.forEach((s, i) => {
+      const c = counts[String(s)] || 0;
+      const card = document.createElement('div'); card.className = 'dr__altar-card';
+      card.innerHTML = `
+        <img class="dr__altar-card-noun" src="https://noun.pics/${s}.svg" alt="" />
+        <span class="dr__altar-card-instrument">${NAMES[i]}</span>
+        <span class="dr__altar-card-count">${c} TRIBUTES</span>
+      `;
+      body.appendChild(card);
+    });
+  }
+  function paintNow(state) {
+    const visitors = state?.visitors || [];
+    document.getElementById('dr-now-count').textContent = String(visitors.length);
+    const body = document.getElementById('dr-now-body');
+    if (!body) return;
+    if (visitors.length === 0) { body.innerHTML = '<div class="dr__loading">— quiet · the wing is empty right now —</div>'; return; }
+    body.innerHTML = '';
+    visitors.forEach((v) => {
+      const c = document.createElement('div'); c.className = 'dr__now-card';
+      c.innerHTML = `<img src="https://noun.pics/${v.nounId}.svg" alt="" /><span class="dr__now-card-meta">${v.pid.slice(0, 8)}…</span>`;
+      body.appendChild(c);
+    });
+  }
+
+  fetchAll();
+  setInterval(fetchAll, 5000);
+</script>
