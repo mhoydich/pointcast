@@ -1,0 +1,377 @@
+---
+/**
+ * /drum-relay-2 — pass-the-beat chain.
+ *
+ * Hour 3 of the 4-hour pulse sprint. Visitor records a 3-tap fragment;
+ * the chain prepends it to a 12-link rolling history. PLAY THE CHAIN
+ * plays back every link in sequence at original tempo with each link
+ * tinted by its visitor's hue. Each new link mutates the chain's color
+ * + tempo by inheriting + slightly shifting from the previous link.
+ *
+ * Backed by /api/chamber kind=relay.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Relay 2 · Pass the Beat · PointCast';
+const description =
+  'Tap three times, leave a fragment. The chamber strings 12 fragments together and plays them as one chain.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Relay 2',
+  url: 'https://pointcast.xyz/drum-relay-2',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dr2" id="dr2-main">
+    <DrumNav current="relay-2" />
+
+    <header class="dr2__header">
+      <div class="dr2__chrome">
+        <span>RELAY · CHAIN</span>
+        <span class="dr2__chrome-sep">·</span>
+        <span><span id="dr2-len">0</span> / 12 LINKS</span>
+        <span class="dr2__chrome-sep">·</span>
+        <span id="dr2-state">RECORD</span>
+      </div>
+      <h1 class="dr2__title">RELAY</h1>
+      <p class="dr2__tagline">three taps · one fragment · twelve fragments make one chain</p>
+    </header>
+
+    <section class="dr2__stage">
+      <button class="dr2__pad" id="dr2-pad" type="button" aria-label="Tap to record fragment">
+        <svg viewBox="0 0 80 96" shape-rendering="crispEdges" aria-hidden="true">
+          <rect x="36" y="0" width="8" height="4" fill="#6b4d12"/>
+          <rect x="32" y="4" width="16" height="6" fill="#b8862c"/>
+          <path d="M 14 12 L 66 12 L 70 76 L 10 76 Z" fill="#d4a437"/>
+          <rect x="10" y="76" width="60" height="4" fill="#b8862c"/>
+          <rect x="6" y="80" width="68" height="4" fill="#6b4d12"/>
+          <rect x="38" y="84" width="4" height="8" fill="#3a2410"/>
+          <rect x="20" y="22" width="3" height="40" fill="#fff5c0" opacity="0.5"/>
+        </svg>
+      </button>
+      <div class="dr2__progress">
+        <span class="dr2__dot" data-i="0"></span>
+        <span class="dr2__dot" data-i="1"></span>
+        <span class="dr2__dot" data-i="2"></span>
+      </div>
+      <div class="dr2__cue" id="dr2-cue">tap three times to leave your fragment</div>
+    </section>
+
+    <section class="dr2__controls">
+      <button class="dr2__btn dr2__btn--primary" id="dr2-play" type="button">PLAY THE CHAIN</button>
+      <button class="dr2__btn" id="dr2-record-again" type="button" hidden>RECORD AGAIN</button>
+    </section>
+
+    <section class="dr2__chain" id="dr2-chain">
+      <header>THE CHAIN</header>
+      <ol id="dr2-chain-list"><li class="dr2__empty">— first fragment, then it fills —</li></ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dr2-main) { background: #0c0410; }
+  .dr2 {
+    --dr2-velvet: #1a0820; --dr2-velvet-deep: #0c0410;
+    --dr2-brass: #d4a437; --dr2-brass-deep: #6b4d12;
+    --dr2-flame: #f6c15e;
+    --dr2-ink-light: #f4e7c8; --dr2-ink-mid: #c9b78c; --dr2-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dr2-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dr2-velvet) 0%, var(--dr2-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dr2 .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dr2__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 28px); }
+  .dr2__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dr2-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dr2-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dr2__chrome-sep { color: var(--dr2-brass-deep); }
+  #dr2-len, #dr2-state { color: var(--dr2-flame); font-weight: 700; }
+
+  .dr2__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dr2-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dr2-velvet-deep);
+  }
+  .dr2__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dr2-ink-mid);
+  }
+
+  .dr2__stage {
+    display: flex; flex-direction: column; align-items: center; gap: clamp(14px, 2vh, 22px);
+    padding: clamp(20px, 4vh, 36px) 0;
+  }
+  .dr2__pad {
+    appearance: none; border: 0; cursor: pointer; padding: 0; background: transparent;
+    width: clamp(160px, 22vw, 220px); aspect-ratio: 80 / 96;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.6));
+    transition: transform 80ms;
+  }
+  .dr2__pad:active, .dr2__pad.dr2__pad--struck { transform: translateY(2px); }
+  .dr2__pad svg { width: 100%; height: 100%; display: block; }
+  .dr2__progress { display: flex; gap: 14px; }
+  .dr2__dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(212, 164, 55, 0.20);
+    border: 1.5px solid var(--dr2-brass-deep);
+    transition: background 160ms, transform 160ms;
+  }
+  .dr2__dot.dr2__dot--lit {
+    background: var(--dr2-flame); transform: scale(1.2);
+    box-shadow: 0 0 14px rgba(246, 193, 94, 0.55);
+  }
+  .dr2__cue {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(15px, 1.5vw, 19px); color: var(--dr2-ink-mid);
+    min-height: 1.5em; text-align: center;
+  }
+
+  .dr2__controls {
+    display: flex; gap: clamp(10px, 2vw, 20px); justify-content: center;
+    padding: clamp(8px, 1vh, 14px) 0 clamp(20px, 3vh, 32px);
+  }
+  .dr2__btn {
+    appearance: none; cursor: pointer;
+    padding: 12px 26px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; font-weight: 800; letter-spacing: 0.22em;
+    color: var(--dr2-ink-mid); background: transparent;
+    border: 1.5px solid var(--dr2-brass-deep);
+  }
+  .dr2__btn:hover { color: var(--dr2-brass); border-color: var(--dr2-brass); }
+  .dr2__btn--primary {
+    color: var(--dr2-velvet-deep);
+    background: linear-gradient(180deg, var(--dr2-brass) 0%, oklch(0.62 0.18 60) 100%);
+    border: 0;
+    box-shadow: 0 0 0 2px var(--dr2-velvet-deep), 0 4px 0 0 var(--dr2-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+  }
+
+  .dr2__chain {
+    max-width: 720px; margin: 0 auto;
+    padding-top: clamp(14px, 2vh, 22px);
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .dr2__chain header {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.30em; color: var(--dr2-brass);
+    text-transform: uppercase; margin-bottom: 12px; text-align: center;
+  }
+  #dr2-chain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  #dr2-chain-list li {
+    display: flex; gap: 12px; align-items: center;
+    padding: 8px 12px;
+    border-left: 4px solid oklch(0.65 0.20 var(--link-hue, 60));
+    background: rgba(212, 164, 55, 0.06);
+  }
+  .dr2__chain-noun {
+    width: 32px; height: 32px; image-rendering: pixelated;
+    background: rgba(0, 0, 0, 0.30); border: 1px solid var(--dr2-brass-deep);
+    flex-shrink: 0;
+  }
+  .dr2__chain-meta {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.18em; color: var(--dr2-ink-mid);
+  }
+  .dr2__chain-pattern {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; color: var(--dr2-ink-dim); margin-left: auto;
+  }
+  #dr2-chain-list li.dr2__chain-list--playing {
+    background: rgba(246, 193, 94, 0.20);
+    border-left-color: var(--dr2-flame);
+  }
+  .dr2__empty {
+    color: var(--dr2-ink-dim) !important; font-style: italic;
+    font-family: 'Lora', Georgia, serif !important; border-left: 0 !important; background: none !important;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playBell(freq, gain = 0.18) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.3); o2.start(t); o2.stop(t + 0.9);
+  }
+
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+
+  const padEl = document.getElementById('dr2-pad');
+  const cueEl = document.getElementById('dr2-cue');
+  const stateEl = document.getElementById('dr2-state');
+  const lenEl = document.getElementById('dr2-len');
+  const dotEls = Array.from(document.querySelectorAll('.dr2__dot'));
+  const playBtn = document.getElementById('dr2-play');
+  const recordAgainBtn = document.getElementById('dr2-record-again');
+  const chainListEl = document.getElementById('dr2-chain-list');
+
+  let mode = 'idle'; // 'idle' | 'recording' | 'playing'
+  let taps = [];
+  let lastTapAt = 0;
+
+  function setCue(t) { if (cueEl) cueEl.textContent = t; }
+  function setState(t) { if (stateEl) stateEl.textContent = t; }
+  function paintDots(n) { dotEls.forEach((d, i) => d.classList.toggle('dr2__dot--lit', i < n)); }
+
+  function paintChain(chain) {
+    if (lenEl) lenEl.textContent = String(chain?.length || 0);
+    if (!chainListEl) return;
+    if (!chain || chain.length === 0) { chainListEl.innerHTML = '<li class="dr2__empty">— first fragment, then it fills —</li>'; return; }
+    chainListEl.innerHTML = '';
+    chain.forEach((link, idx) => {
+      const li = document.createElement('li');
+      li.dataset.linkIdx = String(idx);
+      li.style.setProperty('--link-hue', String(link.hue));
+      const intervals = link.pattern.map((p) => `${p}ms`).join(' · ');
+      li.innerHTML = `
+        <img class="dr2__chain-noun" src="https://noun.pics/${link.nounId}.svg" alt="" />
+        <span class="dr2__chain-meta">${link.pid.slice(0, 6)}…</span>
+        <span class="dr2__chain-pattern">${intervals}</span>
+      `;
+      chainListEl.appendChild(li);
+    });
+  }
+
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=relay', { cache: 'no-store' });
+      const j = await r.json();
+      if (j?.ok) paintChain(j.state?.chain || []);
+    } catch {}
+  }
+
+  function startRecord() {
+    if (mode !== 'idle') return;
+    mode = 'recording';
+    taps = [];
+    lastTapAt = 0;
+    paintDots(0);
+    setState('REC');
+    setCue('tap the bell three times');
+    if (recordAgainBtn) recordAgainBtn.hidden = true;
+  }
+  async function tap() {
+    if (mode === 'idle') startRecord();
+    if (mode !== 'recording') return;
+    const now = performance.now();
+    if (lastTapAt > 0) taps.push(Math.min(2000, Math.round(now - lastTapAt)));
+    lastTapAt = now;
+    paintDots(taps.length + 1);
+    if (padEl) {
+      padEl.classList.remove('dr2__pad--struck'); void padEl.offsetWidth;
+      padEl.classList.add('dr2__pad--struck');
+      setTimeout(() => padEl?.classList.remove('dr2__pad--struck'), 180);
+    }
+    try { playBell(587.33 - taps.length * 18); } catch {}
+    if (taps.length === 2) {
+      // 3 taps total → 2 intervals; pad with a 600ms tail
+      taps.push(600);
+      mode = 'idle';
+      setState('SAVING');
+      setCue('saving your fragment…');
+      try {
+        const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'relay', action: 'link', sessionId: SID, pattern: taps }) });
+        const j = await r.json();
+        if (j?.ok) {
+          paintChain(j.state?.chain || []);
+          setCue('your fragment joined the chain · play it back below');
+        } else {
+          setCue('save failed · try again');
+        }
+      } catch { setCue('offline · try again'); }
+      setState('READY');
+      if (recordAgainBtn) recordAgainBtn.hidden = false;
+    }
+  }
+
+  async function playChain() {
+    if (mode === 'playing') return;
+    let chain;
+    try {
+      const r = await fetch('/api/chamber?kind=relay', { cache: 'no-store' });
+      const j = await r.json();
+      chain = j?.state?.chain || [];
+    } catch { return; }
+    if (!chain.length) { setCue('the chain is empty — tap to add the first fragment'); return; }
+
+    mode = 'playing';
+    setState('PLAY');
+    paintDots(0);
+    let cumulative = 0;
+    // Play in REVERSE chronological order (newest first → oldest last)
+    chain.forEach((link, linkIdx) => {
+      // Each fragment plays its 3 hits at the link's intervals; pitch derives from hue
+      const baseFreq = 392 + (link.hue / 360) * 392;
+      link.pattern.forEach((interval, i) => {
+        const wait = i === 0 ? 0 : link.pattern[i - 1];
+        cumulative += wait;
+        setTimeout(() => {
+          try { playBell(baseFreq - i * 14, 0.16); } catch {}
+          // Highlight the current link in the list
+          chainListEl?.querySelectorAll('li').forEach((l) => l.classList.remove('dr2__chain-list--playing'));
+          const li = chainListEl?.querySelector(`[data-link-idx="${linkIdx}"]`);
+          if (li) li.classList.add('dr2__chain-list--playing');
+        }, cumulative);
+      });
+      // Pause between links
+      cumulative += 350;
+    });
+    setTimeout(() => {
+      mode = 'idle';
+      setState('READY');
+      setCue('chain ended · add another fragment to extend it');
+      chainListEl?.querySelectorAll('li').forEach((l) => l.classList.remove('dr2__chain-list--playing'));
+    }, cumulative + 400);
+  }
+
+  padEl?.addEventListener('click', tap);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat) { e.preventDefault(); tap(); }
+  });
+  playBtn?.addEventListener('click', playChain);
+  recordAgainBtn?.addEventListener('click', startRecord);
+
+  fetchState();
+  setInterval(fetchState, 5000);
+</script>
