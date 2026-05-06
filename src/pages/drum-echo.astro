@@ -1,0 +1,370 @@
+---
+/**
+ * /drum-echo — async call-and-response.
+ *
+ * Sprint 1, surface 2 of the Presence Bus. Visitors record a 5-hit
+ * rhythmic phrase (tap a single big bell five times; intervals are
+ * captured), and the phrase is left in the chamber for a future
+ * visitor to pick up and "echo back" — the page plays back another
+ * visitor's 5-hit phrase with the original intervals preserved, then
+ * lets them record their own.
+ *
+ * Backed by /api/chamber kind=echo.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Echo · Call and Response · PointCast';
+const description =
+  'Record a 5-hit rhythmic phrase. The chamber plays you another visitor\'s phrase to echo. Async.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Echo',
+  url: 'https://pointcast.xyz/drum-echo',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="de" id="de-main">
+    <DrumNav current="echo" />
+
+    <header class="de__header">
+      <div class="de__chrome">
+        <span>ECHO</span>
+        <span class="de__chrome-sep">·</span>
+        <span id="de-state">RECEIVE</span>
+        <span class="de__chrome-sep">·</span>
+        <span><span id="de-phrases">0</span> PHRASES IN CHAMBER</span>
+      </div>
+      <h1 class="de__title">ECHO</h1>
+      <p class="de__tagline">listen first · then leave one</p>
+    </header>
+
+    <section class="de__stage">
+      <button class="de__bell" id="de-bell" type="button" aria-label="Tap the bell">
+        <svg viewBox="0 0 80 96" shape-rendering="crispEdges" aria-hidden="true">
+          <rect x="36" y="0" width="8" height="4" fill="#6b4d12"/>
+          <rect x="32" y="4" width="16" height="6" fill="#b8862c"/>
+          <path d="M 14 12 L 66 12 L 70 76 L 10 76 Z" fill="#d4a437"/>
+          <rect x="10" y="76" width="60" height="4" fill="#b8862c"/>
+          <rect x="6" y="80" width="68" height="4" fill="#6b4d12"/>
+          <rect x="38" y="84" width="4" height="8" fill="#3a2410"/>
+          <rect x="20" y="22" width="3" height="40" fill="#fff5c0" opacity="0.5"/>
+          <rect x="26" y="22" width="2" height="28" fill="#fff5c0" opacity="0.30"/>
+        </svg>
+        <span class="de__bell-glow"></span>
+      </button>
+      <div class="de__cue" id="de-cue">tap to begin</div>
+      <div class="de__progress">
+        <span class="de__dot" data-i="0"></span>
+        <span class="de__dot" data-i="1"></span>
+        <span class="de__dot" data-i="2"></span>
+        <span class="de__dot" data-i="3"></span>
+        <span class="de__dot" data-i="4"></span>
+      </div>
+    </section>
+
+    <footer class="de__controls">
+      <button class="de__btn" id="de-listen" type="button">RECEIVE A PHRASE</button>
+      <button class="de__btn de__btn--primary" id="de-record" type="button">LEAVE A PHRASE</button>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#de-main) { background: #0c0410; }
+  .de {
+    --de-velvet: #1a0820; --de-velvet-deep: #0c0410;
+    --de-brass: #d4a437; --de-brass-deep: #6b4d12;
+    --de-flame: #f6c15e;
+    --de-ink-light: #f4e7c8; --de-ink-mid: #c9b78c; --de-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--de-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--de-velvet) 0%, var(--de-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex; flex-direction: column;
+  }
+  .de .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .de__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px); }
+  .de__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--de-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--de-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .de__chrome-sep { color: var(--de-brass-deep); }
+  #de-state, #de-phrases { color: var(--de-flame); font-weight: 700; }
+
+  .de__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--de-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--de-velvet-deep);
+  }
+  .de__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--de-ink-mid);
+  }
+
+  .de__stage {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: clamp(14px, 2vh, 24px);
+    padding: clamp(20px, 4vh, 40px) 0;
+  }
+  .de__bell {
+    appearance: none; border: 0; cursor: pointer; padding: 0;
+    position: relative;
+    width: clamp(160px, 24vw, 240px); aspect-ratio: 80 / 96;
+    background: transparent;
+    transition: transform 80ms;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.6));
+  }
+  .de__bell:active, .de__bell.de__bell--struck {
+    transform: translateY(2px);
+  }
+  .de__bell svg { width: 100%; height: 100%; display: block; }
+  .de__bell-glow {
+    position: absolute; inset: -30%;
+    background: radial-gradient(circle, oklch(0.85 0.20 80 / 0.55) 0%, transparent 60%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms;
+    filter: blur(10px);
+    mix-blend-mode: screen;
+  }
+  .de__bell.de__bell--struck .de__bell-glow {
+    opacity: 1;
+  }
+  .de__cue {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(15px, 1.5vw, 19px);
+    color: var(--de-ink-mid);
+    min-height: 1.5em;
+  }
+  .de__progress {
+    display: flex; gap: 12px;
+  }
+  .de__dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: rgba(212, 164, 55, 0.20);
+    border: 1px solid var(--de-brass-deep);
+    transition: background 160ms, transform 160ms;
+  }
+  .de__dot.de__dot--lit {
+    background: var(--de-flame);
+    transform: scale(1.2);
+    box-shadow: 0 0 12px rgba(246, 193, 94, 0.5);
+  }
+
+  .de__controls {
+    display: flex; align-items: center; justify-content: center; gap: clamp(10px, 2vw, 20px);
+    flex-wrap: wrap; padding: clamp(14px, 2vh, 24px) 0 0;
+    border-top: 1px solid rgba(212, 164, 55, 0.18);
+  }
+  .de__btn {
+    appearance: none; cursor: pointer;
+    padding: 12px 28px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.22em;
+    color: var(--de-ink-mid);
+    background: transparent;
+    border: 1.5px solid var(--de-brass-deep);
+    transition: color 160ms, border-color 160ms, background 160ms;
+  }
+  .de__btn:hover { color: var(--de-brass); border-color: var(--de-brass); background: rgba(212, 164, 55, 0.06); }
+  .de__btn--primary {
+    color: var(--de-velvet-deep);
+    background: linear-gradient(180deg, var(--de-brass) 0%, oklch(0.62 0.18 60) 100%);
+    border: 0;
+    box-shadow: 0 0 0 2px var(--de-velvet-deep), 0 4px 0 0 var(--de-brass-deep), 0 4px 16px rgba(212, 164, 55, 0.30);
+  }
+  .de__btn--primary:hover { background: linear-gradient(180deg, #efbb46 0%, var(--de-brass) 100%); }
+  .de__btn--primary:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 2px var(--de-velvet-deep), 0 1px 0 0 var(--de-brass-deep), 0 0 18px rgba(246, 193, 94, 0.55);
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playBell(freq = 587.33, gain = 0.20) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.4); o2.start(t); o2.stop(t + 1.0);
+  }
+
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+
+  const bellEl = document.getElementById('de-bell');
+  const cueEl = document.getElementById('de-cue');
+  const stateEl = document.getElementById('de-state');
+  const phrasesEl = document.getElementById('de-phrases');
+  const dots = Array.from(document.querySelectorAll('.de__dot'));
+  const listenBtn = document.getElementById('de-listen');
+  const recordBtn = document.getElementById('de-record');
+
+  let mode = 'idle'; // 'idle' | 'recording' | 'playing'
+  let taps = []; // intervals between taps (ms)
+  let lastTapAt = 0;
+  let lastFetchedPhrase = null;
+
+  function setCue(text) { if (cueEl) cueEl.textContent = text; }
+  function setState(text) { if (stateEl) stateEl.textContent = text; }
+  function paintDots(count) {
+    dots.forEach((d, i) => {
+      if (i < count) d.classList.add('de__dot--lit');
+      else d.classList.remove('de__dot--lit');
+    });
+  }
+
+  async function fetchPhrases() {
+    try {
+      const r = await fetch('/api/chamber?kind=echo', { cache: 'no-store' });
+      const j = await r.json();
+      if (j?.ok) {
+        if (phrasesEl) phrasesEl.textContent = String(j.state?.phrases?.length || 0);
+        return j.state?.phrases || [];
+      }
+    } catch {}
+    return [];
+  }
+  async function leavePhrase(pattern) {
+    try {
+      const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'echo', action: 'leave', sessionId: SID, pattern }) });
+      return r.json();
+    } catch { return { ok: false }; }
+  }
+  async function pickup(phraseId) {
+    try {
+      await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'echo', action: 'pickup', sessionId: SID, phraseId }) });
+    } catch {}
+  }
+
+  // RECEIVE: pick a random phrase from the chamber, play it back
+  async function receive() {
+    if (mode !== 'idle') return;
+    const phrases = await fetchPhrases();
+    const others = phrases.filter((p) => p.pid !== (SID.slice(0,10)));
+    const pool = others.length > 0 ? others : phrases;
+    if (pool.length === 0) {
+      setCue('the chamber is empty — leave the first phrase');
+      return;
+    }
+    const phrase = pool[Math.floor(Math.random() * pool.length)];
+    lastFetchedPhrase = phrase;
+    mode = 'playing';
+    setState('PLAYING');
+    setCue('listen…');
+    paintDots(0);
+    let cumulative = 0;
+    for (let i = 0; i < phrase.pattern.length; i++) {
+      const wait = i === 0 ? 200 : phrase.pattern[i - 1];
+      cumulative += wait;
+      setTimeout(() => {
+        try { playBell(587.33 - i * 8, 0.18); } catch {}
+        paintDots(i + 1);
+        if (bellEl) {
+          bellEl.classList.add('de__bell--struck');
+          setTimeout(() => bellEl?.classList.remove('de__bell--struck'), 220);
+        }
+      }, cumulative);
+    }
+    setTimeout(() => {
+      mode = 'idle';
+      setState('RECEIVE');
+      setCue('that was a phrase from another visitor · echo it back below');
+      pickup(phrase.id);
+    }, cumulative + 600);
+  }
+
+  // RECORD: tap 5 times; intervals between taps captured
+  function startRecord() {
+    if (mode !== 'idle') return;
+    mode = 'recording';
+    taps = [];
+    lastTapAt = 0;
+    paintDots(0);
+    setState('RECORDING');
+    setCue('tap the bell five times · spacing is your phrase');
+  }
+  async function recordTap() {
+    if (mode !== 'recording') return;
+    const now = performance.now();
+    if (lastTapAt > 0) taps.push(Math.min(2000, Math.round(now - lastTapAt)));
+    lastTapAt = now;
+    paintDots(taps.length + 1);
+    try { playBell(659.25 - taps.length * 6, 0.20); } catch {}
+    if (bellEl) {
+      bellEl.classList.add('de__bell--struck');
+      setTimeout(() => bellEl?.classList.remove('de__bell--struck'), 220);
+    }
+    if (taps.length === 4) {
+      // 5 taps total → 4 intervals; pad with tail to make it 5 elements (last interval is the "rest after")
+      taps.push(800); // arbitrary tail
+      mode = 'idle';
+      setState('SAVING');
+      setCue('saving…');
+      const j = await leavePhrase(taps);
+      if (j?.ok) {
+        setCue('the chamber holds your phrase · receive another to continue');
+        await fetchPhrases();
+      } else {
+        setCue('save failed · try again');
+      }
+      setState('RECEIVE');
+    }
+  }
+
+  bellEl?.addEventListener('click', () => {
+    if (mode === 'recording') recordTap();
+    else if (mode === 'idle') {
+      // Casual single ring
+      try { playBell(587.33, 0.16); } catch {}
+      if (bellEl) {
+        bellEl.classList.add('de__bell--struck');
+        setTimeout(() => bellEl?.classList.remove('de__bell--struck'), 220);
+      }
+    }
+  });
+  listenBtn?.addEventListener('click', receive);
+  recordBtn?.addEventListener('click', startRecord);
+
+  fetchPhrases();
+  setInterval(fetchPhrases, 8000);
+</script>
