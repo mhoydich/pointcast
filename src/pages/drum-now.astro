@@ -1,0 +1,214 @@
+---
+/**
+ * /drum-now — who's in the wing right now.
+ *
+ * Sprint 1, surface 4 of the Presence Bus. Pings /api/chamber kind=now
+ * every 8s. Renders a compact list of currently-present visitors with
+ * their pid, Noun, hue, and "minutes here" — a wing-wide presence
+ * dashboard.
+ *
+ * Distinct from /drum-room (which is the lobby room itself); /drum-now
+ * is the read-only "who's around right now" panel.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Now · Wing Presence · PointCast';
+const description =
+  'Who\'s in the wing right now. Compact live presence panel — visitors, Nouns, time-here.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Now',
+  url: 'https://pointcast.xyz/drum-now',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dn" id="dn-main">
+    <DrumNav current="now" />
+
+    <header class="dn__header">
+      <div class="dn__chrome">
+        <span>NOW</span>
+        <span class="dn__chrome-sep">·</span>
+        <span><span id="dn-count">0</span> HERE</span>
+        <span class="dn__chrome-sep">·</span>
+        <span id="dn-updated">--:--</span>
+      </div>
+      <h1 class="dn__title">NOW</h1>
+      <p class="dn__tagline">who's in the wing right now · 30-second presence window</p>
+    </header>
+
+    <section class="dn__list" id="dn-list">
+      <div class="dn__empty">— you're the first one here —</div>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dn-main) { background: #0c0410; }
+  .dn {
+    --dn-velvet: #1a0820; --dn-velvet-deep: #0c0410;
+    --dn-brass: #d4a437; --dn-brass-deep: #6b4d12;
+    --dn-flame: #f6c15e;
+    --dn-ink-light: #f4e7c8; --dn-ink-mid: #c9b78c; --dn-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 36px;
+    color: var(--dn-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dn-velvet) 0%, var(--dn-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+  }
+  .dn .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dn__header { text-align: center; padding: clamp(8px, 1vh, 18px) 0 clamp(20px, 3vh, 32px); }
+  .dn__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dn-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dn-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dn__chrome-sep { color: var(--dn-brass-deep); }
+  #dn-count, #dn-updated { color: var(--dn-flame); font-weight: 700; }
+
+  .dn__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dn-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dn-velvet-deep);
+  }
+  .dn__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dn-ink-mid);
+  }
+
+  .dn__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    max-width: 980px; margin: 0 auto;
+  }
+  .dn__empty {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 32px;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    color: var(--dn-ink-dim);
+  }
+  .dn__card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--dn-brass-deep);
+    background: linear-gradient(180deg, rgba(44, 13, 54, 0.55), rgba(12, 4, 16, 0.78));
+    border-left-width: 4px;
+  }
+  .dn__card-noun {
+    width: 48px; height: 48px;
+    image-rendering: pixelated;
+    background: rgba(0, 0, 0, 0.40);
+    border: 1px solid var(--dn-brass-deep);
+    flex-shrink: 0;
+  }
+  .dn__card-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .dn__card-pid {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px; letter-spacing: 0.18em; color: var(--dn-flame); font-weight: 700;
+  }
+  .dn__card-here {
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: 12px; color: var(--dn-ink-dim);
+  }
+  .dn__card.dn__card--mine { border-left-color: var(--dn-flame); }
+</style>
+
+<script>
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  let MY_PID = '';
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+  }
+
+  const countEl = document.getElementById('dn-count');
+  const updatedEl = document.getElementById('dn-updated');
+  const listEl = document.getElementById('dn-list');
+
+  function fmtMin(joinedAt) {
+    const sec = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+    if (sec < 60) return `${sec}s here`;
+    const m = Math.floor(sec / 60);
+    if (m < 60) return `${m}m here`;
+    return `${Math.floor(m / 60)}h ${m % 60}m here`;
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function paint(state) {
+    if (!state) return;
+    const visitors = state.visitors || [];
+    if (countEl) countEl.textContent = String(visitors.length);
+    const d = new Date();
+    if (updatedEl) updatedEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    if (!listEl) return;
+    if (visitors.length === 0) {
+      listEl.innerHTML = '<div class="dn__empty">— you\'re the first one here —</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    visitors.forEach((v) => {
+      const card = document.createElement('div');
+      card.className = 'dn__card';
+      if (v.pid === MY_PID) card.classList.add('dn__card--mine');
+      card.style.setProperty('--card-hue', String(v.hue));
+      card.innerHTML = `
+        <img class="dn__card-noun" src="https://noun.pics/${v.nounId}.svg" alt="" />
+        <div class="dn__card-meta">
+          <span class="dn__card-pid">${v.pid}</span>
+          <span class="dn__card-here">${fmtMin(v.joinedAt)}</span>
+        </div>
+      `;
+      listEl.appendChild(card);
+    });
+  }
+
+  async function ping() {
+    try {
+      const r = await fetch('/api/chamber', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'now', action: 'ping', sessionId: SID }),
+      });
+      const j = await r.json();
+      if (j?.ok) paint(j.state);
+    } catch {}
+  }
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=now', { cache: 'no-store' });
+      const j = await r.json();
+      if (j?.ok) paint(j.state);
+    } catch {}
+  }
+
+  (async () => { MY_PID = await sha256short(SID); ping(); })();
+  setInterval(ping, 8000);
+  setInterval(fetchState, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+</script>
