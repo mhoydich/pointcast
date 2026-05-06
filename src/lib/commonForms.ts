@@ -1,0 +1,265 @@
+/**
+ * Common Forms — A Civic Architecture Plan for the 25-Mile Radius.
+ *
+ * The architectural elaboration of the PointCast Commons wishlist.
+ * Twelve commissions across three tiers, organized by scale and cost.
+ * Brutalist material honesty, midcentury civic honesty, locally
+ * grounded in the radius. Each commission ties to an existing UES
+ * program (Marine Layer, Commons, Civic Layer, Geology, Honey League,
+ * Court Craft) and to a specific phase of the Commons Acquisition
+ * Thesis (Phase 0 Map → Phase 4 Open Hours).
+ *
+ * "Built to last. Photographable in any weather including the marine layer."
+ */
+
+export const PLAN_META = {
+  title: 'Common Forms',
+  subtitle: 'A Civic Architecture Plan for the 25-Mile Radius',
+  tagline: 'From bench to pavilion, from plaque to parcel.',
+  authors: [
+    { name: 'Michael Hoydich', dept: 'Department of Local Geography', email: 'mh@pointcast.xyz' },
+    { name: 'The Marine Layer Cohort', dept: 'University of El Segundo', email: 'cohort@pointcast.xyz' },
+  ],
+  affiliation: 'University of El Segundo',
+  publication: 'UES Working Papers in Civic Architecture, Vol. 1',
+  paperNumber: 'UES-WP-2026-11',
+  date: '2026-05-06',
+  thesis: 'Twelve commissions, three tiers, one radius. The plan elaborates the PointCast Commons wishlist into a real-world architectural sequence — bench first, pavilion eventually, parcel only when stewardship has earned it. Material honesty over decoration. Civic generosity over private appropriation. Built to last fifty years and photographable in the marine layer.',
+};
+
+export const PRINCIPLES = [
+  'Material honesty. Concrete looks like concrete; steel weathers; wood ages. Nothing pretends to be something it is not.',
+  'Form follows civic function. Each commission solves a public-square problem. Decorative ornament is added only when it is structural.',
+  'Generous to the public, hostile to the private appropriator. Benches face the view; pavilions are unrentable; plaques credit the place, not the funder.',
+  'Built to last fifty years. The cost-per-year of a $1,800 bench over fifty years is $36 — less than a Marine Layer cohort coffee budget.',
+  'Photographable in any weather including the marine layer. Forms must read at 56°F in 95% humidity at 6:00 AM, not just at noon.',
+  'Local stone before imported stone. Granite from the Sierra batholith outranks granite from Vermont; magnetite black sand from El Porto outranks black sand from anywhere else.',
+  'Brutalist sincerity over brutalist mannerism. We are not building a 1968 set; we are using brutalism\'s honest-material vocabulary because it lasts and tells the truth.',
+];
+
+export const FORM_VOCABULARY = [
+  { material: 'Cast concrete (board-formed)', use: 'Benches, plinths, plaza pavers, fault-trace inlays. The default civic material.', source: 'California aggregate; cement from Lehigh Hanson Tehachapi plant.' },
+  { material: 'Weathering steel (Cor-Ten)', use: 'Plaques, markers, signage. Develops a stable rust patina; never paints over time.', source: 'US steel; cut to size at South Bay fabricators.' },
+  { material: 'Local granite', use: 'Bench seats, pavilion column bases, larger plinths.', source: 'Sierra Nevada batholith — quarried in the central Sierra and trucked.' },
+  { material: 'Reclaimed Douglas fir', use: 'Bench seat slats, pavilion ceilings, shaded structures.', source: 'Reclaimed from El Segundo and South Bay deconstruction projects.' },
+  { material: 'Plate glass', use: 'Civic-room storefront on Main Street. Single-pane, museum-grade.', source: 'Standard glazier supply; minimal frame.' },
+  { material: 'Sand-blasted bronze', use: 'Plaques. Engraved through the patina to reveal raw bronze beneath.', source: 'Foundry partnership TBD.' },
+];
+
+export type Commission = {
+  id: string;
+  number: string; // A1, A2, B1, etc.
+  tier: 'A' | 'B' | 'C';
+  tierLabel: string;
+  name: string;
+  site: string;
+  form: string;
+  materials: string[];
+  cost: string;
+  costLow: number;
+  costHigh: number;
+  stewardship: string;
+  triggerCondition: string;
+  uesProgram: string;
+  commonsPhase: 'Phase 0' | 'Phase 1' | 'Phase 2' | 'Phase 3' | 'Phase 4';
+  schematic: 'bench' | 'plaque' | 'bollard' | 'inlay' | 'deck' | 'court' | 'pavilion' | 'storefront' | 'garden';
+  status: 'concept' | 'sited' | 'permitted' | 'built' | 'open';
+  description: string;
+};
+
+export const COMMISSIONS: Commission[] = [
+  // TIER A — Small Forms ($1–15K each)
+  {
+    id: 'first-bench-hilltop', number: 'A1', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'First Bench at Hilltop',
+    site: 'Hilltop Park, southwest corner — facing the marine layer',
+    form: 'Single west-facing bench, 6-foot length, two granite plinth supports, four reclaimed Douglas fir seat slats with a cast-concrete center support engraved with the Marine Layer principle "the place is the curriculum."',
+    materials: ['Sierra granite plinth', 'Reclaimed Douglas fir slat', 'Cast concrete center support', 'Sand-blasted bronze plaque'],
+    cost: '$1,800 (bench + parks-department permit + plaque)', costLow: 1800, costHigh: 1800,
+    stewardship: 'Marine Layer cohort — monthly wipe-down rotation',
+    triggerCondition: 'Already met. Ledger weight 92 ≥ threshold 25. Awaiting parks-department permit (Manus brief docs/briefs/2026-05-02-manus-first-bench-hilltop.md).',
+    uesProgram: 'Marine Layer + Commons First Bench pilot',
+    commonsPhase: 'Phase 1', schematic: 'bench', status: 'permitted',
+    description: 'The pilot. The smallest useful unit. A bench precedes a pavilion.',
+  },
+  {
+    id: 'imperial-overlook-bench', number: 'A2', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'Imperial Avenue Overlook Bench',
+    site: 'Imperial Avenue overlook, top of the Pleistocene dunes',
+    form: 'Twin benches in opposing pairs, faced toward the western horizon and the eastern flight path. Cast concrete monolith with two slat seats.',
+    materials: ['Cast concrete monolith', 'Reclaimed Douglas fir seat slats'],
+    cost: '$3,800 (twin bench + permit + dune-protection setbacks)', costLow: 3800, costHigh: 3800,
+    stewardship: 'Marine Layer cohort, alternating with Imperial Heights neighborhood association',
+    triggerCondition: 'After First Bench at Hilltop is built and held for six months.',
+    uesProgram: 'Marine Layer Week 03 (Imperial Blue Hour)',
+    commonsPhase: 'Phase 1', schematic: 'bench', status: 'concept',
+    description: 'Twin benches because the Imperial overlook reads in two directions: west to the marine layer, east to the LAX flight path. Both views are sit-worthy.',
+  },
+  {
+    id: 'library-park-reading-bench', number: 'A3', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'Library Park Reading Bench',
+    site: 'Library Park, under the Italian stone pines',
+    form: 'L-shaped bench wrapping a single pine, with an attached weathering-steel reading-light stub (solar-powered, dawn-and-dusk only). Granite seat, concrete plinths.',
+    materials: ['Sierra granite seat', 'Cast concrete plinths', 'Weathering steel reading-light stub'],
+    cost: '$4,200 (bench + lighting + permit)', costLow: 4200, costHigh: 4200,
+    stewardship: 'Library Quiet Hour stewardship rotation',
+    triggerCondition: 'After Library Quiet Hour Custody entries cross 24 weight (six months of monthly stewardship).',
+    uesProgram: 'Marine Layer Week 04 (Library Quiet Hour) spillover',
+    commonsPhase: 'Phase 1', schematic: 'bench', status: 'concept',
+    description: 'For the readers who arrive before the library opens. The reading light is the smallest possible civic infrastructure.',
+  },
+  {
+    id: 'marine-layer-bollards', number: 'A4', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'Marine Layer Week Bollards',
+    site: 'Eight sites across the radius — Plaza, Powerline, Imperial, Library, El Porto, Chevron edge, Recreation Park, Manhattan Beach pier',
+    form: 'Eight cast-concrete bollards, each 18 inches tall, 8 inches square cross-section. Top face engraved with the week number, breath protocol, prompt, and a small embedded magnetite-bearing concrete aggregate for the literal pyrite-fleck (Lapis Lazuli reference).',
+    materials: ['Cast concrete (with El Porto magnetite black-sand aggregate)', 'Sand-blasted bronze top-face inlay'],
+    cost: '$11,200 (8 bollards × $1,400 each, includes permits across 8 jurisdictions)', costLow: 11200, costHigh: 11200,
+    stewardship: 'Marine Layer cohort — quarterly sit-and-clean at each',
+    triggerCondition: 'After three Marine Layer eight-week cycles complete with documented attendance receipts.',
+    uesProgram: 'Marine Layer (all 8 weeks)',
+    commonsPhase: 'Phase 2', schematic: 'bollard', status: 'concept',
+    description: 'Eight markers, one per Marine Layer week, scattered across the radius. They are the architecture of the practice. They make the practice findable.',
+  },
+  {
+    id: 'fault-trace-inlay', number: 'A5', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'Newport–Inglewood Fault Trace Inlay',
+    site: 'Sepulveda Boulevard sidewalk, where the fault crosses near the Imperial Avenue intersection',
+    form: 'A 40-foot weathering-steel line embedded in the existing sidewalk, perpendicular to traffic, oriented along the actual fault strike. Adjacent cast-bronze plaque carrying the magnitudes of the 1933 Long Beach quake (M6.4) and the 1920 Inglewood quake (M~4.9). The line says <em>HERE IS THE GROUND THAT MOVES</em>.',
+    materials: ['Weathering steel embedded line', 'Sand-blasted bronze plaque', 'Existing sidewalk concrete substrate'],
+    cost: '$8,500 (steel + bronze + city permit + concrete cutting)', costLow: 8500, costHigh: 8500,
+    stewardship: 'City of El Segundo Public Works (after donation), with annual marker-cleaning by the Marine Layer cohort',
+    triggerCondition: 'After parks-department conversation establishes a working relationship (queued in Manus brief).',
+    uesProgram: 'Geology · Newport-Inglewood Fault deep-dive',
+    commonsPhase: 'Phase 2', schematic: 'inlay', status: 'concept',
+    description: 'The most important civic fact of the radius made visible at sidewalk scale. The ground is not metaphor; the steel line is the proof.',
+  },
+  {
+    id: 'mb-dunes-marker', number: 'A6', tier: 'A', tierLabel: 'Small Forms · $1–15K',
+    name: 'Manhattan Beach Sand Dunes Formation Marker',
+    site: 'Imperial Avenue overlook, west-facing, paired with A2 (Imperial bench)',
+    form: 'A waist-high cast-concrete monolith, 4 feet tall, with a sand-blasted bronze plaque facing the bench. The plaque carries the formation name, the age range (~10 Kya – ~125 Kya), and the El Segundo Blue butterfly\'s status as endemic to this substrate.',
+    materials: ['Cast concrete monolith', 'Sand-blasted bronze plaque', 'Embedded micro-magnetite from El Porto'],
+    cost: '$5,400 (monolith + plaque + permit)', costLow: 5400, costHigh: 5400,
+    stewardship: 'Marine Layer cohort + El Segundo Blue Butterfly Foundation (if partnership establishes)',
+    triggerCondition: 'After A2 (Imperial Bench) is built and held for one year.',
+    uesProgram: 'Geology + Marine Layer Week 03',
+    commonsPhase: 'Phase 2', schematic: 'plaque', status: 'concept',
+    description: 'The dune you are sitting on has a name and an age. The butterfly is endemic to it. The marker says so, plainly.',
+  },
+
+  // TIER B — Medium Forms ($15–100K each)
+  {
+    id: 'pollinator-garden', number: 'B1', tier: 'B', tierLabel: 'Medium Forms · $15–100K',
+    name: 'Pollinator Garden at Library Park',
+    site: 'Library Park, southeast corner (currently underused lawn)',
+    form: 'A 1,200-square-foot native-planting plot — California buckwheat (host plant of the El Segundo Blue), California poppy, narrow-leaf milkweed, sage scrub. Cast-concrete edge curbs at the perimeter; a bronze plaque crediting the Honey League and naming the species. Twelve plant labels on weathering-steel stakes.',
+    materials: ['Cast concrete curb', 'Weathering-steel plant labels', 'Native plant stock from Theodore Payne Foundation', 'Decomposed-granite paths'],
+    cost: '$18,000 (plants + curbs + labels + first-year maintenance)', costLow: 18000, costHigh: 25000,
+    stewardship: 'Honey League cohort + Library Park volunteers',
+    triggerCondition: 'After Honey League Season Zero completes and parks-department conversation establishes a working partnership.',
+    uesProgram: 'Honey League + Geology · El Segundo Blue habitat',
+    commonsPhase: 'Phase 2', schematic: 'garden', status: 'concept',
+    description: 'A native-planting demo plot. Brutalist edge curbs, sincere plant choices. Pollinators inside the radius first; pollinator economics learned over a single Honey League season.',
+  },
+  {
+    id: 'one-more-court', number: 'B2', tier: 'B', tierLabel: 'Medium Forms · $15–100K',
+    name: 'One More Pickleball Court',
+    site: 'Recreation Park, east of the existing court bank',
+    form: 'A single regulation pickleball court — 20 ft × 44 ft playing surface, 30 ft × 60 ft total fenced area. Cast-concrete slab over compacted aggregate. Acrylic surface coat in two colors (regulation requires two-tone). Galvanized steel fence with locally-fabricated weathering-steel signage.',
+    materials: ['Cast concrete slab', 'Acrylic court surface', 'Galvanized steel fence', 'Weathering-steel signage'],
+    cost: '$60,000 (slab + surface + fence + lighting; on parks land via partnership)', costLow: 40000, costHigh: 80000,
+    stewardship: 'Court Craft + Paddle Tide Exchange',
+    triggerCondition: 'After Paddle Tide registry crosses 100 active profiles and Court Craft can show usage data justifying the addition.',
+    uesProgram: 'Court Craft + Paddle Tide Exchange + Marine Layer Week 07',
+    commonsPhase: 'Phase 2', schematic: 'court', status: 'concept',
+    description: 'Demand outpaces supply at the Recreation Park courts. One more court is the difference between a five-minute wait and a one-hour wait. Cheapest civic intervention with the highest cohort impact.',
+  },
+  {
+    id: 'vista-del-mar-deck', number: 'B3', tier: 'B', tierLabel: 'Medium Forms · $15–100K',
+    name: 'Vista del Mar Bluff Observation Deck',
+    site: 'Vista del Mar bluffs, south of Dockweiler, at a confirmed-stable point set back from the active retreat scarp',
+    form: 'A 12-foot × 24-foot cantilevered cast-concrete deck with a 4-foot weathering-steel parapet. Two integrated benches on the deck. A bronze plaque acknowledging the active sea-cliff retreat and naming the year-over-year inches lost.',
+    materials: ['Cast concrete deck (cantilevered, with rebar reinforcement)', 'Weathering steel parapet', 'Sand-blasted bronze plaque'],
+    cost: '$85,000 (engineering + concrete + steel + permits + Coastal Commission review)', costLow: 70000, costHigh: 100000,
+    stewardship: 'City of El Segundo Public Works + annual cohort inspection of the active scarp',
+    triggerCondition: 'After Geology field walk #4 (Vista del Mar cliff retreat) has been documented twelve times across at least two seasons, and a structural engineer has confirmed a safe-setback location.',
+    uesProgram: 'Geology · Vista del Mar field walk + Civic Layer · Coastal Commission deep-dive',
+    commonsPhase: 'Phase 3', schematic: 'deck', status: 'concept',
+    description: 'A civic acknowledgment of the active sea-cliff retreat. The deck is the place we go to look at the place we are losing. Brutalist honesty as a coastal-loss memorial.',
+  },
+  {
+    id: 'hilltop-pavilion', number: 'B4', tier: 'B', tierLabel: 'Medium Forms · $15–100K',
+    name: 'Hilltop Open-Air Pavilion',
+    site: 'Hilltop Park, west of A1 (First Bench), set back from the ridge',
+    form: 'A 16-foot × 16-foot open-air pavilion. Four cast-concrete columns, a flat reclaimed-Douglas-fir ceiling, no walls. Roof slope <2% (visually flat from below). Single ceiling-mounted bell for the cohort to ring at the start of First Sit.',
+    materials: ['Cast concrete columns', 'Reclaimed Douglas fir ceiling', 'Bronze ring bell', 'Decomposed-granite floor'],
+    cost: '$95,000 (columns + ceiling + permit + Coastal Commission consult if applicable)', costLow: 70000, costHigh: 120000,
+    stewardship: 'Marine Layer cohort + parks-department maintenance partnership',
+    triggerCondition: 'After A1 (First Bench) has been held for 18 months and the Marine Layer eight-week cycles have completed at least three full rotations.',
+    uesProgram: 'Marine Layer · pavilion-as-bell-tower + Commons · pavilion principle',
+    commonsPhase: 'Phase 3', schematic: 'pavilion', status: 'concept',
+    description: 'A bench precedes a pavilion. After eighteen months of First Bench attendance, the cohort earns the pavilion. Open-air, no walls, single bell. Brutalist permanence at the smallest pavilion scale that works.',
+  },
+
+  // TIER C — Large Forms ($150K+)
+  {
+    id: 'free-pavilion-corner', number: 'C1', tier: 'C', tierLabel: 'Large Forms · $150K+',
+    name: 'Free Pavilion at a Corner Lot',
+    site: 'TBD: corner lot inside El Segundo, walking distance from a UES session',
+    form: 'A 30-foot × 40-foot single-story cast-concrete pavilion with reclaimed-Douglas-fir ceiling. Plate-glass on two sides for daylight. No interior walls. Built-in benches around the perimeter. Flat roof with rooftop access for occasional cohort gatherings. The pavilion is unrentable. Open to anyone, any time.',
+    materials: ['Cast concrete walls and slab', 'Reclaimed Douglas fir ceiling', 'Plate glass on two faces', 'Bronze threshold plaque'],
+    cost: '$420,000 (parcel + build; held in Commons CLT shell entity)', costLow: 350000, costHigh: 500000,
+    stewardship: 'PointCast Commons CLT + named stewardship circle (5–9 directors)',
+    triggerCondition: 'Phase 3 trigger met: 100 give-back ledger weight + 1 offered easement + CLT shell entity filed with CA Secretary of State + 12 months of prior stewardship at the parcel site.',
+    uesProgram: 'Commons · the pavilion principle (unrentable civic space)',
+    commonsPhase: 'Phase 3', schematic: 'pavilion', status: 'concept',
+    description: 'The keystone commission. A pavilion that anyone can walk into for a session, a sit, a build night. Not a coworking space. A civic room. The CLT holds the parcel; the cohort holds the keys; the door holds the test.',
+  },
+  {
+    id: 'main-street-civic-room', number: 'C2', tier: 'C', tierLabel: 'Large Forms · $150K+',
+    name: 'The Civic Room on Main Street',
+    site: 'Main Street, El Segundo, between Holly and Grand',
+    form: 'A 1,200-square-foot ground-floor storefront. Single-pane plate glass facade. Cast-concrete floor. Reclaimed-Douglas-fir ceiling and back wall. One long table (16 ft × 4 ft Douglas fir slab on cast-concrete trestles). Twelve simple chairs. A small kitchenette. A single ring bell at the entrance. No reception desk.',
+    materials: ['Plate glass facade', 'Cast concrete floor', 'Reclaimed Douglas fir ceiling, back wall, table', 'Bronze threshold plaque'],
+    cost: '$175,000/year lease ($14,500/month), or $1.4M to buy outright', costLow: 175000, costHigh: 1400000,
+    stewardship: 'PointCast Commons CLT + named stewardship circle',
+    triggerCondition: 'After one full UES year and a stewardship circle willing to keep documented public hours. Lease first; buy after three years of operation.',
+    uesProgram: 'Commons · Main Street meeting room wishlist + UES · permanent home',
+    commonsPhase: 'Phase 3', schematic: 'storefront', status: 'concept',
+    description: 'The University finally has a door anyone can walk into. A civic room, not a coworking space. The plate glass is the affordance: the public sees the room from the sidewalk, and the room sees the public back.',
+  },
+];
+
+export type Influence = { name: string; year: string; architect: string; locality: string; lesson: string };
+
+export const INFLUENCES: Influence[] = [
+  { name: 'Notre-Dame du Haut, Ronchamp', year: '1955', architect: 'Le Corbusier', locality: 'Ronchamp, France', lesson: 'A civic-religious building can be small, irregular, and honestly material without being decorative.' },
+  { name: 'Salk Institute', year: '1965', architect: 'Louis Kahn', locality: 'La Jolla, CA — inside the radius+', lesson: 'Cast concrete on the Pacific. Honest material at coastal scale.' },
+  { name: 'Marin County Civic Center', year: '1962', architect: 'Frank Lloyd Wright', locality: 'San Rafael, CA', lesson: 'Civic architecture spanning a hilltop. Generous to the public, insistent on its own form.' },
+  { name: 'Boston City Hall', year: '1968', architect: 'Kallmann, McKinnell & Knowles', locality: 'Boston, MA', lesson: 'Brutalism at civic scale. Loved and hated; never invisible. The form refuses to apologize.' },
+  { name: 'Geisel Library, UCSD', year: '1970', architect: 'William Pereira', locality: 'La Jolla, CA — inside the radius+', lesson: 'Local Southern California brutalism. Concrete cantilevered over a hill. Adjacent to the radius and instructive.' },
+  { name: 'Kimbell Art Museum', year: '1972', architect: 'Louis Kahn', locality: 'Fort Worth, TX', lesson: 'Cycloidal concrete vaults. Light as material. The civic interior should be photographable in any light.' },
+  { name: 'Yale Art & Architecture Building', year: '1963', architect: 'Paul Rudolph', locality: 'New Haven, CT', lesson: 'Bush-hammered concrete. The texture is the ornament; nothing applied.' },
+  { name: 'Kahn\'s Phillips Exeter Library', year: '1971', architect: 'Louis Kahn', locality: 'Exeter, NH', lesson: 'A library shell of brick and concrete that frames the act of reading. The materials speak; the books do the rest.' },
+];
+
+export const SEQUENCE = [
+  { phase: 'Year 1 · 2026–2027', commissions: ['A1 First Bench', 'A2 Imperial Bench', 'A3 Library Park Bench'], totalCost: '$9,800', narrative: 'Three benches, no pavilions. The smallest useful unit at scale. Establishes the cohort\'s right to act.' },
+  { phase: 'Year 2 · 2027–2028', commissions: ['A4 Marine Layer Bollards', 'A5 Fault Trace Inlay', 'A6 MB Dunes Marker'], totalCost: '$25,100', narrative: 'Markers and plaques. The radius gets named. Civic literacy infrastructure at sidewalk scale.' },
+  { phase: 'Year 3 · 2028–2029', commissions: ['B1 Pollinator Garden', 'B2 One More Court'], totalCost: '$78,000', narrative: 'Medium-form commissions on parks-department land. Honey League Season Two onward; Court Craft cohort doubled.' },
+  { phase: 'Year 4 · 2029–2030', commissions: ['B3 Vista del Mar Deck', 'B4 Hilltop Pavilion'], totalCost: '$180,000', narrative: 'The first cantilevered concrete commission and the first pavilion. CLT shell entity is operational; first easement gift accepted.' },
+  { phase: 'Year 5 · 2030–2031', commissions: ['C1 Free Pavilion at a Corner Lot'], totalCost: '$420,000', narrative: 'The keystone commission. CLT acquires the parcel; pavilion built; open hours documented within twelve months.' },
+  { phase: 'Year 6+ · 2031+', commissions: ['C2 Main Street Civic Room'], totalCost: '$175,000/yr lease or $1.4M purchase', narrative: 'The University finally has a permanent door. Triggered after the corner-lot pavilion has been held for a full year with documented open hours.' },
+];
+
+export const STEWARDSHIP_NOTES = {
+  uesNote: 'UES Working Papers in Civic Architecture are non-peer-reviewed publications of the University of El Segundo. Comments to mh@pointcast.xyz.',
+  acknowledgments: 'The plan thanks the PointCast Commons stewardship circle (forming), the Marine Layer cohort, and the staff of the City of El Segundo Recreation, Parks & Library Commission for their willingness to be approached.',
+  openQuestions: [
+    'Naming policy for plaques. Default position: the plaque credits the place, not the funder. Edge case: a single donor at the $1.8K bench scale may receive a small bronze line at the bench underside.',
+    'CLT shell entity name. The architectural plan does not bind the entity name. See docs/briefs/2026-05-02-clt-shell-thesis.md.',
+    'Coastal Commission review for B3 (Vista del Mar Deck). Likely required. Adds 12–18 months to the timeline. The plan accommodates the delay.',
+    'Whether C1 (Free Pavilion) and C2 (Main Street Civic Room) are alternatives or sequential. Current plan: sequential, with C1 first.',
+  ],
+};

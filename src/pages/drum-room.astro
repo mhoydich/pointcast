@@ -1,0 +1,327 @@
+---
+/**
+ * /drum-room — shared live chamber.
+ *
+ * Sprint 1, surface 1 of the Presence Bus. Each visitor present
+ * appears as a brass light at a deterministic position (hash of pid →
+ * x, y on a velvet field). Click anywhere → ring. Rings broadcast to
+ * EVERY visitor in real time (2s poll) — your ring lights up your
+ * brass light + plays a bell on every connected page.
+ *
+ * Backed by /api/chamber kind=lobby.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'Room · Shared Live Chamber · PointCast';
+const description =
+  'Each visitor is a brass light. Tap to ring; everyone in the room hears it. Polled live presence.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Drum Room (live)',
+  url: 'https://pointcast.xyz/drum-room',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="dr" id="dr-main">
+    <DrumNav current="room" />
+    <RoomPresenceChip surface="drum-room" />
+
+    <header class="dr__header">
+      <div class="dr__chrome">
+        <span>ROOM</span>
+        <span class="dr__chrome-sep">·</span>
+        <span><span id="dr-count">0</span> HERE</span>
+        <span class="dr__chrome-sep">·</span>
+        <span><span id="dr-rings">0</span> RINGS</span>
+      </div>
+      <h1 class="dr__title">ROOM</h1>
+      <p class="dr__tagline">each visitor is a brass light · click to ring · everyone hears it</p>
+    </header>
+
+    <section class="dr__field" id="dr-field" aria-label="Click anywhere to ring">
+      <div class="dr__lights" id="dr-lights"></div>
+      <div class="dr__cue" id="dr-cue">click anywhere to ring</div>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#dr-main) { background: #0c0410; }
+  .dr {
+    --dr-velvet: #1a0820;
+    --dr-velvet-deep: #0c0410;
+    --dr-brass: #d4a437;
+    --dr-brass-deep: #6b4d12;
+    --dr-flame: #f6c15e;
+    --dr-ink-light: #f4e7c8;
+    --dr-ink-mid: #c9b78c;
+    --dr-ink-dim: #8a7a55;
+
+    position: relative; isolation: isolate; margin: 0 -32px;
+    padding: 0 clamp(16px, 2vw, 56px) 32px;
+    color: var(--dr-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
+      linear-gradient(180deg, var(--dr-velvet) 0%, var(--dr-velvet-deep) 100%);
+    min-height: calc(100vh - 80px);
+    display: flex; flex-direction: column;
+  }
+  .dr .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
+
+  .dr__header { text-align: center; padding: clamp(8px, 1vh, 16px) 0 clamp(14px, 2vh, 22px); flex-shrink: 0; }
+  .dr__chrome {
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 4px 16px; border: 1.5px solid var(--dr-brass-deep); border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--dr-ink-mid); background: rgba(0, 0, 0, 0.35);
+  }
+  .dr__chrome-sep { color: var(--dr-brass-deep); }
+  #dr-count, #dr-rings { color: var(--dr-flame); font-weight: 700; }
+
+  .dr__title {
+    margin: clamp(8px, 1vh, 14px) 0 6px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
+    color: var(--dr-brass);
+    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dr-velvet-deep);
+  }
+  .dr__tagline {
+    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(13px, 1.2vw, 17px); color: var(--dr-ink-mid);
+  }
+
+  .dr__field {
+    flex: 1; position: relative;
+    border: 1.5px solid var(--dr-brass-deep);
+    cursor: crosshair;
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(212, 164, 55, 0.08) 0%, transparent 70%),
+      var(--dr-velvet-deep);
+    overflow: hidden;
+    min-height: 380px;
+  }
+
+  .dr__lights {
+    position: absolute; inset: 0; pointer-events: none;
+  }
+  .dr__light {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, oklch(0.85 0.30 var(--hue, 60)) 0%, oklch(0.55 0.25 var(--hue, 60)) 60%, transparent 100%);
+    box-shadow: 0 0 16px oklch(0.85 0.30 var(--hue, 60) / 0.55);
+    transition: transform 360ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms;
+    will-change: transform, box-shadow;
+  }
+  .dr__light--ringing {
+    transform: translate(-50%, -50%) scale(2.4);
+    box-shadow: 0 0 50px oklch(0.95 0.30 var(--hue, 60) / 0.75);
+  }
+  .dr__light--mine {
+    /* Add a subtle ring indicator */
+    outline: 2px solid rgba(244, 231, 200, 0.4);
+    outline-offset: 4px;
+  }
+
+  .dr__cue {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    pointer-events: none; user-select: none;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(24px, 3.5vw, 42px); letter-spacing: 0.06em;
+    color: rgba(244, 231, 200, 0.20);
+    transition: opacity 800ms;
+  }
+  .dr__field.dr__field--touched .dr__cue { opacity: 0; }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playRoomBell(hue) {
+    const a = ctx(); const t = a.currentTime;
+    // Pitch derived from hue: low for warm hues, higher for cool
+    const f = 392 + (hue / 360) * 392;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.06, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.7); o2.start(t); o2.stop(t + 1.1);
+  }
+
+  // Identity
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  let MY_PID = '';
+  async function sha256short(s) {
+    const buf = new TextEncoder().encode(s);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
+  }
+  function pidToPos(pid) {
+    // Hash to 0..1 x and 0..1 y
+    let hx = 0, hy = 0;
+    for (let i = 0; i < pid.length; i++) {
+      hx = (hx * 31 + pid.charCodeAt(i)) | 0;
+      hy = (hy * 37 + pid.charCodeAt(i)) | 0;
+    }
+    return { x: (Math.abs(hx) % 100) / 100, y: (Math.abs(hy) % 100) / 100 };
+  }
+
+  // DOM
+  const fieldEl = document.getElementById('dr-field');
+  const lightsEl = document.getElementById('dr-lights');
+  const countEl = document.getElementById('dr-count');
+  const ringsEl = document.getElementById('dr-rings');
+  const cueEl = document.getElementById('dr-cue');
+
+  let lastRingsSeen = new Set();
+
+  async function api(action, extra) {
+    const body = { kind: 'lobby', action, sessionId: SID, ...extra };
+    const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return r.json();
+  }
+  async function fetchState() {
+    const r = await fetch('/api/chamber?kind=lobby', { cache: 'no-store' });
+    return r.json();
+  }
+
+  function paintVisitors(visitors) {
+    if (!lightsEl) return;
+    const present = new Set(visitors.map((v) => v.pid));
+    // Remove lights for missing visitors
+    Array.from(lightsEl.querySelectorAll('.dr__light')).forEach((el) => {
+      if (!present.has(el.dataset.pid)) el.remove();
+    });
+    // Add or update existing
+    visitors.forEach((v) => {
+      let el = lightsEl.querySelector(`[data-pid="${v.pid}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'dr__light';
+        el.dataset.pid = v.pid;
+        if (v.pid === MY_PID) el.classList.add('dr__light--mine');
+        lightsEl.appendChild(el);
+      }
+      const pos = pidToPos(v.pid);
+      el.style.left = `${pos.x * 100}%`;
+      el.style.top = `${pos.y * 100}%`;
+      el.style.setProperty('--hue', String(v.hue));
+    });
+  }
+
+  function paintRings(rings) {
+    if (!lightsEl) return;
+    const now = Date.now();
+    rings.forEach((r) => {
+      // Fresh rings (within last 4s) trigger flash + audio (only once)
+      if (now - r.t > 4000) return;
+      const ringKey = `${r.pid}-${r.t}`;
+      if (lastRingsSeen.has(ringKey)) return;
+      lastRingsSeen.add(ringKey);
+      // Audio + visual flash on the corresponding light
+      try { playRoomBell(r.hue); } catch {}
+      const el = lightsEl.querySelector(`[data-pid="${r.pid}"]`);
+      if (el) {
+        el.classList.add('dr__light--ringing');
+        setTimeout(() => el.classList.remove('dr__light--ringing'), 700);
+      }
+    });
+    // Clean old keys (> 30s)
+    if (lastRingsSeen.size > 100) lastRingsSeen = new Set();
+  }
+
+  function paintCounters(state) {
+    if (!state) return;
+    if (countEl) countEl.textContent = String(state.visitors?.length || 0);
+    if (ringsEl) ringsEl.textContent = String(state.ringCount || 0);
+  }
+
+  // Boot
+  async function boot() {
+    MY_PID = await sha256short(SID);
+    await ping();
+    poll();
+  }
+  async function ping() {
+    try {
+      const j = await api('ping');
+      if (j?.ok && j.state) {
+        paintCounters(j.state);
+        paintVisitors(j.state.visitors || []);
+        paintRings(j.state.rings || []);
+      }
+    } catch {}
+  }
+  let pollTimer = null;
+  async function poll() {
+    try {
+      const j = await fetchState();
+      if (j?.ok && j.state) {
+        paintCounters(j.state);
+        paintVisitors(j.state.visitors || []);
+        paintRings(j.state.rings || []);
+      }
+    } catch {}
+    pollTimer = setTimeout(poll, 2000);
+  }
+
+  // Click to ring
+  fieldEl?.addEventListener('click', async () => {
+    if (fieldEl) fieldEl.classList.add('dr__field--touched');
+    // Optimistic: play locally + flash my light
+    if (MY_PID) {
+      const myLight = lightsEl?.querySelector(`[data-pid="${MY_PID}"]`);
+      if (myLight) {
+        myLight.classList.add('dr__light--ringing');
+        setTimeout(() => myLight.classList.remove('dr__light--ringing'), 700);
+      }
+    }
+    // Build hue from MY_PID
+    let h = 0;
+    for (let i = 0; i < MY_PID.length; i++) h = ((h << 7) - h + MY_PID.charCodeAt(i)) | 0;
+    const myHue = Math.abs(h) % 360;
+    try { playRoomBell(myHue); } catch {}
+    // Server
+    try {
+      const j = await api('ring');
+      if (j?.ok && j.state) {
+        paintCounters(j.state);
+        paintVisitors(j.state.visitors || []);
+        // Mark this ring as already seen so the poll doesn't replay it
+        const myLatest = j.state.rings.find((r) => r.pid === MY_PID);
+        if (myLatest) lastRingsSeen.add(`${myLatest.pid}-${myLatest.t}`);
+      }
+    } catch {}
+  });
+
+  // Keep-alive ping every 8s
+  setInterval(ping, 8000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+
+  boot();
+</script>
