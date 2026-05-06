@@ -48,6 +48,7 @@ export const GET: APIRoute = async () => {
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
+    blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
     count: products.length,
     sources: [
