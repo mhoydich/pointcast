@@ -14,6 +14,7 @@ import {
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
+  isPublicProduct,
   pairingsUrls,
   shopLaneUrl,
   sourceKind,
@@ -21,7 +22,7 @@ import {
 } from '../../lib/commerce';
 
 export const GET: APIRoute = async () => {
-  const products = (await getCollection('products', ({ data }) => !data.draft))
+  const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
 
   const lines = products.map((p) => {

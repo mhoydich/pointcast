@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v1-2026-05-05';
+export const COMMERCE_VERSION = 'commerce-hub-v1-2026-05-06';
 
 export const CHECKOUT_POLICY = {
   mode: 'outbound-only',
@@ -60,6 +60,13 @@ export function sourceKind(product: { brand?: string; url: string }): 'good-feel
   if (brand === 'good feels' || host === 'getgoodfeels.com') return 'good-feels';
   if (brand.includes('pointcast') || host.endsWith('.myshopify.com')) return 'pointcast-merch';
   return 'external';
+}
+
+export function isPublicProduct(product: { draft?: boolean; availability?: string; brand?: string; url: string }): boolean {
+  if (product.draft) return false;
+  const kind = sourceKind(product);
+  if (kind === 'pointcast-merch' && product.availability && product.availability !== 'in-stock') return false;
+  return true;
 }
 
 export function sourceLabel(kind: ReturnType<typeof sourceKind>): string {

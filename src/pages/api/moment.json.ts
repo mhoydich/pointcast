@@ -11,6 +11,7 @@
  */
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
+import { isPublicProduct } from '../../lib/commerce';
 import { moonPhase, season, zodiacOfDate, nextEquinoxOrSolstice } from '../../lib/sky';
 
 export const GET: APIRoute = async () => {
@@ -29,7 +30,7 @@ export const GET: APIRoute = async () => {
   const featuredZone = clockZones.find((z) => z.label === 'El Segundo') ?? clockZones[0];
 
   const [allProducts, allBlocks] = await Promise.all([
-    getCollection('products', ({ data }) => !data.draft),
+    getCollection('products', ({ data }) => isPublicProduct(data)),
     getCollection('blocks', ({ data }) => !data.draft),
   ]);
 

@@ -12,6 +12,7 @@ import {
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
+  isPublicProduct,
   pairingsUrls,
   schemaAvailability,
   shopLaneUrl,
@@ -20,7 +21,7 @@ import {
 } from '../lib/commerce';
 
 export const GET: APIRoute = async () => {
-  const products = await getCollection('products', ({ data }) => !data.draft);
+  const products = await getCollection('products', ({ data }) => isPublicProduct(data));
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
