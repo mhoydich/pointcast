@@ -11,6 +11,7 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
 import {
+  COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -20,6 +21,20 @@ import {
   sourceKind,
   sourceLabel,
 } from '../../lib/commerce';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
+} as const;
+
+export const OPTIONS: APIRoute = async () => {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+};
 
 export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
@@ -66,6 +81,8 @@ export const GET: APIRoute = async () => {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
+      'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      ...CORS_HEADERS,
     },
   });
 };
