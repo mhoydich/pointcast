@@ -1,0 +1,135 @@
+---
+/**
+ * QuintetPulseModule — homepage strip for the five-seat composition.
+ *
+ * Sibling to WingPulseModule + AltarsPulseModule. Renders:
+ *   QUINTET · 3/5 SEATS FILLED · BPM 90 · enter →
+ *   plus 5 small instrument indicators (kick, snare, bell, lead, pad).
+ *
+ * Polls /api/quintet every 6s.
+ */
+---
+
+<section class="qpm" id="qpm-root" aria-label="Quintet — five-seat composition">
+  <a class="qpm__pill" href="/drum-quintet">
+    <span class="qpm__brass">●</span>
+    <span class="qpm__label">QUINTET</span>
+    <span class="qpm__sep">·</span>
+    <span class="qpm__seats" id="qpm-seats">— / 5 seats</span>
+    <span class="qpm__sep">·</span>
+    <span class="qpm__bpm" id="qpm-bpm">— bpm</span>
+    <span class="qpm__cta">join →</span>
+  </a>
+  <div class="qpm__seat-row" id="qpm-seat-row" aria-hidden="true">
+    <span class="qpm__seat" data-inst="kick">K</span>
+    <span class="qpm__seat" data-inst="snare">S</span>
+    <span class="qpm__seat" data-inst="bell">B</span>
+    <span class="qpm__seat" data-inst="lead">L</span>
+    <span class="qpm__seat" data-inst="pad">P</span>
+  </div>
+</section>
+
+<style>
+  .qpm {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 14px;
+    margin: 6px 0;
+    flex-wrap: wrap;
+
+    --qpm-velvet: #1a0820;
+    --qpm-brass: #d4a437;
+    --qpm-brass-deep: #6b4d12;
+    --qpm-flame: #f6c15e;
+    --qpm-cream: #f4e7c8;
+  }
+  .qpm__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    border: 1.5px solid var(--qpm-brass-deep);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--qpm-cream);
+    background: linear-gradient(180deg, rgba(26, 8, 32, 0.95) 0%, rgba(12, 4, 16, 0.95) 100%);
+    transition: transform 120ms, border-color 200ms, box-shadow 200ms;
+    box-shadow: 0 4px 16px rgba(212, 164, 55, 0.16);
+  }
+  .qpm__pill:hover {
+    transform: translateY(-1px);
+    border-color: var(--qpm-brass);
+    box-shadow: 0 6px 22px rgba(212, 164, 55, 0.30);
+    text-decoration: none;
+  }
+  .qpm__brass { color: var(--qpm-flame); font-size: 9px; }
+  .qpm__label { color: var(--qpm-brass); font-weight: 800; letter-spacing: 0.30em; }
+  .qpm__sep { color: var(--qpm-brass-deep); }
+  .qpm__seats, .qpm__bpm { color: var(--qpm-cream); font-weight: 600; opacity: 0.85; }
+  .qpm__cta { color: var(--qpm-flame); font-weight: 700; margin-left: 4px; }
+
+  .qpm__seat-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .qpm__seat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: rgba(212, 164, 55, 0.12);
+    color: rgba(212, 164, 55, 0.40);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px; font-weight: 800;
+    border: 1px solid rgba(212, 164, 55, 0.25);
+    transition: background 240ms, color 240ms, border-color 240ms;
+  }
+  .qpm__seat.qpm__seat--filled {
+    background: var(--qpm-flame);
+    color: var(--qpm-velvet);
+    border-color: var(--qpm-flame);
+    box-shadow: 0 0 12px rgba(246, 193, 94, 0.55);
+  }
+
+  @media (max-width: 720px) {
+    .qpm__pill { font-size: 11px; padding: 7px 14px; gap: 8px; }
+    .qpm__bpm { display: none; }
+  }
+</style>
+
+<script>
+  const seatsEl = document.getElementById('qpm-seats');
+  const bpmEl = document.getElementById('qpm-bpm');
+  const seatRowEl = document.getElementById('qpm-seat-row');
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/quintet', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j?.ok) return;
+      const seats = j.state?.seats || {};
+      const filled = Object.values(seats).filter((v) => v).length;
+      if (seatsEl) seatsEl.textContent = `${filled} / 5 seats`;
+      if (bpmEl) bpmEl.textContent = `${j.state?.bpm ?? 90} bpm`;
+      if (seatRowEl) {
+        Array.from(seatRowEl.querySelectorAll('.qpm__seat')).forEach((el) => {
+          const inst = el.dataset.inst;
+          if (!inst) return;
+          el.classList.toggle('qpm__seat--filled', !!seats[inst]);
+        });
+      }
+    } catch {}
+  }
+  if (seatsEl || seatRowEl) {
+    refresh();
+    setInterval(refresh, 6000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+</script>
