@@ -1,0 +1,234 @@
+---
+/**
+ * ChamberMegaModule — single rotating hero strip consolidating all five
+ * wing pulse strips into one fancy place.
+ *
+ * Sibling to WingPulseModule + AltarsPulseModule + QuintetPulseModule
+ * + ProcessionPulseModule + OfferingsPulseModule. Mike 2026-05-06
+ * "3 sprints go" → third of three follow-on siblings.
+ *
+ * Single wider pill that rotates through 5 modes every 4s:
+ *   THE WING · 3 here now · enter →
+ *   ALTARS · 18 tributes · ring →
+ *   QUINTET · 3 / 5 seats · join →
+ *   PROCESSION · 142 steps · march →
+ *   OFFERINGS · 12 gifts · gift →
+ *
+ * Five small mode-indicator pips show which slot is active. Clicking the
+ * pill takes you to the surface for the currently-active mode.
+ *
+ * Polls all 5 endpoints every 5s in parallel.
+ */
+---
+
+<section class="cmm" id="cmm-root" aria-label="The wing — rotating hero">
+  <a class="cmm__pill" href="/drum-room" id="cmm-pill">
+    <span class="cmm__brass">●</span>
+    <span class="cmm__label" id="cmm-label">THE WING</span>
+    <span class="cmm__sep">·</span>
+    <span class="cmm__stat" id="cmm-stat">— here now</span>
+    <span class="cmm__cta" id="cmm-cta">enter →</span>
+  </a>
+  <div class="cmm__pips" id="cmm-pips" aria-hidden="true">
+    <span class="cmm__pip cmm__pip--active" data-mode="0"></span>
+    <span class="cmm__pip" data-mode="1"></span>
+    <span class="cmm__pip" data-mode="2"></span>
+    <span class="cmm__pip" data-mode="3"></span>
+    <span class="cmm__pip" data-mode="4"></span>
+  </div>
+</section>
+
+<style>
+  .cmm {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+
+    --cmm-velvet: #1a0820;
+    --cmm-brass: #d4a437;
+    --cmm-brass-deep: #6b4d12;
+    --cmm-flame: #f6c15e;
+    --cmm-cream: #f4e7c8;
+  }
+
+  .cmm__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 22px;
+    border: 2px solid var(--cmm-brass);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cmm-cream);
+    background: linear-gradient(180deg, rgba(26, 8, 32, 0.96) 0%, rgba(8, 2, 12, 0.96) 100%);
+    transition: transform 120ms, border-color 200ms, box-shadow 200ms;
+    box-shadow:
+      0 6px 24px rgba(212, 164, 55, 0.28),
+      inset 0 1px 0 rgba(246, 193, 94, 0.20);
+    position: relative;
+    overflow: hidden;
+  }
+  .cmm__pill::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 200px 60px at 50% 100%, rgba(246, 193, 94, 0.18), transparent 70%);
+    pointer-events: none;
+  }
+  .cmm__pill:hover {
+    transform: translateY(-1px);
+    border-color: var(--cmm-flame);
+    box-shadow:
+      0 8px 32px rgba(246, 193, 94, 0.42),
+      inset 0 1px 0 rgba(246, 193, 94, 0.28);
+    text-decoration: none;
+  }
+
+  .cmm__brass {
+    color: var(--cmm-flame);
+    font-size: 11px;
+    text-shadow: 0 0 10px rgba(246, 193, 94, 0.85);
+    animation: cmm-throb 2.0s ease-in-out infinite;
+  }
+  @keyframes cmm-throb {
+    0%, 100% { opacity: 0.85; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+  }
+
+  .cmm__label {
+    color: var(--cmm-flame);
+    font-weight: 800;
+    letter-spacing: 0.32em;
+    transition: opacity 280ms;
+    min-width: 8.5ch;
+  }
+  .cmm__sep { color: var(--cmm-brass-deep); }
+  .cmm__stat {
+    color: var(--cmm-cream);
+    font-weight: 600;
+    opacity: 0.95;
+    transition: opacity 280ms;
+    min-width: 14ch;
+  }
+  .cmm__cta {
+    color: var(--cmm-flame);
+    font-weight: 700;
+    margin-left: 4px;
+    transition: opacity 280ms;
+  }
+  .cmm__label.cmm--swap, .cmm__stat.cmm--swap, .cmm__cta.cmm--swap { opacity: 0; }
+
+  .cmm__pips {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .cmm__pip {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(212, 164, 55, 0.30);
+    transition: background 280ms, box-shadow 280ms, transform 280ms;
+  }
+  .cmm__pip.cmm__pip--active {
+    background: var(--cmm-flame);
+    box-shadow: 0 0 8px rgba(246, 193, 94, 0.75);
+    transform: scale(1.25);
+  }
+
+  @media (max-width: 720px) {
+    .cmm__pill { font-size: 12px; padding: 8px 16px; gap: 8px; }
+    .cmm__label { min-width: 7ch; letter-spacing: 0.22em; }
+    .cmm__stat { min-width: 10ch; }
+  }
+</style>
+
+<script>
+  const pillEl = document.getElementById('cmm-pill') as HTMLAnchorElement | null;
+  const labelEl = document.getElementById('cmm-label');
+  const statEl = document.getElementById('cmm-stat');
+  const ctaEl = document.getElementById('cmm-cta');
+  const pipsEl = document.getElementById('cmm-pips');
+
+  // Five rotating modes. Each fills label + stat + cta + href.
+  const MODES = [
+    { key: 'wing',       href: '/drum-room',       label: 'THE WING',   cta: 'enter →' },
+    { key: 'altars',     href: '/drum-altars',     label: 'ALTARS',     cta: 'ring →' },
+    { key: 'quintet',    href: '/drum-quintet',    label: 'QUINTET',    cta: 'join →' },
+    { key: 'procession', href: '/drum-procession', label: 'PROCESSION', cta: 'march →' },
+    { key: 'offerings',  href: '/drum-offering',   label: 'OFFERINGS',  cta: 'gift →' },
+  ];
+
+  let stats = {
+    wing: '— here now',
+    altars: '— tributes',
+    quintet: '— / 5 seats',
+    procession: '— steps',
+    offerings: '— gifts',
+  };
+  let cursor = 0;
+
+  function applyMode(i: number) {
+    const m = MODES[i % MODES.length];
+    if (!labelEl || !statEl || !ctaEl || !pillEl) return;
+    labelEl.classList.add('cmm--swap');
+    statEl.classList.add('cmm--swap');
+    ctaEl.classList.add('cmm--swap');
+    setTimeout(() => {
+      labelEl.textContent = m.label;
+      statEl.textContent = stats[m.key as keyof typeof stats];
+      ctaEl.textContent = m.cta;
+      pillEl.href = m.href;
+      labelEl.classList.remove('cmm--swap');
+      statEl.classList.remove('cmm--swap');
+      ctaEl.classList.remove('cmm--swap');
+    }, 280);
+    if (pipsEl) {
+      Array.from(pipsEl.querySelectorAll('.cmm__pip')).forEach((el, idx) => {
+        el.classList.toggle('cmm__pip--active', idx === (i % MODES.length));
+      });
+    }
+  }
+
+  async function poll() {
+    const fetches = [
+      fetch('/api/chamber?kind=lobby', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/altar', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/quintet', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/chamber?kind=procession', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/chamber?kind=offering', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).catch(() => null),
+    ];
+    const [lobby, altar, quintet, procession, offering] = await Promise.all(fetches);
+
+    const wingN = lobby?.state?.visitors?.length ?? 0;
+    stats.wing = wingN === 1 ? '1 here now' : `${wingN} here now`;
+
+    const altarN = altar?.totalThisWeek ?? 0;
+    stats.altars = `${altarN} ${altarN === 1 ? 'tribute' : 'tributes'}`;
+
+    const seats = quintet?.state?.seats || {};
+    const filled = Object.values(seats).filter((v) => v).length;
+    stats.quintet = `${filled} / 5 seats`;
+
+    const stepN = procession?.state?.totalSteps ?? 0;
+    stats.procession = `${stepN} ${stepN === 1 ? 'step' : 'steps'}`;
+
+    const gifts = Array.isArray(offering?.state?.offerings) ? offering.state.offerings.length : 0;
+    stats.offerings = `${gifts} ${gifts === 1 ? 'gift' : 'gifts'}`;
+
+    // Repaint current mode in case its number changed.
+    applyMode(cursor);
+  }
+
+  if (pillEl) {
+    poll();
+    setInterval(poll, 5000);
+    setInterval(() => { cursor = (cursor + 1) % MODES.length; applyMode(cursor); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+  }
+</script>

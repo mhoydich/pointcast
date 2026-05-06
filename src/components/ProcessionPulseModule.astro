@@ -1,0 +1,145 @@
+---
+/**
+ * ProcessionPulseModule — homepage strip for the ceremonial procession.
+ *
+ * Sibling to WingPulseModule + AltarsPulseModule + QuintetPulseModule.
+ * Mike 2026-05-06 "3 sprints go" → first of three follow-on siblings.
+ *
+ * Renders:
+ *   PROCESSION · 142 STEPS · last by f7a3 · march →
+ *   plus 5 footstep dots, the latest one bright + flashing.
+ *
+ * Polls /api/chamber?kind=procession every 6s.
+ */
+---
+
+<section class="ppm" id="ppm-root" aria-label="Procession — collective ceremonial steps">
+  <a class="ppm__pill" href="/drum-procession">
+    <span class="ppm__brass">●</span>
+    <span class="ppm__label">PROCESSION</span>
+    <span class="ppm__sep">·</span>
+    <span class="ppm__total" id="ppm-total">— steps</span>
+    <span class="ppm__sep">·</span>
+    <span class="ppm__last" id="ppm-last">— last</span>
+    <span class="ppm__cta">march →</span>
+  </a>
+  <div class="ppm__feet" id="ppm-feet" aria-hidden="true">
+    <span class="ppm__foot" data-idx="0">◦</span>
+    <span class="ppm__foot" data-idx="1">◦</span>
+    <span class="ppm__foot" data-idx="2">◦</span>
+    <span class="ppm__foot" data-idx="3">◦</span>
+    <span class="ppm__foot" data-idx="4">◦</span>
+  </div>
+</section>
+
+<style>
+  .ppm {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 14px;
+    margin: 6px 0;
+    flex-wrap: wrap;
+
+    --ppm-velvet: #1a0820;
+    --ppm-brass: #d4a437;
+    --ppm-brass-deep: #6b4d12;
+    --ppm-flame: #f6c15e;
+    --ppm-cream: #f4e7c8;
+  }
+
+  .ppm__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    border: 1.5px solid var(--ppm-brass-deep);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ppm-cream);
+    background: linear-gradient(180deg, rgba(26, 8, 32, 0.95) 0%, rgba(12, 4, 16, 0.95) 100%);
+    transition: transform 120ms, border-color 200ms, box-shadow 200ms;
+    box-shadow: 0 4px 16px rgba(212, 164, 55, 0.16);
+  }
+  .ppm__pill:hover {
+    transform: translateY(-1px);
+    border-color: var(--ppm-brass);
+    box-shadow: 0 6px 22px rgba(212, 164, 55, 0.30);
+    text-decoration: none;
+  }
+
+  .ppm__brass { color: var(--ppm-flame); font-size: 9px; }
+  .ppm__label { color: var(--ppm-brass); font-weight: 800; letter-spacing: 0.30em; }
+  .ppm__sep { color: var(--ppm-brass-deep); }
+  .ppm__total, .ppm__last { color: var(--ppm-cream); font-weight: 600; opacity: 0.85; }
+  .ppm__cta { color: var(--ppm-flame); font-weight: 700; margin-left: 4px; }
+
+  .ppm__feet {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+  }
+  .ppm__foot {
+    color: rgba(212, 164, 55, 0.30);
+    transition: color 240ms, text-shadow 240ms, transform 240ms;
+    line-height: 1;
+  }
+  .ppm__foot.ppm__foot--lit {
+    color: var(--ppm-flame);
+    text-shadow: 0 0 8px rgba(246, 193, 94, 0.65);
+  }
+  .ppm__foot.ppm__foot--newest {
+    color: var(--ppm-flame);
+    text-shadow: 0 0 12px rgba(246, 193, 94, 0.85);
+    animation: ppm-step 1.6s ease-in-out infinite;
+  }
+  @keyframes ppm-step {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
+  }
+
+  @media (max-width: 720px) {
+    .ppm__pill { font-size: 11px; padding: 7px 14px; gap: 8px; }
+    .ppm__last { display: none; }
+  }
+</style>
+
+<script>
+  const totalEl = document.getElementById('ppm-total');
+  const lastEl = document.getElementById('ppm-last');
+  const feetEl = document.getElementById('ppm-feet');
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/chamber?kind=procession', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j?.ok) return;
+      const total = j.state?.totalSteps ?? 0;
+      const steps = Array.isArray(j.state?.lastFiveSteps) ? j.state.lastFiveSteps : [];
+      if (totalEl) totalEl.textContent = `${total} ${total === 1 ? 'step' : 'steps'}`;
+      if (lastEl) {
+        const head = steps[0];
+        lastEl.textContent = head ? `last by ${String(head.pid).slice(0, 4)}` : '— last';
+      }
+      if (feetEl) {
+        const foots = Array.from(feetEl.querySelectorAll('.ppm__foot'));
+        foots.forEach((el, i) => {
+          el.classList.remove('ppm__foot--lit', 'ppm__foot--newest');
+          if (i < steps.length) el.classList.add('ppm__foot--lit');
+          if (i === 0 && steps[0]) el.classList.add('ppm__foot--newest');
+        });
+      }
+    } catch {}
+  }
+  if (totalEl || feetEl) {
+    refresh();
+    setInterval(refresh, 6000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+</script>

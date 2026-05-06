@@ -1,0 +1,170 @@
+---
+/**
+ * OfferingsPulseModule — homepage strip for the intention archive.
+ *
+ * Sibling to WingPulseModule + AltarsPulseModule + QuintetPulseModule
+ * + ProcessionPulseModule. Mike 2026-05-06 "3 sprints go" → second of
+ * three follow-on siblings.
+ *
+ * Renders:
+ *   OFFERINGS · 12 GIFTS · "to make it through the week" · gift →
+ *   plus 3 small colored dots (one per most-recent offering, hue from
+ *   visitor pid). Headline rotates through last 3 intentions every 4s.
+ *
+ * Polls /api/chamber?kind=offering every 6s.
+ */
+---
+
+<section class="opm" id="opm-root" aria-label="Offerings — visitor intentions archive">
+  <a class="opm__pill" href="/drum-offering">
+    <span class="opm__brass">●</span>
+    <span class="opm__label">OFFERINGS</span>
+    <span class="opm__sep">·</span>
+    <span class="opm__total" id="opm-total">— gifts</span>
+    <span class="opm__sep">·</span>
+    <span class="opm__rotor" id="opm-rotor">— intention</span>
+    <span class="opm__cta">gift →</span>
+  </a>
+  <div class="opm__dots" id="opm-dots" aria-hidden="true">
+    <span class="opm__dot" data-idx="0"></span>
+    <span class="opm__dot" data-idx="1"></span>
+    <span class="opm__dot" data-idx="2"></span>
+  </div>
+</section>
+
+<style>
+  .opm {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 14px;
+    margin: 6px 0;
+    flex-wrap: wrap;
+
+    --opm-velvet: #1a0820;
+    --opm-brass: #d4a437;
+    --opm-brass-deep: #6b4d12;
+    --opm-flame: #f6c15e;
+    --opm-cream: #f4e7c8;
+  }
+
+  .opm__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    border: 1.5px solid var(--opm-brass-deep);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--opm-cream);
+    background: linear-gradient(180deg, rgba(26, 8, 32, 0.95) 0%, rgba(12, 4, 16, 0.95) 100%);
+    transition: transform 120ms, border-color 200ms, box-shadow 200ms;
+    box-shadow: 0 4px 16px rgba(212, 164, 55, 0.16);
+    max-width: 100%;
+  }
+  .opm__pill:hover {
+    transform: translateY(-1px);
+    border-color: var(--opm-brass);
+    box-shadow: 0 6px 22px rgba(212, 164, 55, 0.30);
+    text-decoration: none;
+  }
+
+  .opm__brass { color: var(--opm-flame); font-size: 9px; }
+  .opm__label { color: var(--opm-brass); font-weight: 800; letter-spacing: 0.30em; }
+  .opm__sep { color: var(--opm-brass-deep); }
+  .opm__total { color: var(--opm-cream); font-weight: 600; opacity: 0.85; }
+  .opm__rotor {
+    color: var(--opm-cream);
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.04em;
+    font-style: italic;
+    opacity: 0.85;
+    max-width: 28ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: opacity 320ms;
+  }
+  .opm__rotor.opm__rotor--swap { opacity: 0.0; }
+  .opm__cta { color: var(--opm-flame); font-weight: 700; margin-left: 4px; }
+
+  .opm__dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .opm__dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: oklch(0.65 0.20 var(--hue, 60));
+    box-shadow: 0 0 6px oklch(0.75 0.30 var(--hue, 60) / 0.65);
+    opacity: 0.30;
+    transition: opacity 400ms;
+  }
+  .opm__dot.opm__dot--lit { opacity: 1; }
+
+  @media (max-width: 720px) {
+    .opm__pill { font-size: 11px; padding: 7px 14px; gap: 8px; }
+    .opm__rotor { max-width: 18ch; }
+  }
+</style>
+
+<script>
+  const totalEl = document.getElementById('opm-total');
+  const rotorEl = document.getElementById('opm-rotor');
+  const dotsEl = document.getElementById('opm-dots');
+
+  let recent = [];
+  let cursor = 0;
+
+  function paint() {
+    if (!rotorEl) return;
+    if (recent.length === 0) {
+      rotorEl.textContent = 'no intentions yet';
+      return;
+    }
+    rotorEl.classList.add('opm__rotor--swap');
+    setTimeout(() => {
+      const o = recent[cursor % recent.length];
+      const text = o ? String(o.intention || '').slice(0, 60) : '';
+      rotorEl.textContent = text ? `"${text}"` : '— intention';
+      rotorEl.classList.remove('opm__rotor--swap');
+    }, 320);
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/chamber?kind=offering', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j?.ok) return;
+      const offerings = Array.isArray(j.state?.offerings) ? j.state.offerings : [];
+      const total = offerings.length;
+      if (totalEl) totalEl.textContent = `${total} ${total === 1 ? 'gift' : 'gifts'}`;
+      recent = offerings.slice(0, 3);
+      if (dotsEl) {
+        const ds = Array.from(dotsEl.querySelectorAll('.opm__dot'));
+        ds.forEach((el, i) => {
+          const o = recent[i];
+          if (o) {
+            (el as HTMLElement).style.setProperty('--hue', String(o.hue ?? 60));
+            el.classList.add('opm__dot--lit');
+          } else {
+            el.classList.remove('opm__dot--lit');
+          }
+        });
+      }
+      paint();
+    } catch {}
+  }
+  if (totalEl || rotorEl) {
+    refresh();
+    setInterval(refresh, 6000);
+    setInterval(() => { cursor = (cursor + 1); paint(); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+</script>
