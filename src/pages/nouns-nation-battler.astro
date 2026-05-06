@@ -139,6 +139,7 @@ const jsonLd = {
       </div>
       <div class="network-actions">
         <a class="data-link" href="/nouns-nation-battler.json">Desk JSON</a>
+        <a class="data-link" href="/nouns-nation-sports-reenactment/">Sports Reenactment</a>
         <a class="data-link" href="/nouns-nation-battler-v3/">V3 Desk</a>
         <a class="data-link" href="/nouns-nation-battler-v3/#season-recap">Recap Archive</a>
         <a class="data-link" href="/nouns-nation-battler-v3/#sprint-room">Sprint Room</a>
@@ -411,6 +412,16 @@ const jsonLd = {
           <button type="button" data-reenactor-launch>Launch Battle Setup</button>
           <button type="button" data-reenactor-copy>Copy Alt Receipt</button>
         </div>
+        <div class="reenactor-slate" aria-label="Alt sports result slate">
+          <p>Alt Sports Slate</p>
+          <div class="reenactor-slate__grid">
+            <button type="button" data-reenactor-slate="0">NBA close</button>
+            <button type="button" data-reenactor-slate="1">WNBA comeback</button>
+            <button type="button" data-reenactor-slate="2">NFL overtime</button>
+            <button type="button" data-reenactor-slate="3">MLB blowout</button>
+            <button type="button" data-reenactor-slate="4">EPL upset</button>
+          </div>
+        </div>
         <p class="desk-copy" data-reenactor-output="status">
           Informational only: no official score feed, no odds, no betting, no claim of a real replay.
         </p>
@@ -528,9 +539,34 @@ const jsonLd = {
     return node ? node.value : '';
   }
 
+  var reenactorSlate = [
+    { league: 'NBA', winner: 'Celtics', loser: 'Knicks', score: '112-109', shape: 'close' },
+    { league: 'WNBA', winner: 'Aces', loser: 'Liberty', score: '88-84', shape: 'comeback' },
+    { league: 'NFL', winner: 'Chiefs', loser: 'Ravens', score: '27-24', shape: 'overtime' },
+    { league: 'MLB', winner: 'Dodgers', loser: 'Padres', score: '11-3', shape: 'blowout' },
+    { league: 'EPL', winner: 'Brighton', loser: 'Arsenal', score: '2-1', shape: 'upset' },
+  ];
+
+  function reenactorFieldSet(name, value) {
+    var node = find('[data-reenactor-field="' + name + '"]');
+    if (node) node.value = value;
+  }
+
   function reenactorSet(name, value) {
     var node = find('[data-reenactor-output="' + name + '"]');
     if (node) node.textContent = value;
+  }
+
+  function loadReenactorSlate(index, launch) {
+    var item = reenactorSlate[index] || reenactorSlate[0];
+    reenactorFieldSet('league', item.league);
+    reenactorFieldSet('winner', item.winner);
+    reenactorFieldSet('loser', item.loser);
+    reenactorFieldSet('score', item.score);
+    reenactorFieldSet('shape', item.shape);
+    renderReenactment();
+    reenactorSet('status', 'Loaded ' + item.league + ' ' + item.winner + '-' + item.loser + ' from the local alt slate.');
+    if (launch) launchReenactment();
   }
 
   function reenactorBlueprint() {
@@ -770,6 +806,11 @@ const jsonLd = {
     var reenactorCopy = target.closest('[data-reenactor-copy]');
     if (reenactorCopy && desk.contains(reenactorCopy)) {
       copyText(reenactmentReceipt(), reenactorCopy);
+      return;
+    }
+    var reenactorSlateButton = target.closest('[data-reenactor-slate]');
+    if (reenactorSlateButton && desk.contains(reenactorSlateButton)) {
+      loadReenactorSlate(Number(reenactorSlateButton.dataset.reenactorSlate || 0), true);
       return;
     }
     var button = target.closest('[data-desk-command]');
@@ -1610,6 +1651,46 @@ const jsonLd = {
 
   .reenactor-card em {
     font-style: normal;
+  }
+
+  .reenactor-slate {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .reenactor-slate p {
+    margin: 0;
+    color: var(--muted);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.64rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .reenactor-slate__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .reenactor-slate__grid button {
+    min-height: 34px;
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: #fffdf7;
+    color: var(--ink);
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 0.65rem;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .reenactor-slate__grid button:hover {
+    background: #d7ff3f;
   }
 
   .feature-stack {

@@ -424,6 +424,10 @@ const el = {
   toast: document.querySelector("#toast"),
   weather: document.querySelector("#weather"),
   challengeRibbon: document.querySelector("#challengeRibbon"),
+  reenactmentBanner: document.querySelector("#reenactmentBanner"),
+  reenactmentKicker: document.querySelector("#reenactmentKicker"),
+  reenactmentHeadline: document.querySelector("#reenactmentHeadline"),
+  reenactmentMeta: document.querySelector("#reenactmentMeta"),
   tvClock: document.querySelector("#tvClock"),
   tvLeftGang: document.querySelector("#tvLeftGang"),
   tvLeftAlive: document.querySelector("#tvLeftAlive"),
@@ -2855,8 +2859,23 @@ function render() {
   renderRecapStudio(left, right);
   renderRooting(left, right);
   renderScout();
+  renderReenactmentBanner(left, right);
   renderTv(left, right);
   broadcastSnapshot();
+}
+
+function renderReenactmentBanner(left, right) {
+  if (!el.reenactmentBanner) return;
+  const setup = state.reenactment;
+  const active = Boolean(setup?.active);
+  el.reenactmentBanner.hidden = !active;
+  el.field.classList.toggle("reenactment-active", active);
+  if (!active) return;
+  const shape = String(setup.shape || "close").replace(/-/g, " ");
+  const source = setup.sourceResult || `${setup.league || "Sports"}: ${setup.winner || gangs[0].short} ${setup.score || ""} vs ${setup.loser || gangs[1].short}`;
+  el.reenactmentKicker.textContent = `${setup.league || "Sports"} ${shape} reenactment`;
+  el.reenactmentHeadline.textContent = setup.headline || source;
+  el.reenactmentMeta.textContent = `${source} · ${left}-${right} alive · ${setup.field || fieldName()} · ${setup.guardrail || "Informational alt-broadcast setup."}`;
 }
 
 function renderRivalryBadge() {
