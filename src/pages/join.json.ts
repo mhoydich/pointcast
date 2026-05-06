@@ -15,6 +15,7 @@ export const GET: APIRoute = async () => {
     homepage: 'https://pointcast.xyz/join',
     thesis: JOIN_SYSTEM.thesis,
     loop: JOIN_SYSTEM.loop,
+    commercialLanes: JOIN_SYSTEM.commercialLanes,
     projects: JOIN_SYSTEM.projects.map((project) => ({
       ...project,
       url: `https://pointcast.xyz/join#${project.id}`,
@@ -31,6 +32,10 @@ export const GET: APIRoute = async () => {
       sprint: 'https://pointcast.xyz/sprint',
       agents: 'https://pointcast.xyz/agents.json',
       ping: 'https://pointcast.xyz/ping',
+      cartography: 'https://pointcast.xyz/cartography',
+      cartographyJson: 'https://pointcast.xyz/cartography.json',
+      cartographyDemo: 'https://pointcast.xyz/cartography/demo',
+      cartographyDemoJson: 'https://pointcast.xyz/cartography/demo.json',
       block: 'https://pointcast.xyz/b/0435',
     },
   };

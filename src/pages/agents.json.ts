@@ -17,6 +17,7 @@ import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
+import { CARTOGRAPHY_BUSINESS, cartographyCoreSchemas } from '../lib/cartography-business';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
   AGENT_VALUE_SURFACE,
@@ -129,6 +130,8 @@ export const GET: APIRoute = async () => {
         aiStack: 'https://pointcast.xyz/ai-stack',
         mesh: 'https://pointcast.xyz/mesh',
         join: 'https://pointcast.xyz/join',
+        cartography: 'https://pointcast.xyz/cartography',
+        cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         yeePlayer: 'https://pointcast.xyz/yee',
         collabs: 'https://pointcast.xyz/collabs',
         collabsRelay: 'https://pointcast.xyz/collabs/relay',
@@ -276,6 +279,8 @@ export const GET: APIRoute = async () => {
         beacon: 'https://pointcast.xyz/beacon.json',
         aiStack: 'https://pointcast.xyz/ai-stack.json',
         join: 'https://pointcast.xyz/join.json',
+        cartography: 'https://pointcast.xyz/cartography.json',
+        cartographyDemo: 'https://pointcast.xyz/cartography/demo.json',
         collabs: 'https://pointcast.xyz/collabs.json',
         commerce: 'https://pointcast.xyz/shop.json',
         goodFeels: 'https://pointcast.xyz/shop.json',
@@ -473,6 +478,29 @@ export const GET: APIRoute = async () => {
         })),
         version: PLAY_LAYER_VERSION,
         note: 'Local-first ritual layer: passport stamps, daily walk, quests, room weather, radio, routes, builder ghosts, civic wishes, pet care, Zen Cats, and Derby season.',
+      },
+      cartographyBusiness: {
+        html: CARTOGRAPHY_BUSINESS.homepage,
+        json: CARTOGRAPHY_BUSINESS.json,
+        demo: CARTOGRAPHY_BUSINESS.demo,
+        demoJson: CARTOGRAPHY_BUSINESS.demoJson,
+        sourceBlock: CARTOGRAPHY_BUSINESS.sourceBlock,
+        status: CARTOGRAPHY_BUSINESS.status,
+        goal: CARTOGRAPHY_BUSINESS.goal,
+        positioning: CARTOGRAPHY_BUSINESS.positioning,
+        revenueModel: CARTOGRAPHY_BUSINESS.revenueModel,
+        productPackages: CARTOGRAPHY_BUSINESS.packages.map((pkg) => ({
+          id: pkg.id,
+          name: pkg.name,
+          priceUsd: pkg.priceUsd,
+          billing: pkg.billing,
+          stripeMode: pkg.stripeMode,
+          stripeSurface: pkg.stripeSurface,
+          status: pkg.status,
+        })),
+        schemas: cartographyCoreSchemas,
+        guardrails: CARTOGRAPHY_BUSINESS.guardrails,
+        note: 'Brand-first service-to-SaaS product surface for Digital Identity Cartography. Yield means leads, deals, campaign proof, and contribution receipts, not financial return.',
       },
       nounsNationBattlerAgentBench: {
         hub: 'https://pointcast.xyz/nouns-nation/',

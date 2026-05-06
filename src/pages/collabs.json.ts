@@ -53,7 +53,15 @@ export const GET: APIRoute = async () => {
       human: 'https://pointcast.xyz/join',
       json: 'https://pointcast.xyz/join.json',
       announcementBlock: 'https://pointcast.xyz/b/0435',
-      purpose: 'Turn startup and product ideas into claimable people tasks, agent tasks, and reviewable artifacts.',
+      purpose: 'Turn startup and product ideas into claimable people tasks, agent tasks, sales tasks, fulfillment tasks, receipt tasks, and reviewable artifacts.',
+    },
+    cartographyBusiness: {
+      human: 'https://pointcast.xyz/cartography',
+      json: 'https://pointcast.xyz/cartography.json',
+      demo: 'https://pointcast.xyz/cartography/demo',
+      demoJson: 'https://pointcast.xyz/cartography/demo.json',
+      announcementBlock: 'https://pointcast.xyz/b/0442',
+      purpose: 'Turn Digital Identity Cartography into a brand-first service-to-SaaS product board with non-financial yield artifacts.',
     },
     governance: {
       proposal: 'PC-0005',
