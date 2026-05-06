@@ -1,35 +1,40 @@
 ---
 /**
- * /shop — PointCast storefront front door.
+ * /shop — unified PointCast commerce hub.
  *
- * Shopify owns checkout. PointCast owns discovery, context, pairings, and
- * machine-readable product routing.
+ * PointCast owns discovery, merchandising, pairings, and machine-readable
+ * routing. Checkout stays outbound at canonical shop/marketplace surfaces.
  */
 import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  CHECKOUT_POLICY,
+  checkoutHost,
+  sourceKind,
+  sourceLabel,
+} from '../lib/commerce';
 
 const products = (await getCollection('products', ({ data }) => !data.draft))
   .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
 
+type ProductEntry = (typeof products)[number];
+
 const categories = Array.from(new Set(products.map((p) => p.data.category || 'catalog'))).sort();
+const moodSlugs = Array.from(new Set(products.flatMap((p) => p.data.pairsWithMood ?? []))).sort();
+const goodFeelsProducts = products.filter((p) => sourceKind(p.data) === 'good-feels');
+const pointcastMerchProducts = products.filter((p) => sourceKind(p.data) === 'pointcast-merch');
 const seltzerCount = products.filter((p) => /seltzer|drink|mix seltzer/i.test(p.data.category || p.data.name)).length;
 const gummyCount = products.filter((p) => /gumm/i.test(p.data.category || p.data.name)).length;
 const enhancerCount = products.filter((p) => /enhancer/i.test(p.data.category || p.data.name)).length;
-const hosts = Array.from(new Set(products.map((p) => {
-  try {
-    return new URL(p.data.url).hostname.replace(/^www\./, '');
-  } catch {
-    return 'external shop';
-  }
-}))).sort();
+const hosts = Array.from(new Set(products.map((p) => checkoutHost(p.data.url)))).sort();
 
-const title = 'Good Feels Shop Mirror';
-const description = 'PointCast mirror of the public Good Feels Shopify catalog. Products stay canonical at getgoodfeels.com; PointCast keeps the catalog readable for people and agents.';
+const title = 'PointCast Commerce';
+const description = 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.';
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
-  name: 'Good Feels Shop Mirror',
+  name: title,
   description,
   url: 'https://pointcast.xyz/shop',
   mainEntity: {
@@ -57,17 +62,9 @@ const alternates = [
   { type: 'application/x-ndjson', href: '/api/products.jsonl', title: 'Products (JSONL)' },
 ];
 
-function price(product: (typeof products)[number]): string {
+function price(product: ProductEntry): string {
   if (product.data.priceUsd === undefined) return 'see shop';
   return `$${product.data.priceUsd.toFixed(2)} ${product.data.currency}`;
-}
-
-function shopHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return 'shop';
-  }
 }
 ---
 
@@ -79,64 +76,93 @@ function shopHost(url: string): string {
       <span>shop</span>
     </nav>
 
-    <header class="head">
-      <div>
-        <p class="kicker mono">GOOD FEELS MIRROR</p>
-        <h1 class="title">Good Feels, readable by agents.</h1>
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker mono">COMMERCE HUB · OUTBOUND CHECKOUT</p>
+        <h1 class="title">PointCast Commerce</h1>
         <p class="dek">
-          The source of truth is the live Good Feels Shopify catalog at
-          getgoodfeels.com. PointCast mirrors public product data, adds
-          structured routes and JSON, then sends checkout back to Good Feels.
+          Good Feels products, PointCast merch lanes, mood pairings, and
+          machine-readable feeds in one place. PointCast routes the read;
+          canonical shops handle carts, payment, shipping, and fulfillment.
         </p>
+        <div class="endpoint-row mono" aria-label="Machine-readable commerce endpoints">
+          <a href="/shop.json">/shop.json</a>
+          <a href="/products.json">/products.json</a>
+          <a href="/api/products.jsonl">/api/products.jsonl</a>
+        </div>
       </div>
-      <dl class="stats" aria-label="Shop summary">
-        <div>
-          <dt class="mono">PRODUCTS</dt>
-          <dd>{products.length}</dd>
-        </div>
-        <div>
-          <dt class="mono">CATEGORIES</dt>
-          <dd>{categories.length}</dd>
-        </div>
-        <div>
-          <dt class="mono">CHECKOUT</dt>
-          <dd>{hosts.length === 1 ? hosts[0] : 'external'}</dd>
-        </div>
-      </dl>
+
+      <aside class="policy" aria-label="Checkout policy">
+        <p class="policy__label mono">CHECKOUT POLICY</p>
+        <p class="policy__mode mono">{CHECKOUT_POLICY.mode}</p>
+        <p>{CHECKOUT_POLICY.summary}</p>
+      </aside>
     </header>
 
+    <dl class="stats" aria-label="Commerce summary">
+      <div>
+        <dt class="mono">PUBLIC PRODUCTS</dt>
+        <dd>{products.length}</dd>
+      </div>
+      <div>
+        <dt class="mono">GOOD FEELS LIVE</dt>
+        <dd>{goodFeelsProducts.length}</dd>
+      </div>
+      <div>
+        <dt class="mono">MOOD PAIRINGS</dt>
+        <dd>{moodSlugs.length}</dd>
+      </div>
+      <div>
+        <dt class="mono">CHECKOUT HOST</dt>
+        <dd>{hosts.length === 1 ? hosts[0] : 'external'}</dd>
+      </div>
+    </dl>
+
     <section class="lanes" aria-label="Shop lanes">
-      <a class="lane lane--live" href="#products">
+      <a class="lane lane--good-feels" href="#catalog">
         <span class="lane__kicker mono">LIVE MIRROR</span>
         <span class="lane__title">Good Feels</span>
-        <span class="lane__meta mono">{products.length} entries</span>
+        <span class="lane__meta mono">{goodFeelsProducts.length} entries</span>
       </a>
-      <a class="lane" href="#products">
+      <a class="lane lane--seltzers" href="#catalog">
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Seltzers</span>
         <span class="lane__meta mono">{seltzerCount} entries</span>
       </a>
-      <a class="lane" href="#products">
+      <a class="lane lane--gummies" href="#catalog">
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Gummies</span>
         <span class="lane__meta mono">{gummyCount} entries</span>
       </a>
-      <a class="lane" href="#products">
+      <a class="lane lane--enhancers" href="#catalog">
         <span class="lane__kicker mono">CATEGORY</span>
         <span class="lane__title">Enhancers</span>
         <span class="lane__meta mono">{enhancerCount} entries</span>
       </a>
-      <a class="lane" href="/products.json">
+      <a class="lane lane--merch" href="#pointcast-merch">
+        <span class="lane__kicker mono">COMING SOON</span>
+        <span class="lane__title">PointCast Merch</span>
+        <span class="lane__meta mono">{pointcastMerchProducts.length} public entries</span>
+      </a>
+      <a class="lane lane--pairings" href="/pairings">
+        <span class="lane__kicker mono">CROSS-INDEX</span>
+        <span class="lane__title">Pairings</span>
+        <span class="lane__meta mono">{moodSlugs.length} moods</span>
+      </a>
+      <a class="lane lane--json" href="/shop.json">
         <span class="lane__kicker mono">MACHINE VIEW</span>
-        <span class="lane__title">JSON</span>
+        <span class="lane__title">JSON / API</span>
         <span class="lane__meta mono">agent route</span>
       </a>
     </section>
 
-    <section id="products" class="products" aria-labelledby="products-title">
+    <section id="catalog" class="products" aria-labelledby="products-title">
       <div class="section-head">
-        <p class="kicker mono">CATALOG</p>
-        <h2 id="products-title">Available products</h2>
+        <div>
+          <p class="kicker mono">CATALOG · {categories.length} CATEGORIES</p>
+          <h2 id="products-title">Public commerce catalog</h2>
+        </div>
+        <a class="section-link mono" href="/products">Open /products</a>
       </div>
 
       {products.length === 0 ? (
@@ -149,30 +175,77 @@ function shopHost(url: string): string {
         </div>
       ) : (
         <ul class="grid" role="list">
-          {products.map((product) => (
-            <li class="card">
-              <a class="card__media" href={`/products/${product.data.slug}`} aria-label={`Open ${product.data.name}`}>
-                {product.data.image?.[0] ? (
-                  <img src={product.data.image[0]} alt={product.data.name} loading="lazy" />
-                ) : (
-                  <span class="card__fallback mono">{product.data.brand}</span>
-                )}
-              </a>
-              <div class="card__body">
-                <p class="card__kicker mono">{product.data.category || 'product'} / {product.data.availability}</p>
-                <h3><a href={`/products/${product.data.slug}`}>{product.data.name}</a></h3>
-                {product.data.dek && <p class="card__dek">{product.data.dek}</p>}
-                <p class="card__price mono">{price(product)}</p>
-                <div class="card__actions">
-                  <a class="btn btn--primary mono" href={product.data.url} target="_blank" rel="noopener">Buy at {shopHost(product.data.url)}</a>
-                  <a class="btn mono" href={`/products/${product.data.slug}`}>Details</a>
+          {products.map((product) => {
+            const kind = sourceKind(product.data);
+            const host = checkoutHost(product.data.url);
+            const moods = product.data.pairsWithMood ?? [];
+            return (
+              <li class="card">
+                <a class="card__media" href={`/products/${product.data.slug}`} aria-label={`Open ${product.data.name}`}>
+                  {product.data.image?.[0] ? (
+                    <img src={product.data.image[0]} alt={product.data.name} loading="lazy" />
+                  ) : (
+                    <span class="card__fallback mono">{sourceLabel(kind)}</span>
+                  )}
+                </a>
+                <div class="card__body">
+                  <div class="card__topline mono">
+                    <span class={`source source--${kind}`}>{sourceLabel(kind)}</span>
+                    <span>{product.data.category || 'product'}</span>
+                    <span class={`availability availability--${product.data.availability}`}>{product.data.availability}</span>
+                  </div>
+                  <h3><a href={`/products/${product.data.slug}`}>{product.data.name}</a></h3>
+                  {product.data.dek && <p class="card__dek">{product.data.dek}</p>}
+                  <p class="card__price mono">{price(product)}</p>
+                  {moods.length > 0 && (
+                    <ul class="moods" aria-label={`${product.data.name} pairings`}>
+                      {moods.map((mood) => (
+                        <li><a class="mood mono" href={`/pairings/${mood}`}>{mood}</a></li>
+                      ))}
+                    </ul>
+                  )}
+                  <div class="card__actions">
+                    <a class="btn btn--primary mono" href={product.data.url} target="_blank" rel="noopener">Buy at {host}</a>
+                    <a class="btn mono" href={`/products/${product.data.slug}`}>Details</a>
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
+
+    <section id="pointcast-merch" class="coming" aria-labelledby="merch-title">
+      <div>
+        <p class="kicker mono">POINTCAST MERCH · STAGED</p>
+        <h2 id="merch-title">Postcards, prints, mugs, and field goods stay hidden until active.</h2>
+        <p>
+          The Shopify bridge can sync PointCast products, but draft or
+          out-of-stock listings do not appear in the public catalog. When a
+          listing is ready, it joins the same cards, JSON feeds, and outbound
+          checkout policy.
+        </p>
+      </div>
+      <a class="btn mono" href="/postcards">Preview postcards</a>
+    </section>
+
+    {moodSlugs.length > 0 && (
+      <section class="pairing-strip" aria-labelledby="pairings-title">
+        <div class="section-head">
+          <div>
+            <p class="kicker mono">PAIRINGS</p>
+            <h2 id="pairings-title">Commerce by mood</h2>
+          </div>
+          <a class="section-link mono" href="/pairings">Open /pairings</a>
+        </div>
+        <ul class="pairing-list" role="list">
+          {moodSlugs.map((mood) => (
+            <li><a class="pairing-chip mono" href={`/pairings/${mood}`}>{mood}</a></li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <section class="agent-strip">
       <p class="agent-strip__label mono">MACHINE-READABLE</p>
@@ -187,9 +260,15 @@ function shopHost(url: string): string {
 
   <style>
     .shop {
-      width: min(1120px, calc(100% - 36px));
+      width: min(1180px, calc(100% - 36px));
       margin: 0 auto;
       padding: 24px 0 84px;
+    }
+
+    .shop *,
+    .shop *::before,
+    .shop *::after {
+      box-sizing: border-box;
     }
 
     .mono {
@@ -210,23 +289,27 @@ function shopHost(url: string): string {
     }
 
     .crumb a,
+    .endpoint-row a,
+    .section-link,
     .agent-strip a {
       color: #a02c2c;
       text-decoration: none;
     }
 
     .crumb a:hover,
+    .endpoint-row a:hover,
+    .section-link:hover,
     .agent-strip a:hover {
       text-decoration: underline;
     }
 
-    .head {
+    .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 300px;
-      gap: 22px;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 24px;
       align-items: end;
-      margin-bottom: 18px;
-      padding-bottom: 18px;
+      margin-bottom: 12px;
+      padding-bottom: 20px;
       border-bottom: 1px solid #d6d4cd;
     }
 
@@ -238,31 +321,78 @@ function shopHost(url: string): string {
     }
 
     .title {
-      max-width: 760px;
+      max-width: 820px;
       margin: 0 0 12px;
       font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif);
       font-size: 72px;
       line-height: 0.98;
       letter-spacing: 0;
+      overflow-wrap: anywhere;
     }
 
     .dek {
-      max-width: 650px;
+      max-width: 690px;
       margin: 0;
       color: #38373A;
       font-size: 16px;
       line-height: 1.55;
     }
 
+    .endpoint-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      font-size: 10px;
+    }
+
+    .endpoint-row a {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid #d6d4cd;
+      background: #fff;
+    }
+
+    .policy {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid #183B56;
+      border-left: 5px solid #183B56;
+      background: #f4f8fb;
+    }
+
+    .policy p {
+      margin: 0;
+      color: #183B56;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .policy__label {
+      color: #185FA5;
+      font-size: 9px;
+      margin-bottom: 8px;
+    }
+
+    .policy__mode {
+      color: #12110E;
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
     .stats {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      margin: 0;
+      margin: 0 0 18px;
     }
 
     .stats div {
-      min-height: 86px;
+      min-height: 88px;
       padding: 10px;
       border: 1px solid #d6d4cd;
       background: #fbfaf5;
@@ -284,14 +414,14 @@ function shopHost(url: string): string {
 
     .lanes {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
       margin-bottom: 34px;
     }
 
     .lane {
       display: grid;
-      min-height: 132px;
+      min-height: 128px;
       padding: 14px;
       border: 1px solid #d6d4cd;
       border-left: 5px solid #185FA5;
@@ -305,15 +435,14 @@ function shopHost(url: string): string {
       background: #f5f9ff;
     }
 
-    .lane--live {
-      border-left-color: #993556;
-      background: #fdf6f9;
-    }
-
-    .lane--live:hover {
-      border-color: #993556;
-      background: #fff2f7;
-    }
+    .lane--good-feels { border-left-color: #993556; background: #fdf6f9; }
+    .lane--good-feels:hover { border-color: #993556; background: #fff2f7; }
+    .lane--seltzers { border-left-color: #0F766E; }
+    .lane--gummies { border-left-color: #B45309; }
+    .lane--enhancers { border-left-color: #6D28D9; }
+    .lane--merch { border-left-color: #12110E; background: #fbfaf5; }
+    .lane--pairings { border-left-color: #5F3DC4; }
+    .lane--json { border-left-color: #185FA5; }
 
     .lane__kicker,
     .lane__meta {
@@ -323,8 +452,9 @@ function shopHost(url: string): string {
 
     .lane__title {
       align-self: end;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
+      overflow-wrap: anywhere;
     }
 
     .products {
@@ -339,14 +469,22 @@ function shopHost(url: string): string {
       margin-bottom: 12px;
     }
 
-    .section-head h2 {
+    .section-head h2,
+    .coming h2 {
       margin: 0;
       font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .section-link {
+      flex: 0 0 auto;
+      font-size: 10px;
+      font-weight: 700;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 12px;
       margin: 0;
       padding: 0;
@@ -364,7 +502,7 @@ function shopHost(url: string): string {
     .card__media {
       display: grid;
       place-items: center;
-      min-height: 190px;
+      min-height: 196px;
       aspect-ratio: 4 / 3;
       overflow: hidden;
       background:
@@ -392,17 +530,43 @@ function shopHost(url: string): string {
       padding: 14px;
     }
 
-    .card__kicker,
-    .card__price {
+    .card__topline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
       margin: 0;
       color: #5F5E5A;
       font-size: 9px;
     }
 
+    .source,
+    .availability,
+    .mood,
+    .pairing-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 7px;
+      border: 1px solid #d6d4cd;
+      background: #fbfaf5;
+      font-size: 9px;
+      text-decoration: none;
+    }
+
+    .source--good-feels { border-color: #e6c8d6; color: #6B2139; background: #fdf6f9; }
+    .source--pointcast-merch { border-color: #12110E; color: #12110E; background: #fbfaf5; }
+    .source--external { border-color: #d6d4cd; color: #38373A; background: #fff; }
+    .availability--in-stock { border-color: #BFE6CC; color: #1B4E2B; background: #E7F5EC; }
+    .availability--out-of-stock { border-color: #F2BEC6; color: #8A2432; background: #FCE8EA; }
+    .availability--preorder { border-color: #F6D29A; color: #6A3E05; background: #FFF4E5; }
+    .availability--discontinued { border-color: #d6d4cd; color: #5F5E5A; background: #f0eee6; }
+
     .card h3 {
       margin: 0;
       font-size: 20px;
       line-height: 1.15;
+      letter-spacing: 0;
     }
 
     .card h3 a {
@@ -422,8 +586,26 @@ function shopHost(url: string): string {
     }
 
     .card__price {
+      margin: 0;
       color: #12110E;
+      font-size: 9px;
       font-weight: 800;
+    }
+
+    .moods,
+    .pairing-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .mood {
+      color: #5F3DC4;
+      border-color: #d9d0ff;
+      background: #f5f0ff;
     }
 
     .card__actions {
@@ -446,6 +628,8 @@ function shopHost(url: string): string {
       font-size: 10px;
       font-weight: 700;
       text-decoration: none;
+      text-align: center;
+      overflow-wrap: anywhere;
     }
 
     .btn:hover {
@@ -462,7 +646,8 @@ function shopHost(url: string): string {
       background: #6B2139;
     }
 
-    .empty {
+    .empty,
+    .coming {
       padding: 18px;
       border: 1.5px dashed #993556;
       background: #fdf6f9;
@@ -474,7 +659,8 @@ function shopHost(url: string): string {
       font-size: 10px;
     }
 
-    .empty p {
+    .empty p,
+    .coming p {
       margin: 0;
       color: #38373A;
       line-height: 1.5;
@@ -484,6 +670,31 @@ function shopHost(url: string): string {
       font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
       background: #fff;
       padding: 1px 5px;
+    }
+
+    .coming {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      margin-top: 24px;
+      border-color: #12110E;
+      background: #fbfaf5;
+    }
+
+    .coming p {
+      max-width: 720px;
+      margin-top: 8px;
+    }
+
+    .pairing-strip {
+      margin-top: 26px;
+    }
+
+    .pairing-chip {
+      color: #5F3DC4;
+      border-color: #d9d0ff;
+      background: #f5f0ff;
     }
 
     .agent-strip {
@@ -515,8 +726,8 @@ function shopHost(url: string): string {
       letter-spacing: 0;
     }
 
-    @media (max-width: 860px) {
-      .head {
+    @media (max-width: 900px) {
+      .hero {
         grid-template-columns: 1fr;
       }
 
@@ -524,24 +735,40 @@ function shopHost(url: string): string {
         font-size: 52px;
       }
 
-      .stats,
-      .lanes {
+      .stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 560px) {
       .shop {
-        width: min(100% - 28px, 1120px);
+        width: min(100% - 28px, 1180px);
       }
 
       .title {
-        font-size: 38px;
+        font-size: 34px;
       }
 
       .stats,
-      .lanes {
+      .lanes,
+      .coming {
         grid-template-columns: 1fr;
+      }
+
+      .endpoint-row {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .endpoint-row a {
+        justify-content: flex-start;
+        width: 100%;
+        overflow-wrap: anywhere;
+      }
+
+      .section-head {
+        align-items: flex-start;
+        flex-direction: column;
       }
 
       .card__actions {

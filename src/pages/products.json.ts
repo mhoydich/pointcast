@@ -6,60 +6,103 @@
  */
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
+import {
+  CHECKOUT_POLICY,
+  COMMERCE_VERSION,
+  checkoutHost,
+  pairingsUrls,
+  schemaAvailability,
+  sourceKind,
+  sourceLabel,
+} from '../lib/commerce';
 
 export const GET: APIRoute = async () => {
   const products = await getCollection('products', ({ data }) => !data.draft);
+  const countSource = (kind: ReturnType<typeof sourceKind>) =>
+    products.filter((product) => sourceKind(product.data) === kind).length;
 
   const payload = {
     $schema: 'https://pointcast.xyz/products.json',
+    version: COMMERCE_VERSION,
     name: 'PointCast products catalog',
-    description: 'Structured Good Feels product entries surfaced via PointCast for agent discovery. Checkout always at getgoodfeels.com.',
+    description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
     generatedAt: new Date().toISOString(),
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
+    shop: 'https://pointcast.xyz/shop',
+    checkoutPolicy: CHECKOUT_POLICY,
     seller: {
       name: 'Good Feels',
       url: 'https://getgoodfeels.com',
     },
+    sources: [
+      {
+        slug: 'good-feels',
+        label: 'Good Feels',
+        sourceKind: 'good-feels',
+        url: 'https://getgoodfeels.com',
+        checkoutHost: 'getgoodfeels.com',
+        count: countSource('good-feels'),
+        status: 'live',
+      },
+      {
+        slug: 'pointcast-merch',
+        label: 'PointCast Merch',
+        sourceKind: 'pointcast-merch',
+        url: 'https://pointcast.xyz/shop#pointcast-merch',
+        checkoutHost: null,
+        count: countSource('pointcast-merch'),
+        status: 'coming-soon',
+      },
+    ],
     products: products
       .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime())
-      .map((p) => ({
-        slug: p.data.slug,
-        name: p.data.name,
-        brand: p.data.brand,
-        description: p.data.description,
-        dek: p.data.dek ?? null,
-        url: p.data.url,
-        canonical: `https://pointcast.xyz/products/${p.data.slug}`,
-        image: p.data.image ?? [],
-        priceUsd: p.data.priceUsd ?? null,
-        currency: p.data.currency,
-        availability: p.data.availability,
-        category: p.data.category ?? null,
-        effects: p.data.effects ?? [],
-        ingredients: p.data.ingredients ?? [],
-        addedAt: p.data.addedAt.toISOString(),
-        author: p.data.author,
-        source: p.data.source ?? null,
-        schemaOrg: {
-          '@context': 'https://schema.org',
-          '@type': 'Product',
+      .map((p) => {
+        const kind = sourceKind(p.data);
+        const moods = p.data.pairsWithMood ?? [];
+        return {
+          slug: p.data.slug,
           name: p.data.name,
           brand: p.data.brand,
           description: p.data.description,
-          url: `https://pointcast.xyz/products/${p.data.slug}`,
-          ...(p.data.image && p.data.image.length ? { image: p.data.image } : {}),
-          ...(p.data.priceUsd !== undefined ? {
-            offers: {
-              '@type': 'Offer',
-              price: p.data.priceUsd,
-              priceCurrency: p.data.currency,
-              availability: 'https://schema.org/' + (p.data.availability === 'in-stock' ? 'InStock' : 'OutOfStock'),
-              url: p.data.url,
-            },
-          } : {}),
-        },
-      })),
+          dek: p.data.dek ?? null,
+          url: p.data.url,
+          canonical: `https://pointcast.xyz/products/${p.data.slug}`,
+          checkoutHost: checkoutHost(p.data.url),
+          sourceKind: kind,
+          sourceLabel: sourceLabel(kind),
+          image: p.data.image ?? [],
+          priceUsd: p.data.priceUsd ?? null,
+          currency: p.data.currency,
+          availability: p.data.availability,
+          category: p.data.category ?? null,
+          effects: p.data.effects ?? [],
+          ingredients: p.data.ingredients ?? [],
+          pairsWithMood: moods,
+          pairingsUrls: pairingsUrls(moods),
+          addedAt: p.data.addedAt.toISOString(),
+          author: p.data.author,
+          source: p.data.source ?? null,
+          schemaOrg: {
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            name: p.data.name,
+            brand: p.data.brand,
+            description: p.data.description,
+            url: `https://pointcast.xyz/products/${p.data.slug}`,
+            ...(p.data.image && p.data.image.length ? { image: p.data.image } : {}),
+            ...(p.data.priceUsd !== undefined ? {
+              offers: {
+                '@type': 'Offer',
+                price: p.data.priceUsd,
+                priceCurrency: p.data.currency,
+                availability: schemaAvailability(p.data.availability),
+                url: p.data.url,
+              },
+            } : {}),
+          },
+        };
+      }),
     ...(products.length === 0 ? {
       note: 'Catalog is empty (v0). First product lands when Mike adds an entry under src/content/products/ or drops a product URL via /drop.',
     } : {}),

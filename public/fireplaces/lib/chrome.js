@@ -16,8 +16,8 @@ export function mountChrome({ title, mood, audio = true, onUserStart } = {}) {
       <span class="gf-flame">🔥</span>
       <span class="gf-title">${title || "fireplace"}</span>
       ${mood ? `<span class="gf-mood">${mood}</span>` : ""}
-      <a class="gf-sponsor" href="https://shop.getgoodfeels.com" target="_blank" rel="noopener sponsored">
-        brought to you by <b>Good Feels</b> · shop.getgoodfeels.com
+      <a class="gf-sponsor" href="https://getgoodfeels.com" target="_blank" rel="noopener sponsored">
+        brought to you by <b>Good Feels</b> · getgoodfeels.com
       </a>
     </div>`;
   document.body.appendChild(foot);

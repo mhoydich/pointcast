@@ -117,7 +117,9 @@ export const GET: APIRoute = async () => {
       elSegundoPlantingPalette: 'https://pointcast.xyz/b/0331',
       esNameDropsPoll: 'https://pointcast.xyz/poll/es-name-drops',
       broadcastTv: 'https://pointcast.xyz/tv',
-      goodFeelsShop: 'https://shop.getgoodfeels.com',
+      goodFeelsShop: 'https://pointcast.xyz/shop',
+      commerce: 'https://pointcast.xyz/shop',
+      commerceJson: 'https://pointcast.xyz/shop.json',
     },
   };
 

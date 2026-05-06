@@ -48,7 +48,7 @@ export const SPRINT_BACKLOG: Sprint[] = [
   {
     id: 'products-scaffold',
     title: '/products scaffold · Good Feels SEO foothold',
-    why: 'Good Feels (shop.getgoodfeels.com) is the day job. PointCast already has agent-discovery trust — exposing a /products surface lets crawlers find Good Feels through us with structured Product schema.',
+    why: 'Good Feels (getgoodfeels.com) is the day job. PointCast already has agent-discovery trust — exposing a /products surface lets crawlers find Good Feels through us with structured Product schema.',
     output: '/products page + /products/[slug] + /products.json + schema.org Product markup + content collection + OG card. Empty on purpose at v0.',
     estMin: 50,
     status: 'done',
@@ -92,7 +92,7 @@ export const SPRINT_BACKLOG: Sprint[] = [
   {
     id: 'good-feels-product-block',
     title: 'First Good-Feels product block',
-    why: 'Once /products is up, the first product entry — say, the headline product from shop.getgoodfeels.com — proves the SEO scaffold works end-to-end.',
+    why: 'Once /products is up, the first product entry — say, a live product from getgoodfeels.com — proves the SEO scaffold works end-to-end.',
     output: 'src/content/products/{slug}.json + featured on /products + linked from a new MINT-or-LINK block.',
     estMin: 25,
     status: 'needs-input',

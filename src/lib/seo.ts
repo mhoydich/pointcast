@@ -96,7 +96,7 @@ export function buildIdentityJsonLd() {
         alternateName: 'Michael Hoydich',
         url: `${SITE_ORIGIN}/about`,
         jobTitle: 'COO, Good Feels',
-        worksFor: { '@type': 'Organization', name: 'Good Feels', url: 'https://shop.getgoodfeels.com' },
+        worksFor: { '@type': 'Organization', name: 'Good Feels', url: 'https://getgoodfeels.com' },
         homeLocation: { '@id': `${SITE_ORIGIN}/#el-segundo` },
         sameAs: SITE_SAME_AS,
       },

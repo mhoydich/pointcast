@@ -9,7 +9,7 @@
  * Categories:
  *   listen   → Spotify, Apple Music, SoundCloud, Bandcamp, Tidal, YouTube Music
  *   watch    → YouTube, Vimeo, Twitch, Loom, Instagram reel
- *   product  → shop.getgoodfeels.com, Shopify-like patterns, /products/, /shop/
+ *   product  → getgoodfeels.com, Shopify-like patterns, /products/, /shop/
  *   location → Google Maps, Apple Maps, Foursquare, OSM, what3words
  *   collab   → linked from a known collaborator's domain (uses the registry)
  *   article  → Substack, Medium, Mirror, generic blog
@@ -40,7 +40,7 @@ export interface Classification {
 /** Hostnames we know about, sorted by category. */
 const LISTEN_HOSTS  = ['open.spotify.com', 'spotify.com', 'music.apple.com', 'soundcloud.com', 'bandcamp.com', 'tidal.com', 'music.youtube.com'];
 const WATCH_HOSTS   = ['youtube.com', 'youtu.be', 'm.youtube.com', 'vimeo.com', 'twitch.tv', 'loom.com', 'instagram.com'];
-const PRODUCT_HOSTS = ['shop.getgoodfeels.com', 'getgoodfeels.com'];
+const PRODUCT_HOSTS = ['getgoodfeels.com', 'shop.getgoodfeels.com'];
 const LOCATION_HOSTS= ['maps.google.com', 'goo.gl', 'maps.apple.com', 'foursquare.com', 'openstreetmap.org', 'what3words.com'];
 const SOCIAL_HOSTS  = ['twitter.com', 'x.com', 'warpcast.com', 'threads.net', 'bsky.app'];
 const ARTICLE_HOSTS = ['substack.com', 'medium.com', 'mirror.xyz'];

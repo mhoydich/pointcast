@@ -9,6 +9,7 @@
  */
 import { getCollection, type CollectionEntry } from 'astro:content';
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import { checkoutHost, schemaAvailability, sourceKind, sourceLabel } from '../../lib/commerce';
 
 export async function getStaticPaths() {
   const products = await getCollection('products', ({ data }) => !data.draft);
@@ -24,7 +25,9 @@ const description = d.dek || d.description.slice(0, 200);
 const ogImage = (d.image && d.image[0]) || `/images/og/products.png`;
 const sourceUrl = new URL(d.url);
 const sourceOrigin = sourceUrl.origin;
-const sourceHost = sourceUrl.hostname.replace(/^www\./, '');
+const sourceHost = checkoutHost(d.url);
+const source = sourceKind(d);
+const sourceName = sourceLabel(source);
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -37,14 +40,14 @@ const jsonLd = {
   ...(d.image && d.image.length ? { image: d.image } : {}),
   ...(d.category ? { category: d.category } : {}),
   ...(d.priceUsd !== undefined ? {
-    offers: {
-      '@type': 'Offer',
-      price: d.priceUsd,
-      priceCurrency: d.currency,
-      availability: 'https://schema.org/' + (d.availability === 'in-stock' ? 'InStock' : d.availability === 'preorder' ? 'PreOrder' : d.availability === 'out-of-stock' ? 'OutOfStock' : 'Discontinued'),
-      url: d.url,
-      seller: { '@type': 'Organization', name: d.brand, url: sourceOrigin },
-    },
+      offers: {
+        '@type': 'Offer',
+        price: d.priceUsd,
+        priceCurrency: d.currency,
+        availability: schemaAvailability(d.availability),
+        url: d.url,
+        seller: { '@type': 'Organization', name: d.brand, url: sourceOrigin },
+      },
   } : {}),
   ...(d.ingredients && d.ingredients.length ? { material: d.ingredients.join(', ') } : {}),
 };
@@ -60,6 +63,8 @@ const alternates = [
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
       <span aria-hidden="true">›</span>
+      <a href="/shop">shop</a>
+      <span aria-hidden="true">›</span>
       <a href="/products">products</a>
       <span aria-hidden="true">›</span>
       <span>{d.slug}</span>
@@ -67,7 +72,7 @@ const alternates = [
 
     <article class="prod">
       <header class="prod__head">
-        <p class="kicker mono">{d.brand.toUpperCase()} · {d.category ? d.category.toUpperCase() : 'PRODUCT'}</p>
+        <p class="kicker mono">{sourceName.toUpperCase()} · {d.category ? d.category.toUpperCase() : 'PRODUCT'}</p>
         <h1 class="title">{d.name}</h1>
         {d.dek && <p class="dek">{d.dek}</p>}
       </header>
@@ -89,15 +94,28 @@ const alternates = [
           <div><dt class="mono">PRICE</dt><dd>{d.priceUsd !== undefined ? `$${d.priceUsd.toFixed(2)} ${d.currency}` : 'see shop'}</dd></div>
           <div><dt class="mono">AVAILABILITY</dt><dd class={`avail avail--${d.availability}`}>{d.availability}</dd></div>
           {d.category && <div><dt class="mono">CATEGORY</dt><dd>{d.category}</dd></div>}
+          <div><dt class="mono">SOURCE</dt><dd>{sourceName}</dd></div>
+          <div><dt class="mono">CHECKOUT</dt><dd>{sourceHost}</dd></div>
           {d.effects && d.effects.length > 0 && <div><dt class="mono">EFFECTS</dt><dd>{d.effects.join(' · ')}</dd></div>}
           {d.ingredients && d.ingredients.length > 0 && <div><dt class="mono">INGREDIENTS</dt><dd>{d.ingredients.join(', ')}</dd></div>}
         </dl>
       </aside>
 
+      {d.pairsWithMood && d.pairsWithMood.length > 0 && (
+        <section class="pairings" aria-labelledby="pairings-title">
+          <p id="pairings-title" class="pairings__label mono">PAIRINGS</p>
+          <ul>
+            {d.pairsWithMood.map((mood) => (
+              <li><a class="mood mono" href={`/pairings/${mood}`}>{mood}</a></li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <a class="cta" href={d.url} target="_blank" rel="noopener">→ Buy on {sourceHost}</a>
 
       <p class="disclaimer mono">
-        POINTCAST DOES NOT SELL OR FULFILL · CHECKOUT HAPPENS AT {sourceHost.toUpperCase()}
+        POINTCAST DOES NOT SELL, FULFILL, PROCESS PAYMENT, OR COLLECT CARD/PII · CHECKOUT HAPPENS AT {sourceHost.toUpperCase()}
       </p>
     </article>
 
@@ -146,6 +164,39 @@ const alternates = [
     .avail--out-of-stock { background: #FCE8EA; color: #8A2432; }
     .avail--preorder { background: #FFF4E5; color: #6A3E05; }
     .avail--discontinued { background: #f0eee6; color: #5F5E5A; }
+
+    .pairings {
+      display: grid;
+      gap: 8px;
+      padding: 12px 0 2px;
+      border-top: 1px dashed #d6d4cd;
+    }
+    .pairings__label {
+      margin: 0;
+      color: #5F3DC4;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .pairings ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .mood {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      padding: 0 9px;
+      border: 1px solid #d9d0ff;
+      color: #5F3DC4;
+      background: #f5f0ff;
+      font-size: 9px;
+      text-decoration: none;
+    }
+    .mood:hover { border-color: #5F3DC4; }
 
     .cta {
       display: inline-block;

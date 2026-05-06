@@ -765,7 +765,7 @@ const PAGES = [
     kind: 'good feels catalog',
     kicker: 'PRODUCTS · GOOD FEELS',
     title: 'A structured shop window.',
-    dek: 'Schema.org Product markup feeding shop.getgoodfeels.com. Agent-readable, CORS-open. Catalog at /products, per-product at /products/{slug}.',
+    dek: 'Schema.org Product markup feeding the outbound commerce hub. Agent-readable, CORS-open. Catalog at /shop and /products, per-product at /products/{slug}.',
     color600: '#993556',
     color800: '#6B2139',
     glyph: '⊕',

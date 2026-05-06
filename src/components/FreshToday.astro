@@ -3,7 +3,7 @@
  * FreshToday — human-oriented live signal strip for the home page.
  *
  * Mike 2026-04-24 ~11:30 PT: "what can someone collect today, a sport
- * score, shop.getgoodfeels.com link"
+ * score, PointCast commerce link"
  *
  * Four live-signal tiles:
  *   COLLECT — today's daily drop (from pickDailyBlock)
@@ -32,21 +32,21 @@ const dailyId = daily?.data.id ?? '';
 const dailyTitle = daily?.data.title ?? '';
 const dailyChannel = daily?.data.channel ?? '';
 
-// SHOP — rotate through a curated Good Feels link-of-the-day
-// Source of truth stays shop.getgoodfeels.com; we just pick which
-// landing each day. Day-seeded so everyone sees the same pick.
-const GOOD_FEELS_PICKS = [
-  { slug: '',                 title: 'Shop Good Feels',        kicker: 'THE ENTIRE SHOP',          note: 'Browse every drop.' },
-  { slug: '/collections/new', title: 'What\u2019s new',        kicker: 'NEW ARRIVALS',             note: 'Whatever just landed.' },
-  { slug: '/collections/bestsellers', title: 'Bestsellers',    kicker: 'THE STEADY ROTATION',      note: 'Everyone\u2019s top picks.' },
-  { slug: '/collections/gift-cards',  title: 'Gift cards',     kicker: 'SEND A VIBE',              note: 'Low effort, high yield.' },
-];
 function daySeedIndex(len: number, salt: number): number {
   const day = Math.floor(Date.now() / (24 * 3600 * 1000));
   return (((day * 131) ^ (salt * 17)) >>> 0) % Math.max(1, len);
 }
-const shopPick = GOOD_FEELS_PICKS[daySeedIndex(GOOD_FEELS_PICKS.length, 7)];
-const shopHref = `https://shop.getgoodfeels.com${shopPick.slug}`;
+
+// SHOP — rotate through the synced Good Feels mirror so the tile cannot
+// point at stale product handles or retired Shopify routes.
+const commerceProducts = (await getCollection('products', ({ data }) => !data.draft && data.brand === 'Good Feels'))
+  .sort((a, b) => a.data.slug.localeCompare(b.data.slug));
+const shopProduct = commerceProducts[daySeedIndex(commerceProducts.length, 7)];
+const shopHref = shopProduct ? `/products/${shopProduct.data.slug}` : '/shop';
+const shopPick = {
+  title: shopProduct?.data.name ?? 'PointCast Commerce',
+  kicker: shopProduct?.data.category?.toUpperCase() ?? 'OPEN /SHOP',
+};
 
 // POUR — rotate through taproom breweries + their first beer
 const breweries = (taproomData as any).breweries as Array<{
