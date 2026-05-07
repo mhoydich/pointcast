@@ -96,15 +96,48 @@ function notFoundHtml(id: string): string {
 </body></html>`;
 }
 
-function renderHtml(id: string, comp: Composition, request: Request): string {
+function renderHtml(id: string, comp: Composition, createdAt: string | undefined, request: Request): string {
   const dims = TPL_DIMS[comp.tpl] || TPL_DIMS.postcard;
   const url = new URL(request.url);
   const origin = `${url.protocol}//${url.host}`;
   const title = pickTitle(comp);
   const desc = describe(comp) || 'A PointCast Studio composition.';
-  const ogImage = `${origin}/studio-og.png`;
+  // v2.4 fix (codex review PR 2): /studio-og.png didn't exist. Switched to
+  // a static SVG fallback at /studio-og.svg (lives in public/) so the OG
+  // image stops 404-ing on every paste-unfurl. Per-composition rendered
+  // OG images remain on the follow-up roadmap.
+  const ogImage = `${origin}/studio-og.svg`;
   const filter = FILTERS[comp.filter] || 'none';
   const stateJson = JSON.stringify(comp).replace(/</g, '\\u003c');
+  const shareUrl = `${origin}/studio/share/${id}`;
+  const apiUrl   = `${origin}/api/studio-block/${id}`;
+  const remixUrl = `${origin}/studio?remix=${encodeURIComponent(id)}`;
+  const datePublished = createdAt || new Date().toISOString();
+
+  // JSON-LD CreativeWork — per codex review recommendation. Helps agents
+  // and crawlers understand each share page is a discrete creative
+  // artifact, not just a generic page.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    '@id': shareUrl,
+    name: title,
+    description: desc,
+    url: shareUrl,
+    datePublished,
+    dateModified: datePublished,
+    isAccessibleForFree: true,
+    license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    creator: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+    publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+    encodingFormat: 'text/html',
+    image: ogImage,
+    inLanguage: 'en',
+    keywords: ['PointCast', 'Studio', 'Block Maker', comp.tpl],
+    mainEntityOfPage: shareUrl,
+    additionalType: `https://pointcast.xyz/agent-native-publishing#studio-${comp.tpl}`,
+  };
+  const jsonLdJson = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -113,19 +146,32 @@ function renderHtml(id: string, comp: Composition, request: Request): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)} — PointCast Studio</title>
   <meta name="description" content="${escapeHtml(desc)}" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:160" />
 
-  <meta property="og:type" content="website" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="PointCast Studio" />
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(desc)}" />
-  <meta property="og:url" content="${escapeHtml(`${origin}/studio/share/${id}`)}" />
+  <meta property="og:url" content="${escapeHtml(shareUrl)}" />
   <meta property="og:image" content="${escapeHtml(ogImage)}" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="${escapeHtml(title + ' — a PointCast Studio composition')}" />
+  <meta property="article:published_time" content="${escapeHtml(datePublished)}" />
+  <meta property="article:author" content="PointCast" />
+
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@mhoydich" />
   <meta name="twitter:title" content="${escapeHtml(title)}" />
   <meta name="twitter:description" content="${escapeHtml(desc)}" />
   <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
+  <meta name="twitter:image:alt" content="${escapeHtml(title + ' — a PointCast Studio composition')}" />
 
-  <link rel="canonical" href="${escapeHtml(`${origin}/studio/share/${id}`)}" />
-  <link rel="alternate" type="application/json" href="${escapeHtml(`${origin}/api/studio-block/${id}`)}" />
+  <link rel="canonical" href="${escapeHtml(shareUrl)}" />
+  <link rel="alternate" type="application/json" href="${escapeHtml(apiUrl)}" />
+
+  <script type="application/ld+json">${jsonLdJson}</script>
 
   <style>
     :root {
@@ -195,30 +241,35 @@ function renderHtml(id: string, comp: Composition, request: Request): string {
     }
     .foot a { color: var(--ink-soft); }
 
+    /* v2.4 fix (codex review PR 2): keyframes now compose with the
+       per-layer --s (scale) and --r (rotate) CSS variables, mirroring
+       the editor's transform model. Without this, animated share
+       layers drop the layer's scale/rotation. The variables default
+       to 1 / 0deg if unset so static + non-animated paths still work. */
     @keyframes pc-bounce {
-      0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-      50%      { transform: translate(-50%, -50%) translateY(-12px); }
+      0%, 100% { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)) translateY(0); }
+      50%      { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)) translateY(-12px); }
     }
     @keyframes pc-ring {
-      0%, 100% { transform: translate(-50%, -50%) scale(1); }
-      50%      { transform: translate(-50%, -50%) scale(1.06); }
+      0%, 100% { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
+      50%      { transform: translate(-50%, -50%) scale(calc(var(--s, 1) * 1.06)) rotate(var(--r, 0deg)); }
     }
     @keyframes pc-glitch {
-      0%   { transform: translate(-52%, -50%); }
-      25%  { transform: translate(-48%, -51%); }
-      50%  { transform: translate(-51%, -49%); }
-      75%  { transform: translate(-49%, -50%); }
-      100% { transform: translate(-50%, -50%); }
+      0%   { transform: translate(-52%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
+      25%  { transform: translate(-48%, -51%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
+      50%  { transform: translate(-51%, -49%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
+      75%  { transform: translate(-49%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
+      100% { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(var(--r, 0deg)); }
     }
     @keyframes pc-spin {
-      0%   { transform: translate(-50%, -50%) rotate(-3deg); }
-      50%  { transform: translate(-50%, -50%) rotate(3deg); }
-      100% { transform: translate(-50%, -50%) rotate(-3deg); }
+      0%   { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(-3deg); }
+      50%  { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(3deg); }
+      100% { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(-3deg); }
     }
     @keyframes pc-drop {
-      0%   { transform: translate(-50%, -150%) rotate(-15deg); opacity: 0; }
-      60%  { transform: translate(-50%, -50%) rotate(8deg); opacity: 1; }
-      100% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; }
+      0%   { transform: translate(-50%, -150%) scale(var(--s, 1)) rotate(-15deg); opacity: 0; }
+      60%  { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(8deg); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(var(--s, 1)) rotate(0deg); opacity: 1; }
     }
     .anim-bounce { animation: pc-bounce 1.4s ease-in-out infinite; }
     .anim-ring   { animation: pc-ring 1.2s ease-in-out infinite; }
@@ -266,6 +317,12 @@ function renderHtml(id: string, comp: Composition, request: Request): string {
         node.className = 'layer layer--' + layer.kind + ' anim-' + state.anim;
         node.style.left = (layer.x * 100) + '%';
         node.style.top = (layer.y * 100) + '%';
+        // v2.4 fix (codex review PR 2): set --s + --r on every layer so
+        // both the static-direct-transform path and the keyframe-driven
+        // animated path see the layer's actual scale + rotation. This
+        // mirrors the editor's render path in src/pages/studio.astro.
+        node.style.setProperty('--s', String(layer.scale));
+        node.style.setProperty('--r', layer.rotate + 'deg');
         if (state.anim === 'static') {
           node.style.transform = 'translate(-50%, -50%) scale(' + layer.scale + ') rotate(' + layer.rotate + 'deg)';
         }
@@ -336,19 +393,40 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     });
   }
 
-  let parsed: { composition: Composition };
+  let parsed: { composition: Composition; createdAt?: string };
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
     return new Response('composition data corrupt', { status: 500 });
   }
 
-  const html = renderHtml(id, parsed.composition, request);
+  // v2.4 (codex review PR 2): emit Last-Modified from createdAt so
+  // crawlers and conditional-GET clients can short-circuit. The record
+  // is immutable once stored, so createdAt is also the dateModified.
+  const createdAt = parsed.createdAt;
+  const lastModified = createdAt
+    ? new Date(createdAt).toUTCString()
+    : new Date().toUTCString();
+
+  // HEAD requests get the same headers without a body.
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=600',
+        'Last-Modified': lastModified,
+      },
+    });
+  }
+
+  const html = renderHtml(id, parsed.composition, createdAt, request);
   return new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'public, max-age=60, stale-while-revalidate=600',
+      'Last-Modified': lastModified,
     },
   });
 };
