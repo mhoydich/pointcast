@@ -6,36 +6,222 @@
  * serve `404.html` for unmatched routes with a 404 status. Adding this
  * page + the _redirects rule (which our build emits) gets us there.
  *
- * BLOCKS.md dictates the aesthetic — mono metadata, hard corners, channel
- * accent (picked VST gray as the "nothing there" color).
+ * Mike 2026-05-06: rewrote from a dry "block IDs are immutable" notice
+ * into something that actually helps a lost visitor — three plain
+ * reasons they might have landed here, a tap-to-ring drum pad so the
+ * dead end feels alive, a curated nav grid by mood, and a random-door
+ * button for "just take me somewhere good."
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
 const ch = CHANNELS.VST;
+
+const NAV_GROUPS = [
+  {
+    label: 'TODAY',
+    blurb: 'what is happening right now',
+    links: [
+      { href: '/now',     label: '/now' },
+      { href: '/here',    label: '/here' },
+      { href: '/window',  label: '/window' },
+      { href: '/briefs',  label: '/briefs' },
+      { href: '/wire',    label: '/wire' },
+    ],
+  },
+  {
+    label: 'DRUM',
+    blurb: 'tap, ring, breathe, sing',
+    links: [
+      { href: '/drum',     label: '/drum' },
+      { href: '/spells',   label: '/spells' },
+      { href: '/sing',     label: '/sing' },
+      { href: '/meditate', label: '/meditate' },
+    ],
+  },
+  {
+    label: 'ROOMS',
+    blurb: 'walk into one',
+    links: [
+      { href: '/rooms',     label: '/rooms' },
+      { href: '/coffee',    label: '/coffee' },
+      { href: '/kettle',    label: '/kettle' },
+      { href: '/lobby',     label: '/lobby' },
+      { href: '/residents', label: '/residents' },
+    ],
+  },
+  {
+    label: 'SPARROW',
+    blurb: 'the reader',
+    links: [
+      { href: '/sparrow',     label: '/sparrow' },
+      { href: '/sparrow/tv',  label: '/sparrow/tv' },
+    ],
+  },
+  {
+    label: 'AGENTS',
+    blurb: 'machine-readable surfaces',
+    links: [
+      { href: '/for-agents',  label: '/for-agents' },
+      { href: '/agents.json', label: '/agents.json' },
+      { href: '/manifesto',   label: '/manifesto' },
+      { href: '/protocol',    label: '/protocol' },
+    ],
+  },
+];
+
+// Random-door pool — small, hand-picked, all confirmed live + interesting.
+const RANDOM_DOORS = [
+  '/coffee', '/window', '/mythos', '/race', '/town', '/residents',
+  '/drum', '/spells', '/sing', '/meditate', '/signal-garden',
+  '/sparrow', '/sparrow/tv', '/cake', '/houseplants', '/zen-cats',
+  '/walk', '/tide', '/nature', '/local', '/nouns-nation', '/battle',
+  '/c/front-door', '/c/garden', '/c/visit',
+];
 ---
 
-<BlockLayout title="Block not found" description="The block at this URL does not exist. Block IDs are monotonic and immutable — retired blocks stay retired.">
+<BlockLayout
+  title="Block not found"
+  description="No block at this URL. Try the bell, browse a room, or take a random door into PointCast."
+>
   <div class="page" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
     <header class="head">
-      <p class="code">CH.404 · BLOCK NOT FOUND</p>
-      <h1>No block at this address.</h1>
+      <p class="code">CH.404 · DEAD LETTER OFFICE</p>
+      <h1>You hit an empty doorway.</h1>
       <p class="dek">
-        Block IDs are monotonic and immutable per
-        <a href="/BLOCKS.md"><code>BLOCKS.md</code></a> — if a block is retired,
-        the ID does not get handed to something else.
+        That's fine — the broadcast keeps going around it. Here's what probably
+        happened, plus a few ways back in.
       </p>
     </header>
-    <section class="doors">
-      <a class="door" href="/">← All blocks</a>
-      <a class="door" href="/for-agents">/for-agents</a>
-      <a class="door" href="/blocks.json">/blocks.json</a>
-      <a class="door" href="/status">/status</a>
+
+    <section class="reasons" aria-label="Why you're here">
+      <ol>
+        <li>
+          <strong>The link is stale or has a typo.</strong> Block URLs are
+          short and easy to mistype. Try the address bar again, or jump to
+          <a href="/">the home pulse</a>.
+        </li>
+        <li>
+          <strong>You followed a link to a page that hasn't deployed yet.</strong>
+          PointCast ships many small PRs a day. Cloudflare Pages usually
+          catches up within a few minutes. Refresh after a coffee.
+        </li>
+        <li>
+          <strong>Block IDs are immutable.</strong> If a block was retired,
+          the number stays retired — it does not get handed to something
+          else. See <a href="/BLOCKS.md"><code>BLOCKS.md</code></a>.
+        </li>
+      </ol>
     </section>
+
+    <section class="bell-pad" aria-label="Tap the bell">
+      <div class="bell-pad__inner">
+        <button class="bell" id="bell-pad" type="button" aria-label="Tap the bell">
+          <span class="bell__dome" aria-hidden="true"></span>
+          <span class="bell__halo" aria-hidden="true"></span>
+        </button>
+        <div class="bell-pad__caption">
+          <div class="bell-pad__hed">TAP THE BELL</div>
+          <div class="bell-pad__sub" id="bell-status">
+            five taps and the sound carries to the lobby
+          </div>
+          <div class="bell-pad__count">
+            <span class="bell-pad__count-num" id="bell-count">0</span>
+            <span class="bell-pad__count-label">/ 5</span>
+          </div>
+        </div>
+      </div>
+      <a class="bell-pad__cta" id="bell-cta" href="/lobby" hidden>→ enter the lobby</a>
+    </section>
+
+    <nav class="grid" aria-label="Where to go next">
+      {NAV_GROUPS.map(group => (
+        <div class="card">
+          <div class="card__head">
+            <span class="card__label">{group.label}</span>
+            <span class="card__blurb">{group.blurb}</span>
+          </div>
+          <ul class="card__list">
+            {group.links.map(link => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+
+    <section class="random" aria-label="Random door">
+      <button class="random__btn" id="random-door" type="button">
+        <span class="random__icon" aria-hidden="true">⎈</span>
+        TAKE A RANDOM DOOR
+      </button>
+      <p class="random__hint">picks one of the better corners of the site</p>
+    </section>
+
+    <footer class="foot">
+      <a href="/">← all blocks</a>
+      <a href="/for-agents">/for-agents</a>
+      <a href="/blocks.json">/blocks.json</a>
+      <a href="/status">/status</a>
+    </footer>
   </div>
 </BlockLayout>
 
+<script is:inline define:vars={{ doors: RANDOM_DOORS }}>
+  // Bell pad — five taps with a Web Audio chime per tap, ascending pitch.
+  const pad = document.getElementById('bell-pad');
+  const count = document.getElementById('bell-count');
+  const status = document.getElementById('bell-status');
+  const cta = document.getElementById('bell-cta');
+  const TARGET = 5;
+  let taps = 0;
+  let ctx = null;
+
+  function chime(step) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = ctx.currentTime;
+      const base = 523.25; // C5
+      const freq = base * Math.pow(2, step / 12); // ascending semitones
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.65);
+    } catch (e) { /* audio is decorative — ignore failures */ }
+  }
+
+  pad?.addEventListener('click', () => {
+    if (taps >= TARGET) return;
+    taps += 1;
+    chime(taps - 1);
+    count.textContent = String(taps);
+    pad.classList.remove('bell--ring');
+    void pad.offsetWidth; // restart animation
+    pad.classList.add('bell--ring');
+    if (taps === TARGET) {
+      status.textContent = 'rung — the lobby heard it.';
+      cta.hidden = false;
+    } else {
+      status.textContent = `${TARGET - taps} more · keep going`;
+    }
+  });
+
+  // Random door — picks a route, navigates.
+  document.getElementById('random-door')?.addEventListener('click', () => {
+    const next = doors[Math.floor(Math.random() * doors.length)];
+    window.location.href = next;
+  });
+</script>
+
 <style>
-  .page { max-width: 640px; margin: 0 auto; padding: 80px 20px; }
+  .page { max-width: 720px; margin: 0 auto; padding: 64px 20px 80px; }
+
+  /* Header */
   .code {
     font-family: var(--pc-font-mono);
     font-size: 11px;
@@ -51,19 +237,198 @@ const ch = CHANNELS.VST;
     line-height: 1.1;
     margin: 0 0 14px;
   }
-  .dek { font-size: 15px; color: var(--pc-ink-soft); margin: 0 0 36px; line-height: 1.5; }
-  .dek code { font-family: var(--pc-font-mono); font-size: 13px; padding: 1px 4px; background: var(--ch-50); border-radius: 2px; }
-  .doors { display: flex; flex-wrap: wrap; gap: 10px; }
-  .door {
+  .dek { font-size: 15px; color: var(--pc-ink-soft); margin: 0 0 32px; line-height: 1.55; }
+
+  /* Reasons */
+  .reasons { margin: 0 0 36px; }
+  .reasons ol {
+    counter-reset: r;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 12px;
+  }
+  .reasons li {
+    counter-increment: r;
+    position: relative;
+    padding: 14px 16px 14px 44px;
+    border: 1px solid var(--pc-rule, #e6e6e6);
+    border-radius: 3px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+    background: #fff;
+  }
+  .reasons li::before {
+    content: counter(r);
+    position: absolute;
+    left: 14px; top: 14px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--ch-600);
+    border: 1px solid var(--ch-600);
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px;
+  }
+  .reasons li strong { color: var(--pc-ink, #111); font-weight: 500; }
+  .reasons code { font-family: var(--pc-font-mono); font-size: 12px; padding: 1px 4px; background: var(--ch-50); border-radius: 2px; }
+
+  /* Bell pad */
+  .bell-pad {
+    display: flex; flex-direction: column; align-items: stretch;
+    gap: 14px;
+    padding: 22px;
+    margin: 0 0 36px;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 4px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, var(--ch-50), transparent 60%),
+      #fff;
+  }
+  .bell-pad__inner { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .bell {
+    position: relative;
+    width: 64px; height: 64px;
+    border: none; padding: 0; background: none; cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .bell__dome {
+    position: absolute; inset: 6px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 35% 30%, #f6c15e, #b8821a 60%, #6b4d12 100%);
+    box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .bell__halo {
+    position: absolute; inset: 0;
+    border-radius: 999px;
+    border: 1.5px solid var(--ch-600);
+    opacity: 0.35;
+    transform: scale(1);
+    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+  }
+  .bell:hover .bell__halo { opacity: 0.6; }
+  .bell--ring .bell__halo {
+    animation: bell-pulse 0.6s ease-out;
+  }
+  .bell--ring .bell__dome {
+    animation: bell-shake 0.4s ease-out;
+  }
+  @keyframes bell-pulse {
+    0%   { transform: scale(1);    opacity: 0.7; }
+    100% { transform: scale(1.9);  opacity: 0;   }
+  }
+  @keyframes bell-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px) rotate(-3deg); }
+    75% { transform: translateX(2px)  rotate(3deg);  }
+  }
+  .bell-pad__caption { flex: 1 1 200px; min-width: 0; }
+  .bell-pad__hed {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ch-800);
+  }
+  .bell-pad__sub {
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .bell-pad__count { margin-top: 8px; font-family: var(--pc-font-mono); }
+  .bell-pad__count-num { font-size: 20px; color: var(--ch-800); font-weight: 600; }
+  .bell-pad__count-label { font-size: 12px; color: var(--pc-ink-soft); margin-left: 4px; }
+  .bell-pad__cta {
+    align-self: flex-start;
     padding: 8px 14px;
     border: 1.5px solid var(--ch-600);
-    color: var(--ch-800);
+    background: var(--ch-600);
+    color: #fff !important;
     font-family: var(--pc-font-mono);
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     border-radius: 2px;
-    transition: background-color 0.12s;
   }
-  .door:hover { background: var(--ch-50); text-decoration: none; }
+  .bell-pad__cta:hover { background: var(--ch-800); border-color: var(--ch-800); text-decoration: none; }
+
+  /* Nav grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 0 0 36px;
+  }
+  .card {
+    border: 1px solid var(--pc-rule, #e6e6e6);
+    border-radius: 3px;
+    padding: 14px 14px 12px;
+    background: #fff;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .card:hover { border-color: var(--ch-600); }
+  .card__head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+  .card__label {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--ch-800);
+  }
+  .card__blurb { font-size: 12px; color: var(--pc-ink-soft); }
+  .card__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .card__list a {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    color: var(--pc-ink, #111);
+    text-decoration: none;
+  }
+  .card__list a:hover { color: var(--ch-600); text-decoration: underline; }
+
+  /* Random door */
+  .random {
+    text-align: center;
+    margin: 0 0 36px;
+    padding: 18px;
+    border: 1px dashed var(--pc-rule, #d8d8d8);
+    border-radius: 3px;
+  }
+  .random__btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 18px;
+    border: 1.5px solid var(--pc-ink, #111);
+    background: #fff;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .random__btn:hover { background: var(--pc-ink, #111); color: #fff; }
+  .random__icon { font-size: 14px; }
+  .random__hint { font-size: 11px; color: var(--pc-ink-soft); margin: 8px 0 0; }
+
+  /* Footer doors */
+  .foot {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    padding-top: 18px;
+    border-top: 1px solid var(--pc-rule, #e6e6e6);
+  }
+  .foot a {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-soft);
+  }
+  .foot a:hover { color: var(--ch-800); }
+
+  @media (max-width: 480px) {
+    .head h1 { font-size: 28px; }
+    .page { padding: 40px 16px 60px; }
+  }
 </style>
