@@ -1,0 +1,149 @@
+---
+/**
+ * TideSurf — tide + surf + water-temp strip for the BRIEF section.
+ *
+ * A natural extension of the WX line: same monospace labels, same
+ * warm chip aesthetic. Reads as one sentence at a glance:
+ *
+ *   "Low tide · rising · high at 2:18p · 2-3ft @ El Porto · 60°F water"
+ *
+ * ─── Mock data, May 2026, El Segundo / South Bay ────────────────────
+ * Values below are static seasonal-realistic placeholders (early-May
+ * water in the low 60s, typical waist-to-chest WSW windswell at El
+ * Porto, semi-diurnal tide). Wire to live sources before shipping:
+ *
+ * 1. Tides — NOAA CO-OPS API. Station 9410660 (Los Angeles, Outer
+ *    Harbor) is the canonical reference for the South Bay; TidePool
+ *    already uses it. Endpoint:
+ *      https://api.tidesandcurrents.noaa.gov/api/prod/datagetter
+ *        ?station=9410660&product=predictions&datum=MLLW
+ *        &interval=hilo&units=english&time_zone=lst_ldt
+ *        &format=json&begin_date=YYYYMMDD&range=48
+ *    Take the most recent past hi/lo to determine current state +
+ *    rising/falling, and the next future entry for the change time.
+ *
+ * 2. Surf — Surfline is the journalism-grade source but requires an
+ *    auth'd spot ID (5842041f4e65fad6a7708bbe = El Porto). Their
+ *    public forecast endpoint is:
+ *      https://services.surfline.com/kbyg/spots/forecasts/wave
+ *        ?spotId=...&days=1&intervalHours=1
+ *    No-auth alternative: NDBC buoy 46221 (Santa Monica Bay) gives
+ *    raw Hs / period / direction; map Hs to a face-height range
+ *    (Hs × ~1.4 → face high, ÷ 0.6 → face low) for a faces-style
+ *    display. Cache aggressively (15-30min) — this isn't real-time.
+ *
+ * 3. Water temp — NDBC buoy 46221 SST field, or the simpler
+ *    Open-Meteo Marine API:
+ *      https://marine-api.open-meteo.com/v1/marine
+ *        ?latitude=33.92&longitude=-118.42&hourly=sea_surface_temperature
+ *    Round to whole °F. Open-Meteo Marine is no-auth and shares the
+ *    same provider as the existing WX chip (MorningBrief.astro).
+ *
+ * Server-render the mocks so the strip ships without layout shift;
+ * a follow-up sprint can hydrate live values into the same DOM nodes
+ * (matching the MorningBrief pattern of skeleton-then-fill).
+ * ────────────────────────────────────────────────────────────────────
+ */
+
+const tide = {
+  state: 'Low tide',
+  trend: 'rising',
+  nextLabel: 'high',
+  nextTime: '2:18p',
+};
+
+const surf = {
+  faces: '2-3ft',
+  spot: 'El Porto',
+};
+
+const water = {
+  tempF: 60,
+};
+---
+
+<aside class="tidesurf" aria-label="Tide and surf">
+  <span class="chip chip--tide" title="Tide · NOAA station 9410660 (mock)">
+    <span class="chip__label mono">TIDE</span>
+    <span class="chip__val mono">{tide.state} · {tide.trend} · {tide.nextLabel} at {tide.nextTime}</span>
+  </span>
+  <span class="chip chip--surf" title={`Surf · ${surf.spot} (mock)`}>
+    <span class="chip__label mono">SURF</span>
+    <span class="chip__val mono">{surf.faces} @ {surf.spot}</span>
+  </span>
+  <span class="chip chip--sea" title="Water temperature (mock)">
+    <span class="chip__label mono">SEA</span>
+    <span class="chip__val mono">{water.tempF}°F water</span>
+  </span>
+</aside>
+
+<style>
+  .tidesurf {
+    margin: 8px 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    background: #fbfaf5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border: 1px solid #d6d4cd;
+    background: #fff;
+    border-radius: 2px;
+    color: #12110E;
+    max-width: 100%;
+  }
+  .chip__label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #5F5E5A;
+    font-weight: 700;
+  }
+  .chip__val {
+    font-size: 11px;
+    color: #12110E;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Cool accents (ocean) against the warm cream container — mirrors the
+     way MorningBrief's chips use a colored left border per channel. */
+  .chip--tide { border-left: 3px solid #1864AB; }
+  .chip--surf { border-left: 3px solid #0F6E56; }
+  .chip--sea  { border-left: 3px solid #2A6F97; }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 540px) {
+    .tidesurf {
+      padding: 10px 12px;
+      gap: 8px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chip {
+      padding: 7px 10px;
+      flex: 0 0 auto;
+      min-height: 36px;
+    }
+    .chip__label { font-size: 8.5px; }
+    .chip__val { font-size: 11px; }
+  }
+</style>
