@@ -177,7 +177,7 @@ const jsonLd = {
 <BlockLayout title={title} description={description} jsonLd={jsonLd}>
   <main class="studio2">
     <header class="studio2__head">
-      <p class="kicker">CH.STUDIO · BLOCK MAKER · v2.1</p>
+      <p class="kicker">CH.STUDIO · BLOCK MAKER · v2.2</p>
       <h1>Drag, type, ship.</h1>
       <p class="dek">
         Pick a template. Drop in Nouns. Stack a headline. Apply a filter,
@@ -271,6 +271,18 @@ const jsonLd = {
               </button>
             ))}
           </div>
+        </section>
+
+        <!-- UPLOAD -->
+        <section class="tool">
+          <header class="tool__head">
+            <span class="kicker">UPLOAD</span>
+          </header>
+          <p class="tool__hint">drop a photo onto the canvas — png, jpg, gif, svg up to 4 MB.</p>
+          <label class="upload-btn">
+            <input type="file" id="upload-input" accept="image/*" hidden />
+            <span>+ ADD A PHOTO</span>
+          </label>
         </section>
 
         <!-- TEXT -->
@@ -534,6 +546,12 @@ const jsonLd = {
         img.alt = `Noun ${layer.seed}`;
         img.draggable = false;
         node.appendChild(img);
+      } else if (layer.kind === 'photo') {
+        const img = document.createElement('img');
+        img.src = layer.dataUrl;
+        img.alt = layer.name || 'Uploaded photo';
+        img.draggable = false;
+        node.appendChild(img);
       } else if (layer.kind === 'text') {
         node.textContent = layer.value;
         node.style.fontFamily = fontCss(layer.font);
@@ -552,7 +570,11 @@ const jsonLd = {
     state.layers.slice().reverse().forEach(l => {
       const li = document.createElement('li');
       li.className = 'layer-item' + (state.selectedId === l.id ? ' is-selected' : '');
-      const label = l.kind === 'noun' ? `Noun #${l.seed}` : `“${l.value.slice(0, 24)}”`;
+      const label = l.kind === 'noun'
+        ? `Noun #${l.seed}`
+        : l.kind === 'photo'
+          ? (l.name || 'Photo')
+          : `“${l.value.slice(0, 24)}”`;
       const sel = document.createElement('button');
       sel.type = 'button';
       sel.className = 'layer-item__select';
@@ -658,6 +680,39 @@ const jsonLd = {
     state.selectedId = layer.id;
     renderLayers();
   }
+
+  document.getElementById('upload-input').addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const MAX = 4 * 1024 * 1024;
+    if (file.size > MAX) {
+      notify(`too big — ${(file.size / 1024 / 1024).toFixed(1)} MB · 4 MB max`);
+      e.target.value = '';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      notify('that does not look like an image');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const layer = {
+        id: state.nextId++, kind: 'photo',
+        dataUrl: ev.target.result,
+        name: file.name,
+        x: 0.5, y: 0.5, scale: 1, rotate: 0,
+      };
+      state.layers.push(layer);
+      state.selectedId = layer.id;
+      renderLayers();
+      persist();
+      notify(`added · ${file.name}`);
+    };
+    reader.onerror = () => notify('could not read that file');
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
 
   document.getElementById('add-text').addEventListener('click', () => {
     const value = document.getElementById('text-input').value.trim();
@@ -1177,6 +1232,24 @@ const jsonLd = {
     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.18));
     pointer-events: none;
   }
+  .layer--photo img {
+    width: 240px; height: auto;
+    display: block;
+    border: 4px solid #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.22);
+    pointer-events: none;
+  }
+  .upload-btn {
+    display: block; cursor: pointer; text-align: center;
+    padding: 10px;
+    background: var(--color-card-hover);
+    border: 1.5px dashed var(--color-warm);
+    color: var(--color-ink);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+    border-radius: 2px;
+    transition: background 0.12s;
+  }
+  .upload-btn:hover { background: var(--color-warm); color: #fff; }
   .layer--text {
     font-weight: 700;
     line-height: 1.05;
