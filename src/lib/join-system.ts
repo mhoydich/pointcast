@@ -3,8 +3,8 @@ export const JOIN_SYSTEM = {
   title: 'Join System',
   slug: 'join',
   status: 'open',
-  updatedAt: '2026-05-06T16:30:00Z',
-  source: 'Gmail idea overview from 2026-04-30, Mike chat on 2026-05-05, and Cartography $5M 2026 implementation plan on 2026-05-06.',
+  updatedAt: '2026-05-07T07:15:00Z',
+  source: 'Gmail idea overview from 2026-04-30, Mike chat on 2026-05-05, Cartography $5M 2026 implementation plan on 2026-05-06, and pilot close sprint directive on 2026-05-07.',
   thesis:
     'Map scattered human and creative identity, make it legible, then route collaboration, opportunity, commercial proof, and expression through small claimable tasks.',
   loop: [
@@ -54,7 +54,7 @@ export const JOIN_SYSTEM = {
         'Design a confidence rubric for matching the same person across platforms.',
         'Prototype a static profile-map JSON schema and sample page.',
         'Research platform access constraints and safe opt-in data flows.',
-        'Maintain /cartography, /cartography.json, and /cartography/demo.json as the public product surface.',
+        'Maintain /cartography, /cartography.json, /cartography/pilot.json, /cartography/sprint.json, and /cartography/demo.json as the public product surface.',
       ],
       peopleTasks: [
         'Name 10 candidate users with scattered online identity and real collaboration needs.',
@@ -219,6 +219,16 @@ export const JOIN_SYSTEM = {
   ],
   claimableTasks: [
     {
+      id: 'cartography-pilot-close-sprint',
+      lane: 'sales',
+      owner: 'Mike plus BD contractor',
+      project: 'cartography',
+      ask: 'Run the May 7-15 close sprint: 100 accounts, 30 founder-led calls, 10 qualified follow-ups, and 3 paid pilots or a niche decision.',
+      artifact: '/cartography/sprint and /cartography/sprint.json',
+      estimate: '2026-05-07 to 2026-05-15',
+      status: 'active',
+    },
+    {
       id: 'cartography-prd-v0',
       lane: 'agent',
       owner: 'Codex or cc',
@@ -254,9 +264,9 @@ export const JOIN_SYSTEM = {
       owner: 'Codex',
       project: 'cartography',
       ask: 'Build one static profile-map demo route from mock data, with JSON sibling and no scraping.',
-      artifact: 'Astro route plus JSON endpoint',
+      artifact: '/cartography/demo and /cartography/demo.json',
       estimate: '2-3 hr',
-      status: 'open',
+      status: 'shipped',
     },
     {
       id: 'interview-5-creatives',
@@ -304,9 +314,9 @@ export const JOIN_SYSTEM = {
       owner: 'Mike',
       project: 'cartography',
       ask: 'Turn the $50k paid pilot into a one-page offer: buyer pain, scope, deliverables, timeline, proof, and close path.',
-      artifact: '/cartography plus docs/prd/pointcast-cartography-2026-business.md',
+      artifact: '/cartography/pilot and /cartography/pilot.json',
       estimate: '90 min',
-      status: 'open',
+      status: 'shipped',
     },
     {
       id: 'cartography-stripe-payment-links',

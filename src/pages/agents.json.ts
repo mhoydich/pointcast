@@ -18,6 +18,7 @@ import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { CARTOGRAPHY_BUSINESS, cartographyCoreSchemas } from '../lib/cartography-business';
+import { CARTOGRAPHY_NEXT_SPRINT, cartographyPilotOffer } from '../lib/cartography-sprint';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
   AGENT_VALUE_SURFACE,
@@ -131,6 +132,8 @@ export const GET: APIRoute = async () => {
         mesh: 'https://pointcast.xyz/mesh',
         join: 'https://pointcast.xyz/join',
         cartography: 'https://pointcast.xyz/cartography',
+        cartographyPilot: 'https://pointcast.xyz/cartography/pilot',
+        cartographySprint: 'https://pointcast.xyz/cartography/sprint',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         yeePlayer: 'https://pointcast.xyz/yee',
         collabs: 'https://pointcast.xyz/collabs',
@@ -280,6 +283,8 @@ export const GET: APIRoute = async () => {
         aiStack: 'https://pointcast.xyz/ai-stack.json',
         join: 'https://pointcast.xyz/join.json',
         cartography: 'https://pointcast.xyz/cartography.json',
+        cartographyPilot: 'https://pointcast.xyz/cartography/pilot.json',
+        cartographySprint: 'https://pointcast.xyz/cartography/sprint.json',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo.json',
         collabs: 'https://pointcast.xyz/collabs.json',
         commerce: 'https://pointcast.xyz/shop.json',
@@ -482,11 +487,30 @@ export const GET: APIRoute = async () => {
       cartographyBusiness: {
         html: CARTOGRAPHY_BUSINESS.homepage,
         json: CARTOGRAPHY_BUSINESS.json,
+        pilot: cartographyPilotOffer.human,
+        pilotJson: cartographyPilotOffer.json,
+        sprint: CARTOGRAPHY_NEXT_SPRINT.human,
+        sprintJson: CARTOGRAPHY_NEXT_SPRINT.json,
         demo: CARTOGRAPHY_BUSINESS.demo,
         demoJson: CARTOGRAPHY_BUSINESS.demoJson,
         sourceBlock: CARTOGRAPHY_BUSINESS.sourceBlock,
+        sprintBlock: CARTOGRAPHY_NEXT_SPRINT.sourceBlock,
         status: CARTOGRAPHY_BUSINESS.status,
         goal: CARTOGRAPHY_BUSINESS.goal,
+        nextSprint: {
+          id: CARTOGRAPHY_NEXT_SPRINT.id,
+          status: CARTOGRAPHY_NEXT_SPRINT.status,
+          goal: CARTOGRAPHY_NEXT_SPRINT.goal,
+          scorecard: CARTOGRAPHY_NEXT_SPRINT.scorecard,
+          lanes: CARTOGRAPHY_NEXT_SPRINT.lanes,
+        },
+        pilotOffer: {
+          id: cartographyPilotOffer.id,
+          title: cartographyPilotOffer.title,
+          priceUsd: cartographyPilotOffer.priceUsd,
+          status: cartographyPilotOffer.status,
+          cta: cartographyPilotOffer.cta,
+        },
         positioning: CARTOGRAPHY_BUSINESS.positioning,
         revenueModel: CARTOGRAPHY_BUSINESS.revenueModel,
         productPackages: CARTOGRAPHY_BUSINESS.packages.map((pkg) => ({
