@@ -1070,6 +1070,136 @@
       active.byId.lantern = l;
     }
 
+    // ─── typewriter (burst) ──────────────────────────────────────
+    // 20 chars/symbols erupt radially from viewport center.
+    // Monospace, dark — feels like a paragraph detonating.
+    function castTypewriter(durationMs) {
+      if (reduce()) return;
+      var chars = 'abcdefghijklmnopqrstuvwxyz.,!?;:\'"_-*#@&%0123456789'.split('');
+      var count = 20;
+      var cx = window.innerWidth / 2;
+      var cy = window.innerHeight / 2;
+      for (var i = 0; i < count; i++) {
+        var d = document.createElement('span');
+        d.className = 'spell-typewriter';
+        d.textContent = chars[Math.floor(Math.random() * chars.length)];
+        var angle = Math.random() * Math.PI * 2;
+        var dist = 80 + Math.random() * 280;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var dur = (durationMs || 2500) - Math.floor(Math.random() * 400);
+        var delay = Math.floor(Math.random() * 180);
+        var size = 12 + Math.floor(Math.random() * 16);
+        d.style.cssText =
+          'left:' + (cx - size / 2) + 'px;' +
+          'top:' + (cy - size / 2) + 'px;' +
+          'font-size:' + size + 'px;' +
+          '--spell-tw-dx:' + dx + 'px;' +
+          '--spell-tw-dy:' + dy + 'px;' +
+          'animation:spell-typewriter-fly ' + dur + 'ms ease-out ' + delay + 'ms both;';
+        $layer.appendChild(d);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(d);
+      }
+    }
+
+    // ─── kite (companion) ────────────────────────────────────────
+    // Floats at 60–78 vh from bottom — the high lane no other companion
+    // uses. Dips and tilts on a slow sinusoid.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prevK = active.byId.kite;
+        if (prevK && prevK.parentNode) prevK.parentNode.removeChild(prevK);
+      }
+      var k = document.createElement('button');
+      k.className = 'spell-kite';
+      k.type = 'button';
+      k.setAttribute('aria-label', 'A kite drifting high. Click to let go.');
+      k.title = 'click to let the kite go';
+      k.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      k.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 55000;
+      var flySeconds = Math.max(14, Math.min(40, window.innerWidth / 64));
+      var heightPct = (60 + Math.random() * 18).toFixed(1);
+      k.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-kite-dip' + (ltr ? '' : '-rtl') + ' 4.4s ease-in-out infinite;';
+      k.addEventListener('click', function () {
+        if (k.parentNode) k.parentNode.removeChild(k);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(k);
+      active.byId.kite = k;
+      setTimeout(function () {
+        if (k && k.parentNode) k.parentNode.removeChild(k);
+        if (active.byId.kite === k) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── paper (companion) ───────────────────────────────────────
+    // A paper airplane at mid-screen height (~35–55 vh). Glides with
+    // a small pitch oscillation — rises, settles, repeats.
+    function castPaper(durationMs) {
+      if (active.byId.paper) {
+        var prevP = active.byId.paper;
+        if (prevP && prevP.parentNode) prevP.parentNode.removeChild(prevP);
+      }
+      var p = document.createElement('button');
+      p.className = 'spell-paper';
+      p.type = 'button';
+      p.setAttribute('aria-label', 'A paper airplane gliding by. Click to fold it away.');
+      p.title = 'click to fold it away';
+      p.textContent = '✈️';
+      var ltr = Math.random() < 0.5;
+      p.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 40000;
+      var flySeconds = Math.max(10, Math.min(28, window.innerWidth / 70));
+      var heightPct = (35 + Math.random() * 20).toFixed(1);
+      p.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-paper-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-paper-glide' + (ltr ? '' : '-rtl') + ' 2.8s ease-in-out infinite;';
+      p.addEventListener('click', function () {
+        if (p.parentNode) p.parentNode.removeChild(p);
+        active.byId.paper = null;
+      });
+      $layer.appendChild(p);
+      active.byId.paper = p;
+      setTimeout(function () {
+        if (p && p.parentNode) p.parentNode.removeChild(p);
+        if (active.byId.paper === p) active.byId.paper = null;
+      }, dur);
+    }
+
+    // ─── moon (ambient) ──────────────────────────────────────────
+    // Full moon at top-center — the only cool-toned ambient, distinct
+    // from warm corners (candle, lantern, campfire). Glow breathes
+    // slowly. Recasting while active is a no-op.
+    function castMoon() {
+      if (active.byId.moon) return;
+      var m = document.createElement('button');
+      m.className = 'spell-moon';
+      m.type = 'button';
+      m.setAttribute('aria-label', 'A full moon. Click to let it set.');
+      m.title = 'click to let the moon set';
+      m.innerHTML =
+        '<span class="spell-moon__glow" aria-hidden="true"></span>' +
+        '<span class="spell-moon__body" aria-hidden="true">🌕</span>';
+      m.addEventListener('click', function () {
+        if (m.parentNode) m.parentNode.removeChild(m);
+        active.byId.moon = null;
+      });
+      $layer.appendChild(m);
+      active.byId.moon = m;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1103,8 +1233,12 @@
         case 'campfire':  castCampfire(); break;
         case 'spark':     castSpark(2000); break;
         case 'frog':      castFrog(35000); break;
-        case 'leaves':    castLeaves(); break;
-        case 'lantern':   castLantern(); break;
+        case 'leaves':     castLeaves(); break;
+        case 'lantern':    castLantern(); break;
+        case 'typewriter': castTypewriter(2500); break;
+        case 'kite':       castKite(55000); break;
+        case 'paper':      castPaper(40000); break;
+        case 'moon':       castMoon(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2232,6 +2366,151 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ── typewriter (burst) ─────────────────────────────────────── */
+  .spell-typewriter {
+    position: fixed;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    color: #2d2a26;
+    pointer-events: none;
+    line-height: 1;
+  }
+  @keyframes spell-typewriter-fly {
+    0%   { transform: translate(0, 0) scale(0.4); opacity: 1; }
+    60%  { opacity: 0.9; }
+    100% {
+      transform: translate(var(--spell-tw-dx, 0px), var(--spell-tw-dy, 0px)) scale(1.1);
+      opacity: 0;
+    }
+  }
+
+  /* ── kite (companion) ────────────────────────────────────────── */
+  /* Takes the high lane (60–78 vh from bottom). Dip gives it that
+     wind-buffeted feel without being chaotic. */
+  .spell-kite {
+    position: fixed;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+  }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-kite-dip {
+    0%, 100% { transform: translateY(0) rotate(-10deg); }
+    35%       { transform: translateY(20px) rotate(6deg); }
+    65%       { transform: translateY(-14px) rotate(-14deg); }
+  }
+  @keyframes spell-kite-dip-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(10deg); }
+    35%       { transform: scaleX(-1) translateY(20px) rotate(-6deg); }
+    65%       { transform: scaleX(-1) translateY(-14px) rotate(14deg); }
+  }
+
+  /* ── paper (companion) ───────────────────────────────────────── */
+  /* Mid-screen (35–55 vh). Glide keyframe pitches slightly up then
+     down — a lazy thermal-assisted glide. */
+  .spell-paper {
+    position: fixed;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 4px rgba(74, 158, 255, 0.25));
+  }
+  @keyframes spell-paper-fly-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-paper-fly-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-paper-glide {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    38%       { transform: translateY(-18px) rotate(4deg); }
+    72%       { transform: translateY(12px) rotate(-6deg); }
+  }
+  @keyframes spell-paper-glide-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(3deg); }
+    38%       { transform: scaleX(-1) translateY(-18px) rotate(-4deg); }
+    72%       { transform: scaleX(-1) translateY(12px) rotate(6deg); }
+  }
+
+  /* ── moon (ambient) ──────────────────────────────────────────── */
+  /* Top-center — the only cool-toned ambient. The glow pulses slowly;
+     the body breathes via drop-shadow shift. Click anywhere on it to
+     dismiss. corners: candle=BR, chimes=TR, campfire=BL, lantern=TL */
+  .spell-moon {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 64px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .spell-moon__glow {
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(180, 212, 250, 0.5) 0%,
+      rgba(180, 212, 250, 0.12) 50%,
+      rgba(180, 212, 250, 0) 72%
+    );
+    animation: spell-moon-pulse 4.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .spell-moon__body {
+    font-size: 42px;
+    line-height: 1;
+    display: block;
+    animation: spell-moon-breathe 6.4s ease-in-out infinite;
+  }
+  @keyframes spell-moon-pulse {
+    0%, 100% { opacity: 0.65; transform: scale(1); }
+    50%       { opacity: 1; transform: scale(1.1); }
+  }
+  @keyframes spell-moon-breathe {
+    0%, 100% { filter: drop-shadow(0 0 12px rgba(180, 212, 250, 0.5)); }
+    50%       { filter: drop-shadow(0 0 26px rgba(180, 212, 250, 0.9)); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2260,7 +2539,11 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-kite,
+    .spell-paper,
+    .spell-moon__glow,
+    .spell-moon__body { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2270,7 +2553,9 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite,
+    .spell-paper { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2279,7 +2564,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'],
+    .spell-paper[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2295,5 +2582,7 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-moon { transform: translateX(-50%); } /* keep centered */
+    .spell-moon__body { filter: drop-shadow(0 0 14px rgba(180, 212, 250, 0.6)); }
   }
 </style>
