@@ -47,9 +47,16 @@
  * each public session entry.
  */
 
+import { acceptPresenceWebSocketFallback } from '../_realtime-fallback';
+
 interface Env {
   PRESENCE?: DurableObjectNamespace;
+  VISITS?: KVNamespace;
 }
+
+const PRESENCE_GLOBAL_KEY = 'global:2026-04-29c';
+// Account-level DO duration is exhausted right now; use Pages fallback.
+const USE_DURABLE_OBJECTS = false;
 
 export const onRequest: PagesFunction<Env> = async (ctx) => {
   const upgrade = ctx.request.headers.get('upgrade') || '';
@@ -71,20 +78,19 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     });
   }
 
-  if (!ctx.env.PRESENCE) {
-    return new Response(JSON.stringify({
-      error: 'presence-unbound',
-      note: 'Presence Durable Object binding is not configured.',
-    }, null, 2), {
-      status: 503,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-      },
-    });
+  if (!USE_DURABLE_OBJECTS || !ctx.env.PRESENCE) {
+    return acceptPresenceWebSocketFallback(ctx.request, PRESENCE_GLOBAL_KEY, 'agent', ctx.env.VISITS);
   }
 
-  const id = ctx.env.PRESENCE.idFromName('global');
-  const stub = ctx.env.PRESENCE.get(id);
-  return stub.fetch(ctx.request);
+  try {
+    const id = ctx.env.PRESENCE.idFromName(PRESENCE_GLOBAL_KEY);
+    const stub = ctx.env.PRESENCE.get(id);
+    const response = await stub.fetch(ctx.request);
+    if (response.status === 101) return response;
+    console.error(`[presence] DO returned ${response.status}; using fallback`);
+    return acceptPresenceWebSocketFallback(ctx.request, PRESENCE_GLOBAL_KEY, 'agent', ctx.env.VISITS);
+  } catch (err) {
+    console.error('[presence] DO fetch failed:', err);
+    return acceptPresenceWebSocketFallback(ctx.request, PRESENCE_GLOBAL_KEY, 'agent', ctx.env.VISITS);
+  }
 };

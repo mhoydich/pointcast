@@ -2,11 +2,10 @@
 /**
  * SitTile — live "/sit · N sitting now" ribbon on the home feed.
  *
- * Server renders hidden. JS opens a WS to /api/sit (or HTTP fallback to
- * /api/sit/presence) and reveals the tile only when N > 0. If the WS
- * never opens, the tile stays hidden — the home feed shouldn't carry a
- * dead pill. The /sit page itself runs standalone with a local fallback;
- * the home tile is intentionally stricter.
+ * Server renders hidden. JS reads /api/sit/presence and reveals the tile
+ * only when N > 0. This is intentionally snapshot-only: the homepage should
+ * observe the sitting room without opening a WebSocket that would count the
+ * observer as one of the sitters.
  */
 ---
 
@@ -36,37 +35,28 @@
     var hasFunctions = host.endsWith('pointcast.xyz') || host.endsWith('.pages.dev');
     if (!hasFunctions) return;
 
-    var ws = null;
-    var connectTimer = window.setTimeout(function () {
-      try { ws && ws.close(); } catch {}
-      // HTTP fallback
+    function readPresence() {
       fetch('/api/sit/presence', { credentials: 'omit' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (!j) return;
-          var n = Number(j.sitting || j.count || 0);
+          var n = sittingFrom(j);
           if (n > 0) show(n);
         })
         .catch(function () {});
-    }, 4000);
+    }
 
-    try {
-      var proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      ws = new WebSocket(proto + host + '/api/sit');
-    } catch { return; }
+    function sittingFrom(j) {
+      if (!j || typeof j !== 'object') return 0;
+      var direct = Number(j.sitting || j.count || 0);
+      if (direct > 0) return direct;
+      var sessions = Array.isArray(j.sessions) ? j.sessions.length : 0;
+      var aggregate = Number(j.humans || 0) + Number(j.agents || 0);
+      return Math.max(sessions, aggregate, 0);
+    }
 
-    ws.addEventListener('open', function () {
-      clearTimeout(connectTimer);
-    });
-    ws.addEventListener('message', function (evt) {
-      try {
-        var msg = JSON.parse(evt.data);
-        if (msg && msg.type === 'presence' && Number(msg.sitting) > 0) {
-          show(Number(msg.sitting));
-        }
-      } catch {}
-    });
-    ws.addEventListener('error', function () { clearTimeout(connectTimer); });
+    readPresence();
+    window.setInterval(readPresence, 15000);
   })();
 </script>
 

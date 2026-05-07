@@ -234,6 +234,9 @@ const VIBE_RATE_WINDOW_MS = 10_000;
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
 const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
+const GLOBAL_ROOM_KEY = 'global:2026-04-29c';
+const ROOM_PREFIX = 'room:2026-04-29c:';
+const SIT_ROOM_KEY = 'room:2026-04-29c:/sit';
 
 function cheapHash(input: string): number {
   let hash = 5381;
@@ -968,14 +971,35 @@ function mergeEdge(current: EdgeContext, incoming: EdgeContext): EdgeContext {
 }
 
 /**
- * Worker fetch handler — every incoming request routes to the singleton
- * PresenceRoom DO instance named 'global'. The DO itself branches on
- * path + Upgrade header (WebSocket vs /snapshot).
+ * Worker fetch handler — routes to the same DO shards as the Pages
+ * wrappers: global presence, per-path cursor/chat rooms, and the /sit room.
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const id = env.PRESENCE.idFromName('global');
+    const url = new URL(request.url);
+    const id = env.PRESENCE.idFromName(roomKeyForRequest(url));
     const stub = env.PRESENCE.get(id);
     return stub.fetch(request);
   },
 };
+
+function roomKeyForRequest(url: URL): string {
+  if (url.pathname.startsWith('/api/sit')) return SIT_ROOM_KEY;
+  if (url.pathname.startsWith('/api/room')) {
+    const raw = url.searchParams.get('url') ?? '/';
+    return ROOM_PREFIX + normalizeRoomPath(raw);
+  }
+  return GLOBAL_ROOM_KEY;
+}
+
+function normalizeRoomPath(input: string): string {
+  let path: string;
+  try {
+    const parsed = new URL(input, 'https://pointcast.xyz');
+    path = parsed.pathname;
+  } catch {
+    path = input.startsWith('/') ? input : `/${input}`;
+  }
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  return path.toLowerCase().slice(0, 120) || '/';
+}
