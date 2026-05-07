@@ -1070,6 +1070,106 @@
       active.byId.lantern = l;
     }
 
+    // ─── typewriter (burst) ──────────────────────────────────────
+    // Letters scatter from a horizontal band — the sound of thinking.
+    function castTypewriter(durationMs) {
+      if (reduce()) return;
+      var chars = 'abcdefghijklmnopqrstuvwxyz.,!?;:—"\''.split('');
+      var count = 22;
+      var bandY = window.innerHeight * 0.42;
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-typewriter-char';
+        s.textContent = chars[Math.floor(Math.random() * chars.length)];
+        var x = window.innerWidth * 0.15 + Math.random() * window.innerWidth * 0.7;
+        var y = bandY + (Math.random() - 0.5) * 80;
+        var drop = (28 + Math.random() * 55).toFixed(1);
+        var rot = ((Math.random() - 0.5) * 28).toFixed(1);
+        var rot2 = (parseFloat(rot) + (Math.random() - 0.5) * 16).toFixed(1);
+        var delay = Math.floor(Math.random() * 360);
+        var dur = Math.floor((durationMs || 2600) * (0.65 + Math.random() * 0.35)) - delay;
+        s.style.cssText =
+          'left:' + x.toFixed(0) + 'px;top:' + y.toFixed(0) + 'px;' +
+          '--tw-drop:' + drop + 'px;--tw-rot:' + rot + 'deg;--tw-rot2:' + rot2 + 'deg;' +
+          'animation:spell-typewriter-drop ' + dur + 'ms ease-out ' + delay + 'ms forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el, d, dl) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, d + dl + 120);
+        })(s, dur, delay);
+      }
+    }
+
+    // ─── kite (companion) ────────────────────────────────────────
+    // Drifts through the upper sky. Gentle oscillating bob.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite drifting across the sky. Click to release.');
+      kite.title = 'click to release the kite';
+      kite.innerHTML = '🪁<span class="spell-kite__tail" aria-hidden="true">〰</span>';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var driftSeconds = Math.max(14, Math.min(38, window.innerWidth / 32));
+      kite.style.cssText =
+        'animation:spell-kite-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + driftSeconds + 's ease-in-out infinite,' +
+        'spell-kite-bob 4.5s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── drift (ambient) ─────────────────────────────────────────
+    // Warm dust motes floating slow and horizontal. Afternoon light.
+    function castDrift() {
+      if (active.byId.drift) return;
+      var drift = document.createElement('button');
+      drift.className = 'spell-drift';
+      drift.type = 'button';
+      drift.setAttribute('aria-label', 'Drifting dust motes. Click to clear.');
+      drift.title = 'click to clear the drift';
+      var html = '';
+      for (var i = 0; i < 20; i++) {
+        var top = (8 + Math.random() * 72).toFixed(1);
+        var delay = -(Math.random() * 22).toFixed(2);
+        var dur2 = (16 + Math.random() * 18).toFixed(2);
+        var size = (3 + Math.random() * 5).toFixed(1);
+        var hue = Math.floor(30 + Math.random() * 38);
+        var op = (0.3 + Math.random() * 0.42).toFixed(2);
+        html += '<span class="spell-drift__mote" style="' +
+          'top:' + top + 'vh;' +
+          'width:' + size + 'px;height:' + size + 'px;' +
+          'animation-delay:' + delay + 's;' +
+          'animation-duration:' + dur2 + 's;' +
+          '--drift-op:' + op + ';' +
+          'background:hsl(' + hue + ',38%,70%);' +
+          '"></span>';
+      }
+      drift.innerHTML = html;
+      drift.addEventListener('click', function () {
+        if (drift.parentNode) drift.parentNode.removeChild(drift);
+        active.byId.drift = null;
+      });
+      $layer.appendChild(drift);
+      active.byId.drift = drift;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1104,7 +1204,10 @@
         case 'spark':     castSpark(2000); break;
         case 'frog':      castFrog(35000); break;
         case 'leaves':    castLeaves(); break;
-        case 'lantern':   castLantern(); break;
+        case 'lantern':    castLantern(); break;
+        case 'typewriter': castTypewriter(2600); break;
+        case 'kite':       castKite(55000); break;
+        case 'drift':      castDrift(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2232,6 +2335,99 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ── typewriter (burst) ──────────────────────────────────── */
+  .spell-typewriter-char {
+    position: fixed;
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--pc-ink, #1a1a1a);
+    pointer-events: none;
+    user-select: none;
+    z-index: 32;
+    opacity: 0;
+  }
+  @keyframes spell-typewriter-drop {
+    0%   { opacity: 0; transform: translateY(-8px) rotate(var(--tw-rot, 0deg)); }
+    10%  { opacity: 1; }
+    80%  { opacity: 0.8; }
+    100% { opacity: 0; transform: translateY(var(--tw-drop, 40px)) rotate(var(--tw-rot2, 4deg)); }
+  }
+
+  /* ── kite (companion) ────────────────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    top: 14%;
+    left: -60px;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: 1.9rem;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+  }
+  .spell-kite__tail {
+    display: inline-block;
+    font-size: 0.75rem;
+    opacity: 0.38;
+    color: #666;
+    transform: rotate(90deg) scaleX(1.3);
+    transform-origin: left center;
+    margin-left: 1px;
+  }
+  .spell-kite[data-dir='rtl'] {
+    animation-name: spell-kite-drift-rtl, spell-kite-bob-rtl !important;
+  }
+  @keyframes spell-kite-drift-ltr {
+    0%   { left: -60px; }
+    100% { left: calc(100vw + 60px); }
+  }
+  @keyframes spell-kite-drift-rtl {
+    0%   { left: calc(100vw + 60px); }
+    100% { left: -60px; }
+  }
+  @keyframes spell-kite-bob {
+    0%, 100% { transform: translateY(0) rotate(-6deg); }
+    35%      { transform: translateY(-14px) rotate(4deg); }
+    68%      { transform: translateY(8px) rotate(-2deg); }
+  }
+  @keyframes spell-kite-bob-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(-6deg); }
+    35%      { transform: scaleX(-1) translateY(-14px) rotate(4deg); }
+    68%      { transform: scaleX(-1) translateY(8px) rotate(-2deg); }
+  }
+
+  /* ── drift (ambient) ─────────────────────────────────────── */
+  .spell-drift {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-drift__mote {
+    position: absolute;
+    border-radius: 50%;
+    animation: spell-drift-float linear infinite;
+    will-change: left, transform;
+  }
+  @keyframes spell-drift-float {
+    0%   { left: -6%; opacity: 0;                      transform: translateY(0); }
+    6%   { opacity: var(--drift-op, 0.45); }
+    50%  {                                              transform: translateY(-14px); }
+    94%  { opacity: var(--drift-op, 0.45); }
+    100% { left: 108%; opacity: 0;                     transform: translateY(0); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2260,7 +2456,9 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-kite,
+    .spell-drift__mote { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2295,5 +2493,10 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-kite,
+    .spell-drift__mote { animation: none; }
+    .spell-kite { left: 50%; transform: translateX(-50%); }
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-drift__mote { display: none; } /* drift motion-only */
   }
 </style>
