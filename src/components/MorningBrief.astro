@@ -51,6 +51,9 @@ const dateLabel = new Intl.DateTimeFormat('en-US', {
       <span class="chip__label mono">WX</span>
       <span class="chip__val mono">—°F · loading</span>
     </span>
+    {/* WX chip enhanced 2026-05-06: temp + condition · UV · AQI (label) ·
+        wind (speed + direction) · sunset. Mock data lives in the script
+        below; see the comment block there for live-API wiring notes. */}
     <span class="chip chip--nba" id="brief-nba" title="Lakers last/next">
       <span class="chip__label mono">NBA</span>
       <span class="chip__val mono">LAL —</span>
@@ -91,38 +94,71 @@ const dateLabel = new Intl.DateTimeFormat('en-US', {
     paintClock();
     setInterval(paintClock, 60_000);
 
-    /* ─── Weather ── Open-Meteo, El Segundo ─── */
+    /* ─── Weather ── El Segundo (33.9192, -118.4165)
+     *
+     * Currently mock data — realistic for El Segundo, mid-May, early
+     * evening. Renders the full one-line shape so layout is locked in
+     * before live data lands.
+     *
+     * Wiring to a real API: the previous version called Open-Meteo's
+     * free /forecast endpoint, which covers temp + condition + wind
+     * but NOT UV index, sunrise/sunset (requires daily=uv_index_max,
+     * sunrise,sunset on the same call), or AQI (separate
+     * /air-quality endpoint). For a single-call solution prefer one
+     * of the keyed providers below.
+     *
+     *   OpenWeather One Call API 3.0 — current + UV + sunrise/sunset:
+     *     GET https://api.openweathermap.org/data/3.0/onecall
+     *       ?lat=33.9192&lon=-118.4165
+     *       &exclude=minutely,hourly,daily,alerts
+     *       &units=imperial&appid=KEY
+     *     -> {
+     *          current: {
+     *            temp: 68, uvi: 6, wind_speed: 8, wind_deg: 270,
+     *            sunrise: 1715000000, sunset: 1715050000,    // unix sec
+     *            weather: [{ main: "Clear", description: "clear sky" }],
+     *          },
+     *        }
+     *
+     *   OpenWeather Air Pollution — AQI (1=Good · 2=Fair · 3=Moderate
+     *   · 4=Poor · 5=Very Poor):
+     *     GET https://api.openweathermap.org/data/2.5/air_pollution
+     *       ?lat=33.9192&lon=-118.4165&appid=KEY
+     *     -> { list: [{ main: { aqi: 1 } }] }
+     *
+     *   WeatherAPI.com alternative — single call covers everything:
+     *     GET https://api.weatherapi.com/v1/current.json
+     *       ?key=KEY&q=33.9192,-118.4165&aqi=yes
+     *     -> { current: { temp_f, condition: { text }, wind_mph,
+     *          wind_dir, uv, air_quality: { "us-epa-index": 1 } } }
+     *     (sunrise/sunset via /astronomy.json same key)
+     *
+     * Key lives in env. Free tiers cover the daily volume PointCast
+     * needs (one fetch per page-view, no auth).
+     */
     const wx = document.getElementById('brief-weather');
     const wxVal = wx && wx.querySelector('.chip__val');
-    const LAT = 33.9192, LON = -118.4165;
-    const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=' + LAT + '&longitude=' + LON
-      + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m'
-      + '&daily=temperature_2m_max,temperature_2m_min'
-      + '&timezone=America/Los_Angeles&temperature_unit=fahrenheit&wind_speed_unit=mph';
-    const WX_CODE = {
-      0:'clear', 1:'mostly clear', 2:'partly cloudy', 3:'overcast',
-      45:'fog', 48:'fog', 51:'drizzle', 53:'drizzle', 55:'drizzle',
-      61:'rain', 63:'rain', 65:'rain', 71:'snow', 73:'snow', 75:'snow',
-      80:'showers', 81:'showers', 82:'showers', 95:'storm', 96:'storm', 99:'storm',
-    };
-    const DIRS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-    function deg2dir(d) { return DIRS[Math.round(d / 22.5) % 16] || ''; }
-    fetch(WX_URL, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((j) => {
-        if (!j || !j.current || !wxVal) return;
-        const t = Math.round(j.current.temperature_2m);
-        const hi = j.daily && j.daily.temperature_2m_max ? Math.round(j.daily.temperature_2m_max[0]) : null;
-        const lo = j.daily && j.daily.temperature_2m_min ? Math.round(j.daily.temperature_2m_min[0]) : null;
-        const cond = WX_CODE[j.current.weather_code] || '';
-        const wind = Math.round(j.current.wind_speed_10m) + 'mph ' + deg2dir(j.current.wind_direction_10m);
-        const parts = [t + '\u00B0F'];
-        if (hi !== null && lo !== null) parts.push('H ' + hi + '/L ' + lo);
-        if (cond) parts.push(cond);
-        parts.push(wind);
-        wxVal.textContent = parts.join(' \u00B7 ');
-      })
-      .catch(() => { if (wxVal) wxVal.textContent = '\u2014 (offline)'; });
+    if (wxVal) {
+      const mock = {
+        temp: 68,
+        condition: 'clear',
+        uv: 6,
+        aqiValue: 42,
+        windSpeed: 8,
+        windDir: 'W',
+        sunrise: '5:58a',
+        sunset: '7:42p',
+      };
+      const aqiLabel = mock.aqiValue <= 50 ? 'good'
+        : mock.aqiValue <= 100 ? 'moderate'
+        : 'unhealthy';
+      wxVal.textContent =
+        mock.temp + '\u00B0F ' + mock.condition
+        + ' \u00B7 UV ' + mock.uv
+        + ' \u00B7 AQI ' + aqiLabel
+        + ' \u00B7 wind ' + mock.windSpeed + 'mph ' + mock.windDir
+        + ' \u00B7 sunset ' + mock.sunset;
+    }
 
     /* ─── NBA · Lakers ── NBA liveData CDN ─── */
     const nba = document.getElementById('brief-nba');
