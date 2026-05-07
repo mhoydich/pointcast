@@ -1,0 +1,1092 @@
+---
+/**
+ * /dispatch-drum — command center for the PointCast drum hub.
+ *
+ * One page that gathers the things scattered across /drum*: the global
+ * tap counter, a portal grid into all 11 drum rooms, a top-10
+ * leaderboard, a quick instrument tap-pad, a now-playing surface,
+ * the five altar tributes, and the visitor's Noun identity.
+ *
+ * Almost entirely client-side. The tap pad and altar buttons render
+ * visual feedback only — comments mark where to wire the real
+ * /api/sounds and /api/altar endpoints. The leaderboard is mock
+ * (frozen snapshot the brief gave us). Global tap count fetches
+ * /api/drum on load and falls back to the same snapshot if the
+ * endpoint isn't reachable.
+ *
+ * Layout: BaseLayout for the warm cream palette. Section CSS uses the
+ * .dd__* prefix so the styles don't leak into other surfaces.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Dispatch Drum';
+const description =
+  'Command center for the PointCast drum hub — global tap counter, multi-room portal, leaderboard, quick tap pad, altar tributes, and your Noun identity.';
+
+// All 11 drum rooms surfaced in the controller grid.
+const ROOMS = [
+  { href: '/drum',          version: 'v1',    label: 'classic',   icon: '◐', sub: 'cookie-clicker · the original' },
+  { href: '/drum-v2',       version: 'v2',    label: 'collab',    icon: '◓', sub: 'pentatonic harmony · token' },
+  { href: '/drum-v3',       version: 'v3',    label: 'spotify',   icon: '♪', sub: 'drum along to a track' },
+  { href: '/drum-v4',       version: 'v4',    label: 'orchestra', icon: '⚇', sub: '12 instruments · 6 genres' },
+  { href: '/drum-v5',       version: 'v5',    label: 'loops',     icon: '↻', sub: 'build · share · url' },
+  { href: '/drum-v6',       version: 'v6',    label: 'choir',     icon: '◈', sub: '12 voices · 4 progressions' },
+  { href: '/drum-v7',       version: 'v7',    label: 'big',       icon: '⬢', sub: '30 nouns · instrument board' },
+  { href: '/drum-v8',       version: 'v8',    label: 'symphony',  icon: '✦', sub: '42 nouns · giant orchestra' },
+  { href: '/drum-v9',       version: 'v9',    label: 'lounge',    icon: '~', sub: 'smooth jazz · sax' },
+  { href: '/drum-apr26',    version: 'apr26', label: 'sequencer', icon: '▦', sub: '8-pad beat machine' },
+  { href: '/drum-trophies', version: '⌐◨-◨',  label: 'trophies',  icon: '★', sub: 'on-chain · tezos', gold: true },
+] as const;
+
+// 12 instruments for the quick tap pad. Each maps to a /api/sounds
+// "button" event seeded by instrument index when wired up.
+const PAD = [
+  { id: 'kick',     label: 'kick',     keyHint: 'Q' },
+  { id: 'snare',    label: 'snare',    keyHint: 'W' },
+  { id: 'hihat',    label: 'hihat',    keyHint: 'E' },
+  { id: 'openhat',  label: 'openhat',  keyHint: 'R' },
+  { id: 'clap',     label: 'clap',     keyHint: 'A' },
+  { id: 'tom',      label: 'tom',      keyHint: 'S' },
+  { id: 'bass',     label: 'bass',     keyHint: 'D' },
+  { id: 'lead',     label: 'lead',     keyHint: 'F' },
+  { id: 'pad',      label: 'pad',      keyHint: 'Z' },
+  { id: 'bell',     label: 'bell',     keyHint: 'X' },
+  { id: 'shaker',   label: 'shaker',   keyHint: 'C' },
+  { id: 'cymbal',   label: 'cymbal',   keyHint: 'V' },
+] as const;
+
+// Five altars from /drum-altars. Each fans out a tribute event with a
+// 5-second cooldown when wired to /api/altar.
+const ALTARS = [
+  { id: 'bell',  label: 'BELL',  glyph: '✺' },
+  { id: 'bowl',  label: 'BOWL',  glyph: '◯' },
+  { id: 'chime', label: 'CHIME', glyph: '☷' },
+  { id: 'gong',  label: 'GONG',  glyph: '◉' },
+  { id: 'drone', label: 'DRONE', glyph: '∞' },
+] as const;
+
+// Frozen leaderboard snapshot per brief. When wired live, swap with a
+// fetch to /api/drum/top → { entries: [{ rank, hash, nounId, count }] }.
+const LEADERBOARD = [
+  { rank:  1, nounId: 253,  count: 7272 },
+  { rank:  2, nounId: 752,  count: 6599 },
+  { rank:  3, nounId: 156,  count: 4398 },
+  { rank:  4, nounId: 886,  count: 4134 },
+  { rank:  5, nounId: 805,  count: 2444 },
+  { rank:  6, nounId: 1008, count:  852 },
+  { rank:  7, nounId: 731,  count:  643 },
+  { rank:  8, nounId: 680,  count:  538 },
+  { rank:  9, nounId: 662,  count:  380 },
+  { rank: 10, nounId: 554,  count:  243 },
+] as const;
+
+// Mock starting global tap count. The page tries /api/drum on mount
+// and updates if it succeeds; otherwise this number stays.
+const GLOBAL_TAPS_FALLBACK = 23_883;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Dispatch Drum',
+  url: 'https://pointcast.xyz/dispatch-drum',
+  description,
+  applicationCategory: 'Dashboard',
+  applicationSubCategory: 'Music',
+};
+---
+
+<BaseLayout title={title} description={description} image="/images/og-drum.png">
+  <main class="dd" id="dd-main">
+
+    <!-- ════ 1 · HEADER + GLOBAL STAT HUD + VISITOR NOUN ════ -->
+    <header class="dd__header">
+      <p class="dd__kicker">DISPATCH DRUM · ROOM 00 · COMMAND CENTER</p>
+      <h1 class="dd__title">Dispatch Drum</h1>
+      <p class="dd__lede">
+        A command center for the drum hub. Watch the rooms, tap the pad, ring an altar.
+      </p>
+
+      <div class="dd__hero">
+        <div class="dd__visitor" aria-label="Your visitor identity">
+          <img
+            id="dd-noun-img"
+            class="dd__noun-img"
+            src="https://noun.pics/42.svg"
+            alt="Your Noun avatar"
+            width="128"
+            height="128"
+            loading="eager"
+          />
+          <div class="dd__visitor-text">
+            <p class="dd__visitor-label">YOUR NOUN</p>
+            <p class="dd__visitor-id">#<span id="dd-noun-id">42</span></p>
+            <button id="dd-noun-shuffle" type="button" class="dd__visitor-shuffle">
+              shuffle ↻
+            </button>
+          </div>
+        </div>
+
+        <div class="dd__stats">
+          <div class="dd__stat dd__stat--big">
+            <p class="dd__stat-label">GLOBAL TAPS</p>
+            <p class="dd__stat-value" id="dd-global">23,883</p>
+            <p class="dd__stat-sub">all surfaces · all time</p>
+          </div>
+          <div class="dd__stat">
+            <p class="dd__stat-label">IN THE HUB</p>
+            <p class="dd__stat-value" id="dd-present">—</p>
+            <p class="dd__stat-sub">
+              <span id="dd-humans">—</span> humans · <span id="dd-agents">—</span> agents
+            </p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ════ 2 · MULTI-ROOM CONTROLLER ════ -->
+    <section class="dd__section" aria-labelledby="dd-rooms-h">
+      <header class="dd__section-head">
+        <h2 id="dd-rooms-h" class="dd__section-title">Rooms</h2>
+        <p class="dd__section-sub">11 drum surfaces · tap a card to enter</p>
+      </header>
+
+      <div class="dd__rooms-grid" role="list">
+        {ROOMS.map((r) => (
+          <a
+            href={r.href}
+            class={`dd__room${r.gold ? ' dd__room--gold' : ''}`}
+            role="listitem"
+          >
+            <div class="dd__room-top">
+              <span class="dd__room-icon" aria-hidden="true">{r.icon}</span>
+              <span class="dd__room-version">{r.version}</span>
+            </div>
+            <p class="dd__room-label">{r.label}</p>
+            <p class="dd__room-sub">{r.sub}</p>
+            <p class="dd__room-cta">ENTER →</p>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <!-- ════ 3 · LEADERBOARD ════ -->
+    <section class="dd__section" aria-labelledby="dd-board-h">
+      <header class="dd__section-head">
+        <h2 id="dd-board-h" class="dd__section-title">Leaderboard</h2>
+        <p class="dd__section-sub">top 10 drummers · all-time</p>
+      </header>
+
+      <ol class="dd__board" role="list">
+        {LEADERBOARD.map((row) => (
+          <li class={`dd__board-row${row.rank === 1 ? ' dd__board-row--gold' : ''}`}>
+            <span class="dd__board-rank">#{row.rank}</span>
+            <img
+              class="dd__board-noun"
+              src={`https://noun.pics/${row.nounId}.svg`}
+              alt={`Noun #${row.nounId}`}
+              width="48"
+              height="48"
+              loading="lazy"
+            />
+            <span class="dd__board-name">Noun #{row.nounId}</span>
+            <span class="dd__board-count">{row.count.toLocaleString()}</span>
+            <span class="dd__board-unit">taps</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <!-- ════ 4 · QUICK TAP PAD ════ -->
+    <section class="dd__section" aria-labelledby="dd-pad-h">
+      <header class="dd__section-head">
+        <h2 id="dd-pad-h" class="dd__section-title">Quick Tap Pad</h2>
+        <p class="dd__section-sub">12 instruments · tap without leaving the page</p>
+      </header>
+
+      <div class="dd__pad" role="group" aria-label="Instrument pad">
+        {PAD.map((p, i) => (
+          <button
+            type="button"
+            class="dd__pad-btn"
+            data-instrument={p.id}
+            data-pad-index={i}
+            aria-label={`Tap ${p.label}`}
+          >
+            <span class="dd__pad-name">{p.label}</span>
+            <span class="dd__pad-key" aria-hidden="true">{p.keyHint}</span>
+          </button>
+        ))}
+      </div>
+      <p class="dd__pad-hint">
+        visual feedback only — wire <code>POST /api/sounds</code>
+        <span class="dd__pad-hint-sub">{`{ type: 'button', seed: <index>, sessionId }`}</span>
+        to broadcast to other listeners.
+      </p>
+    </section>
+
+    <!-- ════ 5 · NOW PLAYING ════ -->
+    <section class="dd__section" aria-labelledby="dd-now-h">
+      <header class="dd__section-head">
+        <h2 id="dd-now-h" class="dd__section-title">Now Playing</h2>
+        <p class="dd__section-sub">spotify track shared on /drum-v3</p>
+      </header>
+
+      <div class="dd__now" id="dd-now">
+        <div class="dd__now-icon" aria-hidden="true">♪</div>
+        <div class="dd__now-text">
+          <p class="dd__now-title" id="dd-now-title">No track playing</p>
+          <p class="dd__now-artist" id="dd-now-artist">
+            open <a href="/drum-v3">/drum-v3</a> to set one
+          </p>
+        </div>
+        <a class="dd__now-cta" href="/drum-v3">SET A TRACK →</a>
+      </div>
+    </section>
+
+    <!-- ════ 6 · ALTARS ════ -->
+    <section class="dd__section" aria-labelledby="dd-altar-h">
+      <header class="dd__section-head">
+        <h2 id="dd-altar-h" class="dd__section-title">Altars</h2>
+        <p class="dd__section-sub">ring an altar · one tribute every 5 seconds</p>
+      </header>
+
+      <div class="dd__altars" role="group" aria-label="Five altars">
+        {ALTARS.map((a) => (
+          <button
+            type="button"
+            class="dd__altar"
+            data-altar={a.id}
+            aria-label={`Ring the ${a.label.toLowerCase()} altar`}
+          >
+            <span class="dd__altar-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="dd__altar-label">{a.label}</span>
+          </button>
+        ))}
+      </div>
+      <p class="dd__altar-status" id="dd-altar-status" aria-live="polite">
+        ready
+      </p>
+    </section>
+
+    <!-- ════ 7 · NOUNS IDENTITY PANEL ════ -->
+    <section class="dd__section dd__section--identity" aria-labelledby="dd-id-h">
+      <header class="dd__section-head">
+        <h2 id="dd-id-h" class="dd__section-title">Your Identity</h2>
+        <p class="dd__section-sub">cc0 noun pixel art · stable per browser</p>
+      </header>
+
+      <div class="dd__identity">
+        <img
+          id="dd-id-img"
+          class="dd__identity-img"
+          src="https://noun.pics/42.svg"
+          alt="Your Noun identity"
+          width="180"
+          height="180"
+          loading="lazy"
+        />
+        <div class="dd__identity-text">
+          <p class="dd__identity-label">YOUR NOUN</p>
+          <p class="dd__identity-id">#<span id="dd-id-num">42</span></p>
+          <p class="dd__identity-sub">
+            stored locally as <code>pc:visitor-noun-id</code>. matches the avatar
+            up top. shuffle there to get a new one — every drum room recognizes the same
+            noun id.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="dd__footer">
+      <p>
+        ⌐◨-◨ this is the dispatch desk. mechanics are live in the rooms — taps and altars
+        here are previews until <code>/api/sounds</code> + <code>/api/altar</code> are
+        wired in.
+      </p>
+    </footer>
+
+  </main>
+</BaseLayout>
+
+<style is:global>
+  /* Dispatch Drum styles — scoped via .dd__* prefix.
+     Inherits the v1 warm cream palette via BaseLayout's global.css. */
+  .dd {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    color: var(--color-ink);
+    font-family: var(--pc-font-sans, 'Inter Variable', 'Inter', system-ui, sans-serif);
+  }
+
+  /* Header */
+  .dd__header {
+    margin-bottom: 36px;
+    padding-bottom: 28px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .dd__kicker {
+    margin: 0 0 12px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    font-weight: 500;
+  }
+  .dd__title {
+    margin: 0 0 8px;
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
+    font-size: clamp(34px, 6vw, 52px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+    line-height: 1.05;
+  }
+  .dd__lede {
+    margin: 0 0 24px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    max-width: 36rem;
+  }
+
+  .dd__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+  @media (max-width: 640px) {
+    .dd__hero { grid-template-columns: 1fr; }
+  }
+
+  .dd__visitor {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    border-radius: 4px;
+  }
+  .dd__noun-img {
+    width: 84px;
+    height: 84px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card-hover);
+    image-rendering: pixelated;
+    border-radius: 2px;
+  }
+  .dd__visitor-text { display: flex; flex-direction: column; gap: 4px; }
+  .dd__visitor-label {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .dd__visitor-id {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-ink);
+    letter-spacing: 0.04em;
+  }
+  .dd__visitor-shuffle {
+    margin-top: 4px;
+    align-self: flex-start;
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--color-rule);
+    color: var(--color-ink-soft);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 100ms, color 100ms, border-color 100ms;
+  }
+  .dd__visitor-shuffle:hover {
+    background: var(--color-warm);
+    color: #fff;
+    border-color: var(--color-warm);
+  }
+
+  .dd__stats {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) { .dd__stats { grid-template-columns: 1fr; } }
+
+  .dd__stat {
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    padding: 14px 16px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .dd__stat-label {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .dd__stat-value {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 700;
+    color: var(--color-warm);
+    letter-spacing: 0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .dd__stat--big .dd__stat-value { color: var(--color-ink); }
+  .dd__stat--big {
+    background: var(--color-card-hover);
+    border-color: var(--color-warm);
+  }
+  .dd__stat-sub {
+    margin: 2px 0 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+
+  /* Sections */
+  .dd__section { margin-top: 40px; }
+  .dd__section-head { margin-bottom: 14px; }
+  .dd__section-title {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--color-ink);
+    letter-spacing: -0.005em;
+  }
+  .dd__section-sub {
+    margin: 4px 0 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+
+  /* Rooms grid */
+  .dd__rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .dd__room {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 14px 12px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--color-ink);
+    transition: transform 90ms, background 90ms, box-shadow 90ms;
+  }
+  .dd__room:hover {
+    background: var(--color-card-hover);
+    transform: translateY(-2px);
+    box-shadow: 3px 3px 0 var(--color-ink);
+    text-decoration: none;
+  }
+  .dd__room--gold {
+    border-color: var(--color-warm);
+    background: linear-gradient(180deg, var(--color-card-hover), var(--color-card));
+  }
+  .dd__room--gold:hover { box-shadow: 3px 3px 0 var(--color-warm); }
+  .dd__room-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .dd__room-icon {
+    font-size: 22px;
+    line-height: 1;
+    color: var(--color-warm);
+  }
+  .dd__room-version {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    background: var(--color-paper);
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--color-rule);
+  }
+  .dd__room-label {
+    margin: 4px 0 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--color-ink);
+    line-height: 1.1;
+  }
+  .dd__room-sub {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-ink-soft);
+  }
+  .dd__room-cta {
+    margin: 8px 0 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    font-weight: 500;
+  }
+
+  /* Leaderboard */
+  .dd__board {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .dd__board-row {
+    display: grid;
+    grid-template-columns: 50px 56px 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .dd__board-row:last-child { border-bottom: 0; }
+  .dd__board-row--gold {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-warm) 18%, transparent), transparent 60%);
+  }
+  .dd__board-rank {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .dd__board-row--gold .dd__board-rank { color: var(--color-warm); }
+  .dd__board-noun {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--color-rule);
+    background: var(--color-card-hover);
+    image-rendering: pixelated;
+    border-radius: 2px;
+  }
+  .dd__board-row--gold .dd__board-noun { border-color: var(--color-warm); border-width: 1.5px; }
+  .dd__board-name {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 13px;
+    color: var(--color-ink);
+    letter-spacing: 0.02em;
+  }
+  .dd__board-count {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .dd__board-row--gold .dd__board-count { color: var(--color-warm); }
+  .dd__board-unit {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  @media (max-width: 480px) {
+    .dd__board-row {
+      grid-template-columns: 36px 40px 1fr auto;
+      gap: 8px;
+      padding: 8px 10px;
+    }
+    .dd__board-noun { width: 40px; height: 40px; }
+    .dd__board-unit { display: none; }
+  }
+
+  /* Quick tap pad */
+  .dd__pad {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 480px) { .dd__pad { grid-template-columns: repeat(3, 1fr); } }
+
+  .dd__pad-btn {
+    appearance: none;
+    cursor: pointer;
+    aspect-ratio: 1.4 / 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    padding: 12px 10px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    color: var(--color-ink);
+    border-radius: 4px;
+    transition: transform 70ms, background 70ms, color 70ms, box-shadow 70ms;
+    text-align: left;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .dd__pad-btn:hover { background: var(--color-card-hover); }
+  .dd__pad-btn:active,
+  .dd__pad-btn.is-flash {
+    background: var(--color-warm);
+    color: #fff;
+    transform: translateY(1px);
+    box-shadow: inset 2px 2px 0 rgba(0,0,0,0.18);
+  }
+  .dd__pad-name {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+  }
+  .dd__pad-key {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    align-self: flex-end;
+    opacity: 0.65;
+  }
+  .dd__pad-btn:active .dd__pad-key,
+  .dd__pad-btn.is-flash .dd__pad-key { color: rgba(255,255,255,0.85); }
+
+  .dd__pad-hint {
+    margin: 12px 0 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+    line-height: 1.6;
+  }
+  .dd__pad-hint code {
+    font-size: 10px;
+    background: var(--color-card-hover);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--color-warm);
+  }
+  .dd__pad-hint-sub {
+    display: block;
+    color: var(--color-ink-soft);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  /* Now playing */
+  .dd__now {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    border-radius: 4px;
+  }
+  .dd__now-icon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-paper);
+    border-radius: 50%;
+    font-size: 20px;
+    color: var(--color-warm);
+  }
+  .dd__now-text { flex: 1; min-width: 0; }
+  .dd__now-title {
+    margin: 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .dd__now-artist {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--color-ink-soft);
+  }
+  .dd__now-cta {
+    flex-shrink: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    text-decoration: none;
+    border: 1px solid var(--color-warm);
+    padding: 6px 10px;
+    border-radius: 3px;
+    transition: background 100ms, color 100ms;
+  }
+  .dd__now-cta:hover { background: var(--color-warm); color: #fff; text-decoration: none; }
+  @media (max-width: 480px) {
+    .dd__now { flex-wrap: wrap; }
+    .dd__now-cta { flex-basis: 100%; text-align: center; }
+  }
+
+  /* Altars */
+  .dd__altars {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 480px) { .dd__altars { grid-template-columns: repeat(3, 1fr); } }
+
+  .dd__altar {
+    appearance: none;
+    cursor: pointer;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1.5px solid var(--color-ink);
+    background: radial-gradient(circle at 50% 35%, var(--color-card-hover), var(--color-card) 70%);
+    color: var(--color-ink);
+    border-radius: 50%;
+    padding: 0;
+    transition: transform 100ms, box-shadow 100ms, background 100ms;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dd__altar:hover {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-warm) 25%, transparent);
+  }
+  .dd__altar:active,
+  .dd__altar.is-ring {
+    background: radial-gradient(circle at 50% 35%, var(--color-warm), color-mix(in srgb, var(--color-warm) 65%, var(--color-ink)) 80%);
+    color: #fff;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-warm) 35%, transparent);
+  }
+  .dd__altar:disabled,
+  .dd__altar.is-cooldown {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .dd__altar-glyph {
+    font-size: 28px;
+    line-height: 1;
+    font-family: 'Lora', Georgia, serif;
+  }
+  .dd__altar-label {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .dd__altar-status {
+    margin: 12px 0 0;
+    text-align: center;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    min-height: 1.2em;
+  }
+
+  /* Identity */
+  .dd__section--identity { margin-top: 48px; }
+  .dd__identity {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    padding: 20px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card);
+    border-radius: 4px;
+  }
+  @media (max-width: 480px) {
+    .dd__identity { flex-direction: column; text-align: center; }
+  }
+  .dd__identity-img {
+    width: 140px;
+    height: 140px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-card-hover);
+    image-rendering: pixelated;
+    border-radius: 4px;
+  }
+  .dd__identity-text { display: flex; flex-direction: column; gap: 6px; }
+  .dd__identity-label {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .dd__identity-id {
+    margin: 0;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--color-warm);
+    letter-spacing: 0.04em;
+  }
+  .dd__identity-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    max-width: 36rem;
+  }
+  .dd__identity-sub code {
+    font-size: 11px;
+    background: var(--color-card-hover);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--color-warm);
+  }
+
+  /* Footer */
+  .dd__footer {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid var(--color-rule);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    color: var(--color-ink-soft);
+  }
+  .dd__footer code {
+    font-size: 10px;
+    background: var(--color-card-hover);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--color-warm);
+  }
+</style>
+
+<script>
+  // ════════════════════════════════════════════════════════════════════
+  // /dispatch-drum — client-side wiring.
+  //
+  // Responsibilities, in order:
+  //   1. Pick / load the visitor's Noun id and paint both avatars.
+  //   2. Try /api/drum for live global tap count; fall back silently.
+  //   3. Mock the "in the hub" presence tile (no real source yet).
+  //   4. Wire the tap pad → visual flash + keyboard shortcuts.
+  //      (Comments mark the POST /api/sounds spot.)
+  //   5. Wire the altar buttons → visual ring + 5s cooldown.
+  //      (Comments mark the POST /api/altar spot.)
+  //
+  // No imports, no bundled deps — runs as a plain inline script.
+  // ════════════════════════════════════════════════════════════════════
+
+  (function () {
+    const NOUN_KEY = 'pc:visitor-noun-id';
+    const NOUN_MAX = 1200; // matches the leaderboard helper in /api/drum/top.ts
+
+    /** Pick a stable noun id for this browser; persist for cross-room id. */
+    function loadOrAssignNoun() {
+      try {
+        const raw = localStorage.getItem(NOUN_KEY);
+        if (raw) {
+          const n = parseInt(raw, 10);
+          if (Number.isFinite(n) && n >= 0 && n < NOUN_MAX) return n;
+        }
+      } catch {}
+      const n = Math.floor(Math.random() * NOUN_MAX);
+      try { localStorage.setItem(NOUN_KEY, String(n)); } catch {}
+      return n;
+    }
+
+    function paintNoun(id) {
+      const url = `https://noun.pics/${id}.svg`;
+      const img1 = document.getElementById('dd-noun-img');
+      const img2 = document.getElementById('dd-id-img');
+      const num1 = document.getElementById('dd-noun-id');
+      const num2 = document.getElementById('dd-id-num');
+      if (img1) img1.setAttribute('src', url);
+      if (img2) img2.setAttribute('src', url);
+      if (num1) num1.textContent = String(id);
+      if (num2) num2.textContent = String(id);
+    }
+
+    let nounId = loadOrAssignNoun();
+    paintNoun(nounId);
+
+    const shuffleBtn = document.getElementById('dd-noun-shuffle');
+    if (shuffleBtn) {
+      shuffleBtn.addEventListener('click', () => {
+        nounId = Math.floor(Math.random() * NOUN_MAX);
+        try { localStorage.setItem(NOUN_KEY, String(nounId)); } catch {}
+        paintNoun(nounId);
+      });
+    }
+
+    // ── Global tap count: live fetch, mock fallback ──────────────────
+    const FALLBACK_GLOBAL = 23883;
+    const globalEl = document.getElementById('dd-global');
+    function paintGlobal(n) {
+      if (globalEl) globalEl.textContent = n.toLocaleString();
+    }
+    paintGlobal(FALLBACK_GLOBAL);
+
+    fetch('/api/drum', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && typeof j.globalTotal === 'number' && j.globalTotal > 0) {
+          paintGlobal(j.globalTotal);
+        }
+      })
+      .catch(() => { /* keep fallback */ });
+
+    // ── Mock presence (humans / agents). No real source wired yet —
+    // /api/visit could feed this; left as a TODO. ────────────────────
+    const presentEl = document.getElementById('dd-present');
+    const humansEl = document.getElementById('dd-humans');
+    const agentsEl = document.getElementById('dd-agents');
+    function paintPresence() {
+      const humans = 1 + Math.floor(Math.random() * 6);   // 1–6
+      const agents = Math.floor(Math.random() * 3);        // 0–2
+      if (humansEl) humansEl.textContent = String(humans);
+      if (agentsEl) agentsEl.textContent = String(agents);
+      if (presentEl) presentEl.textContent = String(humans + agents);
+    }
+    paintPresence();
+    setInterval(paintPresence, 12_000);
+
+    // ── Quick tap pad ────────────────────────────────────────────────
+    const padBtns = Array.from(document.querySelectorAll('.dd__pad-btn'));
+    function flashPad(btn) {
+      btn.classList.add('is-flash');
+      setTimeout(() => btn.classList.remove('is-flash'), 140);
+    }
+    function tapPad(btn) {
+      flashPad(btn);
+      // const instrument = btn.dataset.instrument;
+      // const idx = Number(btn.dataset.padIndex || 0);
+      // To wire live broadcast — POST to /api/sounds:
+      //   fetch('/api/sounds', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({
+      //       type: 'button',
+      //       seed: idx,
+      //       sessionId: getOrCreateSessionId(),
+      //     }),
+      //   });
+      // /api/sounds accepts the 'button' type already (see ALLOWED_TYPES
+      // in functions/api/sounds.ts). The cast surfaces — /drum-tv,
+      // /drum-marquee, /drum-viz — will then flash the matching tile
+      // for any other listener.
+    }
+    padBtns.forEach((btn) => {
+      btn.addEventListener('click', () => tapPad(btn));
+    });
+
+    // Keyboard shortcuts: Q W E R / A S D F / Z X C V → 12 instruments.
+    const keyMap = {
+      KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3,
+      KeyA: 4, KeyS: 5, KeyD: 6, KeyF: 7,
+      KeyZ: 8, KeyX: 9, KeyC: 10, KeyV: 11,
+    };
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const target = e.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      const idx = keyMap[e.code];
+      if (idx === undefined) return;
+      const btn = padBtns[idx];
+      if (btn) tapPad(btn);
+    });
+
+    // ── Altars ───────────────────────────────────────────────────────
+    const altarBtns = Array.from(document.querySelectorAll('.dd__altar'));
+    const altarStatus = document.getElementById('dd-altar-status');
+    let altarLockedUntil = 0;
+
+    function setAltarStatus(text) {
+      if (altarStatus) altarStatus.textContent = text;
+    }
+
+    function ringAltar(btn) {
+      const now = Date.now();
+      if (now < altarLockedUntil) {
+        const wait = Math.ceil((altarLockedUntil - now) / 1000);
+        setAltarStatus(`cooling down · ${wait}s`);
+        return;
+      }
+      altarLockedUntil = now + 5_000;
+      btn.classList.add('is-ring');
+      setTimeout(() => btn.classList.remove('is-ring'), 600);
+
+      const id = btn.dataset.altar || 'altar';
+      setAltarStatus(`✺ rang ${id} · 5s cooldown`);
+      // To wire live tribute — POST to /api/altar:
+      //   fetch('/api/altar', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ kind: id, nounId, sessionId: getOrCreateSessionId() }),
+      //   });
+      // /api/altar tracks tributes in KV under `altar:week:{iso-week}`
+      // and the conductor / lobby surfaces poll the resulting count.
+
+      altarBtns.forEach((b) => b.classList.add('is-cooldown'));
+      setTimeout(() => {
+        altarBtns.forEach((b) => b.classList.remove('is-cooldown'));
+        if (Date.now() >= altarLockedUntil) setAltarStatus('ready');
+      }, 5_000);
+
+      // Tick the cooldown text down each second.
+      const tickAt = Date.now();
+      const tick = setInterval(() => {
+        const remaining = altarLockedUntil - Date.now();
+        if (remaining <= 0) { clearInterval(tick); return; }
+        if (Date.now() - tickAt < 700) return; // skip first tick
+        const s = Math.ceil(remaining / 1000);
+        setAltarStatus(`cooling down · ${s}s`);
+      }, 500);
+    }
+
+    altarBtns.forEach((btn) => {
+      btn.addEventListener('click', () => ringAltar(btn));
+    });
+    setAltarStatus('ready');
+
+  })();
+</script>
