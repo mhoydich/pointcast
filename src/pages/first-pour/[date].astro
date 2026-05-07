@@ -1,0 +1,157 @@
+---
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+export function getStaticPaths() {
+  const dir = join(process.cwd(), 'src/data/first-pour');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
+    .map((name) => {
+      const date = name.replace('.json', '');
+      return {
+        params: { date },
+        props: { pour: JSON.parse(readFileSync(join(dir, name), 'utf8')) },
+      };
+    });
+}
+
+const { pour } = Astro.props;
+---
+
+<BlockLayout
+  title={`First Pour · ${pour.date}`}
+  description={`First Pour for ${pour.date}: markets, Good Feels, PointCast delta, chamber draw.`}
+  image={pour.heroImage}
+>
+  <main class="pour">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><a href="/first-pour/">first-pour</a><span>/{pour.date}</span></nav>
+    <header class="hero">
+      <img src={pour.heroImage} alt={`First Pour morning ritual image for ${pour.date}`} width="1600" height="900" />
+      <div>
+        <p class="kicker">{pour.id}</p>
+        <h1>First Pour · {pour.date}</h1>
+      </div>
+    </header>
+
+    <section class="panels">
+      <article>
+        <h2>Markets pulse</h2>
+        {pour.panels.marketsPulse.map((line) => <p>{line}</p>)}
+      </article>
+      <article>
+        <h2>Good Feels gut</h2>
+        {pour.panels.goodFeelsGut.map((line) => <p>{line}</p>)}
+      </article>
+      <article>
+        <h2>PointCast delta</h2>
+        {pour.panels.pointcastDelta.map((line) => <p>{line}</p>)}
+      </article>
+      <article>
+        <h2>Chamber draw</h2>
+        <p><a href={pour.panels.chamberDraw}>{pour.panels.chamberDraw}</a></p>
+      </article>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .pour {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 24px 18px 80px;
+  }
+
+  .crumb,
+  .kicker {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: #6d665d;
+    font-size: 11px;
+    margin-bottom: 20px;
+  }
+
+  a {
+    color: #8b2b25;
+    text-decoration: none;
+  }
+
+  .hero {
+    position: relative;
+    min-height: min(58vw, 560px);
+    display: grid;
+    align-items: end;
+    overflow: hidden;
+    border: 2px solid #1f1b18;
+    margin-bottom: 18px;
+    background: #1f1b18;
+  }
+
+  .hero img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 30%, rgba(31, 27, 24, .72));
+  }
+
+  .hero div {
+    position: relative;
+    z-index: 1;
+    padding: 28px;
+    color: #fff8e6;
+  }
+
+  .kicker {
+    color: #f1c777;
+    font-size: 12px;
+  }
+
+  h1 {
+    margin: 8px 0 0;
+    font-size: clamp(42px, 8vw, 88px);
+    line-height: .92;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  article {
+    border: 1px solid #d8ccba;
+    background: #fffaf0;
+    padding: 16px;
+  }
+
+  h2 {
+    margin: 0 0 12px;
+    font-size: 24px;
+  }
+
+  p {
+    color: #4c453e;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 760px) {
+    .panels {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

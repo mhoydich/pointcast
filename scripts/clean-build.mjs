@@ -1,9 +1,18 @@
-import { rmSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
+const dist = join(root, 'dist');
 
 // Repeated local Astro builds can leave stale prerender chunks in dist.
-rmSync(join(root, 'dist'), { recursive: true, force: true });
+if (existsSync(dist)) {
+  const stale = join(root, '..', `dist.stale-${Date.now()}`);
+  try {
+    renameSync(dist, stale);
+    console.log(`[clean-build] moved dist -> ${stale}`);
+  } catch {
+    rmSync(dist, { recursive: true, force: true });
+  }
+}

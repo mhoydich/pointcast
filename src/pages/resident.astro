@@ -1,0 +1,209 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'Local resident loop status: current join-system task, last 10 runs, success/fail counts, and compute hours.';
+---
+
+<BlockLayout title="Resident" description={description}>
+  <main class="resident">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>resident</span></nav>
+    <header class="top">
+      <p class="kicker">OVERNIGHT RESIDENT</p>
+      <h1>The machine has a night shift.</h1>
+      <p>{description}</p>
+    </header>
+
+    <section class="stats" data-stats>
+      <article><span>Current task</span><strong data-current>offline</strong></article>
+      <article><span>Success</span><strong data-success>0</strong></article>
+      <article><span>Fail</span><strong data-fail>0</strong></article>
+      <article><span>Compute hours</span><strong data-hours>0</strong></article>
+    </section>
+
+    <section class="runs">
+      <div class="section-head">
+        <h2>Last 10 runs</h2>
+        <p data-status>Start with <code>npm run resident</code> and <code>npm run oracle</code>.</p>
+      </div>
+      <ol data-runs></ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  const set = (sel, text) => {
+    const el = document.querySelector(sel);
+    if (el) el.textContent = text;
+  };
+
+  async function loadStatus() {
+    const response = await fetch('http://127.0.0.1:8789/api/resident/status', { cache: 'no-store' });
+    if (!response.ok) throw new Error('resident endpoint offline');
+    return response.json();
+  }
+
+  function render(status) {
+    const current = status.currentTask ? `${status.currentTask.id} · ${status.currentTask.project}` : status.running ? 'running' : 'idle';
+    set('[data-current]', current);
+    set('[data-success]', String(status.successCount || 0));
+    set('[data-fail]', String(status.failCount || 0));
+    set('[data-hours]', String(status.computeHours || 0));
+    set('[data-status]', status.running ? 'running now' : `updated ${status.updatedAt || 'never'}`);
+    const runs = document.querySelector('[data-runs]');
+    runs.innerHTML = (status.runs || []).map((run) => `
+      <li class="${run.success ? 'ok' : 'fail'}">
+        <a href="${run.blockPath || '#'}">${run.taskId}</a>
+        <span>${run.success ? 'success' : 'fail'} · ${Number(run.minutes || 0).toFixed(1)}m · ${run.finishedAt || ''}</span>
+        <p>${(run.artifacts || []).slice(0, 5).join(', ') || 'no artifacts listed'}</p>
+      </li>
+    `).join('') || '<li class="empty">No resident runs yet.</li>';
+  }
+
+  loadStatus().then(render).catch((error) => {
+    set('[data-status]', error.message + '. Run npm run oracle.');
+  });
+  setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
+</script>
+
+<style>
+  .resident {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 24px 18px 80px;
+  }
+
+  .crumb,
+  .kicker,
+  .stats span,
+  .runs span {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: #6d665d;
+    font-size: 11px;
+    margin-bottom: 20px;
+  }
+
+  .crumb a,
+  .runs a {
+    color: #8b2b25;
+    text-decoration: none;
+  }
+
+  .top {
+    border-bottom: 2px solid #1f1b18;
+    padding-bottom: 20px;
+    margin-bottom: 18px;
+  }
+
+  .kicker {
+    color: #8b2b25;
+    font-size: 12px;
+  }
+
+  h1 {
+    margin: 8px 0 10px;
+    font-size: clamp(42px, 8vw, 84px);
+    line-height: .94;
+  }
+
+  .top p:last-child {
+    color: #4c453e;
+    max-width: 680px;
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .stats article {
+    border: 2px solid #1f1b18;
+    padding: 14px;
+    background: #fffaf0;
+    min-height: 94px;
+  }
+
+  .stats span {
+    display: block;
+    color: #6d665d;
+    font-size: 10px;
+    margin-bottom: 12px;
+  }
+
+  .stats strong {
+    font-size: clamp(22px, 4vw, 38px);
+    line-height: 1;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 16px;
+    border-bottom: 1px solid #d8ccba;
+    margin-bottom: 12px;
+  }
+
+  .section-head h2 {
+    margin: 0 0 10px;
+    font-size: 28px;
+  }
+
+  .section-head p {
+    margin: 0 0 12px;
+    color: #6d665d;
+  }
+
+  ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  li {
+    border-left: 6px solid #5f5e5a;
+    background: #fffdf7;
+    padding: 12px 14px;
+  }
+
+  li.ok {
+    border-left-color: #0f6e56;
+  }
+
+  li.fail {
+    border-left-color: #8a2432;
+  }
+
+  .runs span {
+    display: block;
+    font-size: 10px;
+    color: #6d665d;
+    margin-top: 4px;
+  }
+
+  .runs p {
+    margin: 8px 0 0;
+  }
+
+  @media (max-width: 760px) {
+    .stats {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .section-head {
+      display: block;
+    }
+  }
+</style>

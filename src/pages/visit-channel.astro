@@ -1,0 +1,277 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'Private local voice channel: browser mic to localhost whisper.cpp, local qwen reply, kokoro audio back. No persistent logs.';
+---
+
+<BlockLayout title="Visit Channel" description={description}>
+  <main class="visit">
+    <section class="bell" data-state="idle">
+      <nav><a href="/">PointCast</a><span>/visit-channel</span></nav>
+      <button class="bell-button" type="button" data-mic aria-label="Hold to speak">
+        <span class="halo"></span>
+        <span class="body"></span>
+        <span class="clapper"></span>
+      </button>
+      <div class="copy">
+        <p class="kicker" data-kicker>PRIVATE VISIT CHANNEL</p>
+        <h1 data-title>Hold the bell.</h1>
+        <p data-status>Run <code>npm run oracle</code>. Hold the bell, speak, release.</p>
+      </div>
+      <label class="tone">
+        <span>Tone</span>
+        <select data-tone>
+          <option value="saint">saint</option>
+          <option value="koan">koan</option>
+          <option value="mantra">mantra</option>
+          <option value="weather">weather</option>
+        </select>
+      </label>
+      <p class="reply" data-reply></p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  const root = document.querySelector('.bell');
+  const mic = document.querySelector('[data-mic]');
+  const statusEl = document.querySelector('[data-status]');
+  const replyEl = document.querySelector('[data-reply]');
+  const toneEl = document.querySelector('[data-tone]');
+  let recorder = null;
+  let chunks = [];
+  let stream = null;
+  let audioCtx = null;
+
+  function setState(state, text) {
+    root.dataset.state = state;
+    if (text) statusEl.innerHTML = text;
+  }
+
+  function chime(freq = 392, duration = 0.22) {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, audioCtx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration + 0.02);
+  }
+
+  async function blobToBase64(blob) {
+    const buffer = await blob.arrayBuffer();
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  async function start() {
+    chunks = [];
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.start();
+    chime(330, 0.16);
+    setState('listening', 'listening...');
+  }
+
+  async function stop() {
+    if (!recorder) return;
+    const done = new Promise((resolve) => recorder.addEventListener('stop', resolve, { once: true }));
+    recorder.stop();
+    await done;
+    stream?.getTracks().forEach((track) => track.stop());
+    setState('thinking', 'thinking locally...');
+    const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+    recorder = null;
+    const started = performance.now();
+    try {
+      const response = await fetch('http://127.0.0.1:8789/api/visit-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tone: toneEl.value,
+          mime: blob.type,
+          audioBase64: await blobToBase64(blob),
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json.error || response.statusText);
+      replyEl.textContent = json.reply;
+      setState('speaking', `response in ${Math.round(performance.now() - started)}ms`);
+      chime(523, 0.18);
+      chime(659, 0.20);
+      if (json.tts?.audioBase64) {
+        const audio = new Audio(`data:${json.tts.mime};base64,${json.tts.audioBase64}`);
+        audio.play().catch(() => {});
+      } else if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(json.reply);
+        utterance.rate = 0.92;
+        utterance.pitch = toneEl.value === 'koan' ? 0.82 : 0.95;
+        speechSynthesis.speak(utterance);
+      }
+      setTimeout(() => setState('idle', 'hold the bell, speak, release'), 1400);
+    } catch (error) {
+      setState('idle', `local voice server offline: ${String(error.message || error)}`);
+    }
+  }
+
+  mic.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    start().catch((error) => setState('idle', String(error.message || error)));
+  });
+  window.addEventListener('pointerup', () => stop().catch((error) => setState('idle', String(error.message || error))));
+</script>
+
+<style>
+  .visit {
+    min-height: calc(100vh - 40px);
+    background:
+      radial-gradient(circle at 50% 34%, rgba(238, 204, 127, .22), transparent 34%),
+      linear-gradient(135deg, #16110f, #32221d 48%, #0d1518);
+    color: #fff8e6;
+  }
+
+  .bell {
+    min-height: calc(100vh - 40px);
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    place-items: center;
+    padding: 24px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+  }
+
+  nav {
+    width: min(980px, 100%);
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: #d9b66f;
+  }
+
+  nav a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .bell-button {
+    width: min(56vw, 340px);
+    aspect-ratio: 1;
+    border: 0;
+    background: transparent;
+    position: relative;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .halo {
+    position: absolute;
+    inset: 8%;
+    border-radius: 50%;
+    border: 2px solid rgba(217, 182, 111, .4);
+    box-shadow: 0 0 80px rgba(217, 182, 111, .22);
+    transform: scale(.8);
+    opacity: .5;
+    transition: .22s ease;
+  }
+
+  .body {
+    width: 52%;
+    height: 56%;
+    margin-top: 14%;
+    background: linear-gradient(135deg, #fff1b8, #b77930 55%, #6b381b);
+    clip-path: polygon(38% 0, 62% 0, 68% 18%, 84% 38%, 90% 82%, 100% 100%, 0 100%, 10% 82%, 16% 38%, 32% 18%);
+    box-shadow: inset -20px -18px 0 rgba(76, 37, 18, .2), 0 26px 80px rgba(0, 0, 0, .42);
+  }
+
+  .clapper {
+    position: absolute;
+    width: 13%;
+    height: 13%;
+    border-radius: 50%;
+    background: #e4b15d;
+    top: 70%;
+    box-shadow: 0 10px 20px rgba(0,0,0,.35);
+  }
+
+  .bell[data-state="listening"] .body {
+    filter: drop-shadow(0 0 34px #f2ca76);
+  }
+
+  .bell[data-state="thinking"] .halo {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 120px rgba(95, 158, 160, .42);
+  }
+
+  .bell[data-state="speaking"] .body {
+    animation: ring .52s ease-in-out 2;
+  }
+
+  @keyframes ring {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+  }
+
+  .copy {
+    text-align: center;
+    max-width: 720px;
+  }
+
+  .kicker,
+  .tone span {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: #d9b66f;
+  }
+
+  h1 {
+    margin: 8px 0 10px;
+    font-size: clamp(42px, 9vw, 98px);
+    line-height: .9;
+  }
+
+  .copy p:last-child {
+    color: #ead8b9;
+  }
+
+  .tone {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  select {
+    color: #fff8e6;
+    background: rgba(255,255,255,.08);
+    border: 1px solid #d9b66f;
+    padding: 8px 12px;
+    font: inherit;
+  }
+
+  .reply {
+    min-height: 42px;
+    max-width: 680px;
+    text-align: center;
+    color: #fff8e6;
+    font-size: 18px;
+    line-height: 1.5;
+  }
+</style>

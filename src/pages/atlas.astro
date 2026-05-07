@@ -1,0 +1,330 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'Interactive UMAP scatter of every PointCast block, colored by channel, searchable and linked back to /b/{id}.';
+---
+
+<BlockLayout title="Atlas" description={description}>
+  <main class="atlas">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>atlas</span></nav>
+    <header class="top">
+      <div>
+        <p class="kicker">BLOCK ATLAS</p>
+        <h1>Every block has gravity.</h1>
+      </div>
+      <label class="search">
+        <span>Search</span>
+        <input type="search" placeholder="visit, battler, good feels..." data-search>
+      </label>
+    </header>
+
+    <section class="stage">
+      <canvas data-canvas width="1400" height="900" aria-label="PointCast block atlas"></canvas>
+      <div class="tip" data-tip hidden></div>
+      <div class="empty" data-empty>Run <code>npm run reindex</code> to build the atlas.</div>
+    </section>
+
+    <section class="legend" data-legend></section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  const colors = {
+    FD: '#185FA5', CRT: '#3B6D11', SPN: '#993C1D', GF: '#993556', GDN: '#0F6E56',
+    ESC: '#534AB7', FCT: '#BA7517', VST: '#5F5E5A', BTL: '#8A2432', BDY: '#C15A24'
+  };
+  const channelSlugs = {
+    FD: 'front-door', CRT: 'court', SPN: 'spinning', GF: 'good-feels', GDN: 'garden',
+    ESC: 'el-segundo', FCT: 'faucet', VST: 'visit', BTL: 'battler', BDY: 'birthday'
+  };
+  const canvas = document.querySelector('[data-canvas]');
+  const ctx = canvas.getContext('2d');
+  const search = document.querySelector('[data-search]');
+  const tip = document.querySelector('[data-tip]');
+  const empty = document.querySelector('[data-empty]');
+  const legend = document.querySelector('[data-legend]');
+  let atlas = null;
+  let hover = null;
+  let query = '';
+
+  async function loadAtlas() {
+    for (const url of ['http://127.0.0.1:8789/api/atlas', '/atlas/blocks-atlas.json']) {
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (response.ok) return await response.json();
+      } catch {}
+    }
+    return null;
+  }
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function pointScreen(p) {
+    const rect = canvas.getBoundingClientRect();
+    const pad = 36;
+    return {
+      x: pad + p.x * (rect.width - pad * 2),
+      y: pad + p.y * (rect.height - pad * 2),
+    };
+  }
+
+  function matches(p) {
+    if (!query) return true;
+    const hay = `${p.id} ${p.title} ${p.channel} ${p.type} ${p.mood} ${p.text}`.toLowerCase();
+    return hay.includes(query);
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.fillStyle = '#fffaf0';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = '#1f1b18';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, rect.width - 2, rect.height - 2);
+    if (!atlas) return;
+
+    for (const cluster of atlas.clusters || []) {
+      const p = pointScreen({ x: cluster.cx, y: cluster.cy });
+      ctx.fillStyle = 'rgba(31,27,24,.52)';
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillText(cluster.label, p.x + 10, p.y - 10);
+    }
+
+    for (const p of atlas.points) {
+      const s = pointScreen(p);
+      const hit = matches(p);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, hover && hover.id === p.id ? 7 : hit ? 4.5 : 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = hit ? (colors[p.channel] || '#333') : 'rgba(31,27,24,.12)';
+      ctx.fill();
+      if (hit || (hover && hover.id === p.id)) {
+        ctx.strokeStyle = '#fffaf0';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+  }
+
+  function nearest(event) {
+    if (!atlas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    let best = null;
+    let bestD = 18 * 18;
+    for (const p of atlas.points) {
+      const s = pointScreen(p);
+      const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+      if (d < bestD) {
+        best = p;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  canvas.addEventListener('mousemove', (event) => {
+    hover = nearest(event);
+    if (hover) {
+      const rect = canvas.getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.left = `${event.clientX - rect.left + 14}px`;
+      tip.style.top = `${event.clientY - rect.top + 14}px`;
+      tip.innerHTML = `<strong>${hover.id} · ${hover.title}</strong><span>CH.${hover.channel}</span>`;
+    } else {
+      tip.hidden = true;
+    }
+    draw();
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hover = null;
+    tip.hidden = true;
+    draw();
+  });
+
+  canvas.addEventListener('click', (event) => {
+    const p = nearest(event);
+    if (p) window.location.href = p.path;
+  });
+
+  search.addEventListener('input', () => {
+    query = search.value.trim().toLowerCase();
+    draw();
+  });
+
+  loadAtlas().then((data) => {
+    atlas = data;
+    empty.hidden = Boolean(atlas);
+    if (atlas) {
+      const clusters = atlas.clusters || [];
+      legend.innerHTML = clusters.map((c) => `<a href="/c/${channelSlugs[c.id] || c.id.toLowerCase()}" style="--c:${colors[c.id] || '#333'}"><span></span>${c.label}<b>${c.count}</b></a>`).join('');
+    }
+    resize();
+  });
+  window.addEventListener('resize', resize);
+</script>
+
+<style>
+  .atlas {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px 18px 80px;
+  }
+
+  .crumb,
+  .kicker,
+  .search span,
+  .legend,
+  .tip span {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    margin-bottom: 20px;
+    color: #6d665d;
+  }
+
+  .crumb a {
+    color: #8b2b25;
+    text-decoration: none;
+  }
+
+  .top {
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    align-items: end;
+    border-bottom: 2px solid #1f1b18;
+    padding-bottom: 18px;
+    margin-bottom: 18px;
+  }
+
+  .kicker {
+    font-size: 12px;
+    color: #8b2b25;
+  }
+
+  h1 {
+    margin: 8px 0 0;
+    font-size: clamp(38px, 7vw, 78px);
+    line-height: .95;
+  }
+
+  .search {
+    min-width: min(320px, 100%);
+    display: grid;
+    gap: 6px;
+  }
+
+  .search span {
+    font-size: 10px;
+    color: #6d665d;
+  }
+
+  .search input {
+    border: 2px solid #1f1b18;
+    background: #fffaf0;
+    padding: 10px 12px;
+    font: inherit;
+  }
+
+  .stage {
+    position: relative;
+    min-height: 62vh;
+  }
+
+  canvas {
+    width: 100%;
+    height: 62vh;
+    min-height: 520px;
+    display: block;
+    cursor: crosshair;
+  }
+
+  .empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #6d665d;
+  }
+
+  .tip {
+    position: absolute;
+    pointer-events: none;
+    max-width: 280px;
+    background: #1f1b18;
+    color: #fffaf0;
+    border: 1px solid #fffaf0;
+    padding: 10px;
+    box-shadow: 4px 4px 0 rgba(31, 27, 24, .2);
+  }
+
+  .tip strong {
+    display: block;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .tip span {
+    display: block;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #d8ccba;
+  }
+
+  .legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    font-size: 10px;
+  }
+
+  .legend a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #d8ccba;
+    padding: 7px 9px;
+    color: #1f1b18;
+    text-decoration: none;
+    background: #fffdf7;
+  }
+
+  .legend span {
+    width: 9px;
+    height: 9px;
+    background: var(--c);
+    display: inline-block;
+  }
+
+  .legend b {
+    color: #6d665d;
+    font-weight: 500;
+  }
+
+  @media (max-width: 720px) {
+    .top {
+      display: block;
+    }
+
+    .search {
+      margin-top: 16px;
+    }
+  }
+</style>

@@ -35,10 +35,20 @@ function output(command, args) {
   return result.stdout.trim();
 }
 
-const message = process.argv.slice(2).join(' ').trim();
+const rawArgs = process.argv.slice(2);
+const all = rawArgs.includes('--all');
+const pathArg = rawArgs.find((arg) => arg.startsWith('--paths='));
+const scopedPaths = pathArg
+  ? pathArg.slice('--paths='.length).split(',').map((path) => path.trim()).filter(Boolean)
+  : (process.env.PUBLISH_PATHS || '').split(',').map((path) => path.trim()).filter(Boolean);
+const message = rawArgs
+  .filter((arg) => arg !== '--all' && !arg.startsWith('--paths='))
+  .join(' ')
+  .trim();
 
 if (!message) {
-  console.error('Usage: npm run publish:live -- "feat(scope): describe the ship"');
+  console.error('Usage: npm run publish:live -- --all "feat(scope): describe the ship"');
+  console.error('   or: PUBLISH_PATHS=src/pages/ask.astro,scripts/reindex.mjs npm run publish:live -- "feat(scope): describe the ship"');
   process.exit(1);
 }
 
@@ -71,7 +81,15 @@ run('npm', ['run', 'build']);
 const changed = output('git', ['status', '--porcelain']);
 
 if (changed) {
-  run('git', ['add', '-A']);
+  if (scopedPaths.length > 0) {
+    run('git', ['add', '--', ...scopedPaths]);
+  } else if (all) {
+    run('git', ['add', '-A']);
+  } else {
+    console.error('Refusing to stage all changes implicitly. Pass --all or set PUBLISH_PATHS=file1,file2.');
+    console.error(changed);
+    process.exit(1);
+  }
   const stagedFiles = output('git', ['diff', '--cached', '--name-only']);
 
   if (stagedFiles) {

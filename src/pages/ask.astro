@@ -1,0 +1,214 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'Ask PointCast a question. Local RAG over the block corpus with LanceDB, Ollama embeddings, and inline block citations.';
+---
+
+<BlockLayout
+  title="Ask"
+  description={description}
+  alternates={[{ type: 'application/json', href: '/blocks.json', title: 'Blocks corpus' }]}
+>
+  <main class="ask">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>ask</span></nav>
+    <header class="hero">
+      <p class="kicker">LOCAL ORACLE</p>
+      <h1>Ask the blocks.</h1>
+      <p>{description}</p>
+    </header>
+
+    <form class="panel" data-ask-form>
+      <textarea name="question" rows="4" placeholder="what is the bell wing" required></textarea>
+      <div class="bar">
+        <button type="submit">Ask</button>
+        <span data-status>Run <code>npm run oracle</code> for local answers.</span>
+      </div>
+    </form>
+
+    <section class="answer" data-answer hidden></section>
+    <section class="citations" data-citations hidden></section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  const endpoint = 'http://127.0.0.1:8789/api/ask';
+  const form = document.querySelector('[data-ask-form]');
+  const statusEl = document.querySelector('[data-status]');
+  const answerEl = document.querySelector('[data-answer]');
+  const citationsEl = document.querySelector('[data-citations]');
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function mdLinks(text) {
+    return escapeHtml(text)
+      .replace(/\[([^\]]+)\]\((\/b\/\d{4})\)/g, '<a href="$2">$1</a>')
+      .replace(/(^|[\s(])(\/b\/\d{4})(?=$|[\s.,;:)!?])/g, '$1<a href="$2">$2</a>')
+      .replace(/\n/g, '<br>');
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const question = new FormData(form).get('question');
+    statusEl.textContent = 'retrieving top-8 blocks...';
+    answerEl.hidden = true;
+    citationsEl.hidden = true;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json.error || response.statusText);
+      answerEl.innerHTML = `<h2>Answer</h2><p>${mdLinks(json.answer)}</p>`;
+      citationsEl.innerHTML = `<h2>Retrieved blocks</h2><ol>${json.citations.map((c) => `
+        <li><a href="${escapeHtml(c.path)}">${escapeHtml(c.id)} · ${escapeHtml(c.title)}</a><span>CH.${escapeHtml(c.channel)}</span><p>${escapeHtml(c.snippet)}</p></li>
+      `).join('')}</ol>`;
+      answerEl.hidden = false;
+      citationsEl.hidden = false;
+      statusEl.textContent = json.fallback ? `answered with ${json.model}` : `answered by ${json.model}`;
+    } catch (error) {
+      statusEl.innerHTML = `oracle offline. Start <code>npm run oracle</code>, then run <code>npm run reindex</code>.`;
+      answerEl.innerHTML = `<h2>Local server needed</h2><p>${String(error.message || error)}</p>`;
+      answerEl.hidden = false;
+    }
+  });
+</script>
+
+<style>
+  .ask {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 28px 18px 90px;
+  }
+
+  .crumb,
+  .kicker,
+  .bar span,
+  .citations span {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    color: #6d665d;
+    font-size: 11px;
+    margin-bottom: 22px;
+  }
+
+  .crumb a,
+  .answer a,
+  .citations a {
+    color: #8b2b25;
+    text-decoration: none;
+  }
+
+  .hero {
+    border-bottom: 2px solid #1f1b18;
+    padding-bottom: 22px;
+    margin-bottom: 22px;
+  }
+
+  .kicker {
+    font-size: 12px;
+    color: #8b2b25;
+  }
+
+  h1 {
+    font-size: clamp(44px, 9vw, 92px);
+    line-height: .92;
+    margin: 8px 0 14px;
+  }
+
+  .hero p:last-child {
+    max-width: 650px;
+    font-size: 18px;
+    line-height: 1.5;
+    color: #4c453e;
+  }
+
+  .panel {
+    border: 2px solid #1f1b18;
+    background: #fffaf0;
+    padding: 14px;
+  }
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 0;
+    border-bottom: 1px solid #d8ccba;
+    background: transparent;
+    color: #1f1b18;
+    font: inherit;
+    font-size: 22px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+  }
+
+  button {
+    border: 2px solid #1f1b18;
+    background: #1f1b18;
+    color: #fffaf0;
+    padding: 10px 18px;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .bar span {
+    font-size: 11px;
+    color: #6d665d;
+  }
+
+  .answer,
+  .citations {
+    margin-top: 18px;
+    border: 1px solid #d8ccba;
+    padding: 18px;
+    background: #fffdf7;
+  }
+
+  .answer p {
+    font-size: 18px;
+    line-height: 1.65;
+  }
+
+  .citations ol {
+    padding-left: 22px;
+  }
+
+  .citations li {
+    margin: 0 0 16px;
+  }
+
+  .citations span {
+    display: block;
+    margin-top: 4px;
+    color: #6d665d;
+    font-size: 10px;
+  }
+
+  .citations p {
+    margin: 6px 0 0;
+    color: #4c453e;
+  }
+</style>
