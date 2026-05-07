@@ -1,0 +1,273 @@
+---
+/**
+ * HomeRingPad — interactive tap-to-ring pad on the homepage.
+ *
+ * Mike 2026-05-06 "keep going" → convert the homepage from passive
+ * pulse-strip viewing into active participation. A single circular brass
+ * pad sits above the chamber pulse strips. Tap it → bell tone + POST a
+ * ring to /api/chamber kind=lobby. WingPulseModule polls the lobby every
+ * 4s and flashes its lights when fresh rings land, so a tap on the pad
+ * makes the strip below light up within seconds.
+ *
+ * Sibling family with the *PulseModule.astro components but distinct:
+ * those are read-only display strips, this is an interactive pad.
+ */
+---
+
+<section class="hrp" id="hrp-root" aria-label="Tap to ring the wing">
+  <button class="hrp__pad" id="hrp-pad" type="button" aria-label="Ring the wing">
+    <span class="hrp__core"></span>
+    <span class="hrp__halo" aria-hidden="true"></span>
+  </button>
+  <div class="hrp__caption">
+    <div class="hrp__hed">TAP TO RING THE WING</div>
+    <div class="hrp__sub">
+      <span id="hrp-status">a soft brass bell · everyone in the wing hears it</span>
+    </div>
+  </div>
+  <div class="hrp__count" aria-hidden="true">
+    <span class="hrp__count-num" id="hrp-count">0</span>
+    <span class="hrp__count-label">rings sent</span>
+  </div>
+</section>
+
+<style>
+  .hrp {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 14px;
+    margin: 8px 0 10px;
+    flex-wrap: wrap;
+
+    --hrp-velvet: #1a0820;
+    --hrp-brass: #d4a437;
+    --hrp-brass-deep: #6b4d12;
+    --hrp-flame: #f6c15e;
+    --hrp-flame-tip: #ff6b3a;
+    --hrp-cream: #f4e7c8;
+  }
+
+  .hrp__pad {
+    position: relative;
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    border: 2.5px solid var(--hrp-brass);
+    background:
+      radial-gradient(ellipse 30px 24px at 50% 50%, rgba(246, 193, 94, 0.28) 0%, transparent 70%),
+      linear-gradient(180deg, var(--hrp-velvet) 0%, #08020c 100%);
+    box-shadow:
+      0 6px 22px rgba(246, 193, 94, 0.32),
+      inset 0 0 18px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(246, 193, 94, 0.18);
+    cursor: pointer;
+    transition: transform 140ms cubic-bezier(.2,.7,.3,1), border-color 200ms, box-shadow 200ms;
+    overflow: hidden;
+    flex: none;
+  }
+  .hrp__pad:hover {
+    transform: scale(1.04);
+    border-color: var(--hrp-flame);
+    box-shadow:
+      0 8px 28px rgba(246, 193, 94, 0.55),
+      inset 0 0 22px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(246, 193, 94, 0.30);
+  }
+  .hrp__pad:active { transform: scale(0.96); }
+  .hrp__pad:disabled { cursor: progress; opacity: 0.7; }
+
+  .hrp__core {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 45% 35%, var(--hrp-flame) 0%, var(--hrp-brass) 55%, var(--hrp-brass-deep) 100%);
+    box-shadow:
+      0 0 14px rgba(246, 193, 94, 0.85),
+      inset -2px -2px 4px rgba(0, 0, 0, 0.45);
+    transform: translate(-50%, -50%);
+    animation: hrp-throb 2.0s ease-in-out infinite;
+  }
+  @keyframes hrp-throb {
+    0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: 0.92; }
+    50%      { transform: translate(-50%, -50%) scale(1.10); opacity: 1; }
+  }
+
+  .hrp__halo {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--hrp-flame);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .hrp__pad.hrp__pad--ringing .hrp__halo {
+    animation: hrp-halo 0.7s ease-out 1;
+  }
+  @keyframes hrp-halo {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+  }
+
+  .hrp__caption {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1 1 auto;
+    min-width: 200px;
+  }
+  .hrp__hed {
+    color: var(--hrp-flame);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+  }
+  .hrp__sub {
+    color: var(--hrp-cream);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 11px;
+    opacity: 0.75;
+    letter-spacing: 0.04em;
+  }
+
+  .hrp__count {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding: 4px 10px;
+    border: 1px solid var(--hrp-brass-deep);
+    border-radius: 6px;
+    background: rgba(26, 8, 32, 0.65);
+    min-width: 56px;
+  }
+  .hrp__count-num {
+    color: var(--hrp-flame);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+    transition: transform 200ms;
+  }
+  .hrp__count-num.hrp__count-num--bump { transform: scale(1.25); }
+  .hrp__count-label {
+    color: var(--hrp-cream);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.65;
+  }
+
+  @media (max-width: 720px) {
+    .hrp { gap: 12px; padding: 10px 12px; }
+    .hrp__pad { width: 72px; height: 72px; }
+    .hrp__hed { font-size: 12px; letter-spacing: 0.16em; }
+    .hrp__sub { font-size: 10px; }
+    .hrp__count-num { font-size: 16px; }
+  }
+</style>
+
+<script>
+  const pad = document.getElementById('hrp-pad') as HTMLButtonElement | null;
+  const countEl = document.getElementById('hrp-count');
+  const statusEl = document.getElementById('hrp-status');
+
+  // ---- Web Audio: brass bell (sine + 2.76× partial), borrowed from /drum-relay-2.
+  let actx: AudioContext | null = null;
+  function ctx() {
+    if (!actx) {
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx && actx.state === 'suspended') actx.resume();
+    return actx!;
+  }
+  function playBell(freq: number, gain = 0.20) {
+    const a = ctx(); const t = a.currentTime;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(gain * 0.30, t + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    o.connect(g).connect(a.destination);
+    o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.5);
+    o2.start(t); o2.stop(t + 1.0);
+  }
+
+  // ---- Session id (shared across surfaces).
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) {
+        sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(SID_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return 'sid-anon-' + Date.now();
+    }
+  }
+  const SID = ensureSid();
+
+  // ---- Local count (this visitor, this device, this session).
+  const COUNT_KEY = 'pc:hrp:count';
+  let localCount = 0;
+  try { localCount = Number(sessionStorage.getItem(COUNT_KEY) || '0') | 0; } catch {}
+  if (countEl) countEl.textContent = String(localCount);
+
+  // ---- Ring action.
+  let cooldownUntil = 0;
+  async function ring() {
+    if (!pad) return;
+    const now = Date.now();
+    if (now < cooldownUntil) return;
+    cooldownUntil = now + 320;
+
+    pad.classList.remove('hrp__pad--ringing');
+    void pad.offsetWidth; // force reflow so animation re-fires
+    pad.classList.add('hrp__pad--ringing');
+
+    try { playBell(587.33); } catch {}
+
+    if (countEl) {
+      localCount += 1;
+      countEl.textContent = String(localCount);
+      countEl.classList.remove('hrp__count-num--bump');
+      void (countEl as HTMLElement).offsetWidth;
+      countEl.classList.add('hrp__count-num--bump');
+      setTimeout(() => countEl.classList.remove('hrp__count-num--bump'), 220);
+      try { sessionStorage.setItem(COUNT_KEY, String(localCount)); } catch {}
+    }
+
+    if (statusEl) {
+      const prev = statusEl.textContent;
+      statusEl.textContent = 'rang ✦ wing strip will flash within ~4s';
+      setTimeout(() => { if (statusEl) statusEl.textContent = prev || ''; }, 2200);
+    }
+
+    try {
+      await fetch('/api/chamber', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'lobby', action: 'ring', sessionId: SID }),
+      });
+    } catch {}
+  }
+
+  if (pad) {
+    pad.addEventListener('click', ring);
+    pad.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); ring(); }
+    });
+  }
+</script>
