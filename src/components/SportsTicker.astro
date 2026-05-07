@@ -1,0 +1,238 @@
+---
+/**
+ * SportsTicker — LA-team brief-style ticker (mock data, v0).
+ *
+ * Lives next to the BRIEF cluster on the homepage. Same visual register as
+ * MorningBrief.astro: warm-paper bg, thin rule, mono kicker on top,
+ * colored-left-border chips on the bottom row.
+ *
+ * Five LA teams: Dodgers, Lakers, Kings, Chargers, Galaxy.
+ *
+ * Line formats (per Mike's engagement plan §2.2):
+ *   • completed → "Dodgers 4, Rockies 2 · Final"
+ *   • upcoming  → "Lakers @ Nuggets · 7:30p PT"
+ *   • live      → "Dodgers 3, Padres 1 · Bot 6th"
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WIRING UP LIVE DATA — TODO (replace MOCK_GAMES below)
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * The live version of LASportsTicker.astro already does this with ESPN's
+ * public site.api endpoint:
+ *
+ *   GET https://site.api.espn.com/apis/site/v2/sports/{path}/teams/{teamId}
+ *
+ * Per-team paths and ESPN team IDs:
+ *   Dodgers  → baseball/mlb       team 19
+ *   Lakers   → basketball/nba     team 13
+ *   Kings    → hockey/nhl         team 8
+ *   Chargers → football/nfl       team 24
+ *   Galaxy   → soccer/usa.1       team 187
+ *
+ * The response includes `team.nextEvent[]` and `team.previousEvent[]`,
+ * each with `competitions[0].competitors[]` (score, homeAway, winner)
+ * and `competitions[0].status.type` (state: pre|in|post, shortDetail).
+ *
+ * Recommended: same 10-min sessionStorage cache as LASportsTicker, OR
+ * a server-side route at /api/la-scoreboard.json that aggregates all
+ * five teams behind a single edge cache. The latter is friendlier to
+ * agents reading the page (one fetch instead of five) and matches the
+ * agent-native pattern in BLOCKS.md.
+ *
+ * MLB-specific note: in-progress baseball gives "Bot 6th" / "Top 9th"
+ * via competitions[0].status.type.detail — ESPN's shortDetail truncates
+ * to "Bot 6". For the exact format above, prefer detail over shortDetail
+ * for MLB only.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * EXPECTED JSON SHAPE (when /api/la-scoreboard.json lands)
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ *   {
+ *     "updatedAt": "2026-05-06T19:42:00-07:00",
+ *     "games": [
+ *       {
+ *         "team": "dodgers",       // one of: dodgers|lakers|kings|chargers|galaxy
+ *         "league": "mlb",         // mlb|nba|nhl|nfl|mls
+ *         "status": "post",        // pre|in|post
+ *         "us":   { "name": "Dodgers", "score": 4 },
+ *         "them": { "name": "Rockies", "score": 2 },
+ *         "homeAway": "home",      // home|away — drives @/vs in pre lines
+ *         "detail": "Final",       // "Final" | "Bot 6th" | "7:30p PT" | "Final/OT"
+ *         "startsAt": "2026-05-06T19:10:00-07:00" // ISO; only meaningful for pre
+ *       }
+ *       // …one per team that has a tracked game today
+ *     ]
+ *   }
+ *
+ * Component contract: render the first 4 entries in `games`, in order.
+ * Off-season teams should be omitted by the API rather than rendered as
+ * "no game" — keeps the brief tight.
+ */
+
+type GameStatus = 'pre' | 'in' | 'post';
+
+interface TickerGame {
+  team: 'dodgers' | 'lakers' | 'kings' | 'chargers' | 'galaxy';
+  league: 'mlb' | 'nba' | 'nhl' | 'nfl' | 'mls';
+  status: GameStatus;
+  line: string;          // pre-formatted, ready to print
+  accent: string;        // chip left-border color (team primary)
+  label: string;         // chip kicker, e.g. "MLB · LAD"
+}
+
+const MOCK_GAMES: TickerGame[] = [
+  {
+    team: 'dodgers',
+    league: 'mlb',
+    status: 'in',
+    line: 'Dodgers 3, Padres 1 · Bot 6th',
+    accent: '#005A9C',
+    label: 'MLB · LAD',
+  },
+  {
+    team: 'lakers',
+    league: 'nba',
+    status: 'pre',
+    line: 'Lakers @ Nuggets · 7:30p PT',
+    accent: '#552583',
+    label: 'NBA · LAL',
+  },
+  {
+    team: 'kings',
+    league: 'nhl',
+    status: 'post',
+    line: 'Kings 4, Oilers 2 · Final',
+    accent: '#111111',
+    label: 'NHL · LAK',
+  },
+  {
+    team: 'galaxy',
+    league: 'mls',
+    status: 'post',
+    line: 'Galaxy 1, LAFC 1 · Final',
+    accent: '#00245D',
+    label: 'MLS · LAG',
+  },
+];
+---
+
+<aside class="sports-ticker" aria-label="LA sports ticker">
+  <div class="sports-ticker__row sports-ticker__row--top">
+    <span class="sports-ticker__kicker mono">SPORTS TICKER</span>
+    <span class="sports-ticker__sep mono" aria-hidden="true">·</span>
+    <span class="sports-ticker__locus mono">LA · 5 TEAMS</span>
+    <span class="sports-ticker__sep mono" aria-hidden="true">·</span>
+    <span class="sports-ticker__note mono">MOCK · WIRE ESPN</span>
+  </div>
+  <div class="sports-ticker__row sports-ticker__row--bottom">
+    {MOCK_GAMES.map((g) => (
+      <span
+        class={`chip chip--${g.team} chip--status-${g.status}`}
+        style={`--team-accent: ${g.accent};`}
+        title={`${g.label} · ${g.line}`}
+      >
+        <span class="chip__label mono">{g.label}</span>
+        <span class="chip__val mono">{g.line}</span>
+      </span>
+    ))}
+  </div>
+</aside>
+
+<style>
+  .sports-ticker {
+    margin: 8px 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--pc-rule, #d6d4cd);
+    border-radius: 3px;
+    background: #fbfaf5;
+    display: grid;
+    gap: 6px;
+  }
+  .sports-ticker__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+  }
+  .sports-ticker__row--top {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .sports-ticker__kicker {
+    color: #a02c2c;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+  }
+  .sports-ticker__sep { color: #c8c5bd; }
+  .sports-ticker__locus { color: #5F5E5A; }
+  .sports-ticker__note {
+    color: #8a6a2a;
+    font-weight: 500;
+  }
+
+  .sports-ticker__row--bottom {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border: 1px solid #d6d4cd;
+    border-left: 3px solid var(--team-accent, #12110E);
+    background: #fff;
+    border-radius: 2px;
+    color: #12110E;
+    max-width: 100%;
+  }
+  .chip__label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #5F5E5A;
+    font-weight: 700;
+  }
+  .chip__val {
+    font-size: 11px;
+    color: #12110E;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Live games get a warm highlight so they read first. */
+  .chip--status-in {
+    background: #fff8d6;
+  }
+  .chip--status-in .chip__val {
+    color: #c95c2e;
+    font-weight: 700;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 540px) {
+    .sports-ticker { padding: 10px 12px; gap: 8px; }
+    .sports-ticker__row--bottom {
+      gap: 8px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chip {
+      padding: 7px 10px;
+      flex: 0 0 auto;
+      min-height: 36px;
+    }
+    .chip__label { font-size: 8.5px; }
+    .chip__val { font-size: 11px; }
+  }
+</style>

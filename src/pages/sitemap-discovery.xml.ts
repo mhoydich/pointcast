@@ -16,6 +16,7 @@ const urls = [
   ['https://pointcast.xyz/products', 'daily', '0.85'],
   ['https://pointcast.xyz/products.json', 'daily', '0.85'],
   ['https://pointcast.xyz/api/products.jsonl', 'daily', '0.8'],
+  ['https://pointcast.xyz/api/blocks.jsonl', 'daily', '0.8'],
   ['https://pointcast.xyz/pairings', 'daily', '0.75'],
   ['https://pointcast.xyz/.well-known/agents.json', 'daily', '0.8'],
   ['https://pointcast.xyz/.well-known/ai.json', 'daily', '0.8'],

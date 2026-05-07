@@ -16,6 +16,20 @@ import {
   sourceLabel,
 } from '../lib/commerce';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
+} as const;
+
+export const OPTIONS: APIRoute = async () => {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+};
+
 export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
@@ -34,6 +48,7 @@ export const GET: APIRoute = async () => {
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
+    blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
     count: products.length,
     sources: [
@@ -103,7 +118,9 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
-      'Access-Control-Allow-Origin': '*',
+      'X-Total-Count': String(products.length),
+      'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      ...CORS_HEADERS,
     },
   });
 };

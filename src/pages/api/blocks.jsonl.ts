@@ -12,6 +12,20 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Expose-Headers': 'X-Total-Count',
+} as const;
+
+export const OPTIONS: APIRoute = async () => {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+};
+
 export const GET: APIRoute = async () => {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
     .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
@@ -46,6 +60,7 @@ export const GET: APIRoute = async () => {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(blocks.length),
+      ...CORS_HEADERS,
     },
   });
 };
