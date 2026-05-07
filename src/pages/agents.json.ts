@@ -106,6 +106,9 @@ export const GET: APIRoute = async () => {
         nounsNationRoadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
         nounsNationRoadmapJson: 'https://pointcast.xyz/nouns-nation/roadmap.json',
         nounsNationRoadmapDeck: 'https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx',
+        // 2026-05-07: codex review PR 3 — operating-mode + studio surfaces.
+        operatingMode: 'https://pointcast.xyz/operating-mode.json',
+        operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
       },
       human: {
         home: 'https://pointcast.xyz/',
@@ -252,6 +255,8 @@ export const GET: APIRoute = async () => {
         pointcastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         farcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         investmentThesis: 'https://pointcast.xyz/investment-thesis.json',
+        operatingMode: 'https://pointcast.xyz/operating-mode.json',
+        operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
         blocks: 'https://pointcast.xyz/blocks.json',
         archive: 'https://pointcast.xyz/archive.json',
         editions: 'https://pointcast.xyz/editions.json',
@@ -621,6 +626,22 @@ export const GET: APIRoute = async () => {
           primaryCategory: 'music',
           tags: ['music', 'social', 'nouns', 'tezos', 'drums'],
           note: 'Farcaster mini app manifest for PointCast Drum. Account association is supplied from FARCASTER_ACCOUNT_ASSOCIATION when configured.',
+        },
+        // 2026-05-07: codex review PR 3 — surface Studio publish/read/share for
+        // cold agents. URI templates use RFC 6570 syntax for the {id} param.
+        studio: {
+          editor: 'https://pointcast.xyz/studio',
+          publish: 'https://pointcast.xyz/api/studio-publish',
+          publishMethod: 'POST',
+          publishContentType: 'application/json',
+          publishStatusGet: 'https://pointcast.xyz/api/studio-publish',
+          read: 'https://pointcast.xyz/api/studio-block/{id}',
+          share: 'https://pointcast.xyz/studio/share/{id}',
+          remix: 'https://pointcast.xyz/studio?remix={id}',
+          idShape: '^s-[a-z0-9-]{4,40}$',
+          idExample: 's-movmkwaa-thv2q',
+          retentionDays: 365,
+          note: 'Compositions are stored in PC_STUDIO_KV with a 1-year TTL. The /api/studio-publish GET response includes a service descriptor; a JSON Schema for the POST body is on the follow-up sprint and will land at /studio-publish.schema.json.',
         },
       },
     },
