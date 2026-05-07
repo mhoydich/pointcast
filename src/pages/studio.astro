@@ -177,7 +177,7 @@ const jsonLd = {
 <BlockLayout title={title} description={description} jsonLd={jsonLd}>
   <main class="studio2">
     <header class="studio2__head">
-      <p class="kicker">CH.STUDIO · BLOCK MAKER · v2.2</p>
+      <p class="kicker">CH.STUDIO · BLOCK MAKER · v2.3</p>
       <h1>Drag, type, ship.</h1>
       <p class="dek">
         Pick a template. Drop in Nouns. Stack a headline. Apply a filter,
@@ -912,26 +912,58 @@ const jsonLd = {
   });
 
   document.getElementById('export-publish').addEventListener('click', async () => {
-    notify('rendering png + filing publish request…');
-    const c = await snapshotCanvas(2);
-    if (!c) return;
-    c.toBlob(async blob => {
-      downloadBlob(blob, `pointcast-publish-${Date.now()}.png`);
-      try {
-        const fd = new FormData();
-        fd.append('image', blob, 'studio.png');
-        fd.append('meta', JSON.stringify({
-          tpl: state.tpl, layers: state.layers,
+    notify('publishing composition…');
+    try {
+      const r = await fetch('/api/studio-publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tpl: state.tpl, bg: state.bg,
           filter: state.filter, anim: state.anim,
-        }));
-        const r = await fetch('/api/publish', { method: 'POST', body: fd });
-        if (r.ok) notify('published ✓ — check the wire');
-        else notify('saved png locally — /api/publish not wired yet');
-      } catch (e) {
-        notify('saved png locally — /api/publish unreachable');
+          layers: state.layers,
+        }),
+      });
+      const data = await r.json().catch(() => null);
+      if (r.ok && data && data.viewUrl) {
+        showPublishSuccess(data);
+      } else if (r.status === 503) {
+        notify('publish endpoint not bound yet — saving png locally instead.');
+        const c = await snapshotCanvas(2);
+        c?.toBlob(b => b && downloadBlob(b, `pointcast-publish-${Date.now()}.png`), 'image/png');
+      } else {
+        notify(`publish failed · ${data?.reason || data?.error || r.status}`);
       }
-    }, 'image/png');
+    } catch (e) {
+      notify('publish unreachable — saving png locally instead.');
+      const c = await snapshotCanvas(2);
+      c?.toBlob(b => b && downloadBlob(b, `pointcast-publish-${Date.now()}.png`), 'image/png');
+    }
   });
+
+  function showPublishSuccess(data) {
+    const existing = document.getElementById('publish-success');
+    if (existing) existing.remove();
+    const panel = document.createElement('aside');
+    panel.id = 'publish-success';
+    panel.className = 'publish-success';
+    panel.setAttribute('role', 'status');
+    panel.innerHTML = `
+      <p class="publish-success__head">✓ PUBLISHED · <code>${data.id}</code></p>
+      <div class="publish-success__row">
+        <a class="publish-success__btn publish-success__btn--primary" href="${data.viewUrl}">VIEW SHARE PAGE →</a>
+        <button type="button" class="publish-success__btn" data-copy="${data.viewUrl}">COPY LINK</button>
+        <a class="publish-success__btn" href="${data.remixUrl}">REMIX URL</a>
+        <button type="button" class="publish-success__btn" data-dismiss>×</button>
+      </div>
+      <p class="publish-success__hint">share the link anywhere — paste hits unfurl with an OG card. anyone visiting can hit “Remix” to load the composition into Studio.</p>`;
+    document.querySelector('.export')?.appendChild(panel);
+    panel.querySelector('[data-copy]').addEventListener('click', async (ev) => {
+      const url = ev.currentTarget.dataset.copy;
+      try { await navigator.clipboard.writeText(url); ev.currentTarget.textContent = '✓ COPIED'; }
+      catch (_) { prompt('copy this link:', url); }
+    });
+    panel.querySelector('[data-dismiss]').addEventListener('click', () => panel.remove());
+  }
 
   function notify(msg) {
     exportNote.textContent = msg;
@@ -982,11 +1014,42 @@ const jsonLd = {
   }, true);
   document.getElementById('bg-custom')?.addEventListener('input', () => setTimeout(persist, 0));
 
+  // ---------- REMIX (?remix={id}) ----------
+  async function loadRemix(id) {
+    try {
+      const r = await fetch(`/api/studio-block/${encodeURIComponent(id)}`);
+      if (!r.ok) { notify(`remix · ${id} not found`); return false; }
+      const data = await r.json();
+      if (!data?.composition) return false;
+      applyState(data.composition);
+      applyTemplate();
+      renderLayers();
+      syncControlsToState();
+      persist();
+      notify(`remixing · ${id}`);
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ---------- BOOT ----------
-  if (!loadFromHash() && !loadFromLS()) seedDemo();
-  applyTemplate();
-  renderLayers();
-  syncControlsToState();
+  const remixId = new URL(location.href).searchParams.get('remix');
+  if (remixId) {
+    // Skip the demo, fetch async, fall back to LS/demo if remix fails.
+    seedDemo();
+    applyTemplate();
+    renderLayers();
+    syncControlsToState();
+    loadRemix(remixId);
+  } else if (!loadFromHash() && !loadFromLS()) {
+    seedDemo();
+    applyTemplate();
+    renderLayers();
+    syncControlsToState();
+  } else {
+    applyTemplate();
+    renderLayers();
+    syncControlsToState();
+  }
 })();
 </script>
 
@@ -1349,5 +1412,37 @@ const jsonLd = {
     margin: 10px 0 0;
     font-family: var(--font-mono); font-size: 11px;
     color: var(--color-warm);
+  }
+
+  /* Publish-success panel */
+  .publish-success {
+    margin: 14px 0 0;
+    padding: 14px 16px;
+    border: 1.5px solid var(--color-live, #2f8f5f);
+    background: var(--color-live-bg, #e4efe5);
+    border-radius: 3px;
+  }
+  .publish-success__head {
+    margin: 0 0 8px;
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.16em; color: var(--color-live, #2f8f5f);
+  }
+  .publish-success__head code {
+    font-size: 11px; color: var(--color-ink);
+    background: rgba(255,255,255,0.5); padding: 1px 5px; border-radius: 2px;
+  }
+  .publish-success__row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .publish-success__btn {
+    padding: 6px 10px; border: 1.5px solid var(--color-ink);
+    background: #fff; color: var(--color-ink);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; text-decoration: none; cursor: pointer;
+    border-radius: 2px;
+  }
+  .publish-success__btn:hover { background: var(--color-ink); color: #fff; }
+  .publish-success__btn--primary { background: var(--color-ink); color: #fff; }
+  .publish-success__btn--primary:hover { background: var(--color-warm); border-color: var(--color-warm); }
+  .publish-success__hint {
+    margin: 8px 0 0; font-size: 11px; color: var(--color-ink-soft);
   }
 </style>
