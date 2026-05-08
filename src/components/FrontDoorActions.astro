@@ -1,0 +1,534 @@
+---
+/**
+ * FrontDoorActions - first-viewport action desk for the home page.
+ *
+ * The rest of PointCast has plenty to explore, but the arrival state needs
+ * one unmistakable answer to "what can I do right now?" This component keeps
+ * four tiny loops above the fold and marks progress with the same local
+ * browser receipts used by /today, /polls, /walk, and /ping.
+ */
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import { pickDailyBlock, todayPT } from '../lib/daily';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+
+const daily = pickDailyBlock(blocks);
+const today = todayPT();
+const prettyDay = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date()).toUpperCase();
+
+const polls = (await getCollection('polls', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.openedAt.getTime() - a.data.openedAt.getTime());
+const primaryPoll = polls[0] ?? null;
+const pollSlugs = polls.slice(0, 12).map((poll) => poll.data.slug);
+
+const dailyId = daily?.data.id ?? '';
+const dailyTitle = daily?.data.title ?? "Today's drop";
+const dailyChannel = daily ? CHANNELS[daily.data.channel]?.code ?? daily.data.channel : 'FD';
+const dailyNoun = daily ? daily.data.noun ?? (parseInt(daily.data.id, 10) % 1200) : 137;
+const latestId = blocks[0]?.data.id ?? '';
+---
+
+<section
+  id="action-desk"
+  class="frontdoor-actions"
+  aria-labelledby="frontdoor-actions-title"
+  data-today={today}
+  data-daily-id={dailyId}
+  data-poll-slug={primaryPoll?.data.slug ?? ''}
+  data-poll-slugs={pollSlugs.join(',')}
+>
+  <div class="frontdoor-actions__summary">
+    <p class="frontdoor-actions__kicker mono">{prettyDay} · ACTION DESK</p>
+    <div class="frontdoor-actions__title-row">
+      <img
+        src={`https://noun.pics/${dailyNoun}.svg`}
+        alt=""
+        width="58"
+        height="58"
+        loading="lazy"
+        style="image-rendering: pixelated;"
+      />
+      <h2 id="frontdoor-actions-title">Do one thing on PointCast.</h2>
+    </div>
+    <p class="frontdoor-actions__dek">
+      Four small loops, no login required. Collect, vote, walk, or tell Mike
+      what is missing; your browser keeps the receipt.
+    </p>
+
+    <div class="frontdoor-actions__progress" aria-live="polite">
+      <span class="frontdoor-actions__progress-label mono" id="frontdoor-progress-label">0 / 4 touched</span>
+      <span class="frontdoor-actions__meter" aria-hidden="true">
+        <span id="frontdoor-progress-bar"></span>
+      </span>
+    </div>
+
+    <a class="frontdoor-actions__next mono" id="frontdoor-next" href={daily ? '/today' : (latestId ? `/b/${latestId}` : '/start')}>
+      Start with today's drop
+    </a>
+  </div>
+
+  <div class="frontdoor-actions__grid">
+    {daily && (
+      <article class="frontdoor-action frontdoor-action--collect" data-frontdoor-action="daily" id="frontdoor-daily">
+        <div class="frontdoor-action__top">
+          <span class="frontdoor-action__num mono">01</span>
+          <span class="frontdoor-action__state mono" data-action-state>open</span>
+        </div>
+        <h3>Collect today's drop.</h3>
+        <p>CH.{dailyChannel} · {dailyId} · {dailyTitle}</p>
+        <button type="button" class="frontdoor-action__button mono" id="frontdoor-daily-collect">
+          Collect
+        </button>
+      </article>
+    )}
+
+    {primaryPoll && (
+      <article class="frontdoor-action frontdoor-action--vote" data-frontdoor-action="poll">
+        <div class="frontdoor-action__top">
+          <span class="frontdoor-action__num mono">02</span>
+          <span class="frontdoor-action__state mono" data-action-state>open</span>
+        </div>
+        <h3>Vote a live poll.</h3>
+        <p>{primaryPoll.data.question}</p>
+        <a class="frontdoor-action__button mono" href={`/poll/${primaryPoll.data.slug}`} data-frontdoor-mark="poll">
+          Vote
+        </a>
+      </article>
+    )}
+
+    <article class="frontdoor-action frontdoor-action--walk" data-frontdoor-action="walk">
+      <div class="frontdoor-action__top">
+        <span class="frontdoor-action__num mono">03</span>
+        <span class="frontdoor-action__state mono" data-action-state>open</span>
+      </div>
+      <h3>Take the daily walk.</h3>
+      <p>Five stops through today's useful rooms. Mark each one done when you get there.</p>
+      <a class="frontdoor-action__button mono" href="/walk" data-frontdoor-mark="walk">
+        Walk
+      </a>
+    </article>
+
+    <article class="frontdoor-action frontdoor-action--ping" data-frontdoor-action="ping">
+      <div class="frontdoor-action__top">
+        <span class="frontdoor-action__num mono">04</span>
+        <span class="frontdoor-action__state mono" data-action-state>open</span>
+      </div>
+      <h3>Tell Mike what is missing.</h3>
+      <p>A private note, a topic seed, or the exact reason the page felt inert.</p>
+      <a class="frontdoor-action__button mono" href="/ping" data-frontdoor-mark="ping">
+        Ping
+      </a>
+    </article>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('.frontdoor-actions');
+    if (!root) return;
+
+    var today = root.getAttribute('data-today') || '';
+    var dailyId = root.getAttribute('data-daily-id') || '';
+    var pollSlug = root.getAttribute('data-poll-slug') || '';
+    var pollSlugs = (root.getAttribute('data-poll-slugs') || '').split(',').filter(Boolean);
+    var progressLabel = document.getElementById('frontdoor-progress-label');
+    var progressBar = document.getElementById('frontdoor-progress-bar');
+    var next = document.getElementById('frontdoor-next');
+    var collectButton = document.getElementById('frontdoor-daily-collect');
+
+    function readJson(key, fallback) {
+      try {
+        var raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        var parsed = JSON.parse(raw);
+        return parsed || fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function writeJson(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+
+    function dailyCollection() {
+      var value = readJson('pc:daily:collected', []);
+      return Array.isArray(value) ? value : [];
+    }
+
+    function hasDaily() {
+      if (!dailyId || !today) return false;
+      return dailyCollection().some(function (entry) {
+        return entry && entry.date === today && entry.blockId === dailyId;
+      });
+    }
+
+    function hasPollVote() {
+      try {
+        if (pollSlugs.some(function (slug) { return !!localStorage.getItem('pc:poll:voted:' + slug); })) return true;
+        for (var i = 0; i < localStorage.length; i += 1) {
+          var key = localStorage.key(i) || '';
+          if (key.indexOf('pc:poll:voted:') === 0) return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function hasWalk() {
+      try {
+        if (localStorage.getItem('pc:frontdoor:done:walk') === today) return true;
+        var state = readJson('pc:walk:' + today, {});
+        return !!(state && typeof state === 'object' && Object.keys(state).length > 0);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function hasPing() {
+      try {
+        if (localStorage.getItem('pc:frontdoor:done:ping') === today) return true;
+        var lastSent = localStorage.getItem('pc:ping:lastSent') || '';
+        if (!lastSent) return false;
+        var sentDay = new Date(lastSent).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+        return sentDay === today;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function mark(action) {
+      if (!action) return;
+      try { localStorage.setItem('pc:frontdoor:done:' + action, today || new Date().toISOString().slice(0, 10)); } catch (e) {}
+      paint();
+    }
+
+    function addPassportStamp(id, via) {
+      var stamps = readJson('pc:passport:stamps', {});
+      if (!stamps || typeof stamps !== 'object' || Array.isArray(stamps)) stamps = {};
+      if (!stamps[id]) {
+        stamps[id] = { id: id, at: new Date().toISOString(), via: via || 'front-door' };
+        writeJson('pc:passport:stamps', stamps);
+      }
+    }
+
+    function collectDaily() {
+      if (hasDaily()) {
+        paint();
+        return;
+      }
+      var collection = dailyCollection();
+      collection.push({ date: today, blockId: dailyId, at: new Date().toISOString() });
+      writeJson('pc:daily:collected', collection);
+      try { localStorage.setItem('pc:daily:lastDay', today); } catch (e) {}
+      try {
+        var hello = parseInt(localStorage.getItem('pc:hello:count') || '0', 10) || 0;
+        localStorage.setItem('pc:hello:count', String(hello + 1));
+      } catch (e) {}
+      addPassportStamp('daily-drop', 'front-door-action-desk');
+      mark('daily');
+      try { window.dispatchEvent(new CustomEvent('pc:daily-collected', { detail: { date: today, blockId: dailyId } })); } catch (e) {}
+    }
+
+    var actions = {
+      daily: { done: hasDaily, href: dailyId ? '/today' : '/start', label: "Collect today's drop" },
+      poll: { done: hasPollVote, href: pollSlug ? '/poll/' + pollSlug : '/polls', label: 'Vote a live poll' },
+      walk: { done: hasWalk, href: '/walk', label: 'Take the daily walk' },
+      ping: { done: hasPing, href: '/ping', label: 'Tell Mike what is missing' },
+    };
+
+    function paint() {
+      var keys = ['daily', 'poll', 'walk', 'ping'].filter(function (key) {
+        return !!root.querySelector('[data-frontdoor-action="' + key + '"]');
+      });
+      var done = 0;
+
+      keys.forEach(function (key) {
+        var el = root.querySelector('[data-frontdoor-action="' + key + '"]');
+        var state = el ? el.querySelector('[data-action-state]') : null;
+        var isDone = !!(actions[key] && actions[key].done());
+        if (isDone) done += 1;
+        if (el) el.classList.toggle('is-done', isDone);
+        if (state) state.textContent = isDone ? 'done' : 'open';
+        if (key === 'daily' && collectButton) {
+          collectButton.textContent = isDone ? 'Collected' : 'Collect';
+          collectButton.disabled = isDone;
+        }
+      });
+
+      var total = keys.length || 1;
+      if (progressLabel) progressLabel.textContent = done + ' / ' + total + ' touched';
+      if (progressBar) progressBar.style.width = Math.round((done / total) * 100) + '%';
+
+      if (next) {
+        var nextKey = keys.find(function (key) { return !(actions[key] && actions[key].done()); });
+        if (nextKey && actions[nextKey]) {
+          next.href = actions[nextKey].href;
+          next.textContent = actions[nextKey].label;
+        } else {
+          next.href = '/profile';
+          next.textContent = 'Open your profile receipts';
+        }
+      }
+    }
+
+    if (collectButton) collectButton.addEventListener('click', collectDaily);
+
+    root.querySelectorAll('[data-frontdoor-mark]').forEach(function (link) {
+      link.addEventListener('click', function () {
+        mark(link.getAttribute('data-frontdoor-mark'));
+      });
+    });
+
+    window.addEventListener('pc:voter-updated', paint);
+    window.addEventListener('pc:daily-collected', paint);
+    window.addEventListener('storage', paint);
+    paint();
+  })();
+</script>
+
+<style>
+  .frontdoor-actions {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.34fr) minmax(0, 1fr);
+    gap: 10px;
+    margin: 12px 0;
+    padding: 10px;
+    border: 1.5px solid var(--pc-ink);
+    background:
+      linear-gradient(135deg, rgba(255, 206, 92, 0.2), transparent 34%),
+      linear-gradient(315deg, rgba(24, 95, 165, 0.12), transparent 40%),
+      #fffdf4;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .frontdoor-actions__summary,
+  .frontdoor-action {
+    border: 1px solid var(--pc-ink);
+    background: rgba(255, 255, 255, 0.78);
+  }
+
+  .frontdoor-actions__summary {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+    justify-content: space-between;
+    padding: 14px;
+  }
+
+  .frontdoor-actions__kicker {
+    margin: 0;
+    color: #8a2432;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .frontdoor-actions__title-row {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+  }
+
+  .frontdoor-actions__title-row img {
+    width: 58px;
+    height: 58px;
+    border: 1px solid var(--pc-rule);
+    background: #f1eadc;
+  }
+
+  .frontdoor-actions h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 46px);
+    font-weight: 560;
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .frontdoor-actions__dek {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .frontdoor-actions__progress {
+    display: grid;
+    gap: 7px;
+  }
+
+  .frontdoor-actions__progress-label {
+    color: var(--pc-ink-muted);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .frontdoor-actions__meter {
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid var(--pc-ink);
+    background: #f3f0e7;
+  }
+
+  .frontdoor-actions__meter span {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #2f8f5f, #185fa5, #8a2432);
+    transition: width 180ms ease;
+  }
+
+  .frontdoor-actions__next,
+  .frontdoor-action__button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--pc-ink);
+    background: var(--pc-ink);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .frontdoor-actions__next {
+    padding: 9px 10px;
+  }
+
+  .frontdoor-actions__next:hover,
+  .frontdoor-action__button:hover {
+    color: #ffe7a5;
+    text-decoration: none;
+  }
+
+  .frontdoor-actions__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .frontdoor-action {
+    --action-accent: #185fa5;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 9px;
+    min-width: 0;
+    min-height: 210px;
+    padding: 12px;
+    border-top: 4px solid var(--action-accent);
+  }
+
+  .frontdoor-action--collect { --action-accent: #2f8f5f; }
+  .frontdoor-action--vote { --action-accent: #5f3dc4; }
+  .frontdoor-action--walk { --action-accent: #185fa5; }
+  .frontdoor-action--ping { --action-accent: #8a2432; }
+
+  .frontdoor-action__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .frontdoor-action__num,
+  .frontdoor-action__state {
+    color: var(--action-accent);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .frontdoor-action__state {
+    padding: 2px 5px;
+    border: 1px solid color-mix(in srgb, var(--action-accent) 45%, var(--pc-rule));
+    background: color-mix(in srgb, var(--action-accent) 9%, white);
+  }
+
+  .frontdoor-action h3 {
+    margin: 0;
+    color: var(--pc-ink);
+    font-size: 19px;
+    line-height: 1.08;
+    font-weight: 560;
+    letter-spacing: 0;
+  }
+
+  .frontdoor-action p {
+    margin: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.38;
+  }
+
+  .frontdoor-action__button {
+    width: 100%;
+    padding: 8px 9px;
+    cursor: pointer;
+  }
+
+  button.frontdoor-action__button {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .frontdoor-action__button:disabled,
+  .frontdoor-action.is-done .frontdoor-action__button {
+    background: #f4f8f4;
+    color: #1f6d42;
+    cursor: default;
+  }
+
+  .frontdoor-action.is-done {
+    background:
+      linear-gradient(135deg, rgba(47, 143, 95, 0.12), transparent 42%),
+      rgba(255, 255, 255, 0.8);
+  }
+
+  @media (max-width: 1120px) {
+    .frontdoor-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .frontdoor-actions__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .frontdoor-actions {
+      padding: 8px;
+    }
+
+    .frontdoor-actions__title-row {
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .frontdoor-actions__title-row img {
+      width: 48px;
+      height: 48px;
+    }
+
+    .frontdoor-actions__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .frontdoor-action {
+      min-height: 0;
+    }
+  }
+</style>
