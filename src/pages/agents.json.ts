@@ -158,6 +158,7 @@ export const GET: APIRoute = async () => {
         briefs: 'https://pointcast.xyz/briefs',
         gallery: 'https://pointcast.xyz/gallery',
         ethLegacy: 'https://pointcast.xyz/eth-legacy',
+        mist: 'https://pointcast.xyz/mist',
         glossary: 'https://pointcast.xyz/glossary',
         changelog: 'https://pointcast.xyz/changelog',
         archive: 'https://pointcast.xyz/archive',
