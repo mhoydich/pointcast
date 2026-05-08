@@ -1,0 +1,473 @@
+---
+/**
+ * /noun-cinema-v3 — silent film with 2 branch points + 4 endings + supporting cast.
+ *
+ * v3 over v2:
+ *   - 8 scenes (was 5)
+ *   - 2 branch points = 4 distinct paths
+ *   - 4 named endings: THE PROMISE · THE LETTER · THE ROAD · THE WINDOW
+ *   - Supporting Nouns appear in scenes 4-6 (a friend, a stranger, a passerby)
+ *   - Dialogue cards between scenes (italicized titlecard quotes)
+ *   - Endings collection saved to localStorage — see which you've seen
+ *
+ * Path tree:
+ *   1.  THE MEET                        (linear)
+ *   2.  THE DANCE                       (linear)
+ *   3.  ─── BRANCH 1 ───
+ *   3a. CLOSER STILL    (chose close)   3b. THE DRIFT       (chose drift)
+ *   4a. A QUESTION                      4b. A WINDOW
+ *   5.  ─── BRANCH 2 ───
+ *   5a-i.  THE WORD                     5b-i.  THE ROAD
+ *   5a-ii. THE LETTER                   5b-ii. THE WAIT
+ *   6.  THE ENDING (named per path)
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Noun Cinema v3 · 4 endings · supporting cast · PointCast';
+const description = 'Two Nouns + supporting cast. 8 scenes, 2 branch points, 4 named endings. Collect them all.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="ncn3">
+    <header class="ncn3__header">
+      <h1 class="ncn3__title">NOUN CINEMA · V3</h1>
+      <p class="ncn3__tag">8 scenes · 2 choices · 4 endings · find them all</p>
+    </header>
+
+    <section class="ncn3__collection" id="ncn3-collection">
+      <span class="ncn3__sec-label">YOUR COLLECTION</span>
+      <span class="ncn3__ending" data-ending="promise">🤝 THE PROMISE</span>
+      <span class="ncn3__ending" data-ending="letter">✉ THE LETTER</span>
+      <span class="ncn3__ending" data-ending="road">🛤 THE ROAD</span>
+      <span class="ncn3__ending" data-ending="window">🪟 THE WINDOW</span>
+    </section>
+
+    <section class="ncn3__theatre" id="ncn3-theatre" data-state="idle" data-scene="0" data-path1="" data-path2="">
+      <svg class="ncn3__layer ncn3__sky" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="ncn3-sky-day" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9ed6f0"/><stop offset="60%" stop-color="#d6e8ee"/><stop offset="100%" stop-color="#f5d9b8"/></linearGradient>
+          <linearGradient id="ncn3-sky-warm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5d9b8"/><stop offset="55%" stop-color="#e8b3c0"/><stop offset="100%" stop-color="#f4d35e"/></linearGradient>
+          <linearGradient id="ncn3-sky-cool" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a2860"/><stop offset="55%" stop-color="#5fbafd"/><stop offset="100%" stop-color="#9ed6f0"/></linearGradient>
+          <linearGradient id="ncn3-sky-dawn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c47081"/><stop offset="55%" stop-color="#f6c15e"/><stop offset="100%" stop-color="#fff7c8"/></linearGradient>
+          <linearGradient id="ncn3-sky-night" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0418"/><stop offset="55%" stop-color="#3a2860"/><stop offset="100%" stop-color="#6f59c0"/></linearGradient>
+          <linearGradient id="ncn3-sky-rain" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5a574e"/><stop offset="55%" stop-color="#88715a"/><stop offset="100%" stop-color="#cfc6df"/></linearGradient>
+        </defs>
+        <rect width="320" height="180" fill="url(#ncn3-sky-day)" id="ncn3-sky-rect"/>
+      </svg>
+      <div class="ncn3__layer ncn3__bg" aria-hidden="true"><img src="/images/main-street-pixel.svg" alt="" width="100%" height="100%" style="image-rendering: pixelated;"/></div>
+      <div class="ncn3__layer ncn3__mid" aria-hidden="true"><img src="/images/main-street-pixel.svg" alt="" width="100%" height="100%" style="image-rendering: pixelated;"/></div>
+
+      <div class="ncn3__nouns" id="ncn3-nouns">
+        <div class="ncn3__noun ncn3__noun--a" id="ncn3-a"><img src="https://noun.pics/523.svg" alt="" width="120" height="120"/></div>
+        <div class="ncn3__noun ncn3__noun--b" id="ncn3-b"><img src="https://noun.pics/1042.svg" alt="" width="120" height="120"/></div>
+        <div class="ncn3__noun ncn3__noun--support" id="ncn3-support" hidden><img src="" alt="" width="100" height="100"/></div>
+      </div>
+
+      <div class="ncn3__card" id="ncn3-card" hidden>
+        <div class="ncn3__card-frame">
+          <p class="ncn3__card-roman" id="ncn3-card-roman">I.</p>
+          <h2 class="ncn3__card-title" id="ncn3-card-title">— THE MEET —</h2>
+          <p class="ncn3__card-by" id="ncn3-card-by">a noun cinema short · in eight parts</p>
+        </div>
+      </div>
+
+      <div class="ncn3__dialogue" id="ncn3-dialogue" hidden>
+        <div class="ncn3__dialogue-frame">
+          <p class="ncn3__dialogue-text" id="ncn3-dialogue-text">"…"</p>
+        </div>
+      </div>
+
+      <div class="ncn3__choice" id="ncn3-choice" hidden>
+        <div class="ncn3__choice-frame">
+          <h2 class="ncn3__choice-title" id="ncn3-choice-title">— A CROSSROADS —</h2>
+          <p class="ncn3__choice-prompt" id="ncn3-choice-prompt">After the dance, what now?</p>
+          <div class="ncn3__choice-row" id="ncn3-choice-row">
+            <button class="ncn3__choice-btn" data-choice="a" type="button"><span class="ncn3__choice-emoji" id="ncn3-choice-a-emoji">🌅</span><span class="ncn3__choice-text" id="ncn3-choice-a-text">STAY CLOSE</span><span class="ncn3__choice-sub" id="ncn3-choice-a-sub">a warm path</span></button>
+            <button class="ncn3__choice-btn" data-choice="b" type="button"><span class="ncn3__choice-emoji" id="ncn3-choice-b-emoji">🌌</span><span class="ncn3__choice-text" id="ncn3-choice-b-text">DRIFT APART</span><span class="ncn3__choice-sub" id="ncn3-choice-b-sub">a cool path</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ncn3__ending-card" id="ncn3-ending-card" hidden>
+        <div class="ncn3__ending-frame">
+          <p class="ncn3__ending-fin">— FIN —</p>
+          <h2 class="ncn3__ending-title" id="ncn3-ending-title">THE PROMISE</h2>
+          <p class="ncn3__ending-emoji" id="ncn3-ending-emoji">🤝</p>
+          <p class="ncn3__ending-line" id="ncn3-ending-line">they kept it</p>
+          <p class="ncn3__ending-meta" id="ncn3-ending-meta">1 / 4 endings collected</p>
+          <button class="ncn3__btn" id="ncn3-ending-again" type="button">↻ RESTART</button>
+        </div>
+      </div>
+
+      <div class="ncn3__letterbox ncn3__letterbox--top" aria-hidden="true"></div>
+      <div class="ncn3__letterbox ncn3__letterbox--bottom" aria-hidden="true"></div>
+
+      <div class="ncn3__hud" aria-hidden="true">
+        <span>SCENE <span id="ncn3-hud-scene">— / 8</span></span>
+        <span id="ncn3-hud-state">— idle —</span>
+      </div>
+    </section>
+
+    <section class="ncn3__panel">
+      <button class="ncn3__btn ncn3__btn--big" id="ncn3-toggle" type="button">▶ START THE FILM</button>
+      <button class="ncn3__btn" id="ncn3-restart" type="button">↺ RESTART</button>
+      <span class="ncn3__path-tag" id="ncn3-path-tag">— path: undecided —</span>
+    </section>
+
+    <section class="ncn3__siblings">
+      <a href="/noun-cinema">v1</a>
+      <a href="/noun-cinema-v2">v2</a>
+      <a href="/drum-race-v3">/drum-race-v3</a>
+      <a href="/drum-audiophile-v3">/drum-audiophile-v3</a>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .ncn3 { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #fffaf0; background: #0a0418; min-height: 100vh; }
+  .ncn3__header { text-align: center; margin: 18px 0 14px; }
+  .ncn3__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6.5vw, 64px); letter-spacing: 0.20em; margin: 0; color: #f6c15e; text-shadow: 0 0 18px rgba(246, 193, 94, 0.45); }
+  .ncn3__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 6px 0 0; }
+
+  .ncn3__sec-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.20em; text-transform: uppercase; color: #d4a437; }
+  .ncn3__collection { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 14px; }
+  .ncn3__ending { padding: 6px 10px; border: 1.5px solid #5a3422; background: #1a0820; color: #5a3422; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; opacity: 0.55; transition: opacity 200ms, color 200ms, border-color 200ms; }
+  .ncn3__ending--seen { color: #f6c15e; border-color: #d4a437; opacity: 1; box-shadow: 0 0 0 1px #d4a437; }
+
+  .ncn3__theatre { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 4px solid #1a0820; box-shadow: 6px 6px 0 0 #d4a437, 12px 12px 0 0 #1a0820; background: #050310; }
+  .ncn3__layer { position: absolute; inset: 0; }
+  .ncn3__sky { z-index: 1; }
+  .ncn3__sky svg { width: 100%; height: 100%; transition: opacity 1.2s; }
+  .ncn3__bg { z-index: 2; width: 200%; animation: ncn3-scroll 32s linear infinite; animation-play-state: paused; }
+  .ncn3__mid { z-index: 3; width: 200%; animation: ncn3-scroll 16s linear infinite; animation-play-state: paused; }
+  .ncn3__bg img, .ncn3__mid img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  .ncn3__theatre[data-state='playing'] .ncn3__bg, .ncn3__theatre[data-state='playing'] .ncn3__mid { animation-play-state: running; }
+  @keyframes ncn3-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+  .ncn3__nouns { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+  .ncn3__noun { position: absolute; bottom: 12%; width: clamp(80px, 10vw, 130px); height: clamp(80px, 10vw, 130px); transition: transform 1.6s cubic-bezier(.25,.1,.25,1), filter 1.2s, opacity 1s; image-rendering: pixelated; filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)); left: calc(50% - 70px); }
+  .ncn3__noun--support { width: clamp(70px, 8vw, 100px); height: clamp(70px, 8vw, 100px); opacity: 0; }
+  .ncn3__noun--support:not([hidden]) { opacity: 1; }
+  .ncn3__noun img { width: 100%; height: 100%; image-rendering: pixelated; }
+
+  /* Scene positions */
+  .ncn3__theatre[data-scene='0'] .ncn3__noun--a { transform: translateX(-30vw); }
+  .ncn3__theatre[data-scene='0'] .ncn3__noun--b { transform: translateX( 30vw); }
+  .ncn3__theatre[data-scene='1'] .ncn3__noun--a { transform: translateX(-15vw); animation: ncn3-bob 0.6s ease-in-out infinite alternate; }
+  .ncn3__theatre[data-scene='1'] .ncn3__noun--b { transform: translateX( 15vw); animation: ncn3-bob 0.6s ease-in-out infinite alternate-reverse; }
+  /* Path 1 = close */
+  .ncn3__theatre[data-path1='close'][data-scene='2'] .ncn3__noun--a { transform: translateX(-4vw); }
+  .ncn3__theatre[data-path1='close'][data-scene='2'] .ncn3__noun--b { transform: translateX( 4vw); }
+  .ncn3__theatre[data-path1='close'][data-scene='3'] .ncn3__noun--a { transform: translateX(-2vw) scale(1.04); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(246, 193, 94, 0.45)); }
+  .ncn3__theatre[data-path1='close'][data-scene='3'] .ncn3__noun--b { transform: translateX( 2vw) scale(1.04); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(246, 193, 94, 0.45)); }
+  /* Path 1 = drift */
+  .ncn3__theatre[data-path1='drift'][data-scene='2'] .ncn3__noun--a { transform: translateX(-50vw) translateY(2px); }
+  .ncn3__theatre[data-path1='drift'][data-scene='2'] .ncn3__noun--b { transform: translateX( 50vw) translateY(2px); }
+  .ncn3__theatre[data-path1='drift'][data-scene='3'] .ncn3__noun--a { transform: translateX(-25vw); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(95, 186, 253, 0.45)); }
+  .ncn3__theatre[data-path1='drift'][data-scene='3'] .ncn3__noun--b { transform: translateX( 25vw); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(95, 186, 253, 0.45)); }
+  /* Path 2 endings (scenes 4-6) */
+  .ncn3__theatre[data-scene='4'] .ncn3__noun--support:not([hidden]) { left: 70%; transform: translateX(0); }
+  .ncn3__theatre[data-path1='close'][data-path2='word'][data-scene='5'] .ncn3__noun--a,
+  .ncn3__theatre[data-path1='close'][data-path2='word'][data-scene='5'] .ncn3__noun--b { transform: translateX(0); }
+  .ncn3__theatre[data-path1='close'][data-path2='letter'][data-scene='5'] .ncn3__noun--a { transform: translateX(-40vw); }
+  .ncn3__theatre[data-path1='close'][data-path2='letter'][data-scene='5'] .ncn3__noun--b { transform: translateX(0); }
+  .ncn3__theatre[data-path1='drift'][data-path2='road'][data-scene='5'] .ncn3__noun--a { transform: translateX(-60vw); opacity: 0.7; }
+  .ncn3__theatre[data-path1='drift'][data-path2='road'][data-scene='5'] .ncn3__noun--b { transform: translateX( 8vw); }
+  .ncn3__theatre[data-path1='drift'][data-path2='wait'][data-scene='5'] .ncn3__noun--a { transform: translateX(-8vw); }
+  .ncn3__theatre[data-path1='drift'][data-path2='wait'][data-scene='5'] .ncn3__noun--b { transform: translateX( 50vw); }
+  /* Final scene 6 */
+  .ncn3__theatre[data-scene='6'] .ncn3__noun--a { transform: translateX(-2vw) scale(1.05); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 22px rgba(246, 193, 94, 0.55)); }
+  .ncn3__theatre[data-scene='6'] .ncn3__noun--b { transform: translateX( 2vw) scale(1.05); filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)) drop-shadow(0 0 22px rgba(246, 193, 94, 0.55)); }
+  @keyframes ncn3-bob { 0% { transform-origin: 50% 100%; transform: translateX(-15vw) translateY(0) scale(1); } 100% { transform: translateX(-15vw) translateY(-10px) scale(1.04); } }
+
+  .ncn3__card, .ncn3__choice, .ncn3__dialogue, .ncn3__ending-card { position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: 30px; transition: opacity 600ms; }
+  .ncn3__card { background: rgba(10, 4, 24, 0.78); pointer-events: none; }
+  .ncn3__choice { background: rgba(10, 4, 24, 0.85); pointer-events: auto; z-index: 9; }
+  .ncn3__dialogue { background: rgba(10, 4, 24, 0.55); pointer-events: none; z-index: 7; }
+  .ncn3__ending-card { background: rgba(10, 4, 24, 0.92); pointer-events: auto; z-index: 10; }
+  .ncn3__card[hidden], .ncn3__choice[hidden], .ncn3__dialogue[hidden], .ncn3__ending-card[hidden] { opacity: 0; pointer-events: none; }
+  .ncn3__card:not([hidden]), .ncn3__choice:not([hidden]), .ncn3__dialogue:not([hidden]), .ncn3__ending-card:not([hidden]) { opacity: 1; }
+
+  .ncn3__card-frame, .ncn3__dialogue-frame, .ncn3__choice-frame, .ncn3__ending-frame { padding: 30px 40px; border: 4px double #d4a437; background: #1a0820; text-align: center; box-shadow: 0 0 0 4px #050310, 0 0 30px rgba(212, 164, 55, 0.45); max-width: 80%; }
+  .ncn3__card-roman, .ncn3__ending-fin { font-family: Georgia, serif; font-size: clamp(18px, 3vw, 30px); margin: 0 0 6px; color: #d4a437; font-style: italic; }
+  .ncn3__card-title { font-family: Georgia, serif; font-size: clamp(22px, 4vw, 44px); letter-spacing: 0.18em; margin: 0 0 10px; color: #f6c15e; text-transform: uppercase; }
+  .ncn3__card-by { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.20em; color: #cfc6df; margin: 0; text-transform: uppercase; }
+
+  .ncn3__dialogue-text { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(18px, 3vw, 30px); font-style: italic; line-height: 1.4; margin: 0; color: #f4e7c8; }
+
+  .ncn3__choice-title { font-family: Georgia, serif; font-size: clamp(22px, 3.5vw, 32px); letter-spacing: 0.18em; margin: 0 0 6px; color: #f6c15e; text-transform: uppercase; }
+  .ncn3__choice-prompt { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #cfc6df; margin: 0 0 18px; }
+  .ncn3__choice-row { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+  .ncn3__choice-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 22px; border: 2px solid #d4a437; background: #050310; color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; cursor: pointer; min-width: 160px; transition: transform 100ms, border-color 200ms; }
+  .ncn3__choice-btn:hover { transform: translateY(-2px); border-color: #f6c15e; box-shadow: 0 4px 16px rgba(246, 193, 94, 0.35); }
+  .ncn3__choice-emoji { font-size: 32px; }
+  .ncn3__choice-text { font-size: 14px; font-weight: 800; letter-spacing: 0.20em; }
+  .ncn3__choice-sub { font-size: 9px; letter-spacing: 0.18em; color: #cfc6df; opacity: 0.75; }
+
+  .ncn3__ending-frame { animation: ncn3-end-pop 0.8s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes ncn3-end-pop { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .ncn3__ending-title { font-family: Georgia, serif; font-size: clamp(28px, 5vw, 56px); letter-spacing: 0.20em; margin: 6px 0 8px; color: #f6c15e; text-transform: uppercase; text-shadow: 0 0 20px rgba(246, 193, 94, 0.45); }
+  .ncn3__ending-emoji { font-size: 48px; margin: 8px 0; }
+  .ncn3__ending-line { font-family: Georgia, serif; font-size: clamp(16px, 2.4vw, 22px); font-style: italic; color: #f4e7c8; margin: 4px 0 14px; }
+  .ncn3__ending-meta { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.18em; color: #d4a437; margin: 0 0 14px; text-transform: uppercase; }
+
+  .ncn3__letterbox { position: absolute; left: 0; right: 0; height: 8%; background: #050310; z-index: 6; pointer-events: none; }
+  .ncn3__letterbox--top { top: 0; } .ncn3__letterbox--bottom { bottom: 0; }
+  .ncn3__hud { position: absolute; top: 12%; right: 12px; z-index: 9; display: inline-flex; gap: 12px; padding: 4px 10px; background: rgba(10, 4, 24, 0.85); border: 1px solid #d4a437; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #f6c15e; }
+
+  .ncn3__panel { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+  .ncn3__btn { padding: 10px 18px; border: 2px solid #d4a437; background: linear-gradient(180deg, #1a0820, #050310); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; cursor: pointer; transition: transform 100ms, border-color 200ms; }
+  .ncn3__btn:hover { transform: translateY(-1px); border-color: #f6c15e; }
+  .ncn3__btn--big { padding: 12px 22px; font-size: 14px; }
+  .ncn3__path-tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; opacity: 0.85; }
+
+  .ncn3__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .ncn3__siblings a { color: #d4a437; text-decoration: none; }
+  .ncn3__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+
+  @media (prefers-reduced-motion: reduce) { .ncn3__bg, .ncn3__mid, .ncn3__noun, .ncn3__ending-frame { animation: none !important; transition: none !important; } }
+</style>
+
+<script>
+  type EndingId = 'promise' | 'letter' | 'road' | 'window';
+  interface Scene { roman: string; title: string; sky: string; bpm: number; dur: number; pat: { kick: number[]; snare: number[]; bell: number[]; lead: number[]; pad: number[] }; support?: number; dialogue?: string; }
+  interface Ending { id: EndingId; title: string; emoji: string; line: string; sky: string; bpm: number; }
+
+  // Scenes 0,1 = pre-branch1
+  const PRE: Scene[] = [
+    { roman: 'I.',  title: '— THE MEET —',  sky: 'day',  bpm: 90,  dur: 11000, pat: { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0], lead: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] }, dialogue: '"You looked familiar. Like a song I used to know."' },
+    { roman: 'II.', title: '— THE DANCE —', sky: 'day',  bpm: 110, dur: 13000, pat: { kick: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], snare: [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1], bell: [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], lead: [1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] }, dialogue: '"For one song the world held still."' },
+  ];
+  // Scene 2 (per path1)
+  const CLOSE_SC2: Scene = { roman: 'III.', title: '— CLOSER STILL —', sky: 'warm', bpm: 72, dur: 12000, pat: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], lead: [0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"Stay another minute. The street\'s not done with us."' };
+  const DRIFT_SC2: Scene = { roman: 'III.', title: '— THE DRIFT —', sky: 'cool', bpm: 64, dur: 12000, pat: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0], lead: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"Some currents you don\'t fight."' };
+  // Scene 3 (per path1) — supporting cast appears
+  const CLOSE_SC3: Scene = { roman: 'IV.', title: '— A QUESTION —', sky: 'warm', bpm: 78, dur: 12000, pat: { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], bell: [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], lead: [0,0,0,0,1,0,0,1,0,0,1,0,0,0,1,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, support: 612, dialogue: '"A friend passes by. They lean in: \'Have you told them yet?\'"' };
+  const DRIFT_SC3: Scene = { roman: 'IV.', title: '— A WINDOW —', sky: 'rain', bpm: 70, dur: 12000, pat: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], bell: [0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0], lead: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, support: 99, dialogue: '"Through the rain — a stranger\'s window. Someone else\'s warm light."' };
+  // Scene 4 (per path2)
+  const SC_WORD:   Scene = { roman: 'V.', title: '— THE WORD —', sky: 'dawn', bpm: 84, dur: 13000, pat: { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], bell: [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], lead: [1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"They said it. The street heard."' };
+  const SC_LETTER: Scene = { roman: 'V.', title: '— THE LETTER —', sky: 'warm', bpm: 70, dur: 13000, pat: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], bell: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], lead: [0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"They wrote instead. The pen knew first."' };
+  const SC_ROAD:   Scene = { roman: 'V.', title: '— THE ROAD —', sky: 'cool', bpm: 88, dur: 13000, pat: { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0], lead: [0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"One of them packed. The road is honest."' };
+  const SC_WAIT:   Scene = { roman: 'V.', title: '— THE WAIT —', sky: 'night', bpm: 60, dur: 13000, pat: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], bell: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], lead: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], pad: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, dialogue: '"They stayed by the glass. Light was the language."' };
+  // Scene 6 — final closing (varies by ending)
+  const FINAL_BPM: Record<EndingId, number> = { promise: 78, letter: 70, road: 88, window: 60 };
+
+  const ENDINGS: Record<EndingId, Ending> = {
+    promise: { id: 'promise', title: 'THE PROMISE', emoji: '🤝', line: 'they kept it', sky: 'dawn', bpm: 78 },
+    letter:  { id: 'letter',  title: 'THE LETTER',  emoji: '✉', line: 'mailed at sunrise', sky: 'warm', bpm: 70 },
+    road:    { id: 'road',    title: 'THE ROAD',    emoji: '🛤', line: 'the long way home', sky: 'cool', bpm: 88 },
+    window:  { id: 'window',  title: 'THE WINDOW',  emoji: '🪟', line: 'a light in every storm', sky: 'night', bpm: 60 },
+  };
+
+  // Audio (basic kit)
+  let actx: AudioContext | null = null;
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+  function pK(t:number){const a=ctx(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(120,t);o.frequency.exponentialRampToValueAtTime(40,t+0.18);g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.3);}
+  function pSn(t:number){const a=ctx(),buf=a.createBuffer(1,a.sampleRate*0.12,a.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;const n=a.createBufferSource();n.buffer=buf;const bp=a.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=1.2;const g=a.createGain();g.gain.setValueAtTime(0.32,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);n.connect(bp).connect(g).connect(a.destination);n.start(t);n.stop(t+0.2);}
+  function pB(t:number){const a=ctx();[1320,2640,3960].forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime([0.13,0.07,0.04][i],t);g.gain.exponentialRampToValueAtTime(0.0001,t+1.0);o.connect(g).connect(a.destination);o.start(t);o.stop(t+1.1);});}
+  function pL(t:number){const a=ctx();const D=[0,4,7,12,14],deg=D[Math.floor(Math.random()*D.length)],f=264*Math.pow(2,deg/12);const o=a.createOscillator(),g=a.createGain(),lp=a.createBiquadFilter();o.type='sawtooth';o.frequency.setValueAtTime(f,t);lp.type='lowpass';lp.frequency.setValueAtTime(2200,t);lp.frequency.exponentialRampToValueAtTime(800,t+0.4);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.13,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);o.connect(lp).connect(g).connect(a.destination);o.start(t);o.stop(t+0.45);}
+  function pP(t:number){const a=ctx();[132,198].forEach(f=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.09,t+0.18);g.gain.linearRampToValueAtTime(0.09,t+0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+0.65);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.7);});}
+  const PLAY: any = { kick: pK, snare: pSn, bell: pB, lead: pL, pad: pP };
+
+  // State
+  type Path1 = '' | 'close' | 'drift';
+  type Path2 = '' | 'word' | 'letter' | 'road' | 'wait';
+  let path1: Path1 = '';
+  let path2: Path2 = '';
+  let scene = 0; // 0,1 = pre · 2 = path1 sc1 · 3 = path1 sc2 (with support) · 4 = path2 sc · 5 = transition · 6 = ending card
+  let step = 0;
+  let stepTimer: number | null = null;
+  let sceneTimer: number | null = null;
+  let cardTimer: number | null = null;
+  let dialogueTimer: number | null = null;
+  let playing = false;
+  let endingId: EndingId | null = null;
+
+  const theatre = document.getElementById('ncn3-theatre') as HTMLElement;
+  const card = document.getElementById('ncn3-card') as HTMLElement;
+  const cardRoman = document.getElementById('ncn3-card-roman');
+  const cardTitle = document.getElementById('ncn3-card-title');
+  const cardBy = document.getElementById('ncn3-card-by');
+  const dialogueEl = document.getElementById('ncn3-dialogue') as HTMLElement;
+  const dialogueText = document.getElementById('ncn3-dialogue-text');
+  const skyRect = document.getElementById('ncn3-sky-rect');
+  const choiceEl = document.getElementById('ncn3-choice') as HTMLElement;
+  const choiceTitle = document.getElementById('ncn3-choice-title');
+  const choicePrompt = document.getElementById('ncn3-choice-prompt');
+  const choiceAEmoji = document.getElementById('ncn3-choice-a-emoji');
+  const choiceAText = document.getElementById('ncn3-choice-a-text');
+  const choiceASub = document.getElementById('ncn3-choice-a-sub');
+  const choiceBEmoji = document.getElementById('ncn3-choice-b-emoji');
+  const choiceBText = document.getElementById('ncn3-choice-b-text');
+  const choiceBSub = document.getElementById('ncn3-choice-b-sub');
+  const endingCardEl = document.getElementById('ncn3-ending-card') as HTMLElement;
+  const endingTitle = document.getElementById('ncn3-ending-title');
+  const endingEmoji = document.getElementById('ncn3-ending-emoji');
+  const endingLine = document.getElementById('ncn3-ending-line');
+  const endingMeta = document.getElementById('ncn3-ending-meta');
+  const supportEl = document.getElementById('ncn3-support') as HTMLElement;
+  const supportImg = supportEl?.querySelector('img') as HTMLImageElement | null;
+  const toggleBtn = document.getElementById('ncn3-toggle') as HTMLButtonElement;
+  const restartBtn = document.getElementById('ncn3-restart') as HTMLButtonElement;
+  const hudScene = document.getElementById('ncn3-hud-scene');
+  const hudState = document.getElementById('ncn3-hud-state');
+  const pathTag = document.getElementById('ncn3-path-tag');
+  const endingAgainBtn = document.getElementById('ncn3-ending-again') as HTMLButtonElement;
+
+  function loadCollected(): EndingId[] { try { return JSON.parse(localStorage.getItem('pc-ncn3-collected') || '[]'); } catch { return []; } }
+  function saveCollected(ids: EndingId[]) { try { localStorage.setItem('pc-ncn3-collected', JSON.stringify(Array.from(new Set(ids)))); } catch {} }
+  function renderCollection() {
+    const seen = new Set(loadCollected());
+    document.querySelectorAll<HTMLElement>('.ncn3__ending').forEach(el => { el.classList.toggle('ncn3__ending--seen', seen.has(el.dataset.ending as EndingId)); });
+  }
+
+  function setSky(kind: string) {
+    if (!skyRect) return;
+    const map: Record<string, string> = { day: 'url(#ncn3-sky-day)', warm: 'url(#ncn3-sky-warm)', cool: 'url(#ncn3-sky-cool)', dawn: 'url(#ncn3-sky-dawn)', night: 'url(#ncn3-sky-night)', rain: 'url(#ncn3-sky-rain)' };
+    skyRect.setAttribute('fill', map[kind] || map.day);
+  }
+
+  function showCard(s: Scene, idx: number, then: () => void) {
+    if (!card || !cardRoman || !cardTitle) return;
+    cardRoman.textContent = s.roman;
+    cardTitle.textContent = s.title;
+    if (cardBy) cardBy.textContent = idx === 0 ? 'a noun cinema short · in eight parts' : `scene ${idx + 1} of 8`;
+    card.hidden = false;
+    if (cardTimer) clearTimeout(cardTimer);
+    cardTimer = window.setTimeout(() => { card.hidden = true; then(); }, 2200);
+  }
+  function showDialogue(text: string, dur = 3500) {
+    if (!dialogueEl || !dialogueText) return;
+    dialogueText.textContent = text;
+    dialogueEl.hidden = false;
+    if (dialogueTimer) clearTimeout(dialogueTimer);
+    dialogueTimer = window.setTimeout(() => { dialogueEl.hidden = true; }, dur);
+  }
+  function showSupport(nounId: number | undefined) {
+    if (!supportEl || !supportImg) return;
+    if (nounId) { supportImg.src = `https://noun.pics/${nounId}.svg`; supportEl.hidden = false; }
+    else { supportEl.hidden = true; }
+  }
+
+  function tick(s: Scene) {
+    const at = ctx().currentTime + 0.02;
+    (['kick','snare','bell','lead','pad'] as const).forEach((inst) => { const arr = (s.pat as any)[inst]; if (arr[step]) try { PLAY[inst](at); } catch {} });
+    step = (step + 1) % 16;
+  }
+
+  function playSceneObj(s: Scene, sceneIdx: number, then?: () => void) {
+    if (theatre) theatre.dataset.scene = String(sceneIdx);
+    if (hudScene) hudScene.textContent = `${sceneIdx + 1} / 8`;
+    if (hudState) hudState.textContent = s.title.replace(/—/g, '').trim();
+    setSky(s.sky);
+    showSupport(s.support);
+    step = 0;
+    if (stepTimer) clearInterval(stepTimer);
+    stepTimer = window.setInterval(() => tick(s), (60 / s.bpm / 4) * 1000);
+    if (s.dialogue) setTimeout(() => showDialogue(s.dialogue!), 600);
+    if (sceneTimer) clearTimeout(sceneTimer);
+    sceneTimer = window.setTimeout(() => { if (then) then(); else advance(); }, s.dur);
+  }
+
+  function showChoice1() {
+    if (stepTimer) clearInterval(stepTimer);
+    if (choiceTitle) choiceTitle.textContent = '— A CROSSROADS —';
+    if (choicePrompt) choicePrompt.textContent = 'After the dance, what now?';
+    if (choiceAEmoji) choiceAEmoji.textContent = '🌅'; if (choiceAText) choiceAText.textContent = 'STAY CLOSE'; if (choiceASub) choiceASub.textContent = 'a warm path';
+    if (choiceBEmoji) choiceBEmoji.textContent = '🌌'; if (choiceBText) choiceBText.textContent = 'DRIFT APART'; if (choiceBSub) choiceBSub.textContent = 'a cool path';
+    document.querySelectorAll<HTMLButtonElement>('.ncn3__choice-btn').forEach(b => { b.onclick = () => onChoice1(b.dataset.choice as 'a' | 'b'); });
+    if (choiceEl) choiceEl.hidden = false;
+    if (hudState) hudState.textContent = 'AT THE CROSSROADS';
+  }
+  function showChoice2() {
+    if (stepTimer) clearInterval(stepTimer);
+    if (choiceTitle) choiceTitle.textContent = '— ONE MORE STEP —';
+    if (path1 === 'close') {
+      if (choicePrompt) choicePrompt.textContent = 'They\'re asking. What do you do?';
+      if (choiceAEmoji) choiceAEmoji.textContent = '🤝'; if (choiceAText) choiceAText.textContent = 'SAY IT'; if (choiceASub) choiceASub.textContent = 'out loud';
+      if (choiceBEmoji) choiceBEmoji.textContent = '✉'; if (choiceBText) choiceBText.textContent = 'WRITE IT'; if (choiceBSub) choiceBSub.textContent = 'on paper';
+    } else {
+      if (choicePrompt) choicePrompt.textContent = 'Through the window. Stay or go?';
+      if (choiceAEmoji) choiceAEmoji.textContent = '🛤'; if (choiceAText) choiceAText.textContent = 'TAKE THE ROAD'; if (choiceASub) choiceASub.textContent = 'leave at dawn';
+      if (choiceBEmoji) choiceBEmoji.textContent = '🪟'; if (choiceBText) choiceBText.textContent = 'WAIT BY THE WINDOW'; if (choiceBSub) choiceBSub.textContent = 'keep the light on';
+    }
+    document.querySelectorAll<HTMLButtonElement>('.ncn3__choice-btn').forEach(b => { b.onclick = () => onChoice2(b.dataset.choice as 'a' | 'b'); });
+    if (choiceEl) choiceEl.hidden = false;
+    if (hudState) hudState.textContent = 'ONE MORE STEP';
+  }
+  function onChoice1(c: 'a' | 'b') {
+    path1 = c === 'a' ? 'close' : 'drift';
+    if (theatre) theatre.dataset.path1 = path1;
+    if (pathTag) pathTag.textContent = `— path: ${path1 === 'close' ? 'STAY CLOSE 🌅' : 'DRIFT APART 🌌'} —`;
+    if (choiceEl) choiceEl.hidden = true;
+    const sc2 = path1 === 'close' ? CLOSE_SC2 : DRIFT_SC2;
+    showCard(sc2, 2, () => playSceneObj(sc2, 2));
+  }
+  function onChoice2(c: 'a' | 'b') {
+    if (path1 === 'close') path2 = c === 'a' ? 'word' : 'letter';
+    else path2 = c === 'a' ? 'road' : 'wait';
+    if (theatre) theatre.dataset.path2 = path2;
+    if (pathTag) pathTag.textContent = `— ${path1} → ${path2.toUpperCase()} —`;
+    if (choiceEl) choiceEl.hidden = true;
+    const sc4 = path2 === 'word' ? SC_WORD : path2 === 'letter' ? SC_LETTER : path2 === 'road' ? SC_ROAD : SC_WAIT;
+    showCard(sc4, 4, () => playSceneObj(sc4, 4, () => showFinale()));
+  }
+
+  function whichEnding(): EndingId { if (path2 === 'word') return 'promise'; if (path2 === 'letter') return 'letter'; if (path2 === 'road') return 'road'; return 'window'; }
+  function showFinale() {
+    if (stepTimer) clearInterval(stepTimer);
+    if (sceneTimer) clearTimeout(sceneTimer);
+    endingId = whichEnding();
+    const e = ENDINGS[endingId];
+    setSky(e.sky);
+    if (theatre) theatre.dataset.scene = '6';
+    if (hudScene) hudScene.textContent = '6 / 8';
+    if (hudState) hudState.textContent = `FIN · ${e.title}`;
+    showSupport(undefined);
+    if (endingTitle) endingTitle.textContent = e.title;
+    if (endingEmoji) endingEmoji.textContent = e.emoji;
+    if (endingLine) endingLine.textContent = e.line;
+    const collected = loadCollected();
+    if (!collected.includes(endingId)) collected.push(endingId);
+    saveCollected(collected);
+    if (endingMeta) endingMeta.textContent = `${collected.length} / 4 endings collected`;
+    setTimeout(() => { if (endingCardEl) endingCardEl.hidden = false; }, 1400);
+    renderCollection();
+  }
+
+  function advance() {
+    if (!playing) return;
+    if (scene === 0) { scene = 1; showCard(PRE[1], 1, () => playSceneObj(PRE[1], 1)); return; }
+    if (scene === 1) { scene = 2; setTimeout(showChoice1, 400); return; }
+    if (scene === 2) { scene = 3; const sc3 = path1 === 'close' ? CLOSE_SC3 : DRIFT_SC3; showCard(sc3, 3, () => playSceneObj(sc3, 3, () => { scene = 4; setTimeout(showChoice2, 400); })); return; }
+    // scene 4 already wraps to showFinale
+  }
+
+  function start() {
+    if (playing) return;
+    ctx();
+    playing = true;
+    scene = 0; step = 0; path1 = ''; path2 = ''; endingId = null;
+    if (theatre) { theatre.dataset.state = 'playing'; theatre.dataset.path1 = ''; theatre.dataset.path2 = ''; theatre.dataset.scene = '0'; }
+    if (pathTag) pathTag.textContent = '— path: undecided —';
+    if (endingCardEl) endingCardEl.hidden = true;
+    showSupport(undefined);
+    toggleBtn.textContent = '■ STOP';
+    showCard(PRE[0], 0, () => playSceneObj(PRE[0], 0));
+  }
+  function stop() {
+    playing = false;
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+    if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
+    if (theatre) theatre.dataset.state = 'idle';
+    toggleBtn.textContent = '▶ START THE FILM';
+  }
+  function restart() { stop(); scene = 0; path1 = ''; path2 = ''; endingId = null; if (theatre) { theatre.dataset.scene = '0'; theatre.dataset.path1 = ''; theatre.dataset.path2 = ''; } if (hudScene) hudScene.textContent = '— / 8'; if (hudState) hudState.textContent = '— idle —'; if (pathTag) pathTag.textContent = '— path: undecided —'; if (choiceEl) choiceEl.hidden = true; if (endingCardEl) endingCardEl.hidden = true; showSupport(undefined); setSky('day'); }
+
+  toggleBtn.addEventListener('click', () => { playing ? stop() : start(); });
+  restartBtn.addEventListener('click', restart);
+  endingAgainBtn?.addEventListener('click', () => { restart(); start(); });
+
+  renderCollection();
+</script>

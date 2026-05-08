@@ -1,0 +1,509 @@
+---
+/**
+ * /drum-audiophile-v3 — listening room with per-track FX, 32-step seq, named patches.
+ *
+ * v3 over v2:
+ *   - Per-track FX rack: each lane (kick/snare/bell/lead/pad) gets:
+ *       · REVERB send slider 0-100%
+ *       · DELAY toggle (1/8 dotted, 280ms feedback)
+ *       · FILTER mode (off / lowpass / highpass at 1kHz)
+ *       · DRIVE % (WaveShaperNode tanh, 0-100% wet)
+ *   - 32-STEP sequencer (2 bars × 16 steps), bar markers visible.
+ *   - SWING global slider 0-50% — shifts every 16th's odd hits later.
+ *   - Named PATCH SAVE/LOAD: name your config, sidebar list, click to load.
+ *     Patch contains: pattern, fx, swing, bpm, eq, sat, wetGain.
+ *   - "A/B SLOT" — flip between current and stashed patch live.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Drum Audiophile v3 · per-track FX · 32-step · patches · PointCast';
+const description = 'Listening room v3 — per-track FX rack, 32-step sequencer, swing, named patch library, A/B slot.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="da3" id="da3-main">
+    <header class="da3__header">
+      <h1 class="da3__title">DRUM AUDIOPHILE · V3</h1>
+      <p class="da3__tag">per-track FX · 32 steps · swing · named patches · A/B slot</p>
+    </header>
+
+    <section class="da3__topbar">
+      <div class="da3__transport">
+        <button class="da3__btn da3__btn--big" id="da3-toggle" type="button">▶ DROP THE NEEDLE</button>
+        <label class="da3__tempo">
+          <span>TEMPO</span>
+          <input type="range" id="da3-tempo" min="60" max="160" step="2" value="92"/>
+          <span id="da3-tempo-readout">92 bpm</span>
+        </label>
+        <label class="da3__tempo">
+          <span>SWING</span>
+          <input type="range" id="da3-swing" min="0" max="50" step="1" value="0"/>
+          <span id="da3-swing-readout">0%</span>
+        </label>
+        <label class="da3__sat-toggle">
+          <input type="checkbox" id="da3-sat"/>
+          <span>📻 TAPE SAT</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="da3__room" id="da3-room">
+      <div class="da3__chair da3__chair--left">
+        <div class="da3__noun"><img src="/images/audiophile-nouns/headphones.svg" alt="" width="64" height="64"/></div>
+        <span class="da3__chair-label">L · headphones</span>
+      </div>
+      <div class="da3__center">
+        <div class="da3__amp">
+          <div class="da3__vu"><span>L</span><canvas id="da3-vu-l" width="160" height="64"></canvas></div>
+          <div class="da3__vu"><span>R</span><canvas id="da3-vu-r" width="160" height="64"></canvas></div>
+        </div>
+        <canvas id="da3-spectrum" width="600" height="80"></canvas>
+        <div class="da3__readout" id="da3-readout">— idle · ready —</div>
+      </div>
+      <div class="da3__chair da3__chair--right">
+        <div class="da3__noun"><img src="/images/audiophile-nouns/vu-meter.svg" alt="" width="64" height="64"/></div>
+        <span class="da3__chair-label">R · vu-meter</span>
+      </div>
+    </section>
+
+    <section class="da3__main-grid">
+      <section class="da3__pattern" id="da3-pattern">
+        <div class="da3__pattern-head">
+          <span class="da3__sec-label">PATTERN · 32 STEPS · 2 BARS</span>
+          <div class="da3__bar-marker"><span>BAR 1</span><span>BAR 2</span></div>
+        </div>
+        {['kick', 'snare', 'bell', 'lead', 'pad'].map((inst) => (
+          <div class="da3__lane" data-inst={inst}>
+            <div class="da3__lane-side">
+              <span class="da3__lane-label">{inst.toUpperCase()}</span>
+              <div class="da3__fx" data-inst={inst}>
+                <label class="da3__fx-knob"><span>REV</span><input type="range" class="da3__fx-rev" data-inst={inst} min="0" max="100" step="5" value="20"/></label>
+                <label class="da3__fx-knob"><span>DRV</span><input type="range" class="da3__fx-drv" data-inst={inst} min="0" max="100" step="5" value="0"/></label>
+                <button class="da3__fx-toggle da3__fx-dly" data-inst={inst} data-on="false" type="button">DLY</button>
+                <button class="da3__fx-cycle da3__fx-flt" data-inst={inst} data-mode="off" type="button">FILT·OFF</button>
+              </div>
+            </div>
+            <div class="da3__cells">
+              {Array.from({ length: 32 }).map((_, i) => (
+                <button class={`da3__cell ${i % 4 === 0 ? 'da3__cell--beat' : ''} ${i === 16 ? 'da3__cell--bar' : ''}`} data-inst={inst} data-step={i} aria-pressed="false" type="button"></button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <aside class="da3__patches">
+        <h3>PATCH LIBRARY</h3>
+        <div class="da3__patch-actions">
+          <input class="da3__patch-name" id="da3-patch-name" type="text" placeholder="patch name…" maxlength="40"/>
+          <button class="da3__btn da3__btn--small" id="da3-patch-save" type="button">💾 SAVE</button>
+        </div>
+        <div class="da3__patch-actions">
+          <button class="da3__btn da3__btn--small" id="da3-ab-stash" type="button">📥 STASH A/B</button>
+          <button class="da3__btn da3__btn--small" id="da3-ab-flip" type="button">↔ FLIP A/B</button>
+        </div>
+        <ul class="da3__patch-list" id="da3-patch-list">
+          <li class="da3__patch-empty">— no patches saved —</li>
+        </ul>
+        <div class="da3__patch-presets">
+          <h4>BUILT-INS</h4>
+          <button class="da3__patch-load" data-built="chill">🌿 CHILL</button>
+          <button class="da3__patch-load" data-built="driving">🚗 DRIVING</button>
+          <button class="da3__patch-load" data-built="church">⛪ CHURCH</button>
+          <button class="da3__patch-load" data-built="dry">🏜 DRY</button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="da3__eq">
+      <span class="da3__sec-label">MASTER EQ</span>
+      <label class="da3__eq-band"><span>LOW · 200Hz</span><input type="range" id="da3-eq-low" min="-12" max="12" step="0.5" value="0"/><span class="da3__eq-val" id="da3-eq-low-val">0.0 dB</span></label>
+      <label class="da3__eq-band"><span>MID · 1kHz</span><input type="range" id="da3-eq-mid" min="-12" max="12" step="0.5" value="0"/><span class="da3__eq-val" id="da3-eq-mid-val">0.0 dB</span></label>
+      <label class="da3__eq-band"><span>HIGH · 8kHz</span><input type="range" id="da3-eq-high" min="-12" max="12" step="0.5" value="0"/><span class="da3__eq-val" id="da3-eq-high-val">0.0 dB</span></label>
+      <button class="da3__btn da3__btn--small" id="da3-eq-flat" type="button">⏤ FLAT</button>
+    </section>
+
+    <section class="da3__siblings">
+      <a href="/drum-audiophile">v1</a>
+      <a href="/drum-audiophile-v2">v2</a>
+      <a href="/drum-race-v3">/drum-race-v3</a>
+      <a href="/noun-cinema-v3">/noun-cinema-v3</a>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .da3 { max-width: 1280px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #f4e7c8; background: linear-gradient(180deg, #1a0a06 0%, #0c0408 100%); min-height: 100vh; }
+  .da3__header { text-align: center; margin: 18px 0 14px; }
+  .da3__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6vw, 60px); letter-spacing: 0.18em; margin: 0; color: #f6c15e; text-shadow: 0 0 24px rgba(246, 193, 94, 0.40); }
+  .da3__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 6px 0 0; }
+
+  .da3__sec-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; color: #d4a437; text-transform: uppercase; }
+
+  .da3__topbar { padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 14px; }
+  .da3__transport { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .da3__btn { padding: 9px 16px; border: 2px solid #d4a437; background: linear-gradient(180deg, #2a1408, #1a0a06); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; cursor: pointer; }
+  .da3__btn:hover { transform: translateY(-1px); border-color: #f6c15e; }
+  .da3__btn--big { padding: 11px 20px; font-size: 12px; }
+  .da3__btn--small { padding: 6px 10px; font-size: 9px; }
+  .da3__tempo { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a437; }
+  .da3__tempo input[type='range'] { width: 110px; }
+  .da3__sat-toggle { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; cursor: pointer; color: #d4a437; padding: 4px 10px; border: 1px dashed #5a3422; }
+
+  .da3__room { display: grid; grid-template-columns: 80px 1fr 80px; gap: 16px; align-items: center; padding: 16px; border: 2px solid #5a3422; background: linear-gradient(180deg, #2a1810, #1a0a06); margin-bottom: 14px; box-shadow: 4px 4px 0 0 #050310; }
+  .da3__chair { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .da3__noun { width: 64px; height: 64px; image-rendering: pixelated; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+  .da3__noun img { width: 100%; height: 100%; image-rendering: pixelated; }
+  .da3__chair-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.16em; color: #d4a437; }
+  .da3__center { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .da3__amp { display: flex; gap: 14px; padding: 6px 10px; border: 2px solid #6b4d12; background: linear-gradient(180deg, #2a1408, #5a3422); border-radius: 4px; }
+  .da3__vu { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .da3__vu span { font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.30em; color: #d4a437; }
+  .da3__vu canvas { background: #1a0a06; border: 1px solid #5a3422; border-radius: 3px; }
+  #da3-spectrum { width: 100%; max-width: 600px; height: 80px; background: #050310; border: 2px solid #5a3422; border-radius: 4px; padding: 4px; box-sizing: border-box; }
+  .da3__readout { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.14em; color: #d4a437; opacity: 0.75; }
+
+  .da3__main-grid { display: grid; grid-template-columns: 1fr 240px; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 920px) { .da3__main-grid { grid-template-columns: 1fr; } }
+
+  .da3__pattern { padding: 12px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.55); }
+  .da3__pattern-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .da3__bar-marker { display: flex; gap: 50%; font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.18em; color: #d4a437; opacity: 0.5; padding-right: 8px; }
+  .da3__lane { display: grid; grid-template-columns: 220px 1fr; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(212, 164, 55, 0.15); }
+  .da3__lane:last-of-type { border-bottom: none; }
+  .da3__lane-side { display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+  .da3__lane-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.18em; color: #d4a437; }
+  .da3__fx { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; align-items: center; }
+  .da3__fx-knob { display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; letter-spacing: 0.12em; color: #d4a437; }
+  .da3__fx-knob input { width: 100%; max-width: 50px; }
+  .da3__fx-toggle, .da3__fx-cycle { padding: 3px 4px; border: 1.5px solid #5a3422; background: #1a0a06; color: #d4a437; font-family: 'JetBrains Mono Variable', monospace; font-size: 8px; font-weight: 800; letter-spacing: 0.10em; cursor: pointer; line-height: 1.4; }
+  .da3__fx-toggle[data-on='true'] { background: #d4a437; color: #1a0a06; border-color: #f6c15e; }
+  .da3__fx-cycle[data-mode='lowpass']  { background: #5fbafd; color: #1a0a06; border-color: #5fbafd; }
+  .da3__fx-cycle[data-mode='highpass'] { background: #ff8a4a; color: #1a0a06; border-color: #ff8a4a; }
+
+  .da3__cells { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+  .da3__cell { height: 22px; border: 1px solid #5a3422; background: rgba(212, 164, 55, 0.05); cursor: pointer; padding: 0; transition: background 80ms, transform 80ms, box-shadow 80ms; }
+  .da3__cell:hover { background: rgba(212, 164, 55, 0.18); }
+  .da3__cell--beat { border-color: #6b4d12; }
+  .da3__cell--bar { border-left: 3px solid #d4a437; }
+  .da3__cell[aria-pressed='true'] { background: #d4a437; }
+  .da3__cell[data-active='true'] { box-shadow: 0 0 0 2px #f6c15e; transform: translateY(-1px); }
+
+  .da3__patches { padding: 12px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.55); display: flex; flex-direction: column; gap: 8px; }
+  .da3__patches h3 { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.22em; margin: 0; color: #d4a437; text-transform: uppercase; }
+  .da3__patches h4 { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.20em; margin: 8px 0 4px; color: #d4a437; opacity: 0.75; text-transform: uppercase; }
+  .da3__patch-actions { display: flex; gap: 4px; align-items: center; }
+  .da3__patch-name { flex: 1; padding: 6px 8px; border: 1.5px solid #5a3422; background: #1a0a06; color: #f4e7c8; font-family: inherit; font-size: 11px; }
+  .da3__patch-name:focus { outline: none; border-color: #d4a437; }
+  .da3__patch-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .da3__patch-list li { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid #5a3422; background: #1a0a06; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; color: #f4e7c8; }
+  .da3__patch-list li button { padding: 2px 6px; border: 1px solid #5a3422; background: #2a1408; color: #d4a437; font-family: inherit; font-size: 9px; cursor: pointer; }
+  .da3__patch-list li button:hover { color: #f6c15e; border-color: #d4a437; }
+  .da3__patch-list li .da3__patch-name-text { flex: 1; }
+  .da3__patch-empty { color: #5a3422 !important; font-style: italic; border: 1px dashed #5a3422 !important; }
+  .da3__patch-presets { display: flex; flex-direction: column; gap: 4px; }
+  .da3__patch-load { padding: 6px 8px; border: 1.5px solid #5a3422; background: #1a0a06; color: #d4a437; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; cursor: pointer; text-align: left; }
+  .da3__patch-load:hover { border-color: #d4a437; color: #f6c15e; }
+
+  .da3__eq { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.55); margin: 14px 0; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a437; }
+  .da3__eq-band { display: inline-flex; align-items: center; gap: 8px; }
+  .da3__eq-band input[type='range'] { width: 120px; }
+  .da3__eq-val { color: #f6c15e; min-width: 48px; }
+
+  .da3__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .da3__siblings a { color: #d4a437; text-decoration: none; }
+  .da3__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+</style>
+
+<script>
+  type Inst = 'kick' | 'snare' | 'bell' | 'lead' | 'pad';
+  type FilterMode = 'off' | 'lowpass' | 'highpass';
+  const LANES: Inst[] = ['kick', 'snare', 'bell', 'lead', 'pad'];
+  const STEPS = 32;
+
+  interface FxConfig { rev: number; drv: number; dly: boolean; flt: FilterMode; }
+  interface Patch {
+    pattern: Record<Inst, boolean[]>;
+    fx: Record<Inst, FxConfig>;
+    swing: number; bpm: number;
+    eq: { low: number; mid: number; high: number };
+    sat: boolean;
+  }
+
+  // ─── Audio infrastructure ───────────────────────────────────
+  let actx: AudioContext | null = null;
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+
+  // Master chain: laneOut[inst] → eq → sat/dry → comp → analyser → destination
+  // Reverb sum bus also feeds eq → comp.
+  let master: GainNode | null = null;
+  let comp: DynamicsCompressorNode | null = null;
+  let analyser: AnalyserNode | null = null;
+  let convolver: ConvolverNode | null = null;
+  let revBus: GainNode | null = null;
+  let delayBus: GainNode | null = null;
+  let delayNode: DelayNode | null = null;
+  let delayFb: GainNode | null = null;
+  let eqLow: BiquadFilterNode | null = null;
+  let eqMid: BiquadFilterNode | null = null;
+  let eqHigh: BiquadFilterNode | null = null;
+  let saturator: WaveShaperNode | null = null;
+  let satDry: GainNode | null = null;
+  let satWet: GainNode | null = null;
+  // Per-lane: { out, revSend, drvShaper, drvDry, drvWet, filter }
+  const laneNodes: Record<Inst, any> = {} as any;
+
+  function makeSatCurve(): Float32Array { const n = 1024; const c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = (i * 2 / n) - 1; c[i] = Math.tanh(x * 2.5); } return c; }
+
+  function ensureBus() {
+    if (master) return;
+    const a = ctx();
+    master = a.createGain(); master.gain.value = 0.85;
+    comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 2; comp.attack.value = 0.005; comp.release.value = 0.18;
+    eqLow = a.createBiquadFilter(); eqLow.type = 'lowshelf'; eqLow.frequency.value = 200; eqLow.gain.value = 0;
+    eqMid = a.createBiquadFilter(); eqMid.type = 'peaking'; eqMid.frequency.value = 1000; eqMid.Q.value = 0.8; eqMid.gain.value = 0;
+    eqHigh = a.createBiquadFilter(); eqHigh.type = 'highshelf'; eqHigh.frequency.value = 8000; eqHigh.gain.value = 0;
+    saturator = a.createWaveShaper(); saturator.curve = makeSatCurve(); saturator.oversample = '4x';
+    analyser = a.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.78;
+    // Reverb IR
+    convolver = a.createConvolver();
+    const sr = a.sampleRate; const len = Math.floor(sr * 3.0); const ir = a.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) { const t = i / sr; const decay = Math.exp(-t * 1.8); d[i] = ((Math.random() * 2 - 1) * 0.55 + Math.sin(2 * Math.PI * (40 + ch * 12) * t) * 0.45) * decay; } }
+    convolver.buffer = ir;
+    revBus = a.createGain(); revBus.gain.value = 0.30;
+    delayBus = a.createGain(); delayBus.gain.value = 0.40;
+    delayNode = a.createDelay(2.0); delayNode.delayTime.value = 0.30;
+    delayFb = a.createGain(); delayFb.gain.value = 0.35;
+    // Build lane nodes
+    LANES.forEach(inst => {
+      const out = a.createGain();
+      const drvShaper = a.createWaveShaper(); drvShaper.curve = makeSatCurve(); drvShaper.oversample = '2x';
+      const drvDry = a.createGain(); drvDry.gain.value = 1;
+      const drvWet = a.createGain(); drvWet.gain.value = 0;
+      const filter = a.createBiquadFilter(); filter.frequency.value = 1000; filter.Q.value = 0.7;
+      const revSend = a.createGain(); revSend.gain.value = 0.20;
+      const dlySend = a.createGain(); dlySend.gain.value = 0;
+      // Routing per-lane: source → drvDry/drvWet (parallel) → filter → out
+      const drySum = a.createGain();
+      drvDry.connect(drySum);
+      drvShaper.connect(drvWet); drvWet.connect(drySum);
+      drySum.connect(filter);
+      filter.connect(out);
+      out.connect(master!);
+      // Sends
+      out.connect(revSend); revSend.connect(convolver!);
+      out.connect(dlySend); dlySend.connect(delayNode!);
+      laneNodes[inst] = { out, drvShaper, drvDry, drvWet, drySum, filter, revSend, dlySend };
+    });
+    // Reverb back to main chain
+    convolver!.connect(revBus!);
+    // Delay feedback + mix to main
+    delayNode!.connect(delayFb!);
+    delayFb!.connect(delayNode!);
+    delayNode!.connect(delayBus!);
+    // Sum master + revBus + delayBus → eq → sat/dry → comp → analyser → out
+    const sum = a.createGain();
+    master!.connect(sum); revBus!.connect(sum); delayBus!.connect(sum);
+    sum.connect(eqLow).connect(eqMid).connect(eqHigh);
+    satDry = a.createGain(); satDry.gain.value = 1;
+    satWet = a.createGain(); satWet.gain.value = 0;
+    eqHigh!.connect(satDry).connect(comp);
+    eqHigh!.connect(saturator); saturator.connect(satWet).connect(comp);
+    comp!.connect(analyser!); analyser!.connect(a.destination);
+  }
+  function setSat(on: boolean) { if (satDry && satWet) { satDry.gain.value = on ? 0 : 1; satWet.gain.value = on ? 1 : 0; } }
+
+  // ─── Voices (HI-FI from v1) — routed to lane.out ─────────────
+  function pK(t: number) { const a = ctx(); const dest = laneNodes.kick.drvDry; const s2 = laneNodes.kick.drvShaper; const sub = a.createOscillator(), subG = a.createGain(); sub.type = 'sine'; sub.frequency.setValueAtTime(60, t); sub.frequency.exponentialRampToValueAtTime(35, t + 0.24); subG.gain.setValueAtTime(0.40, t); subG.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); sub.connect(subG); subG.connect(dest); subG.connect(s2); sub.start(t); sub.stop(t + 0.6); const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.20); g.gain.setValueAtTime(0.50, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.30); o.connect(g); g.connect(dest); g.connect(s2); o.start(t); o.stop(t + 0.32); }
+  function pSn(t: number) { const a = ctx(); const dest = laneNodes.snare.drvDry; const s2 = laneNodes.snare.drvShaper; const len = Math.floor(a.sampleRate * 0.30); const buf = a.createBuffer(1, len, a.sampleRate); const d = buf.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.96300 * b1 + w * 0.2965164; b2 = 0.57000 * b2 + w * 1.0526913; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.6; } const noise = a.createBufferSource(); noise.buffer = buf; const bp1 = a.createBiquadFilter(); bp1.type = 'bandpass'; bp1.frequency.value = 1800; bp1.Q.value = 0.9; const bp2 = a.createBiquadFilter(); bp2.type = 'peaking'; bp2.frequency.value = 5500; bp2.Q.value = 1.4; bp2.gain.value = 6; const g = a.createGain(); g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28); noise.connect(bp1).connect(bp2).connect(g); g.connect(dest); g.connect(s2); noise.start(t); noise.stop(t + 0.30); }
+  function pB(t: number) { const a = ctx(); const dest = laneNodes.bell.drvDry; const s2 = laneNodes.bell.drvShaper; [{f:1320,g:0.13,d:2.4},{f:2640,g:0.08,d:2.0},{f:3300,g:0.05,d:1.6},{f:3960,g:0.04,d:1.2},{f:5280,g:0.03,d:0.9}].forEach(p => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(p.f, t); g.gain.setValueAtTime(p.g, t); g.gain.exponentialRampToValueAtTime(0.0001, t + p.d); o.connect(g); g.connect(dest); g.connect(s2); o.start(t); o.stop(t + p.d + 0.1); }); }
+  function pL(t: number) { const a = ctx(); const dest = laneNodes.lead.drvDry; const s2 = laneNodes.lead.drvShaper; const D = [0,4,7,12,14], deg = D[Math.floor(Math.random()*D.length)]; const f = 264 * Math.pow(2, deg/12); const o = a.createOscillator(), g = a.createGain(), lpf = a.createBiquadFilter(); o.type = 'triangle'; o.frequency.setValueAtTime(f, t); lpf.type = 'lowpass'; lpf.frequency.setValueAtTime(3200, t); lpf.frequency.exponentialRampToValueAtTime(900, t + 0.7); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.012); g.gain.linearRampToValueAtTime(0.13, t + 0.30); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.85); o.connect(lpf).connect(g); g.connect(dest); g.connect(s2); o.start(t); o.stop(t + 0.90); }
+  function pP(t: number) { const a = ctx(); const dest = laneNodes.pad.drvDry; const s2 = laneNodes.pad.drvShaper; [132, 165, 198, 264].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); const peak = [0.10,0.06,0.05,0.04][i]; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.6); g.gain.linearRampToValueAtTime(peak * 0.85, t + 1.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4); o.connect(g); g.connect(dest); g.connect(s2); o.start(t); o.stop(t + 2.5); }); }
+  const VOICES: Record<Inst, (t: number) => void> = { kick: pK, snare: pSn, bell: pB, lead: pL, pad: pP };
+
+  // ─── State ──────────────────────────────────────────────────
+  const pattern: Record<Inst, boolean[]> = { kick: Array(STEPS).fill(false), snare: Array(STEPS).fill(false), bell: Array(STEPS).fill(false), lead: Array(STEPS).fill(false), pad: Array(STEPS).fill(false) };
+  const fx: Record<Inst, FxConfig> = {
+    kick:  { rev: 10, drv: 0, dly: false, flt: 'off' },
+    snare: { rev: 25, drv: 0, dly: false, flt: 'off' },
+    bell:  { rev: 50, drv: 0, dly: false, flt: 'off' },
+    lead:  { rev: 35, drv: 0, dly: false, flt: 'off' },
+    pad:   { rev: 60, drv: 0, dly: false, flt: 'off' },
+  };
+  let bpm = 92, swing = 0, step = 0;
+  let stepTimer: number | null = null;
+  let drawHandle: number | null = null;
+  let playing = false;
+  let stashedAB: Patch | null = null;
+
+  const cells = Array.from(document.querySelectorAll<HTMLButtonElement>('.da3__cell'));
+  const toggleBtn = document.getElementById('da3-toggle') as HTMLButtonElement;
+  const tempoEl = document.getElementById('da3-tempo') as HTMLInputElement;
+  const tempoReadout = document.getElementById('da3-tempo-readout');
+  const swingEl = document.getElementById('da3-swing') as HTMLInputElement;
+  const swingReadout = document.getElementById('da3-swing-readout');
+  const satCheck = document.getElementById('da3-sat') as HTMLInputElement;
+  const readoutEl = document.getElementById('da3-readout');
+
+  function applyFxToBus() {
+    if (!laneNodes.kick) return;
+    LANES.forEach(inst => {
+      const ln = laneNodes[inst]; const f = fx[inst];
+      if (ln.revSend) ln.revSend.gain.value = f.rev / 100;
+      if (ln.dlySend) ln.dlySend.gain.value = f.dly ? 0.4 : 0;
+      if (ln.drvDry) ln.drvDry.gain.value = 1 - (f.drv / 100);
+      if (ln.drvWet) ln.drvWet.gain.value = (f.drv / 100) * 0.6;
+      if (ln.filter) {
+        if (f.flt === 'off') { ln.filter.type = 'allpass'; ln.filter.frequency.value = 1000; }
+        else { ln.filter.type = f.flt; ln.filter.frequency.value = 1000; }
+      }
+    });
+  }
+  function paintFx() {
+    LANES.forEach(inst => {
+      const f = fx[inst];
+      const rev = document.querySelector(`.da3__fx-rev[data-inst='${inst}']`) as HTMLInputElement | null;
+      if (rev) rev.value = String(f.rev);
+      const drv = document.querySelector(`.da3__fx-drv[data-inst='${inst}']`) as HTMLInputElement | null;
+      if (drv) drv.value = String(f.drv);
+      const dly = document.querySelector(`.da3__fx-dly[data-inst='${inst}']`) as HTMLButtonElement | null;
+      if (dly) { dly.dataset.on = String(f.dly); dly.textContent = `DLY${f.dly ? ' ●' : ''}`; }
+      const flt = document.querySelector(`.da3__fx-flt[data-inst='${inst}']`) as HTMLButtonElement | null;
+      if (flt) { flt.dataset.mode = f.flt; flt.textContent = `FILT·${f.flt === 'off' ? 'OFF' : f.flt === 'lowpass' ? 'LP' : 'HP'}`; }
+    });
+  }
+  function paintCells() {
+    cells.forEach(c => { const inst = c.dataset.inst as Inst; const s = Number(c.dataset.step); c.setAttribute('aria-pressed', String(pattern[inst][s])); });
+  }
+  function paintActive(s: number) { cells.forEach(c => c.dataset.active = String(Number(c.dataset.step) === s)); }
+
+  function tick() {
+    ensureBus(); if (!master) return;
+    let at = ctx().currentTime + 0.02;
+    // Apply swing — push odd 16ths later
+    if (step % 2 === 1) at += (swing / 100) * (60 / bpm / 4) * 0.5;
+    LANES.forEach(inst => { if (pattern[inst][step]) { try { VOICES[inst](at); } catch {} } });
+    paintActive(step);
+    if (readoutEl) readoutEl.textContent = `step ${step + 1} / ${STEPS} · ${bpm} bpm · swing ${swing}%`;
+    step = (step + 1) % STEPS;
+  }
+  function start() { if (playing) return; ensureBus(); applyFxToBus(); playing = true; step = 0; if (toggleBtn) toggleBtn.textContent = '■ LIFT THE NEEDLE'; tick(); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); if (!drawHandle) drawLoop(); }
+  function stop() { if (!playing) return; playing = false; if (stepTimer) { clearInterval(stepTimer); stepTimer = null; } if (toggleBtn) toggleBtn.textContent = '▶ DROP THE NEEDLE'; if (readoutEl) readoutEl.textContent = '— idle · ready —'; paintActive(-1); }
+
+  // Visualizers
+  const freqData = new Uint8Array(512); const timeData = new Uint8Array(2048);
+  function drawLoop() {
+    drawHandle = window.requestAnimationFrame(drawLoop);
+    if (!analyser) return;
+    analyser.getByteFrequencyData(freqData); analyser.getByteTimeDomainData(timeData);
+    const sc = document.getElementById('da3-spectrum') as HTMLCanvasElement | null;
+    if (sc) { const sctx = sc.getContext('2d'); if (sctx) { const w = sc.width, h = sc.height; sctx.clearRect(0, 0, w, h); const bins = 64; const binW = w / bins; for (let i = 0; i < bins; i++) { const v = freqData[i * 4] / 255; const bh = v * h * 0.92; const grad = sctx.createLinearGradient(0, h, 0, h - bh); grad.addColorStop(0, '#5a3422'); grad.addColorStop(0.5, '#d4a437'); grad.addColorStop(1, '#f6c15e'); sctx.fillStyle = grad; sctx.fillRect(i * binW + 1, h - bh, binW - 2, bh); } } }
+    let sum = 0; for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; sum += v * v; } const rms = Math.sqrt(sum / timeData.length); const level = Math.min(1, rms * 4);
+    drawVU(document.getElementById('da3-vu-l') as HTMLCanvasElement | null, level * (0.92 + Math.random() * 0.08));
+    drawVU(document.getElementById('da3-vu-r') as HTMLCanvasElement | null, level * (0.96 + Math.random() * 0.08));
+  }
+  function drawVU(c: HTMLCanvasElement | null, level: number) { if (!c) return; const x = c.getContext('2d'); if (!x) return; const w = c.width, h = c.height; x.clearRect(0, 0, w, h); x.fillStyle = '#f4e7c8'; x.fillRect(0, 0, w, h); const cx = w / 2, cy = h + 16; const ang = Math.PI * (1.0 - level * 0.7) - Math.PI * 0.15; const r = h * 0.92; x.strokeStyle = '#1a0a06'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(ang) * r, cy - Math.sin(ang) * r); x.stroke(); x.fillStyle = '#5a3422'; x.beginPath(); x.arc(cx, cy, 3, 0, Math.PI * 2); x.fill(); }
+
+  // EQ
+  function setEq(low: number, mid: number, high: number) {
+    if (eqLow) eqLow.gain.value = low; if (eqMid) eqMid.gain.value = mid; if (eqHigh) eqHigh.gain.value = high;
+    document.getElementById('da3-eq-low-val')!.textContent = `${low.toFixed(1)} dB`;
+    document.getElementById('da3-eq-mid-val')!.textContent = `${mid.toFixed(1)} dB`;
+    document.getElementById('da3-eq-high-val')!.textContent = `${high.toFixed(1)} dB`;
+    (document.getElementById('da3-eq-low') as HTMLInputElement).value = String(low);
+    (document.getElementById('da3-eq-mid') as HTMLInputElement).value = String(mid);
+    (document.getElementById('da3-eq-high') as HTMLInputElement).value = String(high);
+  }
+
+  // ─── Patches ────────────────────────────────────────────────
+  function snapshot(): Patch {
+    return {
+      pattern: { kick: [...pattern.kick], snare: [...pattern.snare], bell: [...pattern.bell], lead: [...pattern.lead], pad: [...pattern.pad] },
+      fx: { kick: { ...fx.kick }, snare: { ...fx.snare }, bell: { ...fx.bell }, lead: { ...fx.lead }, pad: { ...fx.pad } },
+      swing, bpm,
+      eq: { low: Number((document.getElementById('da3-eq-low') as HTMLInputElement).value), mid: Number((document.getElementById('da3-eq-mid') as HTMLInputElement).value), high: Number((document.getElementById('da3-eq-high') as HTMLInputElement).value) },
+      sat: satCheck?.checked || false,
+    };
+  }
+  function applyPatch(p: Patch) {
+    LANES.forEach(inst => { pattern[inst] = [...p.pattern[inst]]; fx[inst] = { ...p.fx[inst] }; });
+    swing = p.swing; bpm = p.bpm;
+    if (tempoEl) { tempoEl.value = String(bpm); if (tempoReadout) tempoReadout.textContent = `${bpm} bpm`; }
+    if (swingEl) { swingEl.value = String(swing); if (swingReadout) swingReadout.textContent = `${swing}%`; }
+    setEq(p.eq.low, p.eq.mid, p.eq.high);
+    if (satCheck) satCheck.checked = p.sat; setSat(p.sat);
+    paintCells(); paintFx(); applyFxToBus();
+    if (playing && stepTimer) { clearInterval(stepTimer); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); }
+  }
+  function loadPatches(): { name: string; patch: Patch }[] {
+    try { return JSON.parse(localStorage.getItem('pc-da-v3-patches') || '[]'); } catch { return []; }
+  }
+  function savePatches(arr: { name: string; patch: Patch }[]) { try { localStorage.setItem('pc-da-v3-patches', JSON.stringify(arr)); } catch {} }
+  function renderPatchList() {
+    const list = document.getElementById('da3-patch-list'); if (!list) return;
+    const arr = loadPatches();
+    if (arr.length === 0) { list.innerHTML = '<li class="da3__patch-empty">— no patches saved —</li>'; return; }
+    list.innerHTML = arr.map((p, i) => `<li><span class="da3__patch-name-text">${p.name.replace(/[<>]/g, '')}</span><button data-load="${i}" type="button">load</button><button data-del="${i}" type="button">✕</button></li>`).join('');
+    list.querySelectorAll<HTMLButtonElement>('[data-load]').forEach(b => b.addEventListener('click', () => { const i = Number(b.dataset.load); applyPatch(arr[i].patch); }));
+    list.querySelectorAll<HTMLButtonElement>('[data-del]').forEach(b => b.addEventListener('click', () => { const i = Number(b.dataset.del); arr.splice(i, 1); savePatches(arr); renderPatchList(); }));
+  }
+  function savePatch() {
+    const name = (document.getElementById('da3-patch-name') as HTMLInputElement).value.trim().slice(0, 40);
+    if (!name) return;
+    const arr = loadPatches();
+    arr.unshift({ name, patch: snapshot() });
+    if (arr.length > 30) arr.length = 30;
+    savePatches(arr);
+    (document.getElementById('da3-patch-name') as HTMLInputElement).value = '';
+    renderPatchList();
+  }
+  function abStash() { stashedAB = snapshot(); if (readoutEl) readoutEl.textContent = '📥 STASHED — flip to compare'; setTimeout(() => { if (readoutEl && phase === 'idle') readoutEl.textContent = '— idle · ready —'; }, 1400); }
+  function abFlip() { if (!stashedAB) return; const cur = snapshot(); applyPatch(stashedAB); stashedAB = cur; }
+  let phase: 'idle' | 'playing' = 'idle';
+
+  // ─── Built-in patches ───────────────────────────────────────
+  const BUILTINS: Record<string, Patch> = {
+    chill:   { swing: 12, bpm: 70,  sat: false, eq: { low: 1.5, mid: -1, high: 0.5 }, fx: { kick: { rev: 30, drv: 0, dly: false, flt: 'off' }, snare: { rev: 50, drv: 0, dly: false, flt: 'off' }, bell: { rev: 70, drv: 0, dly: true, flt: 'off' }, lead: { rev: 60, drv: 0, dly: false, flt: 'off' }, pad: { rev: 80, drv: 0, dly: false, flt: 'off' } }, pattern: { kick: pat32([0, 8, 16, 24]), snare: pat32([12, 28]), bell: pat32([2, 10, 18, 26]), lead: pat32([14, 30]), pad: pat32([0, 16]) } },
+    driving: { swing: 0,  bpm: 110, sat: false, eq: { low: 2,   mid: 0,    high: 1.5 }, fx: { kick: { rev: 8,  drv: 10, dly: false, flt: 'off' }, snare: { rev: 18, drv: 5,  dly: false, flt: 'off' }, bell: { rev: 35, drv: 0,  dly: false, flt: 'off' }, lead: { rev: 25, drv: 30, dly: false, flt: 'lowpass' }, pad: { rev: 40, drv: 0,  dly: false, flt: 'off' } }, pattern: { kick: pat32([0,4,8,12,16,20,24,28]), snare: pat32([4,12,20,28,31]), bell: pat32([2,18]), lead: pat32([6,14,22,30]), pad: pat32([0,16]) } },
+    church:  { swing: 0,  bpm: 60,  sat: false, eq: { low: -1,  mid: -2,   high: 3   }, fx: { kick: { rev: 60, drv: 0, dly: false, flt: 'off' }, snare: { rev: 0,  drv: 0, dly: false, flt: 'off' }, bell: { rev: 95, drv: 0, dly: false, flt: 'off' }, lead: { rev: 0,  drv: 0, dly: false, flt: 'off' }, pad: { rev: 90, drv: 0, dly: false, flt: 'off' } }, pattern: { kick: pat32([0, 16]), snare: pat32([]), bell: pat32([4, 12, 20, 28]), lead: pat32([]), pad: pat32([0, 8, 16, 24]) } },
+    dry:     { swing: 16, bpm: 90,  sat: true,  eq: { low: 0,   mid: 1,    high: -1  }, fx: { kick: { rev: 0,  drv: 25, dly: false, flt: 'highpass' }, snare: { rev: 0,  drv: 30, dly: false, flt: 'off' }, bell: { rev: 0,  drv: 0,  dly: false, flt: 'off' }, lead: { rev: 0,  drv: 50, dly: true,  flt: 'lowpass' }, pad: { rev: 0,  drv: 0,  dly: false, flt: 'off' } }, pattern: { kick: pat32([0,3,4,8,11,12,16,19,20,24,27,28]), snare: pat32([4,12,20,28,31]), bell: pat32([]), lead: pat32([]), pad: pat32([]) } },
+  };
+  function pat32(steps: number[]): boolean[] { const arr = Array(STEPS).fill(false); steps.forEach(s => { if (s >= 0 && s < STEPS) arr[s] = true; }); return arr; }
+
+  // ─── Wiring ─────────────────────────────────────────────────
+  cells.forEach(c => c.addEventListener('click', () => { const inst = c.dataset.inst as Inst; const s = Number(c.dataset.step); pattern[inst][s] = !pattern[inst][s]; c.setAttribute('aria-pressed', String(pattern[inst][s])); }));
+  toggleBtn?.addEventListener('click', () => { playing ? stop() : start(); });
+  tempoEl?.addEventListener('input', () => { bpm = Math.max(60, Math.min(160, Number(tempoEl.value))); if (tempoReadout) tempoReadout.textContent = `${bpm} bpm`; if (playing && stepTimer) { clearInterval(stepTimer); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); } });
+  swingEl?.addEventListener('input', () => { swing = Math.max(0, Math.min(50, Number(swingEl.value))); if (swingReadout) swingReadout.textContent = `${swing}%`; });
+  satCheck?.addEventListener('change', () => { ensureBus(); setSat(satCheck.checked); });
+
+  // FX wiring
+  document.querySelectorAll<HTMLInputElement>('.da3__fx-rev').forEach(e => e.addEventListener('input', () => { const inst = e.dataset.inst as Inst; fx[inst].rev = Number(e.value); ensureBus(); applyFxToBus(); }));
+  document.querySelectorAll<HTMLInputElement>('.da3__fx-drv').forEach(e => e.addEventListener('input', () => { const inst = e.dataset.inst as Inst; fx[inst].drv = Number(e.value); ensureBus(); applyFxToBus(); }));
+  document.querySelectorAll<HTMLButtonElement>('.da3__fx-dly').forEach(b => b.addEventListener('click', () => { const inst = b.dataset.inst as Inst; fx[inst].dly = !fx[inst].dly; paintFx(); ensureBus(); applyFxToBus(); }));
+  document.querySelectorAll<HTMLButtonElement>('.da3__fx-flt').forEach(b => b.addEventListener('click', () => { const inst = b.dataset.inst as Inst; const seq: FilterMode[] = ['off', 'lowpass', 'highpass']; const cur = seq.indexOf(fx[inst].flt); fx[inst].flt = seq[(cur + 1) % seq.length]; paintFx(); ensureBus(); applyFxToBus(); }));
+
+  // EQ wiring
+  ['low', 'mid', 'high'].forEach(band => { document.getElementById(`da3-eq-${band}`)?.addEventListener('input', () => { ensureBus(); const lo = Number((document.getElementById('da3-eq-low') as HTMLInputElement).value); const md = Number((document.getElementById('da3-eq-mid') as HTMLInputElement).value); const hi = Number((document.getElementById('da3-eq-high') as HTMLInputElement).value); setEq(lo, md, hi); }); });
+  document.getElementById('da3-eq-flat')?.addEventListener('click', () => { ensureBus(); setEq(0, 0, 0); });
+
+  // Patches
+  document.getElementById('da3-patch-save')?.addEventListener('click', savePatch);
+  document.getElementById('da3-ab-stash')?.addEventListener('click', abStash);
+  document.getElementById('da3-ab-flip')?.addEventListener('click', abFlip);
+  document.querySelectorAll<HTMLButtonElement>('.da3__patch-load').forEach(b => b.addEventListener('click', () => { const k = b.dataset.built!; if (BUILTINS[k]) applyPatch(BUILTINS[k]); }));
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (e.key === ' ') { e.preventDefault(); playing ? stop() : start(); }
+    if (e.key === 'a' || e.key === 'A') abFlip();
+    if (e.key === 's' || e.key === 'S') abStash();
+  });
+
+  // Boot
+  applyPatch(BUILTINS.driving);
+  renderPatchList();
+  drawLoop();
+</script>
