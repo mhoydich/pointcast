@@ -359,6 +359,38 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#8a2432',
   },
+
+  // ─── BURSTS (batch 9) ─────────────────────────────────────────
+  {
+    id: 'typewriter',
+    label: 'typewriter',
+    blurb: 'Letters scatter from center — the sound of thinking, made visible.',
+    glyph: '⌨️',
+    kind: 'burst',
+    durationMs: 2600,
+    accent: '#1a1a1a',
+  },
+
+  // ─── COMPANIONS (batch 9) ─────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across the upper sky, string trailing. Easy company.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 9) ────────────────────────────────────────
+  {
+    id: 'drift',
+    label: 'drift',
+    blurb: 'Warm dust motes float slow and horizontal. Afternoon light.',
+    glyph: '🌤️',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
