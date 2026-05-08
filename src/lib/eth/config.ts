@@ -79,6 +79,32 @@ export const VISIT_NOUNS_TEZOS = 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh' as const
  */
 export const WIRE_ATTESTATIONS_BASE: `0x${string}` | null = null;
 
+/**
+ * MIST coin — the room itself coined on Zora.
+ *
+ * /mist becomes an ERC-20 with a Uniswap V4 pool on Base via Zora's
+ * coining standard (zora.co). NULL until Mike mints. After origination,
+ * paste the coin contract address here and the MistCoinWidget activates
+ * with live name / symbol / supply reads + "Trade on Zora" button.
+ *
+ * Decision: Zora coin > self-deployed ERC-20 because Zora's pool is
+ * already running, fees are tiny, and PointCast's posture is sovereign-
+ * on-Tezos / mirror-or-participate-on-Ethereum. We don't add another
+ * contract we have to maintain — we participate in Zora's market that
+ * already exists.
+ *
+ * Mint instructions: docs/briefs/2026-05-07-mike-mint-mist-coin.md
+ */
+export const MIST_COIN_BASE: `0x${string}` | null = null;
+
+/**
+ * Optional: the Uniswap V4 pool that pairs the MIST coin against ETH at
+ * mint time. Zora records this on the coin contract; this constant is
+ * a convenience cache so the widget doesn't have to fetch the pool
+ * address on every render. Leave null until Mike copies it from Zora.
+ */
+export const MIST_COIN_POOL_BASE: `0x${string}` | null = null;
+
 // ---------------------------------------------------------------------------
 // App Catalog — the 2014 Mist mockup, populated with real 2026 surfaces
 // ---------------------------------------------------------------------------
