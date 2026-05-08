@@ -941,6 +941,25 @@ const jsonLd = {
   });
 
   function showPublishSuccess(data) {
+    // Append to /me's "Things you've made" feed so a publish here shows up
+    // on the visitor's personal page on next visit. Capped at 50 entries
+    // (most recent first). Stores enough to render the row without another
+    // round-trip to /api/studio-block.
+    try {
+      const raw = localStorage.getItem('pc:studio:published');
+      const arr = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(arr) ? arr : [];
+      // Pull the first text layer's value as a friendly title; fall back to
+      // template name. Mirrors the share-page title-picking heuristic.
+      const firstText = (state.layers || []).find(l => l.kind === 'text' && l.value);
+      const title = firstText?.value?.slice(0, 70) || (state.tpl || 'untitled');
+      const next = [
+        { id: data.id, at: new Date().toISOString(), title, tpl: state.tpl, viewUrl: data.viewUrl },
+        ...list.filter(p => p && p.id !== data.id),
+      ].slice(0, 50);
+      localStorage.setItem('pc:studio:published', JSON.stringify(next));
+    } catch (e) { /* private mode etc — ignore */ }
+
     const existing = document.getElementById('publish-success');
     if (existing) existing.remove();
     const panel = document.createElement('aside');
