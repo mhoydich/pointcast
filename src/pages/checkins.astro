@@ -1,0 +1,335 @@
+---
+/**
+ * /checkins — public daily check-in aggregate.
+ *
+ * Mike 2026-05-08 (30-min sprint while away): "give the community
+ * presence its own surface."
+ *
+ * Sibling to /here (live WebSocket presence) and /me (your private
+ * dashboard). /checkins is the daily aggregate — not who's connected
+ * right now, but who has CHECKED IN today, broken down by area + mood.
+ *
+ * Same data the /me "WHO ELSE IS HERE TODAY" band reads, just given
+ * its own room. Pulls from /api/checkin client-side every 60s so the
+ * count ticks live without server-side rendering.
+ *
+ * No auth. No PII. IP hashes rotate daily on the server side. /checkins
+ * is shareable: "27 people checked in from El Segundo today, FOCUS is
+ * the top mood" reads as a community pulse anyone can see.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const AREAS = [
+  { slug: 'el-segundo',       label: 'EL SEGUNDO',       color: '#c4952e' },
+  { slug: 'manhattan-beach',  label: 'MANHATTAN BEACH',  color: '#1b3a5b' },
+  { slug: 'hermosa-beach',    label: 'HERMOSA BEACH',    color: '#2cc5a0' },
+  { slug: 'redondo-beach',    label: 'REDONDO BEACH',    color: '#4a9eff' },
+  { slug: 'venice',           label: 'VENICE',           color: '#e84d6a' },
+  { slug: 'palos-verdes',     label: 'PALOS VERDES',     color: '#0f6e56' },
+  { slug: 'santa-monica',     label: 'SANTA MONICA',     color: '#f7c325' },
+  { slug: 'culver-city',      label: 'CULVER CITY',      color: '#993556' },
+  { slug: 'lax',              label: 'NEAR LAX',         color: '#534ab7' },
+  { slug: 'long-beach',       label: 'LONG BEACH',       color: '#993c1d' },
+  { slug: 'downtown-la',      label: 'DOWNTOWN LA',      color: '#3b6d11' },
+  { slug: 'elsewhere',        label: 'ELSEWHERE',        color: '#6a6154' },
+];
+
+const MOODS = [
+  { id: 'chill',   label: 'CHILL',   blurb: 'taking it slow',         color: '#4a9eff' },
+  { id: 'hype',    label: 'HYPE',    blurb: 'amped, momentum-on',     color: '#e84d6a' },
+  { id: 'focus',   label: 'FOCUS',   blurb: 'heads-down work',        color: '#1f1b15' },
+  { id: 'flow',    label: 'FLOW',    blurb: 'in the zone',            color: '#2cc5a0' },
+  { id: 'curious', label: 'CURIOUS', blurb: 'exploring, learning',    color: '#c4952e' },
+  { id: 'quiet',   label: 'QUIET',   blurb: 'observing, recharging',  color: '#534ab7' },
+];
+
+const title = 'Check-ins today · /checkins';
+const description = 'Today on PointCast — public daily check-in aggregate broken down by area and mood. Refreshes every minute. Companion to /here (live presence) and /me (your dashboard).';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="checkins2027">
+
+    <header class="checkins__hero">
+      <p class="checkins__crumb">
+        <a href="/">home</a> <span aria-hidden="true">›</span> <span>checkins</span>
+      </p>
+      <p class="checkins__kicker">DAILY · COMMUNITY PRESENCE · <time id="ck-date">—</time></p>
+      <h1 class="checkins__title">Who's checked in today.</h1>
+      <p class="checkins__dek">
+        Public aggregate of every visitor who's checked in on
+        <a href="/me">/me</a> today. Refreshes every minute. Sibling
+        of <a href="/here">/here</a> (live WebSocket presence) and
+        <a href="/api/checkin">/api/checkin</a> (the JSON).
+      </p>
+    </header>
+
+    <section class="checkins__band hero" aria-label="Total" data-state="loading" id="ck-total-band">
+      <div class="hero__row">
+        <strong class="hero__num" id="ck-total">—</strong>
+        <span class="hero__label mono">CHECK-IN<span id="ck-plural">S</span> · TODAY</span>
+      </div>
+      <p class="hero__sub mono" id="ck-sub">loading aggregate…</p>
+    </section>
+
+    <section class="checkins__band split" aria-label="Top mood and area">
+      <div class="split__col">
+        <p class="me__eyebrow mono">TOP MOOD</p>
+        <strong class="split__pill split__pill--mood" id="ck-top-mood">—</strong>
+        <p class="split__blurb" id="ck-top-mood-blurb">—</p>
+      </div>
+      <div class="split__col">
+        <p class="me__eyebrow mono">TOP AREA</p>
+        <strong class="split__pill split__pill--area" id="ck-top-area">—</strong>
+        <p class="split__blurb" id="ck-top-area-blurb">—</p>
+      </div>
+    </section>
+
+    <section class="checkins__band breakdown" aria-label="Area breakdown">
+      <p class="me__eyebrow mono">BY AREA</p>
+      <ol class="bars" id="ck-bars-area">
+        {AREAS.map(a => (
+          <li class="bar" data-area={a.slug} style={`--bar-c: ${a.color}`}>
+            <span class="bar__label mono">{a.label}</span>
+            <span class="bar__track"><span class="bar__fill" style="width: 0%"></span></span>
+            <span class="bar__count mono">0</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="checkins__band breakdown" aria-label="Mood breakdown">
+      <p class="me__eyebrow mono">BY MOOD</p>
+      <ol class="bars" id="ck-bars-mood">
+        {MOODS.map(m => (
+          <li class="bar" data-mood={m.id} style={`--bar-c: ${m.color}`}>
+            <span class="bar__label mono">{m.label}</span>
+            <span class="bar__track"><span class="bar__fill" style="width: 0%"></span></span>
+            <span class="bar__count mono">0</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="checkins__band cta" aria-label="Add your check-in">
+      <p class="cta__h">add your check-in →</p>
+      <p class="cta__dek">/me is your personal start experience — set a noun, pick an area, drop a mood. Every check-in adds to the aggregate above.</p>
+      <a class="cta__btn mono" href="/me">OPEN /ME</a>
+    </section>
+
+    <footer class="checkins__foot">
+      <p class="mono">
+        Aggregated server-side at <a href="/api/checkin">/api/checkin</a> · IPs are hashed daily so today's hash can't be linked to yesterday's · 7-day TTL on every key · open source &amp; self-hostable
+      </p>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ AREAS, MOODS }}>
+(() => {
+  const AREA_LABELS = AREAS.reduce((m, a) => (m[a.slug] = a.label, m), {});
+  const MOOD_LABELS = MOODS.reduce((m, x) => (m[x.id] = x.label, m), {});
+  const MOOD_BLURBS = MOODS.reduce((m, x) => (m[x.id] = x.blurb, m), {});
+
+  function fmtDay(iso) { return iso ? iso.slice(0, 10) : '—'; }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function renderBars(containerId, dict, attr, labels) {
+    const root = document.getElementById(containerId);
+    if (!root) return;
+    const max = Math.max(1, ...Object.values(dict).map(v => Number(v) || 0));
+    root.querySelectorAll('.bar').forEach(li => {
+      const key = li.getAttribute(attr);
+      const count = Number(dict[key] || 0);
+      const fill = li.querySelector('.bar__fill');
+      const cnt  = li.querySelector('.bar__count');
+      const pct  = (count / max) * 100;
+      if (fill) fill.style.width = pct.toFixed(1) + '%';
+      if (cnt)  cnt.textContent  = String(count);
+      li.classList.toggle('is-zero', count === 0);
+    });
+  }
+
+  function render(today) {
+    if (!today) {
+      const totalBand = document.getElementById('ck-total-band');
+      if (totalBand) totalBand.dataset.state = 'unavailable';
+      setText('ck-sub', 'community aggregates unavailable right now — try again in a moment.');
+      return;
+    }
+    const total = Number(today.total) || 0;
+    setText('ck-date', today.date || '—');
+    setText('ck-total', String(total));
+    setText('ck-plural', total === 1 ? '' : 'S');
+    setText('ck-sub', total > 0
+      ? 'updated ' + fmtRel(today.updatedAt) + ' · refreshes every minute'
+      : 'no one has checked in yet today — be first');
+    setText('ck-top-mood', today.topMood ? (MOOD_LABELS[today.topMood] || today.topMood) : '—');
+    setText('ck-top-mood-blurb', today.topMood ? (MOOD_BLURBS[today.topMood] || '') : 'pending first check-in');
+    setText('ck-top-area', today.topArea ? (AREA_LABELS[today.topArea] || today.topArea) : '—');
+    setText('ck-top-area-blurb', today.topArea ? (today.byArea?.[today.topArea] + ' check-in' + (today.byArea?.[today.topArea] === 1 ? '' : 's')) : 'pending first check-in');
+    renderBars('ck-bars-area', today.byArea || {}, 'data-area', AREA_LABELS);
+    renderBars('ck-bars-mood', today.byMood || {}, 'data-mood', MOOD_LABELS);
+    const totalBand = document.getElementById('ck-total-band');
+    if (totalBand) totalBand.dataset.state = total > 0 ? 'live' : 'empty';
+  }
+
+  function fmtRel(iso) {
+    if (!iso) return 'just now';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 0) return 'just now';
+    const mins = Math.round(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    return Math.round(mins / 60) + ' h ago';
+  }
+
+  async function fetchAggregate() {
+    try {
+      // Cache-buster query so the same browser session sees ticks live
+      // even though the endpoint sets a 60s public Cache-Control. The
+      // server-side caching is still fine for unique-visitor amortization.
+      const r = await fetch('/api/checkin?_t=' + Date.now(), {
+        method: 'GET', cache: 'no-store',
+      });
+      if (!r.ok) { render(null); return; }
+      const data = await r.json();
+      render(data?.today);
+    } catch (e) { render(null); }
+  }
+
+  fetchAggregate();
+  setInterval(fetchAggregate, 60 * 1000);
+})();
+</script>
+
+<style>
+  .checkins2027 {
+    max-width: 980px; margin: 0 auto; padding: 24px 20px 80px;
+    font-family: var(--font-body);
+  }
+
+  /* HERO */
+  .checkins__hero { margin: 0 0 28px; padding: 24px 0; border-bottom: 1.5px solid var(--color-rule); }
+  .checkins__crumb {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--color-ink-soft); text-transform: uppercase; margin: 0 0 14px;
+  }
+  .checkins__crumb a { color: var(--color-ink-soft); text-decoration: none; }
+  .checkins__crumb a:hover { color: var(--color-ink); }
+  .checkins__crumb span { margin: 0 6px; }
+  .checkins__kicker {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: #c4952e; text-transform: uppercase; margin: 0 0 12px;
+  }
+  .checkins__title {
+    font-family: var(--font-heading);
+    font-size: clamp(36px, 5vw, 60px); line-height: 1.05;
+    font-weight: 600; letter-spacing: -0.02em; margin: 0 0 14px;
+    color: var(--color-ink);
+  }
+  .checkins__dek {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.3vw, 18px); line-height: 1.5;
+    color: var(--color-ink-soft); max-width: 680px; margin: 0;
+  }
+  .checkins__dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .checkins__dek a:hover { color: #1f1b15; }
+
+  /* BANDS */
+  .checkins__band {
+    margin: 0 0 28px; padding: 22px;
+    background: #fbf7ee; border: 1.5px solid #d8cdb8; border-radius: 3px;
+  }
+  .me__eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; color: #c4952e;
+    text-transform: uppercase; margin: 0 0 14px;
+  }
+
+  /* HERO band */
+  .hero__row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .hero__num {
+    font-family: var(--font-heading); font-size: clamp(64px, 12vw, 128px);
+    font-weight: 600; line-height: 1; letter-spacing: -0.03em;
+    color: #1f1b15;
+  }
+  .hero__label {
+    font-size: 12px; letter-spacing: 0.18em; color: #6a6154;
+  }
+  .hero__sub { font-size: 12px; color: #6a6154; margin: 8px 0 0; letter-spacing: 0.06em; }
+  .hero[data-state='loading'] .hero__num { opacity: 0.4; }
+  .hero[data-state='unavailable'] .hero__num { opacity: 0.4; color: #6a6154; }
+
+  /* SPLIT (top mood + top area) */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 600px) { .split { grid-template-columns: 1fr; } }
+  .split__col { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .split__pill {
+    display: inline-block; padding: 10px 16px;
+    background-color: #1f1b15; color: #fff;
+    font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.16em;
+    border-radius: 2px; font-weight: 500;
+  }
+  .split__pill--mood { background-color: #c4952e; }
+  .split__pill--area { background-color: #1b3a5b; }
+  .split__blurb { margin: 0; font-size: 13px; color: #6a6154; }
+
+  /* BARS */
+  .bars { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .bar {
+    display: grid; grid-template-columns: 140px 1fr 40px; gap: 12px;
+    align-items: center;
+  }
+  @media (max-width: 600px) { .bar { grid-template-columns: 100px 1fr 32px; gap: 8px; } }
+  .bar__label {
+    font-size: 10px; letter-spacing: 0.14em; color: #1f1b15;
+  }
+  .bar__track {
+    position: relative; height: 14px;
+    background: rgba(0,0,0,0.04); border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar__fill {
+    display: block; height: 100%;
+    background-color: var(--bar-c, #c4952e);
+    transition: width 0.4s ease;
+    min-width: 0;
+  }
+  .bar__count {
+    font-size: 11px; color: #6a6154; text-align: right;
+  }
+  .bar.is-zero .bar__label { color: #6a6154; opacity: 0.5; }
+  .bar.is-zero .bar__count { opacity: 0.5; }
+
+  /* CTA */
+  .cta { text-align: center; padding: 32px 22px; }
+  .cta__h {
+    font-family: var(--font-heading); font-size: clamp(22px, 2.5vw, 32px);
+    font-weight: 600; margin: 0 0 8px; color: #1f1b15;
+    letter-spacing: -0.01em;
+  }
+  .cta__dek {
+    font-family: var(--font-serif); font-size: 14px; line-height: 1.55;
+    color: #6a6154; max-width: 480px; margin: 0 auto 18px;
+  }
+  .cta__btn {
+    display: inline-block; padding: 12px 22px;
+    background-color: #1f1b15; color: #fff !important;
+    font-size: 12px; letter-spacing: 0.16em;
+    text-decoration: none; border-radius: 2px;
+  }
+  .cta__btn:hover { background-color: #c4952e; }
+
+  /* FOOT */
+  .checkins__foot {
+    margin-top: 36px; padding-top: 16px;
+    border-top: 1px solid #d8cdb8;
+    font-size: 11px; color: #6a6154;
+  }
+  .checkins__foot a { color: #6a6154; }
+</style>
