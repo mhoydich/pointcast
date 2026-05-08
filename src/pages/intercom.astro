@@ -1,0 +1,147 @@
+---
+/**
+ * /intercom — Mike's inbox + thread viewer.
+ * v2: Mike-mode toggle, reply UI, resolve/read flags.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Intercom · messages to Mike · PointCast';
+const description = 'Bug reports + chat-to-Mike with threaded replies.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="icx" id="icx-main">
+    <header class="icx__header">
+      <h1 class="icx__title">INTERCOM</h1>
+      <p class="icx__tag">messages to mike · threaded replies · filter by kind &amp; status</p>
+    </header>
+    <section class="icx__stats">
+      <span class="icx__stat-cell">TOTAL <strong id="icx-stat-total">—</strong></span>
+      <span class="icx__stat-cell">UNREPLIED <strong id="icx-stat-unreplied">—</strong></span>
+      <span class="icx__stat-cell">UNREAD <strong id="icx-stat-unread">—</strong></span>
+      <label class="icx__mike-toggle"><input type="checkbox" id="icx-mike-mode"/><span>I am Mike (show reply controls)</span></label>
+    </section>
+    <section class="icx__toolbar">
+      <button class="icx__btn icx__btn--active" data-filter="all" type="button">ALL</button>
+      <button class="icx__btn" data-filter="chat" type="button">💬 CHAT</button>
+      <button class="icx__btn" data-filter="bug" type="button">🐛 BUGS</button>
+      <button class="icx__btn" data-filter="unreplied" type="button">✉ UNREPLIED</button>
+      <button class="icx__btn" data-filter="unresolved" type="button">⚠ UNRESOLVED</button>
+      <span class="icx__count">SHOWING <strong id="icx-count">0</strong></span>
+      <button class="icx__btn" id="icx-refresh" type="button">↻ REFRESH</button>
+    </section>
+    <section class="icx__list" id="icx-list" aria-live="polite"><p class="icx__loading">loading…</p></section>
+  </main>
+</BlockLayout>
+
+<style>
+  .icx { max-width: 920px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #1a0820; background: #fffaf0; min-height: 100vh; }
+  .icx__header { text-align: center; margin: 18px 0 14px; }
+  .icx__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6.5vw, 64px); letter-spacing: 0.16em; margin: 0; text-shadow: 2px 2px 0 rgba(212, 164, 55, 0.40); }
+  .icx__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #5a3422; opacity: 0.85; margin: 6px 0 0; }
+  .icx__stats, .icx__toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #1a0820; background: #f4e7c8; box-shadow: 4px 4px 0 0 #1a0820; margin-bottom: 12px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .icx__stat-cell { color: #5a3422; }
+  .icx__stat-cell strong { color: #b8431a; padding-left: 4px; font-size: 14px; }
+  .icx__mike-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 10px; border: 1px dashed #1a0820; background: #fffaf0; }
+  .icx__mike-toggle span { font-size: 10px; color: #1a0820; }
+  .icx__btn { padding: 7px 12px; border: 2px solid #1a0820; background: #fffaf0; color: #1a0820; font-family: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; cursor: pointer; box-shadow: 2px 2px 0 0 #1a0820; }
+  .icx__btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #1a0820; }
+  .icx__btn--active { background: #d4a437; }
+  .icx__count { margin-left: auto; }
+  .icx__count strong { color: #b8431a; padding-left: 4px; }
+  .icx__list { display: flex; flex-direction: column; gap: 10px; }
+  .icx__loading, .icx__empty { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; color: #5a3422; padding: 20px; text-align: center; }
+  .icx__msg { padding: 12px 14px; border: 2px solid #1a0820; background: #fffaf0; box-shadow: 4px 4px 0 0 #1a0820; }
+  .icx__msg--unread { border-left: 6px solid #b8431a; }
+  .icx__msg--resolved { opacity: 0.62; }
+  .icx__msg-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a3422; margin-bottom: 6px; }
+  .icx__msg-kind { padding: 2px 8px; border: 1px solid currentColor; border-radius: 999px; font-weight: 800; }
+  .icx__msg-kind--bug { color: #b8431a; }
+  .icx__msg-kind--chat { color: #2a5a30; }
+  .icx__msg-page { color: #185fa5; word-break: break-all; }
+  .icx__msg-flag { padding: 2px 6px; background: #1a0820; color: #f6c15e; border-radius: 2px; font-size: 9px; }
+  .icx__msg-flag--resolved { background: #2a5a30; color: #fffaf0; }
+  .icx__msg-flag--unread { background: #b8431a; color: #fffaf0; }
+  .icx__msg-body { font-family: var(--pc-font-sans, system-ui, sans-serif); font-size: 14px; line-height: 1.5; color: #1a0820; white-space: pre-wrap; word-break: break-word; }
+  .icx__msg-contact { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.20); font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; color: #5a3422; }
+  .icx__replies { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(0,0,0,0.20); display: flex; flex-direction: column; gap: 8px; }
+  .icx__reply { padding: 8px 10px; border-left: 3px solid #d4a437; background: #f4e7c8; }
+  .icx__reply-head { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #b8431a; margin-bottom: 4px; }
+  .icx__reply-body { font-size: 13px; line-height: 1.5; color: #1a0820; white-space: pre-wrap; }
+  .icx__mike-controls { display: none; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #d4a437; flex-direction: column; gap: 8px; }
+  .icx[data-mike='true'] .icx__mike-controls { display: flex; }
+  .icx__reply-form { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icx__reply-input { flex: 1; min-width: 200px; padding: 6px 10px; border: 2px solid #1a0820; background: #fffaf0; font-family: var(--pc-font-sans, system-ui, sans-serif); font-size: 13px; box-sizing: border-box; resize: vertical; }
+  .icx__reply-input:focus { outline: none; border-color: #d4a437; box-shadow: 0 0 0 2px #f6c15e; }
+  .icx__reply-send { padding: 7px 14px; border: 2px solid #1a0820; background: #d4a437; color: #1a0820; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; cursor: pointer; box-shadow: 2px 2px 0 0 #1a0820; }
+  .icx__row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icx__action { padding: 6px 10px; border: 1px solid #5a3422; background: #fffaf0; color: #5a3422; font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; cursor: pointer; }
+  .icx__action:hover { background: #f4e7c8; }
+  .icx__action--on { background: #2a5a30; color: #fffaf0; border-color: #2a5a30; }
+</style>
+
+<script>
+  type Reply = { body: string; t: number; from: string };
+  type Msg = { id: string; kind: 'bug'|'chat'; body: string; contact: string; page: string; pid: string; t: number; replies?: Reply[]; resolved?: boolean; readByMike?: boolean };
+  const listEl = document.getElementById('icx-list'); const countEl = document.getElementById('icx-count');
+  const totalEl = document.getElementById('icx-stat-total'); const unrepliedEl = document.getElementById('icx-stat-unreplied'); const unreadEl = document.getElementById('icx-stat-unread');
+  const filterBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.icx__toolbar [data-filter]'));
+  const refreshBtn = document.getElementById('icx-refresh'); const mikeToggle = document.getElementById('icx-mike-mode') as HTMLInputElement;
+  const icxRoot = document.querySelector('.icx') as HTMLElement | null;
+  let filter = 'all', messages: Msg[] = [], mikeMode = false;
+  try { mikeMode = localStorage.getItem('pc-i-am-mike') === '1'; } catch {}
+  if (mikeToggle) mikeToggle.checked = mikeMode;
+  if (icxRoot) icxRoot.dataset.mike = String(mikeMode);
+  mikeToggle?.addEventListener('change', () => { mikeMode = mikeToggle.checked; try { localStorage.setItem('pc-i-am-mike', mikeMode ? '1' : '0'); } catch {} if (icxRoot) icxRoot.dataset.mike = String(mikeMode); });
+  function fmtTime(t: number): string { const d = new Date(t); return `${d.toLocaleDateString('en-CA')} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`; }
+  function escape(s: string): string { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function applyFilter(arr: Msg[]): Msg[] {
+    if (filter === 'all') return arr;
+    if (filter === 'chat') return arr.filter(m => m.kind === 'chat');
+    if (filter === 'bug') return arr.filter(m => m.kind === 'bug');
+    if (filter === 'unreplied') return arr.filter(m => !m.replies || m.replies.length === 0);
+    if (filter === 'unresolved') return arr.filter(m => !m.resolved);
+    return arr;
+  }
+  function renderMessage(m: Msg): string {
+    const cls = ['icx__msg']; if (!m.readByMike) cls.push('icx__msg--unread'); if (m.resolved) cls.push('icx__msg--resolved');
+    const flags: string[] = [];
+    if (m.resolved) flags.push('<span class="icx__msg-flag icx__msg-flag--resolved">✓ RESOLVED</span>');
+    if (!m.readByMike) flags.push('<span class="icx__msg-flag icx__msg-flag--unread">UNREAD</span>');
+    if (m.replies && m.replies.length) flags.push(`<span class="icx__msg-flag">${m.replies.length} REPLY</span>`);
+    const repliesHtml = (m.replies && m.replies.length) ? `<div class="icx__replies">${m.replies.map(r => `<div class="icx__reply"><div class="icx__reply-head">${escape(r.from || 'mike')} · ${fmtTime(r.t)}</div><div class="icx__reply-body">${escape(r.body)}</div></div>`).join('')}</div>` : '';
+    const mikeHtml = `<div class="icx__mike-controls"><form class="icx__reply-form" data-id="${escape(m.id)}"><textarea class="icx__reply-input" rows="2" placeholder="reply as mike…" maxlength="2000"></textarea><button class="icx__reply-send" type="submit">SEND REPLY</button></form><div class="icx__row"><button class="icx__action ${m.resolved ? 'icx__action--on' : ''}" data-act="resolve" data-id="${escape(m.id)}">${m.resolved ? '✓ RESOLVED' : 'MARK RESOLVED'}</button><button class="icx__action ${m.readByMike ? 'icx__action--on' : ''}" data-act="read" data-id="${escape(m.id)}">${m.readByMike ? '✓ READ' : 'MARK READ'}</button></div></div>`;
+    return `<article class="${cls.join(' ')}" data-id="${escape(m.id)}"><header class="icx__msg-head"><span class="icx__msg-kind icx__msg-kind--${m.kind}">${m.kind === 'bug' ? '🐛 BUG' : '💬 CHAT'}</span><span>${fmtTime(m.t)}</span><span class="icx__msg-page">${escape(m.page || '')}</span><span>pid ${escape(m.pid || '')}</span><span>${flags.join('')}</span></header><div class="icx__msg-body">${escape(m.body)}</div>${m.contact ? `<div class="icx__msg-contact"><strong>contact:</strong> ${escape(m.contact)}</div>` : ''}${repliesHtml}${mikeHtml}</article>`;
+  }
+  function render() {
+    if (!listEl) return;
+    const filtered = applyFilter(messages);
+    if (countEl) countEl.textContent = String(filtered.length);
+    if (totalEl) totalEl.textContent = String(messages.length);
+    if (unrepliedEl) unrepliedEl.textContent = String(messages.filter(m => !m.replies || m.replies.length === 0).length);
+    if (unreadEl) unreadEl.textContent = String(messages.filter(m => !m.readByMike).length);
+    if (filtered.length === 0) { listEl.innerHTML = '<p class="icx__empty">— no messages —</p>'; return; }
+    listEl.innerHTML = filtered.map(renderMessage).join('');
+    Array.from(listEl.querySelectorAll<HTMLFormElement>('.icx__reply-form')).forEach(form => {
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const id = form.dataset.id!; const ta = form.querySelector('textarea') as HTMLTextAreaElement; const body = ta.value.trim();
+        if (!body) return;
+        try { const r = await fetch('/api/intercom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'reply', parentId: id, body }) }); const j = await r.json(); if (j?.ok) { ta.value = ''; refresh(); } } catch {}
+      });
+    });
+    Array.from(listEl.querySelectorAll<HTMLButtonElement>('.icx__action')).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id!; const act = btn.dataset.act!; const msg = messages.find(m => m.id === id); if (!msg) return;
+        const turnOn = (act === 'resolve' && !msg.resolved) || (act === 'read' && !msg.readByMike);
+        const action = turnOn ? act : (act === 'resolve' ? 'unresolve' : 'unread');
+        try { const r = await fetch('/api/intercom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'mark', parentId: id, action }) }); const j = await r.json(); if (j?.ok) refresh(); } catch {}
+      });
+    });
+  }
+  async function refresh() { try { const r = await fetch('/api/intercom', { cache: 'no-store' }); const j = await r.json(); if (j?.ok && Array.isArray(j.messages)) { messages = j.messages; render(); } } catch {} }
+  filterBtns.forEach(btn => btn.addEventListener('click', () => { filterBtns.forEach(b => b.classList.toggle('icx__btn--active', b === btn)); filter = btn.dataset.filter || 'all'; render(); }));
+  refreshBtn?.addEventListener('click', refresh);
+  refresh();
+  setInterval(refresh, 12000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
