@@ -15,12 +15,19 @@
  *   - time-of-day sky (morning/midday/evening/night gradient)
  *   - small chevron at far right links to /me
  *
- * v6.1 (next sprint) will add COMPANIONS:
- *   - existing +pet/+cat/+pup spells reroute to spawn here, walk
- *     alongside the noun, fade after durationMs
- *   - "keep" interaction promotes a companion to a persistent PET in
+ * v6.1 (THIS PR) adds COMPANIONS:
+ *   - 13 companion-kind spell ids (+cat/+pup/+penguin/+fish/+moth/+bee/
+ *     +duck/+crab/+snail/+frog/+bird/+rabbit/+pet) reroute to spawn
+ *     emoji sprites IN the bar that walk alongside your noun
+ *   - each runs the same fbv6-walk loop with a staggered animation-
+ *     delay so they trail the walker
+ *   - cap of 3 simultaneous; oldest is evicted when full
+ *   - auto-fade-out via .is-leaving class then DOM removal at durationMs
+ *
+ * v6.2 will add PET PERSISTENCE + CROSS-VISITOR:
+ *   - "keep" right-click promotes a companion to a persistent PET in
  *     pc:pet:v1 with a name + bornAt + mood
- *   - up to 3 companions visible at once (pet + 2 ephemeral)
+ *   - other visitors' nouns + pets visible via CursorRoom WS
  *
  * v6.2 will add CROSS-VISITOR:
  *   - other visitors' nouns appear ghost-translucent when CursorRoom
@@ -95,6 +102,13 @@ const BUILDINGS = [
     <span class="fbv6__walker-shadow" aria-hidden="true"></span>
   </div>
 
+  {/* v6.1: COMPANIONS layer. Spawned by `pc:spell:cast` events for
+      companion-kind spells (cat / pup / penguin / fish / moth / bee /
+      duck / etc.). Each runs the same walk animation as the main
+      walker but with an animation-delay offset so they trail behind.
+      Capped at 3 simultaneous. JS-managed. */}
+  <div class="fbv6__companions" id="fbv6-companions" aria-hidden="true"></div>
+
   {/* Right edge — chevron + ON AIR. Chevron links to /me for now;
       v6.1 will turn it into the omnibox modal trigger. */}
   <div class="fbv6__edge">
@@ -157,6 +171,73 @@ const BUILDINGS = [
       walkerImg.src = 'https://noun.pics/' + e.detail.seed + '.svg';
       walkerImg.alt = 'You · Noun #' + e.detail.seed;
     }
+  });
+
+  // ─── v6.1: COMPANIONS ────────────────────────────────────────────────
+  // Reroute existing companion-kind spells (cat/pup/penguin/...) to
+  // spawn IN the bar instead of the global SpellLayer overlay. Each
+  // companion is a small emoji sprite that walks alongside your noun
+  // for `durationMs` then fades out.
+  //
+  // Pet persistence (pc:pet:v1) and "keep" interaction land in v6.2 —
+  // for now everything is ephemeral. SpellLayer's existing renderers
+  // still run for non-companion spells (confetti, breath, etc.).
+  const COMPANION_KIND = {
+    cat:     { emoji: '🐱', dur: 60000 },
+    pup:     { emoji: '🐶', dur: 50000 },
+    penguin: { emoji: '🐧', dur: 70000 },
+    fish:    { emoji: '🐟', dur: 45000 },
+    moth:    { emoji: '🦋', dur: 30000 },
+    bee:     { emoji: '🐝', dur: 25000 },
+    duck:    { emoji: '🦆', dur: 50000 },
+    crab:    { emoji: '🦀', dur: 40000 },
+    snail:   { emoji: '🐌', dur: 90000 },
+    frog:    { emoji: '🐸', dur: 50000 },
+    bird:    { emoji: '🐦', dur: 30000 },
+    rabbit:  { emoji: '🐰', dur: 60000 },
+    pet:     { emoji: '🐾', dur: 90000 }, // generic "+pet"
+  };
+  const MAX_COMPANIONS = 3;
+  const companionsRoot = document.getElementById('fbv6-companions');
+
+  function spawnCompanion(spellId) {
+    const spec = COMPANION_KIND[spellId];
+    if (!spec || !companionsRoot) return;
+    // Cap at MAX_COMPANIONS — if full, remove the oldest to make room.
+    while (companionsRoot.children.length >= MAX_COMPANIONS) {
+      companionsRoot.removeChild(companionsRoot.firstChild);
+    }
+    const node = document.createElement('span');
+    node.className = 'fbv6__companion';
+    node.title = '+' + spellId + ' (ephemeral · disappears in ' + Math.round(spec.dur / 1000) + 's)';
+    // Stagger animation-delay so multiple companions don't pile on the
+    // same x-position. Negative delay = "started Xs ago" — pushes the
+    // sprite further along its loop relative to the walker.
+    const offset = -2 - (companionsRoot.children.length * 1.6);
+    node.style.animationDelay = offset + 's';
+    const inner = document.createElement('span');
+    inner.className = 'fbv6__companion-inner';
+    inner.textContent = spec.emoji;
+    node.appendChild(inner);
+    companionsRoot.appendChild(node);
+    // Auto-remove after dur with a small fade-out window.
+    const fade = Math.min(2400, spec.dur / 4);
+    setTimeout(() => { node.classList.add('is-leaving'); }, spec.dur - fade);
+    setTimeout(() => {
+      if (node.parentNode === companionsRoot) companionsRoot.removeChild(node);
+    }, spec.dur);
+  }
+
+  window.addEventListener('pc:spell:cast', (e) => {
+    const id = e?.detail?.id;
+    if (typeof id === 'string' && COMPANION_KIND[id]) {
+      spawnCompanion(id);
+    }
+  });
+
+  // pc:spell:clear sweeps the layer.
+  window.addEventListener('pc:spell:clear', () => {
+    if (companionsRoot) companionsRoot.innerHTML = '';
   });
 })();
 </script>
@@ -360,6 +441,53 @@ const BUILDINGS = [
   .fbv6__sky[data-mode='night'] ~ .fbv6__walker,
   .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__walker {
     animation-duration: 120s;
+  }
+
+  /* COMPANIONS — emoji sprites that share the noun's walk animation.
+     Each gets its own animation-delay (set inline) so they trail the
+     walker at staggered offsets. */
+  .fbv6__companions {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .fbv6__companion {
+    position: absolute;
+    bottom: 14px;
+    left: 0;
+    width: 22px; height: 22px;
+    transform-origin: bottom center;
+    animation: fbv6-walk 60s linear infinite;
+    pointer-events: auto;
+    cursor: help;
+  }
+  .fbv6__companion-inner {
+    display: inline-block;
+    font-size: 18px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+    animation: fbv6-companion-bob 0.5s ease-in-out infinite;
+  }
+  .fbv6__companion::before {
+    /* shadow puff under the sprite */
+    content: '';
+    position: absolute;
+    bottom: -3px; left: 50%;
+    width: 16px; height: 3px;
+    background: rgba(0,0,0,0.18); border-radius: 50%;
+    transform: translateX(-50%);
+  }
+  @keyframes fbv6-companion-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.5px); }
+  }
+  .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__companion {
+    animation-duration: 120s;
+    opacity: 0.65;
+  }
+  /* Fade out when the companion's lifetime is ending */
+  .fbv6__companion.is-leaving {
+    transition: opacity 2.4s ease, transform 2.4s ease;
+    opacity: 0;
   }
 
   /* RIGHT EDGE — chevron + ON AIR */
