@@ -19,6 +19,12 @@ const PANELS = [
     chant: "WE DON'T CARE",
     blockBody: "panel 1 — track 02 of College Dropout. The kid choir is the whole point.",
     accent: "#993c1d",
+    liner: {
+      era: "first major-label LP. the sweater raps before the autotune.",
+      feel: "kids on the hook, soul-clap drums, defiance you can sing on the way to school.",
+      line: "yall can't tell me nothing.",
+      nouns: [233, 263],
+    },
   },
   {
     n: 2,
@@ -33,6 +39,12 @@ const PANELS = [
     chant: "GOTTA HAVE IT",
     blockBody: "panel 2 — track 07 of Watch The Throne. Two-twenty of strut.",
     accent: "#8a2432",
+    liner: {
+      era: "the throne tour summer. luxury rap at full volume.",
+      feel: "two-twenty straight strut. James-Brown chops, trade-off bars, no hook.",
+      line: "gotta have it.",
+      nouns: [458, 769],
+    },
   },
   {
     n: 3,
@@ -47,6 +59,12 @@ const PANELS = [
     chant: "LET THE BEAT BUILD",
     blockBody: "panel 3 — Kanye-produced. Kick → snare → bell → choir → horn.",
     accent: "#185fa5",
+    liner: {
+      era: "carter iii. five-oh-nine of layers stacking, exactly what the title says.",
+      feel: "kanye production at its patient: each section adds one element and lets it ride.",
+      line: "let the beat build.",
+      nouns: [866, 977],
+    },
   },
 ];
 
@@ -126,6 +144,7 @@ const jsonLd = {
           <li class="panel" data-panel={p.n} style={`--accent: ${p.accent};`}>
             <header class="panel__head">
               <span class="panel__num">{`PANEL ${String(p.n).padStart(2, '0')}`}</span>
+              <span class="panel__pick" data-pick-badge hidden>★ TODAY'S PICK</span>
               <span class="panel__year">{p.year}</span>
             </header>
 
@@ -202,7 +221,48 @@ const jsonLd = {
 
             <footer class="panel__foot">
               <a href={`/b/${p.blockId}`}>open block /b/{p.blockId} →</a>
+              <button type="button" class="panel__flip" data-flip>♪ LINER NOTES</button>
             </footer>
+
+            <aside class="panel__back" data-back aria-hidden="true">
+              <header class="panel__head">
+                <span class="panel__num">{`LINER · 0${p.n}`}</span>
+                <span class="panel__year">{p.year}</span>
+              </header>
+
+              <h3 class="panel__backTitle">{`"${p.liner.line}"`}</h3>
+
+              <dl class="panel__liner">
+                <div><dt>era</dt><dd>{p.liner.era}</dd></div>
+                <div><dt>feel</dt><dd>{p.liner.feel}</dd></div>
+              </dl>
+
+              <ul class="panel__backNouns" aria-label="Liner-note mascots">
+                {p.liner.nouns.map((seed) => (
+                  <li>
+                    <img
+                      src={`https://noun.pics/${seed}.svg`}
+                      alt={`Visit Noun #${seed}`}
+                      width="56"
+                      height="56"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <span class="panel__nounTag">#{seed}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <p class="panel__backNote">
+                liner notes are this room's small story — what the song is doing,
+                not a discography. the front side is for play. this side is for
+                the spin afterwards.
+              </p>
+
+              <footer class="panel__backFoot">
+                <button type="button" class="panel__flipBack" data-flip-back>← BACK TO FRONT</button>
+              </footer>
+            </aside>
           </li>
         ))}
       </ol>
@@ -234,6 +294,43 @@ const jsonLd = {
 
   <script is:inline>
     (function () {
+      // --- panel flip (sprint 2) ---
+      (function flips() {
+        const panels = document.querySelectorAll('.panel');
+        panels.forEach((panel) => {
+          const flipBtn = panel.querySelector('[data-flip]');
+          const flipBack = panel.querySelector('[data-flip-back]');
+          const back = panel.querySelector('[data-back]');
+          if (!flipBtn || !flipBack || !back) return;
+          flipBtn.addEventListener('click', () => {
+            panel.classList.add('is-flipped');
+            back.setAttribute('aria-hidden', 'false');
+          });
+          flipBack.addEventListener('click', () => {
+            panel.classList.remove('is-flipped');
+            back.setAttribute('aria-hidden', 'true');
+          });
+        });
+      })();
+
+      // --- today's pick (sprint 2): deterministic per-day highlight ---
+      (function todaysPick() {
+        const panels = document.querySelectorAll('.panel');
+        if (panels.length !== 3) return;
+        const d = new Date();
+        const key = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+        let h = 5381;
+        for (let i = 0; i < key.length; i++) {
+          h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
+        }
+        const pickN = (h % 3) + 1;
+        const picked = document.querySelector('[data-panel="' + pickN + '"]');
+        if (!picked) return;
+        picked.classList.add('is-pick');
+        const badges = picked.querySelectorAll('[data-pick-badge]');
+        badges.forEach((b) => b.removeAttribute('hidden'));
+      })();
+
       // --- chant counter (panel 1) ---
       (function chant() {
         const btn = document.querySelector('[data-chant-btn]');
@@ -447,6 +544,7 @@ const jsonLd = {
       gap: 1.1rem;
     }
     .panel {
+      position: relative;
       background: var(--paper);
       border: 4px solid var(--ink);
       box-shadow:
@@ -457,6 +555,35 @@ const jsonLd = {
       display: flex;
       flex-direction: column;
       gap: 0.7rem;
+      min-height: 700px;
+      transition: box-shadow 0.45s ease, transform 0.45s ease;
+    }
+
+    /* Today's Pick — gold halo on one panel, deterministic per day */
+    .panel.is-pick {
+      box-shadow:
+        inset 0 0 0 2px var(--paper),
+        inset 0 0 0 4px var(--gold),
+        0 0 0 4px var(--gold),
+        0 0 24px 4px rgba(216, 168, 58, 0.55),
+        0 8px 0 -2px rgba(0, 0, 0, 0.4);
+      transform: translateY(-2px);
+    }
+    .panel__pick {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      padding: 0.18rem 0.45rem;
+      background: var(--gold);
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      font-weight: 700;
+      white-space: nowrap;
+      animation: pickPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pickPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(216, 168, 58, 0); }
+      50%      { box-shadow: 0 0 0 4px rgba(216, 168, 58, 0.45); }
     }
     .panel__head {
       display: flex;
@@ -643,6 +770,10 @@ const jsonLd = {
       margin-top: auto;
       padding-top: 0.4rem;
       border-top: 2px dashed rgba(26, 20, 16, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
     }
     .panel__foot a {
       font-family: 'IBM Plex Mono', ui-monospace, monospace;
@@ -651,6 +782,139 @@ const jsonLd = {
       text-transform: uppercase;
       color: var(--accent);
     }
+    .panel__flip {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.6rem;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    .panel__flip:hover { background: var(--gold); color: var(--ink); }
+    .panel__flip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+    /* Back side — liner notes */
+    .panel__back {
+      position: absolute;
+      inset: 0;
+      background: var(--paper);
+      border: 4px solid var(--ink);
+      box-shadow:
+        inset 0 0 0 2px var(--paper),
+        inset 0 0 0 4px var(--gold);
+      padding: 1rem 1rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      transform: rotateY(90deg) scale(0.96);
+      opacity: 0;
+      pointer-events: none;
+      transform-origin: 50% 50%;
+      transition: opacity 0.32s ease, transform 0.42s cubic-bezier(0.2, 0.8, 0.3, 1);
+      z-index: 2;
+      backface-visibility: hidden;
+    }
+    .panel.is-flipped > :not(.panel__back) {
+      opacity: 0;
+      transform: rotateY(-90deg) scale(0.96);
+      pointer-events: none;
+      transition: opacity 0.28s ease, transform 0.42s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .panel.is-flipped .panel__back {
+      transform: rotateY(0deg) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .panel__backTitle {
+      font-family: 'Georgia', serif;
+      font-style: italic;
+      font-weight: 900;
+      font-size: clamp(1.4rem, 2.6vw, 1.8rem);
+      line-height: 1.15;
+      margin: 0.2rem 0 0.6rem;
+      color: var(--accent);
+    }
+    .panel__liner {
+      margin: 0;
+      display: grid;
+      gap: 0.55rem;
+    }
+    .panel__liner div {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 0.55rem;
+      align-items: baseline;
+      padding: 0.25rem 0;
+      border-bottom: 1px dashed rgba(26, 20, 16, 0.2);
+    }
+    .panel__liner dt {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 0.66rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(26, 20, 16, 0.55);
+    }
+    .panel__liner dd {
+      margin: 0;
+      font-size: 0.94rem;
+      line-height: 1.4;
+    }
+    .panel__backNouns {
+      list-style: none;
+      margin: 0;
+      padding: 0.5rem;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+      background:
+        repeating-linear-gradient(135deg, var(--paper) 0 8px, #f5e3c4 8px 16px);
+      border: 2px solid var(--ink);
+    }
+    .panel__backNouns li {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .panel__backNouns img {
+      width: 100%;
+      max-width: 56px;
+      aspect-ratio: 1 / 1;
+      image-rendering: pixelated;
+      background: var(--paper);
+      border: 2px solid var(--ink);
+    }
+    .panel__backNote {
+      font-size: 0.82rem;
+      line-height: 1.45;
+      font-style: italic;
+      color: rgba(26, 20, 16, 0.62);
+      margin: 0;
+    }
+    .panel__backFoot {
+      margin-top: auto;
+      padding-top: 0.5rem;
+      border-top: 2px dashed rgba(26, 20, 16, 0.25);
+    }
+    .panel__flipBack {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.7rem;
+      border: 2px solid var(--ink);
+      background: var(--ink);
+      color: var(--paper);
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    .panel__flipBack:hover { background: var(--gold); color: var(--ink); }
 
     /* Below-frame surfaces */
     .bar {
