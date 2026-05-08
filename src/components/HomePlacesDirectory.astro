@@ -6,10 +6,25 @@
  * craigslist type of link tree to visit places."
  *
  * Then 2026-05-08 (later): "lets have this list include every /, /gandalf, etc"
- * — so this is now a comprehensive index of EVERY public route on the
- * site, organized by purpose. Hand-curated; deliberately not auto-generated
- * from the sitemap so the editorial shape stays opinionated. New routes
- * get added by editing this file.
+ * — comprehensive index of every public route on the site, organized
+ * by purpose.
+ *
+ * Then 2026-05-08 (later still): "as new / are added, can you make sure
+ * they get added to bottom menu" — so the directory is now HYBRID:
+ *
+ *   1. The 14 hand-curated SECTIONS below stay opinionated. New routes
+ *      should still be moved into the right category by editing this
+ *      file — that's what keeps the shape readable.
+ *   2. A 15th UNFILED section is auto-discovered at build time. We
+ *      glob src/pages/, diff against the curated href set, and surface
+ *      anything new at the bottom. Nothing slips through anymore.
+ *
+ * Filters applied to auto-discovery:
+ *   - Skip dynamic routes ([slug], [id])
+ *   - Skip /admin/* (operator-only)
+ *   - Skip /404, /index (the home itself)
+ *   - .astro / .md / .ts → route path; .json.ts stays as .json (so
+ *     /agents.json shows up correctly if not already curated)
  *
  * The aesthetic is dense, terse, scannable. No images, no chrome, just
  * LINKS — the way Yahoo's portal looked in 1996 and Craigslist still
@@ -533,7 +548,65 @@ const SECTIONS: Section[] = [
   },
 ];
 
-const totalLinks = SECTIONS.reduce(
+// ─── Auto-discovery: glob src/pages/ at build time, diff against the
+// curated href set, and surface anything new at the bottom in UNFILED.
+// import.meta.glob enumerates path keys without bundling the modules.
+const allPageFiles = import.meta.glob('/src/pages/**/*.{astro,md,ts}', { eager: false });
+
+function fileToRoute(file: string): string | null {
+  // Drop the prefix.
+  let route = file.replace(/^\/src\/pages\//, '/');
+  // Strip page suffixes. Order matters: .astro / .md fall away cleanly;
+  // .ts is for endpoint files like agents.json.ts → /agents.json.
+  route = route.replace(/\.(astro|md)$/, '');
+  route = route.replace(/\.ts$/, '');
+  // /foo/index → /foo. /index → /.
+  route = route.replace(/\/index$/, '');
+  if (!route) route = '/';
+  return route;
+}
+
+// Build the curated href set (handles both flat sections and nested groups).
+const curatedHrefs = new Set<string>();
+for (const sec of SECTIONS) {
+  if (sec.places) for (const p of sec.places) curatedHrefs.add(p.href);
+  if (sec.groups) for (const g of sec.groups) for (const p of g.places) curatedHrefs.add(p.href);
+}
+
+const unfiledRoutes = Object.keys(allPageFiles)
+  .map(fileToRoute)
+  .filter((r): r is string => !!r)
+  // Hide internal/operator/dynamic routes.
+  .filter((r) => !r.includes('['))             // dynamic [slug], [id]
+  .filter((r) => !r.startsWith('/admin'))      // operator-only
+  .filter((r) => !r.startsWith('/api'))        // shouldn't be in src/pages, but defensive
+  .filter((r) => !r.startsWith('/data/'))      // data fixtures, not browseable routes
+  .filter((r) => r !== '/')                    // home itself
+  .filter((r) => r !== '/404')                 // error route
+  // Hide machine-readable endpoints (.json, .txt, .xml). If a JSON endpoint
+  // is worth surfacing for agents, add it to AGENTS by hand — the per-page
+  // .json companions (one per /foo) just bury the real new pages otherwise.
+  .filter((r) => !/\.(json|txt|xml|rss)$/.test(r))
+  // Exclude already-curated.
+  .filter((r) => !curatedHrefs.has(r))
+  // Stable order so ship diffs are readable.
+  .sort();
+
+const UNFILED_SECTION: Section | null = unfiledRoutes.length === 0 ? null : {
+  id: 'unfiled',
+  label: 'NEW · UNFILED',
+  sub: 'auto-discovered routes',
+  places: unfiledRoutes.map((r) => ({
+    href: r,
+    label: r.replace(/^\//, ''),
+  })),
+};
+
+const RENDERED_SECTIONS: Section[] = UNFILED_SECTION
+  ? [...SECTIONS, UNFILED_SECTION]
+  : SECTIONS;
+
+const totalLinks = RENDERED_SECTIONS.reduce(
   (n, s) => n + (s.places?.length ?? 0) + (s.groups?.reduce((m, g) => m + g.places.length, 0) ?? 0),
   0
 );
@@ -541,19 +614,22 @@ const totalLinks = SECTIONS.reduce(
 
 <section class="places" aria-label="Places to visit">
   <header class="places__head">
-    <p class="kicker mono">PLACES · {totalLinks} LINKS · {SECTIONS.length} CATEGORIES</p>
+    <p class="kicker mono">PLACES · {totalLinks} LINKS · {RENDERED_SECTIONS.length} CATEGORIES{unfiledRoutes.length > 0 ? ` · ${unfiledRoutes.length} UNFILED` : ''}</p>
     <h2 class="places__title">Map of the town.</h2>
     <p class="places__dek">
-      Yahoo-style index of every public surface. Hand-curated, terse,
-      no images. Use the channel filters on <a href="/archive">/archive</a>
-      for a denser block-level view, or the agent-readable
-      <a href="/agents.json">/agents.json</a> for the full manifest.
+      Yahoo-style index of every public surface. The 14 categories below
+      are hand-curated; anything new ships into the auto-discovered
+      <strong>NEW · UNFILED</strong> section at the bottom until someone
+      moves it into a proper category. Use the channel filters on
+      <a href="/archive">/archive</a> for a denser block-level view, or
+      the agent-readable <a href="/agents.json">/agents.json</a> for the
+      full manifest.
     </p>
   </header>
 
   <div class="places__grid">
-    {SECTIONS.map((sec) => (
-      <section class="places__col" aria-labelledby={`places-${sec.id}-h`}>
+    {RENDERED_SECTIONS.map((sec) => (
+      <section class={`places__col${sec.id === 'unfiled' ? ' places__col--unfiled' : ''}`} aria-labelledby={`places-${sec.id}-h`}>
         <header class="places__col-head">
           <h3 id={`places-${sec.id}-h`} class="places__col-label mono">{sec.label}</h3>
           <p class="places__col-sub">{sec.sub}</p>
@@ -594,8 +670,10 @@ const totalLinks = SECTIONS.reduce(
   </div>
 
   <p class="places__foot mono">
-    missing a place? edit <code>src/components/HomePlacesDirectory.astro</code> ·
-    deliberately hand-curated, not auto-generated from sitemap
+    new routes auto-land in <strong>NEW · UNFILED</strong> ·
+    move them into a proper category by editing
+    <code>src/components/HomePlacesDirectory.astro</code> ·
+    14 hand-curated categories + 1 auto-discovered
   </p>
 </section>
 
@@ -642,6 +720,29 @@ const totalLinks = SECTIONS.reduce(
     gap: 22px 28px;
     margin: 0 0 24px;
     align-items: start;
+  }
+
+  .places__col--unfiled {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+    padding: 16px 18px;
+    background: #fff;
+    border: 1.5px dashed #c4952e;
+    border-radius: 3px;
+  }
+  .places__col--unfiled .places__col-head {
+    border-bottom-color: #c4952e;
+  }
+  .places__col--unfiled .places__col-label { color: #c4952e; }
+  .places__col--unfiled .places__list {
+    columns: 4 160px;
+    column-gap: 18px;
+  }
+  .places__col--unfiled .places__item {
+    break-inside: avoid;
+  }
+  @media (max-width: 600px) {
+    .places__col--unfiled .places__list { columns: 2 130px; }
   }
 
   .places__col-head {
