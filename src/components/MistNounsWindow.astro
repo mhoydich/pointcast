@@ -1,0 +1,335 @@
+---
+/**
+ * MistNounsWindow — the "Window onto Ethereum" hero in /mist.
+ *
+ * Reads the Nouns DAO Auction House at build time via viem against
+ * Ethereum L1. Renders today's noun + current bid + a client-side
+ * countdown. The 2014 Mist mockup wanted coordination primitives in
+ * the launcher; the daily Nouns auction is exactly that, viewed from
+ * a Tezos town as the philosophical bridge.
+ *
+ * Build-time fetch is deliberate:
+ *  - matches PointCast's static-site ethos (no client RPC bundle)
+ *  - fast first paint, stale by deploy interval
+ *  - countdown hydrates client-side so it stays visually live without
+ *    re-fetching auction state
+ *
+ * RPC failure is tolerated. If L1 is unreachable at build time, the
+ * card renders a graceful fallback with a link to nouns.wtf — the
+ * page never fails to build because of a flaky public RPC.
+ */
+
+import { formatEther } from 'viem';
+import { getEthMainnetClient } from '../lib/eth/clients';
+import { NOUNS_L1 } from '../lib/eth/config';
+
+// Auction House V3: `auction()` returns a single Auction struct.
+// We declare the output as a tuple-with-components so viem returns the
+// named fields as an object.
+const NOUNS_AUCTION_HOUSE_ABI = [
+  {
+    inputs: [],
+    name: 'auction',
+    outputs: [
+      {
+        components: [
+          { name: 'nounId',    type: 'uint256' },
+          { name: 'amount',    type: 'uint256' },
+          { name: 'startTime', type: 'uint256' },
+          { name: 'endTime',   type: 'uint256' },
+          { name: 'bidder',    type: 'address' },
+          { name: 'settled',   type: 'bool'    },
+        ],
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+type AuctionView = {
+  nounId: number;
+  amountEth: string;       // e.g. "12.34" (4 decimals)
+  endTimeUnix: number;     // seconds since epoch
+  bidder: `0x${string}`;
+  settled: boolean;
+  fetchedAt: string;       // ISO timestamp of build-time fetch
+};
+
+let auction: AuctionView | null = null;
+let fetchError: string | null = null;
+
+try {
+  const result = await getEthMainnetClient().readContract({
+    address: NOUNS_L1.auctionHouse,
+    abi: NOUNS_AUCTION_HOUSE_ABI,
+    functionName: 'auction',
+  });
+  // result is a single tuple — viem returns it as an object with the named fields
+  auction = {
+    nounId: Number(result.nounId),
+    amountEth: Number(formatEther(result.amount)).toFixed(4),
+    endTimeUnix: Number(result.endTime),
+    bidder: result.bidder,
+    settled: result.settled,
+    fetchedAt: new Date().toISOString(),
+  };
+} catch (err: any) {
+  // Public RPC throttle / outage / contract revert / build-time network failure.
+  // Don't fail the build — just render the fallback card.
+  fetchError = err?.shortMessage ?? err?.message ?? 'unknown';
+  console.warn('[MistNounsWindow] L1 fetch failed at build time:', fetchError);
+}
+
+const nounsWtfUrl = auction
+  ? `https://nouns.wtf/noun/${auction.nounId}`
+  : 'https://nouns.wtf';
+const nounImageUrl = auction
+  ? `https://noun.pics/${auction.nounId}.svg`
+  : null;
+const shortBidder = auction
+  ? `${auction.bidder.slice(0, 6)}…${auction.bidder.slice(-4)}`
+  : '';
+---
+
+<section class="mist__window" aria-labelledby="window-title" data-mist-window>
+  <header class="mist__window-head">
+    <p class="mist__section-title mono">Window onto Ethereum</p>
+    <h2 id="window-title" class="mist__window-title">
+      An Ethereum-native culture, viewed from a Tezos town.
+    </h2>
+    <p class="mist__window-dek">
+      One Noun per day, forever. Today's auction reads live from L1 — the
+      bridge between the room you're in and the chain it's pointing at.
+    </p>
+  </header>
+
+  {auction ? (
+    <article class="mist__window-card mist__window-card--live">
+      <a href={nounsWtfUrl} target="_blank" rel="noopener noreferrer" class="mist__window-link">
+        <div class="mist__window-art">
+          <img
+            src={nounImageUrl}
+            alt={`Noun #${auction.nounId}`}
+            width="160"
+            height="160"
+            loading="eager"
+          />
+        </div>
+        <div class="mist__window-body">
+          <p class="mist__window-id mono">Noun · {auction.nounId}</p>
+          <p class="mist__window-bid">
+            <span class="mist__window-bid-amount">{auction.amountEth}</span>
+            <span class="mist__window-bid-unit mono">ETH</span>
+          </p>
+          <p class="mist__window-bidder mono">
+            {auction.settled ? 'settled' : 'top bid by'} <span>{shortBidder}</span>
+          </p>
+          <p class="mist__window-countdown mono" data-end-time={auction.endTimeUnix}>
+            <span class="mist__window-countdown-label">ends in</span>
+            <span class="mist__window-countdown-value">computing…</span>
+          </p>
+          <p class="mist__window-go mono">view on nouns.wtf ↗</p>
+        </div>
+      </a>
+      <p class="mist__window-meta mono">
+        L1 read at build · {new Date(auction.fetchedAt).toUTCString()}
+      </p>
+    </article>
+  ) : (
+    <article class="mist__window-card mist__window-card--fallback">
+      <a href={nounsWtfUrl} target="_blank" rel="noopener noreferrer" class="mist__window-link">
+        <div class="mist__window-body">
+          <p class="mist__window-id mono">L1 quiet at build time</p>
+          <p class="mist__window-bid">
+            <span class="mist__window-bid-amount">—</span>
+            <span class="mist__window-bid-unit mono">ETH</span>
+          </p>
+          <p class="mist__window-fallback">
+            The Ethereum L1 RPC didn't answer when this page was built ({fetchError ?? 'unknown'}).
+            The Nouns auction is still running every day forever — view it directly at nouns.wtf.
+          </p>
+          <p class="mist__window-go mono">open nouns.wtf ↗</p>
+        </div>
+      </a>
+    </article>
+  )}
+</section>
+
+<script>
+  // Hydrate the countdown from the build-baked endTime. Updates every second.
+  // No re-fetch — auction state is stale-by-deploy on purpose. If you want
+  // live state, click through to nouns.wtf.
+  const els = document.querySelectorAll<HTMLElement>('.mist__window-countdown[data-end-time]');
+  if (els.length > 0) {
+    const fmt = (totalSeconds: number): string => {
+      if (totalSeconds <= 0) return 'ended (refresh for next noun)';
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    };
+    const tick = () => {
+      const now = Math.floor(Date.now() / 1000);
+      els.forEach((el) => {
+        const end = Number(el.dataset.endTime ?? 0);
+        const valueEl = el.querySelector<HTMLElement>('.mist__window-countdown-value');
+        if (valueEl) valueEl.textContent = fmt(end - now);
+      });
+    };
+    tick();
+    setInterval(tick, 1000);
+  }
+</script>
+
+<style>
+  .mist__window {
+    margin: 32px 0;
+    padding: 24px;
+    border: 1px solid var(--color-rule);
+    border-radius: 12px;
+    background: linear-gradient(
+      140deg,
+      var(--color-card) 0%,
+      color-mix(in oklab, var(--color-warm) 6%, var(--color-card)) 100%
+    );
+  }
+  .mist__window-head { margin-bottom: 18px; }
+  .mist__window-title {
+    font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+    font-style: italic;
+    line-height: 1.3;
+    margin: 6px 0 4px;
+    color: var(--color-ink);
+  }
+  .mist__window-dek {
+    font-size: 0.92rem;
+    color: var(--color-ink-soft);
+    margin: 0;
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+
+  .mist__window-card {
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    background: var(--color-paper);
+    overflow: hidden;
+    transition: border-color 120ms ease;
+  }
+  .mist__window-card:hover { border-color: var(--color-warm); }
+
+  .mist__window-link {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 20px;
+    padding: 18px;
+    text-decoration: none;
+    color: inherit;
+    align-items: center;
+  }
+  @media (max-width: 600px) {
+    .mist__window-link {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
+    }
+  }
+
+  .mist__window-art {
+    width: 160px; height: 160px;
+    border: 1px dashed var(--color-rule);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-card);
+    image-rendering: pixelated;
+  }
+  .mist__window-art img {
+    width: 144px; height: 144px;
+    image-rendering: pixelated;
+  }
+
+  .mist__window-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mist__window-id {
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0;
+  }
+  .mist__window-bid {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 0;
+  }
+  .mist__window-bid-amount {
+    font-size: 2.2rem;
+    line-height: 1;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .mist__window-bid-unit {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+  }
+  .mist__window-bidder {
+    font-size: 0.7rem;
+    color: var(--color-ink-soft);
+    margin: 2px 0 0;
+  }
+  .mist__window-bidder span { color: var(--color-ink); }
+  .mist__window-countdown {
+    font-size: 0.7rem;
+    color: var(--color-ink-soft);
+    margin: 8px 0 0;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .mist__window-countdown-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+  }
+  .mist__window-countdown-value {
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .mist__window-go {
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin-top: 10px;
+  }
+  .mist__window-fallback {
+    font-size: 0.85rem;
+    color: var(--color-ink-soft);
+    line-height: 1.5;
+    margin: 6px 0 0;
+    max-width: 50ch;
+  }
+  .mist__window-meta {
+    font-size: 0.55rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 0;
+    padding: 8px 18px 12px;
+    border-top: 1px dashed var(--color-rule);
+  }
+</style>
