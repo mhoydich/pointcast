@@ -1,0 +1,134 @@
+---
+/**
+ * IntercomWidget — global floating bug-report + chat-to-Mike + inbox.
+ * v2: visitor inbox tab + reply badge.
+ */
+---
+
+<div class="ico" id="ico-root" data-state="closed">
+  <button class="ico__trigger" id="ico-trigger" type="button" aria-expanded="false">
+    <span class="ico__trigger-icon" aria-hidden="true">💬</span>
+    <span class="ico__trigger-label">message mike</span>
+    <span class="ico__badge" id="ico-badge" hidden></span>
+  </button>
+  <div class="ico__panel" id="ico-panel" role="dialog" aria-hidden="true">
+    <header class="ico__head"><span class="ico__title">Send to Mike</span><button class="ico__close" id="ico-close" type="button">✕</button></header>
+    <div class="ico__tabs" role="tablist">
+      <button class="ico__tab ico__tab--active" data-tab="chat" type="button">💬 Say hi</button>
+      <button class="ico__tab" data-tab="bug" type="button">🐛 Bug</button>
+      <button class="ico__tab" data-tab="inbox" type="button">📥 Inbox <span class="ico__tab-dot" id="ico-tab-dot" hidden></span></button>
+    </div>
+    <form class="ico__form" id="ico-form">
+      <textarea class="ico__textarea" id="ico-body" rows="4" placeholder="say hi…" maxlength="2000" required></textarea>
+      <input class="ico__contact" id="ico-contact" type="text" placeholder="optional · how Mike can reach you" maxlength="200"/>
+      <div class="ico__meta"><span class="ico__page" id="ico-page">page: —</span></div>
+      <div class="ico__row"><button class="ico__send" type="submit" id="ico-send">SEND</button><span class="ico__status" id="ico-status"></span></div>
+    </form>
+    <div class="ico__inbox" id="ico-inbox" hidden>
+      <p class="ico__inbox-loading" id="ico-inbox-loading">loading your inbox…</p>
+      <div class="ico__inbox-list" id="ico-inbox-list"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ico { position: fixed; right: 16px; bottom: 96px; z-index: 90; font-family: 'JetBrains Mono Variable', ui-monospace, monospace; }
+  @media (max-width: 680px) { .ico { bottom: 124px; right: 10px; } }
+  .ico__trigger { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border: 2px solid #1a0820; background: linear-gradient(180deg, #f6c15e 0%, #d4a437 100%); color: #1a0820; font-size: 11px; font-weight: 800; letter-spacing: 0.20em; text-transform: uppercase; cursor: pointer; box-shadow: 4px 4px 0 0 #1a0820; transition: transform 100ms; border-radius: 999px; }
+  .ico__trigger:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #1a0820; }
+  .ico__trigger-icon { font-size: 16px; }
+  .ico__badge { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; border-radius: 50%; background: #b8431a; border: 2px solid #fffaf0; box-shadow: 0 0 0 1px #1a0820; animation: ico-pulse 1.4s ease-in-out infinite; }
+  @keyframes ico-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  .ico[data-state='open'] .ico__trigger { display: none; }
+  .ico__panel { width: 340px; max-width: calc(100vw - 32px); border: 2.5px solid #1a0820; background: #fffaf0; box-shadow: 6px 6px 0 0 #1a0820; display: none; flex-direction: column; overflow: hidden; max-height: 70vh; }
+  .ico[data-state='open'] .ico__panel { display: flex; }
+  .ico__head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #1a0820; color: #f6c15e; }
+  .ico__title { font-size: 11px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; }
+  .ico__close { background: transparent; border: none; color: #f6c15e; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  .ico__tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .ico__tab { padding: 10px 6px; border: none; border-bottom: 2px solid #1a0820; background: #f4e7c8; color: #5a3422; font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; cursor: pointer; }
+  .ico__tab:hover { background: #f6c15e; }
+  .ico__tab--active { background: #fffaf0; color: #1a0820; border-bottom-color: transparent; }
+  .ico__tab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #b8431a; margin-left: 4px; }
+  .ico__form { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #fffaf0; overflow-y: auto; }
+  .ico__textarea, .ico__contact { width: 100%; padding: 8px 10px; border: 2px solid #1a0820; background: #fffaf0; color: #1a0820; font-family: inherit; font-size: 12px; line-height: 1.4; resize: vertical; box-sizing: border-box; }
+  .ico__textarea:focus, .ico__contact:focus { outline: none; border-color: #d4a437; box-shadow: 0 0 0 2px #f6c15e; }
+  .ico__contact { font-size: 11px; }
+  .ico__meta { font-size: 9px; letter-spacing: 0.12em; color: #5a3422; opacity: 0.75; }
+  .ico__row { display: flex; align-items: center; gap: 10px; }
+  .ico__send { padding: 8px 16px; border: 2px solid #1a0820; background: #d4a437; color: #1a0820; font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: 0.18em; cursor: pointer; box-shadow: 2px 2px 0 0 #1a0820; }
+  .ico__send:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 #1a0820; }
+  .ico__send:disabled { opacity: 0.55; cursor: not-allowed; }
+  .ico__status { font-size: 10px; color: #5a3422; }
+  .ico__status[data-kind='ok'] { color: #2a5a30; }
+  .ico__status[data-kind='err'] { color: #b8431a; }
+  .ico__inbox { padding: 12px; overflow-y: auto; max-height: calc(70vh - 80px); }
+  .ico__inbox-loading, .ico__inbox-empty { font-size: 11px; color: #5a3422; text-align: center; padding: 20px 12px; margin: 0; line-height: 1.6; }
+  .ico__inbox-list { display: flex; flex-direction: column; gap: 10px; }
+  .ico__inbox-msg { padding: 8px 10px; border: 1.5px solid #1a0820; background: #fffaf0; }
+  .ico__inbox-msg-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 9px; text-transform: uppercase; color: #5a3422; margin-bottom: 4px; }
+  .ico__inbox-msg-kind { padding: 1px 5px; border: 1px solid currentColor; border-radius: 999px; font-weight: 800; }
+  .ico__inbox-msg-kind--bug { color: #b8431a; }
+  .ico__inbox-msg-kind--chat { color: #2a5a30; }
+  .ico__inbox-msg-body, .ico__inbox-reply-body { font-family: var(--pc-font-sans, system-ui, sans-serif); font-size: 12px; line-height: 1.4; color: #1a0820; white-space: pre-wrap; word-break: break-word; }
+  .ico__inbox-replies { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.20); display: flex; flex-direction: column; gap: 4px; }
+  .ico__inbox-reply { padding: 5px 8px; background: #f4e7c8; border-left: 3px solid #d4a437; }
+  .ico__inbox-reply-head { font-size: 9px; color: #b8431a; margin-bottom: 2px; }
+  .ico__inbox-resolved { color: #2a5a30; font-weight: 800; padding: 1px 5px; border: 1px solid currentColor; border-radius: 999px; font-size: 9px; }
+</style>
+
+<script>
+  (function () {
+    type Reply = { body: string; t: number; from: string };
+    type Msg = { id: string; kind: 'bug'|'chat'; body: string; contact: string; page: string; t: number; replies?: Reply[]; resolved?: boolean };
+    const root = document.getElementById('ico-root'); const trigger = document.getElementById('ico-trigger'); const badge = document.getElementById('ico-badge'); const tabDot = document.getElementById('ico-tab-dot');
+    const panel = document.getElementById('ico-panel'); const closeBtn = document.getElementById('ico-close');
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.ico__tab'));
+    const formEl = document.getElementById('ico-form') as HTMLFormElement | null;
+    const inboxEl = document.getElementById('ico-inbox'); const inboxLoadingEl = document.getElementById('ico-inbox-loading'); const inboxListEl = document.getElementById('ico-inbox-list');
+    const bodyEl = document.getElementById('ico-body') as HTMLTextAreaElement | null; const contactEl = document.getElementById('ico-contact') as HTMLInputElement | null;
+    const sendBtn = document.getElementById('ico-send') as HTMLButtonElement | null; const statusEl = document.getElementById('ico-status'); const pageEl = document.getElementById('ico-page');
+    if (!root || !trigger || !panel || !formEl || !sendBtn || !bodyEl || !pageEl || !inboxEl) return;
+    let tab: 'chat'|'bug'|'inbox' = 'chat'; let inboxPollTimer: number | null = null; let lastReplyT = 0;
+    try { lastReplyT = Number(localStorage.getItem('pc-ico-last-reply') || 0); } catch {}
+    function sessionId(): string { try { let id = localStorage.getItem('pc-session-id'); if (!id) { id = 'anon-' + Math.random().toString(36).slice(2, 12); localStorage.setItem('pc-session-id', id); } return id; } catch { return 'anon-' + Date.now(); } }
+    function escape(s: string): string { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function fmtTime(t: number): string { const m = Math.floor((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`; return new Date(t).toLocaleDateString('en-CA'); }
+    function open() { root!.dataset.state = 'open'; trigger!.setAttribute('aria-expanded', 'true'); panel!.setAttribute('aria-hidden', 'false'); pageEl!.textContent = `page: ${location.pathname}${location.search}`; if (tab === 'inbox') startInboxPoll(); else setTimeout(() => bodyEl!.focus(), 80); }
+    function close() { root!.dataset.state = 'closed'; trigger!.setAttribute('aria-expanded', 'false'); panel!.setAttribute('aria-hidden', 'true'); stopInboxPoll(); }
+    function setTab(t: 'chat'|'bug'|'inbox') { tab = t; tabs.forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('ico__tab--active', on); }); if (t === 'inbox') { formEl!.style.display = 'none'; (inboxEl as HTMLElement).hidden = false; startInboxPoll(); } else { formEl!.style.display = ''; (inboxEl as HTMLElement).hidden = true; stopInboxPoll(); bodyEl!.placeholder = t === 'bug' ? 'what broke? where? what did you expect?' : 'say hi…'; } }
+    trigger.addEventListener('click', open); closeBtn?.addEventListener('click', close);
+    tabs.forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab as any)));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && root.dataset.state === 'open') close(); });
+    formEl.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const body = bodyEl!.value.trim(); if (!body) return;
+      sendBtn!.disabled = true;
+      if (statusEl) { statusEl.textContent = 'sending…'; statusEl.dataset.kind = ''; }
+      try {
+        const r = await fetch('/api/intercom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: tab, body, contact: contactEl?.value || '', page: location.pathname + location.search, sessionId: sessionId() }) });
+        const j = await r.json();
+        if (j?.ok) { if (statusEl) { statusEl.textContent = '✓ sent · thank you'; statusEl.dataset.kind = 'ok'; } bodyEl!.value = ''; if (contactEl) contactEl.value = ''; setTimeout(() => { close(); if (statusEl) { statusEl.textContent = ''; statusEl.dataset.kind = ''; } }, 1400); }
+        else if (statusEl) { statusEl.textContent = `✕ ${j?.reason || 'error'}`; statusEl.dataset.kind = 'err'; }
+      } catch { if (statusEl) { statusEl.textContent = '✕ network error'; statusEl.dataset.kind = 'err'; } }
+      finally { sendBtn!.disabled = false; }
+    });
+    async function fetchInbox() { try { const r = await fetch(`/api/intercom?sessionId=${encodeURIComponent(sessionId())}`, { cache: 'no-store' }); const j = await r.json(); if (j?.ok && Array.isArray(j.messages)) return { messages: j.messages as Msg[] }; } catch {} return null; }
+    function renderInbox(msgs: Msg[]) {
+      if (!inboxListEl || !inboxLoadingEl) return;
+      inboxLoadingEl.style.display = 'none';
+      if (msgs.length === 0) { inboxListEl.innerHTML = '<p class="ico__inbox-empty">— no messages yet —<br/>say hi or report a bug · Mike will reply here</p>'; return; }
+      inboxListEl.innerHTML = msgs.map(m => {
+        const replies = (m.replies || []).map(r => `<div class="ico__inbox-reply"><div class="ico__inbox-reply-head">${escape(r.from || 'mike')} · ${fmtTime(r.t)}</div><div class="ico__inbox-reply-body">${escape(r.body)}</div></div>`).join('');
+        return `<div class="ico__inbox-msg"><div class="ico__inbox-msg-head"><span class="ico__inbox-msg-kind ico__inbox-msg-kind--${m.kind}">${m.kind === 'bug' ? '🐛 BUG' : '💬 CHAT'}</span><span>${fmtTime(m.t)}</span>${m.resolved ? '<span class="ico__inbox-resolved">✓ RESOLVED</span>' : ''}</div><div class="ico__inbox-msg-body">${escape(m.body)}</div>${replies ? `<div class="ico__inbox-replies">${replies}</div>` : ''}</div>`;
+      }).join('');
+    }
+    async function refreshInbox() { const r = await fetchInbox(); if (!r) return; renderInbox(r.messages); const latestReply = r.messages.reduce((max, m) => Math.max(max, (m.replies || []).reduce((mm, rep) => Math.max(mm, rep.t), 0)), 0); if (latestReply > 0) { lastReplyT = latestReply; try { localStorage.setItem('pc-ico-last-reply', String(latestReply)); } catch {} hideBadge(); } }
+    function startInboxPoll() { refreshInbox(); if (inboxPollTimer) clearInterval(inboxPollTimer); inboxPollTimer = window.setInterval(refreshInbox, 30000); }
+    function stopInboxPoll() { if (inboxPollTimer) { clearInterval(inboxPollTimer); inboxPollTimer = null; } }
+    function showBadge() { if (badge) badge.hidden = false; if (tabDot) tabDot.hidden = false; }
+    function hideBadge() { if (badge) badge.hidden = true; if (tabDot) tabDot.hidden = true; }
+    async function checkForReplies() { const r = await fetchInbox(); if (!r) return; const latestReply = r.messages.reduce((max, m) => Math.max(max, (m.replies || []).reduce((mm, rep) => Math.max(mm, rep.t), 0)), 0); if (latestReply > lastReplyT) showBadge(); }
+    setTimeout(checkForReplies, 1500); setInterval(checkForReplies, 60000); setTab('chat');
+  })();
+</script>
