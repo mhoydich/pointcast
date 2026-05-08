@@ -1,0 +1,459 @@
+---
+/**
+ * /drum-race-v2 — drum race with difficulties + ghost replay + best-time tracking.
+ *
+ * Mike 2026-05-08: pick 3 v2s. This is one of them.
+ *
+ * v2 over v1:
+ *   - 3 difficulty levels: CHILL (80 BPM, 50% AI accuracy), NORMAL (100/75%),
+ *     HARD (130/90%)
+ *   - Ghost replay: your last-best run for the chosen difficulty plays back
+ *     as a translucent lane below your noun, showing the line you have to beat
+ *   - Best time + best streak persisted in localStorage per difficulty
+ *   - "PERSONAL BEST" banner if you beat your previous time
+ *   - Streak high water mark shown in HUD
+ *
+ * Ghost storage shape (localStorage key `pc-drum-race-best`):
+ *   { [difficulty]: { time_ms, streak, taps: number[] } }
+ * where `taps` is an array of millisecond offsets from race start at which
+ * the player tapped on each beat.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Noun Drum Race v2 · ghost replay + difficulties · PointCast';
+const description = '4 Nouns race. 3 difficulties. Your previous-best run plays as a ghost. Beat your time, save it.';
+
+const RACERS = [
+  { id: 313,  name: 'Marine Layer',    color: '#9ed6f0', voice: 'kick',  acc_chill: 0.0,  acc_norm: 0.0,  acc_hard: 0.0,  speed: 1.00 },
+  { id: 523,  name: 'Block Runner',    color: '#a8ff3a', voice: 'snare', acc_chill: 0.55, acc_norm: 0.78, acc_hard: 0.92, speed: 1.05 },
+  { id: 1042, name: 'Release Train',   color: '#ffd400', voice: 'bell',  acc_chill: 0.50, acc_norm: 0.72, acc_hard: 0.88, speed: 1.00 },
+  { id: 287,  name: '—',               color: '#f6c15e', voice: 'lead',  acc_chill: 0.45, acc_norm: 0.65, acc_hard: 0.85, speed: 1.10 },
+];
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="dr2" id="dr2-main" data-state="idle">
+    <header class="dr2__header">
+      <h1 class="dr2__title">DRUM RACE · V2</h1>
+      <p class="dr2__tag">3 difficulties · ghost of your best run · personal-best tracking</p>
+    </header>
+
+    <section class="dr2__diff">
+      <span class="dr2__diff-label">DIFFICULTY:</span>
+      <button class="dr2__diff-btn" data-diff="chill"  type="button">🌅 CHILL · 80 bpm</button>
+      <button class="dr2__diff-btn dr2__diff-btn--active" data-diff="normal" type="button">⚡ NORMAL · 100 bpm</button>
+      <button class="dr2__diff-btn" data-diff="hard"   type="button">🔥 HARD · 130 bpm</button>
+      <span class="dr2__best" id="dr2-best">best: — · streak —</span>
+    </section>
+
+    <section class="dr2__hud">
+      <span class="dr2__hud-cell">METRO <span id="dr2-metro">○○○○</span></span>
+      <span class="dr2__hud-cell">BPM <strong id="dr2-bpm">100</strong></span>
+      <span class="dr2__hud-cell">STREAK <strong id="dr2-streak">0</strong> (HI <span id="dr2-streak-hi">0</span>)</span>
+      <span class="dr2__hud-cell">MULT <strong id="dr2-mult">1.0×</strong></span>
+      <span class="dr2__hud-cell">TIME <strong id="dr2-time">0.0s</strong></span>
+      <span class="dr2__hud-cell" id="dr2-state">— ready —</span>
+    </section>
+
+    <section class="dr2__track" id="dr2-track">
+      <div class="dr2__finish" aria-hidden="true">
+        <span class="dr2__finish-flag">⚑</span>
+        <span class="dr2__finish-line"></span>
+      </div>
+      {RACERS.map((r, i) => (
+        <div class={`dr2__lane ${i === 0 ? 'dr2__lane--player' : ''}`} data-i={i} style={`--lane-color: ${r.color};`}>
+          <div class="dr2__lane-meta">
+            <span class="dr2__lane-num">{i === 0 ? '🎯' : '🤖'}</span>
+            <span class="dr2__lane-name">#{r.id} · {r.name}</span>
+          </div>
+          <div class="dr2__lane-track">
+            {i === 0 && (
+              <div class="dr2__ghost" id="dr2-ghost" aria-hidden="true">
+                <img src={`https://noun.pics/${RACERS[0].id}.svg`} alt="" width="56" height="56" loading="lazy"/>
+              </div>
+            )}
+            <div class="dr2__noun" id={`dr2-noun-${i}`} data-i={i}>
+              <img src={`https://noun.pics/${r.id}.svg`} alt={`Noun ${r.id}`} width="56" height="56" loading="lazy"/>
+            </div>
+            <div class="dr2__progress" id={`dr2-progress-${i}`}></div>
+          </div>
+        </div>
+      ))}
+    </section>
+
+    <section class="dr2__pad-area">
+      <button class="dr2__pad" id="dr2-pad" type="button" aria-label="Tap on the beat">
+        <span class="dr2__pad-text" id="dr2-pad-text">▶ START RACE</span>
+        <span class="dr2__pad-hint">spacebar or click</span>
+      </button>
+      <div class="dr2__feedback" id="dr2-feedback" aria-live="polite"></div>
+      <div class="dr2__pb" id="dr2-pb" hidden>★ PERSONAL BEST ★</div>
+    </section>
+
+    <section class="dr2__panel">
+      <button class="dr2__btn" id="dr2-reset" type="button">↻ NEW RACE</button>
+      <button class="dr2__btn" id="dr2-clear-ghost" type="button">✕ CLEAR GHOST</button>
+      <a class="dr2__btn dr2__btn--link" href="/drum-race">v1 →</a>
+    </section>
+
+    <section class="dr2__win" id="dr2-win" hidden>
+      <div class="dr2__win-card">
+        <h2 class="dr2__win-title" id="dr2-win-title">🏆 WINNER</h2>
+        <img class="dr2__win-noun" id="dr2-win-noun" src="" alt="" width="96" height="96"/>
+        <p class="dr2__win-stats" id="dr2-win-stats">— stats —</p>
+        <button class="dr2__btn dr2__btn--big" id="dr2-win-again" type="button">↻ RACE AGAIN</button>
+      </div>
+    </section>
+
+    <section class="dr2__rules">
+      <p><strong>HOW TO RACE:</strong> click a difficulty. Click START. After 3-2-1, tap on each beat.</p>
+      <p><strong>GHOST</strong> · the translucent noun behind you = your previous best run on this difficulty. Beat it.</p>
+      <p><strong>PERSONAL BEST</strong> banner appears if you finish faster than your saved best.</p>
+    </section>
+
+    <section class="dr2__siblings">
+      <a href="/drum-race">/drum-race · v1</a>
+      <a href="/drum-jukebox">/drum-jukebox</a>
+      <a href="/drum-audiophile-v2">/drum-audiophile-v2</a>
+      <a href="/noun-cinema-v2">/noun-cinema-v2</a>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .dr2 { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #f4e7c8; background: linear-gradient(180deg, #1a0a06 0%, #0c0408 100%); min-height: 100vh; }
+  .dr2__header { text-align: center; margin: 18px 0 14px; }
+  .dr2__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6.5vw, 64px); letter-spacing: 0.18em; margin: 0; color: #f6c15e; text-shadow: 0 0 24px rgba(246, 193, 94, 0.40); }
+  .dr2__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 6px 0 0; }
+
+  .dr2__diff { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 10px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .dr2__diff-label { letter-spacing: 0.20em; color: #d4a437; text-transform: uppercase; }
+  .dr2__diff-btn { padding: 7px 12px; border: 2px solid #5a3422; background: #1a0a06; color: #d4a437; font-family: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; cursor: pointer; transition: border-color 200ms, transform 100ms; }
+  .dr2__diff-btn:hover { border-color: #d4a437; transform: translateY(-1px); }
+  .dr2__diff-btn--active { border-color: #f6c15e; background: #2a1408; color: #f6c15e; box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.35); }
+  .dr2__best { margin-left: auto; color: #cfc6df; opacity: 0.85; letter-spacing: 0.10em; }
+
+  .dr2__hud { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 14px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a437; }
+  .dr2__hud-cell strong { color: #f6c15e; padding-left: 4px; font-size: 14px; }
+
+  .dr2__track { position: relative; padding: 14px; border: 3px solid #5a3422; background: linear-gradient(180deg, #2a1810 0%, #3a2418 50%, #1a0a06 100%); box-shadow: 6px 6px 0 0 #050310, inset 0 0 60px rgba(0, 0, 0, 0.55); }
+  .dr2__finish { position: absolute; right: 14px; top: 14px; bottom: 14px; width: 28px; pointer-events: none; z-index: 2; }
+  .dr2__finish-flag { position: absolute; top: -2px; left: 6px; font-size: 22px; color: #f6c15e; text-shadow: 0 0 12px rgba(246, 193, 94, 0.65); }
+  .dr2__finish-line { position: absolute; top: 26px; bottom: 0; left: 0; width: 14px; background: repeating-linear-gradient(45deg, #f4e7c8 0 6px, #1a0a06 6px 12px); border-left: 2px solid #f6c15e; }
+
+  .dr2__lane { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed rgba(212, 164, 55, 0.20); }
+  .dr2__lane:last-of-type { border-bottom: none; }
+  .dr2__lane-meta { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.10em; color: #d4a437; }
+  .dr2__lane-name { color: #f4e7c8; opacity: 0.85; }
+  .dr2__lane--player { background: rgba(212, 164, 55, 0.04); border-left: 3px solid #f6c15e; padding-left: 4px; }
+  .dr2__lane--player .dr2__lane-name { color: #f6c15e; font-weight: 800; }
+  .dr2__lane-track { position: relative; height: 60px; background: linear-gradient(180deg, #050310 0%, #1a0a06 100%); border: 1px solid rgba(212, 164, 55, 0.25); border-radius: 4px; padding-right: 28px; overflow: hidden; }
+  .dr2__progress { position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(90deg, var(--lane-color, #d4a437) 0%, transparent 100%); opacity: 0.20; transition: width 220ms; width: 0%; }
+  .dr2__noun, .dr2__ghost { position: absolute; top: 50%; left: 0; transform: translate(0, -50%); width: 56px; height: 56px; image-rendering: pixelated; transition: left 220ms; }
+  .dr2__noun { z-index: 2; filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, 0.45)); }
+  .dr2__noun img { width: 100%; height: 100%; image-rendering: pixelated; }
+  .dr2__noun.dr2__noun--hit { filter: drop-shadow(0 0 8px var(--lane-color, #f6c15e)) drop-shadow(2px 4px 0 rgba(0, 0, 0, 0.45)); }
+  .dr2__ghost { z-index: 1; opacity: 0.30; mix-blend-mode: screen; filter: blur(0.5px); display: none; }
+  .dr2__ghost--active { display: block; }
+  .dr2__ghost img { width: 100%; height: 100%; image-rendering: pixelated; }
+
+  .dr2__pad-area { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 22px 0 14px; }
+  .dr2__pad { padding: 22px 38px; border: 3px solid #d4a437; border-radius: 12px; background: linear-gradient(180deg, #2a1408 0%, #1a0a06 100%); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-weight: 800; cursor: pointer; transition: transform 60ms, box-shadow 60ms; box-shadow: 4px 4px 0 0 #050310; min-width: 280px; }
+  .dr2__pad:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #050310; border-color: #f6c15e; }
+  .dr2__pad--tapped { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 #050310; background: linear-gradient(180deg, #5a3422 0%, #3a2410 100%); }
+  .dr2__pad-text { display: block; font-size: 18px; letter-spacing: 0.20em; }
+  .dr2__pad-hint { display: block; font-size: 10px; letter-spacing: 0.18em; color: #d4a437; opacity: 0.65; margin-top: 4px; }
+  .dr2__feedback { font-family: 'JetBrains Mono Variable', monospace; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: #cfc6df; min-height: 24px; }
+  .dr2__feedback[data-kind='perfect'] { color: #f6c15e; text-shadow: 0 0 10px rgba(246, 193, 94, 0.65); }
+  .dr2__feedback[data-kind='good']    { color: #a8ff3a; }
+  .dr2__feedback[data-kind='ok']      { color: #d4a437; }
+  .dr2__feedback[data-kind='miss']    { color: #b8431a; }
+  .dr2__pb { font-family: 'JetBrains Mono Variable', monospace; font-size: 18px; font-weight: 800; letter-spacing: 0.30em; color: #f6c15e; padding: 8px 16px; border: 2px solid #f6c15e; background: rgba(246, 193, 94, 0.10); animation: dr2-pb-pulse 1.2s ease-in-out infinite; }
+  @keyframes dr2-pb-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+  .dr2__panel { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.65); margin: 14px 0; }
+  .dr2__btn { padding: 9px 16px; border: 2px solid #d4a437; background: linear-gradient(180deg, #2a1408 0%, #1a0a06 100%); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; cursor: pointer; box-shadow: 2px 2px 0 0 #050310; text-decoration: none; }
+  .dr2__btn:hover { transform: translate(-1px, -1px); border-color: #f6c15e; }
+  .dr2__btn--big { padding: 12px 22px; font-size: 13px; }
+
+  .dr2__win { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 4, 6, 0.85); z-index: 100; padding: 20px; }
+  .dr2__win[hidden] { display: none; }
+  .dr2__win-card { padding: 28px 36px; border: 4px double #f6c15e; background: #1a0a06; text-align: center; box-shadow: 0 0 0 4px #050310, 0 0 40px rgba(246, 193, 94, 0.50); animation: dr2-win-pop 0.6s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes dr2-win-pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .dr2__win-title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(28px, 4vw, 48px); letter-spacing: 0.20em; margin: 0 0 12px; color: #f6c15e; }
+  .dr2__win-noun { display: block; margin: 12px auto; image-rendering: pixelated; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6)); }
+  .dr2__win-stats { font-family: 'JetBrains Mono Variable', monospace; font-size: 13px; color: #cfc6df; margin: 16px 0; letter-spacing: 0.10em; line-height: 1.5; }
+
+  .dr2__confetti { position: fixed; pointer-events: none; width: 8px; height: 8px; z-index: 99; animation: dr2-confetti-fall 3s linear forwards; }
+  @keyframes dr2-confetti-fall { from { transform: translateY(0) rotate(0); opacity: 1; } to { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+
+  .dr2__rules { padding: 14px 18px; border: 2px dashed rgba(212, 164, 55, 0.45); background: rgba(0, 0, 0, 0.3); color: #cfc6df; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; line-height: 1.55; margin: 14px 0; }
+  .dr2__rules p { margin: 4px 0; }
+  .dr2__rules strong { color: #f6c15e; }
+
+  .dr2__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .dr2__siblings a { color: #d4a437; text-decoration: none; }
+  .dr2__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+
+  @media (max-width: 720px) { .dr2__lane { grid-template-columns: 130px 1fr; } .dr2__noun, .dr2__ghost { width: 44px; height: 44px; } }
+  @media (prefers-reduced-motion: reduce) { .dr2__noun, .dr2__progress, .dr2__win-card, .dr2__pb { transition: none !important; animation: none !important; } }
+</style>
+
+<script>
+  type Voice = 'kick' | 'snare' | 'bell' | 'lead';
+  type Diff = 'chill' | 'normal' | 'hard';
+  interface Racer { id: number; name: string; color: string; voice: Voice; acc_chill: number; acc_norm: number; acc_hard: number; speed: number; }
+  const RACERS: Racer[] = [
+    { id: 313,  name: 'Marine Layer',    color: '#9ed6f0', voice: 'kick',  acc_chill: 0.0,  acc_norm: 0.0,  acc_hard: 0.0,  speed: 1.00 },
+    { id: 523,  name: 'Block Runner',    color: '#a8ff3a', voice: 'snare', acc_chill: 0.55, acc_norm: 0.78, acc_hard: 0.92, speed: 1.05 },
+    { id: 1042, name: 'Release Train',   color: '#ffd400', voice: 'bell',  acc_chill: 0.50, acc_norm: 0.72, acc_hard: 0.88, speed: 1.00 },
+    { id: 287,  name: '—',               color: '#f6c15e', voice: 'lead',  acc_chill: 0.45, acc_norm: 0.65, acc_hard: 0.85, speed: 1.10 },
+  ];
+  const BPM_FOR: Record<Diff, number> = { chill: 80, normal: 100, hard: 130 };
+  const FINISH = 100;
+  let difficulty: Diff = 'normal';
+  let actx: AudioContext | null = null;
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+  function pK(t:number){const a=ctx(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(120,t);o.frequency.exponentialRampToValueAtTime(40,t+0.18);g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.3);}
+  function pSn(t:number){const a=ctx(),buf=a.createBuffer(1,a.sampleRate*0.10,a.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;const n=a.createBufferSource();n.buffer=buf;const bp=a.createBiquadFilter();bp.type='bandpass';bp.frequency.value=2200;bp.Q.value=1.4;const g=a.createGain();g.gain.setValueAtTime(0.20,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);n.connect(bp).connect(g).connect(a.destination);n.start(t);n.stop(t+0.14);}
+  function pB(t:number, base = 1320){const a=ctx();[base, base*2, base*3].forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime([0.16,0.09,0.05][i],t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.7);});}
+  function pL(t:number){const a=ctx();const D=[0,4,7,12,14],deg=D[Math.floor(Math.random()*D.length)],f=264*Math.pow(2,deg/12);const o=a.createOscillator(),g=a.createGain(),lp=a.createBiquadFilter();o.type='sawtooth';o.frequency.setValueAtTime(f,t);lp.type='lowpass';lp.frequency.setValueAtTime(2200,t);lp.frequency.exponentialRampToValueAtTime(800,t+0.4);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.13,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);o.connect(lp).connect(g).connect(a.destination);o.start(t);o.stop(t+0.45);}
+  function pTick(t:number){const a=ctx();const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(880,t);g.gain.setValueAtTime(0.10,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.04);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.05);}
+  function pTickAccent(t:number){const a=ctx();const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(1320,t);g.gain.setValueAtTime(0.14,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.07);}
+  const PLAY: Record<Voice, (t: number) => void> = { kick: pK, snare: pSn, bell: (t) => pB(t, 1320), lead: pL };
+  function sndWin() { const a = ctx(); [1320, 1760, 2200, 2640].forEach((f, i) => { try { pB(a.currentTime + i * 0.18, f); } catch {} }); }
+
+  type Phase = 'idle' | 'countdown' | 'racing' | 'won';
+  let phase: Phase = 'idle';
+  let progress = [0, 0, 0, 0];
+  let streak = 0, streakHigh = 0;
+  let raceTimer: number | null = null;
+  let lastBeatT = 0;
+  let beatCount = 0;
+  let countdownTimer: number | null = null;
+  let perfects = 0, goods = 0, oks = 0, misses = 0;
+  let raceStartT = 0;
+  let myTaps: number[] = [];
+  let ghostTaps: number[] = [];
+  let ghostProgress = 0;
+  let ghostTickIdx = 0;
+
+  // Best-time storage
+  function loadBest(): Record<Diff, { time_ms: number; streak: number; taps: number[] } | null> {
+    try { return JSON.parse(localStorage.getItem('pc-drum-race-best') || '{}'); } catch { return {} as any; }
+  }
+  function saveBest(diff: Diff, time_ms: number, streak: number, taps: number[]) {
+    try { const all = loadBest(); all[diff] = { time_ms, streak, taps }; localStorage.setItem('pc-drum-race-best', JSON.stringify(all)); } catch {}
+  }
+  function clearGhost() {
+    try { const all = loadBest(); delete all[difficulty]; localStorage.setItem('pc-drum-race-best', JSON.stringify(all)); } catch {}
+    ghostTaps = []; updateBestDisplay();
+  }
+  function updateBestDisplay() {
+    const all = loadBest();
+    const b = all[difficulty];
+    const el = document.getElementById('dr2-best');
+    if (el) el.textContent = b ? `best: ${(b.time_ms / 1000).toFixed(1)}s · streak ${b.streak}` : 'best: — · streak —';
+  }
+
+  const trackEl = document.getElementById('dr2-track');
+  const padEl = document.getElementById('dr2-pad') as HTMLButtonElement;
+  const padText = document.getElementById('dr2-pad-text');
+  const stateEl = document.getElementById('dr2-state');
+  const streakEl = document.getElementById('dr2-streak');
+  const streakHiEl = document.getElementById('dr2-streak-hi');
+  const multEl = document.getElementById('dr2-mult');
+  const metroEl = document.getElementById('dr2-metro');
+  const bpmEl = document.getElementById('dr2-bpm');
+  const timeEl = document.getElementById('dr2-time');
+  const feedbackEl = document.getElementById('dr2-feedback');
+  const pbEl = document.getElementById('dr2-pb');
+  const winEl = document.getElementById('dr2-win');
+  const winTitleEl = document.getElementById('dr2-win-title');
+  const winNounEl = document.getElementById('dr2-win-noun') as HTMLImageElement | null;
+  const winStatsEl = document.getElementById('dr2-win-stats');
+  const ghostEl = document.getElementById('dr2-ghost');
+
+  function paintRacer(i: number) {
+    const p = progress[i];
+    const noun = document.getElementById(`dr2-noun-${i}`);
+    const prog = document.getElementById(`dr2-progress-${i}`);
+    if (noun) {
+      const trackW = (noun.parentElement as HTMLElement).clientWidth - 56 - 28;
+      const x = (p / 100) * trackW;
+      (noun as HTMLElement).style.left = `${x}px`;
+    }
+    if (prog) (prog as HTMLElement).style.width = `${p}%`;
+  }
+  function paintGhost() {
+    if (!ghostEl) return;
+    const trackW = (ghostEl.parentElement as HTMLElement).clientWidth - 56 - 28;
+    (ghostEl as HTMLElement).style.left = `${(ghostProgress / 100) * trackW}px`;
+  }
+  function bumpRacer(i: number) { const noun = document.getElementById(`dr2-noun-${i}`); if (noun) { noun.classList.add('dr2__noun--hit'); setTimeout(() => noun.classList.remove('dr2__noun--hit'), 110); } }
+
+  function setMultiplier(): number { if (streak >= 8) return 2.0; if (streak >= 4) return 1.5; return 1.0; }
+  function updateHud() {
+    if (streakEl) streakEl.textContent = String(streak);
+    if (streakHiEl) streakHiEl.textContent = String(streakHigh);
+    if (multEl) multEl.textContent = `${setMultiplier().toFixed(1)}×`;
+    if (timeEl) timeEl.textContent = phase === 'racing' ? `${((performance.now() - raceStartT) / 1000).toFixed(1)}s` : '0.0s';
+  }
+
+  function feedback(kind: 'perfect' | 'good' | 'ok' | 'miss', dx: number) {
+    if (!feedbackEl) return;
+    feedbackEl.textContent = kind === 'perfect' ? `★ PERFECT  +${dx.toFixed(1)}` : kind === 'good' ? `✓ GOOD  +${dx.toFixed(1)}` : kind === 'ok' ? `· OK  +${dx.toFixed(1)}` : `✗ MISS`;
+    feedbackEl.dataset.kind = kind;
+  }
+
+  function tick() {
+    if (phase !== 'racing') return;
+    const a = ctx();
+    const t = a.currentTime + 0.02;
+    try { (beatCount % 4 === 0) ? pTickAccent(t) : pTick(t); } catch {}
+    if (metroEl) metroEl.textContent = ['●○○○', '○●○○', '○○●○', '○○○●'][beatCount % 4];
+    lastBeatT = performance.now();
+    // AI
+    const accField: Record<Diff, keyof Racer> = { chill: 'acc_chill', normal: 'acc_norm', hard: 'acc_hard' };
+    for (let i = 1; i < RACERS.length; i++) {
+      const r = RACERS[i];
+      const acc = (r as any)[accField[difficulty]] as number;
+      if (Math.random() < acc) {
+        const dx = (3 + Math.random() * 3) * r.speed;
+        progress[i] = Math.min(100, progress[i] + dx);
+        bumpRacer(i);
+        try { PLAY[r.voice](a.currentTime + 0.04 + Math.random() * 0.10); } catch {}
+        paintRacer(i);
+        if (progress[i] >= FINISH && phase === 'racing') return win(i);
+      }
+    }
+    beatCount++;
+    updateHud();
+  }
+  function ghostStep() {
+    if (phase !== 'racing' || ghostTaps.length === 0) return;
+    const elapsed = performance.now() - raceStartT;
+    while (ghostTickIdx < ghostTaps.length && ghostTaps[ghostTickIdx] <= elapsed) {
+      ghostProgress = Math.min(100, ghostProgress + 6); // assume PERFECT for ghost simplicity
+      ghostTickIdx++;
+    }
+    paintGhost();
+    if (ghostProgress < 100) requestAnimationFrame(ghostStep);
+  }
+
+  function win(idx: number) {
+    if (phase === 'won') return;
+    phase = 'won';
+    if (raceTimer) { clearInterval(raceTimer); raceTimer = null; }
+    const r = RACERS[idx];
+    const elapsed = performance.now() - raceStartT;
+    const total = perfects + goods + oks + misses;
+    const accuracy = total > 0 ? Math.round(((perfects + goods) / total) * 100) : 0;
+    let pbBeat = false;
+    if (idx === 0) {
+      const all = loadBest();
+      const prev = all[difficulty];
+      if (!prev || elapsed < prev.time_ms) { saveBest(difficulty, elapsed, streakHigh, myTaps); pbBeat = true; updateBestDisplay(); }
+    }
+    if (winTitleEl) winTitleEl.textContent = idx === 0 ? `🏆 YOU WIN${pbBeat ? ' · PB!' : ''}` : `🤖 ${r.name.toUpperCase()} WINS`;
+    if (winNounEl) winNounEl.src = `https://noun.pics/${r.id}.svg`;
+    if (winStatsEl) winStatsEl.textContent = `Noun #${r.id} · ${(elapsed / 1000).toFixed(1)}s · streak hi ${streakHigh}\nyour acc ${accuracy}% (P${perfects}/G${goods}/O${oks}/M${misses}) · ${difficulty.toUpperCase()}`;
+    if (winEl) winEl.hidden = false;
+    if (pbBeat && pbEl) { pbEl.hidden = false; setTimeout(() => { if (pbEl) pbEl.hidden = true; }, 4000); }
+    sndWin(); celebrate();
+  }
+
+  function attemptTap() {
+    if (phase !== 'racing') return;
+    const now = performance.now();
+    const offset = Math.abs(now - lastBeatT);
+    let kind: 'perfect' | 'good' | 'ok' | 'miss' = 'miss';
+    let baseDx = 0;
+    if (offset <= 80) { kind = 'perfect'; baseDx = 6; streak++; perfects++; }
+    else if (offset <= 200) { kind = 'good'; baseDx = 3; streak = 0; goods++; }
+    else if (offset <= 400) { kind = 'ok'; baseDx = 1; streak = 0; oks++; }
+    else { kind = 'miss'; baseDx = 0; streak = 0; misses++; }
+    streakHigh = Math.max(streakHigh, streak);
+    const mult = setMultiplier();
+    const dx = baseDx * mult;
+    progress[0] = Math.min(100, progress[0] + dx);
+    bumpRacer(0);
+    if (kind !== 'miss') { try { PLAY[RACERS[0].voice](ctx().currentTime + 0.02); } catch {} }
+    feedback(kind, dx);
+    updateHud();
+    paintRacer(0);
+    myTaps.push(now - raceStartT);
+    if (padEl) { padEl.classList.add('dr2__pad--tapped'); setTimeout(() => padEl.classList.remove('dr2__pad--tapped'), 80); }
+    if (progress[0] >= FINISH) win(0);
+  }
+
+  function startCountdown() {
+    if (phase !== 'idle' && phase !== 'won') return;
+    phase = 'countdown';
+    progress = [0, 0, 0, 0];
+    streak = 0; streakHigh = 0; beatCount = 0; perfects = 0; goods = 0; oks = 0; misses = 0;
+    myTaps = []; ghostProgress = 0; ghostTickIdx = 0;
+    paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost();
+    const all = loadBest();
+    ghostTaps = (all[difficulty]?.taps || []).slice();
+    if (ghostEl) ghostEl.classList.toggle('dr2__ghost--active', ghostTaps.length > 0);
+    updateHud();
+    if (winEl) winEl.hidden = true; if (pbEl) pbEl.hidden = true;
+    if (feedbackEl) { feedbackEl.textContent = ''; delete feedbackEl.dataset.kind; }
+    let n = 3;
+    if (padText) padText.textContent = `${n}…`;
+    if (stateEl) stateEl.textContent = '— get ready —';
+    if (countdownTimer) clearInterval(countdownTimer);
+    ctx();
+    try { pTickAccent(ctx().currentTime + 0.02); } catch {}
+    countdownTimer = window.setInterval(() => {
+      n--;
+      if (n > 0) { if (padText) padText.textContent = `${n}…`; try { pTickAccent(ctx().currentTime + 0.02); } catch {} }
+      else { if (countdownTimer) clearInterval(countdownTimer); startRace(); }
+    }, 800);
+  }
+  function startRace() {
+    phase = 'racing';
+    raceStartT = performance.now();
+    if (padText) padText.textContent = '🥁 TAP ON THE BEAT';
+    if (stateEl) stateEl.textContent = '— racing —';
+    lastBeatT = performance.now();
+    if (raceTimer) clearInterval(raceTimer);
+    const stepMs = 60000 / BPM_FOR[difficulty];
+    tick();
+    raceTimer = window.setInterval(tick, stepMs);
+    if (ghostTaps.length > 0) requestAnimationFrame(ghostStep);
+  }
+  function reset() {
+    phase = 'idle';
+    if (raceTimer) { clearInterval(raceTimer); raceTimer = null; }
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    progress = [0, 0, 0, 0]; streak = 0; streakHigh = 0; beatCount = 0; ghostProgress = 0;
+    paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost();
+    updateHud();
+    if (padText) padText.textContent = '▶ START RACE';
+    if (stateEl) stateEl.textContent = '— ready —';
+    if (feedbackEl) { feedbackEl.textContent = ''; delete feedbackEl.dataset.kind; }
+    if (metroEl) metroEl.textContent = '○○○○';
+    if (winEl) winEl.hidden = true; if (pbEl) pbEl.hidden = true;
+  }
+  function setDiff(d: Diff) {
+    if (phase === 'racing' || phase === 'countdown') return;
+    difficulty = d;
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.dr2__diff-btn')).forEach(b => b.classList.toggle('dr2__diff-btn--active', b.dataset.diff === d));
+    if (bpmEl) bpmEl.textContent = String(BPM_FOR[d]);
+    updateBestDisplay();
+  }
+
+  if (padEl) padEl.addEventListener('click', () => { if (phase === 'idle' || phase === 'won') startCountdown(); else if (phase === 'racing') attemptTap(); });
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); if (phase === 'idle' || phase === 'won') startCountdown(); else if (phase === 'racing') attemptTap(); } if (e.key === 'r' || e.key === 'R') reset(); });
+  document.getElementById('dr2-reset')?.addEventListener('click', reset);
+  document.getElementById('dr2-clear-ghost')?.addEventListener('click', clearGhost);
+  document.getElementById('dr2-win-again')?.addEventListener('click', () => { reset(); startCountdown(); });
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.dr2__diff-btn')).forEach(b => b.addEventListener('click', () => setDiff(b.dataset.diff as Diff)));
+
+  function celebrate() { const colors = ['#f6c15e', '#ff8a4a', '#ff5f7a', '#a8ff3a', '#5fbafd', '#b09bf0']; for (let i = 0; i < 60; i++) { const c = document.createElement('div'); c.className = 'dr2__confetti'; c.style.background = colors[i % colors.length]; c.style.left = `${Math.random() * 100}vw`; c.style.top = `${-20 - Math.random() * 100}px`; c.style.animationDelay = `${Math.random() * 0.6}s`; c.style.animationDuration = `${2.4 + Math.random() * 1.6}s`; document.body.appendChild(c); setTimeout(() => c.remove(), 4000); } }
+
+  setTimeout(() => { paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost(); updateBestDisplay(); }, 50);
+</script>
