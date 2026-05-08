@@ -1,6 +1,6 @@
 import type { PointCastUser } from './types';
 
-type SupportedWalletProvider = 'kukai' | 'metamask' | 'phantom';
+type SupportedWalletProvider = 'kukai' | 'metamask' | 'coinbase' | 'phantom';
 
 type StoredWallet = {
   chain: 'tezos' | 'eth' | 'solana';
@@ -233,6 +233,75 @@ export async function loginWithMetaMask(): Promise<PointCastUser | null> {
 
   if (payload.user) {
     persistWallet({ chain: 'eth', address, provider: 'metamask' });
+  }
+
+  return payload.user ?? null;
+}
+
+/**
+ * Coinbase Smart Wallet (passkey) — the modern Mist Invitation Token.
+ * No seed phrase. Works on mobile Safari. ERC-4337-flavored, lives on Base.
+ *
+ * Implementation note: the SDK is dynamic-imported here so the bundle
+ * (~150KB minified) is paid only by visitors who actually click the
+ * Coinbase Smart Wallet button. Same lazy pattern as Beacon for Tezos.
+ *
+ * Smart-wallet signatures recover via ERC-1271 server-side; the
+ * /api/auth/ethereum endpoint passes a Base viem client to verifyMessage
+ * for that fallback path (PR #6a).
+ */
+export async function loginWithCoinbaseSmartWallet(): Promise<PointCastUser | null> {
+  if (!isBrowser()) return null;
+
+  // Dynamic import keeps the SDK out of the main bundle until clicked.
+  const sdkModule = await import('@coinbase/wallet-sdk');
+  // The package's default export is the SDK class in v4. Belt-and-suspenders
+  // for the named export form too in case packaging changes.
+  const SDKClass: any =
+    (sdkModule as any).default ??
+    (sdkModule as any).CoinbaseWalletSDK ??
+    sdkModule;
+
+  const sdk = new SDKClass({
+    appName: 'PointCast',
+    appLogoUrl: `${window.location.origin}/og/cover.png`,
+    appChainIds: [8453, 1], // Base mainnet, Ethereum L1 (for ENS reads)
+  });
+
+  // smartWalletOnly forces the passkey-flavored Smart Wallet flow rather
+  // than the classic Coinbase Wallet extension/mobile.
+  const provider = sdk.makeWeb3Provider({ options: 'smartWalletOnly' });
+
+  const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+  const address = accounts?.[0];
+  if (!address) throw new Error('No Coinbase Smart Wallet account returned.');
+
+  const chainId = await provider.request({ method: 'eth_chainId' }).catch(() => null) as string | null;
+  const message = buildSignedMessage('Ethereum', {
+    Address: address,
+    Origin: window.location.origin,
+    'Issued At': new Date().toISOString(),
+    Nonce: createNonce(),
+    ...(chainId ? { 'Chain ID': chainId } : {}),
+  });
+  const signature = await provider.request({
+    method: 'personal_sign',
+    params: [message, address],
+  }) as string;
+
+  // Server keys identity by address (provider 'metamask' is the canonical
+  // EVM-auth key, regardless of which wallet signed). Same /api/auth/ethereum
+  // endpoint handles ECDSA EOA + ERC-1271 smart-contract-wallet sigs.
+  const payload = await postJson<{ ok?: boolean; user?: PointCastUser }>('/api/auth/ethereum', {
+    provider: 'coinbase',
+    address,
+    chainId,
+    message,
+    signature,
+  });
+
+  if (payload.user) {
+    persistWallet({ chain: 'eth', address, provider: 'coinbase' });
   }
 
   return payload.user ?? null;

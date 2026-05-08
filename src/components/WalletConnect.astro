@@ -2,10 +2,12 @@
 /**
  * WalletConnect — multi-chain wallet connector.
  *
- * Three wallets, three chains:
- *   - Kukai (Tezos) — via Beacon SDK, lazy-loaded from jsDelivr
- *   - MetaMask (Ethereum) — native window.ethereum
- *   - Phantom (Solana) — native window.solana
+ * Three EVM/Tezos wallets, three providers:
+ *   - Kukai (Tezos) — via Beacon SDK, lazy-loaded from jsDelivr CDN with SRI
+ *   - MetaMask (Ethereum / EOA) — native window.ethereum
+ *   - Coinbase Smart Wallet (Ethereum / ERC-4337 passkey) — @coinbase/wallet-sdk
+ *     dynamically imported on click so the bundle is only paid for visitors
+ *     who actually click the button
  *
  * State persists in localStorage under `pc:wallet`:
  *   { chain, address, provider }
@@ -16,6 +18,12 @@
  *                            (e.g. the Noun modal's Mint button when user isn't connected)
  *
  * The Mint flow reads wallet state directly from localStorage on click.
+ *
+ * Coinbase Smart Wallet path (the modern Mist "Invitation Token"):
+ *  - passkey login, no seed phrase
+ *  - mobile Safari works (no extension required)
+ *  - smart-contract-wallet signatures verify via ERC-1271 in
+ *    functions/api/auth/ethereum.ts (PR #6a wired in the viem client)
  */
 ---
 
@@ -49,7 +57,19 @@
         <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">tz</span>
         <div class="flex-1 min-w-0">
           <p class="text-[0.9rem] text-ink font-medium leading-tight">Kukai</p>
-          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Tezos · browser wallet</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Tezos &middot; browser wallet</p>
+        </div>
+      </button>
+      <button
+        data-wallet="coinbase-smart"
+        type="button"
+        class="w-full flex items-start gap-3 p-3 hover:bg-card transition-colors text-left cursor-pointer"
+        role="menuitem"
+      >
+        <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">key</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-[0.9rem] text-ink font-medium leading-tight">Coinbase Smart Wallet</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Passkey &middot; no seed phrase &middot; Base</p>
         </div>
       </button>
       <button
@@ -65,9 +85,7 @@
         </div>
       </button>
       <!-- Phantom (Solana) stays parked per the 2026-04-17 Manus diagnosis;
-           Solana is out of scope for /mist v0. Coinbase Smart Wallet (passkey,
-           ERC-4337) lands in a follow-up alongside ERC-1271 verify support
-           in functions/api/auth/ethereum.ts.
+           Solana is out of scope for /mist v0.
       <button
         data-wallet="phantom"
         type="button"
@@ -106,7 +124,7 @@
   type Wallet = {
     chain: 'tezos' | 'eth' | 'solana';
     address: string;
-    provider: 'kukai' | 'metamask' | 'phantom';
+    provider: 'kukai' | 'metamask' | 'coinbase' | 'phantom';
   };
 
   const STORAGE_KEY = 'pc:wallet';
@@ -242,8 +260,8 @@
   }
 
   async function connectMetaMask(): Promise<void> {
-    // We delegate to src/lib/auth/client.ts loginWithMetaMask() so the
-    // connect goes through the full server-side SIWE-shaped flow:
+    // Delegates to src/lib/auth/client.ts loginWithMetaMask() so the connect
+    // goes through the full server-side SIWE-shaped flow:
     //   1. eth_requestAccounts → get address
     //   2. build "PointCast Ethereum Login" message (Origin / Issued At /
     //      Nonce / Chain ID) — same shape as /api/auth/tezos
@@ -266,16 +284,38 @@
       closeMenu();
     } catch (err: any) {
       console.warn('MetaMask sign-in failed:', err);
-      // User-rejection / pending-request / not-installed are silent;
-      // surface only real failures.
       const reason = err?.message ?? '';
       if (
         reason === 'metamask-not-available' ||
         reason.includes('User rejected') ||
         reason.includes('rejected') ||
-        reason.includes('-32002')   // request already pending
+        reason.includes('-32002')
       ) return;
       alert('MetaMask sign-in failed. Tap again to retry.');
+    }
+  }
+
+  async function connectCoinbaseSmartWallet(): Promise<void> {
+    // Delegates to src/lib/auth/client.ts loginWithCoinbaseSmartWallet().
+    // Same /api/auth/ethereum flow as MetaMask, but the provider comes
+    // from @coinbase/wallet-sdk (dynamic-imported there) configured for
+    // smartWalletOnly mode. Signature verification on the server happens
+    // via ERC-1271 (PR #6a passes a viem Base client to verifyMessage).
+    try {
+      const { loginWithCoinbaseSmartWallet } = await import('../lib/auth/client');
+      const user = await loginWithCoinbaseSmartWallet();
+      if (!user) return;
+      renderState();
+      closeMenu();
+    } catch (err: any) {
+      console.warn('Coinbase Smart Wallet sign-in failed:', err);
+      const reason = err?.message ?? '';
+      if (
+        reason.includes('User rejected') ||
+        reason.includes('rejected') ||
+        reason.includes('User denied')
+      ) return;
+      alert('Coinbase Smart Wallet sign-in failed. Tap again to retry.');
     }
   }
 
@@ -302,6 +342,7 @@
       const kind = el.dataset.wallet;
       if (kind === 'kukai') connectKukai();
       else if (kind === 'metamask') connectMetaMask();
+      else if (kind === 'coinbase-smart') connectCoinbaseSmartWallet();
       else if (kind === 'phantom') connectPhantom();
     });
   });
@@ -317,6 +358,13 @@
           const client = new beacon.DAppClient({ name: 'PointCast' });
           await client.clearActiveAccount();
         }
+      } catch { /* ignore */ }
+    } else if (w?.provider === 'coinbase') {
+      // Best-effort: reset the CSW provider's local state if loaded.
+      try {
+        const sdkModule = await import('@coinbase/wallet-sdk');
+        const SDK: any = (sdkModule as any).default ?? (sdkModule as any).CoinbaseWalletSDK ?? sdkModule;
+        if (SDK?.disconnect) await SDK.disconnect();
       } catch { /* ignore */ }
     } else if (w?.provider === 'phantom') {
       try { await (window as any).solana?.disconnect?.(); } catch { /* ignore */ }
