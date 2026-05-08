@@ -56,12 +56,11 @@ const MOODS = [
   { id: 'quiet',   label: 'QUIET',   blurb: 'observing, recharging' },
 ];
 
-// Hand-picked "surprise me" noun pool — recognizable Visit Nouns from
-// across the 1200-seed FA2.
-const SURPRISE_NOUNS = [
-  1, 42, 88, 99, 137, 174, 247, 417, 420, 557, 777, 808,
-  945, 1020, 1086, 1111,
-];
+// Visit Nouns FA2 covers seeds 0..NOUN_MAX. Surprise pulls a fully
+// random seed from the catalog (Mike 2026-05-08: "very similar nouns
+// when refresh, is it the whole catalog" — was previously a 16-seed
+// hand-picked pool, repeats every ~12 shuffles. Now 1200 seeds.).
+const NOUN_MAX = 1199;
 
 const title = 'You · /me';
 const description = 'Your PointCast start experience — daily check-in, mood, area, streak, and the things you have made. All local-first, zero auth. Sibling of /profile (wallets).';
@@ -94,17 +93,18 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       </div>
       <div class="you__body">
         <p class="me__eyebrow mono">YOU</p>
-        <div class="you__name-row">
+        <label class="you__name-row" for="me-name-input">
           <input
             type="text"
             id="me-name-input"
             class="you__name-input"
-            placeholder="visitor"
+            placeholder="give yourself a name"
             maxlength="40"
             aria-label="Your display name"
           />
-          <span class="you__name-status mono" id="me-name-status">click to name yourself</span>
-        </div>
+          <span class="you__name-pencil" aria-hidden="true">✎</span>
+          <span class="you__name-status mono" id="me-name-status">click to edit</span>
+        </label>
         <div class="you__chips">
           <span class="you__chip" id="me-chip-mood">
             <span class="mono">MOOD</span>
@@ -233,15 +233,24 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   </main>
 </BlockLayout>
 
-<script is:inline define:vars={{ SURPRISE_NOUNS, AREAS, MOODS }}>
+<script is:inline define:vars={{ NOUN_MAX, AREAS, MOODS }}>
 (() => {
   const KEY = 'pc:me:v1';
   const SCHEMA_VERSION = 1;
   const FONT_NOUN = 'https://noun.pics';
 
+  function randomNoun(avoid) {
+    let seed = Math.floor(Math.random() * (NOUN_MAX + 1));
+    // If asked to avoid a seed (e.g. on re-shuffle), retry up to 5 times.
+    for (let i = 0; avoid != null && seed === avoid && i < 5; i++) {
+      seed = Math.floor(Math.random() * (NOUN_MAX + 1));
+    }
+    return seed;
+  }
+
   // ─── Default state for first-timers ─────────────────────────────────────
   function defaults() {
-    const seed = SURPRISE_NOUNS[Math.floor(Math.random() * SURPRISE_NOUNS.length)];
+    const seed = randomNoun();
     return {
       $v: SCHEMA_VERSION,
       name: '',
@@ -330,7 +339,7 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     const nameInput = document.getElementById('me-name-input');
     if (nameInput && document.activeElement !== nameInput) nameInput.value = state.name || '';
     const nameStatus = document.getElementById('me-name-status');
-    if (nameStatus) nameStatus.textContent = state.name ? 'tap the name to edit' : 'click to name yourself';
+    if (nameStatus) nameStatus.textContent = state.name ? 'click to edit' : 'click to give yourself a name';
 
     const moodChip = document.getElementById('me-chip-mood-val');
     if (moodChip) {
@@ -431,11 +440,7 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
 
   // ─── Event wiring ────────────────────────────────────────────────────────
   document.getElementById('me-shuffle-noun')?.addEventListener('click', () => {
-    let next = state.noun;
-    while (next === state.noun) {
-      next = SURPRISE_NOUNS[Math.floor(Math.random() * SURPRISE_NOUNS.length)];
-    }
-    state.noun = next;
+    state.noun = randomNoun(state.noun);
     save(state);
     syncCurrentNoun();
     render();
@@ -596,20 +601,50 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   }
   .you__noun-shuffle:hover { border-color: var(--color-warm); color: var(--color-ink); }
   .you__body { min-width: 0; }
-  .you__name-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+  /* Mike 2026-05-08: "click to name doesn't seem to be working." The
+     row is now a <label for=me-name-input> so any click in the row
+     focuses the input. The input itself shows a dashed underline by
+     default so it's obviously editable, plus a pencil glyph to
+     reinforce. Solid underline on focus; warm on focus. */
+  .you__name-row {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin: 0 0 14px;
+    cursor: text;
+  }
   .you__name-input {
     font-family: var(--font-heading); font-size: clamp(28px, 4vw, 40px);
     font-weight: 600; letter-spacing: -0.01em;
-    background: none; border: 0; padding: 0; outline: 0; color: var(--color-ink);
-    border-bottom: 2px solid transparent;
-    transition: border-color 0.12s;
-    min-width: 280px; max-width: 100%; flex: 1 1 280px;
+    background: none;
+    /* Explicit per-side border so Tailwind preflight's "border: 0 solid"
+       reset doesn't squash our dashed underline. */
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom-width: 1.5px;
+    border-bottom-style: dashed;
+    border-bottom-color: var(--color-rule);
+    padding: 2px 0;
+    outline: 0; color: var(--color-ink);
+    transition: border-bottom-color 0.12s, border-bottom-style 0.12s;
+    min-width: 240px; max-width: 100%; flex: 1 1 240px;
   }
-  .you__name-input:focus { border-color: var(--color-warm); }
+  .you__name-input::placeholder { color: var(--color-ink-soft); opacity: 0.55; font-weight: 400; }
+  .you__name-input:hover { border-bottom-color: var(--color-warm); }
+  .you__name-input:focus {
+    border-bottom-style: solid;
+    border-bottom-color: var(--color-warm);
+  }
+  .you__name-pencil {
+    font-size: 16px; color: var(--color-ink-soft);
+    transition: color 0.12s;
+  }
+  .you__name-row:hover .you__name-pencil,
+  .you__name-row:focus-within .you__name-pencil { color: var(--color-warm); }
   .you__name-status {
     font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
     text-transform: uppercase;
   }
+  .you__name-row:focus-within .you__name-status { color: var(--color-warm); }
   .you__chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .you__chip {
     display: inline-flex; align-items: baseline; gap: 8px;
