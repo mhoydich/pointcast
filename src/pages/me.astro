@@ -1,0 +1,724 @@
+---
+/**
+ * /me — your personal start experience.
+ *
+ * Mike 2026-05-07 (after the Home v2027 + Footer v5 + Studio publish
+ * stack landed): "let's keep improving the start experience, how about
+ * check-ins, profile, etc."
+ *
+ * /profile already exists but is wallet-focused (every Tezos pairing this
+ * browser has done). /me is the IDENTITY-and-day page — what you'd see
+ * when you sit down at the PointCast desk:
+ *
+ *   - WHO YOU ARE       — noun + name + mood + area
+ *   - TODAY             — one-tap check-in card with area + mood
+ *   - STREAK            — current + longest, reusing StreakBadge
+ *   - THIS WEEK         — last 7 days of check-ins, small grid
+ *   - THINGS YOU'VE MADE — Studio compositions you published
+ *   - QUICK ACTIONS     — change noun, set mood, jump into /studio etc.
+ *
+ * All client-side via localStorage `pc:me:v1`. No auth required, no
+ * server state. The schema is intentionally small (a few KB) so it can
+ * fit alongside the existing pc:streak / pc:wallets keys without
+ * crowding the storage budget.
+ *
+ * Returning visitors see their state restored. First-timers see a
+ * zero-state with "pick a noun" + "say where you are" + "set a mood"
+ * as the obvious next steps.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import StreakBadge from '../components/StreakBadge.astro';
+
+// ─── Static data: areas + moods ──────────────────────────────────────────────
+// South-Bay-anchored area slugs. Lightweight on purpose — agents update the
+// list when more rooms come online; this is just the picker, not the truth.
+const AREAS = [
+  { slug: 'el-segundo',       label: 'EL SEGUNDO' },
+  { slug: 'manhattan-beach',  label: 'MANHATTAN BEACH' },
+  { slug: 'hermosa-beach',    label: 'HERMOSA BEACH' },
+  { slug: 'redondo-beach',    label: 'REDONDO BEACH' },
+  { slug: 'venice',           label: 'VENICE' },
+  { slug: 'palos-verdes',     label: 'PALOS VERDES' },
+  { slug: 'santa-monica',     label: 'SANTA MONICA' },
+  { slug: 'culver-city',      label: 'CULVER CITY' },
+  { slug: 'lax',              label: 'NEAR LAX' },
+  { slug: 'long-beach',       label: 'LONG BEACH' },
+  { slug: 'downtown-la',      label: 'DOWNTOWN LA' },
+  { slug: 'elsewhere',        label: 'ELSEWHERE' },
+];
+
+const MOODS = [
+  { id: 'chill',   label: 'CHILL',   blurb: 'taking it slow' },
+  { id: 'hype',    label: 'HYPE',    blurb: 'amped, momentum-on' },
+  { id: 'focus',   label: 'FOCUS',   blurb: 'heads-down work' },
+  { id: 'flow',    label: 'FLOW',    blurb: 'in the zone' },
+  { id: 'curious', label: 'CURIOUS', blurb: 'exploring, learning' },
+  { id: 'quiet',   label: 'QUIET',   blurb: 'observing, recharging' },
+];
+
+// Hand-picked "surprise me" noun pool — recognizable Visit Nouns from
+// across the 1200-seed FA2.
+const SURPRISE_NOUNS = [
+  1, 42, 88, 99, 137, 174, 247, 417, 420, 557, 777, 808,
+  945, 1020, 1086, 1111,
+];
+
+const title = 'You · /me';
+const description = 'Your PointCast start experience — daily check-in, mood, area, streak, and the things you have made. All local-first, zero auth. Sibling of /profile (wallets).';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="me2027">
+
+    <header class="me__hero">
+      <p class="me__crumb">
+        <a href="/">home</a> <span aria-hidden="true">›</span> <span>me</span>
+      </p>
+      <p class="me__kicker" id="me-kicker">YOU · YOUR START EXPERIENCE</p>
+      <h1 class="me__title" id="me-title">Hello, visitor.</h1>
+      <p class="me__dek" id="me-dek">
+        Local-first identity — saved in this browser only, no auth required.
+        Set a noun, drop a mood, check in for the day.
+        <a href="/profile" class="me__profile-link">Your wallet pairings live at /profile.</a>
+      </p>
+    </header>
+
+    {/* ──────────── 1. YOU CARD ──────────── */}
+    <section class="me__band you" aria-label="You">
+      <div class="you__noun-wrap">
+        <img id="me-noun-img" class="you__noun" src="" alt="" width="160" height="160" />
+        <button type="button" class="you__noun-shuffle" id="me-shuffle-noun" title="Surprise me with a different noun">
+          <span aria-hidden="true">↻</span>
+          <span class="mono">SURPRISE</span>
+        </button>
+      </div>
+      <div class="you__body">
+        <p class="me__eyebrow mono">YOU</p>
+        <div class="you__name-row">
+          <input
+            type="text"
+            id="me-name-input"
+            class="you__name-input"
+            placeholder="visitor"
+            maxlength="40"
+            aria-label="Your display name"
+          />
+          <span class="you__name-status mono" id="me-name-status">click to name yourself</span>
+        </div>
+        <div class="you__chips">
+          <span class="you__chip" id="me-chip-mood">
+            <span class="mono">MOOD</span>
+            <strong id="me-chip-mood-val">— set a mood</strong>
+          </span>
+          <span class="you__chip" id="me-chip-area">
+            <span class="mono">AREA</span>
+            <strong id="me-chip-area-val">— pick an area</strong>
+          </span>
+          <span class="you__chip" id="me-chip-since">
+            <span class="mono">SINCE</span>
+            <strong id="me-chip-since-val">first visit</strong>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    {/* ──────────── 2. CHECK IN ──────────── */}
+    <section class="me__band checkin" aria-label="Check in">
+      <header class="band__head">
+        <p class="me__eyebrow mono">TODAY</p>
+        <span class="checkin__last mono" id="me-checkin-last">never checked in</span>
+      </header>
+
+      <div class="checkin__row">
+        <div class="checkin__col checkin__col--area">
+          <p class="me__field-label mono">AREA</p>
+          <div class="checkin__chips" role="radiogroup" aria-label="Area">
+            {AREAS.map(a => (
+              <button type="button" class="checkin__chip" data-area={a.slug}>{a.label}</button>
+            ))}
+          </div>
+        </div>
+        <div class="checkin__col checkin__col--mood">
+          <p class="me__field-label mono">MOOD</p>
+          <div class="checkin__chips" role="radiogroup" aria-label="Mood">
+            {MOODS.map(m => (
+              <button type="button" class="checkin__chip checkin__chip--mood" data-mood={m.id} title={m.blurb}>
+                <strong>{m.label}</strong>
+                <span>{m.blurb}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="me-checkin-btn" class="checkin__cta">
+        <span class="checkin__cta-glyph" aria-hidden="true">✓</span>
+        <span class="checkin__cta-label" id="me-checkin-label">CHECK IN</span>
+      </button>
+      <p class="checkin__notice mono" id="me-checkin-notice" hidden role="status" aria-live="polite"></p>
+    </section>
+
+    {/* ──────────── 3. STREAK ──────────── */}
+    <section class="me__band streak-band" aria-label="Streak">
+      <p class="me__eyebrow mono">STREAK</p>
+      <StreakBadge variant="full" />
+    </section>
+
+    {/* ──────────── 4. THIS WEEK ──────────── */}
+    <section class="me__band week" aria-label="This week">
+      <header class="band__head">
+        <p class="me__eyebrow mono">THIS WEEK</p>
+        <span class="week__count mono" id="me-week-count">0 check-ins</span>
+      </header>
+      <ol class="week__list" id="me-week-list">
+        <li class="week__empty">
+          You haven't checked in this week yet. Use the card above — it takes a click.
+        </li>
+      </ol>
+    </section>
+
+    {/* ──────────── 5. THINGS YOU'VE MADE ──────────── */}
+    <section class="me__band made" aria-label="Things you have made">
+      <header class="band__head">
+        <p class="me__eyebrow mono">THINGS YOU'VE MADE</p>
+        <a href="/studio" class="band__cta mono">+ NEW IN STUDIO</a>
+      </header>
+      <ol class="made__list" id="me-made-list">
+        <li class="made__empty">
+          You haven't published any Studio compositions on this device yet.
+          <a href="/studio">Open Studio</a> and ship one — they show up here automatically.
+        </li>
+      </ol>
+    </section>
+
+    {/* ──────────── 6. QUICK ACTIONS ──────────── */}
+    <section class="me__band actions" aria-label="Quick actions">
+      <p class="me__eyebrow mono">QUICK ACTIONS</p>
+      <div class="actions__grid">
+        <a class="actions__btn" href="/studio">
+          <span class="actions__btn-label">STUDIO</span>
+          <span class="actions__btn-blurb">Make a block</span>
+        </a>
+        <a class="actions__btn" href="/coffee">
+          <span class="actions__btn-label">COFFEE</span>
+          <span class="actions__btn-blurb">Pour a mug</span>
+        </a>
+        <a class="actions__btn" href="/window">
+          <span class="actions__btn-label">WINDOW</span>
+          <span class="actions__btn-blurb">El Segundo right now</span>
+        </a>
+        <a class="actions__btn" href="/drum">
+          <span class="actions__btn-label">DRUM</span>
+          <span class="actions__btn-blurb">Tap, ring, sing</span>
+        </a>
+        <a class="actions__btn" href="/archive">
+          <span class="actions__btn-label">ARCHIVE</span>
+          <span class="actions__btn-blurb">Every block, ever</span>
+        </a>
+        <a class="actions__btn" href="/profile">
+          <span class="actions__btn-label">PROFILE</span>
+          <span class="actions__btn-blurb">Wallet pairings</span>
+        </a>
+      </div>
+    </section>
+
+    {/* ──────────── 7. STATE FOOT ──────────── */}
+    <footer class="me__foot">
+      <p class="mono">
+        Stored in this browser only · localStorage key <code>pc:me:v1</code> ·
+        <button type="button" class="me__reset-btn" id="me-reset-btn">reset everything</button>
+      </p>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ SURPRISE_NOUNS, AREAS, MOODS }}>
+(() => {
+  const KEY = 'pc:me:v1';
+  const SCHEMA_VERSION = 1;
+  const FONT_NOUN = 'https://noun.pics';
+
+  // ─── Default state for first-timers ─────────────────────────────────────
+  function defaults() {
+    const seed = SURPRISE_NOUNS[Math.floor(Math.random() * SURPRISE_NOUNS.length)];
+    return {
+      $v: SCHEMA_VERSION,
+      name: '',
+      noun: seed,
+      area: null,
+      mood: null,
+      firstVisitAt: new Date().toISOString(),
+      lastCheckinAt: null,
+      checkins: [], // { at: iso, area: slug, mood: id }
+    };
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return defaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || parsed.$v !== SCHEMA_VERSION) {
+        return defaults();
+      }
+      // Normalize any missing fields against defaults.
+      return Object.assign(defaults(), parsed, { $v: SCHEMA_VERSION });
+    } catch (e) {
+      return defaults();
+    }
+  }
+
+  function save(state) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) { /* private mode etc — ignore */ }
+  }
+
+  let state = load();
+
+  // ─── Mirror to existing keys other components read ───────────────────────
+  // pc:currentNoun is read by the FooterBar and CursorRoom. Keep them in sync
+  // so changing your noun on /me updates the dock and the cursor too.
+  function syncCurrentNoun() {
+    try { localStorage.setItem('pc:currentNoun', String(state.noun)); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('pc:noun-change', { detail: { seed: state.noun } })); } catch (e) {}
+  }
+  // pc:mood is the mood-changed event payload other surfaces listen to.
+  function syncMood() {
+    if (!state.mood) return;
+    try { localStorage.setItem('pc:mood', state.mood); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: state.mood } })); } catch (e) {}
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+  function fmtRelative(iso) {
+    if (!iso) return '—';
+    const now = Date.now();
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return '—';
+    const diff = now - t;
+    const mins = Math.round(diff / 60000);
+    if (mins < 1)   return 'just now';
+    if (mins < 60)  return mins + 'm ago';
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24)   return hrs + 'h ago';
+    const days = Math.round(hrs / 24);
+    if (days < 30)  return days + 'd ago';
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+  function fmtDay(iso) {
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+  function findArea(slug) { return AREAS.find(a => a.slug === slug); }
+  function findMood(id)   { return MOODS.find(m => m.id === id); }
+
+  function render() {
+    // Title bar
+    const name = (state.name || '').trim() || 'visitor';
+    const titleEl = document.getElementById('me-title');
+    if (titleEl) titleEl.textContent = name === 'visitor' ? 'Hello, visitor.' : 'Hello, ' + name + '.';
+
+    // YOU card
+    const nounImg = document.getElementById('me-noun-img');
+    if (nounImg) {
+      nounImg.src = FONT_NOUN + '/' + state.noun + '.svg';
+      nounImg.alt = 'Noun #' + state.noun;
+    }
+    const nameInput = document.getElementById('me-name-input');
+    if (nameInput && document.activeElement !== nameInput) nameInput.value = state.name || '';
+    const nameStatus = document.getElementById('me-name-status');
+    if (nameStatus) nameStatus.textContent = state.name ? 'tap the name to edit' : 'click to name yourself';
+
+    const moodChip = document.getElementById('me-chip-mood-val');
+    if (moodChip) {
+      const m = findMood(state.mood);
+      moodChip.textContent = m ? m.label + ' · ' + m.blurb : '— set a mood';
+    }
+    const areaChip = document.getElementById('me-chip-area-val');
+    if (areaChip) {
+      const a = findArea(state.area);
+      areaChip.textContent = a ? a.label : '— pick an area';
+    }
+    const sinceChip = document.getElementById('me-chip-since-val');
+    if (sinceChip) {
+      sinceChip.textContent = state.firstVisitAt
+        ? fmtDay(state.firstVisitAt)
+        : 'first visit';
+    }
+
+    // Check-in card — selected state
+    document.querySelectorAll('[data-area]').forEach(b => {
+      b.classList.toggle('is-active', b.getAttribute('data-area') === state.area);
+    });
+    document.querySelectorAll('[data-mood]').forEach(b => {
+      b.classList.toggle('is-active', b.getAttribute('data-mood') === state.mood);
+    });
+    const checkinLast = document.getElementById('me-checkin-last');
+    if (checkinLast) {
+      checkinLast.textContent = state.lastCheckinAt
+        ? 'last check-in ' + fmtRelative(state.lastCheckinAt)
+        : 'never checked in';
+    }
+    // CTA reflects today / not today
+    const checkinLabel = document.getElementById('me-checkin-label');
+    const checkedInToday = state.lastCheckinAt && fmtDay(state.lastCheckinAt) === todayStr();
+    if (checkinLabel) {
+      checkinLabel.textContent = checkedInToday
+        ? 'CHECKED IN TODAY · UPDATE'
+        : 'CHECK IN';
+    }
+
+    // This week
+    const weekList = document.getElementById('me-week-list');
+    const weekCountEl = document.getElementById('me-week-count');
+    if (weekList) {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const recent = (state.checkins || []).filter(c => new Date(c.at).getTime() >= sevenDaysAgo);
+      if (weekCountEl) weekCountEl.textContent = recent.length + ' check-in' + (recent.length === 1 ? '' : 's');
+      weekList.innerHTML = '';
+      if (recent.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'week__empty';
+        li.textContent = "You haven't checked in this week yet. Use the card above — it takes a click.";
+        weekList.appendChild(li);
+      } else {
+        for (const c of recent) {
+          const li = document.createElement('li');
+          li.className = 'week__row';
+          const a = findArea(c.area);
+          const m = findMood(c.mood);
+          li.innerHTML = '<time class="mono">' + fmtDay(c.at) + '</time>' +
+            '<span class="mono week__row-area">' + (a ? a.label : '—') + '</span>' +
+            '<span class="mono week__row-mood">' + (m ? m.label : '—') + '</span>' +
+            '<span class="mono week__row-rel">' + fmtRelative(c.at) + '</span>';
+          weekList.appendChild(li);
+        }
+      }
+    }
+
+    // Things you've made — from pc:studio:published
+    const madeList = document.getElementById('me-made-list');
+    if (madeList) {
+      let pubs = [];
+      try {
+        const raw = localStorage.getItem('pc:studio:published');
+        pubs = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(pubs)) pubs = [];
+      } catch (e) {}
+      madeList.innerHTML = '';
+      if (pubs.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'made__empty';
+        li.innerHTML = "You haven't published any Studio compositions on this device yet. <a href=\"/studio\">Open Studio</a> and ship one — they show up here automatically.";
+        madeList.appendChild(li);
+      } else {
+        for (const p of pubs.slice(0, 12)) {
+          const li = document.createElement('li');
+          li.className = 'made__row';
+          li.innerHTML = '<a href="/studio/share/' + p.id + '" class="made__link">' +
+            '<span class="mono made__id">' + p.id + '</span>' +
+            '<span class="made__title">' + (p.title || p.tpl || 'untitled') + '</span>' +
+            '<span class="mono made__rel">' + fmtRelative(p.at) + '</span>' +
+            '</a>';
+          madeList.appendChild(li);
+        }
+      }
+    }
+  }
+
+  // ─── Event wiring ────────────────────────────────────────────────────────
+  document.getElementById('me-shuffle-noun')?.addEventListener('click', () => {
+    let next = state.noun;
+    while (next === state.noun) {
+      next = SURPRISE_NOUNS[Math.floor(Math.random() * SURPRISE_NOUNS.length)];
+    }
+    state.noun = next;
+    save(state);
+    syncCurrentNoun();
+    render();
+  });
+
+  document.getElementById('me-name-input')?.addEventListener('input', e => {
+    state.name = e.target.value.slice(0, 40);
+    save(state);
+    // Don't re-render — would fight focus.
+    const titleEl = document.getElementById('me-title');
+    if (titleEl) titleEl.textContent = state.name.trim() ? 'Hello, ' + state.name.trim() + '.' : 'Hello, visitor.';
+  });
+  document.getElementById('me-name-input')?.addEventListener('blur', render);
+
+  document.querySelectorAll('[data-area]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.area = btn.getAttribute('data-area');
+      save(state);
+      render();
+    });
+  });
+  document.querySelectorAll('[data-mood]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mood = btn.getAttribute('data-mood');
+      save(state);
+      syncMood();
+      render();
+    });
+  });
+
+  document.getElementById('me-checkin-btn')?.addEventListener('click', () => {
+    if (!state.area || !state.mood) {
+      const notice = document.getElementById('me-checkin-notice');
+      if (notice) {
+        notice.textContent = 'pick an area + a mood first';
+        notice.hidden = false;
+        setTimeout(() => { notice.hidden = true; }, 2400);
+      }
+      return;
+    }
+    const now = new Date().toISOString();
+    const today = fmtDay(now);
+    // De-dupe to one check-in per day — replace today's entry if it exists.
+    const others = (state.checkins || []).filter(c => fmtDay(c.at) !== today);
+    state.checkins = [{ at: now, area: state.area, mood: state.mood }, ...others].slice(0, 30);
+    state.lastCheckinAt = now;
+    save(state);
+    render();
+
+    // Touch the streak too — StreakBadge reads pc_streak on its own load,
+    // but a same-session check-in shouldn't be a no-op. The badge inits on
+    // page load; we ping its display by triggering a refresh of the
+    // existing pc_streak value if it's already today.
+    try {
+      const raw = localStorage.getItem('pc_streak');
+      const s = raw ? JSON.parse(raw) : null;
+      if (!s || s.lastVisit !== today) {
+        // Defer to StreakBadge's own logic on next page nav.
+      }
+    } catch (e) {}
+
+    const notice = document.getElementById('me-checkin-notice');
+    if (notice) {
+      const a = findArea(state.area);
+      const m = findMood(state.mood);
+      notice.textContent = '✓ checked in · ' + (a ? a.label : '') + ' · ' + (m ? m.label : '');
+      notice.hidden = false;
+      setTimeout(() => { notice.hidden = true; }, 3200);
+    }
+  });
+
+  document.getElementById('me-reset-btn')?.addEventListener('click', () => {
+    if (!confirm('Reset your /me state? This clears name, mood, area, and check-in history. Your wallet pairings on /profile are NOT touched.')) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    state = load();
+    save(state);
+    render();
+  });
+
+  // Initial paint
+  syncCurrentNoun();
+  render();
+})();
+</script>
+
+<style>
+  .me2027 {
+    max-width: 980px; margin: 0 auto; padding: 24px 20px 80px;
+    font-family: var(--font-body);
+  }
+
+  /* HERO */
+  .me__hero { margin: 0 0 28px; padding: 24px 0 24px; border-bottom: 1.5px solid var(--color-rule); }
+  .me__crumb {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--color-ink-soft); text-transform: uppercase; margin: 0 0 14px;
+  }
+  .me__crumb a { color: var(--color-ink-soft); text-decoration: none; }
+  .me__crumb a:hover { color: var(--color-ink); }
+  .me__crumb span { margin: 0 6px; }
+  .me__kicker {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--color-warm); text-transform: uppercase; margin: 0 0 12px;
+  }
+  .me__title {
+    font-family: var(--font-heading);
+    font-size: clamp(36px, 5vw, 60px); line-height: 1.05;
+    font-weight: 600; letter-spacing: -0.02em; margin: 0 0 14px;
+    color: var(--color-ink);
+  }
+  .me__dek {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.3vw, 18px); line-height: 1.5;
+    color: var(--color-ink-soft); max-width: 680px; margin: 0;
+  }
+  .me__profile-link { color: var(--color-warm); text-decoration: none; }
+  .me__profile-link:hover { text-decoration: underline; }
+
+  /* BANDS */
+  .me__band { margin: 0 0 36px; padding: 20px; background: var(--color-card); border: 1.5px solid var(--color-rule); border-radius: 3px; }
+  .band__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin: 0 0 14px;
+  }
+  .me__eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; color: var(--color-warm);
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .band__cta {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--color-ink-soft); text-transform: uppercase; text-decoration: none;
+    padding: 4px 8px; border: 1px solid var(--color-rule); border-radius: 2px;
+  }
+  .band__cta:hover { color: var(--color-ink); border-color: var(--color-ink); }
+  .me__field-label {
+    font-size: 10px; letter-spacing: 0.16em; color: var(--color-ink-soft);
+    text-transform: uppercase; margin: 0 0 8px;
+  }
+
+  /* YOU CARD */
+  .you {
+    display: grid; grid-template-columns: 180px 1fr; gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 600px) { .you { grid-template-columns: 1fr; } }
+  .you__noun-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .you__noun {
+    width: 160px; height: 160px;
+    background: #1a1004; border-radius: 4px;
+    image-rendering: pixelated;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+  .you__noun-shuffle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border: 1.5px solid var(--color-rule);
+    background: #fff; cursor: pointer; border-radius: 2px;
+    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+  }
+  .you__noun-shuffle:hover { border-color: var(--color-warm); color: var(--color-ink); }
+  .you__body { min-width: 0; }
+  .you__name-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+  .you__name-input {
+    font-family: var(--font-heading); font-size: clamp(28px, 4vw, 40px);
+    font-weight: 600; letter-spacing: -0.01em;
+    background: none; border: 0; padding: 0; outline: 0; color: var(--color-ink);
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.12s;
+    min-width: 280px; max-width: 100%; flex: 1 1 280px;
+  }
+  .you__name-input:focus { border-color: var(--color-warm); }
+  .you__name-status {
+    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .you__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .you__chip {
+    display: inline-flex; align-items: baseline; gap: 8px;
+    padding: 6px 10px; border: 1px solid var(--color-rule);
+    background: #fff; border-radius: 2px;
+    font-size: 13px;
+  }
+  .you__chip span { font-size: 9px; letter-spacing: 0.16em; color: var(--color-ink-soft); }
+  .you__chip strong { font-weight: 500; color: var(--color-ink); }
+
+  /* CHECK IN */
+  .checkin__last { font-size: 11px; color: var(--color-ink-soft); }
+  .checkin__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 16px; }
+  @media (max-width: 720px) { .checkin__row { grid-template-columns: 1fr; } }
+  .checkin__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .checkin__chip {
+    padding: 6px 10px; border: 1.5px solid var(--color-rule);
+    background: #fff; cursor: pointer; border-radius: 2px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--color-ink);
+  }
+  .checkin__chip:hover { border-color: var(--color-warm); }
+  .checkin__chip.is-active {
+    background: var(--color-ink); color: #fff; border-color: var(--color-ink);
+  }
+  .checkin__chip--mood {
+    display: flex; flex-direction: column; align-items: flex-start;
+    padding: 8px 12px; line-height: 1.2; gap: 2px;
+  }
+  .checkin__chip--mood strong { font-size: 11px; letter-spacing: 0.14em; }
+  .checkin__chip--mood span { font-size: 10px; text-transform: none; letter-spacing: 0; color: var(--color-ink-soft); font-family: var(--font-body); }
+  .checkin__chip--mood.is-active span { color: rgba(255,255,255,0.75); }
+  .checkin__cta {
+    width: 100%; padding: 14px;
+    background: var(--color-warm); color: #fff; border: none;
+    cursor: pointer; border-radius: 3px;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.16em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background 0.12s;
+  }
+  .checkin__cta:hover { background: var(--color-ink); }
+  .checkin__cta-glyph { font-size: 16px; }
+  .checkin__notice {
+    margin: 10px 0 0; font-size: 11px; letter-spacing: 0.1em; color: var(--color-warm);
+  }
+
+  /* WEEK */
+  .week__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .week__row {
+    display: grid; grid-template-columns: 100px 1fr 100px 100px; gap: 12px;
+    align-items: baseline; padding: 8px 12px;
+    border: 1px solid var(--color-rule); background: #fff; border-radius: 2px;
+    font-size: 12px;
+  }
+  .week__row time, .week__row-area, .week__row-mood, .week__row-rel { font-size: 11px; }
+  .week__row-area { color: var(--color-warm); letter-spacing: 0.12em; }
+  .week__row-mood { color: var(--color-accent); letter-spacing: 0.12em; }
+  .week__row-rel { color: var(--color-ink-soft); justify-self: end; }
+  @media (max-width: 600px) { .week__row { grid-template-columns: 1fr 1fr; } .week__row time, .week__row-rel { grid-column: span 2; } }
+  .week__empty { font-size: 13px; color: var(--color-ink-soft); padding: 8px 12px; }
+  .week__count { font-size: 11px; color: var(--color-ink-soft); }
+
+  /* MADE */
+  .made__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .made__row { background: #fff; border: 1px solid var(--color-rule); border-radius: 2px; }
+  .made__link {
+    display: grid; grid-template-columns: 130px 1fr 80px; gap: 12px;
+    align-items: baseline; padding: 8px 12px; color: var(--color-ink); text-decoration: none;
+  }
+  .made__link:hover { background: var(--color-card-hover); }
+  .made__id { font-size: 10px; color: var(--color-ink-soft); letter-spacing: 0.06em; }
+  .made__title { font-size: 13px; }
+  .made__rel { font-size: 10px; color: var(--color-ink-soft); justify-self: end; }
+  .made__empty { padding: 8px 12px; font-size: 13px; color: var(--color-ink-soft); }
+  .made__empty a { color: var(--color-warm); }
+
+  /* QUICK ACTIONS */
+  .actions__grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
+  }
+  .actions__btn {
+    display: block; padding: 14px 14px;
+    background: #fff; border: 1.5px solid var(--color-rule);
+    border-left: 3px solid var(--color-warm);
+    border-radius: 2px; text-decoration: none; color: inherit;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .actions__btn:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .actions__btn-label {
+    display: block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--color-ink); margin-bottom: 4px;
+  }
+  .actions__btn-blurb { display: block; font-size: 12px; color: var(--color-ink-soft); }
+
+  /* FOOT */
+  .me__foot {
+    margin-top: 36px; padding-top: 16px;
+    border-top: 1px solid var(--color-rule);
+    font-size: 11px; color: var(--color-ink-soft);
+  }
+  .me__foot code {
+    background: var(--color-card); padding: 1px 4px; border-radius: 2px;
+    font-size: 11px;
+  }
+  .me__reset-btn {
+    background: none; border: none; padding: 0;
+    color: var(--color-nouns-red, #E84D6A); cursor: pointer;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-decoration: underline; margin-left: 8px;
+  }
+  .me__reset-btn:hover { color: var(--color-ink); }
+</style>
