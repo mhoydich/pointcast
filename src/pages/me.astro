@@ -216,6 +216,72 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       </ol>
     </section>
 
+    {/* ──────────── 5.5 INVENTORY ──────────── */}
+    <section class="me__band inv" aria-label="Inventory" id="me-inventory">
+      <header class="band__head">
+        <p class="me__eyebrow mono">INVENTORY · YOUR KIT</p>
+        <span class="inv__count mono" id="me-inv-count" aria-live="polite">0 items</span>
+      </header>
+      <p class="inv__dek">
+        Stuff you actually own. Paddles, drums, wheels, houseplants, books — whatever
+        you bring to PointCast. Stored locally only, never sent to a server.
+        Tied into <a href="/paddle-exchange">/paddle-exchange</a> + <a href="/honey-league">/honey-league</a>
+        (paddles), <a href="/houseplants">/houseplants</a> (plants), and the SUSPECT
+        check-in extension.
+      </p>
+
+      {/* Quick-start row — only shown when inventory is empty. */}
+      <div class="inv__quickstarts" id="me-inv-quickstarts" hidden>
+        <p class="inv__quickstart-h mono">QUICK START</p>
+        <button type="button" class="inv__quickstart-btn" data-quickstart="paddles">
+          <span class="mono">+</span> Pickleball paddles
+          <span class="inv__quickstart-blurb">11six24 Vapor 2 · Honolulu JNFK · Gearbox G2 Power · Vatic Prism 14mm</span>
+        </button>
+        <button type="button" class="inv__quickstart-btn" data-quickstart="houseplants">
+          <span class="mono">+</span> A few houseplants
+          <span class="inv__quickstart-blurb">monstera · pothos · snake plant</span>
+        </button>
+      </div>
+
+      {/* Add-item form. */}
+      <form class="inv__add" id="me-inv-add" autocomplete="off">
+        <div class="inv__add-row">
+          <label class="inv__field">
+            <span class="inv__field-label mono">CATEGORY</span>
+            <select class="inv__select" id="inv-add-category" required>
+              <option value="paddles">paddles</option>
+              <option value="drums">drums</option>
+              <option value="wheels">wheels</option>
+              <option value="plants">plants</option>
+              <option value="tech">tech</option>
+              <option value="books">books</option>
+              <option value="other">other</option>
+            </select>
+          </label>
+          <label class="inv__field inv__field--brand">
+            <span class="inv__field-label mono">BRAND</span>
+            <input type="text" class="inv__input" id="inv-add-brand" placeholder="e.g. 11six24" maxlength="40" />
+          </label>
+          <label class="inv__field inv__field--model">
+            <span class="inv__field-label mono">MODEL</span>
+            <input type="text" class="inv__input" id="inv-add-model" placeholder="e.g. Vapor 2" maxlength="60" required />
+          </label>
+        </div>
+        <div class="inv__add-row inv__add-row--bottom">
+          <label class="inv__field inv__field--notes">
+            <span class="inv__field-label mono">NOTES (OPTIONAL)</span>
+            <input type="text" class="inv__input" id="inv-add-notes" placeholder="e.g. 14mm core, lead tape on neck" maxlength="120" />
+          </label>
+          <button type="submit" class="inv__add-btn mono">+ ADD</button>
+        </div>
+      </form>
+
+      {/* Items grouped by category. */}
+      <div class="inv__groups" id="me-inv-groups">
+        <p class="inv__empty">No items yet — add one above, or pick a quick-start.</p>
+      </div>
+    </section>
+
     {/* ──────────── 6. QUICK ACTIONS ──────────── */}
     <section class="me__band actions" aria-label="Quick actions">
       <p class="me__eyebrow mono">QUICK ACTIONS</p>
@@ -594,6 +660,192 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     } catch (e) { renderCommunity(null); }
   }
 
+  // ─── Inventory ─────────────────────────────────────────────────────────
+  // Separate localStorage key (pc:inventory:v1) so it doesn't bloat pc:me:v1.
+  // Schema is intentionally simple: a flat array of items grouped by category
+  // at render time. Categories aren't enforced at storage time — strings come
+  // from the form's <select>, but loosely-typed so future agents can add
+  // their own without a migration.
+  const INV_KEY = 'pc:inventory:v1';
+  const INV_VERSION = 1;
+  const INV_CATEGORIES = ['paddles', 'drums', 'wheels', 'plants', 'tech', 'books', 'other'];
+  const QUICKSTARTS = {
+    paddles: [
+      { brand: '11six24',  model: 'Vapor 2',     notes: '' },
+      { brand: 'Honolulu', model: 'JNFK',        notes: '' },
+      { brand: 'Gearbox',  model: 'G2 Power',    notes: '' },
+      { brand: 'Vatic',    model: 'Prism 14mm',  notes: '' },
+    ],
+    houseplants: [
+      { category: 'plants', brand: '',          model: 'Monstera deliciosa', notes: '' },
+      { category: 'plants', brand: '',          model: 'Pothos',             notes: '' },
+      { category: 'plants', brand: '',          model: 'Snake plant',        notes: '' },
+    ],
+  };
+
+  function invDefaults() {
+    return { $v: INV_VERSION, items: [] };
+  }
+
+  function invLoad() {
+    try {
+      const raw = localStorage.getItem(INV_KEY);
+      if (!raw) return invDefaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || parsed.$v !== INV_VERSION) {
+        return invDefaults();
+      }
+      return Object.assign(invDefaults(), parsed, { $v: INV_VERSION });
+    } catch (e) {
+      return invDefaults();
+    }
+  }
+
+  function invSave(inv) {
+    try { localStorage.setItem(INV_KEY, JSON.stringify(inv)); } catch (e) {}
+  }
+
+  function invMakeId() {
+    return 'i-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  }
+
+  let inv = invLoad();
+
+  function invAdd(item) {
+    const norm = {
+      id: invMakeId(),
+      category: (item.category || 'other').toLowerCase(),
+      brand: (item.brand || '').trim(),
+      model: (item.model || '').trim(),
+      notes: (item.notes || '').trim(),
+      addedAt: new Date().toISOString(),
+    };
+    if (!norm.model) return false;
+    inv.items.push(norm);
+    invSave(inv);
+    invRender();
+    return true;
+  }
+
+  function invRemove(id) {
+    inv.items = inv.items.filter(i => i.id !== id);
+    invSave(inv);
+    invRender();
+  }
+
+  function invQuickstart(kind) {
+    const seeds = QUICKSTARTS[kind];
+    if (!seeds || !seeds.length) return;
+    const defaultCategory = kind === 'paddles' ? 'paddles' : 'plants';
+    for (const s of seeds) {
+      invAdd({
+        category: s.category || defaultCategory,
+        brand: s.brand,
+        model: s.model,
+        notes: s.notes,
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function invRender() {
+    const groupsEl = document.getElementById('me-inv-groups');
+    const countEl = document.getElementById('me-inv-count');
+    const quickstartsEl = document.getElementById('me-inv-quickstarts');
+    if (!groupsEl) return;
+
+    if (countEl) {
+      const n = inv.items.length;
+      countEl.textContent = n + (n === 1 ? ' item' : ' items');
+    }
+
+    if (quickstartsEl) quickstartsEl.hidden = inv.items.length > 0;
+
+    if (!inv.items.length) {
+      groupsEl.innerHTML = '<p class="inv__empty">No items yet — add one above, or pick a quick-start.</p>';
+      return;
+    }
+
+    // Group by category, preserving INV_CATEGORIES order; unknown categories
+    // come last alphabetically.
+    const byCat = {};
+    for (const item of inv.items) {
+      const c = item.category || 'other';
+      if (!byCat[c]) byCat[c] = [];
+      byCat[c].push(item);
+    }
+    const orderedCats = INV_CATEGORIES.filter(c => byCat[c]);
+    const otherCats = Object.keys(byCat).filter(c => !INV_CATEGORIES.includes(c)).sort();
+    const cats = orderedCats.concat(otherCats);
+
+    let html = '';
+    for (const cat of cats) {
+      const items = byCat[cat];
+      html += '<section class="inv__group">';
+      html += '<header class="inv__group-head"><h3 class="mono inv__group-label">' + escapeHtml(cat) + '</h3>';
+      html += '<span class="inv__group-count mono">' + items.length + '</span></header>';
+      html += '<ul class="inv__list">';
+      for (const item of items) {
+        const display = item.brand
+          ? '<span class="inv__brand">' + escapeHtml(item.brand) + '</span> <span class="inv__model">' + escapeHtml(item.model) + '</span>'
+          : '<span class="inv__model">' + escapeHtml(item.model) + '</span>';
+        html += '<li class="inv__row">';
+        html += '<div class="inv__row-main">' + display;
+        if (item.notes) html += '<p class="inv__notes">' + escapeHtml(item.notes) + '</p>';
+        html += '</div>';
+        html += '<button type="button" class="inv__remove" data-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml(item.brand + ' ' + item.model) + '">×</button>';
+        html += '</li>';
+      }
+      html += '</ul>';
+      html += '</section>';
+    }
+    groupsEl.innerHTML = html;
+
+    // Wire up remove buttons.
+    groupsEl.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => invRemove(btn.getAttribute('data-remove')));
+    });
+  }
+
+  // Form wiring.
+  document.getElementById('me-inv-add')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const catEl = document.getElementById('inv-add-category');
+    const brandEl = document.getElementById('inv-add-brand');
+    const modelEl = document.getElementById('inv-add-model');
+    const notesEl = document.getElementById('inv-add-notes');
+    if (!modelEl?.value.trim()) {
+      modelEl?.focus();
+      return;
+    }
+    const ok = invAdd({
+      category: catEl?.value || 'other',
+      brand: brandEl?.value || '',
+      model: modelEl?.value || '',
+      notes: notesEl?.value || '',
+    });
+    if (ok) {
+      if (brandEl) brandEl.value = '';
+      if (modelEl) modelEl.value = '';
+      if (notesEl) notesEl.value = '';
+      modelEl?.focus();
+    }
+  });
+
+  document.querySelectorAll('[data-quickstart]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const kind = btn.getAttribute('data-quickstart');
+      if (kind) invQuickstart(kind);
+    });
+  });
+
+  invRender();
+
   // Initial paint
   syncCurrentNoun();
   render();
@@ -837,6 +1089,127 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   .made__rel { font-size: 10px; color: var(--color-ink-soft); justify-self: end; }
   .made__empty { padding: 8px 12px; font-size: 13px; color: var(--color-ink-soft); }
   .made__empty a { color: var(--color-warm); }
+
+  /* INVENTORY */
+  .inv__count {
+    font-size: 11px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .inv__dek {
+    font-size: 13px; line-height: 1.5; color: var(--color-ink-soft);
+    margin: 0 0 16px; max-width: 680px;
+  }
+  .inv__dek a { color: var(--color-warm); text-decoration: none; }
+  .inv__dek a:hover { text-decoration: underline; }
+
+  .inv__quickstarts {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px;
+    padding: 12px; background: #fbf7ee;
+    border: 1px dashed var(--color-rule); border-radius: 3px;
+  }
+  .inv__quickstart-h {
+    flex-basis: 100%; font-size: 10px; letter-spacing: 0.18em; color: var(--color-warm);
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .inv__quickstart-btn {
+    flex: 1 1 240px; min-width: 0; text-align: left; padding: 10px 12px;
+    background: #fff; border: 1.5px solid var(--color-rule); border-left: 3px solid var(--color-warm);
+    border-radius: 2px; cursor: pointer; font-family: inherit; color: var(--color-ink);
+    font-size: 13px; line-height: 1.4;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .inv__quickstart-btn:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .inv__quickstart-btn .mono { color: var(--color-warm); margin-right: 4px; font-weight: 700; }
+  .inv__quickstart-blurb {
+    display: block; margin-top: 4px; font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.06em; color: var(--color-ink-soft);
+  }
+
+  .inv__add { margin: 0 0 18px; }
+  .inv__add-row {
+    display: grid; grid-template-columns: 130px 1fr 1.5fr; gap: 10px;
+    margin: 0 0 10px;
+  }
+  .inv__add-row--bottom {
+    grid-template-columns: 1fr 110px;
+  }
+  .inv__field { display: flex; flex-direction: column; min-width: 0; }
+  .inv__field-label {
+    font-size: 9px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .inv__select, .inv__input {
+    width: 100%; padding: 8px 10px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule); border-radius: 2px;
+    font-family: inherit; font-size: 13px; color: var(--color-ink);
+  }
+  .inv__select:focus, .inv__input:focus {
+    outline: none; border-color: var(--color-warm);
+  }
+  .inv__add-btn {
+    align-self: flex-end; padding: 9px 14px;
+    background: var(--color-ink); color: #fff;
+    border: 1.5px solid var(--color-ink); border-radius: 2px;
+    font-size: 11px; letter-spacing: 0.16em; font-weight: 700;
+    cursor: pointer; transition: background 0.12s;
+  }
+  .inv__add-btn:hover { background: var(--color-warm); border-color: var(--color-warm); }
+
+  .inv__empty {
+    padding: 12px 14px; font-size: 13px; color: var(--color-ink-soft);
+    text-align: center;
+    border: 1px dashed var(--color-rule); border-radius: 2px;
+    margin: 0;
+  }
+
+  .inv__group { margin: 0 0 16px; }
+  .inv__group:last-child { margin-bottom: 0; }
+  .inv__group-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0; margin: 0 0 6px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .inv__group-label {
+    font-size: 11px; letter-spacing: 0.2em; font-weight: 700;
+    color: var(--color-ink); text-transform: uppercase; margin: 0;
+  }
+  .inv__group-count {
+    font-size: 10px; color: var(--color-ink-soft); letter-spacing: 0.1em;
+  }
+  .inv__list { list-style: none; padding: 0; margin: 0; }
+  .inv__row {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px dashed var(--color-rule);
+  }
+  .inv__row:last-child { border-bottom: 0; }
+  .inv__row-main { min-width: 0; }
+  .inv__brand {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-warm); font-weight: 700; text-transform: uppercase;
+  }
+  .inv__model {
+    font-size: 14px; color: var(--color-ink); font-weight: 600;
+    margin-left: 4px;
+  }
+  .inv__notes {
+    font-size: 12px; line-height: 1.4; color: var(--color-ink-soft);
+    margin: 2px 0 0;
+  }
+  .inv__remove {
+    width: 22px; height: 22px;
+    background: transparent; border: 1px solid var(--color-rule); border-radius: 2px;
+    color: var(--color-ink-soft); cursor: pointer; font-size: 14px; line-height: 1;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .inv__remove:hover { color: #c0392b; border-color: #c0392b; }
+
+  @media (max-width: 600px) {
+    .inv__add-row { grid-template-columns: 1fr; }
+    .inv__add-row--bottom { grid-template-columns: 1fr; }
+    .inv__add-btn { width: 100%; }
+  }
 
   /* QUICK ACTIONS */
   .actions__grid {
