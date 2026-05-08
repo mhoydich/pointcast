@@ -158,6 +158,31 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       <p class="checkin__notice mono" id="me-checkin-notice" hidden role="status" aria-live="polite"></p>
     </section>
 
+    {/* ──────────── 2b. WHO ELSE IS HERE TODAY ──────────── */}
+    <section class="me__band community" aria-label="Community presence" id="me-community" data-state="loading">
+      <header class="band__head">
+        <p class="me__eyebrow mono">WHO ELSE IS HERE TODAY</p>
+        <span class="community__date mono" id="me-community-date">—</span>
+      </header>
+      <div class="community__row">
+        <div class="community__stat">
+          <strong class="community__num" id="me-community-total">—</strong>
+          <span class="community__label mono">CHECK-IN<span id="me-community-plural">S</span></span>
+        </div>
+        <div class="community__stat community__stat--mood">
+          <span class="community__pill-label mono">TOP MOOD</span>
+          <strong class="community__pill" id="me-community-top-mood">—</strong>
+        </div>
+        <div class="community__stat community__stat--area">
+          <span class="community__pill-label mono">TOP AREA</span>
+          <strong class="community__pill" id="me-community-top-area">—</strong>
+        </div>
+      </div>
+      <p class="community__note mono" id="me-community-note">
+        Aggregated across everyone who checked in today. IPs are hashed daily — no record of who you are, just that someone was here. <a href="/api/checkin">/api/checkin</a> for the live JSON.
+      </p>
+    </section>
+
     {/* ──────────── 3. STREAK ──────────── */}
     <section class="me__band streak-band" aria-label="Streak">
       <p class="me__eyebrow mono">STREAK</p>
@@ -471,7 +496,7 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     });
   });
 
-  document.getElementById('me-checkin-btn')?.addEventListener('click', () => {
+  document.getElementById('me-checkin-btn')?.addEventListener('click', async () => {
     if (!state.area || !state.mood) {
       const notice = document.getElementById('me-checkin-notice');
       if (notice) {
@@ -489,6 +514,19 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     state.lastCheckinAt = now;
     save(state);
     render();
+
+    // Fire-and-forget POST to the community aggregate. Failures are
+    // silent — the local check-in already succeeded; community presence
+    // is bonus signal.
+    try {
+      const r = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: state.area, mood: state.mood }),
+      });
+      const data = await r.json().catch(() => null);
+      if (data?.today) renderCommunity(data.today);
+    } catch (e) { /* offline / blocked / 503 — skip */ }
 
     // Touch the streak too — StreakBadge reads pc_streak on its own load,
     // but a same-session check-in shouldn't be a no-op. The badge inits on
@@ -520,9 +558,46 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     render();
   });
 
+  // ─── Community presence ─────────────────────────────────────────────────
+  const AREA_LABELS = AREAS.reduce((m, a) => (m[a.slug] = a.label, m), {});
+  const MOOD_LABELS = MOODS.reduce((m, x) => (m[x.id] = x.label, m), {});
+
+  function renderCommunity(today) {
+    const root = document.getElementById('me-community');
+    if (!root) return;
+    if (!today) {
+      root.dataset.state = 'unavailable';
+      const note = document.getElementById('me-community-note');
+      if (note) note.textContent = 'Community aggregates unavailable right now — your local check-in still saved.';
+      return;
+    }
+    const total = Number(today.total) || 0;
+    const totalEl = document.getElementById('me-community-total');
+    if (totalEl) totalEl.textContent = String(total);
+    const plural = document.getElementById('me-community-plural');
+    if (plural) plural.textContent = total === 1 ? '' : 'S';
+    const dateEl = document.getElementById('me-community-date');
+    if (dateEl) dateEl.textContent = today.date || '—';
+    const moodEl = document.getElementById('me-community-top-mood');
+    if (moodEl) moodEl.textContent = today.topMood ? (MOOD_LABELS[today.topMood] || today.topMood) : '—';
+    const areaEl = document.getElementById('me-community-top-area');
+    if (areaEl) areaEl.textContent = today.topArea ? (AREA_LABELS[today.topArea] || today.topArea) : '—';
+    root.dataset.state = total > 0 ? 'live' : 'empty';
+  }
+
+  async function fetchCommunity() {
+    try {
+      const r = await fetch('/api/checkin', { method: 'GET' });
+      if (!r.ok) { renderCommunity(null); return; }
+      const data = await r.json();
+      renderCommunity(data?.today);
+    } catch (e) { renderCommunity(null); }
+  }
+
   // Initial paint
   syncCurrentNoun();
   render();
+  fetchCommunity();
 })();
 </script>
 
@@ -690,6 +765,48 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   .checkin__notice {
     margin: 10px 0 0; font-size: 11px; letter-spacing: 0.1em; color: var(--color-warm);
   }
+
+  /* COMMUNITY */
+  .community__date { font-size: 11px; letter-spacing: 0.14em; color: var(--color-ink-soft); }
+  .community__row {
+    display: grid; grid-template-columns: auto 1fr 1fr; gap: 24px;
+    align-items: end; margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .community__row { grid-template-columns: 1fr; gap: 12px; } }
+  .community__stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .community__num {
+    font-family: var(--font-heading); font-size: 56px; font-weight: 600;
+    line-height: 1; color: var(--color-ink); letter-spacing: -0.02em;
+  }
+  .community__label {
+    font-size: 10px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .community__pill-label {
+    font-size: 9px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .community__pill {
+    display: inline-block; padding: 6px 12px;
+    /* Hex literals: Tailwind v4 @theme defines --color-* tokens for the
+       UTILITY class generator but doesn't always emit them as runtime
+       :root vars usable with var(). Hardcode here so the pill bgs are
+       visible. Brand-stable values from src/styles/global.css. */
+    background-color: #1f1b15; color: #fff;
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em;
+    border-radius: 2px; font-weight: 500;
+  }
+  .community__stat--mood .community__pill { background-color: #c4952e; }
+  .community__stat--area .community__pill { background-color: #1b3a5b; }
+  .community__note {
+    font-size: 11px; color: var(--color-ink-soft);
+    margin: 0; line-height: 1.55;
+  }
+  .community__note a { color: var(--color-warm); }
+
+  .community[data-state='loading'] .community__num { opacity: 0.4; }
+  .community[data-state='unavailable'] .community__pill { opacity: 0.4; }
+  .community[data-state='empty'] .community__pill { opacity: 0.4; }
 
   /* WEEK */
   .week__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
