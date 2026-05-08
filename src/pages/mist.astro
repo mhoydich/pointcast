@@ -185,9 +185,7 @@ const kindLabel: Record<AppCard['kind'], string> = {
   // src/components/WalletConnect.astro and src/lib/auth/client.ts. When a
   // wallet is connected (Tezos OR Ethereum), shows the address and provider.
   //
-  // PR #3 commit b: ENS reverse-lookup + Base balance read for EVM wallets.
-  //                 viem clients are dynamic-imported so the bundle isn't paid
-  //                 for visitors who never connect an EVM wallet.
+  // PR #3 commit b: ENS reverse-lookup + balance read for EVM wallets.
   // PR #3 commit c: Nouns DAO live-auction tile + identity picker UI.
   // ---------------------------------------------------------------------------
   type Wallet = {
@@ -220,124 +218,39 @@ const kindLabel: Record<AppCard['kind'], string> = {
     return 'Solana';
   }
 
-  // ---------- viem-derived enrichment (EVM only) ----------
-  type EthEnrichment = {
-    ensName: string | null;     // primary ENS name from L1 reverse-lookup
-    baseEth: string | null;     // ETH balance on Base, formatted "0.0123"
-  };
-
-  // Cache enrichment per address in sessionStorage for ~10 min so we don't
-  // re-fetch ENS on every wallet-change event during the session.
-  const ENRICH_TTL_MS = 10 * 60 * 1000;
-  const enrichKey = (addr: string) => `pc:mist:enrich:${addr.toLowerCase()}`;
-
-  function loadEnrichment(addr: string): EthEnrichment | null {
-    try {
-      const raw = sessionStorage.getItem(enrichKey(addr));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { at: number; data: EthEnrichment };
-      if (Date.now() - parsed.at > ENRICH_TTL_MS) return null;
-      return parsed.data;
-    } catch { return null; }
-  }
-  function saveEnrichment(addr: string, data: EthEnrichment): void {
-    try {
-      sessionStorage.setItem(enrichKey(addr), JSON.stringify({ at: Date.now(), data }));
-    } catch { /* private mode etc. */ }
-  }
-
-  /** Fetch ENS reverse-lookup (L1) + Base balance via viem. Best-effort. */
-  async function enrichEvm(addr: string): Promise<EthEnrichment> {
-    const cached = loadEnrichment(addr);
-    if (cached) return cached;
-    try {
-      const [{ resolveEnsName, getBaseClient }, viem] = await Promise.all([
-        import('../lib/eth/clients'),
-        import('viem'),
-      ]);
-      const lower = addr.toLowerCase() as `0x${string}`;
-      const [ensName, balanceWei] = await Promise.all([
-        resolveEnsName(lower),
-        getBaseClient().getBalance({ address: lower }).catch(() => null),
-      ]);
-      const baseEth = balanceWei != null
-        ? Number(viem.formatEther(balanceWei)).toFixed(4)
-        : null;
-      const data: EthEnrichment = { ensName, baseEth };
-      saveEnrichment(addr, data);
-      return data;
-    } catch (err) {
-      console.warn('[mist] EVM enrichment failed:', err);
-      return { ensName: null, baseEth: null };
+  function render(wallet: Wallet | null): void {
+    if (!CARD) return;
+    if (!wallet) {
+      CARD.innerHTML = `
+        <p class="mist__wallet-empty">
+          <span class="mist__wallet-dot" aria-hidden="true"></span>
+          No wallet connected. Use the <strong>connect wallet</strong> button in the corner. Tezos works today, Ethereum lands with this room — sign once, your address joins your PointCast user.
+        </p>
+      `;
+      return;
     }
-  }
-
-  // ---------- panel render ----------
-  function emptyHtml(): string {
-    return `
-      <p class="mist__wallet-empty">
-        <span class="mist__wallet-dot" aria-hidden="true"></span>
-        No wallet connected. Use the <strong>connect wallet</strong> button in the corner. Tezos works today, Ethereum lands with this room — sign once, your address joins your PointCast user.
-      </p>
-    `;
-  }
-
-  function connectedHtml(wallet: Wallet, enrich?: EthEnrichment): string {
     const chain = chainLabel(wallet.chain);
-    const isEth = wallet.chain === 'eth';
-    const display = isEth && enrich?.ensName ? enrich.ensName : shortAddr(wallet.address);
-    const subline = isEth
-      ? (enrich?.ensName ? shortAddr(wallet.address) : '<em>resolving ENS…</em>')
-      : '';
-    const balanceLine = isEth
-      ? (enrich?.baseEth != null
-          ? `<span class="mist__wallet-balance mono">${enrich.baseEth} ETH on Base</span>`
-          : `<span class="mist__wallet-balance mono mist__wallet-balance--loading">reading Base balance…</span>`)
-      : '';
-    return `
+    CARD.innerHTML = `
       <div class="mist__wallet-connected">
         <div class="mist__wallet-line">
           <span class="mist__wallet-dot mist__wallet-dot--live" aria-hidden="true"></span>
           <span class="mist__wallet-chain mono">${chain} · ${wallet.provider}</span>
         </div>
-        <p class="mist__wallet-address mono" title="${wallet.address}">${display}</p>
-        ${subline ? `<p class="mist__wallet-subline mono">${subline}</p>` : ''}
-        ${balanceLine ? `<p class="mist__wallet-meta">${balanceLine}</p>` : ''}
+        <p class="mist__wallet-address mono" title="${wallet.address}">${shortAddr(wallet.address)}</p>
         <p class="mist__wallet-hint">
-          Identity locked. The 2014 Mist had an Identity Picker here — choose <em>which me</em> is signing — that arrives when more than one address is linked to your PointCast user.
+          Identity locked. ENS name + balance load with the next commit. The 2014 Mist had an Identity Picker here — choose <em>which me</em> is signing — that's coming when you have more than one EVM address linked.
         </p>
       </div>
     `;
   }
 
-  function render(wallet: Wallet | null, enrich?: EthEnrichment): void {
-    if (!CARD) return;
-    CARD.innerHTML = wallet ? connectedHtml(wallet, enrich) : emptyHtml();
-  }
+  // Initial render from localStorage
+  render(loadWallet());
 
-  // Pipeline: render synchronously from localStorage, then enrich async if EVM.
-  function pipeline(wallet: Wallet | null): void {
-    render(wallet);
-    if (wallet?.chain === 'eth') {
-      enrichEvm(wallet.address).then((enrich) => {
-        // Only re-render if the same wallet is still connected — avoid
-        // overwriting a fresh disconnect/reconnect with stale data.
-        const current = loadWallet();
-        if (current?.address === wallet.address) {
-          render(wallet, enrich);
-        }
-      });
-    }
-  }
-
-  // Initial render
-  pipeline(loadWallet());
-
-  // React to connect/disconnect from elsewhere on the page. Re-runs the full
-  // pipeline so a fresh EVM connect kicks ENS + balance enrichment.
+  // React to connect/disconnect from elsewhere on the page
   window.addEventListener('pc:wallet-change', (e: Event) => {
     const detail = (e as CustomEvent<Wallet | null>).detail;
-    pipeline(detail);
+    render(detail);
   });
 </script>
 
@@ -452,33 +365,6 @@ const kindLabel: Record<AppCard['kind'], string> = {
     max-width: 60ch;
   }
   .mist__wallet-hint em { color: var(--color-warm); font-style: italic; }
-  .mist__wallet-subline {
-    font-size: 0.7rem;
-    letter-spacing: 0.02em;
-    color: var(--color-ink-soft);
-    margin: 0 0 8px;
-  }
-  .mist__wallet-subline em {
-    font-style: italic;
-    opacity: 0.7;
-  }
-  .mist__wallet-meta { margin: 0 0 10px; }
-  .mist__wallet-balance {
-    display: inline-block;
-    font-size: 0.65rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--color-warm);
-    padding: 4px 8px;
-    border: 1px solid color-mix(in oklab, var(--color-warm) 40%, transparent);
-    border-radius: 999px;
-  }
-  .mist__wallet-balance--loading {
-    color: var(--color-ink-soft);
-    border-color: var(--color-rule);
-    text-transform: none;
-    letter-spacing: 0.04em;
-  }
 
   /* ---------- two-column layout ---------- */
   .mist__split {
