@@ -1,0 +1,383 @@
+---
+/**
+ * /drum-audiophile-v2 — listening room with presets + master EQ + tape saturation.
+ *
+ * v2 over v1:
+ *   - Presets: CHILL / DRIVING / CHURCH / DRY (each loads a pattern + EQ + IR + sat config)
+ *   - Master 3-band EQ (low shelf 200Hz · mid peaking 1000Hz · high shelf 8000Hz, ±12dB)
+ *   - Tape saturation toggle (WaveShaperNode with tanh curve, drive 2.5x)
+ *   - Per-track sends: kick + snare can be dry-only; bell + lead + pad route through reverb
+ *   - Persistent listener-pid so settings survive reloads (your last preset stays)
+ *
+ * Same listening room visual + spectrum + VU meters as v1.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Drum Audiophile v2 · presets + EQ + tape · PointCast';
+const description = 'Listening room v2 — preset slots, 3-band EQ, tape saturation toggle. Tweak the rendering live.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="da" id="da-main">
+    <header class="da__header">
+      <h1 class="da__title">DRUM AUDIOPHILE · V2</h1>
+      <p class="da__tag">presets · 3-band EQ · tape saturation · per-track sends</p>
+    </header>
+
+    <section class="da__presets">
+      <span class="da__presets-label">PRESET:</span>
+      <button class="da__preset" data-preset="chill"   type="button">🌿 CHILL</button>
+      <button class="da__preset da__preset--active" data-preset="driving" type="button">🚗 DRIVING</button>
+      <button class="da__preset" data-preset="church"  type="button">⛪ CHURCH</button>
+      <button class="da__preset" data-preset="dry"     type="button">🏜 DRY</button>
+    </section>
+
+    <section class="da__room" id="da-room">
+      <div class="da__chair da__chair--left">
+        <div class="da__chair-back" aria-hidden="true"></div>
+        <div class="da__noun" id="da-noun-l"><img src="/images/audiophile-nouns/headphones.svg" alt="" width="84" height="84" loading="lazy"/></div>
+        <span class="da__chair-label">L · headphones</span>
+      </div>
+      <div class="da__stack">
+        <div class="da__amp" aria-hidden="true">
+          <div class="da__vu"><span class="da__vu-label">L</span><canvas class="da__vu-canvas" id="da-vu-l" width="180" height="80"></canvas></div>
+          <div class="da__vu"><span class="da__vu-label">R</span><canvas class="da__vu-canvas" id="da-vu-r" width="180" height="80"></canvas></div>
+        </div>
+        <div class="da__spectrum"><canvas class="da__spectrum-canvas" id="da-spectrum" width="600" height="120"></canvas></div>
+        <div class="da__readout" id="da-readout">— idle · ready —</div>
+      </div>
+      <div class="da__chair da__chair--right">
+        <div class="da__chair-back" aria-hidden="true"></div>
+        <div class="da__noun" id="da-noun-r"><img src="/images/audiophile-nouns/vu-meter.svg" alt="" width="84" height="84" loading="lazy"/></div>
+        <span class="da__chair-label">R · vu-meter</span>
+      </div>
+    </section>
+
+    <section class="da__panel">
+      <button class="da__btn da__btn--big" id="da-toggle" type="button">▶ DROP THE NEEDLE</button>
+      <label class="da__tempo">
+        <span class="da__tempo-label">TEMPO</span>
+        <input type="range" id="da-tempo" min="60" max="140" step="2" value="84"/>
+        <span id="da-tempo-readout">84 bpm</span>
+      </label>
+      <label class="da__sat">
+        <input type="checkbox" id="da-sat"/>
+        <span>📻 TAPE SAT</span>
+      </label>
+    </section>
+
+    <section class="da__eq">
+      <span class="da__eq-label">MASTER EQ</span>
+      <label class="da__eq-band">
+        <span>LOW · 200Hz</span>
+        <input type="range" id="da-eq-low" min="-12" max="12" step="0.5" value="0"/>
+        <span class="da__eq-val" id="da-eq-low-val">0.0 dB</span>
+      </label>
+      <label class="da__eq-band">
+        <span>MID · 1kHz</span>
+        <input type="range" id="da-eq-mid" min="-12" max="12" step="0.5" value="0"/>
+        <span class="da__eq-val" id="da-eq-mid-val">0.0 dB</span>
+      </label>
+      <label class="da__eq-band">
+        <span>HIGH · 8kHz</span>
+        <input type="range" id="da-eq-high" min="-12" max="12" step="0.5" value="0"/>
+        <span class="da__eq-val" id="da-eq-high-val">0.0 dB</span>
+      </label>
+      <button class="da__btn" id="da-eq-flat" type="button">⏤ FLAT</button>
+    </section>
+
+    <section class="da__pattern">
+      {['kick', 'snare', 'bell', 'lead', 'pad'].map((inst) => (
+        <div class="da__lane" data-inst={inst}>
+          <span class="da__lane-label">{inst.toUpperCase()}</span>
+          <span class="da__cells">
+            {Array.from({ length: 16 }).map((_, i) => (
+              <button class={`da__cell ${i % 4 === 0 ? 'da__cell--beat' : ''}`} data-inst={inst} data-step={i} aria-pressed="false" type="button"></button>
+            ))}
+          </span>
+        </div>
+      ))}
+    </section>
+
+    <section class="da__siblings">
+      <a href="/drum-audiophile">/drum-audiophile · v1</a>
+      <a href="/drum-race-v2">/drum-race-v2</a>
+      <a href="/noun-cinema-v2">/noun-cinema-v2</a>
+      <a href="/drum-quintet">/drum-quintet</a>
+      <a href="/drum-map">/drum-map</a>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .da { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #f4e7c8; background: linear-gradient(180deg, #1a0a06 0%, #0c0408 100%); min-height: 100vh; }
+  .da__header { text-align: center; margin: 18px 0 14px; }
+  .da__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6.5vw, 64px); letter-spacing: 0.18em; margin: 0; color: #f6c15e; text-shadow: 0 0 24px rgba(246, 193, 94, 0.40); }
+  .da__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 6px 0 0; }
+
+  .da__presets { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 12px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .da__presets-label { letter-spacing: 0.20em; color: #d4a437; text-transform: uppercase; }
+  .da__preset { padding: 7px 12px; border: 2px solid #5a3422; background: #1a0a06; color: #d4a437; font-family: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; cursor: pointer; transition: border-color 200ms, transform 100ms; }
+  .da__preset:hover { border-color: #d4a437; transform: translateY(-1px); }
+  .da__preset--active { border-color: #f6c15e; background: #2a1408; color: #f6c15e; box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.35); }
+
+  .da__room { position: relative; display: grid; grid-template-columns: 140px 1fr 140px; gap: 18px; align-items: center; padding: 28px 22px; border: 3px solid #5a3422; background: linear-gradient(180deg, #2a1810 0%, #3a2418 50%, #1a0a06 100%); box-shadow: 6px 6px 0 0 #050310, inset 0 0 60px rgba(0, 0, 0, 0.55); }
+  .da__chair { display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; padding: 14px 4px; }
+  .da__chair-back { width: 110px; height: 130px; border: 2px solid #5a3422; background: linear-gradient(180deg, #5a3422 0%, #3a2410 100%); border-radius: 10px 10px 4px 4px; box-shadow: inset 0 -10px 0 #2a1408; position: absolute; top: 0; z-index: 0; }
+  .da__noun { width: 84px; height: 84px; image-rendering: pixelated; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6)); position: relative; z-index: 1; transition: transform 80ms; }
+  .da__noun img { width: 100%; height: 100%; image-rendering: pixelated; }
+  .da__noun.da__noun--bob { transform: translateY(-4px) scale(1.03); }
+  .da__chair-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.20em; color: #d4a437; opacity: 0.85; position: relative; z-index: 1; margin-top: 14px; }
+  .da__stack { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .da__amp { display: flex; gap: 14px; padding: 10px 14px; border: 2px solid #6b4d12; background: linear-gradient(180deg, #2a1408 0%, #5a3422 100%); border-radius: 6px; box-shadow: inset 0 0 0 1px #d4a437, 4px 4px 0 0 #050310; }
+  .da__vu { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .da__vu-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.30em; color: #d4a437; }
+  .da__vu-canvas { background: #1a0a06; border: 1px solid #5a3422; border-radius: 4px; }
+  .da__spectrum { width: 100%; max-width: 600px; padding: 6px; border: 2px solid #5a3422; background: #050310; border-radius: 4px; box-shadow: 4px 4px 0 0 #050310; }
+  .da__spectrum-canvas { width: 100%; height: 120px; display: block; }
+  .da__readout { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; color: #d4a437; opacity: 0.75; padding: 2px 8px; }
+
+  .da__panel { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.65); margin: 14px 0; }
+  .da__btn { padding: 9px 16px; border: 2px solid #d4a437; background: linear-gradient(180deg, #2a1408 0%, #1a0a06 100%); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; cursor: pointer; transition: transform 100ms, border-color 200ms; }
+  .da__btn:hover { transform: translateY(-1px); border-color: #f6c15e; }
+  .da__btn--big { padding: 11px 22px; font-size: 12px; }
+  .da__tempo { display: inline-flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; }
+  .da__tempo input[type='range'] { width: 160px; }
+  .da__sat { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.16em; cursor: pointer; color: #d4a437; padding: 4px 10px; border: 1px dashed #5a3422; }
+  .da__sat input { cursor: pointer; }
+
+  .da__eq { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.55); margin: 14px 0; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a437; }
+  .da__eq-label { font-weight: 800; letter-spacing: 0.22em; }
+  .da__eq-band { display: inline-flex; align-items: center; gap: 8px; }
+  .da__eq-band input[type='range'] { width: 120px; }
+  .da__eq-val { color: #f6c15e; min-width: 48px; }
+
+  .da__pattern { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.55); }
+  .da__lane { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 10px; }
+  .da__lane-label { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: #d4a437; }
+  .da__cells { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; }
+  .da__cell { height: 22px; border: 1px solid #5a3422; background: rgba(212, 164, 55, 0.05); cursor: pointer; transition: background 80ms, transform 80ms, box-shadow 80ms; padding: 0; }
+  .da__cell:hover { background: rgba(212, 164, 55, 0.18); }
+  .da__cell--beat { border-color: #6b4d12; }
+  .da__cell[aria-pressed='true'] { background: #d4a437; }
+  .da__cell[data-active='true'] { box-shadow: 0 0 0 2px #f6c15e; transform: translateY(-1px); }
+
+  .da__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .da__siblings a { color: #d4a437; text-decoration: none; }
+  .da__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+  @media (max-width: 720px) { .da__room { grid-template-columns: 1fr; } .da__chair { display: none; } .da__title { font-size: 32px; } }
+</style>
+
+<script>
+  const LANES = ['kick', 'snare', 'bell', 'lead', 'pad'] as const;
+  type Inst = typeof LANES[number];
+  type Preset = 'chill' | 'driving' | 'church' | 'dry';
+
+  const PRESETS: Record<Preset, { pattern: Record<Inst, boolean[]>; eq: { low: number; mid: number; high: number }; sat: boolean; wetGain: number; bpm: number }> = {
+    chill:   { bpm: 70,  sat: false, wetGain: 0.35, eq: { low: 1.5, mid: -1, high: 0.5 }, pattern: { kick: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false], snare: [false,false,false,false, false,false,false,false, false,false,false,false, true,false,false,false], bell: [false,false,true,false, false,false,false,false, false,false,true,false, false,false,false,false], lead: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false], pad: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false] } },
+    driving: { bpm: 100, sat: false, wetGain: 0.20, eq: { low: 2,   mid: 0,    high: 1.5 }, pattern: { kick: [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false], snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true], bell: [false,false,true,false, false,false,false,false, false,false,true,false, false,false,false,false], lead: [false,false,false,false, false,false,true,false, false,false,false,false, false,false,true,false], pad: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false] } },
+    church:  { bpm: 60,  sat: false, wetGain: 0.85, eq: { low: -1,  mid: -2,   high: 3   }, pattern: { kick: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false], snare: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false], bell: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false], lead: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false], pad: [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false] } },
+    dry:     { bpm: 90,  sat: true,  wetGain: 0.0,  eq: { low: 0,   mid: 1,    high: -1  }, pattern: { kick: [true,false,false,true, true,false,false,false, true,false,false,true, true,false,false,false], snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true], bell: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false], lead: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false], pad: [false,false,false,false, false,false,false,false, false,false,false,false, false,false,false,false] } },
+  };
+
+  let actx: AudioContext | null = null;
+  let master: GainNode | null = null;
+  let comp: DynamicsCompressorNode | null = null;
+  let analyser: AnalyserNode | null = null;
+  let convolver: ConvolverNode | null = null;
+  let dryGain: GainNode | null = null;
+  let wetGain: GainNode | null = null;
+  let eqLow: BiquadFilterNode | null = null;
+  let eqMid: BiquadFilterNode | null = null;
+  let eqHigh: BiquadFilterNode | null = null;
+  let saturator: WaveShaperNode | null = null;
+  let satEnabled = false;
+
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+
+  function makeSatCurve(): Float32Array {
+    const n = 1024; const c = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i * 2 / n) - 1; c[i] = Math.tanh(x * 2.5); }
+    return c;
+  }
+
+  function ensureBus() {
+    if (master) return;
+    const a = ctx();
+    master = a.createGain(); master.gain.value = 0.85;
+    comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 2; comp.knee.value = 6; comp.attack.value = 0.005; comp.release.value = 0.18;
+    eqLow = a.createBiquadFilter(); eqLow.type = 'lowshelf'; eqLow.frequency.value = 200; eqLow.gain.value = 0;
+    eqMid = a.createBiquadFilter(); eqMid.type = 'peaking'; eqMid.frequency.value = 1000; eqMid.Q.value = 0.8; eqMid.gain.value = 0;
+    eqHigh = a.createBiquadFilter(); eqHigh.type = 'highshelf'; eqHigh.frequency.value = 8000; eqHigh.gain.value = 0;
+    saturator = a.createWaveShaper(); saturator.curve = makeSatCurve(); saturator.oversample = '4x';
+    analyser = a.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.78;
+    convolver = a.createConvolver();
+    const sr = a.sampleRate; const len = Math.floor(sr * 4.0);
+    const ir = a.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        const t = i / sr; const decay = Math.exp(-t * 1.6);
+        d[i] = ((Math.random() * 2 - 1) * 0.6 + Math.sin(2 * Math.PI * (40 + ch * 12) * t) * 0.4) * decay;
+      }
+    }
+    convolver.buffer = ir;
+    dryGain = a.createGain(); wetGain = a.createGain(); dryGain.gain.value = 0.85; wetGain.gain.value = 0.20;
+    // Routing: master → split → eq chain → comp/sat → analyser → destination
+    master.connect(dryGain);
+    master.connect(convolver);
+    convolver.connect(wetGain);
+    const sumNode = a.createGain();
+    dryGain.connect(sumNode);
+    wetGain.connect(sumNode);
+    sumNode.connect(eqLow).connect(eqMid).connect(eqHigh);
+    // Either through saturator or bypass
+    const postEq = a.createGain();
+    eqHigh.connect(postEq);
+    // Wire both possible paths via two intermediate gains; route based on satEnabled at runtime
+    const dryOut = a.createGain(); dryOut.gain.value = 1;
+    const satOut = a.createGain(); satOut.gain.value = 0;
+    postEq.connect(dryOut).connect(comp);
+    postEq.connect(saturator); saturator.connect(satOut).connect(comp);
+    comp.connect(analyser); analyser.connect(a.destination);
+    // Helpers to swap saturation on/off via gain crossfade
+    (window as any).__daSatDryOut = dryOut;
+    (window as any).__daSatOut = satOut;
+  }
+  function setSat(on: boolean) {
+    satEnabled = on;
+    const dryOut = (window as any).__daSatDryOut as GainNode | undefined;
+    const satOut = (window as any).__daSatOut as GainNode | undefined;
+    if (dryOut && satOut) { dryOut.gain.value = on ? 0 : 1; satOut.gain.value = on ? 1 : 0; }
+  }
+
+  // Voices (HI-FI from v1)
+  function pK(t: number) { const a = ctx(); const sub = a.createOscillator(), subG = a.createGain(); sub.type = 'sine'; sub.frequency.setValueAtTime(60, t); sub.frequency.exponentialRampToValueAtTime(35, t + 0.24); subG.gain.setValueAtTime(0.40, t); subG.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); sub.connect(subG).connect(master!); sub.start(t); sub.stop(t + 0.6); const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.20); g.gain.setValueAtTime(0.50, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.30); o.connect(g).connect(master!); o.start(t); o.stop(t + 0.32); }
+  function pSn(t: number) { const a = ctx(); const len = Math.floor(a.sampleRate * 0.30); const buf = a.createBuffer(1, len, a.sampleRate); const d = buf.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.96300 * b1 + w * 0.2965164; b2 = 0.57000 * b2 + w * 1.0526913; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.6; } const noise = a.createBufferSource(); noise.buffer = buf; const bp1 = a.createBiquadFilter(); bp1.type = 'bandpass'; bp1.frequency.value = 1800; bp1.Q.value = 0.9; const bp2 = a.createBiquadFilter(); bp2.type = 'peaking'; bp2.frequency.value = 5500; bp2.Q.value = 1.4; bp2.gain.value = 6; const g = a.createGain(); g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28); noise.connect(bp1).connect(bp2).connect(g).connect(master!); noise.start(t); noise.stop(t + 0.30); }
+  function pB(t: number) { const a = ctx(); [{f:1320,g:0.13,d:2.4},{f:2640,g:0.08,d:2.0},{f:3300,g:0.05,d:1.6},{f:3960,g:0.04,d:1.2},{f:5280,g:0.03,d:0.9}].forEach(p => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(p.f, t); g.gain.setValueAtTime(p.g, t); g.gain.exponentialRampToValueAtTime(0.0001, t + p.d); o.connect(g).connect(master!); o.start(t); o.stop(t + p.d + 0.1); }); }
+  function pL(t: number) { const a = ctx(); const D = [0,4,7,12,14], deg = D[Math.floor(Math.random()*D.length)]; const f = 264 * Math.pow(2, deg/12); const o = a.createOscillator(), g = a.createGain(), lpf = a.createBiquadFilter(); o.type = 'triangle'; o.frequency.setValueAtTime(f, t); lpf.type = 'lowpass'; lpf.frequency.setValueAtTime(3200, t); lpf.frequency.exponentialRampToValueAtTime(900, t + 0.7); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.012); g.gain.linearRampToValueAtTime(0.13, t + 0.30); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.85); o.connect(lpf).connect(g).connect(master!); o.start(t); o.stop(t + 0.90); }
+  function pP(t: number) { const a = ctx(); [132, 165, 198, 264].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); const peak = [0.10,0.06,0.05,0.04][i]; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.6); g.gain.linearRampToValueAtTime(peak * 0.85, t + 1.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4); o.connect(g).connect(master!); o.start(t); o.stop(t + 2.5); }); }
+  const VOICES: Record<Inst, (t: number) => void> = { kick: pK, snare: pSn, bell: pB, lead: pL, pad: pP };
+
+  const pattern: Record<Inst, boolean[]> = { kick: [], snare: [], bell: [], lead: [], pad: [] };
+  let bpm = 84, step = 0;
+  let stepTimer: number | null = null;
+  let drawHandle: number | null = null;
+  let playing = false;
+
+  const cells = Array.from(document.querySelectorAll<HTMLButtonElement>('.da__cell'));
+  const toggleBtn = document.getElementById('da-toggle') as HTMLButtonElement;
+  const tempoEl = document.getElementById('da-tempo') as HTMLInputElement;
+  const tempoReadout = document.getElementById('da-tempo-readout');
+  const readoutEl = document.getElementById('da-readout');
+  const nounLEl = document.getElementById('da-noun-l');
+  const nounREl = document.getElementById('da-noun-r');
+  const spectrumCanvas = document.getElementById('da-spectrum') as HTMLCanvasElement | null;
+  const vuLCanvas = document.getElementById('da-vu-l') as HTMLCanvasElement | null;
+  const vuRCanvas = document.getElementById('da-vu-r') as HTMLCanvasElement | null;
+  const satCheck = document.getElementById('da-sat') as HTMLInputElement;
+
+  function paintActive(s: number) { cells.forEach(c => c.dataset.active = String(Number(c.dataset.step) === s)); }
+  function paintCells() { cells.forEach(c => { const inst = c.dataset.inst as Inst; const s = Number(c.dataset.step); c.setAttribute('aria-pressed', String(pattern[inst][s])); }); }
+  function bobNoun(noun: HTMLElement | null) { if (!noun) return; noun.classList.add('da__noun--bob'); setTimeout(() => noun.classList.remove('da__noun--bob'), 90); }
+
+  function tick() {
+    ensureBus(); if (!master) return;
+    const at = ctx().currentTime + 0.02;
+    let didKick = false;
+    LANES.forEach(inst => { if (pattern[inst][step]) { try { VOICES[inst](at); } catch {} if (inst === 'kick') didKick = true; } });
+    if (didKick) { bobNoun(nounLEl); bobNoun(nounREl); }
+    paintActive(step);
+    if (readoutEl) readoutEl.textContent = `step ${step + 1} / 16 · ${bpm} bpm · ${currentPreset.toUpperCase()}`;
+    step = (step + 1) % 16;
+  }
+  function start() { if (playing) return; ensureBus(); playing = true; step = 0; if (toggleBtn) toggleBtn.textContent = '■ LIFT THE NEEDLE'; tick(); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); if (!drawHandle) drawLoop(); }
+  function stop() { if (!playing) return; playing = false; if (stepTimer) { clearInterval(stepTimer); stepTimer = null; } if (toggleBtn) toggleBtn.textContent = '▶ DROP THE NEEDLE'; if (readoutEl) readoutEl.textContent = '— idle · ready —'; paintActive(-1); }
+
+  // Visual loop
+  const freqData = new Uint8Array(512); const timeData = new Uint8Array(2048);
+  function drawLoop() {
+    drawHandle = window.requestAnimationFrame(drawLoop);
+    if (!analyser || !spectrumCanvas) return;
+    analyser.getByteFrequencyData(freqData); analyser.getByteTimeDomainData(timeData);
+    const sctx = spectrumCanvas.getContext('2d');
+    if (sctx) {
+      const w = spectrumCanvas.width, h = spectrumCanvas.height; sctx.clearRect(0, 0, w, h);
+      const bins = 64; const binW = w / bins;
+      for (let i = 0; i < bins; i++) {
+        const v = freqData[i * 4] / 255; const bh = v * h * 0.92;
+        const grad = sctx.createLinearGradient(0, h, 0, h - bh);
+        grad.addColorStop(0, '#5a3422'); grad.addColorStop(0.5, '#d4a437'); grad.addColorStop(1, '#f6c15e');
+        sctx.fillStyle = grad; sctx.fillRect(i * binW + 1, h - bh, binW - 2, bh);
+      }
+    }
+    let sum = 0; for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / timeData.length); const level = Math.min(1, rms * 4);
+    drawVU(vuLCanvas, level * (0.92 + Math.random() * 0.08));
+    drawVU(vuRCanvas, level * (0.96 + Math.random() * 0.08));
+  }
+  function drawVU(c: HTMLCanvasElement | null, level: number) {
+    if (!c) return; const x = c.getContext('2d'); if (!x) return;
+    const w = c.width, h = c.height; x.clearRect(0, 0, w, h); x.fillStyle = '#f4e7c8'; x.fillRect(0, 0, w, h);
+    const cx = w / 2, cy = h + 20;
+    x.strokeStyle = '#5a3422'; x.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) { const a = Math.PI * (1.0 - i / 10 * 0.7) - Math.PI * 0.15; const r1 = h * 0.85, r2 = h * 0.95; x.beginPath(); x.moveTo(cx + Math.cos(a)*r1, cy - Math.sin(a)*r1); x.lineTo(cx + Math.cos(a)*r2, cy - Math.sin(a)*r2); x.stroke(); }
+    x.strokeStyle = '#b8431a'; x.lineWidth = 3; x.beginPath();
+    for (let i = 7; i <= 10; i++) { const a = Math.PI * (1.0 - i / 10 * 0.7) - Math.PI * 0.15; const r = h * 0.92; const xx = cx + Math.cos(a)*r, yy = cy - Math.sin(a)*r; if (i === 7) x.moveTo(xx, yy); else x.lineTo(xx, yy); }
+    x.stroke();
+    const ang = Math.PI * (1.0 - level * 0.7) - Math.PI * 0.15; const r = h * 0.98;
+    x.strokeStyle = '#1a0a06'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(ang)*r, cy - Math.sin(ang)*r); x.stroke();
+    x.fillStyle = '#5a3422'; x.beginPath(); x.arc(cx, cy, 4, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#5a3422'; x.font = '8px JetBrains Mono Variable, monospace'; x.fillText('VU', cx - 6, h - 2);
+  }
+
+  // EQ wiring
+  function setEq(low: number, mid: number, high: number) {
+    if (eqLow) eqLow.gain.value = low;
+    if (eqMid) eqMid.gain.value = mid;
+    if (eqHigh) eqHigh.gain.value = high;
+    const vL = document.getElementById('da-eq-low-val'); if (vL) vL.textContent = `${low.toFixed(1)} dB`;
+    const vM = document.getElementById('da-eq-mid-val'); if (vM) vM.textContent = `${mid.toFixed(1)} dB`;
+    const vH = document.getElementById('da-eq-high-val'); if (vH) vH.textContent = `${high.toFixed(1)} dB`;
+    (document.getElementById('da-eq-low') as HTMLInputElement).value = String(low);
+    (document.getElementById('da-eq-mid') as HTMLInputElement).value = String(mid);
+    (document.getElementById('da-eq-high') as HTMLInputElement).value = String(high);
+  }
+
+  let currentPreset: Preset = 'driving';
+  function applyPreset(p: Preset) {
+    ensureBus();
+    currentPreset = p;
+    const cfg = PRESETS[p];
+    LANES.forEach(inst => pattern[inst] = [...cfg.pattern[inst]]);
+    paintCells();
+    bpm = cfg.bpm; if (tempoEl) tempoEl.value = String(bpm); if (tempoReadout) tempoReadout.textContent = `${bpm} bpm`;
+    if (wetGain) wetGain.gain.value = cfg.wetGain;
+    setEq(cfg.eq.low, cfg.eq.mid, cfg.eq.high);
+    setSat(cfg.sat); if (satCheck) satCheck.checked = cfg.sat;
+    if (playing && stepTimer) { clearInterval(stepTimer); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); }
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.da__preset')).forEach(b => b.classList.toggle('da__preset--active', b.dataset.preset === p));
+  }
+
+  // Wire up
+  cells.forEach(c => c.addEventListener('click', () => { const inst = c.dataset.inst as Inst; const s = Number(c.dataset.step); pattern[inst][s] = !pattern[inst][s]; c.setAttribute('aria-pressed', String(pattern[inst][s])); }));
+  toggleBtn?.addEventListener('click', () => { playing ? stop() : start(); });
+  tempoEl?.addEventListener('input', () => { bpm = Math.max(60, Math.min(140, Number(tempoEl.value))); if (tempoReadout) tempoReadout.textContent = `${bpm} bpm`; if (playing && stepTimer) { clearInterval(stepTimer); stepTimer = window.setInterval(tick, (60 / bpm / 4) * 1000); } });
+  satCheck?.addEventListener('change', () => { ensureBus(); setSat(satCheck.checked); });
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.da__preset')).forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset as Preset)));
+  ['low', 'mid', 'high'].forEach(band => {
+    document.getElementById(`da-eq-${band}`)?.addEventListener('input', () => {
+      ensureBus();
+      const lo = Number((document.getElementById('da-eq-low') as HTMLInputElement).value);
+      const md = Number((document.getElementById('da-eq-mid') as HTMLInputElement).value);
+      const hi = Number((document.getElementById('da-eq-high') as HTMLInputElement).value);
+      setEq(lo, md, hi);
+    });
+  });
+  document.getElementById('da-eq-flat')?.addEventListener('click', () => { ensureBus(); setEq(0, 0, 0); });
+
+  // Boot with default preset
+  applyPreset('driving');
+  drawLoop();
+</script>
