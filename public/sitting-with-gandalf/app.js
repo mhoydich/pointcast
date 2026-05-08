@@ -8,9 +8,9 @@
   const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v8";
-  const SETTINGS_RELEASE = "v8-simple-room";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]);
+  const RELEASE_VERSION = "v9";
+  const SETTINGS_RELEASE = "v9-council-hall";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -1631,19 +1631,23 @@
   ];
 
   const savedSettings = loadSettings();
-  const savedRelease = savedSettings.release === SETTINGS_RELEASE;
+  const hasSavedSettings = savedSettings && typeof savedSettings === "object";
+  const savedRelease = savedSettings.release === SETTINGS_RELEASE || (hasSavedSettings && typeof savedSettings.release === "string");
   const requestedVersion = (() => {
     const params = new URLSearchParams(window.location.search);
     const explicitVersion = params.get("version") || params.get("v");
     if (versions.has(explicitVersion)) {
       return explicitVersion;
     }
-    return params.has("v8") ? RELEASE_VERSION : "";
+    if (params.has("v9")) {
+      return RELEASE_VERSION;
+    }
+    return params.has("v8") ? "v8" : "";
   })();
   const initialVersion = requestedVersion || RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
-    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7"
+    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7" || initialVersion === "v9"
       ? "pixel"
       : "storybook";
   const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
