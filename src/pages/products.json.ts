@@ -49,6 +49,11 @@ export const GET: APIRoute = async () => {
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
     checkoutPolicy: CHECKOUT_POLICY,
+    guide: {
+      title: 'AI Shopify SEO, GEO, and LLM best practices for 2026',
+      url: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
+      summary: 'Best-practices guide for AI-readable Shopify product catalogs, Product schema, Shopify Catalog readiness, JSON feeds, and outbound checkout mirrors.',
+    },
     seller: {
       name: 'Good Feels',
       url: 'https://getgoodfeels.com',

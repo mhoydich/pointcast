@@ -26,6 +26,7 @@ const urls = [
   ['https://pointcast.xyz/api/products.jsonl', 'daily', '0.8'],
   ['https://pointcast.xyz/api/blocks.jsonl', 'daily', '0.8'],
   ['https://pointcast.xyz/pairings', 'daily', '0.75'],
+  ['https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026', 'weekly', '0.82'],
   ['https://pointcast.xyz/.well-known/agents.json', 'daily', '0.8'],
   ['https://pointcast.xyz/.well-known/ai.json', 'daily', '0.8'],
   ['https://pointcast.xyz/llms.txt', 'daily', '0.9'],

@@ -50,6 +50,15 @@ export const GET: APIRoute = async () => {
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
     blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
+    guides: [
+      {
+        slug: 'ai-shopify-seo-geo-llm-best-practices-2026',
+        title: 'AI Shopify SEO, GEO, and LLM best practices for 2026',
+        url: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
+        topics: ['shopify', 'seo', 'generative-engine-optimization', 'llm', 'structured-data', 'outbound-checkout'],
+        summary: 'Practical guide for building AI-readable Shopify commerce while keeping source catalog facts and checkout ownership clear.',
+      },
+    ],
     count: products.length,
     sources: [
       {
