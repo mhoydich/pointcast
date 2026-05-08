@@ -1,0 +1,416 @@
+---
+/**
+ * FooterBarV6 — "The Walking Bar."
+ *
+ * Mike 2026-05-08: "let's try [The Walking Bar approach] yah, what's
+ * different than before, companions are super interesting, explore
+ * that angle and consider how they would interact with other visitors,
+ * pets, etc."
+ *
+ * v6.0 (this file) ships the FOUNDATION:
+ *   - horizontal pixel-art town strip at the bottom of the page
+ *   - sky band + ground line + 5 building silhouettes
+ *   - your noun walks left-to-right in a slow loop
+ *   - hover a building → nameplate floats up; click → navigate
+ *   - time-of-day sky (morning/midday/evening/night gradient)
+ *   - small chevron at far right links to /me
+ *
+ * v6.1 (next sprint) will add COMPANIONS:
+ *   - existing +pet/+cat/+pup spells reroute to spawn here, walk
+ *     alongside the noun, fade after durationMs
+ *   - "keep" interaction promotes a companion to a persistent PET in
+ *     pc:pet:v1 with a name + bornAt + mood
+ *   - up to 3 companions visible at once (pet + 2 ephemeral)
+ *
+ * v6.2 will add CROSS-VISITOR:
+ *   - other visitors' nouns appear ghost-translucent when CursorRoom
+ *     WS is connected
+ *   - their pets visible too
+ *   - pass-by emotes (👋, 🐾) when nouns get within ~40px
+ *   - shared spell layer (your +confetti shows in their bar)
+ *
+ * For v6.0 this is purely visual + navigational. No state, no spells,
+ * no presence — just the place. The intent is to swap this in for
+ * FooterBar in BlockLayout once Mike approves the look. For now it
+ * lives at /bar-v6 as a side-by-side preview.
+ */
+import { CHANNELS } from '../lib/channels';
+
+// Hand-placed buildings along the bar. `x` is percent-from-left.
+// Each is a kit slot — clicking navigates, hover shows the nameplate.
+// Heights varied so the silhouette has rhythm.
+const BUILDINGS = [
+  { id: 'kettle',   label: 'KETTLE',   sub: '/coffee',  x: 14, w: 44, h: 50, color: '#c4952e', glyph: '☕' },
+  { id: 'studio',   label: 'STUDIO',   sub: '/studio',  x: 31, w: 56, h: 64, color: '#1b3a5b', glyph: '✎' },
+  { id: 'drum',     label: 'DRUM',     sub: '/drum',    x: 50, w: 50, h: 58, color: '#8a2432', glyph: '◐' },
+  { id: 'window',   label: 'WINDOW',   sub: '/window',  x: 68, w: 48, h: 54, color: '#0f6e56', glyph: '◻' },
+  { id: 'desk',     label: 'YOUR DESK', sub: '/me',     x: 85, w: 52, h: 60, color: '#534ab7', glyph: '✦' },
+];
+---
+
+<aside class="fbv6" id="fbv6" aria-label="PointCast walking bar (v6 preview)">
+
+  {/* Sky band — gradient + a couple of cloud puffs.
+      Time-of-day class swaps in via JS on mount. */}
+  <div class="fbv6__sky" id="fbv6-sky">
+    <span class="fbv6__cloud fbv6__cloud--a" aria-hidden="true"></span>
+    <span class="fbv6__cloud fbv6__cloud--b" aria-hidden="true"></span>
+    <span class="fbv6__star fbv6__star--1" aria-hidden="true"></span>
+    <span class="fbv6__star fbv6__star--2" aria-hidden="true"></span>
+    <span class="fbv6__star fbv6__star--3" aria-hidden="true"></span>
+    <span class="fbv6__sun" aria-hidden="true" id="fbv6-sun"></span>
+  </div>
+
+  {/* Buildings — positioned absolutely, sit on top of the ground line. */}
+  <ul class="fbv6__buildings">
+    {BUILDINGS.map((b) => (
+      <li
+        class="fbv6__building"
+        style={`--bx: ${b.x}%; --bw: ${b.w}px; --bh: ${b.h}px; --bc: ${b.color};`}
+        data-id={b.id}
+      >
+        <a class="fbv6__building-link" href={b.sub}>
+          <span class="fbv6__building-shape" aria-hidden="true">
+            <span class="fbv6__building-window fbv6__building-window--1"></span>
+            <span class="fbv6__building-window fbv6__building-window--2"></span>
+            <span class="fbv6__building-glyph" aria-hidden="true">{b.glyph}</span>
+            <span class="fbv6__building-roof" aria-hidden="true"></span>
+          </span>
+          <span class="fbv6__building-plate mono" aria-hidden="false">
+            <strong>{b.label}</strong>
+            <span class="fbv6__building-sub">{b.sub}</span>
+          </span>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+  {/* Ground line + walking path. */}
+  <div class="fbv6__ground" aria-hidden="true"></div>
+
+  {/* Your noun — animated walk loop. Image src set on mount from
+      pc:currentNoun localStorage (falls back to random visit-noun). */}
+  <div class="fbv6__walker" id="fbv6-walker">
+    <img id="fbv6-walker-noun" alt="" width="32" height="32" />
+    <span class="fbv6__walker-shadow" aria-hidden="true"></span>
+  </div>
+
+  {/* Right edge — chevron + ON AIR. Chevron links to /me for now;
+      v6.1 will turn it into the omnibox modal trigger. */}
+  <div class="fbv6__edge">
+    <span class="fbv6__on-air" aria-label="On air">
+      <span class="fbv6__on-air-dot" aria-hidden="true"></span>
+      <span class="fbv6__on-air-label mono">ON AIR</span>
+    </span>
+    <a class="fbv6__chevron mono" href="/me" title="Your /me page">
+      <span aria-hidden="true">⌘K</span>
+      <span aria-hidden="true">›</span>
+    </a>
+  </div>
+
+</aside>
+
+<script is:inline>
+(() => {
+  // ─── Time-of-day sky ─────────────────────────────────────────────────
+  const sky = document.getElementById('fbv6-sky');
+  const sun = document.getElementById('fbv6-sun');
+  if (sky) {
+    const h = new Date().getHours();
+    let mode = 'midday';
+    if (h >= 5  && h < 11)  mode = 'morning';
+    else if (h >= 11 && h < 17) mode = 'midday';
+    else if (h >= 17 && h < 22) mode = 'evening';
+    else mode = 'night';
+    sky.dataset.mode = mode;
+    if (sun) sun.dataset.mode = mode;
+  }
+
+  // ─── Walker noun: load from pc:currentNoun (synced by /me) ────────────
+  const walkerImg = document.getElementById('fbv6-walker-noun');
+  if (walkerImg) {
+    let seed = null;
+    try {
+      const raw = localStorage.getItem('pc:currentNoun');
+      if (raw) {
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n) && n >= 0 && n <= 1199) seed = n;
+      }
+    } catch (e) {}
+    if (seed === null) seed = Math.floor(Math.random() * 1200);
+    walkerImg.src = 'https://noun.pics/' + seed + '.svg';
+    walkerImg.alt = 'You · Noun #' + seed;
+  }
+
+  // ─── Listen for noun changes (e.g. SURPRISE on /me) ──────────────────
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pc:currentNoun' && walkerImg && e.newValue) {
+      const n = parseInt(e.newValue, 10);
+      if (Number.isFinite(n) && n >= 0 && n <= 1199) {
+        walkerImg.src = 'https://noun.pics/' + n + '.svg';
+        walkerImg.alt = 'You · Noun #' + n;
+      }
+    }
+  });
+  window.addEventListener('pc:noun-change', (e) => {
+    if (walkerImg && e.detail && e.detail.seed != null) {
+      walkerImg.src = 'https://noun.pics/' + e.detail.seed + '.svg';
+      walkerImg.alt = 'You · Noun #' + e.detail.seed;
+    }
+  });
+})();
+</script>
+
+<style>
+  /* Bar shell — taller than v5 (~80px) so the scene has room to breathe.
+     Fixed at the bottom with the same backdrop-blur trick as v5. */
+  .fbv6 {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 80px;
+    z-index: 60;
+    overflow: hidden;
+    pointer-events: auto;
+    user-select: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* SKY — gradient + clouds + sun, swaps by data-mode. */
+  .fbv6__sky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #ffe7a0 0%, #ffc97a 35%, #ffa8b3 70%, #f3d8b8 100%);
+    transition: background 0.6s ease;
+  }
+  .fbv6__sky[data-mode='morning'] {
+    background: linear-gradient(180deg, #ffd180 0%, #ffaf6a 40%, #ff8597 75%, #f3d8b8 100%);
+  }
+  .fbv6__sky[data-mode='midday'] {
+    background: linear-gradient(180deg, #a8d8f0 0%, #c5e6f4 50%, #f0e6cf 100%);
+  }
+  .fbv6__sky[data-mode='evening'] {
+    background: linear-gradient(180deg, #ff7c4a 0%, #e84d6a 35%, #993556 70%, #321031 100%);
+  }
+  .fbv6__sky[data-mode='night'] {
+    background: linear-gradient(180deg, #0a0420 0%, #1a0820 50%, #2a163a 100%);
+  }
+  .fbv6__sky .fbv6__cloud {
+    position: absolute; top: 12px;
+    width: 28px; height: 8px; background: #fff8e5; border-radius: 5px;
+    box-shadow: 6px -3px 0 #fff8e5, -8px -2px 0 #fff8e5;
+    opacity: 0.85;
+    animation: fbv6-cloud 60s linear infinite;
+  }
+  .fbv6__cloud--a { left: 12%; animation-delay: -10s; }
+  .fbv6__cloud--b { left: 64%; top: 22px; animation-delay: -36s; opacity: 0.75; }
+  @keyframes fbv6-cloud {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(40px); }
+  }
+  .fbv6__sky[data-mode='night'] .fbv6__cloud { display: none; }
+
+  /* Stars (night only) */
+  .fbv6__sky .fbv6__star {
+    position: absolute; width: 2px; height: 2px;
+    background: #fdf2d6; border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .fbv6__star--1 { top: 10px;  left: 18%; }
+  .fbv6__star--2 { top: 18px;  left: 42%; }
+  .fbv6__star--3 { top: 8px;   left: 78%; }
+  .fbv6__sky[data-mode='night'] .fbv6__star { opacity: 0.85; }
+
+  /* Sun — small dot in the sky, position by mode */
+  .fbv6__sun {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff8c0;
+    box-shadow: 0 0 12px rgba(255, 240, 140, 0.6);
+    transition: top 0.6s ease, left 0.6s ease, background 0.6s ease, opacity 0.6s ease;
+    top: 30px; left: 50%;
+  }
+  .fbv6__sun[data-mode='morning'] { top: 30px; left: 18%; background: #ffce7a; }
+  .fbv6__sun[data-mode='midday']  { top: 12px; left: 50%; background: #ffe48a; }
+  .fbv6__sun[data-mode='evening'] { top: 36px; left: 78%; background: #ff7a4a; box-shadow: 0 0 18px rgba(255, 100, 60, 0.55); }
+  .fbv6__sun[data-mode='night']   { opacity: 0; }
+
+  /* GROUND line — single horizontal stroke at ~62% height */
+  .fbv6__ground {
+    position: absolute; left: 0; right: 0; bottom: 14px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.45) 8%, rgba(0,0,0,0.45) 92%, transparent 100%);
+  }
+
+  /* BUILDINGS — positioned by --bx percent, sized by --bw/--bh. */
+  .fbv6__buildings {
+    position: absolute; inset: 0;
+    list-style: none; margin: 0; padding: 0;
+  }
+  .fbv6__building {
+    position: absolute;
+    bottom: 14px;
+    left: var(--bx);
+    transform: translateX(-50%);
+  }
+  .fbv6__building-link {
+    position: relative; display: block;
+    text-decoration: none; color: inherit;
+  }
+  .fbv6__building-shape {
+    position: relative; display: block;
+    width: var(--bw); height: var(--bh);
+    background: var(--bc, #1f1b15);
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    box-shadow:
+      inset -2px 0 0 rgba(0,0,0,0.18),
+      inset 0 -3px 0 rgba(0,0,0,0.22);
+    transition: filter 0.18s ease, transform 0.18s ease;
+  }
+  .fbv6__building-window {
+    position: absolute;
+    width: 6px; height: 6px;
+    background: #fff8c0;
+    box-shadow: 0 0 6px rgba(255, 240, 140, 0.45);
+    border-radius: 1px;
+  }
+  .fbv6__building-window--1 { top: 8px;  left: 6px; }
+  .fbv6__building-window--2 { top: 8px;  right: 6px; }
+  .fbv6__building-glyph {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 248, 192, 0.85);
+    font-size: 14px; line-height: 1;
+  }
+  .fbv6__building-roof {
+    position: absolute; top: -4px; left: -2px; right: -2px;
+    height: 4px; background: var(--bc); filter: brightness(0.7);
+    border-radius: 2px 2px 0 0;
+  }
+  .fbv6__building:hover .fbv6__building-shape {
+    filter: brightness(1.18);
+    transform: translateY(-2px);
+  }
+
+  /* NAMEPLATE — floats above the building on hover */
+  .fbv6__building-plate {
+    position: absolute;
+    bottom: calc(var(--bh) + 10px);
+    left: 50%;
+    transform: translate(-50%, 6px);
+    background: rgba(26, 18, 8, 0.96);
+    border: 1px solid rgba(255, 200, 120, 0.45);
+    border-radius: 2px;
+    padding: 4px 10px;
+    color: #fdf2d6;
+    font-size: 10px; letter-spacing: 0.16em;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .fbv6__building-plate strong { display: block; font-weight: 700; }
+  .fbv6__building-sub {
+    display: block; font-size: 9px;
+    color: rgba(253, 242, 214, 0.65); letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+  .fbv6__building:hover .fbv6__building-plate {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  /* WALKER — your noun moves along the ground in a 60s loop. */
+  .fbv6__walker {
+    position: absolute;
+    bottom: 14px;
+    left: 0;
+    transform-origin: bottom center;
+    animation: fbv6-walk 60s linear infinite;
+    pointer-events: none;
+  }
+  .fbv6__walker img {
+    display: block;
+    width: 32px; height: 32px;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+    animation: fbv6-bob 0.6s ease-in-out infinite;
+  }
+  .fbv6__walker-shadow {
+    position: absolute; bottom: -2px; left: 50%;
+    width: 22px; height: 4px;
+    background: rgba(0,0,0,0.18); border-radius: 50%;
+    transform: translateX(-50%);
+  }
+  @keyframes fbv6-walk {
+    0%   { left: -2%;   transform: scaleX(1); }
+    49%  { left: 100%;  transform: scaleX(1); }
+    50%  { left: 100%;  transform: scaleX(-1); }
+    99%  { left: -2%;   transform: scaleX(-1); }
+    100% { left: -2%;   transform: scaleX(1); }
+  }
+  @keyframes fbv6-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
+  }
+  /* Slow walker at night so the bar feels sleepy */
+  .fbv6__sky[data-mode='night'] ~ .fbv6__walker,
+  .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__walker {
+    animation-duration: 120s;
+  }
+
+  /* RIGHT EDGE — chevron + ON AIR */
+  .fbv6__edge {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; align-items: center; gap: 12px;
+    z-index: 2;
+  }
+  .fbv6__on-air {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(255, 200, 120, 0.4);
+    border-radius: 2px;
+    color: #fdf2d6;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  }
+  .fbv6__on-air-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2f8f5f;
+    box-shadow: 0 0 6px rgba(47, 143, 95, 0.7);
+    animation: fbv6-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes fbv6-pulse {
+    0%, 100% { opacity: 0.8; }
+    50%      { opacity: 1; }
+  }
+  .fbv6__on-air-label { font-size: 10px; letter-spacing: 0.18em; }
+
+  .fbv6__chevron {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(255, 200, 120, 0.4);
+    border-radius: 2px;
+    color: #fdf2d6;
+    font-size: 11px; letter-spacing: 0.14em;
+    text-decoration: none;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .fbv6__chevron:hover {
+    background: rgba(255, 200, 120, 0.18);
+    border-color: rgba(255, 200, 120, 0.7);
+  }
+
+  /* Mobile: scale the whole scene down */
+  @media (max-width: 640px) {
+    .fbv6 { height: 64px; }
+    .fbv6__walker img { width: 24px; height: 24px; }
+    .fbv6__on-air-label { display: none; }
+  }
+</style>
