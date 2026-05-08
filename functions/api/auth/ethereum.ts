@@ -14,9 +14,10 @@
  * On success: upserts a PointCast user keyed to the recovered (lowercased)
  * address and issues a session cookie. Provider is recorded as 'metamask'
  * for backward compat with the existing AuthProvider enum, but this
- * endpoint accepts any EVM signer (MetaMask today, Coinbase Smart Wallet
- * in the next PR, future WalletConnect) — `personal_sign` proves address
- * control regardless of which wallet signed.
+ * endpoint accepts any EVM signer — MetaMask, Coinbase Smart Wallet,
+ * future WalletConnect, Safe, etc. `personal_sign` proves address control
+ * regardless of which wallet signed; ERC-1271 (smart-contract wallets)
+ * are also handled by viem.verifyMessage when a `client` arg is supplied.
  *
  * Replay window: 5 min via `Issued At` + age check. Same as /api/auth/tezos.
  * Future hardening: replace with EIP-4361 (SIWE) + server-issued nonce KV.
@@ -24,19 +25,26 @@
  * Required Cloudflare Pages env: USERS (KV namespace).
  *
  * Security notes:
- * - viem.verifyMessage handles EIP-191 personal_sign for EOAs without any
- *   network call. ERC-1271 smart-contract-wallet verification is NOT enabled
- *   in this PR — it requires a `client` argument (RPC) and is added with
- *   Coinbase Smart Wallet support in a follow-up.
+ * - viem.verifyMessage tries EIP-191 personal_sign EOA recovery first
+ *   (no network call). If that fails AND the address is a deployed
+ *   contract, it falls back to ERC-1271's `isValidSignature` via the
+ *   provided `client`. We pass getBaseClient() because Coinbase Smart
+ *   Wallet (and most ERC-4337 wallets PointCast cares about) live on
+ *   Base. A user signing in from a Safe on L1 won't verify here — that's
+ *   acceptable for v0; users with multi-chain smart wallets can fall back
+ *   to a Tezos / EOA login.
  * - Address comparison is case-insensitive: EVM addresses use mixed-case
  *   EIP-55 checksums but the underlying 20-byte address is canonical.
- * - Signature must be exactly 65 bytes (130 hex + '0x') to be a valid
- *   personal_sign output.
+ * - Signature shape is hex-only with even length and >= 130 chars (the
+ *   standard 65-byte ECDSA signature). Smart-contract-wallet signatures
+ *   can be much longer (e.g. multi-sig aggregations) so the upper bound
+ *   is generous (8KB).
  */
 
 import { verifyMessage } from 'viem';
 
 import type { AuthIdentity } from '../../../src/lib/auth/types';
+import { getBaseClient } from '../../../src/lib/eth/clients';
 import {
   IdentityConflictError,
   authJson,
@@ -90,9 +98,18 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[0-9a-fA-F]{40}$/.test(value);
 }
 
+/**
+ * Validate signature shape.
+ * - EOA personal_sign: exactly 65 bytes (130 hex chars + 0x prefix)
+ * - ERC-1271: variable length, but always hex with even length and
+ *   minimum 130 chars (anything shorter can't be a valid ECDSA sig)
+ * Upper bound 8192 hex chars (= 4kB binary) is a generous DoS guard
+ * against pathologically large request bodies.
+ */
 function isHexSignature(value: string): value is `0x${string}` {
-  // EVM personal_sign signatures are 65 bytes = 130 hex + '0x' = 132 total.
-  return /^0x[0-9a-fA-F]{130}$/.test(value);
+  if (!/^0x[0-9a-fA-F]+$/.test(value)) return false;
+  const hexLen = value.length - 2;
+  return hexLen % 2 === 0 && hexLen >= 130 && hexLen <= 8192;
 }
 
 function lc(addr: string): string {
@@ -143,13 +160,18 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
     return authJson({ ok: false, reason: 'stale-message' }, { status: 400 });
   }
 
-  // Cryptographic verification — no network call for EOA signatures.
+  // Cryptographic verification.
+  // - EOA path: synchronous ECDSA recovery, no network call.
+  // - ERC-1271 path: viem checks if `address` is a deployed contract on the
+  //   provided client and, if so, calls `isValidSignature(messageHash, sig)`.
+  //   Adds one RPC round-trip on Base (~50-200ms typical) for smart wallets.
   let isValid = false;
   try {
     isValid = await verifyMessage({
       address: address as `0x${string}`,
       message,
       signature: signature as `0x${string}`,
+      client: getBaseClient(),
     });
   } catch {
     return authJson({ ok: false, reason: 'verify-error' }, { status: 401 });
@@ -162,6 +184,10 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
 
   // Canonicalize identity ID to lowercase. Different wallets return mixed-case
   // addresses (EIP-55 checksums); lowercase makes lookups stable.
+  // All EVM auth — EOA or smart-contract wallet — keys to provider 'metamask'
+  // so a user signing in via MetaMask one day and Coinbase Smart Wallet the
+  // next (with the same address) is the same PointCast user. The actual
+  // signer wallet is recorded client-side in pc:wallet for UI only.
   const identity: AuthIdentity = {
     provider: 'metamask',
     id: lc(address),
