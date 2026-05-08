@@ -359,6 +359,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#8a2432',
   },
+
+  // ─── BURSTS (batch 11) ────────────────────────────────────────
+  {
+    id: 'hearts',
+    label: 'hearts',
+    blurb: 'A scatter of colorful hearts floats upward and fades. All the feelings.',
+    glyph: '💕',
+    kind: 'burst',
+    durationMs: 3500,
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 11) ────────────────────────────────────
+  {
+    id: 'crab',
+    label: 'crab',
+    blurb: 'A crab scuttles sideways across the bottom. Very efficient, actually.',
+    glyph: '🦀',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#8a2432',
+  },
+  {
+    id: 'duck',
+    label: 'duck',
+    blurb: 'A duck waddles across, side to side, totally unbothered.',
+    glyph: '🦆',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (batch 11) ───────────────────────────────────────
+  {
+    id: 'sunrise',
+    label: 'sunrise',
+    blurb: 'A warm glow rises from the horizon. The day beginning.',
+    glyph: '🌅',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
