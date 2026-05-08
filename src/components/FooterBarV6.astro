@@ -106,8 +106,29 @@ const BUILDINGS = [
       companion-kind spells (cat / pup / penguin / fish / moth / bee /
       duck / etc.). Each runs the same walk animation as the main
       walker but with an animation-delay offset so they trail behind.
-      Capped at 3 simultaneous. JS-managed. */}
+      Capped at 3 simultaneous. Right-click any companion to "keep"
+      it as a persistent pet (v6.2). JS-managed. */}
   <div class="fbv6__companions" id="fbv6-companions" aria-hidden="true"></div>
+
+  {/* v6.2: PET layer. A single persistent companion saved to
+      pc:pet:v1 — name, kind, bornAt, mood. Walks alongside the main
+      walker indefinitely. Right-click to release (with confirm). */}
+  <div class="fbv6__pet" id="fbv6-pet" hidden aria-hidden="true">
+    <span class="fbv6__pet-inner" id="fbv6-pet-inner"></span>
+    <span class="fbv6__pet-plate mono" id="fbv6-pet-plate" aria-hidden="true">
+      <strong id="fbv6-pet-name">pet</strong>
+      <span class="fbv6__pet-sub" id="fbv6-pet-sub">your pet</span>
+    </span>
+  </div>
+
+  {/* v6.2: PEERS layer. Other visitors' nouns walking ghost-translucent
+      in your bar. Joins a global "/__bar__" room via the existing
+      PresenceRoom Durable Object. Each peer walks the same 60s loop
+      on a randomized phase (no per-frame position sync needed). */}
+  <div class="fbv6__peers" id="fbv6-peers" aria-hidden="true"></div>
+
+  {/* Pet adopt/release toast — appears briefly on adopt or release. */}
+  <div class="fbv6__toast mono" id="fbv6-toast" role="status" aria-live="polite" hidden></div>
 
   {/* Right edge — chevron + ON AIR. Chevron links to /me for now;
       v6.1 will turn it into the omnibox modal trigger. */}
@@ -209,7 +230,8 @@ const BUILDINGS = [
     }
     const node = document.createElement('span');
     node.className = 'fbv6__companion';
-    node.title = '+' + spellId + ' (ephemeral · disappears in ' + Math.round(spec.dur / 1000) + 's)';
+    node.dataset.kind = spellId;
+    node.title = '+' + spellId + ' · right-click to keep as pet';
     // Stagger animation-delay so multiple companions don't pile on the
     // same x-position. Negative delay = "started Xs ago" — pushes the
     // sprite further along its loop relative to the walker.
@@ -220,6 +242,15 @@ const BUILDINGS = [
     inner.textContent = spec.emoji;
     node.appendChild(inner);
     companionsRoot.appendChild(node);
+
+    // v6.2: right-click → adopt as persistent pet.
+    node.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      adoptPet(spellId);
+      // Yank this companion since it's now embodied as the pet.
+      if (node.parentNode === companionsRoot) companionsRoot.removeChild(node);
+    });
+
     // Auto-remove after dur with a small fade-out window.
     const fade = Math.min(2400, spec.dur / 4);
     setTimeout(() => { node.classList.add('is-leaving'); }, spec.dur - fade);
@@ -239,6 +270,276 @@ const BUILDINGS = [
   window.addEventListener('pc:spell:clear', () => {
     if (companionsRoot) companionsRoot.innerHTML = '';
   });
+
+  // ─── v6.2: PET PERSISTENCE ───────────────────────────────────────────
+  // Right-click a companion → it's promoted to your pet, stored in
+  // pc:pet:v1, and walks alongside your noun forever. Right-click the
+  // pet itself → release (with confirm).
+  const PET_KEY = 'pc:pet:v1';
+  const PET_VERSION = 1;
+  const PET_NAMES = [
+    'Pebble', 'Cricket', 'Biscuit', 'Mochi', 'Sage', 'Juno', 'Pip',
+    'Scout', 'Finch', 'Otto', 'Marbles', 'Basil', 'Pixel', 'Miso',
+    'Pippin', 'Nori', 'Kiwi', 'Atlas', 'Beans', 'Doodle',
+  ];
+  function petLoad() {
+    try {
+      const raw = localStorage.getItem(PET_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.$v !== PET_VERSION || !parsed.pet) return null;
+      return parsed.pet;
+    } catch (e) { return null; }
+  }
+  function petSave(pet) {
+    try {
+      localStorage.setItem(PET_KEY, JSON.stringify({ $v: PET_VERSION, pet }));
+    } catch (e) {}
+  }
+  function petClear() {
+    try { localStorage.removeItem(PET_KEY); } catch (e) {}
+  }
+  function petName() {
+    return PET_NAMES[Math.floor(Math.random() * PET_NAMES.length)];
+  }
+
+  const petRoot   = document.getElementById('fbv6-pet');
+  const petInner  = document.getElementById('fbv6-pet-inner');
+  const petNameEl = document.getElementById('fbv6-pet-name');
+  const petSubEl  = document.getElementById('fbv6-pet-sub');
+
+  function petRender(pet) {
+    if (!petRoot || !petInner) return;
+    if (!pet) {
+      petRoot.hidden = true;
+      petInner.textContent = '';
+      return;
+    }
+    const spec = COMPANION_KIND[pet.kind] || { emoji: pet.emoji || '🐾' };
+    petInner.textContent = pet.emoji || spec.emoji;
+    if (petNameEl) petNameEl.textContent = pet.name;
+    if (petSubEl) {
+      const days = Math.max(0, Math.floor((Date.now() - new Date(pet.bornAt).getTime()) / 86400000));
+      petSubEl.textContent = days === 0 ? 'adopted today' : 'with you for ' + days + (days === 1 ? ' day' : ' days');
+    }
+    petRoot.hidden = false;
+  }
+
+  function adoptPet(kind) {
+    // Replacement is allowed: adopting while a pet exists swaps it out.
+    const spec = COMPANION_KIND[kind];
+    if (!spec) return;
+    const existing = petLoad();
+    const pet = {
+      id: 'pet-' + Date.now().toString(36),
+      kind,
+      emoji: spec.emoji,
+      name: existing && existing.kind === kind ? existing.name : petName(),
+      bornAt: new Date().toISOString(),
+      mood: 'chill',
+    };
+    petSave(pet);
+    petRender(pet);
+    showToast(existing
+      ? '🔄 ' + (existing.name || 'pet') + ' → ' + pet.name + ' (' + spec.emoji + ')'
+      : '🐾 adopted ' + pet.name + ' (' + spec.emoji + ') · right-click to release');
+  }
+
+  function releasePet() {
+    const cur = petLoad();
+    if (!cur) return;
+    if (!confirm('Release ' + cur.name + ' (' + cur.emoji + ')? They\'ll wander off but you can adopt a new pet anytime.')) return;
+    petClear();
+    petRender(null);
+    showToast('🌬 released ' + cur.name + ' · they wandered off');
+  }
+
+  petRoot?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    releasePet();
+  });
+
+  // Toast helper.
+  const toastEl = document.getElementById('fbv6-toast');
+  let toastTimer = null;
+  function showToast(msg) {
+    if (!toastEl) return;
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 3600);
+  }
+
+  // Initial pet paint.
+  petRender(petLoad());
+
+  // ─── v6.2: CROSS-VISITOR PEERS ───────────────────────────────────────
+  // Other visitors' nouns walk in YOUR bar as ghost-translucent. We use
+  // the existing PresenceRoom DO via /api/room with a synthetic key
+  // "/__bar__" so the bar is global (independent of which page each
+  // visitor is on). Position isn't synced per-frame — each peer just
+  // joins with their nounId and we render them walking with a random
+  // phase. The walk loop is identical on every client; offsets are
+  // local-only. Cheap, effective, and there's no animation thrash.
+  const peersRoot = document.getElementById('fbv6-peers');
+  const MAX_PEERS = 4;
+
+  function getCurrentNounSeed() {
+    let seed = null;
+    try {
+      const raw = localStorage.getItem('pc:currentNoun');
+      if (raw) {
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n) && n >= 0 && n <= 1199) seed = n;
+      }
+    } catch (e) {}
+    return seed;
+  }
+
+  function getOrMakeBarSession() {
+    const k = 'pc:bar:sid:v1';
+    try {
+      let sid = localStorage.getItem(k);
+      if (!sid) {
+        sid = 'sid_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+        localStorage.setItem(k, sid);
+      }
+      return sid;
+    } catch (e) {
+      return 'sid_' + Math.random().toString(36).slice(2, 10);
+    }
+  }
+
+  let peerWS = null;
+  let peerSessions = new Map(); // sessionId -> { nounId, node, phaseDelay }
+
+  function renderPeer(sid, nounId) {
+    if (!peersRoot) return;
+    let entry = peerSessions.get(sid);
+    if (!entry) {
+      if (peerSessions.size >= MAX_PEERS) return; // soft cap
+      const node = document.createElement('div');
+      node.className = 'fbv6__peer';
+      node.dataset.sid = sid;
+      // Random phase so peers don't bunch up at the start.
+      const phase = -1 - Math.random() * 60;
+      node.style.animationDelay = phase + 's';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.width = 28;
+      img.height = 28;
+      img.src = 'https://noun.pics/' + nounId + '.svg';
+      node.title = 'visitor · noun #' + nounId;
+      node.appendChild(img);
+      const shadow = document.createElement('span');
+      shadow.className = 'fbv6__peer-shadow';
+      node.appendChild(shadow);
+      peersRoot.appendChild(node);
+      entry = { nounId, node, phaseDelay: phase };
+      peerSessions.set(sid, entry);
+    } else if (entry.nounId !== nounId) {
+      entry.nounId = nounId;
+      const img = entry.node.querySelector('img');
+      if (img) {
+        img.src = 'https://noun.pics/' + nounId + '.svg';
+      }
+      entry.node.title = 'visitor · noun #' + nounId;
+    }
+  }
+
+  function dropPeer(sid) {
+    const entry = peerSessions.get(sid);
+    if (!entry) return;
+    entry.node.classList.add('is-leaving');
+    setTimeout(() => {
+      if (entry.node.parentNode === peersRoot) peersRoot.removeChild(entry.node);
+    }, 800);
+    peerSessions.delete(sid);
+  }
+
+  function onPeers(peers) {
+    if (!Array.isArray(peers)) return;
+    const seen = new Set();
+    for (const p of peers) {
+      if (!p || !p.sessionId || p.nounId == null) continue;
+      const n = parseInt(p.nounId, 10);
+      if (!Number.isFinite(n) || n < 0 || n > 1199) continue;
+      seen.add(p.sessionId);
+      renderPeer(p.sessionId, n);
+    }
+    // Drop peers that vanished from the broadcast.
+    for (const sid of Array.from(peerSessions.keys())) {
+      if (!seen.has(sid)) dropPeer(sid);
+    }
+  }
+
+  function connectPeers() {
+    if (typeof WebSocket === 'undefined') return;
+    if (!peersRoot) return;
+    // Don't open the WS until we know our own noun seed (it's set on
+    // mount above).
+    const ourSeed = getCurrentNounSeed();
+    if (ourSeed === null) {
+      setTimeout(connectPeers, 600);
+      return;
+    }
+    const sid = getOrMakeBarSession();
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = proto + '//' + location.host + '/api/room?url=' +
+                encodeURIComponent('/__bar__') +
+                '&sid=' + encodeURIComponent(sid) +
+                '&kind=human';
+    let ws;
+    try { ws = new WebSocket(url); } catch (e) { return; }
+    peerWS = ws;
+    let pingTimer = null;
+    let nounChangeListener = null;
+
+    ws.addEventListener('open', () => {
+      try {
+        ws.send(JSON.stringify({
+          type: 'identify',
+          nounId: ourSeed,
+          kind: 'human',
+          tag: 'bar',
+        }));
+      } catch (e) {}
+      pingTimer = setInterval(() => {
+        try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+      }, 25000);
+      // Re-identify when the local noun changes so peers see our new sprite.
+      nounChangeListener = (e) => {
+        const n = e?.detail?.seed;
+        if (typeof n === 'number' && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ type: 'identify', nounId: n, kind: 'human', tag: 'bar' }));
+          } catch (err) {}
+        }
+      };
+      window.addEventListener('pc:noun-change', nounChangeListener);
+    });
+
+    ws.addEventListener('message', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data && Array.isArray(data.peers)) onPeers(data.peers);
+      } catch (err) {}
+    });
+
+    ws.addEventListener('close', () => {
+      if (pingTimer) clearInterval(pingTimer);
+      if (nounChangeListener) window.removeEventListener('pc:noun-change', nounChangeListener);
+      // Soft reconnect after 4–8s. Don't fight broken networks.
+      const wait = 4000 + Math.random() * 4000;
+      setTimeout(connectPeers, wait);
+    });
+    ws.addEventListener('error', () => {
+      try { ws.close(); } catch (e) {}
+    });
+  }
+
+  // Defer 1.2s so initial paint isn't competing with WebSocket overhead.
+  setTimeout(connectPeers, 1200);
 })();
 </script>
 
@@ -488,6 +789,132 @@ const BUILDINGS = [
   .fbv6__companion.is-leaving {
     transition: opacity 2.4s ease, transform 2.4s ease;
     opacity: 0;
+  }
+
+  /* PET (v6.2) — single persistent companion. Walks like a companion
+     but never auto-fades; nameplate shows on hover; right-click releases. */
+  .fbv6__pet {
+    position: absolute;
+    bottom: 14px;
+    left: 0;
+    width: 24px; height: 24px;
+    transform-origin: bottom center;
+    animation: fbv6-walk 60s linear infinite;
+    animation-delay: -8s;
+    pointer-events: auto;
+    cursor: context-menu;
+    z-index: 3;
+  }
+  .fbv6__pet-inner {
+    display: inline-block;
+    font-size: 20px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+    animation: fbv6-companion-bob 0.55s ease-in-out infinite;
+  }
+  .fbv6__pet::before {
+    content: '';
+    position: absolute;
+    bottom: -3px; left: 50%;
+    width: 18px; height: 3px;
+    background: rgba(0,0,0,0.22); border-radius: 50%;
+    transform: translateX(-50%);
+  }
+  .fbv6__pet-plate {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 200, 120, 0.5);
+    border-radius: 2px;
+    color: #fdf2d6;
+    font-size: 10px; letter-spacing: 0.06em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  .fbv6__pet-plate strong {
+    display: block;
+    font-size: 11px;
+    color: #ffd97a;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .fbv6__pet-sub {
+    display: block;
+    font-size: 9px;
+    color: rgba(253, 242, 214, 0.7);
+    margin-top: 1px;
+  }
+  .fbv6__pet:hover .fbv6__pet-plate {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__pet { animation-duration: 120s; }
+
+  /* PEERS (v6.2) — other visitors' nouns walking ghost-translucent.
+     Each runs the same 60s walk loop with a randomized animation-delay
+     (set inline). No per-frame position sync — phase offset is local
+     and the loop is identical on every client. */
+  .fbv6__peers {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .fbv6__peer {
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    width: 28px; height: 28px;
+    opacity: 0;
+    animation:
+      fbv6-walk 60s linear infinite,
+      fbv6-peer-fadein 1.2s ease forwards;
+    pointer-events: auto;
+    cursor: help;
+  }
+  .fbv6__peer img {
+    width: 28px; height: 28px;
+    filter: grayscale(0.15) brightness(1.05) drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+    opacity: 0.55;
+  }
+  .fbv6__peer-shadow {
+    position: absolute;
+    bottom: -3px; left: 50%;
+    width: 18px; height: 3px;
+    background: rgba(0,0,0,0.18); border-radius: 50%;
+    transform: translateX(-50%);
+  }
+  .fbv6__peer.is-leaving { animation-play-state: paused; opacity: 0; transition: opacity 0.8s ease; }
+  .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__peer { animation-duration: 120s, 1.2s; }
+  @keyframes fbv6-peer-fadein {
+    from { opacity: 0; }
+    to   { opacity: 0.78; }
+  }
+
+  /* PET ADOPT/RELEASE TOAST */
+  .fbv6__toast {
+    position: absolute;
+    top: -42px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.78);
+    border: 1px solid rgba(255, 200, 120, 0.5);
+    border-radius: 3px;
+    color: #fdf2d6;
+    font-size: 11px; letter-spacing: 0.06em;
+    white-space: nowrap;
+    z-index: 5;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    animation: fbv6-toast 0.32s ease;
+  }
+  @keyframes fbv6-toast {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
   }
 
   /* RIGHT EDGE — chevron + ON AIR */
