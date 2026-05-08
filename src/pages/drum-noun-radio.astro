@@ -1,0 +1,156 @@
+---
+/**
+ * /drum-noun-radio — auto-DJ Noun radio station with preset tracks.
+ * Mike 2026-05-07: "yah build all 4 go." 1 of 4.
+ * Distinct from /drum-radio (live event-driven). 1990s Shoutcast vibe.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Noun Radio Station · auto-DJ from El Segundo · PointCast';
+const description = 'Auto-DJ Noun spins six preset tracks. ON AIR sign blinks. Hit request-next to skip forward.';
+const TRACKS = [
+  { name: 'Marine Layer Morning',   noun: 313,  bpm: 78,  by: 'Marine Layer',    color: '#9ed6f0' },
+  { name: 'Sunrise on Imperial',    noun: 1042, bpm: 102, by: 'Release Train',   color: '#ffd400' },
+  { name: 'Boba & Cassette',        noun: 742,  bpm: 90,  by: 'Main Street',     color: '#e8b3c0' },
+  { name: 'El Segundo at Dusk',     noun: 1189, bpm: 64,  by: 'Night Broadcast', color: '#6f59c0' },
+  { name: 'Block Runner Funk',      noun: 523,  bpm: 110, by: 'Block Runner',    color: '#a8ff3a' },
+  { name: 'Brass Pad on Main',      noun: 287,  bpm: 84,  by: '—',               color: '#f6c15e' },
+];
+---
+<BlockLayout title={title} description={description}>
+  <main class="dnr">
+    <header class="dnr__header">
+      <h1 class="dnr__title">NOUN RADIO STATION</h1>
+      <p class="dnr__tag">auto-DJ · 6 preset tracks · ON AIR · request-next to skip</p>
+    </header>
+    <section class="dnr__booth" id="dnr-booth">
+      <div class="dnr__on-air">● ON AIR</div>
+      <div class="dnr__dj">
+        <div class="dnr__turntable" id="dnr-tt" aria-hidden="true">
+          <span class="dnr__platter"></span>
+          <span class="dnr__label" id="dnr-label" style="background: #f6c15e;"></span>
+          <span class="dnr__needle"></span>
+          <span class="dnr__spindle"></span>
+        </div>
+        <div class="dnr__noun-wrap">
+          <img class="dnr__noun" id="dnr-noun" src={`https://noun.pics/${TRACKS[0].noun}.svg`} alt="DJ Noun" width="140" height="140" />
+          <span class="dnr__head" aria-hidden="true">🎧</span>
+        </div>
+      </div>
+      <div class="dnr__plate">
+        <p class="dnr__nowplaying">NOW PLAYING</p>
+        <h2 class="dnr__name" id="dnr-name">{TRACKS[0].name}</h2>
+        <p class="dnr__by">by <strong id="dnr-by">{TRACKS[0].by}</strong> · <span id="dnr-bpm">{TRACKS[0].bpm} bpm</span></p>
+      </div>
+      <div class="dnr__waveform" id="dnr-wave" aria-hidden="true">
+        {Array.from({length: 24}).map(() => <span class="dnr__bar"></span>)}
+      </div>
+      <div class="dnr__controls">
+        <button class="dnr__btn dnr__btn--big" id="dnr-toggle" type="button">▶ TUNE IN</button>
+        <button class="dnr__btn" id="dnr-skip" type="button">⏭ REQUEST NEXT</button>
+        <span class="dnr__queue" id="dnr-queue">— up next</span>
+      </div>
+    </section>
+    <section class="dnr__siblings">
+      <a href="/drum-jukebox">/drum-jukebox</a>
+      <a href="/drum-looper">/drum-looper</a>
+      <a href="/drum-beat-battle">/drum-beat-battle</a>
+      <a href="/drum-parade">/drum-parade</a>
+      <a href="/drum-radio">/drum-radio · live events</a>
+    </section>
+  </main>
+</BlockLayout>
+<style>
+  .dnr { max-width: 880px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #fffaf0; background: linear-gradient(180deg, #050310 0%, #1a0820 60%, #050310 100%); min-height: 100vh; }
+  .dnr__header { text-align: center; margin: 18px 0 22px; }
+  .dnr__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(30px, 6.5vw, 64px); letter-spacing: 0.16em; margin: 0; color: #f6c15e; text-shadow: 0 0 18px rgba(246, 193, 94, 0.5); }
+  .dnr__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 8px 0 0; }
+  .dnr__booth { position: relative; padding: 28px 22px 24px; border: 2.5px solid #d4a437; background: linear-gradient(180deg, rgba(26, 8, 32, 0.92) 0%, rgba(8, 2, 12, 0.96) 100%); box-shadow: 6px 6px 0 0 #1a0820; }
+  .dnr__on-air { position: absolute; top: -14px; left: 24px; padding: 4px 14px; background: #b8431a; color: #fffaf0; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.30em; border: 2px solid #1a0820; animation: dnr-blink 1.6s ease-in-out infinite; }
+  @keyframes dnr-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  .dnr__dj { display: grid; grid-template-columns: auto auto; gap: 22px; align-items: center; justify-content: center; margin-bottom: 18px; }
+  .dnr__turntable { position: relative; width: 160px; height: 160px; border-radius: 50%; background: #1a0820; border: 4px solid #5a3422; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); animation: dnr-spin var(--spin-dur, 1.6s) linear infinite; animation-play-state: paused; }
+  .dnr__booth[data-state='playing'] .dnr__turntable { animation-play-state: running; }
+  @keyframes dnr-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .dnr__platter { position: absolute; inset: 8px; border-radius: 50%; background: repeating-radial-gradient(circle at 50% 50%, #2a0c30 0 4px, #1a0820 4px 8px); }
+  .dnr__label { position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: #f6c15e; border: 2px solid #1a0820; box-shadow: 0 0 0 3px rgba(0,0,0,0.4); transition: background 320ms; }
+  .dnr__spindle { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: #fffaf0; border-radius: 50%; }
+  .dnr__needle { position: absolute; top: 18px; right: 6px; width: 3px; height: 90px; background: linear-gradient(180deg, #d4a437 0%, #5a3422 100%); transform: rotate(28deg); transform-origin: top right; box-shadow: -1px 0 0 #fff5c0; }
+  .dnr__noun-wrap { position: relative; }
+  .dnr__noun { width: 140px; height: 140px; image-rendering: pixelated; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)); transition: filter 240ms; }
+  .dnr__head { position: absolute; top: -6px; right: -6px; font-size: 28px; }
+  .dnr__plate { text-align: center; margin: 12px 0 14px; }
+  .dnr__nowplaying { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.30em; color: #d4a437; margin: 0 0 4px; }
+  .dnr__name { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(20px, 3.6vw, 32px); margin: 0; color: #fffaf0; letter-spacing: 0.06em; transition: opacity 320ms; }
+  .dnr__name.dnr--swap { opacity: 0; }
+  .dnr__by { margin: 6px 0 0; font-size: 12px; color: #cfc6df; letter-spacing: 0.04em; font-family: 'JetBrains Mono Variable', monospace; }
+  .dnr__by strong { color: #f6c15e; }
+  .dnr__waveform { display: flex; justify-content: center; align-items: end; gap: 3px; height: 36px; margin: 14px 0 18px; }
+  .dnr__bar { width: 6px; height: 6px; background: #d4a437; transition: height 80ms ease-out, background 80ms; }
+  .dnr__bar.dnr__bar--lit { background: #f6c15e; box-shadow: 0 0 6px rgba(246, 193, 94, 0.65); }
+  .dnr__controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .dnr__btn { padding: 10px 18px; border: 2px solid #d4a437; background: linear-gradient(180deg, #1a0820, #050310); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; cursor: pointer; transition: transform 100ms, border-color 200ms, box-shadow 200ms; }
+  .dnr__btn:hover { transform: translateY(-1px); border-color: #f6c15e; box-shadow: 0 4px 16px rgba(246, 193, 94, 0.30); }
+  .dnr__btn--big { padding: 12px 26px; font-size: 14px; }
+  .dnr__queue { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.14em; color: #cfc6df; opacity: 0.75; }
+  .dnr__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .dnr__siblings a { color: #d4a437; text-decoration: none; }
+  .dnr__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+  @media (prefers-reduced-motion: reduce) { .dnr__on-air, .dnr__turntable, .dnr__bar { animation: none !important; transition: none !important; } }
+</style>
+<script>
+  const TRACKS = [
+    { name: 'Marine Layer Morning',   noun: 313,  bpm: 78,  by: 'Marine Layer',    color: '#9ed6f0', kick: [1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1], lead: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+    { name: 'Sunrise on Imperial',    noun: 1042, bpm: 102, by: 'Release Train',   color: '#ffd400', kick: [1,0,0,0,1,0,0,1,1,0,0,0,1,0,1,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], bell: [0,0,1,0,0,0,0,0,1,0,1,0,0,0,1,0], lead: [0,1,0,1,0,0,1,0,0,1,0,1,0,0,1,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+    { name: 'Boba & Cassette',        noun: 742,  bpm: 90,  by: 'Main Street',     color: '#e8b3c0', kick: [1,0,0,0,1,0,0,0,1,0,0,1,1,0,0,0], snare: [0,0,0,1,0,0,1,0,0,0,1,0,0,0,1,0], bell: [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], lead: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+    { name: 'El Segundo at Dusk',     noun: 1189, bpm: 64,  by: 'Night Broadcast', color: '#6f59c0', kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0], lead: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+    { name: 'Block Runner Funk',      noun: 523,  bpm: 110, by: 'Block Runner',    color: '#a8ff3a', kick: [1,0,0,1,1,0,0,0,1,0,1,0,1,0,0,1], snare: [0,0,1,0,1,0,0,0,0,0,1,0,1,0,0,1], bell: [0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,0], lead: [0,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+    { name: 'Brass Pad on Main',      noun: 287,  bpm: 84,  by: '—',               color: '#f6c15e', kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], bell: [0,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0], lead: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], pad: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] },
+  ];
+  const TRACK_DUR_MS = 24000;
+  let trackIdx = 0, step = 0, stepTimer: number | null = null, trackTimer: number | null = null, playing = false;
+  let actx: AudioContext | null = null;
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+  function pK(t:number){const a=ctx(),o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(120,t);o.frequency.exponentialRampToValueAtTime(40,t+0.18);g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.3);}
+  function pSn(t:number){const a=ctx(),buf=a.createBuffer(1,a.sampleRate*0.12,a.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;const n=a.createBufferSource();n.buffer=buf;const bp=a.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=1.2;const g=a.createGain();g.gain.setValueAtTime(0.32,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);n.connect(bp).connect(g).connect(a.destination);n.start(t);n.stop(t+0.2);}
+  function pB(t:number){const a=ctx();[1320,2640,3960].forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime([0.13,0.07,0.04][i],t);g.gain.exponentialRampToValueAtTime(0.0001,t+1.0);o.connect(g).connect(a.destination);o.start(t);o.stop(t+1.1);});}
+  function pL(t:number){const a=ctx();const D=[0,4,7,12,14],deg=D[Math.floor(Math.random()*D.length)],f=264*Math.pow(2,deg/12);const o=a.createOscillator(),g=a.createGain(),lp=a.createBiquadFilter();o.type='sawtooth';o.frequency.setValueAtTime(f,t);lp.type='lowpass';lp.frequency.setValueAtTime(2200,t);lp.frequency.exponentialRampToValueAtTime(800,t+0.4);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.13,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+0.4);o.connect(lp).connect(g).connect(a.destination);o.start(t);o.stop(t+0.45);}
+  function pP(t:number){const a=ctx();[132,198].forEach(f=>{const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.09,t+0.18);g.gain.linearRampToValueAtTime(0.09,t+0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+0.65);o.connect(g).connect(a.destination);o.start(t);o.stop(t+0.7);});}
+  const PLAY: any = { kick: pK, snare: pSn, bell: pB, lead: pL, pad: pP };
+  const booth = document.getElementById('dnr-booth');
+  const labelEl = document.getElementById('dnr-label');
+  const nameEl = document.getElementById('dnr-name');
+  const byEl = document.getElementById('dnr-by');
+  const bpmEl = document.getElementById('dnr-bpm');
+  const queueEl = document.getElementById('dnr-queue');
+  const nounEl = document.getElementById('dnr-noun') as HTMLImageElement | null;
+  const toggleBtn = document.getElementById('dnr-toggle') as HTMLButtonElement | null;
+  const skipBtn = document.getElementById('dnr-skip') as HTMLButtonElement | null;
+  const bars = Array.from(document.querySelectorAll<HTMLElement>('.dnr__bar'));
+  function loadTrack(i: number) {
+    trackIdx = (i + TRACKS.length) % TRACKS.length;
+    const t = TRACKS[trackIdx];
+    if (nameEl) { nameEl.classList.add('dnr--swap'); setTimeout(() => { nameEl.textContent = t.name; nameEl.classList.remove('dnr--swap'); }, 320); }
+    if (byEl) byEl.textContent = t.by;
+    if (bpmEl) bpmEl.textContent = `${t.bpm} bpm`;
+    if (labelEl) (labelEl as HTMLElement).style.background = t.color;
+    if (nounEl) nounEl.src = `https://noun.pics/${t.noun}.svg`;
+    if (booth) (booth as HTMLElement).style.setProperty('--spin-dur', `${(60 / t.bpm).toFixed(2)}s`);
+    const next = TRACKS[(trackIdx + 1) % TRACKS.length];
+    if (queueEl) queueEl.textContent = `up next: ${next.name}`;
+    step = 0;
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+    if (playing) { const stepMs = (60 / t.bpm / 4) * 1000; stepTimer = window.setInterval(tick, stepMs); }
+  }
+  function tick() {
+    const t = TRACKS[trackIdx];
+    const at = ctx().currentTime + 0.02;
+    (['kick','snare','bell','lead','pad'] as const).forEach((inst) => { const arr = (t as any)[inst] as number[]; if (arr[step]) try { PLAY[inst](at); } catch {} });
+    bars.forEach((b, i) => { const lit = (i + step) % 4 === 0; b.classList.toggle('dnr__bar--lit', lit); const h = 6 + Math.round(Math.random() * 22); b.style.height = `${h}px`; });
+    step = (step + 1) % 16;
+  }
+  function start() { if (playing) return; ctx(); playing = true; if (booth) (booth as HTMLElement).dataset.state = 'playing'; if (toggleBtn) toggleBtn.textContent = '■ TUNE OUT'; loadTrack(trackIdx); if (trackTimer) clearInterval(trackTimer); trackTimer = window.setInterval(() => loadTrack(trackIdx + 1), TRACK_DUR_MS); }
+  function stop() { if (!playing) return; playing = false; if (stepTimer) { clearInterval(stepTimer); stepTimer = null; } if (trackTimer) { clearInterval(trackTimer); trackTimer = null; } if (booth) (booth as HTMLElement).dataset.state = 'paused'; if (toggleBtn) toggleBtn.textContent = '▶ TUNE IN'; }
+  if (toggleBtn) toggleBtn.addEventListener('click', () => { playing ? stop() : start(); });
+  if (skipBtn) skipBtn.addEventListener('click', () => { if (!playing) start(); loadTrack(trackIdx + 1); if (trackTimer) clearInterval(trackTimer); trackTimer = window.setInterval(() => loadTrack(trackIdx + 1), TRACK_DUR_MS); });
+  loadTrack(0);
+</script>
