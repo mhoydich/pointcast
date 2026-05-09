@@ -10,7 +10,7 @@
   const DEFAULT_MINUTES = 15;
   const RELEASE_VERSION = "v10";
   const SETTINGS_RELEASE = "v10-atelier";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]);
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v9b", "v10"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -1641,6 +1641,9 @@
     }
     if (params.has("v10")) {
       return RELEASE_VERSION;
+    }
+    if (params.has("v9b")) {
+      return "v9b";
     }
     if (params.has("v9")) {
       return "v9";

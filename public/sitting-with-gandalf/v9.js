@@ -277,7 +277,11 @@
   }
 
   function isV9() {
-    return dom.body.dataset.version === "v9";
+    // V9b shares V9's Council Hall flow — same companions, same council,
+    // same Letter mechanic into the same v9 Journal. The only difference is
+    // the painted-room render layer, which v9b.js handles separately.
+    var v = dom.body.dataset.version;
+    return v === "v9" || v === "v9b";
   }
 
   function format(seconds) {
