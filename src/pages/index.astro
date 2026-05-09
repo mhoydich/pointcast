@@ -36,6 +36,8 @@ import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import opmodeData from '../data/operating-mode.json';
 import shipsData from '../data/recent-ships.json';
+import asksData from '../data/asks.json';
+import learningsData from '../data/learning-notes.json';
 import HomeCheckinHint from '../components/HomeCheckinHint.astro';
 import HomePlacesDirectory from '../components/HomePlacesDirectory.astro';
 
@@ -111,6 +113,62 @@ const ships = (shipsData as { updatedAt: string; updatedBy: string; ships: ShipI
 // Group shipped-today vs shipped-earlier-this-week for visual emphasis.
 const shipsToday = ships.filter(s => new Date(s.at) >= startOfToday);
 const shipsEarlier = ships.filter(s => new Date(s.at) < startOfToday).slice(0, 4);
+
+// ---------- Data: asks (daily rotation) ----------
+// All asks render in the page; client-side JS picks today's by
+// day-of-year. Keeps the homepage feeling alive between deploys —
+// even if we don't ship for a few days, the visible ask still rotates.
+interface Ask {
+  id: string;
+  title: string;
+  body: string;
+  cta: string;
+  ctaLabel: string;
+  tag: string;
+}
+const asks = (asksData as { asks: Ask[] }).asks;
+
+// ---------- Data: learning notes ----------
+interface Note { id: string; at: string; title: string; body: string; }
+const learnings = (learningsData as { updatedAt: string; updatedBy: string; notes: Note[] }).notes;
+const recentLearnings = learnings.slice(0, 5);
+
+// ---------- Momentum stats ----------
+// Compute "ship days in last 14" from blocks + recent-ships (so feature
+// PRs that aren't blocks still count). This is the editorial momentum
+// stat surfaced on the homepage HEARTBEAT — meaningful even at zero
+// traffic because it's about WHAT WE SHIPPED, not who saw it.
+const fourteenDaysAgo = new Date(startOfToday);
+fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+
+const dayKeysShipped = new Set<string>();
+for (const b of allBlocks) {
+  const d = new Date(b.data.timestamp);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+for (const s of ships) {
+  const d = new Date(s.at);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+const shipDays14 = dayKeysShipped.size;
+
+// Consecutive ship streak: walk back from today, stop at the first
+// gap-day. Counts both blocks and ships so a feature-only day still
+// keeps the streak alive.
+let shipStreak = 0;
+{
+  const cursor = new Date(startOfToday);
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (!dayKeysShipped.has(key)) break;
+    shipStreak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+}
+
+// PRs in recent-ships.json shipped in the last 7 days.
+const sevenDaysAgoTs = +sevenDaysAgo;
+const shipsLast7 = ships.filter(s => +new Date(s.at) >= sevenDaysAgoTs).length;
 
 function fmtRelative(iso: string): string {
   const t = new Date(iso);
@@ -210,6 +268,48 @@ const jsonLd = {
        cacheable and the build doesn't differ per-visitor. */}
     <HomeCheckinHint />
 
+    {/* ============== 1c. TODAY'S ASK (daily rotation) ==============
+       Mike 2026-05-08: "create a system to keep the homepage fresh and
+       active, like requesting people build inventory". All asks bake
+       into the HTML; client-side JS picks today's by day-of-year so
+       the visible ask rotates even between deploys. JS-off visitors
+       see the first ask. Single CTA per ask — primary action, not
+       a list. */}
+    {asks.length > 0 && (
+      <section class="ask" aria-label="Today's ask">
+        <div class="ask__head">
+          <p class="kicker">TODAY · ONE THING TO DO</p>
+          <span class="ask__rotates mono">rotates daily · {asks.length} on tap</span>
+        </div>
+        <div class="ask__cards" id="ask-cards">
+          {asks.map((a, i) => (
+            <article class={`ask__card${i === 0 ? '' : ' ask__card--hidden'}`} data-ask-idx={i}>
+              <div class="ask__card-row">
+                <span class="ask__tag" data-tag={a.tag}>{a.tag}</span>
+                <h3 class="ask__title">{a.title}</h3>
+              </div>
+              <p class="ask__body">{a.body}</p>
+              <a class="ask__cta" href={a.cta}>{a.ctaLabel} →</a>
+            </article>
+          ))}
+        </div>
+        <script is:inline>
+          (() => {
+            // Day-of-year → consistent for all visitors today, rotates
+            // overnight. UTC so timezone doesn't fragment the rotation.
+            const cards = document.querySelectorAll('[data-ask-idx]');
+            if (!cards.length) return;
+            const day = Math.floor(Date.now() / 86400000);
+            const pick = day % cards.length;
+            cards.forEach((c, i) => {
+              if (i === pick) c.classList.remove('ask__card--hidden');
+              else c.classList.add('ask__card--hidden');
+            });
+          })();
+        </script>
+      </section>
+    )}
+
     {/* ============== 2. OPERATING MODE ============== */}
     <section class="opmode" aria-label="Operating mode">
       <header class="opmode__head">
@@ -257,23 +357,26 @@ const jsonLd = {
           <h3 class="opmode__h">HEARTBEAT</h3>
           <dl class="heartbeat">
             <div class="heartbeat__stat">
-              <dt>{todayBlocks.length}</dt>
-              <dd>shipped today</dd>
+              <dt>{shipStreak}</dt>
+              <dd>day ship streak</dd>
             </div>
             <div class="heartbeat__stat">
-              <dt>{weekBlocks.length}</dt>
-              <dd>this week</dd>
+              <dt>{shipDays14}<span class="heartbeat__denom">/14</span></dt>
+              <dd>ship days · last 14</dd>
+            </div>
+            <div class="heartbeat__stat">
+              <dt>{shipsLast7}</dt>
+              <dd>feature PRs · last 7d</dd>
             </div>
             <div class="heartbeat__stat">
               <dt>{blockCount}</dt>
               <dd>blocks total</dd>
             </div>
-            <div class="heartbeat__stat heartbeat__stat--small">
-              <dt>{(weekBlocks.length / 7).toFixed(1)}</dt>
-              <dd>blocks / day · 7-day avg</dd>
-            </div>
           </dl>
-          <p class="heartbeat__since">since <time datetime={sinceDate}>{sinceDate}</time></p>
+          <p class="heartbeat__since">
+            since <time datetime={sinceDate}>{sinceDate}</time> ·
+            <span class="heartbeat__editorial">no traffic yet, still getting better every day</span>
+          </p>
         </div>
 
       </div>
@@ -325,6 +428,30 @@ const jsonLd = {
             </ul>
           </div>
         )}
+      </section>
+    )}
+
+    {/* ============== 2c. LEARNING NOTES ==============
+       Hand-curated "what we figured out lately" — editorial signal that
+       even at zero traffic, the project is improving. From
+       src/data/learning-notes.json. Cap at 5 visible. New notes go on
+       top in the file; older ones stay in the file but drop off the
+       homepage. */}
+    {recentLearnings.length > 0 && (
+      <section class="learnings" aria-label="Recent learnings">
+        <header class="learnings__head">
+          <p class="kicker">RECENT LEARNINGS · what we figured out</p>
+          <span class="learnings__cta mono">we are getting better and better</span>
+        </header>
+        <ul class="learnings__list">
+          {recentLearnings.map(n => (
+            <li class="learning">
+              <p class="learning__title">{n.title}</p>
+              <p class="learning__body">{n.body}</p>
+              <p class="learning__at mono">{n.at}</p>
+            </li>
+          ))}
+        </ul>
       </section>
     )}
 
@@ -594,11 +721,166 @@ const jsonLd = {
     font-size: 22px;
     color: var(--color-ink-soft);
   }
+  .heartbeat__denom {
+    font-size: 18px;
+    color: var(--color-ink-soft);
+    font-weight: 400;
+    letter-spacing: 0;
+    margin-left: 1px;
+  }
   .heartbeat__since {
     margin: 12px 0 0;
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--color-ink-soft);
+    line-height: 1.5;
+  }
+  .heartbeat__editorial {
+    color: #c4952e;
+    font-style: italic;
+  }
+
+  /* ============== TODAY'S ASK ============== */
+  .ask {
+    margin: 0 0 36px;
+    padding: 22px 24px;
+    background: #fff;
+    border: 1.5px solid #1f1b15;
+    border-left: 5px solid #c4952e;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(31, 27, 21, 0.15);
+  }
+  .ask__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 14px;
+  }
+  .ask .kicker { color: #1f1b15; }
+  .ask__rotates {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .ask__cards { position: relative; }
+  .ask__card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ask__card--hidden { display: none; }
+  .ask__card-row {
+    display: flex; align-items: baseline; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .ask__tag {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--color-ink);
+  }
+  .ask__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .ask__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .ask__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .ask__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .ask__tag[data-tag='MAKE']   { background: #e6e0e8; color: #4a3a5b; }
+  .ask__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .ask__tag[data-tag='DEEP']   { background: #d6dde6; color: #2a3a5b; }
+  .ask__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .ask__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .ask__tag[data-tag='AGENTS'] { background: #e0e0e0; color: #1f1b15; }
+  .ask__title {
+    font-family: var(--font-heading);
+    font-size: clamp(20px, 2.4vw, 28px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1f1b15;
+    margin: 0;
+    line-height: 1.15;
+  }
+  .ask__body {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-ink-soft);
+    max-width: 680px;
+  }
+  .ask__cta {
+    align-self: flex-start;
+    padding: 9px 16px;
+    background: #1f1b15;
+    color: #fdf2d6;
+    text-decoration: none;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px; letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: background 0.12s;
+  }
+  .ask__cta:hover {
+    background: #c4952e;
+    color: #1f1b15;
+  }
+
+  /* ============== RECENT LEARNINGS ============== */
+  .learnings {
+    margin: 0 0 48px;
+    padding: 22px 24px;
+    background: #fbf7ee;
+    border: 1.5px dashed #d8cdb8;
+    border-radius: 3px;
+  }
+  .learnings__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #d8cdb8;
+  }
+  .learnings__cta {
+    font-size: 11px; letter-spacing: 0.14em;
+    color: #c4952e;
+    text-transform: uppercase;
+    font-style: italic;
+  }
+  .learnings__list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px 22px;
+  }
+  .learning {
+    padding: 12px 14px;
+    background: #fff;
+    border-left: 3px solid #c4952e;
+    border-radius: 2px;
+  }
+  .learning__title {
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f1b15;
+    margin: 0 0 6px;
+    line-height: 1.3;
+  }
+  .learning__body {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 0 6px;
+  }
+  .learning__at {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--color-ink-soft);
+    margin: 0;
+    text-transform: uppercase;
   }
 
   /* ============== RECENT SHIPS ============== */
