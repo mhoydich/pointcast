@@ -498,15 +498,41 @@ const built = new Date().toISOString();
     let hits: boolean[] = [];     // per-beat hit/miss
     let userTaps: number[] = [];  // user tap times in ctx-time
     let startCtxTime = 0;
+    // Track every timer + scheduled audio source from this round so a
+    // mid-round restart can cancel them all (Codex review).
+    let pendingTimers: number[] = [];
+    let pendingClicks: AudioScheduledSourceNode[] = [];
+
+    function clearPending() {
+      pendingTimers.forEach(t => clearTimeout(t)); pendingTimers = [];
+      pendingClicks.forEach(s => { try { s.stop(); } catch {} try { s.disconnect(); } catch {} });
+      pendingClicks = [];
+    }
 
     function reset() {
+      clearPending();
       running = false; beatTimes = []; hits = []; userTaps = [];
       document.querySelectorAll('.ds__beat-dot').forEach(d => d.className = 'ds__beat-dot');
     }
 
+    // Tracked variant of playClick — returns the OscillatorNode so we can
+    // .stop() it on restart instead of letting it fire after the new round
+    // has begun.
+    function playClickTracked(when: number): OscillatorNode | null {
+      const c = ac(); const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'square'; o.frequency.value = 1800;
+      g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(0.20, when + 0.001); g.gain.exponentialRampToValueAtTime(0.001, when + 0.04);
+      o.connect(g); g.connect(c.destination); o.start(when); o.stop(when + 0.05);
+      return o;
+    }
+
     async function start() {
       const c = ac(); if (c.state === 'suspended') await c.resume();
+      // Disable start button while a round is in flight, so a fast double-click
+      // can't stack rounds with overlapping metronomes / early scoring.
+      const btn = $('beat-start') as HTMLButtonElement;
       reset();
+      btn.disabled = true;
       running = true;
       const beat = 60 / BPM;
       startCtxTime = c.currentTime + 0.5; // small delay to let user prepare
@@ -517,16 +543,21 @@ const built = new Date().toISOString();
       for (let i = 0; i < BEATS; i++) {
         const t = startCtxTime + i * beat;
         beatTimes.push(t);
-        playClick(t);
+        const src = playClickTracked(t); if (src) pendingClicks.push(src);
         // Visual cue
-        setTimeout(() => {
+        const tid = window.setTimeout(() => {
           if (!running) return;
           const dot = document.querySelector(`.ds__beat-dot[data-beat="${i}"]`) as HTMLDivElement;
           if (dot) { dot.classList.add('ds__beat-dot--cur'); setTimeout(() => dot.classList.remove('ds__beat-dot--cur'), 120); }
         }, (t - c.currentTime) * 1000);
+        pendingTimers.push(tid);
       }
-      // After last beat + tolerance window, score
-      setTimeout(() => { if (running) score(); }, ((BEATS - 1) * beat + TOLERANCE_MS / 1000 + 0.2) * 1000);
+      // After last beat + tolerance window, score and re-enable start.
+      const scoreTid = window.setTimeout(() => {
+        if (running) score();
+        btn.disabled = false;
+      }, ((BEATS - 1) * beat + TOLERANCE_MS / 1000 + 0.2) * 1000);
+      pendingTimers.push(scoreTid);
     }
 
     function tap() {
@@ -845,9 +876,17 @@ const built = new Date().toISOString();
 
     document.addEventListener('DOMContentLoaded', () => {
       $('rhythm-start')?.addEventListener('click', start);
+      // Rhythm pads — wire mousedown for low-latency mouse, touchstart for
+      // touch (no 300ms click delay), AND a debounced fallback click handler
+      // so keyboard Space/Enter on a focused pad still works (a11y, Codex).
       document.querySelectorAll<HTMLButtonElement>('#rhythm-pads .ds__pad').forEach(p => {
-        p.addEventListener('mousedown', () => tapPad(Number(p.dataset.pad)));
-        p.addEventListener('touchstart', (e) => { e.preventDefault(); tapPad(Number(p.dataset.pad)); }, { passive: false });
+        let lastFire = 0;
+        const fire = () => { const now = Date.now(); if (now - lastFire < 60) return; lastFire = now; tapPad(Number(p.dataset.pad)); };
+        p.addEventListener('mousedown', fire);
+        p.addEventListener('touchstart', (e) => { e.preventDefault(); fire(); }, { passive: false });
+        // Click is the keyboard activation event for a focused button.
+        // Browsers also fire it after mousedown — the debounce above stops doubles.
+        p.addEventListener('click', fire);
       });
       document.addEventListener('keydown', (e) => {
         if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'BUTTON') return;

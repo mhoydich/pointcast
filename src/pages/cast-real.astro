@@ -444,7 +444,11 @@ const built = new Date().toISOString();
   ];
 
   // ---------- Audio engine ----------
+  // Shared scheduler — see src/lib/audio-scheduler.ts. Codex review fix:
+  // pause() actually pauses, stop() stops scheduled drums.
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
   let ctx: AudioContext | null = null;
+  let sched: AudioScheduler | null = null;
   let masterBus: GainNode | null = null;
   let limiter: DynamicsCompressorNode | null = null;
   let reverbConv: ConvolverNode | null = null; let reverbSend: GainNode | null = null; let reverbReturn: GainNode | null = null;
@@ -454,6 +458,7 @@ const built = new Date().toISOString();
   function ac(): AudioContext {
     if (ctx) return ctx;
     ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    sched = createAudioScheduler(ctx);
     masterBus = ctx.createGain(); masterBus.gain.value = 0.85;
     limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -2.0; limiter.knee.value = 0.5; limiter.ratio.value = 18; limiter.attack.value = 0.001; limiter.release.value = 0.10;
@@ -476,28 +481,45 @@ const built = new Date().toISOString();
   }
 
   // ---------- Soundfont cache + loader ----------
+  // Codex review: CDN can hang, fail silently, or be blocked. Add a 12s
+  // timeout per instrument and fail fast with a clear toast so the user
+  // isn't trapped under a stuck loading overlay.
+  const SOUNDFONT_TIMEOUT_MS = 12000;
   const instrumentCache = new Map<string, any>();
   const inFlight = new Map<string, Promise<any>>();
+
+  function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const t = window.setTimeout(() => reject(new Error(`Timeout loading ${label}`)), ms);
+      p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+    });
+  }
 
   async function loadInstrument(name: string, dest: AudioNode | null = null): Promise<any> {
     if (instrumentCache.has(name)) return instrumentCache.get(name);
     if (inFlight.has(name)) return inFlight.get(name);
     const c = ac();
-    const p = (window as any).Soundfont.instrument(c, name, {
+    if (!(window as any).Soundfont) {
+      // Script tag failed to load (CDN block / SRI / network)
+      toast(`Soundfont library failed to load — refresh to retry`);
+      return null;
+    }
+    const fetchPromise = (window as any).Soundfont.instrument(c, name, {
       soundfont: 'MusyngKite',
       destination: dest || masterBus!,
-      // gain default 1.0
-    }).then((inst: any) => {
-      instrumentCache.set(name, inst);
-      inFlight.delete(name);
-      return inst;
-    }).catch((err: any) => {
-      console.error('soundfont load failed', name, err);
-      inFlight.delete(name);
-      // Surface error in UI
-      toast(`Failed to load ${name}`);
-      return null;
     });
+    const p = withTimeout<any>(fetchPromise, SOUNDFONT_TIMEOUT_MS, name)
+      .then((inst: any) => {
+        instrumentCache.set(name, inst);
+        inFlight.delete(name);
+        return inst;
+      })
+      .catch((err: any) => {
+        console.error('soundfont load failed', name, err);
+        inFlight.delete(name);
+        toast(`Couldn't load ${name} (${err?.message?.startsWith('Timeout') ? 'timed out' : 'failed'})`);
+        return null;
+      });
     inFlight.set(name, p);
     return p;
   }
@@ -507,15 +529,19 @@ const built = new Date().toISOString();
     return Array.from(new Set([k.lead, k.chord, k.bass]));
   }
 
-  async function loadKitForSong(s: Song, onProgress: (name: string, done: boolean) => void): Promise<{ lead: any; chord: any; bass: any }> {
+  async function loadKitForSong(s: Song, onProgress: (name: string, done: boolean) => void): Promise<{ lead: any; chord: any; bass: any } | null> {
     const a = ARTISTS.find(x => x.id === s.artistId)!;
     const k = KIT_INST[a.kit];
     const names = instrumentsForKit(a.kit);
     names.forEach(n => onProgress(n, instrumentCache.has(n)));
-    await Promise.all(names.map(async n => {
-      await loadInstrument(n);
-      onProgress(n, true);
+    // Track per-instrument success — if ANY instrument failed we bail and
+    // tell the caller, instead of silently degrading to drums-only.
+    const results = await Promise.all(names.map(async n => {
+      const inst = await loadInstrument(n);
+      onProgress(n, inst != null);
+      return inst != null;
     }));
+    if (results.some(ok => !ok)) return null;
     return { lead: instrumentCache.get(k.lead)!, chord: instrumentCache.get(k.chord)!, bass: instrumentCache.get(k.bass)! };
   }
 
@@ -540,8 +566,8 @@ const built = new Date().toISOString();
     subG.gain.exponentialRampToValueAtTime(0.001, when + len * 1.2);
     o.connect(g); g.connect(masterBus!);
     sub.connect(subG); subG.connect(masterBus!);
-    o.start(when); o.stop(when + len + 0.05);
-    sub.start(when); sub.stop(when + len * 1.2 + 0.05);
+    sched!.trackSource(o); o.start(when); o.stop(when + len + 0.05);
+    sched!.trackSource(sub); sub.start(when); sub.stop(when + len * 1.2 + 0.05);
   }
   function playSnare(when: number, kit: ArtistKitId) {
     const c = ac();
@@ -560,7 +586,7 @@ const built = new Date().toISOString();
     s.connect(f); f.connect(g); g.connect(masterBus!);
     // Send to reverb a bit
     const sg = c.createGain(); sg.gain.value = isBrush ? 0.40 : 0.25; g.connect(sg); sg.connect(reverbSend!);
-    s.start(when); s.stop(when + len + 0.05);
+    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
   }
   function playHat(when: number, type: 'closed' | 'open') {
     const c = ac();
@@ -576,7 +602,7 @@ const built = new Date().toISOString();
     g.gain.exponentialRampToValueAtTime(type === 'open' ? 0.16 : 0.13, when + 0.002);
     g.gain.exponentialRampToValueAtTime(0.001, when + len);
     s.connect(f); f.connect(g); g.connect(masterBus!);
-    s.start(when); s.stop(when + len + 0.05);
+    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
   }
 
   type DrumPattern = { kick: number[]; snare: number[]; hatClosed: number[]; hatOpen: number[] };
@@ -619,12 +645,15 @@ const built = new Date().toISOString();
   }
 
   // ---------- Sequencer ----------
-  let scheduledTimers: number[] = []; let activePlayers: any[] = [];
+  // activePlayers tracks soundfont-player handles (separate from sched.trackSource
+  // which only knows about Web Audio source nodes — soundfont returns its own
+  // handle objects).
+  let activePlayers: any[] = [];
   let currentSongIdx = 0; let currentSong: Song | null = null;
   let playStartCtxTime = 0; let playing = false; let rafId = 0;
   let onBarChange: ((bar: number, step: number) => void) | null = null;
   function clearScheduled() {
-    scheduledTimers.forEach(t => clearTimeout(t)); scheduledTimers = [];
+    if (sched) sched.stopAll(); // stops scheduled drum sources + auto-advance
     activePlayers.forEach(p => { try { p.stop && p.stop(); } catch {} });
     activePlayers = [];
     cancelAnimationFrame(rafId);
@@ -645,7 +674,7 @@ const built = new Date().toISOString();
     if (needsLoad) {
       showLoading(s, a, names);
     }
-    let kit;
+    let kit: { lead: any; chord: any; bass: any } | null;
     try {
       kit = await loadKitForSong(s, (name, done) => updateLoadingItem(name, done));
     } catch (e) {
@@ -654,6 +683,12 @@ const built = new Date().toISOString();
       return;
     }
     hideLoading();
+    if (!kit) {
+      // loadKitForSong returned null = at least one instrument failed.
+      // Toast was already shown by loadInstrument; bail out instead of
+      // silently degrading to drums-only.
+      return;
+    }
     if (currentSongIdx !== idx) return; // user changed songs while loading
 
     const beat = 60 / s.bpm; const step = beat / 4;
@@ -703,18 +738,25 @@ const built = new Date().toISOString();
       }
     });
 
-    // Auto-advance at end (filter out hop loops)
+    // Auto-advance scheduled in AudioContext-time so it parks on pause.
     const dur = songDurationSec(s);
     const next = (idx + 1) % SONGS.length;
-    const advTimer = window.setTimeout(() => playSong(next), Math.max((dur - 1.2) * 1000, 200));
-    scheduledTimers.push(advTimer);
+    sched!.schedule(() => playSong(next), startAt + dur - 1.2);
 
     playing = true; setPlayIcon(true); setBarMeta(s, a); setAmbient(s.color);
     runProgress(); render();
   }
 
-  function pause() { if (!ctx) return; ctx.suspend().catch(() => {}); playing = false; setPlayIcon(false); cancelAnimationFrame(rafId); }
-  function resume() { if (!ctx) { playSong(currentSongIdx); return; } ctx.resume().catch(() => {}); playing = true; setPlayIcon(true); runProgress(); }
+  function pause() {
+    if (!ctx || !sched) return;
+    sched.pause(); // suspends ctx + parks pending timers
+    playing = false; setPlayIcon(false); cancelAnimationFrame(rafId);
+  }
+  function resume() {
+    if (!ctx || !sched) { playSong(currentSongIdx); return; }
+    sched.resume(); // resumes ctx + re-arms parked timers
+    playing = true; setPlayIcon(true); runProgress();
+  }
   function stop() { clearScheduled(); playing = false; setPlayIcon(false); }
 
   function setPlayIcon(on: boolean) {
