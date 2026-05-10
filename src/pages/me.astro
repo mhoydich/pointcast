@@ -283,6 +283,26 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       </div>
     </section>
 
+    {/* ──────────── 5.7 BAR VARIANT (opt-in) ──────────── */}
+    <section class="me__band bar-toggle" aria-label="Bar variant">
+      <p class="me__eyebrow mono">BAR · BETA</p>
+      <div class="bar-toggle__row">
+        <div class="bar-toggle__copy">
+          <p class="bar-toggle__h">Walking bar v6.</p>
+          <p class="bar-toggle__dek">
+            Replaces the v5 dock with a horizontal slice of a pixel-art town —
+            5 buildings, your noun walks, companions follow, pets persist,
+            other visitors' nouns walk in your bar. v5 stays mounted underneath
+            for omnibox + spell casts. Stored in <code>pc:bar:v6</code>.
+          </p>
+        </div>
+        <button type="button" class="bar-toggle__btn mono" id="me-bar-toggle" data-state="off">
+          <span class="bar-toggle__btn-label">OFF</span>
+          <span class="bar-toggle__btn-sub">click to enable</span>
+        </button>
+      </div>
+    </section>
+
     {/* ──────────── 6. QUICK ACTIONS ──────────── */}
     <section class="me__band actions" aria-label="Quick actions">
       <p class="me__eyebrow mono">QUICK ACTIONS</p>
@@ -847,6 +867,32 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
 
   invRender();
 
+  // ─── Walking-bar v6 opt-in toggle ───────────────────────────────────
+  // Reads/writes pc:bar:v6 = 'on' | 'off' (or unset). When 'on', the
+  // global FooterBarV6 (mounted in BlockLayout) becomes visible.
+  const BAR_KEY = 'pc:bar:v6';
+  const barBtn = document.getElementById('me-bar-toggle');
+  function paintBarToggle() {
+    if (!barBtn) return;
+    let on = false;
+    try { on = localStorage.getItem(BAR_KEY) === 'on'; } catch (e) {}
+    barBtn.dataset.state = on ? 'on' : 'off';
+    const lbl = barBtn.querySelector('.bar-toggle__btn-label');
+    const sub = barBtn.querySelector('.bar-toggle__btn-sub');
+    if (lbl) lbl.textContent = on ? 'ON' : 'OFF';
+    if (sub) sub.textContent = on ? 'click to disable' : 'click to enable';
+    if (on) document.documentElement.classList.add('bar-v6-on');
+    else    document.documentElement.classList.remove('bar-v6-on');
+  }
+  barBtn?.addEventListener('click', () => {
+    let on = false;
+    try { on = localStorage.getItem(BAR_KEY) === 'on'; } catch (e) {}
+    const next = !on;
+    try { localStorage.setItem(BAR_KEY, next ? 'on' : 'off'); } catch (e) {}
+    paintBarToggle();
+  });
+  paintBarToggle();
+
   // Initial paint
   syncCurrentNoun();
   render();
@@ -1210,6 +1256,69 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     .inv__add-row { grid-template-columns: 1fr; }
     .inv__add-row--bottom { grid-template-columns: 1fr; }
     .inv__add-btn { width: 100%; }
+  }
+
+  /* BAR TOGGLE (v6 opt-in) */
+  .bar-toggle__row {
+    display: grid;
+    grid-template-columns: 1fr 160px;
+    gap: 16px;
+    align-items: center;
+  }
+  .bar-toggle__copy { min-width: 0; }
+  .bar-toggle__h {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-ink);
+    margin: 0 0 4px;
+  }
+  .bar-toggle__dek {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+  .bar-toggle__dek code {
+    background: var(--color-card);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .bar-toggle__btn {
+    cursor: pointer;
+    padding: 14px 12px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule);
+    border-left: 3px solid #6a6154;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    color: var(--color-ink);
+    text-align: center;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .bar-toggle__btn:hover { transform: translateY(-1px); }
+  .bar-toggle__btn[data-state='on'] {
+    border-left-color: #2f8f5f;
+    background: #f0f8f3;
+  }
+  .bar-toggle__btn-label {
+    display: block;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--color-ink);
+    margin-bottom: 3px;
+  }
+  .bar-toggle__btn[data-state='on'] .bar-toggle__btn-label { color: #2f8f5f; }
+  .bar-toggle__btn-sub {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  @media (max-width: 600px) {
+    .bar-toggle__row { grid-template-columns: 1fr; }
   }
 
   /* QUICK ACTIONS */
