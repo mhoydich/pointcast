@@ -322,6 +322,7 @@ const BUILDINGS = [
       const days = Math.max(0, Math.floor((Date.now() - new Date(pet.bornAt).getTime()) / 86400000));
       petSubEl.textContent = days === 0 ? 'adopted today' : 'with you for ' + days + (days === 1 ? ' day' : ' days');
     }
+    petRoot.title = pet.name + ' (' + (pet.emoji || spec.emoji) + ') · double-click to rename · right-click to release';
     petRoot.hidden = false;
   }
 
@@ -359,6 +360,23 @@ const BUILDINGS = [
     releasePet();
   });
 
+  // v6.3: double-click pet → rename. Single click is reserved for the
+  // hover-style nameplate (already shown on :hover via CSS).
+  function renamePet() {
+    const cur = petLoad();
+    if (!cur) return;
+    const next = window.prompt('Rename ' + cur.name + ' (' + cur.emoji + '). Type a new name (or cancel).', cur.name);
+    if (!next || !next.trim() || next === cur.name) return;
+    cur.name = next.trim().slice(0, 20);
+    petSave(cur);
+    petRender(cur);
+    showToast('✎ renamed → ' + cur.name);
+  }
+  petRoot?.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    renamePet();
+  });
+
   // Toast helper.
   const toastEl = document.getElementById('fbv6-toast');
   let toastTimer = null;
@@ -372,6 +390,67 @@ const BUILDINGS = [
 
   // Initial pet paint.
   petRender(petLoad());
+
+  // ─── v6.3: AMBIENT EMOTES ────────────────────────────────────────────
+  // Periodically pop a small floating emoji above a random walker (you,
+  // pet, companion, peer). Makes the bar feel socially alive even when
+  // there's no actual interaction. Slower at night (sleepy mode).
+  const EMOTES = ['👋', '✨', '🌊', '💭', '🌟', '🌸', '🍃', '☀️', '🫧'];
+  const PET_EMOTES = ['🐾', '💕', '✨', '🐾', '🌟'];
+  const NIGHT_EMOTES = ['💭', '🌙', '⭐', '✨', '🫧'];
+
+  function fireEmote(parentEl, emoji) {
+    if (!parentEl) return;
+    const span = document.createElement('span');
+    span.className = 'fbv6__emote';
+    span.textContent = emoji;
+    parentEl.appendChild(span);
+    setTimeout(() => {
+      if (span.parentNode === parentEl) parentEl.removeChild(span);
+    }, 2400);
+  }
+
+  function pickAmbientTarget() {
+    const candidates = [];
+    const walker = document.getElementById('fbv6-walker');
+    if (walker) candidates.push({ el: walker, kind: 'walker' });
+    if (petRoot && !petRoot.hidden) candidates.push({ el: petRoot, kind: 'pet' });
+    document.querySelectorAll('.fbv6__companion').forEach(c => candidates.push({ el: c, kind: 'companion' }));
+    document.querySelectorAll('.fbv6__peer').forEach(p => candidates.push({ el: p, kind: 'peer' }));
+    if (!candidates.length) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function ambientEmote() {
+    const target = pickAmbientTarget();
+    if (!target) return;
+    const isNight = !!document.querySelector('.fbv6__sky[data-mode="night"]');
+    let pool;
+    if (target.kind === 'pet') pool = PET_EMOTES;
+    else if (isNight) pool = NIGHT_EMOTES;
+    else pool = EMOTES;
+    const emoji = pool[Math.floor(Math.random() * pool.length)];
+    fireEmote(target.el, emoji);
+  }
+
+  function scheduleNextEmote() {
+    const isNight = !!document.querySelector('.fbv6__sky[data-mode="night"]');
+    const min = isNight ? 14000 : 7000;
+    const max = isNight ? 26000 : 16000;
+    const wait = min + Math.random() * (max - min);
+    setTimeout(() => {
+      // Only emit if the bar is actually visible (opted-in or /bar-v6).
+      if (document.documentElement.classList.contains('bar-v6-on')) {
+        ambientEmote();
+      }
+      scheduleNextEmote();
+    }, wait);
+  }
+  // First emote ~3-5s after mount so the bar isn't silent on entry.
+  setTimeout(() => {
+    if (document.documentElement.classList.contains('bar-v6-on')) ambientEmote();
+    scheduleNextEmote();
+  }, 3000 + Math.random() * 2000);
 
   // ─── v6.2: CROSS-VISITOR PEERS ───────────────────────────────────────
   // Other visitors' nouns walk in YOUR bar as ghost-translucent. We use
@@ -898,6 +977,27 @@ const BUILDINGS = [
   @keyframes fbv6-peer-fadein {
     from { opacity: 0; }
     to   { opacity: 0.78; }
+  }
+
+  /* AMBIENT EMOTES (v6.3) — small floating emoji that pop above any
+     walker/pet/companion/peer. Inherits the parent's transform (the
+     walk animation) so the emote rides along with whoever it's on. */
+  .fbv6__emote {
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    font-size: 16px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 10;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+    animation: fbv6-emote 2.4s ease-out forwards;
+  }
+  @keyframes fbv6-emote {
+    0%   { opacity: 0; transform: translate(-50%, 4px); }
+    15%  { opacity: 1; transform: translate(-50%, 0); }
+    70%  { opacity: 1; transform: translate(-50%, -10px); }
+    100% { opacity: 0; transform: translate(-50%, -18px); }
   }
 
   /* PET ADOPT/RELEASE TOAST */
