@@ -45,27 +45,35 @@ import { CHANNELS } from '../lib/channels';
 
 // Hand-placed buildings along the bar. `x` is percent-from-left.
 // Each is a kit slot — clicking navigates, hover shows the nameplate.
-// Heights varied so the silhouette has rhythm.
+// Heights varied so the silhouette has rhythm. `chimney` adds an
+// animated smoke puff (only on STUDIO and KETTLE — they're the
+// "working" buildings).
 const BUILDINGS = [
-  { id: 'kettle',   label: 'KETTLE',   sub: '/coffee',  x: 14, w: 44, h: 50, color: '#c4952e', glyph: '☕' },
-  { id: 'studio',   label: 'STUDIO',   sub: '/studio',  x: 31, w: 56, h: 64, color: '#1b3a5b', glyph: '✎' },
-  { id: 'drum',     label: 'DRUM',     sub: '/drum',    x: 50, w: 50, h: 58, color: '#8a2432', glyph: '◐' },
-  { id: 'window',   label: 'WINDOW',   sub: '/window',  x: 68, w: 48, h: 54, color: '#0f6e56', glyph: '◻' },
-  { id: 'desk',     label: 'YOUR DESK', sub: '/me',     x: 85, w: 52, h: 60, color: '#534ab7', glyph: '✦' },
+  { id: 'kettle',   label: 'KETTLE',   sub: '/coffee',  x: 14, w: 44, h: 50, color: '#c4952e', glyph: '☕', chimney: true  },
+  { id: 'studio',   label: 'STUDIO',   sub: '/studio',  x: 31, w: 56, h: 64, color: '#1b3a5b', glyph: '✎', chimney: true  },
+  { id: 'drum',     label: 'DRUM',     sub: '/drum',    x: 50, w: 50, h: 58, color: '#8a2432', glyph: '◐', chimney: false },
+  { id: 'window',   label: 'WINDOW',   sub: '/window',  x: 68, w: 48, h: 54, color: '#0f6e56', glyph: '◻', chimney: false },
+  { id: 'desk',     label: 'YOUR DESK', sub: '/me',     x: 85, w: 52, h: 60, color: '#534ab7', glyph: '✦', chimney: false },
 ];
 ---
 
 <aside class="fbv6" id="fbv6" aria-label="PointCast walking bar (v6 preview)">
 
-  {/* Sky band — gradient + a couple of cloud puffs.
-      Time-of-day class swaps in via JS on mount. */}
+  {/* Sky band — gradient + clouds + sun + stars.
+      Time-of-day phase computed continuously by JS (not bucketed) so
+      sunset blends from gold → coral → magenta → indigo over real
+      minutes. CSS reads --sky-top/mid/bot vars set by the JS. */}
   <div class="fbv6__sky" id="fbv6-sky">
     <span class="fbv6__cloud fbv6__cloud--a" aria-hidden="true"></span>
     <span class="fbv6__cloud fbv6__cloud--b" aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--1" aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--2" aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--3" aria-hidden="true"></span>
+    <span class="fbv6__star fbv6__star--4" aria-hidden="true"></span>
+    <span class="fbv6__star fbv6__star--5" aria-hidden="true"></span>
     <span class="fbv6__sun" aria-hidden="true" id="fbv6-sun"></span>
+    {/* Birds — JS-spawned occasional flyover. Container only. */}
+    <div class="fbv6__birds" id="fbv6-birds" aria-hidden="true"></div>
   </div>
 
   {/* Buildings — positioned absolutely, sit on top of the ground line. */}
@@ -78,10 +86,19 @@ const BUILDINGS = [
       >
         <a class="fbv6__building-link" href={b.sub}>
           <span class="fbv6__building-shape" aria-hidden="true">
+            <span class="fbv6__building-face" aria-hidden="true"></span>
             <span class="fbv6__building-window fbv6__building-window--1"></span>
             <span class="fbv6__building-window fbv6__building-window--2"></span>
             <span class="fbv6__building-glyph" aria-hidden="true">{b.glyph}</span>
             <span class="fbv6__building-roof" aria-hidden="true"></span>
+            {b.chimney && (
+              <span class="fbv6__chimney" aria-hidden="true">
+                <span class="fbv6__chimney-stack"></span>
+                <span class="fbv6__smoke fbv6__smoke--1"></span>
+                <span class="fbv6__smoke fbv6__smoke--2"></span>
+                <span class="fbv6__smoke fbv6__smoke--3"></span>
+              </span>
+            )}
           </span>
           <span class="fbv6__building-plate mono" aria-hidden="false">
             <strong>{b.label}</strong>
@@ -147,19 +164,124 @@ const BUILDINGS = [
 
 <script is:inline>
 (() => {
-  // ─── Time-of-day sky ─────────────────────────────────────────────────
+  // ─── Time-of-day sky (smooth, continuous) ────────────────────────────
+  // Mike 2026-05-09: "still kinda basic, can it get to apple like tho".
+  // Step 1: stop bucketing into 4 modes. Compute a 0..24 hour phase
+  // continuously and lerp between 8 anchor color stops every minute.
+  // Sky reads --sky-top / --sky-mid / --sky-bot CSS vars; sun reads
+  // --sun-x / --sun-y / --sun-color. Result: gold dawn → blue noon →
+  // coral sunset → magenta dusk → indigo night, all blending smoothly.
   const sky = document.getElementById('fbv6-sky');
   const sun = document.getElementById('fbv6-sun');
-  if (sky) {
-    const h = new Date().getHours();
-    let mode = 'midday';
-    if (h >= 5  && h < 11)  mode = 'morning';
-    else if (h >= 11 && h < 17) mode = 'midday';
-    else if (h >= 17 && h < 22) mode = 'evening';
-    else mode = 'night';
-    sky.dataset.mode = mode;
-    if (sun) sun.dataset.mode = mode;
+  const walkerLayer = null; // (placeholder; keeps the patch focused)
+
+  // Sky anchors: hour → [topColor, midColor, botColor]. 8 stops cover
+  // pre-dawn, sunrise, mid-morning, noon, golden, sunset, dusk, deep night.
+  const SKY_STOPS = [
+    [0,  ['#070418', '#150a26', '#241038']], // 00 — deep night
+    [5,  ['#1f1538', '#3a1f3e', '#5b2630']], // 05 — pre-dawn
+    [7,  ['#ffb56e', '#ff8a78', '#f3d8b8']], // 07 — sunrise
+    [10, ['#a8d8f0', '#c5e6f4', '#f0e6cf']], // 10 — mid-morning
+    [13, ['#7ec5ec', '#bde0f1', '#ede4cd']], // 13 — noon (slightly cooler)
+    [17, ['#ffb05c', '#ff8e63', '#f4c4a4']], // 17 — golden hour
+    [19, ['#ff7c4a', '#e84d6a', '#993556']], // 19 — sunset
+    [21, ['#5a2e6b', '#321031', '#170a26']], // 21 — dusk
+  ];
+  // Sun anchors: hour → [xPercent, yPx, color]. xPercent tracks east→west
+  // arc; y goes high at midday, low at edges.
+  const SUN_STOPS = [
+    [5,  [10, 50, '#ff8a4a']],
+    [7,  [22, 36, '#ffb56e']],
+    [11, [42, 14, '#ffe48a']],
+    [13, [54, 12, '#fff48a']],
+    [17, [78, 32, '#ff7a4a']],
+    [19, [92, 50, '#e84d6a']],
+  ];
+
+  function hexToRgb(h) {
+    const m = h.replace('#', '');
+    return [parseInt(m.slice(0,2),16), parseInt(m.slice(2,4),16), parseInt(m.slice(4,6),16)];
   }
+  function rgbToHex(r,g,b) {
+    const c = (n) => Math.round(n).toString(16).padStart(2, '0');
+    return '#' + c(r) + c(g) + c(b);
+  }
+  function lerpColor(a, b, t) {
+    const [r1,g1,b1] = hexToRgb(a), [r2,g2,b2] = hexToRgb(b);
+    return rgbToHex(r1 + (r2-r1)*t, g1 + (g2-g1)*t, b1 + (b2-b1)*t);
+  }
+  function lerpStops(stops, hourPhase) {
+    // Find bracket; wrap around 24h for last → first.
+    for (let i = 0; i < stops.length; i++) {
+      const [h0, v0] = stops[i];
+      const [h1, v1] = stops[(i + 1) % stops.length];
+      const span = (h1 > h0) ? (h1 - h0) : (24 - h0 + h1);
+      const cursor = (hourPhase >= h0 && (h1 > h0 ? hourPhase < h1 : true))
+        ? (hourPhase >= h0 ? hourPhase - h0 : (24 - h0 + hourPhase))
+        : null;
+      if (cursor === null) continue;
+      const t = Math.min(1, Math.max(0, cursor / span));
+      // Easing: smoothstep so transitions feel less linear.
+      const e = t * t * (3 - 2 * t);
+      // Interpolate each component.
+      if (Array.isArray(v0[0])) return v0; // shouldn't happen
+      const out = [];
+      for (let k = 0; k < v0.length; k++) {
+        if (typeof v0[k] === 'number') out.push(v0[k] + (v1[k] - v0[k]) * e);
+        else out.push(lerpColor(v0[k], v1[k], e));
+      }
+      return out;
+    }
+    return stops[0][1];
+  }
+
+  function paintSky() {
+    const now = new Date();
+    const hourPhase = now.getHours() + now.getMinutes() / 60;
+    const [top, mid, bot] = lerpStops(SKY_STOPS, hourPhase);
+    if (sky) {
+      sky.style.setProperty('--sky-top', top);
+      sky.style.setProperty('--sky-mid', mid);
+      sky.style.setProperty('--sky-bot', bot);
+      // Stars & sun visibility: night = sun.opacity 0, stars opacity 1.
+      // Compute "nightness" 0..1 from hour: peaks at 23-04, fades 5-7 + 19-22.
+      const h = hourPhase;
+      let nightness = 0;
+      if (h >= 22 || h < 5)      nightness = 1;
+      else if (h >= 5 && h < 7)  nightness = (7 - h) / 2;
+      else if (h >= 19 && h < 22) nightness = (h - 19) / 3;
+      sky.style.setProperty('--nightness', String(nightness.toFixed(3)));
+      // Keep data-mode for backwards-compat with selectors that branch
+      // on it (companion slowdown at night, etc.).
+      let mode = 'midday';
+      if (h >= 5  && h < 11)  mode = 'morning';
+      else if (h >= 11 && h < 17) mode = 'midday';
+      else if (h >= 17 && h < 22) mode = 'evening';
+      else mode = 'night';
+      sky.dataset.mode = mode;
+      // Walker shadow length scales with sun height: long at dawn/dusk,
+      // short at midday. Ranges 1.0–2.4 multiplier.
+      const sunHigh = Math.max(0, 1 - Math.abs(13 - h) / 8); // 0..1, peaks at noon
+      const shadowScale = 1.0 + (1 - sunHigh) * 1.4;
+      sky.style.setProperty('--shadow-scale', shadowScale.toFixed(2));
+    }
+    if (sun) {
+      // Determine sun position via SUN_STOPS — only fire during daylight.
+      const isDay = hourPhase >= 5 && hourPhase < 19;
+      if (!isDay) {
+        sun.style.opacity = '0';
+      } else {
+        const [sx, sy, sc] = lerpStops(SUN_STOPS, hourPhase);
+        sun.style.opacity = '1';
+        sun.style.left = sx + '%';
+        sun.style.top  = sy + 'px';
+        sun.style.background = sc;
+      }
+    }
+  }
+  paintSky();
+  // Re-paint every minute so the bar keeps shifting through the day.
+  setInterval(paintSky, 60000);
 
   // ─── Walker noun: load from pc:currentNoun (synced by /me) ────────────
   const walkerImg = document.getElementById('fbv6-walker-noun');
@@ -456,6 +578,35 @@ const BUILDINGS = [
     scheduleNextEmote();
   }, 3000 + Math.random() * 2000);
 
+  // ─── v7: BIRD FLYOVER ────────────────────────────────────────────────
+  // Occasional 'v'-shaped silhouette glides across the sky from one
+  // edge to the other. Rare ambient detail — fires every 45-120s.
+  // Direction alternates so the sky doesn't always feel one-way.
+  const birdsRoot = document.getElementById('fbv6-birds');
+  let birdDir = 1;
+  function spawnBird() {
+    if (!birdsRoot) return;
+    if (!document.documentElement.classList.contains('bar-v6-on')) return;
+    // Don't add birds to the deepest hours of night.
+    const h = new Date().getHours();
+    if (h >= 22 || h < 5) return;
+    const node = document.createElement('span');
+    node.className = 'fbv6__bird' + (birdDir > 0 ? '' : ' fbv6__bird--rev');
+    // Random altitude 6-22px from sky top.
+    node.style.top = (6 + Math.random() * 16) + 'px';
+    birdsRoot.appendChild(node);
+    setTimeout(() => {
+      if (node.parentNode === birdsRoot) birdsRoot.removeChild(node);
+    }, 7600);
+    birdDir = -birdDir;
+  }
+  function scheduleBird() {
+    const wait = 45000 + Math.random() * 75000;
+    setTimeout(() => { spawnBird(); scheduleBird(); }, wait);
+  }
+  // First bird ~10-25s after mount.
+  setTimeout(() => { spawnBird(); scheduleBird(); }, 10000 + Math.random() * 15000);
+
   // ─── v6.2: CROSS-VISITOR PEERS ───────────────────────────────────────
   // Other visitors' nouns walk in YOUR bar as ghost-translucent. We use
   // the existing PresenceRoom DO via /api/room with a synthetic key
@@ -689,23 +840,26 @@ const BUILDINGS = [
   }
   :global(html.bar-v6-on) .fbv6 { display: block; }
 
-  /* SKY — gradient + clouds + sun, swaps by data-mode. */
+  /* SKY — continuous gradient driven by --sky-* CSS vars set by JS
+     every minute. Falls back to a neutral evening if vars not set
+     (initial paint before JS runs). */
   .fbv6__sky {
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, #ffe7a0 0%, #ffc97a 35%, #ffa8b3 70%, #f3d8b8 100%);
-    transition: background 0.6s ease;
+    --sky-top: #ffe7a0;
+    --sky-mid: #ffc97a;
+    --sky-bot: #f3d8b8;
+    --nightness: 0;
+    --shadow-scale: 1;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-bot) 100%);
+    transition: background 1.2s ease;
   }
-  .fbv6__sky[data-mode='morning'] {
-    background: linear-gradient(180deg, #ffd180 0%, #ffaf6a 40%, #ff8597 75%, #f3d8b8 100%);
-  }
-  .fbv6__sky[data-mode='midday'] {
-    background: linear-gradient(180deg, #a8d8f0 0%, #c5e6f4 50%, #f0e6cf 100%);
-  }
-  .fbv6__sky[data-mode='evening'] {
-    background: linear-gradient(180deg, #ff7c4a 0%, #e84d6a 35%, #993556 70%, #321031 100%);
-  }
-  .fbv6__sky[data-mode='night'] {
-    background: linear-gradient(180deg, #0a0420 0%, #1a0820 50%, #2a163a 100%);
+  /* Subtle horizon haze — denser warm band where sky meets ground. */
+  .fbv6__sky::after {
+    content: '';
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 18px;
+    background: linear-gradient(180deg, transparent, rgba(255, 220, 170, 0.18));
+    pointer-events: none;
   }
   .fbv6__sky .fbv6__cloud {
     position: absolute; top: 12px;
@@ -722,17 +876,25 @@ const BUILDINGS = [
   }
   .fbv6__sky[data-mode='night'] .fbv6__cloud { display: none; }
 
-  /* Stars (night only) */
+  /* Stars — fade in proportional to --nightness (0..1), with a subtle
+     twinkle. Five stars now (was three) for a denser sky. */
   .fbv6__sky .fbv6__star {
     position: absolute; width: 2px; height: 2px;
     background: #fdf2d6; border-radius: 50%;
-    opacity: 0;
-    transition: opacity 0.6s ease;
+    opacity: calc(var(--nightness) * 0.95);
+    box-shadow: 0 0 4px rgba(253, 242, 214, 0.7);
+    transition: opacity 1.2s ease;
+    animation: fbv6-twinkle 4s ease-in-out infinite;
   }
-  .fbv6__star--1 { top: 10px;  left: 18%; }
-  .fbv6__star--2 { top: 18px;  left: 42%; }
-  .fbv6__star--3 { top: 8px;   left: 78%; }
-  .fbv6__sky[data-mode='night'] .fbv6__star { opacity: 0.85; }
+  .fbv6__star--1 { top: 10px;  left: 14%; animation-delay: -0.4s; }
+  .fbv6__star--2 { top: 18px;  left: 32%; animation-delay: -1.2s; }
+  .fbv6__star--3 { top: 8px;   left: 56%; animation-delay: -2.0s; }
+  .fbv6__star--4 { top: 22px;  left: 71%; animation-delay: -2.8s; }
+  .fbv6__star--5 { top: 12px;  left: 88%; animation-delay: -3.4s; }
+  @keyframes fbv6-twinkle {
+    0%, 100% { transform: scale(1);   filter: brightness(1); }
+    50%      { transform: scale(1.4); filter: brightness(1.5); }
+  }
 
   /* Sun — small dot in the sky, position by mode */
   .fbv6__sun {
@@ -779,15 +941,36 @@ const BUILDINGS = [
     border-top-right-radius: 2px;
     box-shadow:
       inset -2px 0 0 rgba(0,0,0,0.18),
-      inset 0 -3px 0 rgba(0,0,0,0.22);
-    transition: filter 0.18s ease, transform 0.18s ease;
+      inset 0 -3px 0 rgba(0,0,0,0.22),
+      0 2px 4px rgba(0, 0, 0, calc(0.10 + var(--nightness, 0) * 0.18));
+    transition:
+      filter 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Face — adds a subtle vertical gradient so the building has volume
+     instead of looking like a flat color block. The :before sits over
+     the parent fill at low opacity. */
+  .fbv6__building-face {
+    position: absolute; inset: 0;
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 30%, transparent 60%, rgba(0, 0, 0, 0.18) 100%),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.12) 100%);
+    pointer-events: none;
   }
   .fbv6__building-window {
     position: absolute;
     width: 6px; height: 6px;
     background: #fff8c0;
-    box-shadow: 0 0 6px rgba(255, 240, 140, 0.45);
+    /* At night the window glow swells from a 6px halo to a 14px halo
+       and the inner color warms slightly. --nightness drives both. */
+    box-shadow:
+      0 0 calc(6px + var(--nightness, 0) * 8px) rgba(255, 240, 140, calc(0.45 + var(--nightness, 0) * 0.35)),
+      0 0 calc(2px + var(--nightness, 0) * 4px) rgba(255, 220, 120, calc(0.35 + var(--nightness, 0) * 0.4));
     border-radius: 1px;
+    transition: box-shadow 1.2s ease, background 1.2s ease;
   }
   .fbv6__building-window--1 { top: 8px;  left: 6px; }
   .fbv6__building-window--2 { top: 8px;  right: 6px; }
@@ -796,15 +979,57 @@ const BUILDINGS = [
     transform: translateX(-50%);
     color: rgba(255, 248, 192, 0.85);
     font-size: 14px; line-height: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
   .fbv6__building-roof {
     position: absolute; top: -4px; left: -2px; right: -2px;
     height: 4px; background: var(--bc); filter: brightness(0.7);
     border-radius: 2px 2px 0 0;
   }
+
+  /* Chimney + smoke — chimney sits on the right edge of the roof,
+     three smoke puffs rise + drift + fade in offset cycles. */
+  .fbv6__chimney {
+    position: absolute;
+    top: -10px; right: 6px;
+    width: 5px; height: 8px;
+  }
+  .fbv6__chimney-stack {
+    position: absolute; inset: 0;
+    background: var(--bc); filter: brightness(0.55);
+    border-radius: 1px 1px 0 0;
+  }
+  .fbv6__smoke {
+    position: absolute;
+    bottom: 8px; left: 50%;
+    width: 5px; height: 5px;
+    background: rgba(245, 245, 245, 0.55);
+    border-radius: 50%;
+    transform: translate(-50%, 0) scale(0.4);
+    opacity: 0;
+    animation: fbv6-smoke 4.4s ease-out infinite;
+    filter: blur(0.4px);
+  }
+  .fbv6__smoke--1 { animation-delay: 0s; }
+  .fbv6__smoke--2 { animation-delay: 1.5s; }
+  .fbv6__smoke--3 { animation-delay: 3s; }
+  @keyframes fbv6-smoke {
+    0%   { opacity: 0;    transform: translate(-50%, 0) scale(0.4); }
+    20%  { opacity: 0.7;  }
+    100% { opacity: 0;    transform: translate(calc(-50% + 6px), -22px) scale(2.2); }
+  }
+  /* Smoke is wisp-grey at night for visibility against dark sky. */
+  .fbv6__sky[data-mode='night'] ~ * .fbv6__smoke,
+  .fbv6:has(.fbv6__sky[data-mode='night']) .fbv6__smoke {
+    background: rgba(220, 230, 240, 0.42);
+  }
   .fbv6__building:hover .fbv6__building-shape {
-    filter: brightness(1.18);
-    transform: translateY(-2px);
+    filter: brightness(1.18) saturate(1.08);
+    transform: translateY(-3px);
+    box-shadow:
+      inset -2px 0 0 rgba(0,0,0,0.18),
+      inset 0 -3px 0 rgba(0,0,0,0.22),
+      0 6px 14px rgba(0, 0, 0, calc(0.18 + var(--nightness, 0) * 0.22));
   }
 
   /* NAMEPLATE — floats above the building on hover */
@@ -823,7 +1048,10 @@ const BUILDINGS = [
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition:
+      opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
   }
   .fbv6__building-plate strong { display: block; font-weight: 700; }
   .fbv6__building-sub {
@@ -850,14 +1078,23 @@ const BUILDINGS = [
     width: 32px; height: 32px;
     image-rendering: pixelated;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
-    animation: fbv6-bob 0.6s ease-in-out infinite;
+    animation: fbv6-bob 0.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
+  /* Walker shadow — width scales with --shadow-scale (set by paintSky):
+     ~22px at noon, up to ~50px at dawn/dusk. Faded color too. */
   .fbv6__walker-shadow {
     position: absolute; bottom: -2px; left: 50%;
-    width: 22px; height: 4px;
-    background: rgba(0,0,0,0.18); border-radius: 50%;
+    width: calc(22px * var(--shadow-scale, 1));
+    height: 4px;
+    background: rgba(0, 0, 0, calc(0.20 - var(--nightness, 0) * 0.10));
+    border-radius: 50%;
     transform: translateX(-50%);
+    transition: width 1.2s ease, background 1.2s ease;
+    filter: blur(calc(var(--shadow-scale, 1) - 0.5px));
   }
+  /* fbv6-walk uses cubic-bezier easing so the loop has natural pacing
+     instead of metronome-linear motion. The flip points stay at 49/50
+     and 99/100 to keep the U-turn instant. */
   @keyframes fbv6-walk {
     0%   { left: -2%;   transform: scaleX(1); }
     49%  { left: 100%;  transform: scaleX(1); }
@@ -865,9 +1102,51 @@ const BUILDINGS = [
     99%  { left: -2%;   transform: scaleX(-1); }
     100% { left: -2%;   transform: scaleX(1); }
   }
+  /* The walker animation itself stays linear so position is predictable
+     for cross-visitor sync. Bob uses a sinusoidal easing so it feels
+     more like real walking. */
   @keyframes fbv6-bob {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-2px); }
+    0%, 100% { transform: translateY(0)    rotate(0deg); }
+    25%      { transform: translateY(-1px) rotate(-1deg); }
+    50%      { transform: translateY(-2px) rotate(0deg); }
+    75%      { transform: translateY(-1px) rotate(1deg); }
+  }
+
+  /* BIRDS — small 'v' silhouettes that drift across the sky. */
+  .fbv6__birds {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .fbv6__bird {
+    position: absolute;
+    left: -20px;
+    width: 9px; height: 5px;
+    background:
+      linear-gradient(135deg, transparent 45%, rgba(20, 14, 6, 0.55) 46%, rgba(20, 14, 6, 0.55) 54%, transparent 55%),
+      linear-gradient( 45deg, transparent 45%, rgba(20, 14, 6, 0.55) 46%, rgba(20, 14, 6, 0.55) 54%, transparent 55%);
+    background-size: 5px 5px;
+    background-position: 0 0, 5px 0;
+    background-repeat: no-repeat;
+    animation:
+      fbv6-bird-fly 7.2s linear forwards,
+      fbv6-bird-wing 0.32s ease-in-out infinite;
+  }
+  .fbv6__bird--rev {
+    animation:
+      fbv6-bird-fly-rev 7.2s linear forwards,
+      fbv6-bird-wing 0.32s ease-in-out infinite;
+  }
+  @keyframes fbv6-bird-fly {
+    from { left: -20px; }
+    to   { left: 110%;  }
+  }
+  @keyframes fbv6-bird-fly-rev {
+    from { left: 110%; transform: scaleX(-1); }
+    to   { left: -20px; transform: scaleX(-1); }
+  }
+  @keyframes fbv6-bird-wing {
+    0%, 100% { background-size: 5px 5px;     }
+    50%      { background-size: 5px 2.5px;   }
   }
   /* Slow walker at night so the bar feels sleepy */
   .fbv6__sky[data-mode='night'] ~ .fbv6__walker,
