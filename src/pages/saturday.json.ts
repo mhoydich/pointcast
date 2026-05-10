@@ -27,6 +27,7 @@ const JARS = [
       { name: 'limonene',      pct: 0.34 },
     ],
     batch: { jarred: '2026-04-29', no: 'B-2026-049', flower: 'whole nug · hand-trimmed' },
+    log: 'Heavy on the lid-pop — pine needle, diesel, a bottom note like fresh cut grass. Settles you into the chair within four breaths and stays in the room a long time.',
   },
   {
     strain: 'GOLDEN HOUR',
@@ -40,6 +41,7 @@ const JARS = [
       { name: 'pinene',        pct: 0.22 },
     ],
     batch: { jarred: '2026-05-02', no: 'B-2026-052', flower: 'whole nug · hand-trimmed' },
+    log: 'Tangerine peel and creamsicle. Easy on the lungs, fast on the conversation — the kind of jar that makes you want to walk somewhere with someone.',
   },
   {
     strain: 'EL SEGUNDO PINK',
@@ -53,6 +55,7 @@ const JARS = [
       { name: 'humulene',      pct: 0.28 },
     ],
     batch: { jarred: '2026-05-08', no: 'B-2026-058', flower: '1 of 1 · single-pheno run' },
+    log: 'Floral and sweet, rosewater on a sugar cube. The high is dreamy not heavy — golden-hour brain. Best shared, worst hoarded.',
   },
 ];
 
