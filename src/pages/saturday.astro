@@ -86,6 +86,39 @@ const JARS = [
 // so the visualization compares jars against each other, not in isolation.
 const TERP_MAX = Math.max(...JARS.flatMap((j) => j.terps.map((t) => t.pct)));
 
+// Pick the most recently jarred entry — gets the FRESH sticker.
+const FRESHEST_JARRED = JARS.reduce((acc, j) => (j.batch.jarred > acc ? j.batch.jarred : acc), '0000-00-00');
+
+// Each jar as a CreativeWork (not Product — nothing for sale, this is a
+// tribute) with genetics and effects exposed as additionalProperty so
+// agents can pick them up without scraping the DOM.
+const jarItems = JARS.map((jar) => ({
+  '@type': 'CreativeWork',
+  name: jar.strain,
+  alternateName: jar.cross,
+  genre: jar.type,
+  about: 'Cannabis flower — tribute, not for sale',
+  keywords: jar.effects.join(', '),
+  additionalProperty: [
+    { '@type': 'PropertyValue', name: 'genetics', value: jar.cross },
+    { '@type': 'PropertyValue', name: 'type', value: jar.type },
+    { '@type': 'PropertyValue', name: 'tier', value: jar.label },
+    ...jar.terps.map((t) => ({
+      '@type': 'PropertyValue',
+      name: `terpene:${t.name}`,
+      value: t.pct,
+      unitText: '%',
+    })),
+    ...jar.effects.map((e) => ({
+      '@type': 'PropertyValue',
+      name: 'effect',
+      value: e,
+    })),
+    { '@type': 'PropertyValue', name: 'batch', value: jar.batch.no },
+    { '@type': 'PropertyValue', name: 'jarred', value: jar.batch.jarred },
+  ],
+}));
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -95,6 +128,20 @@ const jsonLd = {
   url: canonical,
   inLanguage: 'en-US',
   isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website', name: 'PointCast' },
+  about: {
+    '@type': 'Organization',
+    name: '710 Labs',
+    url: 'https://710labs.com',
+  },
+  mainEntity: {
+    '@type': 'ItemList',
+    name: 'The Counter — three jars',
+    itemListElement: jarItems.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item,
+    })),
+  },
 };
 ---
 
@@ -181,10 +228,13 @@ const jsonLd = {
       <div class="sat__jars">
         {JARS.map((jar, i) => (
           <article
-            class={`sat__jar sat__jar--${i + 1}`}
+            class={`sat__jar sat__jar--${i + 1}${jar.batch.jarred === FRESHEST_JARRED ? ' is-fresh' : ''}`}
             style={`--jar-hue: ${jar.hue}; --jar-glow: ${jar.glow};`}
           >
             <div class="sat__jar-ribbon">{jar.label}</div>
+            {jar.batch.jarred === FRESHEST_JARRED && (
+              <div class="sat__jar-fresh" aria-label="Most recently jarred">FRESH</div>
+            )}
             <div class="sat__jar-glass">
               <div class="sat__jar-lid"></div>
               <div class="sat__jar-body">
@@ -572,9 +622,66 @@ const jsonLd = {
     color: #fff;
     text-shadow: 0 1px 0 var(--sat-line), 0 0 4px rgba(0,0,0,0.4);
   }
-  .sat__resident--1 { left: -20px; bottom: 12px; transform: rotate(-3deg); }
-  .sat__resident--2 { left: 50%; bottom: -8px; transform: translateX(-50%) rotate(2deg); }
-  .sat__resident--3 { right: -20px; bottom: 18px; transform: rotate(4deg); }
+  .sat__resident--1 {
+    left: -20px; bottom: 12px;
+    transform: rotate(-3deg);
+    animation: sat-idle-a 7.4s ease-in-out infinite;
+    animation-delay: -1.2s;
+  }
+  .sat__resident--2 {
+    left: 50%; bottom: -8px;
+    transform: translateX(-50%) rotate(2deg);
+    animation: sat-idle-b 8.8s ease-in-out infinite;
+    animation-delay: -3.4s;
+  }
+  .sat__resident--3 {
+    right: -20px; bottom: 18px;
+    transform: rotate(4deg);
+    animation: sat-idle-c 9.2s ease-in-out infinite;
+    animation-delay: -5.7s;
+  }
+  @keyframes sat-idle-a {
+    0%, 100% { transform: rotate(-3deg) translateY(0); }
+    50%      { transform: rotate(-2deg) translateY(-3px); }
+  }
+  @keyframes sat-idle-b {
+    0%, 100% { transform: translateX(-50%) rotate(2deg)  translateY(0); }
+    50%      { transform: translateX(-50%) rotate(2.6deg) translateY(-2px); }
+  }
+  @keyframes sat-idle-c {
+    0%, 100% { transform: rotate(4deg) translateY(0); }
+    50%      { transform: rotate(3deg) translateY(-3px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sat__resident--1, .sat__resident--2, .sat__resident--3 { animation: none; }
+  }
+
+  /* FRESH sticker — corner badge on most-recently-jarred jar */
+  .sat__jar.is-fresh {
+    box-shadow: 0 0 0 2px var(--jar-glow), 0 0 24px var(--jar-glow);
+  }
+  .sat__jar-fresh {
+    position: absolute;
+    top: -10px; right: -10px;
+    background: #fff;
+    color: #1a0f08;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border: 2px solid var(--sat-line);
+    box-shadow: 3px 3px 0 var(--sat-accent);
+    transform: rotate(8deg);
+    animation: sat-fresh-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes sat-fresh-pulse {
+    0%, 100% { transform: rotate(8deg) scale(1); }
+    50%      { transform: rotate(8deg) scale(1.06); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sat__jar-fresh { animation: none; }
+  }
 
   /* Counter */
   .sat__counter {
