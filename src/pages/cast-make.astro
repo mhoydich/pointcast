@@ -15,9 +15,18 @@ const built = new Date().toISOString();
           <button class="cm__btn cm__btn--ghost" id="cm-share" type="button" title="Share this composition as a URL">
             <span class="cm__btn-icon">⤴</span> share link
           </button>
+          <button class="cm__btn cm__btn--ghost" id="cm-export" type="button" title="Render to WAV and download">
+            <span class="cm__btn-icon">↓</span> download wav
+          </button>
         </div>
       </div>
     </header>
+
+    <!-- ============== EXAMPLES (curated starting points) ============== -->
+    <section class="cm__examples">
+      <p class="cm__examples-label">EXAMPLES · tap to load</p>
+      <div class="cm__examples-row" id="cm-examples"></div>
+    </section>
 
     <!-- ============== KIT PICKER ============== -->
     <section class="cm__section">
@@ -140,6 +149,31 @@ const built = new Date().toISOString();
   .cm__sub { font-family: var(--cm-body); font-size: 14.5px; color: var(--cm-text-mute); max-width: 560px; line-height: 1.6; margin: 0; }
   .cm__top-r { display: flex; gap: 8px; align-items: flex-start; }
   .cm__share-strip { display: flex; gap: 8px; }
+
+  /* Examples row — curated starting points */
+  .cm__examples { margin-bottom: 22px; padding: 14px 18px; background: linear-gradient(135deg, rgba(246,193,94,0.06), rgba(168,255,58,0.02)); border: 1px solid rgba(246,193,94,0.20); border-radius: 12px; }
+  .cm__examples-label { font-family: var(--cm-mono); font-size: 10px; color: var(--cm-flame); letter-spacing: 0.6px; text-transform: uppercase; margin: 0 0 10px 0; }
+  .cm__examples-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 640px) { .cm__examples-row { grid-template-columns: 1fr; } }
+  .cm__example {
+    background: rgba(244,231,200,0.04); border: 1px solid var(--cm-line); border-radius: 8px;
+    padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    text-align: left;
+  }
+  .cm__example:hover { background: rgba(244,231,200,0.10); border-color: var(--cm-flame); transform: translateY(-2px); }
+  .cm__example-art {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--ec, var(--cm-walnut)), var(--cm-velvet));
+    display: grid; place-items: center;
+  }
+  .cm__example-art img { width: 80%; image-rendering: pixelated; }
+  .cm__example-meta { min-width: 0; flex: 1; }
+  .cm__example-name { font-family: var(--cm-display); font-weight: 700; font-size: 13px; color: var(--cm-text); margin: 0; line-height: 1.2; }
+  .cm__example-tag { font-family: var(--cm-mono); font-size: 10px; color: var(--cm-text-quiet); margin: 2px 0 0 0; letter-spacing: 0.3px; }
+
+  .cm__btn--rendering { background: rgba(244,231,200,0.10); color: var(--cm-flame); border-color: var(--cm-flame); cursor: progress; }
+  .cm__btn--rendering:hover { transform: none; background: rgba(244,231,200,0.10); }
 
   .cm__section { margin-bottom: 28px; padding: 20px; background: var(--cm-glass); border: 1px solid var(--cm-line); border-radius: 12px; }
   .cm__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -356,8 +390,22 @@ const built = new Date().toISOString();
     return ctx;
   }
 
-  function playKick(when: number, style: Kit['drumStyle']) {
-    const c = ac(); const o = c.createOscillator(); const g = c.createGain();
+  // Voice = the audio "world" play* functions write into.
+  // For live playback: { ctx: AudioContext, dest: masterGain, track: sched.trackSource }.
+  // For offline render: { ctx: OfflineAudioContext, dest: offlineMaster, track: noop }.
+  // Same scheduling code reused for both.
+  interface Voice {
+    ctx: BaseAudioContext;
+    dest: AudioNode;
+    track: (node: AudioScheduledSourceNode) => void;
+  }
+  function liveVoice(): Voice {
+    ac();
+    return { ctx: ctx!, dest: masterGain!, track: (n) => sched!.trackSource(n) };
+  }
+
+  function playKick(v: Voice, when: number, style: Kit['drumStyle']) {
+    const c = v.ctx; const o = c.createOscillator(); const g = c.createGain();
     const peak = style === 'punch' ? 130 : 100;
     const tail = style === 'punch' ? 36 : 48;
     const len = style === 'punch' ? 0.40 : 0.30;
@@ -366,13 +414,13 @@ const built = new Date().toISOString();
     g.gain.setValueAtTime(0.001, when);
     g.gain.exponentialRampToValueAtTime(style === 'punch' ? 1.0 : 0.75, when + 0.005);
     g.gain.exponentialRampToValueAtTime(0.001, when + len);
-    o.connect(g); g.connect(masterGain!);
-    sched!.trackSource(o); o.start(when); o.stop(when + len + 0.05);
+    o.connect(g); g.connect(v.dest);
+    v.track(o); o.start(when); o.stop(when + len + 0.05);
   }
-  function playSnare(when: number, style: Kit['drumStyle']) {
-    const c = ac();
+  function playSnare(v: Voice, when: number, style: Kit['drumStyle']) {
+    const c = v.ctx;
     const len = style === 'soft' ? 0.26 : 0.18;
-    const noiseLen = c.sampleRate * len;
+    const noiseLen = Math.floor(c.sampleRate * len);
     const buf = c.createBuffer(1, noiseLen, c.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, style === 'soft' ? 1.0 : 1.6);
@@ -382,13 +430,13 @@ const built = new Date().toISOString();
     g.gain.setValueAtTime(0.001, when);
     g.gain.exponentialRampToValueAtTime(style === 'soft' ? 0.30 : 0.50, when + 0.005);
     g.gain.exponentialRampToValueAtTime(0.001, when + len);
-    s.connect(f); f.connect(g); g.connect(masterGain!);
-    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
+    s.connect(f); f.connect(g); g.connect(v.dest);
+    v.track(s); s.start(when); s.stop(when + len + 0.05);
   }
-  function playHat(when: number) {
-    const c = ac();
+  function playHat(v: Voice, when: number) {
+    const c = v.ctx;
     const len = 0.05;
-    const noiseLen = c.sampleRate * len;
+    const noiseLen = Math.floor(c.sampleRate * len);
     const buf = c.createBuffer(1, noiseLen, c.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, 0.6);
@@ -398,11 +446,11 @@ const built = new Date().toISOString();
     g.gain.setValueAtTime(0.001, when);
     g.gain.exponentialRampToValueAtTime(0.13, when + 0.002);
     g.gain.exponentialRampToValueAtTime(0.001, when + len);
-    s.connect(f); f.connect(g); g.connect(masterGain!);
-    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
+    s.connect(f); f.connect(g); g.connect(v.dest);
+    v.track(s); s.start(when); s.stop(when + len + 0.05);
   }
-  function playPad(when: number, freqs: number[], dur: number, kit: Kit) {
-    const c = ac();
+  function playPad(v: Voice, when: number, freqs: number[], dur: number, kit: Kit) {
+    const c = v.ctx;
     const isWarm = kit.drumStyle === 'soft';
     freqs.forEach((freq, i) => {
       const o = c.createOscillator(); const g = c.createGain();
@@ -411,12 +459,12 @@ const built = new Date().toISOString();
       g.gain.setValueAtTime(0.001, when);
       g.gain.linearRampToValueAtTime(0.10 / freqs.length, when + 0.30);
       g.gain.linearRampToValueAtTime(0.001, when + dur - 0.05);
-      o.connect(g); g.connect(masterGain!);
-      sched!.trackSource(o); o.start(when); o.stop(when + dur + 0.05);
+      o.connect(g); g.connect(v.dest);
+      v.track(o); o.start(when); o.stop(when + dur + 0.05);
     });
   }
-  function playLead(when: number, freq: number, dur: number, kit: Kit) {
-    const c = ac();
+  function playLead(v: Voice, when: number, freq: number, dur: number, kit: Kit) {
+    const c = v.ctx;
     const o = c.createOscillator(); const g = c.createGain(); const f = c.createBiquadFilter();
     if (kit.id === 'brass') {
       o.type = 'sawtooth'; f.type = 'lowpass'; f.frequency.value = 2200; f.Q.value = 1.2;
@@ -425,7 +473,7 @@ const built = new Date().toISOString();
       g.gain.setValueAtTime(0.001, when);
       g.gain.exponentialRampToValueAtTime(0.20, when + 0.04);
       g.gain.exponentialRampToValueAtTime(0.001, when + dur);
-      f2.connect(g); g.connect(masterGain!);
+      f2.connect(g); g.connect(v.dest);
     } else if (kit.id === 'block' || kit.id === 'friday') {
       o.type = 'square'; o.frequency.value = freq;
       f.type = 'lowpass'; f.frequency.setValueAtTime(400, when);
@@ -435,16 +483,42 @@ const built = new Date().toISOString();
       g.gain.setValueAtTime(0.001, when);
       g.gain.exponentialRampToValueAtTime(0.18, when + 0.005);
       g.gain.exponentialRampToValueAtTime(0.001, when + dur);
-      o.connect(f); f.connect(g); g.connect(masterGain!);
+      o.connect(f); f.connect(g); g.connect(v.dest);
     } else {
       o.type = 'triangle'; o.frequency.value = freq;
       f.type = 'lowpass'; f.frequency.value = 2400;
       g.gain.setValueAtTime(0.001, when);
       g.gain.exponentialRampToValueAtTime(0.16, when + 0.02);
       g.gain.exponentialRampToValueAtTime(0.001, when + dur);
-      o.connect(f); f.connect(g); g.connect(masterGain!);
+      o.connect(f); f.connect(g); g.connect(v.dest);
     }
-    sched!.trackSource(o); o.start(when); o.stop(when + dur + 0.05);
+    v.track(o); o.start(when); o.stop(when + dur + 0.05);
+  }
+
+  // Schedule one full 4-bar pass into a Voice starting at `start` in ctx-time.
+  // Used by both playOnce (live) and renderToWav (offline).
+  function scheduleComposition(v: Voice, c: Composition, start: number) {
+    const kit = KITS.find(k => k.id === c.kit)!;
+    const beat = 60 / c.bpm;
+    const step = beat / 4;
+    const lead = LEAD_SHAPES.find(s => s.id === c.lead)!;
+    for (let bar = 0; bar < 4; bar++) {
+      const barStart = start + bar * 4 * beat;
+      const chordSlot = c.chords[bar];
+      const chordHzs = chordToHzs(chordSlot, kit);
+      playPad(v, barStart, chordHzs, 4 * beat * 0.95, kit);
+      for (let i = 0; i < 16; i++) {
+        const t = barStart + i * step;
+        if (c.drums.kick[i])  playKick(v, t, kit.drumStyle);
+        if (c.drums.snare[i]) playSnare(v, t, kit.drumStyle);
+        if (c.drums.hat[i])   playHat(v, t);
+        const ev = lead.pattern[i];
+        if (ev.on) {
+          const hz = chordHzs[Math.min(ev.d, chordHzs.length - 1)] * 2;
+          playLead(v, t, hz, step * 1.6, kit);
+        }
+      }
+    }
   }
 
   function chordToHzs(slot: ChordSlot, kit: Kit): number[] {
@@ -465,33 +539,82 @@ const built = new Date().toISOString();
     cancelAnimationFrame(rafId);
     const start = c.currentTime + 0.05;
     playStartCtxTime = start;
-    const kit = KITS.find(k => k.id === comp.kit)!;
-    const beat = 60 / comp.bpm;
-    const step = beat / 4;
-    const lead = LEAD_SHAPES.find(s => s.id === comp.lead)!;
-
-    for (let bar = 0; bar < 4; bar++) {
-      const barStart = start + bar * 4 * beat;
-      const chordSlot = comp.chords[bar];
-      const chordHzs = chordToHzs(chordSlot, kit);
-      playPad(barStart, chordHzs, 4 * beat * 0.95, kit);
-      for (let i = 0; i < 16; i++) {
-        const t = barStart + i * step;
-        if (comp.drums.kick[i])  playKick(t, kit.drumStyle);
-        if (comp.drums.snare[i]) playSnare(t, kit.drumStyle);
-        if (comp.drums.hat[i])   playHat(t);
-        const ev = lead.pattern[i];
-        if (ev.on) {
-          const hz = chordHzs[Math.min(ev.d, chordHzs.length - 1)] * 2;
-          playLead(t, hz, step * 1.6, kit);
-        }
-      }
-    }
-
+    scheduleComposition(liveVoice(), comp, start);
     const dur = songSec(comp);
     sched!.schedule(() => playOnce(), start + dur);
-
     playing = true; setPlayBtn(true); runProgress();
+  }
+
+  // ------- Render-to-WAV (OfflineAudioContext) -------
+  async function renderToWav(c: Composition): Promise<Blob> {
+    const sampleRate = 44100;
+    const dur = songSec(c) + 1.0; // +1s tail for reverb-y decay
+    const offline = new OfflineAudioContext(2, Math.ceil(sampleRate * dur), sampleRate);
+    const masterOff = offline.createGain(); masterOff.gain.value = 0.7;
+    masterOff.connect(offline.destination);
+    const v: Voice = { ctx: offline, dest: masterOff, track: () => {} };
+    scheduleComposition(v, c, 0.05);
+    const buffer = await offline.startRendering();
+    return audioBufferToWavBlob(buffer);
+  }
+
+  // 16-bit PCM stereo WAV encoder. Returns a Blob with audio/wav mime.
+  function audioBufferToWavBlob(buf: AudioBuffer): Blob {
+    const numChannels = buf.numberOfChannels;
+    const sampleRate = buf.sampleRate;
+    const numSamples = buf.length;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = numSamples * blockAlign;
+    const headerSize = 44;
+    const totalSize = headerSize + dataSize;
+    const ab = new ArrayBuffer(totalSize);
+    const view = new DataView(ab);
+    let p = 0;
+    function w16(n: number) { view.setUint16(p, n, true); p += 2; }
+    function w32(n: number) { view.setUint32(p, n, true); p += 4; }
+    function wstr(s: string) { for (let i = 0; i < s.length; i++) { view.setUint8(p++, s.charCodeAt(i)); } }
+    wstr('RIFF'); w32(totalSize - 8); wstr('WAVE');
+    wstr('fmt '); w32(16); w16(1); w16(numChannels); w32(sampleRate); w32(byteRate); w16(blockAlign); w16(8 * bytesPerSample);
+    wstr('data'); w32(dataSize);
+    // Interleave channels
+    const chans: Float32Array[] = [];
+    for (let ch = 0; ch < numChannels; ch++) chans.push(buf.getChannelData(ch));
+    for (let i = 0; i < numSamples; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        let s = Math.max(-1, Math.min(1, chans[ch][i]));
+        // Convert to 16-bit signed PCM (round-half-away-from-zero)
+        s = s < 0 ? Math.max(-32768, Math.round(s * 32768)) : Math.min(32767, Math.round(s * 32767));
+        view.setInt16(p, s, true); p += 2;
+      }
+    }
+    return new Blob([ab], { type: 'audio/wav' });
+  }
+
+  async function exportWav() {
+    const btn = document.getElementById('cm-export') as HTMLButtonElement; if (!btn) return;
+    const original = btn.innerHTML;
+    btn.disabled = true; btn.classList.add('cm__btn--rendering');
+    btn.innerHTML = '<span class="cm__btn-icon">⌛</span> rendering…';
+    toast('Rendering — usually under 2s');
+    try {
+      const blob = await renderToWav(comp);
+      const url = URL.createObjectURL(blob);
+      const date = new Date().toISOString().slice(0, 10);
+      const name = `cast-make-${comp.kit}-${comp.bpm}bpm-${date}.wav`;
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      // Free the blob URL after the click — small delay so the browser can hand it off.
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast(`Saved ${name}`);
+    } catch (e: any) {
+      console.error('render failed', e);
+      toast(`Render failed (${e?.message || 'unknown'})`);
+    } finally {
+      btn.disabled = false; btn.classList.remove('cm__btn--rendering');
+      btn.innerHTML = original;
+    }
   }
 
   function stop() {
@@ -716,7 +839,58 @@ const built = new Date().toISOString();
     }, 2400);
   }
 
-  function renderAll() { renderKits(); renderTempoUi(); renderChords(); renderDrums(); renderLead(); renderSlots(); }
+  // ------- Curated example compositions (one per kit) -------
+  // Each is encoded the same way as share() — so loading is just decodeComp.
+  // To craft new examples: build them in /cast-make, hit "share link", copy
+  // the hash, paste here.
+  const EXAMPLES: { name: string; tag: string; kitId: KitId; nounId: number; color: string; comp: Composition }[] = [
+    {
+      name: 'Pier walk', tag: 'fog · 84 BPM', kitId: 'fog', nounId: 313, color: '#9ed6f0',
+      comp: {
+        kit: 'fog', bpm: 84, chords: ['I', 'V', 'vi', 'IV'],
+        drums: { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
+        lead: 'phrase',
+      },
+    },
+    {
+      name: 'Five o clock', tag: 'friday · 124 BPM', kitId: 'friday', nounId: 612, color: '#ff5f7a',
+      comp: {
+        kit: 'friday', bpm: 124, chords: ['vi', 'IV', 'I', 'V'],
+        drums: { kick: [1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hat: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
+        lead: 'arp',
+      },
+    },
+    {
+      name: 'Brass on Main', tag: 'brass · 96 BPM', kitId: 'brass', nounId: 287, color: '#f6c15e',
+      comp: {
+        kit: 'brass', bpm: 96, chords: ['I', 'IV', 'V', 'I'],
+        drums: { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+        lead: 'horn',
+      },
+    },
+  ];
+
+  function renderExamples() {
+    const wrap = document.getElementById('cm-examples')!;
+    wrap.innerHTML = EXAMPLES.map((e, i) => `
+      <button class="cm__example" data-example="${i}" type="button">
+        <div class="cm__example-art" style="--ec: ${e.color};"><img src="https://noun.pics/${e.nounId}.svg" alt=""/></div>
+        <div class="cm__example-meta">
+          <p class="cm__example-name">${e.name}</p>
+          <p class="cm__example-tag">${e.tag}</p>
+        </div>
+      </button>
+    `).join('');
+    wrap.querySelectorAll<HTMLButtonElement>('[data-example]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.example);
+        comp = JSON.parse(JSON.stringify(EXAMPLES[idx].comp));
+        renderAll(); toast(`Loaded "${EXAMPLES[idx].name}" — hit play`);
+      });
+    });
+  }
+
+  function renderAll() { renderKits(); renderTempoUi(); renderChords(); renderDrums(); renderLead(); renderSlots(); renderExamples(); }
 
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll<HTMLDivElement>('.cm__chord-bar').forEach((bar, i) => {
@@ -740,6 +914,7 @@ const built = new Date().toISOString();
     });
 
     document.getElementById('cm-share')?.addEventListener('click', share);
+    document.getElementById('cm-export')?.addEventListener('click', exportWav);
 
     document.addEventListener('keydown', (e) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'BUTTON') return;
