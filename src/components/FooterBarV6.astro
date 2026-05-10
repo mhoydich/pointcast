@@ -263,6 +263,10 @@ const BUILDINGS = [
     const id = e?.detail?.id;
     if (typeof id === 'string' && COMPANION_KIND[id]) {
       spawnCompanion(id);
+      // v6.4: broadcast to other v6 bars so the cast appears in their
+      // bar too. broadcastCast() is a no-op if the WS isn't open or
+      // the visitor isn't opted into v6.
+      broadcastCast(id);
     }
   });
 
@@ -491,6 +495,48 @@ const BUILDINGS = [
 
   let peerWS = null;
   let peerSessions = new Map(); // sessionId -> { nounId, node, phaseDelay }
+  // v6.4: cross-room spell casts. We piggyback on the existing chat
+  // protocol — chat msg with prefix "__cast__:<spell-id>" is treated
+  // as a cast broadcast. Sender's sid is excluded so we don't double-
+  // spawn locally.
+  const CAST_PREFIX = '__cast__:';
+  const mySid = getOrMakeBarSession();
+  let connectedAt = 0;          // set when WS opens; stale-cast guard
+  const seenCastAt = new Set(); // dedupe replays
+
+  function broadcastCast(spellId) {
+    if (!peerWS || peerWS.readyState !== WebSocket.OPEN) return;
+    if (typeof spellId !== 'string' || !COMPANION_KIND[spellId]) return;
+    try {
+      peerWS.send(JSON.stringify({ type: 'chat', msg: CAST_PREFIX + spellId }));
+    } catch (e) {}
+  }
+
+  function onChat(chat) {
+    if (!Array.isArray(chat)) return;
+    for (const m of chat) {
+      if (!m || typeof m.msg !== 'string') continue;
+      if (!m.msg.startsWith(CAST_PREFIX)) continue;
+      // Skip self.
+      if (m.sid === mySid) continue;
+      // Dedupe replays (DO sends recent chat history on connect/reconnect).
+      const key = (m.sid || '?') + ':' + (m.at || '?');
+      if (seenCastAt.has(key)) continue;
+      seenCastAt.add(key);
+      // Bound the dedupe set so it doesn't grow unbounded.
+      if (seenCastAt.size > 256) {
+        const first = seenCastAt.values().next().value;
+        seenCastAt.delete(first);
+      }
+      // Stale-cast guard: ignore casts older than 8s before we connected
+      // (= history dump on reconnect — we don't want a flood of fish/cats
+      // appearing in someone's bar just because they reloaded).
+      const at = m.at ? +new Date(m.at) : 0;
+      if (at && connectedAt && at < connectedAt - 8000) continue;
+      const spellId = m.msg.slice(CAST_PREFIX.length);
+      if (COMPANION_KIND[spellId]) spawnCompanion(spellId);
+    }
+  }
 
   function renderPeer(sid, nounId) {
     if (!peersRoot) return;
@@ -562,11 +608,10 @@ const BUILDINGS = [
       setTimeout(connectPeers, 600);
       return;
     }
-    const sid = getOrMakeBarSession();
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = proto + '//' + location.host + '/api/room?url=' +
                 encodeURIComponent('/__bar__') +
-                '&sid=' + encodeURIComponent(sid) +
+                '&sid=' + encodeURIComponent(mySid) +
                 '&kind=human';
     let ws;
     try { ws = new WebSocket(url); } catch (e) { return; }
@@ -575,6 +620,7 @@ const BUILDINGS = [
     let nounChangeListener = null;
 
     ws.addEventListener('open', () => {
+      connectedAt = Date.now();
       try {
         ws.send(JSON.stringify({
           type: 'identify',
@@ -602,6 +648,7 @@ const BUILDINGS = [
       try {
         const data = JSON.parse(e.data);
         if (data && Array.isArray(data.peers)) onPeers(data.peers);
+        if (data && Array.isArray(data.chat))  onChat(data.chat);
       } catch (err) {}
     });
 
