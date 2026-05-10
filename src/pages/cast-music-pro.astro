@@ -941,7 +941,12 @@ const built = new Date().toISOString();
   }
 
   // ---------- Audio engine ----------
+  // Shared scheduler — see src/lib/audio-scheduler.ts. Codex review fix:
+  // pause() now actually pauses, stop() stops scheduled sources, seek
+  // doesn't double-schedule.
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
   let ctx: AudioContext | null = null; let masterGain: GainNode | null = null; let convolver: ConvolverNode | null = null;
+  let sched: AudioScheduler | null = null;
   function ac(): AudioContext { if (!ctx) {
     ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     masterGain = ctx.createGain(); masterGain.gain.value = volume / 100;
@@ -951,13 +956,14 @@ const built = new Date().toISOString();
     for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2); }
     convolver.buffer = ir;
     const wet = ctx.createGain(); wet.gain.value = 0.18; convolver.connect(wet); wet.connect(masterGain);
+    sched = createAudioScheduler(ctx);
   } return ctx!; }
 
   function playKick(when: number, _vel = 1) {
     const c = ac(); const o = c.createOscillator(); const g = c.createGain();
     o.frequency.setValueAtTime(120, when); o.frequency.exponentialRampToValueAtTime(40, when + 0.18);
     g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(1.0, when + 0.005); g.gain.exponentialRampToValueAtTime(0.001, when + 0.36);
-    o.connect(g); g.connect(masterGain!); g.connect(convolver!); o.start(when); o.stop(when + 0.4);
+    o.connect(g); g.connect(masterGain!); g.connect(convolver!); sched!.trackSource(o); o.start(when); o.stop(when + 0.4);
   }
   function playSnare(when: number) {
     const c = ac(); const len = c.sampleRate * 0.20; const buf = c.createBuffer(1, len, c.sampleRate); const d = buf.getChannelData(0);
@@ -965,7 +971,7 @@ const built = new Date().toISOString();
     const s = c.createBufferSource(); s.buffer = buf;
     const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 1.2;
     const g = c.createGain(); g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(0.6, when + 0.005); g.gain.exponentialRampToValueAtTime(0.001, when + 0.18);
-    s.connect(f); f.connect(g); g.connect(masterGain!); g.connect(convolver!); s.start(when); s.stop(when + 0.22);
+    s.connect(f); f.connect(g); g.connect(masterGain!); g.connect(convolver!); sched!.trackSource(s); s.start(when); s.stop(when + 0.22);
   }
   function playBell(when: number) {
     const c = ac();
@@ -973,7 +979,7 @@ const built = new Date().toISOString();
       const o = c.createOscillator(); const g = c.createGain();
       o.frequency.value = freq; o.type = 'sine';
       g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(0.18 / (i + 1), when + 0.01); g.gain.exponentialRampToValueAtTime(0.001, when + 0.6);
-      o.connect(g); g.connect(masterGain!); g.connect(convolver!); o.start(when); o.stop(when + 0.7);
+      o.connect(g); g.connect(masterGain!); g.connect(convolver!); sched!.trackSource(o); o.start(when); o.stop(when + 0.7);
     });
   }
   function playLead(when: number, freq: number) {
@@ -981,7 +987,7 @@ const built = new Date().toISOString();
     o.type = 'sawtooth'; o.frequency.value = freq;
     f.type = 'lowpass'; f.frequency.value = 1800; f.Q.value = 1.4;
     g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(0.30, when + 0.02); g.gain.exponentialRampToValueAtTime(0.001, when + 0.20);
-    o.connect(f); f.connect(g); g.connect(masterGain!); g.connect(convolver!); o.start(when); o.stop(when + 0.24);
+    o.connect(f); f.connect(g); g.connect(masterGain!); g.connect(convolver!); sched!.trackSource(o); o.start(when); o.stop(when + 0.24);
   }
   const PENT = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
   function playPad(when: number) {
@@ -990,14 +996,14 @@ const built = new Date().toISOString();
       const o = c.createOscillator(); const g = c.createGain();
       o.type = 'sine'; o.frequency.value = freq;
       g.gain.setValueAtTime(0.001, when); g.gain.exponentialRampToValueAtTime(0.10, when + 0.30); g.gain.exponentialRampToValueAtTime(0.001, when + 1.20);
-      o.connect(g); g.connect(masterGain!); g.connect(convolver!); o.start(when); o.stop(when + 1.30);
+      o.connect(g); g.connect(masterGain!); g.connect(convolver!); sched!.trackSource(o); o.start(when); o.stop(when + 1.30);
     });
   }
 
   // ---------- Playback engine ----------
   let queue: Track[] = []; let qIdx = 0;
   let playing = false; let rafId = 0;
-  let trackStartCtxTime = 0; let trackPausedAt = 0; let stopFlag = false; let scheduledStops: number[] = [];
+  let trackStartCtxTime = 0;
   let crossfadeMs = 1200;
 
   function trackDuration(t: Track): number { const beat = 60 / t.bpm; return beat * 16; /* 1 bar of 16 steps */ }
@@ -1027,7 +1033,6 @@ const built = new Date().toISOString();
     const t = queue[qIdx];
     if (!t) return;
     const c = ac(); if (c.state === 'suspended') c.resume();
-    stopFlag = false;
     const start = c.currentTime + 0.03;
     trackStartCtxTime = start;
     const dur = scheduleTrack(t, start);
@@ -1038,18 +1043,27 @@ const built = new Date().toISOString();
     setAmbient(t.color);
     render(); // refresh playing-row
     runProgress();
-    // Schedule auto-advance with crossfade
-    const autoAdvanceAt = (dur - crossfadeMs / 1000) * 1000;
-    const tid = window.setTimeout(() => { if (!stopFlag) advance(true); }, Math.max(autoAdvanceAt, 200));
-    scheduledStops.push(tid);
+    // Auto-advance scheduled in AudioContext-time so it pauses with the audio.
+    sched!.schedule(() => advance(true), start + dur - crossfadeMs / 1000);
   }
 
-  function pause() { if (!ctx) return; ctx.suspend().catch(() => {}); playing = false; setPlayIcon(false); document.getElementById('cmp-bar')?.classList.remove('cmp__bar--playing'); cancelAnimationFrame(rafId); }
-  function resume() { if (!ctx) { play(); return; } ctx.resume().catch(() => {}); playing = true; setPlayIcon(true); document.getElementById('cmp-bar')?.classList.add('cmp__bar--playing'); runProgress(); }
+  function pause() {
+    if (!ctx || !sched) return;
+    sched.pause(); // suspends ctx + parks pending timers (incl. auto-advance)
+    playing = false; setPlayIcon(false);
+    document.getElementById('cmp-bar')?.classList.remove('cmp__bar--playing');
+    cancelAnimationFrame(rafId);
+  }
+  function resume() {
+    if (!ctx || !sched) { play(); return; }
+    sched.resume(); // resumes ctx + re-arms parked timers
+    playing = true; setPlayIcon(true);
+    document.getElementById('cmp-bar')?.classList.add('cmp__bar--playing');
+    runProgress();
+  }
 
   function stopAll() {
-    stopFlag = true;
-    scheduledStops.forEach(id => clearTimeout(id)); scheduledStops = [];
+    if (sched) sched.stopAll(); // stops every scheduled source + cancels timers
     cancelAnimationFrame(rafId);
   }
 
@@ -1568,16 +1582,23 @@ const built = new Date().toISOString();
     $('cmp-vol')!.addEventListener('input', (e) => { volume = Number((e.target as HTMLInputElement).value); lsSet(KEY.vol, volume); if (masterGain) masterGain.gain.setTargetAtTime(volume / 100, ac().currentTime, 0.05); });
     ($('cmp-vol') as HTMLInputElement).value = String(volume);
 
-    $('cmp-prog-track')!.addEventListener('click', (e) => {
-      const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect(); const pct = (e.clientX - r.left) / r.width;
-      const t = queue[qIdx]; if (!t) return; const dur = trackDuration(t);
-      stopAll(); const c = ac(); trackStartCtxTime = c.currentTime - dur * pct; scheduleTrack(t, c.currentTime - dur * pct + dur); /* approximate restart */
-      // Simplest: restart and seek visually only — Web Audio osc-graphs aren't seekable
+    $('cmp-prog-track')!.addEventListener('click', () => {
+      // Web Audio osc graphs aren't seekable. Just restart the track from the
+      // top — kills the leftover-schedule bug Codex caught.
+      const t = queue[qIdx]; if (!t) return;
       stopAll(); play();
     });
 
     $('cmp-search-input')!.addEventListener('input', (e) => { const q = (e.target as HTMLInputElement).value; const v = getView(); if (v.kind === 'search') { v.q = q; render(); } else pushView({ kind: 'search', q }); });
-    $('cmp-add-playlist')!.addEventListener('click', () => { const name = prompt('Playlist name?'); if (!name) return; const p = { id: 'user-'+Date.now(), name: name.trim().slice(0, 40), tracks: [], created: Date.now() }; userPlaylists.unshift(p); lsSet(KEY.userPlaylists, userPlaylists); renderUserPlaylists(); toast(`Created "${p.name}"`, 'plus'); });
+    $('cmp-add-playlist')!.addEventListener('click', () => {
+      const name = prompt('Playlist name?'); if (!name) return;
+      const trimmed = name.trim(); if (!trimmed) return;
+      // Cap total playlists at 50 — keeps localStorage bounded (Codex review).
+      if (userPlaylists.length >= 50) { toast('Playlist limit reached (50)', 'check'); return; }
+      const p = { id: 'user-'+Date.now(), name: trimmed.slice(0, 40), tracks: [], created: Date.now() };
+      userPlaylists.unshift(p); lsSet(KEY.userPlaylists, userPlaylists); renderUserPlaylists();
+      toast(`Created "${p.name}"`, 'plus');
+    });
 
     $('cmp-queue-clear')!.addEventListener('click', () => { stopAll(); queue = []; qIdx = 0; renderQueue(); updateBar(); document.getElementById('cmp-bar')?.classList.remove('cmp__bar--playing'); setPlayIcon(false); });
 
