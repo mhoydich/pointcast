@@ -63,9 +63,15 @@ const sinceDate = firstBlock
   : '2025-01-14';
 
 // ---------- Data: lead ----------
-// The lead is the latest block, framed editorially with a time-of-day
-// kicker. Always feels fresh because new blocks trigger a rebuild.
-const lead = allBlocks[0];
+// The lead is whatever the LATEST thing we shipped is — block OR feature
+// PR, whichever is newer. Mike 2026-05-08: "kinda not fresh" — the
+// homepage looked stale because the lead was a 1-day-old block while
+// 12 feature PRs had landed since. Ship-as-lead fixes that — every PR
+// I merge auto-becomes the lead until the next thing lands.
+const latestBlock = allBlocks[0];
+// `ships` is parsed below — we forward-declare the picked lead
+// variables and resolve them after ships exists. Done as a thunk to
+// keep the data section logically grouped.
 
 function timeOfDayKicker(d: Date): string {
   const h = d.getHours();
@@ -76,13 +82,7 @@ function timeOfDayKicker(d: Date): string {
 }
 
 const todayStr = now.toISOString().slice(0, 10);
-const leadKicker = `${timeOfDayKicker(now)} · ${todayStr}`;
-
-const leadChannel = lead ? CHANNELS[lead.data.channel] : null;
-const leadHref = lead?.data.external?.url
-  || (lead ? `/b/${lead.data.id}` : '#');
-const leadCta = (lead?.data.external?.label
-  || (lead?.data.type === 'READ' ? 'read the brief' : 'open block')) + ' →';
+const todayKicker = timeOfDayKicker(now);
 
 // ---------- Data: opmode ----------
 interface InFlightItem {
@@ -113,6 +113,29 @@ const ships = (shipsData as { updatedAt: string; updatedBy: string; ships: ShipI
 // Group shipped-today vs shipped-earlier-this-week for visual emphasis.
 const shipsToday = ships.filter(s => new Date(s.at) >= startOfToday);
 const shipsEarlier = ships.filter(s => new Date(s.at) < startOfToday).slice(0, 4);
+
+// ---------- LEAD: pick block vs ship by recency ----------
+const latestShip = ships[0] || null;
+const latestBlockAt = latestBlock ? +new Date(latestBlock.data.timestamp) : 0;
+const latestShipAt  = latestShip ? +new Date(latestShip.at) : 0;
+// Use ship-as-lead when the most recent ship is newer than the most
+// recent block. Any ship — even older ones — beats an even-older block.
+const useShipAsLead = !!latestShip && latestShipAt > latestBlockAt;
+
+// Block-lead variables (used when useShipAsLead is false).
+const lead = latestBlock;
+const leadKicker = `${todayKicker} · ${todayStr}`;
+const leadChannel = lead ? CHANNELS[lead.data.channel] : null;
+const leadHref = lead?.data.external?.url
+  || (lead ? `/b/${lead.data.id}` : '#');
+const leadCta = (lead?.data.external?.label
+  || (lead?.data.type === 'READ' ? 'read the brief' : 'open block')) + ' →';
+
+// Ship-lead variables (used when useShipAsLead is true).
+const shipLead = latestShip;
+const shipLeadKicker = shipLead
+  ? `${todayKicker} · ${todayStr} · FRESH SHIP ${shipLead.ref} · ${shipLead.tag}`
+  : '';
 
 // ---------- Data: asks (daily rotation) ----------
 // All asks render in the page; client-side JS picks today's by
@@ -239,8 +262,32 @@ const jsonLd = {
 <BlockLayout title={title} description={description} jsonLd={jsonLd}>
   <main class="home2027">
 
-    {/* ============== 1. THE LEAD ============== */}
-    {lead && (
+    {/* ============== 1. THE LEAD ==============
+       Mike 2026-05-08: "kinda not fresh" — the lead is now whatever we
+       SHIPPED most recently, block OR feature PR. Whichever happened
+       latest wins the hero slot. Each merge auto-becomes the lead. */}
+    {useShipAsLead && shipLead ? (
+      <section class="lead lead--ship" style="--ch-600: #c4952e; --ch-50: #fffaf0;">
+        <p class="lead__kicker">{shipLeadKicker}</p>
+        <h1 class="lead__title">{shipLead.title}</h1>
+        <div class="lead__row">
+          <a class="lead__cta" href={shipLead.href}>open it →</a>
+          <a class="lead__alt" href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged">all PRs →</a>
+          <span class="lead__by">
+            by <strong>cc</strong>
+            <span class="lead__dot">·</span>
+            <time datetime={shipLead.at}>{fmtRelative(shipLead.at)}</time>
+          </span>
+        </div>
+        {latestBlock && (
+          <p class="lead__alt-block">
+            ↓ latest content block: <a href={`/b/${latestBlock.data.id}`}>/{latestBlock.data.id} — {latestBlock.data.title}</a>
+            <span class="lead__dot">·</span>
+            <time datetime={latestBlock.data.timestamp}>{fmtRelative(latestBlock.data.timestamp)}</time>
+          </p>
+        )}
+      </section>
+    ) : lead && (
       <section
         class="lead"
         style={`--ch-600: ${leadChannel?.color600 || '#1f1b15'}; --ch-50: ${leadChannel?.color50 || '#f5efe4'};`}
@@ -592,6 +639,27 @@ const jsonLd = {
   }
   .lead__by strong { color: var(--color-ink); font-weight: 500; }
   .lead__dot { margin: 0 6px; }
+
+  /* Ship-as-lead variant: warm-gold accent + "next thing under" line. */
+  .lead--ship .lead__kicker { color: #c4952e; }
+  .lead__alt-block {
+    margin: 18px 0 0;
+    padding-top: 12px;
+    border-top: 1px dashed var(--color-rule);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .lead__alt-block a {
+    color: var(--color-ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .lead__alt-block a:hover {
+    color: #c4952e;
+    border-bottom-color: currentColor;
+  }
 
   /* ============== OPERATING MODE ============== */
   .opmode {
