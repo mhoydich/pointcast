@@ -7,14 +7,103 @@
  * page + the _redirects rule (which our build emits) gets us there.
  *
  * Mike 2026-05-06: rewrote from a dry "block IDs are immutable" notice
- * into something that actually helps a lost visitor — three plain
- * reasons they might have landed here, a tap-to-ring drum pad so the
- * dead end feels alive, a curated nav grid by mood, and a random-door
- * button for "just take me somewhere good."
+ * into something that actually helps a lost visitor.
+ *
+ * Mike 2026-05-09: "yah lets have this dynamic in a fun way" — now also
+ * surfaces (1) time-of-day kicker that rotates by hour, (2) a URL-aware
+ * "you might have meant..." that Levenshtein-matches the typed path
+ * against the auto-discovered route list, (3) today's ASK from the
+ * homepage rotation, (4) the 3 most recent ships, (5) a momentum line
+ * showing the current ship streak. The dead-letter office is now the
+ * liveliest 404 in town.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
+import { getCollection } from 'astro:content';
+import asksData from '../data/asks.json';
+import shipsData from '../data/recent-ships.json';
 const ch = CHANNELS.VST;
+
+// Auto-discovered route list — same trick as HomePlacesDirectory.
+// Shipped as JS to the client so the fuzzy-match runs in-browser
+// against the actual route inventory, not a static stale list.
+const allPageFiles = import.meta.glob('/src/pages/**/*.{astro,md,ts}', { eager: false });
+const allRoutes = Object.keys(allPageFiles)
+  .map((file) => {
+    let r = file.replace(/^\/src\/pages\//, '/');
+    r = r.replace(/\.(astro|md)$/, '');
+    r = r.replace(/\.ts$/, '');
+    r = r.replace(/\/index$/, '');
+    if (!r) r = '/';
+    return r;
+  })
+  .filter((r) => !r.includes('['))            // skip dynamic
+  .filter((r) => !r.startsWith('/admin'))     // operator
+  .filter((r) => !r.startsWith('/api'))       // server
+  .filter((r) => !r.startsWith('/data/'))     // fixtures
+  .filter((r) => r !== '/404')
+  .filter((r) => !/\.(json|txt|xml|rss)$/.test(r))
+  .sort();
+
+// Today's ASK — same client-side rotation as the homepage so a 404'd
+// visitor sees the same prompt for today.
+const asks = (asksData as { asks: Array<{ id: string; title: string; body: string; cta: string; ctaLabel: string; tag: string }> }).asks;
+
+// Recent ships — top 3 by date desc.
+const ships = (shipsData as { ships: Array<{ ref: string; title: string; href: string; tag: string; at: string }> }).ships
+  .slice()
+  .sort((a, b) => +new Date(b.at) - +new Date(a.at))
+  .slice(0, 3);
+
+// Ship streak — count consecutive days with any ship/block back from today.
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft));
+const now = new Date();
+const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const dayKeysShipped = new Set<string>();
+const fourteenDaysAgo = new Date(startOfToday);
+fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+for (const b of blocks) {
+  const d = new Date(b.data.timestamp);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+for (const s of (shipsData as { ships: Array<{ at: string }> }).ships) {
+  const d = new Date(s.at);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+let shipStreak = 0;
+{
+  const cursor = new Date(startOfToday);
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (!dayKeysShipped.has(key)) break;
+    shipStreak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+}
+const shipDays14 = dayKeysShipped.size;
+
+// Time-of-day phrase for the kicker.
+function timeOfDayPhrase(d: Date): string {
+  const h = d.getHours();
+  if (h >= 5  && h < 11) return 'MORNING DESK';
+  if (h >= 11 && h < 17) return 'MIDDAY · SHIP ROOM';
+  if (h >= 17 && h < 22) return 'EVENING DISPATCH';
+  return 'OVERNIGHT BUILD';
+}
+const todPhrase = timeOfDayPhrase(now);
+
+function fmtRelative(iso: string): string {
+  const t = new Date(iso);
+  const diffMs = +now - +t;
+  if (diffMs < 0) return 'just now';
+  const m = Math.round(diffMs / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return t.toISOString().slice(0, 10);
+}
 
 const NAV_GROUPS = [
   {
@@ -85,13 +174,74 @@ const RANDOM_DOORS = [
 >
   <div class="page" style={`--ch-600: ${ch.color600}; --ch-800: ${ch.color800}; --ch-50: ${ch.color50};`}>
     <header class="head">
-      <p class="code">CH.404 · DEAD LETTER OFFICE</p>
+      <p class="code">CH.404 · DEAD LETTER OFFICE · {todPhrase}</p>
       <h1>You hit an empty doorway.</h1>
       <p class="dek">
         That's fine — the broadcast keeps going around it. Here's what probably
         happened, plus a few ways back in.
       </p>
+      <p class="momentum mono">
+        ↳ <span id="dl-momentum">{shipStreak}-day ship streak · {shipDays14}/14 ship days · the broadcast did not stop</span>
+      </p>
     </header>
+
+    {/* "You might have meant…" — populated client-side from location.pathname.
+        Hidden until JS computes 1+ candidate via Levenshtein over the
+        auto-discovered route list. JS-off visitors just don't see it. */}
+    <section class="meant" id="dl-meant" hidden aria-label="You might have meant">
+      <p class="meant__hed mono">YOU TYPED <code id="dl-typed">/</code> · YOU MIGHT HAVE MEANT</p>
+      <ul class="meant__list" id="dl-meant-list"></ul>
+    </section>
+
+    {/* Today's ASK — same daily rotation as the homepage. Plays the
+        editorial role of "while you're here, here's the one thing to
+        do today". JS-off visitors see the first ask. */}
+    {asks.length > 0 && (
+      <section class="dl-ask" aria-label="Today's ask">
+        <p class="dl-ask__hed mono">WHILE YOU'RE HERE · TODAY'S ASK</p>
+        <div class="dl-ask__cards" id="dl-ask-cards">
+          {asks.map((a, i) => (
+            <article class={`dl-ask__card${i === 0 ? '' : ' dl-ask__card--hidden'}`} data-ask-idx={i}>
+              <span class="dl-ask__tag" data-tag={a.tag}>{a.tag}</span>
+              <p class="dl-ask__title">{a.title}</p>
+              <p class="dl-ask__body">{a.body}</p>
+              <a class="dl-ask__cta" href={a.cta}>{a.ctaLabel} →</a>
+            </article>
+          ))}
+        </div>
+        <script is:inline>
+          (() => {
+            const cards = document.querySelectorAll('[data-ask-idx]');
+            if (!cards.length) return;
+            const day = Math.floor(Date.now() / 86400000);
+            const pick = day % cards.length;
+            cards.forEach((c, i) => {
+              if (i === pick) c.classList.remove('dl-ask__card--hidden');
+              else c.classList.add('dl-ask__card--hidden');
+            });
+          })();
+        </script>
+      </section>
+    )}
+
+    {/* Recent ships — last 3, dense rows with tag pills + relative time. */}
+    {ships.length > 0 && (
+      <section class="dl-ships" aria-label="Recent ships">
+        <p class="dl-ships__hed mono">FRESH FROM TONIGHT · 3 RECENT SHIPS</p>
+        <ul class="dl-ships__list">
+          {ships.map((s) => (
+            <li class="dl-ship">
+              <a class="dl-ship__link" href={s.href}>
+                <span class="dl-ship__ref">{s.ref}</span>
+                <span class="dl-ship__tag" data-tag={s.tag}>{s.tag}</span>
+                <span class="dl-ship__title">{s.title}</span>
+                <span class="dl-ship__rel">{fmtRelative(s.at)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <section class="reasons" aria-label="Why you're here">
       <ol>
@@ -166,7 +316,7 @@ const RANDOM_DOORS = [
   </div>
 </BlockLayout>
 
-<script is:inline define:vars={{ doors: RANDOM_DOORS }}>
+<script is:inline define:vars={{ doors: RANDOM_DOORS, allRoutes }}>
   // Bell pad — five taps with a Web Audio chime per tap, ascending pitch.
   const pad = document.getElementById('bell-pad');
   const count = document.getElementById('bell-count');
@@ -216,6 +366,57 @@ const RANDOM_DOORS = [
     const next = doors[Math.floor(Math.random() * doors.length)];
     window.location.href = next;
   });
+
+  // ─── "You might have meant…" ────────────────────────────────────────
+  // Levenshtein-match the typed path against the auto-discovered route
+  // list (baked at build time). Show top 3 within edit distance ≤ 5.
+  // Skips when typed path is "/" or already a real route.
+  (() => {
+    const typed = (location.pathname || '/').toLowerCase().replace(/\/+$/, '') || '/';
+    if (typed === '/' || typed === '/404') return;
+    if (!Array.isArray(allRoutes) || !allRoutes.length) return;
+    // If the typed path IS in the list, the visitor isn't lost — bail.
+    if (allRoutes.includes(typed)) return;
+
+    function lev(a, b) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+      const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+      for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+          dp[i][j] = a[i-1] === b[j-1]
+            ? dp[i-1][j-1]
+            : Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]) + 1;
+        }
+      }
+      return dp[a.length][b.length];
+    }
+
+    // Score: lower = better. Bonus for prefix matches.
+    const ranked = allRoutes
+      .map((r) => {
+        let d = lev(typed, r);
+        if (r.startsWith(typed))   d -= 2;
+        if (typed.startsWith(r))   d -= 1;
+        if (r.endsWith(typed.split('/').pop())) d -= 1;
+        return { r, d };
+      })
+      .filter((x) => x.d <= 5)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+
+    const meant = document.getElementById('dl-meant');
+    const list  = document.getElementById('dl-meant-list');
+    const typedEl = document.getElementById('dl-typed');
+    if (typedEl) typedEl.textContent = typed;
+    if (!meant || !list || !ranked.length) return;
+    list.innerHTML = ranked.map((x) => (
+      '<li><a class="meant__link" href="' + x.r + '"><span class="meant__route mono">' + x.r + '</span><span class="meant__dist mono">edit dist ' + Math.max(0, x.d) + '</span></a></li>'
+    )).join('');
+    meant.hidden = false;
+  })();
 </script>
 
 <style>
@@ -238,6 +439,183 @@ const RANDOM_DOORS = [
     margin: 0 0 14px;
   }
   .dek { font-size: 15px; color: var(--pc-ink-soft); margin: 0 0 32px; line-height: 1.55; }
+
+  /* Momentum line under the dek */
+  .momentum {
+    font-size: 11px;
+    color: var(--ch-800);
+    letter-spacing: 0.06em;
+    margin: -16px 0 32px;
+    padding: 8px 12px;
+    background: var(--ch-50);
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  /* You might have meant… */
+  .meant {
+    margin: 0 0 28px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .meant__hed {
+    font-size: 10px; letter-spacing: 0.16em;
+    color: var(--ch-800);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  .meant__hed code {
+    background: var(--ch-50);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+    color: var(--pc-ink);
+  }
+  .meant__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .meant__link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .meant__link:hover { background: var(--ch-50); }
+  .meant__route {
+    font-size: 13px; font-weight: 600;
+    color: var(--pc-ink);
+  }
+  .meant__dist {
+    font-size: 10px; letter-spacing: 0.06em;
+    color: var(--pc-ink-soft);
+  }
+
+  /* Today's ASK card on the 404 */
+  .dl-ask {
+    margin: 0 0 28px;
+    padding: 16px 18px;
+    border: 1.5px solid var(--pc-ink);
+    border-left: 4px solid var(--ch-600);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .dl-ask__hed {
+    font-size: 10px; letter-spacing: 0.16em;
+    color: var(--pc-ink);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  .dl-ask__cards { position: relative; }
+  .dl-ask__card { display: flex; flex-direction: column; gap: 6px; }
+  .dl-ask__card--hidden { display: none; }
+  .dl-ask__tag {
+    align-self: flex-start;
+    font-family: var(--pc-font-mono);
+    font-size: 9px; letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--pc-ink);
+  }
+  .dl-ask__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .dl-ask__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .dl-ask__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .dl-ask__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .dl-ask__tag[data-tag='MAKE']   { background: #e6e0e8; color: #4a3a5b; }
+  .dl-ask__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .dl-ask__tag[data-tag='DEEP']   { background: #d6dde6; color: #2a3a5b; }
+  .dl-ask__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .dl-ask__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .dl-ask__tag[data-tag='AGENTS'] { background: #e0e0e0; color: #1f1b15; }
+  .dl-ask__title {
+    font-family: var(--pc-font-sans);
+    font-size: 18px; font-weight: 600;
+    margin: 0;
+    color: var(--pc-ink);
+    line-height: 1.2;
+  }
+  .dl-ask__body {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+  }
+  .dl-ask__cta {
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 7px 12px;
+    background: var(--pc-ink);
+    color: #fff !important;
+    text-decoration: none;
+    border-radius: 2px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px; letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .dl-ask__cta:hover {
+    background: var(--ch-600);
+  }
+
+  /* Recent ships strip on 404 */
+  .dl-ships { margin: 0 0 28px; }
+  .dl-ships__hed {
+    font-size: 10px; letter-spacing: 0.16em;
+    color: var(--ch-800);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1.5px solid var(--ch-600);
+  }
+  .dl-ships__list { list-style: none; padding: 0; margin: 0; }
+  .dl-ship { margin: 0; }
+  .dl-ship__link {
+    display: grid;
+    grid-template-columns: 44px 60px 1fr 64px;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 4px;
+    text-decoration: none;
+    color: var(--pc-ink);
+    border-radius: 2px;
+    transition: background 0.12s;
+  }
+  .dl-ship__link:hover { background: var(--ch-50); }
+  .dl-ship__ref {
+    font-family: var(--pc-font-mono);
+    font-size: 11px; font-weight: 700;
+    color: var(--ch-800);
+  }
+  .dl-ship__tag {
+    font-family: var(--pc-font-mono);
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 2px 4px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--pc-ink);
+    line-height: 1.1;
+  }
+  .dl-ship__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .dl-ship__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .dl-ship__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .dl-ship__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .dl-ship__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .dl-ship__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .dl-ship__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .dl-ship__title { font-size: 13px; line-height: 1.4; color: var(--pc-ink); }
+  .dl-ship__rel { font-family: var(--pc-font-mono); font-size: 10px; color: var(--pc-ink-soft); justify-self: end; }
+  @media (max-width: 540px) {
+    .dl-ship__link { grid-template-columns: 38px 50px 1fr; }
+    .dl-ship__rel { display: none; }
+  }
 
   /* Reasons */
   .reasons { margin: 0 0 36px; }
