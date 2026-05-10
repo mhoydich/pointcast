@@ -43,6 +43,12 @@ const JARS = [
     cross: 'OG Kush × Triangle Kush',
     type: 'Indica-leaning hybrid',
     effects: ['relaxed', 'gassy', 'creative', 'porch-pace'],
+    terps: [
+      { name: 'myrcene',       pct: 0.92 },
+      { name: 'caryophyllene', pct: 0.61 },
+      { name: 'limonene',      pct: 0.34 },
+    ],
+    batch: { jarred: '2026-04-29', no: 'B-2026-049', flower: 'whole nug · hand-trimmed' },
   },
   {
     strain: 'GOLDEN HOUR',
@@ -52,6 +58,12 @@ const JARS = [
     cross: 'Tangie × Sunset Sherbet',
     type: 'Sativa-leaning hybrid',
     effects: ['uplift', 'focus', 'citrus', 'long talk'],
+    terps: [
+      { name: 'limonene',      pct: 1.04 },
+      { name: 'terpinolene',   pct: 0.48 },
+      { name: 'pinene',        pct: 0.22 },
+    ],
+    batch: { jarred: '2026-05-02', no: 'B-2026-052', flower: 'whole nug · hand-trimmed' },
   },
   {
     strain: 'EL SEGUNDO PINK',
@@ -61,8 +73,18 @@ const JARS = [
     cross: 'Pink Rozay × Ice Cream Cake',
     type: 'Balanced hybrid',
     effects: ['social', 'floral', 'dreamy', 'low-key'],
+    terps: [
+      { name: 'linalool',      pct: 0.71 },
+      { name: 'caryophyllene', pct: 0.55 },
+      { name: 'humulene',      pct: 0.28 },
+    ],
+    batch: { jarred: '2026-05-08', no: 'B-2026-058', flower: '1 of 1 · single-pheno run' },
   },
 ];
+
+// Highest pct across all jars — used to scale the terp bars consistently
+// so the visualization compares jars against each other, not in isolation.
+const TERP_MAX = Math.max(...JARS.flatMap((j) => j.terps.map((t) => t.pct)));
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -93,7 +115,7 @@ const jsonLd = {
 
     <header class="sat__head">
       <p class="sat__kicker mono">SATURDAY · WEEKEND BLOCK · LIVING DOC</p>
-      <h1 class="sat__title">A Saturday<br/><em>in El Segundo.</em></h1>
+      <h1 class="sat__title">A Saturday <em>in El Segundo.</em></h1>
       <p class="sat__lede">
         A porch at golden hour. Three jars on the counter. The residents are loafing
         and so are you. This block exists because saturdays deserve their own room.
@@ -176,9 +198,29 @@ const jsonLd = {
               <p class="sat__jar-strain">{jar.strain}</p>
               <p class="sat__jar-cross">{jar.cross}</p>
               <p class="sat__jar-type mono">{jar.type}</p>
+
               <ul class="sat__jar-effects" aria-label={`Effects of ${jar.strain}`}>
                 {jar.effects.map((e) => <li>{e}</li>)}
               </ul>
+
+              <div class="sat__jar-terps" aria-label={`Top terpenes in ${jar.strain}`}>
+                <p class="sat__jar-terps-head mono">TERPENES · TOP 3</p>
+                <ul>
+                  {jar.terps.map((t) => (
+                    <li>
+                      <span class="sat__jar-terp-name">{t.name}</span>
+                      <span class="sat__jar-terp-bar" aria-hidden="true">
+                        <span style={`width: ${(t.pct / TERP_MAX) * 100}%`}></span>
+                      </span>
+                      <span class="sat__jar-terp-pct mono">{t.pct.toFixed(2)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p class="sat__jar-batch mono">
+                jarred {jar.batch.jarred} · {jar.batch.no} · {jar.batch.flower}
+              </p>
             </div>
           </article>
         ))}
@@ -190,6 +232,25 @@ const jsonLd = {
         the next. This counter is a love letter to that craft. No
         transactions, no claims, just flower.
       </p>
+    </section>
+
+    {/* Soundtrack pointer */}
+    <section class="sat__sound" aria-label="Saturday soundtrack">
+      <div class="sat__sound-rail">
+        <p class="sat__sound-kicker mono">PLAYING ON THE PORCH</p>
+        <h2 class="sat__sound-title">Low volume, long set.</h2>
+        <p class="sat__sound-lede">
+          Saturday at the altar runs slow — long pads, brushed drums, a single
+          Noun on the kit. The track loops until someone changes it.
+        </p>
+        <a class="sat__sound-cta" href="/drum-altar">Open the drum altar →</a>
+      </div>
+      <ol class="sat__sound-set" aria-label="Today's set">
+        <li><span class="mono">A1</span> warm-up · brushed kit · 78 bpm</li>
+        <li><span class="mono">A2</span> el segundo edge · pads + bass</li>
+        <li><span class="mono">B1</span> golden hour · longest cut, 11 min</li>
+        <li><span class="mono">B2</span> porch lights · ambient, fade out</li>
+      </ol>
     </section>
 
     {/* Saturday-only wire */}
@@ -674,6 +735,140 @@ const jsonLd = {
     line-height: 1.55;
     color: #ffd9b8;
     max-width: 64ch;
+  }
+
+  /* Terpene profile */
+  .sat__jar-terps {
+    margin: 14px 0 8px;
+    padding: 10px 8px;
+    border-top: 1px dashed rgba(255, 214, 128, 0.35);
+    border-bottom: 1px dashed rgba(255, 214, 128, 0.35);
+  }
+  .sat__jar-terps-head {
+    font-size: 10px;
+    color: #ffd680;
+    margin: 0 0 8px;
+    text-align: left;
+  }
+  .sat__jar-terps ul {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    gap: 5px;
+  }
+  .sat__jar-terps li {
+    display: grid;
+    grid-template-columns: 88px 1fr 44px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #ffe7c2;
+    text-align: left;
+  }
+  .sat__jar-terp-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: #fff;
+  }
+  .sat__jar-terp-bar {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 214, 128, 0.12);
+    border: 1px solid rgba(255, 214, 128, 0.35);
+    overflow: hidden;
+  }
+  .sat__jar-terp-bar > span {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--jar-glow), #fff);
+    box-shadow: 0 0 8px var(--jar-glow);
+  }
+  .sat__jar-terp-pct {
+    font-size: 10px;
+    color: #ffd680;
+    text-align: right;
+  }
+
+  .sat__jar-batch {
+    margin: 8px 0 0;
+    font-size: 10px;
+    color: rgba(255, 231, 194, 0.6);
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  /* Soundtrack section */
+  .sat__sound {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+    margin: 28px 0;
+    padding: 22px;
+    border: 3px solid var(--sat-line);
+    background: linear-gradient(180deg, #fff7e6 0%, #ffe7c2 100%);
+    box-shadow: -8px 8px 0 var(--sat-accent-2);
+  }
+  @media (max-width: 720px) {
+    .sat__sound { grid-template-columns: 1fr; }
+  }
+  .sat__sound-kicker {
+    font-size: 11px;
+    color: var(--sat-accent);
+    margin: 0 0 6px;
+    letter-spacing: 0.08em;
+  }
+  .sat__sound-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(24px, 3vw, 36px);
+    margin: 0 0 10px;
+    line-height: 1.05;
+  }
+  .sat__sound-lede {
+    margin: 0 0 14px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--sat-ink);
+    max-width: 44ch;
+  }
+  .sat__sound-cta {
+    display: inline-block;
+    padding: 8px 14px;
+    background: var(--sat-line);
+    color: #ffe07a;
+    text-decoration: none;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border: 2px solid var(--sat-line);
+    box-shadow: 4px 4px 0 var(--sat-accent);
+  }
+  .sat__sound-cta:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--sat-accent);
+  }
+  .sat__sound-set {
+    list-style: none;
+    margin: 0; padding: 14px;
+    background: #fff;
+    border: 2px solid var(--sat-line);
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+  .sat__sound-set li {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 10px;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--sat-line);
+  }
+  .sat__sound-set li:last-child { border-bottom: 0; }
+  .sat__sound-set .mono {
+    color: var(--sat-accent-2);
+    font-weight: 700;
+    font-size: 11px;
   }
 
   /* Wire */
