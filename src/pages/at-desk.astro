@@ -1,0 +1,539 @@
+---
+/**
+ * /at-desk — a myYahoo-style dashboard.
+ *
+ * Mike 2026-05-11: "likely need an at desk which is what's interesting
+ * today current events, local, etc, need to try that, like a myyahoo".
+ *
+ * Different from /desk (the build log — Operating Mode, Recent Ships,
+ * Recent Learnings). /at-desk is a portal: small information boxes
+ * arranged in a grid, each with a colored header bar and 4-8 link
+ * rows underneath. Current events, hyperlocal, Mike's domains. Dense.
+ *
+ * Boxes (left to right, top to bottom):
+ *
+ *   - EL SEGUNDO TODAY    weather, tide hint, sunset, time-of-day
+ *   - FROM THE BROADCAST  latest 5 blocks (real, from collection)
+ *   - HACKER NEWS         top 5 stories (build-time fetch, 2.5s timeout)
+ *   - COORDINATION        Nouns / Tezos / DAOs links
+ *   - COURT               pickleball — The Squeeze, paddles, exchanges
+ *   - GOOD FEELS          cannabis intel
+ *   - CARTOGRAPHY         pilot offer + recent thinking
+ *   - THE GARDEN          mythos / residents / manifesto / protocol
+ *   - QUICK EXITS         the rest of the town
+ *
+ * Aesthetic: bordered colored-header boxes (geocities + sim city per
+ * Mike's stated PointCast aesthetic). Dense link lists, tight padding,
+ * retro-portal vibe. Not minimal-modern AI product.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+
+// ---------- Live El Segundo conditions ----------
+interface Weather {
+  ok: boolean;
+  tempF?: number;
+  condition?: string;
+  sunset?: string;
+}
+let weather: Weather = { ok: false };
+try {
+  const res = await fetch('https://pointcast.xyz/api/weather?lat=33.92&lng=-118.42&label=el-segundo', {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (res.ok) weather = await res.json();
+} catch { /* fall through to stub */ }
+const tempF = weather.tempF ?? 62;
+const condition = (weather.condition ?? 'overcast').toLowerCase();
+const sunsetISO = weather.sunset || null;
+const sunsetTime = sunsetISO
+  ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' }).format(new Date(sunsetISO))
+  : '~7:45 PM';
+
+// ---------- Time of day for El Segundo ----------
+const ptHourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false });
+const ptHour = parseInt(ptHourFmt.format(new Date()), 10);
+function todLabel(h: number) {
+  if (h >= 5 && h < 7)   return 'dawn';
+  if (h >= 7 && h < 11)  return 'morning';
+  if (h >= 11 && h < 14) return 'midday';
+  if (h >= 14 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 19) return 'sunset hour';
+  if (h >= 19 && h < 21) return 'dusk';
+  return 'overnight';
+}
+const tod = todLabel(ptHour);
+const todayStr = new Date().toISOString().slice(0, 10);
+
+// ---------- From the broadcast: latest 5 blocks ----------
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+const recentBlocks = allBlocks.slice(0, 5);
+const blockCount = allBlocks.length;
+
+// ---------- Hacker News top stories (build-time, capped, fail-soft) ----------
+interface HNStory {
+  id: number;
+  title: string;
+  url?: string;
+  score?: number;
+  descendants?: number;
+  by?: string;
+}
+let hnStories: HNStory[] = [];
+try {
+  const idsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (idsRes.ok) {
+    const ids: number[] = (await idsRes.json()).slice(0, 5);
+    const stories = await Promise.all(ids.map(async (id) => {
+      try {
+        const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, {
+          signal: AbortSignal.timeout(2000),
+        });
+        if (!r.ok) return null;
+        return await r.json() as HNStory;
+      } catch { return null; }
+    }));
+    hnStories = stories.filter((s): s is HNStory => !!s && !!s.title);
+  }
+} catch { /* leave empty */ }
+
+function hostOf(url?: string): string {
+  if (!url) return 'news.ycombinator.com';
+  try { return new URL(url).hostname.replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+// ---------- Channel color helpers ----------
+const ESC = CHANNELS.ESC;  // El Segundo
+const FD  = CHANNELS.FD;   // Front Door
+const CRT = CHANNELS.CRT;  // Court (pickleball)
+const GF  = CHANNELS.GF;   // Good Feels (cannabis)
+const GDN = CHANNELS.GDN;  // Garden
+const FCT = CHANNELS.FCT;  // Faucet (cartography lives here)
+const VST = CHANNELS.VST;  // Visit (broadcast)
+
+// ---------- SEO ----------
+const title = 'At the desk · PointCast';
+const description = `What's interesting today — El Segundo conditions, the latest from the broadcast, top stories on the wire, and Mike's domains. Updated each build.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="at-desk">
+
+    {/* ============== TOP STRIP ============== */}
+    <header class="at-desk__head">
+      <p class="at-desk__kicker mono">AT THE DESK · {todayStr} · EL SEGUNDO · {tod}</p>
+      <h1 class="at-desk__title">at the desk.</h1>
+      <p class="at-desk__strip mono">
+        <span class="at-desk__chip"><span class="at-desk__chip-k">temp</span> {tempF}°F</span>
+        <span class="at-desk__chip"><span class="at-desk__chip-k">sky</span> {condition}</span>
+        <span class="at-desk__chip"><span class="at-desk__chip-k">sunset</span> {sunsetTime}</span>
+        <span class="at-desk__chip"><span class="at-desk__chip-k">broadcast</span> {blockCount} blocks</span>
+      </p>
+    </header>
+
+    {/* ============== GRID ============== */}
+    <section class="at-desk__grid" aria-label="What's interesting today">
+
+      {/* EL SEGUNDO TODAY */}
+      <article class="pane" style={`--pane-h: ${ESC.color600}; --pane-bg: ${ESC.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">El Segundo today</span>
+          <span class="pane__h-tag mono">ESC</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/window"><b>The window</b> · {tempF}°F · {condition} · live sky</a></li>
+          <li class="pane__row"><a href="/tide"><b>The tide</b> · El Segundo + South Bay surf window</a></li>
+          <li class="pane__row"><a href="/gm"><b>Good morning</b> · daily El Segundo morning page</a></li>
+          <li class="pane__row"><a href="/coffee"><b>The coffee pot</b> · pour, shelf, mint</a></li>
+          <li class="pane__row"><a href="/areas"><b>Areas</b> · 25-mile beacon programs</a></li>
+          <li class="pane__row"><a href="/university-of-el-segundo"><b>UES</b> · learning tracks</a></li>
+        </ul>
+        <p class="pane__foot mono">sunset · {sunsetTime} PT</p>
+      </article>
+
+      {/* FROM THE BROADCAST */}
+      <article class="pane" style={`--pane-h: ${VST.color600}; --pane-bg: ${VST.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">From the broadcast</span>
+          <span class="pane__h-tag mono">VST</span>
+        </header>
+        <ul class="pane__list pane__list--blocks">
+          {recentBlocks.map(b => {
+            const ch = CHANNELS[b.data.channel];
+            const href = b.data.external?.url || `/b/${b.data.id}`;
+            return (
+              <li class="pane__row">
+                <a href={href}>
+                  <span class="pane__ch mono" style={`color: ${ch?.color600 || '#666'};`}>CH.{b.data.channel}</span>
+                  <span class="pane__t">{b.data.title}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+        <p class="pane__foot mono">
+          <a href="/wire">→ the wire</a> · <a href="/archive">→ {blockCount} blocks</a> · <a href="/blocks.json">/blocks.json</a>
+        </p>
+      </article>
+
+      {/* HACKER NEWS */}
+      <article class="pane" style={`--pane-h: ${FD.color600}; --pane-bg: ${FD.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">Hacker News · top stories</span>
+          <span class="pane__h-tag mono">HN</span>
+        </header>
+        {hnStories.length === 0 ? (
+          <p class="pane__empty">HN unreachable at build time. <a href="https://news.ycombinator.com">news.ycombinator.com →</a></p>
+        ) : (
+          <ul class="pane__list">
+            {hnStories.map((s, i) => (
+              <li class="pane__row pane__row--hn">
+                <a href={s.url || `https://news.ycombinator.com/item?id=${s.id}`}>
+                  <span class="pane__hn-rank mono">{i + 1}.</span>
+                  <span class="pane__t">{s.title}</span>
+                  <span class="pane__hn-meta mono">{s.score ?? 0}↑ · {hostOf(s.url)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="pane__foot mono">refreshed each build · <a href="https://news.ycombinator.com">news.ycombinator.com</a></p>
+      </article>
+
+      {/* COORDINATION */}
+      <article class="pane" style={`--pane-h: ${CHANNELS.BTL.color600}; --pane-bg: ${CHANNELS.BTL.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">Coordination</span>
+          <span class="pane__h-tag mono">BTL</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/manifesto"><b>The manifesto</b> · why this exists</a></li>
+          <li class="pane__row"><a href="/protocol"><b>The protocol</b> · how it works</a></li>
+          <li class="pane__row"><a href="/residents"><b>Residents</b> · 4 agents, 2 open slots</a></li>
+          <li class="pane__row"><a href="/mythos"><b>Mythos</b> · this place in 60 seconds</a></li>
+          <li class="pane__row"><a href="/investment-thesis"><b>Investment thesis</b> · the commercial frame</a></li>
+          <li class="pane__row"><a href="/nouns-nation-battler-bowl"><b>Nouns Battler · Lava Audit Bowl</b> · S4</a></li>
+        </ul>
+        <p class="pane__foot mono">tezos + nouns + cc0</p>
+      </article>
+
+      {/* COURT (pickleball) */}
+      <article class="pane" style={`--pane-h: ${CRT.color600}; --pane-bg: ${CRT.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">The court</span>
+          <span class="pane__h-tag mono">CRT</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/paddle-exchange"><b>Paddle exchange</b> · trade shelf</a></li>
+          <li class="pane__row"><a href="/play"><b>Play</b> · upcoming sessions + drills</a></li>
+        </ul>
+        <p class="pane__placeholder">
+          The Squeeze · Morgan · paddle scouting · South Bay venues — surfaces coming.
+        </p>
+        <p class="pane__foot mono">channel CRT · pickleball</p>
+      </article>
+
+      {/* GOOD FEELS (cannabis) */}
+      <article class="pane" style={`--pane-h: ${GF.color600}; --pane-bg: ${GF.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">Good Feels</span>
+          <span class="pane__h-tag mono">GF</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/cannabis"><b>Cannabis</b> · industry pulse</a></li>
+        </ul>
+        <p class="pane__placeholder">
+          SKU pipeline · strain research · Good Feels intel — surfaces coming.
+        </p>
+        <p class="pane__foot mono">channel GF · cannabis + hemp</p>
+      </article>
+
+      {/* CARTOGRAPHY */}
+      <article class="pane" style={`--pane-h: ${FCT.color600}; --pane-bg: ${FCT.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">Cartography</span>
+          <span class="pane__h-tag mono">FCT</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/cartography"><b>$50k pilot</b> · sprint goal: 3 paid by 2026-05-15</a></li>
+          <li class="pane__row"><a href="/ping?intent=cartography-pilot"><b>Talk pilot</b> · founder call intent</a></li>
+          <li class="pane__row"><a href="/cartography.json"><b>/cartography.json</b> · the manifest</a></li>
+        </ul>
+        <p class="pane__foot mono">100 accounts · 30 calls · 10 follow-ups</p>
+      </article>
+
+      {/* THE GARDEN */}
+      <article class="pane" style={`--pane-h: ${GDN.color600}; --pane-bg: ${GDN.color50};`}>
+        <header class="pane__h">
+          <span class="pane__h-name">The garden</span>
+          <span class="pane__h-tag mono">GDN</span>
+        </header>
+        <ul class="pane__list">
+          <li class="pane__row"><a href="/bath-house"><b>Bath house</b> · quiet room</a></li>
+          <li class="pane__row"><a href="/booth"><b>Booth</b> · sit-with-it</a></li>
+          <li class="pane__row"><a href="/anytime"><b>Anytime</b> · rooms that don't close</a></li>
+          <li class="pane__row"><a href="/time"><b>Time</b> · how PointCast keeps time</a></li>
+        </ul>
+        <p class="pane__foot mono">"a garden is slow on purpose."</p>
+      </article>
+
+      {/* QUICK EXITS */}
+      <article class="pane pane--exits">
+        <header class="pane__h">
+          <span class="pane__h-name">Quick exits</span>
+          <span class="pane__h-tag mono">/</span>
+        </header>
+        <ul class="pane__list pane__list--two-col">
+          <li><a href="/"><b>/</b> the front door</a></li>
+          <li><a href="/desk"><b>/desk</b> build log</a></li>
+          <li><a href="/wire"><b>/wire</b> live</a></li>
+          <li><a href="/archive"><b>/archive</b> all blocks</a></li>
+          <li><a href="/me"><b>/me</b> your noun</a></li>
+          <li><a href="/inventory"><b>/inventory</b> your kit</a></li>
+          <li><a href="/agents.json"><b>/agents.json</b> manifest</a></li>
+          <li><a href="/feed.xml"><b>/feed.xml</b> RSS</a></li>
+        </ul>
+        <p class="pane__foot mono">the rest of the town →</p>
+      </article>
+
+    </section>
+
+    <footer class="at-desk__foot mono">
+      at the desk · refreshed each build · {todayStr} · last lead: <a href={`/b/${recentBlocks[0]?.data.id}`}>/{recentBlocks[0]?.data.id} {recentBlocks[0]?.data.title}</a>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .at-desk {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 18px 80px;
+    font-family: var(--font-body);
+  }
+  .mono { font-family: var(--font-mono); }
+
+  /* ============== TOP STRIP ============== */
+  .at-desk__head {
+    text-align: center;
+    margin: 0 0 24px;
+    padding-bottom: 18px;
+    border-bottom: 2px solid #1f1b15;
+  }
+  .at-desk__kicker {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  .at-desk__title {
+    font-family: var(--font-heading);
+    font-size: clamp(34px, 5.5vw, 56px);
+    line-height: 1.02;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: #1f1b15;
+    letter-spacing: -0.02em;
+  }
+  .at-desk__strip {
+    display: inline-flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+  .at-desk__chip {
+    padding: 4px 10px;
+    background: #fbf7ee;
+    border: 1px solid #d8cdb8;
+    border-radius: 2px;
+    color: #1f1b15;
+    text-transform: lowercase;
+  }
+  .at-desk__chip-k {
+    color: var(--color-ink-soft);
+    margin-right: 6px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 9px;
+  }
+
+  /* ============== GRID ============== */
+  .at-desk__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 540px) {
+    .at-desk__grid { grid-template-columns: 1fr; gap: 12px; }
+  }
+
+  /* ============== PANE ============== */
+  .pane {
+    background: var(--pane-bg, #fbf7ee);
+    border: 1.5px solid #1f1b15;
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 0 #1f1b15;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .pane__h {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--pane-h, #1f1b15);
+    color: #fff;
+    padding: 6px 10px;
+    border-bottom: 1.5px solid #1f1b15;
+  }
+  .pane__h-name {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .pane__h-tag {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: #fff;
+  }
+  .pane__list {
+    list-style: none;
+    padding: 8px 10px;
+    margin: 0;
+    flex: 1;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .pane__list--two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+  }
+  .pane__list--two-col li { padding: 2px 0; }
+  .pane__list--blocks { padding: 6px 10px; }
+  .pane__row {
+    padding: 3px 0;
+    border-bottom: 1px dotted rgba(31, 27, 21, 0.18);
+  }
+  .pane__row:last-child { border-bottom: none; }
+  .pane__row a {
+    color: #1f1b15;
+    text-decoration: none;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+  }
+  .pane__row a b { font-weight: 600; color: #1f1b15; }
+  .pane__row a:hover { color: var(--pane-h, #c4952e); }
+  .pane__row a:hover b { color: var(--pane-h, #c4952e); }
+  .pane__list--two-col li a {
+    display: inline;
+    color: #1f1b15;
+    text-decoration: none;
+  }
+  .pane__list--two-col li a b {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin-right: 4px;
+    color: var(--color-ink-soft);
+  }
+  .pane__list--two-col li a:hover { color: var(--color-warm); }
+
+  .pane__ch {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    flex: 0 0 auto;
+  }
+  .pane__t { flex: 1 1 auto; }
+
+  .pane__row--hn a { flex-wrap: wrap; }
+  .pane__hn-rank {
+    font-size: 10px;
+    color: var(--color-ink-soft);
+    flex: 0 0 auto;
+  }
+  .pane__hn-meta {
+    font-size: 9px;
+    color: var(--color-ink-soft);
+    flex: 1 1 100%;
+    padding-left: 18px;
+    margin-top: 1px;
+    letter-spacing: 0.06em;
+  }
+
+  .pane__placeholder {
+    margin: 0 10px 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    background: rgba(255, 255, 255, 0.5);
+    border-left: 2px solid var(--pane-h, #c4952e);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .pane__empty {
+    margin: 12px 10px;
+    font-size: 12px;
+    color: var(--color-ink-soft);
+    font-style: italic;
+  }
+  .pane__empty a { color: var(--pane-h, #c4952e); }
+
+  .pane__foot {
+    margin: 0;
+    padding: 5px 10px;
+    background: rgba(31, 27, 21, 0.06);
+    border-top: 1px dotted rgba(31, 27, 21, 0.18);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .pane__foot a {
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+  }
+  .pane__foot a:hover { color: #1f1b15; }
+
+  .pane--exits {
+    background: #fbf7ee;
+    grid-column: span 1;
+  }
+  .pane--exits .pane__h {
+    background: #1f1b15;
+  }
+
+  /* ============== FOOT ============== */
+  .at-desk__foot {
+    margin: 28px 0 0;
+    padding: 14px 4px 0;
+    border-top: 1px dashed var(--color-rule);
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+  .at-desk__foot a {
+    color: var(--color-ink-soft);
+    border-bottom: 1px dotted currentColor;
+    text-decoration: none;
+  }
+  .at-desk__foot a:hover { color: #1f1b15; }
+</style>
