@@ -49,11 +49,11 @@ import { CHANNELS } from '../lib/channels';
 // animated smoke puff (only on STUDIO and KETTLE — they're the
 // "working" buildings).
 const BUILDINGS = [
-  { id: 'kettle',   label: 'KETTLE',   sub: '/coffee',  x: 14, w: 44, h: 50, color: '#c4952e', glyph: '☕', chimney: true  },
-  { id: 'studio',   label: 'STUDIO',   sub: '/studio',  x: 31, w: 56, h: 64, color: '#1b3a5b', glyph: '✎', chimney: true  },
-  { id: 'drum',     label: 'DRUM',     sub: '/drum',    x: 50, w: 50, h: 58, color: '#8a2432', glyph: '◐', chimney: false },
-  { id: 'window',   label: 'WINDOW',   sub: '/window',  x: 68, w: 48, h: 54, color: '#0f6e56', glyph: '◻', chimney: false },
-  { id: 'desk',     label: 'YOUR DESK', sub: '/me',     x: 85, w: 52, h: 60, color: '#534ab7', glyph: '✦', chimney: false },
+  { id: 'kettle',   label: 'KETTLE',   sub: '/coffee',  x: 14, w: 44, h: 50, color: '#c4952e', glyph: '☕', chimney: true,  vitrine: '☕' },
+  { id: 'studio',   label: 'STUDIO',   sub: '/studio',  x: 31, w: 56, h: 64, color: '#1b3a5b', glyph: '✎', chimney: true,  vitrine: '✎' },
+  { id: 'drum',     label: 'DRUM',     sub: '/drum',    x: 50, w: 50, h: 58, color: '#8a2432', glyph: '◐', chimney: false, vitrine: '♪' },
+  { id: 'window',   label: 'WINDOW',   sub: '/window',  x: 68, w: 48, h: 54, color: '#0f6e56', glyph: '◻', chimney: false, vitrine: '👁' },
+  { id: 'desk',     label: 'YOUR DESK', sub: '/me',     x: 85, w: 52, h: 60, color: '#534ab7', glyph: '✦', chimney: false, vitrine: '✦' },
 ];
 ---
 
@@ -64,8 +64,15 @@ const BUILDINGS = [
       sunset blends from gold → coral → magenta → indigo over real
       minutes. CSS reads --sky-top/mid/bot vars set by the JS. */}
   <div class="fbv6__sky" id="fbv6-sky">
-    <span class="fbv6__cloud fbv6__cloud--a" aria-hidden="true"></span>
-    <span class="fbv6__cloud fbv6__cloud--b" aria-hidden="true"></span>
+    {/* v9: PARALLAX CLOUDS — three altitudes at three different drift
+        speeds. High (small/fast/far), mid (standard), low (large/slow/
+        near). With the static skyline this gives genuine depth. All
+        respect --wind-mult so windy days drift proportionally faster. */}
+    <span class="fbv6__cloud fbv6__cloud--high1" aria-hidden="true"></span>
+    <span class="fbv6__cloud fbv6__cloud--high2" aria-hidden="true"></span>
+    <span class="fbv6__cloud fbv6__cloud--mid1"  aria-hidden="true"></span>
+    <span class="fbv6__cloud fbv6__cloud--mid2"  aria-hidden="true"></span>
+    <span class="fbv6__cloud fbv6__cloud--low1"  aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--1" aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--2" aria-hidden="true"></span>
     <span class="fbv6__star fbv6__star--3" aria-hidden="true"></span>
@@ -90,6 +97,11 @@ const BUILDINGS = [
       conditions. Container; JS populates by data-condition. */}
   <div class="fbv6__weather" id="fbv6-weather" aria-hidden="true"></div>
 
+  {/* v9: LIGHTNING — flashes in random pulses when weather is thunder.
+      Single empty element; CSS animation. JS adds .is-active when
+      weather.treatment === 'thunder'. */}
+  <div class="fbv6__lightning" id="fbv6-lightning" aria-hidden="true"></div>
+
   {/* Buildings — positioned absolutely, sit on top of the ground line. */}
   <ul class="fbv6__buildings">
     {BUILDINGS.map((b) => (
@@ -103,6 +115,13 @@ const BUILDINGS = [
             <span class="fbv6__building-face" aria-hidden="true"></span>
             <span class="fbv6__building-window fbv6__building-window--1"></span>
             <span class="fbv6__building-window fbv6__building-window--2"></span>
+            {/* v9: Vitrine — larger illuminated window. Mostly invisible
+                during the day; at night, glows warm and shows a tiny
+                silhouette specific to the building. ☕ for KETTLE, ✎ for
+                STUDIO, ♪ for DRUM, 👁 for WINDOW, ✦ for DESK. */}
+            <span class="fbv6__vitrine" aria-hidden="true">
+              <span class="fbv6__vitrine-scene" data-scene={b.id}>{b.vitrine}</span>
+            </span>
             <span class="fbv6__building-glyph" aria-hidden="true">{b.glyph}</span>
             <span class="fbv6__building-roof" aria-hidden="true"></span>
             {b.chimney && (
@@ -125,6 +144,16 @@ const BUILDINGS = [
 
   {/* Ground line + walking path. */}
   <div class="fbv6__ground" aria-hidden="true"></div>
+
+  {/* v9: STREET LAMPS — small posts between buildings, glow warm at
+      night. Almost invisible during the day. Lamp head opacity +
+      shadow swell driven by --nightness. */}
+  <div class="fbv6__lamps" aria-hidden="true">
+    <span class="fbv6__lamp" style="left: 22.5%"></span>
+    <span class="fbv6__lamp" style="left: 40.5%"></span>
+    <span class="fbv6__lamp" style="left: 59%"></span>
+    <span class="fbv6__lamp" style="left: 76.5%"></span>
+  </div>
 
   {/* Your noun — animated walk loop. Image src set on mount from
       pc:currentNoun localStorage (falls back to random visit-noun). */}
@@ -676,6 +705,12 @@ const BUILDINGS = [
     // Set wind hint as CSS var so clouds drift faster on windy days.
     const wind = Number(data.windSpeed) || 3;
     if (sky) sky.style.setProperty('--wind-mult', String(Math.max(0.3, Math.min(2.5, wind / 6))));
+
+    // v9: Toggle the lightning layer for thunder.
+    const lightning = document.getElementById('fbv6-lightning');
+    if (lightning) {
+      lightning.classList.toggle('is-active', treatment === 'thunder');
+    }
   }
   function fetchWeather() {
     if (!weatherEl) return;
@@ -979,20 +1014,54 @@ const BUILDINGS = [
     background: linear-gradient(180deg, transparent, rgba(255, 220, 170, 0.18));
     pointer-events: none;
   }
+  /* v9: PARALLAX CLOUDS — three altitudes drifting at three speeds.
+     Speeds are inverse-related to size (high = small/fast, low = big/
+     slow) which is how distance reads in 3D. All animations factor in
+     --wind-mult so windy weather drifts faster. Night fades all
+     clouds to opacity proportional to --nightness (i.e. clouds dim
+     but don't vanish — fits a real night sky). */
   .fbv6__sky .fbv6__cloud {
-    position: absolute; top: 12px;
-    width: 28px; height: 8px; background: #fff8e5; border-radius: 5px;
+    position: absolute;
+    background: #fff8e5;
+    border-radius: 5px;
+    opacity: calc(0.85 - var(--nightness, 0) * 0.55);
+    transition: opacity 1.2s ease;
+  }
+  /* HIGH layer: small, fast, slightly transparent (atmospheric haze) */
+  .fbv6__cloud--high1, .fbv6__cloud--high2 {
+    top: 6px;
+    width: 18px; height: 5px;
+    background: #fdf2d6;
+    opacity: calc(0.55 - var(--nightness, 0) * 0.4);
+    box-shadow: 4px -2px 0 #fdf2d6, -5px -1px 0 #fdf2d6;
+    animation: fbv6-cloud-drift calc(40s / var(--wind-mult, 1)) linear infinite;
+  }
+  .fbv6__cloud--high1 { left: -10%; animation-delay: -5s; }
+  .fbv6__cloud--high2 { left: 50%;  animation-delay: -22s; }
+  /* MID layer: standard size, medium speed (the "main" clouds) */
+  .fbv6__cloud--mid1, .fbv6__cloud--mid2 {
+    top: 16px;
+    width: 28px; height: 8px;
     box-shadow: 6px -3px 0 #fff8e5, -8px -2px 0 #fff8e5;
-    opacity: 0.85;
-    animation: fbv6-cloud 60s linear infinite;
+    animation: fbv6-cloud-drift calc(70s / var(--wind-mult, 1)) linear infinite;
   }
-  .fbv6__cloud--a { left: 12%; animation-delay: -10s; }
-  .fbv6__cloud--b { left: 64%; top: 22px; animation-delay: -36s; opacity: 0.75; }
-  @keyframes fbv6-cloud {
+  .fbv6__cloud--mid1 { left: 12%; animation-delay: -10s; }
+  .fbv6__cloud--mid2 { left: 64%; animation-delay: -36s; opacity: calc(0.75 - var(--nightness, 0) * 0.5); }
+  /* LOW layer: large, slow (close to viewer) */
+  .fbv6__cloud--low1 {
+    top: 28px;
+    width: 44px; height: 11px;
+    background: #fff;
+    box-shadow: 10px -5px 0 #fff, -14px -3px 0 #fff, 18px -1px 0 #fff;
+    opacity: calc(0.72 - var(--nightness, 0) * 0.55);
+    animation: fbv6-cloud-drift calc(110s / var(--wind-mult, 1)) linear infinite;
+    animation-delay: -45s;
+  }
+  /* Clouds wrap continuously by translating out + back via long range. */
+  @keyframes fbv6-cloud-drift {
     0%   { transform: translateX(0); }
-    100% { transform: translateX(40px); }
+    100% { transform: translateX(160px); }
   }
-  .fbv6__sky[data-mode='night'] .fbv6__cloud { display: none; }
 
   /* Stars — fade in proportional to --nightness (0..1), with a subtle
      twinkle. Five stars now (was three) for a denser sky. */
@@ -1200,6 +1269,99 @@ const BUILDINGS = [
     position: absolute; top: -4px; left: -2px; right: -2px;
     height: 4px; background: var(--bc); filter: brightness(0.7);
     border-radius: 2px 2px 0 0;
+  }
+
+  /* v9: VITRINE — larger illuminated window centered on each building.
+     Mostly invisible during the day; at night, glows warm and shows a
+     tiny silhouette specific to the building. The scene character is
+     filtered to a dark silhouette (filter: brightness(0)) so it reads
+     as a shape inside lit glass, not a colored emoji. */
+  .fbv6__vitrine {
+    position: absolute;
+    top: 22px; left: 50%;
+    transform: translateX(-50%);
+    width: 22px; height: 14px;
+    background: rgba(255, 220, 140, calc(var(--nightness, 0) * 0.85));
+    border-radius: 2px;
+    box-shadow:
+      0 0 calc(var(--nightness, 0) * 14px) rgba(255, 200, 100, calc(var(--nightness, 0) * 0.5)),
+      inset 0 0 0 1px rgba(0, 0, 0, calc(var(--nightness, 0) * 0.18));
+    display: flex; align-items: center; justify-content: center;
+    transition: background 1.2s ease, box-shadow 1.2s ease;
+    overflow: hidden;
+  }
+  .fbv6__vitrine-scene {
+    font-size: 10px;
+    line-height: 1;
+    /* brightness(0) = pure black silhouette regardless of source emoji.
+       Visible in the lit window at night, completely invisible during
+       the day (parent has 0 background). */
+    filter: brightness(0);
+    opacity: calc(var(--nightness, 0) * 0.85);
+    transition: opacity 1.2s ease;
+  }
+
+  /* v9: STREET LAMPS — small posts between buildings. Lamp head glows
+     warm at night via --nightness. Posts visible faintly during the
+     day so the silhouette of the street is consistent. */
+  .fbv6__lamps {
+    position: absolute;
+    left: 0; right: 0; bottom: 14px;
+    height: 14px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .fbv6__lamp {
+    position: absolute;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 1.5px; height: 12px;
+    background: rgba(40, 30, 18, calc(0.4 + var(--nightness, 0) * 0.3));
+  }
+  .fbv6__lamp::before {
+    /* Lamp head — illuminated at night */
+    content: '';
+    position: absolute;
+    top: -1px; left: 50%; transform: translateX(-50%);
+    width: 5px; height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 220, 140, calc(0.15 + var(--nightness, 0) * 0.85));
+    box-shadow:
+      0 0 calc(2px + var(--nightness, 0) * 12px) rgba(255, 200, 100, calc(var(--nightness, 0) * 0.7));
+    transition: background 1.2s ease, box-shadow 1.2s ease;
+  }
+  .fbv6__lamp::after {
+    /* Tiny ground pool of warm light at night */
+    content: '';
+    position: absolute;
+    bottom: -2px; left: 50%; transform: translateX(-50%);
+    width: calc(2px + var(--nightness, 0) * 16px);
+    height: 2px;
+    border-radius: 50%;
+    background: rgba(255, 200, 100, calc(var(--nightness, 0) * 0.32));
+    filter: blur(2px);
+    transition: width 1.2s ease, background 1.2s ease;
+  }
+
+  /* v9: LIGHTNING — full-bar white flash, occasional, only when the
+     thunder treatment is active. Two-stage flash + rumble pause feels
+     more real than a constant strobe. */
+  .fbv6__lightning {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: #fff;
+    opacity: 0;
+    z-index: 2;
+  }
+  .fbv6__lightning.is-active {
+    animation: fbv6-lightning 11s steps(1, end) infinite;
+  }
+  @keyframes fbv6-lightning {
+    0%, 9%   { opacity: 0; }
+    10%      { opacity: 0.9; }   /* main flash */
+    11%      { opacity: 0; }
+    13%      { opacity: 0.6; }   /* secondary flicker */
+    14%, 100% { opacity: 0; }
   }
 
   /* Chimney + smoke — chimney sits on the right edge of the roof,
