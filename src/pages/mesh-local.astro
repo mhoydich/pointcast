@@ -1,0 +1,797 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Mesh Local | PointCast';
+const description =
+  'A small interactive El Segundo node map for seeing the local resources that already connect.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="mesh-room">
+    <section class="mesh-intro" aria-labelledby="mesh-title">
+      <p class="kicker">El Segundo node room</p>
+      <h1 id="mesh-title">The town already has a little wiring.</h1>
+      <p>
+        A soft map of places that can carry signal: tables, tools, public rooms,
+        courts, beach edges, civic counters, and the industrial hum to the east.
+        Not survey-grade. Just a way to notice what can connect with what.
+      </p>
+    </section>
+
+    <section class="mesh-stage" data-map>
+      <div class="map-panel">
+        <svg
+          class="mesh-map"
+          viewBox="0 0 1000 720"
+          role="img"
+          aria-labelledby="map-title map-desc"
+        >
+          <title id="map-title">Stylized mesh map of El Segundo</title>
+          <desc id="map-desc">
+            A non-geographic SVG map with ocean to the west, refinery to the east,
+            Main Street north to south, Grand Avenue east to west, resource nodes,
+            and dotted mesh edges between them.
+          </desc>
+
+          <defs>
+            <pattern id="block-grid" width="54" height="54" patternUnits="userSpaceOnUse">
+              <path d="M 54 0 L 0 0 0 54" fill="none" stroke="rgba(76,61,44,.12)" stroke-width="2" />
+            </pattern>
+
+            <filter id="soft-shadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#5b432c" flood-opacity=".18" />
+            </filter>
+          </defs>
+
+          <rect width="1000" height="720" fill="#ecd8ad" />
+          <rect x="0" y="0" width="178" height="720" fill="#77b5c9" />
+          <path
+            d="M160,0 C188,86 140,156 168,238 C196,320 148,390 172,472 C202,566 146,622 176,720 L0,720 L0,0 Z"
+            fill="#4f95ad"
+            opacity=".74"
+          />
+          <path
+            d="M188,0 C208,88 174,150 197,229 C220,306 181,392 203,477 C228,574 188,642 211,720"
+            fill="none"
+            stroke="#fff4d6"
+            stroke-width="8"
+            stroke-linecap="round"
+            opacity=".75"
+          />
+
+          <rect x="178" y="0" width="582" height="720" fill="url(#block-grid)" opacity=".78" />
+
+          <g class="refinery">
+            <rect x="760" y="0" width="240" height="720" fill="#b46d4d" opacity=".9" />
+            <rect x="804" y="120" width="36" height="420" rx="8" />
+            <rect x="878" y="82" width="42" height="505" rx="8" />
+            <rect x="932" y="166" width="24" height="370" rx="8" />
+            <path d="M788 570 H968" />
+            <path d="M792 232 H962" />
+            <path d="M822 122 C846 88 890 92 916 126" />
+            <circle cx="854" cy="470" r="28" />
+            <circle cx="922" cy="388" r="20" />
+          </g>
+
+          <g class="street-layer">
+            <path class="street major" d="M462 40 V684" />
+            <path class="street major" d="M204 360 H752" />
+            <path class="street" d="M206 188 H752" />
+            <path class="street" d="M210 570 H752" />
+            <path class="street" d="M304 58 V670" />
+            <path class="street" d="M608 66 V670" />
+            <path class="street skinny" d="M388 78 V660" />
+            <path class="street skinny" d="M528 74 V660" />
+            <path class="street skinny" d="M215 268 H744" />
+            <path class="street skinny" d="M216 455 H748" />
+          </g>
+
+          <g class="place-labels" aria-hidden="true">
+            <text x="52" y="92">beach</text>
+            <text x="802" y="92">refinery</text>
+            <text x="476" y="82" transform="rotate(90 476 82)">main street</text>
+            <text x="246" y="346">grand ave</text>
+            <text x="226" y="176">mariposa</text>
+            <text x="222" y="558">el segundo blvd</text>
+            <text x="620" y="438">smoky hollow</text>
+          </g>
+
+          <g id="edge-layer" class="edge-layer" aria-hidden="true"></g>
+          <g id="node-layer" class="node-layer"></g>
+
+          <g class="noun-guide" aria-label="Noun guide at Main and Grand">
+            <circle cx="462" cy="360" r="38" fill="#fff4d6" stroke="#2c2a25" stroke-width="3" />
+            <image
+              href="https://noun.pics/415.svg"
+              x="432"
+              y="329"
+              width="60"
+              height="60"
+              preserveAspectRatio="xMidYMid meet"
+            />
+            <text x="462" y="414" text-anchor="middle">Main + Grand</text>
+          </g>
+        </svg>
+
+        <div class="node-tooltip" data-tooltip hidden></div>
+      </div>
+
+      <aside class="node-rail" aria-label="Mesh node list">
+        <h2>Nodes</h2>
+        <p>
+          Tap a dot or a row. The lines are not routes. They are small guesses
+          about how one local resource might strengthen another.
+        </p>
+        <div class="node-list" data-node-list></div>
+      </aside>
+    </section>
+
+    <section class="mesh-note">
+      <p>
+        A real mesh starts with boring proximity: who has a table, who has a key,
+        who knows the room, who can lend a charger, who is already there on a
+        Tuesday afternoon.
+      </p>
+    </section>
+  </main>
+
+  <script is:inline>
+    const nodes = [
+      {
+        id: 'beach-grand',
+        name: 'Grand Ave beach access',
+        kind: 'edge',
+        x: 132,
+        y: 358,
+        offers: 'Salt-air reset, walking meetings, horizon bandwidth.',
+        address: 'Vista Del Mar & Grand Ave',
+      },
+      {
+        id: 'library',
+        name: 'El Segundo Public Library',
+        kind: 'civic',
+        x: 398,
+        y: 188,
+        offers: 'Public wifi, quiet tables, local memory, help finding things.',
+        address: '111 W Mariposa Ave',
+      },
+      {
+        id: 'esmoa',
+        name: 'ESMoA',
+        kind: 'culture',
+        x: 462,
+        y: 258,
+        offers: 'Art signal, school groups, civic imagination, soft introductions.',
+        address: '208 Main St',
+      },
+      {
+        id: 'blue-butterfly',
+        name: 'Blue Butterfly Coffee Co. (verify)',
+        kind: 'cafe',
+        x: 462,
+        y: 304,
+        offers: 'Coffee, wifi, Main Street overlap, morning loose ties.',
+        address: '351 Main St (verify)',
+      },
+      {
+        id: 'city-hall',
+        name: 'El Segundo City Hall',
+        kind: 'civic',
+        x: 500,
+        y: 332,
+        offers: 'Permits, public process, civic routing, the official counter.',
+        address: '350 Main St',
+      },
+      {
+        id: 'the-bakery',
+        name: 'The Bakery (verify)',
+        kind: 'cafe',
+        x: 420,
+        y: 388,
+        offers: 'Early-day table energy, neighbor gossip, practical carbs.',
+        address: 'Main Street near Grand Ave (verify)',
+      },
+      {
+        id: 'elsegundo-brewing',
+        name: 'El Segundo Brewing Company',
+        kind: 'social',
+        x: 462,
+        y: 484,
+        offers: 'After-work social glue, local craft, loose project talk.',
+        address: '140 Main St',
+      },
+      {
+        id: 'rec-park',
+        name: 'Recreation Park pickleball',
+        kind: 'play',
+        x: 342,
+        y: 432,
+        offers: 'Repeat encounters, casual teams, low-stakes civic rhythm.',
+        address: '401 Sheldon St',
+      },
+      {
+        id: 'tribune',
+        name: 'Tribune Tap House (verify)',
+        kind: 'social',
+        x: 536,
+        y: 412,
+        offers: 'Evening tables, neighbor overlap, game-night connective tissue.',
+        address: 'Main / Richmond district (verify)',
+      },
+      {
+        id: 'post-office',
+        name: 'USPS El Segundo Post Office (verify)',
+        kind: 'infra',
+        x: 618,
+        y: 188,
+        offers: 'Addresses, parcels, identity proofs, small-business logistics.',
+        address: '2130 E Mariposa Ave (verify)',
+      },
+      {
+        id: 'smoky-hollow',
+        name: 'Smoky Hollow workshops',
+        kind: 'maker',
+        x: 656,
+        y: 456,
+        offers: 'Light industry, studios, fabrication know-how, spare parts.',
+        address: 'E Grand Ave & Standard St area',
+      },
+    ];
+
+    const edges = [
+      ['beach-grand', 'rec-park'],
+      ['rec-park', 'library'],
+      ['library', 'esmoa'],
+      ['esmoa', 'blue-butterfly'],
+      ['blue-butterfly', 'city-hall'],
+      ['city-hall', 'post-office'],
+      ['city-hall', 'smoky-hollow'],
+      ['the-bakery', 'blue-butterfly'],
+      ['the-bakery', 'elsegundo-brewing'],
+      ['elsegundo-brewing', 'tribune'],
+      ['tribune', 'smoky-hollow'],
+      ['smoky-hollow', 'post-office'],
+    ];
+
+    const svg = document.querySelector('.mesh-map');
+    const edgeLayer = document.querySelector('#edge-layer');
+    const nodeLayer = document.querySelector('#node-layer');
+    const tooltip = document.querySelector('[data-tooltip]');
+    const nodeList = document.querySelector('[data-node-list]');
+    const panel = document.querySelector('.map-panel');
+
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    let activeId = null;
+    let pinned = false;
+
+    function makeSvg(tag, attrs = {}) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attrs)) {
+        el.setAttribute(key, value);
+      }
+      return el;
+    }
+
+    function clientPoint(node) {
+      const point = svg.createSVGPoint();
+      point.x = node.x;
+      point.y = node.y;
+      return point.matrixTransform(svg.getScreenCTM());
+    }
+
+    function showTooltip(id, shouldPin = false) {
+      const node = byId.get(id);
+      if (!node) return;
+
+      activeId = id;
+      pinned = shouldPin;
+
+      tooltip.innerHTML = `
+        <strong>${node.name}</strong>
+        <span>${node.offers}</span>
+        <em>${node.address}</em>
+      `;
+
+      tooltip.hidden = false;
+
+      const p = clientPoint(node);
+      const box = panel.getBoundingClientRect();
+      const x = p.x - box.left;
+      const y = p.y - box.top;
+
+      tooltip.style.left = `${x}px`;
+      tooltip.style.top = `${y}px`;
+
+      document.querySelectorAll('[data-node-id]').forEach((el) => {
+        el.classList.toggle('is-active', el.dataset.nodeId === id);
+      });
+
+      document.querySelectorAll('[data-node-button]').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.nodeButton === id);
+      });
+    }
+
+    function hideTooltip() {
+      if (pinned) return;
+      activeId = null;
+      tooltip.hidden = true;
+
+      document.querySelectorAll('[data-node-id]').forEach((el) => {
+        el.classList.remove('is-active');
+      });
+
+      document.querySelectorAll('[data-node-button]').forEach((button) => {
+        button.classList.remove('is-active');
+      });
+    }
+
+    function renderEdges() {
+      for (const [fromId, toId] of edges) {
+        const from = byId.get(fromId);
+        const to = byId.get(toId);
+        if (!from || !to) continue;
+
+        const line = makeSvg('line', {
+          x1: from.x,
+          y1: from.y,
+          x2: to.x,
+          y2: to.y,
+          class: 'mesh-edge',
+        });
+
+        edgeLayer.appendChild(line);
+      }
+    }
+
+    function renderNodes() {
+      for (const node of nodes) {
+        const group = makeSvg('g', {
+          class: `mesh-node mesh-node-${node.kind}`,
+          transform: `translate(${node.x} ${node.y})`,
+          tabindex: '0',
+          role: 'button',
+          'aria-label': `${node.name}: ${node.offers} Address: ${node.address}`,
+          'data-node-id': node.id,
+        });
+
+        const halo = makeSvg('circle', { class: 'node-halo', r: '23' });
+        const dot = makeSvg('circle', { class: 'node-dot', r: '11' });
+        const core = makeSvg('circle', { class: 'node-core', r: '4' });
+        const label = makeSvg('text', {
+          class: 'node-label',
+          x: '0',
+          y: '-31',
+          'text-anchor': 'middle',
+        });
+        label.textContent = node.name.replace(' (verify)', '');
+
+        group.append(halo, dot, core, label);
+        nodeLayer.appendChild(group);
+
+        group.addEventListener('mouseenter', () => showTooltip(node.id));
+        group.addEventListener('mouseleave', hideTooltip);
+        group.addEventListener('focus', () => showTooltip(node.id));
+        group.addEventListener('blur', hideTooltip);
+        group.addEventListener('click', (event) => {
+          event.stopPropagation();
+          showTooltip(node.id, activeId !== node.id || !pinned);
+        });
+        group.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            showTooltip(node.id, true);
+          }
+          if (event.key === 'Escape') {
+            pinned = false;
+            hideTooltip();
+          }
+        });
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.nodeButton = node.id;
+        button.innerHTML = `
+          <span class="node-kind">${node.kind}</span>
+          <strong>${node.name}</strong>
+          <small>${node.address}</small>
+        `;
+        button.addEventListener('click', () => showTooltip(node.id, true));
+        nodeList.appendChild(button);
+      }
+    }
+
+    renderEdges();
+    renderNodes();
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-node-id]') && !event.target.closest('[data-node-button]')) {
+        pinned = false;
+        hideTooltip();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (activeId) showTooltip(activeId, pinned);
+    });
+  </script>
+
+  <style>
+    :global(body) {
+      background: #ecd8ad;
+    }
+
+    .mesh-room {
+      min-height: 100vh;
+      color: #2c2a25;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(255, 247, 219, 0.86), transparent 28rem),
+        linear-gradient(90deg, rgba(96, 160, 182, 0.24), transparent 28%, rgba(166, 90, 57, 0.18)),
+        #ecd8ad;
+      padding: clamp(1.25rem, 3vw, 2.5rem);
+    }
+
+    .mesh-intro {
+      max-width: 780px;
+      margin: 0 auto 1.25rem;
+    }
+
+    .kicker {
+      margin: 0 0 0.5rem;
+      font-family: "Departure Mono", monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #7d4f37;
+    }
+
+    .mesh-intro h1 {
+      max-width: 680px;
+      margin: 0;
+      font-size: clamp(2.15rem, 6vw, 5.25rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .mesh-intro p {
+      max-width: 660px;
+      margin: 1rem 0 0;
+      font-size: clamp(1rem, 1.6vw, 1.18rem);
+      line-height: 1.65;
+      color: #4c3d2c;
+    }
+
+    .mesh-stage {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+      gap: 1rem;
+      max-width: 1180px;
+      margin: 0 auto;
+      align-items: start;
+    }
+
+    .map-panel {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid #2c2a25;
+      border-radius: 8px;
+      background: #fff2cf;
+      box-shadow: 0 22px 54px rgba(61, 42, 24, 0.22);
+    }
+
+    .mesh-map {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 430px;
+    }
+
+    .refinery {
+      fill: rgba(82, 44, 31, 0.2);
+      stroke: rgba(82, 44, 31, 0.42);
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .street {
+      fill: none;
+      stroke: rgba(255, 245, 218, 0.9);
+      stroke-width: 18;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .street.major {
+      stroke-width: 28;
+    }
+
+    .street.skinny {
+      stroke-width: 10;
+      opacity: 0.72;
+    }
+
+    .place-labels text {
+      font-family: "Departure Mono", monospace;
+      font-size: 18px;
+      fill: rgba(44, 42, 37, 0.58);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .mesh-edge {
+      stroke: rgba(66, 88, 75, 0.58);
+      stroke-width: 4;
+      stroke-dasharray: 2 12;
+      stroke-linecap: round;
+    }
+
+    .mesh-node {
+      cursor: pointer;
+      outline: none;
+    }
+
+    .node-halo {
+      fill: rgba(255, 244, 214, 0.78);
+      stroke: rgba(44, 42, 37, 0.26);
+      stroke-width: 2;
+      filter: url(#soft-shadow);
+      transition: transform 160ms ease, fill 160ms ease;
+    }
+
+    .node-dot {
+      fill: #5f8067;
+      stroke: #2c2a25;
+      stroke-width: 3;
+      transition: transform 160ms ease, fill 160ms ease;
+    }
+
+    .node-core {
+      fill: #fff4d6;
+    }
+
+    .mesh-node-cafe .node-dot {
+      fill: #8c6e4b;
+    }
+
+    .mesh-node-civic .node-dot {
+      fill: #4f7f9a;
+    }
+
+    .mesh-node-culture .node-dot {
+      fill: #9b5f77;
+    }
+
+    .mesh-node-social .node-dot {
+      fill: #b56f4d;
+    }
+
+    .mesh-node-play .node-dot {
+      fill: #6d8f56;
+    }
+
+    .mesh-node-maker .node-dot,
+    .mesh-node-infra .node-dot {
+      fill: #7e725f;
+    }
+
+    .node-label {
+      pointer-events: none;
+      font-family: "Departure Mono", monospace;
+      font-size: 16px;
+      fill: #2c2a25;
+      paint-order: stroke;
+      stroke: #fff4d6;
+      stroke-width: 6;
+      stroke-linejoin: round;
+    }
+
+    .mesh-node:hover .node-halo,
+    .mesh-node:focus .node-halo,
+    .mesh-node.is-active .node-halo {
+      transform: scale(1.22);
+      fill: rgba(255, 250, 226, 0.96);
+    }
+
+    .mesh-node:hover .node-dot,
+    .mesh-node:focus .node-dot,
+    .mesh-node.is-active .node-dot {
+      transform: scale(1.14);
+      fill: #d29357;
+    }
+
+    .noun-guide text {
+      font-family: "Departure Mono", monospace;
+      font-size: 14px;
+      fill: #2c2a25;
+      paint-order: stroke;
+      stroke: #fff4d6;
+      stroke-width: 5;
+      stroke-linejoin: round;
+    }
+
+    .node-tooltip {
+      position: absolute;
+      z-index: 5;
+      width: min(260px, calc(100% - 2rem));
+      padding: 0.8rem 0.85rem;
+      border: 2px solid #2c2a25;
+      border-radius: 8px;
+      background: #fff7df;
+      box-shadow: 0 16px 34px rgba(44, 42, 37, 0.22);
+      transform: translate(-50%, calc(-100% - 24px));
+      pointer-events: none;
+    }
+
+    .node-tooltip::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      width: 14px;
+      height: 14px;
+      background: #fff7df;
+      border-right: 2px solid #2c2a25;
+      border-bottom: 2px solid #2c2a25;
+      transform: translateX(-50%) rotate(45deg);
+    }
+
+    .node-tooltip strong,
+    .node-tooltip span,
+    .node-tooltip em {
+      display: block;
+    }
+
+    .node-tooltip strong {
+      font-size: 0.98rem;
+      line-height: 1.2;
+    }
+
+    .node-tooltip span {
+      margin-top: 0.38rem;
+      color: #4c3d2c;
+      line-height: 1.45;
+    }
+
+    .node-tooltip em {
+      margin-top: 0.45rem;
+      font-family: "Departure Mono", monospace;
+      font-size: 0.72rem;
+      font-style: normal;
+      color: #7d4f37;
+    }
+
+    .node-rail {
+      border: 3px solid #2c2a25;
+      border-radius: 8px;
+      background: rgba(255, 247, 223, 0.82);
+      padding: 1rem;
+      box-shadow: 0 18px 42px rgba(61, 42, 24, 0.14);
+    }
+
+    .node-rail h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      line-height: 1.1;
+    }
+
+    .node-rail p {
+      margin: 0.65rem 0 1rem;
+      font-size: 0.94rem;
+      line-height: 1.5;
+      color: #4c3d2c;
+    }
+
+    .node-list {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .node-list button {
+      display: grid;
+      gap: 0.18rem;
+      width: 100%;
+      min-height: 68px;
+      padding: 0.65rem 0.7rem;
+      border: 2px solid rgba(44, 42, 37, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 252, 237, 0.76);
+      color: #2c2a25;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .node-list button:hover,
+    .node-list button:focus,
+    .node-list button.is-active {
+      border-color: #2c2a25;
+      background: #fff7df;
+      outline: none;
+    }
+
+    .node-kind {
+      width: fit-content;
+      padding: 0.1rem 0.32rem;
+      border-radius: 999px;
+      background: #e0b875;
+      font-family: "Departure Mono", monospace;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      color: #2c2a25;
+    }
+
+    .node-list strong {
+      font-size: 0.9rem;
+      line-height: 1.15;
+    }
+
+    .node-list small {
+      font-family: "Departure Mono", monospace;
+      font-size: 0.68rem;
+      line-height: 1.25;
+      color: #6d563e;
+    }
+
+    .mesh-note {
+      max-width: 780px;
+      margin: 1.25rem auto 0;
+      border-left: 4px solid #b56f4d;
+      padding: 0.25rem 0 0.25rem 1rem;
+      color: #4c3d2c;
+    }
+
+    .mesh-note p {
+      margin: 0;
+      font-size: clamp(1rem, 1.5vw, 1.12rem);
+      line-height: 1.62;
+    }
+
+    @media (max-width: 900px) {
+      .mesh-stage {
+        grid-template-columns: 1fr;
+      }
+
+      .mesh-map {
+        min-height: 360px;
+      }
+
+      .node-rail {
+        padding: 0.85rem;
+      }
+
+      .node-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 620px) {
+      .mesh-room {
+        padding: 1rem;
+      }
+
+      .mesh-intro h1 {
+        font-size: 2.4rem;
+      }
+
+      .mesh-map {
+        min-height: 330px;
+      }
+
+      .node-label {
+        font-size: 13px;
+      }
+
+      .place-labels text {
+        font-size: 14px;
+      }
+
+      .node-tooltip {
+        width: min(230px, calc(100% - 1.5rem));
+        font-size: 0.92rem;
+      }
+
+      .node-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</BaseLayout>
