@@ -1,0 +1,619 @@
+---
+/**
+ * /plan — the week ahead.
+ *
+ * Mike 2026-05-11: "make next /plan". Sibling to /at-desk (what's
+ * interesting today) but forward-looking: what's the week, what's
+ * waiting on Mike's hand, what's queued behind.
+ *
+ * Different again from /desk (the build log — past 7 days) and
+ * /operating-mode.json (granular sprint state). /plan is the editorial
+ * weekly view + decisions queue.
+ *
+ * Top to bottom:
+ *
+ *   1. HERO              week-of date + headline + status row
+ *   2. THIS WEEK         5 dated items with owner + kind chips
+ *   3. DECISIONS FOR MH  things only Mike can resolve
+ *   4. IN FLIGHT         live from operating-mode.json
+ *   5. UP NEXT           queued items behind this week
+ *   6. RECENT PLAN DOCS  link list into docs/plans/
+ *
+ * Data sources:
+ *   - src/data/plan.json         this-week + decisions + up-next
+ *   - src/data/operating-mode.json   in-flight (already used by /desk)
+ *
+ * No external fetches — fully build-time deterministic.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import planData from '../data/plan.json';
+import opmodeData from '../data/operating-mode.json';
+
+// ---------- Plan + opmode types ----------
+interface ThisWeekItem {
+  id: string;
+  title: string;
+  owner: string;
+  due: string | null;
+  kind: string;
+  url: string | null;
+  note?: string;
+}
+interface Decision {
+  id: string;
+  title: string;
+  url: string;
+  context: string;
+}
+interface UpNext {
+  id: string;
+  title: string;
+  owner: string;
+  url: string | null;
+}
+const plan = planData as {
+  weekOf: string;
+  weekEnd: string;
+  headline: string;
+  updatedAt: string;
+  updatedBy: string;
+  thisWeek: ThisWeekItem[];
+  decisionsForMike: Decision[];
+  upNext: UpNext[];
+};
+
+interface InFlight {
+  id: string;
+  title: string;
+  kind: string;
+  ref: string;
+  url: string | null;
+  owner: string;
+  stage: string;
+}
+const opmode = opmodeData as {
+  updatedAt: string;
+  updatedBy: string;
+  inFlight: InFlight[];
+};
+
+// ---------- Date math ----------
+const now = new Date();
+const todayStr = now.toISOString().slice(0, 10);
+const weekStart = new Date(plan.weekOf + 'T00:00:00Z');
+const weekEnd   = new Date(plan.weekEnd + 'T23:59:59Z');
+const daysIntoWeek = Math.max(0, Math.floor((+now - +weekStart) / 86400000));
+const daysLeftInWeek = Math.max(0, Math.floor((+weekEnd - +now) / 86400000) + 1);
+
+function fmtDue(due: string | null): { label: string; tone: 'past' | 'today' | 'soon' | 'later' | 'none' } {
+  if (!due) return { label: 'no date', tone: 'none' };
+  const d = new Date(due + 'T23:59:59Z');
+  const diff = Math.floor((+d - +now) / 86400000);
+  if (diff < 0)  return { label: `${-diff}d past · ${due}`, tone: 'past' };
+  if (diff === 0) return { label: `today · ${due}`,         tone: 'today' };
+  if (diff <= 3) return { label: `${diff}d · ${due}`,       tone: 'soon' };
+  return { label: due, tone: 'later' };
+}
+
+function fmtRelative(iso: string): string {
+  const t = new Date(iso);
+  const diffMs = +now - +t;
+  if (diffMs < 0) return 'just now';
+  const h = Math.round(diffMs / 3_600_000);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
+// ---------- Up next group by owner ----------
+const upNextByOwner = plan.upNext.reduce<Record<string, UpNext[]>>((acc, item) => {
+  (acc[item.owner] = acc[item.owner] || []).push(item);
+  return acc;
+}, {});
+
+// ---------- Static plan-doc index ----------
+// Hand-listed since src/content/blocks-style ingestion of docs/plans/
+// is a separate sprint. Update this list when notable plan docs land.
+const planDocs = [
+  { date: '2026-05-03', slug: '2026-05-03-planning-cleanup-sprint',     title: 'Planning cleanup sprint' },
+  { date: '2026-04-29', slug: '2026-04-29-marketplace-v4-runbook',      title: 'Marketplace v4 runbook' },
+  { date: '2026-04-28', slug: '2026-04-28-sprint-federation-rooms',     title: 'Sprint · federation rooms' },
+  { date: '2026-04-27', slug: '2026-04-27-3-day-sprint',                title: '3-day sprint (Mike offline)' },
+  { date: '2026-04-25', slug: '2026-04-25-coffee-mugs-deploy-runbook',  title: 'Coffee Mugs FA2 deploy runbook' },
+  { date: '2026-04-24', slug: '2026-04-24-rfc-0003-plus-one-agents',    title: 'RFC 0003 · plus-one agents' },
+];
+
+// ---------- SEO ----------
+const title = `The plan · week of ${plan.weekOf} · PointCast`;
+const description = `${plan.headline} Week ${plan.weekOf} → ${plan.weekEnd}.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="plan">
+
+    {/* ============== HERO ============== */}
+    <header class="plan__head">
+      <p class="plan__kicker mono">WEEK OF {plan.weekOf} → {plan.weekEnd} · DAY {daysIntoWeek + 1} of 7</p>
+      <h1 class="plan__title">the plan.</h1>
+      <p class="plan__headline">{plan.headline}</p>
+      <p class="plan__strip mono">
+        <span class="plan__chip"><span class="plan__chip-k">today</span> {todayStr}</span>
+        <span class="plan__chip"><span class="plan__chip-k">left</span> {daysLeftInWeek}d in week</span>
+        <span class="plan__chip"><span class="plan__chip-k">decisions</span> {plan.decisionsForMike.length} for mh</span>
+        <span class="plan__chip"><span class="plan__chip-k">in flight</span> {opmode.inFlight.length}</span>
+        <span class="plan__chip"><span class="plan__chip-k">updated</span> {fmtRelative(plan.updatedAt)} by {plan.updatedBy}</span>
+      </p>
+    </header>
+
+    {/* ============== THIS WEEK ============== */}
+    <section class="band" aria-label="This week">
+      <header class="band__h">
+        <h2 class="band__title">This week · {plan.thisWeek.length} items</h2>
+        <p class="band__sub mono">dated goals · merges · decisions Mike owns</p>
+      </header>
+      <ol class="week">
+        {plan.thisWeek.map((item, i) => {
+          const due = fmtDue(item.due);
+          return (
+            <li class={`week__row week__row--${due.tone}`}>
+              <span class="week__n mono">{String(i + 1).padStart(2, '0')}</span>
+              <div class="week__body">
+                <p class="week__top">
+                  <span class={`week__kind week__kind--${item.kind.toLowerCase()} mono`}>{item.kind}</span>
+                  {item.url ? (
+                    <a class="week__title" href={item.url}>{item.title}</a>
+                  ) : (
+                    <span class="week__title">{item.title}</span>
+                  )}
+                </p>
+                {item.note && <p class="week__note">{item.note}</p>}
+                <p class="week__meta mono">
+                  owner · <strong>{item.owner}</strong>
+                  <span class="week__dot">·</span>
+                  <span class={`week__due week__due--${due.tone}`}>{due.label}</span>
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+
+    {/* ============== DECISIONS FOR MIKE ============== */}
+    <section class="band band--decisions" aria-label="Decisions for Mike">
+      <header class="band__h">
+        <h2 class="band__title">Decisions for mh · {plan.decisionsForMike.length}</h2>
+        <p class="band__sub mono">things only Mike can resolve · no cc/codex/manus action until landed</p>
+      </header>
+      <ul class="decisions">
+        {plan.decisionsForMike.map(d => (
+          <li class="decision">
+            <a class="decision__link" href={d.url}>
+              <span class="decision__bullet" aria-hidden="true">◆</span>
+              <span class="decision__title">{d.title}</span>
+            </a>
+            <p class="decision__ctx">{d.context}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ============== IN FLIGHT ============== */}
+    <section class="band" aria-label="In flight">
+      <header class="band__h">
+        <h2 class="band__title">In flight · {opmode.inFlight.length}</h2>
+        <p class="band__sub mono">
+          live from /operating-mode.json · updated {fmtRelative(opmode.updatedAt)} by {opmode.updatedBy}
+        </p>
+      </header>
+      <ul class="flight">
+        {opmode.inFlight.map(f => (
+          <li class={`flight__row flight__row--${f.stage}`}>
+            <span class={`flight__kind flight__kind--${f.kind.toLowerCase()} mono`}>
+              {f.kind}{f.ref !== 'tbd' && f.ref !== '' ? ` ${f.ref}` : ''}
+            </span>
+            {f.url ? (
+              <a class="flight__title" href={f.url}>{f.title}</a>
+            ) : (
+              <span class="flight__title">{f.title}</span>
+            )}
+            <span class="flight__meta mono">{f.owner} · <span class={`flight__stage flight__stage--${f.stage}`}>{f.stage}</span></span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ============== UP NEXT ============== */}
+    <section class="band" aria-label="Up next">
+      <header class="band__h">
+        <h2 class="band__title">Up next · queued behind this week</h2>
+        <p class="band__sub mono">grouped by owner</p>
+      </header>
+      <div class="upnext">
+        {Object.entries(upNextByOwner).map(([owner, items]) => (
+          <div class="upnext__col">
+            <p class="upnext__owner mono">{owner} · {items.length}</p>
+            <ul class="upnext__list">
+              {items.map(u => (
+                <li>
+                  {u.url ? (
+                    <a href={u.url}>{u.title}</a>
+                  ) : (
+                    <span>{u.title}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    {/* ============== RECENT PLAN DOCS ============== */}
+    <section class="band band--docs" aria-label="Recent plan docs">
+      <header class="band__h">
+        <h2 class="band__title">Recent plan docs</h2>
+        <p class="band__sub mono">in docs/plans/ · pulled into the repo's plan canon</p>
+      </header>
+      <ul class="docs">
+        {planDocs.map(d => (
+          <li class="docs__row">
+            <a class="docs__link" href={`https://github.com/mhoydich/pointcast/blob/main/docs/plans/${d.slug}.md`}>
+              <span class="docs__date mono">{d.date}</span>
+              <span class="docs__t">{d.title}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p class="docs__foot mono">
+        <a href="https://github.com/mhoydich/pointcast/tree/main/docs/plans">→ docs/plans on github</a>
+      </p>
+    </section>
+
+    {/* ============== FOOT ============== */}
+    <footer class="plan__foot mono">
+      the plan · <a href="/at-desk">/at-desk</a> · <a href="/desk">/desk</a> · <a href="/">the front door</a>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .plan {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+    font-family: var(--font-body);
+    color: var(--color-ink);
+  }
+  .mono { font-family: var(--font-mono); }
+
+  /* ============== HEAD ============== */
+  .plan__head {
+    text-align: center;
+    margin: 0 0 36px;
+    padding-bottom: 22px;
+    border-bottom: 2px solid #1f1b15;
+  }
+  .plan__kicker {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  .plan__title {
+    font-family: var(--font-heading);
+    font-size: clamp(40px, 6.5vw, 64px);
+    line-height: 1.02;
+    font-weight: 600;
+    margin: 0 0 14px;
+    letter-spacing: -0.02em;
+  }
+  .plan__headline {
+    max-width: 640px;
+    margin: 0 auto 18px;
+    font-family: var(--font-serif);
+    font-size: clamp(16px, 1.6vw, 19px);
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+  }
+  .plan__strip {
+    display: inline-flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center;
+    font-size: 11px;
+    margin: 0;
+  }
+  .plan__chip {
+    padding: 4px 10px;
+    background: #fbf7ee;
+    border: 1px solid #d8cdb8;
+    border-radius: 2px;
+    text-transform: lowercase;
+  }
+  .plan__chip-k {
+    color: var(--color-ink-soft);
+    margin-right: 6px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 9px;
+  }
+
+  /* ============== BAND ============== */
+  .band { margin: 0 0 44px; }
+  .band__h {
+    margin: 0 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1.5px solid var(--color-rule);
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .band__title {
+    font-family: var(--font-heading);
+    font-size: clamp(18px, 2vw, 22px);
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .band__sub {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ============== THIS WEEK ============== */
+  .week { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .week__row {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fbf7ee;
+    border: 1px solid #d8cdb8;
+    border-radius: 3px;
+    border-left: 4px solid var(--color-rule);
+  }
+  .week__row--past   { border-left-color: #c4392e; background: #faecea; }
+  .week__row--today  { border-left-color: #c4952e; background: #fbf2d8; }
+  .week__row--soon   { border-left-color: #ba7517; background: #fbf1e1; }
+  .week__row--later  { border-left-color: #185fa5; background: #eef4fa; }
+  .week__row--none   { border-left-color: #5f5e5a; background: #efefee; }
+  .week__n {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-ink-soft);
+    text-align: right;
+    padding-top: 2px;
+  }
+  .week__body { min-width: 0; }
+  .week__top {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+    margin: 0 0 4px;
+  }
+  .week__kind {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    background: rgba(31, 27, 21, 0.08);
+    color: #1f1b15;
+    flex: 0 0 auto;
+  }
+  .week__kind--goal       { background: #fbf1e1; color: #874c1d; }
+  .week__kind--merge      { background: #eef4fa; color: #185fa5; }
+  .week__kind--originate  { background: #fbeaee; color: #8a2432; }
+  .week__kind--incident   { background: #faecea; color: #993c1d; }
+  .week__title {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-ink);
+    text-decoration: none;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+    flex: 1 1 200px;
+  }
+  a.week__title { border-bottom: 1px dotted var(--color-ink-soft); }
+  a.week__title:hover { color: var(--color-warm); border-bottom-color: currentColor; }
+  .week__note {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--color-ink-soft);
+    font-family: var(--font-serif);
+  }
+  .week__meta {
+    margin: 6px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+  }
+  .week__meta strong { color: var(--color-ink); font-weight: 600; }
+  .week__dot { margin: 0 6px; opacity: 0.5; }
+  .week__due--past   { color: #c4392e; font-weight: 600; }
+  .week__due--today  { color: #c4952e; font-weight: 600; }
+  .week__due--soon   { color: #ba7517; font-weight: 600; }
+  .week__due--later  { color: #185fa5; }
+  .week__due--none   { color: var(--color-ink-soft); font-style: italic; }
+
+  /* ============== DECISIONS ============== */
+  .band--decisions { padding: 22px 24px; background: #fbf2d8; border: 1.5px dashed #c4952e; border-radius: 4px; }
+  .band--decisions .band__h { border-bottom-color: #c4952e; }
+  .decisions { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .decision {
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #d8cdb8;
+    border-left: 4px solid #c4952e;
+    border-radius: 2px;
+  }
+  .decision__link {
+    display: flex; align-items: baseline; gap: 10px;
+    text-decoration: none; color: var(--color-ink);
+    margin: 0 0 4px;
+  }
+  .decision__bullet {
+    color: #c4952e;
+    flex: 0 0 auto;
+    font-size: 14px;
+  }
+  .decision__title {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px dotted var(--color-ink-soft);
+  }
+  .decision__link:hover .decision__title { color: #c4952e; border-bottom-color: currentColor; }
+  .decision__ctx {
+    margin: 4px 0 0 24px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    font-family: var(--font-serif);
+  }
+
+  /* ============== IN FLIGHT ============== */
+  .flight { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .flight__row {
+    display: grid;
+    grid-template-columns: 86px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+  }
+  .flight__row--blocked { background: #faecea; border-color: #d8a097; }
+  .flight__row--queued  { background: #fbf7ee; }
+  .flight__kind {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    padding: 2px 6px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--color-ink-soft);
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .flight__kind--pr        { color: #185fa5; }
+  .flight__kind--plan      { color: #5f5e5a; }
+  .flight__kind--incident  { color: #993c1d; background: #faecea; }
+  .flight__title {
+    font-size: 13.5px;
+    line-height: 1.4;
+    color: var(--color-ink);
+    text-decoration: none;
+    min-width: 0;
+  }
+  a.flight__title { border-bottom: 1px dotted transparent; }
+  a.flight__title:hover { color: var(--color-warm); border-bottom-color: currentColor; }
+  .flight__meta {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+    text-align: right;
+    flex: 0 0 auto;
+  }
+  .flight__stage--blocked { color: #c4392e; font-weight: 600; }
+  .flight__stage--queued  { color: var(--color-ink-soft); }
+  .flight__stage--in-progress { color: #185fa5; font-weight: 600; }
+
+  /* ============== UP NEXT ============== */
+  .upnext {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .upnext__col {
+    padding: 14px;
+    background: #fbf7ee;
+    border: 1px solid #d8cdb8;
+    border-radius: 2px;
+  }
+  .upnext__owner {
+    margin: 0 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px dotted var(--color-rule);
+  }
+  .upnext__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .upnext__list li { font-size: 13px; line-height: 1.4; }
+  .upnext__list a {
+    color: var(--color-ink);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--color-ink-soft);
+  }
+  .upnext__list a:hover { color: var(--color-warm); border-bottom-color: currentColor; }
+
+  /* ============== DOCS ============== */
+  .band--docs .band__h { border-bottom-color: var(--color-rule); }
+  .docs { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .docs__row { padding: 4px 0; }
+  .docs__link {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 14px;
+    text-decoration: none;
+    color: var(--color-ink);
+    align-items: baseline;
+  }
+  .docs__date {
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.06em;
+  }
+  .docs__t {
+    font-size: 14px;
+    border-bottom: 1px dotted transparent;
+  }
+  .docs__link:hover .docs__t { color: var(--color-warm); border-bottom-color: currentColor; }
+  .docs__foot {
+    margin: 14px 0 0;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .docs__foot a {
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+  }
+  .docs__foot a:hover { color: var(--color-ink); }
+
+  /* ============== FOOT ============== */
+  .plan__foot {
+    margin: 36px 0 0;
+    padding: 14px 4px 0;
+    border-top: 1px dashed var(--color-rule);
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+  .plan__foot a {
+    color: var(--color-ink-soft);
+    border-bottom: 1px dotted currentColor;
+    text-decoration: none;
+  }
+  .plan__foot a:hover { color: var(--color-ink); }
+
+  @media (max-width: 540px) {
+    .plan { padding: 20px 14px 60px; }
+    .week__row { grid-template-columns: 28px 1fr; gap: 8px; padding: 10px; }
+    .flight__row { grid-template-columns: 1fr; gap: 4px; padding: 10px; }
+    .flight__meta { text-align: left; }
+    .band--decisions { padding: 18px 16px; }
+    .docs__link { grid-template-columns: 1fr; gap: 2px; }
+  }
+</style>
