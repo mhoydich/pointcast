@@ -1,118 +1,811 @@
 ---
 /**
- * NounBells — a playable grid of 24 uniquely-tuned nouns.
+ * NounBells - a 100-rung playable ladder of uniquely tuned nouns.
  *
- * Each tile taps to a distinct chime (via src/lib/chimes.ts — same synth
- * as the presence strip + modal + drum room, so the whole site sounds
- * coherent). Rapid-tap for rhythms; the pentatonic constraint means any
- * two tiles always harmonize.
- *
- * The 24 IDs are picked at build time from the full 0–1199 range, so each
- * deploy rotates the voicing of the instrument while staying stable for
- * the visit. Add/remove rows by bumping `rows × cols` below.
- *
- * Taps broadcast via /api/sounds so other visitors with "hear others" on
- * hear the same bell a few seconds later — distributed gong.
+ * v1: deterministic 100-rung ladder.
+ * v2: octave and chord filters.
+ * v3: eight-rung phrase rail with replay.
+ * v4: room-signal status and /api/sounds broadcast on every hit.
  */
 
-const rows = 3;
-const cols = 8;
-const count = rows * cols;
+const count = 100;
+const totalNouns = 1200;
+const stride = Math.floor(totalNouns / count);
+const scale = [
+  130.81, 146.83, 164.81, 196.00, 220.00,
+  261.63, 293.66, 329.63, 392.00, 440.00,
+  523.25, 587.33, 659.25, 783.99, 880.00,
+  1046.5,
+];
 
-// Stratified pick — slice the full ID range into `count` buckets and pick
-// one from each. Guarantees the grid spans the full tonal palette rather
-// than clustering by accident.
-const stride = Math.floor(1200 / count);
-const bellNounIds: number[] = [];
+const noteNames = new Map<number, string>([
+  [130.81, 'C3'], [146.83, 'D3'], [164.81, 'E3'], [196.00, 'G3'], [220.00, 'A3'],
+  [261.63, 'C4'], [293.66, 'D4'], [329.63, 'E4'], [392.00, 'G4'], [440.00, 'A4'],
+  [523.25, 'C5'], [587.33, 'D5'], [659.25, 'E5'], [783.99, 'G5'], [880.00, 'A5'],
+  [1046.5, 'C6'],
+]);
+
+const filters = [
+  { id: 'all', label: 'All', note: '100' },
+  { id: 'low', label: 'Low', note: 'C3-A3' },
+  { id: 'mid', label: 'Mid', note: 'C4-A4' },
+  { id: 'high', label: 'High', note: 'C5-C6' },
+  { id: 'chord', label: 'Chord', note: '2-note' },
+];
+
+const phraseSlots = Array.from({ length: 8 }, (_, i) => i + 1);
+
+function hashVoice(nounId: number, seed: number): number {
+  const x = Math.sin(nounId * (seed * 1337.42 + 1) + seed * 97.31) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function nounVoiceMeta(nounId: number): { baseFreq: number; secondFreq: number | null } {
+  const baseIdx = Math.floor(hashVoice(nounId, 1) * scale.length);
+  const baseFreq = scale[baseIdx];
+  let secondFreq: number | null = null;
+
+  if (hashVoice(nounId, 2) > 0.4) {
+    const offsets = [2, 3, 4, 5, -2, -3];
+    const off = offsets[Math.floor(hashVoice(nounId, 3) * offsets.length)];
+    const secIdx = Math.max(0, Math.min(scale.length - 1, baseIdx + off));
+    if (secIdx !== baseIdx) secondFreq = scale[secIdx];
+  }
+
+  return { baseFreq, secondFreq };
+}
+
+const rungs = [];
 for (let i = 0; i < count; i++) {
   const lo = i * stride;
-  const hi = Math.min(1199, lo + stride - 1);
-  bellNounIds.push(lo + Math.floor(Math.random() * (hi - lo + 1)));
+  const offset = (i * 7 + 3) % stride;
+  const nounId = Math.min(totalNouns - 1, lo + offset);
+  const voice = nounVoiceMeta(nounId);
+  const note = noteNames.get(voice.baseFreq) ?? `${Math.round(voice.baseFreq)} hz`;
+  const band = voice.baseFreq < 261.63 ? 'low' : voice.baseFreq < 523.25 ? 'mid' : 'high';
+  const shape = voice.secondFreq ? 'chord' : 'single';
+  const accent = `hsl(${(nounId * 47) % 360} 78% 46%)`;
+  rungs.push({ index: i + 1, nounId, note, band, shape, accent });
 }
 ---
 
-<section class="mt-12 mb-10" id="noun-bells">
-  <div class="flex items-center gap-3 mb-4">
-    <div class="h-px flex-1 bg-rule/40"></div>
-    <h2 class="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-ink-soft/60">
-      <span class="text-warm/70">05</span> &middot; Noun Bells
-    </h2>
-    <div class="h-px flex-1 bg-rule/40"></div>
+<section class="noun-bell-ladder" id="noun-bells" aria-labelledby="noun-bell-ladder-title">
+  <div class="noun-bell-ladder__head">
+    <p class="noun-bell-ladder__kicker">PointCast.xyz &middot; lobby instrument</p>
+    <div class="noun-bell-ladder__title-block">
+      <h2 id="noun-bell-ladder-title">Nouns Bell Ladder</h2>
+      <p>100 rungs &middot; deterministic Noun voices &middot; room broadcast</p>
+    </div>
+    <div class="noun-bell-ladder__meter" aria-label="100 rungs">
+      <span>100</span>
+      <small>rungs</small>
+    </div>
   </div>
 
-  <p class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/55 text-center mb-5">
-    each noun sings its own note &middot; tap to play &middot; rapid-fire for a rhythm
-  </p>
+  <div class="noun-bell-ladder__versions" aria-label="Build versions">
+    <span><strong>v1</strong> 100 rung ladder</span>
+    <span><strong>v2</strong> octave filters</span>
+    <span><strong>v3</strong> phrase replay</span>
+    <span><strong>v4</strong> room signal</span>
+  </div>
 
-  <!-- Block-y frame — doubled thick rule so the instrument reads as a
-       discrete object ("a bell rack") not just a decorative grid. -->
-  <div class="relative rounded-xl overflow-hidden border-2 border-ink/80 bg-card p-3 md:p-4">
-    <!-- Midcentury corner blocks echoing the footer + Spotify + Weather -->
-    <div class="absolute top-0 left-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
-    <div class="absolute top-0 right-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
-    <div class="absolute bottom-0 left-0 w-2.5 h-2.5 bg-ink" aria-hidden="true"></div>
-    <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-warm" aria-hidden="true"></div>
-
-    <!-- Static Tailwind classes so JIT can see them. If you change rows*cols
-         remember to update these to match (dynamic template strings get
-         stripped during build and render unclassed). -->
-    <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5 md:gap-2">
-      {bellNounIds.map((id) => (
+  <div class="noun-bell-ladder__controls" aria-label="Nouns bell ladder controls">
+    <div class="noun-bell-ladder__filters" role="group" aria-label="Filter rungs">
+      {filters.map((filter, index) => (
         <button
           type="button"
-          class="noun-bell group relative block p-0 border-0 bg-paper/60 rounded-md overflow-hidden cursor-pointer transition-all duration-75 ease-out ring-1 ring-rule/30 hover:ring-warm/60 active:scale-90"
-          data-bell-noun={id}
-          aria-label={`Play noun ${id}`}
+          class="noun-bell-filter"
+          data-bell-filter={filter.id}
+          aria-pressed={index === 0 ? 'true' : 'false'}
         >
-          <img
-            src={`https://noun.pics/${id}.svg`}
-            alt=""
-            aria-hidden="true"
-            width="72"
-            height="72"
-            class="block w-full aspect-square"
-            style="image-rendering: pixelated;"
-            loading="lazy"
-          />
-          <span class="absolute inset-0 ring-0 group-active:ring-2 ring-warm/80 rounded-md pointer-events-none transition-all"></span>
+          <span>{filter.label}</span>
+          <small>{filter.note}</small>
         </button>
+      ))}
+    </div>
+    <div class="noun-bell-ladder__actions" role="group" aria-label="Phrase actions">
+      <button type="button" class="noun-bell-action" data-bell-play-phrase>Play phrase</button>
+      <button type="button" class="noun-bell-action" data-bell-clear-phrase>Clear</button>
+    </div>
+  </div>
+
+  <div class="noun-bell-ladder__phrase" aria-label="Eight rung phrase rail">
+    <p class="noun-bell-ladder__phrase-label">v3 phrase rail</p>
+    <div class="noun-bell-ladder__phrase-slots">
+      {phraseSlots.map((slot) => (
+        <span class="noun-bell-ladder__phrase-slot" data-phrase-slot={slot}>
+          <small>{String(slot).padStart(2, '0')}</small>
+          <strong>empty</strong>
+        </span>
       ))}
     </div>
   </div>
 
-  <p class="font-mono text-[0.48rem] tracking-[0.18em] uppercase text-ink-soft/40 text-center mt-3">
-    24 voices &middot; pentatonic &middot; shared across the room
+  <p class="noun-bell-ladder__status" data-bell-status aria-live="polite">
+    v4 room signal ready. Tap a rung to ring the lobby.
   </p>
+
+  <div class="noun-bell-ladder__stage">
+    <div class="noun-bell-ladder__plaque" aria-hidden="true">
+      <span class="noun-bell-ladder__plaque-mark">PC</span>
+      <span class="noun-bell-ladder__plaque-line"></span>
+      <span>001-100</span>
+      <span>NOUNS</span>
+    </div>
+
+    <ol class="noun-bell-ladder__rungs" aria-label="Nouns bell ladder with 100 playable rungs">
+      {rungs.map((rung) => (
+        <li
+          class="noun-bell-rung"
+          data-rung-band={rung.band}
+          data-rung-shape={rung.shape}
+          style={`--rung-accent: ${rung.accent};`}
+        >
+          <button
+            type="button"
+            class="noun-bell"
+            data-bell-index={rung.index}
+            data-bell-noun={rung.nounId}
+            data-bell-note={rung.note}
+            data-bell-band={rung.band}
+            data-bell-shape={rung.shape}
+            aria-label={`Play rung ${rung.index}, Noun ${rung.nounId}, ${rung.note}`}
+          >
+            <span class="noun-bell__number">{String(rung.index).padStart(3, '0')}</span>
+            <span class="noun-bell__rail-dot" aria-hidden="true"></span>
+            <span class="noun-bell__art">
+              <img
+                src={`https://noun.pics/${rung.nounId}.svg`}
+                alt=""
+                aria-hidden="true"
+                width="56"
+                height="56"
+                loading={rung.index <= 12 ? 'eager' : 'lazy'}
+                decoding="async"
+                fetchpriority={rung.index <= 12 ? 'high' : 'low'}
+              />
+            </span>
+            <span class="noun-bell__copy">
+              <span class="noun-bell__noun">Noun #{rung.nounId}</span>
+              <span class="noun-bell__tone">{rung.note} &middot; {rung.band} &middot; {rung.shape}</span>
+            </span>
+            <span class="noun-bell__bar" aria-hidden="true"></span>
+            <span class="noun-bell__ping" aria-hidden="true"></span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  </div>
 </section>
 
 <script>
-  /**
-   * NounBells client — lightweight wrapper over src/lib/chimes.ts.
-   * Every tap plays the noun's signature + broadcasts to /api/sounds so
-   * other visitors hear it too (respect the hear-others toggle).
-   */
   import { playNounVoice, broadcastSound } from '../lib/chimes';
 
-  // Brief scale-pulse feedback so rapid taps feel percussive even in
-  // browsers where the CSS :active state doesn't hold long enough.
-  function pulse(el: HTMLElement) {
-    el.style.transition = 'transform 70ms ease-out';
-    el.style.transform = 'scale(0.9)';
-    setTimeout(() => {
-      el.style.transform = 'scale(1.05)';
-      setTimeout(() => { el.style.transform = ''; }, 80);
-    }, 60);
+  const root = document.getElementById('noun-bells');
+  const phrase = [];
+  let activeFilter = 'all';
+  let replaying = false;
+
+  function setStatus(message) {
+    const status = root?.querySelector('[data-bell-status]');
+    if (status) status.textContent = message;
   }
 
-  // Delegated handler — one listener, every bell routes through it. Works
-  // even if we re-render the grid later.
-  const bellsSection = document.getElementById('noun-bells');
-  bellsSection?.addEventListener('pointerdown', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>('.noun-bell');
-    if (!btn) return;
-    const id = Number(btn.dataset.bellNoun ?? 0);
-    playNounVoice(id);
-    broadcastSound('profile', id);
+  function pulse(el) {
+    el.classList.remove('noun-bell--ringing');
+    void el.offsetWidth;
+    el.classList.add('noun-bell--ringing');
+    setTimeout(() => el.classList.remove('noun-bell--ringing'), 520);
+  }
+
+  function renderPhrase() {
+    root?.querySelectorAll('[data-phrase-slot]').forEach((slot, i) => {
+      const hit = phrase[i];
+      const label = slot.querySelector('strong');
+      slot.style.removeProperty('--slot-accent');
+      slot.toggleAttribute('data-filled', Boolean(hit));
+      if (!label) return;
+      if (!hit) {
+        label.textContent = 'empty';
+        return;
+      }
+      label.textContent = `#${hit.nounId} ${hit.note}`;
+      slot.style.setProperty('--slot-accent', `hsl(${(hit.nounId * 47) % 360} 78% 46%)`);
+    });
+  }
+
+  function addToPhrase(hit) {
+    phrase.push(hit);
+    while (phrase.length > 8) phrase.shift();
+    renderPhrase();
+  }
+
+  function ring(btn, shouldAddToPhrase = true) {
+    const nounId = Number(btn.dataset.bellNoun ?? 0);
+    const index = Number(btn.dataset.bellIndex ?? 0);
+    const note = btn.dataset.bellNote ?? '';
+    const band = btn.dataset.bellBand ?? '';
+    const shape = btn.dataset.bellShape ?? '';
+    playNounVoice(nounId);
+    broadcastSound('profile', nounId);
     pulse(btn);
+    if (shouldAddToPhrase) addToPhrase({ index, nounId, note, band, shape });
+    setStatus(`v4 room signal: rung ${String(index).padStart(3, '0')} rang Noun #${nounId} at ${note}.`);
+  }
+
+  function applyFilter(nextFilter) {
+    activeFilter = nextFilter;
+    root?.querySelectorAll('[data-bell-filter]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.bellFilter === activeFilter));
+    });
+
+    let visible = 0;
+    root?.querySelectorAll('.noun-bell-rung').forEach((rung) => {
+      const matches =
+        activeFilter === 'all' ||
+        rung.dataset.rungBand === activeFilter ||
+        rung.dataset.rungShape === activeFilter;
+      rung.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    setStatus(`v2 filter: ${activeFilter} showing ${visible} rungs.`);
+  }
+
+  function replayPhrase() {
+    if (replaying || phrase.length === 0) {
+      if (phrase.length === 0) setStatus('v3 phrase rail is empty. Tap up to 8 rungs first.');
+      return;
+    }
+    replaying = true;
+    setStatus(`v3 replay: playing ${phrase.length} rung phrase.`);
+    phrase.forEach((hit, i) => {
+      setTimeout(() => {
+        const btn = root?.querySelector(`.noun-bell[data-bell-noun="${hit.nounId}"]`);
+        if (btn) ring(btn, false);
+        if (i === phrase.length - 1) {
+          setTimeout(() => {
+            replaying = false;
+            setStatus('v3 replay complete. Phrase rail is ready.');
+          }, 220);
+        }
+      }, i * 220);
+    });
+  }
+
+  root?.addEventListener('pointerdown', (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const bell = target.closest('.noun-bell');
+    if (bell) {
+      ring(bell);
+      return;
+    }
+
+    const filter = target.closest('[data-bell-filter]');
+    if (filter) {
+      applyFilter(filter.dataset.bellFilter ?? 'all');
+      return;
+    }
+
+    if (target.closest('[data-bell-play-phrase]')) {
+      replayPhrase();
+      return;
+    }
+
+    if (target.closest('[data-bell-clear-phrase]')) {
+      phrase.length = 0;
+      renderPhrase();
+      setStatus('v3 phrase rail cleared.');
+    }
   });
+
+  renderPhrase();
 </script>
+
+<style>
+  .noun-bell-ladder {
+    scroll-margin-top: 76px;
+    margin: 24px 0 34px;
+    border: 2px solid #1a1208;
+    border-radius: 0;
+    background:
+      linear-gradient(90deg, rgba(26, 18, 8, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+      linear-gradient(0deg, rgba(15, 110, 86, 0.08) 1px, transparent 1px) 0 0 / 24px 24px,
+      #fffaf0;
+    color: #1a1208;
+    box-shadow: 8px 8px 0 rgba(26, 18, 8, 0.12);
+  }
+
+  .noun-bell-ladder__head {
+    display: grid;
+    grid-template-columns: minmax(140px, 0.24fr) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    padding: 16px;
+    border-bottom: 2px solid #1a1208;
+    background:
+      linear-gradient(90deg, rgba(255, 210, 74, 0.55), transparent 46%),
+      rgba(255, 253, 248, 0.82);
+  }
+
+  .noun-bell-ladder__kicker,
+  .noun-bell-ladder__title-block p,
+  .noun-bell-ladder__meter,
+  .noun-bell-ladder__versions,
+  .noun-bell-ladder__controls,
+  .noun-bell-ladder__phrase,
+  .noun-bell-ladder__status,
+  .noun-bell-ladder__plaque,
+  .noun-bell__number,
+  .noun-bell__noun,
+  .noun-bell__tone {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .noun-bell-ladder__kicker {
+    margin: 0;
+    color: #8a2432;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .noun-bell-ladder h2 {
+    margin: 0 0 4px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(28px, 5vw, 56px);
+    line-height: 0.95;
+    letter-spacing: 0.06em;
+  }
+
+  .noun-bell-ladder__title-block p {
+    margin: 0;
+    color: #5f5e5a;
+    font-size: 10px;
+  }
+
+  .noun-bell-ladder__meter {
+    display: grid;
+    place-items: center;
+    min-width: 96px;
+    min-height: 72px;
+    border: 2px solid #1a1208;
+    background: #fffdf8;
+  }
+
+  .noun-bell-ladder__meter span {
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .noun-bell-ladder__meter small {
+    color: #8a2432;
+    font-size: 10px;
+  }
+
+  .noun-bell-ladder__versions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 2px solid #1a1208;
+    background: #1a1208;
+    gap: 1px;
+    font-size: 10px;
+  }
+
+  .noun-bell-ladder__versions span {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    background: #fffdf8;
+    color: #5f5e5a;
+  }
+
+  .noun-bell-ladder__versions strong {
+    color: #8a2432;
+  }
+
+  .noun-bell-ladder__controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid rgba(26, 18, 8, 0.48);
+    background: rgba(255, 253, 248, 0.72);
+  }
+
+  .noun-bell-ladder__filters,
+  .noun-bell-ladder__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .noun-bell-filter,
+  .noun-bell-action {
+    display: inline-grid;
+    gap: 3px;
+    min-height: 44px;
+    border: 1px solid #1a1208;
+    border-radius: 0;
+    background: #fffdf8;
+    color: #1a1208;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .noun-bell-filter[aria-pressed="true"],
+  .noun-bell-action:hover,
+  .noun-bell-filter:hover {
+    background: #ffd24a;
+  }
+
+  .noun-bell-filter small {
+    color: #5f5e5a;
+    font-size: 9px;
+  }
+
+  .noun-bell-ladder__phrase {
+    padding: 12px;
+    border-bottom: 1px solid rgba(26, 18, 8, 0.48);
+    background: rgba(255, 210, 74, 0.12);
+  }
+
+  .noun-bell-ladder__phrase-label {
+    margin: 0 0 8px;
+    color: #8a2432;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .noun-bell-ladder__phrase-slots {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .noun-bell-ladder__phrase-slot {
+    display: grid;
+    gap: 4px;
+    min-height: 48px;
+    padding: 6px;
+    border: 1px dashed rgba(26, 18, 8, 0.42);
+    background: #fffdf8;
+    color: #7b7265;
+    font-size: 9px;
+  }
+
+  .noun-bell-ladder__phrase-slot[data-filled] {
+    border-style: solid;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--slot-accent) 22%, transparent), transparent),
+      #fffdf8;
+    color: #1a1208;
+  }
+
+  .noun-bell-ladder__phrase-slot strong {
+    overflow-wrap: anywhere;
+  }
+
+  .noun-bell-ladder__status {
+    margin: 0;
+    padding: 10px 12px;
+    border-bottom: 2px solid #1a1208;
+    background: #0f6e56;
+    color: #fffdf8;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .noun-bell-ladder__stage {
+    display: grid;
+    grid-template-columns: minmax(112px, 0.16fr) minmax(0, 1fr);
+    min-height: 520px;
+  }
+
+  .noun-bell-ladder__plaque {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 18px 14px;
+    border-right: 2px solid #1a1208;
+    background:
+      linear-gradient(180deg, rgba(74, 214, 255, 0.18), transparent 280px),
+      #fffdf8;
+    color: #5f5e5a;
+    font-size: 10px;
+    writing-mode: vertical-rl;
+  }
+
+  .noun-bell-ladder__plaque-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #1a1208;
+    background: #ffd24a;
+    color: #1a1208;
+    writing-mode: horizontal-tb;
+  }
+
+  .noun-bell-ladder__plaque-line {
+    width: 1px;
+    min-height: 180px;
+    background: linear-gradient(180deg, #1a1208, transparent);
+  }
+
+  .noun-bell-ladder__rungs {
+    position: relative;
+    max-height: 560px;
+    margin: 0;
+    padding: 14px 16px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    background:
+      linear-gradient(90deg, transparent 21px, rgba(26, 18, 8, 0.32) 21px 23px, transparent 23px calc(100% - 23px), rgba(26, 18, 8, 0.32) calc(100% - 23px) calc(100% - 21px), transparent calc(100% - 21px)),
+      rgba(255, 253, 248, 0.74);
+    scrollbar-color: #8a2432 #f2ead9;
+  }
+
+  .noun-bell-rung {
+    min-width: 0;
+  }
+
+  .noun-bell-rung + .noun-bell-rung {
+    margin-top: 6px;
+  }
+
+  .noun-bell {
+    position: relative;
+    display: grid;
+    grid-template-columns: 48px 14px 48px minmax(132px, 0.36fr) minmax(80px, 1fr) 24px;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 58px;
+    padding: 6px 8px;
+    border: 1px solid rgba(26, 18, 8, 0.74);
+    border-radius: 0;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--rung-accent) 18%, transparent), transparent 32%),
+      #fffdf8;
+    color: #1a1208;
+    cursor: pointer;
+    text-align: left;
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
+  }
+
+  .noun-bell:hover,
+  .noun-bell:focus-visible {
+    border-color: var(--rung-accent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rung-accent) 36%, transparent);
+    outline: none;
+    transform: translateX(2px);
+  }
+
+  .noun-bell__number {
+    color: #8a2432;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .noun-bell__rail-dot {
+    width: 12px;
+    height: 12px;
+    border: 1px solid #1a1208;
+    background: var(--rung-accent);
+    box-shadow: 0 0 0 3px #fffdf8;
+  }
+
+  .noun-bell__art {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border: 1px solid rgba(26, 18, 8, 0.54);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--rung-accent) 18%, #f8f3e8), #f1f1ed);
+  }
+
+  .noun-bell__art::before,
+  .noun-bell__art::after {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .noun-bell__art::before {
+    left: 9px;
+    right: 9px;
+    top: 15px;
+    height: 10px;
+    background:
+      linear-gradient(90deg, #e43a31 0 42%, transparent 42% 58%, #e43a31 58% 100%);
+    box-shadow:
+      0 0 0 2px #1a1208,
+      0 12px 0 -3px color-mix(in srgb, var(--rung-accent) 62%, #fffdf8);
+  }
+
+  .noun-bell__art::after {
+    left: 13px;
+    top: 18px;
+    width: 5px;
+    height: 4px;
+    background: #fffdf8;
+    box-shadow: 13px 0 0 #fffdf8;
+  }
+
+  .noun-bell__art img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+
+  .noun-bell__copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .noun-bell__noun {
+    overflow-wrap: anywhere;
+    color: #1a1208;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .noun-bell__tone {
+    color: #5f5e5a;
+    font-size: 10px;
+  }
+
+  .noun-bell__bar {
+    height: 8px;
+    min-width: 0;
+    border-top: 1px solid rgba(26, 18, 8, 0.5);
+    border-bottom: 1px solid rgba(26, 18, 8, 0.5);
+    background:
+      repeating-linear-gradient(90deg, var(--rung-accent) 0 8px, transparent 8px 14px),
+      rgba(26, 18, 8, 0.05);
+    opacity: 0.74;
+  }
+
+  .noun-bell__ping {
+    width: 16px;
+    height: 16px;
+    justify-self: end;
+    border: 1px solid rgba(26, 18, 8, 0.74);
+    background: #fffaf0;
+  }
+
+  .noun-bell--ringing {
+    animation: nounBellRing 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .noun-bell--ringing .noun-bell__ping {
+    animation: nounBellPulse 520ms ease-out;
+  }
+
+  @keyframes nounBellRing {
+    0% { transform: translateX(0); }
+    18% { transform: translateX(6px); }
+    34% { transform: translateX(-3px); }
+    52% { transform: translateX(3px); }
+    100% { transform: translateX(0); }
+  }
+
+  @keyframes nounBellPulse {
+    0% {
+      background: var(--rung-accent);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--rung-accent) 42%, transparent);
+    }
+    100% {
+      background: #fffaf0;
+      box-shadow: 0 0 0 16px transparent;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .noun-bell-ladder {
+      box-shadow: 5px 5px 0 rgba(26, 18, 8, 0.12);
+    }
+
+    .noun-bell-ladder__head,
+    .noun-bell-ladder__stage,
+    .noun-bell-ladder__controls {
+      grid-template-columns: 1fr;
+    }
+
+    .noun-bell-ladder__versions,
+    .noun-bell-ladder__phrase-slots {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .noun-bell-ladder__meter {
+      justify-self: start;
+      min-width: 78px;
+      min-height: 56px;
+    }
+
+    .noun-bell-ladder__plaque {
+      display: flex;
+      align-items: center;
+      min-height: 0;
+      border-right: 0;
+      border-bottom: 2px solid #1a1208;
+      writing-mode: horizontal-tb;
+    }
+
+    .noun-bell-ladder__plaque-line {
+      width: min(26vw, 140px);
+      min-height: 1px;
+      height: 1px;
+      background: linear-gradient(90deg, #1a1208, transparent);
+    }
+
+    .noun-bell-ladder__rungs {
+      max-height: 520px;
+      padding: 10px;
+      background:
+        linear-gradient(90deg, transparent 13px, rgba(26, 18, 8, 0.28) 13px 15px, transparent 15px calc(100% - 15px), rgba(26, 18, 8, 0.28) calc(100% - 15px) calc(100% - 13px), transparent calc(100% - 13px)),
+        rgba(255, 253, 248, 0.74);
+    }
+
+    .noun-bell {
+      grid-template-columns: 40px 10px 42px minmax(0, 1fr) 18px;
+      gap: 7px;
+      min-height: 54px;
+    }
+
+    .noun-bell__bar {
+      display: none;
+    }
+
+    .noun-bell__art {
+      width: 40px;
+      height: 40px;
+    }
+  }
+
+  @media (max-width: 440px) {
+    .noun-bell-ladder__head {
+      padding: 12px;
+    }
+
+    .noun-bell-ladder__versions,
+    .noun-bell-ladder__phrase-slots {
+      grid-template-columns: 1fr;
+    }
+
+    .noun-bell {
+      grid-template-columns: 34px 36px minmax(0, 1fr) 16px;
+    }
+
+    .noun-bell__rail-dot {
+      display: none;
+    }
+
+    .noun-bell__number {
+      font-size: 10px;
+    }
+
+    .noun-bell__noun,
+    .noun-bell__tone {
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+    }
+  }
+</style>
