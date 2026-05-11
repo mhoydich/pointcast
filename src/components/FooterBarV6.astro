@@ -76,6 +76,20 @@ const BUILDINGS = [
     <div class="fbv6__birds" id="fbv6-birds" aria-hidden="true"></div>
   </div>
 
+  {/* v8: SKYLINE — distant pixel-silhouette buildings behind the
+      foreground row. Pure SVG, no animation. The horizon haze gradient
+      from .fbv6__sky::after blends into it. Adds spatial depth. */}
+  <div class="fbv6__skyline" aria-hidden="true">
+    <svg viewBox="0 0 800 30" preserveAspectRatio="none" width="100%" height="30" focusable="false">
+      <path d="M0,30 L0,18 L20,18 L20,12 L40,12 L40,16 L70,16 L70,8 L90,8 L90,14 L110,14 L110,20 L140,20 L140,10 L160,10 L160,18 L190,18 L190,6 L210,6 L210,16 L240,16 L240,14 L270,14 L270,18 L295,18 L295,8 L320,8 L320,16 L355,16 L355,12 L380,12 L380,20 L410,20 L410,10 L435,10 L435,16 L460,16 L460,8 L490,8 L490,14 L515,14 L515,20 L545,20 L545,12 L570,12 L570,16 L600,16 L600,8 L625,8 L625,18 L650,18 L650,12 L680,12 L680,20 L710,20 L710,14 L735,14 L735,8 L760,8 L760,18 L800,18 L800,30 Z" fill="currentColor"/>
+    </svg>
+  </div>
+
+  {/* v8: WEATHER OVERLAY — fetched from /api/weather on mount. Adds
+      rain particles / fog wash / extra clouds based on real El Segundo
+      conditions. Container; JS populates by data-condition. */}
+  <div class="fbv6__weather" id="fbv6-weather" aria-hidden="true"></div>
+
   {/* Buildings — positioned absolutely, sit on top of the ground line. */}
   <ul class="fbv6__buildings">
     {BUILDINGS.map((b) => (
@@ -114,7 +128,10 @@ const BUILDINGS = [
 
   {/* Your noun — animated walk loop. Image src set on mount from
       pc:currentNoun localStorage (falls back to random visit-noun). */}
-  <div class="fbv6__walker" id="fbv6-walker">
+  <div class="fbv6__walker" id="fbv6-walker" data-mood="">
+    {/* v8: mood aura — radial glow tinted by pc:mood. JS sets the
+        data-mood attribute on mount and on storage events. */}
+    <span class="fbv6__walker-aura" aria-hidden="true"></span>
     <img id="fbv6-walker-noun" alt="" width="32" height="32" />
     <span class="fbv6__walker-shadow" aria-hidden="true"></span>
   </div>
@@ -607,6 +624,107 @@ const BUILDINGS = [
   // First bird ~10-25s after mount.
   setTimeout(() => { spawnBird(); scheduleBird(); }, 10000 + Math.random() * 15000);
 
+  // ─── v8: REAL WEATHER ────────────────────────────────────────────────
+  // Fetch /api/weather (Open-Meteo, El Segundo) and apply visual
+  // treatments: extra clouds for partly-cloudy, dim wash for overcast,
+  // fog overlay for fog, rain particles for drizzle/rain. WMO codes:
+  //   0      clear · 1-2 mainly clear/partly cloudy · 3 overcast
+  //   45-48  fog · 51-67 drizzle/rain · 71-86 snow · 95+ thunder
+  const weatherEl = document.getElementById('fbv6-weather');
+  function applyWeather(data) {
+    if (!weatherEl || !data) return;
+    const code = Number(data.conditionCode);
+    weatherEl.dataset.condition = data.condition || '';
+    weatherEl.dataset.code = String(code);
+    weatherEl.innerHTML = '';
+    // Bucket the WMO code into a visual treatment.
+    let treatment = 'clear';
+    if (code === 1) treatment = 'mainly-clear';
+    else if (code === 2) treatment = 'partly-cloudy';
+    else if (code === 3) treatment = 'overcast';
+    else if (code >= 45 && code <= 48) treatment = 'fog';
+    else if ((code >= 51 && code <= 57) || (code >= 80 && code <= 82)) treatment = 'drizzle';
+    else if (code >= 61 && code <= 67) treatment = 'rain';
+    else if (code >= 71 && code <= 77) treatment = 'snow';
+    else if (code >= 85 && code <= 86) treatment = 'snow';
+    else if (code >= 95) treatment = 'thunder';
+    weatherEl.dataset.treatment = treatment;
+
+    // Spawn rain particles for drizzle/rain/thunder.
+    if (treatment === 'drizzle' || treatment === 'rain' || treatment === 'thunder') {
+      const drops = treatment === 'drizzle' ? 12 : (treatment === 'rain' ? 22 : 28);
+      for (let i = 0; i < drops; i++) {
+        const drop = document.createElement('span');
+        drop.className = 'fbv6__rain';
+        drop.style.left = (Math.random() * 100) + '%';
+        drop.style.animationDelay = (Math.random() * 1.4) + 's';
+        drop.style.animationDuration = (0.7 + Math.random() * 0.5) + 's';
+        weatherEl.appendChild(drop);
+      }
+    }
+    // Spawn snowflakes for snow.
+    if (treatment === 'snow') {
+      for (let i = 0; i < 18; i++) {
+        const flake = document.createElement('span');
+        flake.className = 'fbv6__flake';
+        flake.style.left = (Math.random() * 100) + '%';
+        flake.style.animationDelay = (Math.random() * 4) + 's';
+        flake.style.animationDuration = (3 + Math.random() * 3) + 's';
+        weatherEl.appendChild(flake);
+      }
+    }
+    // Set wind hint as CSS var so clouds drift faster on windy days.
+    const wind = Number(data.windSpeed) || 3;
+    if (sky) sky.style.setProperty('--wind-mult', String(Math.max(0.3, Math.min(2.5, wind / 6))));
+  }
+  function fetchWeather() {
+    if (!weatherEl) return;
+    if (!document.documentElement.classList.contains('bar-v6-on')) return;
+    fetch('/api/weather', { cache: 'default' })
+      .then(r => r.ok ? r.json() : null)
+      .then(applyWeather)
+      .catch(() => {});
+  }
+  // First fetch ~2s after mount so it doesn't compete with initial paint.
+  setTimeout(fetchWeather, 2000);
+  // Refresh every 15 minutes — the API caches at the edge anyway.
+  setInterval(fetchWeather, 15 * 60 * 1000);
+
+  // ─── v8: WALKER MOOD AURA ─────────────────────────────────────────────
+  // Reads pc:mood from localStorage and sets data-mood on the walker.
+  // CSS handles the colored radial glow. Listens for storage events so
+  // changing mood on /me updates the aura everywhere instantly.
+  function paintMood() {
+    const walker = document.getElementById('fbv6-walker');
+    if (!walker) return;
+    let mood = '';
+    try {
+      mood = localStorage.getItem('pc:mood') || '';
+      // Fallback: read from pc:me:v1 (the /me identity blob).
+      if (!mood) {
+        const me = JSON.parse(localStorage.getItem('pc:me:v1') || '{}');
+        if (me && typeof me.mood === 'string') mood = me.mood;
+      }
+    } catch (e) {}
+    walker.dataset.mood = mood;
+  }
+  paintMood();
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pc:mood') paintMood();
+  });
+  // pc:me:v1 also stores mood (different key); refresh on changes there too.
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'pc:me:v1') {
+      try {
+        const me = JSON.parse(e.newValue || '{}');
+        if (me && me.mood) {
+          const walker = document.getElementById('fbv6-walker');
+          if (walker) walker.dataset.mood = me.mood;
+        }
+      } catch (err) {}
+    }
+  });
+
   // ─── v6.2: CROSS-VISITOR PEERS ───────────────────────────────────────
   // Other visitors' nouns walk in YOUR bar as ghost-translucent. We use
   // the existing PresenceRoom DO via /api/room with a synthetic key
@@ -911,6 +1029,103 @@ const BUILDINGS = [
   .fbv6__sun[data-mode='evening'] { top: 36px; left: 78%; background: #ff7a4a; box-shadow: 0 0 18px rgba(255, 100, 60, 0.55); }
   .fbv6__sun[data-mode='night']   { opacity: 0; }
 
+  /* v8: SKYLINE — distant pixel-silhouette buildings behind the
+     foreground row. Color shifts with --nightness so distant buildings
+     fade into the night sky. The wind multiplier doesn't apply here
+     — distant skyline is static, parallax of the sky alone gives the
+     depth illusion when clouds move.
+     Sits at ~30px above the ground line, behind everything. */
+  .fbv6__skyline {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 14px;
+    height: 30px;
+    z-index: 0;
+    pointer-events: none;
+    /* Color: warm-grey by default, shifts darker at night. */
+    color: rgba(60, 50, 38, calc(0.42 + var(--nightness, 0) * 0.45));
+    transition: color 1.2s ease;
+    /* Soft top edge so it blends into sky instead of cutting hard. */
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 25%, #000 100%);
+            mask-image: linear-gradient(180deg, transparent 0%, #000 25%, #000 100%);
+  }
+  .fbv6__skyline svg { display: block; width: 100%; height: 100%; }
+
+  /* v8: WEATHER OVERLAY */
+  .fbv6__weather {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* Overcast: dim wash + saturate the sky downward. */
+  .fbv6__weather[data-treatment='overcast']::before,
+  .fbv6__weather[data-treatment='partly-cloudy']::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(180, 188, 195, 0.32) 0%, rgba(150, 160, 170, 0.18) 60%, transparent 100%);
+    pointer-events: none;
+  }
+  .fbv6__weather[data-treatment='overcast']::after {
+    /* Extra cloud bands for overcast. */
+    content: '';
+    position: absolute; top: 6px; left: 0; right: 0;
+    height: 14px;
+    background:
+      radial-gradient(ellipse 30px 6px at 12% 50%, rgba(255, 255, 255, 0.6) 0%, transparent 70%),
+      radial-gradient(ellipse 40px 7px at 38% 50%, rgba(255, 255, 255, 0.55) 0%, transparent 70%),
+      radial-gradient(ellipse 36px 6px at 62% 50%, rgba(255, 255, 255, 0.5) 0%, transparent 70%),
+      radial-gradient(ellipse 32px 7px at 88% 50%, rgba(255, 255, 255, 0.55) 0%, transparent 70%);
+    animation: fbv6-overcast-drift 80s linear infinite;
+  }
+  @keyframes fbv6-overcast-drift {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(40px); }
+  }
+  /* Fog: low band of wash near the ground line. */
+  .fbv6__weather[data-treatment='fog']::before {
+    content: '';
+    position: absolute; left: 0; right: 0; bottom: 14px;
+    height: 38px;
+    background: linear-gradient(180deg, transparent, rgba(220, 220, 220, 0.55) 60%, rgba(220, 220, 220, 0.65));
+    pointer-events: none;
+    animation: fbv6-fog-drift 30s ease-in-out infinite alternate;
+  }
+  @keyframes fbv6-fog-drift {
+    from { opacity: 0.85; transform: translateX(-3px); }
+    to   { opacity: 1;    transform: translateX(3px);  }
+  }
+  /* Rain: many tiny streaks falling diagonally. */
+  .fbv6__rain {
+    position: absolute;
+    top: -6px;
+    width: 1px;
+    height: 8px;
+    background: linear-gradient(180deg, transparent, rgba(180, 200, 230, 0.7));
+    transform: rotate(15deg);
+    animation: fbv6-rain-fall 0.9s linear infinite;
+  }
+  @keyframes fbv6-rain-fall {
+    from { transform: translateY(0)    rotate(15deg); opacity: 0; }
+    8%   {                                            opacity: 1; }
+    to   { transform: translateY(80px) rotate(15deg); opacity: 0; }
+  }
+  /* Snow: bigger soft flakes, slower. */
+  .fbv6__flake {
+    position: absolute;
+    top: -6px;
+    width: 3px; height: 3px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.6);
+    animation: fbv6-flake-fall linear infinite;
+  }
+  @keyframes fbv6-flake-fall {
+    from { transform: translateY(0)    translateX(0);    opacity: 0; }
+    10%  {                                                opacity: 1; }
+    50%  { transform: translateY(40px) translateX(6px);              }
+    to   { transform: translateY(80px) translateX(0);    opacity: 0; }
+  }
+
   /* GROUND line — single horizontal stroke at ~62% height */
   .fbv6__ground {
     position: absolute; left: 0; right: 0; bottom: 14px;
@@ -1082,6 +1297,52 @@ const BUILDINGS = [
   }
   /* Walker shadow — width scales with --shadow-scale (set by paintSky):
      ~22px at noon, up to ~50px at dawn/dusk. Faded color too. */
+  /* v8: WALKER MOOD AURA — radial glow tinted by pc:mood. Sits behind
+     the noun img; only visible when data-mood is set. Six moods, each
+     a different color. Subtle by design — should feel like a halo,
+     not a Pokeball. */
+  .fbv6__walker-aura {
+    position: absolute;
+    top: -4px; left: 50%;
+    width: 44px; height: 44px;
+    margin-left: -22px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    filter: blur(4px);
+    transition: opacity 0.6s ease, background 0.6s ease;
+  }
+  .fbv6__walker[data-mood='chill'] .fbv6__walker-aura   {
+    background: radial-gradient(circle, rgba(140, 200, 230, 0.55) 0%, transparent 70%);
+    opacity: 1;
+  }
+  .fbv6__walker[data-mood='hype'] .fbv6__walker-aura    {
+    background: radial-gradient(circle, rgba(255, 140, 80, 0.6)  0%, transparent 70%);
+    opacity: 1;
+    animation: fbv6-aura-pulse 1.6s ease-in-out infinite;
+  }
+  .fbv6__walker[data-mood='focus'] .fbv6__walker-aura   {
+    background: radial-gradient(circle, rgba(120, 200, 140, 0.55) 0%, transparent 70%);
+    opacity: 1;
+  }
+  .fbv6__walker[data-mood='flow'] .fbv6__walker-aura    {
+    background: radial-gradient(circle, rgba(180, 140, 220, 0.55) 0%, transparent 70%);
+    opacity: 1;
+    animation: fbv6-aura-pulse 3.2s ease-in-out infinite;
+  }
+  .fbv6__walker[data-mood='curious'] .fbv6__walker-aura {
+    background: radial-gradient(circle, rgba(240, 210, 100, 0.55) 0%, transparent 70%);
+    opacity: 1;
+  }
+  .fbv6__walker[data-mood='quiet'] .fbv6__walker-aura   {
+    background: radial-gradient(circle, rgba(180, 180, 190, 0.45) 0%, transparent 70%);
+    opacity: 1;
+  }
+  @keyframes fbv6-aura-pulse {
+    0%, 100% { transform: scale(1);    filter: blur(4px); }
+    50%      { transform: scale(1.18); filter: blur(5px); }
+  }
+
   .fbv6__walker-shadow {
     position: absolute; bottom: -2px; left: 50%;
     width: calc(22px * var(--shadow-scale, 1));
