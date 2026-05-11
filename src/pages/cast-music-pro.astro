@@ -1142,7 +1142,18 @@ const built = new Date().toISOString();
   function fmtTime(sec: number) { sec = Math.max(0, sec); const m = Math.floor(sec/60); const s = Math.floor(sec%60); return `${m}:${String(s).padStart(2,'0')}`; }
 
   function bumpRecent(id: string) { recentlyPlayed = [id, ...recentlyPlayed.filter(x => x !== id)].slice(0, 24); lsSet(KEY.recent, recentlyPlayed); }
-  function incrementPlay(id: string) { plays[id] = (plays[id] || 0) + 1; lsSet(KEY.plays, plays); }
+  function incrementPlay(id: string) {
+    plays[id] = (plays[id] || 0) + 1;
+    // Audit fix #10: cap plays dict at 200 keys. If we exceed, drop the
+    // 50 lowest-count entries so we keep room for fresh listens. Currently
+    // bounded by TRACKS.length (~30) but defends against dynamic catalogs.
+    const keys = Object.keys(plays);
+    if (keys.length > 200) {
+      const sorted = keys.sort((a, b) => plays[a] - plays[b]);
+      for (let i = 0; i < 50; i++) delete plays[sorted[i]];
+    }
+    lsSet(KEY.plays, plays);
+  }
 
   function toggleSave(id: string, originEl?: HTMLElement) {
     const i = saved.indexOf(id);
@@ -1594,8 +1605,14 @@ const built = new Date().toISOString();
       else if (sched && sched.timerCount > 0) await resume();
       else play();
     });
-    $('cmp-prev')!.addEventListener('click', prev);
-    $('cmp-next')!.addEventListener('click', () => advance(false));
+    // Audit fix #9: rapid prev/next mashing caused UI flash. Debounce to 120ms
+    // so a panicked tap-tap-tap collapses into a single advance.
+    let lastNav = 0;
+    const navDebounced = (fn: () => void) => () => {
+      const now = Date.now(); if (now - lastNav < 120) return; lastNav = now; fn();
+    };
+    $('cmp-prev')!.addEventListener('click', navDebounced(prev));
+    $('cmp-next')!.addEventListener('click', navDebounced(() => advance(false)));
     $('cmp-shuffle')!.addEventListener('click', () => { shuffleMode = !shuffleMode; lsSet(KEY.shuffle, shuffleMode); $('cmp-shuffle')!.classList.toggle('cmp__bar-btn--active', shuffleMode); if (shuffleMode && queue.length > 1) { const cur = queue[qIdx]; const rest = queue.filter((_, i) => i !== qIdx); for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [rest[i], rest[j]] = [rest[j], rest[i]]; } queue = [cur, ...rest]; qIdx = 0; renderQueue(); } toast(shuffleMode ? 'Shuffle on' : 'Shuffle off', 'check'); });
     $('cmp-repeat')!.addEventListener('click', () => { repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off'; lsSet(KEY.repeat, repeatMode); const el = $('cmp-repeat')!; el.classList.toggle('cmp__bar-btn--active', repeatMode !== 'off'); el.textContent = repeatMode === 'one' ? '⟳·1' : '⟳'; toast(`Repeat ${repeatMode}`, 'check'); });
     $('cmp-bar-heart')!.addEventListener('click', (e) => { const t = queue[qIdx]; if (t) toggleSave(t.id, e.currentTarget as HTMLElement); });

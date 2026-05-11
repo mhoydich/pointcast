@@ -555,7 +555,9 @@ const built = new Date().toISOString();
 
   // ------- Render-to-WAV (OfflineAudioContext) -------
   async function renderToWav(c: Composition): Promise<Blob> {
-    const sampleRate = 44100;
+    // Audit item #7: match live ctx sample rate so the export sounds
+    // identical to the preview. Defaults to 44100 if ac() hasn't fired yet.
+    const sampleRate = (ctx && ctx.sampleRate) || 44100;
     const dur = songSec(c) + 1.0; // +1s tail for reverb-y decay
     const offline = new OfflineAudioContext(2, Math.ceil(sampleRate * dur), sampleRate);
     const masterOff = offline.createGain(); masterOff.gain.value = 0.7;
@@ -589,12 +591,15 @@ const built = new Date().toISOString();
     // Interleave channels
     const chans: Float32Array[] = [];
     for (let ch = 0; ch < numChannels; ch++) chans.push(buf.getChannelData(ch));
+    // Audit item #8: symmetric int16 conversion. Use the same multiplier
+    // (32767) on both signs, then clamp — avoids the half-LSB asymmetry
+    // the asymmetric-multiplier form introduced.
     for (let i = 0; i < numSamples; i++) {
       for (let ch = 0; ch < numChannels; ch++) {
-        let s = Math.max(-1, Math.min(1, chans[ch][i]));
-        // Convert to 16-bit signed PCM (round-half-away-from-zero)
-        s = s < 0 ? Math.max(-32768, Math.round(s * 32768)) : Math.min(32767, Math.round(s * 32767));
-        view.setInt16(p, s, true); p += 2;
+        const s = Math.max(-1, Math.min(1, chans[ch][i]));
+        let v = Math.round(s * 32767);
+        v = Math.max(-32768, Math.min(32767, v));
+        view.setInt16(p, v, true); p += 2;
       }
     }
     return new Blob([ab], { type: 'audio/wav' });
@@ -778,11 +783,17 @@ const built = new Date().toISOString();
     }, { passive: false });
     btn.addEventListener('touchend', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
     btn.addEventListener('touchcancel', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
       if (savedViaLongPress) { savedViaLongPress = false; return; }
+      // Audit fix #11: keyboard users have no long-press. Shift+click (which
+      // is what a screen reader / keyboard user can produce with Shift+Enter)
+      // always saves, regardless of whether the slot is filled.
+      if (e.shiftKey) { saveSlot(n); return; }
       const filled = !!localStorage.getItem(SAVE_KEY(n));
       if (filled) loadSlot(n); else saveSlot(n);
     });
+    // Hint text via title attribute so hover + screen-readers both see it.
+    btn.title = (btn.title || '') + ' · Shift+Click to overwrite';
   }
 
   function encodeComp(c: Composition): string {
