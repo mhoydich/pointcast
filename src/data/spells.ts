@@ -399,6 +399,38 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 10) ────────────────────────────────────────
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'A comet tears diagonally across the viewport. Quick, bright, gone.',
+    glyph: '☄️',
+    kind: 'burst',
+    durationMs: 1800,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 10) ────────────────────────────────────
+  {
+    id: 'jellyfish',
+    label: 'jellyfish',
+    blurb: 'A jellyfish drifts by mid-screen, quietly pulsing. Unhurried.',
+    glyph: '🪼',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#a78bfa',
+  },
+
+  // ─── AMBIENT (batch 10) ───────────────────────────────────────
+  {
+    id: 'dusk',
+    label: 'dusk',
+    blurb: 'Warm amber light pools at the bottom of the page. Golden hour.',
+    glyph: '🌇',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
