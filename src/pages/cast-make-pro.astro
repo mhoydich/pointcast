@@ -960,6 +960,14 @@ const built = new Date().toISOString();
     masterGain.gain.value = 0.72;
     masterGain.connect(ctx.destination);
     sched = createAudioScheduler(ctx);
+    // Audit fix #2: iOS Safari auto-suspends the AudioContext on tab-switch.
+    // Without this, the page comes back silent while `playing === true` and
+    // the play icon still says STOP. Same fix PR #568 shipped to siblings.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) {
+        sched?.resume();
+      }
+    });
     return ctx;
   }
 
@@ -1156,8 +1164,11 @@ const built = new Date().toISOString();
   }
 
   function swingOffset(stepIndex: number, step: number, swing: number): number {
+    // Audit fix #1: was `step * factor * step * 0.3` — the squared step
+    // collapsed the effective offset to ~2ms which is inaudible. Now scales
+    // to ~37ms max shuffle at 100bpm. Only delays off-beat 16ths.
     if (stepIndex % 2 === 0) return 0;
-    return step * ((swing - 50) / 50) * step * 0.3;
+    return step * ((swing - 50) / 50) * 0.5;
   }
 
   function scheduleComposition(v: Voice, c: Composition, start: number, stem: StemName = 'master') {
@@ -1524,10 +1535,10 @@ const built = new Date().toISOString();
       if (parsed) {
         const preview = summarizeComp(parsed);
         btn.dataset.preview = preview;
-        btn.title = `Slot ${n} · click to load · long-press to save · ${preview}`;
+        btn.title = `Slot ${n} · click to load · shift+click or long-press to overwrite · ${preview}`;
       } else {
         delete btn.dataset.preview;
-        btn.title = `Slot ${n} · empty · long-press to save`;
+        btn.title = `Slot ${n} · empty · click to save`;
       }
     });
   }
@@ -1615,7 +1626,9 @@ const built = new Date().toISOString();
   }
 
   async function renderStemToWav(c: Composition, stem: StemName): Promise<Blob> {
-    const sampleRate = 44100;
+    // Audit fix #4: match live ctx sample rate so exports sound identical
+    // to the preview. Falls back to 44100 if ac() hasn't fired yet.
+    const sampleRate = (ctx && ctx.sampleRate) || 44100;
     const dur = songSec(c) + 1.0;
     const offline = new OfflineAudioContext(2, Math.ceil(sampleRate * dur), sampleRate);
     const masterOff = offline.createGain();
@@ -1648,11 +1661,15 @@ const built = new Date().toISOString();
     wstr('data'); w32(dataSize);
     const chans: Float32Array[] = [];
     for (let ch = 0; ch < numChannels; ch++) chans.push(buf.getChannelData(ch));
+    // Audit fix #5: symmetric int16 conversion. Was 32768/32767 split-by-sign
+    // which introduced a half-LSB asymmetric distortion. Standard form is one
+    // multiplier (32767) on both signs, then clamp.
     for (let i = 0; i < numSamples; i++) {
       for (let ch = 0; ch < numChannels; ch++) {
-        let s = Math.max(-1, Math.min(1, chans[ch][i]));
-        s = s < 0 ? Math.max(-32768, Math.round(s * 32768)) : Math.min(32767, Math.round(s * 32767));
-        view.setInt16(p, s, true); p += 2;
+        const s = Math.max(-1, Math.min(1, chans[ch][i]));
+        let v = Math.round(s * 32767);
+        v = Math.max(-32768, Math.min(32767, v));
+        view.setInt16(p, v, true); p += 2;
       }
     }
     return new Blob([ab], { type: 'audio/wav' });
@@ -1983,9 +2000,15 @@ const built = new Date().toISOString();
     btn.addEventListener('pointerup', clearTimer);
     btn.addEventListener('pointercancel', clearTimer);
     btn.addEventListener('pointerleave', clearTimer);
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
       if (savedViaLongPress) { savedViaLongPress = false; return; }
-      loadSlot(n);
+      // Audit fix #3: keyboard users have no long-press, so previously couldn't
+      // save at all. Shift+Click always saves regardless of fill state. Empty
+      // slots also default to save-on-click (matches /cast-make v1 behavior
+      // post-PR #574).
+      if (e.shiftKey) { saveSlot(n); return; }
+      const filled = !!localStorage.getItem(SAVE_KEY(n));
+      if (filled) loadSlot(n); else saveSlot(n);
     });
   }
 
