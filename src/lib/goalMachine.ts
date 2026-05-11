@@ -32,23 +32,7 @@ export const MACHINE_PRINCIPLES = [
 
 export type GoalType = 'artifact' | 'ritual' | 'acquisition' | 'publication' | 'attendance';
 export type GoalHorizon = 30 | 90 | 365;
-export type GoalStatus = 'set' | 'running' | 'paused' | 'crossed' | 'restarted' | 'retired' | 'retired-honestly' | 'abandoned' | 'kept';
-
-export type GoalWitnessId = 'gandalf' | 'frodo' | 'samwise' | 'aragorn' | 'galadriel';
-
-export type GoalWitness = {
-  id: GoalWitnessId;
-  name: string;
-  mark: string;
-  stand: string;
-  accent: string;
-  deep: string;
-  role: string;
-  opening: string;
-  affirmations: string[];
-  partings: string[];
-  completionLines: string[];
-};
+export type GoalStatus = 'set' | 'running' | 'paused' | 'crossed' | 'restarted' | 'retired';
 
 export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
   artifact: 'Artifact — one thing made (a paper, a bench, a plaque)',
@@ -58,6 +42,38 @@ export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
   attendance: 'Attendance — one place shown up to (a council, a library, a court)',
 };
 
+export const GOAL_PRESETS = {
+  'nouns-union-manus-50': {
+    label: 'Nouns Union Manus 50',
+    title: 'Ship the Nouns Union Manus 50 artifact draft room.',
+    why: 'Turn every state team into one reviewed, model-ready artifact so humans and agents can work from the same board.',
+    type: 'publication',
+    dailyAction: 'Generate, review, remix, or proof one state artifact prompt or draft.',
+    horizon: 30,
+    cohortPartner: 'Nouns Union Artifact Studio + visiting agents',
+    triggerCondition: 'All 50 state artifacts have a prompt, proof note, review state, and accepted next action.',
+  },
+  'nouns-union-state-night': {
+    label: 'Nouns Union State Night',
+    title: 'Run one watchable Nouns Union state night.',
+    why: 'Prove that state-rooted teams can pull fans, agents, sponsors, and artifact makers into the same live ritual.',
+    type: 'ritual',
+    dailyAction: 'Prepare one matchup card, artifact prompt, host note, sponsor read, or proof receipt.',
+    horizon: 30,
+    cohortPartner: 'State team fans + Nouns Nation hosts',
+    triggerCondition: 'One state-night slate is watched, documented, shared, and archived with at least three contribution receipts.',
+  },
+} as const satisfies Record<string, {
+  label: string;
+  title: string;
+  why: string;
+  type: GoalType;
+  dailyAction: string;
+  horizon: GoalHorizon;
+  cohortPartner: string;
+  triggerCondition: string;
+}>;
+
 export type Goal = {
   id: string;
   title: string;
@@ -65,7 +81,6 @@ export type Goal = {
   type: GoalType;
   dailyAction: string;
   horizon: GoalHorizon;
-  goalWitness?: GoalWitnessId;
   uesProgram: string;
   cohortPartner: string;
   triggerCondition: string;
@@ -73,153 +88,6 @@ export type Goal = {
   startedAt: string;
   ledgerToward: string;
 };
-
-export const GOAL_RELEASE = {
-  version: 'v1-the-field',
-  label: 'V1 — The Field + The Witness',
-  storageSchema: 'pointcast.goal.machine.v1',
-  storageKey: 'pointcast.goal.machine.v0',
-  journalKey: 'sitting-with-gandalf-journal-v9',
-  fieldWitnessTag: 'field-witness',
-};
-
-export const GOAL_WITNESSES: GoalWitness[] = [
-  {
-    id: 'gandalf',
-    name: 'Gandalf',
-    mark: 'G',
-    stand: 'west bleacher hearth',
-    accent: '#ffb14a',
-    deep: '#6d2d1f',
-    role: 'steady counsel',
-    opening: 'The staff is planted in the stands. Begin with one honest kick.',
-    affirmations: [
-      'One step that actually happens outranks a grand speech.',
-      'Keep the road small enough for today and long enough for truth.',
-      'The ball moved. Let the rest of the field learn that fact.',
-      'A machine is faithful because it runs again.',
-      'Do not argue with the whole horizon. Mark the yard in front of you.',
-    ],
-    partings: [
-      'An honest retirement keeps the field clean for the next oath.',
-      'Leaving a false road is still a kind of direction.',
-      'The machine can rest without lying about what happened.',
-    ],
-    completionLines: [
-      'The post was not moved. You arrived anyway.',
-      'A kept goal leaves a little light in the net.',
-      'The field has your receipt now.',
-    ],
-  },
-  {
-    id: 'frodo',
-    name: 'Frodo',
-    mark: 'F',
-    stand: 'round-door corner',
-    accent: '#ffd36e',
-    deep: '#5d3f22',
-    role: 'small courage',
-    opening: 'A small figure watches from the quiet corner. Carry only today.',
-    affirmations: [
-      'A burden gets lighter when it is divided into one day.',
-      'The small kick counts because you made it under your own name.',
-      'Do not despise the slow yard. It knows the way forward.',
-      'The road is hard. The tick is real.',
-      'Keep close to the plain action and let the field do its measuring.',
-    ],
-    partings: [
-      'Some burdens should be put down before they name you.',
-      'You told the truth before the road became cruel.',
-      'Rest the hand. The next promise can be smaller.',
-    ],
-    completionLines: [
-      'You carried the promise across the line.',
-      'The small courage made it all the way to the post.',
-      'The field saw the weight and the finish.',
-    ],
-  },
-  {
-    id: 'samwise',
-    name: 'Samwise',
-    mark: 'S',
-    stand: 'garden-row rail',
-    accent: '#9ddc67',
-    deep: '#24522f',
-    role: 'practical hope',
-    opening: 'The garden rail is occupied. Tend the nearest yard.',
-    affirmations: [
-      'There now. One tended row is enough for today.',
-      'Hope behaves better when it has a chore.',
-      'A useful kick beats a fancy worry.',
-      'Water the small thing. The large thing hears eventually.',
-      'Keep your hands near the real work and the ball near the ground.',
-    ],
-    partings: [
-      'Better a clean row ended than a garden left to weeds.',
-      'You can plant again when the soil is honest.',
-      'The work was real even if this bed is done.',
-    ],
-    completionLines: [
-      'You kept tending until the net had to answer.',
-      'The row is finished. The field looks greener for it.',
-      'A practical hope became a kept thing.',
-    ],
-  },
-  {
-    id: 'aragorn',
-    name: 'Aragorn',
-    mark: 'A',
-    stand: 'stone watch line',
-    accent: '#b9c0c8',
-    deep: '#39424b',
-    role: 'clear watch',
-    opening: 'A watch is kept from the stone rail. State the oath cleanly.',
-    affirmations: [
-      'Readiness is quieter than panic and more durable.',
-      'Hold the line. Move the ball. Save the speech.',
-      'The horizon is not a command; this yard is.',
-      'A clear watch does not invent the enemy twice.',
-      'Keep the oath small enough to keep today.',
-    ],
-    partings: [
-      'A good captain retires a false order before it spends the company.',
-      'The watch remains clean because you named the change.',
-      'No honor is lost by refusing a crooked road.',
-    ],
-    completionLines: [
-      'The oath crossed the line with its blade sheathed.',
-      'You watched, acted, and kept the field.',
-      'The post stands behind you now.',
-    ],
-  },
-  {
-    id: 'galadriel',
-    name: 'Galadriel',
-    mark: 'L',
-    stand: 'silver-light box',
-    accent: '#d8f3ff',
-    deep: '#263c54',
-    role: 'bright reflection',
-    opening: 'Silver light gathers above the stand. Let the goal be seen plainly.',
-    affirmations: [
-      'Reflection becomes counsel when it leads to one action.',
-      'The ball shines because it is moving, not because it is perfect.',
-      'Leave the grand image in the bowl. Keep the useful glimmer.',
-      'A true mirror does not hurry the field.',
-      'Carry the light, not the whole vision.',
-    ],
-    partings: [
-      'The mirror is not a verdict. It showed enough.',
-      'A vision released honestly leaves the hand open.',
-      'Let this ending ripen into better sight.',
-    ],
-    completionLines: [
-      'The kept goal catches light in the net.',
-      'You saw the line and crossed it without seizing the whole future.',
-      'The field reflects a finished promise.',
-    ],
-  },
-];
 
 export const SEED_GOALS: Goal[] = [
   {
@@ -317,9 +185,6 @@ export const HORIZON_BANDS = [
 
 export const MACHINE_NOTES = {
   storageKey: 'pointcast.goal.machine.v0',
-  storageSchema: GOAL_RELEASE.storageSchema,
-  release: GOAL_RELEASE.version,
   privacy: 'All goal data and streak ticks are stored in this browser only. Nothing leaves your device until you choose to log a corresponding ledger entry at /commons.',
   retirementClause: 'You are permitted, at any horizon crossing, to retire the goal. This is not failure; it is honesty. The cohort respects retirement more than perpetual zombie goals.',
-  v1Continuity: 'V1 keeps the V0 storage key and migrates direct goal records into a browser-local envelope with activeGoal, pastGoals, witness counsel, and local keepsakes.',
 };

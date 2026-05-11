@@ -118,6 +118,125 @@ export const NOUNS_BATTLER_AGENT_TASKS = [
       'QA: game {status}, tv {status}, desk {status}, posters {status}, JSON {status}. TOP FIX: {fix}.',
   },
   {
+    id: 'union-state-scout',
+    title: 'Scout a Union League State Team',
+    role: 'state scout',
+    difficulty: 'easy',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/nouns-nation-battler/',
+    ],
+    prompt:
+      'Open the Nouns Nation Union League, pick one US state team, and return a state scout card with team name, motif, home field, signature move, fan ritual, contribution idea, and one watch hook.',
+    expectedOutput:
+      'A compact scout card for one state team plus one way a human or agent can contribute.',
+    shareFormat:
+      'UNION SCOUT: {state} rides with {team}. Field: {field}. Move: {move}. Contribute: {idea}.',
+  },
+  {
+    id: 'union-artifact-maker',
+    title: 'Generate a Union League Artifact Brief',
+    role: 'creative producer',
+    difficulty: 'easy',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/artifacts/',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/nouns-nation-union/',
+    ],
+    prompt:
+      'Open the Union Artifact Studio, choose one state team and one artifact type, then return a copy-ready ChatGPT image-generation prompt plus acceptance criteria, safe-use guardrail, and one distribution idea.',
+    expectedOutput:
+      'A state-team artifact prompt for poster, ad, product drop, broadcast card, fan ritual art, or agent brief, with proof requirements and no official sports marks.',
+    shareFormat:
+      'ARTIFACT: {state} / {team}; type {artifact}; prompt {prompt}; guardrail {guardrail}; proof {proof}.',
+  },
+  {
+    id: 'union-founding-drop-producer',
+    title: 'Produce a Union Founding Drop Pack',
+    role: 'campaign producer',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/artifacts/#founding-drop',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/nouns-nation-battler-sponsors/',
+    ],
+    prompt:
+      'Open the Union Artifact Studio founding drop, choose one campaign, and return a production pack with poster prompt, product mock prompt, sponsor-safe read, watch hook, proof checklist, and one distribution plan.',
+    expectedOutput:
+      'A campaign pack that a human can approve before generating images, posting, sponsoring, or routing accepted work to participant credit.',
+    shareFormat:
+      'FOUNDING DROP: {drop}; team {team}; poster {poster}; product {product}; sponsor {read}; proof {proof}.',
+  },
+  {
+    id: 'union-drop-gallery-curator',
+    title: 'Curate a Union Drop Gallery Board',
+    role: 'artifact curator',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/artifacts/#drop-gallery',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/nouns-nation-battler-agents/',
+    ],
+    prompt:
+      'Open the Union Artifact Studio drop gallery, choose one founding campaign, and return a review board with one ready-to-generate prompt, one sponsor-candidate product slot, one ready-to-publish broadcast still, one needs-remix ritual note, and proof requirements for each.',
+    expectedOutput:
+      'A human-reviewable artifact gallery receipt that routes generated images, sponsor candidates, broadcast stills, and remix requests into approved Union League production work.',
+    shareFormat:
+      'DROP GALLERY: {drop}; generate {hero}; sponsor {product}; publish {broadcast}; remix {ritual}; proof {proof}.',
+  },
+  {
+    id: 'union-manus-50-artifact-run',
+    title: 'Run the Union Manus 50 Artifact Batch',
+    role: 'model relay producer',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/artifacts/#manus-50',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/nouns-nation-union/artifacts/',
+    ],
+    prompt:
+      'Open the Union Artifact Studio Manus 50 section and select three state artifacts to pressure-test. For each, return the model prompt, likely Nano Banana or ChatGPT image-generation lane, review criteria, one remix instruction, and proof needed before publishing.',
+    expectedOutput:
+      'A model-relay production report that helps Manus, ChatGPT, Nano Banana, or another top image model generate and review 50 state-team artifacts without official marks or payout claims.',
+    shareFormat:
+      'MANUS 50: {stateA}, {stateB}, {stateC}; model lane {model}; prompts {prompts}; proof {proof}; remix {remix}.',
+  },
+  {
+    id: 'union-state-night-producer',
+    title: 'Produce a Union State Night Slate',
+    role: 'state-night producer',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/state-night/',
+      'https://pointcast.xyz/nouns-nation-union.json',
+      'https://pointcast.xyz/goal?preset=nouns-union-state-night#setup',
+    ],
+    prompt:
+      'Open the Union State Night Launcher, pick one regional slate, and return three watch hooks, one artifact brief, one sponsor-safe read, one agent handoff, and one proof checklist. Keep it fictional, local-first, and free of official sports marks, betting claims, checkout language, or payout promises.',
+    expectedOutput:
+      'A host-ready State Night package that a human can use to run one regional slate, route creative work to agents, and set the State Night /goal.',
+    shareFormat:
+      'STATE NIGHT: {region}; matches {matchups}; watch {hooks}; artifact {brief}; sponsor {read}; proof {proof}.',
+  },
+  {
+    id: 'union-agency-50-poster-campaign',
+    title: 'Produce the Union Agency 50 Poster Campaign',
+    role: 'creative director',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/artifacts/#agency-50',
+      'https://pointcast.xyz/nouns-nation-union/state-night/',
+      'https://pointcast.xyz/nouns-nation-union.json',
+    ],
+    prompt:
+      'Open the Union Artifact Studio Agency 50 section and choose five state poster prompts. Return a campaign review with the strongest headline, one LA/NY agency-style visual system, one remix note per poster, one media plan, and proof requirements before publishing.',
+    expectedOutput:
+      'A 50-state poster campaign production note that helps Manus, ChatGPT image generation, Nano Banana, or another top image model generate premium state-team ads for human approval.',
+    shareFormat:
+      'AGENCY 50: {states}; campaign {line}; strongest {headline}; remixes {notes}; media {plan}; proof {proof}.',
+  },
+  {
     id: 'sports-reenactment-mission',
     title: 'Run Sports Reenactment Mission Control',
     role: 'host',
@@ -128,9 +247,9 @@ export const NOUNS_BATTLER_AGENT_TASKS = [
       'https://pointcast.xyz/nouns-nation-battler/',
     ],
     prompt:
-      'Open Sports Reenactment Mission Control, choose one sample or typed result plus one goal and one result shape, then produce the host rundown, agent task, share receipt, proof checklist, and live run sheet.',
+      'Open Sports Reenactment Mission Control, choose one sample or typed result plus one goal and one result shape, then produce the host rundown, agent task, share receipt, proof checklist, live run sheet, and visual reenactment beat.',
     expectedOutput:
-      'A compact mission package with launch URL, source result, field, host line, agent task, share receipt, proof checklist, live run sheet, and guardrail.',
+      'A compact mission package with launch URL, source result, field, inspired-by reenactment choreography beat, host line, agent task, share receipt, proof checklist, live run sheet, and guardrail.',
     shareFormat:
       'MISSION: {league} {winner} over {loser}; goal {goal}; field {field}; launch {url}; guardrail {text}.',
   },
@@ -298,6 +417,7 @@ export const NOUNS_BATTLER_AGENT_PROMPT_KIT = {
       successCriteria: [
         'Includes the tested Mission Control URL.',
         'Names one goal and one shape.',
+        'Names the visual beat, pressure lane, or surge cue the live field should show.',
         'Includes the informational guardrail.',
       ],
       stopRule: 'Stop once the mission package has one host artifact, one agent artifact, one share artifact, one proof checklist, and one live run sheet.',

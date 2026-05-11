@@ -1,161 +1,40 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
-import {
-  GOAL_RELEASE,
-  GOAL_TYPE_LABELS,
-  GOAL_WITNESSES,
-  HORIZON_BANDS,
-  MACHINE_LOOPS,
-  MACHINE_META,
-  MACHINE_PRINCIPLES,
-  SEED_GOALS,
-  type GoalType,
-} from '../lib/goalMachine';
+import { GOAL_PRESETS, GOAL_TYPE_LABELS, HORIZON_BANDS, MACHINE_LOOPS, MACHINE_META, MACHINE_NOTES, MACHINE_PRINCIPLES, SEED_GOALS, type GoalType } from '../lib/goalMachine';
 
-const title = `${MACHINE_META.title} — The Field`;
-const description = `${MACHINE_META.thesis} V1 adds a browser-local pixel field, a witness in the stands, and a keepsake when the ball crosses the post.`;
+const title = `${MACHINE_META.title} — ${MACHINE_META.subtitle}`;
+const description = MACHINE_META.thesis;
 
 const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebApplication',
+  '@context': 'https://schema.org', '@type': 'WebApplication',
   '@id': 'https://pointcast.xyz/goal',
   name: MACHINE_META.title,
-  alternateName: GOAL_RELEASE.label,
   applicationCategory: 'ProductivityApplication',
-  softwareVersion: GOAL_RELEASE.version,
   description,
   url: 'https://pointcast.xyz/goal',
-  featureList: [
-    'one browser-local goal',
-    'daily action marks',
-    'pixel soccer field progress',
-    'V9 Fellowship witness',
-    'local V9 Journal field letters',
-  ],
-  isPartOf: {
-    '@type': 'EducationalOrganization',
-    name: 'University of El Segundo',
-    url: 'https://pointcast.xyz/university-of-el-segundo',
-  },
+  isPartOf: { '@type': 'EducationalOrganization', name: 'University of El Segundo', url: 'https://pointcast.xyz/university-of-el-segundo' },
 };
 
 const goalTypeKeys = Object.keys(GOAL_TYPE_LABELS) as GoalType[];
-const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
+const goalPresetEntries = Object.entries(GOAL_PRESETS);
 ---
 
-<BlockLayout
-  title={title}
-  description={description}
-  jsonLd={jsonLd}
-  alternates={[{ type: 'application/json', href: '/goal.json', title: 'Goal machine (JSON)' }]}
->
-  <div class="page">
+<BlockLayout title={title} description={description} jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/goal.json', title: 'Goal machine (JSON)' }]}>
+  <div class="page" data-goal-presets={JSON.stringify(GOAL_PRESETS)}>
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a><span aria-hidden="true">/</span>
       <a href="/university-of-el-segundo">university-of-el-segundo</a><span aria-hidden="true">/</span>
       <span>goal</span>
     </nav>
 
-    <header class="hero" id="field-hero">
-      <div class="hero__chrome" aria-hidden="true">
-        <span>POINTCAST GOAL MACHINE</span>
-        <span>EL SEGUNDO FIELD</span>
-        <span>{GOAL_RELEASE.version}</span>
-      </div>
-
-      <div class="hero__copy">
-        <p class="kicker">UES · ONE GOAL · BROWSER-LOCAL · V1</p>
-        <h1>THE FIELD.</h1>
-        <p class="subtitle">One goal. One ball. One witness in the stands.</p>
-        <p class="thesis">{MACHINE_META.thesis}</p>
-      </div>
-
-      <section class="field-console" aria-label="The Field">
-        <div class="scoreboard" id="scoreboard">
-          <div class="scoreboard__cell scoreboard__cell--main">
-            <span class="scoreboard__label">CURRENT GOAL</span>
-            <strong id="score-title">NO GOAL SET</strong>
-          </div>
-          <div class="scoreboard__cell">
-            <span class="scoreboard__label">WITNESS</span>
-            <strong id="score-witness">GANDALF</strong>
-          </div>
-          <div class="scoreboard__cell">
-            <span class="scoreboard__label">YARDAGE</span>
-            <strong id="score-yardage">0 / 90</strong>
-          </div>
-          <div class="scoreboard__cell">
-            <span class="scoreboard__label">STREAK</span>
-            <strong id="score-streak">0</strong>
-          </div>
-        </div>
-
-        <div class="field-scene" id="field-scene" data-witness="gandalf" data-sky="day">
-          <div class="marine-layer" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </div>
-
-          <div class="stands" aria-label="Witness in the stands">
-            <div class="stands__rail" aria-hidden="true"></div>
-            <div class="witness-card">
-              <div class="witness-sprite" id="witness-sprite" aria-hidden="true">
-                <span id="witness-mark">G</span>
-              </div>
-              <div>
-                <span class="scoreboard__label">FROM THE STANDS</span>
-                <strong id="witness-name">Gandalf</strong>
-                <small id="witness-role">steady counsel</small>
-              </div>
-            </div>
-            <p class="witness-speech" id="witness-speech" aria-live="polite">
-              Set a goal and pick a witness. The first ball waits at midfield.
-            </p>
-          </div>
-
-          <div class="pitch-wrap">
-            <div class="pitch" id="field-pitch" style="--ball-left: 8%;">
-              <div class="yard-lines" aria-hidden="true">
-                {yardTicks.map((tick) => (
-                  <span style={`left: ${tick}%`} data-yard={tick}></span>
-                ))}
-              </div>
-              <div class="center-circle" aria-hidden="true"></div>
-              <div class="goal-mouth" aria-hidden="true">
-                <div class="goal-post"></div>
-                <div class="net" id="goal-net">
-                  <div class="ghost-net" id="ghost-net"></div>
-                </div>
-              </div>
-              <button class="field-ball" id="field-ball" type="button" hidden aria-label="Current goal ball">
-                <span id="ball-label">0</span>
-              </button>
-              <div class="windsock" aria-hidden="true"><span></span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="field-ledger" aria-label="Past goals in the net">
-          <div>
-            <span class="scoreboard__label">BACK OF NET</span>
-            <p>Last 10 kept, retired, or abandoned goals glow behind the post.</p>
-          </div>
-          <ol class="past-goals" id="past-goal-list">
-            <li>No past goals on this device yet.</li>
-          </ol>
-        </div>
-
-        <div class="keepsake-region" id="keepsake-region" aria-live="polite"></div>
-      </section>
-
-      <aside class="v1-callout" aria-label="What's new in V1">
-        <p class="kicker">WHAT'S NEW IN V1</p>
-        <p>
-          The V0 machine now has a field: your declared goal becomes a glowing
-          pixel ball, each daily mark moves it toward the post, and a V9
-          Fellowship companion witnesses the run from the stands. Completion
-          writes a local Field Letter into the V9 Journal. <a href="/gandalf">Meet the witnesses at /gandalf.</a>
-        </p>
-      </aside>
+    <header class="hero">
+      <div class="hero__bar"></div>
+      <p class="kicker">UES · ONE GOAL · BROWSER-LOCAL · V0</p>
+      <h1>ONE / GOAL.</h1>
+      <p class="subtitle">{MACHINE_META.subtitle}</p>
+      <p class="tagline">{MACHINE_META.tagline}</p>
+      <p class="thesis">{MACHINE_META.thesis}</p>
     </header>
 
     <section class="machine" id="machine">
@@ -175,6 +54,13 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
       <p class="kicker">SET IT</p>
       <h2>One goal. Declare it.</h2>
       <p class="lede">All fields are stored in this browser only. Nothing leaves your device until you log a corresponding ledger entry at <a href="/commons">/commons</a>.</p>
+      <div class="presets" aria-label="Goal presets">
+        <span>Preset jumps</span>
+        {goalPresetEntries.map(([id, preset]) => (
+          <a href={`/goal?preset=${id}#setup`}>{preset.label}</a>
+        ))}
+      </div>
+      <p class="preset-status" id="preset-status" aria-live="polite"></p>
       <form class="form" id="goal-form">
         <label>The goal (one sentence)<input name="title" required maxlength="180" placeholder="e.g., First Bench at Hilltop, built and open by 2026-08-01." /></label>
         <label>Why<input name="why" required maxlength="240" placeholder="Why this. Why now." /></label>
@@ -187,24 +73,6 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
           <option value="90" selected>90-day</option>
           <option value="365">365-day</option>
         </select></label>
-
-        <fieldset class="witness-picker">
-          <legend>Witness</legend>
-          <div class="witness-picker__grid">
-            {GOAL_WITNESSES.map((witness) => (
-              <label class="witness-option" style={`--w-color: ${witness.accent}; --w-deep: ${witness.deep};`}>
-                <input type="radio" name="goalWitness" value={witness.id} checked={witness.id === 'gandalf'} />
-                <span class="witness-option__mark">{witness.mark}</span>
-                <span class="witness-option__body">
-                  <strong>{witness.name}</strong>
-                  <small>{witness.role}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-          <p class="witness-picker__note">The witness appears in the stands, rotates daily counsel, and signs the Field Letter when the goal is kept.</p>
-        </fieldset>
-
         <label>Cohort partner (optional)<input name="cohortPartner" maxlength="120" placeholder="Marine Layer cohort, parks-department point person, etc." /></label>
         <label>Trigger condition (when the goal is complete)<input name="triggerCondition" required maxlength="240" placeholder="The unambiguous test for done-ness." /></label>
         <button type="submit" class="btn btn--primary">SET THE GOAL · RUN THE MACHINE</button>
@@ -238,7 +106,7 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
       <p class="kicker">PRINCIPLES</p>
       <h2>Seven rules before any goal is set.</h2>
       <ol class="rules">{MACHINE_PRINCIPLES.map((p, i) => (
-        <li><span>{String(i + 1).padStart(2, '0')}</span><p>{p}</p></li>
+        <li><span>{String(i+1).padStart(2,'0')}</span><p>{p}</p></li>
       ))}</ol>
     </section>
 
@@ -267,7 +135,6 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
       <a href="/civic-layer">Civic Layer</a>
       <a href="/common-forms">Common Forms</a>
       <a href="/university-of-el-segundo">UES tracks</a>
-      <a href="/gandalf">Witnesses</a>
       <a href="/goal.json">JSON</a>
     </section>
   </div>
@@ -282,773 +149,66 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
     --gm-sage: #7a8c4f;
     --gm-navy: #2a3550;
     --gm-mauve: #a06478;
-    --gm-field: #3a8a3a;
-    --gm-field-dark: #246f35;
-    --gm-chalk: #fff8e8;
-    --gm-score: #ffd84a;
-    --gm-sky: #7dc5dd;
   }
-  .page {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0 0 88px;
-    background: var(--gm-paper);
-    color: var(--gm-ink);
-    font-family: Inter, system-ui, sans-serif;
-  }
+  .page { max-width: 1080px; margin: 0 auto; padding: 0 0 88px; background: var(--gm-paper); color: var(--gm-ink); font-family: Inter, system-ui, sans-serif; }
   .page > * { padding-inline: 28px; }
-  .crumb {
-    padding: 18px 28px 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #5a5450;
-  }
+  .crumb { padding: 18px 28px 12px; display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #5a5450; }
   .crumb a { color: var(--gm-ink); text-decoration: underline; text-underline-offset: 3px; }
 
-  .hero { padding: 0 28px 40px; }
-  .hero__chrome {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 2px;
-    margin: 0 -28px 22px;
-    background: var(--gm-ink);
-    border-top: 6px solid var(--gm-rust);
-    border-bottom: 4px solid var(--gm-ink);
-    color: var(--gm-score);
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-  .hero__chrome span { padding: 9px 12px; border-right: 2px solid #4a3b1f; }
-  .hero__copy {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 440px);
-    gap: 20px 30px;
-    align-items: end;
-    margin-bottom: 20px;
-  }
-  .hero__copy .kicker { grid-column: 1 / -1; }
-  .kicker {
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: var(--gm-ink);
-    margin: 0 0 10px;
-    padding: 4px 8px;
-    background: var(--gm-mustard);
-    display: inline-block;
-    width: fit-content;
-  }
-  h1 {
-    font-family: var(--pc-font-mono);
-    font-size: 104px;
-    line-height: 0.9;
-    font-weight: 700;
-    letter-spacing: 0;
-    margin: 0;
-    text-transform: uppercase;
-  }
-  .subtitle {
-    font-family: Inter, sans-serif;
-    font-size: 25px;
-    line-height: 1.12;
-    font-weight: 700;
-    margin: 0 0 10px;
-    max-width: 28ch;
-  }
-  .tagline {
-    font-family: var(--pc-font-mono);
-    font-size: 12px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #5a5450;
-    margin: 0 0 18px;
-  }
-  .thesis {
-    font-size: 15px;
-    line-height: 1.55;
-    max-width: 64ch;
-    margin: 0;
-  }
-
-  .field-console {
-    padding: 0;
-    border: 4px solid var(--gm-ink);
-    background: #111;
-    box-shadow: 8px 8px 0 var(--gm-rust);
-  }
-  .scoreboard {
-    display: grid;
-    grid-template-columns: minmax(0, 1.8fr) 1fr 1fr 0.7fr;
-    gap: 2px;
-    background: var(--gm-ink);
-    color: var(--gm-score);
-    border-bottom: 4px solid var(--gm-ink);
-  }
-  .scoreboard__cell {
-    min-width: 0;
-    background: #241b0e;
-    padding: 12px 14px;
-    display: grid;
-    gap: 5px;
-  }
-  .scoreboard__cell--main strong { font-size: 18px; }
-  .scoreboard__label {
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #f4d977;
-  }
-  .scoreboard strong {
-    font-family: var(--pc-font-mono);
-    font-size: 15px;
-    line-height: 1.1;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    overflow-wrap: anywhere;
-  }
-  .scoreboard.is-flashing .scoreboard__cell { animation: scoreboard-flash 900ms steps(2, end); }
-
-  .field-scene {
-    position: relative;
-    overflow: hidden;
-    min-height: 520px;
-    background:
-      linear-gradient(180deg, var(--gm-sky) 0 30%, #a8d4cb 30% 41%, #6a8e51 41% 100%);
-    image-rendering: pixelated;
-  }
-  .field-scene[data-sky='evening'] {
-    --gm-sky: #e6a25f;
-    background: linear-gradient(180deg, #e6a25f 0 28%, #a86f69 28% 40%, #466f4a 40% 100%);
-  }
-  .field-scene[data-sky='night'] {
-    --gm-sky: #23385f;
-    background: linear-gradient(180deg, #23385f 0 28%, #314562 28% 40%, #315640 40% 100%);
-  }
-  .marine-layer {
-    position: absolute;
-    inset: 18px auto auto -20%;
-    width: 140%;
-    height: 70px;
-    pointer-events: none;
-    opacity: 0.7;
-    animation: marine-roll 26s linear infinite;
-  }
-  .marine-layer span {
-    position: absolute;
-    display: block;
-    width: 160px;
-    height: 22px;
-    background: rgba(255, 248, 232, 0.76);
-    box-shadow: 32px 0 rgba(255, 248, 232, 0.54), 74px 10px rgba(255, 248, 232, 0.46);
-  }
-  .marine-layer span:nth-child(1) { left: 2%; top: 6px; }
-  .marine-layer span:nth-child(2) { left: 36%; top: 26px; width: 210px; }
-  .marine-layer span:nth-child(3) { left: 72%; top: 10px; width: 190px; }
-
-  .stands {
-    position: relative;
-    z-index: 2;
-    min-height: 150px;
-    padding: 22px 22px 10px;
-    display: grid;
-    grid-template-columns: 310px minmax(220px, 1fr);
-    gap: 16px;
-    align-items: end;
-  }
-  .stands__rail {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 34px;
-    background:
-      repeating-linear-gradient(90deg, #32261a 0 20px, #4d3a27 20px 38px),
-      #32261a;
-    border-top: 4px solid var(--gm-ink);
-    border-bottom: 4px solid var(--gm-ink);
-  }
-  .witness-card {
-    position: relative;
-    z-index: 3;
-    display: grid;
-    grid-template-columns: 70px minmax(0, 1fr);
-    gap: 12px;
-    align-items: center;
-    padding: 10px;
-    background: #f9efcf;
-    border: 3px solid var(--gm-ink);
-    box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.24);
-  }
-  .witness-card strong {
-    display: block;
-    font-family: var(--pc-font-mono);
-    font-size: 18px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-  .witness-card small {
-    display: block;
-    margin-top: 4px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #5a5450;
-  }
-  .witness-sprite {
-    position: relative;
-    width: 58px;
-    height: 70px;
-    background:
-      linear-gradient(var(--witness-accent, #ffb14a) 0 0) 18px 8px / 22px 18px no-repeat,
-      linear-gradient(#f0c597 0 0) 16px 0 / 26px 16px no-repeat,
-      linear-gradient(var(--witness-deep, #6d2d1f) 0 0) 12px 28px / 34px 26px no-repeat,
-      linear-gradient(var(--gm-ink) 0 0) 9px 54px / 14px 14px no-repeat,
-      linear-gradient(var(--gm-ink) 0 0) 35px 54px / 14px 14px no-repeat;
-  }
-  .witness-sprite::before,
-  .witness-sprite::after {
-    content: '';
-    position: absolute;
-    top: 32px;
-    width: 10px;
-    height: 24px;
-    background: var(--witness-deep, #6d2d1f);
-  }
-  .witness-sprite::before { left: 0; }
-  .witness-sprite::after { right: 0; }
-  .witness-sprite span {
-    position: absolute;
-    left: 18px;
-    top: 30px;
-    width: 22px;
-    text-align: center;
-    color: var(--gm-chalk);
-    font-family: var(--pc-font-mono);
-    font-size: 13px;
-    font-weight: 700;
-  }
-  .witness-speech {
-    position: relative;
-    z-index: 3;
-    align-self: center;
-    margin: 0 0 12px;
-    padding: 14px 16px;
-    background: #fffdf5;
-    border: 3px solid var(--gm-ink);
-    font-family: var(--pc-font-mono);
-    font-size: 13px;
-    line-height: 1.45;
-    letter-spacing: 0;
-    box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.2);
-  }
-  .witness-speech::before {
-    content: '';
-    position: absolute;
-    left: -15px;
-    bottom: 18px;
-    width: 0;
-    height: 0;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-    border-right: 15px solid var(--gm-ink);
-  }
-
-  .pitch-wrap {
-    position: relative;
-    z-index: 1;
-    padding: 14px 18px 24px;
-  }
-  .pitch {
-    position: relative;
-    min-height: 300px;
-    aspect-ratio: 16 / 6;
-    overflow: hidden;
-    background-color: var(--gm-field);
-    background-image:
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 2px, transparent 2px 10%),
-      repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 22px, transparent 22px 44px),
-      linear-gradient(90deg, var(--gm-field-dark), var(--gm-field), #4a9b42);
-    border: 5px solid var(--gm-chalk);
-    box-shadow: inset 0 0 0 4px rgba(26, 26, 26, 0.28), 0 10px 0 rgba(0, 0, 0, 0.24);
-  }
-  .yard-lines span {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: rgba(255, 248, 232, 0.42);
-  }
-  .yard-lines span::after {
-    content: attr(data-yard);
-    position: absolute;
-    top: 8px;
-    left: 4px;
-    color: rgba(255, 248, 232, 0.7);
-    font-family: var(--pc-font-mono);
-    font-size: 9px;
-  }
-  .center-circle {
-    position: absolute;
-    left: 48%;
-    top: 50%;
-    width: 86px;
-    height: 86px;
-    border: 3px solid rgba(255, 248, 232, 0.7);
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-  }
-  .goal-mouth {
-    position: absolute;
-    top: 15%;
-    right: 0;
-    width: 17%;
-    height: 70%;
-  }
-  .goal-post {
-    position: absolute;
-    top: 3%;
-    bottom: 3%;
-    left: 0;
-    width: 18px;
-    border-top: 12px solid var(--gm-chalk);
-    border-bottom: 12px solid var(--gm-chalk);
-    border-left: 12px solid var(--gm-chalk);
-    filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.34));
-    z-index: 3;
-  }
-  .net {
-    position: absolute;
-    inset: 3% 0 3% 12px;
-    background:
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.32) 0 2px, transparent 2px 16px),
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.32) 0 2px, transparent 2px 16px),
-      rgba(255, 255, 255, 0.12);
-    border: 2px solid rgba(255, 248, 232, 0.72);
-    transform-origin: left center;
-  }
-  .field-scene.is-goal .net { animation: net-ripple 950ms steps(4, end); }
-  .ghost-net {
-    position: absolute;
-    inset: 0;
-  }
-  .ghost-ball {
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(26, 26, 26, 0.55);
-    border-radius: 50%;
-    cursor: help;
-    box-shadow: 0 0 10px currentColor;
-  }
-  .ghost-ball--kept { background: var(--gm-score); color: var(--gm-score); }
-  .ghost-ball--retired-honestly { background: var(--gm-mauve); color: var(--gm-mauve); }
-  .ghost-ball--abandoned { background: #d7d0c1; color: rgba(215, 208, 193, 0.62); opacity: 0.62; }
-
-  .field-ball {
-    position: absolute;
-    left: var(--ball-left, 8%);
-    top: 50%;
-    width: 34px;
-    height: 34px;
-    transform: translate(-50%, -50%);
-    border: 3px solid var(--gm-ink);
-    border-radius: 50%;
-    background:
-      linear-gradient(90deg, transparent 43%, rgba(26,26,26,0.42) 43% 57%, transparent 57%),
-      linear-gradient(0deg, transparent 43%, rgba(26,26,26,0.42) 43% 57%, transparent 57%),
-      var(--gm-score);
-    box-shadow: 0 0 18px var(--gm-score), 5px 5px 0 rgba(0, 0, 0, 0.25);
-    transition: left 720ms steps(7, end);
-    cursor: default;
-    z-index: 4;
-  }
-  .field-ball span {
-    position: absolute;
-    inset: -24px 50% auto auto;
-    transform: translateX(50%);
-    min-width: 44px;
-    padding: 3px 5px;
-    background: var(--gm-ink);
-    color: var(--gm-score);
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-  }
-  .field-scene.is-kick .field-ball { animation: kick-pop 720ms steps(5, end); }
-  .windsock {
-    position: absolute;
-    left: 51%;
-    top: 18px;
-    width: 4px;
-    height: 44px;
-    background: var(--gm-ink);
-  }
-  .windsock span {
-    position: absolute;
-    left: 4px;
-    top: 0;
-    width: 38px;
-    height: 14px;
-    background: repeating-linear-gradient(90deg, var(--gm-rust) 0 8px, var(--gm-chalk) 8px 16px);
-    animation: sock-wave 900ms steps(2, end) infinite;
-  }
-
-  .field-ledger {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    gap: 16px;
-    align-items: start;
-    padding: 14px 16px 16px;
-    background: #f9efcf;
-    border-top: 4px solid var(--gm-ink);
-  }
-  .field-ledger p {
-    margin: 5px 0 0;
-    font-size: 13px;
-    line-height: 1.4;
-  }
-  .past-goals {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 6px;
-  }
-  .past-goals li {
-    min-width: 0;
-    padding: 8px 10px;
-    background: #fffdf5;
-    border: 2px solid var(--gm-ink);
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-  .past-goals strong { display: block; font-size: 11px; overflow-wrap: anywhere; }
-  .past-goals small { display: block; margin-top: 4px; color: #5a5450; }
-  .past-goals__status--kept { border-left: 8px solid var(--gm-score) !important; }
-  .past-goals__status--retired-honestly { border-left: 8px solid var(--gm-mauve) !important; }
-  .past-goals__status--abandoned { border-left: 8px solid #d7d0c1 !important; opacity: 0.72; }
-
-  .keepsake-region { background: #111; }
-  .keepsake {
-    margin: 0;
-    padding: 18px;
-    background: #f8e5ba;
-    border-top: 4px solid var(--gm-ink);
-  }
-  .postcard {
-    display: grid;
-    grid-template-columns: 130px minmax(0, 1fr);
-    gap: 18px;
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 16px;
-    background:
-      linear-gradient(90deg, rgba(184,90,58,0.16) 0 2px, transparent 2px 100%),
-      #fff8e8;
-    border: 3px solid var(--gm-ink);
-    box-shadow: 7px 7px 0 rgba(0, 0, 0, 0.24);
-  }
-  .postcard__stamp {
-    display: grid;
-    place-items: center;
-    min-height: 120px;
-    border: 3px dashed var(--gm-rust);
-    background: var(--gm-score);
-    font-family: var(--pc-font-mono);
-    font-size: 42px;
-    font-weight: 700;
-  }
-  .postcard__body { min-width: 0; }
-  .postcard__kicker {
-    margin: 0 0 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: var(--gm-rust);
-  }
-  .postcard h3 {
-    margin: 0 0 8px;
-    font-family: var(--pc-font-mono);
-    font-size: 20px;
-    line-height: 1.2;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    overflow-wrap: anywhere;
-  }
-  .postcard p { margin: 0 0 8px; font-size: 14px; line-height: 1.45; }
-  .postcard small {
-    display: block;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #5a5450;
-  }
-
-  .v1-callout {
-    margin-top: 22px;
-    padding: 16px;
-    background: #fffdf5;
-    border: 3px solid var(--gm-ink);
-    box-shadow: 5px 5px 0 var(--gm-mustard);
-  }
-  .v1-callout p:last-child {
-    margin: 0;
-    max-width: 76ch;
-    font-size: 14px;
-    line-height: 1.55;
-  }
-  .v1-callout a { color: var(--gm-rust); text-decoration: underline; text-underline-offset: 3px; }
+  .hero { padding: 18px 28px 44px; }
+  .hero__bar { height: 14px; background: var(--gm-ink); margin: 0 -28px 28px; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--gm-ink); margin: 0 0 10px; padding: 4px 8px; background: var(--gm-mustard); display: inline-block; }
+  h1 { font-family: var(--pc-font-mono); font-size: 120px; line-height: .9; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 14px; text-transform: uppercase; }
+  .subtitle { font-family: Inter, sans-serif; font-size: 24px; font-weight: 500; margin: 0 0 6px; max-width: 30ch; }
+  .tagline { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #5a5450; margin: 0 0 18px; }
+  .thesis { font-size: 16px; line-height: 1.6; max-width: 64ch; margin: 0; }
 
   section { padding: 36px 28px; border-top: 4px solid var(--gm-ink); }
-  h2 {
-    font-family: var(--pc-font-mono);
-    font-size: 32px;
-    line-height: 1;
-    font-weight: 700;
-    letter-spacing: 0;
-    margin: 0 0 14px;
-    text-transform: uppercase;
-  }
-  .lede {
-    font-size: 15px;
-    line-height: 1.55;
-    max-width: 70ch;
-    margin: 0 0 16px;
-    color: var(--gm-ink);
-  }
+  h2 { font-family: var(--pc-font-mono); font-size: 32px; line-height: 1; font-weight: 700; letter-spacing: -.01em; margin: 0 0 14px; text-transform: uppercase; }
+  .lede { font-size: 15px; line-height: 1.55; max-width: 70ch; margin: 0 0 16px; color: var(--gm-ink); }
   .lede a { color: var(--gm-ink); text-decoration: underline; text-underline-offset: 3px; }
 
   .machine { background: #fff; border-bottom: 4px solid var(--gm-ink); }
-  .dashboard {
-    padding: 18px;
-    background: var(--gm-paper);
-    border: 3px solid var(--gm-ink);
-    margin-bottom: 14px;
-    min-height: 180px;
-  }
-  .dashboard__placeholder {
-    margin: 0;
-    font-family: var(--pc-font-mono);
-    font-size: 12px;
-    letter-spacing: 0;
-    color: #5a5450;
-  }
+  .dashboard { padding: 18px; background: var(--gm-paper); border: 3px solid var(--gm-ink); margin-bottom: 14px; min-height: 180px; }
+  .dashboard__placeholder { margin: 0; font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: .12em; color: #5a5450; }
   .dashboard__live { display: grid; gap: 14px; }
-  .dashboard__title {
-    margin: 0;
-    font-family: var(--pc-font-mono);
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0;
-  }
-  .dashboard__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #5a5450;
-  }
-  .dashboard__streak {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    padding: 14px 16px;
-    background: var(--gm-ink);
-    color: var(--gm-paper);
-  }
-  .dashboard__streak__num {
-    font-family: var(--pc-font-mono);
-    font-size: 64px;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--gm-mustard);
-  }
-  .dashboard__streak__lbl {
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0;
-  }
-  .dashboard__progress {
-    height: 24px;
-    background: #fff;
-    border: 2px solid var(--gm-ink);
-    position: relative;
-    overflow: hidden;
-  }
-  .dashboard__progress::before {
-    content: attr(data-label);
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    color: white;
-    z-index: 2;
-    mix-blend-mode: difference;
-  }
-  .dashboard__progress__fill {
-    height: 100%;
-    background: repeating-linear-gradient(45deg, var(--gm-mustard) 0 12px, var(--gm-rust) 12px 24px);
-    transition: width 600ms ease;
-  }
-  .dashboard__action {
-    font-size: 14px;
-    line-height: 1.5;
-    padding: 10px 12px;
-    background: var(--gm-mustard);
-    border-left: 4px solid var(--gm-ink);
-  }
-  .dashboard__action strong {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    margin-right: 6px;
-  }
+  .dashboard__title { margin: 0; font-family: var(--pc-font-mono); font-size: 20px; font-weight: 700; }
+  .dashboard__meta { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #5a5450; }
+  .dashboard__streak { display: flex; align-items: baseline; gap: 14px; padding: 14px 16px; background: var(--gm-ink); color: var(--gm-paper); }
+  .dashboard__streak__num { font-family: var(--pc-font-mono); font-size: 64px; font-weight: 700; line-height: 1; color: var(--gm-mustard); }
+  .dashboard__streak__lbl { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .14em; }
+  .dashboard__progress { height: 24px; background: #fff; border: 2px solid var(--gm-ink); position: relative; overflow: hidden; }
+  .dashboard__progress::before { content: attr(data-label); position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; color: var(--gm-ink); z-index: 2; mix-blend-mode: difference; color: white; }
+  .dashboard__progress__fill { height: 100%; background: repeating-linear-gradient(45deg, var(--gm-mustard) 0 12px, var(--gm-rust) 12px 24px); transition: width 600ms ease; }
+  .dashboard__action { font-size: 14px; line-height: 1.5; padding: 10px 12px; background: var(--gm-mustard); border-left: 4px solid var(--gm-ink); }
+  .dashboard__action strong { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; margin-right: 6px; }
 
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-  .btn {
-    font-family: var(--pc-font-mono);
-    font-size: 12px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    padding: 12px 16px;
-    border: 0;
-    cursor: pointer;
-  }
-  .btn--primary {
-    background: var(--gm-ink);
-    color: var(--gm-paper);
-    padding: 16px 22px;
-    font-size: 14px;
-  }
+  .btn { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; padding: 12px 16px; border: 0; cursor: pointer; }
+  .btn--primary { background: var(--gm-ink); color: var(--gm-paper); padding: 16px 22px; font-size: 14px; }
   .btn--primary:hover { background: var(--gm-rust); }
   .btn--mark { background: var(--gm-mustard); color: var(--gm-ink); }
   .btn--mark:hover { background: var(--gm-rust); color: var(--gm-paper); }
   .btn--undo { background: #fff; color: var(--gm-ink); border: 2px solid var(--gm-ink); }
   .btn--retire { background: var(--gm-mauve); color: var(--gm-paper); margin-left: auto; }
 
-  .form { display: grid; gap: 12px; max-width: 780px; }
-  .form label,
-  .witness-picker legend {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: var(--gm-ink);
-  }
-  .form input,
-  .form select {
-    font-family: inherit;
-    font-size: 15px;
-    padding: 10px 12px;
-    border: 2px solid var(--gm-ink);
-    background: #fff;
-    color: var(--gm-ink);
-    border-radius: 0;
-  }
-  .witness-picker {
-    margin: 2px 0;
-    padding: 12px;
-    border: 2px solid var(--gm-ink);
-    background: #fffdf5;
-  }
-  .witness-picker legend { padding: 0 6px; }
-  .witness-picker__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 8px;
-    margin-top: 6px;
-  }
-  .witness-option {
-    display: grid !important;
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 8px !important;
-    align-items: center;
-    padding: 8px !important;
-    border: 2px solid var(--gm-ink);
-    background: var(--gm-paper);
-    cursor: pointer;
-  }
-  .witness-option input { position: absolute; opacity: 0; pointer-events: none; }
-  .witness-option__mark {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    background: var(--w-deep);
-    color: var(--w-color);
-    border: 2px solid var(--gm-ink);
-    font-family: var(--pc-font-mono);
-    font-size: 16px;
-    font-weight: 700;
-  }
-  .witness-option__body strong {
-    display: block;
-    font-size: 12px;
-    letter-spacing: 0;
-  }
-  .witness-option__body small {
-    display: block;
-    margin-top: 2px;
-    color: #5a5450;
-    font-size: 9px;
-    letter-spacing: 0;
-  }
-  .witness-option:has(input:checked) {
-    background: var(--w-color);
-    box-shadow: inset 0 0 0 3px var(--w-deep);
-  }
-  .witness-picker__note {
-    margin: 10px 0 0;
-    font-size: 12px;
-    line-height: 1.45;
-    color: #5a5450;
-  }
+  .form { display: grid; gap: 12px; max-width: 720px; }
+  .form label { display: flex; flex-direction: column; gap: 5px; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--gm-ink); }
+  .form input, .form select { font-family: inherit; font-size: 15px; padding: 10px 12px; border: 2px solid var(--gm-ink); background: #fff; color: var(--gm-ink); border-radius: 0; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+  .presets span,
+  .presets a { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .presets span { color: #5a5450; margin-right: 4px; }
+  .presets a { padding: 9px 11px; background: #fff; color: var(--gm-ink); border: 2px solid var(--gm-ink); text-decoration: none; }
+  .presets a:hover { background: var(--gm-mustard); }
+  .preset-status { min-height: 18px; margin: -4px 0 12px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gm-rust); }
 
   .loop-list, .band-list, .seed-list, .rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   .loop { padding: 14px 16px; background: #fff; border: 2px solid var(--gm-ink); display: grid; gap: 6px; }
-  .loop__cad {
-    font-family: var(--pc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0;
-    padding: 4px 8px;
-    background: var(--gm-ink);
-    color: var(--gm-paper);
-    justify-self: start;
-  }
+  .loop__cad { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .22em; padding: 4px 8px; background: var(--gm-ink); color: var(--gm-paper); justify-self: start; }
   .loop__act { margin: 0; font-size: 14px; line-height: 1.55; }
   .loop__out { margin: 0; font-size: 13px; color: #2a2a2a; }
-  .loop__out strong {
-    font-family: var(--pc-font-mono);
-    font-size: 10px;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    margin-right: 4px;
-  }
+  .loop__out strong { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; margin-right: 4px; }
 
   .band { display: grid; grid-template-columns: 220px 1fr; gap: 14px; padding: 12px 14px; background: #fff; border: 1.5px solid var(--gm-ink); align-items: baseline; }
   .band__day { font-family: var(--pc-font-mono); font-size: 13px; font-weight: 700; color: var(--gm-rust); }
@@ -1062,546 +222,128 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
   .seed-goal--running { border-left-color: var(--gm-sage); }
   .seed-goal--set { border-left-color: var(--gm-mustard); }
   .seed-goal--paused { border-left-color: var(--gm-mauve); }
-  .seed-goal--kept { border-left-color: var(--gm-score); }
-  .seed-goal--retired-honestly { border-left-color: var(--gm-mauve); }
-  .seed-goal--abandoned { border-left-color: #d7d0c1; }
   .seed-goal__head { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-  .seed-goal__type { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0; padding: 3px 7px; background: var(--gm-ink); color: var(--gm-paper); }
-  .seed-goal__status { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0; padding: 3px 7px; background: var(--gm-paper); border: 1px solid var(--gm-ink); }
+  .seed-goal__type { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; padding: 3px 7px; background: var(--gm-ink); color: var(--gm-paper); }
+  .seed-goal__status { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; padding: 3px 7px; background: var(--gm-paper); border: 1px solid var(--gm-ink); }
   .seed-goal__status--running { color: var(--gm-sage); }
   .seed-goal__status--set { color: var(--gm-mustard); }
-  .seed-goal__status--kept { color: var(--gm-score); }
-  .seed-goal__status--retired-honestly { color: var(--gm-mauve); }
-  .seed-goal h3 { font-family: var(--pc-font-mono); font-size: 16px; line-height: 1.25; font-weight: 700; margin: 0 0 8px; letter-spacing: 0; }
+  .seed-goal h3 { font-family: var(--pc-font-mono); font-size: 16px; line-height: 1.25; font-weight: 700; margin: 0 0 8px; }
   .seed-goal p { margin: 0 0 4px; font-size: 13px; line-height: 1.5; }
-  .seed-goal strong { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0; text-transform: uppercase; color: #5a5450; margin-right: 4px; }
-  .seed-goal__meta { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0; color: #5a5450; margin-top: 6px !important; padding-top: 6px; border-top: 1px solid #c8c4b3; }
+  .seed-goal strong { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #5a5450; margin-right: 4px; }
+  .seed-goal__meta { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .04em; color: #5a5450; margin-top: 6px !important; padding-top: 6px; border-top: 1px solid #c8c4b3; }
 
   .links { display: flex; flex-wrap: wrap; gap: 8px; }
-  .links a { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: 0; text-transform: uppercase; padding: 10px 14px; background: var(--gm-ink); color: var(--gm-paper); text-decoration: none; }
+  .links a { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; padding: 10px 14px; background: var(--gm-ink); color: var(--gm-paper); text-decoration: none; }
   .links a:hover { background: var(--gm-rust); }
 
-  @keyframes marine-roll {
-    from { transform: translateX(0); }
-    to { transform: translateX(16%); }
-  }
-  @keyframes sock-wave {
-    0%, 100% { transform: skewY(0deg); }
-    50% { transform: skewY(8deg); }
-  }
-  @keyframes kick-pop {
-    0% { transform: translate(-50%, -50%) scale(1); }
-    45% { transform: translate(-50%, -74%) scale(1.14); }
-    100% { transform: translate(-50%, -50%) scale(1); }
-  }
-  @keyframes net-ripple {
-    0% { transform: skewX(0deg) scaleX(1); }
-    35% { transform: skewX(5deg) scaleX(1.05); }
-    70% { transform: skewX(-3deg) scaleX(0.98); }
-    100% { transform: skewX(0deg) scaleX(1); }
-  }
-  @keyframes scoreboard-flash {
-    0%, 100% { background: #241b0e; color: var(--gm-score); }
-    50% { background: var(--gm-score); color: var(--gm-ink); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.001ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.001ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
-
-  @media (max-width: 880px) {
-    .hero__copy { grid-template-columns: 1fr; }
-    .scoreboard { grid-template-columns: 1fr 1fr; }
-    .stands { grid-template-columns: 1fr; }
-    .witness-speech::before { display: none; }
-    .field-ledger { grid-template-columns: 1fr; }
-    h1 { font-size: 76px; }
-    .postcard { grid-template-columns: 1fr; }
-  }
-  @media (max-width: 620px) {
-    .page > * { padding-inline: 16px; }
-    .hero { padding-inline: 16px; }
-    .hero__chrome { margin-inline: -16px; grid-template-columns: 1fr; }
-    h1 { font-size: 52px; }
-    .subtitle { font-size: 20px; }
-    .scoreboard { grid-template-columns: 1fr; }
-    .field-scene { min-height: 560px; }
-    .pitch { min-height: 260px; aspect-ratio: 10 / 8; }
+  @media (max-width: 800px) {
+    h1 { font-size: 80px; }
     .band { grid-template-columns: 1fr; }
-    .dashboard__streak { align-items: flex-start; flex-direction: column; }
-    .btn--retire { margin-left: 0; }
+  }
+  @media (max-width: 520px) {
+    h1 { font-size: 56px; }
   }
 </style>
 
-<script is:inline define:vars={{ GOAL_RELEASE, GOAL_WITNESSES }}>
-(() => {
-  const KEY = GOAL_RELEASE.storageKey;
-  const JOURNAL_KEY = GOAL_RELEASE.journalKey;
-  const SCHEMA = GOAL_RELEASE.storageSchema;
-  const WITNESSES = GOAL_WITNESSES;
-  const witnessMap = WITNESSES.reduce((map, witness) => {
-    map[witness.id] = witness;
-    return map;
-  }, {});
-  const terminalStatuses = new Set(['kept', 'retired-honestly', 'abandoned']);
-
-  function nowISO() { return new Date().toISOString(); }
+<script is:inline>
+  const KEY = 'pointcast.goal.machine.v0';
+  function load() { try { const r = localStorage.getItem(KEY); const p = r ? JSON.parse(r) : null; return p && typeof p === 'object' ? p : null; } catch { return null; } }
+  function save(g) { try { localStorage.setItem(KEY, JSON.stringify(g)); } catch {} }
+  function clear() { try { localStorage.removeItem(KEY); } catch {} }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function todayISO() { return new Date().toISOString().slice(0, 10); }
   function dayDiff(aISO, bISO) { return Math.floor((Date.parse(bISO) - Date.parse(aISO)) / 86400000); }
-  function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-  function validWitness(id) { return witnessMap[id] ? id : 'gandalf'; }
-  function witnessFor(goalOrId) {
-    const id = typeof goalOrId === 'string' ? goalOrId : goalOrId?.goalWitness;
-    return witnessMap[validWitness(id)] || witnessMap.gandalf;
-  }
-  function compactTitle(title) {
-    const text = String(title || '(untitled)').trim();
-    return text.length > 62 ? text.slice(0, 59) + '...' : text;
-  }
-  function uniqueMarks(items) {
-    const marks = Array.isArray(items) ? items : [];
-    return [...new Set(marks.map((item) => String(item).slice(0, 10)).filter(Boolean))].sort();
-  }
-  function normalizeMarksLog(goal, marks) {
-    if (Array.isArray(goal?.marksLog)) {
-      return goal.marksLog
-        .filter((entry) => entry && entry.date)
-        .map((entry) => ({
-          date: String(entry.date).slice(0, 10),
-          at: String(entry.at || entry.date),
-          action: String(entry.action || 'mark'),
-        }));
-    }
-    return marks.map((date) => ({ date, at: date + 'T00:00:00.000Z', action: 'mark' }));
-  }
-  function emptyStore() {
-    return {
-      $v: SCHEMA,
-      release: GOAL_RELEASE.version,
-      activeGoal: null,
-      pastGoals: [],
-      lastKeepsake: null,
-      lastSpeech: null,
-      updatedAt: null,
-    };
-  }
-  function normalizeGoal(raw) {
-    const today = todayISO();
-    const marks = uniqueMarks(raw?.marks);
-    const horizon = Number(raw?.horizon) === 30 || Number(raw?.horizon) === 365 ? Number(raw.horizon) : 90;
-    const status = String(raw?.status || 'running');
-    const goal = {
-      id: String(raw?.id || 'local-' + Date.now().toString(36)),
-      title: String(raw?.title || '').slice(0, 180),
-      why: String(raw?.why || '').slice(0, 240),
-      type: String(raw?.type || 'ritual'),
-      dailyAction: String(raw?.dailyAction || '').slice(0, 240),
-      horizon,
-      cohortPartner: String(raw?.cohortPartner || '').slice(0, 120),
-      triggerCondition: String(raw?.triggerCondition || '').slice(0, 240),
-      startedAt: String(raw?.startedAt || today).slice(0, 10),
-      status,
-      goalWitness: validWitness(raw?.goalWitness || raw?.witness),
-      marks,
-      marksLog: normalizeMarksLog(raw, marks),
-      lastAffirmation: raw?.lastAffirmation || null,
-      createdAt: raw?.createdAt || raw?.startedAt || nowISO(),
-      updatedAt: raw?.updatedAt || null,
-    };
-    return goal;
-  }
-  function archiveFromGoal(goal, status, line) {
-    const endedAt = nowISO();
-    const normalizedStatus = status === 'kept' ? 'kept' : status === 'abandoned' ? 'abandoned' : 'retired-honestly';
-    return {
-      ...goal,
-      status: normalizedStatus,
-      endedAt,
-      completedAt: normalizedStatus === 'kept' ? endedAt : goal.completedAt || null,
-      retiredAt: normalizedStatus === 'retired-honestly' ? endedAt : goal.retiredAt || null,
-      abandonedAt: normalizedStatus === 'abandoned' ? endedAt : goal.abandonedAt || null,
-      marksCount: (goal.marks || []).length,
-      witnessLine: line || null,
-    };
-  }
-  function normalizePast(items) {
-    const list = Array.isArray(items) ? items : [];
-    return list
-      .filter((item) => item && typeof item === 'object')
-      .map((item) => {
-        const goal = normalizeGoal(item);
-        const status = item.status === 'kept' || item.status === 'abandoned' || item.status === 'retired-honestly'
-          ? item.status
-          : item.status === 'retired'
-            ? 'retired-honestly'
-            : 'abandoned';
-        return {
-          ...goal,
-          status,
-          endedAt: item.endedAt || item.completedAt || item.retiredAt || item.abandonedAt || goal.updatedAt || goal.createdAt,
-          completedAt: item.completedAt || null,
-          retiredAt: item.retiredAt || null,
-          abandonedAt: item.abandonedAt || null,
-          marksCount: Number(item.marksCount || goal.marks.length) || 0,
-          journalLetterId: item.journalLetterId || null,
-          witnessLine: item.witnessLine || null,
-        };
-      })
-      .slice(0, 10);
-  }
-  function normalizeStore(raw) {
-    const base = emptyStore();
-    if (!raw || typeof raw !== 'object') return base;
-    if ('activeGoal' in raw || 'pastGoals' in raw || raw.$v === SCHEMA) {
-      const active = raw.activeGoal ? normalizeGoal(raw.activeGoal) : null;
-      const past = normalizePast(raw.pastGoals);
-      return {
-        ...base,
-        ...raw,
-        $v: SCHEMA,
-        release: GOAL_RELEASE.version,
-        activeGoal: active && terminalStatuses.has(active.status) ? null : active,
-        pastGoals: active && terminalStatuses.has(active.status)
-          ? [archiveFromGoal(active, active.status), ...past].slice(0, 10)
-          : past,
-        lastKeepsake: raw.lastKeepsake || null,
-        lastSpeech: raw.lastSpeech || null,
-      };
-    }
-    return {
-      ...base,
-      activeGoal: normalizeGoal(raw),
-      pastGoals: normalizePast(raw.pastGoals),
-      lastSpeech: raw.lastSpeech || null,
-    };
-  }
-  function loadStore() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      return normalizeStore(raw ? JSON.parse(raw) : null);
-    } catch {
-      return emptyStore();
-    }
-  }
-  function saveStore(store) {
-    try {
-      localStorage.setItem(KEY, JSON.stringify({
-        ...store,
-        $v: SCHEMA,
-        release: GOAL_RELEASE.version,
-        pastGoals: (store.pastGoals || []).slice(0, 10),
-        updatedAt: nowISO(),
-      }));
-    } catch {}
-  }
-  function loadJournal() {
-    try {
-      const raw = localStorage.getItem(JOURNAL_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed.filter((letter) => letter && letter.body).slice(0, 40) : [];
-    } catch {
-      return [];
-    }
-  }
-  function saveJournal(journal) {
-    try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(journal.slice(0, 40))); } catch {}
-  }
-  function formatDate(iso) {
-    const date = iso ? new Date(iso) : new Date();
-    if (Number.isNaN(date.getTime())) return todayISO();
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
-  }
-  function formatTime(iso) {
-    const date = iso ? new Date(iso) : new Date();
-    if (Number.isNaN(date.getTime())) return '';
-    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
-  }
   function streakOf(marks) {
     if (!marks || !marks.length) return 0;
     const sorted = [...marks].sort();
     let s = 1;
     for (let i = sorted.length - 1; i > 0; i--) {
-      if (dayDiff(sorted[i - 1], sorted[i]) === 1) s += 1;
-      else break;
+      if (dayDiff(sorted[i - 1], sorted[i]) === 1) s++; else break;
     }
     const today = todayISO();
     const last = sorted[sorted.length - 1];
     if (last !== today && dayDiff(last, today) > 1) return 0;
     return s;
   }
-  function nextBand(ticks) {
+  function nextBand(daysIn) {
     const bands = [1, 7, 30, 60, 90, 180, 270, 365];
-    for (const b of bands) if (ticks < b) return b;
+    for (const b of bands) if (daysIn < b) return b;
     return null;
   }
-  function chooseLine(lines, previous) {
-    const bank = Array.isArray(lines) && lines.length ? lines : ['Keep the machine honest today.'];
-    if (bank.length === 1) return bank[0];
-    let line = bank[Math.floor(Math.random() * bank.length)];
-    for (let i = 0; line === previous && i < 6; i += 1) line = bank[Math.floor(Math.random() * bank.length)];
-    return line;
+  function readPresets() {
+    const raw = document.querySelector('.page')?.getAttribute('data-goal-presets') || '{}';
+    try { return JSON.parse(raw); } catch { return {}; }
   }
-  function progressFor(goal) {
-    const horizon = Number(goal?.horizon) || 90;
-    const marks = Array.isArray(goal?.marks) ? goal.marks.length : 0;
-    return Math.min(100, Math.max(0, Math.round((marks / horizon) * 100)));
-  }
-  function ballLeftFor(goal) {
-    const pct = progressFor(goal);
-    return 8 + (pct / 100) * 82;
-  }
-  function setText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  }
-  function setSky() {
-    const scene = document.getElementById('field-scene');
-    if (!scene) return;
-    const hour = new Date().getHours();
-    scene.dataset.sky = hour >= 19 || hour < 6 ? 'night' : hour >= 16 ? 'evening' : 'day';
-  }
-  function composeFieldLetter(goal, witness, line) {
-    const endedAt = goal.endedAt || nowISO();
-    const date = formatDate(endedAt);
-    const time = formatTime(endedAt);
-    const marks = Number(goal.marksCount || goal.marks?.length || 0);
-    const body = [
-      `${witness.name} witnessed the field goal "${goal.title || '(untitled)'}" cross the post on ${date}.`,
-      `The machine recorded ${marks} daily tick${marks === 1 ? '' : 's'} against a ${goal.horizon}-day horizon.`,
-      `Daily action: ${goal.dailyAction || 'not specified'}`,
-      line || witness.completionLines[0],
-    ].join('\n');
-    return {
-      id: `goal-field-${goal.id}-${Date.now().toString(36)}`,
-      companion: witness.name,
-      companionId: witness.id,
-      posture: 'field witness',
-      answer: 'goal kept',
-      title: `${witness.name} witnessed a goal kept on the field`,
-      body,
-      signed: `${witness.name} / Field Witness / ${date} / ${time}`,
-      date,
-      tags: [GOAL_RELEASE.fieldWitnessTag, 'goal-machine', GOAL_RELEASE.version],
-      source: '/goal',
-      goalId: goal.id,
-    };
-  }
-  function addFieldLetter(goal, witness, line) {
-    const letter = composeFieldLetter(goal, witness, line);
-    const journal = loadJournal().filter((entry) => entry.id !== letter.id);
-    journal.unshift(letter);
-    saveJournal(journal);
-    return letter;
-  }
-  function renderGhostNet(pastGoals) {
-    const net = document.getElementById('ghost-net');
-    if (!net) return;
-    net.innerHTML = '';
-    pastGoals.slice(0, 10).forEach((goal, index) => {
-      const button = document.createElement('button');
-      const status = goal.status || 'abandoned';
-      button.type = 'button';
-      button.className = `ghost-ball ghost-ball--${status}`;
-      button.style.left = (18 + (index % 4) * 19) + '%';
-      button.style.top = (14 + Math.floor(index / 4) * 28) + '%';
-      button.title = `${goal.title || '(untitled)'} - ${status}`;
-      button.setAttribute('aria-label', `${goal.title || 'Untitled goal'} - ${status}`);
-      net.append(button);
-    });
-  }
-  function renderPastGoals(pastGoals) {
-    const list = document.getElementById('past-goal-list');
-    if (!list) return;
-    const goals = pastGoals.slice(0, 10);
-    if (!goals.length) {
-      list.innerHTML = '<li>No past goals on this device yet.</li>';
-      renderGhostNet([]);
-      return;
+  function applyPresetFromUrl() {
+    const form = document.getElementById('goal-form');
+    if (!form || form.dataset.presetApplied === '1') return;
+    const id = new URLSearchParams(window.location.search).get('preset');
+    const preset = id ? readPresets()[id] : null;
+    if (!preset) return;
+    for (const key of ['title', 'why', 'type', 'dailyAction', 'horizon', 'cohortPartner', 'triggerCondition']) {
+      const field = form.elements[key];
+      if (field && preset[key] !== undefined) field.value = String(preset[key]);
     }
-    list.innerHTML = goals.map((goal) => {
-      const status = goal.status || 'abandoned';
-      const date = goal.completedAt || goal.retiredAt || goal.abandonedAt || goal.endedAt || '';
-      return `
-        <li class="past-goals__status--${escapeHtml(status)}">
-          <strong>${escapeHtml(compactTitle(goal.title))}</strong>
-          <small>${escapeHtml(status.replace('-', ' '))} · ${escapeHtml(witnessFor(goal).name)} · ${escapeHtml(date ? formatDate(date) : 'undated')}</small>
-        </li>
-      `;
-    }).join('');
-    renderGhostNet(goals);
+    form.dataset.presetApplied = '1';
+    const status = document.getElementById('preset-status');
+    if (status) status.textContent = `${preset.label || 'Goal preset'} loaded. Review it, then set the goal.`;
   }
-  function renderKeepsake(store) {
-    const region = document.getElementById('keepsake-region');
-    if (!region) return;
-    const keepsake = store.lastKeepsake;
-    if (!keepsake || keepsake.status !== 'kept') {
-      region.innerHTML = '';
-      return;
-    }
-    const witness = witnessFor(keepsake);
-    const date = keepsake.completedAt || keepsake.endedAt || nowISO();
-    region.innerHTML = `
-      <div class="keepsake">
-        <article class="postcard" aria-label="Field keepsake postcard">
-          <div class="postcard__stamp" style="background:${escapeHtml(witness.accent)}">${escapeHtml(witness.mark)}</div>
-          <div class="postcard__body">
-            <p class="postcard__kicker">FIELD LETTER · LOCAL KEEPSAKE · ${escapeHtml(GOAL_RELEASE.version)}</p>
-            <h3>${escapeHtml(keepsake.title || '(untitled)')}</h3>
-            <p>${escapeHtml(keepsake.witnessLine || witness.completionLines[0])}</p>
-            <small>${escapeHtml(witness.name)} / ${escapeHtml(formatDate(date))} / ${escapeHtml(Number(keepsake.marksCount || 0))} ticks</small>
-          </div>
-        </article>
-      </div>
-    `;
-  }
-  function renderField(store, mode) {
-    const goal = store.activeGoal;
-    const scene = document.getElementById('field-scene');
-    const pitch = document.getElementById('field-pitch');
-    const ball = document.getElementById('field-ball');
-    const scoreboard = document.getElementById('scoreboard');
-    const witness = witnessFor(goal || store.lastSpeech?.companionId || 'gandalf');
-    if (scene) {
-      scene.dataset.witness = witness.id;
-      scene.style.setProperty('--witness-accent', witness.accent);
-      scene.style.setProperty('--witness-deep', witness.deep);
-    }
-    setText('witness-mark', witness.mark);
-    setText('witness-name', witness.name);
-    setText('witness-role', witness.role);
-    setText('score-witness', witness.name.toUpperCase());
-    if (goal) {
-      const marks = goal.marks || [];
-      const horizon = Number(goal.horizon) || 90;
-      const pct = progressFor(goal);
-      const streak = streakOf(marks);
-      setText('score-title', compactTitle(goal.title).toUpperCase());
-      setText('score-yardage', `${marks.length} / ${horizon}`);
-      setText('score-streak', String(streak));
-      if (pitch) pitch.style.setProperty('--ball-left', ballLeftFor(goal).toFixed(2) + '%');
-      if (ball) {
-        ball.hidden = false;
-        ball.setAttribute('aria-label', `${goal.title || 'Goal'}: ${pct}% to the post`);
-      }
-      setText('ball-label', `${marks.length}`);
-      const speech = store.lastSpeech?.line || witness.opening;
-      setText('witness-speech', speech);
-    } else {
-      setText('score-title', store.lastKeepsake?.status === 'kept' ? 'GOAL KEPT' : 'NO GOAL SET');
-      setText('score-yardage', '0 / 90');
-      setText('score-streak', '0');
-      if (pitch) pitch.style.setProperty('--ball-left', '8%');
-      if (ball) ball.hidden = true;
-      setText('ball-label', '0');
-      setText('witness-speech', store.lastSpeech?.line || 'Set a goal and pick a witness. The first ball waits at midfield.');
-    }
-    renderPastGoals(store.pastGoals || []);
-    renderKeepsake(store);
-    if (mode && scene) {
-      scene.classList.remove('is-kick', 'is-goal');
-      void scene.offsetWidth;
-      scene.classList.add(mode === 'goal' ? 'is-goal' : 'is-kick');
-      window.setTimeout(() => scene.classList.remove('is-kick', 'is-goal'), 1000);
-    }
-    if (mode === 'goal' && scoreboard) {
-      scoreboard.classList.remove('is-flashing');
-      void scoreboard.offsetWidth;
-      scoreboard.classList.add('is-flashing');
-      window.setTimeout(() => scoreboard.classList.remove('is-flashing'), 1000);
-    }
-  }
-  function renderDashboard(store) {
+  function render() {
     const dashEl = document.getElementById('dashboard');
     const actionsEl = document.getElementById('actions');
+    const setupEl = document.getElementById('setup');
     if (!dashEl) return;
-    const goal = store.activeGoal;
-    if (!goal) {
-      dashEl.innerHTML = store.lastKeepsake?.status === 'kept'
-        ? '<p class="dashboard__placeholder">Last goal kept. The postcard above is stored locally; set the next goal below.</p>'
-        : '<p class="dashboard__placeholder">No goal set on this device yet. Use the form below.</p>';
+    const g = load();
+    if (!g) {
+      dashEl.innerHTML = '<p class="dashboard__placeholder">No goal set on this device yet. Use the form below.</p>';
       if (actionsEl) actionsEl.hidden = true;
+      if (setupEl) setupEl.style.display = '';
       return;
     }
     const today = todayISO();
-    const startedAt = goal.startedAt || today;
+    const startedAt = g.startedAt || today;
     const daysIn = Math.max(1, dayDiff(startedAt, today) + 1);
-    const horizon = Number(goal.horizon) || 90;
-    const marks = goal.marks || [];
-    const streak = streakOf(marks);
-    const pct = progressFor(goal);
-    const next = nextBand(marks.length);
-    const markedToday = marks.includes(today);
-    const witness = witnessFor(goal);
+    const horizon = Number(g.horizon) || 90;
+    const marked = g.marks || [];
+    const streak = streakOf(marked);
+    const pct = Math.min(100, Math.round((daysIn / horizon) * 100));
+    const next = nextBand(daysIn);
+    const markedToday = marked.includes(today);
     dashEl.innerHTML = `
       <div class="dashboard__live">
-        <p class="dashboard__title">${escapeHtml(goal.title || '(untitled)')}</p>
+        <p class="dashboard__title">${escapeHtml(g.title || '(untitled)')}</p>
         <p class="dashboard__meta">
-          <span>${escapeHtml((goal.type || '').toUpperCase())}</span>
+          <span>${escapeHtml((g.type || '').toUpperCase())}</span>
           <span>${escapeHtml(String(horizon))}-DAY HORIZON</span>
           <span>STARTED ${escapeHtml(startedAt)}</span>
-          <span>DAY ${daysIn}</span>
-          <span>${marks.length} TICKS</span>
-          <span>WITNESS ${escapeHtml(witness.name.toUpperCase())}</span>
+          <span>DAY ${daysIn} / ${horizon}</span>
           ${next ? `<span>NEXT BAND ${next}</span>` : ''}
         </p>
         <div class="dashboard__streak">
           <span class="dashboard__streak__num">${streak}</span>
-          <span class="dashboard__streak__lbl">DAY STREAK · ${marks.length} TOTAL TICKS · ${markedToday ? 'TODAY MARKED' : 'TODAY UNMARKED'}</span>
+          <span class="dashboard__streak__lbl">DAY STREAK · ${marked.length} TOTAL TICKS · ${markedToday ? 'TODAY MARKED' : 'TODAY UNMARKED'}</span>
         </div>
-        <div class="dashboard__progress" data-label="${pct}% TO POST">
+        <div class="dashboard__progress" data-label="${pct}% TO HORIZON">
           <div class="dashboard__progress__fill" style="width: ${pct}%"></div>
         </div>
-        <p class="dashboard__action"><strong>Daily action:</strong> ${escapeHtml(goal.dailyAction || '')}</p>
-        <p class="dashboard__action" style="background:#fff; border-left-color: var(--gm-rust);"><strong>Trigger:</strong> ${escapeHtml(goal.triggerCondition || '')}</p>
+        <p class="dashboard__action"><strong>Daily action:</strong> ${escapeHtml(g.dailyAction || '')}</p>
+        <p class="dashboard__action" style="background:#fff; border-left-color: var(--gm-rust);"><strong>Trigger:</strong> ${escapeHtml(g.triggerCondition || '')}</p>
       </div>
     `;
     if (actionsEl) actionsEl.hidden = false;
     const markBtn = document.getElementById('btn-mark');
     if (markBtn) markBtn.textContent = markedToday ? 'TODAY MARKED ✓' : 'MARK TODAY ✓';
-  }
-  function render(mode) {
-    setSky();
-    const store = loadStore();
-    renderField(store, mode);
-    renderDashboard(store);
-  }
-  function completeGoal(store, goal) {
-    const witness = witnessFor(goal);
-    const line = chooseLine(witness.completionLines, goal.lastAffirmation);
-    const archived = archiveFromGoal(goal, 'kept', line);
-    const letter = addFieldLetter(archived, witness, line);
-    archived.journalLetterId = letter.id;
-    store.activeGoal = null;
-    store.pastGoals = [archived, ...(store.pastGoals || [])].slice(0, 10);
-    store.lastKeepsake = archived;
-    store.lastSpeech = { companionId: witness.id, line, kind: 'completion', at: nowISO() };
-    saveStore(store);
+    if (setupEl) setupEl.style.display = '';
   }
   function init() {
-    if (document.body.dataset.goalFieldBound === '1') { render(); return; }
-    document.body.dataset.goalFieldBound = '1';
-
+    if (document.body.dataset.goalBound === '1') { render(); return; }
+    document.body.dataset.goalBound = '1';
     const form = document.getElementById('goal-form');
+    applyPresetFromUrl();
     if (form) form.addEventListener('submit', (ev) => {
       ev.preventDefault();
       const fd = new FormData(form);
-      const store = loadStore();
-      if (store.activeGoal) {
-        const replace = confirm('Archive the current goal as abandoned and set this new one? The old record stays in the back of the net.');
-        if (!replace) return;
-        const oldWitness = witnessFor(store.activeGoal);
-        const oldLine = 'A replacement was declared. The old ball goes faded into the net.';
-        store.pastGoals = [archiveFromGoal(store.activeGoal, 'abandoned', oldLine), ...(store.pastGoals || [])].slice(0, 10);
-        store.lastSpeech = { companionId: oldWitness.id, line: oldLine, kind: 'abandoned', at: nowISO() };
-      }
-      const witnessId = validWitness(String(fd.get('goalWitness') || 'gandalf'));
-      const witness = witnessFor(witnessId);
-      const goal = normalizeGoal({
+      const goal = {
         id: 'local-' + Date.now().toString(36),
         title: String(fd.get('title') || '').slice(0, 180),
         why: String(fd.get('why') || '').slice(0, 240),
@@ -1612,88 +354,31 @@ const yardTicks = Array.from({ length: 11 }, (_, i) => i * 10);
         triggerCondition: String(fd.get('triggerCondition') || '').slice(0, 240),
         startedAt: todayISO(),
         status: 'running',
-        goalWitness: witnessId,
         marks: [],
-        marksLog: [],
-        createdAt: nowISO(),
-      });
-      store.activeGoal = goal;
-      store.lastKeepsake = null;
-      store.lastSpeech = { companionId: witness.id, line: witness.opening, kind: 'set', at: nowISO() };
-      saveStore(store);
+      };
+      save(goal);
       form.reset();
-      const gandalf = form.querySelector('input[name="goalWitness"][value="gandalf"]');
-      if (gandalf) gandalf.checked = true;
-      render('kick');
-      document.getElementById('field-hero')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      render();
+      document.getElementById('machine')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-
     document.getElementById('btn-mark')?.addEventListener('click', () => {
-      const store = loadStore();
-      const goal = store.activeGoal;
-      if (!goal) return;
+      const g = load(); if (!g) return;
+      g.marks = g.marks || [];
       const today = todayISO();
-      const witness = witnessFor(goal);
-      if (!goal.marks.includes(today)) {
-        goal.marks.push(today);
-        goal.marks = uniqueMarks(goal.marks);
-        goal.marksLog = [{ date: today, at: nowISO(), action: 'mark' }, ...(goal.marksLog || [])].slice(0, 400);
-        const line = chooseLine(witness.affirmations, goal.lastAffirmation);
-        goal.lastAffirmation = line;
-        goal.updatedAt = nowISO();
-        store.lastSpeech = { companionId: witness.id, line, kind: 'mark', at: nowISO() };
-        if (goal.marks.length >= Number(goal.horizon || 90)) {
-          completeGoal(store, goal);
-          render('goal');
-          return;
-        }
-        store.activeGoal = goal;
-        saveStore(store);
-        render('kick');
-        return;
-      }
-      const line = chooseLine(witness.affirmations, goal.lastAffirmation);
-      goal.lastAffirmation = line;
-      store.lastSpeech = { companionId: witness.id, line: 'Today is already marked. The ball holds its yard.', kind: 'already-marked', at: nowISO() };
-      store.activeGoal = goal;
-      saveStore(store);
-      render();
+      if (!g.marks.includes(today)) g.marks.push(today);
+      save(g); render();
     });
-
     document.getElementById('btn-undo')?.addEventListener('click', () => {
-      const store = loadStore();
-      const goal = store.activeGoal;
-      if (!goal) return;
-      const removed = (goal.marks || []).slice(-1)[0];
-      goal.marks = (goal.marks || []).slice(0, -1);
-      goal.marksLog = [{ date: removed || todayISO(), at: nowISO(), action: 'undo' }, ...(goal.marksLog || [])].slice(0, 400);
-      goal.updatedAt = nowISO();
-      const witness = witnessFor(goal);
-      store.lastSpeech = { companionId: witness.id, line: 'The last yard is undone. Run the machine honestly tomorrow.', kind: 'undo', at: nowISO() };
-      store.activeGoal = goal;
-      saveStore(store);
-      render('kick');
+      const g = load(); if (!g) return;
+      g.marks = (g.marks || []).slice(0, -1);
+      save(g); render();
     });
-
     document.getElementById('btn-retire')?.addEventListener('click', () => {
-      const store = loadStore();
-      const goal = store.activeGoal;
-      if (!goal) return;
-      if (!confirm('Retire goal honestly? The record will stay in the back of the net.')) return;
-      const witness = witnessFor(goal);
-      const line = chooseLine(witness.partings, goal.lastAffirmation);
-      const archived = archiveFromGoal(goal, 'retired-honestly', line);
-      store.activeGoal = null;
-      store.pastGoals = [archived, ...(store.pastGoals || [])].slice(0, 10);
-      store.lastKeepsake = null;
-      store.lastSpeech = { companionId: witness.id, line, kind: 'retired-honestly', at: nowISO() };
-      saveStore(store);
-      render();
+      if (!confirm('Retire goal honestly? This is not failure; it is honesty. Local data will be cleared.')) return;
+      clear(); render();
     });
-
     render();
   }
   init();
   document.addEventListener('astro:page-load', init);
-})();
 </script>
