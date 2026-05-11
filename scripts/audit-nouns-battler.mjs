@@ -86,6 +86,7 @@ const checks = [
   ['union artifact studio has drop gallery', files.unionArtifacts.includes('Drop Gallery') && files.unionArtifacts.includes('Copy Gallery Receipt')],
   ['union artifact studio has Manus 50', files.unionArtifacts.includes('Manus 50') && files.unionArtifacts.includes('Copy Manus 50 Batch')],
   ['union artifact studio has Agency 50', files.unionArtifacts.includes('Agency 50') && files.unionArtifacts.includes('Copy Agency 50 Batch')],
+  ['union Agency 50 uses actual Noun references', files.unionLeague.includes('Use actual Noun #') && files.unionLeague.includes('https://noun.pics/') && files.unionArtifacts.includes('Actual Noun #')],
   ['union artifact studio links Manus 50 goal preset', files.unionArtifacts.includes('/goal?preset=nouns-union-manus-50#setup')],
   ['union artifact studio has Nano Banana lane', files.unionArtifacts.includes('Nano Banana') && files.unionLeague.includes('buildNounsStateManusArtifactRun')],
   ['union artifact studio has gallery review states', ['ready-to-generate', 'sponsor-candidate', 'ready-to-publish', 'needs-remix'].every((state) => files.unionArtifacts.includes(state) || files.unionLeague.includes(state))],

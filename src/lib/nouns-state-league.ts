@@ -61,6 +61,8 @@ export type NounsStateAgencyPoster = {
   code: string;
   team: string;
   short: string;
+  nounId: number;
+  nounReference: string;
   agencyLane: string;
   campaignLine: string;
   headline: string;
@@ -589,13 +591,16 @@ export function buildNounsStateAgencyPoster(team: NounsStateTeam, index = 0): No
   const campaignLine = 'Fifty States. Fifty Nouns. One Union Night.';
   const headline = `${team.short} ${verb} from ${team.field}.`;
   const posterTitle = `${team.state} State Night Poster`;
+  const nounReference = `Actual Noun #${team.nounSeed} reference: https://noun.pics/${team.nounSeed}.svg. PointCast local preview asset: /games/nouns-nation-battler/assets/noun-${team.nounSeed % 60}.svg.`;
   const prompt = [
     `Create an original ${format} for ${team.team} in the Nouns United States Union League.`,
     `Creative benchmark: a top Los Angeles or New York advertising/design firm launching a weird fictional sports property.`,
     `Campaign line: "${campaignLine}" Headline: "${headline}"`,
-    `Use Nouns-inspired pixel characters with chunky noggles, premium sports typography, high-contrast field energy, and one unmistakable ${team.state} visual idea.`,
+    `${nounReference}`,
+    `Use actual Noun #${team.nounSeed} as the central athlete/captain, preserving the real Noun silhouette, head shape, body/accessory feel, pixel-art construction, and noggles from the reference rather than inventing a generic mascot.`,
+    `Build the ad around that actual Noun with premium sports typography, high-contrast field energy, and one unmistakable ${team.state} visual idea.`,
     `State identity: ${team.motif}. Team colors: ${team.colors[0]} and ${team.colors[1]}.`,
-    `Feature one central Noun athlete or captain, one secondary local symbol, and a clean team-name lockup: ${team.team}.`,
+    `Feature actual Noun #${team.nounSeed}, one secondary local symbol, and a clean team-name lockup: ${team.team}.`,
     `Include subtle cues for home field "${team.field}", signature move "${team.signatureMove}", and fan ritual "${team.fanRitual}".`,
     `Keep a safe zone for a PointCast caption and a small "Nouns Union State Night" tag.`,
     `Do not use official league logos, school marks, real team marks, betting language, checkout language, or promised financial return.`,
@@ -607,6 +612,8 @@ export function buildNounsStateAgencyPoster(team: NounsStateTeam, index = 0): No
     code: team.code,
     team: team.team,
     short: team.short,
+    nounId: team.nounSeed,
+    nounReference,
     agencyLane,
     campaignLine,
     headline,
@@ -624,6 +631,7 @@ export function buildNounsStateAgencyPosterRun() {
     'NOUNS UNION AGENCY 50 POSTER CAMPAIGN',
     'Assignment: one premium ad-poster concept for every state team.',
     'Benchmark: top Los Angeles / New York advertising and design firm energy, executed through Manus, ChatGPT image generation, Nano Banana, or another top image model.',
+    'Noun rule: every poster must use its assigned actual Noun number as the central athlete, with noun.pics reference art preserved before adding state campaign styling.',
     `Campaign line: ${posters[0]?.campaignLine}`,
     `Posters: ${posters.map((poster) => `${poster.code}:${poster.format}`).join(', ')}`,
     'Workflow: generate, review, remix weak concepts, publish accepted posters, then route sponsor or participant credit only after human approval.',
