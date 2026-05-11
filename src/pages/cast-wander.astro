@@ -1,0 +1,594 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Wander — generative ambient that never repeats" description="Music that composes itself. Markov-chain chord progression. Pentatonic lead phrases. Slow pad evolution. Runs forever. Different every time. For background while you work, read, sleep.">
+  <main class="cw" id="cw" data-built={built}>
+    <header class="cw__hero">
+      <p class="cw__kicker">CAST · WANDER · generative ambient</p>
+      <h1 class="cw__title">Music that composes itself.</h1>
+      <p class="cw__sub">A Markov chain picks the next chord. A weighted-random walk plays the lead. The pad slowly opens and closes. Click play. Walk away. The piece keeps writing itself.</p>
+    </header>
+
+    <section class="cw__stage" data-state="idle" id="cw-stage">
+      <div class="cw__chord-display">
+        <p class="cw__chord-label" id="cw-chord-label">—</p>
+        <p class="cw__chord-roman" id="cw-chord-roman">click play</p>
+      </div>
+
+      <button class="cw__play" id="cw-play" type="button" aria-label="Start the wander">
+        <span id="cw-play-icon">▶</span>
+      </button>
+
+      <p class="cw__elapsed" id="cw-elapsed">— : —</p>
+    </section>
+
+    <section class="cw__controls">
+      <div class="cw__ctl">
+        <label class="cw__ctl-label" for="cw-mood">MOOD</label>
+        <div class="cw__pill-row" id="cw-mood-row">
+          <button class="cw__pill cw__pill--active" data-mood="serene">serene</button>
+          <button class="cw__pill" data-mood="searching">searching</button>
+          <button class="cw__pill" data-mood="bittersweet">bittersweet</button>
+          <button class="cw__pill" data-mood="bright">bright</button>
+        </div>
+      </div>
+
+      <div class="cw__ctl">
+        <label class="cw__ctl-label" for="cw-density">DENSITY</label>
+        <input type="range" class="cw__ctl-slider" id="cw-density" min="0" max="100" value="40"/>
+        <p class="cw__ctl-hint" id="cw-density-hint">how often lead notes play (40% — sparse)</p>
+      </div>
+
+      <div class="cw__ctl">
+        <label class="cw__ctl-label" for="cw-tempo">PACE</label>
+        <input type="range" class="cw__ctl-slider" id="cw-tempo" min="40" max="80" step="2" value="56"/>
+        <p class="cw__ctl-hint" id="cw-tempo-hint">56 BPM — slow walk</p>
+      </div>
+
+      <div class="cw__vol">
+        <span class="cw__vol-icon">♪</span>
+        <input type="range" class="cw__vol-slider" id="cw-vol" min="0" max="100" value="55" aria-label="Volume"/>
+      </div>
+    </section>
+
+    <section class="cw__history">
+      <p class="cw__section-label">RECENT CHORDS · last 12</p>
+      <div class="cw__history-row" id="cw-history-row">
+        <span class="cw__history-empty">—</span>
+      </div>
+    </section>
+
+    <section class="cw__tips">
+      <h2 class="cw__tips-title">How it composes</h2>
+      <ul class="cw__tips-list">
+        <li><strong>Markov chain</strong> — each chord knows which chords commonly follow it. Probabilistically picks one. <code>I → IV (35%) · V (30%) · vi (25%) · ii (10%)</code> — that kind of thing.</li>
+        <li><strong>Mood</strong> swaps the chord palette + transition weights. Serene: lots of suspended chords. Bittersweet: minor 7ths. Bright: dominant 7s with quick resolution.</li>
+        <li><strong>Pentatonic lead</strong> — note choice is constrained to the mode's pentatonic, so it always fits. Density slider controls how often a note fires per beat.</li>
+        <li><strong>Pad</strong> — slow filter envelope opens through each chord, closes at the change. The "breathing" feel.</li>
+      </ul>
+      <p class="cw__tips-note">Spacebar toggles play. The piece runs as long as the tab is open — but pause it when you close it; iOS will sleep the tab anyway.</p>
+    </section>
+
+    <footer class="cw__foot">
+      <p>Built {built.slice(0,10)} · pure Web Audio · the same piece never plays twice</p>
+      <p>← <a href="/cast-on">/cast-on</a> · <a href="/cast-breathe">/cast-breathe</a> · <a href="/cast-tone">/cast-tone</a> · <a href="/town-music">/town-music</a> · <a href="/">PointCast home</a></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --cw-bg: #0a0610;
+    --cw-walnut: #5a3422;
+    --cw-flame: #f6c15e;
+    --cw-cream: #f4e7c8;
+    --cw-velvet: #1a0820;
+    --cw-line: rgba(244,231,200,0.10);
+    --cw-text: #f4e7c8;
+    --cw-text-mute: rgba(244,231,200,0.62);
+    --cw-text-quiet: rgba(244,231,200,0.38);
+    --cw-mood-c: #9ed6f0;
+    --cw-display: 'Inter Tight', system-ui, sans-serif;
+    --cw-body: 'Inter', system-ui, sans-serif;
+    --cw-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  body { background: var(--cw-bg); color: var(--cw-text); font-family: var(--cw-body); }
+
+  .cw {
+    max-width: 760px; margin: 0 auto;
+    padding: 36px 22px 60px 22px;
+    display: flex; flex-direction: column; gap: 28px;
+    position: relative; isolation: isolate;
+    min-height: 100vh;
+  }
+  .cw::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(75% 60% at 50% 30%, var(--cw-mood-c) 0%, transparent 60%),
+      radial-gradient(60% 50% at 50% 90%, color-mix(in srgb, var(--cw-mood-c) 30%, #000) 0%, transparent 60%),
+      linear-gradient(180deg, var(--cw-bg) 0%, color-mix(in srgb, var(--cw-mood-c) 10%, var(--cw-bg)) 100%);
+    filter: blur(70px) saturate(0.75);
+    opacity: 0.22;
+    transform: scale(1.05);
+    transition: opacity 2s ease;
+  }
+  .cw[data-state="on"]::before { opacity: 0.35; }
+
+  /* HERO */
+  .cw__kicker { font-family: var(--cw-mono); font-size: 11px; letter-spacing: 0.7px; color: var(--cw-flame); text-transform: uppercase; margin: 0 0 12px 0; }
+  .cw__title {
+    font-family: var(--cw-display); font-weight: 900;
+    font-size: clamp(40px, 6.5vw, 56px); line-height: 0.98; letter-spacing: -0.025em; margin: 0 0 14px 0;
+    background: linear-gradient(180deg, var(--cw-cream), var(--cw-mood-c));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    transition: background 1.6s ease;
+  }
+  .cw__sub { font-family: var(--cw-body); font-size: 15px; line-height: 1.6; color: var(--cw-text-mute); max-width: 580px; margin: 0; }
+
+  /* STAGE */
+  .cw__stage {
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+    padding: 32px 24px;
+    background: linear-gradient(180deg, rgba(244,231,200,0.04), rgba(244,231,200,0.01));
+    border: 1px solid var(--cw-line); border-radius: 16px;
+    position: relative;
+  }
+  .cw__chord-display { text-align: center; min-height: 96px; display: flex; flex-direction: column; justify-content: center; }
+  .cw__chord-label {
+    font-family: var(--cw-display); font-weight: 900;
+    font-size: 72px; line-height: 1; letter-spacing: -0.03em;
+    margin: 0; color: var(--cw-text);
+    transition: color 1.6s ease, transform 1.6s ease;
+  }
+  .cw__stage[data-state="on"] .cw__chord-label { color: var(--cw-mood-c); }
+  .cw__chord-roman { font-family: var(--cw-mono); font-size: 13px; color: var(--cw-text-mute); margin: 12px 0 0 0; letter-spacing: 0.4px; }
+
+  .cw__play {
+    width: 76px; height: 76px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, var(--cw-mood-c) 0%, var(--cw-walnut) 70%, var(--cw-velvet) 100%);
+    border: 2px solid rgba(244,231,200,0.18);
+    color: var(--cw-velvet); font-size: 28px; font-weight: 800; padding-left: 4px;
+    cursor: pointer; display: grid; place-items: center;
+    transition: transform 0.15s ease, background 1.6s ease;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  .cw__play:hover { transform: scale(1.05); }
+  .cw__play:focus-visible { outline: 3px solid var(--cw-flame); outline-offset: 4px; }
+  .cw__play--on { padding-left: 0; animation: cw-breathe 6s ease-in-out infinite; }
+  @keyframes cw-breathe { 0%, 100% { transform: scale(1); box-shadow: 0 6px 20px rgba(0,0,0,0.4); } 50% { transform: scale(1.04); box-shadow: 0 8px 30px rgba(0,0,0,0.55); } }
+
+  .cw__elapsed { font-family: var(--cw-mono); font-size: 12px; color: var(--cw-text-quiet); margin: 0; letter-spacing: 0.5px; }
+
+  /* CONTROLS */
+  .cw__controls {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: 20px 22px;
+    background: rgba(244,231,200,0.03);
+    border: 1px solid var(--cw-line);
+    border-radius: 12px;
+  }
+  .cw__ctl { display: flex; flex-direction: column; gap: 10px; }
+  .cw__ctl-label { font-family: var(--cw-mono); font-size: 10px; letter-spacing: 0.7px; color: var(--cw-text-quiet); text-transform: uppercase; }
+  .cw__pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cw__pill {
+    background: rgba(244,231,200,0.04); color: var(--cw-text-mute);
+    border: 1px solid var(--cw-line); border-radius: 8px;
+    padding: 6px 12px; font-family: var(--cw-mono); font-size: 11px; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .cw__pill:hover { background: rgba(244,231,200,0.10); color: var(--cw-text); }
+  .cw__pill--active { background: color-mix(in srgb, var(--cw-mood-c) 18%, transparent); color: var(--cw-mood-c); border-color: var(--cw-mood-c); }
+
+  .cw__ctl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    background: rgba(244,231,200,0.16); border-radius: 2px; outline: 0; cursor: pointer;
+  }
+  .cw__ctl-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cw-mood-c); cursor: pointer; transition: background 1.6s ease; }
+  .cw__ctl-hint { font-family: var(--cw-mono); font-size: 10.5px; color: var(--cw-text-quiet); margin: 0; letter-spacing: 0.3px; }
+
+  .cw__vol { display: flex; align-items: center; gap: 10px; }
+  .cw__vol-icon { font-size: 14px; color: var(--cw-text-mute); }
+  .cw__vol-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(244,231,200,0.16); border-radius: 2px; outline: 0; cursor: pointer; }
+  .cw__vol-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cw-flame); cursor: pointer; }
+
+  /* HISTORY */
+  .cw__history { padding: 16px 22px; background: rgba(244,231,200,0.03); border: 1px solid var(--cw-line); border-radius: 12px; overflow: hidden; }
+  .cw__section-label { font-family: var(--cw-mono); font-size: 10px; letter-spacing: 0.7px; color: var(--cw-text-quiet); text-transform: uppercase; margin: 0 0 12px 0; }
+  .cw__history-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 32px; }
+  .cw__history-chip {
+    font-family: var(--cw-mono); font-size: 12px;
+    padding: 5px 10px; border-radius: 999px;
+    background: rgba(244,231,200,0.06);
+    color: var(--cw-text-mute);
+    border: 1px solid rgba(244,231,200,0.10);
+    animation: cw-chip-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .cw__history-chip--latest {
+    background: color-mix(in srgb, var(--cw-mood-c) 18%, transparent);
+    color: var(--cw-mood-c);
+    border-color: var(--cw-mood-c);
+  }
+  @keyframes cw-chip-in {
+    from { opacity: 0; transform: translateX(8px) scale(0.92); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .cw__history-empty { font-family: var(--cw-mono); font-size: 11px; color: var(--cw-text-quiet); }
+
+  /* TIPS */
+  .cw__tips { padding: 22px 24px; background: rgba(244,231,200,0.03); border: 1px solid var(--cw-line); border-radius: 12px; }
+  .cw__tips-title { font-family: var(--cw-display); font-weight: 700; font-size: 18px; margin: 0 0 12px 0; letter-spacing: -0.01em; }
+  .cw__tips-list { list-style: none; padding: 0; margin: 0 0 12px 0; display: flex; flex-direction: column; gap: 10px; }
+  .cw__tips-list li { font-family: var(--cw-body); font-size: 13.5px; line-height: 1.55; color: var(--cw-text-mute); }
+  .cw__tips-list strong { color: var(--cw-mood-c); font-weight: 600; }
+  .cw__tips-list code { font-family: var(--cw-mono); font-size: 11.5px; background: var(--cw-velvet); padding: 1px 5px; border-radius: 3px; color: var(--cw-flame); }
+  .cw__tips-note { font-family: var(--cw-body); font-size: 12.5px; color: var(--cw-text-quiet); margin: 0; font-style: italic; line-height: 1.5; }
+
+  /* FOOT */
+  .cw__foot { margin-top: auto; padding-top: 24px; border-top: 1px solid var(--cw-line); font-family: var(--cw-mono); font-size: 11px; color: var(--cw-text-quiet); line-height: 1.7; text-align: center; }
+  .cw__foot a { color: var(--cw-mood-c); text-decoration: none; }
+  .cw__foot a:hover { text-decoration: underline; }
+</style>
+
+<script>
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
+
+  // ============================================================
+  //  CAST · WANDER — generative ambient
+  //  Markov chain over chord degrees · weighted-random pentatonic
+  //  lead · slow filter-enveloped pad · runs forever, no repeat.
+  // ============================================================
+
+  type Mood = 'serene' | 'searching' | 'bittersweet' | 'bright';
+  type ChordDegree = 'I' | 'I6' | 'ii' | 'iii' | 'IV' | 'IVmaj7' | 'V' | 'V7' | 'vi' | 'vi7' | 'iiisus' | 'vsus';
+
+  interface MoodSpec {
+    name: string;
+    color: string;
+    rootHz: number;
+    isMinor: boolean; // affects pentatonic for the lead
+    transitions: Record<ChordDegree, [ChordDegree, number][]>;
+  }
+
+  // Chord degree → semitone offsets from root + chord type
+  const CHORD_DEFS: Record<ChordDegree, { semi: number; intervals: number[] }> = {
+    'I':      { semi: 0,  intervals: [0, 4, 7] },
+    'I6':     { semi: 0,  intervals: [0, 4, 7, 9] },
+    'ii':     { semi: 2,  intervals: [0, 3, 7, 10] },
+    'iii':    { semi: 4,  intervals: [0, 3, 7, 10] },
+    'iiisus': { semi: 4,  intervals: [0, 5, 7, 10] },
+    'IV':     { semi: 5,  intervals: [0, 4, 7] },
+    'IVmaj7': { semi: 5,  intervals: [0, 4, 7, 11] },
+    'V':      { semi: 7,  intervals: [0, 4, 7] },
+    'V7':     { semi: 7,  intervals: [0, 4, 7, 10] },
+    'vsus':   { semi: 7,  intervals: [0, 5, 7, 10] },
+    'vi':     { semi: 9,  intervals: [0, 3, 7] },
+    'vi7':    { semi: 9,  intervals: [0, 3, 7, 10] },
+  };
+
+  // Markov transition tables. Weighted by intuition: I likes IV+V+vi; vi likes IV+ii+V; V resolves to I most.
+  const MOODS: Record<Mood, MoodSpec> = {
+    serene: {
+      name: 'serene', color: '#9ed6f0', rootHz: 130.81, isMinor: false,
+      transitions: {
+        'I':      [['IVmaj7', 35], ['vsus', 25], ['vi7', 20], ['ii', 10], ['I6', 10]],
+        'I6':     [['IVmaj7', 40], ['vsus', 30], ['I', 30]],
+        'ii':     [['vsus', 40], ['IVmaj7', 30], ['vi7', 20], ['I', 10]],
+        'iii':    [['IVmaj7', 50], ['vi7', 30], ['I', 20]],
+        'iiisus': [['IVmaj7', 50], ['vi7', 30], ['I', 20]],
+        'IV':     [['I', 30], ['vi7', 30], ['vsus', 30], ['IVmaj7', 10]],
+        'IVmaj7': [['I', 30], ['vi7', 30], ['vsus', 25], ['ii', 15]],
+        'V':      [['I', 60], ['vi7', 30], ['IVmaj7', 10]],
+        'V7':     [['I', 70], ['vi7', 30]],
+        'vsus':   [['I', 50], ['IVmaj7', 30], ['vi7', 20]],
+        'vi':     [['IVmaj7', 40], ['vsus', 30], ['ii', 20], ['I', 10]],
+        'vi7':    [['IVmaj7', 35], ['vsus', 30], ['ii', 25], ['I', 10]],
+      },
+    },
+    searching: {
+      name: 'searching', color: '#b39ddb', rootHz: 110.00, isMinor: true,
+      transitions: {
+        'I':      [['vi7', 35], ['IVmaj7', 30], ['iii', 20], ['V7', 15]],
+        'I6':     [['vi7', 50], ['IVmaj7', 30], ['V7', 20]],
+        'ii':     [['V7', 40], ['vi7', 30], ['iiisus', 20], ['I', 10]],
+        'iii':    [['vi7', 50], ['IVmaj7', 30], ['I', 20]],
+        'iiisus': [['vi7', 50], ['IVmaj7', 30], ['I', 20]],
+        'IV':     [['vi7', 35], ['V7', 35], ['I', 30]],
+        'IVmaj7': [['vi7', 40], ['V7', 30], ['I', 20], ['iiisus', 10]],
+        'V':      [['vi7', 50], ['I', 40], ['IVmaj7', 10]],
+        'V7':     [['vi7', 55], ['I', 35], ['IVmaj7', 10]],
+        'vsus':   [['vi7', 50], ['I', 40], ['IVmaj7', 10]],
+        'vi':     [['ii', 30], ['IVmaj7', 30], ['iiisus', 20], ['V7', 20]],
+        'vi7':    [['ii', 30], ['IVmaj7', 30], ['iiisus', 20], ['V7', 20]],
+      },
+    },
+    bittersweet: {
+      name: 'bittersweet', color: '#e8b3c0', rootHz: 130.81, isMinor: false,
+      transitions: {
+        'I':      [['vi7', 35], ['ii', 25], ['IVmaj7', 25], ['iii', 15]],
+        'I6':     [['vi7', 40], ['IVmaj7', 35], ['ii', 25]],
+        'ii':     [['V7', 35], ['IVmaj7', 30], ['vi7', 20], ['I', 15]],
+        'iii':    [['vi7', 40], ['IVmaj7', 30], ['I', 30]],
+        'iiisus': [['vi7', 40], ['IVmaj7', 30], ['I', 30]],
+        'IV':     [['I', 25], ['vi7', 35], ['ii', 25], ['V7', 15]],
+        'IVmaj7': [['I', 25], ['vi7', 30], ['ii', 25], ['V7', 20]],
+        'V':      [['I', 50], ['vi7', 35], ['IVmaj7', 15]],
+        'V7':     [['I', 50], ['vi7', 40], ['IVmaj7', 10]],
+        'vsus':   [['I', 45], ['vi7', 35], ['IVmaj7', 20]],
+        'vi':     [['IVmaj7', 30], ['ii', 30], ['iii', 25], ['V7', 15]],
+        'vi7':    [['IVmaj7', 30], ['ii', 30], ['iii', 25], ['V7', 15]],
+      },
+    },
+    bright: {
+      name: 'bright', color: '#ffd400', rootHz: 146.83, isMinor: false,
+      transitions: {
+        'I':      [['IV', 30], ['V7', 30], ['vi', 20], ['I6', 20]],
+        'I6':     [['IV', 40], ['V7', 35], ['vi', 25]],
+        'ii':     [['V7', 60], ['IV', 25], ['I', 15]],
+        'iii':    [['IV', 50], ['vi', 30], ['I', 20]],
+        'iiisus': [['IV', 50], ['vi', 30], ['I', 20]],
+        'IV':     [['I', 30], ['V7', 35], ['vi', 25], ['ii', 10]],
+        'IVmaj7': [['I', 30], ['V7', 35], ['vi', 25], ['ii', 10]],
+        'V':      [['I', 70], ['vi', 30]],
+        'V7':     [['I', 75], ['vi', 25]],
+        'vsus':   [['I', 60], ['IV', 25], ['vi', 15]],
+        'vi':     [['IV', 35], ['ii', 30], ['V7', 25], ['I', 10]],
+        'vi7':    [['IV', 35], ['ii', 30], ['V7', 25], ['I', 10]],
+      },
+    },
+  };
+
+  function pickNext(current: ChordDegree, mood: Mood): ChordDegree {
+    const options = MOODS[mood].transitions[current];
+    const total = options.reduce((acc, [_, w]) => acc + w, 0);
+    let r = Math.random() * total;
+    for (const [next, w] of options) {
+      r -= w;
+      if (r <= 0) return next;
+    }
+    return options[0][0];
+  }
+
+  // Pentatonic scale in semitone offsets from root
+  // Major pent: 1, 2, 3, 5, 6, 8
+  // Minor pent: 1, b3, 4, 5, b7, 8
+  const MAJOR_PENT = [0, 2, 4, 7, 9, 12, 14];
+  const MINOR_PENT = [0, 3, 5, 7, 10, 12, 15];
+
+  // ---------- Audio ----------
+  let ctx: AudioContext | null = null;
+  let masterGain: GainNode | null = null;
+  let sched: AudioScheduler | null = null;
+  let volume = 55;
+
+  function ac(): AudioContext {
+    if (ctx) return ctx;
+    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    masterGain = ctx.createGain(); masterGain.gain.value = volume / 100;
+    masterGain.connect(ctx.destination);
+    sched = createAudioScheduler(ctx);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && running) sched?.resume();
+    });
+    return ctx;
+  }
+
+  function playPad(when: number, freqs: number[], dur: number) {
+    const c = ac();
+    // Slow attack, hold, slow release. Filter opens then closes.
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(600, when);
+    filter.frequency.linearRampToValueAtTime(2400, when + dur * 0.5);
+    filter.frequency.linearRampToValueAtTime(600, when + dur);
+    filter.Q.value = 0.7;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.001, when);
+    gain.gain.linearRampToValueAtTime(0.08, when + dur * 0.3);
+    gain.gain.linearRampToValueAtTime(0.06, when + dur * 0.7);
+    gain.gain.linearRampToValueAtTime(0.001, when + dur);
+    filter.connect(gain); gain.connect(masterGain!);
+    freqs.forEach((freq, i) => {
+      // Two slightly-detuned voices per chord tone
+      [-3, 3].forEach(cents => {
+        const o = c.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = freq * Math.pow(2, cents / 1200);
+        o.connect(filter);
+        sched!.trackSource(o); o.start(when); o.stop(when + dur + 0.05);
+      });
+    });
+    // Cleanup on the slowest tail
+    setTimeout(() => { try { filter.disconnect(); gain.disconnect(); } catch {} }, (dur + 0.5) * 1000);
+  }
+
+  function playLead(when: number, freq: number) {
+    const c = ac();
+    const o = c.createOscillator();
+    const g = c.createGain();
+    const f = c.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.value = freq;
+    f.type = 'lowpass'; f.frequency.value = 2000; f.Q.value = 0.8;
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(0.10, when + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 1.4);
+    o.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(o); o.start(when); o.stop(when + 1.5);
+    setTimeout(() => { try { f.disconnect(); g.disconnect(); } catch {} }, 1700);
+  }
+
+  // ---------- Chord helpers ----------
+  function chordHzs(degree: ChordDegree, mood: Mood): number[] {
+    const def = CHORD_DEFS[degree];
+    const root = MOODS[mood].rootHz * Math.pow(2, def.semi / 12);
+    return def.intervals.map(s => root * Math.pow(2, s / 12));
+  }
+
+  function pickLeadFreq(degree: ChordDegree, mood: Mood): number {
+    const m = MOODS[mood];
+    const def = CHORD_DEFS[degree];
+    const root = m.rootHz * Math.pow(2, def.semi / 12) * 2; // octave up for lead
+    const scale = m.isMinor ? MINOR_PENT : MAJOR_PENT;
+    const step = scale[Math.floor(Math.random() * scale.length)];
+    return root * Math.pow(2, step / 12);
+  }
+
+  // ---------- State machine ----------
+  let running = false;
+  let mood: Mood = 'serene';
+  let density = 0.4;
+  let bpm = 56;
+  let currentChord: ChordDegree = 'I';
+  let history: ChordDegree[] = [];
+  let elapsedSec = 0;
+  let elapsedTimerId: number | null = null;
+
+  function chordSec(): number { return (60 / bpm) * 4 * 4; } // 4 bars
+
+  function startCycle() {
+    if (!running) return;
+    const c = ac();
+    if (c.state === 'suspended') c.resume();
+    const dur = chordSec();
+    const start = c.currentTime + 0.04;
+    const hzs = chordHzs(currentChord, mood);
+    // Pad lasts the full chord duration
+    playPad(start, hzs, dur * 0.98);
+    // Lead notes scattered across this chord — `density` controls probability per beat
+    const beat = 60 / bpm;
+    const beatsInChord = 16;
+    for (let i = 0; i < beatsInChord; i++) {
+      // Each beat has `density` chance of triggering a lead note
+      // (skip the very last few beats so notes don't bleed into the next chord)
+      if (i >= beatsInChord - 2) break;
+      if (Math.random() < density) {
+        const t = start + i * beat;
+        const f = pickLeadFreq(currentChord, mood);
+        playLead(t, f);
+      }
+    }
+    // Show this chord in the display
+    renderCurrentChord();
+    // Push to history (only after first cycle, since it shows as "current")
+    history.unshift(currentChord);
+    if (history.length > 12) history.pop();
+    renderHistory();
+    // Pick next chord at end of this one
+    sched!.schedule(() => {
+      currentChord = pickNext(currentChord, mood);
+      startCycle();
+    }, start + dur);
+  }
+
+  function start() {
+    if (!ctx) ac();
+    running = true;
+    history = [];
+    elapsedSec = 0;
+    currentChord = 'I';
+    renderCurrentChord();
+    renderHistory();
+    updatePlayBtn();
+    document.getElementById('cw-stage')!.dataset.state = 'on';
+    document.querySelector('main.cw')!.setAttribute('data-state', 'on');
+    startCycle();
+    elapsedTimerId = window.setInterval(() => { elapsedSec++; renderElapsed(); }, 1000);
+  }
+  function stop() {
+    running = false;
+    if (sched) sched.stopAll();
+    if (elapsedTimerId) { clearInterval(elapsedTimerId); elapsedTimerId = null; }
+    updatePlayBtn();
+    document.getElementById('cw-stage')!.dataset.state = 'idle';
+    document.querySelector('main.cw')!.setAttribute('data-state', 'idle');
+  }
+  function toggle() { if (running) stop(); else start(); }
+
+  // ---------- Render ----------
+  function updatePlayBtn() {
+    const btn = document.getElementById('cw-play')!;
+    const ic = document.getElementById('cw-play-icon')!;
+    btn.classList.toggle('cw__play--on', running);
+    ic.textContent = running ? '◼' : '▶';
+  }
+  function renderCurrentChord() {
+    const def = CHORD_DEFS[currentChord];
+    const m = MOODS[mood];
+    // Build a friendly chord name
+    const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const ROOT_TO_IDX: Record<number, number> = { 110: 9, 130.81: 0, 146.83: 2, 164.81: 4 };
+    const rootIdx = ROOT_TO_IDX[m.rootHz] ?? 0;
+    const noteIdx = (rootIdx + def.semi) % 12;
+    let suffix = '';
+    if (currentChord.includes('sus')) suffix = 'sus';
+    else if (currentChord === 'V7' || currentChord === 'vi7') suffix = '7';
+    else if (currentChord === 'IVmaj7') suffix = 'maj7';
+    else if (currentChord.toLowerCase() === currentChord) suffix = 'm';
+    else if (currentChord === 'I6') suffix = '6';
+    document.getElementById('cw-chord-label')!.textContent = NOTES[noteIdx] + suffix;
+    document.getElementById('cw-chord-roman')!.textContent = `${currentChord} in ${m.name} · ${bpm} bpm`;
+  }
+  function renderHistory() {
+    const wrap = document.getElementById('cw-history-row')!;
+    if (history.length === 0) {
+      wrap.innerHTML = '<span class="cw__history-empty">—</span>';
+      return;
+    }
+    wrap.innerHTML = history.map((c, i) => `<span class="cw__history-chip ${i === 0 ? 'cw__history-chip--latest' : ''}">${c}</span>`).join('');
+  }
+  function renderElapsed() {
+    const m = Math.floor(elapsedSec / 60);
+    const s = elapsedSec % 60;
+    document.getElementById('cw-elapsed')!.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  }
+  function renderMood() {
+    document.querySelectorAll<HTMLButtonElement>('[data-mood]').forEach(b => b.classList.toggle('cw__pill--active', b.dataset.mood === mood));
+    document.documentElement.style.setProperty('--cw-mood-c', MOODS[mood].color);
+  }
+
+  // ---------- Init ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    renderMood();
+    renderHistory();
+    renderElapsed();
+
+    document.getElementById('cw-play')?.addEventListener('click', toggle);
+
+    document.querySelectorAll<HTMLButtonElement>('[data-mood]').forEach(b => {
+      b.addEventListener('click', () => {
+        const wasRunning = running;
+        if (wasRunning) stop();
+        mood = b.dataset.mood as Mood;
+        renderMood();
+        history = [];
+        renderHistory();
+        if (wasRunning) start();
+      });
+    });
+
+    document.getElementById('cw-density')?.addEventListener('input', (e) => {
+      density = Number((e.target as HTMLInputElement).value) / 100;
+      const label = density < 0.25 ? 'very sparse' : density < 0.5 ? 'sparse' : density < 0.75 ? 'flowing' : 'dense';
+      document.getElementById('cw-density-hint')!.textContent = `how often lead notes play (${Math.round(density * 100)}% — ${label})`;
+    });
+
+    document.getElementById('cw-tempo')?.addEventListener('input', (e) => {
+      bpm = Number((e.target as HTMLInputElement).value);
+      const label = bpm < 50 ? 'meditative' : bpm < 60 ? 'slow walk' : bpm < 70 ? 'gentle' : 'flowing';
+      document.getElementById('cw-tempo-hint')!.textContent = `${bpm} BPM — ${label}`;
+    });
+
+    document.getElementById('cw-vol')?.addEventListener('input', (e) => {
+      volume = Number((e.target as HTMLInputElement).value);
+      if (masterGain) masterGain.gain.setTargetAtTime(volume / 100, ac().currentTime, 0.05);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    });
+  });
+</script>
+</BlockLayout>
