@@ -599,6 +599,20 @@ const built = new Date().toISOString();
 
   function $(id: string) { return document.getElementById(id); }
 
+  // Audit follow-up (2026-05-11): some lessons build a fresh node graph on
+  // every play and never disconnect the downstream gain/filter/analyser
+  // nodes — they accumulate on c.destination across clicks. This helper
+  // disconnects a list of nodes when the source's natural lifetime ends.
+  // For lessons that re-use long-lived nodes via local state (lesson 10),
+  // this isn't the right fix — that one disconnects in stop() directly.
+  function autoCleanup(source: AudioScheduledSourceNode, nodes: AudioNode[]) {
+    try {
+      source.addEventListener('ended', () => {
+        nodes.forEach((n) => { try { n.disconnect(); } catch {} });
+      });
+    } catch {}
+  }
+
   // ---------- LESSON 1: STEREO ----------
   (() => {
     let playing = false; let interval: number | null = null;
@@ -1094,7 +1108,8 @@ const built = new Date().toISOString();
       drawIR();
     }
 
-    function kick(when: number, target: AudioNode) {
+    // Returns the OscillatorNode so callers can autoCleanup() the downstream graph.
+    function kick(when: number, target: AudioNode): OscillatorNode {
       const c = ac(); const o = c.createOscillator(); const g = c.createGain();
       o.frequency.setValueAtTime(120, when);
       o.frequency.exponentialRampToValueAtTime(40, when + 0.18);
@@ -1103,12 +1118,15 @@ const built = new Date().toISOString();
       g.gain.exponentialRampToValueAtTime(0.001, when + 0.36);
       o.connect(g); g.connect(target);
       o.start(when); o.stop(when + 0.45);
+      autoCleanup(o, [g]);
+      return o;
     }
 
     function playDry() {
       const c = ac(); if (c.state === 'suspended') c.resume();
       const g = c.createGain(); g.gain.value = 0.6; g.connect(c.destination);
-      kick(c.currentTime + 0.02, g);
+      const src = kick(c.currentTime + 0.02, g);
+      autoCleanup(src, [g]);
     }
     function playWet() {
       const c = ac(); if (c.state === 'suspended') c.resume();
@@ -1116,8 +1134,12 @@ const built = new Date().toISOString();
       const wet = c.createGain(); wet.gain.value = 0.85;
       convolver!.connect(wet); wet.connect(c.destination);
       const dry = c.createGain(); dry.gain.value = 0.3; dry.connect(c.destination);
-      kick(c.currentTime + 0.02, dry);
-      kick(c.currentTime + 0.02, convolver!);
+      const drySrc = kick(c.currentTime + 0.02, dry);
+      const wetSrc = kick(c.currentTime + 0.02, convolver!);
+      autoCleanup(drySrc, [dry]);
+      // Disconnect wet AFTER the reverb tail decays (~size seconds + buffer)
+      autoCleanup(wetSrc, []); // wetSrc's own g is already cleaned by kick()
+      setTimeout(() => { try { wet.disconnect(); } catch {} }, (size + 1) * 1000);
     }
     function playSweep() {
       const c = ac(); if (c.state === 'suspended') c.resume();
@@ -1132,6 +1154,8 @@ const built = new Date().toISOString();
         kick(t0 + i * 0.45, dry);
         kick(t0 + i * 0.45, convolver!);
       }
+      // Disconnect the dry/wet send nodes after the sweep + reverb tail.
+      setTimeout(() => { try { dry.disconnect(); wet.disconnect(); } catch {} }, (2 + size + 1) * 1000);
     }
 
     function drawIR() {
@@ -1224,6 +1248,7 @@ const built = new Date().toISOString();
       g.gain.exponentialRampToValueAtTime(0.0001, when + 0.35);
       o.connect(g); g.connect(comp!);
       o.start(when); o.stop(when + 0.4);
+      autoCleanup(o, [g]);
     }
 
     function loop() {
@@ -1472,6 +1497,7 @@ const built = new Date().toISOString();
       g.gain.linearRampToValueAtTime(0.0001, releaseEnd);
       o.connect(g); g.connect(c.destination);
       o.start(t0); o.stop(releaseEnd + 0.1);
+      autoCleanup(o, [g]);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1524,6 +1550,10 @@ const built = new Date().toISOString();
 
     function stop() {
       try { osc?.stop(); lfo?.stop(); } catch {}
+      // Audit follow-up (2026-05-11): disconnect downstream graph so the
+      // c.destination doesn't accumulate filt+lfoGain+outGain chains across
+      // play/stop cycles.
+      try { filt?.disconnect(); lfoGain?.disconnect(); outGain?.disconnect(); } catch {}
       osc = lfo = null; filt = null; lfoGain = null; outGain = null;
     }
 
