@@ -1215,6 +1215,123 @@
       }, dur);
     }
 
+    // ─── fox (companion) ────────────────────────────────────────
+    function castFox(durationMs) {
+      if (active.byId.fox) {
+        var prev = active.byId.fox;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var fox = document.createElement('button');
+      fox.className = 'spell-fox';
+      fox.type = 'button';
+      fox.setAttribute('aria-label', 'A trotting fox. Click to send away.');
+      fox.title = 'click to send the fox home';
+      fox.textContent = '🦊';
+      var ltr = Math.random() < 0.6;
+      fox.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var walkSeconds = Math.max(9, Math.min(28, window.innerWidth / 70));
+      fox.style.cssText = 'animation:spell-fox-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear forwards;';
+      fox.addEventListener('click', function () {
+        if (fox.parentNode) fox.parentNode.removeChild(fox);
+        active.byId.fox = null;
+      });
+      $layer.appendChild(fox);
+      active.byId.fox = fox;
+      setTimeout(function () {
+        if (fox && fox.parentNode) fox.parentNode.removeChild(fox);
+        if (active.byId.fox === fox) active.byId.fox = null;
+      }, dur);
+    }
+
+    // ─── kite (companion) ───────────────────────────────────────
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A flying kite. Click to let go.');
+      kite.title = 'click to let go';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 40000);
+      var flySeconds = Math.max(10, Math.min(28, window.innerWidth / 60));
+      kite.style.cssText = 'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's ease-in-out forwards;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── typewriter (burst) ─────────────────────────────────────
+    function castTypewriter(durationMs) {
+      if (reduce()) return;
+      var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,!?;:—*@#'.split('');
+      var count = 18;
+      var cx = window.innerWidth / 2;
+      var cy = window.innerHeight / 2;
+      var dur = (durationMs || 2500);
+      for (var i = 0; i < count; i++) {
+        var d = document.createElement('span');
+        d.className = 'spell-typewriter-char';
+        var angle = (i / count) * 2 * Math.PI + (Math.random() - 0.5) * 0.4;
+        var dist = 80 + Math.random() * 180;
+        var tx = Math.cos(angle) * dist;
+        var ty = Math.sin(angle) * dist;
+        var delay = Math.floor(i * 40 + Math.random() * 60);
+        d.textContent = chars[Math.floor(Math.random() * chars.length)];
+        d.style.cssText =
+          'left:' + cx + 'px;' +
+          'top:' + cy + 'px;' +
+          '--tw-tx:' + tx.toFixed(1) + 'px;' +
+          '--tw-ty:' + ty.toFixed(1) + 'px;' +
+          'animation-delay:' + delay + 'ms;' +
+          'animation-duration:' + (dur - delay) + 'ms;' +
+          'font-size:' + (14 + Math.floor(Math.random() * 14)) + 'px;';
+        $layer.appendChild(d);
+        (function (el, total) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          }, total + 120);
+        })(d, dur);
+      }
+    }
+
+    // ─── orbit (ambient) ────────────────────────────────────────
+    function castOrbit() {
+      if (active.byId.orbit) return;
+      var o = document.createElement('div');
+      o.className = 'spell-orbit';
+      o.setAttribute('role', 'button');
+      o.setAttribute('aria-label', 'Two orbiting dots. Click to dismiss.');
+      o.tabIndex = 0;
+      o.innerHTML =
+        '<div class="spell-orbit__ring" aria-hidden="true">' +
+        '<div class="spell-orbit__dot spell-orbit__dot--a"></div>' +
+        '<div class="spell-orbit__dot spell-orbit__dot--b"></div>' +
+        '</div>';
+      function dismissOrbit() {
+        if (o.parentNode) o.parentNode.removeChild(o);
+        active.byId.orbit = null;
+      }
+      o.addEventListener('click', dismissOrbit);
+      o.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismissOrbit(); }
+      });
+      $layer.appendChild(o);
+      active.byId.orbit = o;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1371,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'fox':          castFox(55000); break;
+        case 'kite':         castKite(40000); break;
+        case 'typewriter':   castTypewriter(2500); break;
+        case 'orbit':        castOrbit(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2668,151 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 14: fox, kite, typewriter, orbit ─────────────── */
+
+  /* fox (companion) */
+  .spell-fox {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+  .spell-fox[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-fox-walk-ltr {
+    0%   { left: -44px; bottom: 56px; }
+    38%  { left: calc(50vw - 18px); bottom: 56px; }
+    44%  { left: calc(50vw - 18px); bottom: 62px; } /* sniff — nose dips */
+    50%  { left: calc(50vw - 18px); bottom: 56px; }
+    56%  { left: calc(50vw - 18px); bottom: 56px; } /* brief pause */
+    100% { left: calc(100vw + 44px); bottom: 56px; }
+  }
+  @keyframes spell-fox-walk-rtl {
+    0%   { left: calc(100vw + 44px); bottom: 56px; }
+    38%  { left: calc(50vw - 18px); bottom: 56px; }
+    44%  { left: calc(50vw - 18px); bottom: 62px; }
+    50%  { left: calc(50vw - 18px); bottom: 56px; }
+    56%  { left: calc(50vw - 18px); bottom: 56px; }
+    100% { left: -44px; bottom: 56px; }
+  }
+
+  /* kite (companion) */
+  .spell-kite {
+    position: fixed;
+    bottom: 35vh;
+    left: -52px;
+    font-size: 36px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 6px rgba(74, 158, 255, 0.3));
+  }
+  .spell-kite[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -52px;                bottom: 35vh; }
+    25%  {                              bottom: 44vh; }
+    50%  { left: calc(50vw - 20px);    bottom: 32vh; }
+    75%  {                              bottom: 41vh; }
+    100% { left: calc(100vw + 52px);   bottom: 36vh; }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 52px);   bottom: 35vh; }
+    25%  {                              bottom: 44vh; }
+    50%  { left: calc(50vw - 20px);    bottom: 32vh; }
+    75%  {                              bottom: 41vh; }
+    100% { left: -52px;                bottom: 36vh; }
+  }
+
+  /* typewriter (burst) */
+  .spell-typewriter-char {
+    position: absolute;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    color: #1f1d29;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    animation: spell-typewriter-fly linear forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-typewriter-fly {
+    0%   { transform: translate(-50%, -50%) translate(0, 0) scale(0.9);  opacity: 1; }
+    60%  { opacity: 0.85; }
+    100% { transform: translate(-50%, -50%) translate(var(--tw-tx), var(--tw-ty)) scale(1.1); opacity: 0; }
+  }
+
+  /* orbit (ambient) */
+  .spell-orbit {
+    position: fixed;
+    bottom: 72px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .spell-orbit__ring {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    animation: spell-orbit-ring-rotate 3.2s linear infinite;
+  }
+  .spell-orbit__dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    left: 50%;
+    margin-left: -4px;
+  }
+  .spell-orbit__dot--a {
+    background: #a78bfa;
+    top: -4px;
+  }
+  .spell-orbit__dot--b {
+    background: #4A9EFF;
+    bottom: -4px;
+    opacity: 0.75;
+  }
+  @keyframes spell-orbit-ring-rotate {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-fox,
+    .spell-kite { animation: none !important; left: 50% !important; bottom: 56px !important; }
+    .spell-fox[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-typewriter-char { display: none; }
+    .spell-orbit__ring { animation: none; }
   }
 </style>

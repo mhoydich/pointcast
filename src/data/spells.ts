@@ -399,6 +399,43 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BATCH 14 ─────────────────────────────────────────────────
+  {
+    id: 'fox',
+    label: 'fox',
+    blurb: 'A fox trots across the bottom, pauses mid-screen to sniff, then carries on.',
+    glyph: '🦊',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#c4952e',
+  },
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across mid-screen, trailing its ribbon. Breezy.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'typewriter',
+    label: 'typewriter',
+    blurb: 'A burst of letters and punctuation clacks outward from the center.',
+    glyph: '⌨️',
+    kind: 'burst',
+    durationMs: 2500,
+    accent: '#1f1d29',
+  },
+  {
+    id: 'orbit',
+    label: 'orbit',
+    blurb: 'Two small dots circle each other in the corner. Quiet, hypnotic.',
+    glyph: '⭕',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
