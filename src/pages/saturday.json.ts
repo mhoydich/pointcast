@@ -59,6 +59,12 @@ const JARS = [
   },
 ];
 
+const CELLAR = [
+  { strain: 'CASSETTE GAS', retired: '2026-04-19', epitaph: 'a tape-deck-and-driveway jar; gone in two weekends.' },
+  { strain: 'BLUE OYSTER',  retired: '2026-04-12', epitaph: 'salt air and a slow start; one-of-one pheno-hunt run.' },
+  { strain: 'PALETA',       retired: '2026-04-05', epitaph: 'mango on the front, lavender on the back; sunset friend.' },
+];
+
 const SET = [
   { side: 'A1', title: 'warm-up',          notes: 'brushed kit · 78 bpm' },
   { side: 'A2', title: 'el segundo edge',  notes: 'pads + bass' },
@@ -106,6 +112,11 @@ export const GET: APIRoute = async () => {
       title: 'The Counter',
       subtitle: 'FLOWER · GENETICS · EFFECTS PROFILE · NOT FOR SALE · A TRIBUTE',
       jars: JARS,
+    },
+    cellar: {
+      title: 'The Cellar',
+      note: 'Retired jars from previous saturdays.',
+      jars: CELLAR,
     },
     soundtrack: {
       venue: '/drum-altar',
