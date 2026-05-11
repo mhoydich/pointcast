@@ -1,0 +1,553 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast On — one-button radio for the Nouns drum hub" description="Tap a big button. Music plays. Tap again. Music stops. The page picks tracks based on the hour: morning chill, afternoon drive, evening cinema, late-night ambient. No menus. Just on.">
+  <main class="co" id="co" data-built={built}>
+    <header class="co__hero">
+      <p class="co__kicker">CAST · ON · radio for one button</p>
+      <h1 class="co__title">Tap to listen.</h1>
+      <p class="co__sub">The page picks tracks for the hour. <strong>Morning</strong> is choir pad and brushes. <strong>Afternoon</strong> drives. <strong>Evening</strong> goes cinema. <strong>Late night</strong> is ambient. No menus. Just on.</p>
+    </header>
+
+    <section class="co__stage">
+      <button class="co__button" id="co-btn" type="button" aria-label="Toggle music">
+        <span class="co__button-icon" id="co-icon">▶</span>
+        <span class="co__button-label" id="co-label">ON</span>
+      </button>
+
+      <div class="co__now" id="co-now" hidden>
+        <div class="co__now-noun">
+          <img id="co-now-noun" src="" alt=""/>
+        </div>
+        <div class="co__now-meta">
+          <p class="co__now-track" id="co-now-track">—</p>
+          <p class="co__now-artist" id="co-now-artist">—</p>
+          <p class="co__now-bpm" id="co-now-bpm">— bpm</p>
+        </div>
+      </div>
+
+      <div class="co__progress" id="co-progress" hidden>
+        <div class="co__progress-track">
+          <div class="co__progress-fill" id="co-progress-fill"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="co__hour">
+      <p class="co__hour-label" id="co-hour-label">—</p>
+      <p class="co__hour-mood" id="co-hour-mood">—</p>
+    </section>
+
+    <footer class="co__foot">
+      <p>Built {built.slice(0,10)} · No CDN dependency · pure Web Audio synthesis</p>
+      <p>Other surfaces in the music landscape: <a href="/cast-music-pro">/cast-music-pro</a> · <a href="/cast-studio">/cast-studio</a> · <a href="/cast-real">/cast-real</a> · <a href="/cast-make">/cast-make</a> · <a href="/cast-make-pro">/cast-make-pro</a> · <a href="/drum-school">/drum-school</a> · <a href="/town-music">/town-music</a></p>
+      <p class="co__foot-credit">← <a href="/">PointCast home</a> · audio routes through the shared scheduler in <code>src/lib/audio-scheduler.ts</code></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --co-bg: #0a0610;
+    --co-walnut: #5a3422;
+    --co-flame: #f6c15e;
+    --co-cream: #f4e7c8;
+    --co-velvet: #1a0820;
+    --co-line: rgba(244,231,200,0.10);
+    --co-text: #f4e7c8;
+    --co-text-mute: rgba(244,231,200,0.62);
+    --co-text-quiet: rgba(244,231,200,0.38);
+    --co-display: 'Inter Tight', system-ui, sans-serif;
+    --co-body: 'Inter', system-ui, sans-serif;
+    --co-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  body { background: var(--co-bg); color: var(--co-text); font-family: var(--co-body); }
+
+  .co {
+    min-height: 100vh; max-width: 720px; margin: 0 auto;
+    padding: 56px 24px 60px 24px;
+    display: flex; flex-direction: column; gap: 36px;
+    position: relative; isolation: isolate;
+  }
+
+  /* Ambient backdrop morphs to the current mood color */
+  .co::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(70% 50% at 50% 30%, var(--mood-c, #5a3422) 0%, transparent 60%),
+      radial-gradient(50% 40% at 50% 80%, var(--mood-c-2, #1a0820) 0%, transparent 60%),
+      linear-gradient(180deg, #0a0610 0%, #170a14 100%);
+    filter: blur(50px) saturate(1.1);
+    transform: scale(1.05);
+    transition: --mood-c 1.6s ease, --mood-c-2 1.6s ease;
+  }
+
+  /* HERO */
+  .co__hero { text-align: center; }
+  .co__kicker {
+    font-family: var(--co-mono); font-size: 11px;
+    letter-spacing: 0.7px; color: var(--co-flame);
+    text-transform: uppercase; margin: 0 0 14px 0;
+  }
+  .co__title {
+    font-family: var(--co-display); font-weight: 900;
+    font-size: clamp(48px, 9vw, 86px);
+    line-height: 0.94; letter-spacing: -0.028em;
+    margin: 0 0 18px 0;
+    background: linear-gradient(180deg, var(--co-cream) 0%, var(--co-flame) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .co__sub {
+    font-family: var(--co-body); font-size: 15px; line-height: 1.6;
+    color: var(--co-text-mute); margin: 0 auto; max-width: 540px;
+  }
+  .co__sub strong { color: var(--co-text); font-weight: 600; }
+
+  /* THE BUTTON */
+  .co__stage { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  .co__button {
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, var(--btn-glow, var(--co-flame)) 0%, var(--co-walnut) 65%, var(--co-velvet) 100%);
+    border: 2px solid rgba(244,231,200,0.18);
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    color: var(--co-velvet);
+    font-family: var(--co-display); font-weight: 800; font-size: 32px;
+    letter-spacing: 0.02em;
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.5),
+      0 1px 0 rgba(255,255,255,0.15) inset,
+      0 -4px 12px rgba(0,0,0,0.4) inset;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.4s ease;
+  }
+  .co__button:hover {
+    transform: scale(1.04);
+    box-shadow:
+      0 12px 40px rgba(0,0,0,0.55),
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 -4px 16px rgba(0,0,0,0.5) inset;
+  }
+  .co__button:active { transform: scale(0.96); }
+  .co__button:focus-visible { outline: 3px solid var(--co-flame); outline-offset: 6px; }
+  .co__button--on {
+    animation: co-breathe calc(var(--bpm-period, 600ms) * 4) ease-in-out infinite;
+  }
+  @keyframes co-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+  }
+  .co__button-icon { font-size: 56px; line-height: 1; padding-left: 4px; }
+  .co__button--on .co__button-icon { padding-left: 0; }
+  .co__button-label { font-family: var(--co-mono); font-size: 12px; letter-spacing: 0.5px; opacity: 0.7; }
+
+  /* NOW PLAYING */
+  .co__now {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(244,231,200,0.06), rgba(244,231,200,0.02));
+    border: 1px solid var(--co-line);
+    border-radius: 12px;
+    max-width: 380px; width: 100%;
+    animation: co-fade-in 0.4s ease;
+  }
+  @keyframes co-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .co__now-noun {
+    width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--track-c, var(--co-walnut)), var(--co-velvet));
+    display: grid; place-items: center;
+  }
+  .co__now-noun img { width: 80%; image-rendering: pixelated; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+  .co__now-meta { flex: 1; min-width: 0; }
+  .co__now-track { font-family: var(--co-display); font-weight: 700; font-size: 16px; margin: 0; line-height: 1.2; color: var(--co-text); }
+  .co__now-artist { font-family: var(--co-body); font-size: 12.5px; margin: 4px 0 2px 0; color: var(--co-text-mute); }
+  .co__now-bpm { font-family: var(--co-mono); font-size: 10.5px; margin: 0; color: var(--co-text-quiet); letter-spacing: 0.4px; }
+
+  /* PROGRESS */
+  .co__progress { width: 100%; max-width: 380px; }
+  .co__progress-track { height: 3px; background: rgba(244,231,200,0.10); border-radius: 2px; overflow: hidden; }
+  .co__progress-fill { height: 100%; background: var(--co-flame); width: 0%; transition: width 0.1s linear; }
+
+  /* HOUR LABEL */
+  .co__hour { text-align: center; padding: 18px 0; }
+  .co__hour-label {
+    font-family: var(--co-mono); font-size: 11px;
+    color: var(--co-text-quiet); letter-spacing: 0.7px;
+    text-transform: uppercase; margin: 0 0 6px 0;
+  }
+  .co__hour-mood {
+    font-family: var(--co-display); font-weight: 600;
+    font-size: 18px; letter-spacing: -0.01em;
+    color: var(--co-text); margin: 0;
+  }
+
+  /* FOOT */
+  .co__foot {
+    padding-top: 28px; border-top: 1px solid var(--co-line);
+    margin-top: auto;
+    font-family: var(--co-mono); font-size: 11px;
+    color: var(--co-text-quiet); line-height: 1.7;
+    text-align: center;
+  }
+  .co__foot a { color: var(--co-flame); text-decoration: none; }
+  .co__foot a:hover { text-decoration: underline; }
+  .co__foot code { background: var(--co-velvet); padding: 1px 5px; border-radius: 3px; color: var(--co-flame); font-size: 10.5px; }
+  .co__foot-credit { margin-top: 8px; }
+</style>
+
+<script>
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
+
+  // ---------- Music catalog (subset, hardcoded — no CDN dependency) ----------
+  // Shape mirrors cast-studio's catalog. Each track has a simple drum +
+  // chord pattern that the synth engine plays. Six tracks per mood pool.
+
+  type Mood = 'chill' | 'drive' | 'cinema' | 'ambient';
+  interface Track {
+    id: string;
+    name: string;
+    artist: string;
+    nounId: number;
+    color: string;
+    bpm: number;
+    mood: Mood;
+    // 8-bar chord progression as semitone offsets from key root, with chord type
+    chords: { offset: number; type: 'maj' | 'min' | 'maj7' | 'min7' | '7sus' }[];
+    // 16-step drum pattern (1 bar, repeats for 8 bars)
+    kick: number[];
+    snare: number[];
+    hat: number[];
+    // Key root in Hz (drives pad/chord/lead pitch)
+    rootHz: number;
+    // Drum style for the synth voicing
+    drumStyle: 'soft' | 'punch';
+  }
+
+  function pat(...steps: number[]): number[] {
+    const a = Array(16).fill(0);
+    steps.forEach(s => { if (s >= 0 && s < 16) a[s] = 1; });
+    return a;
+  }
+
+  const TRACKS: Track[] = [
+    // ---- CHILL (morning) ----
+    {
+      id: 'morning-fog', name: 'Morning Fog', artist: 'Marine Layer',
+      nounId: 313, color: '#9ed6f0', bpm: 72, mood: 'chill', rootHz: 130.81, drumStyle: 'soft',
+      chords: [{offset:5,type:'maj7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:7,type:'7sus'},{offset:5,type:'maj7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:0,type:'maj'}],
+      kick: pat(0,8), snare: pat(4,12), hat: pat(2,6,10,14),
+    },
+    {
+      id: 'pink-awning', name: 'Pink Awning', artist: 'Main Street',
+      nounId: 742, color: '#e8b3c0', bpm: 88, mood: 'chill', rootHz: 146.83, drumStyle: 'soft',
+      chords: [{offset:0,type:'min7'},{offset:5,type:'min7'},{offset:7,type:'7sus'},{offset:10,type:'maj7'},{offset:0,type:'min7'},{offset:5,type:'min7'},{offset:7,type:'7sus'},{offset:0,type:'min7'}],
+      kick: pat(0,8), snare: pat(4,12), hat: pat(2,10),
+    },
+
+    // ---- DRIVE (afternoon) ----
+    {
+      id: 'block-runner', name: 'Block Runner Funk', artist: 'Block Runner',
+      nounId: 523, color: '#a8ff3a', bpm: 110, mood: 'drive', rootHz: 146.83, drumStyle: 'punch',
+      chords: [{offset:9,type:'min7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:4,type:'7sus'},{offset:9,type:'min7'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:4,type:'7sus'}],
+      kick: pat(0,3,4,8,10,12,15), snare: pat(4,12), hat: pat(0,2,4,6,8,10,12,14),
+    },
+    {
+      id: 'sunrise-imperial', name: 'Sunrise on Imperial', artist: 'Release Train',
+      nounId: 1042, color: '#ffd400', bpm: 102, mood: 'drive', rootHz: 130.81, drumStyle: 'punch',
+      chords: [{offset:0,type:'maj7'},{offset:7,type:'maj'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:0,type:'maj7'},{offset:7,type:'maj'},{offset:9,type:'min7'},{offset:5,type:'maj7'}],
+      kick: pat(0,4,7,8,12), snare: pat(4,12), hat: pat(0,2,4,6,8,10,12,14),
+    },
+
+    // ---- CINEMA (evening) ----
+    {
+      id: 'el-segundo-dusk', name: 'El Segundo at Dusk', artist: 'Night Broadcast',
+      nounId: 1189, color: '#6f59c0', bpm: 64, mood: 'cinema', rootHz: 110.00, drumStyle: 'soft',
+      chords: [{offset:0,type:'min7'},{offset:8,type:'maj7'},{offset:3,type:'maj7'},{offset:10,type:'7sus'},{offset:0,type:'min7'},{offset:8,type:'maj7'},{offset:5,type:'min7'},{offset:7,type:'7sus'}],
+      kick: pat(0), snare: pat(8), hat: pat(0,4,8,12),
+    },
+    {
+      id: 'the-promise', name: 'The Promise', artist: 'Release Train',
+      nounId: 1042, color: '#ffd400', bpm: 78, mood: 'cinema', rootHz: 130.81, drumStyle: 'soft',
+      chords: [{offset:0,type:'maj7'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:7,type:'7sus'},{offset:0,type:'maj7'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:0,type:'maj7'}],
+      kick: pat(0,4,8,12), snare: pat(4,12), hat: pat(0,4,8,12),
+    },
+
+    // ---- AMBIENT (late night) ----
+    {
+      id: 'aurora-slow', name: 'Aurora Slow', artist: 'Aurora Slow',
+      nounId: 928, color: '#7d9a7c', bpm: 56, mood: 'ambient', rootHz: 110.00, drumStyle: 'soft',
+      chords: [{offset:0,type:'min7'},{offset:3,type:'maj7'},{offset:7,type:'min7'},{offset:0,type:'min7'},{offset:0,type:'min7'},{offset:3,type:'maj7'},{offset:10,type:'maj7'},{offset:0,type:'min7'}],
+      kick: pat(0), snare: pat(), hat: pat(0,4,8,12),
+    },
+    {
+      id: 'late-station', name: 'Late Station', artist: 'Night Broadcast',
+      nounId: 1189, color: '#6f59c0', bpm: 60, mood: 'ambient', rootHz: 110.00, drumStyle: 'soft',
+      chords: [{offset:5,type:'min7'},{offset:0,type:'min7'},{offset:8,type:'maj7'},{offset:3,type:'maj7'},{offset:5,type:'min7'},{offset:0,type:'min7'},{offset:10,type:'7sus'},{offset:3,type:'maj7'}],
+      kick: pat(0), snare: pat(8), hat: pat(0,4,8,12),
+    },
+  ];
+
+  function moodForHour(h: number): { mood: Mood; label: string; phrase: string } {
+    if (h >= 5 && h < 12)  return { mood: 'chill',   label: 'MORNING', phrase: 'Choir pad. Brush snare. Slow walk.' };
+    if (h >= 12 && h < 17) return { mood: 'drive',   label: 'AFTERNOON', phrase: 'Punchy kick. Tight hats. Keep moving.' };
+    if (h >= 17 && h < 22) return { mood: 'cinema',  label: 'EVENING', phrase: 'Soft pad. Long bell. Cinema light.' };
+    return                        { mood: 'ambient', label: 'LATE NIGHT', phrase: 'Held tones. No drums. Studio glow.' };
+  }
+
+  function moodColor(m: Mood): { c1: string; c2: string } {
+    if (m === 'chill')   return { c1: '#9ed6f0', c2: '#1a3040' };
+    if (m === 'drive')   return { c1: '#a8ff3a', c2: '#2a4012' };
+    if (m === 'cinema')  return { c1: '#6f59c0', c2: '#241640' };
+    return                       { c1: '#7d9a7c', c2: '#1a2618' };
+  }
+
+  // ---------- Audio engine ----------
+  let ctx: AudioContext | null = null;
+  let masterGain: GainNode | null = null;
+  let sched: AudioScheduler | null = null;
+
+  function ac(): AudioContext {
+    if (ctx) return ctx;
+    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    masterGain = ctx.createGain(); masterGain.gain.value = 0.7;
+    masterGain.connect(ctx.destination);
+    sched = createAudioScheduler(ctx);
+    // Audit fix #2 (iOS visibility) — apply here too on day one.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) {
+        sched?.resume();
+      }
+    });
+    return ctx;
+  }
+
+  function chordHzs(rootHz: number, offset: number, type: string): number[] {
+    const root = rootHz * Math.pow(2, offset / 12);
+    const intervals: Record<string, number[]> = {
+      'maj':  [0, 4, 7],
+      'min':  [0, 3, 7],
+      'maj7': [0, 4, 7, 11],
+      'min7': [0, 3, 7, 10],
+      '7sus': [0, 5, 7, 10],
+    };
+    return (intervals[type] || intervals['maj']).map(s => root * Math.pow(2, s / 12));
+  }
+
+  function playKick(when: number, style: Track['drumStyle']) {
+    const c = ac(); const o = c.createOscillator(); const g = c.createGain();
+    const peak = style === 'punch' ? 130 : 100;
+    const tail = style === 'punch' ? 36 : 48;
+    const len = style === 'punch' ? 0.40 : 0.30;
+    o.frequency.setValueAtTime(peak, when);
+    o.frequency.exponentialRampToValueAtTime(tail, when + len * 0.5);
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(style === 'punch' ? 1.0 : 0.70, when + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, when + len);
+    o.connect(g); g.connect(masterGain!);
+    sched!.trackSource(o); o.start(when); o.stop(when + len + 0.05);
+  }
+  function playSnare(when: number, style: Track['drumStyle']) {
+    const c = ac();
+    const len = style === 'soft' ? 0.26 : 0.18;
+    const noiseLen = Math.floor(c.sampleRate * len);
+    const buf = c.createBuffer(1, noiseLen, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, style === 'soft' ? 1.0 : 1.6);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = style === 'soft' ? 'highpass' : 'bandpass'; f.frequency.value = style === 'soft' ? 800 : 2200;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(style === 'soft' ? 0.28 : 0.46, when + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, when + len);
+    s.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
+  }
+  function playHat(when: number) {
+    const c = ac();
+    const noiseLen = Math.floor(c.sampleRate * 0.05);
+    const buf = c.createBuffer(1, noiseLen, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, 0.6);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(0.12, when + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.05);
+    s.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(s); s.start(when); s.stop(when + 0.06);
+  }
+  function playPad(when: number, freqs: number[], dur: number, isWarm: boolean) {
+    const c = ac();
+    freqs.forEach((freq, i) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = isWarm ? 'sine' : 'triangle';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.001, when);
+      g.gain.linearRampToValueAtTime(0.10 / freqs.length, when + 0.30);
+      g.gain.linearRampToValueAtTime(0.001, when + dur - 0.05);
+      o.connect(g); g.connect(masterGain!);
+      sched!.trackSource(o); o.start(when); o.stop(when + dur + 0.05);
+    });
+  }
+
+  function trackDurationSec(t: Track) { return (60 / t.bpm) * 4 * 8; } // 8 bars
+
+  function scheduleTrack(t: Track, start: number) {
+    const beat = 60 / t.bpm;
+    const step = beat / 4;
+    for (let bar = 0; bar < 8; bar++) {
+      const barStart = start + bar * 4 * beat;
+      const ch = t.chords[bar];
+      const hzs = chordHzs(t.rootHz, ch.offset, ch.type);
+      playPad(barStart, hzs, 4 * beat * 0.95, t.drumStyle === 'soft');
+      for (let i = 0; i < 16; i++) {
+        const tm = barStart + i * step;
+        if (t.kick[i])  playKick(tm, t.drumStyle);
+        if (t.snare[i]) playSnare(tm, t.drumStyle);
+        if (t.hat[i])   playHat(tm);
+      }
+    }
+  }
+
+  // ---------- Radio state ----------
+  let playing = false;
+  let queue: Track[] = [];
+  let qIdx = 0;
+  let trackStartCtxTime = 0;
+  let rafId = 0;
+
+  function buildQueueForNow(): Track[] {
+    const { mood } = moodForHour(new Date().getHours());
+    // Pick all tracks in this mood + 1 random other-mood track for variety
+    const inMood = TRACKS.filter(t => t.mood === mood);
+    const others = TRACKS.filter(t => t.mood !== mood);
+    const wander = others[Math.floor(Math.random() * others.length)];
+    // Shuffle the in-mood tracks deterministically by date so a refresh
+    // doesn't reorder mid-listen, then append the wander track.
+    const today = new Date();
+    const seed = today.getFullYear() * 1000 + (today.getMonth() + 1) * 31 + today.getDate();
+    const shuffled = [...inMood];
+    let s = seed;
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      const j = s % (i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return [...shuffled, wander];
+  }
+
+  function playFromQueue() {
+    if (qIdx >= queue.length) qIdx = 0; // loop forever
+    const t = queue[qIdx];
+    const c = ac();
+    if (c.state === 'suspended') c.resume();
+    const start = c.currentTime + 0.05;
+    trackStartCtxTime = start;
+    scheduleTrack(t, start);
+    // Schedule next track at end of this one
+    const dur = trackDurationSec(t);
+    sched!.schedule(() => { qIdx++; playFromQueue(); }, start + dur);
+    updateNowPlaying(t);
+    runProgress();
+  }
+
+  function stop() {
+    if (sched) sched.stopAll();
+    cancelAnimationFrame(rafId);
+    playing = false;
+    setButtonState(false);
+    hideNowPlaying();
+  }
+
+  function start() {
+    if (!ctx) ac();
+    queue = buildQueueForNow();
+    qIdx = 0;
+    playing = true;
+    setButtonState(true);
+    playFromQueue();
+  }
+
+  function setButtonState(on: boolean) {
+    const btn = document.getElementById('co-btn') as HTMLButtonElement;
+    const icon = document.getElementById('co-icon');
+    const label = document.getElementById('co-label');
+    if (!btn || !icon || !label) return;
+    btn.classList.toggle('co__button--on', on);
+    icon.textContent = on ? '◼' : '▶';
+    label.textContent = on ? 'OFF' : 'ON';
+  }
+
+  function updateNowPlaying(t: Track) {
+    const now = document.getElementById('co-now') as HTMLDivElement;
+    const noun = document.getElementById('co-now-noun') as HTMLImageElement;
+    const track = document.getElementById('co-now-track')!;
+    const artist = document.getElementById('co-now-artist')!;
+    const bpm = document.getElementById('co-now-bpm')!;
+    const progress = document.getElementById('co-progress') as HTMLDivElement;
+    noun.src = `https://noun.pics/${t.nounId}.svg`;
+    track.textContent = t.name;
+    artist.textContent = t.artist;
+    bpm.textContent = `${t.bpm} bpm · ${t.mood}`;
+    now.hidden = false;
+    progress.hidden = false;
+    // Track-color CSS var on the Noun bubble
+    (now.querySelector('.co__now-noun') as HTMLElement).style.setProperty('--track-c', t.color);
+    // Set button breathe period to match BPM
+    const btn = document.getElementById('co-btn') as HTMLButtonElement;
+    btn.style.setProperty('--bpm-period', `${60 / t.bpm * 1000}ms`);
+    btn.style.setProperty('--btn-glow', t.color);
+  }
+
+  function hideNowPlaying() {
+    (document.getElementById('co-now') as HTMLDivElement).hidden = true;
+    (document.getElementById('co-progress') as HTMLDivElement).hidden = true;
+    const fill = document.getElementById('co-progress-fill') as HTMLDivElement;
+    if (fill) fill.style.width = '0%';
+  }
+
+  function runProgress() {
+    cancelAnimationFrame(rafId);
+    const tick = () => {
+      if (!ctx || !playing) return;
+      const t = queue[qIdx]; if (!t) return;
+      const elapsed = ctx.currentTime - trackStartCtxTime;
+      const dur = trackDurationSec(t);
+      const pct = Math.max(0, Math.min(1, elapsed / dur));
+      const fill = document.getElementById('co-progress-fill') as HTMLDivElement;
+      if (fill) fill.style.width = (pct * 100) + '%';
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function updateHourLabel() {
+    const { label, phrase, mood } = moodForHour(new Date().getHours());
+    document.getElementById('co-hour-label')!.textContent = `${label} · ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+    document.getElementById('co-hour-mood')!.textContent = phrase;
+    // Set mood-color CSS vars for the backdrop
+    const { c1, c2 } = moodColor(mood);
+    document.documentElement.style.setProperty('--mood-c', c1 + 'AA');
+    document.documentElement.style.setProperty('--mood-c-2', c2);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    updateHourLabel();
+    // Refresh hour label every minute in case the page is left open across the hour boundary
+    setInterval(updateHourLabel, 60_000);
+    document.getElementById('co-btn')?.addEventListener('click', () => {
+      if (playing) stop(); else start();
+    });
+    document.addEventListener('keydown', (e) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.code === 'Space') { e.preventDefault(); if (playing) stop(); else start(); }
+    });
+  });
+</script>
+</BlockLayout>
