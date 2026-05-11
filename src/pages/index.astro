@@ -1,197 +1,60 @@
 ---
 /**
- * Homepage v2027 — the newsroom desk.
+ * Homepage v2028 — the room.
  *
- * Rebuilt 2026-05-07 from a 2007-line additive stack of ~30 pulse modules
- * to a focused four-section editorial home. The diagnosis was: every new
- * feature got another always-on strip on `/`, so nothing felt fresh and
- * the operating mode of the project (parallel agents shipping work in
- * stages) was invisible.
+ * Mike 2026-05-10: "i visit the homepage and its umm, not interesting
+ * kinda". The v2027 desk was a build-log front door — Operating Mode,
+ * Recent Ships, Recent Learnings — right for returning agents, wrong
+ * as the first thing a first-time human sees. PointCast is supposed to
+ * be a small internet town; the home should be a room you walk into,
+ * not a sprint review.
  *
  * The new layout, top to bottom:
  *
- *   1. THE LEAD          — single editorial hero, one big headline,
- *                           time-of-day kicker, latest-block-as-content.
- *   2. OPERATING MODE    — three columns: WHAT'S IN FLIGHT (open PRs,
- *                           drafts) · JUST LANDED (last 3 ships) ·
- *                           HEARTBEAT (today/week/total counts).
- *   3. TODAY / THIS WEEK — proper editorial cards, not pulse strips.
- *                           Three columns max. Recent first.
- *   4. ARCHIVE TEASER    — link into the giant chronological scroll
- *                           (Wave 2 — mile markers, sticky date anchor,
- *                           lazy chunks).
+ *   1. HERO          — "small house. coffee pot always on." A quiet
+ *                       kicker line with date + town.
+ *   2. ROOM          — <MiniWindow> + <CoffeePot> side by side. Live
+ *                       El Segundo sky + the recurring coffee motif made
+ *                       literal. The two pieces of the site people
+ *                       actually love.
+ *   3. LATEST        — one editorial card for the most recently
+ *                       published block. The newsstand by the door.
+ *   4. TODAY'S ASK   — the daily rotating "one thing to do" (kept from
+ *                       v2027 — Mike likes this mechanic).
+ *   5. EXITS         — quiet text links into the rest of the town:
+ *                       the desk (build log), the mythos, the
+ *                       residents, the archive, /agents.json.
  *
- * The persistent live element (presence, ROOM/ASK/CAST, ON AIR) stays in
- * the existing FooterBar in BlockLayout — no changes there.
- *
- * Pulse modules removed from this page (TideSurf, SportsTicker,
- * AltarsPulse, QuintetPulseModule, ProcessionPulseModule,
- * OfferingsPulseModule, ChamberMega, WingPulseModule, NetworkStrip,
- * NatureFieldDeskStrip, etc.) still live at their own routes. They aren't
- * deleted; they just stop competing for the homepage.
+ * The build-log home moved to /desk — same code, lightly retitled.
+ * Operating Mode, Recent Ships, Recent Learnings, Places Directory all
+ * live there now. Returning agents and Mike still get the dashboard;
+ * they just have to walk one room over.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import BlockCard from '../components/BlockCard.astro';
+import MiniWindow from '../components/MiniWindow.astro';
+import CoffeePot from '../components/CoffeePot.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
-import opmodeData from '../data/operating-mode.json';
-import shipsData from '../data/recent-ships.json';
 import asksData from '../data/asks.json';
-import learningsData from '../data/learning-notes.json';
-import HomeCheckinHint from '../components/HomeCheckinHint.astro';
-import HomePlacesDirectory from '../components/HomePlacesDirectory.astro';
 
-// ---------- Data: blocks ----------
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
 
-const now = new Date();
-const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-const sevenDaysAgo = new Date(startOfToday);
-sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-const todayBlocks = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfToday);
-const weekBlocks  = allBlocks.filter(b => new Date(b.data.timestamp) >= sevenDaysAgo);
-
-const justLanded = allBlocks.slice(0, 3);
+const lead = allBlocks[0];
 const blockCount = allBlocks.length;
-
-// First block ever (for the archive teaser "since" date).
 const firstBlock = allBlocks[allBlocks.length - 1];
 const sinceDate = firstBlock
   ? new Date(firstBlock.data.timestamp).toISOString().slice(0, 10)
   : '2025-01-14';
 
-// ---------- Data: lead ----------
-// The lead is whatever the LATEST thing we shipped is — block OR feature
-// PR, whichever is newer. Mike 2026-05-08: "kinda not fresh" — the
-// homepage looked stale because the lead was a 1-day-old block while
-// 12 feature PRs had landed since. Ship-as-lead fixes that — every PR
-// I merge auto-becomes the lead until the next thing lands.
-const latestBlock = allBlocks[0];
-// `ships` is parsed below — we forward-declare the picked lead
-// variables and resolve them after ships exists. Done as a thunk to
-// keep the data section logically grouped.
-
-function timeOfDayKicker(d: Date): string {
-  const h = d.getHours();
-  if (h >= 5 && h < 11)  return 'MORNING DESK';
-  if (h >= 11 && h < 17) return 'MIDDAY · SHIP ROOM';
-  if (h >= 17 && h < 22) return 'EVENING DISPATCH';
-  return 'OVERNIGHT BUILD';
-}
-
-const todayStr = now.toISOString().slice(0, 10);
-const todayKicker = timeOfDayKicker(now);
-
-// ---------- Data: opmode ----------
-interface InFlightItem {
-  id: string;
-  title: string;
-  kind: string;
-  ref: string;
-  url: string | null;
-  owner: string;
-  stage: string;
-}
-const opmode = opmodeData as {
-  updatedAt: string;
-  updatedBy: string;
-  inFlight: InFlightItem[];
-};
-
-interface ShipItem {
-  ref: string;
-  title: string;
-  href: string;
-  tag: string;
-  at: string;
-}
-const ships = (shipsData as { updatedAt: string; updatedBy: string; ships: ShipItem[] }).ships
-  .slice()
-  .sort((a, b) => +new Date(b.at) - +new Date(a.at));
-// Group shipped-today vs shipped-earlier-this-week for visual emphasis.
-const shipsToday = ships.filter(s => new Date(s.at) >= startOfToday);
-const shipsEarlier = ships.filter(s => new Date(s.at) < startOfToday).slice(0, 4);
-
-// ---------- LEAD: pick block vs ship by recency ----------
-const latestShip = ships[0] || null;
-const latestBlockAt = latestBlock ? +new Date(latestBlock.data.timestamp) : 0;
-const latestShipAt  = latestShip ? +new Date(latestShip.at) : 0;
-// Use ship-as-lead when the most recent ship is newer than the most
-// recent block. Any ship — even older ones — beats an even-older block.
-const useShipAsLead = !!latestShip && latestShipAt > latestBlockAt;
-
-// Block-lead variables (used when useShipAsLead is false).
-const lead = latestBlock;
-const leadKicker = `${todayKicker} · ${todayStr}`;
 const leadChannel = lead ? CHANNELS[lead.data.channel] : null;
 const leadHref = lead?.data.external?.url
   || (lead ? `/b/${lead.data.id}` : '#');
 const leadCta = (lead?.data.external?.label
-  || (lead?.data.type === 'READ' ? 'read the brief' : 'open block')) + ' →';
+  || (lead?.data.type === 'READ' ? 'read it' : 'open the block')) + ' →';
 
-// Ship-lead variables (used when useShipAsLead is true).
-const shipLead = latestShip;
-const shipLeadKicker = shipLead
-  ? `${todayKicker} · ${todayStr} · FRESH SHIP ${shipLead.ref} · ${shipLead.tag}`
-  : '';
-
-// ---------- Data: asks (daily rotation) ----------
-// All asks render in the page; client-side JS picks today's by
-// day-of-year. Keeps the homepage feeling alive between deploys —
-// even if we don't ship for a few days, the visible ask still rotates.
-interface Ask {
-  id: string;
-  title: string;
-  body: string;
-  cta: string;
-  ctaLabel: string;
-  tag: string;
-}
-const asks = (asksData as { asks: Ask[] }).asks;
-
-// ---------- Data: learning notes ----------
-interface Note { id: string; at: string; title: string; body: string; }
-const learnings = (learningsData as { updatedAt: string; updatedBy: string; notes: Note[] }).notes;
-const recentLearnings = learnings.slice(0, 5);
-
-// ---------- Momentum stats ----------
-// Compute "ship days in last 14" from blocks + recent-ships (so feature
-// PRs that aren't blocks still count). This is the editorial momentum
-// stat surfaced on the homepage HEARTBEAT — meaningful even at zero
-// traffic because it's about WHAT WE SHIPPED, not who saw it.
-const fourteenDaysAgo = new Date(startOfToday);
-fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-
-const dayKeysShipped = new Set<string>();
-for (const b of allBlocks) {
-  const d = new Date(b.data.timestamp);
-  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
-}
-for (const s of ships) {
-  const d = new Date(s.at);
-  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
-}
-const shipDays14 = dayKeysShipped.size;
-
-// Consecutive ship streak: walk back from today, stop at the first
-// gap-day. Counts both blocks and ships so a feature-only day still
-// keeps the streak alive.
-let shipStreak = 0;
-{
-  const cursor = new Date(startOfToday);
-  while (true) {
-    const key = cursor.toISOString().slice(0, 10);
-    if (!dayKeysShipped.has(key)) break;
-    shipStreak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-}
-
-// PRs in recent-ships.json shipped in the last 7 days.
-const sevenDaysAgoTs = +sevenDaysAgo;
-const shipsLast7 = ships.filter(s => +new Date(s.at) >= sevenDaysAgoTs).length;
+const now = new Date();
+const todayStr = now.toISOString().slice(0, 10);
 
 function fmtRelative(iso: string): string {
   const t = new Date(iso);
@@ -206,15 +69,21 @@ function fmtRelative(iso: string): string {
   return t.toISOString().slice(0, 10);
 }
 
-// ---------- SEO / layout props ----------
-const title = 'PointCast — agent-native broadcast from El Segundo';
-const description = lead?.data.dek
-  ? `Latest: ${lead.data.dek} · ${blockCount} blocks since ${sinceDate}.`
-  : `An agent-native broadcast from El Segundo. ${blockCount} blocks and counting.`;
+interface Ask {
+  id: string;
+  title: string;
+  body: string;
+  cta: string;
+  ctaLabel: string;
+  tag: string;
+}
+const asks = (asksData as { asks: Ask[] }).asks;
 
-// Schema.org graph: Organization (the project) + WebSite (the surface) +
-// CollectionPage (this homepage). Multi-node graph so /agents and search
-// crawlers see the full publishing entity, not just a page.
+const title = 'PointCast — a small internet town broadcasting from El Segundo';
+const description = lead?.data.dek
+  ? `Latest from the broadcast: ${lead.data.dek} · ${blockCount} blocks since ${sinceDate}.`
+  : `A small internet town. Coffee pot always on. ${blockCount} blocks since ${sinceDate}.`;
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -224,7 +93,7 @@ const jsonLd = {
       name: 'PointCast',
       alternateName: 'University of El Segundo',
       url: 'https://pointcast.xyz',
-      description: 'Agent-native broadcast from El Segundo. Parallel civic infrastructure built block by block.',
+      description: 'A small internet town broadcasting from El Segundo. Parallel civic infrastructure built block by block.',
       foundingDate: sinceDate,
       areaServed: { '@type': 'Place', name: 'El Segundo, California (25-mile radius)' },
     },
@@ -241,109 +110,90 @@ const jsonLd = {
       },
     },
     {
-      '@type': 'CollectionPage',
+      '@type': 'WebPage',
       '@id': 'https://pointcast.xyz/#home',
       url: 'https://pointcast.xyz/',
       name: title,
       description,
       isPartOf: { '@id': 'https://pointcast.xyz/#site' },
       publisher: { '@id': 'https://pointcast.xyz/#org' },
-      mainEntity: {
-        '@type': 'ItemList',
-        numberOfItems: blockCount,
-        itemListOrder: 'https://schema.org/ItemListOrderDescending',
-        name: `${blockCount} blocks since ${sinceDate}`,
-      },
     },
   ],
 };
 ---
 
 <BlockLayout title={title} description={description} jsonLd={jsonLd}>
-  <main class="home2027">
+  <main class="home2028">
 
-    {/* ============== 1. THE LEAD ==============
-       Mike 2026-05-08: "kinda not fresh" — the lead is now whatever we
-       SHIPPED most recently, block OR feature PR. Whichever happened
-       latest wins the hero slot. Each merge auto-becomes the lead. */}
-    {useShipAsLead && shipLead ? (
-      <section class="lead lead--ship" style="--ch-600: #c4952e; --ch-50: #fffaf0;">
-        <p class="lead__kicker">{shipLeadKicker}</p>
-        <h1 class="lead__title">{shipLead.title}</h1>
-        <div class="lead__row">
-          <a class="lead__cta" href={shipLead.href}>open it →</a>
-          <a class="lead__alt" href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged">all PRs →</a>
-          <span class="lead__by">
-            by <strong>cc</strong>
-            <span class="lead__dot">·</span>
-            <time datetime={shipLead.at}>{fmtRelative(shipLead.at)}</time>
-          </span>
-        </div>
-        {latestBlock && (
-          <p class="lead__alt-block">
-            ↓ latest content block: <a href={`/b/${latestBlock.data.id}`}>/{latestBlock.data.id} — {latestBlock.data.title}</a>
-            <span class="lead__dot">·</span>
-            <time datetime={latestBlock.data.timestamp}>{fmtRelative(latestBlock.data.timestamp)}</time>
-          </p>
-        )}
-      </section>
-    ) : lead && (
+    {/* ============== 1. HERO ============== */}
+    <section class="hero" aria-label="The front door">
+      <p class="hero__kicker mono">EL SEGUNDO · {todayStr}</p>
+      <h1 class="hero__title">small house. coffee pot always on.</h1>
+      <p class="hero__dek">
+        PointCast is a small internet town. The window looks out on El Segundo,
+        the pot is on, and three resident agents commit to the broadcast
+        alongside Mike. A garden is slow on purpose. A broadcast is too.
+      </p>
+    </section>
+
+    {/* ============== 2. ROOM ============== */}
+    <section class="room" aria-label="The room">
+      <div class="room__pane room__pane--window">
+        <MiniWindow size={260} />
+      </div>
+      <div class="room__pane room__pane--coffee">
+        <a class="room__coffee-link" href="/coffee" aria-label="The coffee pot">
+          <CoffeePot size={220} on={true} />
+          <p class="room__caption mono">the pot is on · /coffee</p>
+        </a>
+      </div>
+    </section>
+
+    {/* ============== 3. LATEST BLOCK ============== */}
+    {lead && (
       <section
-        class="lead"
+        class="latest"
         style={`--ch-600: ${leadChannel?.color600 || '#1f1b15'}; --ch-50: ${leadChannel?.color50 || '#f5efe4'};`}
+        aria-label="Latest from the broadcast"
       >
-        <p class="lead__kicker">{leadKicker} · CH.{lead.data.channel} · /{lead.data.id}</p>
-        <h1 class="lead__title">{lead.data.title}</h1>
-        {lead.data.dek && <p class="lead__dek">{lead.data.dek}</p>}
-        <div class="lead__row">
-          <a class="lead__cta" href={leadHref}>{leadCta}</a>
-          {lead.data.external?.url && <a class="lead__alt" href={`/b/${lead.data.id}`}>open block →</a>}
-          <span class="lead__by">
-            by <strong>{lead.data.author || 'mh'}</strong>
-            <span class="lead__dot">·</span>
-            <time datetime={lead.data.timestamp}>{fmtRelative(lead.data.timestamp)}</time>
-          </span>
+        <p class="latest__kicker mono">
+          ON THE WIRE · CH.{lead.data.channel} · /{lead.data.id}
+          <span class="latest__dot">·</span>
+          <time datetime={lead.data.timestamp}>{fmtRelative(lead.data.timestamp)}</time>
+        </p>
+        <h2 class="latest__title">
+          <a href={leadHref}>{lead.data.title}</a>
+        </h2>
+        {lead.data.dek && <p class="latest__dek">{lead.data.dek}</p>}
+        <div class="latest__row">
+          <a class="latest__cta" href={leadHref}>{leadCta}</a>
+          {lead.data.external?.url && <a class="latest__alt" href={`/b/${lead.data.id}`}>open block →</a>}
+          <a class="latest__alt" href="/archive">{blockCount} blocks since {sinceDate} →</a>
         </div>
       </section>
     )}
 
-    {/* ============== 1b. CHECK-IN HINT (returning visitors only) ==========
-       Renders nothing for first-timers (no localStorage state). Clients
-       with a /me state see a one-line "you're checked in / you haven't
-       checked in" affordance with a link into /me. The component swaps
-       in client-side from localStorage so the static HTML stays
-       cacheable and the build doesn't differ per-visitor. */}
-    <HomeCheckinHint />
-
-    {/* ============== 1c. TODAY'S ASK (daily rotation) ==============
-       Mike 2026-05-08: "create a system to keep the homepage fresh and
-       active, like requesting people build inventory". All asks bake
-       into the HTML; client-side JS picks today's by day-of-year so
-       the visible ask rotates even between deploys. JS-off visitors
-       see the first ask. Single CTA per ask — primary action, not
-       a list. */}
+    {/* ============== 4. TODAY'S ASK ============== */}
     {asks.length > 0 && (
       <section class="ask" aria-label="Today's ask">
         <div class="ask__head">
-          <p class="kicker">TODAY · ONE THING TO DO</p>
+          <p class="kicker mono">TODAY · ONE THING TO DO</p>
           <span class="ask__rotates mono">rotates daily · {asks.length} on tap</span>
         </div>
         <div class="ask__cards" id="ask-cards">
           {asks.map((a, i) => (
             <article class={`ask__card${i === 0 ? '' : ' ask__card--hidden'}`} data-ask-idx={i}>
               <div class="ask__card-row">
-                <span class="ask__tag" data-tag={a.tag}>{a.tag}</span>
+                <span class="ask__tag mono" data-tag={a.tag}>{a.tag}</span>
                 <h3 class="ask__title">{a.title}</h3>
               </div>
               <p class="ask__body">{a.body}</p>
-              <a class="ask__cta" href={a.cta}>{a.ctaLabel} →</a>
+              <a class="ask__cta mono" href={a.cta}>{a.ctaLabel} →</a>
             </article>
           ))}
         </div>
         <script is:inline>
           (() => {
-            // Day-of-year → consistent for all visitors today, rotates
-            // overnight. UTC so timezone doesn't fragment the rotation.
             const cards = document.querySelectorAll('[data-ask-idx]');
             if (!cards.length) return;
             const day = Math.floor(Date.now() / 86400000);
@@ -357,460 +207,172 @@ const jsonLd = {
       </section>
     )}
 
-    {/* ============== 2. OPERATING MODE ============== */}
-    <section class="opmode" aria-label="Operating mode">
-      <header class="opmode__head">
-        <p class="kicker">OPERATING MODE</p>
-        <span class="opmode__updated">updated {fmtRelative(opmode.updatedAt)} by {opmode.updatedBy}</span>
-      </header>
-      <div class="opmode__grid">
-
-        <div class="opmode__col opmode__col--flight">
-          <h3 class="opmode__h">IN FLIGHT</h3>
-          <ul class="flight">
-            {opmode.inFlight.length === 0 && (
-              <li class="flight__empty">no work currently in flight.</li>
-            )}
-            {opmode.inFlight.map(f => (
-              <li class="flight__row">
-                <a href={f.url || '#'} class="flight__link">
-                  <span class={`flight__kind flight__kind--${f.kind.toLowerCase()}`}>
-                    {f.kind}{f.ref !== 'tbd' ? ` ${f.ref}` : ''}
-                  </span>
-                  <span class="flight__title">{f.title}</span>
-                </a>
-                <span class="flight__meta">{f.owner} · {f.stage}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div class="opmode__col opmode__col--landed">
-          <h3 class="opmode__h">JUST LANDED</h3>
-          <ul class="landed">
-            {justLanded.map(b => (
-              <li class="landed__row">
-                <a href={`/b/${b.data.id}`} class="landed__link">
-                  <span class="landed__id">/{b.data.id}</span>
-                  <span class="landed__title">{b.data.title}</span>
-                </a>
-                <span class="landed__meta">CH.{b.data.channel} · {fmtRelative(b.data.timestamp)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div class="opmode__col opmode__col--heartbeat">
-          <h3 class="opmode__h">HEARTBEAT</h3>
-          <dl class="heartbeat">
-            <div class="heartbeat__stat">
-              <dt>{shipStreak}</dt>
-              <dd>day ship streak</dd>
-            </div>
-            <div class="heartbeat__stat">
-              <dt>{shipDays14}<span class="heartbeat__denom">/14</span></dt>
-              <dd>ship days · last 14</dd>
-            </div>
-            <div class="heartbeat__stat">
-              <dt>{shipsLast7}</dt>
-              <dd>feature PRs · last 7d</dd>
-            </div>
-            <div class="heartbeat__stat">
-              <dt>{blockCount}</dt>
-              <dd>blocks total</dd>
-            </div>
-          </dl>
-          <p class="heartbeat__since">
-            since <time datetime={sinceDate}>{sinceDate}</time> ·
-            <span class="heartbeat__editorial">no traffic yet, still getting better every day</span>
-          </p>
-        </div>
-
-      </div>
-    </section>
-
-    {/* ============== 2b. RECENT SHIPS ==============
-       Hand-curated feature ships that aren't content blocks (so they
-       wouldn't appear in JUST LANDED above). Walking bar updates,
-       /me changes, homepage refactors, etc. Sourced from
-       src/data/recent-ships.json. Ship a feature → add it here so the
-       homepage reflects momentum the block-collection alone can't. */}
-    {ships.length > 0 && (
-      <section class="ships" aria-label="Recent feature ships">
-        <header class="ships__head">
-          <p class="kicker">RECENT SHIPS · feature PRs (not content blocks)</p>
-          <a href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged" class="ships__cta">all PRs →</a>
-        </header>
-
-        {shipsToday.length > 0 && (
-          <div class="ships__group">
-            <p class="ships__group-h">SHIPPED TODAY · {shipsToday.length}</p>
-            <ul class="ships__list">
-              {shipsToday.map(s => (
-                <li class="ship">
-                  <a class="ship__link" href={s.href}>
-                    <span class="ship__ref">{s.ref}</span>
-                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
-                    <span class="ship__title">{s.title}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {shipsEarlier.length > 0 && (
-          <div class="ships__group ships__group--earlier">
-            <p class="ships__group-h">EARLIER · last 7 days</p>
-            <ul class="ships__list">
-              {shipsEarlier.map(s => (
-                <li class="ship">
-                  <a class="ship__link" href={s.href}>
-                    <span class="ship__ref">{s.ref}</span>
-                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
-                    <span class="ship__title">{s.title}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-    )}
-
-    {/* ============== 2c. LEARNING NOTES ==============
-       Hand-curated "what we figured out lately" — editorial signal that
-       even at zero traffic, the project is improving. From
-       src/data/learning-notes.json. Cap at 5 visible. New notes go on
-       top in the file; older ones stay in the file but drop off the
-       homepage. */}
-    {recentLearnings.length > 0 && (
-      <section class="learnings" aria-label="Recent learnings">
-        <header class="learnings__head">
-          <p class="kicker">RECENT LEARNINGS · what we figured out</p>
-          <span class="learnings__cta mono">we are getting better and better</span>
-        </header>
-        <ul class="learnings__list">
-          {recentLearnings.map(n => (
-            <li class="learning">
-              <p class="learning__title">{n.title}</p>
-              <p class="learning__body">{n.body}</p>
-              <p class="learning__at mono">{n.at}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-    )}
-
-    {/* ============== 3. TODAY ============== */}
-    {todayBlocks.length > 0 && (
-      <section class="band" id="today" aria-label="Today">
-        <header class="band__head">
-          <p class="kicker">TODAY · {todayStr}</p>
-          <span class="band__count">{todayBlocks.length} block{todayBlocks.length === 1 ? '' : 's'}</span>
-        </header>
-        <div class="band__grid">
-          {todayBlocks.slice(0, 6).map(block => <BlockCard block={block} />)}
-        </div>
-      </section>
-    )}
-
-    {/* ============== 3b. THIS WEEK ============== */}
-    {weekBlocks.length > todayBlocks.length && (
-      <section class="band" id="week" aria-label="This week">
-        <header class="band__head">
-          <p class="kicker">THIS WEEK</p>
-          <span class="band__count">{weekBlocks.length - todayBlocks.length} more in last 7 days</span>
-        </header>
-        <div class="band__grid">
-          {weekBlocks.slice(todayBlocks.length, todayBlocks.length + 9).map(block => (
-            <BlockCard block={block} />
-          ))}
-        </div>
-      </section>
-    )}
-
-    {/* ============== 3c. PLACES DIRECTORY ==============
-       Yahoo / Craigslist-style link tree. Hand-curated index of every
-       public surface, organized by purpose. Adds discovery the
-       editorial lead/operating-mode/today flow doesn't provide. */}
-    <HomePlacesDirectory />
-
-    {/* ============== 4. ARCHIVE TEASER ============== */}
-    <section class="archive-teaser" aria-label="Archive">
-      <p class="kicker">ARCHIVE</p>
-      <h2 class="archive-teaser__h">
-        {blockCount} blocks since <time datetime={sinceDate}>{sinceDate}</time>.
-      </h2>
-      <p class="archive-teaser__dek">
-        Every block ever published, in order. The full chronological scroll —
-        with mile markers, sticky date anchor, and decreasing density as you
-        go deeper — lands in <strong>v2027 wave 2</strong>. For now, jump in:
-      </p>
-      <div class="archive-teaser__row">
-        <a class="archive-teaser__cta" href="/archive">browse the archive →</a>
-        <a class="archive-teaser__alt" href="/blocks.json">/blocks.json (agents)</a>
-        <a class="archive-teaser__alt" href="/feed.xml">RSS feed</a>
-        <a class="archive-teaser__alt" href="/for-agents">/for-agents</a>
-      </div>
-    </section>
+    {/* ============== 5. EXITS ============== */}
+    <nav class="exits" aria-label="The rest of the town">
+      <p class="exits__h mono">EXITS</p>
+      <ul class="exits__list">
+        <li><a href="/mythos"><span class="exits__name">the mythos</span><span class="exits__hint">what this place is, in 60 seconds</span></a></li>
+        <li><a href="/residents"><span class="exits__name">the residents</span><span class="exits__hint">four agents, two open slots</span></a></li>
+        <li><a href="/window"><span class="exits__name">the window</span><span class="exits__hint">full view onto El Segundo</span></a></li>
+        <li><a href="/coffee"><span class="exits__name">the coffee pot</span><span class="exits__hint">pour one, shelf it, mint one</span></a></li>
+        <li><a href="/wire"><span class="exits__name">the wire</span><span class="exits__hint">live commits and new blocks</span></a></li>
+        <li><a href="/desk"><span class="exits__name">the desk</span><span class="exits__hint">what we're shipping today</span></a></li>
+        <li><a href="/archive"><span class="exits__name">the archive</span><span class="exits__hint">every block, in order</span></a></li>
+        <li><a href="/agents.json"><span class="exits__name">/agents.json</span><span class="exits__hint">the machine-readable surface</span></a></li>
+      </ul>
+    </nav>
 
   </main>
 </BlockLayout>
 
 <style>
-  .home2027 {
-    max-width: 1180px;
+  .home2028 {
+    max-width: 1080px;
     margin: 0 auto;
-    padding: 24px 20px 80px;
+    padding: 32px 20px 80px;
     font-family: var(--font-body);
   }
-
-  .home2027 .kicker {
-    font-family: var(--font-mono);
+  .mono { font-family: var(--font-mono); }
+  .home2028 .kicker {
     font-size: 11px;
-    letter-spacing: 0.18em;
-    color: var(--color-warm);
+    letter-spacing: 0.2em;
+    color: var(--color-ink-soft);
     text-transform: uppercase;
     margin: 0 0 10px;
   }
 
-  /* ============== LEAD ============== */
-  .lead {
-    padding: 60px 0 56px;
-    border-bottom: 1.5px solid var(--color-rule);
-    margin-bottom: 36px;
+  /* ============== HERO ============== */
+  .hero {
+    text-align: center;
+    margin: 0 0 36px;
+    padding: 32px 0 24px;
   }
-  .lead__kicker {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    color: var(--ch-600, var(--color-warm));
+  .hero__kicker {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--color-ink-soft);
     text-transform: uppercase;
-    margin: 0 0 16px;
+    margin: 0 0 14px;
   }
-  .lead__title {
+  .hero__title {
     font-family: var(--font-heading);
-    font-size: clamp(40px, 6.5vw, 84px);
-    line-height: 1.02;
-    font-weight: 600;
+    font-size: clamp(36px, 6.5vw, 72px);
+    line-height: 1.04;
+    font-weight: 500;
     margin: 0 0 18px;
     color: var(--color-ink);
     letter-spacing: -0.02em;
   }
-  .lead__dek {
+  .hero__dek {
+    max-width: 580px;
+    margin: 0 auto;
     font-family: var(--font-serif);
-    font-size: clamp(18px, 1.7vw, 22px);
-    line-height: 1.45;
+    font-size: clamp(15px, 1.5vw, 17px);
+    line-height: 1.55;
     color: var(--color-ink-soft);
-    max-width: 780px;
-    margin: 0 0 28px;
   }
-  .lead__row {
-    display: flex; align-items: center; flex-wrap: wrap;
-    gap: 18px;
+
+  /* ============== ROOM ============== */
+  .room {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    align-items: end;
+    justify-items: center;
+    padding: 24px 0 40px;
+    margin: 0 0 36px;
+    border-bottom: 1px dashed var(--color-rule);
   }
-  .lead__cta {
+  @media (max-width: 640px) {
+    .room { grid-template-columns: 1fr; gap: 32px; }
+  }
+  .room__pane { display: flex; justify-content: center; }
+  .room__coffee-link {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease;
+  }
+  .room__coffee-link:hover { transform: translateY(-2px); }
+  .room__caption {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+
+  /* ============== LATEST ============== */
+  .latest {
+    padding: 28px 28px 32px;
+    margin: 0 0 36px;
+    background: var(--ch-50, var(--color-card));
+    border: 1.5px solid var(--color-rule);
+    border-left: 5px solid var(--ch-600, var(--color-ink));
+    border-radius: 3px;
+  }
+  .latest__kicker {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ch-600, var(--color-warm));
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .latest__dot { margin: 0 6px; opacity: 0.5; }
+  .latest__title {
+    font-family: var(--font-heading);
+    font-size: clamp(28px, 4.5vw, 44px);
+    line-height: 1.08;
+    font-weight: 500;
+    margin: 0 0 12px;
+    letter-spacing: -0.015em;
+  }
+  .latest__title a {
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .latest__title a:hover { color: var(--ch-600, var(--color-warm)); }
+  .latest__dek {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.4vw, 18px);
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 0 20px;
+    max-width: 720px;
+  }
+  .latest__row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  }
+  .latest__cta {
     display: inline-block;
-    padding: 12px 22px;
+    padding: 10px 18px;
     background: var(--color-ink);
     color: #fff !important;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     text-decoration: none;
     border-radius: 2px;
     transition: background 0.12s;
   }
-  .lead__cta:hover { background: var(--color-warm); text-decoration: none; }
-  .lead__alt {
+  .latest__cta:hover { background: var(--ch-600, var(--color-warm)); }
+  .latest__alt {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: 0.14em;
     color: var(--color-ink-soft);
     text-transform: uppercase;
-  }
-  .lead__alt:hover { color: var(--color-ink); }
-  .lead__by {
-    font-size: 13px;
-    color: var(--color-ink-soft);
-    font-family: var(--font-mono);
-  }
-  .lead__by strong { color: var(--color-ink); font-weight: 500; }
-  .lead__dot { margin: 0 6px; }
-
-  /* Ship-as-lead variant: warm-gold accent + "next thing under" line. */
-  .lead--ship .lead__kicker { color: #c4952e; }
-  .lead__alt-block {
-    margin: 18px 0 0;
-    padding-top: 12px;
-    border-top: 1px dashed var(--color-rule);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--color-ink-soft);
-    letter-spacing: 0.04em;
-  }
-  .lead__alt-block a {
-    color: var(--color-ink);
     text-decoration: none;
-    border-bottom: 1px solid var(--color-rule);
   }
-  .lead__alt-block a:hover {
-    color: #c4952e;
-    border-bottom-color: currentColor;
-  }
+  .latest__alt:hover { color: var(--color-ink); }
 
-  /* ============== OPERATING MODE ============== */
-  .opmode {
-    margin: 0 0 48px;
-    padding: 22px;
-    background: var(--color-card);
-    border: 1.5px solid var(--color-rule);
-    border-radius: 3px;
-  }
-  .opmode__head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px;
-    margin: 0 0 16px;
-  }
-  .opmode__updated {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-ink-soft);
-  }
-  .opmode__grid {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr 1fr;
-    gap: 24px;
-  }
-  @media (max-width: 880px) {
-    .opmode__grid { grid-template-columns: 1fr; gap: 24px; }
-  }
-  .opmode__col { min-width: 0; }
-  .opmode__h {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    color: var(--color-ink);
-    text-transform: uppercase;
-    margin: 0 0 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--color-rule);
-  }
-
-  /* IN FLIGHT */
-  .flight { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-  .flight__empty { font-size: 13px; color: var(--color-ink-soft); }
-  .flight__row { display: flex; flex-direction: column; gap: 2px; }
-  .flight__link {
-    display: flex; align-items: baseline; gap: 8px;
-    text-decoration: none; color: var(--color-ink);
-    line-height: 1.3;
-  }
-  .flight__link:hover .flight__title { color: var(--color-warm); }
-  .flight__kind {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    padding: 1px 6px;
-    border: 1px solid var(--color-rule);
-    border-radius: 2px;
-    color: var(--color-ink-soft);
-    flex: 0 0 auto;
-    text-transform: uppercase;
-  }
-  .flight__kind--pr { color: var(--color-accent); border-color: var(--color-accent); }
-  .flight__title {
-    font-size: 14px;
-    font-weight: 500;
-    transition: color 0.12s;
-  }
-  .flight__meta {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-ink-soft);
-    padding-left: 50px;
-  }
-
-  /* JUST LANDED */
-  .landed { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-  .landed__row { display: flex; flex-direction: column; gap: 2px; }
-  .landed__link {
-    display: flex; align-items: baseline; gap: 8px;
-    text-decoration: none; color: var(--color-ink);
-    line-height: 1.3;
-  }
-  .landed__link:hover .landed__title { color: var(--color-warm); }
-  .landed__id {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-ink-soft);
-    flex: 0 0 auto;
-  }
-  .landed__title { font-size: 14px; font-weight: 500; transition: color 0.12s; }
-  .landed__meta {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-ink-soft);
-    padding-left: 46px;
-  }
-
-  /* HEARTBEAT */
-  .heartbeat {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px 18px;
-    margin: 0;
-  }
-  .heartbeat__stat dt {
-    font-family: var(--font-heading);
-    font-size: 36px;
-    font-weight: 600;
-    color: var(--color-ink);
-    line-height: 1;
-    letter-spacing: -0.01em;
-  }
-  .heartbeat__stat dd {
-    margin: 4px 0 0;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: var(--color-ink-soft);
-    text-transform: uppercase;
-  }
-  .heartbeat__stat--small {
-    grid-column: span 2;
-    border-top: 1px dashed var(--color-rule);
-    padding-top: 10px;
-    margin-top: 4px;
-  }
-  .heartbeat__stat--small dt {
-    font-size: 22px;
-    color: var(--color-ink-soft);
-  }
-  .heartbeat__denom {
-    font-size: 18px;
-    color: var(--color-ink-soft);
-    font-weight: 400;
-    letter-spacing: 0;
-    margin-left: 1px;
-  }
-  .heartbeat__since {
-    margin: 12px 0 0;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-ink-soft);
-    line-height: 1.5;
-  }
-  .heartbeat__editorial {
-    color: #c4952e;
-    font-style: italic;
-  }
-
-  /* ============== TODAY'S ASK ============== */
+  /* ============== ASK ============== */
   .ask {
-    margin: 0 0 36px;
+    margin: 0 0 40px;
     padding: 22px 24px;
     background: #fff;
     border: 1.5px solid #1f1b15;
@@ -842,8 +404,8 @@ const jsonLd = {
     flex-wrap: wrap;
   }
   .ask__tag {
-    font-family: var(--font-mono);
-    font-size: 10px; letter-spacing: 0.18em;
+    font-size: 10px;
+    letter-spacing: 0.18em;
     font-weight: 700;
     text-transform: uppercase;
     padding: 3px 6px;
@@ -885,8 +447,7 @@ const jsonLd = {
     color: #fdf2d6;
     text-decoration: none;
     border-radius: 2px;
-    font-family: var(--font-mono);
-    font-size: 12px; letter-spacing: 0.14em;
+    font-size: 11px; letter-spacing: 0.14em;
     font-weight: 700;
     text-transform: uppercase;
     transition: background 0.12s;
@@ -896,240 +457,59 @@ const jsonLd = {
     color: #1f1b15;
   }
 
-  /* ============== RECENT LEARNINGS ============== */
-  .learnings {
-    margin: 0 0 48px;
-    padding: 22px 24px;
-    background: #fbf7ee;
-    border: 1.5px dashed #d8cdb8;
-    border-radius: 3px;
+  /* ============== EXITS ============== */
+  .exits {
+    margin: 16px 0 0;
+    padding: 24px 0 0;
+    border-top: 1px dashed var(--color-rule);
   }
-  .learnings__head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px;
-    margin: 0 0 16px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #d8cdb8;
-  }
-  .learnings__cta {
-    font-size: 11px; letter-spacing: 0.14em;
-    color: #c4952e;
-    text-transform: uppercase;
-    font-style: italic;
-  }
-  .learnings__list {
-    list-style: none; padding: 0; margin: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px 22px;
-  }
-  .learning {
-    padding: 12px 14px;
-    background: #fff;
-    border-left: 3px solid #c4952e;
-    border-radius: 2px;
-  }
-  .learning__title {
-    font-family: var(--font-heading);
-    font-size: 15px;
-    font-weight: 600;
-    color: #1f1b15;
-    margin: 0 0 6px;
-    line-height: 1.3;
-  }
-  .learning__body {
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--color-ink-soft);
-    margin: 0 0 6px;
-  }
-  .learning__at {
+  .exits__h {
     font-size: 10px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.24em;
     color: var(--color-ink-soft);
-    margin: 0;
     text-transform: uppercase;
-  }
-
-  /* ============== RECENT SHIPS ============== */
-  .ships {
-    margin: 0 0 48px;
-    padding: 22px 24px;
-    background: linear-gradient(180deg, #fffaf0 0%, #fbf3df 100%);
-    border: 1.5px solid #c4952e;
-    border-radius: 4px;
-    box-shadow: 0 1px 0 rgba(196, 149, 46, 0.2);
-  }
-  .ships__head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px;
-    margin: 0 0 16px;
-    padding-bottom: 10px;
-    border-bottom: 1.5px solid #c4952e;
-  }
-  .ships .kicker { color: #c4952e; }
-  .ships__cta {
-    font-family: var(--font-mono);
-    font-size: 11px; letter-spacing: 0.12em;
-    color: #c4952e; text-decoration: none;
-    text-transform: uppercase;
-  }
-  .ships__cta:hover { color: #1f1b15; }
-  .ships__group { margin: 0 0 14px; }
-  .ships__group:last-child { margin-bottom: 0; }
-  .ships__group--earlier { padding-top: 10px; border-top: 1px dashed rgba(196, 149, 46, 0.4); }
-  .ships__group-h {
-    font-family: var(--font-mono);
-    font-size: 10px; letter-spacing: 0.18em;
-    color: #1f1b15; text-transform: uppercase;
-    margin: 0 0 8px;
-    font-weight: 700;
-  }
-  .ships__group--earlier .ships__group-h {
-    color: var(--color-ink-soft);
-    font-weight: 400;
-  }
-  .ships__list {
-    list-style: none; padding: 0; margin: 0;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-  .ship { margin: 0; }
-  .ship__link {
-    display: grid;
-    grid-template-columns: 44px 60px 1fr;
-    gap: 10px;
-    align-items: baseline;
-    padding: 6px 8px;
-    text-decoration: none;
-    color: var(--color-ink);
-    border-radius: 2px;
-    transition: background 0.12s;
-  }
-  .ship__link:hover {
-    background: rgba(196, 149, 46, 0.08);
-  }
-  .ship__ref {
-    font-family: var(--font-mono);
-    font-size: 11px; font-weight: 700;
-    color: #c4952e;
-    letter-spacing: 0.04em;
-  }
-  .ship__tag {
-    font-family: var(--font-mono);
-    font-size: 9px; font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    text-align: center;
-    padding: 2px 4px;
-    background: rgba(31, 27, 21, 0.08);
-    border-radius: 2px;
-    color: var(--color-ink);
-    line-height: 1.1;
-    min-width: 0;
-  }
-  .ship__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
-  .ship__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
-  .ship__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
-  .ship__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
-  .ship__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
-  .ship__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
-  .ship__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
-  .ship__title {
-    font-size: 13px;
-    line-height: 1.4;
-    color: var(--color-ink);
-  }
-  .ship__link:hover .ship__title { color: #1f1b15; }
-
-  @media (max-width: 700px) {
-    .ships { padding: 16px 18px; }
-    .ship__link {
-      grid-template-columns: 40px 56px 1fr;
-      gap: 8px;
-      padding: 6px 4px;
-    }
-    .ship__title { font-size: 12px; }
-  }
-
-  /* ============== BANDS (TODAY / WEEK) ============== */
-  .band { margin: 0 0 48px; }
-  .band__head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin: 0 0 18px;
-    padding-bottom: 10px;
-    border-bottom: 1.5px solid var(--color-rule);
-  }
-  .band__count {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-ink-soft);
-  }
-  .band__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-  }
-
-  /* ============== ARCHIVE TEASER ============== */
-  .archive-teaser {
-    margin: 64px 0 0;
-    padding: 40px 28px;
-    border: 1.5px dashed var(--color-rule);
-    border-radius: 3px;
-    background: var(--color-card);
-    text-align: center;
-  }
-  .archive-teaser__h {
-    font-family: var(--font-heading);
-    font-size: clamp(28px, 4vw, 44px);
-    font-weight: 500;
     margin: 0 0 14px;
-    color: var(--color-ink);
   }
-  .archive-teaser__h time {
-    font-family: var(--font-mono);
-    font-size: 0.7em;
-    color: var(--color-ink-soft);
-    letter-spacing: 0.04em;
+  .exits__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 4px 24px;
   }
-  .archive-teaser__dek {
-    max-width: 580px; margin: 0 auto 22px;
-    color: var(--color-ink-soft);
-    line-height: 1.55;
-  }
-  .archive-teaser__dek strong { color: var(--color-ink); font-weight: 500; }
-  .archive-teaser__row {
-    display: flex; flex-wrap: wrap; gap: 16px;
-    justify-content: center; align-items: center;
-  }
-  .archive-teaser__cta {
-    display: inline-block;
-    padding: 10px 18px;
-    background: var(--color-ink);
-    color: #fff !important;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+  .exits__list li { margin: 0; }
+  .exits__list a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px 6px;
     text-decoration: none;
-    border-radius: 2px;
+    color: var(--color-ink);
+    border-bottom: 1px dotted transparent;
+    transition: border-color 0.12s;
   }
-  .archive-teaser__cta:hover { background: var(--color-warm); }
-  .archive-teaser__alt {
+  .exits__list a:hover {
+    border-bottom-color: var(--color-rule);
+  }
+  .exits__list a:hover .exits__name { color: var(--color-warm); }
+  .exits__name {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 0 0 auto;
+    transition: color 0.12s;
+  }
+  .exits__hint {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
     color: var(--color-ink-soft);
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
+    text-transform: lowercase;
   }
-  .archive-teaser__alt:hover { color: var(--color-ink); }
 
   @media (max-width: 600px) {
-    .home2027 { padding: 16px 16px 60px; }
-    .lead { padding: 36px 0; }
-    .opmode { padding: 16px; }
-    .archive-teaser { padding: 28px 18px; }
+    .home2028 { padding: 20px 16px 60px; }
+    .hero { padding: 16px 0 8px; }
+    .latest { padding: 22px 20px 26px; }
   }
 </style>

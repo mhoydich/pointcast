@@ -1,0 +1,1142 @@
+---
+/**
+ * /desk — the newsroom desk (formerly the homepage).
+ *
+ * Moved off `/` on 2026-05-10 (Mike: "homepage is umm, not interesting
+ * kinda"). The desk is the build-log view: what's in flight, what just
+ * landed, what we figured out lately. Right for returning agents and for
+ * Mike; wrong as a front door for a first-time human. The new `/` is a
+ * room (window + coffee pot + lead block). The desk lives on at this
+ * route so the editorial layout doesn't get thrown away.
+ *
+ * Rebuilt 2026-05-07 from a 2007-line additive stack of ~30 pulse modules
+ * to a focused four-section editorial home. The diagnosis was: every new
+ * feature got another always-on strip on `/`, so nothing felt fresh and
+ * the operating mode of the project (parallel agents shipping work in
+ * stages) was invisible.
+ *
+ * The new layout, top to bottom:
+ *
+ *   1. THE LEAD          — single editorial hero, one big headline,
+ *                           time-of-day kicker, latest-block-as-content.
+ *   2. OPERATING MODE    — three columns: WHAT'S IN FLIGHT (open PRs,
+ *                           drafts) · JUST LANDED (last 3 ships) ·
+ *                           HEARTBEAT (today/week/total counts).
+ *   3. TODAY / THIS WEEK — proper editorial cards, not pulse strips.
+ *                           Three columns max. Recent first.
+ *   4. ARCHIVE TEASER    — link into the giant chronological scroll
+ *                           (Wave 2 — mile markers, sticky date anchor,
+ *                           lazy chunks).
+ *
+ * The persistent live element (presence, ROOM/ASK/CAST, ON AIR) stays in
+ * the existing FooterBar in BlockLayout — no changes there.
+ *
+ * Pulse modules removed from this page (TideSurf, SportsTicker,
+ * AltarsPulse, QuintetPulseModule, ProcessionPulseModule,
+ * OfferingsPulseModule, ChamberMega, WingPulseModule, NetworkStrip,
+ * NatureFieldDeskStrip, etc.) still live at their own routes. They aren't
+ * deleted; they just stop competing for the homepage.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import BlockCard from '../components/BlockCard.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import opmodeData from '../data/operating-mode.json';
+import shipsData from '../data/recent-ships.json';
+import asksData from '../data/asks.json';
+import learningsData from '../data/learning-notes.json';
+import HomeCheckinHint from '../components/HomeCheckinHint.astro';
+import HomePlacesDirectory from '../components/HomePlacesDirectory.astro';
+
+// ---------- Data: blocks ----------
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+
+const now = new Date();
+const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const sevenDaysAgo = new Date(startOfToday);
+sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+const todayBlocks = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfToday);
+const weekBlocks  = allBlocks.filter(b => new Date(b.data.timestamp) >= sevenDaysAgo);
+
+const justLanded = allBlocks.slice(0, 3);
+const blockCount = allBlocks.length;
+
+// First block ever (for the archive teaser "since" date).
+const firstBlock = allBlocks[allBlocks.length - 1];
+const sinceDate = firstBlock
+  ? new Date(firstBlock.data.timestamp).toISOString().slice(0, 10)
+  : '2025-01-14';
+
+// ---------- Data: lead ----------
+// The lead is whatever the LATEST thing we shipped is — block OR feature
+// PR, whichever is newer. Mike 2026-05-08: "kinda not fresh" — the
+// homepage looked stale because the lead was a 1-day-old block while
+// 12 feature PRs had landed since. Ship-as-lead fixes that — every PR
+// I merge auto-becomes the lead until the next thing lands.
+const latestBlock = allBlocks[0];
+// `ships` is parsed below — we forward-declare the picked lead
+// variables and resolve them after ships exists. Done as a thunk to
+// keep the data section logically grouped.
+
+function timeOfDayKicker(d: Date): string {
+  const h = d.getHours();
+  if (h >= 5 && h < 11)  return 'MORNING DESK';
+  if (h >= 11 && h < 17) return 'MIDDAY · SHIP ROOM';
+  if (h >= 17 && h < 22) return 'EVENING DISPATCH';
+  return 'OVERNIGHT BUILD';
+}
+
+const todayStr = now.toISOString().slice(0, 10);
+const todayKicker = timeOfDayKicker(now);
+
+// ---------- Data: opmode ----------
+interface InFlightItem {
+  id: string;
+  title: string;
+  kind: string;
+  ref: string;
+  url: string | null;
+  owner: string;
+  stage: string;
+}
+const opmode = opmodeData as {
+  updatedAt: string;
+  updatedBy: string;
+  inFlight: InFlightItem[];
+};
+
+interface ShipItem {
+  ref: string;
+  title: string;
+  href: string;
+  tag: string;
+  at: string;
+}
+const ships = (shipsData as { updatedAt: string; updatedBy: string; ships: ShipItem[] }).ships
+  .slice()
+  .sort((a, b) => +new Date(b.at) - +new Date(a.at));
+// Group shipped-today vs shipped-earlier-this-week for visual emphasis.
+const shipsToday = ships.filter(s => new Date(s.at) >= startOfToday);
+const shipsEarlier = ships.filter(s => new Date(s.at) < startOfToday).slice(0, 4);
+
+// ---------- LEAD: pick block vs ship by recency ----------
+const latestShip = ships[0] || null;
+const latestBlockAt = latestBlock ? +new Date(latestBlock.data.timestamp) : 0;
+const latestShipAt  = latestShip ? +new Date(latestShip.at) : 0;
+// Use ship-as-lead when the most recent ship is newer than the most
+// recent block. Any ship — even older ones — beats an even-older block.
+const useShipAsLead = !!latestShip && latestShipAt > latestBlockAt;
+
+// Block-lead variables (used when useShipAsLead is false).
+const lead = latestBlock;
+const leadKicker = `${todayKicker} · ${todayStr}`;
+const leadChannel = lead ? CHANNELS[lead.data.channel] : null;
+const leadHref = lead?.data.external?.url
+  || (lead ? `/b/${lead.data.id}` : '#');
+const leadCta = (lead?.data.external?.label
+  || (lead?.data.type === 'READ' ? 'read the brief' : 'open block')) + ' →';
+
+// Ship-lead variables (used when useShipAsLead is true).
+const shipLead = latestShip;
+const shipLeadKicker = shipLead
+  ? `${todayKicker} · ${todayStr} · FRESH SHIP ${shipLead.ref} · ${shipLead.tag}`
+  : '';
+
+// ---------- Data: asks (daily rotation) ----------
+// All asks render in the page; client-side JS picks today's by
+// day-of-year. Keeps the homepage feeling alive between deploys —
+// even if we don't ship for a few days, the visible ask still rotates.
+interface Ask {
+  id: string;
+  title: string;
+  body: string;
+  cta: string;
+  ctaLabel: string;
+  tag: string;
+}
+const asks = (asksData as { asks: Ask[] }).asks;
+
+// ---------- Data: learning notes ----------
+interface Note { id: string; at: string; title: string; body: string; }
+const learnings = (learningsData as { updatedAt: string; updatedBy: string; notes: Note[] }).notes;
+const recentLearnings = learnings.slice(0, 5);
+
+// ---------- Momentum stats ----------
+// Compute "ship days in last 14" from blocks + recent-ships (so feature
+// PRs that aren't blocks still count). This is the editorial momentum
+// stat surfaced on the homepage HEARTBEAT — meaningful even at zero
+// traffic because it's about WHAT WE SHIPPED, not who saw it.
+const fourteenDaysAgo = new Date(startOfToday);
+fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+
+const dayKeysShipped = new Set<string>();
+for (const b of allBlocks) {
+  const d = new Date(b.data.timestamp);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+for (const s of ships) {
+  const d = new Date(s.at);
+  if (d >= fourteenDaysAgo) dayKeysShipped.add(d.toISOString().slice(0, 10));
+}
+const shipDays14 = dayKeysShipped.size;
+
+// Consecutive ship streak: walk back from today, stop at the first
+// gap-day. Counts both blocks and ships so a feature-only day still
+// keeps the streak alive.
+let shipStreak = 0;
+{
+  const cursor = new Date(startOfToday);
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (!dayKeysShipped.has(key)) break;
+    shipStreak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+}
+
+// PRs in recent-ships.json shipped in the last 7 days.
+const sevenDaysAgoTs = +sevenDaysAgo;
+const shipsLast7 = ships.filter(s => +new Date(s.at) >= sevenDaysAgoTs).length;
+
+function fmtRelative(iso: string): string {
+  const t = new Date(iso);
+  const diffMs = +now - +t;
+  if (diffMs < 0) return 'just now';
+  const m = Math.round(diffMs / 60000);
+  if (m < 60)   return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24)   return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 30)   return `${d}d ago`;
+  return t.toISOString().slice(0, 10);
+}
+
+// ---------- SEO / layout props ----------
+const title = 'The desk · PointCast';
+const description = lead?.data.dek
+  ? `What we're shipping at PointCast. Latest: ${lead.data.dek} · ${blockCount} blocks since ${sinceDate}.`
+  : `What we're shipping at PointCast. ${blockCount} blocks and counting since ${sinceDate}.`;
+
+// Schema.org graph: Organization (the project) + WebSite (the surface) +
+// CollectionPage (this homepage). Multi-node graph so /agents and search
+// crawlers see the full publishing entity, not just a page.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': 'https://pointcast.xyz/#org',
+      name: 'PointCast',
+      alternateName: 'University of El Segundo',
+      url: 'https://pointcast.xyz',
+      description: 'Agent-native broadcast from El Segundo. Parallel civic infrastructure built block by block.',
+      foundingDate: sinceDate,
+      areaServed: { '@type': 'Place', name: 'El Segundo, California (25-mile radius)' },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://pointcast.xyz/#site',
+      url: 'https://pointcast.xyz',
+      name: 'PointCast',
+      publisher: { '@id': 'https://pointcast.xyz/#org' },
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://pointcast.xyz/archive?q={search_term_string}',
+        'query-input': 'required name=search_term_string',
+      },
+    },
+    {
+      '@type': 'CollectionPage',
+      '@id': 'https://pointcast.xyz/desk#page',
+      url: 'https://pointcast.xyz/desk',
+      name: title,
+      description,
+      isPartOf: { '@id': 'https://pointcast.xyz/#site' },
+      publisher: { '@id': 'https://pointcast.xyz/#org' },
+      mainEntity: {
+        '@type': 'ItemList',
+        numberOfItems: blockCount,
+        itemListOrder: 'https://schema.org/ItemListOrderDescending',
+        name: `${blockCount} blocks since ${sinceDate}`,
+      },
+    },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="home2027">
+
+    {/* ============== 1. THE LEAD ==============
+       Mike 2026-05-08: "kinda not fresh" — the lead is now whatever we
+       SHIPPED most recently, block OR feature PR. Whichever happened
+       latest wins the hero slot. Each merge auto-becomes the lead. */}
+    {useShipAsLead && shipLead ? (
+      <section class="lead lead--ship" style="--ch-600: #c4952e; --ch-50: #fffaf0;">
+        <p class="lead__kicker">{shipLeadKicker}</p>
+        <h1 class="lead__title">{shipLead.title}</h1>
+        <div class="lead__row">
+          <a class="lead__cta" href={shipLead.href}>open it →</a>
+          <a class="lead__alt" href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged">all PRs →</a>
+          <span class="lead__by">
+            by <strong>cc</strong>
+            <span class="lead__dot">·</span>
+            <time datetime={shipLead.at}>{fmtRelative(shipLead.at)}</time>
+          </span>
+        </div>
+        {latestBlock && (
+          <p class="lead__alt-block">
+            ↓ latest content block: <a href={`/b/${latestBlock.data.id}`}>/{latestBlock.data.id} — {latestBlock.data.title}</a>
+            <span class="lead__dot">·</span>
+            <time datetime={latestBlock.data.timestamp}>{fmtRelative(latestBlock.data.timestamp)}</time>
+          </p>
+        )}
+      </section>
+    ) : lead && (
+      <section
+        class="lead"
+        style={`--ch-600: ${leadChannel?.color600 || '#1f1b15'}; --ch-50: ${leadChannel?.color50 || '#f5efe4'};`}
+      >
+        <p class="lead__kicker">{leadKicker} · CH.{lead.data.channel} · /{lead.data.id}</p>
+        <h1 class="lead__title">{lead.data.title}</h1>
+        {lead.data.dek && <p class="lead__dek">{lead.data.dek}</p>}
+        <div class="lead__row">
+          <a class="lead__cta" href={leadHref}>{leadCta}</a>
+          {lead.data.external?.url && <a class="lead__alt" href={`/b/${lead.data.id}`}>open block →</a>}
+          <span class="lead__by">
+            by <strong>{lead.data.author || 'mh'}</strong>
+            <span class="lead__dot">·</span>
+            <time datetime={lead.data.timestamp}>{fmtRelative(lead.data.timestamp)}</time>
+          </span>
+        </div>
+      </section>
+    )}
+
+    {/* ============== 1b. CHECK-IN HINT (returning visitors only) ==========
+       Renders nothing for first-timers (no localStorage state). Clients
+       with a /me state see a one-line "you're checked in / you haven't
+       checked in" affordance with a link into /me. The component swaps
+       in client-side from localStorage so the static HTML stays
+       cacheable and the build doesn't differ per-visitor. */}
+    <HomeCheckinHint />
+
+    {/* ============== 1c. TODAY'S ASK (daily rotation) ==============
+       Mike 2026-05-08: "create a system to keep the homepage fresh and
+       active, like requesting people build inventory". All asks bake
+       into the HTML; client-side JS picks today's by day-of-year so
+       the visible ask rotates even between deploys. JS-off visitors
+       see the first ask. Single CTA per ask — primary action, not
+       a list. */}
+    {asks.length > 0 && (
+      <section class="ask" aria-label="Today's ask">
+        <div class="ask__head">
+          <p class="kicker">TODAY · ONE THING TO DO</p>
+          <span class="ask__rotates mono">rotates daily · {asks.length} on tap</span>
+        </div>
+        <div class="ask__cards" id="ask-cards">
+          {asks.map((a, i) => (
+            <article class={`ask__card${i === 0 ? '' : ' ask__card--hidden'}`} data-ask-idx={i}>
+              <div class="ask__card-row">
+                <span class="ask__tag" data-tag={a.tag}>{a.tag}</span>
+                <h3 class="ask__title">{a.title}</h3>
+              </div>
+              <p class="ask__body">{a.body}</p>
+              <a class="ask__cta" href={a.cta}>{a.ctaLabel} →</a>
+            </article>
+          ))}
+        </div>
+        <script is:inline>
+          (() => {
+            // Day-of-year → consistent for all visitors today, rotates
+            // overnight. UTC so timezone doesn't fragment the rotation.
+            const cards = document.querySelectorAll('[data-ask-idx]');
+            if (!cards.length) return;
+            const day = Math.floor(Date.now() / 86400000);
+            const pick = day % cards.length;
+            cards.forEach((c, i) => {
+              if (i === pick) c.classList.remove('ask__card--hidden');
+              else c.classList.add('ask__card--hidden');
+            });
+          })();
+        </script>
+      </section>
+    )}
+
+    {/* ============== 2. OPERATING MODE ============== */}
+    <section class="opmode" aria-label="Operating mode">
+      <header class="opmode__head">
+        <p class="kicker">OPERATING MODE</p>
+        <span class="opmode__updated">updated {fmtRelative(opmode.updatedAt)} by {opmode.updatedBy}</span>
+      </header>
+      <div class="opmode__grid">
+
+        <div class="opmode__col opmode__col--flight">
+          <h3 class="opmode__h">IN FLIGHT</h3>
+          <ul class="flight">
+            {opmode.inFlight.length === 0 && (
+              <li class="flight__empty">no work currently in flight.</li>
+            )}
+            {opmode.inFlight.map(f => (
+              <li class="flight__row">
+                <a href={f.url || '#'} class="flight__link">
+                  <span class={`flight__kind flight__kind--${f.kind.toLowerCase()}`}>
+                    {f.kind}{f.ref !== 'tbd' ? ` ${f.ref}` : ''}
+                  </span>
+                  <span class="flight__title">{f.title}</span>
+                </a>
+                <span class="flight__meta">{f.owner} · {f.stage}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="opmode__col opmode__col--landed">
+          <h3 class="opmode__h">JUST LANDED</h3>
+          <ul class="landed">
+            {justLanded.map(b => (
+              <li class="landed__row">
+                <a href={`/b/${b.data.id}`} class="landed__link">
+                  <span class="landed__id">/{b.data.id}</span>
+                  <span class="landed__title">{b.data.title}</span>
+                </a>
+                <span class="landed__meta">CH.{b.data.channel} · {fmtRelative(b.data.timestamp)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div class="opmode__col opmode__col--heartbeat">
+          <h3 class="opmode__h">HEARTBEAT</h3>
+          <dl class="heartbeat">
+            <div class="heartbeat__stat">
+              <dt>{shipStreak}</dt>
+              <dd>day ship streak</dd>
+            </div>
+            <div class="heartbeat__stat">
+              <dt>{shipDays14}<span class="heartbeat__denom">/14</span></dt>
+              <dd>ship days · last 14</dd>
+            </div>
+            <div class="heartbeat__stat">
+              <dt>{shipsLast7}</dt>
+              <dd>feature PRs · last 7d</dd>
+            </div>
+            <div class="heartbeat__stat">
+              <dt>{blockCount}</dt>
+              <dd>blocks total</dd>
+            </div>
+          </dl>
+          <p class="heartbeat__since">
+            since <time datetime={sinceDate}>{sinceDate}</time> ·
+            <span class="heartbeat__editorial">no traffic yet, still getting better every day</span>
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    {/* ============== 2b. RECENT SHIPS ==============
+       Hand-curated feature ships that aren't content blocks (so they
+       wouldn't appear in JUST LANDED above). Walking bar updates,
+       /me changes, homepage refactors, etc. Sourced from
+       src/data/recent-ships.json. Ship a feature → add it here so the
+       homepage reflects momentum the block-collection alone can't. */}
+    {ships.length > 0 && (
+      <section class="ships" aria-label="Recent feature ships">
+        <header class="ships__head">
+          <p class="kicker">RECENT SHIPS · feature PRs (not content blocks)</p>
+          <a href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged" class="ships__cta">all PRs →</a>
+        </header>
+
+        {shipsToday.length > 0 && (
+          <div class="ships__group">
+            <p class="ships__group-h">SHIPPED TODAY · {shipsToday.length}</p>
+            <ul class="ships__list">
+              {shipsToday.map(s => (
+                <li class="ship">
+                  <a class="ship__link" href={s.href}>
+                    <span class="ship__ref">{s.ref}</span>
+                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
+                    <span class="ship__title">{s.title}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {shipsEarlier.length > 0 && (
+          <div class="ships__group ships__group--earlier">
+            <p class="ships__group-h">EARLIER · last 7 days</p>
+            <ul class="ships__list">
+              {shipsEarlier.map(s => (
+                <li class="ship">
+                  <a class="ship__link" href={s.href}>
+                    <span class="ship__ref">{s.ref}</span>
+                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
+                    <span class="ship__title">{s.title}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+    )}
+
+    {/* ============== 2c. LEARNING NOTES ==============
+       Hand-curated "what we figured out lately" — editorial signal that
+       even at zero traffic, the project is improving. From
+       src/data/learning-notes.json. Cap at 5 visible. New notes go on
+       top in the file; older ones stay in the file but drop off the
+       homepage. */}
+    {recentLearnings.length > 0 && (
+      <section class="learnings" aria-label="Recent learnings">
+        <header class="learnings__head">
+          <p class="kicker">RECENT LEARNINGS · what we figured out</p>
+          <span class="learnings__cta mono">we are getting better and better</span>
+        </header>
+        <ul class="learnings__list">
+          {recentLearnings.map(n => (
+            <li class="learning">
+              <p class="learning__title">{n.title}</p>
+              <p class="learning__body">{n.body}</p>
+              <p class="learning__at mono">{n.at}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {/* ============== 3. TODAY ============== */}
+    {todayBlocks.length > 0 && (
+      <section class="band" id="today" aria-label="Today">
+        <header class="band__head">
+          <p class="kicker">TODAY · {todayStr}</p>
+          <span class="band__count">{todayBlocks.length} block{todayBlocks.length === 1 ? '' : 's'}</span>
+        </header>
+        <div class="band__grid">
+          {todayBlocks.slice(0, 6).map(block => <BlockCard block={block} />)}
+        </div>
+      </section>
+    )}
+
+    {/* ============== 3b. THIS WEEK ============== */}
+    {weekBlocks.length > todayBlocks.length && (
+      <section class="band" id="week" aria-label="This week">
+        <header class="band__head">
+          <p class="kicker">THIS WEEK</p>
+          <span class="band__count">{weekBlocks.length - todayBlocks.length} more in last 7 days</span>
+        </header>
+        <div class="band__grid">
+          {weekBlocks.slice(todayBlocks.length, todayBlocks.length + 9).map(block => (
+            <BlockCard block={block} />
+          ))}
+        </div>
+      </section>
+    )}
+
+    {/* ============== 3c. PLACES DIRECTORY ==============
+       Yahoo / Craigslist-style link tree. Hand-curated index of every
+       public surface, organized by purpose. Adds discovery the
+       editorial lead/operating-mode/today flow doesn't provide. */}
+    <HomePlacesDirectory />
+
+    {/* ============== 4. ARCHIVE TEASER ============== */}
+    <section class="archive-teaser" aria-label="Archive">
+      <p class="kicker">ARCHIVE</p>
+      <h2 class="archive-teaser__h">
+        {blockCount} blocks since <time datetime={sinceDate}>{sinceDate}</time>.
+      </h2>
+      <p class="archive-teaser__dek">
+        Every block ever published, in order. The full chronological scroll —
+        with mile markers, sticky date anchor, and decreasing density as you
+        go deeper — lands in <strong>v2027 wave 2</strong>. For now, jump in:
+      </p>
+      <div class="archive-teaser__row">
+        <a class="archive-teaser__cta" href="/archive">browse the archive →</a>
+        <a class="archive-teaser__alt" href="/blocks.json">/blocks.json (agents)</a>
+        <a class="archive-teaser__alt" href="/feed.xml">RSS feed</a>
+        <a class="archive-teaser__alt" href="/for-agents">/for-agents</a>
+      </div>
+    </section>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .home2027 {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    font-family: var(--font-body);
+  }
+
+  .home2027 .kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--color-warm);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+
+  /* ============== LEAD ============== */
+  .lead {
+    padding: 60px 0 56px;
+    border-bottom: 1.5px solid var(--color-rule);
+    margin-bottom: 36px;
+  }
+  .lead__kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ch-600, var(--color-warm));
+    text-transform: uppercase;
+    margin: 0 0 16px;
+  }
+  .lead__title {
+    font-family: var(--font-heading);
+    font-size: clamp(40px, 6.5vw, 84px);
+    line-height: 1.02;
+    font-weight: 600;
+    margin: 0 0 18px;
+    color: var(--color-ink);
+    letter-spacing: -0.02em;
+  }
+  .lead__dek {
+    font-family: var(--font-serif);
+    font-size: clamp(18px, 1.7vw, 22px);
+    line-height: 1.45;
+    color: var(--color-ink-soft);
+    max-width: 780px;
+    margin: 0 0 28px;
+  }
+  .lead__row {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 18px;
+  }
+  .lead__cta {
+    display: inline-block;
+    padding: 12px 22px;
+    background: var(--color-ink);
+    color: #fff !important;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 2px;
+    transition: background 0.12s;
+  }
+  .lead__cta:hover { background: var(--color-warm); text-decoration: none; }
+  .lead__alt {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .lead__alt:hover { color: var(--color-ink); }
+  .lead__by {
+    font-size: 13px;
+    color: var(--color-ink-soft);
+    font-family: var(--font-mono);
+  }
+  .lead__by strong { color: var(--color-ink); font-weight: 500; }
+  .lead__dot { margin: 0 6px; }
+
+  /* Ship-as-lead variant: warm-gold accent + "next thing under" line. */
+  .lead--ship .lead__kicker { color: #c4952e; }
+  .lead__alt-block {
+    margin: 18px 0 0;
+    padding-top: 12px;
+    border-top: 1px dashed var(--color-rule);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .lead__alt-block a {
+    color: var(--color-ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .lead__alt-block a:hover {
+    color: #c4952e;
+    border-bottom-color: currentColor;
+  }
+
+  /* ============== OPERATING MODE ============== */
+  .opmode {
+    margin: 0 0 48px;
+    padding: 22px;
+    background: var(--color-card);
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+  }
+  .opmode__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 16px;
+  }
+  .opmode__updated {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-ink-soft);
+  }
+  .opmode__grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 880px) {
+    .opmode__grid { grid-template-columns: 1fr; gap: 24px; }
+  }
+  .opmode__col { min-width: 0; }
+  .opmode__h {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--color-ink);
+    text-transform: uppercase;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-rule);
+  }
+
+  /* IN FLIGHT */
+  .flight { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .flight__empty { font-size: 13px; color: var(--color-ink-soft); }
+  .flight__row { display: flex; flex-direction: column; gap: 2px; }
+  .flight__link {
+    display: flex; align-items: baseline; gap: 8px;
+    text-decoration: none; color: var(--color-ink);
+    line-height: 1.3;
+  }
+  .flight__link:hover .flight__title { color: var(--color-warm); }
+  .flight__kind {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    padding: 1px 6px;
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+    color: var(--color-ink-soft);
+    flex: 0 0 auto;
+    text-transform: uppercase;
+  }
+  .flight__kind--pr { color: var(--color-accent); border-color: var(--color-accent); }
+  .flight__title {
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.12s;
+  }
+  .flight__meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink-soft);
+    padding-left: 50px;
+  }
+
+  /* JUST LANDED */
+  .landed { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .landed__row { display: flex; flex-direction: column; gap: 2px; }
+  .landed__link {
+    display: flex; align-items: baseline; gap: 8px;
+    text-decoration: none; color: var(--color-ink);
+    line-height: 1.3;
+  }
+  .landed__link:hover .landed__title { color: var(--color-warm); }
+  .landed__id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink-soft);
+    flex: 0 0 auto;
+  }
+  .landed__title { font-size: 14px; font-weight: 500; transition: color 0.12s; }
+  .landed__meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink-soft);
+    padding-left: 46px;
+  }
+
+  /* HEARTBEAT */
+  .heartbeat {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 18px;
+    margin: 0;
+  }
+  .heartbeat__stat dt {
+    font-family: var(--font-heading);
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--color-ink);
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .heartbeat__stat dd {
+    margin: 4px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .heartbeat__stat--small {
+    grid-column: span 2;
+    border-top: 1px dashed var(--color-rule);
+    padding-top: 10px;
+    margin-top: 4px;
+  }
+  .heartbeat__stat--small dt {
+    font-size: 22px;
+    color: var(--color-ink-soft);
+  }
+  .heartbeat__denom {
+    font-size: 18px;
+    color: var(--color-ink-soft);
+    font-weight: 400;
+    letter-spacing: 0;
+    margin-left: 1px;
+  }
+  .heartbeat__since {
+    margin: 12px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink-soft);
+    line-height: 1.5;
+  }
+  .heartbeat__editorial {
+    color: #c4952e;
+    font-style: italic;
+  }
+
+  /* ============== TODAY'S ASK ============== */
+  .ask {
+    margin: 0 0 36px;
+    padding: 22px 24px;
+    background: #fff;
+    border: 1.5px solid #1f1b15;
+    border-left: 5px solid #c4952e;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(31, 27, 21, 0.15);
+  }
+  .ask__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 14px;
+  }
+  .ask .kicker { color: #1f1b15; }
+  .ask__rotates {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .ask__cards { position: relative; }
+  .ask__card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ask__card--hidden { display: none; }
+  .ask__card-row {
+    display: flex; align-items: baseline; gap: 10px;
+    flex-wrap: wrap;
+  }
+  .ask__tag {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--color-ink);
+  }
+  .ask__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .ask__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .ask__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .ask__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .ask__tag[data-tag='MAKE']   { background: #e6e0e8; color: #4a3a5b; }
+  .ask__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .ask__tag[data-tag='DEEP']   { background: #d6dde6; color: #2a3a5b; }
+  .ask__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .ask__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .ask__tag[data-tag='AGENTS'] { background: #e0e0e0; color: #1f1b15; }
+  .ask__title {
+    font-family: var(--font-heading);
+    font-size: clamp(20px, 2.4vw, 28px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1f1b15;
+    margin: 0;
+    line-height: 1.15;
+  }
+  .ask__body {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-ink-soft);
+    max-width: 680px;
+  }
+  .ask__cta {
+    align-self: flex-start;
+    padding: 9px 16px;
+    background: #1f1b15;
+    color: #fdf2d6;
+    text-decoration: none;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px; letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: background 0.12s;
+  }
+  .ask__cta:hover {
+    background: #c4952e;
+    color: #1f1b15;
+  }
+
+  /* ============== RECENT LEARNINGS ============== */
+  .learnings {
+    margin: 0 0 48px;
+    padding: 22px 24px;
+    background: #fbf7ee;
+    border: 1.5px dashed #d8cdb8;
+    border-radius: 3px;
+  }
+  .learnings__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #d8cdb8;
+  }
+  .learnings__cta {
+    font-size: 11px; letter-spacing: 0.14em;
+    color: #c4952e;
+    text-transform: uppercase;
+    font-style: italic;
+  }
+  .learnings__list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px 22px;
+  }
+  .learning {
+    padding: 12px 14px;
+    background: #fff;
+    border-left: 3px solid #c4952e;
+    border-radius: 2px;
+  }
+  .learning__title {
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f1b15;
+    margin: 0 0 6px;
+    line-height: 1.3;
+  }
+  .learning__body {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 0 6px;
+  }
+  .learning__at {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--color-ink-soft);
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  /* ============== RECENT SHIPS ============== */
+  .ships {
+    margin: 0 0 48px;
+    padding: 22px 24px;
+    background: linear-gradient(180deg, #fffaf0 0%, #fbf3df 100%);
+    border: 1.5px solid #c4952e;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(196, 149, 46, 0.2);
+  }
+  .ships__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid #c4952e;
+  }
+  .ships .kicker { color: #c4952e; }
+  .ships__cta {
+    font-family: var(--font-mono);
+    font-size: 11px; letter-spacing: 0.12em;
+    color: #c4952e; text-decoration: none;
+    text-transform: uppercase;
+  }
+  .ships__cta:hover { color: #1f1b15; }
+  .ships__group { margin: 0 0 14px; }
+  .ships__group:last-child { margin-bottom: 0; }
+  .ships__group--earlier { padding-top: 10px; border-top: 1px dashed rgba(196, 149, 46, 0.4); }
+  .ships__group-h {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em;
+    color: #1f1b15; text-transform: uppercase;
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+  .ships__group--earlier .ships__group-h {
+    color: var(--color-ink-soft);
+    font-weight: 400;
+  }
+  .ships__list {
+    list-style: none; padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .ship { margin: 0; }
+  .ship__link {
+    display: grid;
+    grid-template-columns: 44px 60px 1fr;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 8px;
+    text-decoration: none;
+    color: var(--color-ink);
+    border-radius: 2px;
+    transition: background 0.12s;
+  }
+  .ship__link:hover {
+    background: rgba(196, 149, 46, 0.08);
+  }
+  .ship__ref {
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 700;
+    color: #c4952e;
+    letter-spacing: 0.04em;
+  }
+  .ship__tag {
+    font-family: var(--font-mono);
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 2px 4px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--color-ink);
+    line-height: 1.1;
+    min-width: 0;
+  }
+  .ship__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .ship__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .ship__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .ship__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .ship__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .ship__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .ship__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .ship__title {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-ink);
+  }
+  .ship__link:hover .ship__title { color: #1f1b15; }
+
+  @media (max-width: 700px) {
+    .ships { padding: 16px 18px; }
+    .ship__link {
+      grid-template-columns: 40px 56px 1fr;
+      gap: 8px;
+      padding: 6px 4px;
+    }
+    .ship__title { font-size: 12px; }
+  }
+
+  /* ============== BANDS (TODAY / WEEK) ============== */
+  .band { margin: 0 0 48px; }
+  .band__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .band__count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-ink-soft);
+  }
+  .band__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  /* ============== ARCHIVE TEASER ============== */
+  .archive-teaser {
+    margin: 64px 0 0;
+    padding: 40px 28px;
+    border: 1.5px dashed var(--color-rule);
+    border-radius: 3px;
+    background: var(--color-card);
+    text-align: center;
+  }
+  .archive-teaser__h {
+    font-family: var(--font-heading);
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 500;
+    margin: 0 0 14px;
+    color: var(--color-ink);
+  }
+  .archive-teaser__h time {
+    font-family: var(--font-mono);
+    font-size: 0.7em;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .archive-teaser__dek {
+    max-width: 580px; margin: 0 auto 22px;
+    color: var(--color-ink-soft);
+    line-height: 1.55;
+  }
+  .archive-teaser__dek strong { color: var(--color-ink); font-weight: 500; }
+  .archive-teaser__row {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    justify-content: center; align-items: center;
+  }
+  .archive-teaser__cta {
+    display: inline-block;
+    padding: 10px 18px;
+    background: var(--color-ink);
+    color: #fff !important;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 2px;
+  }
+  .archive-teaser__cta:hover { background: var(--color-warm); }
+  .archive-teaser__alt {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .archive-teaser__alt:hover { color: var(--color-ink); }
+
+  @media (max-width: 600px) {
+    .home2027 { padding: 16px 16px 60px; }
+    .lead { padding: 36px 0; }
+    .opmode { padding: 16px; }
+    .archive-teaser { padding: 28px 18px; }
+  }
+</style>
