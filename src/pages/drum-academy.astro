@@ -585,6 +585,15 @@ const built = new Date().toISOString();
   function ac(): AudioContext {
     if (ctx) return ctx;
     ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Audit fix #2: iOS Safari auto-suspends AudioContext on tab-switch.
+    // Drum-academy doesn't use the shared scheduler — each lesson manages its
+    // own oscillators. Just resume the context on visibility-return; oscillators
+    // already running will pick back up. Harmless when no lesson is active.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running') {
+        ctx.resume().catch(() => {});
+      }
+    });
     return ctx;
   }
 
@@ -599,6 +608,8 @@ const built = new Date().toISOString();
     let masterGain: GainNode | null = null;
     let analyserL: AnalyserNode | null = null; let analyserR: AnalyserNode | null = null;
     let splitter: ChannelSplitterNode | null = null;
+    // Audit fix #6: track RAF so we can cancel on stop.
+    let rafId = 0;
 
     function setup() {
       const c = ac();
@@ -641,6 +652,9 @@ const built = new Date().toISOString();
       const fillL = $('da-stereo-l') as HTMLDivElement;
       const fillR = $('da-stereo-r') as HTMLDivElement;
       const tick = () => {
+        // Audit fix #6: stop animating after the user clicks stop. Previously
+        // ran at 60fps until navigation, re-reading from the analyser.
+        if (!playing) return;
         if (!analyserL || !fillL) return;
         analyserL.getByteTimeDomainData(dataL);
         analyserR.getByteTimeDomainData(dataR);
@@ -649,7 +663,7 @@ const built = new Date().toISOString();
         for (let i = 0; i < dataR.length; i++) { const a = Math.abs(dataR[i] - 128); if (a > pkR) pkR = a; }
         fillL.style.width = Math.min(100, (pkL / 60) * 100) + '%';
         fillR.style.width = Math.min(100, (pkR / 60) * 100) + '%';
-        requestAnimationFrame(tick);
+        rafId = requestAnimationFrame(tick);
       };
       tick();
     }
@@ -664,17 +678,20 @@ const built = new Date().toISOString();
     document.addEventListener('DOMContentLoaded', () => {
       const btn = $('da-stereo-play') as HTMLButtonElement;
       btn?.addEventListener('click', () => {
-        if (!ctx) { setup(); startMeters(); }
+        if (!ctx) { setup(); }
         const c = ac(); if (c.state === 'suspended') c.resume();
         if (playing) {
           playing = false; if (interval) { clearInterval(interval); interval = null; }
+          // Audit fix #6: kill the meters RAF on stop.
+          cancelAnimationFrame(rafId);
           btn.textContent = '▶ play'; btn.classList.remove('da__btn--playing');
         } else {
-          if (!panNode) { setup(); startMeters(); }
+          if (!panNode) { setup(); }
           playing = true;
           btn.textContent = '◼ stop'; btn.classList.add('da__btn--playing');
           loop();
           interval = window.setInterval(loop, 60000 / bpm);
+          startMeters();
         }
       });
       $('da-stereo-pan')?.addEventListener('input', (e) => { pan = Number((e.target as HTMLInputElement).value) / 100; updatePanLabel(); });
@@ -692,6 +709,8 @@ const built = new Date().toISOString();
     let merger: ChannelMergerNode | null = null;
     let analyser: AnalyserNode | null = null;
     let carrier = 200; let beat = 4;
+    // Audit fix #6: track RAF so we can cancel on stop.
+    let rafId = 0;
 
     function start() {
       const c = ac();
@@ -710,7 +729,12 @@ const built = new Date().toISOString();
     }
     function stop() {
       try { oscL?.stop(); oscR?.stop(); } catch {}
-      oscL = oscR = null; gainL = gainR = null;
+      // Audit fix #6: previously left gain/merger/analyser connected to
+      // c.destination after stop. After N play/stop cycles the graph held
+      // N stale chains.
+      try { gainL?.disconnect(); gainR?.disconnect(); merger?.disconnect(); analyser?.disconnect(); } catch {}
+      oscL = oscR = null; gainL = gainR = null; merger = null; analyser = null;
+      cancelAnimationFrame(rafId);
     }
 
     function updateFreqs() {
@@ -758,7 +782,7 @@ const built = new Date().toISOString();
         x.stroke();
         // Center divider
         x.strokeStyle = 'rgba(244,231,200,0.10)'; x.lineWidth = 1; x.beginPath(); x.moveTo(0, h/2); x.lineTo(w, h/2); x.stroke();
-        if (playing) requestAnimationFrame(tick);
+        if (playing) rafId = requestAnimationFrame(tick);
       };
       tick();
     }
@@ -784,6 +808,8 @@ const built = new Date().toISOString();
     let analyserF: AnalyserNode | null = null;
     let type: OscillatorType = 'sawtooth';
     let freq = 220;
+    // Audit fix #6: track RAF so we can cancel on stop.
+    let rafId = 0;
 
     function start() {
       const c = ac();
@@ -795,7 +821,13 @@ const built = new Date().toISOString();
       osc.start();
       drawScope();
     }
-    function stop() { try { osc?.stop(); } catch {}; osc = null; }
+    function stop() {
+      try { osc?.stop(); } catch {}
+      // Audit fix #6: disconnect gain/analysers so the graph doesn't accumulate.
+      try { gain?.disconnect(); analyserT?.disconnect(); analyserF?.disconnect(); } catch {}
+      osc = null; gain = null; analyserT = null; analyserF = null;
+      cancelAnimationFrame(rafId);
+    }
 
     function drawScope() {
       const ct = $('da-wave-time') as HTMLCanvasElement;
@@ -832,7 +864,7 @@ const built = new Date().toISOString();
           xf.fillStyle = grad;
           xf.fillRect(i * barW, hf - h, Math.max(1, barW - 1), h);
         }
-        if (playing) requestAnimationFrame(tick);
+        if (playing) rafId = requestAnimationFrame(tick);
       };
       tick();
     }
@@ -867,6 +899,8 @@ const built = new Date().toISOString();
     let outGain: GainNode | null = null;
     let analyser: AnalyserNode | null = null;
     let cFreq = 800; let mFreq = 4; let depth = 0.8;
+    // Audit fix #6: track RAF so we can cancel on stop.
+    let rafId = 0;
 
     function start() {
       const c = ac();
@@ -885,7 +919,12 @@ const built = new Date().toISOString();
     }
     function stop() {
       try { carrier?.stop(); modulator?.stop(); constSrc?.stop(); } catch {}
+      // Audit fix #6: disconnect gain/analyser nodes so the graph doesn't grow
+      // each play/stop cycle.
+      try { modGain?.disconnect(); outGain?.disconnect(); analyser?.disconnect(); } catch {}
       carrier = modulator = constSrc = null;
+      modGain = null; outGain = null; analyser = null;
+      cancelAnimationFrame(rafId);
     }
     function drawScope() {
       const cv = $('da-am-scope') as HTMLCanvasElement; if (!cv || !analyser) return;
@@ -904,7 +943,7 @@ const built = new Date().toISOString();
           if (i === 0) x.moveTo(i, y); else x.lineTo(i, y);
         }
         x.stroke();
-        if (playing) requestAnimationFrame(tick);
+        if (playing) rafId = requestAnimationFrame(tick);
       };
       tick();
     }
@@ -937,6 +976,8 @@ const built = new Date().toISOString();
     let outGain: GainNode | null = null;
     let analyser: AnalyserNode | null = null;
     let cFreq = 220; let ratio = 3.0; let index = 1.0;
+    // Audit fix #6: track RAF so we can cancel on stop.
+    let rafId = 0;
 
     function setMod() {
       if (modulator && modGain) {
@@ -961,7 +1002,11 @@ const built = new Date().toISOString();
     }
     function stop() {
       try { carrier?.stop(); modulator?.stop(); } catch {}
+      // Audit fix #6: disconnect gain/analyser nodes so the graph doesn't grow.
+      try { modGain?.disconnect(); outGain?.disconnect(); analyser?.disconnect(); } catch {}
       carrier = modulator = null;
+      modGain = null; outGain = null; analyser = null;
+      cancelAnimationFrame(rafId);
     }
     function drawScope() {
       const cv = $('da-fm-scope') as HTMLCanvasElement; if (!cv || !analyser) return;
@@ -980,7 +1025,7 @@ const built = new Date().toISOString();
           if (i === 0) x.moveTo(i, y); else x.lineTo(i, y);
         }
         x.stroke();
-        if (playing) requestAnimationFrame(tick);
+        if (playing) rafId = requestAnimationFrame(tick);
       };
       tick();
     }
