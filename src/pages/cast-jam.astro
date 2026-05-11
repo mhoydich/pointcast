@@ -1,0 +1,573 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Jam — play along with the Nouns" description="Pick a track. Hit play. Tap the keys. Anything you play is in the song's key, so it sounds good. A bridge between listening and creating.">
+  <main class="cj" id="cj" data-built={built}>
+    <header class="cj__hero">
+      <p class="cj__kicker">CAST · JAM · play along with the Nouns</p>
+      <h1 class="cj__title">Jam.</h1>
+      <p class="cj__sub">Pick a track. Hit play. Tap the keys below — they're tuned to the song's key, so anything you tap sounds good. Eight notes, one octave, four moods.</p>
+    </header>
+
+    <section class="cj__tracks">
+      <p class="cj__section-label">PICK A TRACK</p>
+      <div class="cj__track-row" id="cj-tracks"></div>
+    </section>
+
+    <section class="cj__transport">
+      <button class="cj__play" id="cj-play" type="button" aria-label="Play / stop">
+        <span class="cj__play-icon" id="cj-play-icon">▶</span>
+      </button>
+      <div class="cj__transport-meta">
+        <p class="cj__transport-name" id="cj-transport-name">Pick a track</p>
+        <p class="cj__transport-sub" id="cj-transport-sub">— · — bpm</p>
+      </div>
+      <div class="cj__vol">
+        <span class="cj__vol-icon">♪</span>
+        <input type="range" class="cj__vol-slider" id="cj-vol" min="0" max="100" value="55" aria-label="Volume"/>
+      </div>
+    </section>
+
+    <section class="cj__keyboard-wrap">
+      <p class="cj__section-label">TAP TO JAM · keys A-K · spacebar = root note · scale: <span id="cj-scale-name">—</span></p>
+      <div class="cj__keyboard" id="cj-keyboard" role="group" aria-label="Piano keyboard">
+        <!-- 8 keys, populated by JS -->
+      </div>
+      <p class="cj__keyboard-hint" id="cj-keyboard-hint">Pick a track first, then tap or press A through K.</p>
+    </section>
+
+    <footer class="cj__foot">
+      <p>Built {built.slice(0,10)} · no CDN dependency · pure Web Audio</p>
+      <p>← <a href="/cast-music-pro">/cast-music-pro</a> · <a href="/cast-make">/cast-make</a> · <a href="/cast-on">/cast-on</a> · <a href="/town-music">/town-music</a> · <a href="/">PointCast home</a></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --cj-bg: #0a0610;
+    --cj-walnut: #5a3422;
+    --cj-flame: #f6c15e;
+    --cj-cream: #f4e7c8;
+    --cj-velvet: #1a0820;
+    --cj-line: rgba(244,231,200,0.10);
+    --cj-text: #f4e7c8;
+    --cj-text-mute: rgba(244,231,200,0.62);
+    --cj-text-quiet: rgba(244,231,200,0.38);
+    --cj-display: 'Inter Tight', system-ui, sans-serif;
+    --cj-body: 'Inter', system-ui, sans-serif;
+    --cj-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  body { background: var(--cj-bg); color: var(--cj-text); font-family: var(--cj-body); }
+
+  .cj { max-width: 920px; margin: 0 auto; padding: 36px 22px 60px 22px;
+        display: flex; flex-direction: column; gap: 28px;
+        position: relative; isolation: isolate; }
+  .cj::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(80% 60% at 50% 30%, var(--ambient-c, #5a3422) 0%, transparent 60%),
+      linear-gradient(180deg, #0a0610 0%, #170a14 100%);
+    filter: blur(60px) saturate(1.0); transform: scale(1.05);
+    transition: --ambient-c 1.6s ease;
+  }
+
+  /* HERO */
+  .cj__hero { padding-top: 6px; }
+  .cj__kicker { font-family: var(--cj-mono); font-size: 11px; letter-spacing: 0.7px; color: var(--cj-flame); text-transform: uppercase; margin: 0 0 12px 0; }
+  .cj__title { font-family: var(--cj-display); font-weight: 800; font-size: clamp(48px, 8vw, 76px); line-height: 0.94; letter-spacing: -0.025em; margin: 0 0 12px 0; color: var(--cj-text); }
+  .cj__sub { font-family: var(--cj-body); font-size: 15px; line-height: 1.55; color: var(--cj-text-mute); max-width: 600px; margin: 0; }
+
+  .cj__section-label { font-family: var(--cj-mono); font-size: 10px; letter-spacing: 0.7px; color: var(--cj-text-quiet); text-transform: uppercase; margin: 0 0 12px 0; }
+  .cj__section-label span { color: var(--cj-flame); }
+
+  /* TRACK GRID */
+  .cj__tracks { padding: 18px 20px; background: rgba(244,231,200,0.03); border: 1px solid var(--cj-line); border-radius: 12px; }
+  .cj__track-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 720px) { .cj__track-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .cj__track-row { grid-template-columns: 1fr; } }
+
+  .cj__track {
+    background: linear-gradient(135deg, var(--track-c, var(--cj-walnut)) 0%, var(--cj-velvet) 100%);
+    border: 2px solid transparent; border-radius: 10px; padding: 12px 14px;
+    cursor: pointer; display: flex; align-items: center; gap: 12px; text-align: left;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+  }
+  .cj__track:hover { transform: translateY(-2px); }
+  .cj__track--active { border-color: var(--cj-flame); box-shadow: 0 0 0 4px rgba(246,193,94,0.16); }
+  .cj__track-noun { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.30); display: grid; place-items: center; flex-shrink: 0; }
+  .cj__track-noun img { width: 80%; image-rendering: pixelated; }
+  .cj__track-meta { flex: 1; min-width: 0; }
+  .cj__track-name { font-family: var(--cj-display); font-weight: 700; font-size: 14px; color: #fff; margin: 0 0 2px 0; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cj__track-info { font-family: var(--cj-mono); font-size: 10.5px; color: rgba(255,255,255,0.7); margin: 0; letter-spacing: 0.2px; }
+
+  /* TRANSPORT BAR */
+  .cj__transport {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+    padding: 16px 20px; background: rgba(244,231,200,0.03); border: 1px solid var(--cj-line); border-radius: 12px;
+  }
+  @media (max-width: 560px) { .cj__transport { grid-template-columns: auto 1fr; } .cj__vol { grid-column: 1 / -1; justify-content: center; } }
+  .cj__play {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, var(--play-c, var(--cj-flame)) 0%, var(--cj-walnut) 70%, var(--cj-velvet) 100%);
+    border: 2px solid rgba(244,231,200,0.18); cursor: pointer;
+    display: grid; place-items: center;
+    color: var(--cj-velvet);
+    font-size: 26px; font-weight: 800; padding-left: 4px;
+    transition: transform 0.15s ease, background 0.4s ease;
+  }
+  .cj__play:hover { transform: scale(1.06); }
+  .cj__play:focus-visible { outline: 3px solid var(--cj-flame); outline-offset: 4px; }
+  .cj__play--on .cj__play-icon { padding-left: 0; }
+  .cj__transport-meta { min-width: 0; }
+  .cj__transport-name { font-family: var(--cj-display); font-weight: 700; font-size: 16px; margin: 0; color: var(--cj-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cj__transport-sub { font-family: var(--cj-mono); font-size: 11px; color: var(--cj-text-mute); margin: 4px 0 0 0; letter-spacing: 0.3px; }
+
+  .cj__vol { display: flex; align-items: center; gap: 10px; }
+  .cj__vol-icon { font-size: 14px; color: var(--cj-text-mute); }
+  .cj__vol-slider { width: 96px; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(244,231,200,0.16); border-radius: 2px; outline: 0; cursor: pointer; }
+  .cj__vol-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cj-flame); cursor: pointer; }
+  .cj__vol-slider:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--cj-flame); outline-offset: 3px; }
+
+  /* KEYBOARD */
+  .cj__keyboard-wrap { padding: 22px 22px 18px 22px; background: linear-gradient(180deg, rgba(244,231,200,0.04), rgba(244,231,200,0.01)); border: 1px solid var(--cj-line); border-radius: 14px; }
+  .cj__keyboard {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+    margin: 14px 0 8px 0;
+    height: 200px;
+  }
+  @media (max-width: 560px) { .cj__keyboard { height: 160px; gap: 4px; } }
+  .cj__key {
+    background: linear-gradient(180deg, var(--key-c, var(--cj-cream)) 0%, color-mix(in srgb, var(--key-c, var(--cj-cream)) 70%, #000) 100%);
+    border: 2px solid rgba(0,0,0,0.30);
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 10px 4px;
+    transition: transform 0.06s ease, filter 0.06s ease, box-shadow 0.06s ease;
+    font-family: var(--cj-mono); color: var(--cj-velvet);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 -2px 4px rgba(0,0,0,0.15) inset;
+  }
+  .cj__key:focus-visible { outline: 2px solid var(--cj-flame); outline-offset: 3px; }
+  .cj__key:active, .cj__key--press {
+    transform: translateY(2px) scale(0.98);
+    filter: brightness(1.18);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 -1px 2px rgba(0,0,0,0.2) inset;
+  }
+  .cj__key--ringing {
+    animation: cj-ring 0.32s ease-out;
+  }
+  @keyframes cj-ring {
+    0% { filter: brightness(1.4); }
+    100% { filter: brightness(1.0); }
+  }
+  .cj__key-letter { font-size: 18px; font-weight: 700; opacity: 0.85; }
+  .cj__key-note { font-size: 10px; opacity: 0.55; letter-spacing: 0.3px; }
+  .cj__key-root .cj__key-letter { color: #fff; }
+  .cj__key-root {
+    background: linear-gradient(180deg, var(--cj-flame) 0%, color-mix(in srgb, var(--cj-flame) 60%, #000) 100%);
+    color: var(--cj-velvet);
+  }
+
+  .cj__keyboard-hint { font-family: var(--cj-mono); font-size: 10.5px; color: var(--cj-text-quiet); margin: 8px 0 0 0; text-align: center; letter-spacing: 0.3px; }
+
+  /* FOOT */
+  .cj__foot {
+    padding-top: 24px; border-top: 1px solid var(--cj-line);
+    font-family: var(--cj-mono); font-size: 11px;
+    color: var(--cj-text-quiet); line-height: 1.7; text-align: center;
+  }
+  .cj__foot a { color: var(--cj-flame); text-decoration: none; }
+  .cj__foot a:hover { text-decoration: underline; }
+</style>
+
+<script>
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
+
+  // ---------- Track catalog (6 hand-picked, hardcoded) ----------
+  interface Track {
+    id: string; name: string; artist: string; nounId: number; color: string;
+    bpm: number; rootHz: number; scaleName: string;
+    drumStyle: 'soft' | 'punch';
+    // 8-bar chord progression (semitone offsets from rootHz, chord type)
+    chords: { offset: number; type: 'maj' | 'min' | 'maj7' | 'min7' | '7sus' }[];
+    kick: number[]; snare: number[]; hat: number[];
+  }
+
+  function pat(...steps: number[]): number[] { const a = Array(16).fill(0); steps.forEach(s => { if (s >= 0 && s < 16) a[s] = 1; }); return a; }
+
+  const TRACKS: Track[] = [
+    {
+      id: 'morning-fog', name: 'Morning Fog', artist: 'Marine Layer', nounId: 313, color: '#9ed6f0',
+      bpm: 72, rootHz: 130.81, scaleName: 'C major',
+      drumStyle: 'soft',
+      chords: [{offset:5,type:'maj7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:7,type:'7sus'},{offset:5,type:'maj7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:0,type:'maj'}],
+      kick: pat(0,8), snare: pat(4,12), hat: pat(2,6,10,14),
+    },
+    {
+      id: 'block-runner', name: 'Block Runner', artist: 'Block Runner', nounId: 523, color: '#a8ff3a',
+      bpm: 110, rootHz: 146.83, scaleName: 'D dorian',
+      drumStyle: 'punch',
+      chords: [{offset:9,type:'min7'},{offset:9,type:'min7'},{offset:2,type:'min7'},{offset:4,type:'7sus'},{offset:9,type:'min7'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:4,type:'7sus'}],
+      kick: pat(0,3,4,8,10,12,15), snare: pat(4,12), hat: pat(0,2,4,6,8,10,12,14),
+    },
+    {
+      id: 'sunrise-imperial', name: 'Sunrise on Imperial', artist: 'Release Train', nounId: 1042, color: '#ffd400',
+      bpm: 102, rootHz: 130.81, scaleName: 'C major',
+      drumStyle: 'punch',
+      chords: [{offset:0,type:'maj7'},{offset:7,type:'maj'},{offset:9,type:'min7'},{offset:5,type:'maj7'},{offset:0,type:'maj7'},{offset:7,type:'maj'},{offset:9,type:'min7'},{offset:5,type:'maj7'}],
+      kick: pat(0,4,7,8,12), snare: pat(4,12), hat: pat(0,2,4,6,8,10,12,14),
+    },
+    {
+      id: 'el-segundo-dusk', name: 'El Segundo at Dusk', artist: 'Night Broadcast', nounId: 1189, color: '#6f59c0',
+      bpm: 64, rootHz: 110.00, scaleName: 'A minor',
+      drumStyle: 'soft',
+      chords: [{offset:0,type:'min7'},{offset:8,type:'maj7'},{offset:3,type:'maj7'},{offset:10,type:'7sus'},{offset:0,type:'min7'},{offset:8,type:'maj7'},{offset:5,type:'min7'},{offset:7,type:'7sus'}],
+      kick: pat(0), snare: pat(8), hat: pat(0,4,8,12),
+    },
+    {
+      id: 'brass-on-main', name: 'Brass on Main', artist: 'Brass on Main', nounId: 287, color: '#f6c15e',
+      bpm: 84, rootHz: 174.61, scaleName: 'F major',
+      drumStyle: 'punch',
+      chords: [{offset:0,type:'maj'},{offset:7,type:'maj'},{offset:9,type:'min'},{offset:5,type:'maj'},{offset:0,type:'maj'},{offset:7,type:'maj'},{offset:5,type:'maj'},{offset:7,type:'7sus'}],
+      kick: pat(0,4,8,12), snare: pat(4,12), hat: pat(0,2,4,6,8,10,12,14),
+    },
+    {
+      id: 'aurora-slow', name: 'Aurora Slow', artist: 'Aurora Slow', nounId: 928, color: '#7d9a7c',
+      bpm: 56, rootHz: 110.00, scaleName: 'A minor',
+      drumStyle: 'soft',
+      chords: [{offset:0,type:'min7'},{offset:3,type:'maj7'},{offset:7,type:'min7'},{offset:0,type:'min7'},{offset:0,type:'min7'},{offset:3,type:'maj7'},{offset:10,type:'maj7'},{offset:0,type:'min7'}],
+      kick: pat(0), snare: pat(), hat: pat(0,4,8,12),
+    },
+  ];
+
+  // ---------- Theory ----------
+  // For each track, derive an 8-note scale starting at the root.
+  // Major scales: rooted on a maj chord → ionian (1, 2, 3, 4, 5, 6, 7, 8).
+  // Minor (a-minor type) → aeolian (1, 2, b3, 4, 5, b6, b7, 8).
+  // We pick "scale family" from the FIRST chord's type — close enough for jamming.
+  function scaleStepsForTrack(t: Track): number[] {
+    const firstType = t.chords[0].type;
+    const isMinor = firstType === 'min' || firstType === 'min7';
+    // major = ionian, minor = aeolian; both 8 steps including the octave
+    return isMinor ? [0, 2, 3, 5, 7, 8, 10, 12] : [0, 2, 4, 5, 7, 9, 11, 12];
+  }
+  function noteNamesForTrack(t: Track): string[] {
+    // Pick note letters for display only (approximate — uses chromatic indices)
+    const ROOTS_BY_HZ: Record<number, string> = { 110: 'A', 130.81: 'C', 146.83: 'D', 164.81: 'E', 174.61: 'F', 196.00: 'G' };
+    const rootName = ROOTS_BY_HZ[t.rootHz] || '?';
+    // Build chromatic scale from rootName up
+    const CHROMATIC = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const start = CHROMATIC.indexOf(rootName);
+    const steps = scaleStepsForTrack(t);
+    return steps.map(s => CHROMATIC[(start + s) % 12]);
+  }
+  function noteFreqsForTrack(t: Track): number[] {
+    // Played 2 octaves above the bass (so the user's notes sit above the pad)
+    return scaleStepsForTrack(t).map(s => t.rootHz * Math.pow(2, s / 12) * 2);
+  }
+
+  // ---------- Audio engine ----------
+  let ctx: AudioContext | null = null;
+  let masterGain: GainNode | null = null;
+  let sched: AudioScheduler | null = null;
+  let volume = 55;
+
+  function ac(): AudioContext {
+    if (ctx) return ctx;
+    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    masterGain = ctx.createGain(); masterGain.gain.value = volume / 100;
+    masterGain.connect(ctx.destination);
+    sched = createAudioScheduler(ctx);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) sched?.resume();
+    });
+    return ctx;
+  }
+
+  function chordHzs(rootHz: number, offset: number, type: string): number[] {
+    const root = rootHz * Math.pow(2, offset / 12);
+    const intervals: Record<string, number[]> = {
+      'maj':  [0, 4, 7], 'min':  [0, 3, 7],
+      'maj7': [0, 4, 7, 11], 'min7': [0, 3, 7, 10],
+      '7sus': [0, 5, 7, 10],
+    };
+    return (intervals[type] || intervals['maj']).map(s => root * Math.pow(2, s / 12));
+  }
+
+  function playKick(when: number, style: Track['drumStyle']) {
+    const c = ac(); const o = c.createOscillator(); const g = c.createGain();
+    const peak = style === 'punch' ? 130 : 100;
+    const tail = style === 'punch' ? 36 : 48;
+    const len = style === 'punch' ? 0.40 : 0.30;
+    o.frequency.setValueAtTime(peak, when);
+    o.frequency.exponentialRampToValueAtTime(tail, when + len * 0.5);
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(style === 'punch' ? 1.0 : 0.70, when + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, when + len);
+    o.connect(g); g.connect(masterGain!);
+    sched!.trackSource(o); o.start(when); o.stop(when + len + 0.05);
+  }
+  function playSnare(when: number, style: Track['drumStyle']) {
+    const c = ac();
+    const len = style === 'soft' ? 0.26 : 0.18;
+    const noiseLen = Math.floor(c.sampleRate * len);
+    const buf = c.createBuffer(1, noiseLen, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, style === 'soft' ? 1.0 : 1.6);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = style === 'soft' ? 'highpass' : 'bandpass'; f.frequency.value = style === 'soft' ? 800 : 2200;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(style === 'soft' ? 0.26 : 0.42, when + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, when + len);
+    s.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(s); s.start(when); s.stop(when + len + 0.05);
+  }
+  function playHat(when: number) {
+    const c = ac();
+    const noiseLen = Math.floor(c.sampleRate * 0.05);
+    const buf = c.createBuffer(1, noiseLen, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/noiseLen, 0.6);
+    const s = c.createBufferSource(); s.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(0.12, when + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.05);
+    s.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(s); s.start(when); s.stop(when + 0.06);
+  }
+  function playPad(when: number, freqs: number[], dur: number, isWarm: boolean) {
+    const c = ac();
+    freqs.forEach((freq) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = isWarm ? 'sine' : 'triangle';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.001, when);
+      g.gain.linearRampToValueAtTime(0.06 / freqs.length, when + 0.30);
+      g.gain.linearRampToValueAtTime(0.001, when + dur - 0.05);
+      o.connect(g); g.connect(masterGain!);
+      sched!.trackSource(o); o.start(when); o.stop(when + dur + 0.05);
+    });
+  }
+
+  // The user's jam-note voice. A soft synth tuned for sitting on top.
+  function playJamNote(freq: number, isLow: boolean) {
+    const c = ac(); if (c.state === 'suspended') c.resume();
+    const when = c.currentTime + 0.005;
+    const o = c.createOscillator();
+    const o2 = c.createOscillator(); // slight detune for thickness
+    const g = c.createGain();
+    const f = c.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.value = freq;
+    o2.type = 'sine'; o2.frequency.value = freq * 1.005;
+    f.type = 'lowpass'; f.frequency.value = 3000; f.Q.value = 1;
+    g.gain.setValueAtTime(0.001, when);
+    g.gain.exponentialRampToValueAtTime(isLow ? 0.20 : 0.16, when + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.7);
+    o.connect(f); o2.connect(f); f.connect(g); g.connect(masterGain!);
+    sched!.trackSource(o); o.start(when); o.stop(when + 0.75);
+    sched!.trackSource(o2); o2.start(when); o2.stop(when + 0.75);
+  }
+
+  function trackDurationSec(t: Track) { return (60 / t.bpm) * 4 * 8; }
+
+  function scheduleTrack(t: Track, start: number) {
+    const beat = 60 / t.bpm;
+    const step = beat / 4;
+    for (let bar = 0; bar < 8; bar++) {
+      const barStart = start + bar * 4 * beat;
+      const ch = t.chords[bar];
+      const hzs = chordHzs(t.rootHz, ch.offset, ch.type);
+      playPad(barStart, hzs, 4 * beat * 0.95, t.drumStyle === 'soft');
+      for (let i = 0; i < 16; i++) {
+        const tm = barStart + i * step;
+        if (t.kick[i])  playKick(tm, t.drumStyle);
+        if (t.snare[i]) playSnare(tm, t.drumStyle);
+        if (t.hat[i])   playHat(tm);
+      }
+    }
+  }
+
+  // ---------- State ----------
+  let currentTrackId: string | null = null;
+  let playing = false;
+  let trackStartCtxTime = 0;
+
+  function getTrack(): Track | null { return TRACKS.find(t => t.id === currentTrackId) || null; }
+
+  function selectTrack(id: string) {
+    currentTrackId = id;
+    renderTracks();
+    renderTransport();
+    renderKeyboard();
+    if (playing) {
+      // restart playback with the new track
+      if (sched) sched.stopAll();
+      startPlaying();
+    }
+  }
+
+  function startPlaying() {
+    const t = getTrack(); if (!t) return;
+    if (!ctx) ac();
+    const c = ac();
+    if (c.state === 'suspended') c.resume();
+    if (sched) sched.stopAll();
+    const start = c.currentTime + 0.05;
+    trackStartCtxTime = start;
+    scheduleTrack(t, start);
+    // Auto-loop: schedule next playthrough at end
+    sched!.schedule(() => startPlaying(), start + trackDurationSec(t));
+    playing = true;
+    renderTransport();
+  }
+  function stopPlaying() {
+    if (sched) sched.stopAll();
+    playing = false;
+    renderTransport();
+  }
+
+  function toggle() {
+    if (!currentTrackId) {
+      // No track picked — default to first
+      selectTrack(TRACKS[0].id);
+    }
+    if (playing) stopPlaying(); else startPlaying();
+  }
+
+  // ---------- Render ----------
+  function escape(s: string) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as Record<string,string>)[c]!); }
+
+  function renderTracks() {
+    const wrap = document.getElementById('cj-tracks')!;
+    wrap.innerHTML = TRACKS.map(t => `
+      <button class="cj__track ${currentTrackId === t.id ? 'cj__track--active' : ''}" data-track="${t.id}" type="button" style="--track-c: ${t.color};">
+        <div class="cj__track-noun"><img src="https://noun.pics/${t.nounId}.svg" alt="${escape(t.artist)}" loading="lazy"/></div>
+        <div class="cj__track-meta">
+          <p class="cj__track-name">${escape(t.name)}</p>
+          <p class="cj__track-info">${t.bpm} bpm · ${escape(t.scaleName)}</p>
+        </div>
+      </button>
+    `).join('');
+    wrap.querySelectorAll<HTMLButtonElement>('[data-track]').forEach(btn => {
+      btn.addEventListener('click', () => selectTrack(btn.dataset.track!));
+    });
+  }
+
+  function renderTransport() {
+    const t = getTrack();
+    const name = document.getElementById('cj-transport-name')!;
+    const sub = document.getElementById('cj-transport-sub')!;
+    const icon = document.getElementById('cj-play-icon')!;
+    const btn = document.getElementById('cj-play')!;
+    if (!t) {
+      name.textContent = 'Pick a track';
+      sub.textContent = '— · — bpm';
+    } else {
+      name.textContent = `${t.name} · ${t.artist}`;
+      sub.textContent = `${t.bpm} bpm · ${t.scaleName}${playing ? ' · playing' : ''}`;
+      btn.style.setProperty('--play-c', t.color);
+      // Set ambient color
+      document.documentElement.style.setProperty('--ambient-c', t.color + '66');
+    }
+    icon.textContent = playing ? '◼' : '▶';
+    btn.classList.toggle('cj__play--on', playing);
+  }
+
+  function renderKeyboard() {
+    const wrap = document.getElementById('cj-keyboard')!;
+    const t = getTrack();
+    const scaleName = document.getElementById('cj-scale-name')!;
+    const hint = document.getElementById('cj-keyboard-hint')!;
+    if (!t) {
+      wrap.innerHTML = '';
+      scaleName.textContent = '—';
+      hint.textContent = 'Pick a track first, then tap or press A through K.';
+      return;
+    }
+    const notes = noteNamesForTrack(t);
+    const freqs = noteFreqsForTrack(t);
+    scaleName.textContent = t.scaleName;
+    const KEYS = ['A','S','D','F','G','H','J','K'];
+    wrap.innerHTML = notes.map((note, i) => {
+      const isRoot = i === 0 || i === 7; // root + octave both get the flame treatment
+      // Slight color gradient: each key gets a slightly different shade of cream
+      const tint = isRoot ? '' : `style="--key-c: ${shadeKey(t.color, i)};"`;
+      return `<button class="cj__key ${isRoot ? 'cj__key-root' : ''}" data-key-idx="${i}" ${tint} type="button" aria-label="Play ${note}">
+        <span class="cj__key-letter">${KEYS[i]}</span>
+        <span class="cj__key-note">${note}</span>
+      </button>`;
+    }).join('');
+    wrap.querySelectorAll<HTMLButtonElement>('[data-key-idx]').forEach(btn => {
+      const idx = Number(btn.dataset.keyIdx);
+      const fire = () => {
+        playJamNote(freqs[idx], idx === 0);
+        btn.classList.remove('cj__key--ringing'); void btn.offsetWidth;
+        btn.classList.add('cj__key--ringing');
+        btn.classList.add('cj__key--press');
+        setTimeout(() => btn.classList.remove('cj__key--press'), 100);
+      };
+      // pointerdown for low-latency on mouse + touch
+      btn.addEventListener('pointerdown', fire);
+      // click for keyboard activation (Enter/Space on focused button)
+      btn.addEventListener('click', (e) => { if ((e as MouseEvent).detail === 0) fire(); }); // detail==0 = keyboard
+    });
+    hint.textContent = 'Tap any key. Or press A-K. Spacebar = root note (octave 1).';
+  }
+
+  function shadeKey(baseHex: string, idx: number): string {
+    // Mix the track color into cream by 4-10% per step away from root
+    const pct = 4 + idx * 1.5;
+    return `color-mix(in srgb, ${baseHex} ${pct}%, var(--cj-cream))`;
+  }
+
+  // ---------- Keyboard input ----------
+  const KEY_MAP: Record<string, number> = { 'a': 0, 's': 1, 'd': 2, 'f': 3, 'g': 4, 'h': 5, 'j': 6, 'k': 7 };
+  function bindKeyboard() {
+    document.addEventListener('keydown', (e) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      const t = getTrack();
+      // Space = toggle play
+      if (e.code === 'Space') {
+        e.preventDefault();
+        toggle();
+        return;
+      }
+      // Tab = open keyboard navigation, allow default
+      if (e.key === 'Tab') return;
+      const idx = KEY_MAP[e.key.toLowerCase()];
+      if (idx === undefined || !t) return;
+      e.preventDefault();
+      if (e.repeat) return; // don't auto-fire on held keys
+      const freqs = noteFreqsForTrack(t);
+      playJamNote(freqs[idx], idx === 0);
+      const btn = document.querySelector(`[data-key-idx="${idx}"]`) as HTMLButtonElement;
+      if (btn) {
+        btn.classList.remove('cj__key--ringing'); void btn.offsetWidth;
+        btn.classList.add('cj__key--ringing');
+        btn.classList.add('cj__key--press');
+        setTimeout(() => btn.classList.remove('cj__key--press'), 100);
+      }
+    });
+  }
+
+  // ---------- Init ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    renderTracks();
+    renderTransport();
+    renderKeyboard();
+    document.getElementById('cj-play')?.addEventListener('click', toggle);
+    document.getElementById('cj-vol')?.addEventListener('input', (e) => {
+      volume = Number((e.target as HTMLInputElement).value);
+      if (masterGain) masterGain.gain.setTargetAtTime(volume / 100, ac().currentTime, 0.05);
+    });
+    bindKeyboard();
+  });
+</script>
+</BlockLayout>
