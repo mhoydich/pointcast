@@ -21,6 +21,7 @@ const jsonLd = {
       <nav class="menubar" aria-label="Mines menu">
         <button type="button" data-new>Game</button>
         <button type="button" data-mode>Flag mode: off</button>
+        <button type="button" data-peek>Peek</button>
         <a href="/win95-games">All games</a>
         <a href="/solitaire-v2">Solitaire</a>
         <a href="/nouns-memory-v2">Memory</a>
@@ -57,6 +58,8 @@ const jsonLd = {
   let timer;
   let gameOver = false;
   let flagMode = false;
+  let firstOpen = true;
+  let peeks = 3;
 
   function readJson(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
@@ -110,6 +113,18 @@ const jsonLd = {
     picks.forEach((index) => { board[index].mine = true; });
     board.forEach((cell) => { cell.count = neighbors(cell).filter((n) => n.mine).length; });
   }
+  function placeMines(safeIndex) {
+    board.forEach((cell) => { cell.mine = false; cell.count = 0; });
+    const safe = board[safeIndex];
+    const blocked = new Set([safeIndex, ...neighbors(safe).map((cell) => cell.index)]);
+    const picks = new Set();
+    while (picks.size < mineCount) {
+      const pick = Math.floor(Math.random() * board.length);
+      if (!blocked.has(pick)) picks.add(pick);
+    }
+    picks.forEach((index) => { board[index].mine = true; });
+    board.forEach((cell) => { cell.count = neighbors(cell).filter((n) => n.mine).length; });
+  }
   function formatTime() {
     const elapsed = Math.floor((Date.now() - started) / 1000);
     return `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
@@ -151,6 +166,10 @@ const jsonLd = {
     if (gameOver) return;
     const cell = board[index];
     if (!cell || cell.flag || cell.open) return;
+    if (firstOpen) {
+      placeMines(index);
+      firstOpen = false;
+    }
     if (cell.mine) {
       cell.open = true;
       gameOver = true;
@@ -172,12 +191,39 @@ const jsonLd = {
     say(cell.flag ? 'Flag placed.' : 'Flag removed.');
     render();
   }
+  function chordCell(index) {
+    if (gameOver) return;
+    const cell = board[index];
+    if (!cell?.open || !cell.count) return;
+    const nearby = neighbors(cell);
+    const flags = nearby.filter((n) => n.flag).length;
+    if (flags !== cell.count) {
+      say(`Need ${cell.count} adjacent flag${cell.count === 1 ? '' : 's'} before opening neighbors.`);
+      return;
+    }
+    nearby.filter((n) => !n.flag && !n.open).forEach((n) => openCell(n.index));
+  }
+  function peek() {
+    if (gameOver || peeks <= 0) {
+      say(peeks <= 0 ? 'No peeks left.' : 'Game over.');
+      return;
+    }
+    const safe = board.find((cell) => !cell.mine && !cell.open && !cell.flag);
+    if (!safe) return;
+    peeks -= 1;
+    say(`Peek: tile ${safe.x + 1},${safe.y + 1} is safe. ${peeks} left.`);
+    const el = boardEl?.querySelector<HTMLElement>(`[data-index="${safe.index}"]`);
+    el?.classList.add('is-peek');
+    window.setTimeout(() => el?.classList.remove('is-peek'), 1000);
+  }
   function newGame() {
     window.clearInterval(timer);
     makeBoard();
     started = Date.now();
     gameOver = false;
+    firstOpen = true;
     flagMode = false;
+    peeks = 3;
     if (modeEl) modeEl.textContent = 'Flag mode: off';
     timer = window.setInterval(renderStats, 1000);
     updateArcadeProfile(false);
@@ -188,7 +234,8 @@ const jsonLd = {
     const cell = (event.target as HTMLElement).closest('[data-index]');
     if (!cell) return;
     const index = Number(cell.dataset.index);
-    flagMode ? flagCell(index) : openCell(index);
+    if ((event as MouseEvent).shiftKey) chordCell(index);
+    else flagMode ? flagCell(index) : openCell(index);
   });
   boardEl?.addEventListener('contextmenu', (event) => {
     event.preventDefault();
@@ -196,9 +243,18 @@ const jsonLd = {
     if (cell) flagCell(Number(cell.dataset.index));
   });
   document.querySelector('[data-new]')?.addEventListener('click', newGame);
+  document.querySelector('[data-peek]')?.addEventListener('click', peek);
   modeEl?.addEventListener('click', () => {
     flagMode = !flagMode;
     modeEl.textContent = `Flag mode: ${flagMode ? 'on' : 'off'}`;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'n') newGame();
+    if (event.key.toLowerCase() === 'f') {
+      flagMode = !flagMode;
+      if (modeEl) modeEl.textContent = `Flag mode: ${flagMode ? 'on' : 'off'}`;
+    }
+    if (event.key.toLowerCase() === 'p') peek();
   });
   newGame();
 </script>
@@ -219,9 +275,12 @@ const jsonLd = {
   .felt { display:grid; place-items:center; min-height:620px; padding:18px; background:linear-gradient(rgba(0,62,48,.34),rgba(0,52,42,.58)),var(--arcade-desktop) center/cover; overflow:auto; }
   .board { display:grid; grid-template-columns:repeat(9,42px); gap:3px; padding:10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#c0c0c0; }
   .cell { width:42px; height:42px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; padding:0; font:900 18px/1 "Courier New",monospace; }
+  .cell:not(.is-open) { cursor:pointer; }
+  .cell:not(.is-open):hover { outline:2px solid #ffff00; outline-offset:-4px; }
   .cell:active,.cell.is-open { border-color:#808080 #fff #fff #808080; background:#e6e6e6; }
   .cell.is-flagged { color:#b00020; }
   .cell.is-mine { background:#ff8080; }
+  .cell.is-peek { outline:3px solid #00ff80; outline-offset:-5px; }
   .cell img { width:28px; height:28px; image-rendering:pixelated; }
   .status { margin:4px; }
   @media (max-width:560px) { .desk{padding:8px}.toolbar{grid-template-columns:1fr 1fr}.toolbar p{grid-column:1/-1}.felt{padding:10px; justify-items:start}.board{grid-template-columns:repeat(9,34px)}.cell{width:34px;height:34px}.cell img{width:23px;height:23px} }

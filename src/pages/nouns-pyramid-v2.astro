@@ -69,6 +69,7 @@ const jsonLd = {
   let recycles = 0;
   let history: string[] = [];
   let won = false;
+  let moves = 0;
   const statsKey = 'pc:arcade:nouns-pyramid-v2';
   const profileKey = 'pc:arcade:profile';
 
@@ -117,6 +118,7 @@ const jsonLd = {
   }
 
   function say(text: string) { if (statusEl) statusEl.textContent = text; }
+  function describe(card: Card) { return `${ranks[card.rank]} ${symbols[card.suit]}`; }
   function cardHtml(card: Card, active = false) {
     const red = card.suit === 'H' || card.suit === 'D';
     return `<span class="card ${red ? 'red' : 'black'}${active ? ' is-selected' : ''}">
@@ -141,6 +143,19 @@ const jsonLd = {
     return selected.source === 'waste' ? waste[waste.length - 1] : pyramid[selected.index ?? -1];
   }
 
+  function openPyramidCards() {
+    return pyramid
+      .map((card, index) => ({ card, index }))
+      .filter(({ card, index }) => !card.removed && !isCovered(index));
+  }
+
+  function findMate(card: Card, source: 'pyramid' | 'waste', index?: number) {
+    const needed = 13 - card.rank;
+    const wasteCard = waste[waste.length - 1];
+    if (source !== 'waste' && wasteCard?.rank === needed) return { source: 'waste' as const };
+    return openPyramidCards().find((item) => item.card.rank === needed && !(source === 'pyramid' && item.index === index));
+  }
+
   function clearSelection() { selected = null; }
   function removeSelection() {
     if (!selected) return;
@@ -159,8 +174,9 @@ const jsonLd = {
         const index = cursor++;
         const card = pyramid[index];
         const covered = card && !card.removed && isCovered(index);
+        const playable = card && !card.removed && !covered;
         const active = selected?.source === 'pyramid' && selected.index === index;
-        html += `<button class="slot" type="button" data-index="${index}" ${!card || card.removed ? 'disabled' : ''}>
+        html += `<button class="slot ${playable ? 'is-playable' : ''}" type="button" data-index="${index}" ${!card || card.removed ? 'disabled' : ''}>
           ${card?.removed ? '<span class="empty"></span>' : cardHtml(card, active)}
           ${covered ? '<span class="cover">locked</span>' : ''}
         </button>`;
@@ -196,14 +212,29 @@ const jsonLd = {
       else if (index !== undefined) pyramid[index].removed = true;
       selected = null;
       score += 13;
+      moves += 1;
       say('King clears alone.');
       render();
       return;
     }
     const other = selectedCard();
     if (!selected || !other) {
+      const mate = findMate(card, source, index);
+      if (mate) {
+        snapshot();
+        if (source === 'waste') waste.pop();
+        else if (index !== undefined) pyramid[index].removed = true;
+        if (mate.source === 'waste') waste.pop();
+        else pyramid[mate.index].removed = true;
+        selected = null;
+        score += 13;
+        moves += 1;
+        say(`Auto-paired ${describe(card)} with ${source === 'waste' ? 'an exposed card' : 'its mate'}.`);
+        render();
+        return;
+      }
       selected = { source, index };
-      say(`${ranks[card.rank]} selected. Need ${13 - card.rank}.`);
+      say(`${describe(card)} selected. Need ${13 - card.rank}.`);
       render();
       return;
     }
@@ -218,6 +249,7 @@ const jsonLd = {
       if (source === 'waste') waste.pop();
       else if (index !== undefined) pyramid[index].removed = true;
       score += 13;
+      moves += 1;
       say('Pair cleared.');
     } else {
       say('Not thirteen.');
@@ -231,6 +263,7 @@ const jsonLd = {
     if (stock.length) {
       snapshot();
       waste.push(stock.pop()!);
+      moves += 1;
       say('Drawn.');
     } else if (waste.length) {
       snapshot();
@@ -238,6 +271,7 @@ const jsonLd = {
       waste = [];
       recycles += 1;
       score = Math.max(0, score - 5);
+      moves += 1;
       say('Stock recycled.');
     } else {
       say('No cards left.');
@@ -253,6 +287,7 @@ const jsonLd = {
     selected = null;
     score = 0;
     recycles = 0;
+    moves = 0;
     history = [];
     won = false;
     recordPlay(false);
@@ -285,9 +320,7 @@ const jsonLd = {
     render();
   });
   document.querySelector('[data-hint]')?.addEventListener('click', () => {
-    const openCards = pyramid
-      .map((card, index) => ({ card, index }))
-      .filter(({ card, index }) => !card.removed && !isCovered(index));
+    const openCards = openPyramidCards();
     const wasteCard = waste[waste.length - 1];
     for (const { card } of openCards) {
       if (card.rank === 13) {
@@ -329,6 +362,8 @@ const jsonLd = {
   .pyramid { min-width:760px; display:grid; gap:10px; align-content:start; }
   .row { display:flex; justify-content:center; gap:10px; }
   .slot,.pile { position:relative; width:86px; height:120px; border:0; background:transparent; padding:0; }
+  .slot.is-playable,.pile { cursor:pointer; }
+  .slot.is-playable:hover .card,.pile:hover .card,.pile:hover > span:first-child:not(.empty-label) { outline:3px solid #ffff00; outline-offset:-7px; }
   .card { position:absolute; inset:0; display:grid; place-items:center; border-radius:7px; border:2px solid; border-color:#fff #606060 #606060 #fff; background:#fffef5; box-shadow:2px 2px 0 rgba(0,0,0,.45); overflow:hidden; }
   .card.red { color:#b00020; }
   .card.black { color:#111; }

@@ -73,6 +73,7 @@ const jsonLd = {
   let found = 0;
   let pairs = 12;
   let misses = 0;
+  let started = Date.now();
 
   function readJson(key: string, fallback: any) {
     try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
@@ -144,6 +145,7 @@ const jsonLd = {
     moves = 0;
     found = 0;
     misses = 0;
+    started = Date.now();
     document.querySelectorAll<HTMLButtonElement>('.tile').forEach((tile) => {
       tile.classList.remove('is-open', 'is-found');
       tile.disabled = false;
@@ -156,7 +158,8 @@ const jsonLd = {
 
   function win() {
     recordPlay(true);
-    say(`Tray cleared in ${moves} moves. Very tidy.`);
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    say(`Tray cleared in ${moves} moves and ${elapsed}s. Very tidy.`);
     root?.classList.add('did-win');
     render();
     window.setTimeout(() => root?.classList.remove('did-win'), 900);
@@ -180,7 +183,7 @@ const jsonLd = {
       found += 1;
       say(`Pair found: Noun #${tile.dataset.noun}.`);
       first = null;
-      if (found === 12) win();
+      if (found === pairs) win();
       render();
       return;
     }
@@ -200,6 +203,14 @@ const jsonLd = {
   document.querySelector('[data-new]')?.addEventListener('click', () => newGame(pairs * 2));
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((button) => {
     button.addEventListener('click', () => newGame(Number(button.dataset.difficulty || 24)));
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'n') newGame(pairs * 2);
+    if (event.key === 'Escape' && first && !lock) {
+      first.classList.remove('is-open');
+      first = null;
+      say('Selection cleared.');
+    }
   });
   newGame(24);
 </script>
@@ -225,6 +236,8 @@ const jsonLd = {
   .board[data-size="16"] { grid-template-columns:repeat(4, minmax(92px,1fr)); }
   .board[data-size="20"] { grid-template-columns:repeat(5, minmax(92px,1fr)); }
   .tile { position:relative; height:132px; border:0; background:transparent; perspective:700px; }
+  .tile:not(:disabled) { cursor:pointer; }
+  .tile:not(:disabled):hover .back { outline:3px solid #ffff00; outline-offset:-7px; }
   .tile span { position:absolute; inset:0; display:grid; place-items:center; border-radius:7px; border:2px solid; border-color:#fff #606060 #606060 #fff; box-shadow:2px 2px 0 rgba(0,0,0,.45); backface-visibility:hidden; transition:transform .18s ease; }
   .back { background:linear-gradient(rgba(0,0,128,.1),rgba(0,0,80,.24)),var(--arcade-card-backs) center/190px 190px,linear-gradient(45deg,#000080 25%,#1084d0 25% 50%,#000080 50% 75%,#1084d0 75%) 0 0/14px 14px; color:#ffff00; font:900 28px/1 "Courier New", monospace; }
   .front { transform:rotateY(180deg); background:#fffef5; }
