@@ -81,7 +81,7 @@ const jsonLd = {
 
       <footer class="statusbar">
         <span>Draw 1</span>
-        <span>Click-to-move</span>
+        <span>Click, double-click, or drag</span>
         <span>Generated table art</span>
         <span>Nouns deck faces</span>
       </footer>
@@ -104,6 +104,11 @@ const jsonLd = {
     index?: number;
     suit?: Suit;
     start?: number;
+  }
+  interface MoveTarget {
+    type: 'foundation' | 'tableau';
+    suit?: Suit;
+    column?: number;
   }
 
   const suits: Suit[] = ['S', 'H', 'D', 'C'];
@@ -135,6 +140,7 @@ const jsonLd = {
   let timer: number | undefined;
   let history: string[] = [];
   let won = false;
+  let lastClick = { cardId: '', at: 0 };
   const statsKey = 'pc:arcade:solitaire-v2';
   const profileKey = 'pc:arcade:profile';
 
@@ -276,7 +282,11 @@ const jsonLd = {
     columns.forEach((el, columnIndex) => {
       const pile = tableau[columnIndex];
       el.innerHTML = pile.length
-        ? pile.map((card, cardIndex) => `<span class="slot-card" style="--i:${cardIndex}">${cardHtml(card, selected?.zone === 'tableau' && selected.index === columnIndex && cardIndex >= (selected.start ?? 99))}</span>`).join('')
+        ? pile.map((card, cardIndex) => {
+          const canLift = card.faceUp && isValidRun(pile.slice(cardIndex));
+          const selectedCard = selected?.zone === 'tableau' && selected.index === columnIndex && cardIndex >= (selected.start ?? 99);
+          return `<span class="slot-card" style="--i:${cardIndex}" ${canLift ? 'draggable="true"' : ''}>${cardHtml(card, selectedCard)}</span>`;
+        }).join('')
         : '<span class="column__empty">K</span>';
       el.style.setProperty('--cards', String(pile.length));
     });
@@ -302,6 +312,44 @@ const jsonLd = {
     if (card.suit !== suit) return false;
     const top = foundation[suit][foundation[suit].length - 1];
     return top ? card.rank === top.rank + 1 : card.rank === 1;
+  }
+
+  function isValidRun(cards: Card[]) {
+    if (!cards.length || cards.some((card) => !card.faceUp)) return false;
+    return cards.every((card, index) => {
+      if (index === 0) return true;
+      const previous = cards[index - 1];
+      return cardColor(previous) !== cardColor(card) && previous.rank === card.rank + 1;
+    });
+  }
+
+  function findFoundationTarget(card: Card) {
+    return suits.find((suit) => canPlaceOnFoundation(card, suit));
+  }
+
+  function findTableauTargets(cards: Card[], sourceColumn?: number) {
+    const first = cards[0];
+    if (!first) return [];
+    return tableau
+      .map((pile, column) => ({ column, top: pile[pile.length - 1] }))
+      .filter(({ column, top }) => column !== sourceColumn && canPlaceOnTableau(first, top))
+      .map(({ column }) => column);
+  }
+
+  function findBestMove(cards: Card[], source: Selection): MoveTarget | null {
+    const first = cards[0];
+    if (!first) return null;
+    if (cards.length === 1) {
+      const foundationSuit = findFoundationTarget(first);
+      if (foundationSuit) return { type: 'foundation', suit: foundationSuit };
+    }
+    const tableauTargets = findTableauTargets(cards, source.zone === 'tableau' ? source.index : undefined);
+    if (tableauTargets.length) return { type: 'tableau', column: tableauTargets[0] };
+    return null;
+  }
+
+  function describeCard(card: Card) {
+    return `${ranks[card.rank]} ${suitSymbols[card.suit]}`;
   }
 
   function selectedCards(): Card[] {
@@ -343,12 +391,35 @@ const jsonLd = {
     render();
   }
 
+  function applyMove(target: MoveTarget) {
+    if (target.type === 'foundation' && target.suit) {
+      moveToFoundation(target.suit);
+      return true;
+    }
+    if (target.type === 'tableau' && target.column !== undefined) {
+      moveToColumn(target.column);
+      return true;
+    }
+    return false;
+  }
+
+  function smartMove(selection: Selection) {
+    selected = selection;
+    const cards = selectedCards();
+    const target = findBestMove(cards, selection);
+    if (!target) {
+      const card = cards[0];
+      setStatus(card ? `${describeCard(card)} selected. Choose a legal target.` : 'Choose a visible card.');
+      render();
+      return false;
+    }
+    return applyMove(target);
+  }
+
   function selectWaste() {
     const card = waste[waste.length - 1];
     if (!card) return;
-    selected = { zone: 'waste' };
-    setStatus(`${ranks[card.rank]} ${suitSymbols[card.suit]} selected.`);
-    render();
+    smartMove({ zone: 'waste' });
   }
 
   function selectFoundation(suit: Suit) {
@@ -374,17 +445,35 @@ const jsonLd = {
     const card = pile[cardIndex];
     if (!card) return;
     if (!card.faceUp && cardIndex === pile.length - 1) {
+      snapshot();
       card.faceUp = true;
       finishMove('Card flipped.', 5);
       return;
     }
     if (!card.faceUp) return;
     if (selected) {
+      if (selected.zone === 'tableau' && selected.index === columnIndex) {
+        selected = { zone: 'tableau', index: columnIndex, start: cardIndex };
+        setStatus(`${describeCard(card)} stack selected.`);
+        render();
+        return;
+      }
       moveToColumn(columnIndex);
       return;
     }
+    const now = Date.now();
+    const isDouble = lastClick.cardId === card.id && now - lastClick.at < 420;
+    lastClick = { cardId: card.id, at: now };
+    if (!isValidRun(pile.slice(cardIndex))) {
+      setStatus('That stack is blocked. Move from a clean descending run.');
+      return;
+    }
+    if (isDouble || cardIndex === pile.length - 1) {
+      smartMove({ zone: 'tableau', index: columnIndex, start: cardIndex });
+      return;
+    }
     selected = { zone: 'tableau', index: columnIndex, start: cardIndex };
-    setStatus(`${ranks[card.rank]} ${suitSymbols[card.suit]} stack selected.`);
+    setStatus(`${describeCard(card)} stack selected.`);
     render();
   }
 
@@ -411,19 +500,25 @@ const jsonLd = {
 
   function moveToColumn(columnIndex: number) {
     const cards = selectedCards();
+    const source = selected;
     const first = cards[0];
     if (!selected || !first) return;
+    if (selected.zone === 'tableau' && selected.index === columnIndex) {
+      selected = null;
+      setStatus('Selection cleared.');
+      render();
+      return;
+    }
     const target = tableau[columnIndex][tableau[columnIndex].length - 1];
     if (!canPlaceOnTableau(first, target)) {
-      selected = null;
-      setStatus('That stack does not fit there.');
+      setStatus('That stack does not fit there. Try opposite color, one rank lower.');
       render();
       return;
     }
     snapshot();
     const moved = removeSelected();
     tableau[columnIndex].push(...moved);
-    finishMove('Stack moved.', selected.zone === 'waste' ? 5 : 0);
+    finishMove(`${describeCard(first)} moved to column ${columnIndex + 1}.`, source?.zone === 'waste' ? 5 : 0);
   }
 
   function moveToFoundation(suit: Suit) {
@@ -434,7 +529,6 @@ const jsonLd = {
     }
     const card = cards[0];
     if (!canPlaceOnFoundation(card, suit)) {
-      selected = null;
       setStatus('Foundation needs same suit in order.');
       render();
       return;
@@ -446,31 +540,103 @@ const jsonLd = {
   }
 
   function tryAutoMove() {
-    const wasteCard = waste[waste.length - 1];
-    if (wasteCard && suits.some((suit) => {
-      if (!canPlaceOnFoundation(wasteCard, suit)) return false;
-      selected = { zone: 'waste' };
-      moveToFoundation(suit);
-      return true;
-    })) return;
-    for (let i = 0; i < tableau.length; i++) {
-      const card = tableau[i][tableau[i].length - 1];
-      if (!card?.faceUp) continue;
-      for (const suit of suits) {
-        if (canPlaceOnFoundation(card, suit)) {
+    let moved = 0;
+    for (let guard = 0; guard < 52; guard++) {
+      const before = foundation.S.length + foundation.H.length + foundation.D.length + foundation.C.length;
+      const wasteCard = waste[waste.length - 1];
+      const wasteSuit = wasteCard ? findFoundationTarget(wasteCard) : undefined;
+      if (wasteCard && wasteSuit) {
+        selected = { zone: 'waste' };
+        moveToFoundation(wasteSuit);
+        moved++;
+        continue;
+      }
+      let didMove = false;
+      for (let i = 0; i < tableau.length; i++) {
+        const card = tableau[i][tableau[i].length - 1];
+        if (!card?.faceUp) continue;
+        const suit = findFoundationTarget(card);
+        if (suit) {
           selected = { zone: 'tableau', index: i, start: tableau[i].length - 1 };
           moveToFoundation(suit);
-          return;
+          moved++;
+          didMove = true;
+          break;
         }
       }
+      const after = foundation.S.length + foundation.H.length + foundation.D.length + foundation.C.length;
+      if (!didMove || before === after) break;
     }
-    setStatus('No obvious foundation move.');
+    if (!moved) setStatus('No obvious foundation move.');
+    else setStatus(`Auto moved ${moved} card${moved === 1 ? '' : 's'} to foundations.`);
+  }
+
+  function findHint() {
+    const wasteCard = waste[waste.length - 1];
+    if (wasteCard) {
+      const foundationSuit = findFoundationTarget(wasteCard);
+      if (foundationSuit) return `Hint: move ${describeCard(wasteCard)} to ${suitNames[foundationSuit]}.`;
+      const targets = findTableauTargets([wasteCard]);
+      if (targets.length) return `Hint: move ${describeCard(wasteCard)} from waste to column ${targets[0] + 1}.`;
+    }
+    for (let i = 0; i < tableau.length; i++) {
+      const pile = tableau[i];
+      for (let cardIndex = pile.findIndex((card) => card.faceUp); cardIndex >= 0 && cardIndex < pile.length; cardIndex++) {
+        const run = pile.slice(cardIndex);
+        if (!isValidRun(run)) continue;
+        const card = run[0];
+        if (run.length === 1) {
+          const foundationSuit = findFoundationTarget(card);
+          if (foundationSuit) return `Hint: move ${describeCard(card)} from column ${i + 1} to ${suitNames[foundationSuit]}.`;
+        }
+        const targets = findTableauTargets(run, i);
+        if (targets.length) return `Hint: move ${describeCard(card)} stack from column ${i + 1} to column ${targets[0] + 1}.`;
+      }
+    }
+    if (stock.length) return 'Hint: draw from the stock.';
+    if (waste.length) return 'Hint: recycle the waste, then keep digging.';
+    return 'Hint: no visible move. Undo or start a new deal.';
   }
 
   stockEl?.addEventListener('click', drawStock);
   wasteEl?.addEventListener('click', selectWaste);
   foundations.forEach((el, suit) => el.addEventListener('click', () => moveToFoundation(suit)));
   columns.forEach((el, index) => el.addEventListener('click', (event) => selectColumn(index, event)));
+  columns.forEach((el, columnIndex) => {
+    el.addEventListener('dragstart', (event) => {
+      const cardEl = (event.target as HTMLElement).closest<HTMLElement>('[data-card]');
+      if (!cardEl) return;
+      const pile = tableau[columnIndex];
+      const cardIndex = pile.findIndex((card) => card.id === cardEl.dataset.card);
+      if (cardIndex < 0 || !isValidRun(pile.slice(cardIndex))) {
+        event.preventDefault();
+        return;
+      }
+      selected = { zone: 'tableau', index: columnIndex, start: cardIndex };
+      event.dataTransfer?.setData('text/plain', cardEl.dataset.card || '');
+      event.dataTransfer?.setDragImage(cardEl, 40, 55);
+      setStatus(`${describeCard(pile[cardIndex])} stack lifted.`);
+      render();
+    });
+    el.addEventListener('dragover', (event) => {
+      const first = selectedCards()[0];
+      if (first && canPlaceOnTableau(first, tableau[columnIndex][tableau[columnIndex].length - 1])) event.preventDefault();
+    });
+    el.addEventListener('drop', (event) => {
+      event.preventDefault();
+      moveToColumn(columnIndex);
+    });
+  });
+  foundations.forEach((el, suit) => {
+    el.addEventListener('dragover', (event) => {
+      const cards = selectedCards();
+      if (cards.length === 1 && canPlaceOnFoundation(cards[0], suit)) event.preventDefault();
+    });
+    el.addEventListener('drop', (event) => {
+      event.preventDefault();
+      moveToFoundation(suit);
+    });
+  });
   document.querySelector('[data-new]')?.addEventListener('click', startGame);
   document.querySelector('[data-auto]')?.addEventListener('click', tryAutoMove);
   document.querySelector('[data-undo]')?.addEventListener('click', () => {
@@ -492,19 +658,7 @@ const jsonLd = {
     render();
   });
   document.querySelector('[data-hint]')?.addEventListener('click', () => {
-    const wasteCard = waste[waste.length - 1];
-    if (wasteCard && suits.some((suit) => canPlaceOnFoundation(wasteCard, suit))) {
-      setStatus(`Hint: move ${ranks[wasteCard.rank]} ${suitSymbols[wasteCard.suit]} to its foundation.`);
-      return;
-    }
-    for (let i = 0; i < tableau.length; i++) {
-      const card = tableau[i][tableau[i].length - 1];
-      if (card?.faceUp && suits.some((suit) => canPlaceOnFoundation(card, suit))) {
-        setStatus(`Hint: foundation can take ${ranks[card.rank]} ${suitSymbols[card.suit]}.`);
-        return;
-      }
-    }
-    setStatus('Hint: draw, or move a visible stack onto the opposite color.');
+    setStatus(findHint());
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
@@ -683,6 +837,7 @@ const jsonLd = {
     min-height: 124px;
     padding: 0;
     color: inherit;
+    cursor: pointer;
   }
 
   .pile {
@@ -693,6 +848,12 @@ const jsonLd = {
   .foundation {
     border-style: solid;
     border-color: rgba(255,255,255,0.4);
+  }
+
+  .pile:hover,
+  .column:hover {
+    border-color: rgba(255, 255, 0, 0.82);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.22);
   }
 
   .pile__empty,
@@ -718,6 +879,14 @@ const jsonLd = {
     transform: translateX(-50%);
     width: 88px;
     height: 124px;
+  }
+
+  .slot-card[draggable="true"] {
+    cursor: grab;
+  }
+
+  .slot-card[draggable="true"]:active {
+    cursor: grabbing;
   }
 
   .card {
@@ -773,6 +942,7 @@ const jsonLd = {
     outline: 3px solid #ffff00;
     outline-offset: -5px;
     transform: translateY(-2px);
+    box-shadow: 0 0 0 2px #000, 4px 4px 0 rgba(0,0,0,0.55);
   }
 
   .card__corner {
