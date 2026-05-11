@@ -387,6 +387,14 @@ const built = new Date().toISOString();
     masterGain = ctx.createGain(); masterGain.gain.value = 0.7;
     masterGain.connect(ctx.destination);
     sched = createAudioScheduler(ctx);
+    // Audit fix #2: iOS Safari auto-suspends AudioContext on tab-switch.
+    // When the user returns and we still believe we're playing, re-arm parked
+    // timers so audio actually resumes.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) {
+        sched?.resume();
+      }
+    });
     return ctx;
   }
 
@@ -760,6 +768,16 @@ const built = new Date().toISOString();
     });
     btn.addEventListener('mouseup', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
     btn.addEventListener('mouseleave', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
+    // Audit fix #3: iPhone users couldn't save slots — mousedown is unreliable
+    // for touch on iOS Safari and mouseleave never fires. Mirror drum-school's
+    // pattern and bind touch events explicitly.
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      savedViaLongPress = false;
+      pressTimer = window.setTimeout(() => { savedViaLongPress = true; saveSlot(n); pressTimer = null; }, 600);
+    }, { passive: false });
+    btn.addEventListener('touchend', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
+    btn.addEventListener('touchcancel', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
     btn.addEventListener('click', () => {
       if (savedViaLongPress) { savedViaLongPress = false; return; }
       const filled = !!localStorage.getItem(SAVE_KEY(n));

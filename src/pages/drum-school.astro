@@ -472,7 +472,20 @@ const built = new Date().toISOString();
   // ===========================================================
 
   let ctx: AudioContext | null = null;
-  function ac(): AudioContext { if (ctx) return ctx; ctx = new (window.AudioContext || (window as any).webkitAudioContext)(); return ctx; }
+  function ac(): AudioContext {
+    if (ctx) return ctx;
+    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Audit fix #2: iOS Safari auto-suspends AudioContext on tab-switch.
+    // Only Beat Keeper has long-running scheduled audio; others fire instant
+    // sounds. Always resume on visibility-return — harmless when nothing's
+    // queued, fixes silent audio when the user comes back mid-Beat-Keeper.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running') {
+        ctx.resume().catch(() => {});
+      }
+    });
+    return ctx;
+  }
   const $ = (id: string) => document.getElementById(id);
 
   // Tone helpers (sine notes for ear training, kick for rhythm games)

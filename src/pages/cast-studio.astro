@@ -645,6 +645,15 @@ const built = new Date().toISOString();
     bassDuckGain = ctx.createGain(); bassDuckGain.gain.value = 1.0;
     bassDuckGain.connect(masterBus);
 
+    // Audit fix #2: iOS Safari auto-suspends AudioContext on tab-switch.
+    // When the user returns and we still believe we're playing, re-arm parked
+    // timers so audio actually resumes.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) {
+        sched?.resume();
+      }
+    });
+
     return ctx;
   }
 
@@ -1052,14 +1061,14 @@ const built = new Date().toISOString();
     render();
   }
 
-  function pause() {
+  async function pause() {
     if (!ctx || !sched) return;
-    sched.pause(); // suspends ctx + parks pending timers
+    await sched.pause(); // suspends ctx + parks pending timers
     playing = false; setPlayIcon(false); cancelAnimationFrame(rafId);
   }
-  function resume() {
+  async function resume() {
     if (!ctx || !sched) { playSong(currentSongIdx); return; }
-    sched.resume(); // resumes ctx + re-arms parked timers
+    await sched.resume(); // resumes ctx + re-arms parked timers
     playing = true; setPlayIcon(true); runProgress();
   }
   function stop() { clearScheduled(); playing = false; setPlayIcon(false); }
@@ -1302,7 +1311,13 @@ const built = new Date().toISOString();
 
   function bindGlobal() {
     document.querySelectorAll<HTMLButtonElement>('.cs__nav-btn').forEach(b => b.addEventListener('click', () => { view = b.dataset.view as any; render(); if (view === 'meters') startSpectrum(); }));
-    document.getElementById('cs-play')!.addEventListener('click', () => { if (!ctx) { playSong(0); return; } if (playing) pause(); else resume(); });
+    // Audit fix #5: await async pause/resume + debounce rapid clicks.
+    let csLastPlayToggle = 0;
+    document.getElementById('cs-play')!.addEventListener('click', async () => {
+      const now = Date.now(); if (now - csLastPlayToggle < 100) return; csLastPlayToggle = now;
+      if (!ctx) { playSong(0); return; }
+      if (playing) await pause(); else await resume();
+    });
     document.getElementById('cs-prev')!.addEventListener('click', () => { stop(); playSong((currentSongIdx - 1 + SONGS.length) % SONGS.length); });
     document.getElementById('cs-next')!.addEventListener('click', () => { stop(); playSong((currentSongIdx + 1) % SONGS.length); });
     document.getElementById('cs-vol')!.addEventListener('input', (e) => { volume = Number((e.target as HTMLInputElement).value); if (ctx) { /* find output gain via masterBus chain? Simplest: store ref */ }

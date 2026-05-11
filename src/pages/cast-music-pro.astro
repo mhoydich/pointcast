@@ -957,6 +957,14 @@ const built = new Date().toISOString();
     convolver.buffer = ir;
     const wet = ctx.createGain(); wet.gain.value = 0.18; convolver.connect(wet); wet.connect(masterGain);
     sched = createAudioScheduler(ctx);
+    // Audit fix #2: iOS Safari auto-suspends AudioContext on tab-switch.
+    // When the user returns and we still believe we're playing, re-arm parked
+    // timers so audio actually resumes.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && playing) {
+        sched?.resume();
+      }
+    });
   } return ctx!; }
 
   function playKick(when: number, _vel = 1) {
@@ -1047,16 +1055,16 @@ const built = new Date().toISOString();
     sched!.schedule(() => advance(true), start + dur - crossfadeMs / 1000);
   }
 
-  function pause() {
+  async function pause() {
     if (!ctx || !sched) return;
-    sched.pause(); // suspends ctx + parks pending timers (incl. auto-advance)
+    await sched.pause(); // suspends ctx + parks pending timers (incl. auto-advance)
     playing = false; setPlayIcon(false);
     document.getElementById('cmp-bar')?.classList.remove('cmp__bar--playing');
     cancelAnimationFrame(rafId);
   }
-  function resume() {
+  async function resume() {
     if (!ctx || !sched) { play(); return; }
-    sched.resume(); // resumes ctx + re-arms parked timers
+    await sched.resume(); // resumes ctx + re-arms parked timers
     playing = true; setPlayIcon(true);
     document.getElementById('cmp-bar')?.classList.add('cmp__bar--playing');
     runProgress();
@@ -1573,7 +1581,19 @@ const built = new Date().toISOString();
     document.querySelectorAll<HTMLLIElement>('.cmp__playlist').forEach(li => li.addEventListener('click', () => pushView({ kind: 'playlist', pid: li.dataset.pid! })));
     $('cmp-back')!.addEventListener('click', navBack);
     $('cmp-fwd')!.addEventListener('click', navFwd);
-    $('cmp-play')!.addEventListener('click', () => { if (queue.length === 0) { const t = TRACKS[today % TRACKS.length]; loadQueue([t]); return; } if (playing) pause(); else resume(); });
+    // Audit fixes (2026-05-10):
+    //   #1 — after queue exhausts with repeat=off, sched has no parked timers;
+    //        resume() is a no-op. Fall through to play() instead.
+    //   #5 — pause()/resume() now await sched. Debounce clicks within 100ms so
+    //        a rapid double-tap can't interleave suspend/resume on iOS Safari.
+    let cmpLastPlayToggle = 0;
+    $('cmp-play')!.addEventListener('click', async () => {
+      const now = Date.now(); if (now - cmpLastPlayToggle < 100) return; cmpLastPlayToggle = now;
+      if (queue.length === 0) { const t = TRACKS[today % TRACKS.length]; loadQueue([t]); return; }
+      if (playing) await pause();
+      else if (sched && sched.timerCount > 0) await resume();
+      else play();
+    });
     $('cmp-prev')!.addEventListener('click', prev);
     $('cmp-next')!.addEventListener('click', () => advance(false));
     $('cmp-shuffle')!.addEventListener('click', () => { shuffleMode = !shuffleMode; lsSet(KEY.shuffle, shuffleMode); $('cmp-shuffle')!.classList.toggle('cmp__bar-btn--active', shuffleMode); if (shuffleMode && queue.length > 1) { const cur = queue[qIdx]; const rest = queue.filter((_, i) => i !== qIdx); for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [rest[i], rest[j]] = [rest[j], rest[i]]; } queue = [cur, ...rest]; qIdx = 0; renderQueue(); } toast(shuffleMode ? 'Shuffle on' : 'Shuffle off', 'check'); });
