@@ -301,6 +301,23 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
           <span class="bar-toggle__btn-sub">click to enable</span>
         </button>
       </div>
+
+      {/* T2: Ambient audio toggle (the bar's surf layer) */}
+      <div class="bar-toggle__row bar-toggle__row--secondary">
+        <div class="bar-toggle__copy">
+          <p class="bar-toggle__h">Ambient audio.</p>
+          <p class="bar-toggle__dek">
+            Soft procedural surf, a gentle low-passed wash with slow wave
+            swells. Plus a single bell at the top of each hour while you're
+            here. Volume capped low (~0.10). Requires the bar ON above.
+            Stored in <code>pc:bar:audio</code>.
+          </p>
+        </div>
+        <button type="button" class="bar-toggle__btn mono" id="me-bar-audio-toggle" data-state="off">
+          <span class="bar-toggle__btn-label">OFF</span>
+          <span class="bar-toggle__btn-sub">click to enable</span>
+        </button>
+      </div>
     </section>
 
     {/* ──────────── 6. QUICK ACTIONS ──────────── */}
@@ -893,6 +910,34 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   });
   paintBarToggle();
 
+  // T2: Ambient audio toggle — pc:bar:audio = on | off. Dispatches a
+  // pc:bar:audio-change CustomEvent so FooterBarV6 (which owns the
+  // AudioContext) can start/stop without re-reading localStorage.
+  const AUDIO_KEY = 'pc:bar:audio';
+  const audioBtn = document.getElementById('me-bar-audio-toggle');
+  function paintAudioToggle() {
+    if (!audioBtn) return;
+    let on = false;
+    try { on = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
+    audioBtn.dataset.state = on ? 'on' : 'off';
+    const lbl = audioBtn.querySelector('.bar-toggle__btn-label');
+    const sub = audioBtn.querySelector('.bar-toggle__btn-sub');
+    if (lbl) lbl.textContent = on ? 'ON' : 'OFF';
+    if (sub) sub.textContent = on ? 'click to disable' : 'click to enable';
+  }
+  audioBtn?.addEventListener('click', () => {
+    let on = false;
+    try { on = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
+    const next = !on;
+    try { localStorage.setItem(AUDIO_KEY, next ? 'on' : 'off'); } catch (e) {}
+    paintAudioToggle();
+    // Fire a custom event so FooterBarV6 can react immediately (start
+    // the AudioContext now — we're still inside the click handler, so
+    // browsers honor the user-gesture autoplay rule).
+    window.dispatchEvent(new CustomEvent('pc:bar:audio-change', { detail: { on: next } }));
+  });
+  paintAudioToggle();
+
   // Initial paint
   syncCurrentNoun();
   render();
@@ -1264,6 +1309,11 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     grid-template-columns: 1fr 160px;
     gap: 16px;
     align-items: center;
+  }
+  .bar-toggle__row--secondary {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--color-rule);
   }
   .bar-toggle__copy { min-width: 0; }
   .bar-toggle__h {
