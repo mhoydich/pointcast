@@ -1,0 +1,651 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Quartet — four-voice round, one voice at a time" description="Pick a melody. Four voices sing it as a round — each entering one phrase after the last, in a different octave. Row Row Row Your Boat geometry. Eight hand-built subjects, five keys, browser only.">
+  <main class="cq" id="cq" data-built={built}>
+    <header class="cq__hero">
+      <p class="cq__kicker">CAST · QUARTET · canon · round · four voices</p>
+      <h1 class="cq__title">Quartet.</h1>
+      <p class="cq__sub">Pick a melody. Four voices sing it as a round — each entering one phrase later than the one before, each in its own octave. Once they're all in, it loops forever. The Row-Row-Row-Your-Boat geometry, in 8 hand-built subjects and 5 keys.</p>
+    </header>
+
+    <section class="cq__panel">
+      <div class="cq__set">
+        <p class="cq__set-label">SUBJECT</p>
+        <div class="cq__pills" id="cq-subj-pills">
+          <button class="cq__pill cq__pill--active" data-subj="0">walk</button>
+          <button class="cq__pill" data-subj="1">step</button>
+          <button class="cq__pill" data-subj="2">curl</button>
+          <button class="cq__pill" data-subj="3">leap</button>
+          <button class="cq__pill" data-subj="4">arch</button>
+          <button class="cq__pill" data-subj="5">drone</button>
+          <button class="cq__pill" data-subj="6">spire</button>
+          <button class="cq__pill" data-subj="7">dance</button>
+        </div>
+      </div>
+      <div class="cq__set">
+        <p class="cq__set-label">KEY</p>
+        <div class="cq__pills" id="cq-key-pills">
+          <button class="cq__pill cq__pill--active" data-key="C">C major</button>
+          <button class="cq__pill" data-key="F">F major</button>
+          <button class="cq__pill" data-key="G">G major</button>
+          <button class="cq__pill" data-key="Am">A minor</button>
+          <button class="cq__pill" data-key="Dm">D minor</button>
+        </div>
+      </div>
+      <div class="cq__set">
+        <p class="cq__set-label">TEMPO · <span id="cq-tempo-val">88</span> BPM</p>
+        <input type="range" class="cq__tempo" id="cq-tempo" min="60" max="140" value="88"/>
+      </div>
+    </section>
+
+    <section class="cq__stage">
+      <canvas class="cq__staves" id="cq-staves" width="1200" height="380"></canvas>
+      <p class="cq__hint" id="cq-hint">Voice 1 enters at bar 1. Voice 2 at bar 2. Voice 3 at bar 3. Voice 4 at bar 4. Then they all loop together.</p>
+    </section>
+
+    <section class="cq__transport">
+      <button class="cq__play" id="cq-play" type="button">
+        <span class="cq__play-icon" id="cq-play-icon">▶</span>
+        <span class="cq__play-label" id="cq-play-label">SING</span>
+      </button>
+      <button class="cq__mutes" id="cq-mute-1" type="button" aria-pressed="false">V1</button>
+      <button class="cq__mutes" id="cq-mute-2" type="button" aria-pressed="false">V2</button>
+      <button class="cq__mutes" id="cq-mute-3" type="button" aria-pressed="false">V3</button>
+      <button class="cq__mutes" id="cq-mute-4" type="button" aria-pressed="false">V4</button>
+      <span class="cq__mute-hint">Click a voice button to mute it. Pressed = muted.</span>
+    </section>
+
+    <section class="cq__about">
+      <h2 class="cq__about-h">What's a round, exactly</h2>
+      <p>A round is a piece of music where every voice sings the same melody, but each starts later than the one before. Because the melody is written so its bars harmonize with each other no matter the offset, you end up with what sounds like 4 different parts even though it's really 4 staggered copies of one part. "Row Row Row Your Boat" is the canonical example. "Frère Jacques." "Three Blind Mice."</p>
+      <p>This page implements that pattern directly. The melody is 4 bars × 4 beats = 16 beats long. Voice 1 starts at the downbeat. Voice 2 enters 4 beats later (bar 2). Voice 3 enters another 4 beats later (bar 3). Voice 4 enters at bar 4. From that point on, all four voices are singing the same melody at different positions in the cycle, and the page loops forever.</p>
+      <p>Each voice gets its own octave (bass / tenor / alto / soprano-ish), so they stack rather than crash. Each voice has its own color in the staff display: walnut, rose, sky, mint.</p>
+      <p>All 8 subjects are written to harmonize against themselves at every 4-beat offset — drop any voice in at any bar and the result will still sound consonant.</p>
+      <p>Pair with <a href="/cast-rivers">/cast-rivers</a> for different-tempo phasing, <a href="/cast-throw">/cast-throw</a> for melodic call-and-response, <a href="/cast-wheel">/cast-wheel</a> for key relationships.</p>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --cq-ink: #0a0814;
+      --cq-walnut: #5a3422;
+      --cq-walnut-light: #8b5a3a;
+      --cq-flame: #f6c15e;
+      --cq-flame-deep: #d68f2c;
+      --cq-cream: #f4e7c8;
+      --cq-cream-dim: #c8b48a;
+      --cq-cream-dimmer: #8b7a5a;
+      --cq-rose: #e6788c;
+      --cq-sky: #9ed6f0;
+      --cq-mint: #9bd7b8;
+    }
+
+    body:has(.cq) {
+      background: radial-gradient(circle at 50% 0%, #1a0e28 0%, var(--cq-ink) 60%);
+      color: var(--cq-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .cq { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    .cq__hero { text-align: center; margin-bottom: 32px; }
+    .cq__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      color: var(--cq-flame-deep);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .cq__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 900;
+      font-size: clamp(56px, 12vw, 140px);
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      margin: 0 0 16px;
+      color: var(--cq-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    }
+    .cq__sub {
+      max-width: 720px; margin: 0 auto;
+      font-size: 17px; line-height: 1.5;
+      color: var(--cq-cream-dim);
+    }
+
+    /* PANEL */
+    .cq__panel {
+      display: grid;
+      grid-template-columns: 2fr 1.6fr 1.2fr;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    @media (max-width: 820px) { .cq__panel { grid-template-columns: 1fr; } }
+    .cq__set {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .cq__set-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--cq-cream-dimmer);
+      margin: 0 0 8px;
+    }
+    .cq__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .cq__pill {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(246,193,94,0.28);
+      background: transparent;
+      color: var(--cq-cream);
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .cq__pill:hover { background: rgba(246,193,94,0.10); }
+    .cq__pill--active {
+      background: var(--cq-flame);
+      color: var(--cq-walnut);
+      border-color: var(--cq-flame);
+    }
+    .cq__tempo { width: 100%; accent-color: var(--cq-flame); }
+
+    /* STAGE */
+    .cq__stage {
+      background: rgba(0,0,0,0.32);
+      border: 1px solid rgba(246,193,94,0.16);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 22px;
+    }
+    .cq__staves {
+      width: 100%;
+      height: 380px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .cq__hint {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cq-cream-dimmer);
+      margin: 0;
+      text-align: center;
+    }
+
+    /* TRANSPORT */
+    .cq__transport {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+    .cq__play {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 26px;
+      border-radius: 12px;
+      border: 0;
+      background: var(--cq-flame);
+      color: var(--cq-walnut);
+      cursor: pointer;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      box-shadow: 0 4px 14px rgba(246,193,94,0.32);
+    }
+    .cq__play:hover { background: var(--cq-flame-deep); }
+    .cq__mutes {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(246,193,94,0.32);
+      background: transparent;
+      color: var(--cq-cream);
+      cursor: pointer;
+      transition: background 100ms ease, border 100ms ease;
+    }
+    .cq__mutes:hover { background: rgba(246,193,94,0.12); }
+    .cq__mutes[aria-pressed="true"] {
+      background: var(--cq-rose);
+      color: var(--cq-walnut);
+      border-color: var(--cq-rose);
+    }
+    .cq__mute-hint {
+      flex: 1;
+      min-width: 160px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cq-cream-dimmer);
+    }
+
+    /* ABOUT */
+    .cq__about {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 24px 0 0;
+      border-top: 1px solid rgba(246,193,94,0.14);
+    }
+    .cq__about-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--cq-cream);
+      margin: 0 0 12px;
+    }
+    .cq__about p {
+      font-size: 15px; line-height: 1.6;
+      color: var(--cq-cream-dim);
+      margin: 0 0 12px;
+    }
+    .cq__about a { color: var(--cq-flame); text-decoration: none; }
+    .cq__about a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // ---- music data ----
+    const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+    const MINOR = [0, 2, 3, 5, 7, 8, 10];
+    type KeyKey = 'C' | 'F' | 'G' | 'Am' | 'Dm';
+    const KEYS: Record<KeyKey, { rootMidi: number; scale: number[] }> = {
+      'C':  { rootMidi: 60, scale: MAJOR },
+      'F':  { rootMidi: 65, scale: MAJOR },
+      'G':  { rootMidi: 67, scale: MAJOR },
+      'Am': { rootMidi: 57, scale: MINOR },
+      'Dm': { rootMidi: 62, scale: MINOR },
+    };
+
+    // Subjects: 16 beats each, expressed as { startBeat, durBeats, degree (0..7) }
+    // where degree 0..6 are scale degrees and 7 = degree 0 octave up.
+    // All subjects designed to self-harmonize at 4-beat offsets.
+    type SubjectNote = { startBeat: number; durBeats: number; degree: number };
+    const SUBJECTS: { name: string; notes: SubjectNote[] }[] = [
+      // walk: simple stepwise + return  (1 3 5 3 | 1 3 5 8 | 5 3 1 5 | 1 1 1 1)
+      { name: 'walk', notes: [
+        { startBeat: 0,  durBeats: 1, degree: 0 },
+        { startBeat: 1,  durBeats: 1, degree: 2 },
+        { startBeat: 2,  durBeats: 1, degree: 4 },
+        { startBeat: 3,  durBeats: 1, degree: 2 },
+        { startBeat: 4,  durBeats: 1, degree: 0 },
+        { startBeat: 5,  durBeats: 1, degree: 2 },
+        { startBeat: 6,  durBeats: 1, degree: 4 },
+        { startBeat: 7,  durBeats: 1, degree: 7 },
+        { startBeat: 8,  durBeats: 1, degree: 4 },
+        { startBeat: 9,  durBeats: 1, degree: 2 },
+        { startBeat: 10, durBeats: 1, degree: 0 },
+        { startBeat: 11, durBeats: 1, degree: 4 },
+        { startBeat: 12, durBeats: 4, degree: 0 },
+      ]},
+      // step: only triadic tones, eighth notes
+      { name: 'step', notes: [
+        { startBeat: 0,    durBeats: 0.5, degree: 0 },
+        { startBeat: 0.5,  durBeats: 0.5, degree: 2 },
+        { startBeat: 1,    durBeats: 0.5, degree: 4 },
+        { startBeat: 1.5,  durBeats: 0.5, degree: 2 },
+        { startBeat: 2,    durBeats: 0.5, degree: 0 },
+        { startBeat: 2.5,  durBeats: 0.5, degree: 4 },
+        { startBeat: 3,    durBeats: 1,   degree: 2 },
+        { startBeat: 4,    durBeats: 0.5, degree: 4 },
+        { startBeat: 4.5,  durBeats: 0.5, degree: 2 },
+        { startBeat: 5,    durBeats: 0.5, degree: 0 },
+        { startBeat: 5.5,  durBeats: 0.5, degree: 4 },
+        { startBeat: 6,    durBeats: 1,   degree: 7 },
+        { startBeat: 7,    durBeats: 1,   degree: 4 },
+        { startBeat: 8,    durBeats: 0.5, degree: 2 },
+        { startBeat: 8.5,  durBeats: 0.5, degree: 0 },
+        { startBeat: 9,    durBeats: 1,   degree: 2 },
+        { startBeat: 10,   durBeats: 1,   degree: 4 },
+        { startBeat: 11,   durBeats: 1,   degree: 2 },
+        { startBeat: 12,   durBeats: 4,   degree: 0 },
+      ]},
+      // curl: stepwise wraps
+      { name: 'curl', notes: [
+        { startBeat: 0,  durBeats: 1, degree: 4 },
+        { startBeat: 1,  durBeats: 1, degree: 2 },
+        { startBeat: 2,  durBeats: 1, degree: 0 },
+        { startBeat: 3,  durBeats: 1, degree: 2 },
+        { startBeat: 4,  durBeats: 2, degree: 4 },
+        { startBeat: 6,  durBeats: 2, degree: 2 },
+        { startBeat: 8,  durBeats: 1, degree: 0 },
+        { startBeat: 9,  durBeats: 1, degree: 4 },
+        { startBeat: 10, durBeats: 1, degree: 2 },
+        { startBeat: 11, durBeats: 1, degree: 0 },
+        { startBeat: 12, durBeats: 4, degree: 4 },
+      ]},
+      // leap: bigger intervals
+      { name: 'leap', notes: [
+        { startBeat: 0,  durBeats: 2, degree: 0 },
+        { startBeat: 2,  durBeats: 2, degree: 4 },
+        { startBeat: 4,  durBeats: 2, degree: 2 },
+        { startBeat: 6,  durBeats: 2, degree: 7 },
+        { startBeat: 8,  durBeats: 2, degree: 4 },
+        { startBeat: 10, durBeats: 2, degree: 0 },
+        { startBeat: 12, durBeats: 4, degree: 2 },
+      ]},
+      // arch: rising then falling
+      { name: 'arch', notes: [
+        { startBeat: 0,  durBeats: 1, degree: 0 },
+        { startBeat: 1,  durBeats: 1, degree: 2 },
+        { startBeat: 2,  durBeats: 1, degree: 4 },
+        { startBeat: 3,  durBeats: 1, degree: 7 },
+        { startBeat: 4,  durBeats: 2, degree: 4 },
+        { startBeat: 6,  durBeats: 2, degree: 2 },
+        { startBeat: 8,  durBeats: 1, degree: 0 },
+        { startBeat: 9,  durBeats: 1, degree: 2 },
+        { startBeat: 10, durBeats: 2, degree: 4 },
+        { startBeat: 12, durBeats: 4, degree: 0 },
+      ]},
+      // drone: mostly tonic with grace notes
+      { name: 'drone', notes: [
+        { startBeat: 0,  durBeats: 3, degree: 0 },
+        { startBeat: 3,  durBeats: 1, degree: 2 },
+        { startBeat: 4,  durBeats: 2, degree: 4 },
+        { startBeat: 6,  durBeats: 2, degree: 2 },
+        { startBeat: 8,  durBeats: 4, degree: 0 },
+        { startBeat: 12, durBeats: 4, degree: 0 },
+      ]},
+      // spire: ascending climbs
+      { name: 'spire', notes: [
+        { startBeat: 0,  durBeats: 0.5, degree: 0 },
+        { startBeat: 0.5,durBeats: 0.5, degree: 2 },
+        { startBeat: 1,  durBeats: 0.5, degree: 4 },
+        { startBeat: 1.5,durBeats: 0.5, degree: 7 },
+        { startBeat: 2,  durBeats: 2, degree: 4 },
+        { startBeat: 4,  durBeats: 0.5, degree: 4 },
+        { startBeat: 4.5,durBeats: 0.5, degree: 2 },
+        { startBeat: 5,  durBeats: 0.5, degree: 0 },
+        { startBeat: 5.5,durBeats: 0.5, degree: 2 },
+        { startBeat: 6,  durBeats: 2, degree: 4 },
+        { startBeat: 8,  durBeats: 0.5, degree: 7 },
+        { startBeat: 8.5,durBeats: 0.5, degree: 4 },
+        { startBeat: 9,  durBeats: 1, degree: 2 },
+        { startBeat: 10, durBeats: 2, degree: 0 },
+        { startBeat: 12, durBeats: 4, degree: 0 },
+      ]},
+      // dance: dotted feel
+      { name: 'dance', notes: [
+        { startBeat: 0,    durBeats: 0.75, degree: 0 },
+        { startBeat: 0.75, durBeats: 0.25, degree: 2 },
+        { startBeat: 1,    durBeats: 1,    degree: 4 },
+        { startBeat: 2,    durBeats: 0.75, degree: 2 },
+        { startBeat: 2.75, durBeats: 0.25, degree: 4 },
+        { startBeat: 3,    durBeats: 1,    degree: 0 },
+        { startBeat: 4,    durBeats: 0.75, degree: 4 },
+        { startBeat: 4.75, durBeats: 0.25, degree: 7 },
+        { startBeat: 5,    durBeats: 1,    degree: 4 },
+        { startBeat: 6,    durBeats: 2,    degree: 2 },
+        { startBeat: 8,    durBeats: 0.5,  degree: 0 },
+        { startBeat: 8.5,  durBeats: 0.5,  degree: 2 },
+        { startBeat: 9,    durBeats: 0.5,  degree: 4 },
+        { startBeat: 9.5,  durBeats: 0.5,  degree: 2 },
+        { startBeat: 10,   durBeats: 2,    degree: 0 },
+        { startBeat: 12,   durBeats: 4,    degree: 4 },
+      ]},
+    ];
+
+    // Voice colors
+    const VOICE_COLORS = ['#8b5a3a', '#e6788c', '#9ed6f0', '#9bd7b8'];
+    // Voice octave offsets (bass, tenor, alto, soprano-ish)
+    const VOICE_OCTAVES = [-1, 0, 1, 2];
+
+    // ---- state ----
+    let subjIdx = 0;
+    let currentKey: KeyKey = 'C';
+    let tempo = 88;
+    let muted: boolean[] = [false, false, false, false];
+    let playing = false;
+
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    let startCtxTime = 0;
+    let scheduleTimer: number | null = null;
+    let rafId: number | null = null;
+    // Per-voice running beat index (relative to canon start, can be negative until voice enters)
+    let nextNoteIdx: number[] = [0, 0, 0, 0];
+    // Per-voice entry offset in beats (voice n enters at beat n*4)
+    const ENTRY_OFFSET_BEATS = 4;
+    const SUBJECT_LENGTH_BEATS = 16;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.45;
+      masterGain.connect(ctx.destination);
+    }
+    function midiToHz(m: number) { return 440 * Math.pow(2, (m - 69) / 12); }
+    function beatSec() { return 60 / tempo; }
+
+    function noteMidi(degree: number, voiceIdx: number): number {
+      const k = KEYS[currentKey];
+      // degree can be 0..7 where 7 = next octave's degree 0
+      const deg = degree;
+      const oct = Math.floor(deg / 7) + VOICE_OCTAVES[voiceIdx];
+      const inOct = deg % 7;
+      return k.rootMidi + oct * 12 + k.scale[inOct];
+    }
+
+    function playNote(voiceIdx: number, midi: number, atCtxTime: number, durSec: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const hz = midiToHz(midi);
+      // Soft pad voice with subtle detune per voice
+      const detune = (voiceIdx - 1.5) * 4;
+      const tail = Math.max(durSec, 0.2);
+      const stacks = [
+        { freq: hz,     gain: 0.18, decay: tail + 0.4 },
+        { freq: hz,     gain: 0.12, detune,  decay: tail + 0.4 },
+        { freq: hz * 2, gain: 0.04, decay: tail * 0.5 + 0.2 },
+      ];
+      const attack = 0.04;
+      for (const v of stacks) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = v.freq;
+        if ((v as any).detune) osc.detune.value = (v as any).detune;
+        g.gain.setValueAtTime(0.0001, atCtxTime);
+        g.gain.exponentialRampToValueAtTime(v.gain, atCtxTime + attack);
+        g.gain.setValueAtTime(v.gain, atCtxTime + tail - 0.18);
+        g.gain.exponentialRampToValueAtTime(0.0001, atCtxTime + v.decay);
+        osc.connect(g).connect(masterGain);
+        scheduler.trackSource(osc);
+        osc.start(atCtxTime);
+        osc.stop(atCtxTime + v.decay + 0.1);
+      }
+    }
+
+    function scheduleAhead() {
+      if (!playing || !ctx) return;
+      const horizon = ctx.currentTime + 0.3;
+      const bs = beatSec();
+      const subj = SUBJECTS[subjIdx];
+      for (let v = 0; v < 4; v++) {
+        if (muted[v]) continue;
+        // Voice v's notes are subj.notes with startBeat shifted by (v * ENTRY_OFFSET_BEATS),
+        // looping every SUBJECT_LENGTH_BEATS after the initial entry.
+        // We track the next note index for this voice. Each note's absolute time =
+        // startCtxTime + ((noteIdx_in_loop)*0 + v*ENTRY + cycle*16 + note.startBeat) * bs
+        // Simpler: maintain nextNoteIdx[v] in notes, increment, compute time.
+        while (true) {
+          const idxInLoop = nextNoteIdx[v] % subj.notes.length;
+          const cycle = Math.floor(nextNoteIdx[v] / subj.notes.length);
+          const note = subj.notes[idxInLoop];
+          const beatAbs = v * ENTRY_OFFSET_BEATS + cycle * SUBJECT_LENGTH_BEATS + note.startBeat;
+          const atCtx = startCtxTime + beatAbs * bs;
+          if (atCtx >= horizon) break;
+          const midi = noteMidi(note.degree, v);
+          playNote(v, midi, atCtx, note.durBeats * bs);
+          nextNoteIdx[v]++;
+        }
+      }
+      scheduleTimer = window.setTimeout(scheduleAhead, 60);
+    }
+
+    function startSing() {
+      ensureCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      playing = true;
+      startCtxTime = ctx.currentTime + 0.1;
+      nextNoteIdx = [0, 0, 0, 0];
+      document.getElementById('cq-play-icon')!.textContent = '■';
+      document.getElementById('cq-play-label')!.textContent = 'STOP';
+      scheduleAhead();
+      tickViz();
+    }
+    function stopSing() {
+      playing = false;
+      if (scheduleTimer != null) { clearTimeout(scheduleTimer); scheduleTimer = null; }
+      if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (scheduler) scheduler.stopAll();
+      document.getElementById('cq-play-icon')!.textContent = '▶';
+      document.getElementById('cq-play-label')!.textContent = 'SING';
+      drawStaves();
+    }
+
+    // ---- visualization ----
+    function drawStaves() {
+      const canvas = document.getElementById('cq-staves') as HTMLCanvasElement;
+      const c2 = canvas.getContext('2d')!;
+      const W = canvas.width, H = canvas.height;
+      c2.clearRect(0, 0, W, H);
+      const subj = SUBJECTS[subjIdx];
+      const k = KEYS[currentKey];
+
+      // 4 staves stacked
+      const staveH = H / 4;
+      const labelW = 50;
+      const rollW = W - labelW;
+      // window: show 8 bars (32 beats) — wrap around when needed
+      const VISIBLE_BEATS = 32;
+
+      for (let v = 0; v < 4; v++) {
+        const y0 = v * staveH;
+        // background per voice
+        c2.fillStyle = `rgba(255,255,255,0.02)`;
+        c2.fillRect(0, y0, W, staveH);
+        c2.strokeStyle = 'rgba(244,231,200,0.08)';
+        c2.lineWidth = 1;
+        c2.beginPath(); c2.moveTo(0, y0); c2.lineTo(W, y0); c2.stroke();
+
+        // bar lines
+        for (let b = 0; b <= 8; b++) {
+          const x = labelW + (b / 8) * rollW;
+          c2.strokeStyle = b === 0 || b === 8 ? 'rgba(246,193,94,0.18)' : 'rgba(244,231,200,0.06)';
+          c2.beginPath(); c2.moveTo(x, y0); c2.lineTo(x, y0 + staveH); c2.stroke();
+        }
+
+        // label
+        c2.fillStyle = VOICE_COLORS[v];
+        c2.font = 'bold 14px Inter Tight, sans-serif';
+        c2.fillText(`V${v + 1}`, 10, y0 + 24);
+        c2.font = '9px JetBrains Mono, monospace';
+        c2.fillStyle = muted[v] ? 'rgba(230,120,140,0.7)' : 'rgba(244,231,200,0.4)';
+        c2.fillText(muted[v] ? 'MUTED' : `enters bar ${v + 1}`, 10, y0 + 38);
+
+        // Compute current beat for this voice
+        let voiceBeat = 0;
+        let curBarOffset = 0;
+        if (playing && ctx) {
+          const elapsed = ctx.currentTime - startCtxTime;
+          const beatsPassed = elapsed / beatSec();
+          voiceBeat = beatsPassed - v * ENTRY_OFFSET_BEATS;
+          curBarOffset = Math.max(0, voiceBeat);
+        }
+
+        // Render the subject's notes once + show a sliding playhead
+        // For clarity: show this voice's notes positioned by their startBeat,
+        // looping across 2 cycles (so the playhead can move smoothly through wrap)
+        const cycleW = rollW / 2;
+        for (let cycle = 0; cycle < 2; cycle++) {
+          for (const n of subj.notes) {
+            const x = labelW + cycle * cycleW + (n.startBeat / SUBJECT_LENGTH_BEATS) * cycleW;
+            const w = Math.max(2, (n.durBeats / SUBJECT_LENGTH_BEATS) * cycleW - 2);
+            // pitch: scale degree (0..7) maps to y position within stave; higher = up
+            const yPos = y0 + staveH * 0.85 - (n.degree / 7) * staveH * 0.55;
+            const color = muted[v] ? `${VOICE_COLORS[v]}30` : `${VOICE_COLORS[v]}b0`;
+            c2.fillStyle = color;
+            c2.fillRect(x, yPos - 4, w, 8);
+          }
+        }
+
+        // playhead
+        if (playing && ctx && voiceBeat >= 0) {
+          const cyclePos = (voiceBeat % SUBJECT_LENGTH_BEATS) / SUBJECT_LENGTH_BEATS;
+          const x = labelW + cyclePos * cycleW;
+          c2.strokeStyle = muted[v] ? `${VOICE_COLORS[v]}50` : VOICE_COLORS[v];
+          c2.lineWidth = 2;
+          c2.beginPath(); c2.moveTo(x, y0 + 4); c2.lineTo(x, y0 + staveH - 4); c2.stroke();
+        }
+      }
+    }
+    function tickViz() {
+      drawStaves();
+      if (playing) rafId = requestAnimationFrame(tickViz);
+    }
+
+    function init() {
+      drawStaves();
+
+      document.getElementById('cq-subj-pills')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('[data-subj]');
+        if (!btn) return;
+        subjIdx = parseInt(btn.getAttribute('data-subj')!);
+        document.querySelectorAll('#cq-subj-pills .cq__pill').forEach(el =>
+          el.classList.toggle('cq__pill--active', el === btn));
+        drawStaves();
+      });
+      document.getElementById('cq-key-pills')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('[data-key]');
+        if (!btn) return;
+        currentKey = btn.getAttribute('data-key') as KeyKey;
+        document.querySelectorAll('#cq-key-pills .cq__pill').forEach(el =>
+          el.classList.toggle('cq__pill--active', el === btn));
+      });
+      const tempoSlider = document.getElementById('cq-tempo') as HTMLInputElement;
+      tempoSlider.addEventListener('input', () => {
+        tempo = parseInt(tempoSlider.value);
+        document.getElementById('cq-tempo-val')!.textContent = String(tempo);
+      });
+
+      document.getElementById('cq-play')!.addEventListener('click', () => {
+        if (playing) stopSing();
+        else startSing();
+      });
+      for (let v = 0; v < 4; v++) {
+        const btn = document.getElementById(`cq-mute-${v + 1}`)!;
+        btn.addEventListener('click', () => {
+          muted[v] = !muted[v];
+          btn.setAttribute('aria-pressed', String(muted[v]));
+        });
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && playing) stopSing();
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
