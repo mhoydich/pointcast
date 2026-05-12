@@ -1,0 +1,741 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Mirror — sing into your mic, see the note" description="A pitch mirror. Sing or hum into your microphone and watch the note name, cents off, and a scrolling trace. Pick a scale to see which degrees you're hitting. Real-time autocorrelation, no upload, browser only.">
+  <main class="cmr" id="cmr" data-built={built}>
+    <header class="cmr__hero">
+      <p class="cmr__kicker">CAST · MIRROR · pitch detection · scale tracking · in-browser</p>
+      <h1 class="cmr__title">Mirror.</h1>
+      <p class="cmr__sub">Sing or hum into your microphone. See the note you're holding, the cents you're flat or sharp, and a scrolling trace of your pitch over time. Pick a scale to learn the geography of your voice.</p>
+    </header>
+
+    <section class="cmr__gate" id="cmr-gate">
+      <button class="cmr__enable" id="cmr-enable" type="button">
+        <span class="cmr__enable-icon">●</span>
+        <span class="cmr__enable-text">
+          <span class="cmr__enable-main">Enable microphone</span>
+          <span class="cmr__enable-sub">Browser asks permission. Audio stays in this tab — nothing uploaded.</span>
+        </span>
+      </button>
+    </section>
+
+    <section class="cmr__main" id="cmr-main" hidden>
+      <div class="cmr__readout">
+        <div class="cmr__note-card">
+          <span class="cmr__note-label">NOTE</span>
+          <div class="cmr__note-display">
+            <span class="cmr__note-name" id="cmr-note-name">—</span>
+            <span class="cmr__note-octave" id="cmr-note-octave"></span>
+          </div>
+          <div class="cmr__cents-bar">
+            <div class="cmr__cents-zero"></div>
+            <div class="cmr__cents-dot" id="cmr-cents-dot"></div>
+          </div>
+          <span class="cmr__cents-label" id="cmr-cents-label">listening…</span>
+        </div>
+
+        <div class="cmr__hz-card">
+          <span class="cmr__hz-label">FREQ</span>
+          <span class="cmr__hz-val" id="cmr-hz-val">—</span>
+          <span class="cmr__hz-unit">Hz</span>
+        </div>
+
+        <div class="cmr__hz-card">
+          <span class="cmr__hz-label">LEVEL</span>
+          <div class="cmr__level-bar">
+            <div class="cmr__level-fill" id="cmr-level-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cmr__scale-wrap">
+        <div class="cmr__scale-header">
+          <span class="cmr__scale-label">SCALE</span>
+          <div class="cmr__scale-pills" id="cmr-scale-pills">
+            <button class="cmr__pill cmr__pill--active" data-scale="chromatic">chromatic</button>
+            <button class="cmr__pill" data-scale="cmaj">C major</button>
+            <button class="cmr__pill" data-scale="amin">A minor</button>
+            <button class="cmr__pill" data-scale="ddor">D dorian</button>
+            <button class="cmr__pill" data-scale="fpent">F pentatonic</button>
+            <button class="cmr__pill" data-scale="gblues">G blues</button>
+          </div>
+        </div>
+        <div class="cmr__keyboard" id="cmr-keyboard"></div>
+      </div>
+
+      <div class="cmr__trace-wrap">
+        <div class="cmr__trace-header">
+          <span class="cmr__trace-label">PITCH TRACE · last 8 seconds</span>
+          <button class="cmr__trace-clear" id="cmr-trace-clear" type="button">clear</button>
+        </div>
+        <canvas class="cmr__trace" id="cmr-trace" width="960" height="200"></canvas>
+      </div>
+
+      <div class="cmr__guide">
+        <h2 class="cmr__guide-h">What you're seeing</h2>
+        <p>The pitch detector runs autocorrelation on a 2048-sample window from your mic at ~30 frames/sec. The note is the nearest equal-temperament pitch class; the cents bar shows how flat (left) or sharp (right) you are inside the half-step.</p>
+        <p>The scale row highlights the degrees of the selected mode — sing within the highlighted notes to stay in key. The pitch trace draws filled circles when you're inside the scale, hollow when you're not.</p>
+        <p>Audio is processed locally in this tab. Nothing is uploaded. Close the tab and the mic stream ends.</p>
+        <p>Pair with <a href="/cast-wheel">/cast-wheel</a> for harmonic geography, <a href="/cast-tone">/cast-tone</a> for a reference drone to tune against, <a href="/cast-jam">/cast-jam</a> for the same scale as a keyboard.</p>
+      </div>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --cmr-ink: #0e0a18;
+      --cmr-walnut: #4a2a1a;
+      --cmr-flame: #f6c15e;
+      --cmr-flame-deep: #d68f2c;
+      --cmr-cream: #f4e7c8;
+      --cmr-cream-dim: #c8b48a;
+      --cmr-cream-dimmer: #8b7a5a;
+      --cmr-mint: #9bd7b8;
+      --cmr-rose: #e6788c;
+      --cmr-mauve: #b39ddb;
+    }
+
+    body:has(.cmr) {
+      background: radial-gradient(circle at 50% -10%, #1a1230 0%, var(--cmr-ink) 60%);
+      color: var(--cmr-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .cmr {
+      max-width: 1020px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .cmr__hero { text-align: center; margin-bottom: 36px; }
+    .cmr__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--cmr-flame-deep);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .cmr__title {
+      font-family: 'Inter Tight', 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(56px, 12vw, 130px);
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      margin: 0 0 16px;
+      color: var(--cmr-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .cmr__sub {
+      max-width: 640px;
+      margin: 0 auto;
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--cmr-cream-dim);
+    }
+
+    /* GATE */
+    .cmr__gate {
+      display: flex;
+      justify-content: center;
+      margin: 36px 0;
+    }
+    .cmr__enable {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 26px;
+      border-radius: 16px;
+      border: 2px solid var(--cmr-flame);
+      background: rgba(246,193,94,0.08);
+      color: var(--cmr-cream);
+      cursor: pointer;
+      transition: background 100ms ease, transform 60ms ease;
+    }
+    .cmr__enable:hover { background: rgba(246,193,94,0.16); transform: translateY(-1px); }
+    .cmr__enable:active { transform: translateY(0); }
+    .cmr__enable-icon {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--cmr-rose);
+      box-shadow: 0 0 14px rgba(230,120,140,0.6);
+    }
+    .cmr__enable-text { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+    .cmr__enable-main {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 17px;
+      color: var(--cmr-flame);
+    }
+    .cmr__enable-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cmr-cream-dim);
+    }
+
+    /* MAIN — READOUT */
+    .cmr__readout {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    @media (max-width: 700px) {
+      .cmr__readout { grid-template-columns: 1fr; }
+    }
+    .cmr__note-card, .cmr__hz-card {
+      background: rgba(0,0,0,0.32);
+      border: 1px solid rgba(246,193,94,0.16);
+      border-radius: 18px;
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .cmr__note-label, .cmr__hz-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: var(--cmr-cream-dimmer);
+    }
+    .cmr__note-display {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .cmr__note-name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 900;
+      font-size: 60px;
+      color: var(--cmr-flame);
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .cmr__note-octave {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      color: var(--cmr-cream-dim);
+    }
+    .cmr__cents-bar {
+      position: relative;
+      height: 10px;
+      border-radius: 5px;
+      background: rgba(244,231,200,0.1);
+      margin-top: 4px;
+    }
+    .cmr__cents-zero {
+      position: absolute;
+      left: 50%;
+      top: -2px;
+      width: 2px;
+      height: 14px;
+      background: rgba(244,231,200,0.4);
+      transform: translateX(-50%);
+    }
+    .cmr__cents-dot {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--cmr-flame);
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 12px rgba(246,193,94,0.6);
+      transition: left 100ms linear, background 100ms ease;
+    }
+    .cmr__cents-dot--in-tune { background: var(--cmr-mint); box-shadow: 0 0 14px rgba(155,215,184,0.7); }
+    .cmr__cents-dot--off { background: var(--cmr-rose); }
+    .cmr__cents-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cmr-cream-dim);
+    }
+    .cmr__hz-val {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 32px;
+      color: var(--cmr-flame);
+      line-height: 1;
+    }
+    .cmr__hz-unit {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cmr-cream-dimmer);
+    }
+    .cmr__level-bar {
+      height: 10px;
+      border-radius: 5px;
+      background: rgba(244,231,200,0.1);
+      overflow: hidden;
+    }
+    .cmr__level-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(to right, var(--cmr-mint), var(--cmr-flame), var(--cmr-rose));
+      transition: width 60ms linear;
+    }
+
+    /* SCALE */
+    .cmr__scale-wrap {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 18px;
+      padding: 16px 20px 18px;
+      margin-bottom: 22px;
+    }
+    .cmr__scale-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .cmr__scale-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: var(--cmr-cream-dimmer);
+    }
+    .cmr__scale-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cmr__pill {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(246,193,94,0.28);
+      background: transparent;
+      color: var(--cmr-cream);
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .cmr__pill:hover { background: rgba(246,193,94,0.10); }
+    .cmr__pill--active {
+      background: var(--cmr-flame);
+      color: var(--cmr-walnut);
+      border-color: var(--cmr-flame);
+    }
+    .cmr__keyboard {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 4px;
+    }
+    .cmr__key {
+      padding: 12px 0 10px;
+      text-align: center;
+      border-radius: 8px;
+      background: rgba(244,231,200,0.06);
+      border: 1px solid transparent;
+      transition: background 80ms ease, border 80ms ease, transform 60ms ease;
+    }
+    .cmr__key--in-scale { background: rgba(246,193,94,0.18); border-color: rgba(246,193,94,0.32); }
+    .cmr__key--root { background: rgba(246,193,94,0.32); border-color: var(--cmr-flame); }
+    .cmr__key--hit {
+      background: var(--cmr-mint);
+      border-color: var(--cmr-mint);
+      transform: scale(1.06);
+    }
+    .cmr__key-name {
+      display: block;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--cmr-cream);
+    }
+    .cmr__key--in-scale .cmr__key-name { color: var(--cmr-flame); }
+    .cmr__key--root .cmr__key-name { color: var(--cmr-walnut); }
+    .cmr__key--hit .cmr__key-name { color: var(--cmr-walnut); }
+    .cmr__key-deg {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--cmr-cream-dimmer);
+      margin-top: 2px;
+    }
+    .cmr__key--in-scale .cmr__key-deg { color: var(--cmr-flame-deep); }
+
+    /* TRACE */
+    .cmr__trace-wrap {
+      background: rgba(0,0,0,0.32);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 18px;
+      padding: 14px 18px 18px;
+      margin-bottom: 28px;
+    }
+    .cmr__trace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .cmr__trace-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--cmr-cream-dimmer);
+    }
+    .cmr__trace-clear {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(246,193,94,0.28);
+      background: transparent;
+      color: var(--cmr-cream);
+      cursor: pointer;
+    }
+    .cmr__trace-clear:hover { background: rgba(246,193,94,0.12); }
+    .cmr__trace {
+      width: 100%;
+      height: 200px;
+      display: block;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.3);
+    }
+
+    /* GUIDE */
+    .cmr__guide {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 0 0;
+      border-top: 1px solid rgba(246,193,94,0.14);
+    }
+    .cmr__guide-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      margin: 0 0 12px;
+      color: var(--cmr-cream);
+    }
+    .cmr__guide p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--cmr-cream-dim);
+      margin: 0 0 12px;
+    }
+    .cmr__guide a {
+      color: var(--cmr-flame);
+      text-decoration: none;
+    }
+    .cmr__guide a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    // ---- music data ----
+    const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    type ScaleKey = 'chromatic' | 'cmaj' | 'amin' | 'ddor' | 'fpent' | 'gblues';
+    // Each scale is described as a Set of pitch-classes (0-11) plus a root pitch-class for labeling degrees.
+    const SCALES: Record<ScaleKey, { name: string; root: number; degrees: number[] }> = {
+      chromatic: { name: 'chromatic', root: 0, degrees: [0,1,2,3,4,5,6,7,8,9,10,11] },
+      cmaj:      { name: 'C major',   root: 0, degrees: [0,2,4,5,7,9,11] },
+      amin:      { name: 'A minor',   root: 9, degrees: [9,11,0,2,4,5,7] },
+      ddor:      { name: 'D dorian',  root: 2, degrees: [2,4,5,7,9,11,0] },
+      fpent:     { name: 'F pent',    root: 5, degrees: [5,7,9,0,2] },
+      gblues:    { name: 'G blues',   root: 7, degrees: [7,10,0,1,2,5] },
+    };
+
+    // ---- state ----
+    let ac: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let buf: Float32Array | null = null;
+    let mediaStream: MediaStream | null = null;
+    let scale: ScaleKey = 'chromatic';
+    let running = false;
+    let lastFreq = 0;
+    let smoothedFreq = 0;
+    let level = 0;
+    let lastUiFrame = 0;
+    type TracePoint = { t: number; midi: number; inScale: boolean };
+    const trace: TracePoint[] = [];
+    const TRACE_WINDOW_MS = 8000;
+
+    // ---- pitch detection ----
+    function autocorrelate(buf: Float32Array, sampleRate: number): number | null {
+      const SIZE = buf.length;
+      // RMS gate
+      let rms = 0;
+      for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+      rms = Math.sqrt(rms / SIZE);
+      level = Math.min(1, rms * 8);
+      if (rms < 0.012) return null;
+
+      // Trim near-silent edges to improve correlation focus
+      let r1 = 0, r2 = SIZE - 1;
+      const TH = 0.18;
+      for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buf[i]) >= TH) { r1 = i; break; }
+      for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buf[SIZE - i]) >= TH) { r2 = SIZE - i; break; }
+      const trimmed = buf.subarray(r1, r2);
+      const N = trimmed.length;
+      if (N < 64) return null;
+
+      // search range: lowest pitch ~65Hz (deep voice) → highest 1100Hz
+      const maxLag = Math.min(N - 2, Math.floor(sampleRate / 65));
+      const minLag = Math.max(2, Math.floor(sampleRate / 1100));
+
+      let bestOffset = -1;
+      let bestCorr = 0;
+      let lastCorr = 1;
+      let foundGoodCorrelation = false;
+
+      for (let offset = minLag; offset < maxLag; offset++) {
+        let corr = 0;
+        for (let i = 0; i < N - offset; i++) {
+          corr += trimmed[i] * trimmed[i + offset];
+        }
+        corr = corr / (N - offset);
+        if (corr > 0.9 && corr > lastCorr) {
+          foundGoodCorrelation = true;
+          if (corr > bestCorr) {
+            bestCorr = corr;
+            bestOffset = offset;
+          }
+        } else if (foundGoodCorrelation) {
+          // We were on a peak and we're descending — refine via parabolic interp around bestOffset
+          const x1 = bestOffset - 1, x2 = bestOffset, x3 = bestOffset + 1;
+          let a = 0, b = 0, c = 0;
+          // recompute corrs for x1,x2,x3
+          const corrAt = (off: number) => {
+            let s = 0;
+            for (let i = 0; i < N - off; i++) s += trimmed[i] * trimmed[i + off];
+            return s / (N - off);
+          };
+          a = corrAt(x1); b = corrAt(x2); c = corrAt(x3);
+          const refined = x2 + 0.5 * (a - c) / (a - 2*b + c);
+          return sampleRate / refined;
+        }
+        lastCorr = corr;
+      }
+      if (bestCorr > 0.01) return sampleRate / bestOffset;
+      return null;
+    }
+
+    // ---- music helpers ----
+    function freqToMidi(f: number): number {
+      return 69 + 12 * Math.log2(f / 440);
+    }
+    function midiToPC(midi: number): number {
+      const m = Math.round(midi);
+      return ((m % 12) + 12) % 12;
+    }
+    function midiToOctave(midi: number): number {
+      return Math.floor(Math.round(midi) / 12) - 1;
+    }
+    function inScale(midi: number): boolean {
+      const pc = midiToPC(midi);
+      return SCALES[scale].degrees.includes(pc);
+    }
+
+    // ---- rendering ----
+    function renderKeyboard() {
+      const kb = document.getElementById('cmr-keyboard')!;
+      const spec = SCALES[scale];
+      const degs = spec.degrees;
+      // Build pitch-class → degree-index map (1-based) for chromatic-friendly labeling
+      const pcToDeg = new Map<number, number>();
+      degs.forEach((pc, i) => pcToDeg.set(pc, i + 1));
+      kb.innerHTML = '';
+      for (let pc = 0; pc < 12; pc++) {
+        const div = document.createElement('div');
+        div.className = 'cmr__key';
+        div.setAttribute('data-pc', String(pc));
+        if (degs.includes(pc)) div.classList.add('cmr__key--in-scale');
+        if (pc === spec.root && scale !== 'chromatic') div.classList.add('cmr__key--root');
+        const deg = pcToDeg.get(pc);
+        div.innerHTML = `<span class="cmr__key-name">${NOTE_NAMES[pc]}</span>${deg ? `<span class="cmr__key-deg">${deg}</span>` : '<span class="cmr__key-deg">·</span>'}`;
+        kb.appendChild(div);
+      }
+    }
+
+    function highlightKey(pc: number | null) {
+      document.querySelectorAll('.cmr__key--hit').forEach(el => el.classList.remove('cmr__key--hit'));
+      if (pc == null) return;
+      const k = document.querySelector(`.cmr__key[data-pc="${pc}"]`);
+      if (k) k.classList.add('cmr__key--hit');
+    }
+
+    function refreshReadout(freq: number | null) {
+      const nameEl = document.getElementById('cmr-note-name')!;
+      const octEl = document.getElementById('cmr-note-octave')!;
+      const dot = document.getElementById('cmr-cents-dot')!;
+      const centsLabel = document.getElementById('cmr-cents-label')!;
+      const hzVal = document.getElementById('cmr-hz-val')!;
+      const levelFill = document.getElementById('cmr-level-fill') as HTMLElement;
+
+      levelFill.style.width = `${Math.round(level * 100)}%`;
+
+      if (!freq) {
+        nameEl.textContent = '—';
+        octEl.textContent = '';
+        dot.style.left = '50%';
+        dot.classList.remove('cmr__cents-dot--in-tune', 'cmr__cents-dot--off');
+        centsLabel.textContent = level < 0.05 ? 'listening…' : 'unvoiced';
+        hzVal.textContent = '—';
+        highlightKey(null);
+        return;
+      }
+      const midi = freqToMidi(freq);
+      const pc = midiToPC(midi);
+      const oct = midiToOctave(midi);
+      const cents = (midi - Math.round(midi)) * 100;
+      nameEl.textContent = NOTE_NAMES[pc];
+      octEl.textContent = String(oct);
+      const pos = 50 + (cents / 50) * 50; // -50c→0%, +50c→100%
+      dot.style.left = `${Math.max(2, Math.min(98, pos))}%`;
+      const absCents = Math.abs(cents);
+      dot.classList.toggle('cmr__cents-dot--in-tune', absCents < 12);
+      dot.classList.toggle('cmr__cents-dot--off', absCents >= 35);
+      centsLabel.textContent = `${cents >= 0 ? '+' : ''}${cents.toFixed(0)} cents ${absCents < 12 ? '· in tune' : ''}`;
+      hzVal.textContent = freq.toFixed(1);
+      highlightKey(pc);
+    }
+
+    function drawTrace() {
+      const canvas = document.getElementById('cmr-trace') as HTMLCanvasElement;
+      const ctx2d = canvas.getContext('2d')!;
+      const W = canvas.width, H = canvas.height;
+      ctx2d.clearRect(0, 0, W, H);
+
+      // Y-axis: span 2 octaves around the median
+      const now = performance.now();
+      while (trace.length && now - trace[0].t > TRACE_WINDOW_MS) trace.shift();
+      if (trace.length < 2) {
+        ctx2d.fillStyle = 'rgba(244,231,200,0.4)';
+        ctx2d.font = '11px JetBrains Mono, monospace';
+        ctx2d.fillText('Sing or hum to draw a trace…', 12, 24);
+        return;
+      }
+      const midis = trace.map(p => p.midi);
+      const median = midis.slice().sort((a,b) => a - b)[Math.floor(midis.length/2)];
+      const yMin = median - 14;
+      const yMax = median + 14;
+
+      // grid: octave + scale lines
+      ctx2d.strokeStyle = 'rgba(244,231,200,0.06)';
+      ctx2d.lineWidth = 1;
+      for (let m = Math.floor(yMin); m <= Math.ceil(yMax); m++) {
+        const pc = ((m % 12) + 12) % 12;
+        const y = H - ((m - yMin) / (yMax - yMin)) * H;
+        if (SCALES[scale].degrees.includes(pc)) {
+          ctx2d.strokeStyle = pc === SCALES[scale].root ? 'rgba(246,193,94,0.24)' : 'rgba(246,193,94,0.10)';
+        } else {
+          ctx2d.strokeStyle = 'rgba(244,231,200,0.04)';
+        }
+        ctx2d.beginPath();
+        ctx2d.moveTo(0, y);
+        ctx2d.lineTo(W, y);
+        ctx2d.stroke();
+        // octave label
+        if (pc === 0) {
+          ctx2d.fillStyle = 'rgba(246,193,94,0.32)';
+          ctx2d.font = '9px JetBrains Mono, monospace';
+          ctx2d.fillText(`C${Math.floor(m/12) - 1}`, 4, y - 2);
+        }
+      }
+
+      // pitch points
+      for (const p of trace) {
+        const x = ((p.t - (now - TRACE_WINDOW_MS)) / TRACE_WINDOW_MS) * W;
+        const y = H - ((p.midi - yMin) / (yMax - yMin)) * H;
+        ctx2d.beginPath();
+        ctx2d.arc(x, y, 2.4, 0, Math.PI * 2);
+        if (p.inScale) {
+          ctx2d.fillStyle = '#f6c15e';
+          ctx2d.fill();
+        } else {
+          ctx2d.strokeStyle = '#e6788c';
+          ctx2d.lineWidth = 1.4;
+          ctx2d.stroke();
+        }
+      }
+    }
+
+    // ---- main loop ----
+    function tick() {
+      if (!running || !analyser || !buf) return;
+      analyser.getFloatTimeDomainData(buf);
+      const freq = autocorrelate(buf, ac!.sampleRate);
+      if (freq != null) {
+        // simple smoothing — drop big jumps unless persistent
+        const midi = freqToMidi(freq);
+        if (Math.abs(midi - smoothedFreq) > 6 && smoothedFreq > 0) {
+          // big jump — let in only if held next frame
+          smoothedFreq = midi;
+        } else {
+          smoothedFreq = smoothedFreq === 0 ? midi : smoothedFreq * 0.5 + midi * 0.5;
+        }
+        lastFreq = 440 * Math.pow(2, (smoothedFreq - 69) / 12);
+        trace.push({ t: performance.now(), midi: smoothedFreq, inScale: inScale(smoothedFreq) });
+        if (trace.length > 2000) trace.shift();
+      } else {
+        lastFreq = 0;
+        smoothedFreq = 0;
+      }
+
+      // throttle UI updates to ~30fps
+      const now = performance.now();
+      if (now - lastUiFrame > 33) {
+        refreshReadout(lastFreq || null);
+        drawTrace();
+        lastUiFrame = now;
+      }
+      requestAnimationFrame(tick);
+    }
+
+    async function enable() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+      } catch (e) {
+        document.getElementById('cmr-gate')!.innerHTML = `<p style="color: var(--cmr-rose); font-family: 'JetBrains Mono', monospace; font-size: 14px;">Microphone permission denied. Refresh and re-enable to try again.</p>`;
+        return;
+      }
+      ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const src = ac.createMediaStreamSource(mediaStream);
+      analyser = ac.createAnalyser();
+      analyser.fftSize = 2048;
+      buf = new Float32Array(analyser.fftSize);
+      src.connect(analyser);
+      // Don't connect analyser to ac.destination — we don't want to hear ourselves
+      document.getElementById('cmr-gate')!.style.display = 'none';
+      document.getElementById('cmr-main')!.removeAttribute('hidden');
+      running = true;
+      tick();
+    }
+
+    function init() {
+      renderKeyboard();
+      document.getElementById('cmr-enable')!.addEventListener('click', enable);
+
+      document.getElementById('cmr-scale-pills')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('[data-scale]');
+        if (!btn) return;
+        scale = btn.getAttribute('data-scale') as ScaleKey;
+        document.querySelectorAll('.cmr__scale-pills .cmr__pill').forEach(el => el.classList.toggle('cmr__pill--active', el === btn));
+        renderKeyboard();
+      });
+
+      document.getElementById('cmr-trace-clear')!.addEventListener('click', () => {
+        trace.length = 0;
+      });
+
+      // Pause on tab hide
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && running) {
+          running = false;
+        } else if (!document.hidden && analyser && !running) {
+          running = true;
+          tick();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
