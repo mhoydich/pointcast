@@ -109,6 +109,9 @@ export const GET: APIRoute = async () => {
         // 2026-05-07: codex review PR 3 — operating-mode + studio surfaces.
         operatingMode: 'https://pointcast.xyz/operating-mode.json',
         operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
+        // 2026-05-11: editorial weekly plan — this-week + decisions for mh + up-next.
+        plan: 'https://pointcast.xyz/plan.json',
+        planHuman: 'https://pointcast.xyz/plan',
       },
       human: {
         home: 'https://pointcast.xyz/',
@@ -258,6 +261,7 @@ export const GET: APIRoute = async () => {
         investmentThesis: 'https://pointcast.xyz/investment-thesis.json',
         operatingMode: 'https://pointcast.xyz/operating-mode.json',
         operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
+        plan: 'https://pointcast.xyz/plan.json',
         blocks: 'https://pointcast.xyz/blocks.json',
         archive: 'https://pointcast.xyz/archive.json',
         editions: 'https://pointcast.xyz/editions.json',
