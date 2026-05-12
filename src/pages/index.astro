@@ -38,6 +38,7 @@ import opmodeData from '../data/operating-mode.json';
 import shipsData from '../data/recent-ships.json';
 import asksData from '../data/asks.json';
 import learningsData from '../data/learning-notes.json';
+import morningHeroData from '../data/morning-hero.json';
 import HomeCheckinHint from '../components/HomeCheckinHint.astro';
 import HomePlacesDirectory from '../components/HomePlacesDirectory.astro';
 
@@ -136,6 +137,28 @@ const shipLead = latestShip;
 const shipLeadKicker = shipLead
   ? `${todayKicker} · ${todayStr} · FRESH SHIP ${shipLead.ref} · ${shipLead.tag}`
   : '';
+
+// ---------- Data: morning hero ----------
+// Mike 2026-05-12: "when i say check in the morning, it should be
+// interesting and its ok, hasn't been". The Morning Hero replaces the
+// homepage LEAD when there's a curated entry for today — image-led,
+// real-voice editorial, one specific thing to try. Falls back to the
+// ship-or-block LEAD when no entry for today exists.
+interface MorningPost {
+  date: string;
+  kicker: string;
+  title: string;
+  body: string;
+  image: string;
+  imageAlt: string;
+  cta: string;
+  ctaHref: string;
+  secondaryCta?: string;
+  secondaryHref?: string;
+  byline?: string;
+}
+const morningPosts = (morningHeroData as { posts: MorningPost[] }).posts;
+const morningHero = morningPosts.find((p) => p.date === todayStr) || null;
 
 // ---------- Data: asks (daily rotation) ----------
 // All asks render in the page; client-side JS picks today's by
@@ -263,10 +286,33 @@ const jsonLd = {
   <main class="home2027">
 
     {/* ============== 1. THE LEAD ==============
-       Mike 2026-05-08: "kinda not fresh" — the lead is now whatever we
-       SHIPPED most recently, block OR feature PR. Whichever happened
-       latest wins the hero slot. Each merge auto-becomes the lead. */}
-    {useShipAsLead && shipLead ? (
+       v3: when there's a Morning Hero entry for today, render IT.
+       Mike 2026-05-12: "the morning experience isn't interesting,
+       articles are eh, surfacing isn't capturing the depth." The
+       Morning Hero is image-led with two-sentence human-voice editorial
+       and one specific thing to try — a story, not a ref-list.
+       Falls back to the ship-or-block LEAD when no entry for today. */}
+    {morningHero ? (
+      <section class="morn" aria-label="Today's hero">
+        <a class="morn__imgwrap" href={morningHero.ctaHref}>
+          <img class="morn__img" src={morningHero.image} alt={morningHero.imageAlt} loading="eager" />
+        </a>
+        <div class="morn__body">
+          <p class="morn__kicker mono">{morningHero.kicker}</p>
+          <h1 class="morn__title">{morningHero.title}</h1>
+          <p class="morn__body-text">{morningHero.body}</p>
+          <div class="morn__row">
+            <a class="morn__cta" href={morningHero.ctaHref}>{morningHero.cta} →</a>
+            {morningHero.secondaryCta && morningHero.secondaryHref && (
+              <a class="morn__alt" href={morningHero.secondaryHref}>{morningHero.secondaryCta} →</a>
+            )}
+            {morningHero.byline && (
+              <span class="morn__by mono">by <strong>{morningHero.byline}</strong></span>
+            )}
+          </div>
+        </div>
+      </section>
+    ) : useShipAsLead && shipLead ? (
       <section class="lead lead--ship" style="--ch-600: #c4952e; --ch-50: #fffaf0;">
         <p class="lead__kicker">{shipLeadKicker}</p>
         <h1 class="lead__title">{shipLead.title}</h1>
@@ -591,6 +637,106 @@ const jsonLd = {
     text-transform: uppercase;
     margin: 0 0 10px;
   }
+
+  /* ============== MORNING HERO ============== */
+  /* v3 LEAD when there's an entry for today in morning-hero.json.
+     Image-led, two-column on desktop, stacked on mobile. */
+  .morn {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 32px 0 36px;
+    border-bottom: 1.5px solid var(--color-rule);
+    margin-bottom: 36px;
+  }
+  @media (min-width: 820px) {
+    .morn {
+      grid-template-columns: 1.2fr 1fr;
+      gap: 36px;
+      align-items: center;
+    }
+  }
+  .morn__imgwrap {
+    display: block;
+    line-height: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #1f1b15;
+    box-shadow: 0 6px 28px rgba(31, 27, 21, 0.14);
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease;
+  }
+  .morn__imgwrap:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 36px rgba(31, 27, 21, 0.20);
+  }
+  .morn__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1659 / 948;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+  .morn__body { min-width: 0; }
+  .morn__kicker {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: #c4952e;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .morn__title {
+    font-family: var(--font-heading);
+    font-size: clamp(32px, 4.2vw, 52px);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.018em;
+    margin: 0 0 16px;
+    color: var(--color-ink);
+  }
+  .morn__body-text {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.55;
+    color: var(--color-ink-soft);
+    margin: 0 0 22px;
+    max-width: 540px;
+  }
+  .morn__row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 18px 22px;
+  }
+  .morn__cta {
+    padding: 11px 20px;
+    background: var(--color-ink);
+    color: #fff !important;
+    text-decoration: none;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: background 0.16s ease;
+  }
+  .morn__cta:hover { background: #c4952e; }
+  .morn__alt {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .morn__alt:hover { color: var(--color-ink); }
+  .morn__by {
+    font-size: 11px;
+    color: var(--color-ink-soft);
+    margin-left: auto;
+  }
+  .morn__by strong { color: var(--color-ink); font-weight: 500; }
 
   /* ============== LEAD ============== */
   .lead {
