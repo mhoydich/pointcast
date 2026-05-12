@@ -9,6 +9,7 @@ import {
   NOUNS_STATE_LEAGUE_VERSION,
   buildNounsStateCampaignPack,
   buildNounsStateAgencyPosterRun,
+  buildNounsStateAgencyReviewDesk,
   buildNounsStateDropGallery,
   buildNounsStateManusArtifactRun,
   buildNounsStateNightSlate,
@@ -17,6 +18,7 @@ import {
 
 const manus50 = buildNounsStateManusArtifactRun();
 const agency50 = buildNounsStateAgencyPosterRun();
+const agencyReviewDesk = buildNounsStateAgencyReviewDesk();
 const stateNightSlates = NOUNS_STATE_LEAGUE_REGIONS.map((region) => buildNounsStateNightSlate(region));
 const foundingDrops = NOUNS_STATE_FOUNDING_DROPS.map((drop) => {
   const team = NOUNS_STATE_LEAGUE_TEAMS.find((item) => item.code === drop.code);
@@ -57,6 +59,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     dropGallery: foundingDrops.map((drop) => drop.gallery).filter(Boolean),
     manus50,
     agency50,
+    agencyReviewDesk,
     packs: NOUNS_STATE_LEAGUE_TEAMS.map((team) => buildNounsStateArtifactPack(team)),
   },
   teams: NOUNS_STATE_LEAGUE_TEAMS,

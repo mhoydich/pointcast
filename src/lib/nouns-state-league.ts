@@ -79,6 +79,19 @@ export type NounsStateAgencyReviewLane = {
   rejectIf: string;
 };
 
+export type NounsStateAgencyReviewDesk = {
+  human: string;
+  purpose: string;
+  decisions: string[];
+  scoreScale: string;
+  requiredEvidence: string[];
+  defaultRouting: {
+    accept: string;
+    remix: string;
+    reject: string;
+  };
+};
+
 export type NounsStateNightMatchup = {
   id: string;
   left: NounsStateTeam;
@@ -704,6 +717,27 @@ export function buildNounsStateAgencyPosterRun() {
     approvalChecklist,
     posters,
     receipt,
+  };
+}
+
+export function buildNounsStateAgencyReviewDesk(): NounsStateAgencyReviewDesk {
+  return {
+    human: 'https://pointcast.xyz/nouns-nation-union/review/',
+    purpose: 'Score each generated Agency 50 poster against the professional Creative Director lanes, then produce an accept/remix/reject receipt before anything is published or routed to sponsor inventory.',
+    decisions: ['accept', 'remix', 'reject'],
+    scoreScale: 'Five lanes, each scored from 1 to 5. Accept at 22+, remix at 15-21, reject below 15 or on any legal/sponsor safety failure.',
+    requiredEvidence: [
+      'State code, team name, and assigned actual Noun number.',
+      'Prompt used and model lane.',
+      'Generated image URL or local file reference.',
+      'Reviewer note describing what passed or what must change.',
+      'Human decision: accept, remix, or reject.',
+    ],
+    defaultRouting: {
+      accept: 'Route to poster wall, State Night broadcast stills, sponsor-safe inventory, or participant-credit queue after human approval.',
+      remix: 'Return to image model or creative agent with the weakest review lane and one concrete fix.',
+      reject: 'Archive the receipt with rejection reason; do not publish, sell, route, or credit the artifact.',
+    },
   };
 }
 

@@ -237,6 +237,23 @@ export const NOUNS_BATTLER_AGENT_TASKS = [
       'AGENCY 50: {states}; campaign {line}; strongest {headline}; remixes {notes}; media {plan}; proof {proof}.',
   },
   {
+    id: 'union-agency-50-review-desk',
+    title: 'Review an Agency 50 Poster Like a Creative Director',
+    role: 'creative director',
+    difficulty: 'medium',
+    surfaces: [
+      'https://pointcast.xyz/nouns-nation-union/review/',
+      'https://pointcast.xyz/nouns-nation-union/artifacts/#agency-50',
+      'https://pointcast.xyz/nouns-nation-union.json',
+    ],
+    prompt:
+      'Open the Union Creative Director Review Desk, choose one state poster, score Noun fidelity, state specificity, campaign system, broadcast utility, and sponsor/legal safety, then return an accept/remix/reject receipt plus one concrete remix instruction if needed.',
+    expectedOutput:
+      'A professional Agency 50 review receipt with score, decision, weakest lane, evidence, routing, and guardrails before publication.',
+    shareFormat:
+      'CD REVIEW: {state}; Noun #{noun}; score {score}/25; decision {decision}; weakest {lane}; routing {routing}.',
+  },
+  {
     id: 'sports-reenactment-mission',
     title: 'Run Sports Reenactment Mission Control',
     role: 'host',
