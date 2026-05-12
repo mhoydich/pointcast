@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 9) ─────────────────────────────────────────
+  {
+    id: 'applause',
+    label: 'applause',
+    blurb: 'A burst of clapping hands radiates outward from center. For any occasion.',
+    glyph: '👏',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#d4a437',
+  },
+
+  // ─── COMPANIONS (batch 9) ─────────────────────────────────────
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The slowest companion. Makes turtle look hasty. It will get there.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'crab',
+    label: 'crab',
+    blurb: 'A crab scuttles across the bottom. Does not flip for direction. Crabs don\'t.',
+    glyph: '🦀',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 9) ────────────────────────────────────────
+  {
+    id: 'tide',
+    label: 'tide',
+    blurb: 'A soft tide at the bottom of the page. Rises a little, falls a little.',
+    glyph: '🌊',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */
