@@ -154,6 +154,11 @@ const BUILDING_SVGS: Record<string, string> = {
   {/* Ground line + walking path. */}
   <div class="fbv6__ground" aria-hidden="true"></div>
 
+  {/* T1: WALKER FOOTPRINTS — small dots stamped behind the walker
+      every ~500ms. Fade over 90s. The first "trace" feature — the
+      place remembers what you did, briefly. */}
+  <div class="fbv6__footprints" id="fbv6-footprints" aria-hidden="true"></div>
+
   {/* v10: PALM TREES — Codex-crafted pixel silhouettes scattered between
       buildings as ground-level SoCal flavor. Three variants (tall /
       lean / small). currentColor so they tint at night. */}
@@ -681,6 +686,46 @@ const BUILDING_SVGS: Record<string, string> = {
     if (document.documentElement.classList.contains('bar-v6-on')) ambientEmote();
     scheduleNextEmote();
   }, 3000 + Math.random() * 2000);
+
+  // ─── T1: WALKER FOOTPRINTS ───────────────────────────────────────────
+  // Stamp a small dot at the walker's current x position every ~500ms
+  // while the bar is on. Each dot fades over 90s via CSS animation
+  // then auto-removes. Alternating L/R y-offset creates a natural
+  // L/R/L/R walking pattern. Cheap (just getBoundingClientRect on
+  // a parent), but the bar suddenly feels lived-in.
+  const footprintsRoot = document.getElementById('fbv6-footprints');
+  const fbv6Root = document.getElementById('fbv6');
+  const walkerNode = document.getElementById('fbv6-walker');
+  let footprintToggle = 0;
+  function stampFootprint() {
+    if (!footprintsRoot || !fbv6Root || !walkerNode) return;
+    if (!document.documentElement.classList.contains('bar-v6-on')) return;
+    const wr = walkerNode.getBoundingClientRect();
+    const br = fbv6Root.getBoundingClientRect();
+    if (!br.width) return;
+    // Center of the walker, relative to the bar container.
+    const cx = wr.left + wr.width / 2 - br.left;
+    const xPercent = (cx / br.width) * 100;
+    if (xPercent < -2 || xPercent > 102) return;
+    const dot = document.createElement('span');
+    dot.className = 'fbv6__footprint';
+    dot.style.left = xPercent + '%';
+    // L/R offset for natural walking pattern (~1px y-offset).
+    dot.style.bottom = (footprintToggle === 0 ? 0 : 1) + 'px';
+    footprintToggle = 1 - footprintToggle;
+    footprintsRoot.appendChild(dot);
+    setTimeout(() => {
+      if (dot.parentNode === footprintsRoot) footprintsRoot.removeChild(dot);
+    }, 90000);
+    // Bound the layer to ~120 footprints to prevent runaway DOM growth
+    // if a tab lingers for hours.
+    while (footprintsRoot.children.length > 120) {
+      footprintsRoot.removeChild(footprintsRoot.firstChild);
+    }
+  }
+  // Don't start stamping immediately on mount — give the walker time
+  // to be positioned. ~1.2s feels right.
+  setTimeout(() => setInterval(stampFootprint, 500), 1200);
 
   // ─── v7: BIRD FLYOVER ────────────────────────────────────────────────
   // Occasional 'v'-shaped silhouette glides across the sky from one
@@ -1329,6 +1374,39 @@ const BUILDING_SVGS: Record<string, string> = {
     position: absolute; left: 0; right: 0; bottom: 14px;
     height: 2px;
     background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.45) 8%, rgba(0,0,0,0.45) 92%, transparent 100%);
+  }
+
+  /* T1: WALKER FOOTPRINTS — small dots stamped at the walker's x as
+     it moves. Fade over 90s via CSS animation; JS removes the node
+     when it's done. Alternating bottom offsets give natural L/R feel.
+     z-index: 0 keeps them BEHIND the buildings and the walker. */
+  .fbv6__footprints {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 12px;
+    height: 4px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .fbv6__footprint {
+    position: absolute;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 2px;
+    background: rgba(0, 0, 0, calc(0.32 - var(--nightness, 0) * 0.18));
+    border-radius: 50%;
+    /* Fade from visible to invisible over 90s. */
+    animation: fbv6-footprint-fade 90s linear forwards;
+  }
+  @keyframes fbv6-footprint-fade {
+    0%   { opacity: 0.55; }
+    20%  { opacity: 0.50; }
+    100% { opacity: 0; }
+  }
+  /* Reduce-motion respect — show but don't animate. */
+  @media (prefers-reduced-motion: reduce) {
+    .fbv6__footprint { animation: none; opacity: 0.4; }
   }
 
   /* BUILDINGS — positioned by --bx percent, sized by --bw/--bh. */
