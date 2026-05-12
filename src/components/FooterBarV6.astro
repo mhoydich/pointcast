@@ -687,6 +687,120 @@ const BUILDING_SVGS: Record<string, string> = {
     scheduleNextEmote();
   }, 3000 + Math.random() * 2000);
 
+  // ─── T2: AMBIENT AUDIO ───────────────────────────────────────────────
+  // Procedural surf wash + top-of-hour bell. Opt-in via pc:bar:audio
+  // (set on /me). AudioContext requires a user gesture to start; the
+  // /me toggle click is what unlocks it. Volume capped low (~0.06
+  // gain on the master + 0.04 LFO depth). Respects prefers-reduced-
+  // motion (no audio if visitor wants reduced motion).
+  let audioCtx = null;
+  let surfNoise = null;
+  let surfVol = null;
+  let surfLfo = null;
+  let hourBellTimer = null;
+  function audioWanted() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    try { return localStorage.getItem('pc:bar:audio') === 'on'; } catch (e) { return false; }
+  }
+  function bellTick() {
+    if (!audioCtx) return;
+    try {
+      const t = audioCtx.currentTime;
+      function tone(freq, startOffset) {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const s = t + startOffset;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.10, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 1.4);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(s);
+        osc.stop(s + 1.5);
+      }
+      tone(880, 0);
+      tone(1320, 0.18);
+    } catch (e) {}
+  }
+  function scheduleHourBell() {
+    if (!audioCtx) return;
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(now.getHours() + 1, 0, 0, 50);
+    const wait = next.getTime() - now.getTime();
+    if (hourBellTimer) clearTimeout(hourBellTimer);
+    hourBellTimer = setTimeout(() => {
+      bellTick();
+      scheduleHourBell();
+    }, wait);
+  }
+  function startAudio() {
+    if (audioCtx) return;
+    if (!audioWanted()) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+      // Pink-noise-ish buffer: 5s of weighted random samples (Voss
+      // McCartney lite — three filtered components plus a white sample).
+      const len = audioCtx.sampleRate * 5;
+      const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b0 = 0.99765 * b0 + w * 0.0990460;
+        b1 = 0.96300 * b1 + w * 0.2965164;
+        b2 = 0.57000 * b2 + w * 1.0526913;
+        data[i] = (b0 + b1 + b2 + w * 0.1848) * 0.18;
+      }
+      surfNoise = audioCtx.createBufferSource();
+      surfNoise.buffer = buf;
+      surfNoise.loop = true;
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 540;
+      lp.Q.value = 0.6;
+      const hp = audioCtx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 80;
+      surfVol = audioCtx.createGain();
+      surfVol.gain.value = 0.06;
+      surfLfo = audioCtx.createOscillator();
+      surfLfo.frequency.value = 0.08; // ~12.5s wave cycle
+      const lfoDepth = audioCtx.createGain();
+      lfoDepth.gain.value = 0.04;
+      surfLfo.connect(lfoDepth).connect(surfVol.gain);
+      surfNoise.connect(hp).connect(lp).connect(surfVol).connect(audioCtx.destination);
+      surfNoise.start();
+      surfLfo.start();
+      scheduleHourBell();
+    } catch (e) { /* audio is decorative — swallow */ }
+  }
+  function stopAudio() {
+    if (!audioCtx) return;
+    try {
+      surfNoise?.stop();
+      surfLfo?.stop();
+      audioCtx.close();
+    } catch (e) {}
+    audioCtx = null; surfNoise = null; surfVol = null; surfLfo = null;
+    if (hourBellTimer) { clearTimeout(hourBellTimer); hourBellTimer = null; }
+  }
+  window.addEventListener('pc:bar:audio-change', (e) => {
+    const on = !!e?.detail?.on;
+    if (on) startAudio();
+    else    stopAudio();
+  });
+  // If the flag is already 'on' (returning visitor who toggled it on
+  // last session), wait for the first pointer-down to unlock the
+  // AudioContext. Most browsers honor click as a user gesture.
+  if (audioWanted()) {
+    const unlock = () => { startAudio(); document.removeEventListener('pointerdown', unlock); };
+    document.addEventListener('pointerdown', unlock, { once: true });
+  }
+
   // ─── T1: WALKER FOOTPRINTS ───────────────────────────────────────────
   // Stamp a small dot at the walker's current x position every ~500ms
   // while the bar is on. Each dot fades over 90s via CSS animation
