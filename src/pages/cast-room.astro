@@ -1,0 +1,898 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Room — synthesized room tone for behind whatever else you're listening to" description="A room behind the music. Pick a place — El Segundo porch, café morning, last train, library at dusk, kitchen at nine — dial in each layer. Plays underneath whatever's in another tab. All synthesized, no samples.">
+  <main class="cr" id="cr" data-built={built}>
+    <header class="cr__hero">
+      <p class="cr__kicker">CAST · ROOM · synth ambience · runs underneath</p>
+      <h1 class="cr__title">Room.</h1>
+      <p class="cr__sub">Pick a place. Dial in each layer. Plays underneath whatever you've got going in another tab. The thing Spotify never built — a room behind the music.</p>
+    </header>
+
+    <section class="cr__rooms" id="cr-rooms">
+      <button class="cr__room cr__room--active" data-room="porch">
+        <span class="cr__room-name">El Segundo porch</span>
+        <span class="cr__room-time">7:14am</span>
+      </button>
+      <button class="cr__room" data-room="cafe">
+        <span class="cr__room-name">Café morning</span>
+        <span class="cr__room-time">9:42am</span>
+      </button>
+      <button class="cr__room" data-room="train">
+        <span class="cr__room-name">Last train home</span>
+        <span class="cr__room-time">11:18pm</span>
+      </button>
+      <button class="cr__room" data-room="library">
+        <span class="cr__room-name">Library at dusk</span>
+        <span class="cr__room-time">5:57pm</span>
+      </button>
+      <button class="cr__room" data-room="kitchen">
+        <span class="cr__room-name">Kitchen, after</span>
+        <span class="cr__room-time">9:30pm</span>
+      </button>
+    </section>
+
+    <section class="cr__stage">
+      <button class="cr__play" id="cr-play" type="button" aria-label="Start or stop">
+        <span id="cr-play-icon">▶</span>
+      </button>
+      <div class="cr__title-wrap">
+        <p class="cr__stage-name" id="cr-stage-name">El Segundo porch</p>
+        <p class="cr__stage-sub" id="cr-stage-sub">7:14 in the morning · before the marine layer burns off</p>
+      </div>
+      <div class="cr__vol-wrap">
+        <span class="cr__vol-label">MASTER</span>
+        <input type="range" class="cr__vol-slider" id="cr-vol" min="0" max="100" value="55"/>
+      </div>
+    </section>
+
+    <section class="cr__layers" id="cr-layers"></section>
+
+    <section class="cr__notes">
+      <h2 class="cr__notes-h">Why this exists</h2>
+      <p>Spotify and Apple Music are foreground. They've never built the layer that sits <em>behind</em> the music — the room. /cast-room is one rough cut at that layer. Open it in a tab, dial in a place, then put something else on in another tab. Both layers stack.</p>
+      <h2 class="cr__notes-h">How it's made</h2>
+      <p>Each layer is hand-tuned Web Audio: filtered noise, sine drones, scheduled blips. No samples are loaded — the whole page is &lt; 40 KB of code making sound. Loud layers (chatter, rumble) are continuous noise sources through filter chains; sparse layers (gulls, drips, clack) are scheduled events with random timing within bounds.</p>
+      <p>Volume slider per layer goes 0–100%. Master volume scales everything. Picking a different room re-builds the graph but keeps the master volume.</p>
+      <p>Companions: <a href="/cast-cradle">/cast-cradle</a> for a fading pad on top, <a href="/cast-wander">/cast-wander</a> for generative ambient, <a href="/cast-tone">/cast-tone</a> for a tuning drone, <a href="/cast-on">/cast-on</a> for the time-of-day radio.</p>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --cr-ink: #0a0913;
+      --cr-walnut: #4a2a1a;
+      --cr-flame: #f6c15e;
+      --cr-flame-deep: #d68f2c;
+      --cr-cream: #f4e7c8;
+      --cr-cream-dim: #c8b48a;
+      --cr-cream-dimmer: #8b7a5a;
+      --cr-mauve: #b39ddb;
+      --cr-mint: #9bd7b8;
+      --cr-rose: #e6788c;
+    }
+
+    body:has(.cr) {
+      background:
+        radial-gradient(circle at 10% 10%, #1a1428 0%, transparent 35%),
+        radial-gradient(circle at 85% 50%, #14181f 0%, transparent 45%),
+        var(--cr-ink);
+      color: var(--cr-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .cr { max-width: 920px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    .cr__hero { text-align: center; margin-bottom: 32px; }
+    .cr__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em; color: var(--cr-flame-deep);
+      text-transform: uppercase; margin: 0 0 12px;
+    }
+    .cr__title {
+      font-family: 'Inter Tight', sans-serif; font-weight: 900;
+      font-size: clamp(56px, 12vw, 130px); letter-spacing: -0.04em;
+      line-height: 0.9; margin: 0 0 16px; color: var(--cr-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .cr__sub {
+      max-width: 640px; margin: 0 auto; font-size: 17px;
+      line-height: 1.5; color: var(--cr-cream-dim);
+    }
+
+    /* ROOMS */
+    .cr__rooms {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 700px) { .cr__rooms { grid-template-columns: repeat(2, 1fr); } }
+    .cr__room {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(246,193,94,0.22);
+      background: rgba(0,0,0,0.25);
+      color: var(--cr-cream);
+      cursor: pointer;
+      text-align: left;
+      transition: background 100ms ease, transform 60ms ease, border 100ms ease;
+    }
+    .cr__room:hover { background: rgba(246,193,94,0.08); }
+    .cr__room--active {
+      background: rgba(246,193,94,0.18);
+      border-color: var(--cr-flame);
+    }
+    .cr__room-name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .cr__room--active .cr__room-name { color: var(--cr-flame); }
+    .cr__room-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cr-cream-dimmer);
+    }
+
+    /* STAGE */
+    .cr__stage {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 22px 24px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(246,193,94,0.16);
+      border-radius: 18px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .cr__play {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--cr-flame);
+      color: var(--cr-walnut);
+      font-size: 26px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(246,193,94,0.32);
+      transition: transform 80ms ease;
+    }
+    .cr__play:hover { transform: scale(1.04); }
+    .cr__play:active { transform: scale(0.96); }
+    .cr__title-wrap { flex: 1; min-width: 0; }
+    .cr__stage-name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      color: var(--cr-cream);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .cr__stage-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: var(--cr-cream-dim);
+      margin: 4px 0 0;
+    }
+    .cr__vol-wrap {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .cr__vol-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; letter-spacing: 0.14em;
+      color: var(--cr-cream-dimmer);
+    }
+    .cr__vol-slider { width: 130px; accent-color: var(--cr-flame); }
+
+    /* LAYERS */
+    .cr__layers {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 700px) { .cr__layers { grid-template-columns: 1fr; } }
+    .cr__layer {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cr__layer-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .cr__layer-name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--cr-cream);
+    }
+    .cr__layer-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--cr-flame);
+    }
+    .cr__layer-desc {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cr-cream-dimmer);
+      line-height: 1.5;
+    }
+    .cr__layer-slider {
+      width: 100%;
+      accent-color: var(--cr-flame);
+    }
+
+    /* NOTES */
+    .cr__notes {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 0 0;
+      border-top: 1px solid rgba(246,193,94,0.14);
+    }
+    .cr__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--cr-cream);
+      margin: 18px 0 10px;
+    }
+    .cr__notes-h:first-child { margin-top: 0; }
+    .cr__notes p {
+      font-size: 15px; line-height: 1.6;
+      color: var(--cr-cream-dim);
+      margin: 0 0 12px;
+    }
+    .cr__notes em { color: var(--cr-flame); font-style: normal; }
+    .cr__notes a { color: var(--cr-flame); text-decoration: none; }
+    .cr__notes a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    type RoomKey = 'porch' | 'cafe' | 'train' | 'library' | 'kitchen';
+    type LayerKind =
+      | 'ocean' | 'wind' | 'gulls'
+      | 'chatter' | 'steam' | 'distant_music' | 'clatter'
+      | 'rumble' | 'clack' | 'whistle'
+      | 'paper_rustle' | 'hvac' | 'cough'
+      | 'fridge' | 'drips' | 'clock_tick';
+
+    type LayerSpec = { key: LayerKind; name: string; desc: string; default: number };
+    type RoomSpec = { name: string; sub: string; layers: LayerSpec[] };
+
+    const ROOMS: Record<RoomKey, RoomSpec> = {
+      porch: {
+        name: 'El Segundo porch',
+        sub: '7:14 in the morning · before the marine layer burns off',
+        layers: [
+          { key: 'ocean', name: 'Distant ocean', desc: 'low-passed noise, slow swell envelope', default: 0.65 },
+          { key: 'wind', name: 'Slow wind', desc: 'highpassed noise drift', default: 0.35 },
+          { key: 'gulls', name: 'Occasional gull', desc: '900-1300Hz triangle blip every 6-22s', default: 0.30 },
+        ],
+      },
+      cafe: {
+        name: 'Café morning',
+        sub: '9:42am · espresso ticks, paper rustles, the door',
+        layers: [
+          { key: 'chatter', name: 'Distant chatter', desc: 'bandpassed noise, mod-bursty', default: 0.50 },
+          { key: 'steam', name: 'Espresso steam', desc: '3.5kHz hiss burst every 18-40s', default: 0.30 },
+          { key: 'clatter', name: 'Cups and saucers', desc: 'short high blips, random spacing', default: 0.20 },
+        ],
+      },
+      train: {
+        name: 'Last train home',
+        sub: '11:18pm · sleeping carriage, somebody three rows back',
+        layers: [
+          { key: 'rumble', name: 'Carriage rumble', desc: '45Hz sub + low-noise blend', default: 0.65 },
+          { key: 'clack', name: 'Rail clack', desc: '90bpm low-band noise pop', default: 0.40 },
+          { key: 'whistle', name: 'Far whistle', desc: '600Hz triangle every 40-90s', default: 0.18 },
+        ],
+      },
+      library: {
+        name: 'Library at dusk',
+        sub: '5:57pm · radiators on, the lights getting yellow',
+        layers: [
+          { key: 'paper_rustle', name: 'Paper rustle', desc: 'short HF noise bursts', default: 0.30 },
+          { key: 'hvac', name: 'HVAC hum', desc: '80Hz + 200Hz sines + low noise', default: 0.50 },
+          { key: 'cough', name: 'Two rows over', desc: 'bandpassed cough every 30-90s', default: 0.18 },
+        ],
+      },
+      kitchen: {
+        name: 'Kitchen, after',
+        sub: '9:30pm · dishwasher done, somebody else in the next room',
+        layers: [
+          { key: 'fridge', name: 'Fridge hum', desc: '60Hz + 120Hz sines, very low noise', default: 0.45 },
+          { key: 'drips', name: 'Faucet drip', desc: '1.5kHz blip every 4-9s', default: 0.20 },
+          { key: 'clock_tick', name: 'Wall clock', desc: 'square tick at 1Hz', default: 0.28 },
+        ],
+      },
+    };
+
+    // ---- state ----
+    let currentRoom: RoomKey = 'porch';
+    let playing = false;
+    let masterVol = 0.55;
+    let layerLevels: Partial<Record<LayerKind, number>> = {};
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    let layerGraph: Map<LayerKind, { gain: GainNode; cleanup?: () => void }> = new Map();
+    let noiseBuf: AudioBuffer | null = null;
+    let scheduledEvents: number[] = [];
+
+    function getNoiseBuffer(ac: AudioContext): AudioBuffer {
+      if (noiseBuf) return noiseBuf;
+      const len = ac.sampleRate * 4;
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      noiseBuf = buf;
+      return buf;
+    }
+
+    // ---- layer builders ----
+    function buildContinuousNoise(level: number, opts: {
+      type: BiquadFilterType, freq: number, Q?: number,
+      gainScale?: number, extraFilter?: { type: BiquadFilterType, freq: number },
+    }) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      src.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = opts.type;
+      filter.frequency.value = opts.freq;
+      if (opts.Q) filter.Q.value = opts.Q;
+      let chain: AudioNode = filter;
+      if (opts.extraFilter) {
+        const f2 = ctx.createBiquadFilter();
+        f2.type = opts.extraFilter.type;
+        f2.frequency.value = opts.extraFilter.freq;
+        chain.connect(f2);
+        chain = f2;
+      }
+      const g = ctx.createGain();
+      g.gain.value = level * (opts.gainScale ?? 0.2);
+      src.connect(filter);
+      chain.connect(g).connect(masterGain);
+      scheduler.trackSource(src);
+      src.start();
+      return { gain: g, cleanup: () => { try { src.stop(); } catch {}; try { src.disconnect(); } catch {}; } };
+    }
+
+    function startOcean(level: number) {
+      if (!ctx || !masterGain) return null;
+      const node = buildContinuousNoise(level, { type: 'lowpass', freq: 1200, Q: 0.7, gainScale: 0.32 });
+      if (!node) return null;
+      // slow LFO on gain for swell
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.08;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = level * 0.18;
+      lfo.connect(lfoGain).connect(node.gain.gain);
+      scheduler!.trackSource(lfo);
+      lfo.start();
+      return node;
+    }
+
+    function startWind(level: number) {
+      return buildContinuousNoise(level, { type: 'highpass', freq: 1800, gainScale: 0.16, extraFilter: { type: 'lowpass', freq: 4500 } });
+    }
+
+    function startChatter(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      // bandpassed noise + bursty mod
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      src.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 900;
+      bp.Q.value = 0.6;
+      const g = ctx.createGain();
+      g.gain.value = level * 0.22;
+      // amplitude modulator (slow, irregular via second noise modulator)
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.6;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = level * 0.1;
+      lfo.connect(lfoGain).connect(g.gain);
+      scheduler.trackSource(src);
+      scheduler.trackSource(lfo);
+      src.connect(bp).connect(g).connect(masterGain);
+      src.start();
+      lfo.start();
+      return { gain: g, cleanup: () => { try { src.stop(); } catch {}; try { lfo.stop(); } catch {}; } };
+    }
+
+    function startRumble(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const sub = ctx.createOscillator();
+      sub.type = 'sine';
+      sub.frequency.value = 45;
+      const subG = ctx.createGain();
+      subG.gain.value = level * 0.32;
+      sub.connect(subG).connect(masterGain);
+      scheduler.trackSource(sub);
+      sub.start();
+
+      const noise = buildContinuousNoise(level, { type: 'lowpass', freq: 280, Q: 0.7, gainScale: 0.18 });
+      // tiny slow filter sweep
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.05;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 40;
+      lfo.connect(lfoG).connect(sub.frequency);
+      scheduler.trackSource(lfo);
+      lfo.start();
+
+      return {
+        gain: subG,
+        cleanup: () => {
+          try { sub.stop(); } catch {};
+          try { lfo.stop(); } catch {};
+          noise?.cleanup?.();
+        },
+      };
+    }
+
+    function startHvac(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const s1 = ctx.createOscillator();
+      s1.type = 'sine';
+      s1.frequency.value = 80;
+      const s2 = ctx.createOscillator();
+      s2.type = 'sine';
+      s2.frequency.value = 200;
+      const g1 = ctx.createGain(); g1.gain.value = level * 0.14;
+      const g2 = ctx.createGain(); g2.gain.value = level * 0.06;
+      s1.connect(g1).connect(masterGain);
+      s2.connect(g2).connect(masterGain);
+      scheduler.trackSource(s1);
+      scheduler.trackSource(s2);
+      s1.start(); s2.start();
+      const n = buildContinuousNoise(level * 0.4, { type: 'lowpass', freq: 600, gainScale: 0.05 });
+      return {
+        gain: g1,
+        cleanup: () => { try { s1.stop(); s2.stop(); } catch {}; n?.cleanup?.(); },
+      };
+    }
+
+    function startFridge(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const s1 = ctx.createOscillator(); s1.type = 'sine'; s1.frequency.value = 60;
+      const s2 = ctx.createOscillator(); s2.type = 'sine'; s2.frequency.value = 120;
+      const g1 = ctx.createGain(); g1.gain.value = level * 0.16;
+      const g2 = ctx.createGain(); g2.gain.value = level * 0.04;
+      s1.connect(g1).connect(masterGain);
+      s2.connect(g2).connect(masterGain);
+      scheduler.trackSource(s1);
+      scheduler.trackSource(s2);
+      s1.start(); s2.start();
+      return { gain: g1, cleanup: () => { try { s1.stop(); s2.stop(); } catch {}; } };
+    }
+
+    // ---- scheduled blips ----
+    function scheduleBlip(rangeSec: [number, number], make: (t: number) => void) {
+      if (!ctx) return;
+      const delayMs = (rangeSec[0] + Math.random() * (rangeSec[1] - rangeSec[0])) * 1000;
+      const id = window.setTimeout(() => {
+        if (!playing || !ctx) return;
+        make(ctx.currentTime + 0.01);
+        scheduleBlip(rangeSec, make);
+      }, delayMs);
+      scheduledEvents.push(id);
+    }
+
+    function startGulls(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(900 + Math.random() * 400, t);
+        osc.frequency.linearRampToValueAtTime(1100 + Math.random() * 200, t + 0.15);
+        osc.frequency.exponentialRampToValueAtTime(700, t + 0.35);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.16, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+        osc.connect(g).connect(localG);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + 0.42);
+      };
+      scheduleBlip([6, 22], make);
+      return { gain: localG };
+    }
+
+    function startSteam(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const src = ctx.createBufferSource();
+        src.buffer = getNoiseBuffer(ctx);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 3500;
+        bp.Q.value = 0.8;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.4, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        src.connect(bp).connect(g).connect(localG);
+        scheduler.trackSource(src);
+        src.start(t);
+        src.stop(t + 1.0);
+      };
+      scheduleBlip([18, 40], make);
+      return { gain: localG };
+    }
+
+    function startClatter(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const src = ctx.createBufferSource();
+        src.buffer = getNoiseBuffer(ctx);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 1500 + Math.random() * 1500;
+        bp.Q.value = 1.4;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.45, t + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+        src.connect(bp).connect(g).connect(localG);
+        scheduler.trackSource(src);
+        src.start(t);
+        src.stop(t + 0.1);
+      };
+      scheduleBlip([1.2, 5.0], make);
+      return { gain: localG };
+    }
+
+    function startClack(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      // 90 bpm = 1.5 Hz → spacing ~0.66s but with slight irregularity
+      const tick = () => {
+        if (!playing || !ctx || !scheduler) return;
+        const t = ctx.currentTime + 0.01;
+        const src = ctx.createBufferSource();
+        src.buffer = getNoiseBuffer(ctx);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 180;
+        bp.Q.value = 1.2;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.35, t + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        src.connect(bp).connect(g).connect(localG);
+        scheduler.trackSource(src);
+        src.start(t);
+        src.stop(t + 0.08);
+        const id = window.setTimeout(tick, 620 + Math.random() * 100);
+        scheduledEvents.push(id);
+      };
+      tick();
+      return { gain: localG };
+    }
+
+    function startWhistle(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.linearRampToValueAtTime(620, t + 0.4);
+        osc.frequency.linearRampToValueAtTime(580, t + 1.6);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.22, t + 0.4);
+        g.gain.setValueAtTime(0.22, t + 1.2);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);
+        osc.connect(g).connect(localG);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + 2.1);
+      };
+      scheduleBlip([40, 90], make);
+      return { gain: localG };
+    }
+
+    function startPaperRustle(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const src = ctx.createBufferSource();
+        src.buffer = getNoiseBuffer(ctx);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 4000;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2 + Math.random() * 0.3);
+        src.connect(hp).connect(g).connect(localG);
+        scheduler.trackSource(src);
+        src.start(t);
+        src.stop(t + 0.6);
+      };
+      scheduleBlip([1.5, 6], make);
+      return { gain: localG };
+    }
+
+    function startCough(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const src = ctx.createBufferSource();
+        src.buffer = getNoiseBuffer(ctx);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 600;
+        bp.Q.value = 1.0;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.32, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+        src.connect(bp).connect(g).connect(localG);
+        scheduler.trackSource(src);
+        src.start(t);
+        src.stop(t + 0.2);
+      };
+      scheduleBlip([30, 90], make);
+      return { gain: localG };
+    }
+
+    function startDrips(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const make = (t: number) => {
+        if (!ctx || !scheduler) return;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1600, t);
+        osc.frequency.exponentialRampToValueAtTime(1200, t + 0.05);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.3, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        osc.connect(g).connect(localG);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + 0.14);
+      };
+      scheduleBlip([4, 9], make);
+      return { gain: localG };
+    }
+
+    function startClockTick(level: number) {
+      if (!ctx || !scheduler || !masterGain) return null;
+      const localG = ctx.createGain(); localG.gain.value = level;
+      localG.connect(masterGain);
+      const tick = () => {
+        if (!playing || !ctx || !scheduler) return;
+        const t = ctx.currentTime + 0.01;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 2200;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.08, t + 0.001);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.015);
+        osc.connect(g).connect(localG);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + 0.02);
+        const id = window.setTimeout(tick, 1000);
+        scheduledEvents.push(id);
+      };
+      tick();
+      return { gain: localG };
+    }
+
+    // ---- start/stop ----
+    function startLayer(kind: LayerKind, level: number) {
+      let node: { gain: GainNode; cleanup?: () => void } | null = null;
+      switch (kind) {
+        case 'ocean': node = startOcean(level); break;
+        case 'wind': node = startWind(level); break;
+        case 'gulls': node = startGulls(level); break;
+        case 'chatter': node = startChatter(level); break;
+        case 'steam': node = startSteam(level); break;
+        case 'clatter': node = startClatter(level); break;
+        case 'rumble': node = startRumble(level); break;
+        case 'clack': node = startClack(level); break;
+        case 'whistle': node = startWhistle(level); break;
+        case 'paper_rustle': node = startPaperRustle(level); break;
+        case 'hvac': node = startHvac(level); break;
+        case 'cough': node = startCough(level); break;
+        case 'fridge': node = startFridge(level); break;
+        case 'drips': node = startDrips(level); break;
+        case 'clock_tick': node = startClockTick(level); break;
+      }
+      if (node) layerGraph.set(kind, node);
+    }
+
+    function startAll() {
+      if (!ctx) {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        scheduler = createAudioScheduler(ctx);
+        masterGain = ctx.createGain();
+        masterGain.gain.value = masterVol;
+        masterGain.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      playing = true;
+      const room = ROOMS[currentRoom];
+      for (const layer of room.layers) {
+        const lvl = layerLevels[layer.key] ?? layer.default;
+        startLayer(layer.key, lvl);
+      }
+    }
+
+    function stopAll() {
+      playing = false;
+      for (const id of scheduledEvents) clearTimeout(id);
+      scheduledEvents = [];
+      for (const node of layerGraph.values()) {
+        if (node.cleanup) node.cleanup();
+      }
+      layerGraph.clear();
+      if (scheduler) scheduler.stopAll();
+    }
+
+    // ---- render ----
+    function renderRoomChrome() {
+      const r = ROOMS[currentRoom];
+      document.getElementById('cr-stage-name')!.textContent = r.name;
+      document.getElementById('cr-stage-sub')!.textContent = r.sub;
+      document.querySelectorAll('.cr__room').forEach(el => {
+        el.classList.toggle('cr__room--active', el.getAttribute('data-room') === currentRoom);
+      });
+      // Render layer cards
+      const layers = document.getElementById('cr-layers')!;
+      layers.innerHTML = r.layers.map(l => {
+        const lvl = layerLevels[l.key] ?? l.default;
+        const pct = Math.round(lvl * 100);
+        return `
+        <div class="cr__layer" data-key="${l.key}">
+          <div class="cr__layer-head">
+            <span class="cr__layer-name">${l.name}</span>
+            <span class="cr__layer-val">${pct}%</span>
+          </div>
+          <p class="cr__layer-desc">${l.desc}</p>
+          <input class="cr__layer-slider" type="range" min="0" max="100" value="${pct}" data-key="${l.key}"/>
+        </div>`;
+      }).join('');
+      // Wire slider events
+      layers.querySelectorAll<HTMLInputElement>('.cr__layer-slider').forEach(slider => {
+        slider.addEventListener('input', () => {
+          const key = slider.getAttribute('data-key') as LayerKind;
+          const v = parseInt(slider.value) / 100;
+          layerLevels[key] = v;
+          const card = slider.closest('.cr__layer');
+          const val = card?.querySelector('.cr__layer-val') as HTMLElement;
+          if (val) val.textContent = `${parseInt(slider.value)}%`;
+          // Apply immediately if playing
+          if (playing && ctx) {
+            const node = layerGraph.get(key);
+            if (node) {
+              // For most layers, the local gain is a simple level multiplier
+              node.gain.gain.setTargetAtTime(v * 0.5, ctx.currentTime, 0.04);
+            }
+          }
+          persistState();
+        });
+      });
+    }
+
+    // ---- persistence ----
+    const STORAGE_KEY = 'pc-cr-state-v1';
+    function persistState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          room: currentRoom,
+          master: masterVol,
+          levels: layerLevels,
+        }));
+      } catch {}
+    }
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (s.room && ROOMS[s.room as RoomKey]) currentRoom = s.room;
+        if (typeof s.master === 'number') masterVol = s.master;
+        if (s.levels && typeof s.levels === 'object') layerLevels = s.levels;
+      } catch {}
+    }
+
+    function init() {
+      loadState();
+      const volSlider = document.getElementById('cr-vol') as HTMLInputElement;
+      volSlider.value = String(Math.round(masterVol * 100));
+      renderRoomChrome();
+
+      document.getElementById('cr-rooms')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('[data-room]');
+        if (!btn) return;
+        const key = btn.getAttribute('data-room') as RoomKey;
+        if (key === currentRoom) return;
+        const wasPlaying = playing;
+        if (wasPlaying) stopAll();
+        currentRoom = key;
+        renderRoomChrome();
+        if (wasPlaying) startAll();
+        persistState();
+      });
+
+      document.getElementById('cr-play')!.addEventListener('click', () => {
+        if (playing) {
+          stopAll();
+          document.getElementById('cr-play-icon')!.textContent = '▶';
+        } else {
+          startAll();
+          document.getElementById('cr-play-icon')!.textContent = '■';
+        }
+      });
+
+      volSlider.addEventListener('input', () => {
+        masterVol = parseInt(volSlider.value) / 100;
+        if (masterGain && ctx) {
+          masterGain.gain.setTargetAtTime(masterVol, ctx.currentTime, 0.04);
+        }
+        persistState();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!ctx) return;
+        if (document.hidden && playing) {
+          ctx.suspend().catch(() => {});
+        } else if (!document.hidden && playing) {
+          ctx.resume().catch(() => {});
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
