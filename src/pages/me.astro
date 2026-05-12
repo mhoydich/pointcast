@@ -320,6 +320,45 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       </div>
     </section>
 
+    {/* ──────────── 5.8 YOUR TRACES (T7) ──────────── */}
+    <section class="me__band traces" aria-label="Your traces today">
+      <header class="band__head">
+        <p class="me__eyebrow mono">YOUR TRACES · LOCAL TO THIS BROWSER</p>
+        <span class="traces__date mono" id="me-traces-date">today</span>
+      </header>
+      <p class="traces__dek">
+        What you've actually done. Numbers pulled from your local
+        storage — not sent to a server. PointCast pivots from a site
+        you VISIT to a place that remembers what you did.
+      </p>
+      <dl class="traces__grid">
+        <div class="trace">
+          <dt id="me-traces-checkins">0</dt>
+          <dd>check-ins today</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-taps">0</dt>
+          <dd>drum taps · total</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-spells">0</dt>
+          <dd>spells cast · total</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-streak">0</dt>
+          <dd>day streak</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-inventory">0</dt>
+          <dd>items in kit</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-pet">—</dt>
+          <dd>pet (right-click in bar to adopt)</dd>
+        </div>
+      </dl>
+    </section>
+
     {/* ──────────── 6. QUICK ACTIONS ──────────── */}
     <section class="me__band actions" aria-label="Quick actions">
       <p class="me__eyebrow mono">QUICK ACTIONS</p>
@@ -938,6 +977,105 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   });
   paintAudioToggle();
 
+  // ─── T7: YOUR TRACES ───────────────────────────────────────────────
+  // Reads existing local storage keys to surface what you've actually
+  // done. Real-time updates when you check in or cast a spell on
+  // this page (other pages contribute via their own writes, picked up
+  // on next visit).
+  function paintTraces() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dateEl = document.getElementById('me-traces-date');
+    if (dateEl) dateEl.textContent = todayStr;
+
+    // Check-ins today — from pc:me:v1.checkins
+    const checkinsEl = document.getElementById('me-traces-checkins');
+    if (checkinsEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc:me:v1');
+        if (raw) {
+          const me = JSON.parse(raw);
+          const list = Array.isArray(me?.checkins) ? me.checkins : [];
+          for (const c of list) {
+            if (typeof c?.at === 'string' && c.at.slice(0, 10) === todayStr) n++;
+          }
+        }
+      } catch (e) {}
+      checkinsEl.textContent = String(n);
+    }
+
+    // Drum taps total — pc:drumLocalCount
+    const tapsEl = document.getElementById('me-traces-taps');
+    if (tapsEl) {
+      let n = 0;
+      try { n = Number(localStorage.getItem('pc:drumLocalCount')) || 0; } catch (e) {}
+      tapsEl.textContent = String(n);
+    }
+
+    // Spells cast total — pc:spells:total (incremented below on event)
+    const spellsEl = document.getElementById('me-traces-spells');
+    if (spellsEl) {
+      let n = 0;
+      try { n = Number(localStorage.getItem('pc:spells:total')) || 0; } catch (e) {}
+      spellsEl.textContent = String(n);
+    }
+
+    // Day streak — pc_streak.current
+    const streakEl = document.getElementById('me-traces-streak');
+    if (streakEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc_streak');
+        if (raw) {
+          const s = JSON.parse(raw);
+          n = Number(s?.current) || 0;
+        }
+      } catch (e) {}
+      streakEl.textContent = String(n);
+    }
+
+    // Inventory items — pc:inventory:v1.items.length
+    const invEl = document.getElementById('me-traces-inventory');
+    if (invEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc:inventory:v1');
+        if (raw) {
+          const inv = JSON.parse(raw);
+          n = Array.isArray(inv?.items) ? inv.items.length : 0;
+        }
+      } catch (e) {}
+      invEl.textContent = String(n);
+    }
+
+    // Pet — pc:pet:v1.pet.name + emoji
+    const petEl = document.getElementById('me-traces-pet');
+    if (petEl) {
+      let label = '—';
+      try {
+        const raw = localStorage.getItem('pc:pet:v1');
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p?.pet?.name) {
+            label = (p.pet.emoji || '🐾') + ' ' + p.pet.name;
+          }
+        }
+      } catch (e) {}
+      petEl.textContent = label;
+    }
+  }
+
+  // Increment spell counter when spells fire (this page or elsewhere).
+  window.addEventListener('pc:spell:cast', () => {
+    try {
+      const cur = Number(localStorage.getItem('pc:spells:total')) || 0;
+      localStorage.setItem('pc:spells:total', String(cur + 1));
+    } catch (e) {}
+    paintTraces();
+  });
+
+  paintTraces();
+
   // Initial paint
   syncCurrentNoun();
   render();
@@ -1369,6 +1507,63 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   }
   @media (max-width: 600px) {
     .bar-toggle__row { grid-template-columns: 1fr; }
+  }
+
+  /* T7: YOUR TRACES — local activity counters */
+  .traces__date {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .traces__dek {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 0 16px;
+    max-width: 600px;
+  }
+  .traces__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0;
+    margin: 0;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .trace {
+    padding: 16px 18px;
+    border-right: 1.5px solid var(--color-rule);
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .trace dt {
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--color-ink);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .trace dd {
+    margin: 8px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  /* Last-row borders cleanup. */
+  @media (min-width: 481px) {
+    .trace:nth-child(3n) { border-right: 0; }
+    .trace:nth-last-child(-n+3) { border-bottom: 0; }
+  }
+  @media (max-width: 480px) {
+    .traces__grid { grid-template-columns: 1fr 1fr; }
+    .trace { border-right: 1.5px solid var(--color-rule); }
+    .trace:nth-child(2n) { border-right: 0; }
+    .trace:nth-last-child(-n+2) { border-bottom: 0; }
   }
 
   /* QUICK ACTIONS */
