@@ -39,6 +39,7 @@ import shipsData from '../data/recent-ships.json';
 import asksData from '../data/asks.json';
 import learningsData from '../data/learning-notes.json';
 import morningHeroData from '../data/morning-hero.json';
+import shipsStoriesData from '../data/recent-ships-stories.json';
 import HomeCheckinHint from '../components/HomeCheckinHint.astro';
 import HomePlacesDirectory from '../components/HomePlacesDirectory.astro';
 
@@ -159,6 +160,26 @@ interface MorningPost {
 }
 const morningPosts = (morningHeroData as { posts: MorningPost[] }).posts;
 const morningHero = morningPosts.find((p) => p.date === todayStr) || null;
+
+// ---------- Data: ships as stories ----------
+// Mike 2026-05-12: "all the work highlights aren't resonating". Ships
+// now render as paragraphs with images instead of ref-rows. This is
+// the editorial format; the brief recent-ships.json stays as the
+// metadata feed for agents.
+interface ShipStory {
+  ref: string;
+  tag: string;
+  at: string;
+  title: string;
+  body: string;
+  image?: string;
+  tryHref: string;
+  tryLabel: string;
+}
+const shipStories = (shipsStoriesData as { stories: ShipStory[] }).stories
+  .slice()
+  .sort((a, b) => +new Date(b.at) - +new Date(a.at))
+  .slice(0, 6);
 
 // ---------- Data: asks (daily rotation) ----------
 // All asks render in the page; client-side JS picks today's by
@@ -475,52 +496,40 @@ const jsonLd = {
       </div>
     </section>
 
-    {/* ============== 2b. RECENT SHIPS ==============
-       Hand-curated feature ships that aren't content blocks (so they
-       wouldn't appear in JUST LANDED above). Walking bar updates,
-       /me changes, homepage refactors, etc. Sourced from
-       src/data/recent-ships.json. Ship a feature → add it here so the
-       homepage reflects momentum the block-collection alone can't. */}
-    {ships.length > 0 && (
-      <section class="ships" aria-label="Recent feature ships">
-        <header class="ships__head">
-          <p class="kicker">RECENT SHIPS · feature PRs (not content blocks)</p>
-          <a href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged" class="ships__cta">all PRs →</a>
+    {/* ============== 2b. RECENT SHIPS — AS STORIES ==============
+       Mike 2026-05-12: "all the work highlights aren't resonating".
+       Each ship is now a paragraph with an image + a TRY action,
+       not a ref-row. Sourced from src/data/recent-ships-stories.json.
+       The brief recent-ships.json stays as the metadata feed for
+       agents (see operating-mode.json + ships rendering elsewhere). */}
+    {shipStories.length > 0 && (
+      <section class="story-feed" aria-label="Recent ships as stories">
+        <header class="story-feed__head">
+          <p class="kicker">RECENT · WHAT WE SHIPPED</p>
+          <a href="https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged" class="story-feed__cta">all PRs →</a>
         </header>
 
-        {shipsToday.length > 0 && (
-          <div class="ships__group">
-            <p class="ships__group-h">SHIPPED TODAY · {shipsToday.length}</p>
-            <ul class="ships__list">
-              {shipsToday.map(s => (
-                <li class="ship">
-                  <a class="ship__link" href={s.href}>
-                    <span class="ship__ref">{s.ref}</span>
-                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
-                    <span class="ship__title">{s.title}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {shipsEarlier.length > 0 && (
-          <div class="ships__group ships__group--earlier">
-            <p class="ships__group-h">EARLIER · last 7 days</p>
-            <ul class="ships__list">
-              {shipsEarlier.map(s => (
-                <li class="ship">
-                  <a class="ship__link" href={s.href}>
-                    <span class="ship__ref">{s.ref}</span>
-                    <span class="ship__tag" data-tag={s.tag}>{s.tag}</span>
-                    <span class="ship__title">{s.title}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <ol class="story-feed__list">
+          {shipStories.map((s) => (
+            <li class="story">
+              {s.image && (
+                <a class="story__imgwrap" href={s.tryHref}>
+                  <img class="story__img" src={s.image} alt={s.title} loading="lazy" />
+                </a>
+              )}
+              <div class="story__body">
+                <header class="story__head">
+                  <span class="story__ref mono">{s.ref}</span>
+                  <span class="story__tag mono" data-tag={s.tag}>{s.tag}</span>
+                  <span class="story__when mono">{fmtRelative(s.at)}</span>
+                </header>
+                <h3 class="story__title">{s.title}</h3>
+                <p class="story__body-text">{s.body}</p>
+                <a class="story__try" href={s.tryHref}>{s.tryLabel} →</a>
+              </div>
+            </li>
+          ))}
+        </ol>
       </section>
     )}
 
@@ -1113,6 +1122,141 @@ const jsonLd = {
     margin: 0;
     text-transform: uppercase;
   }
+
+  /* ============== STORY FEED (Ships as stories) ============== */
+  .story-feed {
+    margin: 0 0 48px;
+    padding: 22px 24px 26px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 4px;
+  }
+  .story-feed__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+    margin: 0 0 22px;
+    padding-bottom: 12px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .story-feed__head .kicker { color: #1f1b15; }
+  .story-feed__cta {
+    font-family: var(--font-mono);
+    font-size: 11px; letter-spacing: 0.12em;
+    color: var(--color-warm); text-decoration: none;
+    text-transform: uppercase;
+  }
+  .story-feed__cta:hover { color: var(--color-ink); }
+  .story-feed__list {
+    list-style: none;
+    padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .story {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding-bottom: 26px;
+    border-bottom: 1px dashed var(--color-rule);
+  }
+  .story:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  @media (min-width: 720px) {
+    .story {
+      grid-template-columns: 280px 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+  }
+  .story__imgwrap {
+    display: block;
+    line-height: 0;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #1f1b15;
+    transition: transform 0.18s ease;
+  }
+  .story__imgwrap:hover { transform: translateY(-1px); }
+  .story__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1659 / 948;
+    object-fit: cover;
+    image-rendering: pixelated;
+  }
+  /* 05 Ghibli + 06 Moebius aren't pixel art — let them render smooth */
+  .story__img[src*="05-"], .story__img[src*="06-"] { image-rendering: auto; }
+  .story__body { min-width: 0; }
+  .story__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 0 0 8px;
+  }
+  .story__ref {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--color-warm);
+  }
+  .story__tag {
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    background: rgba(31, 27, 21, 0.08);
+    border-radius: 2px;
+    color: var(--color-ink);
+    line-height: 1.2;
+  }
+  .story__tag[data-tag='DRUM']   { background: #e8e1ce; color: #5b4a1d; }
+  .story__tag[data-tag='BAR']    { background: #f5e6d4; color: #874c1d; }
+  .story__tag[data-tag='ME']     { background: #e1ebed; color: #1b3a5b; }
+  .story__tag[data-tag='HOME']   { background: #efe7d6; color: #7c5c1f; }
+  .story__tag[data-tag='PEOPLE'] { background: #e8e0e6; color: #5b2a4a; }
+  .story__tag[data-tag='TODAY']  { background: #f3eccd; color: #7a5d18; }
+  .story__tag[data-tag='API']    { background: #d6e6e1; color: #1f5b48; }
+  .story__when {
+    font-size: 10px; letter-spacing: 0.06em;
+    color: var(--color-ink-soft);
+  }
+  .story__title {
+    font-family: var(--font-heading);
+    font-size: clamp(20px, 2.2vw, 26px);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+    margin: 0 0 10px;
+  }
+  .story__body-text {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--color-ink-soft);
+    margin: 0 0 14px;
+    max-width: 600px;
+  }
+  .story__try {
+    display: inline-block;
+    padding: 8px 14px;
+    background: var(--color-ink);
+    color: #fff !important;
+    text-decoration: none;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: background 0.16s ease;
+  }
+  .story__try:hover { background: var(--color-warm); }
 
   /* ============== RECENT SHIPS ============== */
   .ships {
