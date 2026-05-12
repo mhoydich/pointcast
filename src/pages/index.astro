@@ -116,16 +116,33 @@ const ships = (shipsData as { updatedAt: string; updatedBy: string; ships: ShipI
 const shipsToday = ships.filter(s => new Date(s.at) >= startOfToday);
 const shipsEarlier = ships.filter(s => new Date(s.at) < startOfToday).slice(0, 4);
 
-// ---------- LEAD: pick block vs ship by recency ----------
+// ---------- LEAD: article quality gate (Mike 2026-05-12 sprint PR 5) ----------
+// Mike: "articles are eh." Default behavior was that any newer block
+// of any kind claimed the hero — even generic agent-authored content.
+// Fix: only blocks with `featured: true` in frontmatter can claim the
+// LEAD over a ship. Everything else is honored in /archive but doesn't
+// own the front door.
+//
+// Resolution chain (after Morning Hero):
+//   1. ship vs featured-block, whichever is newer
+//   2. if no featured block and no ship → fall back to latest block
+//   3. if literally nothing → no lead rendered
 const latestShip = ships[0] || null;
-const latestBlockAt = latestBlock ? +new Date(latestBlock.data.timestamp) : 0;
-const latestShipAt  = latestShip ? +new Date(latestShip.at) : 0;
-// Use ship-as-lead when the most recent ship is newer than the most
-// recent block. Any ship — even older ones — beats an even-older block.
-const useShipAsLead = !!latestShip && latestShipAt > latestBlockAt;
+const latestShipAt = latestShip ? +new Date(latestShip.at) : 0;
 
-// Block-lead variables (used when useShipAsLead is false).
-const lead = latestBlock;
+const latestFeaturedBlock = allBlocks.find(b => b.data.featured === true) || null;
+const latestFeaturedAt = latestFeaturedBlock ? +new Date(latestFeaturedBlock.data.timestamp) : 0;
+
+// Last-resort fallback only if no ship + no featured block exists.
+const latestBlockAt = latestBlock ? +new Date(latestBlock.data.timestamp) : 0;
+
+// Pick the lead source.
+const useShipAsLead = !!latestShip && latestShipAt >= latestFeaturedAt;
+const useFeaturedBlockAsLead = !useShipAsLead && !!latestFeaturedBlock;
+const useLastResortBlockAsLead = !useShipAsLead && !useFeaturedBlockAsLead && !!latestBlock;
+
+// The block that gets rendered IF a block path wins. Prefer featured.
+const lead = useFeaturedBlockAsLead ? latestFeaturedBlock : (useLastResortBlockAsLead ? latestBlock : null);
 const leadKicker = `${todayKicker} · ${todayStr}`;
 const leadChannel = lead ? CHANNELS[lead.data.channel] : null;
 const leadHref = lead?.data.external?.url
