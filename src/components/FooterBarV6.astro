@@ -42,6 +42,19 @@
  * lives at /bar-v6 as a side-by-side preview.
  */
 import { CHANNELS } from '../lib/channels';
+import { getCollection } from 'astro:content';
+
+// T5: Count published blocks in the last 14 days. Each one places a
+// small easel sprite outside the STUDIO building. The town accumulates
+// visible evidence of work done — every block published is an easel
+// in front of the studio. Cap at 12 so the sidewalk doesn't overflow.
+const _allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
+const _now = new Date();
+const _fourteenDaysAgo = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() - 14);
+const easelCount = Math.min(
+  12,
+  _allBlocks.filter((b) => new Date(b.data.timestamp) >= _fourteenDaysAgo).length
+);
 
 // Hand-placed buildings along the bar. `x` is percent-from-left.
 // Each is a kit slot — clicking navigates, hover shows the nameplate.
@@ -153,6 +166,21 @@ const BUILDING_SVGS: Record<string, string> = {
 
   {/* Ground line + walking path. */}
   <div class="fbv6__ground" aria-hidden="true"></div>
+
+  {/* T5: STUDIO EASELS — one tiny easel sprite outside STUDIO for
+      each block published in the last 14 days. The town visibly
+      accumulates evidence of work done. Capped at 12 to avoid
+      overflowing the sidewalk between STUDIO (31%) and DRUM (50%).
+      The Codex-crafted A-frame easel SVG is reused for every one. */}
+  {easelCount > 0 && (
+    <div class="fbv6__easels" aria-hidden="true" data-count={easelCount}>
+      {Array.from({ length: easelCount }, (_, i) => (
+        <span class="fbv6__easel" style={`left: ${36 + i * 1.3}%; animation-delay: ${i * 0.4}s;`} title={`${easelCount} blocks in the last 14 days`}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 12"><path fill="currentColor" d="M3 0h2v2h1v3h1v1H1V5h1V2h1V0ZM2 6h1v2h1v1H3v3H1v-1h1V8H1V7h1V6Zm3 0h1v1h1v1H6v3h1v1H5V9H4V8h1V6Z"/></svg>
+        </span>
+      ))}
+    </div>
+  )}
 
   {/* T1: WALKER FOOTPRINTS — small dots stamped behind the walker
       every ~500ms. Fade over 90s. The first "trace" feature — the
@@ -1587,6 +1615,40 @@ const BUILDING_SVGS: Record<string, string> = {
     position: absolute; left: 0; right: 0; bottom: 14px;
     height: 2px;
     background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.45) 8%, rgba(0,0,0,0.45) 92%, transparent 100%);
+  }
+
+  /* T5: STUDIO EASELS — one per block published in the last 14 days,
+     parked between STUDIO and DRUM. currentColor + ground-level. A
+     subtle bob animation gives the sense the studio is busy. */
+  .fbv6__easels {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 14px;
+    height: 12px;
+    pointer-events: none;
+    z-index: 1;
+    color: rgba(40, 30, 18, calc(0.6 + var(--nightness, 0) * 0.30));
+    transition: color 1.2s ease;
+  }
+  .fbv6__easel {
+    position: absolute;
+    bottom: 0;
+    transform: translateX(-50%);
+    display: block;
+    animation: fbv6-easel-bob 4s ease-in-out infinite;
+  }
+  .fbv6__easel svg {
+    display: block;
+    width: 6px; height: 9px;
+    image-rendering: pixelated;
+  }
+  /* A very subtle 1px bob suggests the easel is being worked at. */
+  @keyframes fbv6-easel-bob {
+    0%, 100% { transform: translate(-50%, 0); }
+    50%      { transform: translate(-50%, -0.5px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fbv6__easel { animation: none; }
   }
 
   /* T1: WALKER FOOTPRINTS — small dots stamped at the walker's x as
