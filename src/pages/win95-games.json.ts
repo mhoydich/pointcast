@@ -24,6 +24,14 @@ export const GET: APIRoute = async () => {
         target: index === 0 ? 'best-time' : index === 1 ? 'fewest-moves' : index === 2 ? 'clear-pyramid' : 'safe-clear',
       })),
     },
+    localProgress: {
+      profileKey: `${ARCADE_STORAGE_PREFIX}profile`,
+      gameKeys: RETRO_ARCADE_GAMES.map((game) => ({
+        slug: game.slug,
+        storageKey: game.storageKey,
+      })),
+      fields: ['plays', 'clears', 'bestTime', 'bestMoves', 'lastPlayed', 'achievements'],
+    },
     games: RETRO_ARCADE_GAMES.map((game) => ({
       ...game,
       url: `https://pointcast.xyz${game.path}`,

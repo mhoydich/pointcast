@@ -60,6 +60,24 @@ const jsonLd = {
         </div>
       </section>
 
+      <section class="launcher" aria-label="Arcade quick actions">
+        <a class="resume" href="/solitaire-v2" data-resume>
+          <span>RESUME</span>
+          <strong data-resume-title>Start Solitaire</strong>
+          <em data-resume-copy>No local game yet. Pick a table and make the first mark.</em>
+        </a>
+        <div class="daily">
+          <span>DAILY CHALLENGE</span>
+          <strong data-daily-date>Today</strong>
+          <em data-daily-copy>Four small goals from the same daily seed. Local-only, honor-system arcade.</em>
+        </div>
+        <button class="reset" type="button" data-reset-stats>
+          <span>RESET</span>
+          <strong>Clear local stats</strong>
+          <em>Only this browser. No server account, no remote wipe.</em>
+        </button>
+      </section>
+
       <section class="grid" aria-label="Arcade games">
         {RETRO_ARCADE_GAMES.map((game) => (
           <a class={`game game--${game.category}`} href={game.path} data-game-card={game.slug}>
@@ -91,15 +109,35 @@ const jsonLd = {
 
 <script>
   const games = [
-    { slug: 'solitaire-v2', name: 'Solitaire' },
-    { slug: 'nouns-memory-v2', name: 'Memory' },
-    { slug: 'nouns-pyramid-v2', name: 'Pyramid' },
-    { slug: 'nouns-mines-v2', name: 'Mines' },
+    { slug: 'solitaire-v2', name: 'Solitaire', path: '/solitaire-v2', target: 'Best time' },
+    { slug: 'nouns-memory-v2', name: 'Memory', path: '/nouns-memory-v2', target: 'Fewest moves' },
+    { slug: 'nouns-pyramid-v2', name: 'Pyramid', path: '/nouns-pyramid-v2', target: 'Clear the pyramid' },
+    { slug: 'nouns-mines-v2', name: 'Mines', path: '/nouns-mines-v2', target: 'Safe clear' },
   ];
   const profileKey = 'pc:arcade:profile';
 
   function readJson(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+
+  function formatBest(game, stats) {
+    if (stats.bestTime) {
+      const minutes = Math.floor(stats.bestTime / 60);
+      const seconds = String(stats.bestTime % 60).padStart(2, '0');
+      return `${minutes}:${seconds}`;
+    }
+    if (stats.bestMoves) return `${stats.bestMoves} moves`;
+    if (game.slug === 'nouns-pyramid-v2' && stats.clears) return `${stats.clears} clears`;
+    return '--';
+  }
+
+  function todaySeed() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
   }
 
   function render() {
@@ -109,21 +147,38 @@ const jsonLd = {
       const plays = Number(stats.plays || 0);
       const clears = Number(stats.clears || 0);
       const stat = document.querySelector(`[data-game-stat="${game.slug}"]`);
-      if (stat) stat.textContent = plays ? `${plays} plays · ${clears} clears` : 'No local plays yet';
-      return { ...game, plays, clears };
+      const best = formatBest(game, stats);
+      if (stat) stat.textContent = plays ? `${plays} plays · ${clears} clears · best ${best}` : `Daily: ${game.target}`;
+      return { ...game, plays, clears, best };
     });
     const totalPlays = totals.reduce((sum, game) => sum + game.plays, 0);
     const clears = totals.reduce((sum, game) => sum + game.clears, 0);
     const favorite = totals.slice().sort((a, b) => b.plays - a.plays)[0];
+    const last = totals.find((game) => game.name === profile.lastPlayed) || favorite;
     document.querySelector('[data-total-plays]').textContent = String(totalPlays);
     document.querySelector('[data-clears]').textContent = String(clears);
     document.querySelector('[data-favorite]').textContent = favorite?.plays ? favorite.name : '--';
     document.querySelector('[data-last-played]').textContent = profile.lastPlayed || '--';
+    const resume = document.querySelector('[data-resume]');
+    if (resume && last?.plays) resume.setAttribute('href', last.path);
+    document.querySelector('[data-resume-title]').textContent = last?.plays ? `Resume ${last.name}` : 'Start Solitaire';
+    document.querySelector('[data-resume-copy]').textContent = last?.plays
+      ? `${last.plays} plays, ${last.clears} clears, best ${last.best}.`
+      : 'No local game yet. Pick a table and make the first mark.';
+    document.querySelector('[data-daily-date]').textContent = todaySeed();
+    document.querySelector('[data-daily-copy]').textContent = games.map((game) => `${game.name}: ${game.target}`).join(' · ');
     const achievements = new Set(profile.achievements || []);
     document.querySelectorAll('[data-achievement]').forEach((node) => {
       node.classList.toggle('is-earned', achievements.has(node.dataset.achievement));
     });
   }
+
+  document.querySelector('[data-reset-stats]')?.addEventListener('click', () => {
+    if (!window.confirm('Clear local Retro Arcade stats in this browser?')) return;
+    localStorage.removeItem(profileKey);
+    games.forEach((game) => localStorage.removeItem(`pc:arcade:${game.slug}`));
+    render();
+  });
 
   render();
 </script>
@@ -143,6 +198,12 @@ const jsonLd = {
   .profile { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; }
   .profile div,.achievements { border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:10px; }
   .profile strong { display:block; overflow-wrap:anywhere; font:700 20px/1 "Courier New",monospace; }
+  .launcher { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:4px; padding:4px; border-top:1px solid #fff; }
+  .launcher a,.launcher div,.launcher button { display:grid; gap:7px; min-height:92px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#efefef; color:#000; padding:10px; text-align:left; text-decoration:none; font:inherit; }
+  .launcher a:hover,.launcher button:hover { background:#000080; color:#fff; }
+  .launcher span { margin:0; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; text-transform:uppercase; }
+  .launcher strong { font-size:20px; line-height:1; }
+  .launcher em { font-style:normal; line-height:1.35; }
   .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px; }
   .game { min-height:220px; display:grid; align-content:start; gap:10px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#fff; color:#000; padding:14px; text-decoration:none; }
   .game:hover { background:#000080; color:#fff; text-decoration:none; }
@@ -156,6 +217,6 @@ const jsonLd = {
   .achievements li.is-earned { opacity:1; background:#ffffcc; box-shadow:inset 0 0 0 2px #ffff00; }
   .achievements strong,.achievements span { display:block; }
   .achievements span { margin-top:5px; line-height:1.35; }
-  @media (max-width:860px) { .grid,.profile,.achievements ul{grid-template-columns:repeat(2,minmax(0,1fr));} }
-  @media (max-width:560px) { .desk{padding:8px}.grid,.profile,.achievements ul{grid-template-columns:1fr}.hero{padding:18px}.game{min-height:150px} }
+  @media (max-width:860px) { .grid,.profile,.launcher,.achievements ul{grid-template-columns:repeat(2,minmax(0,1fr));} .resume{grid-column:1/-1;} }
+  @media (max-width:560px) { .desk{padding:8px}.grid,.profile,.launcher,.achievements ul{grid-template-columns:1fr}.resume{grid-column:auto}.hero{padding:18px}.game{min-height:150px} }
 </style>
