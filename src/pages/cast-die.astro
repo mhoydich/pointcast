@@ -1,0 +1,524 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Die — roll four dice, hear a melody" description="Four dice on a felt table. Each die picks a different element of the melody — key, tempo, rhythm, contour. Roll the dice, hear the music. Different every time, always in key.">
+  <main class="cd" id="cd" data-built={built}>
+    <header class="cd__hero">
+      <p class="cd__kicker">CAST · DIE · roll · listen · re-roll</p>
+      <h1 class="cd__title">Die.</h1>
+      <p class="cd__sub">Four dice on a felt table. Each die picks a different element of a four-bar phrase. Roll, the page plays the phrase. Re-roll, a different phrase plays. Different every time, always in key.</p>
+    </header>
+
+    <section class="cd__felt">
+      <div class="cd__dice" id="cd-dice"></div>
+      <div class="cd__readouts" id="cd-readouts"></div>
+    </section>
+
+    <section class="cd__transport">
+      <button class="cd__roll" id="cd-roll" type="button">
+        <span class="cd__roll-icon">⚄</span>
+        <span class="cd__roll-label">ROLL</span>
+      </button>
+      <button class="cd__play" id="cd-play" type="button" disabled>
+        <span class="cd__play-icon" id="cd-play-icon">▶</span>
+        <span class="cd__play-label" id="cd-play-label">PLAY</span>
+      </button>
+      <button class="cd__lock-all" id="cd-lock-all" type="button">UNLOCK ALL</button>
+      <span class="cd__roll-hint">Tap a die to lock it before rolling. Locked dice keep their value.</span>
+    </section>
+
+    <section class="cd__about">
+      <h2 class="cd__about-h">What each die means</h2>
+      <ul class="cd__about-ul">
+        <li><strong>Die 1 — Key.</strong> 1 → C major · 2 → G major · 3 → D major · 4 → A minor · 5 → E minor · 6 → C pentatonic</li>
+        <li><strong>Die 2 — Tempo.</strong> 1 → 60 BPM (slow) · 2 → 80 · 3 → 100 · 4 → 120 · 5 → 140 · 6 → 160 (urgent)</li>
+        <li><strong>Die 3 — Rhythm.</strong> Six four-bar rhythmic patterns: straight quarters, syncopated 8ths, dotted, triplet feel, dense fills, sparse long notes.</li>
+        <li><strong>Die 4 — Contour.</strong> Melodic shape: ascending, descending, arch, valley, zigzag, drone-around-tonic.</li>
+      </ul>
+      <p>Every combination produces a valid 4-bar phrase in the chosen key — 6⁴ = 1,296 possible phrases. Lock a die you like, roll the rest, and you can ratchet toward a phrase you keep.</p>
+      <p>Pair with <a href="/cast-letter">/cast-letter</a> (type → melody), <a href="/cast-shape">/cast-shape</a> (draw → melody), <a href="/cast-throw">/cast-throw</a> (trade with the computer), <a href="/cast-wheel">/cast-wheel</a> (the key geometry).</p>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --cd-ink: #0c0810;
+      --cd-walnut: #4a2a1a;
+      --cd-flame: #f6c15e;
+      --cd-flame-deep: #d68f2c;
+      --cd-cream: #f4e7c8;
+      --cd-cream-dim: #c8b48a;
+      --cd-cream-dimmer: #8b7a5a;
+      --cd-felt: #1c4f2c;
+      --cd-felt-dim: #163823;
+      --cd-mauve: #b39ddb;
+      --cd-mint: #9bd7b8;
+    }
+
+    body:has(.cd) {
+      background: radial-gradient(circle at 30% 0%, #2a1828 0%, var(--cd-ink) 60%);
+      color: var(--cd-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .cd { max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    .cd__hero { text-align: center; margin-bottom: 32px; }
+    .cd__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      color: var(--cd-flame-deep);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .cd__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 900;
+      font-size: clamp(56px, 12vw, 138px);
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      margin: 0 0 16px;
+      color: var(--cd-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .cd__sub {
+      max-width: 680px; margin: 0 auto;
+      font-size: 17px; line-height: 1.5;
+      color: var(--cd-cream-dim);
+    }
+
+    /* FELT */
+    .cd__felt {
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.04) 0%, transparent 50%),
+        linear-gradient(180deg, var(--cd-felt) 0%, var(--cd-felt-dim) 100%);
+      border: 1px solid rgba(246,193,94,0.18);
+      border-radius: 22px;
+      padding: 28px 24px 24px;
+      margin-bottom: 22px;
+      box-shadow: inset 0 0 60px rgba(0,0,0,0.3);
+    }
+    .cd__dice {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 600px) { .cd__dice { grid-template-columns: 1fr 1fr; } }
+    .cd__die {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 18px;
+      border: 0;
+      background: linear-gradient(160deg, #fff 0%, #ddd 100%);
+      box-shadow:
+        0 6px 18px rgba(0,0,0,0.4),
+        inset 0 -4px 8px rgba(0,0,0,0.12),
+        inset 0 4px 6px rgba(255,255,255,0.6);
+      cursor: pointer;
+      padding: 12% 12%;
+      transition: transform 200ms cubic-bezier(.34,1.56,.64,1), box-shadow 100ms ease;
+    }
+    .cd__die:hover { transform: translateY(-2px); }
+    .cd__die--rolling { animation: cdRoll 600ms ease-out; }
+    @keyframes cdRoll {
+      0%   { transform: rotate(0deg) scale(1); }
+      25%  { transform: rotate(-90deg) scale(1.08); }
+      55%  { transform: rotate(180deg) scale(0.95); }
+      85%  { transform: rotate(330deg) scale(1.04); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+    .cd__die--locked {
+      background: linear-gradient(160deg, #f6c15e 0%, #d68f2c 100%);
+      box-shadow:
+        0 6px 18px rgba(246,193,94,0.32),
+        inset 0 -4px 8px rgba(0,0,0,0.2),
+        inset 0 4px 6px rgba(255,255,255,0.4);
+    }
+    .cd__die-face {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr 1fr;
+      gap: 4%;
+    }
+    .cd__pip {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: #1a0c0a;
+      box-shadow: inset 0 2px 2px rgba(0,0,0,0.5);
+    }
+    .cd__lock {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    .cd__die--locked .cd__lock { color: rgba(0,0,0,0.7); }
+
+    .cd__readouts {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 600px) { .cd__readouts { grid-template-columns: 1fr 1fr; } }
+    .cd__readout {
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+    }
+    .cd__readout-label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: rgba(244,231,200,0.6);
+      margin-bottom: 2px;
+    }
+    .cd__readout-val {
+      display: block;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--cd-cream);
+    }
+
+    /* TRANSPORT */
+    .cd__transport {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+    .cd__roll {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 26px;
+      border-radius: 12px;
+      border: 0;
+      background: var(--cd-flame);
+      color: var(--cd-walnut);
+      cursor: pointer;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      box-shadow: 0 4px 14px rgba(246,193,94,0.32);
+    }
+    .cd__roll:hover { background: var(--cd-flame-deep); }
+    .cd__roll-icon { font-size: 18px; }
+    .cd__play, .cd__lock-all {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(246,193,94,0.32);
+      background: transparent;
+      color: var(--cd-cream);
+      cursor: pointer;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      transition: background 100ms ease;
+    }
+    .cd__play:hover:not(:disabled), .cd__lock-all:hover { background: rgba(246,193,94,0.12); }
+    .cd__play:disabled { opacity: 0.4; cursor: not-allowed; }
+    .cd__roll-hint {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cd-cream-dimmer);
+    }
+
+    /* ABOUT */
+    .cd__about {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 0 0;
+      border-top: 1px solid rgba(246,193,94,0.14);
+    }
+    .cd__about-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--cd-cream);
+      margin: 0 0 12px;
+    }
+    .cd__about-ul {
+      padding-left: 0;
+      list-style: none;
+    }
+    .cd__about-ul li {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--cd-cream-dim);
+      margin-bottom: 6px;
+      padding-left: 18px;
+      position: relative;
+    }
+    .cd__about-ul li::before {
+      content: '·';
+      position: absolute;
+      left: 6px;
+      color: var(--cd-flame);
+    }
+    .cd__about p {
+      font-size: 15px; line-height: 1.6;
+      color: var(--cd-cream-dim);
+      margin: 12px 0;
+    }
+    .cd__about strong { color: var(--cd-cream); }
+    .cd__about a { color: var(--cd-flame); text-decoration: none; }
+    .cd__about a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // ---- music data ----
+    const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+    const MINOR = [0, 2, 3, 5, 7, 8, 10];
+    const PENT  = [0, 2, 4, 7, 9];
+    const KEYS = [
+      { name: 'C major',     rootMidi: 60, scale: MAJOR },
+      { name: 'G major',     rootMidi: 67, scale: MAJOR },
+      { name: 'D major',     rootMidi: 62, scale: MAJOR },
+      { name: 'A minor',     rootMidi: 57, scale: MINOR },
+      { name: 'E minor',     rootMidi: 52, scale: MINOR },
+      { name: 'C pentatonic', rootMidi: 60, scale: PENT },
+    ];
+    const TEMPOS = [60, 80, 100, 120, 140, 160];
+
+    // Rhythm patterns: array of beat starts (0..16, 4 bars) for each note slot.
+    // Length determines density.
+    const RHYTHMS: { name: string; beats: number[] }[] = [
+      { name: 'straight 4ths',  beats: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15] },
+      { name: 'syncopated 8ths', beats: [0,0.5,1.5,2.5,3,4,5,5.5,6.5,7,8,9,9.5,11,12,13.5,14] },
+      { name: 'dotted',          beats: [0,1.5,3,4,5.5,7,8,9.5,11,12,13.5,15] },
+      { name: 'triplet feel',    beats: [0,0.67,1.33,2,2.67,3.33,4,4.67,5.33,6,6.67,7.33,8,9,10,11,12,13,14,15] },
+      { name: 'dense fill',      beats: [0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.5,3,4,5,6,7,7.5,8,8.25,8.5,8.75,9,10,11,12,12.5,13,14,15] },
+      { name: 'sparse long',     beats: [0,4,7,12] },
+    ];
+
+    // Contours: function mapping (i, total) → scale degree index (in 0..2*scaleLen)
+    type Contour = (i: number, total: number, scaleLen: number) => number;
+    const CONTOURS: { name: string; fn: Contour }[] = [
+      { name: 'ascending',  fn: (i, total, scaleLen) => Math.floor((i / total) * (scaleLen * 1.6)) },
+      { name: 'descending', fn: (i, total, scaleLen) => Math.floor(((total - i - 1) / total) * (scaleLen * 1.6)) },
+      { name: 'arch',       fn: (i, total, scaleLen) => Math.floor(Math.sin(Math.PI * (i / total)) * scaleLen * 1.4) },
+      { name: 'valley',     fn: (i, total, scaleLen) => Math.floor((1 - Math.sin(Math.PI * (i / total))) * scaleLen * 1.4) },
+      { name: 'zigzag',     fn: (i, total, scaleLen) => (i % 2 === 0 ? Math.floor((i / total) * scaleLen) : scaleLen + Math.floor((i / total) * scaleLen / 2)) },
+      { name: 'drone',      fn: (i, total, scaleLen) => i % 3 === 0 ? 0 : 1 + (i % 3) },
+    ];
+
+    // ---- state ----
+    let dice: number[] = [1, 3, 1, 3];  // 1-6 each
+    let locked: boolean[] = [false, false, false, false];
+
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    let playing = false;
+    let endTimer: number | null = null;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(ctx.destination);
+    }
+    function midiToHz(m: number) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+    function generateNotes() {
+      const k = KEYS[dice[0] - 1];
+      const tempo = TEMPOS[dice[1] - 1];
+      const rhythm = RHYTHMS[dice[2] - 1];
+      const contour = CONTOURS[dice[3] - 1];
+      const beatSec = 60 / tempo;
+      const scaleLen = k.scale.length;
+      const notes: { midi: number; startSec: number; durSec: number }[] = [];
+      const beats = rhythm.beats;
+      for (let i = 0; i < beats.length; i++) {
+        const deg = ((contour.fn(i, beats.length, scaleLen) % (scaleLen * 2)) + scaleLen * 2) % (scaleLen * 2);
+        const oct = Math.floor(deg / scaleLen);
+        const inOct = deg % scaleLen;
+        const midi = k.rootMidi + oct * 12 + k.scale[inOct];
+        const startSec = beats[i] * beatSec;
+        const next = beats[i + 1] !== undefined ? beats[i + 1] : 16;
+        const durSec = Math.max(0.08, (next - beats[i]) * beatSec * 0.9);
+        notes.push({ midi, startSec, durSec });
+      }
+      return { notes, tempo, k, rhythm, contour };
+    }
+
+    function playNote(midi: number, atCtxTime: number, durSec: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const hz = midiToHz(midi);
+      const tail = Math.max(durSec, 0.22);
+      // pluck-y bell-vib hybrid
+      const stacks = [
+        { freq: hz, gain: 0.28 },
+        { freq: hz, gain: 0.16, detune: 6 },
+        { freq: hz * 2, gain: 0.07 },
+      ];
+      for (const v of stacks) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = v.freq;
+        if ((v as any).detune) osc.detune.value = (v as any).detune;
+        g.gain.setValueAtTime(0.0001, atCtxTime);
+        g.gain.exponentialRampToValueAtTime(v.gain, atCtxTime + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, atCtxTime + tail + 0.3);
+        osc.connect(g).connect(masterGain);
+        scheduler.trackSource(osc);
+        osc.start(atCtxTime);
+        osc.stop(atCtxTime + tail + 0.32);
+      }
+    }
+
+    function play() {
+      ensureCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      if (scheduler) scheduler.stopAll();
+      playing = true;
+      document.getElementById('cd-play-icon')!.textContent = '■';
+      document.getElementById('cd-play-label')!.textContent = 'STOP';
+      const { notes, tempo } = generateNotes();
+      const start = ctx.currentTime + 0.06;
+      for (const n of notes) {
+        playNote(n.midi, start + n.startSec, n.durSec);
+      }
+      const totalSec = 16 * (60 / tempo);
+      if (endTimer != null) clearTimeout(endTimer);
+      endTimer = window.setTimeout(() => stop(), (totalSec + 0.8) * 1000);
+    }
+
+    function stop() {
+      playing = false;
+      if (scheduler) scheduler.stopAll();
+      if (endTimer != null) { clearTimeout(endTimer); endTimer = null; }
+      document.getElementById('cd-play-icon')!.textContent = '▶';
+      document.getElementById('cd-play-label')!.textContent = 'PLAY';
+    }
+
+    // ---- dice rendering ----
+    // Pip positions on a 3×3 grid for face values 1..6
+    const PIP_FACES: number[][] = [
+      [4],                          // 1: center
+      [0, 8],                       // 2: top-left, bottom-right
+      [0, 4, 8],                    // 3: diag
+      [0, 2, 6, 8],                 // 4: corners
+      [0, 2, 4, 6, 8],              // 5: corners + center
+      [0, 2, 3, 5, 6, 8],           // 6: two columns
+    ];
+
+    function renderDice() {
+      const dc = document.getElementById('cd-dice')!;
+      dc.innerHTML = dice.map((v, i) => {
+        const pips = PIP_FACES[v - 1];
+        const cells = Array.from({ length: 9 }, (_, c) =>
+          pips.includes(c) ? '<div class="cd__pip"></div>' : '<div></div>'
+        ).join('');
+        return `
+          <button class="cd__die${locked[i] ? ' cd__die--locked' : ''}" data-i="${i}" aria-label="Die ${i+1}, value ${v}">
+            <div class="cd__die-face">${cells}</div>
+            <span class="cd__lock">${locked[i] ? 'LOCK' : ''}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderReadouts() {
+      const labels = [
+        { name: 'KEY',     val: KEYS[dice[0] - 1].name },
+        { name: 'TEMPO',   val: `${TEMPOS[dice[1] - 1]} BPM` },
+        { name: 'RHYTHM',  val: RHYTHMS[dice[2] - 1].name },
+        { name: 'CONTOUR', val: CONTOURS[dice[3] - 1].name },
+      ];
+      document.getElementById('cd-readouts')!.innerHTML = labels.map(l => `
+        <div class="cd__readout">
+          <span class="cd__readout-label">${l.name}</span>
+          <span class="cd__readout-val">${l.val}</span>
+        </div>
+      `).join('');
+    }
+
+    function rollDie(): number { return 1 + Math.floor(Math.random() * 6); }
+
+    function roll() {
+      // animate unlocked dice
+      const dieEls = [...document.querySelectorAll('.cd__die')] as HTMLElement[];
+      for (let i = 0; i < 4; i++) {
+        if (!locked[i]) {
+          dice[i] = rollDie();
+          dieEls[i]?.classList.remove('cd__die--rolling');
+          dieEls[i]?.offsetHeight;  // reflow
+          dieEls[i]?.classList.add('cd__die--rolling');
+        }
+      }
+      setTimeout(() => {
+        renderDice();
+        renderReadouts();
+        (document.getElementById('cd-play') as HTMLButtonElement).disabled = false;
+      }, 100);
+    }
+
+    function init() {
+      renderDice();
+      renderReadouts();
+
+      document.getElementById('cd-roll')!.addEventListener('click', () => {
+        if (playing) stop();
+        roll();
+      });
+      document.getElementById('cd-dice')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('.cd__die');
+        if (!btn) return;
+        const i = parseInt(btn.getAttribute('data-i')!);
+        locked[i] = !locked[i];
+        renderDice();
+      });
+      document.getElementById('cd-play')!.addEventListener('click', () => {
+        if (playing) stop();
+        else play();
+      });
+      document.getElementById('cd-lock-all')!.addEventListener('click', () => {
+        const allLocked = locked.every(Boolean);
+        locked = [!allLocked, !allLocked, !allLocked, !allLocked];
+        renderDice();
+        (document.getElementById('cd-lock-all') as HTMLElement).textContent = allLocked ? 'LOCK ALL' : 'UNLOCK ALL';
+      });
+
+      window.addEventListener('keydown', e => {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'KeyR') { e.preventDefault(); roll(); }
+        else if (e.code === 'Space') { e.preventDefault(); playing ? stop() : play(); }
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && playing) stop();
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
