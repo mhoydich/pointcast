@@ -11,8 +11,10 @@ export const GET: APIRoute = async () => {
     ...NEXT_SPRINT,
     caveats: [
       'Planning and sprint coordination only.',
-      'Generated images must be copied into public project assets before any page references them.',
-      'Validator status is only trustworthy when reproduced from the live URL.',
+      'Shrine crawl completion is local-only and must not be treated as authentication or authorization.',
+      'Route exits should keep working as ordinary links even if localStorage is unavailable.',
+      'Midjourney prompts are generation recipes; generated raster assets are a follow-up production pass.',
+      'Any agent-readable crawl manifest should name its caveats beside the task data.',
     ],
   };
 

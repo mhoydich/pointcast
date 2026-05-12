@@ -87,16 +87,22 @@ const primaryLinks = [
       ))}
     </section>
 
+    <section class="kickoff" aria-label="Sprint kickoff console">
+      {NEXT_SPRINT.kickoff.map((item) => (
+        <a href={item.href}>
+          <span class="mono">{item.label}</span>
+          <strong>{item.title}</strong>
+          <small>{item.detail}</small>
+        </a>
+      ))}
+    </section>
+
     <section class="band band--intro">
       <div>
         <p class="kicker">WHY THIS SPRINT</p>
-        <h2>Make the ritual repeatable.</h2>
+        <h2>{NEXT_SPRINT.whyTitle}</h2>
       </div>
-      <p>
-        The shrine gallery and builder are live. The next sprint makes them
-        operational: expand the route catalog, validate the metadata, tighten
-        the builder presets, and package the right URL for the right audience.
-      </p>
+      <p>{NEXT_SPRINT.whyBody}</p>
     </section>
 
     <section class="lanes" id="lanes" aria-label="Sprint lanes">
@@ -174,22 +180,12 @@ const primaryLinks = [
     </section>
 
     <section class="links">
-      <a href="/shrines">/shrines</a>
-      <a href="/unfurls">/unfurls</a>
-      <a href="/shrines.json">/shrines.json</a>
-      <a href="/unfurls.json">/unfurls.json</a>
-      <a href="/sprint">/sprint</a>
+      {NEXT_SPRINT.links.map((link) => <a href={link.href}>{link.label}</a>)}
     </section>
   </div>
 
   <script is:inline>
     (function () {
-      const root = document.querySelector('[data-next-sprint]');
-      if (!root) return;
-
-      const checks = Array.from(root.querySelectorAll('[data-check]'));
-      const label = root.querySelector('[data-progress-label]');
-      const bar = root.querySelector('[data-progress-bar]');
       const key = 'pc:next-sprint:checks';
 
       function readState() {
@@ -206,23 +202,36 @@ const primaryLinks = [
         } catch (error) {}
       }
 
-      function render() {
-        const done = checks.filter((check) => check.checked).length;
-        const total = checks.length;
-        if (label) label.textContent = done + ' of ' + total + ' done';
-        if (bar) bar.style.width = total ? ((done / total) * 100).toFixed(0) + '%' : '0%';
+      function initNextSprint() {
+        const root = document.querySelector('[data-next-sprint]');
+        if (!root || root.hasAttribute('data-next-sprint-bound')) return;
+        root.setAttribute('data-next-sprint-bound', '');
+
+        const checks = Array.from(root.querySelectorAll('[data-check]'));
+        const label = root.querySelector('[data-progress-label]');
+        const bar = root.querySelector('[data-progress-bar]');
+        const state = readState();
+
+        function render() {
+          const done = checks.filter((check) => check.checked).length;
+          const total = checks.length;
+          if (label) label.textContent = done + ' of ' + total + ' done';
+          if (bar) bar.style.width = total ? ((done / total) * 100).toFixed(0) + '%' : '0%';
+        }
+
+        checks.forEach((check) => {
+          check.checked = Boolean(state[check.getAttribute('data-check')]);
+          check.addEventListener('change', () => {
+            state[check.getAttribute('data-check')] = check.checked;
+            writeState(state);
+            render();
+          });
+        });
+        render();
       }
 
-      const state = readState();
-      checks.forEach((check) => {
-        check.checked = Boolean(state[check.getAttribute('data-check')]);
-        check.addEventListener('change', () => {
-          state[check.getAttribute('data-check')] = check.checked;
-          writeState(state);
-          render();
-        });
-      });
-      render();
+      initNextSprint();
+      document.addEventListener('astro:page-load', initNextSprint);
     })();
   </script>
 </BlockLayout>
@@ -566,6 +575,43 @@ const primaryLinks = [
     gap: 10px;
   }
 
+  .kickoff {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 0 44px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .kickoff a {
+    display: grid;
+    gap: 10px;
+    min-height: 168px;
+    padding: 14px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    color: var(--pc-ink);
+    text-decoration: none;
+  }
+
+  .kickoff a:hover {
+    background: #fff5cc;
+  }
+
+  .kickoff strong {
+    display: block;
+    font-size: clamp(24px, 4vw, 38px);
+    line-height: 0.98;
+  }
+
+  .kickoff small {
+    align-self: end;
+    color: var(--pc-ink-soft);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
   .links a {
     min-height: 42px;
     padding: 12px 14px;
@@ -582,6 +628,7 @@ const primaryLinks = [
     }
 
     .scoreboard,
+    .kickoff,
     .lane-grid,
     .days,
     .check-grid {
@@ -603,6 +650,7 @@ const primaryLinks = [
     }
 
     .scoreboard,
+    .kickoff,
     .lane-grid,
     .days,
     .check-grid {
