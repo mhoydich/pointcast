@@ -73,6 +73,12 @@ export type NounsStateAgencyPoster = {
   proof: string;
 };
 
+export type NounsStateAgencyReviewLane = {
+  label: string;
+  standard: string;
+  rejectIf: string;
+};
+
 export type NounsStateNightMatchup = {
   id: string;
   left: NounsStateTeam;
@@ -627,11 +633,59 @@ export function buildNounsStateAgencyPoster(team: NounsStateTeam, index = 0): No
 
 export function buildNounsStateAgencyPosterRun() {
   const posters = NOUNS_STATE_LEAGUE_TEAMS.map((team, index) => buildNounsStateAgencyPoster(team, index));
+  const reviewLanes: NounsStateAgencyReviewLane[] = [
+    {
+      label: 'Actual Noun Fidelity',
+      standard: 'Central athlete clearly preserves the assigned Noun number, silhouette, pixel construction, noggles, and reference-art character before state styling.',
+      rejectIf: 'The result looks like a generic mascot, human athlete, stock cartoon, or unrelated state character.',
+    },
+    {
+      label: 'State Specificity',
+      standard: 'A viewer can identify the state from one strong local motif without relying only on text.',
+      rejectIf: 'The poster uses vague Americana, generic sports fields, or scenery disconnected from the assigned state.',
+    },
+    {
+      label: 'Campaign System',
+      standard: 'The poster feels like part of “Fifty States. Fifty Nouns. One Union Night.” with type hierarchy, safe zones, and repeatable lockup logic.',
+      rejectIf: 'The composition is beautiful but cannot sit next to the other 49 posters as a unified campaign.',
+    },
+    {
+      label: 'Broadcast Utility',
+      standard: 'Works as a poster, mobile story, and TV pregame still with readable team name, state code, and Nouns Union tag.',
+      rejectIf: 'Key type is too small, clipped, illegible, or too busy for mobile/TV use.',
+    },
+    {
+      label: 'Legal / Sponsor Safety',
+      standard: 'No official sports marks, school marks, betting language, checkout language, official relationship claim, or promised financial return.',
+      rejectIf: 'Any real league/team/school mark, odds/picks framing, or payout implication appears.',
+    },
+  ];
+  const priorityCodes = ['CA', 'NY', 'TX', 'FL', 'WA', 'LA', 'AK', 'WV', 'IL', 'PA', 'GA', 'CO'];
+  const priorityPosters = priorityCodes
+    .map((code) => posters.find((poster) => poster.code === code))
+    .filter((poster): poster is NounsStateAgencyPoster => Boolean(poster));
+  const productionBrief = [
+    'NOUNS UNION AGENCY 50 CREATIVE DIRECTOR BRIEF',
+    'Mandate: make the 50-state campaign feel like a professional launch system, not a prompt dump.',
+    'Hero rule: every execution starts with the assigned actual Noun reference, then layers state identity and sports-broadcast design.',
+    `Priority review set: ${priorityPosters.map((poster) => `${poster.code} / Noun #${poster.nounId}`).join(', ')}.`,
+    'Review each output against: Noun fidelity, state specificity, campaign system, broadcast utility, and sponsor/legal safety.',
+    'Output accepted assets with prompt, model, generated image, reviewer note, state code, Noun number, route URL, and human approval.',
+  ].join('\n');
+  const approvalChecklist = [
+    'Actual Noun number and noun.pics reference are visible in the prompt record.',
+    'Generated image preserves the assigned Noun before adding state styling.',
+    'Team name, state code, and Nouns Union tag are readable on mobile and TV.',
+    'No official sports, school, betting, checkout, payout, or official-relationship language appears.',
+    'Human reviewer chooses accept, remix, or reject and records the reason.',
+    'Accepted work is routed to poster wall, sponsor-safe inventory, or participant-credit queue only after approval.',
+  ];
   const receipt = [
     'NOUNS UNION AGENCY 50 POSTER CAMPAIGN',
     'Assignment: one premium ad-poster concept for every state team.',
     'Benchmark: top Los Angeles / New York advertising and design firm energy, executed through Manus, ChatGPT image generation, Nano Banana, or another top image model.',
     'Noun rule: every poster must use its assigned actual Noun number as the central athlete, with noun.pics reference art preserved before adding state campaign styling.',
+    'Professional review: creative director board scores Noun fidelity, state specificity, campaign system, broadcast utility, and sponsor/legal safety before acceptance.',
     `Campaign line: ${posters[0]?.campaignLine}`,
     `Posters: ${posters.map((poster) => `${poster.code}:${poster.format}`).join(', ')}`,
     'Workflow: generate, review, remix weak concepts, publish accepted posters, then route sponsor or participant credit only after human approval.',
@@ -644,6 +698,10 @@ export function buildNounsStateAgencyPosterRun() {
     modelLane: 'Manus / ChatGPT image generation / Nano Banana / top multimodal image model',
     guardrail: 'Fictional Nouns sports creative only; no official sports marks, betting claims, checkout, payout, or implied official relationship.',
     mediaPlan: ['wild posting', 'mobile story set', 'TV pregame stills', 'state atlas cards', 'sponsor-safe proof board'],
+    reviewLanes,
+    priorityPosters,
+    productionBrief,
+    approvalChecklist,
     posters,
     receipt,
   };
