@@ -111,17 +111,39 @@ const upNextByOwner = plan.upNext.reduce<Record<string, UpNext[]>>((acc, item) =
   return acc;
 }, {});
 
-// ---------- Static plan-doc index ----------
-// Hand-listed since src/content/blocks-style ingestion of docs/plans/
-// is a separate sprint. Update this list when notable plan docs land.
-const planDocs = [
-  { date: '2026-05-03', slug: '2026-05-03-planning-cleanup-sprint',     title: 'Planning cleanup sprint' },
-  { date: '2026-04-29', slug: '2026-04-29-marketplace-v4-runbook',      title: 'Marketplace v4 runbook' },
-  { date: '2026-04-28', slug: '2026-04-28-sprint-federation-rooms',     title: 'Sprint · federation rooms' },
-  { date: '2026-04-27', slug: '2026-04-27-3-day-sprint',                title: '3-day sprint (Mike offline)' },
-  { date: '2026-04-25', slug: '2026-04-25-coffee-mugs-deploy-runbook',  title: 'Coffee Mugs FA2 deploy runbook' },
-  { date: '2026-04-24', slug: '2026-04-24-rfc-0003-plus-one-agents',    title: 'RFC 0003 · plus-one agents' },
-];
+// ---------- Plan-doc index (auto-globbed from docs/plans/) ----------
+// Scans docs/plans/*.md at build time. Filenames must be
+// `YYYY-MM-DD-slug.md`. Title is the first H1, stripped of the date
+// suffix the H1s usually carry (e.g. "# 3-Day Sprint · 2026-04-27 →
+// 2026-04-29" → "3-Day Sprint"). Falls back to a title-cased slug if
+// no H1 is found. Sorted newest first; capped to 8 so the homepage
+// strip stays glance-able. The cap is editorial — full list lives at
+// docs/plans/ on GitHub via the footer link.
+const planFiles = import.meta.glob('/docs/plans/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+
+interface PlanDoc { date: string; slug: string; title: string; }
+
+function titleCase(slug: string): string {
+  return slug.split('-').map(w => w.length > 2 ? w[0].toUpperCase() + w.slice(1) : w).join(' ');
+}
+function extractTitle(raw: string, fallback: string): string {
+  const m = raw.match(/^#\s+(.+?)\s*$/m);
+  if (!m) return titleCase(fallback);
+  // Strip trailing "· YYYY-MM-DD" or "· YYYY-MM-DD → YYYY-MM-DD" decorations.
+  return m[1].replace(/\s*[·•]\s*\d{4}-\d{2}-\d{2}.*$/, '').trim();
+}
+
+const planDocs: PlanDoc[] = Object.entries(planFiles)
+  .map(([path, raw]) => {
+    const fname = path.split('/').pop() || '';
+    const m = fname.match(/^(\d{4}-\d{2}-\d{2})-(.+)\.md$/);
+    if (!m) return null;
+    const [, date, rest] = m;
+    return { date, slug: `${date}-${rest}`, title: extractTitle(raw, rest) };
+  })
+  .filter((d): d is PlanDoc => d !== null)
+  .sort((a, b) => b.date.localeCompare(a.date))
+  .slice(0, 8);
 
 // ---------- SEO ----------
 const title = `The plan · week of ${plan.weekOf} · PointCast`;
