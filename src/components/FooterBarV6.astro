@@ -928,6 +928,11 @@ const BUILDING_SVGS: Record<string, string> = {
     if (lightning) {
       lightning.classList.toggle('is-active', treatment === 'thunder');
     }
+
+    // T3: Schedule sunrise/sunset broadcasts. The API returns sunrise
+    // and sunset as ISO strings (or HH:MM clock strings). Parse to
+    // Date objects, schedule a brief visual broadcast at each.
+    scheduleSunBroadcasts(data);
   }
   function fetchWeather() {
     if (!weatherEl) return;
@@ -941,6 +946,67 @@ const BUILDING_SVGS: Record<string, string> = {
   setTimeout(fetchWeather, 2000);
   // Refresh every 15 minutes — the API caches at the edge anyway.
   setInterval(fetchWeather, 15 * 60 * 1000);
+
+  // ─── T3: SUNRISE / SUNSET BROADCASTS ─────────────────────────────────
+  // Real El Segundo astronomy from /api/weather (Open-Meteo daily
+  // sunrise/sunset). When the current time is within ~5min of either,
+  // play a brief visual broadcast: sweep of warm color across the sky,
+  // a small "SUNRISE OVER EL SEGUNDO" toast, slow ambient bell if
+  // audio is on. Fires once per event per day (gated by sessionStorage
+  // so reload doesn't re-fire).
+  const sunBroadcastTimers = [];
+  function parseClockOrIso(s) {
+    if (!s || typeof s !== 'string') return null;
+    // Open-Meteo sometimes returns "HH:MM" (local) or ISO.
+    if (/^\d{2}:\d{2}/.test(s)) {
+      const [h, m] = s.split(':').map(Number);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d;
+    }
+    const d = new Date(s);
+    return isNaN(+d) ? null : d;
+  }
+  function fireSunBroadcast(kind) {
+    if (!document.documentElement.classList.contains('bar-v6-on')) return;
+    const key = 'pc:bar:sun-broadcast:' + kind + ':' + new Date().toISOString().slice(0, 10);
+    try {
+      if (sessionStorage.getItem(key)) return; // already fired today
+      sessionStorage.setItem(key, '1');
+    } catch (e) {}
+    // Sky sweep — add a class to the sky for a 16s color overlay.
+    const sky = document.getElementById('fbv6-sky');
+    if (sky) {
+      sky.classList.add('is-' + kind + '-broadcast');
+      setTimeout(() => sky.classList.remove('is-' + kind + '-broadcast'), 16000);
+    }
+    // Toast.
+    showToast((kind === 'sunrise' ? '✦ sunrise over el segundo' : '✦ sunset · the day folds'));
+    // Bell if audio is on.
+    if (audioCtx) bellTick();
+  }
+  function scheduleSunBroadcasts(data) {
+    // Clear any prior timers (we re-schedule on each weather fetch).
+    sunBroadcastTimers.forEach(clearTimeout);
+    sunBroadcastTimers.length = 0;
+    if (!data) return;
+    const now = Date.now();
+    const sunriseAt = parseClockOrIso(data.sunrise);
+    const sunsetAt  = parseClockOrIso(data.sunset);
+    [
+      { kind: 'sunrise', at: sunriseAt },
+      { kind: 'sunset',  at: sunsetAt  },
+    ].forEach(({ kind, at }) => {
+      if (!at) return;
+      const delta = at.getTime() - now;
+      // If the event is in the past for today, skip. If it's > 8h away,
+      // skip too — the next weather refresh will pick it up closer.
+      if (delta < -60000 || delta > 8 * 60 * 60 * 1000) return;
+      const fireAt = Math.max(0, delta);
+      const t = setTimeout(() => fireSunBroadcast(kind), fireAt);
+      sunBroadcastTimers.push(t);
+    });
+  }
 
   // ─── v8: WALKER MOOD AURA ─────────────────────────────────────────────
   // Reads pc:mood from localStorage and sets data-mood on the walker.
@@ -1230,6 +1296,39 @@ const BUILDING_SVGS: Record<string, string> = {
     height: 18px;
     background: linear-gradient(180deg, transparent, rgba(255, 220, 170, 0.18));
     pointer-events: none;
+  }
+
+  /* T3: SUNRISE / SUNSET BROADCAST — a 16s warm-color sweep across the
+     sky at the moment the sun actually rises or sets over El Segundo.
+     Uses an overlay element via ::before with a moving gradient. */
+  .fbv6__sky.is-sunrise-broadcast::before,
+  .fbv6__sky.is-sunset-broadcast::before {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 4;
+    opacity: 0;
+    animation: fbv6-sun-broadcast 16s ease-out forwards;
+  }
+  .fbv6__sky.is-sunrise-broadcast::before {
+    background: linear-gradient(180deg,
+      rgba(255, 200, 140, 0.55) 0%,
+      rgba(255, 160, 110, 0.45) 40%,
+      rgba(255, 220, 180, 0.30) 70%,
+      transparent 100%);
+  }
+  .fbv6__sky.is-sunset-broadcast::before {
+    background: linear-gradient(180deg,
+      rgba(80, 30, 80, 0.45) 0%,
+      rgba(255, 90, 80, 0.55) 35%,
+      rgba(255, 160, 100, 0.45) 70%,
+      transparent 100%);
+  }
+  @keyframes fbv6-sun-broadcast {
+    0%   { opacity: 0; }
+    18%  { opacity: 0.9; }
+    50%  { opacity: 0.7; }
+    100% { opacity: 0; }
   }
   /* v9: PARALLAX CLOUDS — three altitudes drifting at three speeds.
      Speeds are inverse-related to size (high = small/fast, low = big/
