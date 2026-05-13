@@ -1215,6 +1215,176 @@
       }, dur);
     }
 
+    // ─── petals (ambient) ───────────────────────────────────────
+    function castPetals() {
+      if (active.byId.petals) return;
+      var wrap = document.createElement('button');
+      wrap.className = 'spell-petals';
+      wrap.type = 'button';
+      wrap.setAttribute('aria-label', 'Cherry blossom petals drifting. Click to clear.');
+      $layer.appendChild(wrap);
+      active.byId.petals = wrap;
+
+      var glyphs = ['🌸', '🌸', '🌸', '🌺'];
+      function spawnPetal() {
+        if (!wrap.parentNode) return;
+        var p = document.createElement('span');
+        p.className = 'spell-petals__petal';
+        p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+        var size = 12 + Math.floor(Math.random() * 14);
+        var startY = -20 + Math.random() * (window.innerHeight * 0.75);
+        var driftY = 50 + Math.floor(Math.random() * 100);
+        var driftX = 180 + Math.floor(Math.random() * 260);
+        var dur = 5500 + Math.floor(Math.random() * 4000);
+        var spin = (Math.random() < 0.5 ? '' : '-') + (Math.floor(Math.random() * 180) + 60) + 'deg';
+        p.style.cssText =
+          'top:' + startY + 'px;' +
+          'right:-' + size + 'px;' +
+          'font-size:' + size + 'px;' +
+          '--spell-petal-drift-y:' + driftY + 'px;' +
+          '--spell-petal-drift-x:-' + driftX + 'px;' +
+          '--spell-petal-spin:' + spin + ';' +
+          'animation-duration:' + dur + 'ms;';
+        wrap.appendChild(p);
+        setTimeout(function () {
+          if (p.parentNode) p.parentNode.removeChild(p);
+        }, dur + 100);
+      }
+      spawnPetal();
+      var petalsInt = setInterval(spawnPetal, 750);
+      wrap.addEventListener('click', function () {
+        clearInterval(petalsInt);
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        active.byId.petals = null;
+      });
+    }
+
+    // ─── clock (ambient) ────────────────────────────────────────
+    function castClock() {
+      if (active.byId.clock) return;
+      var el = document.createElement('button');
+      el.className = 'spell-clock';
+      el.type = 'button';
+      el.setAttribute('aria-label', 'Analog clock showing the current time. Click to dismiss.');
+
+      var face = document.createElement('div');
+      face.className = 'spell-clock__face';
+      var hHand = document.createElement('div');
+      hHand.className = 'spell-clock__hand spell-clock__hand--h';
+      var mHand = document.createElement('div');
+      mHand.className = 'spell-clock__hand spell-clock__hand--m';
+      var sHand = document.createElement('div');
+      sHand.className = 'spell-clock__hand spell-clock__hand--s';
+      var dot = document.createElement('div');
+      dot.className = 'spell-clock__center';
+      face.appendChild(hHand);
+      face.appendChild(mHand);
+      face.appendChild(sHand);
+      face.appendChild(dot);
+      el.appendChild(face);
+      $layer.appendChild(el);
+      active.byId.clock = el;
+
+      function tick() {
+        if (!el.parentNode) return;
+        var now = new Date();
+        var h = now.getHours() % 12;
+        var m = now.getMinutes();
+        var s = now.getSeconds();
+        hHand.style.transform = 'rotate(' + (h * 30 + m * 0.5) + 'deg)';
+        mHand.style.transform = 'rotate(' + (m * 6 + s * 0.1) + 'deg)';
+        sHand.style.transform = 'rotate(' + (s * 6) + 'deg)';
+      }
+      tick();
+      var clockInt = setInterval(tick, 1000);
+
+      el.addEventListener('click', function () {
+        clearInterval(clockInt);
+        if (el.parentNode) el.parentNode.removeChild(el);
+        active.byId.clock = null;
+      });
+    }
+
+    // ─── kite (companion, rises upward) ─────────────────────────
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var dur = durationMs || 18000;
+      var riser = document.createElement('div');
+      riser.className = 'spell-kite__riser';
+      riser.style.animationDuration = dur + 'ms';
+
+      var btn = document.createElement('button');
+      btn.className = 'spell-kite';
+      btn.type = 'button';
+      btn.setAttribute('aria-label', 'A kite rising. Click to let go.');
+      btn.textContent = '🪁';
+
+      riser.appendChild(btn);
+      $layer.appendChild(riser);
+      active.byId.kite = riser;
+
+      btn.addEventListener('click', function () {
+        if (riser.parentNode) riser.parentNode.removeChild(riser);
+        active.byId.kite = null;
+      });
+      setTimeout(function () {
+        if (riser && riser.parentNode) riser.parentNode.removeChild(riser);
+        if (active.byId.kite === riser) active.byId.kite = null;
+      }, dur + 200);
+    }
+
+    // ─── typewriter (burst) ─────────────────────────────────────
+    function castTypewriter(durationMs) {
+      if (reduce()) return;
+      var phrases = [
+        'hello there.',
+        'keep going.',
+        'you got this.',
+        'nice one.',
+        'oh hey.',
+        'still here.',
+        'looking good.',
+      ];
+      var text = phrases[Math.floor(Math.random() * phrases.length)];
+      var wrap = document.createElement('div');
+      wrap.className = 'spell-typewriter';
+      wrap.setAttribute('role', 'presentation');
+      wrap.setAttribute('aria-hidden', 'true');
+
+      var textEl = document.createElement('span');
+      textEl.className = 'spell-typewriter__text';
+      var cursorEl = document.createElement('span');
+      cursorEl.className = 'spell-typewriter__cursor';
+      cursorEl.textContent = '|';
+      wrap.appendChild(textEl);
+      wrap.appendChild(cursorEl);
+      $layer.appendChild(wrap);
+      active.bursts++;
+
+      var i = 0;
+      var typeInt = setInterval(function () {
+        if (i < text.length) {
+          textEl.textContent += text[i];
+          i++;
+        } else {
+          clearInterval(typeInt);
+          cursorEl.style.animation = 'none';
+          cursorEl.style.opacity = '0';
+          setTimeout(function () {
+            wrap.style.transition = 'opacity 0.6s ease';
+            wrap.style.opacity = '0';
+            setTimeout(function () {
+              if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+              active.bursts = Math.max(0, active.bursts - 1);
+            }, 650);
+          }, 1400);
+        }
+      }, 85);
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1424,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'petals':       castPetals(); break;
+        case 'clock':        castClock(); break;
+        case 'kite':         castKite(18000); break;
+        case 'typewriter':   castTypewriter(4000); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2721,184 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ── petals (ambient) ────────────────────────────────────────── */
+  /* Full-viewport overlay; petals spawn at the right edge and drift
+     left and slightly down — a sideways cherry-blossom shower.
+     Click the wrapper to dismiss and clear the interval. */
+  .spell-petals {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-petals__petal {
+    position: absolute;
+    pointer-events: none;
+    line-height: 1;
+    animation: spell-petals-drift linear forwards;
+  }
+  @keyframes spell-petals-drift {
+    0% {
+      transform: translateX(0) translateY(0) rotate(0deg);
+      opacity: 0.9;
+    }
+    80% { opacity: 0.75; }
+    100% {
+      transform:
+        translateX(var(--spell-petal-drift-x, -200px))
+        translateY(var(--spell-petal-drift-y, 60px))
+        rotate(var(--spell-petal-spin, 90deg));
+      opacity: 0;
+    }
+  }
+
+  /* ── clock (ambient) ─────────────────────────────────────────── */
+  /* Fixed in the top-right corner; a pure CSS analog clock face.
+     Hands are rotated by setInterval JS updating inline style.
+     Click anywhere on the element to dismiss. */
+  .spell-clock {
+    position: fixed;
+    top: 16px;
+    right: 72px;
+    width: 52px;
+    height: 52px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+  }
+  .spell-clock__face {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--pc-ink, #1a1714);
+    background: rgba(253, 242, 214, 0.92);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  }
+  .spell-clock__hand {
+    position: absolute;
+    bottom: 50%;
+    left: 50%;
+    transform-origin: 50% 100%;
+    border-radius: 2px;
+    background: var(--pc-ink, #1a1714);
+  }
+  .spell-clock__hand--h {
+    width: 3px;
+    height: 14px;
+    margin-left: -1.5px;
+    background: var(--pc-ink, #1a1714);
+  }
+  .spell-clock__hand--m {
+    width: 2px;
+    height: 19px;
+    margin-left: -1px;
+    background: var(--pc-ink, #1a1714);
+  }
+  .spell-clock__hand--s {
+    width: 1px;
+    height: 20px;
+    margin-left: -0.5px;
+    background: #8a2432;
+    border-radius: 1px;
+  }
+  .spell-clock__center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: var(--pc-ink, #1a1714);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+
+  /* ── kite (companion, rises upward) ─────────────────────────── */
+  /* Two-element composition: .spell-kite__riser handles vertical
+     movement (top keyframe); .spell-kite handles the sway (transform).
+     Separating them avoids competing transforms on a single element. */
+  .spell-kite__riser {
+    position: fixed;
+    left: 50%;
+    top: calc(100vh + 20px);
+    pointer-events: none;
+    animation: spell-kite-rise linear forwards;
+    z-index: 31;
+  }
+  @keyframes spell-kite-rise {
+    0%   { top: calc(100vh + 20px); }
+    100% { top: -80px; }
+  }
+  .spell-kite {
+    display: block;
+    width: 40px;
+    height: 40px;
+    margin-left: -20px;
+    font-size: 30px;
+    line-height: 40px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    filter: drop-shadow(0 4px 8px rgba(74, 158, 255, 0.4));
+    animation: spell-kite-sway 4s ease-in-out infinite;
+  }
+  @keyframes spell-kite-sway {
+    0%, 100% { transform: translateX(0) rotate(-8deg); }
+    33%      { transform: translateX(36px) rotate(8deg); }
+    66%      { transform: translateX(-28px) rotate(-5deg); }
+  }
+
+  /* ── typewriter (burst) ──────────────────────────────────────── */
+  /* A centered panel that types one char at a time, then fades.
+     pointer-events: none so it doesn't block page interaction. */
+  .spell-typewriter {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--pc-font-mono, monospace);
+    font-size: clamp(18px, 3.5vw, 32px);
+    color: var(--pc-ink, #1a1714);
+    background: rgba(253, 242, 214, 0.94);
+    border: 2px solid var(--pc-ink, #1a1714);
+    padding: 14px 22px;
+    pointer-events: none;
+    z-index: 32;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+    box-shadow: 4px 4px 0 rgba(26,23,20,0.14);
+  }
+  .spell-typewriter__cursor {
+    display: inline-block;
+    margin-left: 1px;
+    color: #8a2432;
+    animation: spell-typewriter-blink 0.8s step-end infinite;
+  }
+  @keyframes spell-typewriter-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-petals__petal { display: none; }
+    .spell-clock__hand--s { animation: none; }
+    .spell-kite__riser { animation: none; top: 50%; }
+    .spell-kite { animation: none; }
+    .spell-typewriter { display: none; }
   }
 </style>

@@ -399,6 +399,46 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── AMBIENT (batch 9) ────────────────────────────────────────
+  {
+    id: 'petals',
+    label: 'petals',
+    blurb: 'Cherry blossom petals drift in from the right, soft and sideways. Click to clear.',
+    glyph: '🌸',
+    kind: 'ambient',
+    accent: '#e8a0bf',
+  },
+  {
+    id: 'clock',
+    label: 'clock',
+    blurb: 'A tiny analog clock appears in the corner. The actual time, quietly ticking.',
+    glyph: '🕰️',
+    kind: 'ambient',
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 9) ─────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite rises from the bottom, swaying in an invisible breeze, then gone.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 18_000,
+    accent: '#4A9EFF',
+  },
+
+  // ─── BURSTS (batch 9) ─────────────────────────────────────────
+  {
+    id: 'typewriter',
+    label: 'typewriter',
+    blurb: 'A phrase types itself out, letter by letter. Pauses. Fades.',
+    glyph: '⌨️',
+    kind: 'burst',
+    durationMs: 4000,
+    accent: '#2f8f5f',
+  },
 ];
 
 /** Lookup helper. */
