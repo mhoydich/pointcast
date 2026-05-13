@@ -602,34 +602,47 @@ const UNFILED_SECTION: Section | null = unfiledRoutes.length === 0 ? null : {
   })),
 };
 
-const RENDERED_SECTIONS: Section[] = UNFILED_SECTION
-  ? [...SECTIONS, UNFILED_SECTION]
-  : SECTIONS;
+// UNFILED is no longer rendered as a column inside the façade grid.
+// It collapses into a <details> element at the foot of the directory —
+// keeps the data available without the visual cliff of 100+ raw routes.
+const RENDERED_SECTIONS: Section[] = SECTIONS;
 
 const totalLinks = RENDERED_SECTIONS.reduce(
   (n, s) => n + (s.places?.length ?? 0) + (s.groups?.reduce((m, g) => m + g.places.length, 0) ?? 0),
   0
 );
+const totalWithUnfiled = totalLinks + unfiledRoutes.length;
 ---
 
 <section class="places" aria-label="Places to visit">
+  {/* Woodblock wave pattern, baked into the directory background so the
+     section reads as one saturated field instead of grey-on-cream noise. */}
+  <svg class="places__pattern" aria-hidden="true" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <pattern id="placesWaves" x="0" y="0" width="60" height="40" patternUnits="userSpaceOnUse">
+        <path d="M0 24 q 15 -14 30 0 q 15 14 30 0" fill="none" stroke="rgba(255, 255, 255, 0.07)" stroke-width="1.5"/>
+        <path d="M-30 12 q 15 -10 30 0 q 15 10 30 0 q 15 -10 30 0 q 15 10 30 0" fill="none" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1.5"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#placesWaves)"/>
+  </svg>
+
   <header class="places__head">
-    <p class="kicker mono">PLACES · {totalLinks} LINKS · {RENDERED_SECTIONS.length} CATEGORIES{unfiledRoutes.length > 0 ? ` · ${unfiledRoutes.length} UNFILED` : ''}</p>
+    <p class="kicker mono">PLACES · {totalWithUnfiled} LINKS · {RENDERED_SECTIONS.length} CATEGORIES{unfiledRoutes.length > 0 ? ` · ${unfiledRoutes.length} UNFILED` : ''}</p>
     <h2 class="places__title">Map of the town.</h2>
     <p class="places__dek">
-      Yahoo-style index of every public surface. The 14 categories below
-      are hand-curated; anything new ships into the auto-discovered
-      <strong>NEW · UNFILED</strong> section at the bottom until someone
-      moves it into a proper category. Use the channel filters on
-      <a href="/archive">/archive</a> for a denser block-level view, or
-      the agent-readable <a href="/agents.json">/agents.json</a> for the
-      full manifest.
+      Every public room, mesh, and surface — sorted into windows. The
+      <strong>{RENDERED_SECTIONS.length} categories</strong> below are
+      hand-curated. New routes auto-land in the <a href="#unfiled">unfiled drawer</a> at the foot
+      of the directory. For a denser block-level view, use
+      <a href="/archive">/archive</a>; for the full machine-readable
+      manifest, <a href="/agents.json">/agents.json</a>.
     </p>
   </header>
 
   <div class="places__grid">
     {RENDERED_SECTIONS.map((sec) => (
-      <section class={`places__col${sec.id === 'unfiled' ? ' places__col--unfiled' : ''}`} aria-labelledby={`places-${sec.id}-h`}>
+      <section class="places__col" aria-labelledby={`places-${sec.id}-h`}>
         <header class="places__col-head">
           <h3 id={`places-${sec.id}-h`} class="places__col-label mono">{sec.label}</h3>
           <p class="places__col-sub">{sec.sub}</p>
@@ -669,85 +682,137 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     ))}
   </div>
 
+  {unfiledRoutes.length > 0 && (
+    <details class="places__unfiled" id="unfiled">
+      <summary class="places__unfiled-summary mono">
+        <span class="places__unfiled-chip">UNFILED DRAWER</span>
+        <span class="places__unfiled-count">{unfiledRoutes.length} auto-discovered routes</span>
+        <span class="places__unfiled-hint">open ↓</span>
+      </summary>
+      <p class="places__unfiled-note mono">
+        Routes the build found in <code>src/pages/</code> that haven't been moved into
+        a category yet. Edit <code>src/components/HomePlacesDirectory.astro</code> to
+        file them.
+      </p>
+      <ul class="places__unfiled-list">
+        {unfiledRoutes.map((r) => (
+          <li>
+            <a class="places__unfiled-link" href={r}>{r.replace(/^\//, '')}</a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )}
+
   <p class="places__foot mono">
-    new routes auto-land in <strong>NEW · UNFILED</strong> ·
-    move them into a proper category by editing
-    <code>src/components/HomePlacesDirectory.astro</code> ·
-    14 hand-curated categories + 1 auto-discovered
+    {RENDERED_SECTIONS.length} hand-curated categories
+    {unfiledRoutes.length > 0 && ` · ${unfiledRoutes.length} unfiled in the drawer above`}
   </p>
 </section>
 
 <style>
+  /* ─── Woodblock directory ────────────────────────────────────────────
+     Blue-anchor field carrying the full 14-category façade. Each category
+     is a "window" tile (cream paper on deep sea), wave pattern subtle in
+     the background, coral as the sun/marker accent. Reads as one saturated
+     field instead of grey-on-cream link soup.
+  */
   .places {
-    margin: 48px 0;
-    padding: 28px;
-    background: #fbf7ee;
-    border: 1.5px solid #d8cdb8;
-    border-radius: 3px;
+    position: relative;
+    margin: 0 0 0;
+    padding: 38px 32px 30px;
+    background: linear-gradient(180deg, #2c5573 0%, #1f4561 100%);
+    color: #fdf2d6;
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
   }
+  .places__pattern {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .places__head,
+  .places__grid,
+  .places__unfiled,
+  .places__foot { position: relative; z-index: 1; }
 
-  .places__head { margin: 0 0 24px; }
+  .places__head { margin: 0 0 22px; max-width: 760px; }
   .places .kicker {
     font-family: var(--font-mono);
     font-size: 11px;
-    letter-spacing: 0.18em;
-    color: #c4952e;
+    letter-spacing: 0.2em;
+    color: #f0c6b1;
     text-transform: uppercase;
     margin: 0 0 10px;
   }
   .places__title {
     font-family: var(--font-heading);
-    font-size: clamp(28px, 3.5vw, 40px);
+    font-size: clamp(30px, 4vw, 46px);
     font-weight: 600;
     letter-spacing: -0.01em;
-    line-height: 1.1;
-    margin: 0 0 10px;
-    color: #1f1b15;
+    line-height: 1.05;
+    margin: 0 0 12px;
+    color: #fdf2d6;
   }
   .places__dek {
-    font-size: 14px;
+    font-family: var(--font-serif);
+    font-size: 15px;
     line-height: 1.55;
-    color: #6a6154;
+    color: rgba(253, 242, 214, 0.82);
     max-width: 640px;
     margin: 0;
   }
-  .places__dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
-  .places__dek a:hover { color: #1f1b15; }
+  .places__dek strong { color: #fdf2d6; font-weight: 500; }
+  .places__dek a {
+    color: #f0c6b1;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.4);
+  }
+  .places__dek a:hover { color: #fff; border-bottom-color: currentColor; }
 
+  /* Façade grid: each category is a tile (window in the tower). */
   .places__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 22px 28px;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 18px;
     margin: 0 0 24px;
     align-items: start;
   }
-
-  .places__col--unfiled {
-    grid-column: 1 / -1;
-    margin-top: 12px;
-    padding: 16px 18px;
-    background: #fff;
-    border: 1.5px dashed #c4952e;
-    border-radius: 3px;
+  .places__col {
+    position: relative;
+    padding: 14px 16px 14px;
+    background: #fdf6e7;
+    color: #1f1b15;
+    border-radius: 2px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.12) inset,
+      0 4px 18px rgba(15, 30, 50, 0.32);
+    /* Window-frame inner border, no animation, just the woodblock register. */
+    background-image:
+      linear-gradient(180deg, rgba(240, 198, 177, 0.22) 0 4px, transparent 4px),
+      linear-gradient(0deg, rgba(31, 27, 21, 0.06) 0 1px, transparent 1px);
+    background-position: top, bottom;
+    background-repeat: no-repeat, no-repeat;
+    background-size: 100% 4px, 100% 1px;
   }
-  .places__col--unfiled .places__col-head {
-    border-bottom-color: #c4952e;
-  }
-  .places__col--unfiled .places__col-label { color: #c4952e; }
-  .places__col--unfiled .places__list {
-    columns: 4 160px;
-    column-gap: 18px;
-  }
-  .places__col--unfiled .places__item {
-    break-inside: avoid;
-  }
-  @media (max-width: 600px) {
-    .places__col--unfiled .places__list { columns: 2 130px; }
+  .places__col::before {
+    /* Tiny terracotta dot in the corner — the sun in each window. */
+    content: '';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #d8624a;
   }
 
   .places__col-head {
     margin: 0 0 10px;
-    padding: 0 0 6px;
+    padding: 0 0 8px;
     border-bottom: 1.5px solid #1f1b15;
   }
   .places__col-label {
@@ -757,6 +822,7 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     font-weight: 700;
     color: #1f1b15;
     margin: 0 0 2px;
+    padding-right: 16px;
   }
   .places__col-sub {
     font-size: 11px;
@@ -765,15 +831,15 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     font-style: italic;
   }
 
-  .places__group { margin: 14px 0 0; }
+  .places__group { margin: 12px 0 0; }
   .places__group-sub {
     font-size: 10px;
     letter-spacing: 0.16em;
-    color: #c4952e;
+    color: #1f4561;
     text-transform: uppercase;
     margin: 0 0 6px;
-    padding: 4px 0 4px;
-    border-top: 1px dashed #d8cdb8;
+    padding: 4px 0;
+    border-top: 1px dashed rgba(31, 69, 97, 0.3);
   }
 
   .places__list {
@@ -781,7 +847,7 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     padding: 0;
     margin: 0;
   }
-  .places__item { margin: 0 0 4px; }
+  .places__item { margin: 0 0 3px; }
   .places__link {
     display: grid;
     grid-template-columns: 8px 1fr;
@@ -793,7 +859,7 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     line-height: 1.35;
   }
   .places__link-marker {
-    color: #c4952e;
+    color: #d8624a;
     font-size: 12px;
     line-height: 1;
   }
@@ -802,11 +868,11 @@ const totalLinks = RENDERED_SECTIONS.reduce(
     font-size: 12px;
     font-weight: 700;
     text-decoration: underline;
-    text-decoration-color: rgba(196, 149, 46, 0.35);
+    text-decoration-color: rgba(31, 69, 97, 0.3);
     text-underline-offset: 2px;
   }
   .places__link:hover .places__link-name {
-    color: #c4952e;
+    color: #1f4561;
     text-decoration-color: currentColor;
   }
   .places__link-blurb {
@@ -819,24 +885,102 @@ const totalLinks = RENDERED_SECTIONS.reduce(
   }
   .places__link:hover .places__link-blurb { color: #1f1b15; }
 
-  .places__foot {
+  /* ─── UNFILED drawer ─── */
+  .places__unfiled {
+    margin: 24px 0 18px;
+    padding: 0;
+    background: rgba(15, 30, 50, 0.38);
+    border: 1px dashed rgba(240, 198, 177, 0.45);
+    border-radius: 3px;
+  }
+  .places__unfiled-summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    color: #fdf2d6;
+    user-select: none;
+  }
+  .places__unfiled-summary::-webkit-details-marker { display: none; }
+  .places__unfiled-chip {
     font-size: 10px;
-    color: #6a6154;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #1f1b15;
+    background: #f0c6b1;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+  .places__unfiled-count {
+    font-size: 12px;
+    color: rgba(253, 242, 214, 0.85);
+    letter-spacing: 0.04em;
+  }
+  .places__unfiled-hint {
+    margin-left: auto;
+    font-size: 10px;
+    color: rgba(253, 242, 214, 0.55);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .places__unfiled[open] .places__unfiled-hint::after { content: ''; }
+  .places__unfiled[open] .places__unfiled-hint { content: ''; }
+  .places__unfiled-note {
     margin: 0;
-    padding-top: 16px;
-    border-top: 1px dashed #d8cdb8;
+    padding: 0 16px 10px;
+    font-size: 11px;
+    color: rgba(253, 242, 214, 0.65);
+    letter-spacing: 0.04em;
+  }
+  .places__unfiled-note code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+  .places__unfiled-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 16px 14px;
+    columns: 4 170px;
+    column-gap: 22px;
+  }
+  .places__unfiled-list li { break-inside: avoid; margin: 0 0 3px; }
+  .places__unfiled-link {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #f0c6b1;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.18);
+  }
+  .places__unfiled-link:hover { color: #fff; border-bottom-color: currentColor; }
+  @media (max-width: 600px) {
+    .places__unfiled-list { columns: 2 130px; }
+  }
+
+  .places__foot {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(253, 242, 214, 0.6);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(253, 242, 214, 0.2);
   }
   .places__foot code {
-    background: rgba(0,0,0,0.06);
+    background: rgba(255, 255, 255, 0.08);
     padding: 1px 4px;
     border-radius: 2px;
     font-size: 10px;
   }
 
   @media (max-width: 600px) {
-    .places { padding: 20px 18px; margin: 36px 0; }
-    .places__grid { grid-template-columns: 1fr 1fr; gap: 18px 18px; }
+    .places { padding: 26px 18px 22px; margin: 36px 0 0; }
+    .places__grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .places__col { padding: 12px 12px; }
     .places__link-name { font-size: 11px; }
   }
 </style>
