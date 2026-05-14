@@ -388,6 +388,43 @@ export const SPELLS: Spell[] = [
     accent: '#4A9EFF',
   },
 
+  // ─── BATCH 11 — dragonfly / sunrise / ripple / duck ──────────
+  {
+    id: 'dragonfly',
+    label: 'dragonfly',
+    blurb: 'A dragonfly darts across mid-screen — quick flits, sudden pivots, iridescent.',
+    glyph: '🦟',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'sunrise',
+    label: 'sunrise',
+    blurb: 'A warm glow rises from the horizon. Amber and soft pink, patient.',
+    glyph: '🌅',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
+  {
+    id: 'ripple',
+    label: 'ripple',
+    blurb: 'Concentric rings expand from the center and fade. Still water, one stone.',
+    glyph: '💫',
+    kind: 'burst',
+    durationMs: 2200,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'duck',
+    label: 'duck',
+    blurb: 'A duck waddles across the bottom. Unhurried. Possibly plotting.',
+    glyph: '🦆',
+    kind: 'companion',
+    durationMs: 60_000,
+    accent: '#d4a437',
+  },
+
   // ─── NOUNS (batch 12) ─────────────────────────────────────────
   // CC0 Nouns IP — SVGs pulled live from noun.pics for any seed
   // 0–1199 (matches the Visit Nouns FA2 collection on Tezos).
