@@ -360,6 +360,34 @@ export const SPELLS: Spell[] = [
     accent: '#8a2432',
   },
 
+  // ─── HOURLY SPRINT — comet / koi / dew ────────────────────────
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'A bright streak tears across the viewport, trailing light. Quick and certain.',
+    glyph: '☄️',
+    kind: 'burst',
+    durationMs: 2400,
+    accent: '#fdf2d6',
+  },
+  {
+    id: 'koi',
+    label: 'koi',
+    blurb: 'A tropical fish glides mid-screen in long, graceful arcs. Serene.',
+    glyph: '🐠',
+    kind: 'companion',
+    durationMs: 60_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'dew',
+    label: 'dew',
+    blurb: 'Tiny water droplets condense slowly on the screen. Morning quiet.',
+    glyph: '💧',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
+
   // ─── NOUNS (batch 12) ─────────────────────────────────────────
   // CC0 Nouns IP — SVGs pulled live from noun.pics for any seed
   // 0–1199 (matches the Visit Nouns FA2 collection on Tezos).

@@ -1215,6 +1215,120 @@
       }, dur);
     }
 
+    // ─── comet (burst) ──────────────────────────────────────────
+    // 2–3 bright gradient streaks shoot diagonally across the viewport.
+    // Each is a CSS gradient strip rotated and translated along its own
+    // axis — the tail fades to transparent so it reads as a comet tail.
+    function castComet(durationMs) {
+      if (reduce()) return;
+      var diag = Math.ceil(Math.sqrt(window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight));
+      var count = 2 + (Math.random() < 0.45 ? 1 : 0);
+      for (var i = 0; i < count; i++) {
+        (function (idx) {
+          setTimeout(function () {
+            var c = document.createElement('span');
+            c.className = 'spell-comet';
+            var angle = 18 + Math.random() * 20;
+            var startY = 12 + Math.random() * 50;
+            var tailLen = 140 + Math.floor(Math.random() * 90);
+            var dur = Math.round((durationMs || 2400) * 0.45 + Math.random() * 500);
+            c.style.cssText =
+              'top:' + startY + '%;' +
+              'left:-' + (tailLen + 20) + 'px;' +
+              '--spell-comet-rot:' + angle + 'deg;' +
+              '--spell-comet-dist:' + Math.round(diag * 1.4) + 'px;' +
+              '--spell-comet-len:' + tailLen + 'px;' +
+              'animation:spell-comet-fly ' + dur + 'ms ease-in forwards;';
+            $layer.appendChild(c);
+            setTimeout(function () {
+              if (c.parentNode) c.parentNode.removeChild(c);
+            }, dur + 80);
+          }, idx * 580 + Math.floor(Math.random() * 200));
+        })(i);
+      }
+    }
+
+    // ─── koi (companion) ────────────────────────────────────────
+    // Tropical fish glides mid-screen (25–55% from bottom) on two
+    // stacked animations: horizontal travel + slow vertical drift.
+    // Positioned above the bottom-dwellers (cat/fish/frog) but below
+    // the high-fliers (moth/ghost).
+    function castKoi(durationMs) {
+      if (active.byId.koi) {
+        var prev = active.byId.koi;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var k = document.createElement('button');
+      k.className = 'spell-koi';
+      k.type = 'button';
+      k.setAttribute('aria-label', 'A tropical fish gliding by. Click to release it.');
+      k.title = 'click to release the koi';
+      k.textContent = '🐠';
+      var ltr = Math.random() < 0.5;
+      k.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 60000;
+      var swimSec = Math.max(14, Math.min(34, window.innerWidth / 58));
+      var heightPct = (25 + Math.random() * 30).toFixed(1);
+      k.style.cssText =
+        'bottom:' + heightPct + '%;' +
+        'animation:spell-koi-swim-' + (ltr ? 'ltr' : 'rtl') + ' ' + swimSec + 's ease-in-out infinite,' +
+        'spell-koi-drift' + (ltr ? '' : '-rtl') + ' 4.2s ease-in-out infinite;';
+      k.addEventListener('click', function () {
+        if (k.parentNode) k.parentNode.removeChild(k);
+        active.byId.koi = null;
+      });
+      $layer.appendChild(k);
+      active.byId.koi = k;
+      setTimeout(function () {
+        if (k && k.parentNode) k.parentNode.removeChild(k);
+        if (active.byId.koi === k) active.byId.koi = null;
+      }, dur);
+    }
+
+    // ─── dew (ambient) ──────────────────────────────────────────
+    // 18 water droplets condense gradually onto the screen. Each
+    // starts invisible and scale(0), grows to full size over its own
+    // random duration, then holds at opacity 0.85. The teardrop
+    // shape (asymmetric border-radius) + glass-like radial gradient
+    // give a convincing condensation look.
+    // Click anywhere on the overlay to wipe (fade + remove).
+    // Recasting while active is a no-op.
+    function castDew() {
+      if (active.byId.dew) return;
+      var wrap = document.createElement('button');
+      wrap.className = 'spell-dew';
+      wrap.type = 'button';
+      wrap.setAttribute('aria-label', 'Dew on the screen. Click to wipe it away.');
+      wrap.title = 'click to wipe the dew away';
+      var html = '';
+      for (var i = 0; i < 18; i++) {
+        var size = 5 + Math.random() * 18;
+        var lp   = (4  + Math.random() * 91).toFixed(1);
+        var tp   = (6  + Math.random() * 82).toFixed(1);
+        var del  = (Math.random() * 9).toFixed(2);
+        var dur  = (4  + Math.random() * 7).toFixed(2);
+        html +=
+          '<span class="spell-dew__drop" style="' +
+            'left:' + lp + '%;top:' + tp + '%;' +
+            'width:' + size.toFixed(1) + 'px;' +
+            'height:' + (size * 1.25).toFixed(1) + 'px;' +
+            'animation-delay:' + del + 's;' +
+            'animation-duration:' + dur + 's;' +
+          '"></span>';
+      }
+      wrap.innerHTML = html;
+      wrap.addEventListener('click', function () {
+        wrap.style.opacity = '0';
+        wrap.style.transition = 'opacity 0.35s';
+        setTimeout(function () {
+          if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+          active.byId.dew = null;
+        }, 380);
+      });
+      $layer.appendChild(wrap);
+      active.byId.dew = wrap;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1368,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'comet':        castComet(2400); break;
+        case 'koi':          castKoi(60000); break;
+        case 'dew':          castDew(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2382,6 +2499,112 @@
   }
 
   /* ── reduced-motion ──────────────────────────────────────── */
+  /* ── comet (burst) ──────────────────────────────────────── */
+  /* Gradient strip: transparent tail → bright head. transform-origin
+     is right center so rotation pivots at the head, keeping the tip
+     on the travel path. */
+  .spell-comet {
+    position: fixed;
+    height: 2px;
+    width: var(--spell-comet-len, 160px);
+    border-radius: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 245, 180, 0.35) 40%,
+      rgba(255, 255, 230, 1) 100%);
+    transform-origin: right center;
+    filter: blur(0.5px) drop-shadow(0 0 4px rgba(255, 240, 130, 0.85));
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-comet-fly {
+    0%   { transform: rotate(var(--spell-comet-rot, 25deg)) translateX(0); opacity: 0; }
+    5%   { opacity: 1; }
+    82%  { opacity: 0.95; }
+    100% {
+      transform: rotate(var(--spell-comet-rot, 25deg)) translateX(var(--spell-comet-dist, 1000px));
+      opacity: 0;
+    }
+  }
+
+  /* ── koi (companion) ────────────────────────────────────── */
+  /* Sits mid-screen (bottom set dynamically). Two stacked anims:
+     horizontal swim + slow sine-drift for the unhurried current feel. */
+  .spell-koi {
+    position: fixed;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 32px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 5px rgba(74, 158, 255, 0.35));
+  }
+  @keyframes spell-koi-swim-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-koi-swim-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  /* Graceful vertical drift — sine-like, softer than moth's erratic flutter. */
+  @keyframes spell-koi-drift {
+    0%, 100% { transform: translateY(0); }
+    30%      { transform: translateY(-14px); }
+    70%      { transform: translateY(8px); }
+  }
+  @keyframes spell-koi-drift-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    30%      { transform: scaleX(-1) translateY(-14px); }
+    70%      { transform: scaleX(-1) translateY(8px); }
+  }
+  .spell-koi[data-dir='rtl'] {
+    animation-name: spell-koi-swim-rtl, spell-koi-drift-rtl !important;
+  }
+
+  /* ── dew (ambient) ──────────────────────────────────────── */
+  /* Full-viewport click-target wrap; drops grow from scale(0) via
+     individual animation-delay + animation-duration set inline. */
+  .spell-dew {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+  }
+  .spell-dew__drop {
+    position: absolute;
+    background: radial-gradient(ellipse at 35% 28%,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(160, 210, 255, 0.45) 50%,
+      rgba(80, 155, 230, 0.22) 100%);
+    border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+    box-shadow:
+      inset 0 -1px 3px rgba(255, 255, 255, 0.55),
+      0 1px 4px rgba(80, 140, 210, 0.18);
+    transform: scale(0);
+    animation: spell-dew-condense linear forwards;
+    pointer-events: none;
+  }
+  @keyframes spell-dew-condense {
+    0%   { transform: scale(0); opacity: 0; }
+    10%  { opacity: 1; }
+    78%  { transform: scale(1); opacity: 0.88; }
+    100% { transform: scale(1); opacity: 0.85; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
     .spell-pup,
@@ -2393,6 +2616,7 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
+    .spell-koi,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2419,7 +2643,8 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-koi { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2653,8 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-koi[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2444,6 +2670,7 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-dew__drop { animation: none; transform: scale(1); opacity: 0.8; } /* static droplets */
   }
 
   /* ─── nouns: noun (companion) ───────────────────────────────── */
