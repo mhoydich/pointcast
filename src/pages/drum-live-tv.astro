@@ -1,0 +1,473 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Live TV — watch the room"
+  description="A passive cast view of the live drum bus. Every tap from /drum-live (and the rest of /drum-*) shows up as a ripple. Each player has their own pinned spot on screen and their own color. Put it on a TV. Audio off by default."
+  image="/images/og-drum.png"
+>
+  <main class="dt" id="dt" data-built={built}>
+    <canvas class="dt__canvas" id="dt-canvas"></canvas>
+    <div class="dt__overlay">
+      <span class="dt__live-chip">
+        <span class="dt__live-dot"></span>
+        <span class="dt__live-text">LIVE · DRUM ROOM</span>
+      </span>
+      <span class="dt__here" id="dt-here">listening for taps…</span>
+    </div>
+    <div class="dt__panel">
+      <button class="dt__sound" id="dt-sound" aria-pressed="false">
+        <span class="dt__sound-icon">♪</span>
+        <span class="dt__sound-text">sound off</span>
+      </button>
+      <a class="dt__open" href="/drum-live">↗ open the player</a>
+    </div>
+    <div class="dt__legend" id="dt-legend"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --dt-ink: #060a18;
+      --dt-coral: #ff6b8a;
+      --dt-flame: #f6c15e;
+      --dt-mint: #8aeac0;
+      --dt-cream: #f4e7c8;
+      --dt-cream-dim: #8a8a9a;
+    }
+
+    html, body { background: var(--dt-ink); margin: 0; padding: 0; height: 100%; }
+    body:has(.dt) {
+      background: radial-gradient(circle at 20% 0%, #1a1238 0%, transparent 50%),
+                  radial-gradient(circle at 80% 100%, #0e1a38 0%, transparent 55%),
+                  var(--dt-ink);
+      color: var(--dt-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .dt {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+    .dt__canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .dt__overlay {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+    .dt__live-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 14px;
+      background: rgba(255,107,138,0.18);
+      border: 1px solid rgba(255,107,138,0.42);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      color: var(--dt-coral);
+    }
+    .dt__live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--dt-coral);
+      box-shadow: 0 0 10px rgba(255,107,138,0.7);
+      animation: dtBlink 1.4s ease-in-out infinite;
+    }
+    @keyframes dtBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .dt__here {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--dt-cream-dim);
+      background: rgba(0,0,0,0.42);
+      padding: 6px 12px;
+      border-radius: 14px;
+    }
+    .dt__here strong { color: var(--dt-flame); font-weight: 600; }
+
+    .dt__panel {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
+    }
+    .dt__sound, .dt__open {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(244,231,200,0.22);
+      background: rgba(0,0,0,0.42);
+      color: var(--dt-cream);
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.10em;
+      text-decoration: none;
+      transition: background 100ms ease;
+    }
+    .dt__sound:hover, .dt__open:hover { background: rgba(244,231,200,0.10); }
+    .dt__sound[aria-pressed="true"] {
+      background: rgba(138,234,192,0.18);
+      border-color: rgba(138,234,192,0.42);
+      color: var(--dt-mint);
+    }
+    .dt__sound[aria-pressed="true"] .dt__sound-text::after { content: " on"; }
+    .dt__sound[aria-pressed="false"] .dt__sound-text::after { content: ""; }
+    .dt__sound[aria-pressed="true"] .dt__sound-text::before { content: "sound"; }
+    .dt__sound[aria-pressed="false"] .dt__sound-text::before { content: "sound off"; }
+    .dt__sound-text { font-size: 0; }
+    .dt__sound-text::before, .dt__sound-text::after { font-size: 11px; }
+
+    .dt__legend {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 90vw;
+      z-index: 10;
+    }
+    .dt__legend-pid {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.48);
+      border: 1px solid rgba(244,231,200,0.14);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--dt-cream-dim);
+      animation: dtLegendIn 320ms ease-out;
+    }
+    @keyframes dtLegendIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .dt__legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    let lastT = 0;
+    let pollTimer: number | null = null;
+    let soundOn = false;
+
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+
+    // Each pid gets a stable (xPct, yPct) within the canvas, plus a color and last-seen timestamp
+    const pidState = new Map();
+
+    const PALETTE = [
+      '#ff6b8a', '#8aeac0', '#7ac8ed', '#c9a8ef',
+      '#f4a050', '#ffd56b', '#ff9bd4', '#6be5d4',
+      '#a8d870', '#e89070', '#b894e8', '#70c0d8',
+    ];
+
+    function hashStr(s: string) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+    function pidColor(pid: string) { return PALETTE[hashStr(pid) % PALETTE.length]; }
+    function pidPos(pid: string) {
+      // Stable 2D position within 0..1, with a margin from edges
+      const h = hashStr(pid);
+      const h2 = hashStr(pid + 'y');
+      // Bias toward center-ish, avoiding extreme edges (margin 0.08..0.92)
+      const x = 0.08 + (h % 1000) / 1000 * 0.84;
+      const y = 0.16 + (h2 % 1000) / 1000 * 0.68;
+      return { x, y };
+    }
+
+    // ---- audio ----
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.45;
+      masterGain.connect(ctx.destination);
+    }
+    function playDrumTone(seed: number, pid: string) {
+      if (!soundOn || !ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      // Use seed → base frequency mapping like /drum-live
+      const specs: { [s: number]: { fund: number; bell: boolean; tail: number } } = {
+        20:  { fund: 70,  bell: false, tail: 0.45 },
+        42:  { fund: 120, bell: false, tail: 0.42 },
+        101: { fund: 200, bell: false, tail: 0.42 },
+        333: { fund: 600, bell: true,  tail: 2.4 },
+      };
+      const spec = specs[seed] || specs[42];
+      // Pitch shift per-pid
+      const semis = ((hashStr(pid) % 9) - 4);
+      const fund = spec.fund * Math.pow(2, semis / 12);
+
+      if (!spec.bell) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(fund, t);
+        osc.frequency.exponentialRampToValueAtTime(fund * 0.5, t + 0.15);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.4, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + spec.tail);
+        osc.connect(g).connect(masterGain);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + spec.tail + 0.05);
+      } else {
+        const partials = [
+          { f: fund,      g: 0.28, d: spec.tail },
+          { f: fund * 2,  g: 0.16, d: spec.tail * 0.7 },
+          { f: fund * 4,  g: 0.05, d: spec.tail * 0.4 },
+        ];
+        for (const p of partials) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = p.f;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(p.g, t + 0.006);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
+          osc.connect(g).connect(masterGain);
+          scheduler.trackSource(osc);
+          osc.start(t);
+          osc.stop(t + p.d + 0.1);
+        }
+      }
+    }
+
+    // ---- ripple visual state ----
+    type Ripple = {
+      x: number; y: number;     // px
+      bornMs: number;
+      life: number;
+      maxR: number;
+      color: string;
+      seed: number;
+    };
+    const ripples: Ripple[] = [];
+
+    function addRipple(pid: string, seed: number) {
+      const canvas = document.getElementById('dt-canvas') as HTMLCanvasElement;
+      const W = canvas.width, H = canvas.height;
+      const pos = pidPos(pid);
+      const x = pos.x * W;
+      const y = pos.y * H;
+      // Larger ripples for lower-pitched drums; bell biggest
+      let maxR = 90, life = 1400;
+      if (seed === 333) { maxR = 220; life = 2800; }
+      else if (seed === 20) { maxR = 150; life = 1800; }
+      else if (seed === 42) { maxR = 120; life = 1600; }
+      ripples.push({ x, y, bornMs: performance.now(), life, maxR, color: pidColor(pid), seed });
+    }
+
+    function drawCanvas() {
+      const canvas = document.getElementById('dt-canvas') as HTMLCanvasElement;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const W = (canvas.width = canvas.clientWidth * dpr);
+      const H = (canvas.height = canvas.clientHeight * dpr);
+      const c2 = canvas.getContext('2d')!;
+      c2.scale(dpr, dpr);
+
+      // background subtle gradient
+      const grad = c2.createLinearGradient(0, 0, 0, H / dpr);
+      grad.addColorStop(0, '#0e0f24');
+      grad.addColorStop(1, '#040a1a');
+      c2.fillStyle = grad;
+      c2.fillRect(0, 0, W / dpr, H / dpr);
+
+      // pid dots — pinned positions for everyone seen recently
+      const now = Date.now();
+      pidState.forEach((info, pid) => {
+        const ageSec = (now - info.lastSeen) / 1000;
+        if (ageSec > 30) return;
+        const opacity = Math.max(0.18, 1 - ageSec / 30);
+        const pos = pidPos(pid);
+        const x = pos.x * W / dpr;
+        const y = pos.y * H / dpr;
+        c2.fillStyle = info.color;
+        c2.globalAlpha = opacity * 0.45;
+        c2.beginPath();
+        c2.arc(x, y, 6, 0, Math.PI * 2);
+        c2.fill();
+        // outer halo
+        c2.globalAlpha = opacity * 0.15;
+        c2.beginPath();
+        c2.arc(x, y, 14, 0, Math.PI * 2);
+        c2.fill();
+        c2.globalAlpha = 1;
+      });
+
+      // Active ripples
+      const tnow = performance.now();
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const r = ripples[i];
+        const t = (tnow - r.bornMs) / r.life;
+        if (t >= 1) { ripples.splice(i, 1); continue; }
+        const radius = r.maxR * t;
+        const alpha = (1 - t) * (1 - t);
+        // Outer ring
+        c2.strokeStyle = `${r.color}`;
+        c2.globalAlpha = alpha * 0.8;
+        c2.lineWidth = 2;
+        c2.beginPath();
+        c2.arc(r.x, r.y, radius, 0, Math.PI * 2);
+        c2.stroke();
+        // Inner secondary ring for the bell
+        if (r.seed === 333) {
+          c2.globalAlpha = alpha * 0.5;
+          c2.lineWidth = 1;
+          c2.beginPath();
+          c2.arc(r.x, r.y, radius * 0.55, 0, Math.PI * 2);
+          c2.stroke();
+        }
+        // Center pin at birth
+        if (t < 0.08) {
+          c2.fillStyle = r.color;
+          c2.globalAlpha = alpha;
+          c2.beginPath();
+          c2.arc(r.x, r.y, 4 * (1 - t * 12), 0, Math.PI * 2);
+          c2.fill();
+        }
+        c2.globalAlpha = 1;
+      }
+
+      requestAnimationFrame(drawCanvas);
+    }
+
+    function updateOverlay() {
+      const now = Date.now();
+      const active = [];
+      pidState.forEach((info, pid) => {
+        if (now - info.lastSeen < 25000) active.push(pid);
+      });
+      const el = document.getElementById('dt-here')!;
+      if (active.length === 0) el.textContent = 'listening for taps…';
+      else if (active.length === 1) el.innerHTML = '<strong>1</strong> person drumming';
+      else el.innerHTML = `<strong>${active.length}</strong> drumming right now`;
+
+      // Render legend chips (top 8 most recent)
+      const legend = document.getElementById('dt-legend')!;
+      const sorted = active.sort((a, b) => {
+        const A = pidState.get(a)?.lastSeen || 0;
+        const B = pidState.get(b)?.lastSeen || 0;
+        return B - A;
+      }).slice(0, 8);
+      const existing = new Set(Array.from(legend.children).map((c) => (c as HTMLElement).getAttribute('data-pid')));
+      const wanted = new Set(sorted);
+      // Remove stale
+      Array.from(legend.children).forEach((child) => {
+        const pid = (child as HTMLElement).getAttribute('data-pid');
+        if (!wanted.has(pid)) legend.removeChild(child);
+      });
+      // Add new
+      sorted.forEach((pid) => {
+        if (existing.has(pid)) return;
+        const info = pidState.get(pid);
+        if (!info) return;
+        const chip = document.createElement('span');
+        chip.className = 'dt__legend-pid';
+        chip.setAttribute('data-pid', pid);
+        chip.innerHTML = `<span class="dt__legend-dot" style="background:${info.color}"></span><span>${pid.slice(0, 6)}</span>`;
+        legend.appendChild(chip);
+      });
+    }
+
+    async function pollOnce() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastT}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data.events || data.events.length === 0) {
+          updateOverlay();
+          return;
+        }
+        for (const ev of data.events) {
+          if (ev.type !== 'drum') continue;
+          if (ev.t <= lastT) continue;
+          lastT = Math.max(lastT, ev.t);
+          const color = pidColor(ev.pid);
+          pidState.set(ev.pid, { color, lastSeen: Date.now() });
+          addRipple(ev.pid, ev.seed);
+          if (soundOn) playDrumTone(ev.seed, ev.pid);
+        }
+        updateOverlay();
+      } catch {
+        // best effort
+      }
+    }
+    function startPolling() {
+      if (pollTimer != null) return;
+      const tick = async () => {
+        await pollOnce();
+        pollTimer = window.setTimeout(tick, 1600);
+      };
+      pollTimer = window.setTimeout(tick, 400);
+    }
+    function stopPolling() {
+      if (pollTimer != null) { clearTimeout(pollTimer); pollTimer = null; }
+    }
+
+    function init() {
+      drawCanvas();
+      startPolling();
+
+      const soundBtn = document.getElementById('dt-sound')!;
+      soundBtn.addEventListener('click', () => {
+        soundOn = !soundOn;
+        soundBtn.setAttribute('aria-pressed', String(soundOn));
+        if (soundOn) ensureCtx();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopPolling();
+        else startPolling();
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
