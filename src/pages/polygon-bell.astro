@@ -1,9 +1,12 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import WalletConnect from '../components/WalletConnect.astro';
+import { POLYGON_BELL_PUBLISH, polygonBellProofTemplate } from '../lib/polygon-bell-publish';
 import { POLYGON_BELL_ATTRIBUTES, POLYGON_BELL_TOKEN } from '../lib/polygon-bell-token';
 
 const token = POLYGON_BELL_TOKEN;
+const publish = POLYGON_BELL_PUBLISH;
+const proofTemplate = polygonBellProofTemplate(Astro.site);
 const contractLabel = token.contract ?? 'pending contract';
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -52,6 +55,7 @@ const jsonLd = {
         <div class="actions mono">
           <a class="primary" href="/lobby#noun-bells">Ring ladder</a>
           <button type="button" id="reserve-bell">Collect receipt</button>
+          <a href="#publish">Publish proof</a>
           <a href={token.metadataHref}>Metadata</a>
           <a href="/polygon-bell.json">Agent JSON</a>
         </div>
@@ -91,6 +95,40 @@ const jsonLd = {
       </article>
     </section>
 
+    <section
+      class="publish panel"
+      id="publish"
+      aria-labelledby="publish-title"
+      data-chain-name={publish.chainName}
+      data-chain-hex={publish.chainHex}
+      data-rpc-url={publish.rpcUrls[0]}
+      data-explorer-tx-base={publish.explorerTxBase}
+      data-native-name={publish.nativeCurrency.name}
+      data-native-symbol={publish.nativeCurrency.symbol}
+      data-native-decimals={publish.nativeCurrency.decimals}
+      data-proof-storage-key={publish.storageKey}
+      data-proof-template={JSON.stringify(proofTemplate)}
+    >
+      <div>
+        <p class="kicker mono">v6 MetaMask · {publish.chainName}</p>
+        <h2 id="publish-title">Publish Bell Proof</h2>
+      </div>
+      <div class="publish__body">
+        <dl class="facts publish__facts">
+          <div><dt>Chain</dt><dd>{publish.chainName} / {publish.chainId}</dd></div>
+          <div><dt>Gas token</dt><dd>{publish.nativeCurrency.symbol}</dd></div>
+          <div><dt>Mode</dt><dd>{publish.transactionMode}</dd></div>
+          <div><dt>Explorer</dt><dd><a href={publish.blockExplorerUrls[0]}>Polygonscan</a></dd></div>
+        </dl>
+        <div class="actions publish__actions mono">
+          <button type="button" id="polygon-connect">Connect MetaMask</button>
+          <button type="button" id="polygon-switch">Switch Polygon</button>
+          <button type="button" id="polygon-publish" disabled>Publish proof</button>
+        </div>
+        <output id="polygon-output" class="output mono" aria-live="polite">polygon waits for bell receipt</output>
+      </div>
+    </section>
+
     <section class="attributes panel" aria-labelledby="attributes-title">
       <div>
         <p class="kicker mono">Metadata</p>
@@ -111,10 +149,24 @@ const jsonLd = {
 <script>
   const root = document.querySelector('.polygon-bell');
   const output = document.getElementById('bell-output');
+  const publishRoot = document.getElementById('publish');
+  const polygonOutput = document.getElementById('polygon-output');
   const reserveButton = document.getElementById('reserve-bell');
+  const polygonConnectButton = document.getElementById('polygon-connect');
+  const polygonSwitchButton = document.getElementById('polygon-switch');
+  const polygonPublishButton = document.getElementById('polygon-publish');
   const unlockRings = Number(root?.getAttribute('data-unlock-rings') || 5);
   const storageKey = 'pc:polygon-bell:001';
   const ladderKey = 'pc:polygon-bell:ladder-rungs';
+  const proofStorageKey = publishRoot?.dataset.proofStorageKey || 'pc:polygon-bell:001:polygon-proof';
+  const polygonChainHex = publishRoot?.dataset.chainHex || '0x89';
+  const polygonChainName = publishRoot?.dataset.chainName || 'Polygon';
+  const polygonRpcUrl = publishRoot?.dataset.rpcUrl || 'https://polygon.drpc.org';
+  const polygonExplorerTxBase = publishRoot?.dataset.explorerTxBase || 'https://polygonscan.com/tx/';
+  const polygonNativeName = publishRoot?.dataset.nativeName || 'POL';
+  const polygonNativeSymbol = publishRoot?.dataset.nativeSymbol || 'POL';
+  const polygonNativeDecimals = Number(publishRoot?.dataset.nativeDecimals || 18);
+  const proofTemplate = readJsonFromString(publishRoot?.dataset.proofTemplate || '{}', {});
 
   function readJson(key, fallback) {
     try {
@@ -125,12 +177,181 @@ const jsonLd = {
     }
   }
 
+  function readJsonFromString(raw, fallback) {
+    try {
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   function writeOutput(message) {
     if (output) output.textContent = message;
   }
 
+  function writePolygonOutput(message) {
+    if (polygonOutput) polygonOutput.textContent = message;
+  }
+
   function shortAddress(address) {
     return address && address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address || '';
+  }
+
+  function ethereumProvider() {
+    const eth = (window as any).ethereum;
+    if (!eth || typeof eth.request !== 'function') return null;
+    if (Array.isArray(eth.providers)) {
+      return eth.providers.find((provider) => provider?.isMetaMask) || eth.providers[0] || eth;
+    }
+    return eth;
+  }
+
+  function utf8Hex(value) {
+    const bytes = new TextEncoder().encode(value);
+    return `0x${Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  function saveWallet(address) {
+    const wallet = { chain: 'eth', address, provider: 'metamask' };
+    localStorage.setItem('pc:wallet', JSON.stringify(wallet));
+    window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+  }
+
+  async function connectPolygonWallet() {
+    const provider = ethereumProvider();
+    if (!provider) {
+      writePolygonOutput('MetaMask not found');
+      window.open('https://metamask.io/download/', '_blank', 'noopener,noreferrer');
+      return null;
+    }
+
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    const address = Array.isArray(accounts) ? accounts[0] : null;
+    if (!address) throw new Error('No MetaMask account returned.');
+    saveWallet(address);
+    writePolygonOutput(`connected ${shortAddress(address)}`);
+    renderProofState();
+    return { provider, address };
+  }
+
+  async function ensurePolygon(provider) {
+    try {
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: polygonChainHex }],
+      });
+      return;
+    } catch (err) {
+      if (err?.code !== 4902) throw err;
+    }
+
+    await provider.request({
+      method: 'wallet_addEthereumChain',
+      params: [{
+        chainId: polygonChainHex,
+        chainName: polygonChainName,
+        nativeCurrency: {
+          name: polygonNativeName,
+          symbol: polygonNativeSymbol,
+          decimals: polygonNativeDecimals,
+        },
+        rpcUrls: [polygonRpcUrl],
+        blockExplorerUrls: ['https://polygonscan.com'],
+      }],
+    });
+  }
+
+  function buildProofPayload(address) {
+    const receipt = readJson(storageKey, null);
+    const rungs = readJson(ladderKey, []);
+    return {
+      ...proofTemplate,
+      memo: 'pointcast:polygon-bell:001',
+      publisher: address,
+      receipt: receipt ? {
+        receiptId: receipt.receiptId,
+        tokenId: receipt.tokenId,
+        collectedAt: receipt.collectedAt,
+        rungs: Array.isArray(receipt.rungs) ? receipt.rungs : [],
+        phrase: Array.isArray(receipt.phrase) ? receipt.phrase : [],
+      } : null,
+      rungMarks: Array.isArray(rungs) ? [...new Set(rungs.map(String))].slice(-12) : [],
+      publishedAt: new Date().toISOString(),
+      origin: window.location.origin,
+    };
+  }
+
+  function renderProofState() {
+    const proof = readJson(proofStorageKey, null);
+    const receipt = readJson(storageKey, null);
+    const wallet = readJson('pc:wallet', null);
+
+    if (proof?.txHash) {
+      const label = `${shortAddress(proof.txHash)} · ${shortAddress(proof.address)}`;
+      writePolygonOutput(`published ${label}`);
+      polygonPublishButton?.setAttribute('disabled', 'true');
+      return;
+    }
+
+    if (!receipt) {
+      writePolygonOutput('polygon waits for bell receipt');
+      polygonPublishButton?.setAttribute('disabled', 'true');
+      return;
+    }
+
+    if (wallet?.chain !== 'eth' || !wallet.address) {
+      writePolygonOutput(`receipt ${receipt.receiptId} waits for MetaMask`);
+      polygonPublishButton?.setAttribute('disabled', 'true');
+      return;
+    }
+
+    writePolygonOutput(`ready for Polygon · ${shortAddress(wallet.address)}`);
+    polygonPublishButton?.removeAttribute('disabled');
+  }
+
+  async function switchToPolygon() {
+    const connected = await connectPolygonWallet();
+    if (!connected) return;
+    await ensurePolygon(connected.provider);
+    writePolygonOutput(`MetaMask on ${polygonChainName}`);
+    renderProofState();
+  }
+
+  async function publishProof() {
+    const receipt = readJson(storageKey, null);
+    if (!receipt) {
+      renderReceipt();
+      renderProofState();
+      return;
+    }
+
+    const connected = await connectPolygonWallet();
+    if (!connected) return;
+    await ensurePolygon(connected.provider);
+
+    const payload = buildProofPayload(connected.address);
+    const txHash = await connected.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: connected.address,
+        to: connected.address,
+        value: '0x0',
+        data: utf8Hex(JSON.stringify(payload)),
+      }],
+    });
+
+    const proof = {
+      txHash,
+      chain: 'polygon',
+      chainId: 137,
+      address: connected.address,
+      explorerUrl: `${polygonExplorerTxBase}${txHash}`,
+      payload,
+      publishedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(proofStorageKey, JSON.stringify(proof));
+    writePolygonOutput(`published ${shortAddress(txHash)}`);
+    renderProofState();
   }
 
   function renderReceipt() {
@@ -138,6 +359,7 @@ const jsonLd = {
     if (receipt) {
       writeOutput(`collected ${receipt.receiptId} · ${shortAddress(receipt.address) || 'local visitor'}`);
       reserveButton?.setAttribute('disabled', 'true');
+      renderProofState();
       return;
     }
 
@@ -146,6 +368,7 @@ const jsonLd = {
     const remaining = Math.max(0, unlockRings - count);
     writeOutput(remaining === 0 ? 'ready to collect Polygon Bell receipt' : `${count}/${unlockRings} rung marks`);
     reserveButton?.toggleAttribute('disabled', remaining > 0);
+    renderProofState();
   }
 
   reserveButton?.addEventListener('click', () => {
@@ -170,6 +393,27 @@ const jsonLd = {
     localStorage.setItem(storageKey, JSON.stringify(receipt));
     renderReceipt();
   });
+
+  polygonConnectButton?.addEventListener('click', () => {
+    connectPolygonWallet().catch((err) => {
+      writePolygonOutput(err?.message || 'MetaMask connect failed');
+    });
+  });
+
+  polygonSwitchButton?.addEventListener('click', () => {
+    switchToPolygon().catch((err) => {
+      writePolygonOutput(err?.message || 'Polygon switch failed');
+    });
+  });
+
+  polygonPublishButton?.addEventListener('click', () => {
+    publishProof().catch((err) => {
+      const message = err?.code === 4001 ? 'MetaMask rejected the publish' : err?.message || 'Polygon publish failed';
+      writePolygonOutput(message);
+    });
+  });
+
+  window.addEventListener('pc:wallet-change', renderProofState);
 
   renderReceipt();
 </script>
@@ -201,6 +445,7 @@ const jsonLd = {
   .topbar,
   .hero,
   .details,
+  .publish,
   .attributes {
     max-width: 1180px;
     margin-inline: auto;
@@ -310,7 +555,7 @@ const jsonLd = {
 
   .actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
     gap: 8px;
     margin-top: 22px;
     font-size: 10px;
@@ -403,6 +648,29 @@ const jsonLd = {
     margin-top: 18px;
   }
 
+  .publish {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+    gap: 18px;
+    margin-top: 18px;
+    background:
+      linear-gradient(135deg, rgba(130, 71, 229, 0.12), transparent 46%),
+      rgba(255, 253, 248, 0.95);
+  }
+
+  .publish__body {
+    display: grid;
+    gap: 10px;
+  }
+
+  .publish__facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .publish__actions {
+    margin-top: 0;
+  }
+
   .trait-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -444,6 +712,7 @@ const jsonLd = {
 
     .hero,
     .details,
+    .publish,
     .attributes {
       grid-template-columns: 1fr;
     }
@@ -453,6 +722,7 @@ const jsonLd = {
     }
 
     .actions,
+    .publish__facts,
     .trait-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -460,6 +730,7 @@ const jsonLd = {
 
   @media (max-width: 560px) {
     .actions,
+    .publish__facts,
     .trait-grid {
       grid-template-columns: 1fr;
     }

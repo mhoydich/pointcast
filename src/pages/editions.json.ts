@@ -9,6 +9,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import contracts from '../data/contracts.json';
 import market from '../data/market.json';
+import { POLYGON_BELL_PUBLISH } from '../lib/polygon-bell-publish';
 import { POLYGON_BELL_TOKEN, polygonBellAbsoluteUrl } from '../lib/polygon-bell-token';
 
 export const GET: APIRoute = async () => {
@@ -132,9 +133,15 @@ export const GET: APIRoute = async () => {
           tokenId: POLYGON_BELL_TOKEN.tokenId,
           editionCap: POLYGON_BELL_TOKEN.editionCap,
           unlockRings: POLYGON_BELL_TOKEN.unlockRings,
+          publish: {
+            chainHex: POLYGON_BELL_PUBLISH.chainHex,
+            rpcUrl: POLYGON_BELL_PUBLISH.rpcUrls[0],
+            transactionMode: POLYGON_BELL_PUBLISH.transactionMode,
+          },
           source: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.sourceHref),
           metadata: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.metadataHref),
           page: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.pageHref),
+          publishPage: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.publishHref),
         },
       },
       mintBlocks: mintBlocks.map((b) => ({

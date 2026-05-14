@@ -52,7 +52,7 @@ export const RPC_URLS = {
   base: import.meta.env.PUBLIC_BASE_RPC_URL ?? 'https://mainnet.base.org',
   baseSepolia: import.meta.env.PUBLIC_BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org',
   ethMainnet: import.meta.env.PUBLIC_ETH_RPC_URL ?? 'https://eth.llamarpc.com',
-  polygon: import.meta.env.PUBLIC_POLYGON_RPC_URL ?? 'https://polygon-rpc.com',
+  polygon: import.meta.env.PUBLIC_POLYGON_RPC_URL ?? 'https://polygon.drpc.org',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -146,11 +146,11 @@ export const APP_CATALOG: AppCard[] = [
     id: 'polygon-bell',
     category: 'money-together',
     title: 'Polygon Bell',
-    blurb: 'A five-rung lobby collectible with ERC-1155-ready metadata on Polygon.',
+    blurb: 'A five-rung lobby collectible with MetaMask proof publishing on Polygon.',
     kind: 'pointcast',
     href: '/polygon-bell',
     chain: 'polygon',
-    status: 'soon',
+    status: 'live',
   },
   {
     id: 'splits-base',
