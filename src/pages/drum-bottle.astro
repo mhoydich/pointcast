@@ -1,0 +1,830 @@
+---
+/**
+ * /drum-bottle — async share-via-iMessage drum phrases.
+ *
+ * The live-drum register (drum-live, drum-live-tv, drum-live-pulse,
+ * drum-live-loop, drum-live-stars, drum-live-bus) handles synchronous
+ * presence — people in the same room at the same time. Mike's Thursday
+ * brief explicitly said "channel back forth with inventive companion
+ * on pointcast.xyz, desktop, social, imessage, mobile", which is the
+ * other half: the async loop.
+ *
+ * Drum Bottle is the smallest possible "send someone a drum phrase"
+ * surface. The whole state — pattern + BPM + sender pid prefix — is
+ * encoded in the URL query string. Zero server state. The recipient
+ * opens the link on any device (iMessage preview, browser, watch),
+ * hears the phrase, can record a reply and send it back.
+ *
+ * Encoding:
+ *   pattern  = 4 rows × 16 cells × 1 bit = 64 bits = 8 bytes
+ *   bpm      = 1 byte (offset from 40; 0..180 → 40..220 BPM)
+ *   total    = 9 bytes → 12 chars base64url (no padding)
+ *   url      = /drum-bottle?p=<12 chars>&from=<4 chars from pid>
+ *
+ * The "from" is just the first 4 chars of the sender's drum-session
+ * pid (the same one the live bus uses). It's a stable handle without
+ * being identity-revealing — recipients see "from abcd · 4 bars · 100 BPM"
+ * and over time they recognise their friend's bottle prefix without
+ * any account system.
+ *
+ * Two modes determined at load time by presence of `?p=`:
+ *   • Empty — composer. You make a phrase, copy the link, send it.
+ *   • Received — player. Pattern pre-loaded, click ▶, hear it. Then
+ *     "record a reply" wipes the grid and switches to composer mode.
+ *
+ * Shipped 2026-05-14 (Thursday overnight). First async surface in
+ * the drum register; the bridge to iMessage/SMS/wherever-you-share-links.
+ * — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Bottle — record a drum phrase, send the link, they hear it"
+  description="The async sibling to drum-live. Make a 4-bar pattern, get a share-link with the pattern encoded in the URL itself — no server state. Send it via iMessage, DM, or any link surface; recipients open it and hear your phrase on their device. They can record a reply and send it back."
+  image="/images/og-drum.png"
+>
+  <main class="dbo" id="dbo" data-built={built}>
+    <header class="dbo__hero">
+      <p class="dbo__kicker">DRUM · BOTTLE · async sibling of /drum-live</p>
+      <h1 class="dbo__title" id="dbo-title">Record a phrase. Send the link.</h1>
+      <p class="dbo__sub" id="dbo-sub">A 4-bar drum pattern, encoded in the URL itself. No server state, no accounts, no app. Make something. Press the copy button. Paste it into iMessage, a DM, anywhere a link works.</p>
+    </header>
+
+    <section class="dbo__stage">
+
+      <!-- Received-mode banner -->
+      <div class="dbo__banner" id="dbo-banner" hidden>
+        <span class="dbo__banner-icon">🍾</span>
+        <span class="dbo__banner-body">
+          <span class="dbo__banner-from" id="dbo-from">from someone</span>
+          <span class="dbo__banner-meta" id="dbo-meta">4 bars · 100 BPM</span>
+        </span>
+        <button class="dbo__banner-action" id="dbo-banner-action" type="button">▶ play</button>
+      </div>
+
+      <!-- Grid -->
+      <div class="dbo__grid-wrap">
+        <div class="dbo__grid" id="dbo-grid" role="grid" aria-label="Drum pattern editor"></div>
+        <div class="dbo__voice-labels">
+          <span class="dbo__voice dbo__voice--low">▬ LOW</span>
+          <span class="dbo__voice dbo__voice--mid">◆ MID</span>
+          <span class="dbo__voice dbo__voice--high">▲ HIGH</span>
+          <span class="dbo__voice dbo__voice--bell">✦ BELL</span>
+        </div>
+      </div>
+
+      <!-- Transport -->
+      <div class="dbo__transport">
+        <button class="dbo__btn dbo__btn--play" id="dbo-play" type="button">▶ play</button>
+        <button class="dbo__btn dbo__btn--stop" id="dbo-stop" type="button" hidden>⏹ stop</button>
+        <div class="dbo__bpm-wrap" id="dbo-bpm-wrap">
+          <label class="dbo__bpm-label" for="dbo-bpm">BPM</label>
+          <input class="dbo__bpm" id="dbo-bpm" type="range" min="60" max="180" step="2" value="100" />
+          <span class="dbo__bpm-readout" id="dbo-bpm-readout">100</span>
+        </div>
+      </div>
+
+      <!-- Compose actions (empty mode) -->
+      <div class="dbo__actions" id="dbo-actions-compose">
+        <button class="dbo__action dbo__action--primary" id="dbo-copy" type="button">↗ copy share link</button>
+        <a class="dbo__action" id="dbo-sms" href="#">↗ send via iMessage</a>
+        <button class="dbo__action dbo__action--ghost" id="dbo-clear" type="button">clear</button>
+      </div>
+
+      <!-- Receive actions (received mode) -->
+      <div class="dbo__actions" id="dbo-actions-receive" hidden>
+        <button class="dbo__action dbo__action--primary" id="dbo-reply" type="button">✍ record a reply</button>
+        <a class="dbo__action" href="/drum-live-bus">↗ open the live bus</a>
+      </div>
+
+    </section>
+
+    <section class="dbo__notes">
+      <h2 class="dbo__notes-h">How a bottle works</h2>
+      <p>Every cell you toggle is a bit. The pattern is 4 voices × 16 steps = 64 bits = 8 bytes. Add 1 byte for BPM and you've got 9 bytes — a string of 12 base64url characters. <em>That's the entire message.</em> The URL <code>/drum-bottle?p=AAQACAAQACAA&amp;from=abcd</code> contains a real, playable phrase.</p>
+      <p>There is no server. There is no account. There is no row in any database. The link is the message. You can paste it into iMessage and the recipient will see a tiny preview card; you can text it as plain text; you can put it in your bio. Open it on any device that runs a browser, click ▶, hear the drum.</p>
+      <p>The <code>from</code> param is your live-bus pid prefix — the first 4 chars of <code>sha256(your-session-id)</code>. Stable across your devices, not identifying. Over time you'll recognise a friend's prefix without having any account system. <em>That's the social layer.</em></p>
+      <p>Sister directories: <a href="/drum-live-bus">/drum-live-bus</a> (5 live-drum surfaces · synchronous), <a href="/drum-pavilion">/drum-pavilion</a> (5 meditative screensavers), <a href="/cast-table">/cast-table</a> (32 single-user music tools).</p>
+    </section>
+
+    <div class="dbo__toast" id="dbo-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --dbo-ink: #0a1230;
+      --dbo-mid: #14193a;
+      --dbo-flame: #f6c15e;
+      --dbo-coral: #ff6b8a;
+      --dbo-mint: #8aeac0;
+      --dbo-sky: #7ac8ed;
+      --dbo-mauve: #c9a8ef;
+      --dbo-cream: #f4e7c8;
+      --dbo-cream-dim: #b8aa84;
+    }
+
+    body:has(.dbo) {
+      background:
+        radial-gradient(circle at 20% 10%, #1a1e58 0%, transparent 50%),
+        radial-gradient(circle at 85% 90%, #2a1640 0%, transparent 55%),
+        var(--dbo-ink);
+      color: var(--dbo-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .dbo {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+
+    /* HERO */
+    .dbo__hero { margin-bottom: 32px; }
+    .dbo__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--dbo-coral);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .dbo__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 16px;
+    }
+    .dbo__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--dbo-cream-dim);
+      margin: 0;
+    }
+
+    /* STAGE */
+    .dbo__stage {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 36px;
+    }
+
+    /* RECEIVED BANNER */
+    .dbo__banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin: 0 0 18px;
+      background: rgba(246, 193, 94, 0.10);
+      border: 1px solid rgba(246, 193, 94, 0.30);
+      border-radius: 10px;
+    }
+    .dbo__banner-icon { font-size: 22px; }
+    .dbo__banner-body { flex: 1; display: flex; flex-direction: column; }
+    .dbo__banner-from {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--dbo-flame);
+    }
+    .dbo__banner-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--dbo-cream-dim);
+      margin-top: 2px;
+    }
+    .dbo__banner-action {
+      border: 1px solid rgba(246, 193, 94, 0.6);
+      background: rgba(246, 193, 94, 0.15);
+      color: var(--dbo-flame);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dbo__banner-action:hover { background: rgba(246, 193, 94, 0.25); }
+
+    /* GRID */
+    .dbo__grid-wrap {
+      display: grid;
+      grid-template-columns: 1fr 60px;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 560px) {
+      .dbo__grid-wrap { grid-template-columns: 1fr 48px; gap: 8px; }
+    }
+    .dbo__grid {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 4px;
+      aspect-ratio: 16 / 4;
+      background: rgba(0,0,0,0.30);
+      border-radius: 8px;
+      padding: 6px;
+    }
+    .dbo__cell {
+      background: rgba(244,231,200,0.06);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 80ms ease, transform 60ms ease;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+    }
+    .dbo__cell:hover { background: rgba(244,231,200,0.16); }
+    .dbo__cell--on  { background: var(--cell-color); border-color: var(--cell-color); }
+    .dbo__cell--low.dbo__cell--on  { --cell-color: #f6c15e; }
+    .dbo__cell--mid.dbo__cell--on  { --cell-color: #ff8a70; }
+    .dbo__cell--high.dbo__cell--on { --cell-color: #c9a8ef; }
+    .dbo__cell--bell.dbo__cell--on { --cell-color: #8aeac0; }
+    .dbo__cell--play {
+      box-shadow: 0 0 0 2px var(--dbo-cream);
+      transform: scale(0.95);
+    }
+    /* Beat dividers — first cell of each beat (every 4 cols) gets a subtle left border */
+    .dbo__cell:nth-child(16n + 5),
+    .dbo__cell:nth-child(16n + 9),
+    .dbo__cell:nth-child(16n + 13) {
+      margin-left: 2px;
+    }
+
+    .dbo__voice-labels {
+      display: grid;
+      grid-template-rows: repeat(4, 1fr);
+      gap: 4px;
+      padding: 6px 0;
+    }
+    .dbo__voice {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--dbo-cream-dim);
+    }
+    .dbo__voice--low  { color: #f6c15e; }
+    .dbo__voice--mid  { color: #ff8a70; }
+    .dbo__voice--high { color: #c9a8ef; }
+    .dbo__voice--bell { color: #8aeac0; }
+
+    /* TRANSPORT */
+    .dbo__transport {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .dbo__btn {
+      border: 1px solid rgba(244,231,200,0.25);
+      background: rgba(244,231,200,0.08);
+      color: var(--dbo-cream);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+    }
+    .dbo__btn:hover { background: rgba(244,231,200,0.16); }
+    .dbo__btn--play {
+      background: rgba(246,193,94,0.15);
+      border-color: rgba(246,193,94,0.45);
+      color: var(--dbo-flame);
+    }
+    .dbo__btn--play:hover { background: rgba(246,193,94,0.25); }
+    .dbo__bpm-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 220px;
+    }
+    .dbo__bpm-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--dbo-cream-dim);
+    }
+    .dbo__bpm {
+      flex: 1;
+      accent-color: var(--dbo-flame);
+      cursor: pointer;
+    }
+    .dbo__bpm-readout {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--dbo-flame);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* ACTIONS */
+    .dbo__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .dbo__action {
+      flex: 0 0 auto;
+      border: 1px solid rgba(244,231,200,0.18);
+      background: rgba(244,231,200,0.06);
+      color: var(--dbo-cream);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .dbo__action:hover {
+      background: rgba(244,231,200,0.14);
+      border-color: rgba(244,231,200,0.35);
+    }
+    .dbo__action--primary {
+      background: rgba(255,107,138,0.15);
+      border-color: rgba(255,107,138,0.45);
+      color: var(--dbo-coral);
+    }
+    .dbo__action--primary:hover { background: rgba(255,107,138,0.25); }
+    .dbo__action--ghost {
+      color: var(--dbo-cream-dim);
+      background: transparent;
+      border-color: rgba(244,231,200,0.10);
+    }
+
+    /* NOTES */
+    .dbo__notes {
+      max-width: 700px;
+    }
+    .dbo__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      color: var(--dbo-cream);
+      margin: 0 0 12px;
+    }
+    .dbo__notes p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--dbo-cream-dim);
+      margin: 0 0 12px;
+    }
+    .dbo__notes em { color: var(--dbo-flame); font-style: italic; }
+    .dbo__notes code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--dbo-mint);
+    }
+    .dbo__notes a {
+      color: var(--dbo-coral);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    /* TOAST */
+    .dbo__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--dbo-flame);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(246,193,94,0.4);
+    }
+    .dbo__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    const ROWS = 4;
+    const STEPS = 16;
+    const VOICE_NAMES = ['low', 'mid', 'high', 'bell'] as const;
+    type Voice = typeof VOICE_NAMES[number];
+
+    // ---- state ----
+    let pattern: boolean[][] = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
+    let bpm = 100;
+    let isReceived = false;
+    let fromPid = '';
+    let myPid = '';
+    let isPlaying = false;
+    let playStep = 0;
+    let playTimer: number | null = null;
+
+    // ---- url codec ----
+    // 9 bytes = 12 chars base64url (no padding)
+    function encode(p: boolean[][], b: number): string {
+      const bytes = new Uint8Array(9);
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < STEPS; c++) {
+          if (p[r][c]) {
+            const idx = r * STEPS + c;       // 0..63
+            const byteIdx = idx >> 3;        // 0..7
+            const bitIdx  = idx & 7;
+            bytes[byteIdx] |= (1 << bitIdx);
+          }
+        }
+      }
+      bytes[8] = Math.max(0, Math.min(180, b - 40));
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function decode(code: string): { pattern: boolean[][]; bpm: number } | null {
+      if (!code) return null;
+      const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let bin: string;
+      try { bin = atob(padded); } catch { return null; }
+      if (bin.length < 9) return null;
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const p: boolean[][] = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < STEPS; c++) {
+          const idx = r * STEPS + c;
+          const byteIdx = idx >> 3;
+          const bitIdx  = idx & 7;
+          p[r][c] = !!(bytes[byteIdx] & (1 << bitIdx));
+        }
+      }
+      const b = 40 + bytes[8];
+      if (b < 40 || b > 220) return null;
+      return { pattern: p, bpm: b };
+    }
+
+    // ---- grid render ----
+    function renderGrid() {
+      const wrap = document.getElementById('dbo-grid')!;
+      // Clear and rebuild — cheaper than diffing for a 64-cell grid
+      wrap.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < STEPS; c++) {
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.className = `dbo__cell dbo__cell--${VOICE_NAMES[r]}` + (pattern[r][c] ? ' dbo__cell--on' : '');
+          cell.dataset.row = String(r);
+          cell.dataset.col = String(c);
+          cell.setAttribute('aria-label', `${VOICE_NAMES[r]} step ${c + 1}: ${pattern[r][c] ? 'on' : 'off'}`);
+          cell.setAttribute('role', 'gridcell');
+          cell.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleCell(r, c);
+          });
+          wrap.appendChild(cell);
+        }
+      }
+    }
+
+    function toggleCell(r: number, c: number) {
+      pattern[r][c] = !pattern[r][c];
+      const cell = document.querySelector(`.dbo__cell[data-row="${r}"][data-col="${c}"]`)!;
+      cell.classList.toggle('dbo__cell--on', pattern[r][c]);
+      cell.setAttribute('aria-label', `${VOICE_NAMES[r]} step ${c + 1}: ${pattern[r][c] ? 'on' : 'off'}`);
+      // If user is editing in received mode, they're already past it.
+    }
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(ctx.destination);
+    }
+
+    const VOICE_CFG: Record<Voice, { freq: number; bell: boolean }> = {
+      low:  { freq:  70, bell: false },
+      mid:  { freq: 120, bell: false },
+      high: { freq: 200, bell: false },
+      bell: { freq: 600, bell: true  },
+    };
+
+    function playVoice(voice: Voice) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const cfg = VOICE_CFG[voice];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = cfg.bell ? 'sine' : 'triangle';
+      osc.frequency.value = cfg.freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.004);
+      const tail = cfg.bell ? 1.0 : 0.35;
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+      if (cfg.bell) {
+        for (const mult of [2, 3]) {
+          const o = ctx.createOscillator();
+          const gg = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = cfg.freq * mult;
+          gg.gain.setValueAtTime(0.0001, t);
+          gg.gain.exponentialRampToValueAtTime(0.14 / mult, t + 0.008);
+          gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.7 / mult);
+          o.connect(gg).connect(masterGain);
+          scheduler.trackSource(o);
+          o.start(t);
+          o.stop(t + 0.75);
+        }
+      }
+    }
+
+    // ---- transport ----
+    function stepDurationMs() {
+      // 4 steps per beat, so step = quarter / 4 = 60/bpm/4 sec
+      return (60_000 / bpm) / 4;
+    }
+
+    function tickPlayhead() {
+      // Mark current cells playing, play any lit voices
+      const grid = document.getElementById('dbo-grid')!;
+      grid.querySelectorAll('.dbo__cell--play').forEach((el) => el.classList.remove('dbo__cell--play'));
+      for (let r = 0; r < ROWS; r++) {
+        const cell = grid.children[r * STEPS + playStep] as HTMLElement;
+        if (cell) cell.classList.add('dbo__cell--play');
+        if (pattern[r][playStep]) {
+          playVoice(VOICE_NAMES[r]);
+        }
+      }
+      playStep = (playStep + 1) % STEPS;
+    }
+
+    function startPlay(loop: boolean = true) {
+      if (isPlaying) return;
+      ensureCtx();
+      isPlaying = true;
+      playStep = 0;
+      // Show stop, hide play
+      const playBtn = document.getElementById('dbo-play')!;
+      const stopBtn = document.getElementById('dbo-stop')!;
+      playBtn.hidden = true;
+      stopBtn.hidden = false;
+      // Tick immediately, then every step
+      tickPlayhead();
+      const tick = () => {
+        if (!isPlaying) return;
+        if (!loop && playStep === 0) {
+          // Played one full loop already; stop after one bar set
+          stopPlay();
+          return;
+        }
+        tickPlayhead();
+        playTimer = window.setTimeout(tick, stepDurationMs());
+      };
+      playTimer = window.setTimeout(tick, stepDurationMs());
+    }
+
+    function stopPlay() {
+      isPlaying = false;
+      if (playTimer != null) { clearTimeout(playTimer); playTimer = null; }
+      const grid = document.getElementById('dbo-grid')!;
+      grid.querySelectorAll('.dbo__cell--play').forEach((el) => el.classList.remove('dbo__cell--play'));
+      const playBtn = document.getElementById('dbo-play')!;
+      const stopBtn = document.getElementById('dbo-stop')!;
+      playBtn.hidden = false;
+      stopBtn.hidden = true;
+    }
+
+    // ---- share-link ----
+    function shareUrl(): string {
+      const code = encode(pattern, bpm);
+      const base = `${location.origin}/drum-bottle?p=${code}`;
+      return fromPid ? `${base}&from=${fromPid}` : base;
+    }
+
+    function copyShareLink() {
+      const url = shareUrl();
+      const blob = navigator.clipboard;
+      if (blob && blob.writeText) {
+        blob.writeText(url).then(
+          () => showToast(`copied · ${url.length} chars`),
+          () => promptManualCopy(url),
+        );
+      } else {
+        promptManualCopy(url);
+      }
+    }
+
+    function promptManualCopy(url: string) {
+      // Fallback: stash in a hidden textarea
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast('copied'); }
+      catch { showToast(url); }
+      finally { ta.remove(); }
+    }
+
+    function updateSmsLink() {
+      const a = document.getElementById('dbo-sms')! as HTMLAnchorElement;
+      const url = shareUrl();
+      // SMS deep-link format works on iOS/Android. ?body= for iOS, &body= for Android.
+      // Most parsers accept both. Use & after sms:open prefix.
+      const body = encodeURIComponent(`🥁 ${url}`);
+      a.href = `sms:&body=${body}`;
+    }
+
+    function showToast(msg: string) {
+      const el = document.getElementById('dbo-toast')!;
+      el.textContent = msg;
+      el.classList.add('dbo__toast--show');
+      setTimeout(() => el.classList.remove('dbo__toast--show'), 2400);
+    }
+
+    // ---- session/pid ----
+    async function sha256Hex(input: string): Promise<string> {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    // ---- mode switching ----
+    function enterReceivedMode(p: boolean[][], b: number, from: string) {
+      pattern = p;
+      bpm = b;
+      fromPid = from;
+      isReceived = true;
+      document.getElementById('dbo-title')!.textContent = 'Someone sent you a drum.';
+      document.getElementById('dbo-sub')!.innerHTML = 'Click play to hear it. You can record a reply and send it back.';
+      document.getElementById('dbo-banner')!.hidden = false;
+      const fromEl = document.getElementById('dbo-from')!;
+      fromEl.textContent = from ? `from ${from}` : 'from someone';
+      document.getElementById('dbo-meta')!.textContent = `4 bars · ${b} BPM`;
+      // Hide compose actions, show receive actions
+      document.getElementById('dbo-actions-compose')!.hidden = true;
+      document.getElementById('dbo-actions-receive')!.hidden = false;
+      // Lock BPM slider
+      (document.getElementById('dbo-bpm') as HTMLInputElement).value = String(b);
+      document.getElementById('dbo-bpm-readout')!.textContent = String(b);
+      (document.getElementById('dbo-bpm') as HTMLInputElement).disabled = true;
+      renderGrid();
+    }
+
+    function enterComposeMode() {
+      pattern = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
+      bpm = 100;
+      isReceived = false;
+      document.getElementById('dbo-title')!.textContent = 'Record a phrase. Send the link.';
+      document.getElementById('dbo-sub')!.innerHTML = 'A 4-bar drum pattern, encoded in the URL itself. No server state, no accounts, no app. Make something. Press the copy button. Paste it into iMessage, a DM, anywhere a link works.';
+      document.getElementById('dbo-banner')!.hidden = true;
+      document.getElementById('dbo-actions-compose')!.hidden = false;
+      document.getElementById('dbo-actions-receive')!.hidden = true;
+      (document.getElementById('dbo-bpm') as HTMLInputElement).value = '100';
+      document.getElementById('dbo-bpm-readout')!.textContent = '100';
+      (document.getElementById('dbo-bpm') as HTMLInputElement).disabled = false;
+      // Replace URL without ?p= so refreshes don't kick back into received mode
+      try {
+        const url = new URL(location.href);
+        url.searchParams.delete('p');
+        url.searchParams.delete('from');
+        history.replaceState({}, '', url.toString());
+      } catch { /* old browser, ignore */ }
+      renderGrid();
+      updateSmsLink();
+    }
+
+    // ---- init ----
+    async function init() {
+      const sessionId = getOrCreateSession();
+      myPid = (await sha256Hex(sessionId)).slice(0, 10);
+      fromPid = myPid.slice(0, 4);
+
+      // Check URL for received pattern
+      const params = new URLSearchParams(location.search);
+      const code = params.get('p') || '';
+      const sender = (params.get('from') || '').replace(/[^a-z0-9]/gi, '').slice(0, 4);
+
+      if (code) {
+        const decoded = decode(code);
+        if (decoded) {
+          enterReceivedMode(decoded.pattern, decoded.bpm, sender);
+        } else {
+          // Bad code — fall back to compose mode and toast
+          enterComposeMode();
+          showToast('couldn\'t decode that bottle');
+        }
+      } else {
+        enterComposeMode();
+      }
+
+      // Transport
+      document.getElementById('dbo-play')!.addEventListener('click', () => startPlay());
+      document.getElementById('dbo-stop')!.addEventListener('click', () => stopPlay());
+      document.getElementById('dbo-banner-action')!.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (isPlaying) stopPlay();
+        else startPlay();
+      });
+
+      // BPM
+      const bpmInput = document.getElementById('dbo-bpm') as HTMLInputElement;
+      bpmInput.addEventListener('input', () => {
+        if (isReceived) return;
+        bpm = parseInt(bpmInput.value, 10) || 100;
+        document.getElementById('dbo-bpm-readout')!.textContent = String(bpm);
+        updateSmsLink();
+      });
+
+      // Copy + clear + reply
+      document.getElementById('dbo-copy')!.addEventListener('click', copyShareLink);
+      document.getElementById('dbo-clear')!.addEventListener('click', () => {
+        pattern = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
+        renderGrid();
+        updateSmsLink();
+      });
+      document.getElementById('dbo-reply')!.addEventListener('click', () => {
+        stopPlay();
+        enterComposeMode();
+        showToast('blank slate · make your reply');
+      });
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (isPlaying) stopPlay();
+          else startPlay();
+        }
+      });
+
+      // Initial SMS link
+      updateSmsLink();
+
+      // If we're in received mode, auto-prompt to play once.
+      // Don't auto-play (browsers block audio without gesture); just visually hint.
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
