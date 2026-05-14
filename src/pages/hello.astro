@@ -1,0 +1,497 @@
+---
+/**
+ * /hello — say hello, get one HELLO.
+ *
+ * The room is a faucet. Connect a wallet, switch to Polygon, click claim,
+ * receive 1 HELLO. Rate-limited on-chain to one claim per address per 24h.
+ *
+ * The token is HelloPolygon (contracts/polygon/hello_polygon.sol), an
+ * ERC-20 cousin of Mike's 2018-era L1 HELLO at
+ * 0x1Fda96405DD8Ee22631aBCf4f61282eaE802012f. Same name, same symbol,
+ * same supply, different chain.
+ *
+ * The faucet IS the contract — at construction, the full 10B HELLO was
+ * minted to address(this). claim() transfers 1 HELLO from the contract
+ * to msg.sender, with a 24h cooldown gate.
+ *
+ * Until Mike originates and pastes HELLO_POLYGON in src/lib/eth/config.ts,
+ * this page renders a placeholder. Once the address is set, the build-time
+ * read populates the faucet balance and the client-side flow activates.
+ */
+
+import { formatUnits } from 'viem';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ShareThis from '../components/ShareThis.astro';
+import { getPolygonClient } from '../lib/eth/clients';
+import { HELLO_POLYGON, HELLO_L1_ANCESTOR, POLYGON_CHAIN_HEX } from '../lib/eth/config';
+
+const ERC20_FAUCET_ABI = [
+  { type: 'function', name: 'name',           stateMutability: 'view', inputs: [], outputs: [{ type: 'string'  }] },
+  { type: 'function', name: 'symbol',         stateMutability: 'view', inputs: [], outputs: [{ type: 'string'  }] },
+  { type: 'function', name: 'decimals',       stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8'   }] },
+  { type: 'function', name: 'totalSupply',    stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'faucetBalance',  stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const;
+
+type FaucetView = {
+  name: string;
+  symbol: string;
+  totalSupplyFmt: string;
+  faucetBalanceFmt: string;
+  fetchedAt: string;
+};
+
+let faucet: FaucetView | null = null;
+let fetchError: string | null = null;
+
+if (HELLO_POLYGON) {
+  try {
+    const c = getPolygonClient();
+    const [name, symbol, decimals, totalSupply, faucetBalance] = await Promise.all([
+      c.readContract({ address: HELLO_POLYGON, abi: ERC20_FAUCET_ABI, functionName: 'name' }),
+      c.readContract({ address: HELLO_POLYGON, abi: ERC20_FAUCET_ABI, functionName: 'symbol' }),
+      c.readContract({ address: HELLO_POLYGON, abi: ERC20_FAUCET_ABI, functionName: 'decimals' }),
+      c.readContract({ address: HELLO_POLYGON, abi: ERC20_FAUCET_ABI, functionName: 'totalSupply' }),
+      c.readContract({ address: HELLO_POLYGON, abi: ERC20_FAUCET_ABI, functionName: 'faucetBalance' }),
+    ]);
+    faucet = {
+      name,
+      symbol,
+      totalSupplyFmt: Number(formatUnits(totalSupply, decimals)).toLocaleString('en-US'),
+      faucetBalanceFmt: Number(formatUnits(faucetBalance, decimals)).toLocaleString('en-US'),
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (err: any) {
+    fetchError = err?.shortMessage ?? err?.message ?? 'unknown';
+    console.warn('[/hello] Polygon read failed at build time:', fetchError);
+  }
+}
+
+const polygonscanUrl = HELLO_POLYGON
+  ? `https://polygonscan.com/token/${HELLO_POLYGON}`
+  : null;
+---
+
+<BaseLayout
+  title="/hello · say hello, get one HELLO"
+  description="A faucet on Polygon. Connect a wallet, click claim, receive one HELLO — the L2 cousin of the 2018-era HELLO token on Ethereum L1. One claim per address per 24 hours."
+  canonical="/hello"
+>
+  <main class="hello" aria-labelledby="hello-title">
+    <header class="hello__head">
+      <p class="hello__kicker mono">/hello · polygon faucet · 2026.05</p>
+      <h1 id="hello-title" class="hello__title">Hello.</h1>
+      <p class="hello__lede">
+        Connect a wallet, click claim, get <strong>one HELLO</strong> — the L2
+        cousin of <a href={`https://etherscan.io/token/${HELLO_L1_ANCESTOR}`} target="_blank" rel="noopener noreferrer" class="hello__link">a token Mike deployed on Ethereum mainnet in 2018</a>.
+        Same name, same symbol, same supply, different chain. One claim per
+        address per 24 hours. Gas on Polygon rounds to free.
+      </p>
+    </header>
+
+    <section class="hello__claim" aria-labelledby="claim-title" data-hello-panel>
+      <h2 id="claim-title" class="hello__section-title mono">The faucet</h2>
+
+      {!HELLO_POLYGON ? (
+        <article class="hello__card hello__card--soon">
+          <p class="hello__soon-line">
+            The contract isn't deployed yet. Source at <code class="mono">contracts/polygon/hello_polygon.sol</code>;
+            after Mike originates on Polygon mainnet and pastes the address into
+            <code class="mono">HELLO_POLYGON</code>, this card lights up.
+          </p>
+          <p class="hello__soon-meta mono">
+            Meantime: the original lives at
+            <a href={`https://etherscan.io/token/${HELLO_L1_ANCESTOR}`} target="_blank" rel="noopener noreferrer">{HELLO_L1_ANCESTOR}</a>.
+          </p>
+        </article>
+      ) : faucet ? (
+        <article class="hello__card hello__card--live">
+          <div class="hello__row">
+            <div>
+              <p class="hello__sym mono">{faucet.symbol}</p>
+              <p class="hello__name">{faucet.name}</p>
+            </div>
+            <div class="hello__bag">
+              <p class="hello__bag-label mono">faucet bag</p>
+              <p class="hello__bag-value mono">{faucet.faucetBalanceFmt}</p>
+            </div>
+          </div>
+
+          <div class="hello__action" data-hello-action>
+            <button id="hello-claim-btn" type="button" class="hello__claim-btn mono" disabled>
+              <span class="hello__claim-state">connect a wallet to claim</span>
+            </button>
+            <p class="hello__action-hint mono" id="hello-claim-hint">
+              one hello per address per 24 hours · you pay ~$0.01 in gas on polygon
+            </p>
+          </div>
+
+          <p class="hello__meta mono">
+            Total supply: {faucet.totalSupplyFmt} HELLO ·
+            <a href={polygonscanUrl} target="_blank" rel="noopener noreferrer">Polygonscan ↗</a> ·
+            Read at build: {new Date(faucet.fetchedAt).toUTCString()}
+          </p>
+        </article>
+      ) : (
+        <article class="hello__card hello__card--fallback">
+          <p class="hello__soon-line">
+            The Polygon RPC was quiet when this page was built ({fetchError ?? 'unknown'}).
+            The contract is at <code class="mono">{HELLO_POLYGON}</code>.
+          </p>
+          <div class="hello__action" data-hello-action>
+            <button id="hello-claim-btn" type="button" class="hello__claim-btn mono" disabled>
+              <span class="hello__claim-state">connect a wallet to claim</span>
+            </button>
+          </div>
+        </article>
+      )}
+    </section>
+
+    <section class="hello__lore" aria-label="Lore">
+      <p class="hello__lore-line">
+        HELLO first appeared in 2018 as one of forty-two tokens Mike deployed
+        between 2018 and 2021 — a quiet greeting, then a long pause. The L2
+        cousin landed in 2026, after the L1 gas math made saying hi on-chain
+        cost more than the gesture.
+      </p>
+      <p class="hello__lore-line">
+        Both contracts share the same name, symbol, decimals, and 10B supply.
+        They are cousins, not bridged.
+      </p>
+      <nav class="hello__exits" aria-label="Exits">
+        <a href="/eth-legacy" class="hello__exit mono">/eth-legacy — the forty-two →</a>
+        <a href="/mist" class="hello__exit mono">/mist — the workbench →</a>
+        <a href={`https://etherscan.io/token/${HELLO_L1_ANCESTOR}`} target="_blank" rel="noopener noreferrer" class="hello__exit mono">
+          The ancestor on L1 ↗
+        </a>
+      </nav>
+      <ShareThis url="/hello" kind="hello" />
+    </section>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ HELLO_ADDR: HELLO_POLYGON, POLYGON_HEX: POLYGON_CHAIN_HEX }}>
+  // -------------------------------------------------------------------------
+  // /hello claim flow
+  //
+  // Reads pc:wallet from localStorage (set by WalletConnect.astro). When an
+  // EVM wallet is present, enables the Claim button. On click:
+  //   1. Switch wallet to Polygon (wallet_switchEthereumChain → 0x89). If
+  //      Polygon isn't added, fall back to wallet_addEthereumChain.
+  //   2. eth_sendTransaction with data = 0x4e71d92d (claim() function
+  //      selector — bare no-args). User pays gas, wallet pops for sign.
+  //   3. On success: show tx hash + Polygonscan link, disable button until
+  //      reload, update cooldown text from chain (best-effort, fire-forget).
+  //
+  // No viem on the wire here — raw eth_sendTransaction keeps the bundle
+  // tiny. The viem reads happen at build time in the frontmatter above.
+  // -------------------------------------------------------------------------
+  const CLAIM_SELECTOR = '0x4e71d92d'; // keccak256("claim()")[0:4]
+
+  /** @type {HTMLButtonElement | null} */
+  const btn  = document.getElementById('hello-claim-btn');
+  /** @type {HTMLElement | null} */
+  const hint = document.getElementById('hello-claim-hint');
+
+  function loadWallet() {
+    try {
+      const raw = localStorage.getItem('pc:wallet');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function setState(label, enabled) {
+    if (!btn) return;
+    btn.disabled = !enabled;
+    const span = btn.querySelector('.hello__claim-state');
+    if (span) span.textContent = label;
+  }
+
+  function setHint(text) {
+    if (hint) hint.textContent = text;
+  }
+
+  function refresh() {
+    if (!HELLO_ADDR) return; // placeholder render, no button
+    const w = loadWallet();
+    if (!w) { setState('connect a wallet to claim', false); return; }
+    if (w.chain !== 'eth') {
+      setState('switch to an Ethereum wallet', false);
+      setHint('Kukai works for Tezos. For HELLO you need MetaMask or Coinbase Smart Wallet — open the corner menu.');
+      return;
+    }
+    setState('claim 1 HELLO', true);
+    setHint('one hello per address per 24 hours · you pay ~$0.01 in gas on polygon');
+  }
+
+  async function switchToPolygon(eth) {
+    try {
+      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: POLYGON_HEX }] });
+      return true;
+    } catch (err) {
+      if (err && err.code === 4902) {
+        await eth.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: POLYGON_HEX,
+            chainName: 'Polygon',
+            nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+            rpcUrls: ['https://polygon-rpc.com'],
+            blockExplorerUrls: ['https://polygonscan.com'],
+          }],
+        });
+        return true;
+      }
+      throw err;
+    }
+  }
+
+  async function claim() {
+    const eth = window.ethereum;
+    if (!eth) { setState('no wallet detected', false); return; }
+    const w = loadWallet();
+    const addr = w?.address;
+    if (!addr) { setState('connect a wallet first', false); return; }
+
+    setState('switching to polygon…', false);
+    try {
+      await switchToPolygon(eth);
+    } catch (e) {
+      console.warn('switch failed', e);
+      setState('switch failed — try again', false);
+      setHint('Open MetaMask, switch network to Polygon manually, then click claim.');
+      setTimeout(refresh, 2500);
+      return;
+    }
+
+    setState('sign in your wallet…', false);
+    setHint('Your wallet is popping a confirmation. Approve to mint one HELLO.');
+    try {
+      const txHash = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: addr, to: HELLO_ADDR, data: CLAIM_SELECTOR }],
+      });
+      setState('claimed ✓', false);
+      setHint(`tx ${String(txHash).slice(0,10)}… — view on Polygonscan: https://polygonscan.com/tx/${txHash}`);
+      // Render an explicit link for the user
+      if (hint) {
+        hint.innerHTML = `tx <a class="mono" target="_blank" rel="noopener noreferrer" href="https://polygonscan.com/tx/${txHash}">${String(txHash).slice(0,10)}…</a> · once Polygon confirms, you'll see one HELLO in your wallet`;
+      }
+    } catch (err) {
+      console.warn('claim failed', err);
+      const msg = (err && err.message) ? String(err.message) : '';
+      if (msg.includes('User denied') || msg.includes('rejected') || (err && err.code === 4001)) {
+        setState('claim cancelled — tap again', true);
+      } else if (msg.includes('cooldown')) {
+        setState('on cooldown — back in <24h', false);
+        setHint('You\'ve already said hello today. Come back tomorrow.');
+      } else if (msg.includes('insufficient funds')) {
+        setState('need a tiny bit of POL for gas', false);
+        setHint('Top up POL on Polygon (a fraction of a cent) and try again.');
+      } else {
+        setState('claim failed — tap again', true);
+      }
+    }
+  }
+
+  btn?.addEventListener('click', claim);
+  window.addEventListener('pc:wallet-change', refresh);
+  refresh();
+</script>
+
+<style>
+  .hello {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 64px 20px 96px;
+    color: var(--color-ink);
+  }
+  .mono {
+    font-family: var(--font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-feature-settings: 'tnum' on;
+  }
+  .hello__link { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ---------- head ---------- */
+  .hello__head { margin-bottom: 32px; }
+  .hello__kicker {
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 12px;
+  }
+  .hello__title {
+    font-size: clamp(3rem, 8vw, 5rem);
+    line-height: 0.95;
+    margin: 0 0 16px;
+    color: var(--color-ink);
+    font-style: italic;
+  }
+  .hello__lede {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0;
+    color: var(--color-ink-soft);
+    max-width: 56ch;
+  }
+  .hello__lede strong { color: var(--color-ink); }
+
+  /* ---------- claim card ---------- */
+  .hello__claim { margin: 28px 0; }
+  .hello__section-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 12px;
+  }
+  .hello__card {
+    border: 1px solid var(--color-rule);
+    border-radius: 12px;
+    background: var(--color-card);
+    padding: 24px;
+  }
+  .hello__card--soon { border-style: dashed; }
+  .hello__card--live {
+    background: linear-gradient(140deg, var(--color-card) 0%, color-mix(in oklab, var(--color-warm) 4%, var(--color-card)) 100%);
+  }
+
+  .hello__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .hello__sym {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 4px;
+  }
+  .hello__name {
+    font-size: 1.2rem;
+    color: var(--color-ink);
+    margin: 0;
+    line-height: 1.2;
+  }
+  .hello__bag { text-align: right; }
+  .hello__bag-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 2px;
+  }
+  .hello__bag-value {
+    font-size: 1rem;
+    color: var(--color-ink);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hello__action { margin: 16px 0 6px; }
+  .hello__claim-btn {
+    appearance: none;
+    width: 100%;
+    padding: 16px 20px;
+    border: 1px solid var(--color-warm);
+    border-radius: 999px;
+    background: var(--color-warm);
+    color: var(--color-paper);
+    font-size: 0.85rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  }
+  .hello__claim-btn:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--color-warm) 88%, black);
+  }
+  .hello__claim-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--color-card);
+    color: var(--color-ink-soft);
+    border-color: var(--color-rule);
+  }
+  .hello__action-hint {
+    font-size: 0.75rem;
+    color: var(--color-ink-soft);
+    margin: 12px 0 0;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .hello__action-hint a {
+    color: var(--color-warm);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .hello__soon-line,
+  .hello__soon-meta {
+    font-size: 0.9rem;
+    color: var(--color-ink-soft);
+    line-height: 1.6;
+    margin: 0 0 12px;
+  }
+  .hello__soon-line:last-child,
+  .hello__soon-meta:last-child { margin-bottom: 0; }
+  .hello__soon-line code,
+  .hello__soon-meta code,
+  .hello__meta code {
+    background: var(--color-paper);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--color-rule);
+    font-size: 0.78rem;
+  }
+
+  .hello__meta {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-soft);
+    margin: 22px 0 0;
+    padding-top: 14px;
+    border-top: 1px dashed var(--color-rule);
+    text-transform: lowercase;
+  }
+  .hello__meta a { color: var(--color-warm); text-decoration: none; }
+  .hello__meta a:hover { text-decoration: underline; }
+
+  /* ---------- lore ---------- */
+  .hello__lore {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid var(--color-rule);
+  }
+  .hello__lore-line {
+    font-size: 0.95rem;
+    color: var(--color-ink-soft);
+    line-height: 1.65;
+    margin: 0 0 14px;
+    max-width: 58ch;
+  }
+  .hello__exits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 22px 0 16px;
+  }
+  .hello__exit {
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .hello__exit:hover {
+    color: var(--color-warm);
+    border-bottom-color: var(--color-warm);
+  }
+</style>

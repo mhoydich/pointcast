@@ -13,12 +13,13 @@
  */
 
 import { createPublicClient, http, type PublicClient } from 'viem';
-import { base, baseSepolia, mainnet } from 'viem/chains';
+import { base, baseSepolia, mainnet, polygon } from 'viem/chains';
 import { RPC_URLS } from './config';
 
 let _baseClient: PublicClient | null = null;
 let _baseSepoliaClient: PublicClient | null = null;
 let _ethMainnetClient: PublicClient | null = null;
+let _polygonClient: PublicClient | null = null;
 
 export function getBaseClient(): PublicClient {
   if (!_baseClient) {
@@ -49,6 +50,17 @@ export function getEthMainnetClient(): PublicClient {
     });
   }
   return _ethMainnetClient;
+}
+
+/** Polygon mainnet — home of HelloPolygon. Used by /hello to read faucet state. */
+export function getPolygonClient(): PublicClient {
+  if (!_polygonClient) {
+    _polygonClient = createPublicClient({
+      chain: polygon,
+      transport: http(RPC_URLS.polygon),
+    });
+  }
+  return _polygonClient;
 }
 
 /**

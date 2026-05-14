@@ -16,7 +16,7 @@
  */
 
 import type { Chain } from 'viem';
-import { base, baseSepolia, mainnet } from 'viem/chains';
+import { base, baseSepolia, mainnet, polygon } from 'viem/chains';
 
 // ---------------------------------------------------------------------------
 // Chains
@@ -35,6 +35,11 @@ export const BASE_SEPOLIA_CHAIN_ID = baseSepolia.id; // 84532
 export const ETH_MAINNET_CHAIN: Chain = mainnet;
 export const ETH_MAINNET_CHAIN_ID = mainnet.id; // 1
 
+/** Polygon mainnet — home of HelloPolygon (the L2 cousin of the L1 HELLO). */
+export const POLYGON_CHAIN: Chain = polygon;
+export const POLYGON_CHAIN_ID = polygon.id; // 137
+export const POLYGON_CHAIN_HEX = `0x${polygon.id.toString(16)}`; // 0x89
+
 // ---------------------------------------------------------------------------
 // Public RPC endpoints
 // ---------------------------------------------------------------------------
@@ -47,6 +52,7 @@ export const RPC_URLS = {
   base: import.meta.env.PUBLIC_BASE_RPC_URL ?? 'https://mainnet.base.org',
   baseSepolia: import.meta.env.PUBLIC_BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org',
   ethMainnet: import.meta.env.PUBLIC_ETH_RPC_URL ?? 'https://eth.llamarpc.com',
+  polygon: import.meta.env.PUBLIC_POLYGON_RPC_URL ?? 'https://polygon-rpc.com',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -78,6 +84,26 @@ export const VISIT_NOUNS_TEZOS = 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh' as const
  * address here and the per-block "Attest on Base" button goes live.
  */
 export const WIRE_ATTESTATIONS_BASE: `0x${string}` | null = null;
+
+/**
+ * HELLO on Polygon — ERC-20 mirror of the 2018-era HELLO token on
+ * Ethereum L1 (ancestor: 0x1Fda96405DD8Ee22631aBCf4f61282eaE802012f),
+ * with a built-in 1-HELLO-per-claim-per-24h faucet.
+ *
+ * NULL until Mike originates on Polygon mainnet. Source at
+ * contracts/polygon/hello_polygon.sol. After origination, paste the
+ * deployed address here and the /hello page activates.
+ *
+ * Mint instructions: contracts/polygon/README.md
+ * Review brief: docs/briefs/2026-05-08-codex-hello-polygon.md
+ */
+export const HELLO_POLYGON: `0x${string}` | null = null;
+
+/**
+ * The L1 ancestor of HELLO — informational, used by the /hello page
+ * footer to link the cousins. Always the same address; never null.
+ */
+export const HELLO_L1_ANCESTOR = '0x1Fda96405DD8Ee22631aBCf4f61282eaE802012f' as const;
 
 /**
  * MIST coin — the room itself coined on Zora.
@@ -126,7 +152,7 @@ export type AppCard = {
   blurb: string;
   kind: 'pointcast' | 'dapp' | 'window';
   href: string;
-  chain?: 'tezos' | 'ethereum' | 'base' | 'farcaster' | 'multi';
+  chain?: 'tezos' | 'ethereum' | 'base' | 'polygon' | 'farcaster' | 'multi';
   status?: 'live' | 'soon';
 };
 
@@ -171,6 +197,16 @@ export const APP_CATALOG: AppCard[] = [
     href: 'https://splits.org',
     chain: 'base',
     status: 'live',
+  },
+  {
+    id: 'hello-faucet',
+    category: 'money-together',
+    title: 'HELLO Faucet',
+    blurb: 'Claim one HELLO on Polygon. The L2 cousin of Mike’s 2018 L1 token.',
+    kind: 'pointcast',
+    href: '/hello',
+    chain: 'polygon',
+    status: 'soon',
   },
 
   // ---- New Societies ----
