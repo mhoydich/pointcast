@@ -1,7 +1,7 @@
 /**
  * Ethereum surface — viem clients.
  *
- * Public read clients for Base mainnet, Base Sepolia, and Ethereum L1. Used by:
+ * Public read clients for Base mainnet, Base Sepolia, Polygon, and Ethereum L1. Used by:
  *   - /mist read panels (balance, ENS, NFT view)
  *   - The Nouns DAO live-auction "Window onto Ethereum" tile
  *   - The Cloudflare Worker that verifies SIWE signatures (PR #2)
@@ -13,12 +13,13 @@
  */
 
 import { createPublicClient, http, type PublicClient } from 'viem';
-import { base, baseSepolia, mainnet } from 'viem/chains';
+import { base, baseSepolia, mainnet, polygon } from 'viem/chains';
 import { RPC_URLS } from './config';
 
 let _baseClient: PublicClient | null = null;
 let _baseSepoliaClient: PublicClient | null = null;
 let _ethMainnetClient: PublicClient | null = null;
+let _polygonClient: PublicClient | null = null;
 
 export function getBaseClient(): PublicClient {
   if (!_baseClient) {
@@ -38,6 +39,16 @@ export function getBaseSepoliaClient(): PublicClient {
     });
   }
   return _baseSepoliaClient;
+}
+
+export function getPolygonClient(): PublicClient {
+  if (!_polygonClient) {
+    _polygonClient = createPublicClient({
+      chain: polygon,
+      transport: http(RPC_URLS.polygon),
+    });
+  }
+  return _polygonClient;
 }
 
 /** Ethereum L1 — used only for ENS resolution. ENS resolvers don't bridge. */

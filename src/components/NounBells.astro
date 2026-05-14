@@ -6,7 +6,9 @@
  * v2: octave and chord filters.
  * v3: eight-rung phrase rail with replay.
  * v4: room-signal status and /api/sounds broadcast on every hit.
+ * v5: Polygon Bell collectible unlock after five unique rungs.
  */
+import { POLYGON_BELL_TOKEN } from '../lib/polygon-bell-token';
 
 const count = 100;
 const totalNouns = 1200;
@@ -33,6 +35,7 @@ const filters = [
   { id: 'chord', label: 'Chord', note: '2-note' },
 ];
 
+const token = POLYGON_BELL_TOKEN;
 const phraseSlots = Array.from({ length: 8 }, (_, i) => i + 1);
 
 function hashVoice(nounId: number, seed: number): number {
@@ -87,6 +90,7 @@ for (let i = 0; i < count; i++) {
     <span><strong>v2</strong> octave filters</span>
     <span><strong>v3</strong> phrase replay</span>
     <span><strong>v4</strong> room signal</span>
+    <span><strong>v5</strong> Polygon token</span>
   </div>
 
   <div class="noun-bell-ladder__controls" aria-label="Nouns bell ladder controls">
@@ -120,6 +124,27 @@ for (let i = 0; i < count; i++) {
       ))}
     </div>
   </div>
+
+  <aside
+    class="noun-bell-ladder__token"
+    aria-labelledby="polygon-bell-title"
+    data-polygon-bell
+    data-polygon-bell-unlock={token.unlockRings}
+  >
+    <div class="noun-bell-token__art">
+      <img src={token.imagePath} alt="" width="112" height="112" loading="lazy" />
+    </div>
+    <div class="noun-bell-token__copy">
+      <p class="noun-bell-token__kicker">v5 collectible · {token.chain} · chain {token.chainId}</p>
+      <h3 id="polygon-bell-title">{token.name}</h3>
+      <p>{token.unlockRings} unique rungs unlock a local receipt for the Polygon-ready bell token.</p>
+    </div>
+    <div class="noun-bell-token__actions">
+      <button type="button" class="noun-bell-action" data-polygon-bell-collect disabled>Collect receipt</button>
+      <a class="noun-bell-action" href={token.pageHref}>Token page</a>
+      <small data-polygon-bell-state>{`0/${token.unlockRings} rungs`}</small>
+    </div>
+  </aside>
 
   <p class="noun-bell-ladder__status" data-bell-status aria-live="polite">
     v4 room signal ready. Tap a rung to ring the lobby.
@@ -183,6 +208,10 @@ for (let i = 0; i < count; i++) {
 
   const root = document.getElementById('noun-bells');
   const phrase = [];
+  const tokenRungs = new Set();
+  const tokenStorageKey = 'pc:polygon-bell:001';
+  const tokenLadderKey = 'pc:polygon-bell:ladder-rungs';
+  const tokenUnlockRings = Number(root?.querySelector('[data-polygon-bell]')?.getAttribute('data-polygon-bell-unlock') || 5);
   let activeFilter = 'all';
   let replaying = false;
 
@@ -220,6 +249,77 @@ for (let i = 0; i < count; i++) {
     renderPhrase();
   }
 
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function shortAddress(address) {
+    return address && address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address || '';
+  }
+
+  function saveTokenRungs() {
+    localStorage.setItem(tokenLadderKey, JSON.stringify([...tokenRungs]));
+  }
+
+  function renderTokenState() {
+    const state = root?.querySelector('[data-polygon-bell-state]');
+    const collect = root?.querySelector('[data-polygon-bell-collect]');
+    const savedReceipt = readJson(tokenStorageKey, null);
+    if (savedReceipt) {
+      if (state) state.textContent = `collected ${savedReceipt.receiptId} · ${shortAddress(savedReceipt.address) || 'local visitor'}`;
+      collect?.setAttribute('disabled', 'true');
+      return;
+    }
+
+    const count = Math.min(tokenRungs.size, tokenUnlockRings);
+    if (state) state.textContent = `${count}/${tokenUnlockRings} rungs`;
+    collect?.toggleAttribute('disabled', count < tokenUnlockRings);
+  }
+
+  function hydrateTokenRungs() {
+    const saved = readJson(tokenLadderKey, []);
+    if (Array.isArray(saved)) {
+      saved.forEach((value) => tokenRungs.add(String(value)));
+    }
+    renderTokenState();
+  }
+
+  function collectPolygonBell() {
+    if (tokenRungs.size < tokenUnlockRings) {
+      setStatus(`v5 Polygon Bell: ring ${tokenUnlockRings - tokenRungs.size} more unique rungs.`);
+      renderTokenState();
+      return;
+    }
+
+    const previous = readJson(tokenStorageKey, null);
+    if (previous) {
+      renderTokenState();
+      setStatus(`v5 Polygon Bell already collected: ${previous.receiptId}.`);
+      return;
+    }
+
+    let wallet = null;
+    try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+    const receipt = {
+      receiptId: `pcbell-${Date.now().toString(36)}`,
+      tokenId: '1',
+      chain: 'polygon',
+      chainId: 137,
+      address: wallet?.chain === 'eth' ? wallet.address : null,
+      rungs: [...tokenRungs].slice(-8),
+      phrase: phrase.slice(-8),
+      collectedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(tokenStorageKey, JSON.stringify(receipt));
+    renderTokenState();
+    setStatus(`v5 Polygon Bell collected: ${receipt.receiptId}.`);
+  }
+
   function ring(btn, shouldAddToPhrase = true) {
     const nounId = Number(btn.dataset.bellNoun ?? 0);
     const index = Number(btn.dataset.bellIndex ?? 0);
@@ -230,6 +330,9 @@ for (let i = 0; i < count; i++) {
     broadcastSound('profile', nounId);
     pulse(btn);
     if (shouldAddToPhrase) addToPhrase({ index, nounId, note, band, shape });
+    tokenRungs.add(String(index));
+    saveTokenRungs();
+    renderTokenState();
     setStatus(`v4 room signal: rung ${String(index).padStart(3, '0')} rang Noun #${nounId} at ${note}.`);
   }
 
@@ -297,10 +400,16 @@ for (let i = 0; i < count; i++) {
       phrase.length = 0;
       renderPhrase();
       setStatus('v3 phrase rail cleared.');
+      return;
+    }
+
+    if (target.closest('[data-polygon-bell-collect]')) {
+      collectPolygonBell();
     }
   });
 
   renderPhrase();
+  hydrateTokenRungs();
 </script>
 
 <style>
@@ -387,7 +496,7 @@ for (let i = 0; i < count; i++) {
 
   .noun-bell-ladder__versions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     border-bottom: 2px solid #1a1208;
     background: #1a1208;
     gap: 1px;
@@ -489,6 +598,97 @@ for (let i = 0; i < count; i++) {
   }
 
   .noun-bell-ladder__phrase-slot strong {
+    overflow-wrap: anywhere;
+  }
+
+  .noun-bell-ladder__token {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(180px, 0.24fr);
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 2px solid #1a1208;
+    background:
+      linear-gradient(135deg, rgba(130, 71, 229, 0.12), transparent 46%),
+      linear-gradient(90deg, rgba(15, 110, 86, 0.12), transparent),
+      #fffdf8;
+  }
+
+  .noun-bell-token__art {
+    display: grid;
+    place-items: center;
+    width: 86px;
+    aspect-ratio: 1;
+    border: 2px solid #1a1208;
+    background: #fffaf0;
+    box-shadow: 4px 4px 0 rgba(26, 18, 8, 0.12);
+  }
+
+  .noun-bell-token__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .noun-bell-token__copy {
+    min-width: 0;
+  }
+
+  .noun-bell-token__kicker,
+  .noun-bell-token__copy h3,
+  .noun-bell-token__copy p,
+  .noun-bell-token__actions small {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .noun-bell-token__kicker {
+    margin: 0 0 5px;
+    color: #8247e5;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .noun-bell-token__copy h3 {
+    margin: 0 0 6px;
+    color: #1a1208;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+  }
+
+  .noun-bell-token__copy p {
+    margin: 0;
+    color: #5f5e5a;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .noun-bell-token__actions {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .noun-bell-token__actions .noun-bell-action {
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .noun-bell-token__actions .noun-bell-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.54;
+  }
+
+  .noun-bell-token__actions small {
+    display: block;
+    min-height: 26px;
+    padding: 6px;
+    border: 1px solid rgba(26, 18, 8, 0.2);
+    background: #fffaf0;
+    color: #5f5e5a;
+    font-size: 9px;
+    line-height: 1.35;
     overflow-wrap: anywhere;
   }
 
@@ -725,7 +925,8 @@ for (let i = 0; i < count; i++) {
 
     .noun-bell-ladder__head,
     .noun-bell-ladder__stage,
-    .noun-bell-ladder__controls {
+    .noun-bell-ladder__controls,
+    .noun-bell-ladder__token {
       grid-template-columns: 1fr;
     }
 

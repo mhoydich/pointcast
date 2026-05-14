@@ -16,7 +16,7 @@
  */
 
 import type { Chain } from 'viem';
-import { base, baseSepolia, mainnet } from 'viem/chains';
+import { base, baseSepolia, mainnet, polygon } from 'viem/chains';
 
 // ---------------------------------------------------------------------------
 // Chains
@@ -35,6 +35,11 @@ export const BASE_SEPOLIA_CHAIN_ID = baseSepolia.id; // 84532
 export const ETH_MAINNET_CHAIN: Chain = mainnet;
 export const ETH_MAINNET_CHAIN_ID = mainnet.id; // 1
 
+/** Polygon PoS — first bell collectible target network. */
+export const POLYGON_CHAIN: Chain = polygon;
+export const POLYGON_CHAIN_ID = polygon.id; // 137
+export const POLYGON_CHAIN_HEX = `0x${polygon.id.toString(16)}`; // 0x89
+
 // ---------------------------------------------------------------------------
 // Public RPC endpoints
 // ---------------------------------------------------------------------------
@@ -47,6 +52,7 @@ export const RPC_URLS = {
   base: import.meta.env.PUBLIC_BASE_RPC_URL ?? 'https://mainnet.base.org',
   baseSepolia: import.meta.env.PUBLIC_BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org',
   ethMainnet: import.meta.env.PUBLIC_ETH_RPC_URL ?? 'https://eth.llamarpc.com',
+  polygon: import.meta.env.PUBLIC_POLYGON_RPC_URL ?? 'https://polygon-rpc.com',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -100,7 +106,7 @@ export type AppCard = {
   blurb: string;
   kind: 'pointcast' | 'dapp' | 'window';
   href: string;
-  chain?: 'tezos' | 'ethereum' | 'base' | 'farcaster' | 'multi';
+  chain?: 'tezos' | 'ethereum' | 'base' | 'polygon' | 'farcaster' | 'multi';
   status?: 'live' | 'soon';
 };
 
@@ -135,6 +141,16 @@ export const APP_CATALOG: AppCard[] = [
     href: 'https://zora.co',
     chain: 'base',
     status: 'live',
+  },
+  {
+    id: 'polygon-bell',
+    category: 'money-together',
+    title: 'Polygon Bell',
+    blurb: 'A five-rung lobby collectible with ERC-1155-ready metadata on Polygon.',
+    kind: 'pointcast',
+    href: '/polygon-bell',
+    chain: 'polygon',
+    status: 'soon',
   },
   {
     id: 'splits-base',

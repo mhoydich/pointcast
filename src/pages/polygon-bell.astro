@@ -1,0 +1,471 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import { POLYGON_BELL_ATTRIBUTES, POLYGON_BELL_TOKEN } from '../lib/polygon-bell-token';
+
+const token = POLYGON_BELL_TOKEN;
+const contractLabel = token.contract ?? 'pending contract';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VisualArtwork',
+  name: token.name,
+  artform: 'Collectible token',
+  image: `https://pointcast.xyz${token.imagePath}`,
+  url: `https://pointcast.xyz${token.pageHref}`,
+  creator: {
+    '@type': 'Organization',
+    name: 'PointCast',
+  },
+};
+---
+
+<BaseLayout
+  title={`${token.shortName} · PointCast`}
+  description="PointCast Polygon Bell #001: a collectible earned from the lobby Nouns Bell Ladder, with ERC-1155-ready metadata for Polygon."
+  image={token.imagePath}
+>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+  <main class="polygon-bell" data-token-id={token.tokenId} data-unlock-rings={token.unlockRings}>
+    <header class="topbar">
+      <a class="brand" href="/">PointCast</a>
+      <nav class="nav mono" aria-label="Polygon bell">
+        <a href="/lobby#noun-bells">Bell ladder</a>
+        <a href={token.metadataHref}>Metadata</a>
+        <a href="/polygon-bell.json">JSON</a>
+        <a href="/mist">Mist</a>
+      </nav>
+      <WalletConnect />
+    </header>
+
+    <section class="hero" aria-labelledby="polygon-bell-title">
+      <figure class="art">
+        <img src={token.imagePath} alt={token.name} loading="eager" />
+      </figure>
+      <div class="copy">
+        <p class="kicker mono">{token.symbol} · {token.chain} · chain {token.chainId}</p>
+        <h1 id="polygon-bell-title">{token.shortName}</h1>
+        <p class="dek">
+          A first Polygon-ready object for the lobby: five unique bell rungs become
+          one local collectible receipt today, and the same metadata is ready for
+          an ERC-1155 contract when the mint lane opens.
+        </p>
+        <div class="actions mono">
+          <a class="primary" href="/lobby#noun-bells">Ring ladder</a>
+          <button type="button" id="reserve-bell">Collect receipt</button>
+          <a href={token.metadataHref}>Metadata</a>
+          <a href="/polygon-bell.json">Agent JSON</a>
+        </div>
+        <output id="bell-output" class="output mono" aria-live="polite">receipt waits for five rung marks</output>
+      </div>
+    </section>
+
+    <section class="details" aria-label="Token details">
+      <article class="panel">
+        <p class="kicker mono">Token</p>
+        <dl class="facts">
+          <div><dt>Name</dt><dd>{token.name}</dd></div>
+          <div><dt>Symbol</dt><dd>{token.symbol}</dd></div>
+          <div><dt>Token id</dt><dd>#{token.tokenId}</dd></div>
+          <div><dt>Edition cap</dt><dd>{token.editionCap}</dd></div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <p class="kicker mono">Network</p>
+        <dl class="facts">
+          <div><dt>Chain</dt><dd>{token.chain}</dd></div>
+          <div><dt>Chain id</dt><dd>{token.chainId} / {token.chainHex}</dd></div>
+          <div><dt>Standard</dt><dd>{token.standard}</dd></div>
+          <div><dt>Contract</dt><dd>{contractLabel}</dd></div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <p class="kicker mono">Ritual</p>
+        <dl class="facts">
+          <div><dt>Unlock</dt><dd>{token.unlockRings} unique rungs</dd></div>
+          <div><dt>Source</dt><dd><a href={token.sourceHref}>/lobby#noun-bells</a></dd></div>
+          <div><dt>Status</dt><dd>{token.status}</dd></div>
+          <div><dt>Lead</dt><dd>{token.projectLead}</dd></div>
+        </dl>
+      </article>
+    </section>
+
+    <section class="attributes panel" aria-labelledby="attributes-title">
+      <div>
+        <p class="kicker mono">Metadata</p>
+        <h2 id="attributes-title">Polygon-ready traits</h2>
+      </div>
+      <div class="trait-grid">
+        {POLYGON_BELL_ATTRIBUTES.map((attr) => (
+          <div class="trait">
+            <span>{attr.trait_type}</span>
+            <strong>{attr.value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  </main>
+</BaseLayout>
+
+<script>
+  const root = document.querySelector('.polygon-bell');
+  const output = document.getElementById('bell-output');
+  const reserveButton = document.getElementById('reserve-bell');
+  const unlockRings = Number(root?.getAttribute('data-unlock-rings') || 5);
+  const storageKey = 'pc:polygon-bell:001';
+  const ladderKey = 'pc:polygon-bell:ladder-rungs';
+
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeOutput(message) {
+    if (output) output.textContent = message;
+  }
+
+  function shortAddress(address) {
+    return address && address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address || '';
+  }
+
+  function renderReceipt() {
+    const receipt = readJson(storageKey, null);
+    if (receipt) {
+      writeOutput(`collected ${receipt.receiptId} · ${shortAddress(receipt.address) || 'local visitor'}`);
+      reserveButton?.setAttribute('disabled', 'true');
+      return;
+    }
+
+    const rungs = readJson(ladderKey, []);
+    const count = Array.isArray(rungs) ? new Set(rungs.map(String)).size : 0;
+    const remaining = Math.max(0, unlockRings - count);
+    writeOutput(remaining === 0 ? 'ready to collect Polygon Bell receipt' : `${count}/${unlockRings} rung marks`);
+    reserveButton?.toggleAttribute('disabled', remaining > 0);
+  }
+
+  reserveButton?.addEventListener('click', () => {
+    const rungs = readJson(ladderKey, []);
+    const uniqueRungs = [...new Set(Array.isArray(rungs) ? rungs.map(String) : [])];
+    if (uniqueRungs.length < unlockRings) {
+      renderReceipt();
+      return;
+    }
+
+    let wallet = null;
+    try { wallet = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); } catch {}
+    const receipt = {
+      receiptId: `pcbell-${Date.now().toString(36)}`,
+      tokenId: '1',
+      chain: 'polygon',
+      chainId: 137,
+      address: wallet?.chain === 'eth' ? wallet.address : null,
+      rungs: uniqueRungs.slice(-8),
+      collectedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(storageKey, JSON.stringify(receipt));
+    renderReceipt();
+  });
+
+  renderReceipt();
+</script>
+
+<style>
+  .polygon-bell {
+    --ink: #171717;
+    --paper: #fff8e6;
+    --muted: #676057;
+    --rule: rgba(23, 23, 23, 0.18);
+    --green: #0f6e56;
+    --purple: #8247e5;
+    --gold: #ffd24a;
+    min-height: 100vh;
+    padding: 14px 18px 96px;
+    color: var(--ink);
+    background:
+      linear-gradient(90deg, rgba(23, 23, 23, 0.04) 1px, transparent 1px),
+      linear-gradient(180deg, #fffdf8, var(--paper));
+    background-size: 34px 34px, auto;
+  }
+
+  .mono {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .topbar,
+  .hero,
+  .details,
+  .attributes {
+    max-width: 1180px;
+    margin-inline: auto;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .brand {
+    color: var(--ink);
+    font: 800 15px/1 var(--font-mono, monospace);
+    letter-spacing: 0.26em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-left: auto;
+    font-size: 10px;
+  }
+
+  .nav a {
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr);
+    gap: 18px;
+    padding: 32px 0 18px;
+  }
+
+  .art,
+  .copy,
+  .panel {
+    border: 2px solid var(--ink);
+    background: rgba(255, 253, 248, 0.95);
+    box-shadow: 8px 8px 0 rgba(23, 23, 23, 0.1);
+  }
+
+  .art {
+    display: grid;
+    place-items: center;
+    margin: 0;
+    aspect-ratio: 1;
+    padding: clamp(16px, 4vw, 38px);
+    background:
+      linear-gradient(135deg, rgba(130, 71, 229, 0.13), rgba(15, 110, 86, 0.12) 54%, #f4ecd8);
+  }
+
+  .art img {
+    width: 100%;
+    height: 100%;
+    border: 2px solid rgba(23, 23, 23, 0.58);
+    object-fit: contain;
+    box-shadow: 9px 9px 0 rgba(23, 23, 23, 0.16);
+    background: #fffdf8;
+  }
+
+  .copy {
+    display: grid;
+    align-content: end;
+    min-height: 420px;
+    padding: clamp(22px, 5vw, 54px);
+    background:
+      radial-gradient(circle at 86% 18%, rgba(130, 71, 229, 0.16) 0 12%, transparent 12.5%),
+      linear-gradient(135deg, rgba(15, 110, 86, 0.12), transparent 48%),
+      #fffdf8;
+  }
+
+  .kicker {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(58px, 11vw, 132px);
+    line-height: 0.86;
+    letter-spacing: 0;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: 0.96;
+    letter-spacing: 0;
+  }
+
+  .dek {
+    max-width: 760px;
+    margin: 18px 0 0;
+    color: #332f2b;
+    font-size: clamp(16px, 2vw, 21px);
+    line-height: 1.36;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 22px;
+    font-size: 10px;
+  }
+
+  .actions a,
+  .actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    padding: 0 12px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .actions .primary,
+  .actions button {
+    background: var(--ink);
+    color: #fff;
+  }
+
+  .actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+  }
+
+  .output {
+    display: block;
+    min-height: 42px;
+    margin-top: 10px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    color: var(--muted);
+    font-size: 10px;
+    padding: 11px 10px;
+  }
+
+  .details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  .panel {
+    min-width: 0;
+    padding: 18px;
+  }
+
+  .facts {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .facts div {
+    display: grid;
+    gap: 3px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .facts dt {
+    color: var(--muted);
+    font: 700 10px/1 var(--font-mono, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .facts dd {
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .facts a {
+    color: var(--green);
+  }
+
+  .attributes {
+    display: grid;
+    grid-template-columns: minmax(0, 0.34fr) minmax(0, 1fr);
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  .trait-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .trait {
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 12px;
+  }
+
+  .trait span {
+    color: var(--muted);
+    font: 700 10px/1 var(--font-mono, monospace);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .trait strong {
+    color: var(--ink);
+    font-size: 15px;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 920px) {
+    .topbar {
+      flex-wrap: wrap;
+      align-items: start;
+    }
+
+    .nav {
+      order: 3;
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .hero,
+    .details,
+    .attributes {
+      grid-template-columns: 1fr;
+    }
+
+    .copy {
+      min-height: auto;
+    }
+
+    .actions,
+    .trait-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .actions,
+    .trait-grid {
+      grid-template-columns: 1fr;
+    }
+
+    h1 {
+      font-size: clamp(48px, 17vw, 82px);
+    }
+  }
+</style>

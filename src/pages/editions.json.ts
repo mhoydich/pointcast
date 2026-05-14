@@ -9,6 +9,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import contracts from '../data/contracts.json';
 import market from '../data/market.json';
+import { POLYGON_BELL_TOKEN, polygonBellAbsoluteUrl } from '../lib/polygon-bell-token';
 
 export const GET: APIRoute = async () => {
   const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
@@ -55,7 +56,7 @@ export const GET: APIRoute = async () => {
       liveMinted: visitNounsSupply?.totalMinted ?? 0,
       marketListed: listedTokens.length,
       faucetChannels: faucetBlocks.length,
-      plannedIncoming: 2,
+      plannedIncoming: 3,
     },
     lanes: {
       onChainLive: {
@@ -121,6 +122,19 @@ export const GET: APIRoute = async () => {
           source: 'contracts/v2/prize_cast.py',
           type: 'No-loss prize-linked savings (PoolTogether-flavored)',
           drawDay: 'Sunday 18:00 UTC',
+        },
+        PolygonBell: {
+          contract: POLYGON_BELL_TOKEN.contract,
+          status: POLYGON_BELL_TOKEN.status,
+          type: POLYGON_BELL_TOKEN.standard,
+          chain: POLYGON_BELL_TOKEN.chain,
+          chainId: POLYGON_BELL_TOKEN.chainId,
+          tokenId: POLYGON_BELL_TOKEN.tokenId,
+          editionCap: POLYGON_BELL_TOKEN.editionCap,
+          unlockRings: POLYGON_BELL_TOKEN.unlockRings,
+          source: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.sourceHref),
+          metadata: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.metadataHref),
+          page: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.pageHref),
         },
       },
       mintBlocks: mintBlocks.map((b) => ({
