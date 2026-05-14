@@ -144,6 +144,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'live-feed-nfts',
+    name: 'Live Feed NFTs',
+    kicker: 'LIVE DATA · DYNAMIC CARDS · METADATA',
+    description: 'A mint-prep desk for data-driven PointCast cards powered by weather, sea state, competition, and composite feed snapshots.',
+    url: 'https://pointcast.xyz/live-feed-nfts',
+    path: '/live-feed-nfts',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.MINT',
+    kind: 'pointcast',
+  },
+  {
     slug: 'cabinet',
     name: 'The Cabinet',
     kicker: 'LOCAL SHELF · COLLECTIBLES · RECEIPTS',

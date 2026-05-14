@@ -12,7 +12,7 @@
  * file is just the data plumbing.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 const RAW_PAGES = import.meta.glob('../pages/*.astro', {
@@ -38,9 +38,10 @@ export interface Feature {
  */
 function readMtimes(): Record<string, number> {
   try {
-    const out = execSync(
-      'git log --name-only --pretty=format:__COMMIT__%ct -- src/pages/*.astro',
-      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    const out = execFileSync(
+      'git',
+      ['log', '--name-only', '--pretty=format:__COMMIT__%ct', '--', 'src/pages'],
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 8_000 },
     );
     const map: Record<string, number> = {};
     let currentTs = 0;
