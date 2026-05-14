@@ -249,11 +249,11 @@ const description = `Next-version PointCast home. A woodblock view of the broadc
           {/* flare stack */}
           <rect x="107" y="108" width="3" height="16"/>
         </g>
-        {/* flare glow — bigger and warmer at night */}
+        {/* flare glow — bigger and warmer at night, gently pulsing */}
         {isNight && (
-          <circle cx="108.5" cy="104" r="10" fill={palette.flareGlow} opacity="0.55"/>
+          <circle class="flare-halo" cx="108.5" cy="104" r="10" fill={palette.flareGlow} opacity="0.55"/>
         )}
-        <circle cx="108.5" cy="104" r={isNight ? 6 : 4} fill={palette.flare}/>
+        <circle class="flare-core" cx="108.5" cy="104" r={isNight ? 6 : 4} fill={palette.flare}/>
         {/* a few yellow refinery service lights at night */}
         {isNight && (
           <g fill="#ffd28a">
@@ -315,29 +315,31 @@ const description = `Next-version PointCast home. A woodblock view of the broadc
         {/* beach band — sand */}
         <rect x="0" y="292" width="1200" height="40" fill={palette.sand}/>
 
-        {/* ocean — base + wave crests */}
+        {/* ocean — base + wave crests. Each <g> breathes with a slow
+           vertical translate; see .wave CSS below. Stagger keeps the layers
+           from drifting in lockstep. Disabled by prefers-reduced-motion. */}
         <rect x="0" y="332" width="1200" height="268" fill={palette.sea}/>
-        <g fill="none" stroke={palette.waves[0]} stroke-width="2" stroke-linecap="round">
+        <g class="wave wave--1" fill="none" stroke={palette.waves[0]} stroke-width="2" stroke-linecap="round">
           {Array.from({ length: 40 }).map((_, i) => (
             <path d={`M${i * 32 - 12} 360 q 8 -6 16 0 q 8 6 16 0`} />
           ))}
         </g>
-        <g fill="none" stroke={palette.waves[1]} stroke-width="2" stroke-linecap="round">
+        <g class="wave wave--2" fill="none" stroke={palette.waves[1]} stroke-width="2" stroke-linecap="round">
           {Array.from({ length: 40 }).map((_, i) => (
             <path d={`M${i * 32 + 6} 392 q 8 -6 16 0 q 8 6 16 0`} />
           ))}
         </g>
-        <g fill="none" stroke={palette.waves[2]} stroke-width="2" stroke-linecap="round">
+        <g class="wave wave--3" fill="none" stroke={palette.waves[2]} stroke-width="2" stroke-linecap="round">
           {Array.from({ length: 40 }).map((_, i) => (
             <path d={`M${i * 32 - 4} 426 q 8 -5 16 0 q 8 5 16 0`} />
           ))}
         </g>
-        <g fill="none" stroke={palette.waves[3]} stroke-width="2" stroke-linecap="round">
+        <g class="wave wave--4" fill="none" stroke={palette.waves[3]} stroke-width="2" stroke-linecap="round">
           {Array.from({ length: 40 }).map((_, i) => (
             <path d={`M${i * 32 + 8} 462 q 8 -5 16 0 q 8 5 16 0`} />
           ))}
         </g>
-        <g fill="none" stroke={palette.waves[4]} stroke-width="2" stroke-linecap="round">
+        <g class="wave wave--5" fill="none" stroke={palette.waves[4]} stroke-width="2" stroke-linecap="round">
           {Array.from({ length: 40 }).map((_, i) => (
             <path d={`M${i * 32 - 6} 500 q 8 -5 16 0 q 8 5 16 0`} />
           ))}
@@ -500,6 +502,48 @@ const description = `Next-version PointCast home. A woodblock view of the broadc
     display: block;
     width: 100%;
     height: 100%;
+  }
+
+  /* ─── Wave breathing ────────────────────────────────────────────────
+     Each of the five wave-crest layers translates vertically a few pixels
+     on a slow sine. Different durations + phase offsets keep them out of
+     lockstep so the ocean feels alive, not "scrolling". Top layers move
+     more (visible) than deep layers. Disabled by reduced-motion. */
+  .wave {
+    will-change: transform;
+    transform-origin: center;
+  }
+  .wave--1 { animation: pc-wave 9.5s ease-in-out infinite; }
+  .wave--2 { animation: pc-wave 11s ease-in-out -2.4s infinite; }
+  .wave--3 { animation: pc-wave 13s ease-in-out -5.1s infinite; }
+  .wave--4 { animation: pc-wave-deep 14s ease-in-out -7.3s infinite; }
+  .wave--5 { animation: pc-wave-deep 16s ease-in-out -3.8s infinite; }
+  @keyframes pc-wave {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(3.5px); }
+  }
+  @keyframes pc-wave-deep {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(1.8px); }
+  }
+  /* Refinery flare — gentle flicker, brighter at night. The opacity
+     swing is small (~0.85→1) so it reads as "still burning" not animated.
+     Targeted by the SVG class added below. */
+  .flare-core { animation: pc-flare 3.8s ease-in-out infinite; }
+  .flare-halo { animation: pc-flare-halo 5.2s ease-in-out infinite; }
+  @keyframes pc-flare {
+    0%, 100% { opacity: 0.92; }
+    50%      { opacity: 1; }
+  }
+  @keyframes pc-flare-halo {
+    0%, 100% { opacity: 0.4; transform: scale(1); transform-origin: 108.5px 104px; }
+    50%      { opacity: 0.65; transform: scale(1.15); transform-origin: 108.5px 104px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wave, .wave--1, .wave--2, .wave--3, .wave--4, .wave--5,
+    .flare-core, .flare-halo {
+      animation: none !important;
+    }
   }
 
   .pins {
