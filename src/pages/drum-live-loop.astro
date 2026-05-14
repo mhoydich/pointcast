@@ -1,0 +1,545 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Live Loop — the room's emergent rhythm"
+  description="An eight-second loop in the middle of the page, shared across everyone. Every tap on /drum-live or /drum-live-pulse quantizes into a step and plays back as a rhythm. The pattern emerges from what people are actually doing."
+  image="/images/og-drum.png"
+>
+  <main class="dll" id="dll" data-built={built}>
+    <header class="dll__hud">
+      <span class="dll__live-chip">
+        <span class="dll__live-dot"></span>
+        <span class="dll__live-text">LIVE LOOP · 8 SEC</span>
+      </span>
+      <span class="dll__here" id="dll-here">listening for the room…</span>
+    </header>
+
+    <section class="dll__grid-wrap">
+      <div class="dll__grid" id="dll-grid"></div>
+      <div class="dll__legend">
+        <span class="dll__legend-row"><span class="dll__legend-swatch dll__legend-swatch--low"></span>LOW</span>
+        <span class="dll__legend-row"><span class="dll__legend-swatch dll__legend-swatch--mid"></span>MID</span>
+        <span class="dll__legend-row"><span class="dll__legend-swatch dll__legend-swatch--high"></span>HIGH</span>
+        <span class="dll__legend-row"><span class="dll__legend-swatch dll__legend-swatch--bell"></span>BELL</span>
+      </div>
+    </section>
+
+    <section class="dll__pads">
+      <button class="dll__pad dll__pad--low" data-seed="20" type="button">LOW</button>
+      <button class="dll__pad dll__pad--mid" data-seed="42" type="button">MID</button>
+      <button class="dll__pad dll__pad--high" data-seed="101" type="button">HIGH</button>
+      <button class="dll__pad dll__pad--bell" data-seed="333" type="button">BELL</button>
+    </section>
+
+    <section class="dll__about">
+      <h2 class="dll__about-h">How the loop emerges</h2>
+      <p>The loop is eight seconds long. Every tap on this page or on <a href="/drum-live">/drum-live</a> or <a href="/drum-live-pulse">/drum-live-pulse</a> arrives with a server timestamp. The page computes <code>step = floor((timestamp mod 8000) / 500)</code> — that quantizes each tap into one of sixteen 500ms slots in a wall-clock-aligned loop. Because every client computes the same step from the same timestamp, the loop is implicitly synced across everyone watching.</p>
+      <p>For each step, the page counts taps per voice over the last 30 seconds. The brighter a cell, the more people landed on that step in the last half minute. The playhead walks the grid at 500ms/step. When it crosses a lit cell, it plays that voice at volume proportional to <code>log(count + 1)</code>, so the loud cells are emphatic but the quiet ones aren't drowned.</p>
+      <p>Tap a pad at the bottom to contribute to the loop yourself — your tap broadcasts on the same <code>/api/sounds</code> bus the live family runs on. The cells you contribute to get a flame outline.</p>
+      <p>The pattern decays naturally. If everyone walks away the loop dies in 30 seconds. If somebody keeps tapping the same step, it stays loud.</p>
+      <p>Sister surfaces: <a href="/drum-live">/drum-live</a> (4 pads) · <a href="/drum-live-pulse">/drum-live-pulse</a> (one tap) · <a href="/drum-live-tv">/drum-live-tv</a> (passive projection).</p>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --dll-ink: #060a18;
+      --dll-deep: #0a1230;
+      --dll-flame: #f6c15e;
+      --dll-coral: #ff6b8a;
+      --dll-mint: #8aeac0;
+      --dll-mauve: #c9a8ef;
+      --dll-sky: #7ac8ed;
+      --dll-cream: #f4e7c8;
+      --dll-cream-dim: #8a8a9a;
+    }
+
+    html, body { background: var(--dll-ink); margin: 0; padding: 0; }
+    body:has(.dll) {
+      background:
+        radial-gradient(circle at 10% 0%, #1a1238 0%, transparent 45%),
+        radial-gradient(circle at 90% 100%, #0e1a38 0%, transparent 50%),
+        var(--dll-ink);
+      color: var(--dll-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .dll {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+    }
+
+    /* HUD */
+    .dll__hud {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .dll__live-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 14px;
+      background: rgba(255,107,138,0.18);
+      border: 1px solid rgba(255,107,138,0.42);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      color: var(--dll-coral);
+    }
+    .dll__live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--dll-coral);
+      box-shadow: 0 0 10px rgba(255,107,138,0.7);
+      animation: dllBlink 1.4s ease-in-out infinite;
+    }
+    @keyframes dllBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .dll__here {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--dll-cream-dim);
+      padding: 6px 12px;
+      background: rgba(0,0,0,0.32);
+      border-radius: 14px;
+    }
+    .dll__here strong { color: var(--dll-flame); font-weight: 600; }
+
+    /* GRID */
+    .dll__grid-wrap {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: stretch;
+      background: rgba(0,0,0,0.32);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 22px;
+    }
+    .dll__grid {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 4px;
+      flex: 1;
+      min-height: 220px;
+    }
+    .dll__cell {
+      position: relative;
+      border-radius: 6px;
+      background: rgba(244,231,200,0.04);
+      border: 1px solid rgba(244,231,200,0.06);
+      transition: background 80ms linear, border-color 100ms ease;
+    }
+    .dll__cell--col0 { border-left: 2px solid rgba(246,193,94,0.32); }
+    .dll__cell--low.dll__cell--lit  { background: rgba(255,138,160,calc(var(--lit, 0))); border-color: rgba(255,107,138,0.55); }
+    .dll__cell--mid.dll__cell--lit  { background: rgba(246,193,94,calc(var(--lit, 0)));  border-color: rgba(246,193,94,0.55); }
+    .dll__cell--high.dll__cell--lit { background: rgba(122,200,237,calc(var(--lit, 0))); border-color: rgba(122,200,237,0.55); }
+    .dll__cell--bell.dll__cell--lit { background: rgba(138,234,192,calc(var(--lit, 0))); border-color: rgba(138,234,192,0.55); }
+    .dll__cell--playhead {
+      outline: 2px solid var(--dll-flame);
+      outline-offset: -1px;
+      box-shadow: 0 0 12px rgba(246,193,94,0.45);
+    }
+    .dll__cell--self {
+      box-shadow: inset 0 0 0 2px rgba(246,193,94,0.85);
+    }
+
+    .dll__legend {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      gap: 4px;
+      padding: 4px 6px;
+    }
+    .dll__legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.10em;
+      color: var(--dll-cream-dim);
+    }
+    .dll__legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .dll__legend-swatch--low  { background: rgba(255,107,138,0.7); }
+    .dll__legend-swatch--mid  { background: rgba(246,193,94,0.7); }
+    .dll__legend-swatch--high { background: rgba(122,200,237,0.7); }
+    .dll__legend-swatch--bell { background: rgba(138,234,192,0.7); }
+
+    /* PADS */
+    .dll__pads {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .dll__pad {
+      padding: 18px;
+      border-radius: 14px;
+      border: 0;
+      color: #1a0c20;
+      cursor: pointer;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.06em;
+      transition: transform 80ms ease;
+      box-shadow: inset 0 -5px 10px rgba(0,0,0,0.3), inset 0 4px 6px rgba(255,255,255,0.16), 0 6px 18px rgba(0,0,0,0.45);
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .dll__pad:active { transform: scale(0.97) translateY(2px); }
+    .dll__pad--low  { background: linear-gradient(160deg, #ff8aa0 0%, #c43048 100%); color: #2a0810; }
+    .dll__pad--mid  { background: linear-gradient(160deg, #f4c150 0%, #8a4218 100%); color: #2a1a08; }
+    .dll__pad--high { background: linear-gradient(160deg, #7ac8ed 0%, #2a558c 100%); color: #0a1830; }
+    .dll__pad--bell { background: linear-gradient(160deg, #8aeac0 0%, #2a8a68 100%); color: #0a2a18; }
+
+    /* ABOUT */
+    .dll__about {
+      max-width: 720px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(244,231,200,0.12);
+    }
+    .dll__about-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      color: var(--dll-cream);
+      margin: 0 0 12px;
+    }
+    .dll__about p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--dll-cream-dim);
+      margin: 0 0 12px;
+    }
+    .dll__about code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--dll-flame);
+    }
+    .dll__about a {
+      color: var(--dll-flame);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    const LOOP_MS = 8000;       // 8-second loop
+    const STEPS = 16;           // 16 steps per loop
+    const STEP_MS = LOOP_MS / STEPS; // 500ms per step
+    const WINDOW_MS = 30_000;   // accumulate counts over 30s
+
+    let SESSION_ID = '';
+    let MY_PID = '';
+    let lastT = 0;
+    let pollTimer: number | null = null;
+
+    // Per-voice, per-step rolling buffer of {t, isSelf} tap timestamps
+    // voiceIndex 0..3 = low/mid/high/bell
+    const buffer: { t: number; voice: number; step: number; isSelf: boolean }[] = [];
+    const pidSeen = new Map();
+
+    const SEED_TO_VOICE: { [seed: number]: number } = { 20: 0, 42: 1, 101: 2, 333: 3 };
+    const VOICE_NAMES = ['low', 'mid', 'high', 'bell'];
+
+    function eventToStep(serverT: number) {
+      return Math.floor((serverT % LOOP_MS) / STEP_MS);
+    }
+
+    async function sha256Hex(input: string) {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    function getOrCreateSession() {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.55;
+      masterGain.connect(ctx.destination);
+    }
+
+    function playVoice(voice: number, vel: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const specs = [
+        { fund: 70,  bell: false, tail: 0.45 }, // low
+        { fund: 120, bell: false, tail: 0.42 }, // mid
+        { fund: 200, bell: false, tail: 0.42 }, // high
+        { fund: 600, bell: true,  tail: 2.0 },  // bell
+      ];
+      const spec = specs[voice] || specs[1];
+      if (!spec.bell) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(spec.fund, t);
+        osc.frequency.exponentialRampToValueAtTime(spec.fund * 0.5, t + 0.15);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.42 * vel, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + spec.tail);
+        osc.connect(g).connect(masterGain);
+        scheduler.trackSource(osc);
+        osc.start(t);
+        osc.stop(t + spec.tail + 0.05);
+      } else {
+        const partials = [
+          { f: spec.fund,      g: 0.26, d: spec.tail },
+          { f: spec.fund * 2,  g: 0.14, d: spec.tail * 0.7 },
+          { f: spec.fund * 4,  g: 0.05, d: spec.tail * 0.4 },
+        ];
+        for (const p of partials) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = p.f;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(p.g * vel, t + 0.006);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
+          osc.connect(g).connect(masterGain);
+          scheduler.trackSource(osc);
+          osc.start(t);
+          osc.stop(t + p.d + 0.1);
+        }
+      }
+    }
+
+    // ---- buffer ops ----
+    function trimBuffer() {
+      const now = Date.now();
+      while (buffer.length && now - buffer[0].t > WINDOW_MS) buffer.shift();
+    }
+    function cellCount(voice: number, step: number) {
+      // Returns { count, selfHit }
+      let count = 0;
+      let selfHit = false;
+      for (const entry of buffer) {
+        if (entry.voice === voice && entry.step === step) {
+          count++;
+          if (entry.isSelf) selfHit = true;
+        }
+      }
+      return { count, selfHit };
+    }
+
+    // ---- grid rendering ----
+    function renderGrid() {
+      const grid = document.getElementById('dll-grid')!;
+      const cells: string[] = [];
+      // Rows: voice 0..3 (low/mid/high/bell)
+      for (let v = 0; v < 4; v++) {
+        for (let s = 0; s < STEPS; s++) {
+          const colCls = (s % 4 === 0) ? ' dll__cell--col0' : '';
+          cells.push(`<div class="dll__cell dll__cell--${VOICE_NAMES[v]}${colCls}" data-voice="${v}" data-step="${s}"></div>`);
+        }
+      }
+      grid.innerHTML = cells.join('');
+    }
+
+    function refreshCellsAndPlayhead() {
+      const now = Date.now();
+      const playheadStep = Math.floor((now % LOOP_MS) / STEP_MS);
+      // Update every cell brightness + playhead
+      const cells = document.querySelectorAll('.dll__cell');
+      cells.forEach((el) => {
+        const voice = parseInt((el as HTMLElement).getAttribute('data-voice')!);
+        const step = parseInt((el as HTMLElement).getAttribute('data-step')!);
+        const { count, selfHit } = cellCount(voice, step);
+        // Brightness: 0..0.92 by log scale of count
+        const lit = count > 0 ? Math.min(0.92, 0.18 + Math.log2(count + 1) * 0.18) : 0;
+        if (count > 0) {
+          el.classList.add('dll__cell--lit');
+          (el as HTMLElement).style.setProperty('--lit', String(lit));
+        } else {
+          el.classList.remove('dll__cell--lit');
+          (el as HTMLElement).style.setProperty('--lit', '0');
+        }
+        el.classList.toggle('dll__cell--self', selfHit);
+        el.classList.toggle('dll__cell--playhead', step === playheadStep);
+      });
+    }
+
+    // ---- playhead audio tick ----
+    let lastPlayedStep = -1;
+    let lastPlayedLoopId = -1;
+    function tickPlayhead() {
+      const now = Date.now();
+      const loopId = Math.floor(now / LOOP_MS);
+      const step = Math.floor((now % LOOP_MS) / STEP_MS);
+      // Fire once per (loopId, step) transition
+      if (step !== lastPlayedStep || loopId !== lastPlayedLoopId) {
+        lastPlayedStep = step;
+        lastPlayedLoopId = loopId;
+        for (let v = 0; v < 4; v++) {
+          const { count } = cellCount(v, step);
+          if (count > 0) {
+            const vel = Math.min(1, 0.32 + Math.log2(count + 1) * 0.22);
+            playVoice(v, vel);
+          }
+        }
+      }
+      refreshCellsAndPlayhead();
+      requestAnimationFrame(tickPlayhead);
+    }
+
+    // ---- broadcast + poll ----
+    async function broadcastTap(seed: number) {
+      try {
+        await fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed, sessionId: SESSION_ID }),
+        });
+      } catch { /* best effort */ }
+    }
+
+    async function pollOnce() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastT}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data.events) return;
+        for (const ev of data.events) {
+          if (ev.type !== 'drum') continue;
+          if (ev.t <= lastT) continue;
+          lastT = Math.max(lastT, ev.t);
+          const voice = SEED_TO_VOICE[ev.seed];
+          if (voice == null) continue;
+          const step = eventToStep(ev.t);
+          buffer.push({ t: Date.now(), voice, step, isSelf: ev.pid === MY_PID });
+          pidSeen.set(ev.pid, Date.now());
+        }
+        trimBuffer();
+        refreshHereCount();
+      } catch { /* best effort */ }
+    }
+    function refreshHereCount() {
+      const now = Date.now();
+      let here = 0;
+      pidSeen.forEach((lastSeen) => { if (now - lastSeen < 25000) here++; });
+      const others = here > 0 && pidSeen.has(MY_PID) && (now - pidSeen.get(MY_PID) < 25000) ? here - 1 : here;
+      const el = document.getElementById('dll-here')!;
+      if (here === 0) el.textContent = 'listening for the room…';
+      else if (others === 0) el.innerHTML = 'just you so far · share the link';
+      else if (others === 1) el.innerHTML = '<strong>1</strong> other person feeding the loop';
+      else el.innerHTML = `<strong>${others}</strong> others feeding the loop`;
+    }
+    function startPolling() {
+      if (pollTimer != null) return;
+      const tick = async () => {
+        await pollOnce();
+        pollTimer = window.setTimeout(tick, 1600);
+      };
+      pollTimer = window.setTimeout(tick, 400);
+    }
+    function stopPolling() {
+      if (pollTimer != null) { clearTimeout(pollTimer); pollTimer = null; }
+    }
+
+    function handleTap(seed: number) {
+      const voice = SEED_TO_VOICE[seed];
+      if (voice == null) return;
+      ensureCtx();
+      // Play locally now (don't wait for server roundtrip)
+      const cnt = cellCount(voice, Math.floor(Date.now() % LOOP_MS / STEP_MS));
+      const vel = Math.min(1, 0.5 + Math.log2(cnt.count + 1) * 0.18);
+      playVoice(voice, vel);
+      // Add to buffer with the CURRENT step (server will round-trip the same)
+      const now = Date.now();
+      buffer.push({ t: now, voice, step: eventToStep(now), isSelf: true });
+      pidSeen.set(MY_PID, now);
+      broadcastTap(seed);
+    }
+
+    async function init() {
+      SESSION_ID = getOrCreateSession();
+      MY_PID = (await sha256Hex(SESSION_ID)).slice(0, 10);
+
+      renderGrid();
+
+      document.querySelectorAll('.dll__pad').forEach((btn) => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const seed = parseInt((e.currentTarget as HTMLElement).getAttribute('data-seed')!);
+          if (!Number.isNaN(seed)) handleTap(seed);
+        });
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        const map: { [k: string]: number } = { '1': 20, '2': 42, '3': 101, '4': 333,
+          'a': 20, 's': 42, 'd': 101, 'f': 333 };
+        const seed = map[e.key];
+        if (seed != null) { e.preventDefault(); handleTap(seed); }
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopPolling();
+        else startPolling();
+      });
+
+      refreshHereCount();
+      startPolling();
+      requestAnimationFrame(tickPlayhead);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
