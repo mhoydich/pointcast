@@ -1329,6 +1329,128 @@
       active.byId.dew = wrap;
     }
 
+    // ─── dragonfly (companion) ───────────────────────────────────
+    // Darts mid-screen in quick zigzag arcs. Faster than moth (vw/40 vs vw/70).
+    // jink animations bake the scaleX flip so transform isn't clobbered.
+    function castDragonfly(durationMs) {
+      if (active.byId.dragonfly) {
+        var prev = active.byId.dragonfly;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var df = document.createElement('button');
+      df.className = 'spell-dragonfly';
+      df.type = 'button';
+      df.setAttribute('aria-label', 'A dragonfly darting by. Click to let it go.');
+      df.title = 'click to release the dragonfly';
+      df.textContent = '🦟';
+      var ltr = Math.random() < 0.5;
+      var dir = ltr ? 'ltr' : 'rtl';
+      df.setAttribute('data-dir', dir);
+      var dur = durationMs || 40000;
+      var dartSeconds = Math.max(5, Math.min(20, window.innerWidth / 40));
+      var bottomPct = Math.floor(30 + Math.random() * 30);
+      df.style.cssText =
+        'bottom:' + bottomPct + '%;' +
+        'animation:spell-dragonfly-dart-' + dir + ' ' + dartSeconds + 's ease-in-out infinite,' +
+        'spell-dragonfly-jink-' + dir + ' 0.85s ease-in-out infinite;';
+      df.addEventListener('click', function () {
+        if (df.parentNode) df.parentNode.removeChild(df);
+        active.byId.dragonfly = null;
+      });
+      $layer.appendChild(df);
+      active.byId.dragonfly = df;
+      setTimeout(function () {
+        if (df && df.parentNode) df.parentNode.removeChild(df);
+        if (active.byId.dragonfly === df) active.byId.dragonfly = null;
+      }, dur);
+    }
+
+    // ─── sunrise (ambient) ───────────────────────────────────────
+    // Warm amber-pink gradient rises from the viewport bottom edge.
+    // Sun emoji floats up to 20vh. Click anywhere to dismiss.
+    function castSunrise() {
+      if (active.byId.sunrise) return;
+      var sr = document.createElement('button');
+      sr.className = 'spell-sunrise';
+      sr.type = 'button';
+      sr.setAttribute('aria-label', 'Sunrise glow overlay. Click to let the day begin.');
+      sr.title = 'click to let the day begin';
+      sr.innerHTML =
+        '<span class="spell-sunrise__glow"></span>' +
+        '<span class="spell-sunrise__sun">🌅</span>';
+      sr.addEventListener('click', function () {
+        if (sr.parentNode) sr.parentNode.removeChild(sr);
+        active.byId.sunrise = null;
+      });
+      $layer.appendChild(sr);
+      active.byId.sunrise = sr;
+    }
+
+    // ─── ripple (burst) ──────────────────────────────────────────
+    // 5 concentric rings expand from screen center and fade. One stone, still water.
+    function castRipple(durationMs) {
+      if (reduce()) return;
+      var dur = durationMs || 2200;
+      var colors = [
+        'rgba(74, 158, 255, 0.75)',
+        'rgba(100, 180, 255, 0.60)',
+        'rgba(74, 158, 255, 0.45)',
+        'rgba(150, 210, 255, 0.35)',
+        'rgba(74, 158, 255, 0.20)',
+      ];
+      for (var i = 0; i < 5; i++) {
+        var r = document.createElement('span');
+        r.className = 'spell-ripple__ring';
+        var delay = i * 190;
+        r.style.cssText =
+          'border-color:' + colors[i] + ';' +
+          'animation-duration:' + (dur - delay) + 'ms;' +
+          'animation-delay:' + delay + 'ms;';
+        $layer.appendChild(r);
+        active.bursts++;
+        (function (el, d) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + d + 100);
+        })(r, delay);
+      }
+    }
+
+    // ─── duck (companion) ────────────────────────────────────────
+    // Waddles across the bottom with a bob+tilt. Bob animations bake in
+    // scaleX flip so the two simultaneous animations don't clobber transform.
+    function castDuck(durationMs) {
+      if (active.byId.duck) {
+        var prev = active.byId.duck;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var dk = document.createElement('button');
+      dk.className = 'spell-duck';
+      dk.type = 'button';
+      dk.setAttribute('aria-label', 'A duck waddling by. Click to shoo.');
+      dk.title = 'click to shoo the duck';
+      dk.textContent = '🦆';
+      var ltr = Math.random() < 0.5;
+      var dir = ltr ? 'ltr' : 'rtl';
+      dk.setAttribute('data-dir', dir);
+      var dur = durationMs || 60000;
+      var walkSeconds = Math.max(10, Math.min(35, window.innerWidth / 45));
+      dk.style.cssText =
+        'animation:spell-duck-waddle-' + dir + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-duck-bob-' + dir + ' 0.65s ease-in-out infinite;';
+      dk.addEventListener('click', function () {
+        if (dk.parentNode) dk.parentNode.removeChild(dk);
+        active.byId.duck = null;
+      });
+      $layer.appendChild(dk);
+      active.byId.duck = dk;
+      setTimeout(function () {
+        if (dk && dk.parentNode) dk.parentNode.removeChild(dk);
+        if (active.byId.duck === dk) active.byId.duck = null;
+      }, dur);
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1371,6 +1493,10 @@
         case 'comet':        castComet(2400); break;
         case 'koi':          castKoi(60000); break;
         case 'dew':          castDew(); break;
+        case 'dragonfly':    castDragonfly(40000); break;
+        case 'sunrise':      castSunrise(); break;
+        case 'ripple':       castRipple(2200); break;
+        case 'duck':         castDuck(60000); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2605,6 +2731,151 @@
     100% { transform: scale(1); opacity: 0.85; }
   }
 
+  /* ─── batch 11: dragonfly (companion) ───────────────────────── */
+  .spell-dragonfly {
+    position: fixed;
+    left: -40px;
+    font-size: 24px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    will-change: left, transform;
+    filter: drop-shadow(0 0 5px rgba(47, 143, 95, 0.55));
+  }
+  @keyframes spell-dragonfly-dart-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-dragonfly-dart-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-dragonfly-jink-ltr {
+    0%, 100% { transform: translateY(0) rotate(-8deg) scaleX(1); }
+    20%       { transform: translateY(-22px) rotate(10deg) scaleX(1); }
+    45%       { transform: translateY(12px) rotate(-6deg) scaleX(1); }
+    70%       { transform: translateY(-16px) rotate(8deg) scaleX(1); }
+    85%       { transform: translateY(6px) rotate(-4deg) scaleX(1); }
+  }
+  @keyframes spell-dragonfly-jink-rtl {
+    0%, 100% { transform: translateY(0) rotate(8deg) scaleX(-1); }
+    20%       { transform: translateY(-22px) rotate(-10deg) scaleX(-1); }
+    45%       { transform: translateY(12px) rotate(6deg) scaleX(-1); }
+    70%       { transform: translateY(-16px) rotate(-8deg) scaleX(-1); }
+    85%       { transform: translateY(6px) rotate(4deg) scaleX(-1); }
+  }
+
+  /* ─── batch 11: sunrise (ambient) ───────────────────────────── */
+  .spell-sunrise {
+    position: fixed;
+    inset: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    z-index: 31;
+    overflow: hidden;
+  }
+  .spell-sunrise__glow {
+    position: absolute;
+    bottom: 0;
+    left: -10%;
+    right: -10%;
+    height: 80%;
+    background: linear-gradient(
+      to top,
+      rgba(255, 165, 0, 0.5) 0%,
+      rgba(255, 100, 50, 0.28) 22%,
+      rgba(255, 60, 100, 0.12) 48%,
+      transparent 68%
+    );
+    transform-origin: bottom center;
+    animation: spell-sunrise-glow-in 5s ease-out forwards;
+  }
+  .spell-sunrise__sun {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    font-size: 52px;
+    line-height: 1;
+    animation: spell-sunrise-sun-rise 7s ease-out forwards;
+  }
+  @keyframes spell-sunrise-glow-in {
+    0%   { opacity: 0; transform: scaleY(0.2); }
+    25%  { opacity: 1; transform: scaleY(1); }
+    100% { opacity: 1; transform: scaleY(1); }
+  }
+  @keyframes spell-sunrise-sun-rise {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(80px); }
+    15%  { opacity: 1; }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* ─── batch 11: ripple (burst) ──────────────────────────────── */
+  .spell-ripple__ring {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    margin-left: -10px;
+    border-radius: 50%;
+    border: 2px solid rgba(74, 158, 255, 0.8);
+    pointer-events: none;
+    z-index: 31;
+    animation: spell-ripple-expand 2200ms ease-out forwards;
+  }
+  @keyframes spell-ripple-expand {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(60); opacity: 0; }
+  }
+
+  /* ─── batch 11: duck (companion) ────────────────────────────── */
+  .spell-duck {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    font-size: 30px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    will-change: left, transform;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+  @keyframes spell-duck-waddle-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-duck-waddle-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-duck-bob-ltr {
+    0%, 100% { transform: translateY(0) scaleX(1) rotate(-4deg); }
+    30%       { transform: translateY(-10px) scaleX(1) rotate(4deg); }
+    65%       { transform: translateY(-5px) scaleX(1) rotate(0deg); }
+  }
+  @keyframes spell-duck-bob-rtl {
+    0%, 100% { transform: translateY(0) scaleX(-1) rotate(4deg); }
+    30%       { transform: translateY(-10px) scaleX(-1) rotate(-4deg); }
+    65%       { transform: translateY(-5px) scaleX(-1) rotate(0deg); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
     .spell-pup,
@@ -2617,6 +2888,8 @@
     .spell-ghost,
     .spell-frog,
     .spell-koi,
+    .spell-dragonfly,
+    .spell-duck,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2633,7 +2906,9 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-sunrise__glow,
+    .spell-sunrise__sun { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2644,7 +2919,9 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
-    .spell-koi { left: 50%; transform: translateX(-50%); }
+    .spell-koi,
+    .spell-dragonfly,
+    .spell-duck { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2660,6 +2937,7 @@
     .spell-rain__drop { display: none; } /* rain motion-only */
     .spell-snow__flake { display: none; } /* snow motion-only */
     .spell-leaves__leaf { display: none; } /* leaves motion-only */
+    .spell-ripple__ring { display: none; } /* ripple motion-only burst */
     .spell-starfield__star { opacity: 0.7; }
     .spell-firefly__glow { opacity: 0.7; }
     .spell-chimes__pipe { transform: rotate(0deg); }
@@ -2671,6 +2949,8 @@
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
     .spell-dew__drop { animation: none; transform: scale(1); opacity: 0.8; } /* static droplets */
+    .spell-sunrise__sun { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .spell-sunrise__glow { transform: scaleY(1); opacity: 1; }
   }
 
   /* ─── nouns: noun (companion) ───────────────────────────────── */
