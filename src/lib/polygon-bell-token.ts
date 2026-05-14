@@ -1,3 +1,11 @@
+import contracts from '../data/contracts.json';
+
+const polygonBellConfig = (contracts as any).polygon_bell ?? {};
+const polygonBellAddress = typeof polygonBellConfig.polygon === 'string'
+  && /^0x[a-fA-F0-9]{40}$/.test(polygonBellConfig.polygon)
+  ? polygonBellConfig.polygon as `0x${string}`
+  : null;
+
 export const POLYGON_BELL_TOKEN = {
   slug: 'polygon-bell',
   name: 'PointCast Polygon Bell #001',
@@ -8,8 +16,8 @@ export const POLYGON_BELL_TOKEN = {
   chainId: 137,
   chainHex: '0x89',
   standard: 'ERC-1155-ready',
-  status: 'wallet-publish-ready',
-  contract: null as `0x${string}` | null,
+  status: polygonBellAddress ? 'mint-ready' : 'wallet-publish-ready',
+  contract: polygonBellAddress,
   editionCap: 100,
   unlockRings: 5,
   imagePath: '/images/polygon-bell-token.svg',

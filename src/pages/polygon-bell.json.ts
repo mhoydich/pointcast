@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { POLYGON_BELL_ABI, POLYGON_BELL_MINT } from '../lib/polygon-bell-contract';
 import { POLYGON_BELL_PUBLISH, polygonBellProofTemplate } from '../lib/polygon-bell-publish';
 import { POLYGON_BELL_ATTRIBUTES, POLYGON_BELL_TOKEN, polygonBellAbsoluteUrl } from '../lib/polygon-bell-token';
 
@@ -33,6 +34,14 @@ export const GET: APIRoute = ({ site }) => {
       transactionMode: POLYGON_BELL_PUBLISH.transactionMode,
       proofTemplate: polygonBellProofTemplate(site),
     },
+    mint: {
+      status: POLYGON_BELL_MINT.status,
+      contract: POLYGON_BELL_MINT.contract,
+      functionName: POLYGON_BELL_MINT.functionName,
+      functionSignature: POLYGON_BELL_MINT.functionSignature,
+      abi: POLYGON_BELL_ABI,
+      source: POLYGON_BELL_MINT.source,
+    },
     routes: {
       human: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.pageHref, site),
       publish: polygonBellAbsoluteUrl(POLYGON_BELL_TOKEN.publishHref, site),
@@ -42,9 +51,9 @@ export const GET: APIRoute = ({ site }) => {
     },
     nextMoves: [
       'Publish a bell proof from MetaMask on Polygon.',
-      'Deploy ERC-1155 or Zora creator contract on Polygon after proof lane settles.',
-      'Paste contract address into POLYGON_BELL_TOKEN.contract.',
-      'Swap local receipt collection for wallet-signed mint call.',
+      'Deploy contracts/eth/PointCastPolygonBell1155.sol on Polygon.',
+      'Paste contract address into src/data/contracts.json polygon_bell.polygon.',
+      'Use the live mint button after a proof transaction exists.',
       'Keep the five-rung lobby unlock as the eligibility ritual.',
     ],
   };

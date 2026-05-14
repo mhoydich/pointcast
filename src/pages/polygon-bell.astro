@@ -1,11 +1,13 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import WalletConnect from '../components/WalletConnect.astro';
+import { POLYGON_BELL_ABI, POLYGON_BELL_MINT } from '../lib/polygon-bell-contract';
 import { POLYGON_BELL_PUBLISH, polygonBellProofTemplate } from '../lib/polygon-bell-publish';
 import { POLYGON_BELL_ATTRIBUTES, POLYGON_BELL_TOKEN } from '../lib/polygon-bell-token';
 
 const token = POLYGON_BELL_TOKEN;
 const publish = POLYGON_BELL_PUBLISH;
+const mint = POLYGON_BELL_MINT;
 const proofTemplate = polygonBellProofTemplate(Astro.site);
 const contractLabel = token.contract ?? 'pending contract';
 const jsonLd = {
@@ -108,9 +110,13 @@ const jsonLd = {
       data-native-decimals={publish.nativeCurrency.decimals}
       data-proof-storage-key={publish.storageKey}
       data-proof-template={JSON.stringify(proofTemplate)}
+      data-mint-storage-key={mint.storageKey}
+      data-mint-contract={mint.contract ?? ''}
+      data-mint-abi={JSON.stringify(POLYGON_BELL_ABI)}
+      data-mint-function={mint.functionName}
     >
       <div>
-        <p class="kicker mono">v6 MetaMask · {publish.chainName}</p>
+        <p class="kicker mono">v7 MetaMask · {publish.chainName}</p>
         <h2 id="publish-title">Publish Bell Proof</h2>
       </div>
       <div class="publish__body">
@@ -118,12 +124,13 @@ const jsonLd = {
           <div><dt>Chain</dt><dd>{publish.chainName} / {publish.chainId}</dd></div>
           <div><dt>Gas token</dt><dd>{publish.nativeCurrency.symbol}</dd></div>
           <div><dt>Mode</dt><dd>{publish.transactionMode}</dd></div>
-          <div><dt>Explorer</dt><dd><a href={publish.blockExplorerUrls[0]}>Polygonscan</a></dd></div>
+          <div><dt>Mint</dt><dd>{mint.contract ? 'contract ready' : 'contract pending'}</dd></div>
         </dl>
         <div class="actions publish__actions mono">
           <button type="button" id="polygon-connect">Connect MetaMask</button>
           <button type="button" id="polygon-switch">Switch Polygon</button>
           <button type="button" id="polygon-publish" disabled>Publish proof</button>
+          <button type="button" id="polygon-mint" disabled>Mint token</button>
         </div>
         <output id="polygon-output" class="output mono" aria-live="polite">polygon waits for bell receipt</output>
       </div>
@@ -155,6 +162,7 @@ const jsonLd = {
   const polygonConnectButton = document.getElementById('polygon-connect');
   const polygonSwitchButton = document.getElementById('polygon-switch');
   const polygonPublishButton = document.getElementById('polygon-publish');
+  const polygonMintButton = document.getElementById('polygon-mint');
   const unlockRings = Number(root?.getAttribute('data-unlock-rings') || 5);
   const storageKey = 'pc:polygon-bell:001';
   const ladderKey = 'pc:polygon-bell:ladder-rungs';
@@ -167,6 +175,10 @@ const jsonLd = {
   const polygonNativeSymbol = publishRoot?.dataset.nativeSymbol || 'POL';
   const polygonNativeDecimals = Number(publishRoot?.dataset.nativeDecimals || 18);
   const proofTemplate = readJsonFromString(publishRoot?.dataset.proofTemplate || '{}', {});
+  const mintStorageKey = publishRoot?.dataset.mintStorageKey || 'pc:polygon-bell:001:mint';
+  const mintContract = publishRoot?.dataset.mintContract || '';
+  const mintAbi = readJsonFromString(publishRoot?.dataset.mintAbi || '[]', []);
+  const mintFunction = publishRoot?.dataset.mintFunction || 'mintBell';
 
   function readJson(key, fallback) {
     try {
@@ -191,6 +203,10 @@ const jsonLd = {
 
   function writePolygonOutput(message) {
     if (polygonOutput) polygonOutput.textContent = message;
+  }
+
+  function setMintDisabled(disabled) {
+    polygonMintButton?.toggleAttribute('disabled', Boolean(disabled));
   }
 
   function shortAddress(address) {
@@ -281,15 +297,29 @@ const jsonLd = {
     };
   }
 
+  async function proofHash(proof) {
+    const { keccak256, toHex } = await import('viem');
+    return keccak256(toHex(JSON.stringify(proof.payload ?? proof)));
+  }
+
   function renderProofState() {
     const proof = readJson(proofStorageKey, null);
+    const mintReceipt = readJson(mintStorageKey, null);
     const receipt = readJson(storageKey, null);
     const wallet = readJson('pc:wallet', null);
+    setMintDisabled(true);
+
+    if (mintReceipt?.txHash) {
+      writePolygonOutput(`minted ${shortAddress(mintReceipt.txHash)} · ${shortAddress(mintReceipt.address)}`);
+      polygonPublishButton?.setAttribute('disabled', 'true');
+      return;
+    }
 
     if (proof?.txHash) {
       const label = `${shortAddress(proof.txHash)} · ${shortAddress(proof.address)}`;
-      writePolygonOutput(`published ${label}`);
+      writePolygonOutput(mintContract ? `published ${label} · mint ready` : `published ${label} · contract pending`);
       polygonPublishButton?.setAttribute('disabled', 'true');
+      if (mintContract && wallet?.chain === 'eth' && wallet.address) setMintDisabled(false);
       return;
     }
 
@@ -354,6 +384,54 @@ const jsonLd = {
     renderProofState();
   }
 
+  async function mintBellToken() {
+    if (!mintContract) {
+      writePolygonOutput('contract pending · publish proof first');
+      return;
+    }
+
+    const proof = readJson(proofStorageKey, null);
+    if (!proof?.txHash) {
+      writePolygonOutput('publish proof before mint');
+      return;
+    }
+
+    const connected = await connectPolygonWallet();
+    if (!connected) return;
+    await ensurePolygon(connected.provider);
+
+    const { encodeFunctionData } = await import('viem');
+    const hash = await proofHash(proof);
+    const data = encodeFunctionData({
+      abi: mintAbi,
+      functionName: mintFunction,
+      args: [hash],
+    });
+    const txHash = await connected.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: connected.address,
+        to: mintContract,
+        value: '0x0',
+        data,
+      }],
+    });
+
+    const mintReceipt = {
+      txHash,
+      proofHash: hash,
+      chain: 'polygon',
+      chainId: 137,
+      address: connected.address,
+      contract: mintContract,
+      explorerUrl: `${polygonExplorerTxBase}${txHash}`,
+      mintedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(mintStorageKey, JSON.stringify(mintReceipt));
+    writePolygonOutput(`minted ${shortAddress(txHash)}`);
+    renderProofState();
+  }
+
   function renderReceipt() {
     const receipt = readJson(storageKey, null);
     if (receipt) {
@@ -409,6 +487,13 @@ const jsonLd = {
   polygonPublishButton?.addEventListener('click', () => {
     publishProof().catch((err) => {
       const message = err?.code === 4001 ? 'MetaMask rejected the publish' : err?.message || 'Polygon publish failed';
+      writePolygonOutput(message);
+    });
+  });
+
+  polygonMintButton?.addEventListener('click', () => {
+    mintBellToken().catch((err) => {
+      const message = err?.code === 4001 ? 'MetaMask rejected the mint' : err?.message || 'Polygon mint failed';
       writePolygonOutput(message);
     });
   });
