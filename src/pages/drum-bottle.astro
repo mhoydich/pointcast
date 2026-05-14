@@ -89,12 +89,14 @@ const built = new Date().toISOString();
       <div class="dbo__actions" id="dbo-actions-compose">
         <button class="dbo__action dbo__action--primary" id="dbo-copy" type="button">↗ copy share link</button>
         <a class="dbo__action" id="dbo-sms" href="#">↗ send via iMessage</a>
+        <a class="dbo__action" href="/drum-shelf">📚 your shelf</a>
         <button class="dbo__action dbo__action--ghost" id="dbo-clear" type="button">clear</button>
       </div>
 
       <!-- Receive actions (received mode) -->
       <div class="dbo__actions" id="dbo-actions-receive" hidden>
         <button class="dbo__action dbo__action--primary" id="dbo-reply" type="button">✍ record a reply</button>
+        <a class="dbo__action" href="/drum-shelf">📚 your shelf</a>
         <a class="dbo__action" href="/drum-live-bus">↗ open the live bus</a>
       </div>
 
@@ -105,6 +107,7 @@ const built = new Date().toISOString();
       <p>Every cell you toggle is a bit. The pattern is 4 voices × 16 steps = 64 bits = 8 bytes. Add 1 byte for BPM and you've got 9 bytes — a string of 12 base64url characters. <em>That's the entire message.</em> The URL <code>/drum-bottle?p=AAQACAAQACAA&amp;from=abcd</code> contains a real, playable phrase.</p>
       <p>There is no server. There is no account. There is no row in any database. The link is the message. You can paste it into iMessage and the recipient will see a tiny preview card; you can text it as plain text; you can put it in your bio. Open it on any device that runs a browser, click ▶, hear the drum.</p>
       <p>The <code>from</code> param is your live-bus pid prefix — the first 4 chars of <code>sha256(your-session-id)</code>. Stable across your devices, not identifying. Over time you'll recognise a friend's prefix without having any account system. <em>That's the social layer.</em></p>
+      <p>Every bottle you copy or receive lands in your private <a href="/drum-shelf">shelf</a> — a local-only list living in <code>localStorage</code> on your device. The shelf never leaves your browser; nothing about it goes to a server. Send anyone a phrase and a week later you can still find it back.</p>
       <p>Sister directories: <a href="/drum-live-bus">/drum-live-bus</a> (5 live-drum surfaces · synchronous), <a href="/drum-pavilion">/drum-pavilion</a> (5 meditative screensavers), <a href="/cast-table">/cast-table</a> (32 single-user music tools).</p>
     </section>
 
@@ -638,12 +641,51 @@ const built = new Date().toISOString();
       return fromPid ? `${base}&from=${fromPid}` : base;
     }
 
+    // ---- shelf (localStorage history of bottles) ----
+    // Read by /drum-shelf. Format: { v:1, items: [{code, bpm, from, dir, t}, ...] }
+    // Capped at 100; dedupe by code+dir+from (refresh `t` on dupe).
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+    const SHELF_MAX = 100;
+    interface ShelfItem { code: string; bpm: number; from: string; dir: 'made' | 'received'; t: number; }
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+    function saveShelf(items: ShelfItem[]) {
+      try {
+        localStorage.setItem(SHELF_KEY, JSON.stringify({ v: SHELF_VERSION, items }));
+      } catch { /* private mode, full quota — fail silently */ }
+    }
+    function saveToShelf(code: string, b: number, from: string, dir: 'made' | 'received') {
+      const items = loadShelf();
+      const key = `${code}::${dir}::${from}`;
+      const existing = items.findIndex((it) => `${it.code}::${it.dir}::${it.from}` === key);
+      const entry: ShelfItem = { code, bpm: b, from, dir, t: Date.now() };
+      if (existing >= 0) {
+        items[existing] = entry;
+      } else {
+        items.unshift(entry);
+      }
+      // Sort newest first, then cap
+      items.sort((a, b) => b.t - a.t);
+      if (items.length > SHELF_MAX) items.length = SHELF_MAX;
+      saveShelf(items);
+    }
+
     function copyShareLink() {
       const url = shareUrl();
+      const code = encode(pattern, bpm);
+      saveToShelf(code, bpm, fromPid, 'made');
       const blob = navigator.clipboard;
       if (blob && blob.writeText) {
         blob.writeText(url).then(
-          () => showToast(`copied · ${url.length} chars`),
+          () => showToast(`copied · saved to shelf`),
           () => promptManualCopy(url),
         );
       } else {
@@ -708,8 +750,13 @@ const built = new Date().toISOString();
       bpm = b;
       fromPid = from;
       isReceived = true;
+      // Persist to shelf so /drum-shelf can list it. Uses the raw URL code
+      // (encode is deterministic from the decoded pattern, so this is the
+      // exact code we just decoded back, modulo capacity-bit ordering).
+      const code = encode(p, b);
+      saveToShelf(code, b, from || '', 'received');
       document.getElementById('dbo-title')!.textContent = 'Someone sent you a drum.';
-      document.getElementById('dbo-sub')!.innerHTML = 'Click play to hear it. You can record a reply and send it back.';
+      document.getElementById('dbo-sub')!.innerHTML = 'Click play to hear it. You can record a reply and send it back. Saved to your <a href="/drum-shelf" style="color:var(--dbo-flame)">shelf</a>.';
       document.getElementById('dbo-banner')!.hidden = false;
       const fromEl = document.getElementById('dbo-from')!;
       fromEl.textContent = from ? `from ${from}` : 'from someone';

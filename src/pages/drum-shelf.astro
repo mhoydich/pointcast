@@ -1,0 +1,554 @@
+---
+/**
+ * /drum-shelf — your local-only wallet of bottles.
+ *
+ * Reads localStorage['pc-drum-shelf'] (written by /drum-bottle on every
+ * copy-share-link or received-mode load). Renders the list newest-first
+ * as a column of rows, each showing:
+ *
+ *   • CSS-only mini grid preview of the 16 × 4 pattern (no JS to render)
+ *   • Pid badge (from sender or 'made by you')
+ *   • BPM
+ *   • Direction chip: 'made' or 'received'
+ *   • Relative time-ago label
+ *   • Open button → /drum-bottle?p=<code>&from=<from>
+ *
+ * Capacity 100 bottles, capped by /drum-bottle when it writes. Local-only,
+ * never leaves the device. Clear-shelf button at bottom wipes the storage.
+ *
+ * Why local-only: bottles are meant to be transient. If you want a
+ * permanent record of a phrase, you have its share URL — paste that
+ * wherever you want it kept. The shelf is a recently-touched list,
+ * not an archive.
+ *
+ * Shipped 2026-05-14. Second async-drum surface after /drum-bottle.
+ * — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Shelf — your local bottle list"
+  description="Every drum-bottle you copy or receive lands here. Local-only — lives in your browser's localStorage, never goes to a server. Open old phrases, replay them, copy the link again to re-share."
+  image="/images/og-drum.png"
+>
+  <main class="dsh" id="dsh" data-built={built}>
+    <header class="dsh__hero">
+      <p class="dsh__kicker">DRUM · SHELF · local-only · 100 max</p>
+      <h1 class="dsh__title">Your bottle shelf.</h1>
+      <p class="dsh__sub">Every <a href="/drum-bottle">drum-bottle</a> you copy or receive lands here. Lives only in your browser's <code>localStorage</code> — nothing about it goes to a server, no account, no sync across devices. A recently-touched list, not an archive.</p>
+    </header>
+
+    <section class="dsh__list" id="dsh-list">
+      <!-- JS injects rows here -->
+    </section>
+
+    <section class="dsh__empty" id="dsh-empty" hidden>
+      <p class="dsh__empty-icon">🍾</p>
+      <p class="dsh__empty-msg">No bottles yet.</p>
+      <p class="dsh__empty-sub">Go make one over at <a href="/drum-bottle">/drum-bottle</a>, copy the link to your clipboard, and it'll show up here.</p>
+    </section>
+
+    <footer class="dsh__footer" id="dsh-footer" hidden>
+      <button class="dsh__clear" id="dsh-clear" type="button">clear shelf</button>
+      <span class="dsh__count" id="dsh-count"></span>
+    </footer>
+
+    <section class="dsh__notes">
+      <h2 class="dsh__notes-h">A note on local-only</h2>
+      <p>The shelf is yours and only yours. There is no server-side copy. If you clear your browser data, switch devices, or open this page in an incognito window, it'll be empty — the same way pasting a URL into a private window doesn't give you your history.</p>
+      <p>Bottles you've sent live in their share URLs, not here. If you've copied a link and sent it somewhere, that URL is the permanent record. The shelf is just a recently-touched list so you can find a phrase you made an hour ago without going hunting through your texts.</p>
+      <p>Sister: <a href="/drum-bottle">/drum-bottle</a> (the composer/player). <a href="/drum-live-bus">/drum-live-bus</a> (5 synchronous-drum surfaces).</p>
+    </section>
+
+    <div class="dsh__toast" id="dsh-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --dsh-ink: #0a1230;
+      --dsh-mid: #14193a;
+      --dsh-flame: #f6c15e;
+      --dsh-coral: #ff6b8a;
+      --dsh-mint: #8aeac0;
+      --dsh-sky: #7ac8ed;
+      --dsh-mauve: #c9a8ef;
+      --dsh-cream: #f4e7c8;
+      --dsh-cream-dim: #b8aa84;
+      --dsh-cream-dimmer: #6e6850;
+    }
+
+    body:has(.dsh) {
+      background:
+        radial-gradient(circle at 20% 10%, #1a1e58 0%, transparent 50%),
+        radial-gradient(circle at 80% 90%, #2a1640 0%, transparent 55%),
+        var(--dsh-ink);
+      color: var(--dsh-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .dsh {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+
+    /* HERO */
+    .dsh__hero { margin-bottom: 28px; }
+    .dsh__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--dsh-coral);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .dsh__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 14px;
+    }
+    .dsh__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--dsh-cream-dim);
+      margin: 0;
+    }
+    .dsh__sub a {
+      color: var(--dsh-flame);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .dsh__sub code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--dsh-mint);
+    }
+
+    /* LIST */
+    .dsh__list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .dsh__row {
+      display: grid;
+      grid-template-columns: 132px 1fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background 160ms ease, border-color 160ms ease, transform 100ms ease;
+    }
+    .dsh__row:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(244,231,200,0.30);
+    }
+    .dsh__row:active { transform: translateY(1px); }
+    @media (max-width: 560px) {
+      .dsh__row { grid-template-columns: 100px 1fr auto; gap: 12px; padding: 10px 12px; }
+    }
+
+    /* Mini-grid preview */
+    .dsh__mini {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 2px;
+      aspect-ratio: 16 / 4;
+      background: rgba(0,0,0,0.30);
+      border-radius: 4px;
+      padding: 3px;
+    }
+    .dsh__mini-cell {
+      background: rgba(244,231,200,0.06);
+      border-radius: 1px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .dsh__mini-cell--on  { background: var(--mini-color); }
+    .dsh__mini-cell--low.dsh__mini-cell--on  { --mini-color: #f6c15e; }
+    .dsh__mini-cell--mid.dsh__mini-cell--on  { --mini-color: #ff8a70; }
+    .dsh__mini-cell--high.dsh__mini-cell--on { --mini-color: #c9a8ef; }
+    .dsh__mini-cell--bell.dsh__mini-cell--on { --mini-color: #8aeac0; }
+
+    /* Meta column */
+    .dsh__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .dsh__meta-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .dsh__chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .dsh__chip--made {
+      background: rgba(255,107,138,0.15);
+      color: var(--dsh-coral);
+    }
+    .dsh__chip--received {
+      background: rgba(122,200,237,0.15);
+      color: var(--dsh-sky);
+    }
+    .dsh__from {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--dsh-cream);
+    }
+    .dsh__bpm {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-flame);
+    }
+    .dsh__time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-cream-dimmer);
+    }
+
+    /* Open arrow */
+    .dsh__open {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--dsh-coral);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    @media (max-width: 560px) {
+      .dsh__open { font-size: 9px; }
+    }
+
+    /* EMPTY STATE */
+    .dsh__empty {
+      text-align: center;
+      padding: 48px 24px;
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(244,231,200,0.20);
+      border-radius: 16px;
+      margin-bottom: 28px;
+    }
+    .dsh__empty-icon { font-size: 48px; margin: 0 0 12px; }
+    .dsh__empty-msg {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--dsh-cream);
+      margin: 0 0 6px;
+    }
+    .dsh__empty-sub {
+      font-size: 14px;
+      color: var(--dsh-cream-dim);
+      margin: 0;
+    }
+    .dsh__empty-sub a {
+      color: var(--dsh-flame);
+      text-decoration: underline;
+    }
+
+    /* FOOTER */
+    .dsh__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      margin-bottom: 32px;
+      border-top: 1px solid rgba(244,231,200,0.10);
+      padding-top: 16px;
+    }
+    .dsh__clear {
+      border: 1px solid rgba(255,107,138,0.30);
+      background: transparent;
+      color: var(--dsh-coral);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .dsh__clear:hover {
+      background: rgba(255,107,138,0.10);
+      border-color: rgba(255,107,138,0.5);
+    }
+    .dsh__count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-cream-dim);
+    }
+
+    /* NOTES */
+    .dsh__notes {
+      max-width: 680px;
+    }
+    .dsh__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      color: var(--dsh-cream);
+      margin: 0 0 12px;
+    }
+    .dsh__notes p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--dsh-cream-dim);
+      margin: 0 0 12px;
+    }
+    .dsh__notes a {
+      color: var(--dsh-coral);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* TOAST */
+    .dsh__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--dsh-flame);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(246,193,94,0.4);
+    }
+    .dsh__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    const ROWS = 4;
+    const STEPS = 16;
+    const VOICE_NAMES = ['low', 'mid', 'high', 'bell'] as const;
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+    }
+
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+
+    function clearShelf() {
+      try { localStorage.removeItem(SHELF_KEY); } catch { /* ignore */ }
+    }
+
+    // Decode pattern from the URL code so we can render the mini grid.
+    function decodePattern(code: string): boolean[][] | null {
+      if (!code) return null;
+      const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let bin: string;
+      try { bin = atob(padded); } catch { return null; }
+      if (bin.length < 9) return null;
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const p: boolean[][] = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < STEPS; c++) {
+          const idx = r * STEPS + c;
+          const byteIdx = idx >> 3;
+          const bitIdx  = idx & 7;
+          p[r][c] = !!(bytes[byteIdx] & (1 << bitIdx));
+        }
+      }
+      return p;
+    }
+
+    function timeAgo(t: number): string {
+      const now = Date.now();
+      const diff = Math.max(0, now - t);
+      const s = Math.floor(diff / 1000);
+      if (s < 30)      return 'just now';
+      if (s < 60)      return `${s}s ago`;
+      const m = Math.floor(s / 60);
+      if (m < 60)      return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24)      return `${h}h ago`;
+      const d = Math.floor(h / 24);
+      if (d < 7)       return `${d}d ago`;
+      const w = Math.floor(d / 7);
+      if (w < 5)       return `${w}w ago`;
+      const mo = Math.floor(d / 30);
+      return `${mo}mo ago`;
+    }
+
+    function makeMiniGrid(pattern: boolean[][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < STEPS; c++) {
+          const cell = document.createElement('span');
+          cell.className = `dsh__mini-cell dsh__mini-cell--${VOICE_NAMES[r]}` + (pattern[r][c] ? ' dsh__mini-cell--on' : '');
+          wrap.appendChild(cell);
+        }
+      }
+      return wrap;
+    }
+
+    function makeRow(item: ShelfItem): HTMLElement {
+      const a = document.createElement('a');
+      const url = `/drum-bottle?p=${encodeURIComponent(item.code)}` +
+        (item.from ? `&from=${encodeURIComponent(item.from)}` : '');
+      a.href = url;
+      a.className = 'dsh__row';
+
+      // Mini grid preview
+      const pattern = decodePattern(item.code);
+      if (pattern) {
+        a.appendChild(makeMiniGrid(pattern));
+      } else {
+        const fallback = document.createElement('div');
+        fallback.className = 'dsh__mini';
+        a.appendChild(fallback);
+      }
+
+      // Meta column
+      const meta = document.createElement('div');
+      meta.className = 'dsh__meta';
+
+      const line1 = document.createElement('div');
+      line1.className = 'dsh__meta-line';
+      const chip = document.createElement('span');
+      chip.className = `dsh__chip dsh__chip--${item.dir}`;
+      chip.textContent = item.dir;
+      line1.appendChild(chip);
+      const from = document.createElement('span');
+      from.className = 'dsh__from';
+      from.textContent = item.dir === 'made'
+        ? 'by you'
+        : (item.from ? `from ${item.from}` : 'from someone');
+      line1.appendChild(from);
+      meta.appendChild(line1);
+
+      const line2 = document.createElement('div');
+      line2.className = 'dsh__meta-line';
+      const bpm = document.createElement('span');
+      bpm.className = 'dsh__bpm';
+      bpm.textContent = `${item.bpm} BPM`;
+      line2.appendChild(bpm);
+      const time = document.createElement('span');
+      time.className = 'dsh__time';
+      time.textContent = '· ' + timeAgo(item.t);
+      line2.appendChild(time);
+      meta.appendChild(line2);
+
+      a.appendChild(meta);
+
+      // Open arrow
+      const open = document.createElement('span');
+      open.className = 'dsh__open';
+      open.textContent = 'open →';
+      a.appendChild(open);
+
+      return a;
+    }
+
+    function showToast(msg: string) {
+      const el = document.getElementById('dsh-toast')!;
+      el.textContent = msg;
+      el.classList.add('dsh__toast--show');
+      setTimeout(() => el.classList.remove('dsh__toast--show'), 2400);
+    }
+
+    function render() {
+      const items = loadShelf().sort((a, b) => b.t - a.t);
+      const listEl = document.getElementById('dsh-list')!;
+      const emptyEl = document.getElementById('dsh-empty')!;
+      const footerEl = document.getElementById('dsh-footer')!;
+      const countEl = document.getElementById('dsh-count')!;
+
+      listEl.innerHTML = '';
+
+      if (items.length === 0) {
+        emptyEl.hidden = false;
+        footerEl.hidden = true;
+        return;
+      }
+
+      emptyEl.hidden = true;
+      footerEl.hidden = false;
+
+      const made = items.filter((i) => i.dir === 'made').length;
+      const received = items.length - made;
+      countEl.textContent = `${items.length} bottle${items.length === 1 ? '' : 's'} · ${made} made · ${received} received`;
+
+      const frag = document.createDocumentFragment();
+      for (const item of items) {
+        frag.appendChild(makeRow(item));
+      }
+      listEl.appendChild(frag);
+    }
+
+    function init() {
+      render();
+      document.getElementById('dsh-clear')!.addEventListener('click', () => {
+        if (!confirm('Wipe the shelf? This can\'t be undone.')) return;
+        clearShelf();
+        showToast('shelf cleared');
+        render();
+      });
+      // Listen for storage changes from other tabs (other /drum-bottle windows)
+      window.addEventListener('storage', (e) => {
+        if (e.key === SHELF_KEY) render();
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
