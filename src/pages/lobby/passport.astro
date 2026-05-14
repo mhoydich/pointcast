@@ -1,0 +1,560 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const gates = [
+  {
+    id: 'knock',
+    number: '01',
+    title: 'The Brass Knock',
+    target: 5,
+    route: '/lobby/gate-one',
+    stamp: 'KNOCK',
+    tone: '#ffd24a',
+    note: 'Five hits on the front plate.',
+  },
+  {
+    id: 'errands',
+    number: '02',
+    title: 'Ten Tiny Things',
+    target: 10,
+    route: '/lobby/gate-two',
+    stamp: 'ERRAND',
+    tone: '#4ad6ff',
+    note: 'A checklist of small lobby chores.',
+  },
+  {
+    id: 'bells',
+    number: '03',
+    title: 'Eight Bell Rungs',
+    target: 8,
+    route: '/lobby/gate-three',
+    stamp: 'BELL',
+    tone: '#ff6b9d',
+    note: 'Eight Noun tones from the ladder.',
+  },
+  {
+    id: 'routes',
+    number: '04',
+    title: 'Six Route Stamps',
+    target: 6,
+    route: '/lobby/gate-four',
+    stamp: 'ROUTE',
+    tone: '#0f6e56',
+    note: 'Six exits inked into the run.',
+  },
+  {
+    id: 'again',
+    number: '05',
+    title: 'Keep Going Machine',
+    target: 8,
+    route: '/lobby/gate-five',
+    stamp: 'AGAIN',
+    tone: '#8a2432',
+    note: 'The last machine stays warm.',
+  },
+] as const;
+---
+
+<BaseLayout title="lobby passport · pointcast" description="A local receipt board for the PointCast lobby gate run.">
+  <main class="passport" data-passport>
+    <header class="passport__hero">
+      <a href="/lobby#lobby-gates" class="passport__back">/lobby</a>
+      <p class="passport__kicker">lobby gate run</p>
+      <h1>Passport Control</h1>
+      <p>
+        Every completed gate leaves a local stamp. Finish the row, then keep the receipt on the desk.
+      </p>
+    </header>
+
+    <section class="passport__summary" aria-label="Passport summary">
+      <div class="passport__meter">
+        <span data-passport-count>0 / 5 stamps</span>
+        <div class="passport__track" aria-hidden="true"><span data-passport-bar></span></div>
+      </div>
+      <div class="passport__status">
+        <strong data-passport-title>Passport waiting.</strong>
+        <span data-passport-subtitle>Start at gate one.</span>
+      </div>
+      <div class="passport__actions">
+        <a data-passport-next href="/lobby/gate-one">Start gate one</a>
+        <button type="button" data-passport-copy>Copy receipt</button>
+      </div>
+    </section>
+
+    <section class="passport__stamps" aria-label="Gate stamps">
+      {gates.map((gate) => (
+        <article
+          class="passport-card"
+          data-passport-card={gate.id}
+          style={`--stamp-tone: ${gate.tone};`}
+        >
+          <div class="passport-card__stamp" aria-hidden="true">
+            <span>{gate.stamp}</span>
+          </div>
+          <div class="passport-card__body">
+            <span class="passport-card__number">{gate.number}</span>
+            <h2>{gate.title}</h2>
+            <p>{gate.note}</p>
+            <div class="passport-card__meter">
+              <span data-card-count>0 / {gate.target}</span>
+              <div aria-hidden="true"><span data-card-bar></span></div>
+            </div>
+            <a href={gate.route} data-card-route>Open gate</a>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="passport__receipt" aria-label="Printable receipt">
+      <div>
+        <p class="passport__kicker">desk receipt</p>
+        <h2 data-receipt-heading>No stamps printed yet.</h2>
+      </div>
+      <pre data-passport-receipt>POINTCAST LOBBY PASSPORT
+0/5 STAMPS
+NEXT: GATE ONE</pre>
+    </section>
+  </main>
+</BaseLayout>
+
+<script>
+  const storageKey = 'pc:lobby-gates:v1';
+  const gates = [
+    { id: 'knock', number: '01', title: 'The Brass Knock', target: 5, route: '/lobby/gate-one' },
+    { id: 'errands', number: '02', title: 'Ten Tiny Things', target: 10, route: '/lobby/gate-two' },
+    { id: 'bells', number: '03', title: 'Eight Bell Rungs', target: 8, route: '/lobby/gate-three' },
+    { id: 'routes', number: '04', title: 'Six Route Stamps', target: 6, route: '/lobby/gate-four' },
+    { id: 'again', number: '05', title: 'Keep Going Machine', target: 8, route: '/lobby/gate-five' },
+  ];
+
+  function readRun() {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function gateCount(raw, target) {
+    const doneCount = Array.isArray(raw?.done) ? raw.done.length : 0;
+    const count = Number(raw?.count) || doneCount || 0;
+    return Math.min(target, Math.max(0, count));
+  }
+
+  function receiptText(summaries, completed, nextGate) {
+    const lines = [
+      'POINTCAST LOBBY PASSPORT',
+      `${completed}/5 STAMPS`,
+      `NEXT: ${nextGate ? nextGate.title.toUpperCase() : 'KEEP GOING'}`,
+      '',
+      ...summaries.map((gate) => `${gate.number} ${gate.title}: ${gate.complete ? 'STAMPED' : `${gate.count}/${gate.target}`}`),
+    ];
+    return lines.join('\n');
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+
+  function initPassport() {
+    const root = document.querySelector('[data-passport]');
+    if (!root || root.hasAttribute('data-passport-bound')) return;
+    root.setAttribute('data-passport-bound', '');
+
+    const countNode = root.querySelector('[data-passport-count]');
+    const barNode = root.querySelector('[data-passport-bar]');
+    const titleNode = root.querySelector('[data-passport-title]');
+    const subtitleNode = root.querySelector('[data-passport-subtitle]');
+    const nextLink = root.querySelector('[data-passport-next]');
+    const copyButton = root.querySelector('[data-passport-copy]');
+    const receiptNode = root.querySelector('[data-passport-receipt]');
+    const receiptHeading = root.querySelector('[data-receipt-heading]');
+    let latestReceipt = '';
+
+    function paint() {
+      const run = readRun();
+      const summaries = gates.map((gate, index) => {
+        const raw = run[gate.id] || {};
+        const count = gateCount(raw, gate.target);
+        const complete = Boolean(raw.complete) || count >= gate.target;
+        const unlocked = index === 0 || Boolean(run[gates[index - 1].id]?.complete);
+        return { ...gate, count, complete, unlocked };
+      });
+      const completed = summaries.filter((gate) => gate.complete).length;
+      const nextGate = summaries.find((gate) => !gate.complete) || null;
+      latestReceipt = receiptText(summaries, completed, nextGate);
+
+      if (countNode) countNode.textContent = `${completed} / 5 stamp${completed === 1 ? '' : 's'}`;
+      if (barNode) barNode.style.inlineSize = `${(completed / gates.length) * 100}%`;
+      if (titleNode) {
+        titleNode.textContent = completed === gates.length
+          ? 'All five gates are stamped.'
+          : completed === 0
+            ? 'Passport waiting.'
+            : `${completed} stamp${completed === 1 ? '' : 's'} in the book.`;
+      }
+      if (subtitleNode) {
+        subtitleNode.textContent = nextGate
+          ? `Next up: ${nextGate.number} ${nextGate.title}.`
+          : 'The lobby run is complete. The loop is ready whenever you are.';
+      }
+      if (nextLink) {
+        nextLink.setAttribute('href', nextGate?.route || '/lobby/gate-five');
+        nextLink.textContent = nextGate ? `Open ${nextGate.title}` : 'Run keep-going machine';
+      }
+      if (receiptNode) receiptNode.textContent = latestReceipt;
+      if (receiptHeading) {
+        receiptHeading.textContent = completed === gates.length
+          ? 'Full passport printed.'
+          : `${gates.length - completed} stamp${gates.length - completed === 1 ? '' : 's'} still blank.`;
+      }
+
+      summaries.forEach((gate) => {
+        const card = root.querySelector(`[data-passport-card="${gate.id}"]`);
+        const cardCount = card?.querySelector('[data-card-count]');
+        const cardBar = card?.querySelector('[data-card-bar]');
+        const route = card?.querySelector('[data-card-route]');
+        card?.toggleAttribute('data-complete', gate.complete);
+        card?.toggleAttribute('data-unlocked', gate.unlocked);
+        if (cardCount) cardCount.textContent = gate.complete ? 'stamped' : `${gate.count} / ${gate.target}`;
+        if (cardBar) cardBar.style.inlineSize = `${(gate.count / gate.target) * 100}%`;
+        if (route) route.textContent = gate.complete ? 'Visit again' : gate.unlocked ? 'Open gate' : 'Locked-ish';
+      });
+    }
+
+    copyButton?.addEventListener('click', async () => {
+      await copyText(latestReceipt);
+      copyButton.textContent = 'Copied';
+      window.setTimeout(() => {
+        copyButton.textContent = 'Copy receipt';
+      }, 1200);
+    });
+
+    paint();
+    window.addEventListener('storage', (event) => {
+      if (event.key === storageKey) paint();
+    });
+  }
+
+  initPassport();
+  document.addEventListener('astro:page-load', initPassport);
+</script>
+
+<style>
+  .passport {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4.5rem;
+    color: #1a1208;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .passport__hero {
+    position: relative;
+    border: 2px solid #1a1208;
+    background:
+      linear-gradient(135deg, rgba(255, 210, 74, 0.6), transparent 44%),
+      linear-gradient(45deg, rgba(74, 214, 255, 0.25), rgba(255, 107, 157, 0.18)),
+      #fffdf8;
+    box-shadow: 8px 8px 0 rgba(26, 18, 8, 0.14);
+    padding: clamp(1rem, 4vw, 2rem);
+  }
+
+  .passport__back,
+  .passport__actions a,
+  .passport__actions button,
+  .passport-card a {
+    border: 1px solid #1a1208;
+    background: #fffdf8;
+    color: #1a1208;
+    font: 800 0.72rem/1 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    padding: 0.7rem 0.8rem;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .passport__back {
+    display: inline-block;
+    margin-bottom: 1rem;
+  }
+
+  .passport__kicker,
+  .passport__summary,
+  .passport-card__number,
+  .passport-card__meter,
+  .passport-card__stamp,
+  .passport__receipt pre {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .passport__kicker {
+    margin: 0 0 0.45rem;
+    color: #8a2432;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .passport h1 {
+    max-width: 760px;
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(2.7rem, 10vw, 7rem);
+    line-height: 0.86;
+    text-transform: uppercase;
+  }
+
+  .passport__hero p:not(.passport__kicker) {
+    max-width: 680px;
+    margin: 1rem 0 0;
+    color: #4d4337;
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    line-height: 1.45;
+  }
+
+  .passport__summary {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1fr) auto;
+    gap: 1px;
+    margin: 2rem 0;
+    border: 2px solid #1a1208;
+    background: #1a1208;
+  }
+
+  .passport__meter,
+  .passport__status,
+  .passport__actions {
+    background: #fffdf8;
+    padding: 1rem;
+  }
+
+  .passport__meter {
+    display: grid;
+    gap: 0.7rem;
+    align-content: center;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .passport__track,
+  .passport-card__meter div {
+    height: 11px;
+    border: 1px solid #1a1208;
+    background: #f1ead8;
+  }
+
+  .passport__track span,
+  .passport-card__meter div span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: repeating-linear-gradient(90deg, #0f6e56 0 14px, #ffd24a 14px 22px);
+    transition: width 220ms ease;
+  }
+
+  .passport__status {
+    display: grid;
+    gap: 0.35rem;
+    align-content: center;
+  }
+
+  .passport__status strong {
+    font-size: 0.9rem;
+  }
+
+  .passport__status span {
+    color: #5f5e5a;
+    font-size: 0.7rem;
+  }
+
+  .passport__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .passport__actions a {
+    background: #ffd24a;
+  }
+
+  .passport__actions button {
+    cursor: pointer;
+  }
+
+  .passport__stamps {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+
+  .passport-card {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: 360px;
+    border: 2px solid #1a1208;
+    background: #fffdf8;
+    box-shadow: 6px 6px 0 rgba(26, 18, 8, 0.12);
+    opacity: 0.68;
+  }
+
+  .passport-card[data-unlocked],
+  .passport-card[data-complete] {
+    opacity: 1;
+  }
+
+  .passport-card__stamp {
+    display: grid;
+    place-items: center;
+    min-height: 112px;
+    border-bottom: 2px solid #1a1208;
+    background:
+      radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--stamp-tone) 60%, transparent), transparent 46%),
+      repeating-linear-gradient(-45deg, rgba(26, 18, 8, 0.06) 0 8px, transparent 8px 16px),
+      #f8efd9;
+  }
+
+  .passport-card__stamp span {
+    display: grid;
+    place-items: center;
+    width: 86px;
+    height: 86px;
+    border: 3px double #1a1208;
+    border-radius: 50%;
+    background: #fffdf8;
+    color: #7b7265;
+    font-size: 0.72rem;
+    font-weight: 900;
+    transform: rotate(-8deg);
+  }
+
+  .passport-card[data-complete] .passport-card__stamp span {
+    background: var(--stamp-tone);
+    color: #1a1208;
+    transform: rotate(-8deg) scale(1.06);
+  }
+
+  .passport-card__body {
+    display: grid;
+    gap: 0.7rem;
+    align-content: start;
+    padding: 0.9rem;
+  }
+
+  .passport-card__number {
+    color: #8a2432;
+    font-size: 0.75rem;
+    font-weight: 900;
+  }
+
+  .passport-card h2 {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 1.15rem;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .passport-card p {
+    margin: 0;
+    color: #5f5e5a;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .passport-card__meter {
+    display: grid;
+    gap: 0.4rem;
+    color: #5f5e5a;
+    font-size: 0.64rem;
+  }
+
+  .passport-card a {
+    align-self: end;
+    justify-self: start;
+    margin-top: auto;
+  }
+
+  .passport-card[data-complete] a {
+    background: #dff4e8;
+  }
+
+  .passport__receipt {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+    gap: 1px;
+    margin-top: 2rem;
+    border: 2px solid #1a1208;
+    background: #1a1208;
+  }
+
+  .passport__receipt > div,
+  .passport__receipt pre {
+    background: #fffdf8;
+    margin: 0;
+    padding: 1rem;
+  }
+
+  .passport__receipt h2 {
+    margin: 0;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(1.4rem, 4vw, 2.4rem);
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .passport__receipt pre {
+    overflow: auto;
+    color: #1a1208;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 980px) {
+    .passport__summary,
+    .passport__receipt {
+      grid-template-columns: 1fr;
+    }
+
+    .passport__stamps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .passport {
+      padding-inline: 0.85rem;
+    }
+
+    .passport__stamps {
+      grid-template-columns: 1fr;
+    }
+
+    .passport-card {
+      min-height: 0;
+    }
+
+    .passport__actions {
+      justify-content: stretch;
+    }
+
+    .passport__actions a,
+    .passport__actions button {
+      flex: 1 1 100%;
+      text-align: center;
+    }
+  }
+</style>
