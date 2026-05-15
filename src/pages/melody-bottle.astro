@@ -635,6 +635,48 @@ const built = new Date().toISOString();
       const a = document.getElementById('mbo-sms')! as HTMLAnchorElement;
       a.href = smsHref();
     }
+
+    // ---- shelf (localStorage, shared with drum-bottle/call/octet) ----
+    // /drum-shelf reads this same key and renders by kind. We add 'melody'
+    // as a new kind alongside 'bottle' / 'call' / 'octet'.
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+    const SHELF_MAX = 100;
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+      kind?: 'bottle' | 'call' | 'octet' | 'melody';
+    }
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+    function saveShelf(items: ShelfItem[]) {
+      try {
+        localStorage.setItem(SHELF_KEY, JSON.stringify({ v: SHELF_VERSION, items }));
+      } catch { /* fail silently */ }
+    }
+    function saveToShelf(dir: 'made' | 'received') {
+      const code = encode(steps, bpm);
+      const items = loadShelf();
+      const key = `${code}::${dir}::${fromPid}::melody`;
+      const existing = items.findIndex((it) =>
+        `${it.code}::${it.dir}::${it.from}::${it.kind || 'bottle'}` === key);
+      const entry: ShelfItem = { code, bpm, from: fromPid, dir, t: Date.now(), kind: 'melody' };
+      if (existing >= 0) items[existing] = entry;
+      else items.unshift(entry);
+      items.sort((a, b) => b.t - a.t);
+      if (items.length > SHELF_MAX) items.length = SHELF_MAX;
+      saveShelf(items);
+    }
     async function copyText(text: string, msg: string) {
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -751,6 +793,8 @@ const built = new Date().toISOString();
         const decoded = decode(code);
         if (decoded) {
           enterReceivedMode(decoded.steps, decoded.bpm, sender);
+          // Save the received tune to the shared shelf
+          saveToShelf('received');
         } else {
           enterComposeMode();
           showToast('couldn\'t decode that melody');
@@ -777,7 +821,8 @@ const built = new Date().toISOString();
       // Actions
       document.getElementById('mbo-copy')!.addEventListener('click', () => {
         if (patternEmpty(steps)) { showToast('add some notes first'); return; }
-        copyText(shareUrl(), 'copied · 12 chars');
+        saveToShelf('made');
+        copyText(shareUrl(), 'copied · saved to shelf');
       });
       document.getElementById('mbo-clear')!.addEventListener('click', () => {
         steps = new Array(STEPS).fill(0);

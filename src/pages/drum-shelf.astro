@@ -1,11 +1,11 @@
 ---
 /**
- * /drum-shelf — your local-only wallet of bottles, calls & octets.
+ * /drum-shelf — your local-only wallet of bottles, calls, octets & melodies.
  *
  * Reads localStorage['pc-drum-shelf'] (written by /drum-bottle,
- * /drum-call-and-response, and /drum-octet on every copy-share-link
- * or received-mode load). Renders the list newest-first as a column
- * of rows, each showing:
+ * /drum-call-and-response, /drum-octet, and /melody-bottle on every
+ * copy-share-link or received-mode load). Renders the list newest-first
+ * as a column of rows, each showing:
  *
  *   • CSS-only mini-preview shaped per kind:
  *       - bottle: 16 × 4 grid
@@ -227,6 +227,28 @@ const built = new Date().toISOString();
     }
     .dsh__mini-beat--empty { opacity: 0.20; }
 
+    /* Melody mini: 15-row pentatonic piano roll, condensed */
+    .dsh__mini-melody {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      gap: 1px;
+      aspect-ratio: 16 / 7;
+      background: rgba(0,0,0,0.35);
+      border-radius: 4px;
+      padding: 2px;
+    }
+    .dsh__melody-cell {
+      background: transparent;
+      border-radius: 1px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .dsh__melody-cell--on { background: var(--melody-color); }
+    .dsh__melody-cell--low.dsh__melody-cell--on  { --melody-color: #ff8a70; }
+    .dsh__melody-cell--mid.dsh__melody-cell--on  { --melody-color: #c9a8ef; }
+    .dsh__melody-cell--high.dsh__melody-cell--on { --melody-color: #8aeac0; }
+
     /* Meta column */
     .dsh__meta {
       display: flex;
@@ -272,6 +294,10 @@ const built = new Date().toISOString();
     .dsh__chip--kind-octet {
       background: rgba(138, 234, 192, 0.12);
       color: var(--dsh-mint);
+    }
+    .dsh__chip--kind-melody {
+      background: rgba(201, 168, 239, 0.12);
+      color: var(--dsh-mauve);
     }
     .dsh__from {
       font-family: 'Inter Tight', sans-serif;
@@ -471,7 +497,7 @@ const built = new Date().toISOString();
     const SHELF_KEY = 'pc-drum-shelf';
     const SHELF_VERSION = 1;
 
-    type Kind = 'bottle' | 'call' | 'octet';
+    type Kind = 'bottle' | 'call' | 'octet' | 'melody';
     interface ShelfItem {
       code: string;
       bpm: number;
@@ -526,6 +552,20 @@ const built = new Date().toISOString();
         }
       }
       return { call: a, resp: b };
+    }
+    // /melody-bottle: 9 bytes → 16 steps × 4-bit pitch (0=rest, 1..15=pentatonic)
+    function decodeMelody(code: string): { steps: number[]; bpm: number } | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 9) return null;
+      const steps: number[] = new Array(16).fill(0);
+      for (let i = 0; i < 8; i++) {
+        const b = bytes[i];
+        steps[2 * i]     = b & 0x0f;
+        steps[2 * i + 1] = (b >> 4) & 0x0f;
+      }
+      const bp = 40 + bytes[8];
+      if (bp < 40 || bp > 220) return null;
+      return { steps, bpm: bp };
     }
     // /drum-octet: 4..18 bytes → N beats × 4 voices × 4 cells
     function decodeOctet(code: string): boolean[][][] | null {
@@ -589,6 +629,23 @@ const built = new Date().toISOString();
       }
       return wrap;
     }
+    // Melody piano-roll mini: 15 rows × 16 cols, one cell per column
+    function makeMelodyMini(stepsArr: number[]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-melody';
+      // 15 pitch rows × 16 step cols (pitch 14=A6 top, pitch 0=C4 bottom)
+      for (let row = 0; row < 15; row++) {
+        for (let col = 0; col < 16; col++) {
+          const cell = document.createElement('span');
+          const pitchIdx = 14 - row;  // row 0 = pitch 14 (A6, top)
+          const isOn = stepsArr[col] === pitchIdx + 1;
+          const octave = pitchIdx < 5 ? 'low' : pitchIdx < 10 ? 'mid' : 'high';
+          cell.className = `dsh__melody-cell dsh__melody-cell--${octave}` + (isOn ? ' dsh__melody-cell--on' : '');
+          wrap.appendChild(cell);
+        }
+      }
+      return wrap;
+    }
     // Two stacked minis for call-and-response (call on top, response on bottom)
     function makeCallMini(call: boolean[][], resp: boolean[][]): HTMLElement {
       const wrap = document.createElement('div');
@@ -621,9 +678,10 @@ const built = new Date().toISOString();
 
     function urlFor(item: ShelfItem): string {
       const kind = itemKind(item);
-      const slug = kind === 'call'  ? '/drum-call-and-response'
-                : kind === 'octet' ? '/drum-octet'
-                :                    '/drum-bottle';
+      const slug = kind === 'call'   ? '/drum-call-and-response'
+                : kind === 'octet'  ? '/drum-octet'
+                : kind === 'melody' ? '/melody-bottle'
+                :                     '/drum-bottle';
       return `${slug}?p=${encodeURIComponent(item.code)}` +
         (item.from ? `&from=${encodeURIComponent(item.from)}` : '');
     }
@@ -636,6 +694,9 @@ const built = new Date().toISOString();
       } else if (kind === 'octet') {
         const decoded = decodeOctet(item.code);
         if (decoded) return makeOctetMini(decoded);
+      } else if (kind === 'melody') {
+        const decoded = decodeMelody(item.code);
+        if (decoded) return makeMelodyMini(decoded.steps);
       } else {
         const decoded = decodeBottle(item.code);
         if (decoded) return makeBottleMini(decoded);
@@ -646,9 +707,10 @@ const built = new Date().toISOString();
     }
 
     function kindLabel(kind: Kind): { label: string; chars: string } {
-      if (kind === 'call')  return { label: 'call+resp', chars: '24 chars' };
-      if (kind === 'octet') return { label: 'octet',     chars: '6..24 ch' };
-      return                       { label: 'bottle',    chars: '12 chars' };
+      if (kind === 'call')   return { label: 'call+resp', chars: '24 chars' };
+      if (kind === 'octet')  return { label: 'octet',     chars: '6..24 ch' };
+      if (kind === 'melody') return { label: 'melody',    chars: '12 chars' };
+      return                        { label: 'bottle',    chars: '12 chars' };
     }
 
     function fromLine(item: ShelfItem): string {
@@ -754,10 +816,12 @@ const built = new Date().toISOString();
       const bottles = items.filter((i) => itemKind(i) === 'bottle').length;
       const calls   = items.filter((i) => itemKind(i) === 'call').length;
       const octets  = items.filter((i) => itemKind(i) === 'octet').length;
+      const melodies = items.filter((i) => itemKind(i) === 'melody').length;
       const kindBits: string[] = [];
-      if (bottles) kindBits.push(`${bottles} bottle${bottles === 1 ? '' : 's'}`);
-      if (calls)   kindBits.push(`${calls} call${calls === 1 ? '' : 's'}`);
-      if (octets)  kindBits.push(`${octets} octet${octets === 1 ? '' : 's'}`);
+      if (bottles)  kindBits.push(`${bottles} bottle${bottles === 1 ? '' : 's'}`);
+      if (calls)    kindBits.push(`${calls} call${calls === 1 ? '' : 's'}`);
+      if (octets)   kindBits.push(`${octets} octet${octets === 1 ? '' : 's'}`);
+      if (melodies) kindBits.push(`${melodies} melod${melodies === 1 ? 'y' : 'ies'}`);
       countEl.textContent = `${kindBits.join(' · ')} · ${made} made · ${received} received`;
 
       const frag = document.createDocumentFragment();
@@ -828,13 +892,22 @@ const built = new Date().toISOString();
       }
     }
 
+    // Pentatonic frequencies for /melody-bottle playback (C major across 3 oct)
+    const PENT_FREQS = [
+      261.63, 293.66, 329.63, 392.00, 440.00,
+      523.25, 587.33, 659.25, 783.99, 880.00,
+      1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    ];
+
     // Per-item playback shape — decoded once and cached for the item
     interface PlayShape {
       kind: Kind;
       totalSteps: number;
       bpm: number;
-      // For step s, return [voice -> hit?] (4-tuple)
+      // For step s, return [voice -> hit?] (4-tuple) for drum kinds
       stepHit(s: number): boolean[];
+      // For step s, return pitch index 0..14 or -1 for rest (melody only)
+      melodyHit?(s: number): number;
     }
     function shapeFor(item: ShelfItem): PlayShape | null {
       const kind = itemKind(item);
@@ -877,7 +950,52 @@ const built = new Date().toISOString();
           },
         };
       }
+      if (kind === 'melody') {
+        const m = decodeMelody(item.code);
+        if (!m) return null;
+        return {
+          kind, totalSteps: 16, bpm: m.bpm,
+          stepHit() { return [false, false, false, false]; },  // unused for melody
+          melodyHit(s) {
+            const v = m.steps[s % 16];
+            return v === 0 ? -1 : v - 1;  // 0 in storage = rest, else pitch idx
+          },
+        };
+      }
       return null;
+    }
+
+    // Melodic pluck — same as /melody-bottle's playNote
+    function playPentatonicNote(pitchIdx: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const freq = PENT_FREQS[pitchIdx];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.45);
+      // 2x harmonic shimmer
+      const o2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o2.type = 'sine';
+      o2.frequency.value = freq * 2;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.008);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o2.connect(g2).connect(masterGain);
+      scheduler.trackSource(o2);
+      o2.start(t);
+      o2.stop(t + 0.25);
     }
 
     let playAllState: {
@@ -919,10 +1037,15 @@ const built = new Date().toISOString();
         stopPlayAll();
         return;
       }
-      // Fire voices at this step
-      const hits = shape.stepHit(playAllState.step);
-      for (let v = 0; v < 4; v++) {
-        if (hits[v]) playVoice(VOICE_NAMES[v]);
+      // Fire voices/pitch at this step
+      if (shape.kind === 'melody' && shape.melodyHit) {
+        const pitch = shape.melodyHit(playAllState.step);
+        if (pitch >= 0) playPentatonicNote(pitch);
+      } else {
+        const hits = shape.stepHit(playAllState.step);
+        for (let v = 0; v < 4; v++) {
+          if (hits[v]) playVoice(VOICE_NAMES[v]);
+        }
       }
       playAllState.step++;
       if (playAllState.step >= shape.totalSteps) {
