@@ -1215,6 +1215,88 @@
       }, dur);
     }
 
+    // ─── kite (companion) ────────────────────────────────────────
+    // Glides at mid-screen height (~35vh), ltr or rtl, click to dismiss.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite gliding mid-screen. Click to bring down.');
+      kite.title = 'click to bring the kite down';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 35000;
+      // ~70px/s feel; cap to avoid racing across tiny screens
+      var walkSeconds = Math.max(9, Math.min(22, window.innerWidth / 70));
+      kite.style.animation = 'spell-kite-glide-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── meteor (burst) ──────────────────────────────────────────
+    // 5 shooting stars streak diagonally; staggered 260ms apart.
+    function castMeteor(durationMs) {
+      if (reduce()) return;
+      var count = 5;
+      var dur = durationMs || 2200;
+      for (var i = 0; i < count; i++) {
+        var m = document.createElement('span');
+        m.className = 'spell-meteor';
+        var startX = (5 + Math.random() * 55).toFixed(1);
+        var startY = (5 + Math.random() * 40).toFixed(1);
+        var delay = i * 260;
+        var speed = 450 + Math.floor(Math.random() * 350);
+        m.style.cssText =
+          'left:' + startX + 'vw;' +
+          'top:' + startY + 'vh;' +
+          'animation-delay:' + delay + 'ms;' +
+          'animation-duration:' + speed + 'ms;';
+        $layer.appendChild(m);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(m);
+      }
+    }
+
+    // ─── tide (ambient) ──────────────────────────────────────────
+    // Three layered wave-shaped divs drift at the bottom. Organic
+    // border-radius creates a gentle wavy top edge. Click to pull back.
+    function castTide() {
+      if (active.byId.tide) return;
+      var tide = document.createElement('button');
+      tide.className = 'spell-tide';
+      tide.type = 'button';
+      tide.setAttribute('aria-label', 'Tide overlay. Click to pull back the sea.');
+      tide.title = 'click to pull back the tide';
+      tide.innerHTML =
+        '<span class="spell-tide__wave spell-tide__wave--back"></span>' +
+        '<span class="spell-tide__wave spell-tide__wave--mid"></span>' +
+        '<span class="spell-tide__wave spell-tide__wave--front"></span>';
+      tide.addEventListener('click', function () {
+        if (tide.parentNode) tide.parentNode.removeChild(tide);
+        active.byId.tide = null;
+      });
+      $layer.appendChild(tide);
+      active.byId.tide = tide;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1336,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'kite':         castKite(35000); break;
+        case 'meteor':       castMeteor(2200); break;
+        case 'tide':         castTide(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2381,6 +2466,110 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ── kite (companion, batch 13) ─────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    top: 35vh;
+    left: -50px;
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 36px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+  }
+  .spell-kite[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-kite-glide-ltr {
+    0%   { left: -50px; }
+    100% { left: calc(100vw + 50px); }
+  }
+  @keyframes spell-kite-glide-rtl {
+    0%   { left: calc(100vw + 50px); }
+    100% { left: -50px; }
+  }
+
+  /* ── meteor (burst, batch 13) ───────────────────────────── */
+  .spell-meteor {
+    position: fixed;
+    width: 110px;
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(255, 220, 130, 0.25) 35%,
+      rgba(255, 245, 200, 0.85) 80%,
+      white 100%
+    );
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 31;
+    filter: drop-shadow(0 0 4px rgba(255, 220, 120, 0.7));
+    animation: spell-meteor-streak linear forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-meteor-streak {
+    0%   { transform: translate(0, 0) rotate(30deg); opacity: 0; }
+    8%   { opacity: 1; }
+    90%  { opacity: 0.9; }
+    100% { transform: translate(55vw, 32vh) rotate(30deg); opacity: 0; }
+  }
+
+  /* ── tide (ambient, batch 13) ───────────────────────────── */
+  .spell-tide {
+    position: fixed;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    height: 100px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-tide__wave {
+    position: absolute;
+    bottom: 0;
+    left: -15%;
+    width: 130%;
+    border-radius: 44% 56% 38% 62% / 60% 44% 56% 40%;
+    pointer-events: none;
+  }
+  .spell-tide__wave--back {
+    height: 55%;
+    left: -20%;
+    width: 140%;
+    background: rgba(74, 158, 255, 0.07);
+    border-radius: 62% 38% 56% 44% / 40% 60% 44% 56%;
+    animation: spell-tide-roll 10s ease-in-out 3s infinite alternate;
+  }
+  .spell-tide__wave--mid {
+    height: 68%;
+    left: -10%;
+    width: 120%;
+    background: rgba(47, 143, 95, 0.1);
+    border-radius: 38% 62% 44% 56% / 56% 40% 60% 44%;
+    animation: spell-tide-roll 8s ease-in-out 1.5s infinite alternate-reverse;
+  }
+  .spell-tide__wave--front {
+    height: 82%;
+    background: rgba(74, 158, 255, 0.15);
+    animation: spell-tide-roll 6s ease-in-out infinite alternate;
+  }
+  @keyframes spell-tide-roll {
+    0%   { transform: translateX(-8%) scaleY(1); }
+    100% { transform: translateX(8%) scaleY(1.06); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2409,7 +2598,9 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-kite,
+    .spell-tide__wave { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2419,7 +2610,8 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2620,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-meteor { display: none; } /* meteor is motion-only */
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
