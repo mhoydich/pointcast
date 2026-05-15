@@ -56,7 +56,11 @@ const built = new Date().toISOString();
     </section>
 
     <footer class="dsh__footer" id="dsh-footer" hidden>
-      <button class="dsh__clear" id="dsh-clear" type="button">clear shelf</button>
+      <div class="dsh__footer-buttons">
+        <button class="dsh__play-all" id="dsh-play-all" type="button">▶ play all</button>
+        <button class="dsh__stop-all" id="dsh-stop-all" type="button" hidden>⏹ stop</button>
+        <button class="dsh__clear" id="dsh-clear" type="button">clear shelf</button>
+      </div>
       <span class="dsh__count" id="dsh-count"></span>
     </footer>
 
@@ -335,11 +339,39 @@ const built = new Date().toISOString();
       margin-bottom: 32px;
       border-top: 1px solid rgba(244,231,200,0.10);
       padding-top: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
     }
-    .dsh__clear {
-      border: 1px solid rgba(255,107,138,0.30);
-      background: transparent;
+    .dsh__footer-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .dsh__play-all, .dsh__stop-all {
+      border: 1px solid rgba(246,193,94,0.45);
+      background: rgba(246,193,94,0.12);
+      color: var(--dsh-flame);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .dsh__play-all:hover, .dsh__stop-all:hover {
+      background: rgba(246,193,94,0.22);
+    }
+    .dsh__stop-all {
+      border-color: rgba(255,107,138,0.45);
+      background: rgba(255,107,138,0.12);
       color: var(--dsh-coral);
+    }
+    .dsh__stop-all:hover { background: rgba(255,107,138,0.22); }
+    .dsh__clear {
+      border: 1px solid rgba(244,231,200,0.18);
+      background: transparent;
+      color: var(--dsh-cream-dim);
       font-family: inherit;
       font-size: 12px;
       letter-spacing: 0.06em;
@@ -348,13 +380,36 @@ const built = new Date().toISOString();
       cursor: pointer;
     }
     .dsh__clear:hover {
-      background: rgba(255,107,138,0.10);
-      border-color: rgba(255,107,138,0.5);
+      color: var(--dsh-coral);
+      border-color: rgba(255,107,138,0.40);
+      background: rgba(255,107,138,0.06);
     }
     .dsh__count {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
       color: var(--dsh-cream-dim);
+    }
+
+    /* Now-playing row highlight */
+    .dsh__row--playing {
+      border-color: var(--dsh-flame) !important;
+      box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.30);
+      background: rgba(246, 193, 94, 0.06) !important;
+    }
+    .dsh__row--playing::before {
+      content: '▶';
+      position: absolute;
+      left: -22px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--dsh-flame);
+      font-size: 14px;
+      animation: dshPulse 1.2s ease-in-out infinite;
+    }
+    .dsh__row { position: relative; }
+    @keyframes dshPulse {
+      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+      50%      { opacity: 1.0; transform: translateY(-50%) scale(1.15); }
     }
 
     /* NOTES */
@@ -407,9 +462,12 @@ const built = new Date().toISOString();
   </style>
 
   <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
     const ROWS = 4;
     const STEPS = 16;
     const VOICE_NAMES = ['low', 'mid', 'high', 'bell'] as const;
+    type Voice = typeof VOICE_NAMES[number];
     const SHELF_KEY = 'pc-drum-shelf';
     const SHELF_VERSION = 1;
 
@@ -709,17 +767,244 @@ const built = new Date().toISOString();
       listEl.appendChild(frag);
     }
 
+    // ---- Play All jukebox engine ----
+    // Walks the shelf newest-first, plays each item's pattern once at its
+    // native BPM, then moves to the next item. Loops the whole sequence
+    // until stopped.
+    //
+    // Per-kind step counts:
+    //   bottle: 16 cells × 1 bar
+    //   call+resp: 16 + 16 = 32 cells (call then response)
+    //   octet: N beats × 4 cells = 4..32 cells
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(ctx.destination);
+    }
+    const VOICE_CFG: Record<Voice, { freq: number; bell: boolean }> = {
+      low:  { freq:  70, bell: false },
+      mid:  { freq: 120, bell: false },
+      high: { freq: 200, bell: false },
+      bell: { freq: 600, bell: true  },
+    };
+    function playVoice(voice: Voice) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const cfg = VOICE_CFG[voice];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = cfg.bell ? 'sine' : 'triangle';
+      osc.frequency.value = cfg.freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.45, t + 0.004);
+      const tail = cfg.bell ? 1.0 : 0.35;
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+      if (cfg.bell) {
+        for (const mult of [2, 3]) {
+          const o = ctx.createOscillator();
+          const gg = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = cfg.freq * mult;
+          gg.gain.setValueAtTime(0.0001, t);
+          gg.gain.exponentialRampToValueAtTime(0.12 / mult, t + 0.008);
+          gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.7 / mult);
+          o.connect(gg).connect(masterGain);
+          scheduler.trackSource(o);
+          o.start(t);
+          o.stop(t + 0.75);
+        }
+      }
+    }
+
+    // Per-item playback shape — decoded once and cached for the item
+    interface PlayShape {
+      kind: Kind;
+      totalSteps: number;
+      bpm: number;
+      // For step s, return [voice -> hit?] (4-tuple)
+      stepHit(s: number): boolean[];
+    }
+    function shapeFor(item: ShelfItem): PlayShape | null {
+      const kind = itemKind(item);
+      if (kind === 'bottle') {
+        const p = decodeBottle(item.code);
+        if (!p) return null;
+        return {
+          kind, totalSteps: 16, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % 16;
+            return [p[0][c], p[1][c], p[2][c], p[3][c]];
+          },
+        };
+      }
+      if (kind === 'call') {
+        const d = decodeCall(item.code);
+        if (!d) return null;
+        return {
+          kind, totalSteps: 32, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % 32;
+            const which = c < 16 ? d.call : d.resp;
+            const col = c % 16;
+            return [which[0][col], which[1][col], which[2][col], which[3][col]];
+          },
+        };
+      }
+      if (kind === 'octet') {
+        const beats = decodeOctet(item.code);
+        if (!beats) return null;
+        const total = beats.length * 4;
+        return {
+          kind, totalSteps: total, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % total;
+            const beatIdx = Math.floor(c / 4);
+            const cellIdx = c % 4;
+            const beat = beats[beatIdx];
+            return [beat[0][cellIdx], beat[1][cellIdx], beat[2][cellIdx], beat[3][cellIdx]];
+          },
+        };
+      }
+      return null;
+    }
+
+    let playAllState: {
+      playing: boolean;
+      items: ShelfItem[];
+      idx: number;
+      step: number;
+      shape: PlayShape | null;
+      timer: number | null;
+    } = { playing: false, items: [], idx: 0, step: 0, shape: null, timer: null };
+
+    function highlightPlayingRow(idx: number | null) {
+      document.querySelectorAll('.dsh__row--playing').forEach((el) => el.classList.remove('dsh__row--playing'));
+      if (idx == null) return;
+      const rows = document.querySelectorAll('.dsh__row');
+      const row = rows[idx] as HTMLElement | undefined;
+      if (row) row.classList.add('dsh__row--playing');
+    }
+
+    function loadNextItemShape() {
+      const item = playAllState.items[playAllState.idx];
+      if (!item) {
+        playAllState.shape = null;
+        return;
+      }
+      playAllState.shape = shapeFor(item);
+      // Skip undecodable items
+      while (!playAllState.shape && playAllState.items.length > 0) {
+        playAllState.idx = (playAllState.idx + 1) % playAllState.items.length;
+        playAllState.shape = shapeFor(playAllState.items[playAllState.idx]);
+        if (playAllState.idx === 0 && !playAllState.shape) break; // looped fully with nothing playable
+      }
+    }
+
+    function tickPlayAll() {
+      if (!playAllState.playing) return;
+      const shape = playAllState.shape;
+      if (!shape) {
+        stopPlayAll();
+        return;
+      }
+      // Fire voices at this step
+      const hits = shape.stepHit(playAllState.step);
+      for (let v = 0; v < 4; v++) {
+        if (hits[v]) playVoice(VOICE_NAMES[v]);
+      }
+      playAllState.step++;
+      if (playAllState.step >= shape.totalSteps) {
+        // Move to next item
+        playAllState.step = 0;
+        playAllState.idx = (playAllState.idx + 1) % playAllState.items.length;
+        loadNextItemShape();
+        highlightPlayingRow(playAllState.idx);
+      }
+      // Schedule next tick at current item's tempo (60/BPM/4 sec per cell)
+      const stepMs = (60_000 / (playAllState.shape?.bpm || 100)) / 4;
+      playAllState.timer = window.setTimeout(tickPlayAll, stepMs);
+    }
+
+    function startPlayAll() {
+      if (playAllState.playing) return;
+      ensureCtx();
+      const items = loadShelf().sort((a, b) => b.t - a.t);
+      if (items.length === 0) {
+        showToast('shelf is empty');
+        return;
+      }
+      playAllState.items = items;
+      playAllState.idx = 0;
+      playAllState.step = 0;
+      playAllState.playing = true;
+      loadNextItemShape();
+      if (!playAllState.shape) {
+        showToast('nothing playable on the shelf');
+        playAllState.playing = false;
+        return;
+      }
+      document.getElementById('dsh-play-all')!.hidden = true;
+      document.getElementById('dsh-stop-all')!.hidden = false;
+      highlightPlayingRow(playAllState.idx);
+      tickPlayAll();
+    }
+
+    function stopPlayAll() {
+      playAllState.playing = false;
+      if (playAllState.timer != null) {
+        clearTimeout(playAllState.timer);
+        playAllState.timer = null;
+      }
+      document.getElementById('dsh-play-all')!.hidden = false;
+      document.getElementById('dsh-stop-all')!.hidden = true;
+      highlightPlayingRow(null);
+    }
+
     function init() {
       render();
       document.getElementById('dsh-clear')!.addEventListener('click', () => {
         if (!confirm('Wipe the shelf? This can\'t be undone.')) return;
+        stopPlayAll();
         clearShelf();
         showToast('shelf cleared');
         render();
       });
+      document.getElementById('dsh-play-all')!.addEventListener('click', startPlayAll);
+      document.getElementById('dsh-stop-all')!.addEventListener('click', stopPlayAll);
+
+      // Keyboard: Space toggles play/stop when not focused in input
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (playAllState.playing) stopPlayAll();
+          else startPlayAll();
+        }
+      });
+
       // Listen for storage changes from other tabs (other /drum-bottle windows)
       window.addEventListener('storage', (e) => {
-        if (e.key === SHELF_KEY) render();
+        if (e.key === SHELF_KEY) {
+          // If we're playing and shelf changed, restart with the new ordering
+          const wasPlaying = playAllState.playing;
+          stopPlayAll();
+          render();
+          if (wasPlaying) startPlayAll();
+        }
       });
     }
 
