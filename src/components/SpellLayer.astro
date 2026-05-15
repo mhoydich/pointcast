@@ -1215,6 +1215,141 @@
       }, dur);
     }
 
+    // ─── hearts (burst) ─────────────────────────────────────────
+    // 20 hearts float upward from a random viewport point, each with a
+    // small random drift and size — similar to bubble but ↑ not ↗.
+    function castHearts(durationMs) {
+      if (reduce()) return;
+      var glyphs = ['❤️', '🧡', '💛', '💚', '💙', '💜', '🩷', '🤍'];
+      var count = 20;
+      var cx = (15 + Math.random() * 70).toFixed(1);
+      var cy = (35 + Math.random() * 30).toFixed(1);
+      for (var i = 0; i < count; i++) {
+        var h = document.createElement('span');
+        h.className = 'spell-heart';
+        h.setAttribute('aria-hidden', 'true');
+        h.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+        var size = 14 + Math.floor(Math.random() * 22);
+        var driftX = ((Math.random() - 0.5) * 180).toFixed(1);
+        var dur = 1600 + Math.floor(Math.random() * 1200);
+        var delay = Math.floor(Math.random() * 700);
+        h.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          'font-size:' + size + 'px;' +
+          '--spell-heart-dx:' + driftX + 'px;' +
+          'animation:spell-heart-float ' + dur + 'ms ease-out ' + delay + 'ms both;';
+        $layer.appendChild(h);
+        active.bursts++;
+        (function (el, d, dl) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, d + dl + 100);
+        })(h, dur, delay);
+      }
+    }
+
+    // ─── crab (companion) ────────────────────────────────────────
+    // Scuttles sideways across the bottom. The bob is baked into the
+    // walk keyframes so transform conflicts with [data-dir] are avoided
+    // (crabs are symmetric — no visual flip needed).
+    function castCrab(durationMs) {
+      if (active.byId.crab) {
+        var prev = active.byId.crab;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var crab = document.createElement('button');
+      crab.className = 'spell-crab';
+      crab.type = 'button';
+      crab.setAttribute('aria-label', 'A sideways-scuttling crab. Click to release it.');
+      crab.title = 'click to let the crab scuttle away';
+      crab.textContent = '🦀';
+      var ltr = Math.random() < 0.5;
+      var dur = durationMs || 50000;
+      var walkSeconds = Math.max(12, Math.min(30, window.innerWidth / 55));
+      if (reduce()) {
+        crab.style.cssText = 'left:50vw;';
+      } else {
+        crab.style.cssText = 'animation:spell-crab-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite;';
+      }
+      crab.addEventListener('click', function () {
+        if (crab.parentNode) crab.parentNode.removeChild(crab);
+        active.byId.crab = null;
+      });
+      $layer.appendChild(crab);
+      active.byId.crab = crab;
+      setTimeout(function () {
+        if (crab && crab.parentNode) crab.parentNode.removeChild(crab);
+        if (active.byId.crab === crab) active.byId.crab = null;
+      }, dur);
+    }
+
+    // ─── snail (companion) ───────────────────────────────────────
+    // The absolute slowest companion — ~14px/s, walkSeconds up to 90.
+    // Respects the same ltr/rtl flip pattern as cat/turtle.
+    function castSnail(durationMs) {
+      if (active.byId.snail) {
+        var prev = active.byId.snail;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var snail = document.createElement('button');
+      snail.className = 'spell-snail';
+      snail.type = 'button';
+      snail.setAttribute('aria-label', 'A very slow snail. Click to encourage it onward.');
+      snail.title = 'click to cheer the snail on';
+      snail.textContent = '🐌';
+      var ltr = Math.random() < 0.5;
+      snail.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 120000;
+      var walkSeconds = Math.max(45, Math.min(90, window.innerWidth / 14));
+      snail.style.cssText = 'animation:spell-snail-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite;';
+      snail.addEventListener('click', function () {
+        if (snail.parentNode) snail.parentNode.removeChild(snail);
+        active.byId.snail = null;
+      });
+      $layer.appendChild(snail);
+      active.byId.snail = snail;
+      setTimeout(function () {
+        if (snail && snail.parentNode) snail.parentNode.removeChild(snail);
+        if (active.byId.snail === snail) active.byId.snail = null;
+      }, dur);
+    }
+
+    // ─── cloud (ambient) ─────────────────────────────────────────
+    // Four ☁ glyphs at different sizes/heights drift in alternating
+    // directions across the top third of the viewport at very slow
+    // speeds — the interference creates a lazy sky effect. Click
+    // anywhere to clear. Recasting when active is a no-op.
+    function castCloud() {
+      if (active.byId.cloud) return;
+      var c = document.createElement('button');
+      c.className = 'spell-cloud';
+      c.type = 'button';
+      c.setAttribute('aria-label', 'Clouds drifting by. Click to clear the sky.');
+      c.title = 'click to clear the sky';
+      var configs = [
+        { size: 52, top: 7,  dur: 40, delay:   0, dir: 'ltr' },
+        { size: 30, top: 17, dur: 55, delay: -16, dir: 'rtl' },
+        { size: 40, top: 4,  dur: 46, delay: -24, dir: 'ltr' },
+        { size: 24, top: 22, dur: 62, delay:  -9, dir: 'rtl' },
+      ];
+      var html = '';
+      configs.forEach(function (cfg) {
+        html += '<span class="spell-cloud__puff" aria-hidden="true" style="' +
+          'font-size:' + cfg.size + 'px;' +
+          'top:' + cfg.top + 'vh;' +
+          'animation:spell-cloud-drift-' + cfg.dir + ' ' + cfg.dur + 's linear ' + cfg.delay + 's infinite;' +
+          '"></span>';
+      });
+      c.innerHTML = html;
+      c.addEventListener('click', function () {
+        if (c.parentNode) c.parentNode.removeChild(c);
+        active.byId.cloud = null;
+      });
+      $layer.appendChild(c);
+      active.byId.cloud = c;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1389,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'hearts':    castHearts(3200); break;
+        case 'crab':      castCrab(50000); break;
+        case 'snail':     castSnail(120000); break;
+        case 'cloud':     castCloud(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2686,132 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ── hearts (burst) ──────────────────────────────────────────── */
+  .spell-heart {
+    position: absolute;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0;
+    will-change: transform, opacity;
+    user-select: none;
+  }
+  @keyframes spell-heart-float {
+    0%   { opacity: 0;   transform: translate(0, 0) scale(0.3); }
+    12%  { opacity: 1;   transform: translate(calc(var(--spell-heart-dx) * 0.1), -16px) scale(1.05); }
+    80%  { opacity: 0.8; }
+    100% { opacity: 0;   transform: translate(var(--spell-heart-dx), -160px) scale(0.6); }
+  }
+
+  /* ── crab (companion) ────────────────────────────────────────── */
+  .spell-crab {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 42px;
+    height: 42px;
+    line-height: 42px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+  /* No scaleX flip — 🦀 is symmetric, scuttles equally either way. */
+  @keyframes spell-crab-walk-ltr {
+    0%   { left: -44px;             transform: translateY(0); }
+    10%  {                           transform: translateY(-5px); }
+    20%  {                           transform: translateY(0); }
+    30%  {                           transform: translateY(-5px); }
+    40%  {                           transform: translateY(0); }
+    50%  { left: calc(50vw - 21px); transform: translateY(-5px); }
+    60%  {                           transform: translateY(0); }
+    70%  {                           transform: translateY(-5px); }
+    80%  {                           transform: translateY(0); }
+    90%  {                           transform: translateY(-5px); }
+    100% { left: calc(100vw + 8px); transform: translateY(0); }
+  }
+  @keyframes spell-crab-walk-rtl {
+    0%   { left: calc(100vw + 8px); transform: translateY(0); }
+    10%  {                           transform: translateY(-5px); }
+    20%  {                           transform: translateY(0); }
+    30%  {                           transform: translateY(-5px); }
+    40%  {                           transform: translateY(0); }
+    50%  { left: calc(50vw - 21px); transform: translateY(-5px); }
+    60%  {                           transform: translateY(0); }
+    70%  {                           transform: translateY(-5px); }
+    80%  {                           transform: translateY(0); }
+    90%  {                           transform: translateY(-5px); }
+    100% { left: -44px;             transform: translateY(0); }
+  }
+
+  /* ── snail (companion) ───────────────────────────────────────── */
+  .spell-snail {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 42px;
+    height: 42px;
+    line-height: 42px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+  .spell-snail[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-snail-walk-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 8px); }
+  }
+  @keyframes spell-snail-walk-rtl {
+    0%   { left: calc(100vw + 8px); }
+    100% { left: -44px; }
+  }
+
+  /* ── cloud (ambient) ─────────────────────────────────────────── */
+  .spell-cloud {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+  }
+  .spell-cloud__puff {
+    position: absolute;
+    left: -120px;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.7;
+    filter: drop-shadow(0 2px 6px rgba(100, 160, 220, 0.25));
+  }
+  .spell-cloud__puff::before { content: '☁'; }
+  @keyframes spell-cloud-drift-ltr {
+    0%   { left: -120px; }
+    100% { left: 110vw; }
+  }
+  @keyframes spell-cloud-drift-rtl {
+    0%   { left: 110vw; }
+    100% { left: -120px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-crab, .spell-snail { animation: none !important; left: 50vw !important; }
+    .spell-cloud__puff         { animation: none !important; left: 20vw !important; }
   }
 </style>
