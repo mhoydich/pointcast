@@ -745,6 +745,53 @@ const built = new Date().toISOString();
       return `sms:&body=${encodeURIComponent('🥁 ' + shareUrl())}`;
     }
 
+    // ---- shelf (localStorage history of bottles + calls + octets) ----
+    // Shared format with /drum-bottle and /drum-octet. Read by /drum-shelf.
+    // { v:1, items: [{code, bpm, from, dir, t, kind}, ...] }
+    // kind: 'bottle' | 'call' | 'octet'. Older entries without `kind` are
+    // assumed 'bottle'. Capped at 100; dedupe by code+dir+from+kind.
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+    const SHELF_MAX = 100;
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+      kind?: 'bottle' | 'call' | 'octet';
+    }
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+    function saveShelf(items: ShelfItem[]) {
+      try {
+        localStorage.setItem(SHELF_KEY, JSON.stringify({ v: SHELF_VERSION, items }));
+      } catch { /* fail silently */ }
+    }
+    function saveToShelf(dir: 'made' | 'received') {
+      const code = encodeFull(callPattern, respPattern, bpm);
+      let from = '';
+      if (mode === 'compose-call') from = myPid.slice(0, 4);
+      else if (mode === 'received-call') from = `${callerPid}-${myPid.slice(0, 4)}`;
+      else from = callerPid + (responderPid ? `-${responderPid}` : '');
+      const items = loadShelf();
+      const key = `${code}::${dir}::${from}::call`;
+      const existing = items.findIndex((it) => `${it.code}::${it.dir}::${it.from}::${it.kind || 'bottle'}` === key);
+      const entry: ShelfItem = { code, bpm, from, dir, t: Date.now(), kind: 'call' };
+      if (existing >= 0) items[existing] = entry;
+      else items.unshift(entry);
+      items.sort((a, b) => b.t - a.t);
+      if (items.length > SHELF_MAX) items.length = SHELF_MAX;
+      saveShelf(items);
+    }
+
     async function copyText(text: string, successMsg: string) {
       const blob = navigator.clipboard;
       try {
@@ -894,6 +941,8 @@ const built = new Date().toISOString();
           } else {
             setMode('conversation');
           }
+          // Save to shelf as 'received' — we just landed on a URL someone sent us
+          saveToShelf('received');
         } else {
           setMode('compose-call');
           showToast('couldn\'t decode that conversation');
@@ -920,7 +969,12 @@ const built = new Date().toISOString();
 
       // Compose-call actions
       document.getElementById('dcr-send-call')!.addEventListener('click', () => {
-        copyText(shareUrl(), `copied · 24 chars`);
+        if (patternEmpty(callPattern)) {
+          showToast('add some cells to your call first');
+          return;
+        }
+        saveToShelf('made');
+        copyText(shareUrl(), `copied · saved to shelf`);
       });
       document.getElementById('dcr-clear-call')!.addEventListener('click', () => {
         callPattern = blank();
@@ -933,7 +987,8 @@ const built = new Date().toISOString();
           showToast('add some cells to your response first');
           return;
         }
-        copyText(shareUrl(), `copied · the conversation is complete`);
+        saveToShelf('made');
+        copyText(shareUrl(), `copied · conversation complete · saved to shelf`);
       });
       document.getElementById('dcr-clear-resp')!.addEventListener('click', () => {
         respPattern = blank();
