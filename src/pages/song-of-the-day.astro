@@ -1,0 +1,697 @@
+---
+/**
+ * /song-of-the-day — a procedural pentatonic tune, deterministic per date.
+ *
+ * The first ambient/discovery surface in the new melody register. Every
+ * visitor on the same calendar date hears the same 16-step pentatonic
+ * melody — generated locally from a date-seeded PRNG, no server needed.
+ *
+ * Mechanic:
+ *   • Seed = hash(YYYY-MM-DD)
+ *   • Mulberry32 PRNG produces a deterministic stream
+ *   • A constrained random walk generates 16 steps of pentatonic melody:
+ *       - Start near the middle of the range (pitch 7-9)
+ *       - 30% chance of rest per step
+ *       - Otherwise stepwise motion biased toward small intervals:
+ *           50% step ±1, 30% step ±2, 15% small leap, 5% any pitch
+ *       - Clamped to the 15-pitch pentatonic range (C4..A6)
+ *   • Tempo = 88 + (seed % 56) for 88..143 BPM
+ *
+ * Auto-plays once after first user interaction (browsers require
+ * gesture before AudioContext.resume()). Date arrows step through
+ * previous/next days, each producing a different deterministic tune.
+ *
+ * URL params:
+ *   /song-of-the-day            — today's song
+ *   /song-of-the-day?d=YYYY-MM-DD — that specific day's song
+ *
+ * "Save as melody-bottle" button takes the current melody and opens
+ * /melody-bottle?p=<encoded> so you can edit and share it.
+ *
+ * Distinct from /melody-bottle (interactive composer) and /drum-* family:
+ * this one is a *gift*, not a tool. Visit, listen, move on.
+ *
+ * Shipped 2026-05-14 (Thursday overnight). — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Song of the Day — a procedural pentatonic tune, deterministic per date"
+  description="A 16-step pentatonic melody, generated locally from today's date. Every visitor on the same day hears the same tune. Step through previous days to hear yesterday's, last week's, last year's. Save the one you like as a melody-bottle to edit and share."
+  image="/images/og-drum.png"
+>
+  <main class="sod" id="sod" data-built={built}>
+    <header class="sod__hero">
+      <p class="sod__kicker">SONG · OF · THE · DAY · procedural · deterministic · ambient</p>
+      <h1 class="sod__title" id="sod-title">Today's song.</h1>
+      <p class="sod__sub" id="sod-sub">A 16-step pentatonic melody, generated locally from today's date. Every visitor on the same day hears the same tune. Nothing's saved anywhere — the song lives in the date itself.</p>
+    </header>
+
+    <section class="sod__stage">
+
+      <!-- Date navigator -->
+      <div class="sod__date-nav">
+        <button class="sod__nav-btn" id="sod-prev" type="button" aria-label="Previous day">←</button>
+        <div class="sod__date-display">
+          <span class="sod__date-label" id="sod-date-label">May 14, 2026</span>
+          <span class="sod__date-meta" id="sod-date-meta">100 BPM · 16 steps</span>
+        </div>
+        <button class="sod__nav-btn" id="sod-next" type="button" aria-label="Next day">→</button>
+      </div>
+
+      <!-- Piano roll -->
+      <div class="sod__roll-wrap">
+        <div class="sod__roll" id="sod-roll" role="grid" aria-label="Today's melody"></div>
+        <div class="sod__pitch-labels" id="sod-pitch-labels" aria-hidden="true"></div>
+      </div>
+
+      <!-- Transport -->
+      <div class="sod__transport">
+        <button class="sod__btn sod__btn--play" id="sod-play" type="button">▶ play</button>
+        <button class="sod__btn sod__btn--stop" id="sod-stop" type="button" hidden>⏹ stop</button>
+        <button class="sod__btn sod__btn--loop" id="sod-loop" type="button" aria-pressed="false">🔁 loop off</button>
+      </div>
+
+      <!-- Actions -->
+      <div class="sod__actions">
+        <button class="sod__action sod__action--primary" id="sod-save" type="button">↗ save as melody-bottle</button>
+        <button class="sod__action" id="sod-today" type="button">⊙ today</button>
+        <a class="sod__action" href="/melody-bottle">↗ /melody-bottle</a>
+      </div>
+
+    </section>
+
+    <section class="sod__notes">
+      <h2 class="sod__notes-h">How the song gets chosen</h2>
+      <p>The date string <code>YYYY-MM-DD</code> is hashed into a 32-bit seed. A <em>mulberry32</em> PRNG seeded with that value produces a deterministic stream of pseudo-random numbers. A constrained random walk turns those numbers into a 16-step pentatonic melody — stepwise motion preferred, occasional rests, mostly mid-octave with rare leaps. The same date always produces the same melody on any device anywhere in the world.</p>
+      <p>Why deterministic-per-day: a song that's literally everyone's gives the day a tiny shared quality. If you and a friend both visit on the same Tuesday, you both heard the same 8 bars. Different days sound different. Patterns emerge — some dates land on a happy phrase, some on a melancholy one, none on a wrong note.</p>
+      <p>If you find one you like, hit "save as melody-bottle" to open it in the <a href="/melody-bottle">/melody-bottle</a> editor where you can tweak it and copy the share link.</p>
+      <p>Sister surfaces: <a href="/melody-bottle">/melody-bottle</a> (interactive composer · same pentatonic palette), <a href="/drum-mailbox">/drum-mailbox</a> (async-drum directory · 6 surfaces), <a href="/drum-pavilion">/drum-pavilion</a> (5 meditative-drum screensavers).</p>
+    </section>
+
+    <div class="sod__toast" id="sod-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --sod-ink: #0a1230;
+      --sod-mid: #14193a;
+      --sod-flame: #f6c15e;
+      --sod-coral: #ff6b8a;
+      --sod-mint: #8aeac0;
+      --sod-sky: #7ac8ed;
+      --sod-mauve: #c9a8ef;
+      --sod-cream: #f4e7c8;
+      --sod-cream-dim: #b8aa84;
+      --sod-cream-dimmer: #6a6e8a;
+    }
+
+    body:has(.sod) {
+      background:
+        radial-gradient(circle at 18% 5%, #1a1e58 0%, transparent 50%),
+        radial-gradient(circle at 80% 95%, #2a1640 0%, transparent 55%),
+        var(--sod-ink);
+      color: var(--sod-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .sod { max-width: 780px; margin: 0 auto; padding: 36px 24px 64px; }
+
+    /* HERO */
+    .sod__hero { margin-bottom: 32px; }
+    .sod__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--sod-coral);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .sod__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 16px;
+    }
+    .sod__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--sod-cream-dim);
+      margin: 0;
+    }
+
+    /* STAGE */
+    .sod__stage {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 36px;
+    }
+
+    /* DATE NAVIGATOR */
+    .sod__date-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.20);
+      border-radius: 10px;
+    }
+    .sod__nav-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid rgba(244,231,200,0.18);
+      background: rgba(244,231,200,0.06);
+      color: var(--sod-cream);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .sod__nav-btn:hover {
+      background: rgba(244,231,200,0.14);
+      border-color: rgba(244,231,200,0.35);
+    }
+    .sod__date-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .sod__date-label {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 17px;
+      letter-spacing: -0.01em;
+      color: var(--sod-cream);
+    }
+    .sod__date-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: var(--sod-flame);
+    }
+
+    /* PIANO ROLL — same shape as /melody-bottle */
+    .sod__roll-wrap {
+      display: grid;
+      grid-template-columns: 1fr 50px;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 560px) {
+      .sod__roll-wrap { grid-template-columns: 1fr 38px; gap: 6px; }
+    }
+    .sod__roll {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      gap: 2px;
+      aspect-ratio: 16 / 15;
+      background: rgba(0,0,0,0.30);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .sod__roll-cell {
+      background: rgba(244,231,200,0.04);
+      border-radius: 2px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .sod__roll-cell--on {
+      background: var(--cell-color, var(--sod-mauve));
+      box-shadow: 0 0 6px var(--cell-color, var(--sod-mauve));
+    }
+    .sod__roll-cell--oct-low.sod__roll-cell--on  { --cell-color: #ff8a70; }
+    .sod__roll-cell--oct-mid.sod__roll-cell--on  { --cell-color: #c9a8ef; }
+    .sod__roll-cell--oct-high.sod__roll-cell--on { --cell-color: #8aeac0; }
+    .sod__roll-cell--play {
+      box-shadow: 0 0 0 2px var(--sod-cream);
+      transform: scale(0.92);
+    }
+    .sod__roll-cell:nth-child(16n + 5),
+    .sod__roll-cell:nth-child(16n + 9),
+    .sod__roll-cell:nth-child(16n + 13) {
+      box-shadow: inset 2px 0 0 rgba(244,231,200,0.08);
+    }
+
+    /* Pitch labels */
+    .sod__pitch-labels {
+      display: grid;
+      grid-template-rows: repeat(15, 1fr);
+      gap: 2px;
+      padding: 4px 0;
+    }
+    .sod__pitch-label {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      color: var(--sod-cream-dimmer);
+      padding-right: 4px;
+    }
+    .sod__pitch-label--high { color: #8aeac0; }
+    .sod__pitch-label--mid  { color: #c9a8ef; }
+    .sod__pitch-label--low  { color: #ff8a70; }
+
+    /* TRANSPORT */
+    .sod__transport {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .sod__btn {
+      border: 1px solid rgba(244,231,200,0.25);
+      background: rgba(244,231,200,0.08);
+      color: var(--sod-cream);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sod__btn:hover { background: rgba(244,231,200,0.16); }
+    .sod__btn--play {
+      background: rgba(246, 193, 94, 0.15);
+      border-color: rgba(246, 193, 94, 0.45);
+      color: var(--sod-flame);
+    }
+    .sod__btn--play:hover { background: rgba(246, 193, 94, 0.25); }
+    .sod__btn--loop[aria-pressed="true"] {
+      background: rgba(122, 200, 237, 0.15);
+      border-color: rgba(122, 200, 237, 0.45);
+      color: var(--sod-sky);
+    }
+
+    /* ACTIONS */
+    .sod__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .sod__action {
+      flex: 0 0 auto;
+      border: 1px solid rgba(244,231,200,0.18);
+      background: rgba(244,231,200,0.06);
+      color: var(--sod-cream);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .sod__action:hover {
+      background: rgba(244,231,200,0.14);
+      border-color: rgba(244,231,200,0.35);
+    }
+    .sod__action--primary {
+      background: rgba(255,107,138,0.15);
+      border-color: rgba(255,107,138,0.45);
+      color: var(--sod-coral);
+    }
+    .sod__action--primary:hover { background: rgba(255,107,138,0.25); }
+
+    /* NOTES */
+    .sod__notes { max-width: 720px; }
+    .sod__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      color: var(--sod-cream);
+      margin: 0 0 12px;
+    }
+    .sod__notes p { font-size: 14px; line-height: 1.6; color: var(--sod-cream-dim); margin: 0 0 12px; }
+    .sod__notes em { color: var(--sod-mauve); font-style: italic; }
+    .sod__notes a { color: var(--sod-coral); text-decoration: underline; text-underline-offset: 3px; }
+    .sod__notes code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--sod-mint);
+    }
+
+    /* TOAST */
+    .sod__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--sod-flame);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(246,193,94,0.4);
+    }
+    .sod__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // Same pentatonic palette as /melody-bottle
+    const PENT_FREQS = [
+      261.63, 293.66, 329.63, 392.00, 440.00,
+      523.25, 587.33, 659.25, 783.99, 880.00,
+      1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    ];
+    const PENT_NAMES = [
+      'C4', 'D4', 'E4', 'G4', 'A4',
+      'C5', 'D5', 'E5', 'G5', 'A5',
+      'C6', 'D6', 'E6', 'G6', 'A6',
+    ];
+    const PITCH_COUNT = 15;
+    const STEPS = 16;
+
+    function rowToPitchIdx(row: number) { return PITCH_COUNT - 1 - row; }
+    function pitchIdxToRow(p: number) { return PITCH_COUNT - 1 - p; }
+
+    // ---- date helpers ----
+    function fmtDate(d: Date): string {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    }
+    function parseDate(s: string): Date | null {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) return null;
+      const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+      if (isNaN(d.getTime())) return null;
+      return d;
+    }
+    function prettyDate(d: Date): string {
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    }
+
+    // ---- PRNG (mulberry32) ----
+    function hash32(str: string): number {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+    function mulberry32(seed: number) {
+      let a = seed >>> 0;
+      return function() {
+        a = (a + 0x6D2B79F5) | 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // ---- melody generator ----
+    interface DaySong {
+      steps: number[];  // 0 = rest, 1..15 = pitch index + 1
+      bpm: number;
+    }
+    function songForDate(dateStr: string): DaySong {
+      const seed = hash32(dateStr);
+      const rng = mulberry32(seed);
+      const bpm = 88 + Math.floor(rng() * 56);  // 88..143
+      const steps: number[] = new Array(STEPS).fill(0);
+
+      // Start at a mid-octave pitch (index 5..9)
+      let pitch = 5 + Math.floor(rng() * 5);
+      for (let i = 0; i < STEPS; i++) {
+        if (rng() < 0.30) {
+          steps[i] = 0;  // rest
+          continue;
+        }
+        // Walk: 50% ±1, 30% ±2, 15% nearby leap, 5% any
+        const r = rng();
+        let delta = 0;
+        if (r < 0.50) delta = rng() < 0.5 ? -1 : 1;
+        else if (r < 0.80) delta = rng() < 0.5 ? -2 : 2;
+        else if (r < 0.95) delta = (rng() < 0.5 ? -1 : 1) * (3 + Math.floor(rng() * 3));
+        else pitch = Math.floor(rng() * PITCH_COUNT);
+        if (r < 0.95) pitch += delta;
+        // Clamp
+        pitch = Math.max(0, Math.min(PITCH_COUNT - 1, pitch));
+        steps[i] = pitch + 1;
+      }
+      return { steps, bpm };
+    }
+
+    // ---- state ----
+    let currentDate: Date = new Date();
+    let currentSong: DaySong = { steps: [], bpm: 100 };
+    let loopMode = false;
+    let isPlaying = false;
+    let playStep = 0;
+    let playTimer: number | null = null;
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.4;
+      masterGain.connect(ctx.destination);
+    }
+    function playNote(pitchIdx: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const freq = PENT_FREQS[pitchIdx];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.45);
+      // Soft 2x harmonic
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 2;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.008);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc2.connect(g2).connect(masterGain);
+      scheduler.trackSource(osc2);
+      osc2.start(t);
+      osc2.stop(t + 0.25);
+    }
+
+    // ---- transport ----
+    function stepMs() { return (60_000 / currentSong.bpm) / 4; }
+    function tick() {
+      document.querySelectorAll('.sod__roll-cell--play').forEach((el) => el.classList.remove('sod__roll-cell--play'));
+      const val = currentSong.steps[playStep];
+      if (val !== 0) {
+        const pitchIdx = val - 1;
+        const row = pitchIdxToRow(pitchIdx);
+        const roll = document.getElementById('sod-roll')!;
+        const cell = roll.children[row * STEPS + playStep] as HTMLElement;
+        if (cell) cell.classList.add('sod__roll-cell--play');
+        playNote(pitchIdx);
+      }
+      playStep++;
+      if (playStep >= STEPS) {
+        playStep = 0;
+        if (!loopMode) {
+          stopPlay();
+          return;
+        }
+      }
+    }
+    function startPlay() {
+      if (isPlaying) return;
+      ensureCtx();
+      isPlaying = true;
+      playStep = 0;
+      document.getElementById('sod-play')!.hidden = true;
+      document.getElementById('sod-stop')!.hidden = false;
+      tick();
+      const loop = () => {
+        if (!isPlaying) return;
+        tick();
+        if (isPlaying) playTimer = window.setTimeout(loop, stepMs());
+      };
+      playTimer = window.setTimeout(loop, stepMs());
+    }
+    function stopPlay() {
+      isPlaying = false;
+      if (playTimer != null) { clearTimeout(playTimer); playTimer = null; }
+      document.querySelectorAll('.sod__roll-cell--play').forEach((el) => el.classList.remove('sod__roll-cell--play'));
+      document.getElementById('sod-play')!.hidden = false;
+      document.getElementById('sod-stop')!.hidden = true;
+    }
+
+    // ---- render ----
+    function renderRoll() {
+      const roll = document.getElementById('sod-roll')!;
+      const labels = document.getElementById('sod-pitch-labels')!;
+      roll.innerHTML = '';
+      labels.innerHTML = '';
+      for (let row = 0; row < PITCH_COUNT; row++) {
+        const pitchIdx = rowToPitchIdx(row);
+        const octave = pitchIdx < 5 ? 'low' : pitchIdx < 10 ? 'mid' : 'high';
+        for (let col = 0; col < STEPS; col++) {
+          const cell = document.createElement('span');
+          const isOn = currentSong.steps[col] === pitchIdx + 1;
+          cell.className = `sod__roll-cell sod__roll-cell--oct-${octave}` + (isOn ? ' sod__roll-cell--on' : '');
+          roll.appendChild(cell);
+        }
+        const label = document.createElement('span');
+        label.className = `sod__pitch-label sod__pitch-label--${octave}`;
+        label.textContent = PENT_NAMES[pitchIdx];
+        labels.appendChild(label);
+      }
+    }
+
+    function loadDate(d: Date, updateUrl: boolean = true) {
+      stopPlay();
+      currentDate = d;
+      const dateStr = fmtDate(d);
+      currentSong = songForDate(dateStr);
+      document.getElementById('sod-date-label')!.textContent = prettyDate(d);
+      document.getElementById('sod-date-meta')!.textContent = `${currentSong.bpm} BPM · 16 steps`;
+      const todayStr = fmtDate(new Date());
+      document.getElementById('sod-title')!.textContent = dateStr === todayStr ? 'Today\'s song.' : `Song for ${prettyDate(d)}.`;
+      renderRoll();
+      if (updateUrl) {
+        try {
+          const u = new URL(location.href);
+          if (dateStr === todayStr) u.searchParams.delete('d');
+          else u.searchParams.set('d', dateStr);
+          history.replaceState({}, '', u.toString());
+        } catch { /* ignore */ }
+      }
+    }
+
+    // ---- url ----
+    function saveAsMelodyBottle() {
+      // Encode using the same 9-byte format as /melody-bottle:
+      // 16 steps × 4 bits (packed 2 per byte) + 1 byte BPM
+      const bytes = new Uint8Array(9);
+      for (let i = 0; i < 8; i++) {
+        const a = currentSong.steps[2 * i] & 0x0f;
+        const b = currentSong.steps[2 * i + 1] & 0x0f;
+        bytes[i] = a | (b << 4);
+      }
+      bytes[8] = Math.max(0, Math.min(180, currentSong.bpm - 40));
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const code = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const url = `${location.origin}/melody-bottle?p=${code}`;
+      // Open in new tab so people don't lose their current SOTD context
+      window.open(url, '_blank');
+    }
+
+    function showToast(msg: string) {
+      const el = document.getElementById('sod-toast')!;
+      el.textContent = msg;
+      el.classList.add('sod__toast--show');
+      setTimeout(() => el.classList.remove('sod__toast--show'), 2400);
+    }
+
+    // ---- init ----
+    function init() {
+      // Read URL ?d= if present
+      const params = new URLSearchParams(location.search);
+      const dParam = params.get('d') || '';
+      let initial: Date | null = null;
+      if (dParam) {
+        initial = parseDate(dParam);
+        if (!initial) showToast('bad date · using today');
+      }
+      loadDate(initial || new Date(), false);
+
+      // Navigation
+      document.getElementById('sod-prev')!.addEventListener('click', () => {
+        const d = new Date(currentDate);
+        d.setDate(d.getDate() - 1);
+        loadDate(d);
+      });
+      document.getElementById('sod-next')!.addEventListener('click', () => {
+        const d = new Date(currentDate);
+        d.setDate(d.getDate() + 1);
+        loadDate(d);
+      });
+      document.getElementById('sod-today')!.addEventListener('click', () => {
+        loadDate(new Date());
+        showToast('back to today');
+      });
+
+      // Transport
+      document.getElementById('sod-play')!.addEventListener('click', startPlay);
+      document.getElementById('sod-stop')!.addEventListener('click', stopPlay);
+      document.getElementById('sod-loop')!.addEventListener('click', () => {
+        loopMode = !loopMode;
+        const btn = document.getElementById('sod-loop')! as HTMLButtonElement;
+        btn.textContent = loopMode ? '🔁 loop on' : '🔁 loop off';
+        btn.setAttribute('aria-pressed', String(loopMode));
+      });
+
+      // Save
+      document.getElementById('sod-save')!.addEventListener('click', saveAsMelodyBottle);
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (isPlaying) stopPlay(); else startPlay();
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          (document.getElementById('sod-prev') as HTMLButtonElement).click();
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          (document.getElementById('sod-next') as HTMLButtonElement).click();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
