@@ -1,28 +1,34 @@
 ---
 /**
- * /drum-shelf — your local-only wallet of bottles.
+ * /drum-shelf — your local-only wallet of bottles, calls & octets.
  *
- * Reads localStorage['pc-drum-shelf'] (written by /drum-bottle on every
- * copy-share-link or received-mode load). Renders the list newest-first
- * as a column of rows, each showing:
+ * Reads localStorage['pc-drum-shelf'] (written by /drum-bottle,
+ * /drum-call-and-response, and /drum-octet on every copy-share-link
+ * or received-mode load). Renders the list newest-first as a column
+ * of rows, each showing:
  *
- *   • CSS-only mini grid preview of the 16 × 4 pattern (no JS to render)
- *   • Pid badge (from sender or 'made by you')
- *   • BPM
+ *   • CSS-only mini-preview shaped per kind:
+ *       - bottle: 16 × 4 grid
+ *       - call-and-response: two stacked 16 × 4 grids (call on top, response on bottom)
+ *       - octet: horizontal strip of 8 small 4 × 4 beat-grids
  *   • Direction chip: 'made' or 'received'
- *   • Relative time-ago label
- *   • Open button → /drum-bottle?p=<code>&from=<from>
+ *   • Kind chip: 'bottle' / 'call+resp' / 'octet'
+ *   • Pid / chain label (from sender or 'by you' or 'abcd → efgh → ijkl')
+ *   • BPM + relative time-ago
+ *   • Open button → opens the correct surface based on `kind`
  *
- * Capacity 100 bottles, capped by /drum-bottle when it writes. Local-only,
- * never leaves the device. Clear-shelf button at bottom wipes the storage.
+ * Capacity 100 items, capped at write-time. Local-only, never leaves
+ * the device. Clear-shelf button at bottom wipes the storage.
  *
- * Why local-only: bottles are meant to be transient. If you want a
- * permanent record of a phrase, you have its share URL — paste that
- * wherever you want it kept. The shelf is a recently-touched list,
- * not an archive.
+ * Storage shape (v: 1):
+ *   { v: 1, items: [{code, bpm, from, dir, t, kind?}, ...] }
+ *   `kind` is 'bottle' | 'call' | 'octet'; omitted = 'bottle' (legacy).
+ *   Each composing surface writes its own kind; the shelf reads them
+ *   uniformly.
  *
- * Shipped 2026-05-14. Second async-drum surface after /drum-bottle.
- * — drum-claude
+ * Shipped 2026-05-14 as bottle-only. Multi-kind support added the
+ * same day after PRs #679 (/drum-call-and-response) and #681
+ * (/drum-octet) made the async register a true family. — drum-claude
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 const built = new Date().toISOString();
@@ -36,7 +42,7 @@ const built = new Date().toISOString();
     <header class="dsh__hero">
       <p class="dsh__kicker">DRUM · SHELF · local-only · 100 max</p>
       <h1 class="dsh__title">Your bottle shelf.</h1>
-      <p class="dsh__sub">Every <a href="/drum-bottle">drum-bottle</a> you copy or receive lands here. Lives only in your browser's <code>localStorage</code> — nothing about it goes to a server, no account, no sync across devices. A recently-touched list, not an archive.</p>
+      <p class="dsh__sub">Every <a href="/drum-bottle">bottle</a>, <a href="/drum-call-and-response">call &amp; response</a>, or <a href="/drum-octet">octet</a> you copy or receive lands here. Lives only in your browser's <code>localStorage</code> — nothing about it goes to a server, no account, no sync across devices. A recently-touched list, not an archive.</p>
     </header>
 
     <section class="dsh__list" id="dsh-list">
@@ -185,6 +191,38 @@ const built = new Date().toISOString();
     .dsh__mini-cell--high.dsh__mini-cell--on { --mini-color: #c9a8ef; }
     .dsh__mini-cell--bell.dsh__mini-cell--on { --mini-color: #8aeac0; }
 
+    /* Stacked mini for call-and-response (two 16×4 minis) */
+    .dsh__mini-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .dsh__mini-stack .dsh__mini:first-child {
+      border-left: 2px solid var(--dsh-flame);
+    }
+    .dsh__mini-stack .dsh__mini:last-child {
+      border-left: 2px solid var(--dsh-sky);
+    }
+
+    /* Strip mini for octet (horizontal row of small 4×4 beats) */
+    .dsh__mini-strip {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      aspect-ratio: 8 / 1;
+    }
+    .dsh__mini-beat {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 1px;
+      background: rgba(0,0,0,0.30);
+      border-radius: 2px;
+      padding: 1px;
+      aspect-ratio: 1;
+    }
+    .dsh__mini-beat--empty { opacity: 0.20; }
+
     /* Meta column */
     .dsh__meta {
       display: flex;
@@ -217,6 +255,19 @@ const built = new Date().toISOString();
     .dsh__chip--received {
       background: rgba(122,200,237,0.15);
       color: var(--dsh-sky);
+    }
+    /* Kind chips — what flavor of phrase this is */
+    .dsh__chip--kind-bottle {
+      background: rgba(246, 193, 94, 0.12);
+      color: var(--dsh-flame);
+    }
+    .dsh__chip--kind-call {
+      background: rgba(122, 200, 237, 0.12);
+      color: var(--dsh-sky);
+    }
+    .dsh__chip--kind-octet {
+      background: rgba(138, 234, 192, 0.12);
+      color: var(--dsh-mint);
     }
     .dsh__from {
       font-family: 'Inter Tight', sans-serif;
@@ -362,12 +413,17 @@ const built = new Date().toISOString();
     const SHELF_KEY = 'pc-drum-shelf';
     const SHELF_VERSION = 1;
 
+    type Kind = 'bottle' | 'call' | 'octet';
     interface ShelfItem {
       code: string;
       bpm: number;
       from: string;
       dir: 'made' | 'received';
       t: number;
+      kind?: Kind;  // legacy items without `kind` default to 'bottle'
+    }
+    function itemKind(item: ShelfItem): Kind {
+      return item.kind || 'bottle';
     }
 
     function loadShelf(): ShelfItem[] {
@@ -384,26 +440,64 @@ const built = new Date().toISOString();
       try { localStorage.removeItem(SHELF_KEY); } catch { /* ignore */ }
     }
 
-    // Decode pattern from the URL code so we can render the mini grid.
-    function decodePattern(code: string): boolean[][] | null {
+    // ---- decoders ----
+    // /drum-bottle: 9 bytes → 4 voices × 16 cells, 1-bar phrase
+    function decodeBottle(code: string): boolean[][] | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 9) return null;
+      const p: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const idx = r * 16 + c;
+          p[r][c] = !!(bytes[idx >> 3] & (1 << (idx & 7)));
+        }
+      }
+      return p;
+    }
+    // /drum-call-and-response: 18 bytes → 2 phrases (call + response)
+    function decodeCall(code: string): { call: boolean[][]; resp: boolean[][] } | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 17) return null;
+      const a: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      const b: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const idx = r * 16 + c;
+          a[r][c] = !!(bytes[idx >> 3] & (1 << (idx & 7)));
+          b[r][c] = !!(bytes[8 + (idx >> 3)] & (1 << (idx & 7)));
+        }
+      }
+      return { call: a, resp: b };
+    }
+    // /drum-octet: 4..18 bytes → N beats × 4 voices × 4 cells
+    function decodeOctet(code: string): boolean[][][] | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 4 || bytes.length > 18 || bytes.length % 2 !== 0) return null;
+      const N = (bytes.length - 2) / 2;
+      if (N < 1 || N > 8) return null;
+      const beats: boolean[][][] = [];
+      for (let n = 0; n < N; n++) {
+        const bits = bytes[2 * n] | (bytes[2 * n + 1] << 8);
+        const beat = Array.from({ length: 4 }, () => Array(4).fill(false));
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            const idx = r * 4 + c;
+            beat[r][c] = !!(bits & (1 << idx));
+          }
+        }
+        beats.push(beat);
+      }
+      return beats;
+    }
+    function b64UrlToBytes(code: string): Uint8Array | null {
       if (!code) return null;
       const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
       const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
       let bin: string;
       try { bin = atob(padded); } catch { return null; }
-      if (bin.length < 9) return null;
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const p: boolean[][] = Array.from({ length: ROWS }, () => Array(STEPS).fill(false));
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < STEPS; c++) {
-          const idx = r * STEPS + c;
-          const byteIdx = idx >> 3;
-          const bitIdx  = idx & 7;
-          p[r][c] = !!(bytes[byteIdx] & (1 << bitIdx));
-        }
-      }
-      return p;
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
     }
 
     function timeAgo(t: number): string {
@@ -424,11 +518,12 @@ const built = new Date().toISOString();
       return `${mo}mo ago`;
     }
 
-    function makeMiniGrid(pattern: boolean[][]): HTMLElement {
+    // Mini-grid for bottle's 4×16 phrase shape
+    function makeBottleMini(pattern: boolean[][]): HTMLElement {
       const wrap = document.createElement('div');
       wrap.className = 'dsh__mini';
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < STEPS; c++) {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
           const cell = document.createElement('span');
           cell.className = `dsh__mini-cell dsh__mini-cell--${VOICE_NAMES[r]}` + (pattern[r][c] ? ' dsh__mini-cell--on' : '');
           wrap.appendChild(cell);
@@ -436,27 +531,102 @@ const built = new Date().toISOString();
       }
       return wrap;
     }
+    // Two stacked minis for call-and-response (call on top, response on bottom)
+    function makeCallMini(call: boolean[][], resp: boolean[][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-stack';
+      wrap.appendChild(makeBottleMini(call));
+      wrap.appendChild(makeBottleMini(resp));
+      return wrap;
+    }
+    // Horizontal strip of N small beat-grids for octet
+    function makeOctetMini(beats: boolean[][][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-strip';
+      const SLOTS = 8;
+      for (let i = 0; i < SLOTS; i++) {
+        const beatEl = document.createElement('span');
+        beatEl.className = 'dsh__mini-beat' + (i < beats.length ? ' dsh__mini-beat--filled' : ' dsh__mini-beat--empty');
+        if (i < beats.length) {
+          for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+              const cell = document.createElement('span');
+              cell.className = `dsh__mini-cell dsh__mini-cell--${VOICE_NAMES[r]}` + (beats[i][r][c] ? ' dsh__mini-cell--on' : '');
+              beatEl.appendChild(cell);
+            }
+          }
+        }
+        wrap.appendChild(beatEl);
+      }
+      return wrap;
+    }
+
+    function urlFor(item: ShelfItem): string {
+      const kind = itemKind(item);
+      const slug = kind === 'call'  ? '/drum-call-and-response'
+                : kind === 'octet' ? '/drum-octet'
+                :                    '/drum-bottle';
+      return `${slug}?p=${encodeURIComponent(item.code)}` +
+        (item.from ? `&from=${encodeURIComponent(item.from)}` : '');
+    }
+
+    function makePreview(item: ShelfItem): HTMLElement {
+      const kind = itemKind(item);
+      if (kind === 'call') {
+        const decoded = decodeCall(item.code);
+        if (decoded) return makeCallMini(decoded.call, decoded.resp);
+      } else if (kind === 'octet') {
+        const decoded = decodeOctet(item.code);
+        if (decoded) return makeOctetMini(decoded);
+      } else {
+        const decoded = decodeBottle(item.code);
+        if (decoded) return makeBottleMini(decoded);
+      }
+      const fallback = document.createElement('div');
+      fallback.className = 'dsh__mini';
+      return fallback;
+    }
+
+    function kindLabel(kind: Kind): { label: string; chars: string } {
+      if (kind === 'call')  return { label: 'call+resp', chars: '24 chars' };
+      if (kind === 'octet') return { label: 'octet',     chars: '6..24 ch' };
+      return                       { label: 'bottle',    chars: '12 chars' };
+    }
+
+    function fromLine(item: ShelfItem): string {
+      const kind = itemKind(item);
+      if (kind === 'octet') {
+        // Octet's from is a chain like "abcd-efgh-ijkl"
+        const parts = item.from.split('-').filter(Boolean);
+        if (item.dir === 'made') {
+          return parts.length > 1 ? `chain · ${parts.join(' → ')}` : `started by you`;
+        }
+        return parts.length > 0 ? `chain · ${parts.join(' → ')}` : `from someone`;
+      }
+      if (kind === 'call') {
+        const parts = item.from.split('-').filter(Boolean);
+        if (parts.length === 2) return `${parts[0]} → ${parts[1]}`;
+        if (parts.length === 1) return item.dir === 'made' ? 'call by you' : `from ${parts[0]}`;
+        return item.dir === 'made' ? 'by you' : 'from someone';
+      }
+      // bottle
+      return item.dir === 'made' ? 'by you' : (item.from ? `from ${item.from}` : 'from someone');
+    }
 
     function makeRow(item: ShelfItem): HTMLElement {
       const a = document.createElement('a');
-      const url = `/drum-bottle?p=${encodeURIComponent(item.code)}` +
-        (item.from ? `&from=${encodeURIComponent(item.from)}` : '');
-      a.href = url;
+      a.href = urlFor(item);
       a.className = 'dsh__row';
 
-      // Mini grid preview
-      const pattern = decodePattern(item.code);
-      if (pattern) {
-        a.appendChild(makeMiniGrid(pattern));
-      } else {
-        const fallback = document.createElement('div');
-        fallback.className = 'dsh__mini';
-        a.appendChild(fallback);
-      }
+      // Preview column
+      a.appendChild(makePreview(item));
 
       // Meta column
       const meta = document.createElement('div');
       meta.className = 'dsh__meta';
+
+      const kind = itemKind(item);
+      const kl = kindLabel(kind);
 
       const line1 = document.createElement('div');
       line1.className = 'dsh__meta-line';
@@ -464,11 +634,13 @@ const built = new Date().toISOString();
       chip.className = `dsh__chip dsh__chip--${item.dir}`;
       chip.textContent = item.dir;
       line1.appendChild(chip);
+      const kindChip = document.createElement('span');
+      kindChip.className = `dsh__chip dsh__chip--kind dsh__chip--kind-${kind}`;
+      kindChip.textContent = kl.label;
+      line1.appendChild(kindChip);
       const from = document.createElement('span');
       from.className = 'dsh__from';
-      from.textContent = item.dir === 'made'
-        ? 'by you'
-        : (item.from ? `from ${item.from}` : 'from someone');
+      from.textContent = fromLine(item);
       line1.appendChild(from);
       meta.appendChild(line1);
 
@@ -486,7 +658,6 @@ const built = new Date().toISOString();
 
       a.appendChild(meta);
 
-      // Open arrow
       const open = document.createElement('span');
       open.className = 'dsh__open';
       open.textContent = 'open →';
@@ -522,7 +693,14 @@ const built = new Date().toISOString();
 
       const made = items.filter((i) => i.dir === 'made').length;
       const received = items.length - made;
-      countEl.textContent = `${items.length} bottle${items.length === 1 ? '' : 's'} · ${made} made · ${received} received`;
+      const bottles = items.filter((i) => itemKind(i) === 'bottle').length;
+      const calls   = items.filter((i) => itemKind(i) === 'call').length;
+      const octets  = items.filter((i) => itemKind(i) === 'octet').length;
+      const kindBits: string[] = [];
+      if (bottles) kindBits.push(`${bottles} bottle${bottles === 1 ? '' : 's'}`);
+      if (calls)   kindBits.push(`${calls} call${calls === 1 ? '' : 's'}`);
+      if (octets)  kindBits.push(`${octets} octet${octets === 1 ? '' : 's'}`);
+      countEl.textContent = `${kindBits.join(' · ')} · ${made} made · ${received} received`;
 
       const frag = document.createDocumentFragment();
       for (const item of items) {
