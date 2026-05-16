@@ -1,0 +1,326 @@
+---
+/**
+ * /r/federation/demo — self-federation proof.
+ *
+ * This node lists itself in /node.json's federatedFrom array. At
+ * build time we re-fetch /node.json (as if from a remote subscriber)
+ * and render its rooms with a federated badge + attribution. Proves
+ * the federation protocol works end-to-end with one real node.
+ *
+ * When real partner nodes come online they go into the same array;
+ * this demo renders them all without code changes.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import {
+  validateNodeSpec,
+  FEDERATION_CONTRACT_SCHEMA,
+  type NodeSpec,
+} from '../../../lib/federation-contract';
+
+// Build-time: re-use the node.json builder directly rather than fetching
+// over HTTP at SSG. This is the same pattern as Sprint 2's /r/meditate
+// — single source of truth via a shared module, no HTTP self-call.
+import { buildMeditateRoom } from '../../../data/rooms/meditate';
+
+function localNodeSpec(): NodeSpec {
+  // Mirrors src/pages/node.json.ts — keep in sync. (Sprint 8 will
+  // extract this into src/data/node.ts so both files import it.)
+  const meditate = buildMeditateRoom();
+  return {
+    $schema: FEDERATION_CONTRACT_SCHEMA,
+    id: 'pointcast',
+    name: 'PointCast',
+    description: 'An agent-native broadcast from El Segundo, California. The first node.',
+    home: 'https://pointcast.xyz',
+    generatedAt: new Date().toISOString(),
+    operator: { handle: 'mh', url: 'https://pointcast.xyz/me' },
+    location: 'El Segundo, California (33.916°N 118.416°W)',
+    rooms: [
+      {
+        id: meditate.id,
+        title: meditate.title,
+        url: `https://pointcast.xyz/r/${meditate.id}`,
+        jsonUrl: 'https://pointcast.xyz/meditate.json',
+        status: 'open',
+        visualizer: meditate.visualizer?.type,
+        artifact: meditate.artifact,
+      },
+    ],
+    federatedFrom: [
+      {
+        id: 'pointcast',
+        home: 'https://pointcast.xyz',
+        nodeJsonUrl: 'https://pointcast.xyz/node.json',
+        label: 'PointCast (self)',
+      },
+    ],
+  };
+}
+
+const node = validateNodeSpec(localNodeSpec());
+
+const title = 'Federation demo — PointCast as a subscriber to itself';
+const description = `Self-federation proof: this page renders the rooms advertised by /node.json with attribution back to the source node.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="fed">
+    <header class="fed__head">
+      <p class="kicker mono">FEDERATION DEMO · CONTRACT <a href={FEDERATION_CONTRACT_SCHEMA}>v1</a></p>
+      <h1>How the webring works.</h1>
+      <p class="dek">
+        A PointCast node advertises its rooms in <a href="/node.json">/node.json</a>. A
+        subscriber fetches that JSON, validates it against the federation contract, and
+        renders the rooms with attribution back to the source. To prove the protocol works
+        end-to-end with one real node, <strong>PointCast lists itself</strong> in its own
+        <code>federatedFrom</code> array — this page is the result.
+      </p>
+    </header>
+
+    <section class="fed__sources">
+      <h2 class="fed__h">Subscribed to</h2>
+      <ul class="fed__source-list">
+        {node.federatedFrom?.map((src) => (
+          <li class="fed__source">
+            <span class="fed__source-id mono">{src.id}</span>
+            <span class="fed__source-label">{src.label ?? src.id}</span>
+            <a class="fed__source-home" href={src.home}>{src.home.replace(/^https?:\/\//, '')}</a>
+            <a class="fed__source-json mono" href={src.nodeJsonUrl}>/node.json</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="fed__rooms">
+      <h2 class="fed__h">Rooms available</h2>
+      <ul class="fed__room-list">
+        {node.rooms.map((r) => (
+          <li class="fed__room">
+            {r.artifact?.image && (
+              <img class="fed__room-img" src={r.artifact.image} alt={r.artifact.name} loading="lazy"/>
+            )}
+            <div class="fed__room-body">
+              <div class="fed__room-head">
+                <a class="fed__room-title" href={r.url}>{r.title}</a>
+                <span class={`fed__badge fed__badge--${r.status ?? 'open'}`}>{r.status ?? 'open'}</span>
+                <span class="fed__source-of mono">via {node.id}</span>
+              </div>
+              <p class="fed__room-meta mono">
+                {r.visualizer && <span>visualizer · {r.visualizer}</span>}
+                {r.visualizer && <span aria-hidden="true"> · </span>}
+                <a href={r.jsonUrl}>{r.jsonUrl.replace(/^https?:\/\/[^/]+/, '')}</a>
+              </p>
+              <p class="fed__room-actions">
+                <a class="fed__cta" href={r.url}>open the room →</a>
+                <a class="fed__alt" href={r.jsonUrl}>view contract</a>
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="fed__foot mono">
+      <span>Want to federate with PointCast? Expose <a href="/node.json">/node.json</a> in the v1 shape on your own host and add it to your <code>federatedFrom</code>.</span>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  .fed {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    background: #f7f5ef;
+    min-height: calc(100vh - 88px);
+    color: #1f1b15;
+    font-family: var(--font-body, ui-sans-serif, system-ui);
+  }
+
+  .fed__head { margin: 0 0 32px; }
+  .fed__head .kicker {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #6a6154;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .fed__head .kicker a { color: #1f1b15; text-decoration: underline; }
+  .fed__head h1 {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: clamp(28px, 3.6vw, 40px);
+    font-weight: 500;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .fed__head .dek {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #4a4434;
+    max-width: 700px;
+  }
+  .fed__head .dek strong { color: #1f1b15; }
+  .fed__head .dek code {
+    background: rgba(31,27,21,0.07);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 13px;
+  }
+  .fed__head .dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  .fed__h {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: #6a6154;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ddd9cc;
+  }
+
+  /* Sources */
+  .fed__sources { margin: 0 0 28px; }
+  .fed__source-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .fed__source {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #ddd9cc;
+    border-radius: 6px;
+    flex-wrap: wrap;
+  }
+  .fed__source-id {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #1b3a5b;
+    padding: 2px 7px;
+    background: rgba(27,58,91,0.08);
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .fed__source-label { font-size: 14px; color: #1f1b15; flex: 1 1 auto; }
+  .fed__source-home { font-size: 13px; color: #1f1b15; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .fed__source-home:hover { border-bottom-color: #1f1b15; }
+  .fed__source-json { font-size: 11px; color: #6a6154; text-decoration: none; border-bottom: 1px solid transparent; }
+  .fed__source-json:hover { color: #1f1b15; border-bottom-color: currentColor; }
+
+  /* Rooms */
+  .fed__rooms { margin: 0 0 32px; }
+  .fed__room-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .fed__room {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px 18px;
+    background: #fff;
+    border: 1px solid #ddd9cc;
+    border-radius: 6px;
+  }
+  @media (min-width: 640px) {
+    .fed__room { grid-template-columns: 120px 1fr; align-items: start; }
+  }
+  .fed__room-img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #1f1b15;
+  }
+  .fed__room-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 8px;
+  }
+  .fed__room-title {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: 19px;
+    font-weight: 500;
+    color: #1f1b15;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .fed__room-title:hover { border-bottom-color: currentColor; }
+  .fed__badge {
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    padding: 2px 7px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .fed__badge--open      { background: #d6e6e1; color: #1f5b48; }
+  .fed__badge--closed    { background: #ddd9cc; color: #6a6154; }
+  .fed__badge--scheduled { background: #e1ebed; color: #1b3a5b; }
+  .fed__badge--beta      { background: #f5e6d4; color: #874c1d; }
+  .fed__source-of {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: #6a6154;
+    text-transform: uppercase;
+    margin-left: auto;
+  }
+  .fed__room-meta {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: #6a6154;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .fed__room-meta a { color: #6a6154; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .fed__room-meta a:hover { color: #1f1b15; border-bottom-color: currentColor; }
+  .fed__room-actions {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .fed__cta {
+    padding: 8px 16px;
+    background: #1f1b15;
+    color: #fff;
+    text-decoration: none;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-radius: 999px;
+  }
+  .fed__cta:hover { background: #c4952e; }
+  .fed__alt {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: #6a6154;
+    text-decoration: none;
+    border-bottom: 1px solid #ddd9cc;
+  }
+  .fed__alt:hover { color: #1f1b15; border-bottom-color: currentColor; }
+
+  .fed__foot {
+    margin: 0;
+    padding-top: 18px;
+    border-top: 1px dashed #ddd9cc;
+    font-size: 11px;
+    color: #6a6154;
+    line-height: 1.55;
+  }
+  .fed__foot a { color: #1f1b15; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .fed__foot a:hover { border-bottom-color: #1f1b15; }
+  .fed__foot code {
+    background: rgba(31,27,21,0.07);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+</style>
