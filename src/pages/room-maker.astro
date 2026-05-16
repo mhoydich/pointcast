@@ -1,0 +1,614 @@
+---
+/**
+ * /room-maker — configurator v0 for the v1 Room Contract.
+ *
+ * Sprint 6 of the live-artifacts arc. Pick a template (breath / pour /
+ * tap / wave / lantern), fill the fields (id, title, description, status
+ * badges, programs, durations, verbs, sources), get back a valid
+ * RoomSpec as JSON. Copy it into a new node, post it to a federated
+ * subscriber, or use the "open as a PR" snippet at the bottom to scaffold
+ * a new room in this repo (`src/data/rooms/<id>.ts` + `/<id>.json.ts` +
+ * `/r/<id>.astro`).
+ *
+ * v0 is deliberately a form, not a no-code builder. The real configurator
+ * (with live drag-and-drop preview, federation directory autocomplete,
+ * receipt template insertion helpers) is Sprint 11+. This file shows the
+ * full surface area of the contract in one place — the act of filling it
+ * out is itself documentation.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ROOM_CONTRACT_SCHEMA } from '../lib/room-contract';
+
+const title = '/room-maker — make a new PointCast room';
+const description = 'Configurator for the v1 Room Contract. Pick a template, fill the fields, get back a valid RoomSpec.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="rm">
+
+    <header class="rm__head">
+      <p class="kicker mono">CONFIGURATOR v0 · CONTRACT <a href={ROOM_CONTRACT_SCHEMA}>v1</a></p>
+      <h1>Make a new room.</h1>
+      <p class="dek">
+        Pick a template, fill the fields, get a JSON payload that conforms to the
+        <a href="/room-contract/v1.json">v1 Room Contract</a>. Drop it into a new
+        node, post it to a federated subscriber, or use the scaffold snippet at
+        the bottom to open a PR adding the room to this repo.
+      </p>
+    </header>
+
+    <section class="rm__panes">
+
+      {/* ─── Form ─── */}
+      <form class="rm__form" id="rm-form">
+
+        <fieldset class="rm__group">
+          <legend>Template</legend>
+          <div class="rm__templates" role="radiogroup">
+            <label class="rm__tpl rm__tpl--breath">
+              <input type="radio" name="template" value="breath" checked />
+              <span class="rm__tpl-name">Breath</span>
+              <span class="rm__tpl-desc">Pulsing sphere. For sits, sound baths.</span>
+            </label>
+            <label class="rm__tpl rm__tpl--pour">
+              <input type="radio" name="template" value="pour" />
+              <span class="rm__tpl-name">Pour</span>
+              <span class="rm__tpl-desc">Kettle + cup. For coffee, tea, ritual brewing.</span>
+            </label>
+            <label class="rm__tpl rm__tpl--tap">
+              <input type="radio" name="template" value="tap" />
+              <span class="rm__tpl-name">Tap</span>
+              <span class="rm__tpl-desc">Percussive disc. For drum, ring, knock.</span>
+            </label>
+            <label class="rm__tpl rm__tpl--wave">
+              <input type="radio" name="template" value="wave" />
+              <span class="rm__tpl-name">Wave</span>
+              <span class="rm__tpl-desc">Flat horizon. For sunset, window, tide.</span>
+            </label>
+            <label class="rm__tpl rm__tpl--lantern">
+              <input type="radio" name="template" value="lantern" />
+              <span class="rm__tpl-name">Lantern</span>
+              <span class="rm__tpl-desc">Hanging lamp. For lobby, booth, gallery.</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="rm__group">
+          <legend>Identity</legend>
+          <label class="rm__field">
+            <span>id</span>
+            <input type="text" name="id" required pattern="[a-z0-9-]+" value="coffee" placeholder="kettle, sunset, drum-pavilion" />
+            <em>lowercase, no spaces — becomes the URL slug</em>
+          </label>
+          <label class="rm__field">
+            <span>title</span>
+            <input type="text" name="title" required value="The coffee room" />
+          </label>
+          <label class="rm__field">
+            <span>description</span>
+            <textarea name="description" rows="2" required>Pulled from /coffee on PointCast. Pour, drift, share the pot.</textarea>
+          </label>
+          <label class="rm__field">
+            <span>home URL</span>
+            <input type="url" name="home" required value="https://pointcast.xyz/coffee" />
+          </label>
+        </fieldset>
+
+        <fieldset class="rm__group">
+          <legend>Status chyron (top of room — 0 to 4 badges)</legend>
+          <div class="rm__badges" id="rm-badges">
+            <div class="rm__badge-row">
+              <input type="text" name="badge_label_0" value="MOOD" placeholder="MOOD" />
+              <input type="text" name="badge_value_0" value="pot on" placeholder="pot on" />
+            </div>
+            <div class="rm__badge-row">
+              <input type="text" name="badge_label_1" value="TODAY'S BLOCK" />
+              <input type="text" name="badge_value_1" value="—" />
+            </div>
+            <div class="rm__badge-row">
+              <input type="text" name="badge_label_2" value="PRESENT ON POINTCAST" />
+              <input type="text" name="badge_value_2" value="0 humans · 0 agents" />
+            </div>
+            <div class="rm__badge-row">
+              <input type="text" name="badge_label_3" value="NOW PLAYING" />
+              <input type="text" name="badge_value_3" value="silent" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="rm__group">
+          <legend>Programs (1 to 3)</legend>
+          <div class="rm__programs" id="rm-programs">
+            <div class="rm__prog-row">
+              <input type="text" name="prog_name_0" value="First Pour" placeholder="program name" />
+              <input type="text" name="prog_pattern_0" value="20,4,30,4" placeholder="comma pattern (e.g. 20,4,30,4)" />
+              <textarea name="prog_purpose_0" rows="2" placeholder="When to pick this program">A short, hot pour to wake the bean.</textarea>
+            </div>
+            <div class="rm__prog-row">
+              <input type="text" name="prog_name_1" value="Slow Brew" />
+              <input type="text" name="prog_pattern_1" value="30,4,60,4" />
+              <textarea name="prog_purpose_1" rows="2">A long extraction for the afternoon flat.</textarea>
+            </div>
+            <div class="rm__prog-row">
+              <input type="text" name="prog_name_2" value="" placeholder="program name (optional)" />
+              <input type="text" name="prog_pattern_2" value="" placeholder="pattern (optional)" />
+              <textarea name="prog_purpose_2" rows="2" placeholder="purpose (optional)"></textarea>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="rm__group">
+          <legend>Duration control (3 options)</legend>
+          <div class="rm__durations">
+            <input type="text" name="dur_label_0" value="2 min" placeholder="label" />
+            <input type="number" name="dur_value_0" value="120" placeholder="seconds" />
+            <input type="text" name="dur_label_1" value="5 min" />
+            <input type="number" name="dur_value_1" value="300" />
+            <input type="text" name="dur_label_2" value="10 min" />
+            <input type="number" name="dur_value_2" value="600" />
+          </div>
+        </fieldset>
+
+        <fieldset class="rm__group">
+          <legend>Verb (1 write-back action)</legend>
+          <label class="rm__field">
+            <span>label</span>
+            <input type="text" name="verb_label" value="Pour into the pot" />
+          </label>
+          <label class="rm__field">
+            <span>description</span>
+            <input type="text" name="verb_desc" value="Adds one virtual pour to the shared pot on /coffee." />
+          </label>
+          <label class="rm__field">
+            <span>endpoint</span>
+            <input type="url" name="verb_endpoint" value="https://pointcast.xyz/coffee/pour" />
+          </label>
+          <label class="rm__field">
+            <span>receipt template</span>
+            <input type="text" name="verb_receipt" value="you poured into {target} · {time}" />
+            <em>tokens: {`{actor}`}, {`{action}`}, {`{arg}`}, {`{target}`}, {`{time}`}</em>
+          </label>
+        </fieldset>
+
+      </form>
+
+      {/* ─── Live JSON pane + scaffold ─── */}
+      <aside class="rm__output">
+        <div class="rm__pane">
+          <header class="rm__pane-head">
+            <span class="mono">ROOM CONTRACT · v1</span>
+            <button type="button" class="rm__copy" data-copy="rm-json">Copy</button>
+          </header>
+          <pre><code id="rm-json"></code></pre>
+        </div>
+
+        <div class="rm__pane">
+          <header class="rm__pane-head">
+            <span class="mono">EMBED SNIPPET</span>
+            <button type="button" class="rm__copy" data-copy="rm-embed">Copy</button>
+          </header>
+          <pre><code id="rm-embed"></code></pre>
+        </div>
+
+        <div class="rm__pane">
+          <header class="rm__pane-head">
+            <span class="mono">SCAFFOLD · NEW PR</span>
+            <button type="button" class="rm__copy" data-copy="rm-scaffold">Copy</button>
+          </header>
+          <pre><code id="rm-scaffold"></code></pre>
+          <p class="rm__pane-note mono">
+            Paste these three files into the repo, push, open a PR.
+            <a href="/embed-demo">→ how the embed renders</a>
+          </p>
+        </div>
+      </aside>
+
+    </section>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+(() => {
+  const form = document.getElementById('rm-form');
+  if (!form) return;
+  const jsonOut = document.getElementById('rm-json');
+  const embedOut = document.getElementById('rm-embed');
+  const scaffoldOut = document.getElementById('rm-scaffold');
+
+  function buildSpec() {
+    const fd = new FormData(form);
+    const id = String(fd.get('id') || '').trim() || 'unnamed';
+    const title = String(fd.get('title') || '').trim();
+    const description = String(fd.get('description') || '').trim();
+    const home = String(fd.get('home') || '').trim();
+    const template = String(fd.get('template') || 'breath');
+
+    const status = [];
+    for (let i = 0; i < 4; i++) {
+      const label = String(fd.get(`badge_label_${i}`) || '').trim();
+      const value = String(fd.get(`badge_value_${i}`) || '').trim();
+      if (label && value) {
+        status.push({ id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label, value });
+      }
+    }
+
+    const programs = [];
+    for (let i = 0; i < 3; i++) {
+      const name = String(fd.get(`prog_name_${i}`) || '').trim();
+      const patternStr = String(fd.get(`prog_pattern_${i}`) || '').trim();
+      const purpose = String(fd.get(`prog_purpose_${i}`) || '').trim();
+      if (!name || !purpose) continue;
+      const pattern = patternStr
+        ? patternStr.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n))
+        : undefined;
+      programs.push({
+        id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        name,
+        ...(pattern && pattern.length ? { pattern } : {}),
+        purpose,
+      });
+    }
+
+    const durationOptions = [];
+    for (let i = 0; i < 3; i++) {
+      const label = String(fd.get(`dur_label_${i}`) || '').trim();
+      const value = Number(fd.get(`dur_value_${i}`));
+      if (label && Number.isFinite(value)) {
+        durationOptions.push({ id: `d${i}`, label, value });
+      }
+    }
+    const controls = durationOptions.length
+      ? [{ id: 'duration', type: 'duration', defaultId: durationOptions[Math.min(1, durationOptions.length - 1)].id, options: durationOptions }]
+      : [];
+
+    const verb = {
+      id: 'fire',
+      label: String(fd.get('verb_label') || '').trim() || 'Ring the room',
+      description: String(fd.get('verb_desc') || '').trim() || undefined,
+      method: 'POST',
+      endpoint: String(fd.get('verb_endpoint') || '').trim() || (home + '/ring'),
+      payload: { from: id },
+      receipt: { template: String(fd.get('verb_receipt') || '').trim() || 'done · {time}' },
+    };
+
+    return {
+      $schema: 'https://pointcast.xyz/room-contract/v1.json',
+      id,
+      title,
+      description,
+      home,
+      generatedAt: new Date().toISOString(),
+      status,
+      visualizer: { type: template, binding: 'pattern' },
+      programs: programs.length ? programs : [{ id: 'default', name: 'Default', purpose: 'Default program' }],
+      controls,
+      verbs: [verb],
+    };
+  }
+
+  function renderEmbed(spec) {
+    return [
+      '<script src="https://pointcast.xyz/embed.js" defer></' + 'script>',
+      `<pointcast-room id="${spec.id}"></pointcast-room>`,
+    ].join('\n');
+  }
+
+  function renderScaffold(spec) {
+    const idVar = spec.id.replace(/[^a-zA-Z0-9]/g, '_');
+    const builder = `build${idVar.charAt(0).toUpperCase()}${idVar.slice(1)}Room`;
+    const dataFile = `// src/data/rooms/${spec.id}.ts
+import { ROOM_CONTRACT_SCHEMA, type RoomSpec } from '../../lib/room-contract';
+
+export function ${builder}(): RoomSpec {
+  return ${JSON.stringify({ ...spec, $schema: '__SCHEMA__', generatedAt: '__NOW__' }, null, 2)
+    .replace('"__SCHEMA__"', 'ROOM_CONTRACT_SCHEMA')
+    .replace('"__NOW__"', 'new Date().toISOString()')};
+}`;
+
+    const jsonFile = `// src/pages/${spec.id}.json.ts
+import type { APIRoute } from 'astro';
+import { validateRoomSpec } from '../lib/room-contract';
+import { ${builder} } from '../data/rooms/${spec.id}';
+
+export const GET: APIRoute = async () => {
+  const payload = ${builder}();
+  validateRoomSpec(payload);
+  return new Response(JSON.stringify(payload, null, 2), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+};`;
+
+    const pageFile = `--- src/pages/r/${spec.id}.astro
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import RoomRenderer from '../../components/RoomRenderer.astro';
+import { validateRoomSpec } from '../../lib/room-contract';
+import { ${builder} } from '../../data/rooms/${spec.id}';
+
+const room = validateRoomSpec(${builder}());
+---
+
+<BlockLayout title={room.title} description={room.description}>
+  <RoomRenderer room={room} />
+</BlockLayout>`;
+
+    return [
+      '─── src/data/rooms/' + spec.id + '.ts ─────────────────────',
+      dataFile,
+      '',
+      '─── src/pages/' + spec.id + '.json.ts ─────────────────────',
+      jsonFile,
+      '',
+      '─── src/pages/r/' + spec.id + '.astro ─────────────────────',
+      pageFile,
+    ].join('\n');
+  }
+
+  function refresh() {
+    try {
+      const spec = buildSpec();
+      jsonOut.textContent = JSON.stringify(spec, null, 2);
+      embedOut.textContent = renderEmbed(spec);
+      scaffoldOut.textContent = renderScaffold(spec);
+    } catch (e) {
+      jsonOut.textContent = '// error: ' + (e && e.message ? e.message : String(e));
+    }
+  }
+
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', refresh);
+  refresh();
+
+  // Copy buttons
+  document.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.getAttribute('data-copy'));
+      if (!target) return;
+      try {
+        await navigator.clipboard.writeText(target.textContent || '');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      } catch (e) {
+        btn.textContent = 'Copy failed';
+      }
+    });
+  });
+})();
+</script>
+
+<style>
+  .rm {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    background: #f7f5ef;
+    min-height: calc(100vh - 88px);
+    color: #1f1b15;
+    font-family: var(--font-body, ui-sans-serif, system-ui);
+  }
+
+  .rm__head { margin: 0 0 28px; max-width: 740px; }
+  .rm__head .kicker {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #6a6154;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .rm__head .kicker a { color: #1f1b15; text-decoration: underline; }
+  .rm__head h1 {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: clamp(26px, 3.4vw, 38px);
+    font-weight: 500;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .rm__head .dek {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #4a4434;
+  }
+  .rm__head .dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  /* Two-pane layout */
+  .rm__panes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  @media (min-width: 1080px) {
+    .rm__panes { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+  }
+
+  /* Form */
+  .rm__form {
+    display: grid;
+    gap: 18px;
+  }
+  .rm__group {
+    border: 1px solid #ddd9cc;
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px 18px 16px;
+  }
+  .rm__group legend {
+    padding: 0 8px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: #6a6154;
+    text-transform: uppercase;
+  }
+  .rm__field {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 10px;
+  }
+  .rm__field:last-child { margin-bottom: 0; }
+  .rm__field > span {
+    font-size: 12px;
+    font-weight: 500;
+    color: #1f1b15;
+  }
+  .rm__field em {
+    font-size: 11px;
+    color: #6a6154;
+    font-style: italic;
+  }
+  .rm__field input, .rm__field textarea,
+  .rm__badge-row input, .rm__prog-row input, .rm__prog-row textarea,
+  .rm__durations input {
+    padding: 8px 10px;
+    border: 1px solid #ddd9cc;
+    border-radius: 5px;
+    font: inherit;
+    font-size: 13px;
+    background: #fff;
+    color: #1f1b15;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .rm__field textarea { font-family: inherit; resize: vertical; }
+  .rm__field input:focus, .rm__field textarea:focus,
+  .rm__badge-row input:focus, .rm__prog-row input:focus, .rm__prog-row textarea:focus,
+  .rm__durations input:focus {
+    outline: 2px solid #c4952e;
+    outline-offset: 1px;
+    border-color: #c4952e;
+  }
+
+  /* Templates */
+  .rm__templates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .rm__tpl {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    background: #f7f5ef;
+    border: 1px solid #ddd9cc;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .rm__tpl input { position: absolute; opacity: 0; pointer-events: none; }
+  .rm__tpl:has(input:checked) {
+    background: #1f1b15;
+    color: #fbf3df;
+    border-color: #1f1b15;
+  }
+  .rm__tpl-name {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .rm__tpl-desc {
+    font-size: 11px;
+    color: #6a6154;
+  }
+  .rm__tpl:has(input:checked) .rm__tpl-desc { color: rgba(251, 243, 223, 0.7); }
+
+  /* Badge / program / duration rows */
+  .rm__badges, .rm__programs { display: grid; gap: 8px; margin-top: 8px; }
+  .rm__badge-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 8px;
+  }
+  .rm__prog-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+    background: #f7f5ef;
+    border-radius: 5px;
+  }
+  .rm__prog-row textarea { grid-column: 1 / -1; }
+  .rm__durations {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  @media (max-width: 720px) {
+    .rm__durations { grid-template-columns: 2fr 1fr; }
+  }
+
+  /* Output panes */
+  .rm__output {
+    display: grid;
+    gap: 14px;
+    position: sticky;
+    top: 16px;
+  }
+  @media (max-width: 1079px) {
+    .rm__output { position: static; }
+  }
+  .rm__pane {
+    background: #1f1b15;
+    border-radius: 8px;
+    overflow: hidden;
+    color: #fbf3df;
+  }
+  .rm__pane-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.04);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #c4952e;
+    text-transform: uppercase;
+  }
+  .rm__copy {
+    padding: 5px 12px;
+    background: rgba(196, 149, 46, 0.18);
+    color: #c4952e;
+    border: 1px solid rgba(196, 149, 46, 0.5);
+    border-radius: 999px;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .rm__copy:hover { background: rgba(196, 149, 46, 0.35); color: #fbf3df; }
+  .rm__pane pre {
+    margin: 0;
+    overflow-x: auto;
+  }
+  .rm__pane code {
+    display: block;
+    padding: 12px 14px;
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: #f3eccd;
+    white-space: pre;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .rm__pane-note {
+    margin: 0;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.04);
+    font-size: 10px;
+    color: #c4952e;
+    letter-spacing: 0.08em;
+  }
+  .rm__pane-note a { color: #fbf3df; text-decoration: none; border-bottom: 1px solid rgba(251,243,223,0.3); }
+  .rm__pane-note a:hover { border-bottom-color: #fbf3df; }
+</style>
