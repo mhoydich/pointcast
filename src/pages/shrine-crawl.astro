@@ -1,0 +1,1359 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  BELL_MODE_COPY,
+  SHRINE_CRAWL,
+  SHRINE_CRAWL_META,
+  SHRINE_CRAWL_RECEIPT_SCHEMA,
+  SHRINE_CRAWL_SCREENSAVER_DURATION_MS,
+  SHRINE_CRAWL_STORAGE,
+} from '../lib/shrine-bell-crawl';
+import { absoluteImage, absoluteUrl, SITE_URL } from '../lib/unfurl-shrines';
+
+const title = SHRINE_CRAWL_META.title;
+const description = SHRINE_CRAWL_META.description;
+const first = SHRINE_CRAWL[0];
+const firstStyle = `--active-bg: url('${first.background}'); --active-accent: ${first.accent}; --active-glow: ${first.glow};`;
+const shrineJson = JSON.stringify(SHRINE_CRAWL);
+const receiptSchemaJson = JSON.stringify(SHRINE_CRAWL_RECEIPT_SCHEMA);
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': absoluteUrl('/shrine-crawl'),
+      name: title,
+      description,
+      url: absoluteUrl('/shrine-crawl'),
+      isPartOf: { '@type': 'WebSite', name: 'PointCast', url: SITE_URL },
+      image: absoluteImage('/images/shrines/shrine-background-sheet.png'),
+    },
+    {
+      '@type': 'ItemList',
+      '@id': absoluteUrl('/shrine-crawl#visits'),
+      name: 'PointCast shrine bell crawl visits',
+      numberOfItems: SHRINE_CRAWL.length,
+      itemListElement: SHRINE_CRAWL.map((shrine) => ({
+        '@type': 'ListItem',
+        position: shrine.number,
+        url: absoluteUrl(`/shrine-crawl#${shrine.id}`),
+        name: shrine.title,
+        description: shrine.subtitle,
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/shrines/shrine-background-sheet.png"
+  imageAlt="Generated PointCast shrine background sheet"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/shrine-crawl.json', title: '24 Shrine Bell Crawl JSON' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/shrines/shrine-background-sheet.png',
+    buttons: [
+      { label: 'Open crawl', action: 'link', target: absoluteUrl('/shrine-crawl') },
+      { label: 'Crawl JSON', action: 'link', target: absoluteUrl('/shrine-crawl.json') },
+      { label: 'Shrines', action: 'link', target: absoluteUrl('/shrines') },
+      { label: 'Next sprint', action: 'link', target: absoluteUrl('/next-sprint') },
+    ],
+  }}
+>
+  <div
+    class="shrine-crawl"
+    data-shrine-crawl
+    data-state-key={SHRINE_CRAWL_STORAGE.state}
+    data-legacy-state-key={SHRINE_CRAWL_STORAGE.legacyState}
+    data-receipt-key={SHRINE_CRAWL_STORAGE.receipt}
+    data-screensaver-duration={SHRINE_CRAWL_SCREENSAVER_DURATION_MS}
+    data-receipt-schema={receiptSchemaJson}
+    style={firstStyle}
+  >
+    <script id="shrine-crawl-data" type="application/json" set:html={shrineJson}></script>
+
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span>/</span>
+      <a href="/shrines">shrines</a>
+      <span>/</span>
+      <span>crawl</span>
+      <a href="/shrine-crawl.json">JSON</a>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__shade"></div>
+      <div class="hero__copy">
+        <p class="kicker mono">SHRINE BELL CRAWL</p>
+        <h1>24 shrine visits, each with a bell and a next door.</h1>
+        <p>{description}</p>
+        <div class="hero__actions" aria-label="Primary crawl actions">
+          <a href="#crawl-console">Start Crawl</a>
+          <a href="/shrine-crawl?mode=screensaver">Screensaver</a>
+          <a href="/shrine-crawl.json">Prompt Queue</a>
+          <a href="/next-sprint">Sprint Board</a>
+        </div>
+      </div>
+      <div class="hero__stats" aria-label="Crawl stats">
+        <span><strong>{SHRINE_CRAWL.length}</strong> shrines</span>
+        <span><strong>{SHRINE_CRAWL_META.modes.length}</strong> bell modes</span>
+        <span><strong>24</strong> MJ prompts</span>
+      </div>
+    </header>
+
+    <main class="console" id="crawl-console">
+      <section class="stage" data-stage aria-live="polite">
+        <div class="stage__background"></div>
+        <div class="stage__content">
+          <div class="stage__meta">
+            <span class="mono" data-shrine-count>01 / 24</span>
+            <span class="mono" data-shrine-mode>{BELL_MODE_COPY[first.bell.mode]}</span>
+          </div>
+          <div class="noun-token" aria-hidden="true">
+            <img data-shrine-noun src={`https://noun.pics/${first.bell.noun}.svg`} alt="" width="180" height="180" loading="eager" decoding="async" />
+          </div>
+          <div class="stage__copy">
+            <h2 data-shrine-title>{first.title}</h2>
+            <p data-shrine-subtitle>{first.subtitle}</p>
+            <p class="task" data-shrine-task>{first.task}</p>
+          </div>
+          <div class="bell-panel">
+            <button class="ring-button" data-ring type="button">
+              <span data-bell-label>{first.bell.label}</span>
+              <small class="mono" data-bell-noun>NOUN {first.bell.noun}</small>
+            </button>
+            <div class="note-row" data-notes>
+              {first.bell.notes.map((note) => <span>{note}</span>)}
+            </div>
+          </div>
+          <div class="stage__actions">
+            <button data-next-shrine type="button">Visit Next Shrine</button>
+            <a data-open-route href={first.route}>{first.routeLabel}</a>
+          </div>
+          <div class="screensaver-controls" aria-label="Screensaver controls">
+            <button data-screensaver-toggle type="button">Pause</button>
+            <button data-screensaver-next type="button">Next Shrine</button>
+            <a href="/shrine-crawl">Exit Screensaver</a>
+          </div>
+        </div>
+      </section>
+
+      <aside class="prompt-panel" aria-label="Midjourney shrine prompt">
+        <div class="prompt-panel__head">
+          <div>
+            <p class="kicker mono">MIDJOURNEY QUEUE</p>
+            <h2>Background recipe</h2>
+          </div>
+          <button data-copy-prompt type="button">Copy Prompt</button>
+        </div>
+        <pre data-prompt>{first.midjourney}</pre>
+      </aside>
+    </main>
+
+    <section class="progress-band" aria-label="Local crawl progress">
+      <div>
+        <span class="mono" data-progress-label>0 visited / 0 rung</span>
+        <strong data-progress-title>Start at the brass door.</strong>
+      </div>
+      <div class="progress">
+        <span data-visited-bar></span>
+        <span data-rung-bar></span>
+      </div>
+    </section>
+
+    <section class="receipt-panel" data-receipt-panel hidden aria-label="Pilgrimage receipt">
+      <div>
+        <p class="kicker mono">PILGRIMAGE RECEIPT</p>
+        <h2 data-receipt-title>All 24 bells have answered.</h2>
+        <p data-receipt-summary>A local completion receipt is ready.</p>
+      </div>
+      <div class="receipt-panel__actions">
+        <button data-copy-receipt type="button">Copy Receipt JSON</button>
+        <a href="/shrine-crawl.json">Receipt Schema</a>
+      </div>
+      <pre data-receipt-json>{}</pre>
+    </section>
+
+    <section class="rail" aria-label="Shrine rail">
+      {SHRINE_CRAWL.map((shrine, index) => (
+        <button
+          class={index === 0 ? 'rail__button is-active' : 'rail__button'}
+          type="button"
+          data-shrine-select={index}
+          style={`--accent: ${shrine.accent}; --glow: ${shrine.glow};`}
+          aria-pressed={index === 0 ? 'true' : 'false'}
+        >
+          <span class="mono">{String(shrine.number).padStart(2, '0')}</span>
+          <strong>{shrine.title}</strong>
+          <small>{shrine.route}</small>
+        </button>
+      ))}
+    </section>
+
+    <section class="visit-grid" id="visits" aria-label="All shrine visits">
+      {SHRINE_CRAWL.map((shrine) => (
+        <article class="visit-card" id={shrine.id} style={`--accent: ${shrine.accent}; --glow: ${shrine.glow}; --bg: url('${shrine.background}');`}>
+          <div class="visit-card__image" aria-hidden="true"></div>
+          <div class="visit-card__body">
+            <span class="mono">SHRINE {String(shrine.number).padStart(2, '0')} / {BELL_MODE_COPY[shrine.bell.mode]}</span>
+            <h2>{shrine.title}</h2>
+            <p>{shrine.subtitle}</p>
+            <div class="visit-card__links">
+              <a href={shrine.route}>{shrine.routeLabel}</a>
+              <a href={`/shrine-crawl#${shrine.id}`}>Permalink</a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+  </div>
+
+  <script>
+    import { playEmojiChime, playNounVoice } from '../lib/chimes';
+
+    function emptyState() {
+      return {
+        current: 0,
+        visited: {},
+        rung: {},
+        screensaver: { running: false, paused: false },
+      };
+    }
+
+    function readState(stateKey, legacyStateKey) {
+      try {
+        const raw = localStorage.getItem(stateKey) || localStorage.getItem(legacyStateKey) || '{}';
+        const parsed = JSON.parse(raw) || {};
+        return {
+          current: Number.isFinite(parsed.current) ? parsed.current : 0,
+          visited: parsed.visited || {},
+          rung: parsed.rung || {},
+          screensaver: {
+            running: Boolean(parsed.screensaver?.running),
+            paused: Boolean(parsed.screensaver?.paused),
+          },
+        };
+      } catch (error) {
+        return emptyState();
+      }
+    }
+
+    function writeState(stateKey, state) {
+      try {
+        localStorage.setItem(stateKey, JSON.stringify(state));
+      } catch (error) {}
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+      return Promise.resolve();
+    }
+
+    function playBell(shrine, gain = 1) {
+      const noun = Number(shrine.bell.noun) || 0;
+      playNounVoice(noun, 0.24 * gain);
+      if (shrine.bell.mode === 'chord') {
+        window.setTimeout(() => playNounVoice(noun + 7, 0.16 * gain), 100);
+      }
+      if (shrine.bell.mode === 'cascade') {
+        window.setTimeout(() => playNounVoice(noun + 11, 0.17 * gain), 120);
+        window.setTimeout(() => playNounVoice(noun + 23, 0.14 * gain), 260);
+      }
+      if (shrine.bell.mode === 'drone') {
+        window.setTimeout(() => playNounVoice(noun + 1, 0.12 * gain), 180);
+        if (gain > 0.5) window.setTimeout(() => playEmojiChime(), 520);
+      }
+    }
+
+    function initShrineCrawl() {
+      const root = document.querySelector('[data-shrine-crawl]');
+      if (!root || root.hasAttribute('data-shrine-crawl-bound')) return;
+      root.setAttribute('data-shrine-crawl-bound', '');
+
+      const dataNode = root.querySelector('#shrine-crawl-data');
+      const shrines = JSON.parse(dataNode?.textContent || '[]');
+      if (!shrines.length) return;
+
+      const stateKey = root.getAttribute('data-state-key') || 'pc:shrine-crawl:v2';
+      const legacyStateKey = root.getAttribute('data-legacy-state-key') || 'pc:shrine-crawl:v1';
+      const receiptKey = root.getAttribute('data-receipt-key') || 'pc:shrine-crawl:v2:receipt';
+      const receiptSchema = readJsonFromString(root.getAttribute('data-receipt-schema') || '{}', {});
+      const screensaverDuration = Number(root.getAttribute('data-screensaver-duration') || 18000);
+      const params = new URLSearchParams(window.location.search);
+      const startsInScreensaver = params.get('mode') === 'screensaver';
+      const state = readState(stateKey, legacyStateKey);
+      const buttons = Array.from(root.querySelectorAll('[data-shrine-select]'));
+      const hero = root.querySelector('.hero');
+      const title = root.querySelector('[data-shrine-title]');
+      const subtitle = root.querySelector('[data-shrine-subtitle]');
+      const task = root.querySelector('[data-shrine-task]');
+      const count = root.querySelector('[data-shrine-count]');
+      const mode = root.querySelector('[data-shrine-mode]');
+      const nounImage = root.querySelector('[data-shrine-noun]');
+      const bellLabel = root.querySelector('[data-bell-label]');
+      const bellNoun = root.querySelector('[data-bell-noun]');
+      const notes = root.querySelector('[data-notes]');
+      const prompt = root.querySelector('[data-prompt]');
+      const openRoute = root.querySelector('[data-open-route]');
+      const progressLabel = root.querySelector('[data-progress-label]');
+      const progressTitle = root.querySelector('[data-progress-title]');
+      const visitedBar = root.querySelector('[data-visited-bar]');
+      const rungBar = root.querySelector('[data-rung-bar]');
+      const ringButton = root.querySelector('[data-ring]');
+      const nextButton = root.querySelector('[data-next-shrine]');
+      const copyButton = root.querySelector('[data-copy-prompt]');
+      const screensaverToggle = root.querySelector('[data-screensaver-toggle]');
+      const screensaverNext = root.querySelector('[data-screensaver-next]');
+      const receiptPanel = root.querySelector('[data-receipt-panel]');
+      const receiptTitle = root.querySelector('[data-receipt-title]');
+      const receiptSummary = root.querySelector('[data-receipt-summary]');
+      const receiptJson = root.querySelector('[data-receipt-json]');
+      const copyReceiptButton = root.querySelector('[data-copy-receipt]');
+      let screensaverTimer = 0;
+      let audioUnlocked = false;
+
+      const modeCopy = {
+        single: 'one clear bell',
+        chord: 'two bells in agreement',
+        cascade: 'three bells down the rail',
+        drone: 'a low bell with a bright answer',
+      };
+
+      function markVisited(shrine) {
+        state.visited[shrine.id] = true;
+        writeState(stateKey, state);
+      }
+
+      function readJsonFromString(raw, fallback) {
+        try {
+          return raw ? JSON.parse(raw) : fallback;
+        } catch (error) {
+          return fallback;
+        }
+      }
+
+      function readReceipt() {
+        try {
+          return JSON.parse(localStorage.getItem(receiptKey) || 'null');
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function writeReceipt(receipt) {
+        try {
+          localStorage.setItem(receiptKey, JSON.stringify(receipt));
+        } catch (error) {}
+      }
+
+      function buildReceipt() {
+        const rungShrines = shrines.filter((shrine) => state.rung[shrine.id]);
+        const visitedShrines = shrines.filter((shrine) => state.visited[shrine.id]);
+        return {
+          type: receiptSchema.type || 'pointcast.shrine-crawl.receipt.v2',
+          receiptId: `pc-shrine-${Date.now().toString(36)}`,
+          completedAt: new Date().toISOString(),
+          count: rungShrines.length,
+          source: `${window.location.origin}/shrine-crawl`,
+          screensaverUrl: `${window.location.origin}/shrine-crawl?mode=screensaver`,
+          localOnly: true,
+          rungShrines: rungShrines.map((shrine) => ({
+            id: shrine.id,
+            number: shrine.number,
+            title: shrine.title,
+            route: shrine.route,
+            bell: shrine.bell.label,
+          })),
+          visitedShrines: visitedShrines.map((shrine) => shrine.id),
+        };
+      }
+
+      function ensureReceipt() {
+        const rung = shrines.filter((shrine) => state.rung[shrine.id]).length;
+        if (rung !== shrines.length) return readReceipt();
+        const existing = readReceipt();
+        if (existing?.count === shrines.length) return existing;
+        const receipt = buildReceipt();
+        writeReceipt(receipt);
+        return receipt;
+      }
+
+      function renderReceipt() {
+        const receipt = ensureReceipt();
+        if (!receiptPanel || !receiptJson) return;
+        if (!receipt) {
+          receiptPanel.hidden = true;
+          return;
+        }
+        receiptPanel.hidden = false;
+        if (receiptTitle) receiptTitle.textContent = 'All 24 bells have answered.';
+        if (receiptSummary) {
+          receiptSummary.textContent = `${receipt.receiptId} · completed ${new Date(receipt.completedAt).toLocaleString()}`;
+        }
+        receiptJson.textContent = JSON.stringify(receipt, null, 2);
+      }
+
+      function renderProgress() {
+        const visited = shrines.filter((shrine) => state.visited[shrine.id]).length;
+        const rung = shrines.filter((shrine) => state.rung[shrine.id]).length;
+        if (progressLabel) progressLabel.textContent = `${visited} visited / ${rung} rung`;
+        if (progressTitle) {
+          progressTitle.textContent = rung === shrines.length ? 'All bells have answered.' : `${shrines.length - rung} bells still waiting.`;
+        }
+        if (visitedBar) visitedBar.style.width = `${Math.round((visited / shrines.length) * 100)}%`;
+        if (rungBar) rungBar.style.width = `${Math.round((rung / shrines.length) * 100)}%`;
+        root.setAttribute('data-visited-count', String(visited));
+        root.setAttribute('data-rung-count', String(rung));
+        renderReceipt();
+      }
+
+      function setScreensaver(running, paused = false) {
+        state.screensaver.running = Boolean(running);
+        state.screensaver.paused = Boolean(paused);
+        root.classList.toggle('is-screensaver', state.screensaver.running);
+        root.classList.toggle('is-screensaver-paused', state.screensaver.paused);
+        if (screensaverToggle) screensaverToggle.textContent = state.screensaver.paused ? 'Resume' : 'Pause';
+        writeState(stateKey, state);
+        scheduleScreensaver();
+      }
+
+      function scheduleScreensaver() {
+        window.clearTimeout(screensaverTimer);
+        if (!state.screensaver.running || state.screensaver.paused) return;
+        screensaverTimer = window.setTimeout(() => {
+          advanceScreensaver();
+        }, screensaverDuration);
+      }
+
+      function advanceScreensaver() {
+        paint(state.current + 1, { updateHash: true, scroll: false });
+        const shrine = shrines[state.current] || shrines[0];
+        if (audioUnlocked) {
+          playBell(shrine, 0.42);
+          state.rung[shrine.id] = true;
+          writeState(stateKey, state);
+          renderProgress();
+          paint(state.current, { updateHash: true, scroll: false });
+        }
+        scheduleScreensaver();
+      }
+
+      function paint(index, options = {}) {
+        const clamped = ((index % shrines.length) + shrines.length) % shrines.length;
+        const shrine = shrines[clamped];
+        state.current = clamped;
+        markVisited(shrine);
+        root.style.setProperty('--active-bg', `url('${shrine.background}')`);
+        root.style.setProperty('--active-accent', shrine.accent);
+        root.style.setProperty('--active-glow', shrine.glow);
+
+        if (title) title.textContent = shrine.title;
+        if (subtitle) subtitle.textContent = shrine.subtitle;
+        if (task) task.textContent = shrine.task;
+        if (count) count.textContent = `${String(shrine.number).padStart(2, '0')} / ${String(shrines.length).padStart(2, '0')}`;
+        if (mode) mode.textContent = modeCopy[shrine.bell.mode] || shrine.bell.mode;
+        if (nounImage) nounImage.setAttribute('src', `https://noun.pics/${shrine.bell.noun}.svg`);
+        if (bellLabel) bellLabel.textContent = shrine.bell.label;
+        if (bellNoun) bellNoun.textContent = `NOUN ${shrine.bell.noun}`;
+        if (prompt) prompt.textContent = shrine.midjourney;
+        if (openRoute) {
+          openRoute.setAttribute('href', shrine.route);
+          openRoute.textContent = shrine.routeLabel;
+        }
+        if (notes) notes.innerHTML = shrine.bell.notes.map((note) => `<span>${note}</span>`).join('');
+        if (hero) hero.style.setProperty('background-image', `var(--active-bg)`);
+
+        buttons.forEach((button, buttonIndex) => {
+          const active = buttonIndex === clamped;
+          button.classList.toggle('is-active', active);
+          button.classList.toggle('is-visited', Boolean(state.visited[shrines[buttonIndex].id]));
+          button.classList.toggle('is-rung', Boolean(state.rung[shrines[buttonIndex].id]));
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        writeState(stateKey, state);
+        renderProgress();
+        if (options.updateHash) {
+          history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${shrine.id}`);
+        }
+        if (options.scroll) root.querySelector('[data-stage]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+
+      function unlockAudio() {
+        audioUnlocked = true;
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          unlockAudio();
+          paint(Number(button.getAttribute('data-shrine-select')) || 0, { updateHash: true, scroll: true });
+          scheduleScreensaver();
+        });
+      });
+
+      ringButton?.addEventListener('click', () => {
+        unlockAudio();
+        const shrine = shrines[state.current] || shrines[0];
+        playBell(shrine);
+        state.rung[shrine.id] = true;
+        writeState(stateKey, state);
+        paint(state.current, { updateHash: true });
+        scheduleScreensaver();
+      });
+
+      nextButton?.addEventListener('click', () => {
+        unlockAudio();
+        paint(state.current + 1, { updateHash: true, scroll: true });
+        scheduleScreensaver();
+      });
+
+      screensaverNext?.addEventListener('click', () => {
+        unlockAudio();
+        advanceScreensaver();
+      });
+
+      screensaverToggle?.addEventListener('click', () => {
+        unlockAudio();
+        setScreensaver(true, !state.screensaver.paused);
+      });
+
+      copyButton?.addEventListener('click', async () => {
+        const shrine = shrines[state.current] || shrines[0];
+        await copyText(shrine.midjourney);
+        copyButton.textContent = 'Copied';
+        window.setTimeout(() => {
+          copyButton.textContent = 'Copy Prompt';
+        }, 1200);
+      });
+
+      copyReceiptButton?.addEventListener('click', async () => {
+        const receipt = ensureReceipt();
+        if (!receipt) return;
+        await copyText(JSON.stringify(receipt, null, 2));
+        copyReceiptButton.textContent = 'Copied';
+        window.setTimeout(() => {
+          copyReceiptButton.textContent = 'Copy Receipt JSON';
+        }, 1200);
+      });
+
+      window.addEventListener('hashchange', () => {
+        const nextIndex = shrines.findIndex((shrine) => `#${shrine.id}` === window.location.hash);
+        if (nextIndex >= 0) paint(nextIndex, { scroll: false });
+      });
+
+      const hashIndex = shrines.findIndex((shrine) => `#${shrine.id}` === window.location.hash);
+      if (startsInScreensaver) {
+        setScreensaver(true, false);
+      } else {
+        setScreensaver(false, false);
+      }
+      paint(hashIndex >= 0 ? hashIndex : state.current, { updateHash: startsInScreensaver });
+    }
+
+    initShrineCrawl();
+    document.addEventListener('astro:page-load', initShrineCrawl);
+  </script>
+</BlockLayout>
+
+<style>
+  .shrine-crawl {
+    --paper: #f7f2e8;
+    --ink: #17140f;
+    --muted: #615d54;
+    --line: rgba(23, 20, 15, 0.16);
+    min-height: 100vh;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .mono,
+  .kicker,
+  .hero__actions a,
+  .stage__actions a,
+  .stage__actions button,
+  .prompt-panel button,
+  .screensaver-controls a,
+  .screensaver-controls button,
+  .receipt-panel button,
+  .receipt-panel a {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    position: absolute;
+    z-index: 5;
+    top: 18px;
+    left: 18px;
+    right: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 11px;
+  }
+
+  .crumb a {
+    color: #fff;
+  }
+
+  .crumb a:last-child {
+    margin-left: auto;
+  }
+
+  .hero {
+    position: relative;
+    min-height: min(100svh, 920px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+    gap: 24px;
+    align-items: end;
+    overflow: hidden;
+    isolation: isolate;
+    padding: 88px 24px 30px;
+    color: #fff;
+    background-image: var(--active-bg);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .hero__shade {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, rgba(10, 8, 6, 0.86), rgba(10, 8, 6, 0.34) 54%, rgba(10, 8, 6, 0.72)),
+      linear-gradient(0deg, rgba(10, 8, 6, 0.76), rgba(10, 8, 6, 0.12) 50%);
+  }
+
+  .hero__copy {
+    max-width: 780px;
+  }
+
+  .kicker {
+    margin: 0 0 8px;
+    color: var(--active-glow);
+    font-size: 11px;
+  }
+
+  .hero h1 {
+    max-width: 900px;
+    margin: 0;
+    font-size: clamp(46px, 8vw, 116px);
+    line-height: 0.9;
+  }
+
+  .hero p {
+    max-width: 720px;
+    margin: 18px 0 0;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: clamp(17px, 2vw, 23px);
+    line-height: 1.45;
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .hero__actions a,
+  .stage__actions a,
+  .stage__actions button,
+  .prompt-panel button,
+  .screensaver-controls a,
+  .screensaver-controls button,
+  .receipt-panel button,
+  .receipt-panel a {
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 11px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .hero__actions a:first-child,
+  .stage__actions button,
+  .prompt-panel button,
+  .screensaver-controls button:first-child,
+  .receipt-panel button {
+    border-color: var(--active-accent);
+    background: var(--active-accent);
+    color: #15110d;
+    font-weight: 800;
+  }
+
+  .hero__stats {
+    align-self: end;
+    display: grid;
+    gap: 10px;
+  }
+
+  .hero__stats span {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 8px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .hero__stats strong {
+    color: #fff;
+    font-size: 34px;
+  }
+
+  .console {
+    max-width: 1180px;
+    margin: -42px auto 0;
+    padding: 0 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.14fr) minmax(320px, 0.86fr);
+    gap: 18px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .stage,
+  .prompt-panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fffaf0;
+    box-shadow: 0 22px 80px rgba(20, 15, 8, 0.18);
+    overflow: hidden;
+  }
+
+  .stage {
+    position: relative;
+    min-height: 620px;
+    color: #fff;
+  }
+
+  .stage__background {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(180deg, rgba(12, 8, 5, 0.26), rgba(12, 8, 5, 0.82)),
+      var(--active-bg);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .stage__content {
+    position: relative;
+    min-height: 620px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    gap: 18px;
+    padding: clamp(18px, 4vw, 36px);
+  }
+
+  .stage__meta,
+  .stage__actions,
+  .screensaver-controls,
+  .note-row,
+  .visit-card__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stage__meta {
+    justify-content: space-between;
+  }
+
+  .stage__meta span {
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.22);
+    color: #fff;
+    font-size: 10px;
+  }
+
+  .noun-token {
+    width: min(38vw, 180px);
+    aspect-ratio: 1;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.25);
+  }
+
+  .noun-token img {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+  }
+
+  .stage__copy {
+    align-self: end;
+  }
+
+  .stage__copy h2 {
+    max-width: 720px;
+    margin: 0;
+    font-size: clamp(34px, 5vw, 72px);
+    line-height: 0.94;
+  }
+
+  .stage__copy p {
+    max-width: 680px;
+    margin: 12px 0 0;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 17px;
+    line-height: 1.5;
+  }
+
+  .stage__copy .task {
+    color: #fff;
+    font-weight: 800;
+  }
+
+  .bell-panel {
+    display: grid;
+    grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .ring-button {
+    display: grid;
+    gap: 4px;
+    min-height: 78px;
+    border: 1px solid var(--active-glow);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--active-glow);
+    color: #17140f;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  .ring-button span {
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .ring-button small {
+    color: rgba(23, 20, 15, 0.7);
+  }
+
+  .note-row {
+    min-height: 78px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.22);
+  }
+
+  .note-row span {
+    min-width: 48px;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    text-align: center;
+    font-weight: 800;
+  }
+
+  .screensaver-controls {
+    display: none;
+    justify-content: center;
+  }
+
+  .prompt-panel {
+    padding: 18px;
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+
+  .prompt-panel__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 12px;
+  }
+
+  .prompt-panel h2 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  .prompt-panel button {
+    border-color: var(--active-accent);
+    color: #17140f;
+  }
+
+  .prompt-panel pre {
+    min-height: 360px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    background: #17140f;
+    color: #fff5d9;
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .progress-band,
+  .receipt-panel,
+  .rail,
+  .visit-grid {
+    max-width: 1180px;
+    margin: 18px auto 0;
+    padding: 0 18px;
+  }
+
+  .progress-band {
+    display: grid;
+    grid-template-columns: minmax(0, 0.45fr) minmax(240px, 0.55fr);
+    gap: 18px;
+    align-items: center;
+  }
+
+  .progress-band strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 22px;
+  }
+
+  .progress {
+    position: relative;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(23, 20, 15, 0.12);
+    overflow: hidden;
+  }
+
+  .progress span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    transition: width 180ms ease;
+  }
+
+  .progress span:first-child {
+    background: rgba(45, 111, 189, 0.36);
+  }
+
+  .progress span:last-child {
+    height: 8px;
+    top: 5px;
+    background: var(--active-accent);
+  }
+
+  .receipt-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(280px, 1fr);
+    gap: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    background: #17140f;
+    color: #fff;
+    box-shadow: 0 22px 80px rgba(20, 15, 8, 0.18);
+  }
+
+  .receipt-panel[hidden] {
+    display: none;
+  }
+
+  .receipt-panel h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 52px);
+    line-height: 0.95;
+  }
+
+  .receipt-panel p {
+    margin: 12px 0 0;
+    color: rgba(255, 255, 255, 0.76);
+  }
+
+  .receipt-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-self: start;
+  }
+
+  .receipt-panel pre {
+    grid-column: 1 / -1;
+    max-height: 340px;
+    overflow: auto;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff5d9;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  .shrine-crawl.is-screensaver {
+    min-height: 100svh;
+    overflow: hidden;
+    background: #070504;
+  }
+
+  :global(body:has(.shrine-crawl.is-screensaver) .fb),
+  :global(body:has(.shrine-crawl.is-screensaver) .skip-link) {
+    display: none;
+  }
+
+  .shrine-crawl.is-screensaver .crumb,
+  .shrine-crawl.is-screensaver .hero,
+  .shrine-crawl.is-screensaver .prompt-panel,
+  .shrine-crawl.is-screensaver .rail,
+  .shrine-crawl.is-screensaver .visit-grid {
+    display: none;
+  }
+
+  .shrine-crawl.is-screensaver .console {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+
+  .shrine-crawl.is-screensaver .stage {
+    min-height: 100svh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .shrine-crawl.is-screensaver .stage__background {
+    background-image:
+      radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.12), transparent 26%),
+      linear-gradient(180deg, rgba(5, 4, 3, 0.18), rgba(5, 4, 3, 0.74)),
+      var(--active-bg);
+  }
+
+  .shrine-crawl.is-screensaver .stage__content {
+    min-height: 100svh;
+    max-width: 980px;
+    margin: 0 auto;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+    padding: clamp(22px, 5vw, 70px);
+  }
+
+  .shrine-crawl.is-screensaver .stage__meta,
+  .shrine-crawl.is-screensaver .stage__actions,
+  .shrine-crawl.is-screensaver .note-row,
+  .shrine-crawl.is-screensaver .screensaver-controls {
+    justify-content: center;
+  }
+
+  .shrine-crawl.is-screensaver .noun-token {
+    width: min(38svh, 240px);
+  }
+
+  .shrine-crawl.is-screensaver .stage__copy {
+    align-self: center;
+  }
+
+  .shrine-crawl.is-screensaver .stage__copy h2 {
+    max-width: 900px;
+    font-size: clamp(48px, 8vw, 112px);
+  }
+
+  .shrine-crawl.is-screensaver .stage__copy p {
+    margin-left: auto;
+    margin-right: auto;
+    font-size: clamp(17px, 2vw, 24px);
+  }
+
+  .shrine-crawl.is-screensaver .bell-panel {
+    width: min(100%, 680px);
+    grid-template-columns: 1fr;
+  }
+
+  .shrine-crawl.is-screensaver .ring-button {
+    min-height: 92px;
+    text-align: center;
+    place-items: center;
+  }
+
+  .shrine-crawl.is-screensaver .screensaver-controls {
+    display: flex;
+  }
+
+  .shrine-crawl.is-screensaver .progress-band {
+    position: fixed;
+    z-index: 8;
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+    max-width: none;
+    grid-template-columns: minmax(0, 360px) minmax(180px, 1fr);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(9, 7, 5, 0.7);
+    color: #fff;
+    backdrop-filter: blur(14px);
+  }
+
+  .shrine-crawl.is-screensaver .progress-band strong {
+    font-size: 16px;
+  }
+
+  .shrine-crawl.is-screensaver .receipt-panel {
+    position: fixed;
+    z-index: 9;
+    left: 18px;
+    right: 18px;
+    bottom: 86px;
+    max-width: 760px;
+    margin: 0 auto;
+    grid-template-columns: 1fr;
+  }
+
+  .shrine-crawl.is-screensaver-paused .stage__background {
+    filter: saturate(0.72);
+  }
+
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .rail__button {
+    min-height: 116px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    background: #fffaf0;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .rail__button span,
+  .visit-card .mono {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  .rail__button strong {
+    display: block;
+    margin: 8px 0 6px;
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .rail__button small {
+    color: var(--muted);
+    word-break: break-word;
+  }
+
+  .rail__button.is-active {
+    border-color: var(--accent);
+    background: var(--glow);
+  }
+
+  .rail__button.is-rung {
+    box-shadow: inset 0 -5px 0 var(--accent);
+  }
+
+  .rail__button.is-visited:not(.is-active) {
+    background: #f2eadc;
+  }
+
+  .visit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding-bottom: 84px;
+  }
+
+  .visit-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fffaf0;
+  }
+
+  .visit-card__image {
+    min-height: 150px;
+    background-image:
+      linear-gradient(180deg, rgba(23, 20, 15, 0.08), rgba(23, 20, 15, 0.58)),
+      var(--bg);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .visit-card__body {
+    padding: 16px;
+  }
+
+  .visit-card h2 {
+    margin: 8px 0;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .visit-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .visit-card__links {
+    margin-top: 14px;
+  }
+
+  .visit-card__links a {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 10px;
+    color: var(--ink);
+    font-size: 12px;
+    text-decoration: none;
+  }
+
+  .visit-card__links a:first-child {
+    border-color: var(--accent);
+    background: var(--glow);
+    font-weight: 800;
+  }
+
+  @media (max-width: 980px) {
+    .hero,
+    .console,
+    .progress-band {
+      grid-template-columns: 1fr;
+    }
+
+    .console {
+      margin-top: -24px;
+    }
+
+    .rail {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .visit-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .crumb {
+      left: 14px;
+      right: 14px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .hero {
+      min-height: 82vh;
+      padding: 78px 16px 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 16vw, 68px);
+    }
+
+    .console,
+    .progress-band,
+    .receipt-panel,
+    .rail,
+    .visit-grid {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .stage,
+    .stage__content {
+      min-height: 570px;
+    }
+
+    .bell-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .prompt-panel__head,
+    .stage__actions,
+    .screensaver-controls,
+    .receipt-panel__actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .stage__actions a,
+    .stage__actions button,
+    .prompt-panel button,
+    .screensaver-controls a,
+    .screensaver-controls button,
+    .receipt-panel a,
+    .receipt-panel button {
+      width: 100%;
+      text-align: center;
+    }
+
+    .receipt-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .shrine-crawl.is-screensaver .stage__content {
+      padding-bottom: 130px;
+    }
+
+    .shrine-crawl.is-screensaver .progress-band {
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      grid-template-columns: 1fr;
+    }
+
+    .shrine-crawl.is-screensaver .receipt-panel {
+      left: 10px;
+      right: 10px;
+      bottom: 128px;
+      max-height: calc(100svh - 150px);
+      overflow: auto;
+    }
+
+    .rail,
+    .visit-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
