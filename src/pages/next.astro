@@ -1,0 +1,805 @@
+---
+/**
+ * /next — the next-version PointCast homepage.
+ *
+ * Mike 2026-05-13: "ok lets keep going, and lets try a next version
+ * build pointcast" — after the woodblock-strip pass on `/` (PR #650),
+ * push the direction harder on a sibling route. `/` stays editorial /
+ * newsroom; `/next` is the wondrous town panel.
+ *
+ * The whole page is one composed woodblock view of El Segundo: sky →
+ * refinery → palms → beach houses → ocean. Each of the 9 named
+ * landmarks pins to a position in the scene and links into a room.
+ * Below the scene: today's signal (morning hero, ship, or block) +
+ * the broadcast counts. No 14-column directory — the scene IS the
+ * directory.
+ *
+ * Time-of-day responsive: kicker swaps phase ("MORNING / AFTERNOON /
+ * EVENING / OVERNIGHT") and the sun's vertical position drifts. Palette
+ * stays in the blue-hour register from the Midjourney spotlight.
+ *
+ * Self-contained: no shared component changes, no rewrites of `/`,
+ * so this PR can ship alongside parallel agent work without colliding.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import asksData from '../data/asks.json';
+import shipsData from '../data/recent-ships.json';
+import morningHeroData from '../data/morning-hero.json';
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+const blockCount = allBlocks.length;
+const latestBlock = allBlocks[0] || null;
+
+const now = new Date();
+const todayStr = now.toISOString().slice(0, 10);
+const h = now.getHours();
+function phase(hh: number): string {
+  if (hh < 5) return 'OVERNIGHT';
+  if (hh < 11) return 'MORNING';
+  if (hh < 17) return 'AFTERNOON';
+  if (hh < 21) return 'EVENING';
+  return 'NIGHT';
+}
+const todayPhase = phase(h);
+
+// Sun position drifts across the panel through the day. 6am=left,
+// noon=middle-top, 7pm=right. Outside daylight, hide it.
+const sunVisible = h >= 6 && h < 20;
+const sunX = sunVisible ? 80 + ((h - 6) / 14) * 1040 : 0;
+const sunY = 96 - Math.sin(((h - 6) / 14) * Math.PI) * 36;
+
+// Night mode: NIGHT (21–23) and OVERNIGHT (0–4) swap the entire palette.
+// Sky goes deep navy with stars, a crescent moon rises, the refinery
+// flare brightens, town windows glow lit-yellow, sea darkens. Sprint 2
+// (PR after #651) — same scene, different hour.
+const isNight = todayPhase === 'NIGHT' || todayPhase === 'OVERNIGHT';
+
+// Palette swap. Index 0 = top sky band, index 3 = horizon.
+const palette = isNight
+  ? {
+      sky: ['#0a1530', '#0f1f3a', '#142844', '#1c324d'],
+      sea: '#0a1d36',
+      waves: ['#1e4264', '#16344f', '#11283e', '#0d1e2f', '#0a1828'],
+      sand: '#776246',
+      townBand: '#564231',
+      roof: '#3a2615',
+      wall: '#3c2e1f',
+      windowLit: '#f5c66b',
+      windowDim: '#3d2f1f',
+      mountain: '#1a2533',
+      palmTrunk: '#1a120a',
+      palmFrond1: '#1a3a2d',
+      palmFrond2: '#26513e',
+      flare: '#ff8a4a',
+      flareGlow: '#ffd28a',
+    }
+  : {
+      sky: ['#c8d8e3', '#a9c3d4', '#e8b8a0', '#d8624a'],
+      sea: '#1f4561',
+      waves: ['#a9c3d4', '#7da4bc', '#5b85a0', '#3d6a89', '#2c5573'],
+      sand: '#e3c98f',
+      townBand: '#cdb38a',
+      roof: '#874c1d',
+      wall: '#9a7b53',
+      windowLit: '#fdf2d6',
+      windowDim: '#fdf2d6',
+      mountain: '#5e6f7d',
+      palmTrunk: '#3b2a18',
+      palmFrond1: '#2d6048',
+      palmFrond2: '#3d8060',
+      flare: '#f3a070',
+      flareGlow: '#fbd8a3',
+    };
+
+// Deterministic star field — hardcoded ~80 positions across the sky band
+// (y ∈ [4, 180]) so the layout is stable across SSR and reloads.
+const stars: Array<{ x: number; y: number; r: number; o: number }> = [
+  { x: 32, y: 18, r: 1.2, o: 0.9 },  { x: 88, y: 42, r: 0.8, o: 0.65 },
+  { x: 142, y: 12, r: 1.4, o: 1.0 }, { x: 196, y: 60, r: 0.9, o: 0.7 },
+  { x: 234, y: 26, r: 1.0, o: 0.85 },{ x: 278, y: 86, r: 1.1, o: 0.95 },
+  { x: 308, y: 38, r: 0.7, o: 0.55 },{ x: 354, y: 14, r: 1.3, o: 1.0 },
+  { x: 404, y: 50, r: 0.8, o: 0.6 }, { x: 448, y: 24, r: 1.1, o: 0.9 },
+  { x: 482, y: 72, r: 0.9, o: 0.75 },{ x: 518, y: 30, r: 1.2, o: 0.95 },
+  { x: 562, y: 10, r: 0.7, o: 0.55 },{ x: 604, y: 56, r: 1.0, o: 0.85 },
+  { x: 642, y: 22, r: 1.3, o: 1.0 }, { x: 686, y: 78, r: 0.8, o: 0.6 },
+  { x: 724, y: 38, r: 1.1, o: 0.9 }, { x: 762, y: 18, r: 0.9, o: 0.75 },
+  { x: 802, y: 64, r: 1.2, o: 0.95 },{ x: 840, y: 28, r: 0.7, o: 0.5 },
+  { x: 884, y: 8,  r: 1.0, o: 0.85 },{ x: 928, y: 50, r: 1.4, o: 1.0 },
+  { x: 968, y: 32, r: 0.8, o: 0.65 },{ x: 1006, y: 76, r: 1.1, o: 0.9 },
+  { x: 1052, y: 16, r: 0.9, o: 0.75 },{ x: 1094, y: 44, r: 1.2, o: 0.95 },
+  { x: 1134, y: 22, r: 0.7, o: 0.55 },{ x: 1172, y: 68, r: 1.0, o: 0.85 },
+  // a thinner upper band
+  { x: 64, y: 96, r: 0.6, o: 0.5 },  { x: 152, y: 108, r: 0.7, o: 0.55 },
+  { x: 246, y: 102, r: 0.9, o: 0.7 },{ x: 332, y: 118, r: 0.6, o: 0.5 },
+  { x: 426, y: 96, r: 0.8, o: 0.65 },{ x: 514, y: 112, r: 0.7, o: 0.6 },
+  { x: 612, y: 100, r: 0.9, o: 0.8 },{ x: 712, y: 116, r: 0.6, o: 0.5 },
+  { x: 814, y: 104, r: 0.8, o: 0.7 },{ x: 918, y: 110, r: 0.7, o: 0.6 },
+  { x: 1018, y: 98, r: 0.9, o: 0.75 },{ x: 1118, y: 114, r: 0.6, o: 0.5 },
+];
+
+// Moon position mirrors the sun's arc but shifted 12h. At hour h, moon is
+// at the same x the sun would be at (h+12) mod 24, if that wraps into
+// "night" — otherwise hide. Renders only when isNight.
+const moonHour = (h + 12) % 24;
+const moonX = isNight ? 80 + ((moonHour < 6 ? moonHour + 18 : moonHour - 6) / 14) * 1040 : 0;
+const moonY = isNight ? 84 - Math.sin(((moonHour < 6 ? moonHour + 18 : moonHour - 6) / 14) * Math.PI) * 30 : 0;
+// Clamp moonX to 100..1100 so it stays in the panel even at edge hours.
+const moonXClamped = Math.min(1100, Math.max(100, moonX));
+
+const ships = (shipsData as { ships: Array<{ ref: string; title: string; href: string; tag: string; at: string }> }).ships
+  .slice()
+  .sort((a, b) => +new Date(b.at) - +new Date(a.at));
+const latestShip = ships[0] || null;
+
+const morningPosts = (morningHeroData as { posts: Array<{ date: string; kicker: string; title: string; body: string; cta: string; ctaHref: string }> }).posts;
+const morningHero = morningPosts.find((p) => p.date === todayStr) || null;
+
+// Today's signal: morning hero > latest ship > latest block, freshest wins.
+type Signal = { kicker: string; title: string; body?: string; cta: string; ctaHref: string };
+let signal: Signal | null = null;
+if (morningHero) {
+  signal = { kicker: morningHero.kicker, title: morningHero.title, body: morningHero.body, cta: morningHero.cta, ctaHref: morningHero.ctaHref };
+} else if (latestShip) {
+  signal = { kicker: `FRESH SHIP · ${latestShip.tag} · ${latestShip.ref}`, title: latestShip.title, cta: 'open it', ctaHref: latestShip.href };
+} else if (latestBlock) {
+  signal = { kicker: `LATEST BLOCK · ${latestBlock.data.id}`, title: latestBlock.data.title, body: latestBlock.data.dek, cta: 'read it', ctaHref: `/b/${latestBlock.data.id}` };
+}
+
+// Today's rotating ask (day-of-year for stability across the day).
+type Ask = { id: string; title: string; cta: string; ctaLabel: string; tag: string };
+const asks = (asksData as { asks: Ask[] }).asks;
+const dayKey = Math.floor(+now / 86400000);
+const todaysAsk = asks.length > 0 ? asks[dayKey % asks.length] : null;
+
+// Nine landmarks placed across the panel. Each is a named building/feature
+// that maps to a category room. Coords are in the 1200×600 SVG viewBox.
+interface Landmark {
+  id: string;
+  label: string;
+  href: string;
+  x: number;
+  y: number;
+  align: 'left' | 'right';
+  blurb: string;
+}
+const landmarks: Landmark[] = [
+  { id: 'refinery',  label: 'THE WORKS',  href: '/builders',  x: 110,  y: 250, align: 'left',  blurb: 'builders + agents' },
+  { id: 'tower',     label: 'OBSERVATORY', href: '/observatory', x: 250, y: 240, align: 'right', blurb: 'look at the town' },
+  { id: 'kettle',    label: 'KETTLE',     href: '/coffee',    x: 380,  y: 360, align: 'left',  blurb: 'a slow pour' },
+  { id: 'lobby',     label: 'LOBBY',      href: '/lobby',     x: 540,  y: 350, align: 'right', blurb: 'the front room' },
+  { id: 'drum',      label: 'DRUM ROOM',  href: '/drum',      x: 700,  y: 360, align: 'left',  blurb: 'one tap' },
+  { id: 'studio',    label: 'STUDIO',     href: '/studio',    x: 860,  y: 330, align: 'right', blurb: 'make a block' },
+  { id: 'arcade',    label: 'ARCADE',     href: '/win95-games', x: 1010, y: 350, align: 'left', blurb: 'play before reading' },
+  { id: 'bar',       label: 'THE BAR',    href: '/bar-v6',    x: 460,  y: 450, align: 'left',  blurb: 'cast +cat' },
+  { id: 'archive',   label: 'ARCHIVE',    href: '/archive',   x: 980,  y: 450, align: 'right', blurb: `${blockCount} blocks` },
+];
+
+const title = 'PointCast / next — a town panel from El Segundo';
+const description = `Next-version PointCast home. A woodblock view of the broadcast town: ${landmarks.length} rooms, ${blockCount} blocks, ${todayPhase.toLowerCase()} on ${todayStr}.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class={`pcnext${isNight ? ' pcnext--night' : ''}`}>
+
+    {/* ─── Broadcast chyron ─── */}
+    <p class={`chyron mono${isNight ? ' chyron--night' : ''}`}>
+      <span class="chyron__dot" aria-hidden="true"></span>
+      <span>{todayPhase} · {todayStr}</span>
+      <span class="chyron__dot chyron__dot--dim" aria-hidden="true"></span>
+      <span>EL SEGUNDO · 33.916°N 118.416°W</span>
+      <span class="chyron__dot chyron__dot--dim" aria-hidden="true"></span>
+      <span>{blockCount} BLOCKS</span>
+      <span class="chyron__dot chyron__dot--dim" aria-hidden="true"></span>
+      <a href="/now" class="chyron__cta">/now →</a>
+    </p>
+
+    {/* ─── The town panel ─── */}
+    <section class={`town${isNight ? ' town--night' : ''}`} aria-label="A woodblock view of the broadcast town">
+      <svg class="town__svg" viewBox="0 0 1200 600" role="img" aria-labelledby="town-title" preserveAspectRatio="xMidYMid slice">
+        <title id="town-title">A flat-color woodblock view of El Segundo from above the coast: sky, refinery, town, palms, beach, ocean.</title>
+
+        {/* sky bands — swap day/night via palette */}
+        <rect x="0" y="0"   width="1200" height="80"  fill={palette.sky[0]}/>
+        <rect x="0" y="80"  width="1200" height="40"  fill={palette.sky[1]}/>
+        <rect x="0" y="120" width="1200" height="36"  fill={palette.sky[2]}/>
+        <rect x="0" y="156" width="1200" height="32"  fill={palette.sky[3]} opacity={isNight ? 1 : 0.85}/>
+
+        {/* stars (night only) */}
+        {isNight && (
+          <g fill="#f5e9c4">
+            {stars.map((s) => (
+              <circle cx={s.x} cy={s.y} r={s.r} opacity={s.o}/>
+            ))}
+          </g>
+        )}
+
+        {/* moon (night only) — crescent built from two overlapping circles */}
+        {isNight && (
+          <g>
+            <circle cx={moonXClamped} cy={moonY} r="22" fill="#f3eccd"/>
+            <circle cx={moonXClamped - 7} cy={moonY - 4} r="20" fill={palette.sky[0]}/>
+          </g>
+        )}
+
+        {/* sun — daylight only, drifting with the hour */}
+        {sunVisible && (
+          <circle cx={sunX} cy={sunY} r="28" fill="#f3a070" opacity="0.95"/>
+        )}
+        {sunVisible && (
+          <circle cx={sunX} cy={sunY} r="18" fill="#fbd8a3"/>
+        )}
+
+        {/* distant Santa Monicas */}
+        <path d="M0 188 L120 162 L180 178 L260 154 L340 176 L420 158 L520 184 L600 168 L700 186 L800 178 L900 190 L1000 182 L1100 188 L1200 184 L1200 200 L0 200 Z"
+              fill={palette.mountain}/>
+
+        {/* refinery — left third, El Segundo Chevron */}
+        <g fill="#1f1b15">
+          <rect x="44" y="148" width="6" height="56"/>
+          <rect x="58" y="160" width="4" height="44"/>
+          <rect x="70" y="138" width="10" height="66"/>
+          <rect x="88" y="152" width="6" height="52"/>
+          <rect x="102" y="124" width="14" height="80"/>
+          <rect x="124" y="148" width="8" height="56"/>
+          <rect x="140" y="156" width="5" height="48"/>
+          <rect x="154" y="140" width="9" height="64"/>
+          <rect x="172" y="160" width="6" height="44"/>
+          {/* flare stack */}
+          <rect x="107" y="108" width="3" height="16"/>
+        </g>
+        {/* flare glow — bigger and warmer at night, gently pulsing */}
+        {isNight && (
+          <circle class="flare-halo" cx="108.5" cy="104" r="10" fill={palette.flareGlow} opacity="0.55"/>
+        )}
+        <circle class="flare-core" cx="108.5" cy="104" r={isNight ? 6 : 4} fill={palette.flare}/>
+        {/* a few yellow refinery service lights at night */}
+        {isNight && (
+          <g fill="#ffd28a">
+            <circle cx="60" cy="200" r="1.2"/>
+            <circle cx="92" cy="200" r="1.2"/>
+            <circle cx="118" cy="198" r="1.2"/>
+            <circle cx="146" cy="200" r="1.2"/>
+            <circle cx="170" cy="198" r="1.2"/>
+          </g>
+        )}
+        {/* refinery vapor plume — pinker at night to catch the flare */}
+        <ellipse cx="78" cy="116" rx="32" ry="10" fill={isNight ? '#5a3a2d' : palette.flareGlow} opacity={isNight ? 0.6 : 0.45}/>
+        <ellipse cx="120" cy="100" rx="42" ry="11" fill={isNight ? '#7a4a32' : palette.flareGlow} opacity={isNight ? 0.5 : 0.55}/>
+
+        {/* town rooftop band — beach houses, mid-century, stacked from the camera */}
+        <rect x="0" y="200" width="1200" height="92" fill={palette.townBand}/>
+        {/* repeated roof gables */}
+        <g fill={palette.roof}>
+          {Array.from({ length: 22 }).map((_, i) => (
+            <path d={`M${50 + i * 52} 220 L${74 + i * 52} 196 L${98 + i * 52} 220 Z`}/>
+          ))}
+        </g>
+        {/* windows — at night ~⅔ of them are lit yellow, the rest dim. Use a
+           deterministic check so the same windows are lit every render. */}
+        <g>
+          {Array.from({ length: 22 }).map((_, i) => {
+            const lit = isNight ? (i * 7 + 3) % 5 !== 0 : true;
+            return (
+              <rect x={62 + i * 52} y="232" width="6" height="8"
+                    fill={lit ? palette.windowLit : palette.windowDim}/>
+            );
+          })}
+          {Array.from({ length: 22 }).map((_, i) => {
+            const lit = isNight ? (i * 5 + 1) % 4 !== 0 : true;
+            return (
+              <rect x={78 + i * 52} y="232" width="6" height="8"
+                    fill={lit ? palette.windowLit : palette.windowDim}/>
+            );
+          })}
+        </g>
+        {/* lower row of buildings — courtyard wall */}
+        <rect x="0" y="262" width="1200" height="30" fill={palette.wall}/>
+
+        {/* palms — tall, mid-canvas */}
+        <g>
+          <rect x="335" y="220" width="4" height="100" fill={palette.palmTrunk}/>
+          <ellipse cx="337" cy="218" rx="34" ry="8" fill={palette.palmFrond1}/>
+          <ellipse cx="337" cy="222" rx="28" ry="6" fill={palette.palmFrond2}/>
+
+          <rect x="638" y="210" width="4" height="110" fill={palette.palmTrunk}/>
+          <ellipse cx="640" cy="208" rx="36" ry="9" fill={palette.palmFrond1}/>
+          <ellipse cx="640" cy="212" rx="30" ry="7" fill={palette.palmFrond2}/>
+
+          <rect x="912" y="226" width="4" height="96" fill={palette.palmTrunk}/>
+          <ellipse cx="914" cy="224" rx="32" ry="7" fill={palette.palmFrond1}/>
+          <ellipse cx="914" cy="228" rx="26" ry="5" fill={palette.palmFrond2}/>
+        </g>
+
+        {/* beach band — sand */}
+        <rect x="0" y="292" width="1200" height="40" fill={palette.sand}/>
+
+        {/* ocean — base + wave crests. Each <g> breathes with a slow
+           vertical translate; see .wave CSS below. Stagger keeps the layers
+           from drifting in lockstep. Disabled by prefers-reduced-motion. */}
+        <rect x="0" y="332" width="1200" height="268" fill={palette.sea}/>
+        <g class="wave wave--1" fill="none" stroke={palette.waves[0]} stroke-width="2" stroke-linecap="round">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <path d={`M${i * 32 - 12} 360 q 8 -6 16 0 q 8 6 16 0`} />
+          ))}
+        </g>
+        <g class="wave wave--2" fill="none" stroke={palette.waves[1]} stroke-width="2" stroke-linecap="round">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <path d={`M${i * 32 + 6} 392 q 8 -6 16 0 q 8 6 16 0`} />
+          ))}
+        </g>
+        <g class="wave wave--3" fill="none" stroke={palette.waves[2]} stroke-width="2" stroke-linecap="round">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <path d={`M${i * 32 - 4} 426 q 8 -5 16 0 q 8 5 16 0`} />
+          ))}
+        </g>
+        <g class="wave wave--4" fill="none" stroke={palette.waves[3]} stroke-width="2" stroke-linecap="round">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <path d={`M${i * 32 + 8} 462 q 8 -5 16 0 q 8 5 16 0`} />
+          ))}
+        </g>
+        <g class="wave wave--5" fill="none" stroke={palette.waves[4]} stroke-width="2" stroke-linecap="round">
+          {Array.from({ length: 40 }).map((_, i) => (
+            <path d={`M${i * 32 - 6} 500 q 8 -5 16 0 q 8 5 16 0`} />
+          ))}
+        </g>
+
+        {/* moonlight glitter on the water (night only) — short cream dashes
+           down a vertical strip under the moon, dimming as they fall away. */}
+        {isNight && (
+          <g fill={palette.flareGlow} opacity="0.8">
+            <rect x={moonXClamped - 2} y="356" width="4" height="2" opacity="0.9"/>
+            <rect x={moonXClamped - 3} y="388" width="6" height="2" opacity="0.7"/>
+            <rect x={moonXClamped - 2} y="420" width="4" height="2" opacity="0.55"/>
+            <rect x={moonXClamped - 4} y="452" width="8" height="2" opacity="0.4"/>
+            <rect x={moonXClamped - 2} y="490" width="4" height="2" opacity="0.28"/>
+          </g>
+        )}
+
+        {/* a tiny boat on the horizon */}
+        <g>
+          <path d="M1078 332 L1078 318 L1090 332 Z" fill="#fbf7ee"/>
+          <rect x="1077" y="332" width="14" height="2.5" fill="#1f1b15"/>
+        </g>
+        {/* a kayaker just past the surf */}
+        <g>
+          <ellipse cx="730" cy="448" rx="9" ry="2.5" fill="#d8624a"/>
+          <rect x="728" y="441" width="4" height="7" fill="#fbd8a3"/>
+        </g>
+      </svg>
+
+      {/* Landmark pins — positioned via percentage of viewBox so they
+         scale with the SVG. Each is a link into a room. */}
+      <ul class="pins" aria-label="Rooms in the town">
+        {landmarks.map((l) => (
+          <li
+            class={`pin pin--${l.align}`}
+            style={`left: ${(l.x / 1200) * 100}%; top: ${(l.y / 600) * 100}%;`}
+          >
+            <a class="pin__anchor" href={l.href}>
+              <span class="pin__dot" aria-hidden="true"></span>
+              <span class="pin__card">
+                <span class="pin__label mono">{l.label}</span>
+                <span class="pin__blurb">{l.blurb}</span>
+                <span class="pin__cta mono">enter →</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ─── Today's signal: a single bright thing to look at right now ─── */}
+    {signal && (
+      <section class="signal" aria-label="Today's broadcast">
+        <p class="signal__kicker mono">{signal.kicker}</p>
+        <h1 class="signal__title">{signal.title}</h1>
+        {signal.body && <p class="signal__body">{signal.body}</p>}
+        <a class="signal__cta" href={signal.ctaHref}>{signal.cta} →</a>
+      </section>
+    )}
+
+    {/* ─── Today's ask: one specific thing to try ─── */}
+    {todaysAsk && (
+      <section class="ask" aria-label="One thing to do today">
+        <p class="ask__kicker mono">ONE THING TO DO · ROTATES DAILY</p>
+        <p class="ask__title">{todaysAsk.title}</p>
+        <a class="ask__cta mono" href={todaysAsk.cta}>{todaysAsk.ctaLabel} →</a>
+      </section>
+    )}
+
+    {/* ─── Foot: pointers off the panel ─── */}
+    <footer class="foot mono">
+      <span class="foot__group">
+        <strong>more from the town</strong>
+        <a href="/">/ home</a>
+        <a href="/archive">/archive</a>
+        <a href="/agents.json">/agents.json</a>
+        <a href="/for-agents">/for-agents</a>
+        <a href="/feed.xml">RSS</a>
+      </span>
+      <span class="foot__note">/next is an exploratory build · the editorial home stays at /</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .pcnext {
+    --bg: #0f1d2e;
+    --paper: #fdf2d6;
+    --paper-soft: rgba(253, 242, 214, 0.78);
+    --paper-dim: rgba(253, 242, 214, 0.5);
+    --coral: #d8624a;
+    --coral-soft: #f0c6b1;
+    --sea: #1f4561;
+    --ink: #1f1b15;
+
+    background: var(--bg);
+    color: var(--paper);
+    margin: 0 auto;
+    padding: 18px 22px 60px;
+    max-width: 1280px;
+    font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+    min-height: calc(100vh - 88px);
+  }
+
+  /* ─── Chyron ─── */
+  .chyron {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 14px;
+    margin: 0 0 16px;
+    padding: 8px 14px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--paper-soft);
+    background: rgba(31, 69, 97, 0.6);
+    border: 1px solid rgba(240, 198, 177, 0.18);
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .chyron__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--coral);
+    box-shadow: 0 0 8px rgba(216, 98, 74, 0.6);
+    animation: pcnext-pulse 2.2s ease-in-out infinite;
+  }
+  .chyron__dot--dim {
+    background: var(--paper-dim);
+    box-shadow: none;
+    animation: none;
+    width: 4px;
+    height: 4px;
+  }
+  .chyron__cta {
+    margin-left: auto;
+    color: var(--coral-soft);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.4);
+  }
+  .chyron__cta:hover { color: #fff; border-bottom-color: currentColor; }
+  @keyframes pcnext-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  /* ─── Town panel ─── */
+  .town {
+    position: relative;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 12px 44px rgba(0, 0, 0, 0.5);
+    aspect-ratio: 1200 / 600;
+    line-height: 0;
+    background: #0f1d2e;
+  }
+  .town__svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ─── Wave breathing ────────────────────────────────────────────────
+     Each of the five wave-crest layers translates vertically a few pixels
+     on a slow sine. Different durations + phase offsets keep them out of
+     lockstep so the ocean feels alive, not "scrolling". Top layers move
+     more (visible) than deep layers. Disabled by reduced-motion. */
+  .wave {
+    will-change: transform;
+    transform-origin: center;
+  }
+  .wave--1 { animation: pc-wave 9.5s ease-in-out infinite; }
+  .wave--2 { animation: pc-wave 11s ease-in-out -2.4s infinite; }
+  .wave--3 { animation: pc-wave 13s ease-in-out -5.1s infinite; }
+  .wave--4 { animation: pc-wave-deep 14s ease-in-out -7.3s infinite; }
+  .wave--5 { animation: pc-wave-deep 16s ease-in-out -3.8s infinite; }
+  @keyframes pc-wave {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(3.5px); }
+  }
+  @keyframes pc-wave-deep {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(1.8px); }
+  }
+  /* Refinery flare — gentle flicker, brighter at night. The opacity
+     swing is small (~0.85→1) so it reads as "still burning" not animated.
+     Targeted by the SVG class added below. */
+  .flare-core { animation: pc-flare 3.8s ease-in-out infinite; }
+  .flare-halo { animation: pc-flare-halo 5.2s ease-in-out infinite; }
+  @keyframes pc-flare {
+    0%, 100% { opacity: 0.92; }
+    50%      { opacity: 1; }
+  }
+  @keyframes pc-flare-halo {
+    0%, 100% { opacity: 0.4; transform: scale(1); transform-origin: 108.5px 104px; }
+    50%      { opacity: 0.65; transform: scale(1.15); transform-origin: 108.5px 104px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wave, .wave--1, .wave--2, .wave--3, .wave--4, .wave--5,
+    .flare-core, .flare-halo {
+      animation: none !important;
+    }
+  }
+
+  .pins {
+    position: absolute;
+    inset: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+  }
+  .pin__anchor {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .pin__dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--coral);
+    border: 2.5px solid var(--paper);
+    box-shadow: 0 0 0 3px rgba(15, 29, 46, 0.55), 0 0 14px rgba(216, 98, 74, 0.6);
+    flex: 0 0 auto;
+    transition: transform 0.18s ease;
+  }
+  .pin__anchor:hover .pin__dot,
+  .pin__anchor:focus-visible .pin__dot {
+    transform: scale(1.18);
+  }
+  .pin__card {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-left: 8px;
+    padding: 6px 10px 7px;
+    min-width: 110px;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 3px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    line-height: 1.25;
+    opacity: 0.96;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+  }
+  .pin--right .pin__card {
+    order: -1;
+    margin-left: 0;
+    margin-right: 8px;
+    text-align: right;
+    align-items: flex-end;
+  }
+  .pin__anchor:hover .pin__card,
+  .pin__anchor:focus-visible .pin__card {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+  .pin__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+  .pin__blurb {
+    font-size: 11px;
+    color: rgba(31, 27, 21, 0.7);
+    font-style: italic;
+  }
+  .pin__cta {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--coral);
+    margin-top: 2px;
+  }
+
+  /* ─── Signal block ─── */
+  .signal {
+    margin: 30px 0 0;
+    padding: 28px 30px 28px;
+    background: linear-gradient(180deg, rgba(31, 69, 97, 0.65) 0%, rgba(15, 29, 46, 0.6) 100%);
+    border: 1px solid rgba(240, 198, 177, 0.18);
+    border-radius: 4px;
+    backdrop-filter: blur(2px);
+  }
+  .signal__kicker {
+    margin: 0 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--coral-soft);
+    text-transform: uppercase;
+  }
+  .signal__title {
+    margin: 0 0 12px;
+    font-family: var(--font-heading, 'Syne', sans-serif);
+    font-size: clamp(32px, 4.4vw, 56px);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.018em;
+    color: var(--paper);
+  }
+  .signal__body {
+    margin: 0 0 18px;
+    font-family: var(--font-serif, 'Lora', serif);
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.55;
+    color: var(--paper-soft);
+    max-width: 640px;
+  }
+  .signal__cta {
+    display: inline-block;
+    padding: 11px 20px;
+    background: var(--coral);
+    color: #fff;
+    text-decoration: none;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-radius: 2px;
+    transition: background 0.16s ease, transform 0.16s ease;
+  }
+  .signal__cta:hover {
+    background: #b94e3a;
+    transform: translateY(-1px);
+  }
+
+  /* ─── Ask ─── */
+  .ask {
+    margin: 18px 0 0;
+    padding: 16px 22px;
+    border: 1px dashed rgba(240, 198, 177, 0.3);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    color: var(--paper);
+  }
+  .ask__kicker {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--coral-soft);
+    text-transform: uppercase;
+    flex: 0 0 100%;
+  }
+  .ask__title {
+    margin: 0;
+    font-family: var(--font-heading, 'Syne', sans-serif);
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 500;
+    color: var(--paper);
+    flex: 1 1 auto;
+  }
+  .ask__cta {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--coral-soft);
+    text-decoration: none;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.4);
+  }
+  .ask__cta:hover { color: #fff; border-bottom-color: currentColor; }
+
+  /* ─── Foot ─── */
+  .foot {
+    margin: 36px 0 0;
+    padding-top: 18px;
+    border-top: 1px solid rgba(240, 198, 177, 0.15);
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--paper-dim);
+  }
+  .foot__group { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 10px 14px; }
+  .foot__group strong {
+    color: var(--paper-soft);
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 10px;
+    margin-right: 4px;
+  }
+  .foot a {
+    color: var(--coral-soft);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.18);
+  }
+  .foot a:hover { color: #fff; border-bottom-color: currentColor; }
+  .foot__note {
+    margin-left: auto;
+    font-style: italic;
+    color: var(--paper-dim);
+  }
+
+  /* ─── Night mode — pulls the page deeper into the panel ─── */
+  .pcnext--night {
+    --bg: #050b18;
+  }
+  .pcnext--night .chyron {
+    background: rgba(10, 23, 44, 0.85);
+    border-color: rgba(245, 198, 107, 0.22);
+    color: rgba(245, 233, 196, 0.88);
+  }
+  .pcnext--night .chyron__dot {
+    background: #f5c66b;
+    box-shadow: 0 0 10px rgba(245, 198, 107, 0.7);
+  }
+  .pcnext--night .chyron__cta { color: #f5c66b; }
+  .pcnext--night .chyron__cta:hover { color: #fff; }
+  .town--night {
+    box-shadow: 0 12px 60px rgba(0, 0, 0, 0.75);
+    background: #050b18;
+  }
+  /* Pins reverse to dim-paper at night so they read against the dark sky/sea */
+  .pcnext--night .pin__dot {
+    background: #f5c66b;
+    border-color: #fdf2d6;
+    box-shadow: 0 0 0 3px rgba(5, 11, 24, 0.75), 0 0 14px rgba(245, 198, 107, 0.7);
+  }
+  .pcnext--night .pin__cta { color: #b9621c; }
+  /* Signal block deepens at night */
+  .pcnext--night .signal {
+    background: linear-gradient(180deg, rgba(10, 23, 44, 0.85) 0%, rgba(5, 11, 24, 0.85) 100%);
+    border-color: rgba(245, 198, 107, 0.22);
+  }
+  .pcnext--night .signal__kicker { color: #f5c66b; }
+  .pcnext--night .signal__cta {
+    background: #f5c66b;
+    color: #1f1b15;
+  }
+  .pcnext--night .signal__cta:hover { background: #ffd98a; }
+
+  /* ─── Mobile: pins shrink to dot-only, cards revealed on tap ─── */
+  @media (max-width: 720px) {
+    .pcnext { padding: 14px 14px 50px; }
+    .chyron { font-size: 10px; padding: 7px 10px; }
+    .pin__card {
+      display: none;
+    }
+    .pin__anchor:focus-visible .pin__card,
+    .pin__anchor:hover .pin__card {
+      display: inline-flex;
+    }
+    .signal { padding: 22px 18px; }
+    .foot__note { margin-left: 0; }
+  }
+</style>
