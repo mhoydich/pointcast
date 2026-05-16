@@ -2,7 +2,14 @@
  * /shrine-crawl.json - machine-readable 24 shrine bell crawl manifest.
  */
 import type { APIRoute } from 'astro';
-import { BELL_MODE_COPY, SHRINE_CRAWL, SHRINE_CRAWL_META } from '../lib/shrine-bell-crawl';
+import {
+  BELL_MODE_COPY,
+  SHRINE_CRAWL,
+  SHRINE_CRAWL_META,
+  SHRINE_CRAWL_RECEIPT_SCHEMA,
+  SHRINE_CRAWL_SCREENSAVER_DURATION_MS,
+  SHRINE_CRAWL_STORAGE,
+} from '../lib/shrine-bell-crawl';
 import { absoluteImage, absoluteUrl } from '../lib/unfurl-shrines';
 
 export const GET: APIRoute = async () => {
@@ -10,6 +17,10 @@ export const GET: APIRoute = async () => {
     $schema: 'https://pointcast.xyz/for-agents',
     generatedAt: new Date().toISOString(),
     ...SHRINE_CRAWL_META,
+    version: 2,
+    screensaverUrl: absoluteUrl('/shrine-crawl?mode=screensaver'),
+    completionStorageKey: SHRINE_CRAWL_STORAGE.receipt,
+    receiptSchema: SHRINE_CRAWL_RECEIPT_SCHEMA,
     bellModeCopy: BELL_MODE_COPY,
     visits: SHRINE_CRAWL.map((visit, index) => ({
       ...visit,
@@ -18,6 +29,7 @@ export const GET: APIRoute = async () => {
       routeUrl: absoluteUrl(visit.route),
       nextShrineId: SHRINE_CRAWL[(index + 1) % SHRINE_CRAWL.length].id,
       nextShrineUrl: absoluteUrl(`/shrine-crawl#${SHRINE_CRAWL[(index + 1) % SHRINE_CRAWL.length].id}`),
+      screensaverDurationMs: SHRINE_CRAWL_SCREENSAVER_DURATION_MS,
     })),
     caveats: [
       'Completion, visited, and rung state are local browser state only.',

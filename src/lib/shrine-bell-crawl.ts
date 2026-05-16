@@ -26,9 +26,24 @@ export const SHRINE_CRAWL_META = {
     'A visit-after-visit PointCast crawl: ring a shrine bell, collect the ritual, copy a Midjourney-ready background prompt, and step into the next route.',
   human: 'https://pointcast.xyz/shrine-crawl',
   json: 'https://pointcast.xyz/shrine-crawl.json',
+  screensaver: 'https://pointcast.xyz/shrine-crawl?mode=screensaver',
   count: 24,
   modes: ['single', 'chord', 'cascade', 'drone'] as ShrineBellMode[],
 };
+
+export const SHRINE_CRAWL_SCREENSAVER_DURATION_MS = 18000;
+
+export const SHRINE_CRAWL_STORAGE = {
+  state: 'pc:shrine-crawl:v2',
+  legacyState: 'pc:shrine-crawl:v1',
+  receipt: 'pc:shrine-crawl:v2:receipt',
+} as const;
+
+export const SHRINE_CRAWL_RECEIPT_SCHEMA = {
+  type: 'pointcast.shrine-crawl.receipt.v2',
+  required: ['receiptId', 'completedAt', 'count', 'rungShrines', 'source'],
+  localOnly: true,
+} as const;
 
 export const BELL_MODE_COPY: Record<ShrineBellMode, string> = {
   single: 'one clear bell',
