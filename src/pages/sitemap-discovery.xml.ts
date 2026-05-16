@@ -1,6 +1,10 @@
+import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
+import { isPublicProduct } from '../lib/commerce';
 
-const urls = [
+type UrlTuple = [loc: string, changefreq: string, priority: string];
+
+const baseUrls: UrlTuple[] = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-value', 'weekly', '0.9'],
@@ -75,7 +79,35 @@ function xmlEscape(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
+  const [products, blocks] = await Promise.all([
+    getCollection('products', ({ data }) => isPublicProduct(data)),
+    getCollection('blocks', ({ data }) => !data.draft),
+  ]);
+
+  const productUrls: UrlTuple[] = products
+    .map((p) => [`https://pointcast.xyz/products/${p.data.slug}`, 'daily', '0.82'] satisfies UrlTuple)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const moodSet = new Set<string>();
+  blocks.forEach((b) => {
+    if (b.data.mood) moodSet.add(b.data.mood);
+  });
+  products.forEach((p) => {
+    (p.data.pairsWithMood ?? []).forEach((mood) => moodSet.add(mood));
+  });
+  const moodUrls: UrlTuple[] = Array.from(moodSet)
+    .sort((a, b) => a.localeCompare(b))
+    .map((mood) => [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.76'] satisfies UrlTuple);
+
+  const urls: UrlTuple[] = [];
+  const seen = new Set<string>();
+  for (const tuple of [...baseUrls, ...productUrls, ...moodUrls]) {
+    if (seen.has(tuple[0])) continue;
+    seen.add(tuple[0]);
+    urls.push(tuple);
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
