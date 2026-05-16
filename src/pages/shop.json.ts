@@ -57,6 +57,24 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
+  const ifModifiedSince = request.headers.get('if-modified-since');
+  if (ifModifiedSince) {
+    const since = Date.parse(ifModifiedSince);
+    if (Number.isFinite(since) && lastModified.getTime() <= since) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': 'public, max-age=300',
+          'ETag': etag,
+          'Last-Modified': lastModified.toUTCString(),
+          'X-Total-Count': String(products.length),
+          'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+          ...CORS_HEADERS,
+        },
+      });
+    }
+  }
+
   const payload = {
     $schema: 'https://pointcast.xyz/shop.json',
     version: COMMERCE_VERSION,

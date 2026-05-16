@@ -58,6 +58,24 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
+  const ifModifiedSince = request.headers.get('if-modified-since');
+  if (ifModifiedSince) {
+    const since = Date.parse(ifModifiedSince);
+    if (Number.isFinite(since) && lastModified.getTime() <= since) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': 'public, max-age=300',
+          'ETag': etag,
+          'Last-Modified': lastModified.toUTCString(),
+          'X-Total-Count': String(products.length),
+          'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+          ...CORS_HEADERS,
+        },
+      });
+    }
+  }
+
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
     const lane = commerceLane(p.data);
