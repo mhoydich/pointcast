@@ -24,7 +24,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -34,10 +34,29 @@ export const OPTIONS: APIRoute = async () => {
   });
 };
 
-export const GET: APIRoute = async () => {
-  const products = await getCollection('products', ({ data }) => isPublicProduct(data));
+export const GET: APIRoute = async ({ request }) => {
+  const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
+    .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
+
+  const latestAddedAt = products[0]?.data.addedAt?.toISOString() ?? '';
+  const etag = `W/"${COMMERCE_VERSION}-${products.length}-${latestAddedAt}"`;
+  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'public, max-age=300',
+        'ETag': etag,
+        'Last-Modified': lastModified.toUTCString(),
+        'X-Total-Count': String(products.length),
+        'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+        ...CORS_HEADERS,
+      },
+    });
+  }
 
   const payload = {
     $schema: 'https://pointcast.xyz/products.json',
@@ -79,7 +98,6 @@ export const GET: APIRoute = async () => {
       },
     ],
     products: products
-      .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime())
       .map((p) => {
         const kind = sourceKind(p.data);
         const lane = commerceLane(p.data);
@@ -140,6 +158,8 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
+      'ETag': etag,
+      'Last-Modified': lastModified.toUTCString(),
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,

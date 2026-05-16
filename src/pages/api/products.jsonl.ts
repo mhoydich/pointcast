@@ -26,7 +26,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -36,9 +36,27 @@ export const OPTIONS: APIRoute = async () => {
   });
 };
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+
+  const latestAddedAt = products[0]?.data.addedAt?.toISOString() ?? '';
+  const etag = `W/"${COMMERCE_VERSION}-${products.length}-${latestAddedAt}"`;
+  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'public, max-age=300',
+        'ETag': etag,
+        'Last-Modified': lastModified.toUTCString(),
+        'X-Total-Count': String(products.length),
+        'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+        ...CORS_HEADERS,
+      },
+    });
+  }
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -80,6 +98,8 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
+      'ETag': etag,
+      'Last-Modified': lastModified.toUTCString(),
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,
