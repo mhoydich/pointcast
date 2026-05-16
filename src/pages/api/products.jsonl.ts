@@ -21,6 +21,7 @@ import {
   sourceKind,
   sourceLabel,
 } from '../../lib/commerce';
+import { respondWithConditionalCache } from '../../lib/http-cache';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,42 +40,7 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-
-  const latestAddedAt = products[0]?.data.addedAt?.toISOString() ?? '';
-  const etag = `W/"${COMMERCE_VERSION}-${products.length}-${latestAddedAt}"`;
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
-
-  if (request.headers.get('if-none-match') === etag) {
-    return new Response(null, {
-      status: 304,
-      headers: {
-        'Cache-Control': 'public, max-age=300',
-        'ETag': etag,
-        'Last-Modified': lastModified.toUTCString(),
-        'X-Total-Count': String(products.length),
-        'X-PointCast-Commerce-Version': COMMERCE_VERSION,
-        ...CORS_HEADERS,
-      },
-    });
-  }
-
-  const ifModifiedSince = request.headers.get('if-modified-since');
-  if (ifModifiedSince) {
-    const since = Date.parse(ifModifiedSince);
-    if (Number.isFinite(since) && lastModified.getTime() <= since) {
-      return new Response(null, {
-        status: 304,
-        headers: {
-          'Cache-Control': 'public, max-age=300',
-          'ETag': etag,
-          'Last-Modified': lastModified.toUTCString(),
-          'X-Total-Count': String(products.length),
-          'X-PointCast-Commerce-Version': COMMERCE_VERSION,
-          ...CORS_HEADERS,
-        },
-      });
-    }
-  }
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -111,13 +77,13 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }).join('\n') + '\n';
 
-  return new Response(lines, {
-    status: 200,
+  return respondWithConditionalCache({
+    request,
+    body: lines,
+    contentType: 'application/x-ndjson; charset=utf-8',
+    cacheControl: 'public, max-age=300',
+    lastModified,
     headers: {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'public, max-age=300',
-      'ETag': etag,
-      'Last-Modified': lastModified.toUTCString(),
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,
