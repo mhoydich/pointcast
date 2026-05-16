@@ -219,21 +219,26 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
     {/* ──────────── 5.5 INVENTORY ──────────── */}
     <section class="me__band inv" aria-label="Inventory" id="me-inventory">
       <header class="band__head">
-        <p class="me__eyebrow mono">INVENTORY · YOUR KIT</p>
+        <p class="me__eyebrow mono">INVENTORY · ADVENTURE KIT</p>
         <span class="inv__count mono" id="me-inv-count" aria-live="polite">0 items</span>
         <a href="/inventory" class="band__cta mono">FULLER VIEW · /inventory →</a>
       </header>
       <p class="inv__dek">
-        Stuff you actually own. Paddles, drums, wheels, houseplants, books — whatever
-        you bring to PointCast. Stored locally only, never sent to a server.
+        Stuff you actually own and might carry into the day: water, layers,
+        tools, lights, paddles, wheels, books, houseplants, odd little charms.
+        Stored locally only, never sent to a server.
         Tied into <a href="/paddle-exchange">/paddle-exchange</a> + <a href="/honey-league">/honey-league</a>
-        (paddles), <a href="/houseplants">/houseplants</a> (plants), and the SUSPECT
-        check-in extension.
+        (paddles), <a href="/houseplants">/houseplants</a> (plants), and the full
+        real-life packout at <a href="/inventory">/inventory</a>.
       </p>
 
       {/* Quick-start row — only shown when inventory is empty. */}
       <div class="inv__quickstarts" id="me-inv-quickstarts" hidden>
         <p class="inv__quickstart-h mono">QUICK START</p>
+        <button type="button" class="inv__quickstart-btn" data-quickstart="daypack">
+          <span class="mono">+</span> Day adventure kit
+          <span class="inv__quickstart-blurb">daypack · bottle · shell · headlamp · mini med · snack</span>
+        </button>
         <button type="button" class="inv__quickstart-btn" data-quickstart="paddles">
           <span class="mono">+</span> Pickleball paddles
           <span class="inv__quickstart-blurb">11six24 Vapor 2 · Honolulu JNFK · Gearbox G2 Power · Vatic Prism 14mm</span>
@@ -250,6 +255,16 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
           <label class="inv__field">
             <span class="inv__field-label mono">CATEGORY</span>
             <select class="inv__select" id="inv-add-category" required>
+              <option value="carry">carry</option>
+              <option value="water">water</option>
+              <option value="food">food</option>
+              <option value="layers">layers</option>
+              <option value="shelter">shelter</option>
+              <option value="navigation">navigation</option>
+              <option value="med">med</option>
+              <option value="light">light</option>
+              <option value="tools">tools</option>
+              <option value="power">power</option>
               <option value="paddles">paddles</option>
               <option value="drums">drums</option>
               <option value="wheels">wheels</option>
@@ -260,18 +275,18 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
             </select>
           </label>
           <label class="inv__field inv__field--brand">
-            <span class="inv__field-label mono">BRAND</span>
-            <input type="text" class="inv__input" id="inv-add-brand" placeholder="e.g. 11six24" maxlength="40" />
+            <span class="inv__field-label mono">MAKER / BRAND</span>
+            <input type="text" class="inv__input" id="inv-add-brand" placeholder="e.g. Patagonia" maxlength="40" />
           </label>
           <label class="inv__field inv__field--model">
-            <span class="inv__field-label mono">MODEL</span>
-            <input type="text" class="inv__input" id="inv-add-model" placeholder="e.g. Vapor 2" maxlength="60" required />
+            <span class="inv__field-label mono">ITEM</span>
+            <input type="text" class="inv__input" id="inv-add-model" placeholder="e.g. Houdini shell" maxlength="70" required />
           </label>
         </div>
         <div class="inv__add-row inv__add-row--bottom">
           <label class="inv__field inv__field--notes">
             <span class="inv__field-label mono">NOTES (OPTIONAL)</span>
-            <input type="text" class="inv__input" id="inv-add-notes" placeholder="e.g. 14mm core, lead tape on neck" maxlength="120" />
+            <input type="text" class="inv__input" id="inv-add-notes" placeholder="e.g. hall closet, recharge, 1L" maxlength="140" />
           </label>
           <button type="submit" class="inv__add-btn mono">+ ADD</button>
         </div>
@@ -745,8 +760,27 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   // their own without a migration.
   const INV_KEY = 'pc:inventory:v1';
   const INV_VERSION = 1;
-  const INV_CATEGORIES = ['paddles', 'drums', 'wheels', 'plants', 'tech', 'books', 'other'];
+  const INV_CATEGORIES = [
+    'carry', 'water', 'food', 'layers', 'shelter', 'navigation', 'med',
+    'light', 'tools', 'power', 'tech', 'paddles', 'drums', 'wheels',
+    'plants', 'books', 'other',
+  ];
+  const INV_STATUS_LABELS = {
+    ready: 'ready',
+    packed: 'packed',
+    check: 'needs check',
+    repair: 'repair',
+    lent: 'lent out',
+  };
   const QUICKSTARTS = {
+    daypack: [
+      { category: 'carry', model: 'Daypack', where: 'front closet', status: 'ready', critical: true, notes: '18-25L, room for layers' },
+      { category: 'water', model: 'Water bottle', where: 'kitchen shelf', status: 'ready', critical: true, notes: '1L minimum' },
+      { category: 'layers', model: 'Wind shell', where: 'hall closet', status: 'ready', critical: true, notes: 'packs down small' },
+      { category: 'light', model: 'Headlamp', where: 'top drawer', status: 'check', critical: true, notes: 'check batteries' },
+      { category: 'med', model: 'Mini med pouch', where: 'daypack', status: 'ready', critical: true, notes: 'blister care, tape, ibuprofen' },
+      { category: 'food', model: 'Pocket snack', where: 'pantry', status: 'ready', critical: false, notes: 'bar, nuts, or dried fruit' },
+    ],
     paddles: [
       { brand: '11six24',  model: 'Vapor 2',     notes: '' },
       { brand: 'Honolulu', model: 'JNFK',        notes: '' },
@@ -795,6 +829,9 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
       brand: (item.brand || '').trim(),
       model: (item.model || '').trim(),
       notes: (item.notes || '').trim(),
+      where: (item.where || item.location || '').trim(),
+      status: INV_STATUS_LABELS[item.status] ? item.status : 'ready',
+      critical: Boolean(item.critical),
       addedAt: new Date().toISOString(),
     };
     if (!norm.model) return false;
@@ -813,13 +850,16 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   function invQuickstart(kind) {
     const seeds = QUICKSTARTS[kind];
     if (!seeds || !seeds.length) return;
-    const defaultCategory = kind === 'paddles' ? 'paddles' : 'plants';
+    const defaultCategory = kind === 'paddles' ? 'paddles' : (kind === 'houseplants' ? 'plants' : 'carry');
     for (const s of seeds) {
       invAdd({
         category: s.category || defaultCategory,
         brand: s.brand,
         model: s.model,
         notes: s.notes,
+        where: s.where,
+        status: s.status,
+        critical: s.critical,
       });
     }
   }
@@ -873,6 +913,15 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
           : '<span class="inv__model">' + escapeHtml(item.model) + '</span>';
         html += '<li class="inv__row">';
         html += '<div class="inv__row-main">' + display;
+        const meta = [];
+        if (item.status && item.status !== 'ready') meta.push(INV_STATUS_LABELS[item.status] || item.status);
+        if (item.where) meta.push(item.where);
+        if (item.critical) meta.push('critical');
+        if (meta.length) {
+          html += '<div class="inv__meta">';
+          for (const m of meta) html += '<span class="inv__pill mono">' + escapeHtml(m) + '</span>';
+          html += '</div>';
+        }
         if (item.notes) html += '<p class="inv__notes">' + escapeHtml(item.notes) + '</p>';
         html += '</div>';
         html += '<button type="button" class="inv__remove" data-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml(item.brand + ' ' + item.model) + '">×</button>';
@@ -1422,6 +1471,19 @@ const description = 'Your PointCast start experience — daily check-in, mood, a
   .inv__model {
     font-size: 14px; color: var(--color-ink); font-weight: 600;
     margin-left: 4px;
+  }
+  .inv__meta {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    margin: 5px 0 0;
+  }
+  .inv__pill {
+    display: inline-flex; align-items: center;
+    min-height: 18px; padding: 2px 7px;
+    background: #fff; border: 1px solid var(--color-rule);
+    border-radius: 999px;
+    color: var(--color-ink-soft);
+    font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
   .inv__notes {
     font-size: 12px; line-height: 1.4; color: var(--color-ink-soft);

@@ -1,19 +1,16 @@
 ---
 /**
- * /inventory — fuller standalone view of pc:inventory:v1.
+ * /inventory — real-life adventure inventory, backed by pc:inventory:v1.
  *
- * Sibling of the /me INVENTORY band but with more breathing room and
- * extra editorial framing. Reads the SAME localStorage key
- * (pc:inventory:v1) so changes here show up on /me and vice versa.
- *
- * Shipped 2026-05-08 as the second half of "wire inventory in" — the
- * /paddle-exchange page already imports paddles into its form. This
- * gives Mike (and any visitor with gear) a dedicated home.
+ * This is the fuller sibling of the /me INVENTORY band. It keeps the
+ * existing localStorage key so older paddle/plant/drum entries continue
+ * to appear, then layers in practical adventuring fields: where an item
+ * lives, whether it is ready, and whether it is critical for a packout.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 
-const title = 'Inventory · your local kit';
-const description = 'Stuff you actually own — paddles, drums, wheels, plants, tech, books. Stored locally only, never sent to a server. Wired into /paddle-exchange + /honey-league (paddles) and /houseplants (plants). Sibling of the /me INVENTORY band.';
+const title = 'Adventure Inventory · your local kit';
+const description = 'A local-first real-life inventory for adventuring: gear, location, condition, critical items, and readiness. Stored only in this browser as pc:inventory:v1.';
 ---
 
 <BlockLayout title={title} description={description}>
@@ -25,13 +22,13 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
         <a href="/me">me</a> <span aria-hidden="true">›</span>
         <span>inventory</span>
       </p>
-      <p class="inv-page__kicker mono">YOUR KIT · LOCAL TO THIS BROWSER</p>
-      <h1 class="inv-page__title">What's in the bag.</h1>
+      <p class="inv-page__kicker mono">REAL-LIFE INVENTORY · LOCAL TO THIS BROWSER</p>
+      <h1 class="inv-page__title">Pack for the next outing.</h1>
       <p class="inv-page__dek">
-        Paddles · drums · wheels · plants · tech · books · whatever else.
-        Stored only in this browser as <code>pc:inventory:v1</code> — never
-        sent to a server. Same data as the INVENTORY band on
-        <a href="/me">/me</a>; this page is just a roomier view.
+        A practical kit log for the things you actually carry: water,
+        layers, tools, lights, med supplies, food, books, paddles, wheels,
+        plants, and odd little talismans. Same data as the INVENTORY band
+        on <a href="/me">/me</a>, stored only as <code>pc:inventory:v1</code>.
       </p>
       <p class="inv-page__where mono">
         wired into:
@@ -41,36 +38,90 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
       </p>
     </header>
 
-    {/* Stats strip — populated client-side. */}
     <section class="inv-page__stats" aria-label="Inventory stats">
       <dl class="inv-stats">
         <div class="inv-stats__cell"><dt id="inv-stat-total">0</dt><dd>items</dd></div>
-        <div class="inv-stats__cell"><dt id="inv-stat-cats">0</dt><dd>categories</dd></div>
-        <div class="inv-stats__cell"><dt id="inv-stat-paddles">0</dt><dd>paddles</dd></div>
-        <div class="inv-stats__cell"><dt id="inv-stat-since">—</dt><dd>oldest entry</dd></div>
+        <div class="inv-stats__cell"><dt id="inv-stat-score">0%</dt><dd>pack score</dd></div>
+        <div class="inv-stats__cell"><dt id="inv-stat-ready">0</dt><dd>ready</dd></div>
+        <div class="inv-stats__cell"><dt id="inv-stat-check">0</dt><dd>needs check</dd></div>
+        <div class="inv-stats__cell"><dt id="inv-stat-critical">0</dt><dd>critical</dd></div>
       </dl>
     </section>
 
-    {/* Quickstarts — visible only when inventory is empty. */}
+    <section class="inv-page__readiness" aria-label="Adventure readiness">
+      <div class="inv-section-head">
+        <p class="inv-page__eyebrow mono">ADVENTURE READINESS</p>
+        <span class="inv-section-head__meta mono" id="inv-readiness-meta">0 / 6 essentials</span>
+      </div>
+      <div class="inv-readiness-grid" id="inv-readiness-grid">
+        <p class="inv-empty">Add gear below to build a packout.</p>
+      </div>
+    </section>
+
     <section class="inv-page__quickstarts" id="inv-quickstarts" hidden>
       <p class="inv-page__eyebrow mono">QUICK START</p>
       <div class="inv-quickstart-grid">
-        <button type="button" class="inv-quickstart-btn" data-quickstart="paddles">
-          <span class="inv-quickstart-btn__h"><span class="mono">+</span> Pickleball paddles</span>
-          <span class="inv-quickstart-btn__sub">11six24 Vapor 2 · Honolulu JNFK · Gearbox G2 Power · Vatic Prism 14mm</span>
+        <button type="button" class="inv-quickstart-btn" data-quickstart="daypack">
+          <span class="inv-quickstart-btn__h"><span class="mono">+</span> Day adventure kit</span>
+          <span class="inv-quickstart-btn__sub">daypack · bottle · shell · headlamp · mini med · snack</span>
         </button>
-        <button type="button" class="inv-quickstart-btn" data-quickstart="houseplants">
-          <span class="inv-quickstart-btn__h"><span class="mono">+</span> A few houseplants</span>
-          <span class="inv-quickstart-btn__sub">Monstera deliciosa · Pothos · Snake plant</span>
+        <button type="button" class="inv-quickstart-btn" data-quickstart="coastal">
+          <span class="inv-quickstart-btn__h"><span class="mono">+</span> Coastal overnight</span>
+          <span class="inv-quickstart-btn__sub">sleep layer · bivy · water filter · stove · dry bag</span>
         </button>
-        <button type="button" class="inv-quickstart-btn" data-quickstart="drums">
-          <span class="inv-quickstart-btn__h"><span class="mono">+</span> Drum kit basics</span>
-          <span class="inv-quickstart-btn__sub">snare · kick · hi-hat · ride</span>
+        <button type="button" class="inv-quickstart-btn" data-quickstart="repair">
+          <span class="inv-quickstart-btn__h"><span class="mono">+</span> Repair pouch</span>
+          <span class="inv-quickstart-btn__sub">multi-tool · tape · cord · lighter · battery bank</span>
         </button>
       </div>
     </section>
 
-    {/* Add-item form. */}
+    <section class="inv-page__tools" aria-label="Local trip desk">
+      <div class="inv-section-head">
+        <p class="inv-page__eyebrow mono">LOCAL TRIP DESK</p>
+        <span class="inv-section-head__meta mono" id="inv-trip-note">choose a mode</span>
+      </div>
+      <div class="inv-tool-grid">
+        <label class="inv-field">
+          <span class="inv-field__label mono">TRIP MODE</span>
+          <select class="inv-input" id="inv-trip-mode">
+            <option value="city">city wander</option>
+            <option value="coast">coastal loop</option>
+            <option value="trail">trail scout</option>
+            <option value="overnight">overnight</option>
+            <option value="pickleball">pickleball run</option>
+            <option value="repair">repair errand</option>
+          </select>
+        </label>
+        <label class="inv-field">
+          <span class="inv-field__label mono">FIND</span>
+          <input type="search" class="inv-input" id="inv-search" placeholder="filter gear, notes, places" />
+        </label>
+        <label class="inv-field">
+          <span class="inv-field__label mono">SHOW</span>
+          <select class="inv-input" id="inv-filter-status">
+            <option value="all">all items</option>
+            <option value="ready">ready / packed</option>
+            <option value="check">needs check</option>
+            <option value="critical">critical</option>
+          </select>
+        </label>
+        <button type="button" class="inv-roll-btn mono" id="inv-roll-btn">ROLL OUTING</button>
+      </div>
+      <div class="inv-grab">
+        <div class="inv-grab__copy">
+          <p class="inv-grab__title" id="inv-grab-title">Grab list</p>
+          <p class="inv-grab__text" id="inv-grab-list">Pick a mode or add gear to see what to grab.</p>
+        </div>
+        <div class="inv-grab__actions">
+          <button type="button" class="inv-mini-btn mono" id="inv-pack-critical">PACK CRITICAL</button>
+          <button type="button" class="inv-mini-btn mono" id="inv-unpack-all">UNPACK</button>
+          <button type="button" class="inv-mini-btn mono" id="inv-copy-list">COPY LIST</button>
+        </div>
+      </div>
+      <p class="inv-tool-notice mono" id="inv-tool-notice" hidden role="status" aria-live="polite"></p>
+    </section>
+
     <section class="inv-page__add" aria-label="Add an item">
       <p class="inv-page__eyebrow mono">ADD ITEM</p>
       <form class="inv-add" id="inv-add-form" autocomplete="off">
@@ -78,52 +129,84 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
           <label class="inv-field">
             <span class="inv-field__label mono">CATEGORY</span>
             <select class="inv-input" id="inv-add-category" required>
-              <option value="paddles">paddles</option>
-              <option value="drums">drums</option>
+              <option value="carry">carry</option>
+              <option value="water">water</option>
+              <option value="food">food</option>
+              <option value="layers">layers</option>
+              <option value="shelter">shelter</option>
+              <option value="navigation">navigation</option>
+              <option value="med">med</option>
+              <option value="light">light</option>
+              <option value="tools">tools</option>
+              <option value="power">power</option>
               <option value="wheels">wheels</option>
+              <option value="paddles">paddles</option>
               <option value="plants">plants</option>
-              <option value="tech">tech</option>
               <option value="books">books</option>
+              <option value="drums">drums</option>
               <option value="other">other</option>
             </select>
           </label>
           <label class="inv-field">
-            <span class="inv-field__label mono">BRAND</span>
-            <input type="text" class="inv-input" id="inv-add-brand" placeholder="e.g. 11six24" maxlength="40" />
+            <span class="inv-field__label mono">MAKER / BRAND</span>
+            <input type="text" class="inv-input" id="inv-add-brand" placeholder="e.g. Patagonia" maxlength="40" />
           </label>
           <label class="inv-field">
-            <span class="inv-field__label mono">MODEL <em>(required)</em></span>
-            <input type="text" class="inv-input" id="inv-add-model" placeholder="e.g. Vapor 2" maxlength="60" required />
+            <span class="inv-field__label mono">ITEM <em>(required)</em></span>
+            <input type="text" class="inv-input" id="inv-add-model" placeholder="e.g. Houdini shell" maxlength="70" required />
+          </label>
+        </div>
+        <div class="inv-add__row inv-add__row--gear">
+          <label class="inv-field">
+            <span class="inv-field__label mono">WHERE</span>
+            <input type="text" class="inv-input" id="inv-add-where" placeholder="e.g. hall closet" maxlength="60" />
+          </label>
+          <label class="inv-field">
+            <span class="inv-field__label mono">STATUS</span>
+            <select class="inv-input" id="inv-add-status">
+              <option value="ready">ready</option>
+              <option value="packed">packed</option>
+              <option value="check">needs check</option>
+              <option value="repair">repair</option>
+              <option value="lent">lent out</option>
+            </select>
+          </label>
+          <label class="inv-critical">
+            <input type="checkbox" id="inv-add-critical" />
+            <span>
+              <strong>Critical</strong>
+              <small>belongs in the real pack</small>
+            </span>
           </label>
         </div>
         <div class="inv-add__row inv-add__row--bottom">
           <label class="inv-field inv-field--wide">
-            <span class="inv-field__label mono">NOTES (OPTIONAL)</span>
-            <input type="text" class="inv-input" id="inv-add-notes" placeholder="e.g. 14mm core, lead tape on neck, bought 2024" maxlength="200" />
+            <span class="inv-field__label mono">NOTES</span>
+            <input type="text" class="inv-input" id="inv-add-notes" placeholder="e.g. recharge before leaving, 1L, in dry bag" maxlength="220" />
           </label>
           <button type="submit" class="inv-add__submit mono">+ ADD</button>
         </div>
       </form>
     </section>
 
-    {/* Items grouped by category. */}
     <section class="inv-page__items" aria-label="Items">
-      <p class="inv-page__eyebrow mono">YOUR KIT</p>
+      <div class="inv-section-head">
+        <p class="inv-page__eyebrow mono">YOUR KIT</p>
+        <span class="inv-section-head__meta mono" id="inv-kit-meta">empty</span>
+      </div>
       <div class="inv-groups" id="inv-groups">
-        <p class="inv-empty">No items yet — add one above, or pick a quick-start.</p>
+        <p class="inv-empty">No items yet - add one above, or pick a quick-start.</p>
       </div>
     </section>
 
-    {/* Foot. */}
     <footer class="inv-page__foot mono">
       <p>
         Stored only in this browser · localStorage key <code>pc:inventory:v1</code> ·
         <button type="button" class="inv-page__reset" id="inv-reset-btn">reset everything</button>
       </p>
       <p class="inv-page__foot-note">
-        Items aren't shared anywhere unless you explicitly post them
-        (e.g. into the <a href="/paddle-exchange">/paddle-exchange</a> form).
-        Schema is forward-compatible so future server-sync stays opt-in.
+        Extra adventure fields are optional. Older paddle, plant, and drum
+        items still load cleanly; future sync can stay opt-in.
       </p>
     </footer>
 
@@ -133,40 +216,147 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
 <script is:inline>
 (() => {
   const KEY = 'pc:inventory:v1';
+  const PREF_KEY = 'pc:inventory:prefs:v1';
   const VERSION = 1;
-  const CATEGORIES = ['paddles', 'drums', 'wheels', 'plants', 'tech', 'books', 'other'];
+  const CATEGORIES = [
+    'carry', 'water', 'food', 'layers', 'shelter', 'navigation', 'med',
+    'light', 'tools', 'power', 'tech', 'wheels', 'paddles', 'plants',
+    'books', 'drums', 'other',
+  ];
+  const CATEGORY_LABELS = {
+    carry: 'carry',
+    water: 'water',
+    food: 'food',
+    layers: 'layers',
+    shelter: 'shelter',
+    navigation: 'navigation',
+    med: 'med',
+    light: 'light',
+    tools: 'tools',
+    power: 'power',
+    tech: 'tech',
+    wheels: 'wheels',
+    paddles: 'paddles',
+    plants: 'plants',
+    books: 'books',
+    drums: 'drums',
+    other: 'other',
+  };
+  const STATUS_LABELS = {
+    ready: 'ready',
+    packed: 'packed',
+    check: 'needs check',
+    repair: 'repair',
+    lent: 'lent out',
+  };
+  const ESSENTIALS = [
+    { key: 'water', label: 'water', cats: ['water'], terms: ['bottle', 'filter', 'hydration', 'water'] },
+    { key: 'layers', label: 'layer', cats: ['layers'], terms: ['shell', 'jacket', 'fleece', 'layer', 'beanie'] },
+    { key: 'light', label: 'light', cats: ['light'], terms: ['headlamp', 'lamp', 'flashlight', 'lantern'] },
+    { key: 'med', label: 'med', cats: ['med'], terms: ['med', 'first aid', 'bandage', 'blister'] },
+    { key: 'navigation', label: 'nav', cats: ['navigation'], terms: ['map', 'compass', 'gps', 'route'] },
+    { key: 'food', label: 'food', cats: ['food'], terms: ['snack', 'food', 'bar', 'meal'] },
+  ];
   const QUICKSTARTS = {
-    paddles: [
-      { brand: '11six24',  model: 'Vapor 2',     notes: '' },
-      { brand: 'Honolulu', model: 'JNFK',        notes: '' },
-      { brand: 'Gearbox',  model: 'G2 Power',    notes: '' },
-      { brand: 'Vatic',    model: 'Prism 14mm',  notes: '' },
+    daypack: [
+      { category: 'carry', model: 'Daypack', where: 'front closet', status: 'ready', critical: true, notes: '18-25L, room for layers' },
+      { category: 'water', model: 'Water bottle', where: 'kitchen shelf', status: 'ready', critical: true, notes: '1L minimum' },
+      { category: 'layers', model: 'Wind shell', where: 'hall closet', status: 'ready', critical: true, notes: 'packs down small' },
+      { category: 'light', model: 'Headlamp', where: 'top drawer', status: 'check', critical: true, notes: 'check batteries' },
+      { category: 'med', model: 'Mini med pouch', where: 'daypack', status: 'ready', critical: true, notes: 'blister care, tape, ibuprofen' },
+      { category: 'food', model: 'Pocket snack', where: 'pantry', status: 'ready', critical: false, notes: 'bar, nuts, or dried fruit' },
     ],
-    houseplants: [
-      { category: 'plants', brand: '', model: 'Monstera deliciosa', notes: '' },
-      { category: 'plants', brand: '', model: 'Pothos',             notes: '' },
-      { category: 'plants', brand: '', model: 'Snake plant',        notes: '' },
+    coastal: [
+      { category: 'shelter', model: 'Bivy / sleep cover', where: 'gear bin', status: 'check', critical: true, notes: 'air out before packing' },
+      { category: 'water', model: 'Water filter', where: 'camp box', status: 'ready', critical: true, notes: 'backflush after use' },
+      { category: 'food', model: 'Stove + fuel', where: 'camp box', status: 'check', critical: true, notes: 'weigh canister' },
+      { category: 'layers', model: 'Warm layer', where: 'hall closet', status: 'ready', critical: true, notes: 'marine layer insurance' },
+      { category: 'carry', model: 'Dry bag', where: 'gear bin', status: 'ready', critical: false, notes: 'electronics and socks' },
     ],
-    drums: [
-      { category: 'drums', brand: '', model: 'Snare',   notes: '' },
-      { category: 'drums', brand: '', model: 'Kick',    notes: '' },
-      { category: 'drums', brand: '', model: 'Hi-hat',  notes: '' },
-      { category: 'drums', brand: '', model: 'Ride',    notes: '' },
+    repair: [
+      { category: 'tools', model: 'Multi-tool', where: 'repair pouch', status: 'ready', critical: true, notes: 'knife, pliers, driver' },
+      { category: 'tools', model: 'Tape wrap', where: 'repair pouch', status: 'ready', critical: true, notes: 'duct or tenacious tape' },
+      { category: 'tools', model: 'Paracord', where: 'repair pouch', status: 'ready', critical: false, notes: '10-20 ft' },
+      { category: 'light', model: 'Lighter', where: 'repair pouch', status: 'check', critical: false, notes: 'test spark' },
+      { category: 'power', model: 'Battery bank', where: 'desk drawer', status: 'check', critical: false, notes: 'charge to full' },
     ],
+  };
+  const TRIPS = {
+    city: {
+      label: 'city wander',
+      prompt: 'walkable errands, one good bench, one curious detour',
+      wants: ['water', 'layers', 'power', 'books'],
+    },
+    coast: {
+      label: 'coastal loop',
+      prompt: 'wind, salt, snack, sunset buffer',
+      wants: ['water', 'layers', 'food', 'light'],
+    },
+    trail: {
+      label: 'trail scout',
+      prompt: 'small route, bigger sky, no heroic nonsense',
+      wants: ['water', 'navigation', 'med', 'layers', 'food', 'light'],
+    },
+    overnight: {
+      label: 'overnight',
+      prompt: 'warmth, shelter, food, light, backup plans',
+      wants: ['shelter', 'water', 'food', 'layers', 'light', 'med'],
+    },
+    pickleball: {
+      label: 'pickleball run',
+      prompt: 'paddle, water, towel, weird confidence',
+      wants: ['paddles', 'water', 'food', 'layers'],
+    },
+    repair: {
+      label: 'repair errand',
+      prompt: 'fix one thing, leave the place better',
+      wants: ['tools', 'power', 'light'],
+    },
   };
 
   function defaults() { return { $v: VERSION, items: [] }; }
+  function prefDefaults() { return { $v: 1, tripMode: 'city', search: '', filterStatus: 'all' }; }
+  function loadPrefs() {
+    try {
+      const raw = localStorage.getItem(PREF_KEY);
+      if (!raw) return prefDefaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return prefDefaults();
+      return Object.assign(prefDefaults(), parsed, { $v: 1 });
+    } catch (e) { return prefDefaults(); }
+  }
+  function savePrefs() {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) {}
+  }
+  function normalizeStatus(status) {
+    return STATUS_LABELS[status] ? status : 'ready';
+  }
+  function normalizeItem(item) {
+    const category = String(item?.category || 'other').toLowerCase();
+    return {
+      id: item?.id || makeId(),
+      category,
+      brand: String(item?.brand || '').trim(),
+      model: String(item?.model || '').trim(),
+      notes: String(item?.notes || '').trim(),
+      where: String(item?.where || item?.location || '').trim(),
+      status: normalizeStatus(item?.status),
+      critical: Boolean(item?.critical),
+      addedAt: item?.addedAt || new Date().toISOString(),
+    };
+  }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) return defaults();
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || parsed.$v !== VERSION) return defaults();
-      return Object.assign(defaults(), parsed, { $v: VERSION });
+      const items = Array.isArray(parsed.items) ? parsed.items.map(normalizeItem).filter(i => i.model) : [];
+      return Object.assign(defaults(), parsed, { $v: VERSION, items });
     } catch (e) { return defaults(); }
   }
-  function save(inv) {
-    try { localStorage.setItem(KEY, JSON.stringify(inv)); } catch (e) {}
+  function save(next) {
+    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e) {}
   }
   function makeId() {
     return 'i-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -176,90 +366,231 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+  function labelCategory(cat) {
+    return CATEGORY_LABELS[cat] || cat || 'other';
+  }
+  function isReady(item) {
+    return item.status === 'ready' || item.status === 'packed';
+  }
+  function statusLabel(item) {
+    return STATUS_LABELS[item.status] || item.status || 'ready';
+  }
 
   let inv = load();
+  let prefs = loadPrefs();
 
   function add(item) {
-    const norm = {
-      id: makeId(),
-      category: (item.category || 'other').toLowerCase(),
-      brand: (item.brand || '').trim(),
-      model: (item.model || '').trim(),
-      notes: (item.notes || '').trim(),
-      addedAt: new Date().toISOString(),
-    };
+    const norm = normalizeItem(Object.assign({}, item, { id: makeId(), addedAt: new Date().toISOString() }));
     if (!norm.model) return false;
     inv.items.push(norm);
     save(inv);
     render();
     return true;
   }
-
   function remove(id) {
     inv.items = inv.items.filter(i => i.id !== id);
     save(inv);
     render();
   }
-
   function quickstart(kind) {
     const seeds = QUICKSTARTS[kind];
     if (!seeds || !seeds.length) return;
-    const defaultCategory = kind === 'paddles' ? 'paddles' : (kind === 'drums' ? 'drums' : 'plants');
-    for (const s of seeds) {
-      add({
-        category: s.category || defaultCategory,
-        brand: s.brand,
-        model: s.model,
-        notes: s.notes,
-      });
-    }
+    for (const s of seeds) add(s);
   }
-
+  function setStatus(id, status) {
+    const nextStatus = normalizeStatus(status);
+    const item = inv.items.find(i => i.id === id);
+    if (!item) return;
+    item.status = nextStatus;
+    save(inv);
+    render();
+  }
+  function packCritical() {
+    let changed = 0;
+    for (const item of inv.items) {
+      if (!item.critical || item.status === 'packed' || item.status === 'repair' || item.status === 'lent') continue;
+      item.status = 'packed';
+      changed++;
+    }
+    if (changed) {
+      save(inv);
+      render();
+    }
+    showNotice(changed ? 'Packed ' + changed + ' critical item' + (changed === 1 ? '' : 's') + '.' : 'No unpacked critical items ready to pack.');
+  }
+  function unpackAll() {
+    let changed = 0;
+    for (const item of inv.items) {
+      if (item.status !== 'packed') continue;
+      item.status = 'ready';
+      changed++;
+    }
+    if (changed) {
+      save(inv);
+      render();
+    }
+    showNotice(changed ? 'Unpacked ' + changed + ' item' + (changed === 1 ? '' : 's') + '.' : 'Nothing is marked packed.');
+  }
   function fmtRelativeAt(iso) {
-    if (!iso) return '—';
+    if (!iso) return 'unknown';
     const t = new Date(iso);
     const days = Math.floor((Date.now() - t.getTime()) / 86400000);
+    if (Number.isNaN(days)) return 'unknown';
     if (days <= 0) return 'today';
     if (days === 1) return 'yesterday';
     if (days < 30) return days + 'd ago';
     return t.toISOString().slice(0, 10);
   }
+  function matchesEssential(item, essential) {
+    if (essential.cats.includes(item.category)) return true;
+    const hay = (item.model + ' ' + item.brand + ' ' + item.notes).toLowerCase();
+    return essential.terms.some(term => hay.includes(term));
+  }
+  function essentialMatches(essential) {
+    return inv.items.filter(item => matchesEssential(item, essential));
+  }
+  function readinessScore() {
+    const covered = ESSENTIALS.filter(e => essentialMatches(e).some(isReady)).length;
+    return { covered, total: ESSENTIALS.length, pct: Math.round((covered / ESSENTIALS.length) * 100) };
+  }
+  function itemText(item) {
+    return [
+      item.category, item.brand, item.model, item.notes, item.where, statusLabel(item),
+      item.critical ? 'critical' : '',
+    ].join(' ').toLowerCase();
+  }
+  function visibleItems() {
+    const q = String(prefs.search || '').trim().toLowerCase();
+    return inv.items.filter(item => {
+      if (q && !itemText(item).includes(q)) return false;
+      if (prefs.filterStatus === 'ready' && !isReady(item)) return false;
+      if (prefs.filterStatus === 'check' && isReady(item)) return false;
+      if (prefs.filterStatus === 'critical' && !item.critical) return false;
+      return true;
+    });
+  }
+  function bestForCategory(category) {
+    const matches = inv.items.filter(item => item.category === category);
+    return matches.find(isReady) || matches[0] || null;
+  }
+  function buildGrabList() {
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    const lines = [];
+    for (const category of trip.wants) {
+      const item = bestForCategory(category);
+      if (!item) {
+        lines.push('missing: ' + labelCategory(category));
+        continue;
+      }
+      const prefix = isReady(item) ? 'grab' : 'check';
+      const name = (item.brand ? item.brand + ' ' : '') + item.model;
+      const place = item.where ? ' @ ' + item.where : '';
+      lines.push(prefix + ': ' + name + place);
+    }
+    const unreadyCritical = inv.items.filter(item => item.critical && !isReady(item));
+    for (const item of unreadyCritical) {
+      const name = (item.brand ? item.brand + ' ' : '') + item.model;
+      lines.push('critical check: ' + name);
+    }
+    return lines;
+  }
+  function grabListText() {
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    return [
+      'PointCast packout: ' + trip.label,
+      trip.prompt,
+      '',
+      ...buildGrabList(),
+    ].join('\n');
+  }
+  function showNotice(text) {
+    const el = document.getElementById('inv-tool-notice');
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = text;
+    clearTimeout(showNotice._t);
+    showNotice._t = setTimeout(() => { el.hidden = true; }, 2400);
+  }
 
   function renderStats() {
     const total = inv.items.length;
-    const totalEl = document.getElementById('inv-stat-total');
-    if (totalEl) totalEl.textContent = String(total);
+    const ready = inv.items.filter(isReady).length;
+    const check = inv.items.filter(i => !isReady(i)).length;
+    const critical = inv.items.filter(i => i.critical).length;
+    const score = readinessScore();
+    const visible = visibleItems().length;
 
-    const catSet = new Set(inv.items.map(i => i.category));
-    const catEl = document.getElementById('inv-stat-cats');
-    if (catEl) catEl.textContent = String(catSet.size);
+    const statMap = {
+      'inv-stat-total': String(total),
+      'inv-stat-score': score.pct + '%',
+      'inv-stat-ready': String(ready),
+      'inv-stat-check': String(check),
+      'inv-stat-critical': String(critical),
+      'inv-readiness-meta': score.covered + ' / ' + score.total + ' essentials',
+      'inv-kit-meta': total ? visible + ' shown / ' + total + ' total' : 'empty',
+    };
+    Object.entries(statMap).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    });
+  }
 
-    const paddleEl = document.getElementById('inv-stat-paddles');
-    if (paddleEl) paddleEl.textContent = String(inv.items.filter(i => i.category === 'paddles').length);
+  function renderReadiness() {
+    const root = document.getElementById('inv-readiness-grid');
+    if (!root) return;
+    let html = '';
+    for (const essential of ESSENTIALS) {
+      const matches = essentialMatches(essential);
+      const ready = matches.filter(isReady);
+      const best = ready[0] || matches[0];
+      const state = ready.length ? 'ready' : (matches.length ? 'check' : 'missing');
+      const label = state === 'ready' ? 'ready' : (state === 'check' ? 'check' : 'missing');
+      const detail = best ? ((best.brand ? best.brand + ' ' : '') + best.model) : 'not packed yet';
+      html += '<article class="inv-ready inv-ready--' + state + '">';
+      html += '<span class="inv-ready__dot" aria-hidden="true"></span>';
+      html += '<div><h2 class="inv-ready__h mono">' + escapeHtml(essential.label) + '</h2>';
+      html += '<p class="inv-ready__detail">' + escapeHtml(detail) + '</p></div>';
+      html += '<span class="inv-ready__state mono">' + escapeHtml(label) + '</span>';
+      html += '</article>';
+    }
+    root.innerHTML = html;
+  }
+  function renderTripDesk() {
+    const modeEl = document.getElementById('inv-trip-mode');
+    const searchEl = document.getElementById('inv-search');
+    const filterEl = document.getElementById('inv-filter-status');
+    if (modeEl && modeEl.value !== prefs.tripMode) modeEl.value = prefs.tripMode;
+    if (searchEl && searchEl.value !== prefs.search) searchEl.value = prefs.search;
+    if (filterEl && filterEl.value !== prefs.filterStatus) filterEl.value = prefs.filterStatus;
 
-    const sinceEl = document.getElementById('inv-stat-since');
-    if (sinceEl) {
-      if (!inv.items.length) {
-        sinceEl.textContent = '—';
-      } else {
-        const oldest = inv.items.reduce((min, i) => {
-          if (!i.addedAt) return min;
-          return !min || i.addedAt < min ? i.addedAt : min;
-        }, '');
-        sinceEl.textContent = fmtRelativeAt(oldest);
-      }
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    const noteEl = document.getElementById('inv-trip-note');
+    if (noteEl) noteEl.textContent = trip.prompt;
+    const titleEl = document.getElementById('inv-grab-title');
+    if (titleEl) titleEl.textContent = 'Grab list: ' + trip.label;
+    const listEl = document.getElementById('inv-grab-list');
+    if (listEl) {
+      const lines = buildGrabList();
+      listEl.innerHTML = lines.length
+        ? lines.map(line => '<span>' + escapeHtml(line) + '</span>').join('')
+        : 'Add gear below to make a grab list.';
     }
   }
 
   function renderGroups() {
     const root = document.getElementById('inv-groups');
     if (!root) return;
+    const itemsForView = visibleItems();
     if (!inv.items.length) {
-      root.innerHTML = '<p class="inv-empty">No items yet — add one above, or pick a quick-start.</p>';
+      root.innerHTML = '<p class="inv-empty">No items yet - add one above, or pick a quick-start.</p>';
+      return;
+    }
+    if (!itemsForView.length) {
+      root.innerHTML = '<p class="inv-empty">No matches. Clear the search or change the filter.</p>';
       return;
     }
     const byCat = {};
-    for (const item of inv.items) {
+    for (const item of itemsForView) {
       const c = item.category || 'other';
       if (!byCat[c]) byCat[c] = [];
       byCat[c].push(item);
@@ -272,19 +603,28 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     for (const cat of cats) {
       const items = byCat[cat];
       html += '<section class="inv-group">';
-      html += '<header class="inv-group__head"><h2 class="inv-group__h mono">' + escapeHtml(cat) + '</h2>';
+      html += '<header class="inv-group__head"><h2 class="inv-group__h mono">' + escapeHtml(labelCategory(cat)) + '</h2>';
       html += '<span class="inv-group__count mono">' + items.length + '</span></header>';
       html += '<ul class="inv-group__list">';
       for (const item of items) {
         const display = item.brand
           ? '<span class="inv-row__brand">' + escapeHtml(item.brand) + '</span> <span class="inv-row__model">' + escapeHtml(item.model) + '</span>'
           : '<span class="inv-row__model">' + escapeHtml(item.model) + '</span>';
-        html += '<li class="inv-row">';
+        html += '<li class="inv-row inv-row--' + escapeHtml(item.status) + '">';
         html += '<div class="inv-row__main">' + display;
+        html += '<div class="inv-row__meta">';
+        html += '<span class="inv-row__pill mono">' + escapeHtml(statusLabel(item)) + '</span>';
+        if (item.where) html += '<span class="inv-row__pill inv-row__pill--where mono">' + escapeHtml(item.where) + '</span>';
+        if (item.critical) html += '<span class="inv-row__pill inv-row__pill--critical mono">critical</span>';
+        html += '</div>';
         if (item.notes) html += '<p class="inv-row__notes">' + escapeHtml(item.notes) + '</p>';
         html += '<p class="inv-row__at mono">added ' + fmtRelativeAt(item.addedAt) + '</p>';
         html += '</div>';
-        html += '<button type="button" class="inv-row__remove" data-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml(item.brand + ' ' + item.model) + '">×</button>';
+        html += '<div class="inv-row__actions">';
+        html += '<button type="button" class="inv-row__status mono" data-status="' + escapeHtml(item.status === 'packed' ? 'ready' : 'packed') + '" data-id="' + escapeHtml(item.id) + '">' + (item.status === 'packed' ? 'READY' : 'PACK') + '</button>';
+        html += '<button type="button" class="inv-row__status mono" data-status="check" data-id="' + escapeHtml(item.id) + '">CHECK</button>';
+        html += '<button type="button" class="inv-row__remove" data-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml((item.brand + ' ' + item.model).trim()) + '">×</button>';
+        html += '</div>';
         html += '</li>';
       }
       html += '</ul>';
@@ -295,21 +635,28 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     root.querySelectorAll('[data-remove]').forEach(btn => {
       btn.addEventListener('click', () => remove(btn.getAttribute('data-remove')));
     });
+    root.querySelectorAll('[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => setStatus(btn.getAttribute('data-id'), btn.getAttribute('data-status')));
+    });
   }
 
   function render() {
     const quickstartsEl = document.getElementById('inv-quickstarts');
     if (quickstartsEl) quickstartsEl.hidden = inv.items.length > 0;
     renderStats();
+    renderReadiness();
+    renderTripDesk();
     renderGroups();
   }
 
-  // Form wiring.
   document.getElementById('inv-add-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const catEl = document.getElementById('inv-add-category');
     const brandEl = document.getElementById('inv-add-brand');
     const modelEl = document.getElementById('inv-add-model');
+    const whereEl = document.getElementById('inv-add-where');
+    const statusEl = document.getElementById('inv-add-status');
+    const criticalEl = document.getElementById('inv-add-critical');
     const notesEl = document.getElementById('inv-add-notes');
     if (!modelEl?.value.trim()) {
       modelEl?.focus();
@@ -319,11 +666,17 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
       category: catEl?.value || 'other',
       brand: brandEl?.value || '',
       model: modelEl?.value || '',
+      where: whereEl?.value || '',
+      status: statusEl?.value || 'ready',
+      critical: Boolean(criticalEl?.checked),
       notes: notesEl?.value || '',
     });
     if (ok) {
       if (brandEl) brandEl.value = '';
       if (modelEl) modelEl.value = '';
+      if (whereEl) whereEl.value = '';
+      if (statusEl) statusEl.value = 'ready';
+      if (criticalEl) criticalEl.checked = false;
       if (notesEl) notesEl.value = '';
       modelEl?.focus();
     }
@@ -336,8 +689,48 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     });
   });
 
+  document.getElementById('inv-trip-mode')?.addEventListener('change', (e) => {
+    prefs.tripMode = e.target.value in TRIPS ? e.target.value : 'city';
+    savePrefs();
+    render();
+  });
+
+  document.getElementById('inv-search')?.addEventListener('input', (e) => {
+    prefs.search = e.target.value || '';
+    savePrefs();
+    render();
+  });
+
+  document.getElementById('inv-filter-status')?.addEventListener('change', (e) => {
+    prefs.filterStatus = e.target.value || 'all';
+    savePrefs();
+    render();
+  });
+
+  document.getElementById('inv-roll-btn')?.addEventListener('click', () => {
+    const keys = Object.keys(TRIPS);
+    prefs.tripMode = keys[Math.floor(Math.random() * keys.length)] || 'city';
+    prefs.search = '';
+    prefs.filterStatus = 'all';
+    savePrefs();
+    render();
+    showNotice('Rolled: ' + (TRIPS[prefs.tripMode]?.label || 'city wander') + '.');
+  });
+
+  document.getElementById('inv-pack-critical')?.addEventListener('click', packCritical);
+  document.getElementById('inv-unpack-all')?.addEventListener('click', unpackAll);
+  document.getElementById('inv-copy-list')?.addEventListener('click', async () => {
+    const text = grabListText();
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotice('Grab list copied.');
+    } catch (e) {
+      showNotice('Copy blocked by browser. The grab list is still visible above.');
+    }
+  });
+
   document.getElementById('inv-reset-btn')?.addEventListener('click', () => {
-    if (!confirm('Reset all inventory? This wipes pc:inventory:v1 — your /me state and pet are NOT touched.')) return;
+    if (!confirm('Reset all inventory? This wipes pc:inventory:v1 - your /me state and pet are not touched.')) return;
     try { localStorage.removeItem(KEY); } catch (e) {}
     inv = load();
     save(inv);
@@ -350,44 +743,54 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
 
 <style>
   .inv-page {
-    max-width: 1000px;
+    max-width: 1040px;
     margin: 0 auto;
     padding: 24px 20px 80px;
     font-family: var(--font-body);
   }
 
-  /* HERO */
-  .inv-page__hero { margin: 0 0 30px; padding-bottom: 22px; border-bottom: 1.5px solid var(--color-rule); }
+  .inv-page__hero {
+    margin: 0 0 28px;
+    padding-bottom: 22px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
   .inv-page__crumb {
     font-family: var(--font-mono);
-    font-size: 11px; letter-spacing: 0.16em;
-    color: var(--color-ink-soft); text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
     margin: 0 0 12px;
   }
   .inv-page__crumb a { color: var(--color-ink-soft); text-decoration: none; }
   .inv-page__crumb a:hover { color: var(--color-ink); }
   .inv-page__crumb span { margin: 0 6px; }
   .inv-page__kicker {
-    font-size: 11px; letter-spacing: 0.18em;
-    color: var(--color-warm); text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--color-warm);
+    text-transform: uppercase;
     margin: 0 0 12px;
   }
   .inv-page__title {
     font-family: var(--font-heading);
-    font-size: clamp(36px, 5vw, 56px);
-    line-height: 1.05; font-weight: 600;
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.05;
+    font-weight: 600;
     letter-spacing: -0.02em;
     margin: 0 0 14px;
     color: var(--color-ink);
   }
   .inv-page__dek {
     font-family: var(--font-serif);
-    font-size: clamp(15px, 1.3vw, 18px); line-height: 1.5;
+    font-size: clamp(15px, 1.3vw, 18px);
+    line-height: 1.5;
     color: var(--color-ink-soft);
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 0 14px;
   }
-  .inv-page__dek code {
+  .inv-page__dek code,
+  .inv-page__foot code {
     background: var(--color-card);
     padding: 1px 6px;
     border-radius: 2px;
@@ -396,7 +799,8 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
   }
   .inv-page__dek a { color: var(--color-warm); }
   .inv-page__where {
-    font-size: 11px; letter-spacing: 0.08em;
+    font-size: 11px;
+    letter-spacing: 0.08em;
     color: var(--color-ink-soft);
     margin: 0;
   }
@@ -407,11 +811,17 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     margin: 0 4px;
   }
 
-  /* STATS */
-  .inv-page__stats { margin: 0 0 30px; }
+  .inv-page__stats,
+  .inv-page__readiness,
+  .inv-page__quickstarts,
+  .inv-page__add,
+  .inv-page__items {
+    margin: 0 0 30px;
+  }
+
   .inv-stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     margin: 0;
     border: 1.5px solid var(--color-rule);
@@ -425,11 +835,11 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
   .inv-stats__cell:last-child { border-right: 0; }
   .inv-stats__cell dt {
     font-family: var(--font-heading);
-    font-size: 32px;
+    font-size: 30px;
     font-weight: 600;
     color: var(--color-ink);
     line-height: 1;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
   .inv-stats__cell dd {
     margin: 6px 0 0;
@@ -440,21 +850,80 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     text-transform: uppercase;
   }
 
-  /* SECTION HEADERS */
-  .inv-page__eyebrow {
-    font-size: 10px; letter-spacing: 0.18em;
-    color: var(--color-warm); text-transform: uppercase;
+  .inv-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
     margin: 0 0 10px;
   }
+  .inv-section-head__meta {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .inv-page__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--color-warm);
+    text-transform: uppercase;
+    margin: 0;
+  }
 
-  /* QUICKSTARTS */
+  .inv-readiness-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .inv-ready {
+    display: grid;
+    grid-template-columns: 10px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
+    padding: 12px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+  }
+  .inv-ready__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--color-rule);
+  }
+  .inv-ready--ready .inv-ready__dot { background: #2f8f5f; }
+  .inv-ready--check .inv-ready__dot { background: #c4952e; }
+  .inv-ready--missing .inv-ready__dot { background: #c0392b; }
+  .inv-ready__h {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0 0 3px;
+    color: var(--color-ink);
+  }
+  .inv-ready__detail {
+    margin: 0;
+    color: var(--color-ink-soft);
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .inv-ready__state {
+    color: var(--color-ink-soft);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
   .inv-page__quickstarts {
-    margin: 0 0 30px;
     padding: 18px 20px;
     background: #fbf7ee;
     border: 1px dashed var(--color-rule);
     border-radius: 3px;
   }
+  .inv-page__quickstarts .inv-page__eyebrow { margin: 0 0 10px; }
   .inv-quickstart-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -493,19 +962,112 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     line-height: 1.4;
   }
 
-  /* ADD FORM */
-  .inv-page__add { margin: 0 0 30px; }
+  .inv-page__tools {
+    margin: 0 0 30px;
+    padding: 18px 20px;
+    background: #f4f7f5;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+  }
+  .inv-tool-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr 170px 130px;
+    gap: 12px;
+    align-items: end;
+    margin: 0 0 14px;
+  }
+  .inv-roll-btn {
+    height: 39px;
+    border: 1.5px solid var(--color-ink);
+    background: var(--color-ink);
+    color: #fff;
+    border-radius: 2px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    cursor: pointer;
+  }
+  .inv-roll-btn:hover {
+    background: var(--color-warm);
+    border-color: var(--color-warm);
+  }
+  .inv-grab {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: start;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid var(--color-rule);
+    border-left: 3px solid #2f8f5f;
+    border-radius: 2px;
+  }
+  .inv-grab__copy { min-width: 0; }
+  .inv-grab__title {
+    margin: 0 0 6px;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  .inv-grab__text {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    color: var(--color-ink-soft);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .inv-grab__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    max-width: 250px;
+  }
+  .inv-mini-btn,
+  .inv-row__status {
+    min-height: 28px;
+    padding: 6px 9px;
+    background: #fff;
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+    color: var(--color-ink);
+    cursor: pointer;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+  }
+  .inv-mini-btn:hover,
+  .inv-row__status:hover {
+    border-color: var(--color-warm);
+    color: var(--color-warm);
+  }
+  .inv-tool-notice {
+    margin: 10px 0 0;
+    color: var(--color-warm);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .inv-page__add .inv-page__eyebrow { margin: 0 0 10px; }
   .inv-add__row {
     display: grid;
-    grid-template-columns: 140px 1fr 1.5fr;
+    grid-template-columns: 150px 1fr 1.5fr;
     gap: 12px;
     margin: 0 0 12px;
   }
-  .inv-add__row--bottom { grid-template-columns: 1fr 110px; }
+  .inv-add__row--gear {
+    grid-template-columns: 1.2fr 180px 210px;
+  }
+  .inv-add__row--bottom {
+    grid-template-columns: 1fr 110px;
+  }
   .inv-field { display: flex; flex-direction: column; min-width: 0; }
   .inv-field__label {
-    font-size: 9px; letter-spacing: 0.18em;
-    color: var(--color-ink-soft); text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
     margin: 0 0 4px;
   }
   .inv-field__label em { font-style: normal; color: var(--color-warm); }
@@ -513,7 +1075,8 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     width: 100%;
     padding: 9px 12px;
     background: #fff;
-    border: 1.5px solid var(--color-rule); border-radius: 2px;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 2px;
     font-family: inherit;
     font-size: 14px;
     color: var(--color-ink);
@@ -522,6 +1085,36 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     outline: none;
     border-color: var(--color-warm);
   }
+  .inv-critical {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .inv-critical input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-warm);
+    flex: 0 0 auto;
+  }
+  .inv-critical strong {
+    display: block;
+    font-size: 13px;
+    color: var(--color-ink);
+  }
+  .inv-critical small {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
   .inv-add__submit {
     align-self: flex-end;
     padding: 10px 14px;
@@ -529,7 +1122,8 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     color: #fff;
     border: 1.5px solid var(--color-ink);
     border-radius: 2px;
-    font-size: 11px; letter-spacing: 0.16em;
+    font-size: 11px;
+    letter-spacing: 0.16em;
     font-weight: 700;
     cursor: pointer;
     transition: background 0.12s;
@@ -539,8 +1133,6 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     border-color: var(--color-warm);
   }
 
-  /* GROUPS */
-  .inv-page__items { margin: 0 0 36px; }
   .inv-empty {
     padding: 16px;
     background: var(--color-card);
@@ -555,14 +1147,19 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
   .inv-group { margin: 0 0 22px; }
   .inv-group:last-child { margin-bottom: 0; }
   .inv-group__head {
-    display: flex; align-items: baseline; justify-content: space-between;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
     padding: 6px 0 8px;
     margin: 0 0 10px;
     border-bottom: 1.5px solid var(--color-ink);
   }
   .inv-group__h {
-    font-size: 12px; letter-spacing: 0.2em; font-weight: 700;
-    color: var(--color-ink); text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: var(--color-ink);
+    text-transform: uppercase;
     margin: 0;
   }
   .inv-group__count {
@@ -583,11 +1180,16 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     border-radius: 2px;
     margin: 0 0 6px;
   }
+  .inv-row--check,
+  .inv-row--repair { border-left-color: #c4952e; }
+  .inv-row--lent { border-left-color: #6a6154; }
   .inv-row__main { min-width: 0; }
   .inv-row__brand {
     font-family: var(--font-mono);
-    font-size: 11px; letter-spacing: 0.06em;
-    color: var(--color-warm); font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--color-warm);
+    font-weight: 700;
     text-transform: uppercase;
   }
   .inv-row__model {
@@ -596,34 +1198,71 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
     font-weight: 600;
     margin-left: 4px;
   }
+  .inv-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 6px 0 0;
+  }
+  .inv-row__pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 3px 7px;
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-radius: 999px;
+    color: var(--color-ink-soft);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .inv-row__pill--critical {
+    color: #c0392b;
+    border-color: #c0392b;
+    background: #fff7f4;
+  }
   .inv-row__notes {
     font-size: 13px;
     line-height: 1.45;
     color: var(--color-ink-soft);
-    margin: 4px 0 0;
+    margin: 6px 0 0;
   }
   .inv-row__at {
-    font-size: 10px; letter-spacing: 0.06em;
+    font-size: 10px;
+    letter-spacing: 0.06em;
     color: var(--color-ink-soft);
-    margin: 4px 0 0;
+    margin: 5px 0 0;
     text-transform: uppercase;
   }
   .inv-row__remove {
     align-self: center;
-    width: 28px; height: 28px;
+    width: 28px;
+    height: 28px;
     background: transparent;
-    border: 1px solid var(--color-rule); border-radius: 2px;
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
     color: var(--color-ink-soft);
     cursor: pointer;
-    font-size: 16px; line-height: 1;
+    font-size: 16px;
+    line-height: 1;
     transition: color 0.12s, border-color 0.12s;
   }
   .inv-row__remove:hover {
     color: #c0392b;
     border-color: #c0392b;
   }
+  .inv-row__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: flex-end;
+    align-self: center;
+  }
+  .inv-row__actions .inv-row__remove {
+    flex: 0 0 auto;
+  }
 
-  /* FOOT */
   .inv-page__foot {
     margin-top: 36px;
     padding-top: 16px;
@@ -634,12 +1273,6 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
   }
   .inv-page__foot p { margin: 0 0 8px; }
   .inv-page__foot p:last-child { margin: 0; }
-  .inv-page__foot code {
-    background: var(--color-card);
-    padding: 1px 4px;
-    border-radius: 2px;
-    font-size: 11px;
-  }
   .inv-page__foot a {
     color: var(--color-warm);
     text-decoration: none;
@@ -657,13 +1290,54 @@ const description = 'Stuff you actually own — paddles, drums, wheels, plants, 
   .inv-page__reset:hover { color: #c0392b; }
   .inv-page__foot-note { color: var(--color-ink-soft); font-style: italic; }
 
-  @media (max-width: 700px) {
-    .inv-stats { grid-template-columns: 1fr 1fr; }
-    .inv-stats__cell { border-right: 0; border-bottom: 1.5px solid var(--color-rule); }
+  @media (max-width: 820px) {
+    .inv-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inv-stats__cell {
+      border-right: 0;
+      border-bottom: 1.5px solid var(--color-rule);
+    }
     .inv-stats__cell:nth-child(odd) { border-right: 1.5px solid var(--color-rule); }
-    .inv-stats__cell:nth-last-child(-n+2) { border-bottom: 0; }
-    .inv-add__row { grid-template-columns: 1fr; }
-    .inv-add__row--bottom { grid-template-columns: 1fr; }
+    .inv-stats__cell:last-child {
+      grid-column: span 2;
+      border-right: 0;
+      border-bottom: 0;
+    }
+    .inv-readiness-grid { grid-template-columns: 1fr 1fr; }
+    .inv-tool-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .inv-roll-btn {
+      width: 100%;
+    }
+    .inv-grab {
+      grid-template-columns: 1fr;
+    }
+    .inv-grab__actions {
+      justify-content: flex-start;
+      max-width: none;
+    }
+    .inv-add__row,
+    .inv-add__row--gear,
+    .inv-add__row--bottom {
+      grid-template-columns: 1fr;
+    }
     .inv-add__submit { width: 100%; }
+  }
+
+  @media (max-width: 560px) {
+    .inv-section-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .inv-readiness-grid { grid-template-columns: 1fr; }
+    .inv-tool-grid {
+      grid-template-columns: 1fr;
+    }
+    .inv-row {
+      grid-template-columns: 1fr;
+    }
+    .inv-row__actions {
+      justify-self: end;
+    }
   }
 </style>
