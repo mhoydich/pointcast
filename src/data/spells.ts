@@ -399,6 +399,38 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── COMPANIONS (batch 9) ─────────────────────────────────────
+  {
+    id: 'rabbit',
+    label: 'rabbit',
+    blurb: 'A bunny bounds across the bottom in quick high arcs. Speedy and light.',
+    glyph: '🐇',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#c4952e',
+  },
+
+  // ─── BURSTS (batch 9) ─────────────────────────────────────────
+  {
+    id: 'toast',
+    label: 'toast',
+    blurb: 'Bread and snacks pop from the bottom, spin, and fall. Toaster energy.',
+    glyph: '🍞',
+    kind: 'burst',
+    durationMs: 2600,
+    accent: '#d4a437',
+  },
+
+  // ─── AMBIENT (batch 9) ────────────────────────────────────────
+  {
+    id: 'disco',
+    label: 'disco',
+    blurb: 'Colored spotlights sweep the screen. The floor is yours.',
+    glyph: '🪩',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
