@@ -1215,6 +1215,115 @@
       }, dur);
     }
 
+    // ─── comet (burst) ───────────────────────────────────────────
+    // One comet streaks diagonally from a random top-edge entry,
+    // trailing 12 spark particles at the entry point.
+    function castComet(durationMs) {
+      if (reduce()) return;
+      var dur = durationMs || 1800;
+      var ltr = Math.random() < 0.5;
+      var startY = (5 + Math.random() * 22).toFixed(1); // top 27% of viewport
+      var size = 34 + Math.floor(Math.random() * 10);
+      var startLeft = ltr ? -size - 8 : window.innerWidth + size + 8;
+
+      var c = document.createElement('span');
+      c.className = 'spell-comet';
+      c.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      c.textContent = '☄️';
+      c.style.cssText =
+        'top:' + startY + 'vh;' +
+        'left:' + startLeft + 'px;' +
+        'font-size:' + size + 'px;' +
+        'animation:spell-comet-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + dur + 'ms cubic-bezier(.3,.8,.4,1) forwards;';
+      $layer.appendChild(c);
+      active.bursts++;
+
+      // Scatter sparks from the comet's approximate entry point
+      var sparkX = ltr ? 20 : window.innerWidth - 20;
+      var sparkY = (parseFloat(startY) / 100) * window.innerHeight;
+      for (var i = 0; i < 12; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-firework-spark';
+        var angle = Math.random() * 2 * Math.PI;
+        var dist = 16 + Math.random() * 52;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var sparkDur = 450 + Math.floor(Math.random() * 350);
+        var sDelay = Math.floor(Math.random() * 180);
+        s.style.cssText =
+          'left:' + sparkX + 'px;top:' + sparkY + 'px;' +
+          'background:#fdf2d6;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          'animation:spell-firework-spark-fly ' + sparkDur + 'ms ease-out ' + sDelay + 'ms forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el, t, d) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, t + d + 100);
+        })(s, sparkDur, sDelay);
+      }
+
+      setTimeout(function () {
+        if (c && c.parentNode) c.parentNode.removeChild(c);
+        active.bursts = Math.max(0, active.bursts - 1);
+      }, dur + 100);
+    }
+
+    // ─── jellyfish (companion) ────────────────────────────────────
+    // Drifts at a random mid-screen height with a slow vertical pulse.
+    // The RTL pulse keyframe preserves the scaleX(-1) flip.
+    function castJellyfish(durationMs) {
+      if (active.byId.jellyfish) {
+        var prevJ = active.byId.jellyfish;
+        if (prevJ && prevJ.parentNode) prevJ.parentNode.removeChild(prevJ);
+      }
+      var j = document.createElement('button');
+      j.className = 'spell-jellyfish';
+      j.type = 'button';
+      j.setAttribute('aria-label', 'A drifting jellyfish. Click to release it.');
+      j.title = 'click to release the jellyfish';
+      j.textContent = '🪼';
+      var ltr = Math.random() < 0.5;
+      j.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 55000;
+      var heightPct = (28 + Math.random() * 32).toFixed(1); // 28–60% from bottom
+      var driftSeconds = Math.max(14, Math.min(42, window.innerWidth / 55));
+      j.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-jelly-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + driftSeconds + 's linear infinite,' +
+        'spell-jelly-pulse' + (ltr ? '' : '-rtl') + ' 3.8s ease-in-out infinite;';
+      j.addEventListener('click', function () {
+        if (j.parentNode) j.parentNode.removeChild(j);
+        active.byId.jellyfish = null;
+      });
+      $layer.appendChild(j);
+      active.byId.jellyfish = j;
+      setTimeout(function () {
+        if (j && j.parentNode) j.parentNode.removeChild(j);
+        if (active.byId.jellyfish === j) active.byId.jellyfish = null;
+      }, dur);
+    }
+
+    // ─── dusk (ambient) ───────────────────────────────────────────
+    // Warm amber gradient that pools at the bottom of the viewport,
+    // fading in slowly — like golden-hour light flooding a room.
+    function castDusk() {
+      if (active.byId.dusk) return;
+      var d = document.createElement('button');
+      d.className = 'spell-dusk';
+      d.type = 'button';
+      d.setAttribute('aria-label', 'Golden hour wash. Click to clear.');
+      d.title = 'click to clear the dusk';
+      d.addEventListener('click', function () {
+        if (d.parentNode) d.parentNode.removeChild(d);
+        active.byId.dusk = null;
+      });
+      $layer.appendChild(d);
+      active.byId.dusk = d;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1363,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'comet':        castComet(1800); break;
+        case 'jellyfish':    castJellyfish(55000); break;
+        case 'dusk':         castDusk(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2659,89 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── comet (burst) ─────────────────────────────────────────── */
+  .spell-comet {
+    position: absolute;
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+    line-height: 1;
+  }
+  @keyframes spell-comet-fly-ltr {
+    0%   { transform: translate(0, 0) rotate(135deg); opacity: 0; }
+    7%   { opacity: 1; }
+    93%  { opacity: 1; }
+    100% { transform: translate(calc(100vw + 96px), 28vh) rotate(135deg); opacity: 0; }
+  }
+  @keyframes spell-comet-fly-rtl {
+    0%   { transform: translate(0, 0) rotate(-135deg) scaleX(-1); opacity: 0; }
+    7%   { opacity: 1; }
+    93%  { opacity: 1; }
+    100% { transform: translate(calc(-100vw - 96px), 28vh) rotate(-135deg) scaleX(-1); opacity: 0; }
+  }
+
+  /* ─── jellyfish (companion) ─────────────────────────────────── */
+  .spell-jellyfish {
+    position: fixed;
+    left: 0;
+    font-size: 28px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 32;
+    line-height: 1;
+    opacity: 0.88;
+  }
+  @keyframes spell-jelly-drift-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 8px); }
+  }
+  @keyframes spell-jelly-drift-rtl {
+    0%   { left: calc(100vw + 8px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-jelly-pulse {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%       { transform: translateY(-14px) scale(1.07); }
+  }
+  @keyframes spell-jelly-pulse-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) scale(1); }
+    50%       { transform: scaleX(-1) translateY(-14px) scale(1.07); }
+  }
+
+  /* ─── dusk (ambient) ────────────────────────────────────────── */
+  .spell-dusk {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48vh;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(210, 115, 38, 0.06) 30%,
+      rgba(210, 95, 28, 0.16) 62%,
+      rgba(195, 78, 18, 0.26) 100%
+    );
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    animation: spell-dusk-in 4s ease-out forwards;
+  }
+  @keyframes spell-dusk-in {
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-comet { display: none; }
+    .spell-jellyfish { animation: none !important; left: 50% !important; bottom: 40vh !important; }
+    .spell-dusk { animation: none !important; opacity: 0.7; }
   }
 </style>
