@@ -114,12 +114,48 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
           <p class="inv-grab__text" id="inv-grab-list">Pick a mode or add gear to see what to grab.</p>
         </div>
         <div class="inv-grab__actions">
+          <button type="button" class="inv-mini-btn mono" id="inv-pack-trip">PACK MODE</button>
           <button type="button" class="inv-mini-btn mono" id="inv-pack-critical">PACK CRITICAL</button>
           <button type="button" class="inv-mini-btn mono" id="inv-unpack-all">UNPACK</button>
           <button type="button" class="inv-mini-btn mono" id="inv-copy-list">COPY LIST</button>
+          <button type="button" class="inv-mini-btn mono" id="inv-copy-missing">COPY MISSING</button>
         </div>
       </div>
       <p class="inv-tool-notice mono" id="inv-tool-notice" hidden role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="inv-page__local" aria-label="Home base utility">
+      <div class="inv-section-head">
+        <p class="inv-page__eyebrow mono">HOME BASE</p>
+        <span class="inv-section-head__meta mono" id="inv-local-meta">local utility</span>
+      </div>
+      <div class="inv-local-grid">
+        <article class="inv-local-card">
+          <p class="inv-local-card__k mono">AT HOME</p>
+          <p class="inv-local-card__n" id="inv-local-home">0</p>
+          <p class="inv-local-card__d">ready but not packed</p>
+        </article>
+        <article class="inv-local-card">
+          <p class="inv-local-card__k mono">PACKED</p>
+          <p class="inv-local-card__n" id="inv-local-packed">0</p>
+          <p class="inv-local-card__d">currently marked out</p>
+        </article>
+        <article class="inv-local-card">
+          <p class="inv-local-card__k mono">ACTION</p>
+          <p class="inv-local-card__n" id="inv-local-action">0</p>
+          <p class="inv-local-card__d">check, repair, or lent</p>
+        </article>
+        <article class="inv-local-map">
+          <p class="inv-local-map__h mono">WHERE TO LOOK FIRST</p>
+          <div class="inv-local-map__list" id="inv-location-list">
+            <p class="inv-empty">Add item locations to build a local map.</p>
+          </div>
+        </article>
+      </div>
+      <label class="inv-field inv-field--note">
+        <span class="inv-field__label mono">LOCAL NOTE</span>
+        <textarea class="inv-input inv-note" id="inv-local-note" rows="3" maxlength="260" placeholder="door code, trailhead, errand route, or the one thing you will forget"></textarea>
+      </label>
     </section>
 
     <section class="inv-page__add" aria-label="Add an item">
@@ -315,7 +351,7 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
   };
 
   function defaults() { return { $v: VERSION, items: [] }; }
-  function prefDefaults() { return { $v: 1, tripMode: 'city', search: '', filterStatus: 'all' }; }
+  function prefDefaults() { return { $v: 1, tripMode: 'city', search: '', filterStatus: 'all', note: '' }; }
   function loadPrefs() {
     try {
       const raw = localStorage.getItem(PREF_KEY);
@@ -374,6 +410,9 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
   }
   function statusLabel(item) {
     return STATUS_LABELS[item.status] || item.status || 'ready';
+  }
+  function itemName(item) {
+    return (item.brand ? item.brand + ' ' : '') + item.model;
   }
 
   let inv = load();
@@ -473,6 +512,62 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
     const matches = inv.items.filter(item => item.category === category);
     return matches.find(isReady) || matches[0] || null;
   }
+  function itemsForTrip() {
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    const used = new Set();
+    const items = [];
+    for (const category of trip.wants) {
+      const item = bestForCategory(category);
+      if (!item || used.has(item.id)) continue;
+      used.add(item.id);
+      items.push(item);
+    }
+    return items;
+  }
+  function missingForTrip() {
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    return trip.wants.filter(category => !bestForCategory(category)).map(labelCategory);
+  }
+  function packTrip() {
+    let changed = 0;
+    for (const item of itemsForTrip()) {
+      if (item.status === 'packed' || item.status === 'repair' || item.status === 'lent') continue;
+      item.status = 'packed';
+      changed++;
+    }
+    if (changed) {
+      save(inv);
+      render();
+    }
+    showNotice(changed ? 'Packed ' + changed + ' item' + (changed === 1 ? '' : 's') + ' for this mode.' : 'Nothing new to pack for this mode.');
+  }
+  function missingListText() {
+    const trip = TRIPS[prefs.tripMode] || TRIPS.city;
+    const missing = missingForTrip();
+    return [
+      'PointCast missing list: ' + trip.label,
+      missing.length ? missing.map(item => '- ' + item).join('\n') : 'Nothing missing for this mode.',
+    ].join('\n');
+  }
+  function locationKey(item) {
+    if (item.status === 'packed') return 'packed / with you';
+    if (item.status === 'lent') return 'lent out';
+    return item.where || 'unsorted';
+  }
+  function locationSummary() {
+    const byPlace = {};
+    for (const item of inv.items) {
+      const key = locationKey(item);
+      if (!byPlace[key]) byPlace[key] = { place: key, count: 0, critical: 0, check: 0 };
+      byPlace[key].count++;
+      if (item.critical) byPlace[key].critical++;
+      if (!isReady(item)) byPlace[key].check++;
+    }
+    return Object.values(byPlace).sort((a, b) => {
+      if (b.critical !== a.critical) return b.critical - a.critical;
+      return b.count - a.count;
+    }).slice(0, 6);
+  }
   function buildGrabList() {
     const trip = TRIPS[prefs.tripMode] || TRIPS.city;
     const lines = [];
@@ -483,14 +578,12 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
         continue;
       }
       const prefix = isReady(item) ? 'grab' : 'check';
-      const name = (item.brand ? item.brand + ' ' : '') + item.model;
       const place = item.where ? ' @ ' + item.where : '';
-      lines.push(prefix + ': ' + name + place);
+      lines.push(prefix + ': ' + itemName(item) + place);
     }
     const unreadyCritical = inv.items.filter(item => item.critical && !isReady(item));
     for (const item of unreadyCritical) {
-      const name = (item.brand ? item.brand + ' ' : '') + item.model;
-      lines.push('critical check: ' + name);
+      lines.push('critical check: ' + itemName(item));
     }
     return lines;
   }
@@ -576,6 +669,42 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
         : 'Add gear below to make a grab list.';
     }
   }
+  function renderHomeBase() {
+    const home = inv.items.filter(item => isReady(item) && item.status !== 'packed');
+    const packed = inv.items.filter(item => item.status === 'packed');
+    const action = inv.items.filter(item => !isReady(item));
+    const statMap = {
+      'inv-local-home': String(home.length),
+      'inv-local-packed': String(packed.length),
+      'inv-local-action': String(action.length),
+      'inv-local-meta': inv.items.length ? locationSummary().length + ' places tracked' : 'local utility',
+    };
+    Object.entries(statMap).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    });
+
+    const noteEl = document.getElementById('inv-local-note');
+    if (noteEl && noteEl.value !== prefs.note) noteEl.value = prefs.note || '';
+
+    const listEl = document.getElementById('inv-location-list');
+    if (!listEl) return;
+    const places = locationSummary();
+    if (!places.length) {
+      listEl.innerHTML = '<p class="inv-empty">Add item locations to build a local map.</p>';
+      return;
+    }
+    listEl.innerHTML = places.map(place => {
+      const flags = [];
+      if (place.critical) flags.push(place.critical + ' critical');
+      if (place.check) flags.push(place.check + ' check');
+      return '<div class="inv-local-place">'
+        + '<span class="inv-local-place__name">' + escapeHtml(place.place) + '</span>'
+        + '<span class="inv-local-place__count mono">' + place.count + '</span>'
+        + (flags.length ? '<span class="inv-local-place__flags mono">' + escapeHtml(flags.join(' · ')) + '</span>' : '')
+        + '</div>';
+    }).join('');
+  }
 
   function renderGroups() {
     const root = document.getElementById('inv-groups');
@@ -646,6 +775,7 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
     renderStats();
     renderReadiness();
     renderTripDesk();
+    renderHomeBase();
     renderGroups();
   }
 
@@ -717,6 +847,7 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
     showNotice('Rolled: ' + (TRIPS[prefs.tripMode]?.label || 'city wander') + '.');
   });
 
+  document.getElementById('inv-pack-trip')?.addEventListener('click', packTrip);
   document.getElementById('inv-pack-critical')?.addEventListener('click', packCritical);
   document.getElementById('inv-unpack-all')?.addEventListener('click', unpackAll);
   document.getElementById('inv-copy-list')?.addEventListener('click', async () => {
@@ -728,11 +859,26 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
       showNotice('Copy blocked by browser. The grab list is still visible above.');
     }
   });
+  document.getElementById('inv-copy-missing')?.addEventListener('click', async () => {
+    const text = missingListText();
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotice('Missing list copied.');
+    } catch (e) {
+      showNotice('Copy blocked by browser. Missing items are still visible in the grab list.');
+    }
+  });
+  document.getElementById('inv-local-note')?.addEventListener('input', (e) => {
+    prefs.note = e.target.value || '';
+    savePrefs();
+  });
 
   document.getElementById('inv-reset-btn')?.addEventListener('click', () => {
     if (!confirm('Reset all inventory? This wipes pc:inventory:v1 - your /me state and pet are not touched.')) return;
     try { localStorage.removeItem(KEY); } catch (e) {}
+    try { localStorage.removeItem(PREF_KEY); } catch (e) {}
     inv = load();
+    prefs = loadPrefs();
     save(inv);
     render();
   });
@@ -814,6 +960,7 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
   .inv-page__stats,
   .inv-page__readiness,
   .inv-page__quickstarts,
+  .inv-page__local,
   .inv-page__add,
   .inv-page__items {
     margin: 0 0 30px;
@@ -1047,6 +1194,95 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+  }
+
+  .inv-page__local {
+    padding: 18px 20px;
+    background: #eef4fa;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+  }
+  .inv-local-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 150px)) 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .inv-local-card,
+  .inv-local-map {
+    background: #fff;
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+  }
+  .inv-local-card {
+    padding: 12px;
+    min-height: 112px;
+  }
+  .inv-local-card__k,
+  .inv-local-map__h {
+    margin: 0 0 8px;
+    color: var(--color-ink-soft);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .inv-local-card__n {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 34px;
+    line-height: 1;
+    color: var(--color-ink);
+  }
+  .inv-local-card__d {
+    margin: 8px 0 0;
+    color: var(--color-ink-soft);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .inv-local-map {
+    padding: 12px;
+    min-width: 0;
+  }
+  .inv-local-map__list {
+    display: grid;
+    gap: 6px;
+  }
+  .inv-local-place {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 3px 8px;
+    align-items: center;
+    padding: 8px 9px;
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-radius: 2px;
+  }
+  .inv-local-place__name {
+    min-width: 0;
+    color: var(--color-ink);
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .inv-local-place__count {
+    color: var(--color-warm);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+  .inv-local-place__flags {
+    grid-column: 1 / -1;
+    color: var(--color-ink-soft);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .inv-field--note {
+    margin-top: 12px;
+  }
+  .inv-note {
+    min-height: 82px;
+    resize: vertical;
+    line-height: 1.45;
   }
 
   .inv-page__add .inv-page__eyebrow { margin: 0 0 10px; }
@@ -1316,6 +1552,12 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
       justify-content: flex-start;
       max-width: none;
     }
+    .inv-local-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .inv-local-map {
+      grid-column: 1 / -1;
+    }
     .inv-add__row,
     .inv-add__row--gear,
     .inv-add__row--bottom {
@@ -1332,6 +1574,12 @@ const description = 'A local-first real-life inventory for adventuring: gear, lo
     .inv-readiness-grid { grid-template-columns: 1fr; }
     .inv-tool-grid {
       grid-template-columns: 1fr;
+    }
+    .inv-local-grid {
+      grid-template-columns: 1fr;
+    }
+    .inv-local-map {
+      grid-column: auto;
     }
     .inv-row {
       grid-template-columns: 1fr;
