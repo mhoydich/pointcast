@@ -399,6 +399,46 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 14) ────────────────────────────────────────
+  {
+    id: 'petal',
+    label: 'petal',
+    blurb: 'Cherry blossom petals scatter from the top. Pink, spinning, seasonal.',
+    glyph: '🌸',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#c4688a',
+  },
+
+  // ─── COMPANIONS (batch 14) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite glides across the upper screen, tail curling in the breeze.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#d4a437',
+  },
+
+  // ─── AMBIENT (batch 14) ───────────────────────────────────────
+  {
+    id: 'luna',
+    label: 'luna',
+    blurb: 'A crescent moon glows softly in the corner. Good for late nights.',
+    glyph: '🌙',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
+  {
+    id: 'drift',
+    label: 'drift',
+    blurb: 'Translucent shapes float slowly across the viewport. Barely there.',
+    glyph: '〰️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
 ];
 
 /** Lookup helper. */

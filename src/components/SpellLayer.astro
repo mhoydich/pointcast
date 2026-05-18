@@ -1215,6 +1215,136 @@
       }, dur);
     }
 
+    // ─── petal (burst) ──────────────────────────────────────────
+    // Cherry blossom petals fall from the top with a pinkish palette
+    // and an asymmetric border-radius so each one reads as a petal
+    // rather than a rectangle. Like confetti but softer.
+    function castPetal(durationMs) {
+      if (reduce()) return;
+      var palette = ['#f9c4d5', '#f5a0be', '#f27ca6', '#fde8ef', '#e886a8', '#fce4ef'];
+      var count = 22;
+      for (var i = 0; i < count; i++) {
+        var p = document.createElement('span');
+        p.className = 'spell-petal';
+        var w = 8 + Math.floor(Math.random() * 10);
+        var startX = Math.random() * window.innerWidth;
+        var driftX = (Math.random() - 0.5) * 180;
+        var rotStart = Math.floor(Math.random() * 360);
+        var rotEnd = rotStart + 120 + Math.floor(Math.random() * 300);
+        var fallTime = (durationMs || 3000) - Math.floor(Math.random() * 600);
+        p.style.cssText =
+          'left:' + startX + 'px;' +
+          'top:-' + (w + 4) + 'px;' +
+          'width:' + w + 'px;' +
+          'height:' + Math.floor(w * 0.6) + 'px;' +
+          'background:' + palette[Math.floor(Math.random() * palette.length)] + ';' +
+          'transform:rotate(' + rotStart + 'deg);' +
+          'opacity:' + (0.7 + Math.random() * 0.3).toFixed(2) + ';' +
+          'animation:spell-petal-fall ' + fallTime + 'ms cubic-bezier(.28,.48,.58,1) forwards;' +
+          '--spell-petal-drift:' + driftX + 'px;' +
+          '--spell-petal-rot-end:' + rotEnd + 'deg;';
+        $layer.appendChild(p);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, fallTime + 100);
+        })(p);
+      }
+    }
+
+    // ─── kite (companion) ───────────────────────────────────────
+    // Floats across the upper screen (top ~22vh). Two-animation stack:
+    // horizontal walk + gentle vertical dip, same pattern as fish/moth.
+    // The kite naturally faces right so RTL needs scaleX(-1) in its
+    // own keyframe set.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite soaring by. Click to reel it in.');
+      kite.title = 'click to reel the kite in';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.55;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var flySeconds = Math.max(12, Math.min(32, window.innerWidth / 65));
+      kite.style.cssText =
+        'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-kite-dip' + (ltr ? '' : '-rtl') + ' 3.2s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── luna (ambient) ─────────────────────────────────────────
+    // Crescent moon in the top-right corner with a soft purple glow
+    // that pulses on a slow 4s cycle. Like castLantern but nocturnal.
+    function castLuna() {
+      if (active.byId.luna) return;
+      var l = document.createElement('button');
+      l.className = 'spell-luna';
+      l.type = 'button';
+      l.setAttribute('aria-label', 'A crescent moon. Click to dim it.');
+      l.title = 'click to dim the moon';
+      l.textContent = '🌙';
+      l.addEventListener('click', function () {
+        if (l.parentNode) l.parentNode.removeChild(l);
+        active.byId.luna = null;
+      });
+      $layer.appendChild(l);
+      active.byId.luna = l;
+    }
+
+    // ─── drift (ambient) ────────────────────────────────────────
+    // 8 large translucent circles drift slowly across the viewport
+    // at different depths (size / opacity). Barely-there; meditative.
+    // Click the full-viewport dismiss button to clear.
+    function castDrift() {
+      if (active.byId.drift) return;
+      var wrap = document.createElement('button');
+      wrap.className = 'spell-drift';
+      wrap.type = 'button';
+      wrap.setAttribute('aria-label', 'Drifting shapes overlay. Click to clear.');
+      wrap.title = 'click to stop the drift';
+      var html = '';
+      var colors = ['#4A9EFF', '#a78bfa', '#2f8f5f', '#c4952e', '#8a2432', '#b8d4f0', '#d4a437', '#4A9EFF'];
+      for (var i = 0; i < 8; i++) {
+        var size = 80 + Math.floor(Math.random() * 180);
+        var top = Math.floor(Math.random() * 80);
+        var dur = (24 + Math.random() * 20).toFixed(1);
+        var delay = -(Math.random() * 24).toFixed(1);
+        var ltr = Math.random() < 0.5;
+        var op = (0.04 + Math.random() * 0.06).toFixed(3);
+        html += '<span class="spell-drift__orb" style="' +
+          'width:' + size + 'px;height:' + size + 'px;' +
+          'top:' + top + 'vh;' +
+          'background:' + colors[i % colors.length] + ';' +
+          'opacity:' + op + ';' +
+          'animation:spell-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + dur + 's linear ' + delay + 's infinite;' +
+          '"></span>';
+      }
+      wrap.innerHTML = html;
+      wrap.addEventListener('click', function () {
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        active.byId.drift = null;
+      });
+      $layer.appendChild(wrap);
+      active.byId.drift = wrap;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1384,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'petal':        castPetal(3000); break;
+        case 'kite':         castKite(55000); break;
+        case 'luna':         castLuna(); break;
+        case 'drift':        castDrift(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2681,121 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ── petal (burst) ───────────────────────────────────────── */
+  .spell-petal {
+    position: absolute;
+    border-radius: 50% 0 50% 0;
+    pointer-events: none;
+    will-change: transform, top, opacity;
+  }
+  @keyframes spell-petal-fall {
+    0%   { top: -16px; opacity: 1; transform: rotate(0deg) translateX(0); }
+    80%  { opacity: 0.9; }
+    100% {
+      top: 105vh;
+      opacity: 0;
+      transform: rotate(var(--spell-petal-rot-end, 360deg)) translateX(var(--spell-petal-drift, 0px));
+    }
+  }
+
+  /* ── kite (companion) ───────────────────────────────────── */
+  /* Hovers at top: 22vh — upper sky feel, not bottom-bar crowd. */
+  .spell-kite {
+    position: fixed;
+    top: 22vh;
+    left: -48px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.18));
+  }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -48px; }
+    100% { left: calc(100vw + 48px); }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 48px); }
+    100% { left: -48px; }
+  }
+  @keyframes spell-kite-dip {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    40%      { transform: translateY(-14px) rotate(2deg); }
+    75%      { transform: translateY(8px) rotate(-6deg); }
+  }
+  @keyframes spell-kite-dip-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(-4deg); }
+    40%      { transform: scaleX(-1) translateY(-14px) rotate(2deg); }
+    75%      { transform: scaleX(-1) translateY(8px) rotate(-6deg); }
+  }
+
+  /* ── luna (ambient) ─────────────────────────────────────── */
+  .spell-luna {
+    position: fixed;
+    top: 14px;
+    right: 24px;
+    width: 48px;
+    height: 52px;
+    font-size: 34px;
+    line-height: 52px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    text-shadow:
+      0 0 12px rgba(167, 139, 250, 0.7),
+      0 0 28px rgba(167, 139, 250, 0.35),
+      0 0 48px rgba(167, 139, 250, 0.18);
+    animation: spell-luna-glow 4s ease-in-out infinite;
+  }
+  @keyframes spell-luna-glow {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(167,139,250,0.45)); transform: translateY(0); }
+    50%      { filter: drop-shadow(0 0 18px rgba(167,139,250,0.75)); transform: translateY(-4px); }
+  }
+
+  /* ── drift (ambient) ────────────────────────────────────── */
+  .spell-drift {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 28;
+    overflow: hidden;
+  }
+  .spell-drift__orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  @keyframes spell-drift-ltr {
+    0%   { left: -240px; }
+    100% { left: calc(100vw + 240px); }
+  }
+  @keyframes spell-drift-rtl {
+    0%   { left: calc(100vw + 240px); }
+    100% { left: -240px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-petal { display: none; }
+    .spell-kite  { animation: none !important; left: 50% !important; }
+    .spell-luna  { animation: none; filter: none; }
+    .spell-drift__orb { animation: none; }
   }
 </style>
