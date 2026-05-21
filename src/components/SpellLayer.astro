@@ -1215,6 +1215,89 @@
       }, dur);
     }
 
+    // ─── dandelion (burst) ───────────────────────────────────────
+    // 14 seed-dots scatter upward from a random viewport point.
+    // Travel arc spans ~200-340° so all seeds go upward + sideways.
+    function castDandelion(durationMs) {
+      if (reduce()) return;
+      var count = 14;
+      var cx = (15 + Math.random() * 70).toFixed(1);
+      var cy = (30 + Math.random() * 40).toFixed(1);
+      for (var i = 0; i < count; i++) {
+        var d = document.createElement('span');
+        d.className = 'spell-dandelion__seed';
+        var angle = 200 + (i / count) * 140 + (Math.random() - 0.5) * 28;
+        var dist = 60 + Math.random() * 80;
+        var dx = (Math.cos(angle * Math.PI / 180) * dist).toFixed(1);
+        var dy = (Math.sin(angle * Math.PI / 180) * dist).toFixed(1);
+        var dur = (durationMs || 2800) - Math.floor(Math.random() * 400);
+        var delay = Math.floor(i * 55 + Math.random() * 70);
+        d.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          '--spell-dand-dx:' + dx + 'px;' +
+          '--spell-dand-dy:' + dy + 'px;' +
+          'animation-duration:' + dur + 'ms;' +
+          'animation-delay:' + delay + 'ms;';
+        $layer.appendChild(d);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(d);
+      }
+    }
+
+    // ─── kite (companion) ────────────────────────────────────────
+    // Flies across the top 10-30% of the viewport with a lazy bobbing
+    // cycle (translateY + gentle rotation). ltr/rtl flip on each cast.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prevK = active.byId.kite;
+        if (prevK && prevK.parentNode) prevK.parentNode.removeChild(prevK);
+      }
+      var k = document.createElement('button');
+      k.className = 'spell-kite';
+      k.type = 'button';
+      k.setAttribute('aria-label', 'A kite soaring by. Click to let it go.');
+      k.title = 'click to let the kite go';
+      k.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      k.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 45000;
+      var flySeconds = Math.max(10, Math.min(28, window.innerWidth / 72));
+      var topPct = (10 + Math.random() * 20).toFixed(1);
+      k.style.cssText =
+        'top:' + topPct + 'vh;' +
+        'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-kite-bob 2.8s ease-in-out infinite;';
+      k.addEventListener('click', function () {
+        if (k.parentNode) k.parentNode.removeChild(k);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(k);
+      active.byId.kite = k;
+      setTimeout(function () {
+        if (k && k.parentNode) k.parentNode.removeChild(k);
+        if (active.byId.kite === k) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── random (meta-burst) ─────────────────────────────────────
+    // Picks a random real spell id and casts it. The RANDOM_POOL
+    // excludes 'random' itself and the Nouns-IP spells (too visually
+    // heavy for a surprise pick) so results stay consistently delightful.
+    var RANDOM_POOL = [
+      'confetti','firework','shout','wave','bloom','bubble','dice','spark','balloon','dandelion',
+      'cat','pup','penguin','fish','moth','firefly','bee','turtle','ghost','frog','kite',
+      'breath','candle','rain','starfield','snow','chimes','aurora','here','mood','fog','campfire','leaves','lantern',
+    ];
+    function castRandom() {
+      var id = RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)];
+      castSpell(id);
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1337,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'dandelion':    castDandelion(2800); break;
+        case 'kite':         castKite(45000); break;
+        case 'random':       castRandom(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2393,6 +2479,7 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
+    .spell-kite,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2419,7 +2506,8 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2516,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-dandelion__seed { display: none; } /* seeds are motion-only */
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2444,6 +2534,57 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+  }
+
+  /* ─── dandelion (burst) ─────────────────────────────────────── */
+  .spell-dandelion__seed {
+    position: fixed;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #f5f0e8;
+    box-shadow: 0 0 5px rgba(255, 248, 210, 0.85);
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+    animation: spell-dandelion-fly linear forwards;
+    opacity: 0;
+  }
+  @keyframes spell-dandelion-fly {
+    0%   { transform: translate(0, 0) scale(0.3); opacity: 0; }
+    7%   { transform: translate(calc(var(--spell-dand-dx) * 0.07), calc(var(--spell-dand-dy) * 0.07)) scale(1); opacity: 1; }
+    80%  { opacity: 0.85; }
+    100% { transform: translate(var(--spell-dand-dx), var(--spell-dand-dy)) scale(0.5); opacity: 0; }
+  }
+
+  /* ─── kite (companion) ──────────────────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    left: 0;
+    font-size: 30px;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    will-change: left, transform;
+  }
+  .spell-kite[data-dir="rtl"] { transform: scaleX(-1); }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -48px; }
+    100% { left: calc(100vw + 12px); }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 12px); }
+    100% { left: -48px; }
+  }
+  @keyframes spell-kite-bob {
+    0%   { transform: translateY(0) rotate(-6deg); }
+    30%  { transform: translateY(-16px) rotate(5deg); }
+    65%  { transform: translateY(10px) rotate(-4deg); }
+    100% { transform: translateY(0) rotate(-6deg); }
   }
 
   /* ─── nouns: noun (companion) ───────────────────────────────── */
