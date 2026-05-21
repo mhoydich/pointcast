@@ -439,6 +439,47 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#b8d4f0',
   },
+
+  // ─── BURSTS (batch 15) ─────────────────────────────────────────
+  {
+    id: 'sprout',
+    label: 'sprout',
+    blurb: 'Tiny seedlings pop up from the ground. Spring, fast-forwarded.',
+    glyph: '🌱',
+    kind: 'burst',
+    durationMs: 2500,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'Five bright comets streak diagonally across the screen.',
+    glyph: '☄️',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 15) ─────────────────────────────────────
+  {
+    id: 'duck',
+    label: 'duck',
+    blurb: 'A duck waddles across the bottom. Unbothered. Good energy.',
+    glyph: '🦆',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (batch 15) ────────────────────────────────────────
+  {
+    id: 'sunrise',
+    label: 'sunrise',
+    blurb: 'A warm glow rises from the bottom edge. Something good is coming.',
+    glyph: '🌅',
+    kind: 'ambient',
+    accent: '#d4a437',
+  },
 ];
 
 /** Lookup helper. */

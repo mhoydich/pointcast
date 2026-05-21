@@ -1345,6 +1345,110 @@
       active.byId.drift = wrap;
     }
 
+    // ─── duck (companion) ───────────────────────────────────────
+    function castDuck(durationMs) {
+      if (active.byId.duck) {
+        var prev = active.byId.duck;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var duck = document.createElement('button');
+      duck.className = 'spell-duck';
+      duck.type = 'button';
+      duck.setAttribute('aria-label', 'A waddling duck. Click to send away.');
+      duck.title = 'click to send the duck home';
+      duck.textContent = '🦆';
+      var ltr = Math.random() < 0.5;
+      duck.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 50000);
+      var walkSeconds = Math.max(8, Math.min(28, window.innerWidth / 90));
+      duck.style.cssText =
+        'animation:spell-duck-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-duck-waddle 0.65s ease-in-out infinite;';
+      duck.addEventListener('click', function () {
+        if (duck.parentNode) duck.parentNode.removeChild(duck);
+        active.byId.duck = null;
+      });
+      $layer.appendChild(duck);
+      active.byId.duck = duck;
+      setTimeout(function () {
+        if (duck && duck.parentNode) duck.parentNode.removeChild(duck);
+        if (active.byId.duck === duck) active.byId.duck = null;
+      }, dur);
+    }
+
+    // ─── sprout (burst) ─────────────────────────────────────────
+    function castSprout(durationMs) {
+      if (reduce()) return;
+      var glyphs = ['🌱', '🌿', '🌱', '🌱', '🌿', '☘️', '🌱'];
+      var count = 10 + Math.floor(Math.random() * 5);
+      var dur = durationMs || 2500;
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-sprout';
+        s.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+        var x = 5 + Math.floor(Math.random() * 90);
+        var size = 18 + Math.floor(Math.random() * 16);
+        var delay = Math.floor(Math.random() * 400);
+        var growMs = 380 + Math.floor(Math.random() * 280);
+        s.style.cssText =
+          'left:' + x + 'vw;' +
+          'font-size:' + size + 'px;' +
+          'animation:spell-sprout-pop ' + growMs + 'ms cubic-bezier(.34,1.56,.64,1) ' + delay + 'ms both,' +
+          'spell-sprout-fade ' + Math.max(200, dur - delay - growMs - 100) + 'ms ease-in ' + (delay + growMs) + 'ms forwards;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(s);
+      }
+    }
+
+    // ─── comet (burst) ──────────────────────────────────────────
+    function castComet(durationMs) {
+      if (reduce()) return;
+      var dur = durationMs || 3000;
+      var count = 5;
+      for (var i = 0; i < count; i++) {
+        var c = document.createElement('span');
+        c.className = 'spell-comet';
+        var startY = 5 + Math.floor(Math.random() * 45);
+        var length = 90 + Math.floor(Math.random() * 80);
+        var travelMs = 700 + Math.floor(Math.random() * 500);
+        var delay = i * 260 + Math.floor(Math.random() * 80);
+        c.style.cssText =
+          'top:' + startY + 'vh;' +
+          'width:' + length + 'px;' +
+          'animation:spell-comet-streak ' + travelMs + 'ms ease-in ' + delay + 'ms forwards;';
+        $layer.appendChild(c);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 200);
+        })(c);
+      }
+    }
+
+    // ─── sunrise (ambient) ──────────────────────────────────────
+    function castSunrise() {
+      if (active.byId.sunrise) return;
+      var wrap = document.createElement('button');
+      wrap.className = 'spell-sunrise';
+      wrap.type = 'button';
+      wrap.setAttribute('aria-label', 'Sunrise glow from the horizon. Click to let it set.');
+      wrap.title = 'click to let the sun set';
+      wrap.addEventListener('click', function () {
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        active.byId.sunrise = null;
+      });
+      $layer.appendChild(wrap);
+      active.byId.sunrise = wrap;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1388,6 +1492,10 @@
         case 'kite':         castKite(55000); break;
         case 'luna':         castLuna(); break;
         case 'drift':        castDrift(); break;
+        case 'duck':         castDuck(50000); break;
+        case 'sprout':       castSprout(2500); break;
+        case 'comet':        castComet(3000); break;
+        case 'sunrise':      castSunrise(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2792,10 +2900,116 @@
     100% { left: -240px; }
   }
 
+  /* ── duck (companion) ───────────────────────────────────── */
+  .spell-duck {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  }
+  .spell-duck[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-duck-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-duck-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-duck-waddle {
+    0%, 100% { transform: rotate(-5deg); }
+    50%      { transform: rotate(5deg); }
+  }
+  .spell-duck[data-dir='rtl'] {
+    animation-name: spell-duck-walk-rtl, spell-duck-waddle-rtl !important;
+  }
+  @keyframes spell-duck-waddle-rtl {
+    0%, 100% { transform: scaleX(-1) rotate(-5deg); }
+    50%      { transform: scaleX(-1) rotate(5deg); }
+  }
+
+  /* ── sprout (burst) ─────────────────────────────────────── */
+  .spell-sprout {
+    position: absolute;
+    bottom: 56px;
+    pointer-events: none;
+    line-height: 1;
+    opacity: 0;
+    transform: translateY(20px) scale(0);
+  }
+  @keyframes spell-sprout-pop {
+    0%   { transform: translateY(20px) scale(0); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes spell-sprout-fade {
+    0%   { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  }
+
+  /* ── comet (burst) ──────────────────────────────────────── */
+  .spell-comet {
+    position: absolute;
+    left: -180px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, rgba(253, 242, 214, 0.55) 50%, #fffbe8 100%);
+    border-radius: 2px;
+    pointer-events: none;
+    opacity: 0;
+    transform: rotate(-35deg);
+    transform-origin: right center;
+  }
+  @keyframes spell-comet-streak {
+    0%   { left: -180px; opacity: 0; }
+    6%   { opacity: 1; }
+    80%  { opacity: 0.85; }
+    100% { left: calc(100vw + 180px); opacity: 0; }
+  }
+
+  /* ── sunrise (ambient) ──────────────────────────────────── */
+  .spell-sunrise {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 45vh;
+    background: radial-gradient(
+      ellipse 90% 100% at 50% 100%,
+      rgba(255, 175, 50, 0.28) 0%,
+      rgba(255, 120, 50, 0.14) 40%,
+      transparent 70%
+    );
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 29;
+    animation: spell-sunrise-pulse 6s ease-in-out infinite;
+  }
+  @keyframes spell-sunrise-pulse {
+    0%, 100% { opacity: 0.75; }
+    50%      { opacity: 1; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .spell-petal { display: none; }
-    .spell-kite  { animation: none !important; left: 50% !important; }
-    .spell-luna  { animation: none; filter: none; }
+    .spell-petal  { display: none; }
+    .spell-kite   { animation: none !important; left: 50% !important; }
+    .spell-luna   { animation: none; filter: none; }
     .spell-drift__orb { animation: none; }
+    .spell-duck   { animation: none !important; left: 50% !important; transform: none !important; }
+    .spell-sprout { display: none; }
+    .spell-comet  { display: none; }
+    .spell-sunrise { animation: none; }
   }
 </style>
