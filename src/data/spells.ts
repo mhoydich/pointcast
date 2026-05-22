@@ -399,6 +399,36 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across the sky lane — highest companion, nearest the clouds.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'cricket',
+    label: 'cricket',
+    blurb: 'A cricket hops across the very bottom. Unhurried, springy arcs.',
+    glyph: '🦗',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'lava',
+    label: 'lava',
+    blurb: 'Warm lava lamp blobs drift up and back. Slow, hypnotic company.',
+    glyph: '🌋',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */
