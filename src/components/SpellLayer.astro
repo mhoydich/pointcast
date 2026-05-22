@@ -1215,6 +1215,120 @@
       }, dur);
     }
 
+    // ─── thunder (burst) ────────────────────────────────────────
+    function castThunder(durationMs) {
+      if (reduce()) return;
+      var cx = window.innerWidth / 2;
+      var cy = window.innerHeight / 2;
+      var count = 7;
+      for (var i = 0; i < count; i++) {
+        var b = document.createElement('span');
+        b.className = 'spell-thunder';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 110 + Math.floor(Math.random() * 90);
+        var tx = (Math.cos(angle) * dist).toFixed(1);
+        var ty = (Math.sin(angle) * dist).toFixed(1);
+        var size = 18 + Math.floor(Math.random() * 16);
+        var dur = (durationMs || 1800) - Math.floor(Math.random() * 300);
+        var delay = Math.floor(Math.random() * 100);
+        b.style.cssText =
+          'left:' + cx + 'px;' +
+          'top:' + cy + 'px;' +
+          'font-size:' + size + 'px;' +
+          '--spell-thunder-tx:' + tx + 'px;' +
+          '--spell-thunder-ty:' + ty + 'px;' +
+          'animation-duration:' + dur + 'ms;' +
+          'animation-delay:' + delay + 'ms;';
+        b.textContent = '⚡';
+        $layer.appendChild(b);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(b);
+      }
+    }
+
+    // ─── kite (companion) ───────────────────────────────────────
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite drifting across the sky. Click to let go.');
+      kite.title = 'click to release the kite';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 55000;
+      var walkSeconds = Math.max(12, Math.min(36, window.innerWidth / 55));
+      kite.style.cssText =
+        'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-kite-bob 3.4s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── fox (companion) ────────────────────────────────────────
+    function castFox(durationMs) {
+      if (active.byId.fox) {
+        var prev = active.byId.fox;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var fox = document.createElement('button');
+      fox.className = 'spell-fox';
+      fox.type = 'button';
+      fox.setAttribute('aria-label', 'A fox trotting by. Click to shoo it away.');
+      fox.title = 'click to shoo the fox';
+      fox.textContent = '🦊';
+      var ltr = Math.random() < 0.5;
+      fox.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 40000;
+      var walkSeconds = Math.max(8, Math.min(24, window.innerWidth / 70));
+      fox.style.cssText =
+        'animation:spell-fox-trot-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-fox-step 0.5s ease-in-out infinite;';
+      fox.addEventListener('click', function () {
+        if (fox.parentNode) fox.parentNode.removeChild(fox);
+        active.byId.fox = null;
+      });
+      $layer.appendChild(fox);
+      active.byId.fox = fox;
+      setTimeout(function () {
+        if (fox && fox.parentNode) fox.parentNode.removeChild(fox);
+        if (active.byId.fox === fox) active.byId.fox = null;
+      }, dur);
+    }
+
+    // ─── rainbow (ambient) ──────────────────────────────────────
+    function castRainbow() {
+      if (active.byId.rainbow) return;
+      var r = document.createElement('button');
+      r.className = 'spell-rainbow';
+      r.type = 'button';
+      r.setAttribute('aria-label', 'A rainbow across the sky. Click to let it fade.');
+      r.title = 'click to let the rainbow fade';
+      r.addEventListener('click', function () {
+        if (r.parentNode) r.parentNode.removeChild(r);
+        active.byId.rainbow = null;
+      });
+      $layer.appendChild(r);
+      active.byId.rainbow = r;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1368,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'thunder':      castThunder(1800); break;
+        case 'kite':         castKite(55000); break;
+        case 'fox':          castFox(40000); break;
+        case 'rainbow':      castRainbow(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2665,127 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 13: thunder (burst) ─────────────────────────────── */
+  .spell-thunder {
+    position: absolute;
+    pointer-events: none;
+    transform-origin: center;
+    will-change: transform, opacity;
+    animation: spell-thunder-bolt linear forwards;
+    line-height: 1;
+  }
+  @keyframes spell-thunder-bolt {
+    0%  { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+    25% { transform: translate(calc(-50% + var(--spell-thunder-tx) * 0.4), calc(-50% + var(--spell-thunder-ty) * 0.4)) scale(1.2); opacity: 1; }
+    70% { transform: translate(calc(-50% + var(--spell-thunder-tx)), calc(-50% + var(--spell-thunder-ty))) scale(1); opacity: 0.7; }
+    100%{ transform: translate(calc(-50% + var(--spell-thunder-tx) * 1.3), calc(-50% + var(--spell-thunder-ty) * 1.3)) scale(0.5); opacity: 0; }
+  }
+
+  /* ─── batch 13: kite (companion) ────────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    top: 18%;
+    left: -48px;
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 36px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+  }
+  .spell-kite[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -48px; }
+    100% { left: calc(100vw + 48px); }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 48px); }
+    100% { left: -48px; }
+  }
+  @keyframes spell-kite-bob {
+    0%, 100% { top: 18%; }
+    50%       { top: 25%; }
+  }
+
+  /* ─── batch 13: fox (companion) ─────────────────────────────── */
+  .spell-fox {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 32px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  }
+  .spell-fox[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-fox-trot-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-fox-trot-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-fox-step {
+    0%, 100% { bottom: 56px; }
+    25%, 75%  { bottom: 60px; }
+  }
+
+  /* ─── batch 13: rainbow (ambient) ───────────────────────────── */
+  .spell-rainbow {
+    position: fixed;
+    top: -38vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160vw;
+    height: 110vh;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%,
+      transparent 42%,
+      rgba(180, 0, 220, 0.3) 43.5%,
+      rgba(75, 0, 200, 0.3) 45%,
+      rgba(0, 80, 210, 0.3) 46.5%,
+      rgba(0, 160, 60, 0.3) 48%,
+      rgba(210, 210, 0, 0.3) 49.5%,
+      rgba(255, 145, 0, 0.3) 51%,
+      rgba(220, 30, 30, 0.3) 52.5%,
+      transparent 54%
+    );
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    animation: spell-rainbow-in 1.4s ease-out forwards;
+  }
+  @keyframes spell-rainbow-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-kite,
+    .spell-fox { animation: none; left: 50%; }
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-fox[data-dir='rtl']  { transform: translateX(-50%) scaleX(-1); }
+    .spell-rainbow { animation: none; }
   }
 </style>

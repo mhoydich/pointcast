@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'thunder',
+    label: 'thunder',
+    blurb: 'Lightning bolts crack outward from center. Quick, sharp, electric.',
+    glyph: '⚡',
+    kind: 'burst',
+    durationMs: 1800,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across the upper sky, tail streaming behind.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'fox',
+    label: 'fox',
+    blurb: 'A fox trots across the bottom. Sly, quick, unbothered.',
+    glyph: '🦊',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'rainbow',
+    label: 'rainbow',
+    blurb: 'A soft rainbow arc appears at the top of the viewport. Lingers.',
+    glyph: '🌈',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */
