@@ -1215,6 +1215,140 @@
       }, dur);
     }
 
+    // ─── paper (burst) ──────────────────────────────────────────
+    // 8 planes fan from screen center — each rotates to face its
+    // direction of travel, then translates along that axis (rotate
+    // first, then translate(dist, 0) moves in the rotated frame).
+    function castPaper(durationMs) {
+      if (reduce()) return;
+      var count = 8;
+      var cx = window.innerWidth / 2 - 11;
+      var cy = window.innerHeight / 2 - 11;
+      for (var i = 0; i < count; i++) {
+        var angleDeg = i * (360 / count);
+        var dist = 155 + Math.floor(Math.random() * 90);
+        var flyDuration = (durationMs || 3000) - Math.floor(Math.random() * 400);
+        var d = document.createElement('span');
+        d.className = 'spell-paper';
+        d.textContent = '✈️';
+        d.style.cssText =
+          'left:' + cx + 'px;' +
+          'top:' + cy + 'px;' +
+          '--spell-paper-rot:' + angleDeg + 'deg;' +
+          '--spell-paper-dist:' + dist + 'px;' +
+          'animation:spell-paper-fly ' + flyDuration + 'ms cubic-bezier(.15,.65,.4,1) forwards;';
+        $layer.appendChild(d);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, flyDuration + 150);
+        })(d);
+      }
+    }
+
+    // ─── snail (companion) ───────────────────────────────────────
+    // ~8px/s — even more patient than turtle (~28px/s). A gentle
+    // vertical glide keeps it alive-feeling despite the slow pace.
+    function castSnail(durationMs) {
+      if (active.byId.snail) {
+        var prevS = active.byId.snail;
+        if (prevS && prevS.parentNode) prevS.parentNode.removeChild(prevS);
+      }
+      var sn = document.createElement('button');
+      sn.className = 'spell-snail';
+      sn.type = 'button';
+      sn.setAttribute('aria-label', 'A snail — the most patient companion. Click to let it go.');
+      sn.title = 'click to let the snail go';
+      sn.textContent = '🐌';
+      var ltr = Math.random() < 0.5;
+      sn.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 120000;
+      var walkSeconds = Math.max(40, Math.min(140, window.innerWidth / 8));
+      sn.style.cssText =
+        'animation:spell-snail-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-snail-glide' + (ltr ? '' : '-rtl') + ' 4.5s ease-in-out infinite;';
+      sn.addEventListener('click', function () {
+        if (sn.parentNode) sn.parentNode.removeChild(sn);
+        active.byId.snail = null;
+      });
+      $layer.appendChild(sn);
+      active.byId.snail = sn;
+      setTimeout(function () {
+        if (sn && sn.parentNode) sn.parentNode.removeChild(sn);
+        if (active.byId.snail === sn) active.byId.snail = null;
+      }, dur);
+    }
+
+    // ─── clock (ambient) ────────────────────────────────────────
+    // Live HH:MM:SS in the top-right corner. Clock-face emoji
+    // tracks the current hour (🕐–🕛). Click anywhere to dismiss.
+    // Interval stored outside active.byId to survive clearAll's
+    // nullification pass before we can call clearInterval.
+    function castClock() {
+      if (active.byId.clock) return;
+      var c = document.createElement('div');
+      c.className = 'spell-clock';
+      c.setAttribute('role', 'button');
+      c.setAttribute('aria-label', 'Live clock. Click to dismiss.');
+      c.tabIndex = 0;
+      var $face = document.createElement('span');
+      $face.className = 'spell-clock__face';
+      var $time = document.createElement('time');
+      $time.className = 'spell-clock__time';
+      c.appendChild($face);
+      c.appendChild($time);
+      var faces = ['🕛','🕐','🕑','🕒','🕓','🕔','🕕','🕖','🕗','🕘','🕙','🕚'];
+      function tick() {
+        if (!active.byId.clock) return;
+        var now = new Date();
+        var h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+        $face.textContent = faces[h % 12];
+        $time.textContent =
+          (h < 10 ? '0' : '') + h + ':' +
+          (m < 10 ? '0' : '') + m + ':' +
+          (s < 10 ? '0' : '') + s;
+      }
+      tick();
+      active.clockIntervalId = setInterval(tick, 1000);
+      function dismissClock() {
+        clearInterval(active.clockIntervalId);
+        active.clockIntervalId = 0;
+        if (c.parentNode) c.parentNode.removeChild(c);
+        active.byId.clock = null;
+      }
+      c.addEventListener('click', dismissClock);
+      c.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismissClock(); }
+      });
+      $layer.appendChild(c);
+      active.byId.clock = c;
+    }
+
+    // ─── comet (ambient) ────────────────────────────────────────
+    // CSS does all the work — 20s arc across the upper viewport,
+    // loops infinitely. Gold glow via drop-shadow filter.
+    function castComet() {
+      if (active.byId.comet) return;
+      var c = document.createElement('div');
+      c.className = 'spell-comet';
+      c.setAttribute('role', 'button');
+      c.setAttribute('aria-label', 'A comet arcing by. Click to let it pass.');
+      c.tabIndex = 0;
+      c.textContent = '☄️';
+      function dismissComet() {
+        if (c.parentNode) c.parentNode.removeChild(c);
+        active.byId.comet = null;
+      }
+      c.addEventListener('click', dismissComet);
+      c.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismissComet(); }
+      });
+      $layer.appendChild(c);
+      active.byId.comet = c;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1388,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'paper':  castPaper(3000); break;
+        case 'snail':  castSnail(120000); break;
+        case 'clock':  castClock(); break;
+        case 'comet':  castComet(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -1269,6 +1407,7 @@
         active.byId[k] = null;
       });
       if (active.byId.breathTimer) { clearTimeout(active.byId.breathTimer); active.byId.breathTimer = 0; }
+      if (active.clockIntervalId) { clearInterval(active.clockIntervalId); active.clockIntervalId = 0; }
     }
 
     window.addEventListener('pc:spell:cast', function (e) {
@@ -2547,5 +2686,126 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ── paper (burst) ───────────────────────────────────────────── */
+  /* Rotate sets the heading; translate(dist, 0) flies along that axis. */
+  .spell-paper {
+    position: absolute;
+    font-size: 22px;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-paper-fly {
+    0%   { opacity: 0.95; transform: rotate(var(--spell-paper-rot)) translate(0, 0) scale(1.1); }
+    70%  { opacity: 0.75; }
+    100% { opacity: 0; transform: rotate(var(--spell-paper-rot)) translate(var(--spell-paper-dist), 0) scale(0.3); }
+  }
+
+  /* ── snail (companion) ───────────────────────────────────────── */
+  /* ~8px/s traversal — sits 68px from bottom to avoid exact turtle overlap. */
+  .spell-snail {
+    position: fixed;
+    bottom: 68px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 26px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 4px rgba(47, 143, 95, 0.45));
+  }
+  @keyframes spell-snail-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-snail-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-snail-glide {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
+  }
+  @keyframes spell-snail-glide-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-2px); }
+  }
+
+  /* ── clock (ambient) ─────────────────────────────────────────── */
+  /* Top-right corner — distinct from candle (bottom-right) and campfire (bottom-left). */
+  .spell-clock {
+    position: fixed;
+    top: 20px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 8px 10px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1.5px solid #c4c2bc;
+    border-radius: 4px;
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
+    z-index: 31;
+    backdrop-filter: blur(8px);
+    animation: spell-clock-in 0.3s ease-out;
+  }
+  .spell-clock:hover { border-color: #5F5E5A; }
+  .spell-clock__face {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .spell-clock__time {
+    font-family: var(--pc-font-mono, monospace);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: #12110e;
+    min-width: 60px;
+  }
+  @keyframes spell-clock-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ── comet (ambient) ─────────────────────────────────────────── */
+  /* 20s arc across the upper viewport, dipping to 7% at midpoint. */
+  .spell-comet {
+    position: fixed;
+    left: -80px;
+    top: 14%;
+    font-size: 30px;
+    line-height: 1;
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 0 10px rgba(212, 164, 55, 0.9)) drop-shadow(0 0 22px rgba(212, 164, 55, 0.5));
+    animation: spell-comet-arc 20s cubic-bezier(.1, 0, .9, 1) infinite;
+  }
+  @keyframes spell-comet-arc {
+    0%   { left: -80px;              top: 14%; opacity: 0; }
+    6%   {                                     opacity: 1; }
+    50%  {                           top: 7%;              }
+    94%  {                                     opacity: 1; }
+    100% { left: calc(100vw + 80px); top: 14%; opacity: 0; }
+  }
+
+  /* ── reduced-motion (batch 14) ───────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .spell-snail { animation: none; left: 50%; transform: translateX(-50%); }
+    .spell-snail[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-clock { animation: none; }
+    .spell-comet { animation: none; left: 50%; top: 8%; transform: translateX(-50%); }
   }
 </style>

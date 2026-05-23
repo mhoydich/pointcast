@@ -399,6 +399,46 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 14) ────────────────────────────────────────
+  {
+    id: 'paper',
+    label: 'paper',
+    blurb: 'Paper planes fan outward from center, each on its own graceful arc.',
+    glyph: '✈️',
+    kind: 'burst',
+    durationMs: 3000,
+    accent: '#4A9EFF',
+  },
+
+  // ─── COMPANIONS (batch 14) ────────────────────────────────────
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The most patient companion. Even slower than turtle. Takes its time.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 14) ───────────────────────────────────────
+  {
+    id: 'clock',
+    label: 'clock',
+    blurb: 'A small live clock ticks in the corner. Quiet, present, functional.',
+    glyph: '🕐',
+    kind: 'ambient',
+    accent: '#5F5E5A',
+  },
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'A comet arcs slowly across the upper sky, trailing gold. Loops until dismissed.',
+    glyph: '☄️',
+    kind: 'ambient',
+    accent: '#d4a437',
+  },
 ];
 
 /** Lookup helper. */
