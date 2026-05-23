@@ -1,0 +1,272 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SPELLS } from '../data/spells';
+
+const title = 'Spellbook';
+const description =
+  'Every PointCast dock spell in one place. ' +
+  SPELLS.length +
+  ' spells — bursts, companions, and ambients. Click Cast to try any of them.';
+
+const byKind = {
+  burst:     SPELLS.filter((s) => s.kind === 'burst'),
+  companion: SPELLS.filter((s) => s.kind === 'companion'),
+  ambient:   SPELLS.filter((s) => s.kind === 'ambient'),
+};
+
+const kindMeta = {
+  burst:     { label: 'Bursts',     desc: 'One-shot — fires and fades.' },
+  companion: { label: 'Companions', desc: 'Walks across the screen, exits on its own. Click to dismiss early.' },
+  ambient:   { label: 'Ambient',    desc: 'Persists until you cast again or tap clear.' },
+} as const;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/spellbook',
+  name: 'PointCast Spellbook',
+  description,
+  url: 'https://pointcast.xyz/spellbook',
+  hasPart: SPELLS.map((s) => ({
+    '@type': 'Action',
+    name: s.label,
+    description: s.blurb,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="sb-page">
+    <nav class="sb-crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>spellbook</span>
+    </nav>
+
+    <header class="sb-head">
+      <p class="sb-kicker">Dock · slot 06 CAST</p>
+      <h1 class="sb-title">The Spellbook.</h1>
+      <p class="sb-dek">
+        {SPELLS.length} spells, all of them here. Type <code>+spellname</code> in the omnibox,
+        or hit <strong>Cast</strong> to try any from this page.
+        Ambient spells stack — clear them with the tray.
+      </p>
+    </header>
+
+    {(['burst', 'companion', 'ambient'] as const).map((kind) => {
+      const spells = byKind[kind];
+      const meta   = kindMeta[kind];
+      return (
+        <section class={`sb-section sb-section--${kind}`} aria-labelledby={`sb-kind-${kind}`}>
+          <div class="sb-section__head">
+            <h2 id={`sb-kind-${kind}`} class="sb-section__title">{meta.label}</h2>
+            <p class="sb-section__desc">{meta.desc}</p>
+          </div>
+          <ol class="sb-list" role="list">
+            {spells.map((spell) => (
+              <li class="sb-row" style={`--accent: ${spell.accent}`}>
+                <span class="sb-glyph" aria-hidden="true">{spell.glyph}</span>
+                <div class="sb-info">
+                  <span class="sb-id">+{spell.id}</span>
+                  <p class="sb-blurb">{spell.blurb}</p>
+                </div>
+                <button
+                  class="sb-cast-btn"
+                  type="button"
+                  data-spell-id={spell.id}
+                  aria-label={`Cast ${spell.label}`}
+                >
+                  Cast
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
+      );
+    })}
+
+    <footer class="sb-footer">
+      <p>
+        Spells land via <code>pc:spell:cast</code> — type <code>+clear</code> in
+        the omnibox or use the tray's clear button to dismiss everything at once.
+      </p>
+      <a href="/">← Back to PointCast</a>
+    </footer>
+  </main>
+
+  <script>
+    document.querySelectorAll<HTMLButtonElement>('.sb-cast-btn[data-spell-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.spellId;
+        if (id) {
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id } }));
+          btn.classList.add('sb-cast-btn--fired');
+          setTimeout(() => btn.classList.remove('sb-cast-btn--fired'), 800);
+        }
+      });
+    });
+  </script>
+
+  <style>
+    .sb-page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    .sb-crumb {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      font-size: 0.78rem;
+      color: #888;
+      margin-bottom: 2.5rem;
+    }
+    .sb-crumb a { color: inherit; text-decoration: underline; }
+
+    .sb-kicker {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin: 0 0 0.35rem;
+    }
+    .sb-title {
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+      font-weight: 700;
+      margin: 0 0 0.6rem;
+      line-height: 1.1;
+    }
+    .sb-dek {
+      font-size: 0.95rem;
+      color: #555;
+      max-width: 52ch;
+      line-height: 1.6;
+      margin: 0 0 3rem;
+    }
+    .sb-dek code { font-family: 'JetBrains Mono Variable', monospace; font-size: 0.88em; }
+    .sb-dek strong { font-weight: 600; }
+
+    /* ── Kind sections ───────────────────────────────────── */
+    .sb-section { margin-bottom: 3rem; }
+
+    .sb-section__head {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 0.4rem;
+    }
+    .sb-section__title {
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin: 0;
+    }
+    .sb-section__desc {
+      font-size: 0.78rem;
+      color: #999;
+      margin: 0;
+    }
+
+    /* ── Spell rows ──────────────────────────────────────── */
+    .sb-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sb-row {
+      display: grid;
+      grid-template-columns: 2.2rem 1fr auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0.5rem;
+      border-radius: 6px;
+      transition: background 0.12s;
+    }
+    .sb-row:hover { background: #f9f9f9; }
+
+    .sb-glyph {
+      font-size: 1.4rem;
+      text-align: center;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .sb-info { min-width: 0; }
+    .sb-id {
+      display: block;
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 0.1rem;
+    }
+    .sb-blurb {
+      font-size: 0.8rem;
+      color: #777;
+      margin: 0;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Cast button ─────────────────────────────────────── */
+    .sb-cast-btn {
+      padding: 0.3rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border: 1.5px solid var(--accent, #888);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--accent, #333);
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s, transform 0.08s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sb-cast-btn:hover {
+      background: var(--accent, #333);
+      color: #fff;
+    }
+    .sb-cast-btn:active { transform: scale(0.95); }
+    .sb-cast-btn--fired {
+      background: var(--accent, #333);
+      color: #fff;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .sb-footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #eee;
+      font-size: 0.8rem;
+      color: #aaa;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .sb-footer code { font-family: 'JetBrains Mono Variable', monospace; font-size: 0.85em; color: #888; }
+    .sb-footer a { color: #555; text-decoration: underline; }
+
+    /* ── Reduced motion ──────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      .sb-row { transition: none; }
+      .sb-cast-btn { transition: none; }
+    }
+
+    /* ── Mobile tweaks ───────────────────────────────────── */
+    @media (max-width: 480px) {
+      .sb-blurb { display: none; }
+      .sb-row { grid-template-columns: 2rem 1fr auto; gap: 0.5rem; }
+    }
+  </style>
+</BlockLayout>
