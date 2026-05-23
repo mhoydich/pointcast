@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'meteor',
+    label: 'meteor',
+    blurb: 'Three shooting stars streak across the sky. Gone in an instant.',
+    glyph: '🌠',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#b8d4f0',
+  },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts high across the sky — breezy and bright.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'owl',
+    label: 'owl',
+    blurb: 'A wise owl glides past mid-screen. Patient. Unhurried. Knows things.',
+    glyph: '🦉',
+    kind: 'companion',
+    durationMs: 65_000,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'rainbow',
+    label: 'rainbow',
+    blurb: 'A soft arc of color spans the top of the sky. Stays as long as you want.',
+    glyph: '🌈',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */
