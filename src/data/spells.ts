@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 14) ────────────────────────────────────────
+  {
+    id: 'hearts',
+    label: 'hearts',
+    blurb: 'A burst of hearts floats upward from center. Affectionate. Unstoppable.',
+    glyph: '❤️',
+    kind: 'burst',
+    durationMs: 3200,
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 14) ────────────────────────────────────
+  {
+    id: 'crab',
+    label: 'crab',
+    blurb: 'A crab scuttles sideways across the screen. Unhurried. Lateral.',
+    glyph: '🦀',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#d4a437',
+  },
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The slowest companion. A snail creeps across the bottom. No rush. None at all.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 14) ───────────────────────────────────────
+  {
+    id: 'cloud',
+    label: 'cloud',
+    blurb: 'Soft clouds drift across the top of the viewport. Slow, quiet company.',
+    glyph: '☁️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
 ];
 
 /** Lookup helper. */
