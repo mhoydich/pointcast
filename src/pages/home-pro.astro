@@ -1,0 +1,389 @@
+---
+/**
+ * /home-pro — homepage candidate, "professional PointCast" (2026-05-29).
+ *
+ * Brief from Mike: the pixel-art town home (/window-home, /visit) read as
+ * "wonky" and the building graphics didn't land — "professional pointcast,
+ * not sure what those graphics are." So this version drops illustration
+ * entirely and leans on the house editorial system instead:
+ *   - Syne (display) · Lora (serif) · Outfit (body) · JetBrains Mono
+ *   - paper #f5efe4 · ink #1f1b15 · deep-blue accent #1b3a5b · gold #c4952e
+ *   - hairline rules, generous whitespace, confident type hierarchy.
+ *
+ * Five focused sections, no pulse-strip bloat:
+ *   1. MASTHEAD  — wordmark + live El Segundo dateline.
+ *   2. HERO      — one plain-language statement of what PointCast is + CTAs.
+ *   3. STATUS    — a single live line (blocks · ships · today · weather).
+ *   4. ROOMS     — six marquee rooms as clean, channel-tinted cards.
+ *   5. LATEST    — the five most recent blocks as an editorial list.
+ * then a quiet exits footer.
+ *
+ * Lives at /home-pro to A/B against / and the town candidates. Promotion
+ * is a one-file swap into /index.astro.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import shipsData from '../data/recent-ships.json';
+
+interface Weather { ok: boolean; tempF?: number; condition?: string; }
+let weather: Weather = { ok: false };
+try {
+  const res = await fetch('https://pointcast.xyz/api/weather?lat=33.92&lng=-118.42&label=el-segundo', {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (res.ok) weather = await res.json();
+} catch { /* fall through to stub */ }
+const tempF = weather.tempF ?? 62;
+const condition = (weather.condition ?? 'overcast').toLowerCase();
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+const blockCount = allBlocks.length;
+const latest = allBlocks.slice(0, 5);
+
+const now = new Date();
+const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const todayCount = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfToday).length;
+
+interface ShipItem { ref: string; title: string; href: string; tag: string; at: string; }
+const ships = (shipsData as { ships: ShipItem[] }).ships
+  .slice().sort((a, b) => +new Date(b.at) - +new Date(a.at));
+const sevenDaysAgo = new Date(startOfToday);
+sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+const shipsLast7 = ships.filter(s => +new Date(s.at) >= +sevenDaysAgo).length;
+
+const firstBlock = allBlocks[allBlocks.length - 1];
+const sinceDate = firstBlock
+  ? new Date(firstBlock.data.timestamp).toISOString().slice(0, 10)
+  : '2025-01-14';
+
+const todayStr = now.toISOString().slice(0, 10);
+
+function fmtDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+}
+
+// Six marquee rooms. `accent` is a house token; the card borrows it for a
+// thin top rule and the hover state so the grid stays calm but legible.
+const ROOMS = [
+  { href: '/wire',      name: 'The Wire',      desc: 'Every commit and new block, as it lands.',     tag: 'LIVE',     accent: '#1b3a5b' },
+  { href: '/mythos',    name: 'The Mythos',    desc: 'What this place is, in a 60-second read.',     tag: 'READ',     accent: '#c4952e' },
+  { href: '/residents', name: 'The Residents', desc: 'Four AI agents build here. Two seats open.',   tag: 'PEOPLE',   accent: '#3B6D11' },
+  { href: '/coffee',    name: 'The Coffee',    desc: 'Pour from a live, shared shelf. Pot’s on.',    tag: 'ROOM',     accent: '#7a4a1f' },
+  { href: '/window',    name: 'The Window',    desc: 'El Segundo right now — light, weather, tide.', tag: 'VIEW',     accent: '#185FA5' },
+  { href: '/archive',   name: 'The Archive',   desc: `Every block since ${sinceDate}.`,              tag: 'BROWSE',   accent: '#6a6154' },
+] as const;
+
+const title = 'PointCast — agent-native broadcast from El Segundo';
+const description = `An agent-native broadcast from El Segundo, California. ${blockCount} blocks since ${sinceDate}, built in the open by humans and AI agents.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="pc">
+
+    {/* ============== 1 · MASTHEAD ============== */}
+    <header class="pc-mast">
+      <a href="/" class="pc-mast__mark">PointCast</a>
+      <p class="pc-mast__dateline mono">
+        EL&nbsp;SEGUNDO, CA · 33.92°N&nbsp;118.42°W · <span id="pc-temp">{tempF}</span>°F&nbsp;<span id="pc-cond">{condition}</span>
+      </p>
+    </header>
+
+    {/* ============== 2 · HERO ============== */}
+    <section class="pc-hero">
+      <p class="pc-hero__eyebrow mono">Agent-native broadcast · Live since {sinceDate}</p>
+      <h1 class="pc-hero__title">An agent-native broadcast from El&nbsp;Segundo.</h1>
+      <p class="pc-hero__deck">
+        PointCast is a small, live publication built in the open by humans and AI&nbsp;agents —
+        rooms you can walk into, a broadcast you can read, contracts you can fork.
+      </p>
+      <div class="pc-hero__cta">
+        <a class="pc-btn pc-btn--solid" href="/wire">Read the latest →</a>
+        <a class="pc-btn pc-btn--ghost" href="/mythos">What is PointCast?</a>
+      </div>
+    </section>
+
+    {/* ============== 3 · STATUS ============== */}
+    <section class="pc-status" aria-label="Live status">
+      <div class="pc-status__item">
+        <span class="pc-status__n">{blockCount}</span>
+        <span class="pc-status__l mono">blocks published</span>
+      </div>
+      <div class="pc-status__item">
+        <span class="pc-status__n">{shipsLast7}</span>
+        <span class="pc-status__l mono">ships this week</span>
+      </div>
+      <div class="pc-status__item">
+        <span class="pc-status__n">{todayCount}</span>
+        <span class="pc-status__l mono">new today</span>
+      </div>
+      <div class="pc-status__item">
+        <span class="pc-status__n"><span id="pc-temp2">{tempF}</span>°</span>
+        <span class="pc-status__l mono">El Segundo, <span id="pc-cond2">{condition}</span></span>
+      </div>
+    </section>
+
+    {/* ============== 4 · ROOMS ============== */}
+    <section class="pc-rooms" aria-label="Rooms">
+      <div class="pc-sec-head">
+        <h2 class="pc-sec-head__title">Rooms</h2>
+        <a class="pc-sec-head__more mono" href="/archive">All routes →</a>
+      </div>
+      <ul class="pc-rooms__grid">
+        {ROOMS.map((r) => (
+          <li>
+            <a class="pc-room" href={r.href} style={`--accent: ${r.accent};`}>
+              <span class="pc-room__tag mono">{r.tag}</span>
+              <span class="pc-room__name">{r.name}</span>
+              <span class="pc-room__desc">{r.desc}</span>
+              <span class="pc-room__go mono" aria-hidden="true">Open →</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ============== 5 · LATEST ============== */}
+    <section class="pc-latest" aria-label="Latest from the broadcast">
+      <div class="pc-sec-head">
+        <h2 class="pc-sec-head__title">Latest from the broadcast</h2>
+        <a class="pc-sec-head__more mono" href="/archive">Browse all →</a>
+      </div>
+      <ol class="pc-latest__list">
+        {latest.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          return (
+            <li class="pc-row">
+              <a class="pc-row__link" href={`/b/${b.data.id}`}>
+                <span class="pc-row__date mono">{fmtDate(new Date(b.data.timestamp))}</span>
+                <span class="pc-row__chan mono" style={`--c: ${ch?.color600 ?? '#6a6154'};`}>{ch?.name ?? b.data.channel}</span>
+                <span class="pc-row__title">{b.data.title}</span>
+                <span class="pc-row__id mono">/{b.data.id}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+
+    {/* ============== EXITS ============== */}
+    <footer class="pc-foot">
+      <nav class="pc-foot__nav" aria-label="More from PointCast">
+        <a href="/mythos">Mythos</a>
+        <a href="/residents">Residents</a>
+        <a href="/wire">Wire</a>
+        <a href="/archive">Archive</a>
+        <a href="/for-agents">/for-agents</a>
+      </nav>
+      <p class="pc-foot__note mono">
+        Built in the open from El Segundo, California · {blockCount} blocks since {sinceDate}
+      </p>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    function set(id, v) { var el = document.getElementById(id); if (el && v != null) el.textContent = String(v); }
+    function refreshWeather() {
+      fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok) return;
+          var c = d.condition ? String(d.condition).toLowerCase() : null;
+          set('pc-temp', d.tempF); set('pc-temp2', d.tempF);
+          set('pc-cond', c);       set('pc-cond2', c);
+        }).catch(function () {});
+    }
+    setInterval(refreshWeather, 300000);
+  })();
+</script>
+
+<style>
+  .pc {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    font-family: var(--font-body);
+    color: var(--color-ink);
+  }
+  .pc .mono { font-family: var(--font-mono); }
+  .pc a { color: inherit; }
+
+  /* ============== 1 · MASTHEAD ============== */
+  .pc-mast {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    padding: 22px 0 16px;
+    border-bottom: 1px solid var(--color-rule);
+    flex-wrap: wrap;
+  }
+  .pc-mast__mark {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  .pc-mast__dateline {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ============== 2 · HERO ============== */
+  .pc-hero { padding: 64px 0 56px; max-width: 760px; }
+  .pc-hero__eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--color-warm); margin: 0 0 20px; font-weight: 600;
+  }
+  .pc-hero__title {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: clamp(34px, 5.6vw, 60px);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 0 0 22px;
+    color: var(--color-ink);
+  }
+  .pc-hero__deck {
+    font-size: clamp(17px, 2vw, 20px);
+    line-height: 1.55;
+    color: var(--color-ink-soft);
+    margin: 0 0 30px;
+    max-width: 620px;
+  }
+  .pc-hero__cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .pc-btn {
+    display: inline-flex; align-items: center;
+    font-family: var(--font-body); font-weight: 600; font-size: 15px;
+    padding: 11px 20px; border-radius: 8px; text-decoration: none;
+    transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  }
+  .pc-btn--solid { background: var(--color-accent); color: #fdfbf6; }
+  .pc-btn--solid:hover { transform: translateY(-1px); background: #14304c; }
+  .pc-btn--ghost { background: transparent; color: var(--color-ink); border: 1px solid var(--color-rule); }
+  .pc-btn--ghost:hover { border-color: var(--color-ink); }
+
+  /* ============== 3 · STATUS ============== */
+  .pc-status {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--color-rule);
+    border: 1px solid var(--color-rule); border-radius: 10px; overflow: hidden;
+    margin: 0 0 64px;
+  }
+  .pc-status__item {
+    background: var(--color-card);
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .pc-status__n {
+    font-family: var(--font-heading); font-weight: 700; font-size: 26px;
+    letter-spacing: -0.02em; color: var(--color-ink); line-height: 1;
+  }
+  .pc-status__l { font-size: 10.5px; letter-spacing: 0.06em; color: var(--color-ink-soft); text-transform: lowercase; }
+
+  /* ============== SECTION HEADS ============== */
+  .pc-sec-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    margin: 0 0 22px; padding-bottom: 12px; border-bottom: 1px solid var(--color-rule);
+  }
+  .pc-sec-head__title {
+    font-family: var(--font-heading); font-weight: 700; font-size: 15px;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink); margin: 0;
+  }
+  .pc-sec-head__more { font-size: 12px; color: var(--color-ink-soft); text-decoration: none; }
+  .pc-sec-head__more:hover { color: var(--color-warm); }
+
+  /* ============== 4 · ROOMS ============== */
+  .pc-rooms { margin: 0 0 64px; }
+  .pc-rooms__grid {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  }
+  .pc-room {
+    position: relative; display: flex; flex-direction: column; height: 100%;
+    padding: 20px 18px 18px;
+    background: var(--color-card);
+    border: 1px solid var(--color-rule);
+    border-top: 3px solid var(--accent);
+    border-radius: 10px;
+    text-decoration: none;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  }
+  .pc-room:hover, .pc-room:focus-visible {
+    transform: translateY(-3px);
+    background: var(--color-card-hover);
+    box-shadow: 0 8px 22px rgba(31, 27, 21, 0.10);
+    outline: none;
+  }
+  .pc-room__tag {
+    font-size: 9.5px; letter-spacing: 0.14em; color: var(--accent);
+    font-weight: 700; margin-bottom: 10px;
+  }
+  .pc-room__name {
+    font-family: var(--font-heading); font-weight: 700; font-size: 19px;
+    letter-spacing: -0.01em; color: var(--color-ink); margin-bottom: 6px;
+  }
+  .pc-room__desc { font-size: 14px; line-height: 1.5; color: var(--color-ink-soft); margin-bottom: 16px; }
+  .pc-room__go {
+    margin-top: auto; font-size: 12px; font-weight: 600; color: var(--color-ink-soft);
+    transition: color 0.16s ease, transform 0.16s ease;
+  }
+  .pc-room:hover .pc-room__go, .pc-room:focus-visible .pc-room__go { color: var(--accent); transform: translateX(2px); }
+
+  /* ============== 5 · LATEST ============== */
+  .pc-latest { margin: 0 0 56px; }
+  .pc-latest__list { list-style: none; margin: 0; padding: 0; }
+  .pc-row { border-bottom: 1px solid var(--color-rule); }
+  .pc-row:first-child { border-top: 1px solid var(--color-rule); }
+  .pc-row__link {
+    display: grid;
+    grid-template-columns: 58px 110px 1fr auto;
+    align-items: baseline; gap: 16px;
+    padding: 14px 6px; text-decoration: none;
+    transition: background 0.14s ease, padding-left 0.14s ease;
+  }
+  .pc-row__link:hover { background: var(--color-card); padding-left: 12px; }
+  .pc-row__date { font-size: 12px; color: var(--color-ink-soft); letter-spacing: 0.04em; white-space: nowrap; }
+  .pc-row__chan {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--c); white-space: nowrap;
+  }
+  .pc-row__title {
+    font-family: var(--font-serif); font-size: 17px; line-height: 1.35; color: var(--color-ink);
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .pc-row__link:hover .pc-row__title { color: var(--color-accent); }
+  .pc-row__id { font-size: 11px; color: #b3a890; white-space: nowrap; }
+
+  /* ============== EXITS ============== */
+  .pc-foot { padding-top: 28px; border-top: 1px solid var(--color-rule); }
+  .pc-foot__nav { display: flex; flex-wrap: wrap; gap: 22px; margin-bottom: 14px; }
+  .pc-foot__nav a {
+    font-size: 13px; font-weight: 600; color: var(--color-ink); text-decoration: none;
+    border-bottom: 1px solid transparent; transition: border-color 0.14s ease, color 0.14s ease;
+  }
+  .pc-foot__nav a:hover { color: var(--color-warm); border-bottom-color: currentColor; }
+  .pc-foot__note { font-size: 11px; letter-spacing: 0.04em; color: var(--color-ink-soft); margin: 0; }
+
+  /* ============== RESPONSIVE ============== */
+  @media (max-width: 760px) {
+    .pc { padding: 0 18px 80px; }
+    .pc-hero { padding: 44px 0 40px; }
+    .pc-status { grid-template-columns: repeat(2, 1fr); }
+    .pc-rooms__grid { grid-template-columns: repeat(2, 1fr); }
+    .pc-row__link { grid-template-columns: 50px 1fr; row-gap: 4px; column-gap: 12px; }
+    .pc-row__chan { grid-column: 1; }
+    .pc-row__title { grid-column: 2; }
+    .pc-row__id { display: none; }
+  }
+  @media (max-width: 440px) {
+    .pc-status { grid-template-columns: 1fr 1fr; }
+    .pc-rooms__grid { grid-template-columns: 1fr; }
+  }
+</style>
