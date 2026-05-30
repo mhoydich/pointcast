@@ -1215,6 +1215,101 @@
       }, dur);
     }
 
+    // ─── batch 13: ladybug, rainbow, vinyl, gems ────────────────
+
+    function castLadybug(durationMs) {
+      if (active.byId.ladybug) {
+        var prev = active.byId.ladybug;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var el = document.createElement('button');
+      el.className = 'spell-ladybug';
+      el.type = 'button';
+      el.setAttribute('aria-label', 'A ladybug walking by. Click to shoo away.');
+      el.title = 'click to shoo away';
+      el.textContent = '🐞';
+      var ltr = Math.random() < 0.6;
+      el.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 42000;
+      var walkSeconds = Math.max(6, Math.min(20, window.innerWidth / 70));
+      el.style.cssText =
+        'animation:spell-ladybug-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-ladybug-step 0.45s ease-in-out infinite;';
+      el.addEventListener('click', function () {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        active.byId.ladybug = null;
+      });
+      $layer.appendChild(el);
+      active.byId.ladybug = el;
+      setTimeout(function () {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        if (active.byId.ladybug === el) active.byId.ladybug = null;
+      }, dur);
+    }
+
+    function castRainbow() {
+      if (active.byId.rainbow) return;
+      var el = document.createElement('button');
+      el.className = 'spell-rainbow';
+      el.type = 'button';
+      el.setAttribute('aria-label', 'A rainbow arc at the top. Click to clear.');
+      el.title = 'click to clear the rainbow';
+      el.innerHTML = '<span class="spell-rainbow__arc" aria-hidden="true"></span>';
+      el.addEventListener('click', function () {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        active.byId.rainbow = null;
+      });
+      $layer.appendChild(el);
+      active.byId.rainbow = el;
+    }
+
+    function castVinyl() {
+      if (active.byId.vinyl) return;
+      var el = document.createElement('button');
+      el.className = 'spell-vinyl';
+      el.type = 'button';
+      el.setAttribute('aria-label', 'A spinning vinyl record. Click to lift the needle.');
+      el.title = 'click to lift the needle';
+      el.addEventListener('click', function () {
+        if (el.parentNode) el.parentNode.removeChild(el);
+        active.byId.vinyl = null;
+      });
+      $layer.appendChild(el);
+      active.byId.vinyl = el;
+    }
+
+    function castGems(durationMs) {
+      if (reduce()) return;
+      var shapes = ['💎', '💜', '💙', '🟣', '🔵', '💚', '💛'];
+      var cx = 20 + Math.random() * 60;
+      var cy = 20 + Math.random() * 55;
+      var count = 14;
+      for (var i = 0; i < count; i++) {
+        var g = document.createElement('span');
+        g.className = 'spell-gems';
+        var angleRad = (i / count) * 2 * Math.PI;
+        var dist = 90 + Math.random() * 120;
+        var dx = (Math.cos(angleRad) * dist).toFixed(1);
+        var dy = (Math.sin(angleRad) * dist).toFixed(1);
+        var gem = shapes[Math.floor(Math.random() * shapes.length)];
+        var gemDur = 900 + Math.floor(Math.random() * 700);
+        var delay = Math.floor(i * 30);
+        g.textContent = gem;
+        g.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          '--spell-gems-dx:' + dx + 'px;--spell-gems-dy:' + dy + 'px;' +
+          'animation:spell-gems-fly ' + gemDur + 'ms ' + delay + 'ms ease-out forwards;';
+        $layer.appendChild(g);
+        active.bursts++;
+        (function (el, total) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, total + 100);
+        })(g, gemDur + delay);
+      }
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1349,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'ladybug':      castLadybug(42000); break;
+        case 'rainbow':      castRainbow(); break;
+        case 'vinyl':        castVinyl(); break;
+        case 'gems':         castGems(2800); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2646,128 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 13: ladybug (companion) ──────────────────────────── */
+  .spell-ladybug {
+    position: fixed;
+    bottom: 56px;
+    left: 0;
+    font-size: 1.5rem;
+    line-height: 1;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 32;
+  }
+  @keyframes spell-ladybug-walk-ltr {
+    0%   { left: -36px; }
+    100% { left: calc(100vw + 8px); }
+  }
+  @keyframes spell-ladybug-walk-rtl {
+    0%   { left: calc(100vw + 8px); }
+    100% { left: -36px; }
+  }
+  @keyframes spell-ladybug-step {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-5px) rotate(4deg); }
+  }
+  .spell-ladybug[data-dir='rtl'] { transform: scaleX(-1); }
+
+  /* ─── batch 13: rainbow (ambient) ────────────────────────────── */
+  .spell-rainbow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 22vh;
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 29;
+  }
+  .spell-rainbow__arc {
+    position: absolute;
+    bottom: -100%;
+    left: 50%;
+    width: 120%;
+    height: 120vw;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: transparent;
+    box-shadow:
+      0 0 0 14px rgba(255, 40, 40, 0.55),
+      0 0 0 28px rgba(255, 140, 30, 0.5),
+      0 0 0 42px rgba(250, 220, 30, 0.5),
+      0 0 0 56px rgba(30, 185, 70, 0.45),
+      0 0 0 70px rgba(40, 120, 255, 0.45),
+      0 0 0 84px rgba(120, 50, 220, 0.4);
+    opacity: 0;
+    animation: spell-rainbow-appear 2s ease-out forwards;
+  }
+  @keyframes spell-rainbow-appear {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* ─── batch 13: vinyl (ambient) ──────────────────────────────── */
+  .spell-vinyl {
+    position: fixed;
+    bottom: 60px;
+    right: 18px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%,
+      #0a0a0c 0%,  #0a0a0c 8%,
+      #8a2432 8%,  #8a2432 28%,
+      #0f0f12 28%, #0f0f12 30%,
+      #1c1c20 30%, #1c1c20 48%,
+      #0f0f12 48%, #0f0f12 50%,
+      #1c1c20 50%, #1c1c20 66%,
+      #0f0f12 66%, #0f0f12 68%,
+      #1c1c20 68%, #1c1c20 86%,
+      #0f0f12 86%, #0f0f12 100%
+    );
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 31;
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5);
+    animation: spell-vinyl-spin 1.9s linear infinite;
+  }
+  @keyframes spell-vinyl-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* ─── batch 13: gems (burst) ─────────────────────────────────── */
+  .spell-gems {
+    position: fixed;
+    pointer-events: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    z-index: 31;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-gems-fly {
+    0%   { transform: translate(0, 0) scale(0.2) rotate(-20deg); opacity: 0; }
+    12%  { opacity: 1; transform: translate(calc(var(--spell-gems-dx) * 0.12), calc(var(--spell-gems-dy) * 0.12)) scale(1.15) rotate(12deg); }
+    100% { transform: translate(var(--spell-gems-dx), var(--spell-gems-dy)) scale(0.5) rotate(35deg); opacity: 0; }
+  }
+
+  /* ─── batch 13: reduced-motion ───────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .spell-ladybug { animation: none !important; left: 50%; transform: translateX(-50%); }
+    .spell-ladybug[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-vinyl { animation: none; }
+    .spell-rainbow__arc { animation: none; opacity: 0.8; }
+    .spell-gems { display: none; }
   }
 </style>
