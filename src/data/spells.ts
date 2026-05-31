@@ -3,406 +3,259 @@
  *
  * Mike 2026-05-01: "research peach app, 90s i think, those type of
  * controls and then adding elements to pages in the footer bar, like
- * confetti, virtual pets, cats, pups, penguins, meditative,
- * directionally pleasant".
+ * little components you can add to a page"
  *
- * Each spell is a typed word that, when cast, drops a small element
- * into a fixed-position overlay layer (`SpellLayer.astro`). Spells
- * fall into three kinds:
+ * Every entry here maps to a Peach-style "spell" the viewer can cast.
+ * SpellLayer.astro picks these up at build time and renders the CSS/HTML
+ * needed for each spell, then the kit-tray UI lets the viewer toggle them.
  *
- *   burst    — one-shot, cleans itself up after `durationMs`
- *   companion — small pixel-emoji creature that walks across screen
- *   ambient  — persistent surface (breath circle, candle, rain)
- *              that stays until dismissed via the spell tray's
- *              "clear all" button or pc:spell:clear event
+ * Anatomy of a spell:
+ *   id       — kebab-case, used as CSS class prefix + localStorage key
+ *   label    — short display name shown in the kit tray
+ *   glyph    — single emoji shown as the tray button icon
+ *   blurb    — one-sentence tooltip / aria-label
+ *   kind     — 'ambient' | 'companion' | 'burst' | 'overlay'
+ *   duration — total animation cycle length (ms); 0 = CSS-only / static
  *
- * Render functions are inlined in SpellLayer.astro (vanilla JS,
- * no framework dependency, tiny JSON-serializable surface).
- *
- * Adding a spell = adding a row here + one case in the renderer
- * switch in SpellLayer.astro.
+ * Implementation notes live in SpellLayer.astro.
  */
 
-export type SpellKind = 'burst' | 'companion' | 'ambient';
-
 export interface Spell {
-  /** Stable id used by `pc:spell:cast` and the omnibox `+id` syntax. */
   id: string;
-  /** Display label in the CAST tray + omnibox preview. */
   label: string;
-  /** One-line evocative blurb for the tray. */
-  blurb: string;
-  /** Glyph for the chip (emoji or single char). */
   glyph: string;
-  /** burst | companion | ambient. */
-  kind: SpellKind;
-  /** Burst duration in ms; companions auto-dismiss after this; ambient ignores. */
-  durationMs?: number;
-  /** Hex used as the chip's accent. */
-  accent: string;
+  blurb: string;
+  kind: 'ambient' | 'companion' | 'burst' | 'overlay';
+  /** Animation cycle ms. 0 = static / CSS-only. */
+  duration: number;
 }
 
 export const SPELLS: Spell[] = [
-  // ─── BURSTS ──────────────────────────────────────────────────
-  {
-    id: 'confetti',
-    label: 'confetti',
-    blurb: 'Pixel rectangles in the PC palette. Falls, drifts, fades.',
-    glyph: '🎊',
-    kind: 'burst',
-    durationMs: 4500,
-    accent: '#d4a437',
-  },
-
-  // ─── COMPANIONS ──────────────────────────────────────────────
-  {
-    id: 'cat',
-    label: 'cat',
-    blurb: 'A pixel cat walks across the bottom. Pauses to lick a paw.',
-    glyph: '🐈',
-    kind: 'companion',
-    durationMs: 60_000,
-    accent: '#8a2432',
-  },
+  // ── Companions ──────────────────────────────────────────────────────────
   {
     id: 'pup',
-    label: 'pup',
-    blurb: 'A bouncy puppy trots across the bottom, tail wagging.',
+    label: 'Pup',
     glyph: '🐶',
+    blurb: 'A small dog trots across the screen.',
     kind: 'companion',
-    durationMs: 50_000,
-    accent: '#c4952e',
+    duration: 48000,
   },
   {
-    id: 'penguin',
-    label: 'penguin',
-    blurb: 'A penguin waddles across with a tidy side-to-side rock.',
-    glyph: '🐧',
+    id: 'cat',
+    label: 'Cat',
+    glyph: '🐱',
+    blurb: 'A cat slinks along the bottom of the screen.',
     kind: 'companion',
-    durationMs: 70_000,
-    accent: '#1b3a5b',
-  },
-
-  // ─── AMBIENT (persistent) ────────────────────────────────────
-  {
-    id: 'breath',
-    label: 'breath',
-    blurb: 'A soft circle expands and contracts. 4-7-8 breathing rhythm.',
-    glyph: '🫧',
-    kind: 'ambient',
-    accent: '#4A9EFF',
+    duration: 52000,
   },
   {
-    id: 'candle',
-    label: 'candle',
-    blurb: 'A small flickering candle in the corner. Stays lit until you snuff it.',
-    glyph: '🕯',
-    kind: 'ambient',
-    accent: '#c4952e',
-  },
-  {
-    id: 'rain',
-    label: 'rain',
-    blurb: 'Gentle pixel rain drifts down the page. Soft, patient.',
-    glyph: '🌧',
-    kind: 'ambient',
-    accent: '#4A9EFF',
-  },
-  {
-    id: 'starfield',
-    label: 'starfield',
-    blurb: 'Slow-twinkling stars drift in from the edges. Calming.',
-    glyph: '✨',
-    kind: 'ambient',
-    accent: '#a78bfa',
-  },
-
-  // ─── BURSTS (continued) ──────────────────────────────────────
-  {
-    id: 'firework',
-    label: 'firework',
-    blurb: 'Three colorful bursts shoot outward. Good for any occasion.',
-    glyph: '🎆',
-    kind: 'burst',
-    durationMs: 3500,
-    accent: '#d4a437',
-  },
-
-  // ─── COMPANIONS (continued) ──────────────────────────────────
-  {
-    id: 'fish',
-    label: 'fish',
-    blurb: 'A fish glides past, unhurried. Gentle bob.',
-    glyph: '🐟',
+    id: 'rabbit',
+    label: 'Rabbit',
+    glyph: '🐰',
+    blurb: 'A rabbit hops energetically across the screen.',
     kind: 'companion',
-    durationMs: 45_000,
-    accent: '#4A9EFF',
+    duration: 42000,
   },
   {
-    id: 'moth',
-    label: 'moth',
-    blurb: 'A moth flutters mid-screen, drawn toward the light.',
-    glyph: '🦋',
+    id: 'fox',
+    label: 'Fox',
+    glyph: '🦊',
+    blurb: 'A fox trots confidently across the screen.',
     kind: 'companion',
-    durationMs: 55_000,
-    accent: '#c4952e',
+    duration: 45000,
   },
-
-  // ─── AMBIENT (continued) ─────────────────────────────────────
-  {
-    id: 'snow',
-    label: 'snow',
-    blurb: 'Soft snowflakes drift down. Quiet company.',
-    glyph: '❄️',
-    kind: 'ambient',
-    accent: '#b8d4f0',
-  },
-
-  // ─── BURSTS (batch 4) ─────────────────────────────────────────
-  {
-    id: 'shout',
-    label: 'shout',
-    blurb: 'Punctuation bursts outward from center. Pure typographic energy.',
-    glyph: '📣',
-    kind: 'burst',
-    durationMs: 2200,
-    accent: '#8a2432',
-  },
-  {
-    id: 'wave',
-    label: 'wave',
-    blurb: 'A wave of hands sweeps across the screen. Hello!',
-    glyph: '👋',
-    kind: 'burst',
-    durationMs: 3000,
-    accent: '#c4952e',
-  },
-
-  // ─── COMPANIONS (batch 4) ─────────────────────────────────────
-  {
-    id: 'firefly',
-    label: 'firefly',
-    blurb: 'A soft-glowing firefly drifts by, pulsing gold.',
-    glyph: '🪲',
-    kind: 'companion',
-    durationMs: 40_000,
-    accent: '#d4a437',
-  },
-
-  // ─── AMBIENT (batch 4) ────────────────────────────────────────
-  {
-    id: 'chimes',
-    label: 'chimes',
-    blurb: 'Wind chimes hang in the corner, swaying quietly.',
-    glyph: '🎐',
-    kind: 'ambient',
-    accent: '#2f8f5f',
-  },
-
-  // ─── BURSTS (batch 5) ─────────────────────────────────────────
-  {
-    id: 'bloom',
-    label: 'bloom',
-    blurb: 'A garden erupts from center — flowers scatter outward in all directions.',
-    glyph: '🌸',
-    kind: 'burst',
-    durationMs: 2800,
-    accent: '#8a2432',
-  },
-
-  // ─── AMBIENT (batch 5) ────────────────────────────────────────
-  {
-    id: 'aurora',
-    label: 'aurora',
-    blurb: 'Northern lights ripple across the top of the viewport. Slow, shifting.',
-    glyph: '🌌',
-    kind: 'ambient',
-    accent: '#2f8f5f',
-  },
-
-  // ─── IDENTITY (batch 5) ───────────────────────────────────────
-  {
-    id: 'here',
-    label: 'here',
-    blurb: 'You are here. A pulsing beacon in the center of the screen.',
-    glyph: '📍',
-    kind: 'ambient',
-    accent: '#8a2432',
-  },
-  {
-    id: 'mood',
-    label: 'mood',
-    blurb: 'A color-shifting orb that broadcasts the current vibe. No words needed.',
-    glyph: '🎨',
-    kind: 'ambient',
-    accent: '#a78bfa',
-  },
-
-  // ─── BURSTS (batch 6) ─────────────────────────────────────────
-  {
-    id: 'bubble',
-    label: 'bubble',
-    blurb: 'Soap bubbles drift upward and quietly pop. Gentle, iridescent.',
-    glyph: '🫧',
-    kind: 'burst',
-    durationMs: 3200,
-    accent: '#4A9EFF',
-  },
-  {
-    id: 'dice',
-    label: 'dice',
-    blurb: 'Six dice tumble outward from center. Roll the vibe.',
-    glyph: '🎲',
-    kind: 'burst',
-    durationMs: 2500,
-    accent: '#2f8f5f',
-  },
-
-  // ─── COMPANIONS (batch 6) ─────────────────────────────────────
-  {
-    id: 'bee',
-    label: 'bee',
-    blurb: 'A bee zigzags across the screen, busy with invisible business.',
-    glyph: '🐝',
-    kind: 'companion',
-    durationMs: 35_000,
-    accent: '#d4a437',
-  },
-
-  // ─── AMBIENT (batch 6) ────────────────────────────────────────
-  {
-    id: 'fog',
-    label: 'fog',
-    blurb: 'Low mist rolls across the bottom of the viewport. Quiet and cool.',
-    glyph: '🌫️',
-    kind: 'ambient',
-    accent: '#b8d4f0',
-  },
-
-  // ─── BURSTS (batch 7) ─────────────────────────────────────────
-  {
-    id: 'balloon',
-    label: 'balloon',
-    blurb: 'Colorful balloons float up from the bottom, drifting apart as they rise.',
-    glyph: '🎈',
-    kind: 'burst',
-    durationMs: 4200,
-    accent: '#8a2432',
-  },
-
-  // ─── COMPANIONS (batch 7) ─────────────────────────────────────
-  {
-    id: 'turtle',
-    label: 'turtle',
-    blurb: 'The slowest companion. A turtle ambles across, unbothered, without urgency.',
-    glyph: '🐢',
-    kind: 'companion',
-    durationMs: 90_000,
-    accent: '#2f8f5f',
-  },
-  {
-    id: 'ghost',
-    label: 'ghost',
-    blurb: 'A friendly ghost drifts by mid-screen, oscillating gently. Hello there.',
-    glyph: '👻',
-    kind: 'companion',
-    durationMs: 50_000,
-    accent: '#a78bfa',
-  },
-
-  // ─── AMBIENT (batch 7) ────────────────────────────────────────
-  {
-    id: 'campfire',
-    label: 'campfire',
-    blurb: 'A warm campfire crackles in the corner. Cozier than a candle.',
-    glyph: '🔥',
-    kind: 'ambient',
-    accent: '#c4952e',
-  },
-
-  // ─── BURSTS (batch 8) ─────────────────────────────────────────
-  {
-    id: 'spark',
-    label: 'spark',
-    blurb: 'Electric sparks scatter outward from a point. Sharp, quick, bright.',
-    glyph: '⚡',
-    kind: 'burst',
-    durationMs: 2000,
-    accent: '#fdf2d6',
-  },
-
-  // ─── COMPANIONS (batch 8) ─────────────────────────────────────
-  {
-    id: 'frog',
-    label: 'frog',
-    blurb: 'A frog hops across the bottom in lazy arcs. No hurry at all.',
-    glyph: '🐸',
-    kind: 'companion',
-    durationMs: 35_000,
-    accent: '#2f8f5f',
-  },
-
-  // ─── AMBIENT (batch 8) ────────────────────────────────────────
-  {
-    id: 'leaves',
-    label: 'leaves',
-    blurb: 'Autumn leaves spin and drift down. A seasonal tumble.',
-    glyph: '🍂',
-    kind: 'ambient',
-    accent: '#c4952e',
-  },
-  {
-    id: 'lantern',
-    label: 'lantern',
-    blurb: 'A paper lantern glows in the top corner. Warm and quiet company.',
-    glyph: '🏮',
-    kind: 'ambient',
-    accent: '#8a2432',
-  },
-
-  // ─── NOUNS (batch 12) ─────────────────────────────────────────
-  // CC0 Nouns IP — SVGs pulled live from noun.pics for any seed
-  // 0–1199 (matches the Visit Nouns FA2 collection on Tezos).
   {
     id: 'noun',
-    label: 'noun',
-    blurb: 'A random Noun walks across the bottom. Click to send home.',
-    glyph: '🟥',
+    label: 'Noun',
+    glyph: '⬛',
+    blurb: 'A Noun glasses-head bobs across the viewport.',
     kind: 'companion',
-    durationMs: 60_000,
-    accent: '#d63c5e',
-  },
-  {
-    id: 'noggles',
-    label: 'noggles',
-    blurb: 'A wave of pixel noggles drifts across — the signature glasses.',
-    glyph: '👓',
-    kind: 'burst',
-    durationMs: 5500,
-    accent: '#1f1d29',
-  },
-  {
-    id: 'proliferate',
-    label: 'proliferate',
-    blurb: 'Twelve mini Nouns scatter outward — proliferation in pixel form.',
-    glyph: '✨',
-    kind: 'burst',
-    durationMs: 4200,
-    accent: '#d63c5e',
+    duration: 55000,
   },
   {
     id: 'lilnoun',
-    label: 'lilnoun',
-    blurb: 'A tiny Noun bounces across the bottom. Lil. Energetic.',
-    glyph: '🟢',
+    label: 'Lil Noun',
+    glyph: '🟦',
+    blurb: 'A tiny Noun bounces along the bottom of the page.',
     kind: 'companion',
-    durationMs: 45_000,
-    accent: '#5b6ea8',
+    duration: 38000,
+  },
+
+  // ── Ambient ──────────────────────────────────────────────────────────────
+  {
+    id: 'starfield',
+    label: 'Starfield',
+    glyph: '✨',
+    blurb: 'Twinkling stars drift across the background.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'clouds',
+    label: 'Clouds',
+    glyph: '☁️',
+    blurb: 'Fluffy clouds drift across the sky.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'rain',
+    label: 'Rain',
+    glyph: '🌧️',
+    blurb: 'Gentle rain falls across the screen.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'fireflies',
+    label: 'Fireflies',
+    glyph: '🪲',
+    blurb: 'Fireflies drift and blink in the darkness.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'leaves',
+    label: 'Leaves',
+    glyph: '🍃',
+    blurb: 'Autumn leaves drift and tumble across the screen.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'snow',
+    label: 'Snow',
+    glyph: '❄️',
+    blurb: 'Snowflakes drift gently downward.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'bubbles',
+    label: 'Bubbles',
+    glyph: '🫧',
+    blurb: 'Bubbles float upward and pop.',
+    kind: 'ambient',
+    duration: 0,
+  },
+  {
+    id: 'petals',
+    label: 'Petals',
+    glyph: '🌸',
+    blurb: 'Cherry blossom petals drift across the screen.',
+    kind: 'ambient',
+    duration: 0,
+  },
+
+  // ── Bursts ───────────────────────────────────────────────────────────────
+  {
+    id: 'confetti',
+    label: 'Confetti',
+    glyph: '🎊',
+    blurb: 'A burst of confetti rains down.',
+    kind: 'burst',
+    duration: 3000,
+  },
+  {
+    id: 'fireworks',
+    label: 'Fireworks',
+    glyph: '🎆',
+    blurb: 'Fireworks explode across the screen.',
+    kind: 'burst',
+    duration: 3500,
+  },
+  {
+    id: 'hearts',
+    label: 'Hearts',
+    glyph: '❤️',
+    blurb: 'Hearts burst from the center of the screen.',
+    kind: 'burst',
+    duration: 2500,
+  },
+  {
+    id: 'rings',
+    label: 'Rings',
+    glyph: '💍',
+    blurb: 'Concentric rings expand outward from the center.',
+    kind: 'burst',
+    duration: 2400,
+  },
+  {
+    id: 'sparkle',
+    label: 'Sparkle',
+    glyph: '💫',
+    blurb: 'Sparkles scatter across the screen.',
+    kind: 'burst',
+    duration: 2000,
+  },
+  {
+    id: 'boom',
+    label: 'Boom',
+    glyph: '💥',
+    blurb: 'An explosion radiates outward.',
+    kind: 'burst',
+    duration: 1800,
+  },
+
+  // ── Overlays ─────────────────────────────────────────────────────────────
+  {
+    id: 'vhs',
+    label: 'VHS',
+    glyph: '📼',
+    blurb: 'CRT scanlines and VHS tracking artifacts.',
+    kind: 'overlay',
+    duration: 0,
+  },
+  {
+    id: 'matrix',
+    label: 'Matrix',
+    glyph: '🟩',
+    blurb: 'Green digital rain cascades down the screen.',
+    kind: 'overlay',
+    duration: 0,
+  },
+  {
+    id: 'retro',
+    label: 'Retro',
+    glyph: '🕹️',
+    blurb: 'A pixelated retro-computing color palette.',
+    kind: 'overlay',
+    duration: 0,
+  },
+  {
+    id: 'noggles',
+    label: 'Noggles',
+    glyph: '🕶️',
+    blurb: 'Noggles glasses float across the viewport.',
+    kind: 'overlay',
+    duration: 0,
+  },
+  {
+    id: 'proliferate',
+    label: 'Proliferate',
+    glyph: '⬛',
+    blurb: 'Nouns proliferate across the entire screen.',
+    kind: 'overlay',
+    duration: 0,
   },
 ];
 
-/** Lookup helper. */
-export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s]));
+/** Look up a spell by id. Returns undefined if not found. */
+export function getSpell(id: string): Spell | undefined {
+  return SPELLS.find((s) => s.id === id);
+}
+
+/** All companion spells, in order. */
+export const COMPANION_SPELLS = SPELLS.filter((s) => s.kind === 'companion');
+
+/** All ambient spells, in order. */
+export const AMBIENT_SPELLS = SPELLS.filter((s) => s.kind === 'ambient');
+
+/** All burst spells, in order. */
+export const BURST_SPELLS = SPELLS.filter((s) => s.kind === 'burst');
+
+/** All overlay spells, in order. */
+export const OVERLAY_SPELLS = SPELLS.filter((s) => s.kind === 'overlay');
 
 /** Spells exposed as kit-tray quick-actions (top 4 by order). */
 export const SPELL_TRAY_ACTIONS = SPELLS.slice(0, 4).map((s) => ({
