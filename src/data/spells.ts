@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'toast',
+    label: 'toast',
+    blurb: 'Champagne glasses float up with a shower of rising bubbles. Cheers.',
+    glyph: '🥂',
+    kind: 'burst',
+    durationMs: 3500,
+    accent: '#c4952e',
+  },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across the upper screen, tail ribbons trailing in the wind.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'cricket',
+    label: 'cricket',
+    blurb: 'A cricket hops across the bottom in lazy arcs. Summer evening energy.',
+    glyph: '🦗',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#2f8f5f',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'cloud',
+    label: 'cloud',
+    blurb: 'Soft clouds drift endlessly across the viewport. Daydream companion.',
+    glyph: '☁️',
+    kind: 'ambient',
+    accent: '#b8d4f0',
+  },
 ];
 
 /** Lookup helper. */
