@@ -1215,6 +1215,133 @@
       }, dur);
     }
 
+    // ─── haiku (burst) ──────────────────────────────────────────
+    // A random three-line haiku fades in at screen center, lingers,
+    // then dissolves. The animation handles the full lifecycle.
+    function castHaiku(durationMs) {
+      var dur = durationMs || 4200;
+      var pool = [
+        ['still water reflects', 'the fox who pauses to drink', 'autumn begins here'],
+        ['three lines of a spell', 'spoken once into the air', 'then returned to green'],
+        ['the pixel wanders', 'through the viewport, slow as light', 'lost in the scroll'],
+        ['morning tab refresh', 'all the feeds carry new weight', 'the cursor blinks once'],
+        ['no new messages', 'the silence also contains', 'something worth reading'],
+      ];
+      var lines = pool[Math.floor(Math.random() * pool.length)];
+      var h = document.createElement('div');
+      h.className = 'spell-haiku';
+      h.setAttribute('aria-live', 'polite');
+      h.innerHTML =
+        '<p class="spell-haiku__line">' + lines[0] + '</p>' +
+        '<p class="spell-haiku__line">' + lines[1] + '</p>' +
+        '<p class="spell-haiku__line">' + lines[2] + '</p>';
+      h.style.cssText = 'animation:spell-haiku-appear ' + dur + 'ms ease-out forwards;';
+      $layer.appendChild(h);
+      active.bursts++;
+      (function (el) {
+        setTimeout(function () {
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+          active.bursts = Math.max(0, active.bursts - 1);
+        }, dur + 100);
+      })(h);
+    }
+
+    // ─── otter (companion) ──────────────────────────────────────
+    // Glides ltr/rtl at bottom. Head bobs gently — otters undulate.
+    function castOtter(durationMs) {
+      if (active.byId.otter) {
+        var prev = active.byId.otter;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var o = document.createElement('button');
+      o.className = 'spell-otter';
+      o.type = 'button';
+      o.setAttribute('aria-label', 'A gliding otter. Click to send away.');
+      o.title = 'click to send the otter home';
+      o.textContent = '🦦';
+      var ltr = Math.random() < 0.6;
+      o.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 45000;
+      var walkSeconds = Math.max(9, Math.min(30, window.innerWidth / 80));
+      var bobSeconds = (walkSeconds / 6).toFixed(1);
+      if (ltr) {
+        o.style.cssText =
+          'animation:spell-otter-walk-ltr ' + walkSeconds + 's linear infinite,' +
+          'spell-otter-bob ' + bobSeconds + 's ease-in-out infinite;';
+      } else {
+        o.style.cssText =
+          'animation:spell-otter-walk-rtl ' + walkSeconds + 's linear infinite,' +
+          'spell-otter-bob-rtl ' + bobSeconds + 's ease-in-out infinite;';
+      }
+      o.addEventListener('click', function () {
+        if (o.parentNode) o.parentNode.removeChild(o);
+        active.byId.otter = null;
+      });
+      $layer.appendChild(o);
+      active.byId.otter = o;
+      setTimeout(function () {
+        if (o && o.parentNode) o.parentNode.removeChild(o);
+        if (active.byId.otter === o) active.byId.otter = null;
+      }, dur);
+    }
+
+    // ─── bunny (companion) ──────────────────────────────────────
+    // Fast hopper with a big-then-small double-bounce per stride.
+    function castBunny(durationMs) {
+      if (active.byId.bunny) {
+        var prev = active.byId.bunny;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var b = document.createElement('button');
+      b.className = 'spell-bunny';
+      b.type = 'button';
+      b.setAttribute('aria-label', 'A hopping bunny. Click to shoo away.');
+      b.title = 'click to shoo away';
+      b.textContent = '🐰';
+      var ltr = Math.random() < 0.6;
+      b.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 40000;
+      var walkSeconds = Math.max(7, Math.min(20, window.innerWidth / 100));
+      var hopSeconds = (walkSeconds / 9).toFixed(1);
+      if (ltr) {
+        b.style.cssText =
+          'animation:spell-bunny-walk-ltr ' + walkSeconds + 's linear infinite,' +
+          'spell-bunny-hop ' + hopSeconds + 's ease-in-out infinite;';
+      } else {
+        b.style.cssText =
+          'animation:spell-bunny-walk-rtl ' + walkSeconds + 's linear infinite,' +
+          'spell-bunny-hop-rtl ' + hopSeconds + 's ease-in-out infinite;';
+      }
+      b.addEventListener('click', function () {
+        if (b.parentNode) b.parentNode.removeChild(b);
+        active.byId.bunny = null;
+      });
+      $layer.appendChild(b);
+      active.byId.bunny = b;
+      setTimeout(function () {
+        if (b && b.parentNode) b.parentNode.removeChild(b);
+        if (active.byId.bunny === b) active.byId.bunny = null;
+      }, dur);
+    }
+
+    // ─── moon (ambient) ─────────────────────────────────────────
+    // Crescent moon in the top-right corner. Slow glow-pulse.
+    function castMoon() {
+      if (active.byId.moon) return;
+      var m = document.createElement('button');
+      m.className = 'spell-moon';
+      m.type = 'button';
+      m.setAttribute('aria-label', 'A glowing crescent moon. Click to dismiss.');
+      m.title = 'click to dismiss';
+      m.textContent = '🌙';
+      m.addEventListener('click', function () {
+        if (m.parentNode) m.parentNode.removeChild(m);
+        active.byId.moon = null;
+      });
+      $layer.appendChild(m);
+      active.byId.moon = m;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1381,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'haiku':    castHaiku(4200); break;
+        case 'otter':    castOtter(45000); break;
+        case 'bunny':    castBunny(40000); break;
+        case 'moon':     castMoon(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2678,169 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 13 ──────────────────────────────────────────────── */
+
+  /* ── haiku (burst) ───────────────────────────────────────────── */
+  /* Centered text block. Fade-in-linger-fade-out via a single
+     keyframe — the 12%→70% plateau is the "linger" window. */
+  .spell-haiku {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 31;
+  }
+  .spell-haiku__line {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(13px, 1.8vw, 19px);
+    color: #fdf2d6;
+    letter-spacing: 0.08em;
+    margin: 5px 0;
+    line-height: 1.6;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95), 0 0 24px rgba(0, 0, 0, 0.7);
+  }
+  @keyframes spell-haiku-appear {
+    0%   { opacity: 0; }
+    12%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spell-haiku { animation: none !important; opacity: 1; }
+  }
+
+  /* ── otter (companion) ───────────────────────────────────────── */
+  /* Bottom companion with a gentle head-bob undulate.
+     ltr uses spell-otter-bob (no flip); rtl uses spell-otter-bob-rtl
+     which bakes in scaleX(-1) so both transforms stay on the same prop. */
+  .spell-otter {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 4px rgba(196, 149, 46, 0.4));
+  }
+  @keyframes spell-otter-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-otter-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-otter-bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25%      { transform: translateY(-7px) rotate(-3deg); }
+    50%      { transform: translateY(0) rotate(0deg); }
+    75%      { transform: translateY(-4px) rotate(2deg); }
+  }
+  @keyframes spell-otter-bob-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+    25%      { transform: scaleX(-1) translateY(-7px) rotate(3deg); }
+    50%      { transform: scaleX(-1) translateY(0) rotate(0deg); }
+    75%      { transform: scaleX(-1) translateY(-4px) rotate(-2deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spell-otter { animation: none !important; left: 50% !important; }
+    .spell-otter[data-dir='rtl'] { transform: scaleX(-1) translateX(-50%) !important; }
+  }
+
+  /* ── bunny (companion) ───────────────────────────────────────── */
+  /* Double-bounce hop: big leap (−28px) then quick smaller pop (−14px).
+     Faster walk speed than frog — bunnies don't loiter. */
+  .spell-bunny {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+  }
+  @keyframes spell-bunny-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-bunny-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-bunny-hop {
+    0%, 100% { transform: translateY(0); }
+    18%      { transform: translateY(-28px); }
+    36%      { transform: translateY(0); }
+    52%      { transform: translateY(-14px); }
+    68%      { transform: translateY(0); }
+  }
+  @keyframes spell-bunny-hop-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    18%      { transform: scaleX(-1) translateY(-28px); }
+    36%      { transform: scaleX(-1) translateY(0); }
+    52%      { transform: scaleX(-1) translateY(-14px); }
+    68%      { transform: scaleX(-1) translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spell-bunny { animation: none !important; left: 50% !important; }
+    .spell-bunny[data-dir='rtl'] { transform: scaleX(-1) translateX(-50%) !important; }
+  }
+
+  /* ── moon (ambient) ──────────────────────────────────────────── */
+  /* Top-right corner (lantern is top-left) — soft violet glow pulse.
+     The drop-shadow drives the halo effect; text-shadow adds corona. */
+  .spell-moon {
+    position: fixed;
+    top: 14px;
+    right: 24px;
+    width: 48px;
+    height: 52px;
+    font-size: 36px;
+    line-height: 52px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    text-shadow:
+      0 0 16px rgba(167, 139, 250, 0.85),
+      0 0 32px rgba(167, 139, 250, 0.4);
+    animation: spell-moon-pulse 6s ease-in-out infinite;
+  }
+  @keyframes spell-moon-pulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.35));
+    }
+    50% {
+      filter: drop-shadow(0 0 18px rgba(167, 139, 250, 0.75))
+              drop-shadow(0 0 36px rgba(200, 180, 255, 0.3));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spell-moon { animation: none !important; }
   }
 </style>
