@@ -1215,6 +1215,139 @@
       }, dur);
     }
 
+    // ─── dandelion (burst) ────────────────────────────────────────
+    // 22 seed particles float outward from a random point with an upward
+    // drift bias — like blowing a dandelion. Each seed is a tiny circle
+    // with a short stem, using the dx/dy custom-prop flight pattern.
+    function castDandelion(durationMs) {
+      if (reduce()) return;
+      var cx = (15 + Math.random() * 70).toFixed(1); // vw
+      var cy = (25 + Math.random() * 45).toFixed(1); // vh
+      var count = 22;
+      for (var i = 0; i < count; i++) {
+        var s = document.createElement('span');
+        s.className = 'spell-dandelion-seed';
+        var angle = Math.random() * 2 * Math.PI;
+        var dist = 60 + Math.random() * 110;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist - 70 - Math.random() * 50).toFixed(1); // bias up
+        var floatMs = 1800 + Math.floor(Math.random() * 1400);
+        var delay = Math.floor(Math.random() * 500);
+        s.style.cssText =
+          'left:' + cx + 'vw;top:' + cy + 'vh;' +
+          '--spell-dand-dx:' + dx + 'px;--spell-dand-dy:' + dy + 'px;' +
+          'animation:spell-dandelion-float ' + floatMs + 'ms ease-out ' + delay + 'ms both;';
+        $layer.appendChild(s);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, floatMs + delay + 100);
+        })(s);
+      }
+    }
+
+    // ─── meteor (burst) ──────────────────────────────────────────
+    // 3-4 bright diagonal streaks cross the upper sky at staggered
+    // intervals. Each streak is a thin gradient bar pre-rotated ~-40°,
+    // animated across the viewport. Quick, bright, then gone.
+    function castMeteor(durationMs) {
+      if (reduce()) return;
+      var total = 3 + Math.floor(Math.random() * 2);
+      for (var i = 0; i < total; i++) {
+        (function (idx) {
+          setTimeout(function () {
+            var m = document.createElement('span');
+            m.className = 'spell-meteor';
+            var startX = (45 + Math.random() * 45).toFixed(1); // vw, right half
+            var startY = (3 + Math.random() * 30).toFixed(1);  // vh, upper area
+            var dist = 200 + Math.floor(Math.random() * 160);
+            // Travel ~-40° from horizontal (right-to-left, slightly downward)
+            var dx = (-dist * 0.77).toFixed(1);
+            var dy = (dist * 0.64).toFixed(1);
+            var streakMs = 500 + Math.floor(Math.random() * 400);
+            m.style.cssText =
+              'left:' + startX + 'vw;top:' + startY + 'vh;' +
+              '--spell-meteor-dx:' + dx + 'px;--spell-meteor-dy:' + dy + 'px;' +
+              'animation:spell-meteor-streak ' + streakMs + 'ms ease-in forwards;';
+            $layer.appendChild(m);
+            active.bursts++;
+            (function (el) {
+              setTimeout(function () {
+                if (el && el.parentNode) el.parentNode.removeChild(el);
+                active.bursts = Math.max(0, active.bursts - 1);
+              }, streakMs + 100);
+            })(m);
+          }, idx * (280 + Math.floor(Math.random() * 360)));
+        })(i);
+      }
+    }
+
+    // ─── kite (companion) ─────────────────────────────────────────
+    // Floats high up the viewport (55-75% from bottom) — unlike ground
+    // companions, the kite lives in the sky layer. Gentle directional
+    // drift (up/down oscillation + slight tilt) while it crosses.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prevK = active.byId.kite;
+        if (prevK && prevK.parentNode) prevK.parentNode.removeChild(prevK);
+      }
+      var k = document.createElement('button');
+      k.className = 'spell-kite';
+      k.type = 'button';
+      k.setAttribute('aria-label', 'A kite floating by. Click to release the string.');
+      k.title = 'click to release the kite';
+      k.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      k.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var flySeconds = Math.max(14, Math.min(42, window.innerWidth / 50));
+      var heightPct = (55 + Math.random() * 18).toFixed(1); // 55-73% from bottom
+      k.style.cssText =
+        'bottom:' + heightPct + 'vh;' +
+        'animation:spell-kite-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + flySeconds + 's linear infinite,' +
+        'spell-kite-drift' + (ltr ? '' : '-rtl') + ' 4.5s ease-in-out infinite;';
+      k.addEventListener('click', function () {
+        if (k.parentNode) k.parentNode.removeChild(k);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(k);
+      active.byId.kite = k;
+      setTimeout(function () {
+        if (k && k.parentNode) k.parentNode.removeChild(k);
+        if (active.byId.kite === k) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── lighthouse (ambient) ─────────────────────────────────────
+    // A wide sweeping beam pivots from bottom-center, sweeping ±50°.
+    // Implemented as a clipped triangle div with a slow CSS alternate
+    // rotation. The 🔦 anchor marks the source point. No-op while active.
+    function castLighthouse() {
+      if (active.byId.lighthouse) return;
+      var lh = document.createElement('button');
+      lh.className = 'spell-lighthouse';
+      lh.type = 'button';
+      lh.setAttribute('aria-label', 'Lighthouse beam. Click to turn off.');
+      lh.title = 'click to turn off the lighthouse';
+      var beam = document.createElement('span');
+      beam.className = 'spell-lighthouse__beam';
+      beam.setAttribute('aria-hidden', 'true');
+      var anchor = document.createElement('span');
+      anchor.className = 'spell-lighthouse__anchor';
+      anchor.setAttribute('aria-hidden', 'true');
+      anchor.textContent = '🔦';
+      lh.appendChild(beam);
+      lh.appendChild(anchor);
+      lh.addEventListener('click', function () {
+        if (lh.parentNode) lh.parentNode.removeChild(lh);
+        active.byId.lighthouse = null;
+      });
+      $layer.appendChild(lh);
+      active.byId.lighthouse = lh;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1387,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'dandelion':    castDandelion(3500); break;
+        case 'meteor':       castMeteor(2000); break;
+        case 'kite':         castKite(55000); break;
+        case 'lighthouse':   castLighthouse(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2419,7 +2556,8 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2566,8 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2547,5 +2686,151 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ── dandelion (burst) ───────────────────────────────────────── */
+  /* 22 small seed dots float outward and upward from a random point.
+     Each has a tiny circular head + subtle glow, drifting via dx/dy. */
+  .spell-dandelion-seed {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(253, 242, 214, 0.92);
+    box-shadow: 0 0 5px rgba(253, 242, 214, 0.75), 0 0 12px rgba(253, 242, 214, 0.3);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+  }
+  @keyframes spell-dandelion-float {
+    0%   { transform: translate(-50%, -50%); opacity: 1; }
+    15%  { opacity: 1; }
+    100% {
+      transform: translate(
+        calc(-50% + var(--spell-dand-dx, 0px)),
+        calc(-50% + var(--spell-dand-dy, -80px))
+      );
+      opacity: 0;
+    }
+  }
+
+  /* ── meteor (burst) ──────────────────────────────────────────── */
+  /* Thin gradient bar pre-rotated -40° to face travel direction.
+     Moves left-down across upper sky. Bright white head fades to violet. */
+  .spell-meteor {
+    position: absolute;
+    width: 100px;
+    height: 2px;
+    /* Gradient: transparent tail on left, bright head on right */
+    background: linear-gradient(90deg,
+      rgba(167, 139, 250, 0) 0%,
+      rgba(167, 139, 250, 0.5) 35%,
+      rgba(255, 255, 255, 0.95) 100%
+    );
+    border-radius: 1px;
+    pointer-events: none;
+    transform: rotate(-40deg);
+    transform-origin: 100% 50%; /* pivot from bright head */
+    will-change: transform, opacity;
+    box-shadow: 1px 0 8px rgba(255, 255, 255, 0.6);
+  }
+  @keyframes spell-meteor-streak {
+    0%   { transform: translate(0, 0) rotate(-40deg); opacity: 1; }
+    60%  { opacity: 0.8; }
+    100% {
+      transform: translate(var(--spell-meteor-dx, -200px), var(--spell-meteor-dy, 160px)) rotate(-40deg);
+      opacity: 0;
+    }
+  }
+
+  /* ── kite (companion) ────────────────────────────────────────── */
+  /* Floats in upper sky (55-73% from bottom). Gentle oscillating drift
+     with a slight tilt — like a kite tugging on its string in the wind. */
+  .spell-kite {
+    position: fixed;
+    left: -44px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 8px rgba(74, 158, 255, 0.45));
+  }
+  @keyframes spell-kite-fly-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-kite-fly-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-kite-drift {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25%       { transform: translateY(-20px) rotate(6deg); }
+    75%       { transform: translateY(14px) rotate(-4deg); }
+  }
+  @keyframes spell-kite-drift-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+    25%       { transform: scaleX(-1) translateY(-20px) rotate(-6deg); }
+    75%       { transform: scaleX(-1) translateY(14px) rotate(4deg); }
+  }
+  .spell-kite[data-dir='rtl'] {
+    animation-name: spell-kite-fly-rtl, spell-kite-drift-rtl !important;
+  }
+
+  /* ── lighthouse (ambient) ────────────────────────────────────── */
+  /* A wide triangular beam pivots from center-bottom, sweeping ±50°
+     like a real lighthouse. Very low opacity — atmospheric, not garish. */
+  .spell-lighthouse {
+    position: fixed;
+    inset: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 30;
+    overflow: hidden;
+  }
+  .spell-lighthouse__beam {
+    position: absolute;
+    bottom: 64px;
+    left: 50%;
+    width: 500px;
+    height: 110vh;
+    clip-path: polygon(50% 100%, 30% 0%, 70% 0%);
+    background: linear-gradient(0deg, rgba(253, 242, 214, 0.18) 0%, rgba(253, 242, 214, 0) 100%);
+    transform-origin: 50% 100%;
+    transform: translateX(-50%) rotate(0deg);
+    animation: spell-lighthouse-sweep 4.5s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  .spell-lighthouse__anchor {
+    position: absolute;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0.65;
+  }
+  @keyframes spell-lighthouse-sweep {
+    0%   { transform: translateX(-50%) rotate(-50deg); }
+    100% { transform: translateX(-50%) rotate(50deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-dandelion-seed { display: none; }
+    .spell-meteor { display: none; }
+    .spell-kite { animation: none !important; left: 50% !important; }
+    .spell-lighthouse__beam { animation: none; transform: translateX(-50%) rotate(0deg); }
   }
 </style>
