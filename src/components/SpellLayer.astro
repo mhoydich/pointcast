@@ -1215,6 +1215,126 @@
       }, dur);
     }
 
+    // ─── snail (companion) ────────────────────────────────────────
+    // Ultra-patient — ~15px/s, slower than turtle. The charm is the
+    // implied effort. Gentle 3.5s Y-glide overlaid on the horizontal walk.
+    function castSnail(durationMs) {
+      if (active.byId.snail) {
+        var prevSn = active.byId.snail;
+        if (prevSn && prevSn.parentNode) prevSn.parentNode.removeChild(prevSn);
+      }
+      var snail = document.createElement('button');
+      snail.className = 'spell-snail';
+      snail.type = 'button';
+      snail.setAttribute('aria-label', 'A slow snail. Click to let it rest.');
+      snail.title = 'click to let the snail rest';
+      snail.textContent = '🐌';
+      var ltr = Math.random() < 0.5;
+      snail.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 120000;
+      var walkSeconds = Math.max(50, Math.min(130, window.innerWidth / 15));
+      snail.style.cssText =
+        'animation:spell-snail-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-snail-glide' + (ltr ? '' : '-rtl') + ' 3.5s ease-in-out infinite;';
+      snail.addEventListener('click', function () {
+        if (snail.parentNode) snail.parentNode.removeChild(snail);
+        active.byId.snail = null;
+      });
+      $layer.appendChild(snail);
+      active.byId.snail = snail;
+      setTimeout(function () {
+        if (snail && snail.parentNode) snail.parentNode.removeChild(snail);
+        if (active.byId.snail === snail) active.byId.snail = null;
+      }, dur);
+    }
+
+    // ─── crab (companion) ─────────────────────────────────────────
+    // Scuttles horizontally with an asymmetric up-down wobble — both legs
+    // clacking. Faster than bee, more chaotic than frog.
+    function castCrab(durationMs) {
+      if (active.byId.crab) {
+        var prevCr = active.byId.crab;
+        if (prevCr && prevCr.parentNode) prevCr.parentNode.removeChild(prevCr);
+      }
+      var crab = document.createElement('button');
+      crab.className = 'spell-crab';
+      crab.type = 'button';
+      crab.setAttribute('aria-label', 'A scuttling crab. Click to shoo it away.');
+      crab.title = 'click to shoo the crab';
+      crab.textContent = '🦀';
+      var ltr = Math.random() < 0.5;
+      crab.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 65000;
+      var walkSeconds = Math.max(12, Math.min(38, window.innerWidth / 52));
+      crab.style.cssText =
+        'animation:spell-crab-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-crab-scuttle' + (ltr ? '' : '-rtl') + ' 0.32s ease-in-out infinite;';
+      crab.addEventListener('click', function () {
+        if (crab.parentNode) crab.parentNode.removeChild(crab);
+        active.byId.crab = null;
+      });
+      $layer.appendChild(crab);
+      active.byId.crab = crab;
+      setTimeout(function () {
+        if (crab && crab.parentNode) crab.parentNode.removeChild(crab);
+        if (active.byId.crab === crab) active.byId.crab = null;
+      }, dur);
+    }
+
+    // ─── hearts (burst) ───────────────────────────────────────────
+    // 16 colored hearts fan radially from viewport center using the
+    // fw dx/dy custom-prop trick. Each pulses up briefly before fading.
+    function castHearts(durationMs) {
+      if (reduce()) return;
+      var glyphs = ['❤️', '🧡', '💛', '💚', '💙', '💜', '❤️', '🧡', '💙', '💜', '❤️', '💛', '❤️', '🧡', '💙', '💜'];
+      var count = 16;
+      for (var i = 0; i < count; i++) {
+        var h = document.createElement('span');
+        h.className = 'spell-hearts-heart';
+        var angle = (i / count) * 2 * Math.PI;
+        var dist = 55 + Math.random() * 120;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var dur = (durationMs || 2500) - Math.floor(Math.random() * 400);
+        var size = 16 + Math.floor(Math.random() * 20);
+        h.textContent = glyphs[i % glyphs.length];
+        h.style.cssText =
+          'left:50vw;top:45vh;font-size:' + size + 'px;' +
+          '--spell-fw-dx:' + dx + 'px;--spell-fw-dy:' + dy + 'px;' +
+          'animation:spell-hearts-fly ' + dur + 'ms ease-out forwards;';
+        $layer.appendChild(h);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + 100);
+        })(h);
+      }
+    }
+
+    // ─── kite (ambient) ───────────────────────────────────────────
+    // A 🪁 kite sways in the upper-right with a dangling string element.
+    // Pendulum rotation from transform-origin top — same idiom as lantern.
+    // Sits at right: 90px to clear the chimes at right: 24px.
+    function castKite() {
+      if (active.byId.kite) return;
+      var k = document.createElement('button');
+      k.className = 'spell-kite';
+      k.type = 'button';
+      k.setAttribute('aria-label', 'A kite in the sky. Click to bring it down.');
+      k.title = 'click to bring down the kite';
+      k.innerHTML =
+        '<span class="spell-kite__glyph" aria-hidden="true">🪁</span>' +
+        '<span class="spell-kite__string" aria-hidden="true"></span>';
+      k.addEventListener('click', function () {
+        if (k.parentNode) k.parentNode.removeChild(k);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(k);
+      active.byId.kite = k;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1374,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'snail':        castSnail(120000); break;
+        case 'crab':         castCrab(65000); break;
+        case 'hearts':       castHearts(2500); break;
+        case 'kite':         castKite(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2381,6 +2505,141 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ── snail (companion) ──────────────────────────────────────── */
+  .spell-snail {
+    position: fixed;
+    bottom: 56px;
+    left: -46px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 32px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  }
+  @keyframes spell-snail-walk-ltr {
+    0%   { left: -46px; }
+    100% { left: calc(100vw + 46px); }
+  }
+  @keyframes spell-snail-walk-rtl {
+    0%   { left: calc(100vw + 46px); }
+    100% { left: -46px; }
+  }
+  @keyframes spell-snail-glide {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
+  }
+  .spell-snail[data-dir='rtl'] {
+    animation-name: spell-snail-walk-rtl, spell-snail-glide-rtl !important;
+  }
+  @keyframes spell-snail-glide-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-2px); }
+  }
+
+  /* ── crab (companion) ───────────────────────────────────────── */
+  .spell-crab {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 38px;
+    height: 38px;
+    line-height: 38px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  }
+  @keyframes spell-crab-walk-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-crab-walk-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+  @keyframes spell-crab-scuttle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    33%      { transform: translateY(-5px) rotate(-4deg); }
+    66%      { transform: translateY(-3px) rotate(3deg); }
+  }
+  .spell-crab[data-dir='rtl'] {
+    animation-name: spell-crab-walk-rtl, spell-crab-scuttle-rtl !important;
+  }
+  @keyframes spell-crab-scuttle-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+    33%      { transform: scaleX(-1) translateY(-5px) rotate(-4deg); }
+    66%      { transform: scaleX(-1) translateY(-3px) rotate(3deg); }
+  }
+
+  /* ── hearts (burst) ─────────────────────────────────────────── */
+  .spell-hearts-heart {
+    position: fixed;
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-hearts-fly {
+    0%   { transform: translate(0, 0) scale(0.3); opacity: 0.95; }
+    18%  { transform: translate(calc(var(--spell-fw-dx) * 0.18), calc(var(--spell-fw-dy) * 0.18)) scale(1.2); opacity: 1; }
+    100% { transform: translate(var(--spell-fw-dx), var(--spell-fw-dy)) scale(0.6); opacity: 0; }
+  }
+
+  /* ── kite (ambient) ─────────────────────────────────────────── */
+  /* Upper-right, right:90px so chimes (right:24px) stay clear. */
+  .spell-kite {
+    position: fixed;
+    top: 10px;
+    right: 90px;
+    width: 48px;
+    height: 72px;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform-origin: 50% 0;
+    animation: spell-kite-sway 5s ease-in-out infinite;
+  }
+  .spell-kite__glyph {
+    font-size: 36px;
+    line-height: 1.15;
+    filter: drop-shadow(0 2px 8px rgba(74, 158, 255, 0.4));
+  }
+  .spell-kite__string {
+    width: 2px;
+    height: 30px;
+    background: linear-gradient(to bottom, rgba(120,120,120,0.55), transparent);
+    border-radius: 1px;
+    animation: spell-kite-string-wave 2.5s ease-in-out infinite;
+    transform-origin: 50% 0;
+  }
+  @keyframes spell-kite-sway {
+    0%, 100% { transform: rotate(-8deg); }
+    50%      { transform: rotate(8deg); }
+  }
+  @keyframes spell-kite-string-wave {
+    0%, 100% { transform: rotate(-9deg); }
+    50%      { transform: rotate(9deg); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2393,6 +2652,8 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
+    .spell-snail,
+    .spell-crab,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2409,7 +2670,9 @@
     .spell-campfire__flame--main,
     .spell-campfire__flame--side,
     .spell-campfire__glow,
-    .spell-lantern { animation: none; }
+    .spell-lantern,
+    .spell-kite,
+    .spell-kite__string { animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2419,7 +2682,9 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-snail,
+    .spell-crab { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2693,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-snail[data-dir='rtl'],
+    .spell-crab[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
