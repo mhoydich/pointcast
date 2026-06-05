@@ -400,6 +400,38 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#c4952e',
   },
+
+  // ─── BURSTS (batch 12) ─────────────────────────────────────────
+  {
+    id: 'petal',
+    label: 'petal',
+    blurb: 'Flower petals drift upward and scatter outward. Light and scattered.',
+    glyph: '🌸',
+    kind: 'burst',
+    durationMs: 3200,
+    accent: '#8a2432',
+  },
+
+  // ─── COMPANIONS (batch 12) ─────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across the upper sky, swaying in the breeze.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#4A9EFF',
+  },
+
+  // ─── AMBIENT (batch 12) ────────────────────────────────────────
+  {
+    id: 'tide',
+    label: 'tide',
+    blurb: 'A slow tide breathes at the bottom of the viewport. Patient, inevitable.',
+    glyph: '🌊',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */

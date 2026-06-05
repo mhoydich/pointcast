@@ -1194,6 +1194,98 @@
       active.byId.sunrise = sr;
     }
 
+    // ─── petal (burst) ───────────────────────────────────────────
+    // Flower petals float upward from the lower viewport. Same custom-prop
+    // trick as firework/bloom for the translate target.
+    function castPetal(durationMs) {
+      if (reduce()) return;
+      var glyphs = ['🌸', '🌺', '🌷', '🌼', '🌸', '🌺', '🌸', '🌷', '🌼', '🌺', '🌸', '🌷', '🌸', '🌼', '🌺', '🌷'];
+      var count = 16;
+      for (var i = 0; i < count; i++) {
+        var p = document.createElement('span');
+        p.className = 'spell-petal';
+        var startXPct = (14 + Math.random() * 72).toFixed(1);
+        var startY = (window.innerHeight * (0.55 + Math.random() * 0.25)).toFixed(0);
+        var dx = ((Math.random() - 0.5) * 180).toFixed(1);
+        var dy = -(120 + Math.random() * 180);
+        var size = 13 + Math.floor(Math.random() * 16);
+        var dur = (durationMs || 3200) + Math.floor(Math.random() * 900);
+        var delay = Math.floor(Math.random() * 700);
+        var rot = Math.floor(Math.random() * 540) - 270;
+        p.textContent = glyphs[i % glyphs.length];
+        p.style.cssText =
+          'left:' + startXPct + '%;' +
+          'top:' + startY + 'px;' +
+          'font-size:' + size + 'px;' +
+          'animation-duration:' + dur + 'ms;' +
+          'animation-delay:' + delay + 'ms;' +
+          '--spell-petal-dx:' + dx + 'px;' +
+          '--spell-petal-dy:' + dy + 'px;' +
+          '--spell-petal-rot:' + rot + 'deg;';
+        $layer.appendChild(p);
+        active.bursts++;
+        (function (el) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, dur + delay + 100);
+        })(p);
+      }
+    }
+
+    // ─── kite (companion) ────────────────────────────────────────
+    // Drifts across the upper third of the viewport — a gentler altitude
+    // than the bottom-walking companions. Sways as it moves.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prevKt = active.byId.kite;
+        if (prevKt && prevKt.parentNode) prevKt.parentNode.removeChild(prevKt);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite drifting across the sky. Click to release it.');
+      kite.title = 'click to release the kite';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 50000;
+      var topPct = (10 + Math.random() * 22).toFixed(1);
+      var driftSeconds = Math.max(12, Math.min(40, window.innerWidth / 50));
+      kite.style.cssText =
+        'top:' + topPct + 'vh;' +
+        'animation:spell-kite-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + driftSeconds + 's linear infinite,' +
+        'spell-kite-sway 3.4s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── tide (ambient) ──────────────────────────────────────────
+    // A translucent wave at the viewport bottom, breathing in and out.
+    // No-op on recast (idempotent like candle/snow).
+    function castTide() {
+      if (active.byId.tide) return;
+      var td = document.createElement('button');
+      td.className = 'spell-tide';
+      td.type = 'button';
+      td.setAttribute('aria-label', 'Tide overlay, rising and falling. Click to still the water.');
+      td.title = 'click to still the tide';
+      td.addEventListener('click', function () {
+        if (td.parentNode) td.parentNode.removeChild(td);
+        active.byId.tide = null;
+      });
+      $layer.appendChild(td);
+      active.byId.tide = td;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1233,6 +1325,9 @@
         case 'crab':      castCrab(40000); break;
         case 'duck':      castDuck(55000); break;
         case 'sunrise':   castSunrise(); break;
+        case 'petal':     castPetal(3200); break;
+        case 'kite':      castKite(50000); break;
+        case 'tide':      castTide(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2501,6 +2596,84 @@
     50%      { box-shadow: 0 0 64px 24px rgba(255, 200, 60, 0.6), 0 0 140px 55px rgba(255, 140, 30, 0.30); }
   }
 
+  /* ── petal (burst) ──────────────────────────────────────── */
+  .spell-petal {
+    position: absolute;
+    pointer-events: none;
+    animation: spell-petal-drift ease-out forwards;
+    opacity: 0;
+  }
+  @keyframes spell-petal-drift {
+    0%   { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+    8%   { opacity: 1; }
+    75%  { opacity: 0.8; }
+    100% {
+      opacity: 0;
+      transform:
+        translate(var(--spell-petal-dx, 0), var(--spell-petal-dy, -120px))
+        rotate(var(--spell-petal-rot, 360deg));
+    }
+  }
+
+  /* ── kite (companion) ────────────────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    top: 18vh; /* overridden inline */
+    left: -50px;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+  }
+  @keyframes spell-kite-drift-ltr {
+    0%   { left: -50px; }
+    100% { left: calc(100vw + 50px); }
+  }
+  @keyframes spell-kite-drift-rtl {
+    0%   { left: calc(100vw + 50px); }
+    100% { left: -50px; }
+  }
+  @keyframes spell-kite-sway {
+    0%, 100% { transform: rotate(-10deg) translateY(0); }
+    50%       { transform: rotate(10deg) translateY(-10px); }
+  }
+
+  /* ── tide (ambient) ─────────────────────────────────────── */
+  .spell-tide {
+    position: fixed;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+    height: 56px;
+    background: linear-gradient(
+      180deg,
+      rgba(74, 158, 255, 0) 0%,
+      rgba(74, 158, 255, 0.11) 44%,
+      rgba(74, 158, 255, 0.22) 100%
+    );
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 30;
+    border-radius: 50% 50% 0 0 / 18px 18px 0 0;
+    transform-origin: center bottom;
+    animation: spell-tide-breathe 9s ease-in-out infinite;
+  }
+  @keyframes spell-tide-breathe {
+    0%, 100% { transform: scaleY(0.5) translateY(8px); opacity: 0.7; }
+    50%       { transform: scaleY(1) translateY(0); opacity: 1; }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2531,7 +2704,10 @@
     .spell-campfire__glow,
     .spell-lantern,
     .spell-crab,
-    .spell-duck { animation: none; }
+    .spell-duck,
+    .spell-kite,
+    .spell-tide { animation: none; }
+    .spell-petal { display: none; } /* petal motion-only */
     .spell-cat,
     .spell-pup,
     .spell-penguin,
@@ -2543,7 +2719,8 @@
     .spell-ghost,
     .spell-frog,
     .spell-crab,
-    .spell-duck { left: 50%; transform: translateX(-50%); }
+    .spell-duck,
+    .spell-kite { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2571,5 +2748,6 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-tide { transform: scaleY(0.85); opacity: 0.8; } /* static tide band */
   }
 </style>
