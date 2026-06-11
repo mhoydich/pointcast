@@ -430,7 +430,7 @@ export const GET: APIRoute = async () => {
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
-        postsOnly: 'https://pointcast.xyz/rss.xml',
+        postsOnly: 'https://pointcast.xyz/feed.xml',
         explore: 'https://pointcast.xyz/explore.rss',
       },
       indexnow: 'https://pointcast.xyz/api/indexnow',
@@ -613,7 +613,7 @@ export const GET: APIRoute = async () => {
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
-        rss: 'https://pointcast.xyz/rss.xml',
+        rss: 'https://pointcast.xyz/feed.xml',
       },
       metadata: {
         tezosMetadata: 'https://pointcast.xyz/api/tezos-metadata/{tokenId}',

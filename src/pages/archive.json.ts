@@ -141,7 +141,7 @@ export const GET: APIRoute = async () => {
       human:    'https://pointcast.xyz/archive',
       flat:     'https://pointcast.xyz/blocks.json',
       sitemap:  'https://pointcast.xyz/sitemap-blocks.xml',
-      rss:      'https://pointcast.xyz/rss.xml',
+      rss:      'https://pointcast.xyz/feed.xml',
     },
   };
 

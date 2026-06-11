@@ -58,7 +58,10 @@ function readMtimes(): Record<string, number> {
       }
     }
     return map;
-  } catch {
+  } catch (err) {
+    // Loud on purpose: a silent {} here empties the NEW THIS WEEK shelf and
+    // zeroes every mtime, which reads downstream as "nothing ships here".
+    console.warn('[explore] git mtime extraction failed — recent/stale shelves will be empty:', err);
     return {};
   }
 }

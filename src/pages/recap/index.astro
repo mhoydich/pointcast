@@ -1,0 +1,90 @@
+---
+/**
+ * /recap — the weekly recap room's front door.
+ *
+ * Until tonight this path 404'd: only /recap/[week] existed, its
+ * getStaticPaths fed from /api/recap?index=true, and that endpoint hard-500'd
+ * because the RECAPS KV binding never existed (bound 2026-06-10). So the only
+ * door to the recap system was a dead link. This index is the stable door:
+ * it renders an honest zero-state at build time and hydrates the archive list
+ * client-side once recaps exist, so it never goes stale between deploys.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const title = 'Weekly Recap — PointCast';
+const description =
+  'The week in the town, one dispatch at a time — drums tapped, visitors arrived, blocks published. Archive of every weekly recap.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="rc">
+    <header class="rc-head">
+      <p class="rc-kicker mono">VST · WEEKLY RECAP · EVERY SUNDAY</p>
+      <h1 class="rc-title">The week, recapped.</h1>
+      <p class="rc-deck">
+        Once a week the town counts itself: drums tapped, visitors arrived, blocks
+        published, one hero moment. Each recap is a small newspaper page that stays
+        put forever.
+      </p>
+    </header>
+
+    <section class="rc-list" aria-label="Recap archive">
+      <div class="rc-sechead">
+        <h2 class="rc-sechead__t mono">ARCHIVE</h2>
+      </div>
+      <ol id="rc-weeks" class="rc-weeks mono"></ol>
+      <p id="rc-empty" class="rc-empty">
+        No recaps published yet — the counter started ticking tonight. The first
+        one lands on a Sunday. Until then, <a href="/wire">the wire</a> carries the
+        day-to-day and <a href="/archive">the archive</a> holds every block.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    fetch('/api/recap?index=true', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (ids) {
+        if (!Array.isArray(ids) || ids.length === 0) return;
+        var ol = document.getElementById('rc-weeks');
+        var empty = document.getElementById('rc-empty');
+        if (!ol) return;
+        ids.forEach(function (id) {
+          if (!/^\d{4}-w\d{2}$/.test(String(id))) return;
+          var li = document.createElement('li');
+          var a = document.createElement('a');
+          a.href = '/recap/' + id;
+          a.textContent = id.toUpperCase();
+          li.appendChild(a);
+          ol.appendChild(li);
+        });
+        if (ol.children.length > 0 && empty) empty.style.display = 'none';
+      })
+      .catch(function () {});
+  })();
+</script>
+
+<style>
+  .rc { max-width: 760px; margin: 0 auto; padding: 0 20px 88px; color: var(--pc-ink); }
+  .rc .mono, .rc-kicker, .rc-sechead__t, .rc-weeks { font-family: var(--pc-font-mono); }
+  .rc a { color: inherit; }
+
+  .rc-head { border: 1.5px solid var(--pc-accent); border-left-width: 6px; border-radius: 2px; background: #fff; padding: 22px 24px 20px; margin: 22px 0 0; }
+  .rc-kicker { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-accent); text-transform: uppercase; margin: 0 0 14px; font-weight: 500; }
+  .rc-title { font-size: clamp(26px, 4vw, 36px); font-weight: 500; line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 12px; }
+  .rc-deck { font-size: 15px; line-height: 1.5; font-weight: 400; color: var(--pc-ink-soft); margin: 0; max-width: 560px; }
+
+  .rc-list { margin: 40px 0 0; }
+  .rc-sechead { padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1.5px solid var(--pc-ink); }
+  .rc-sechead__t { font-size: 12px; font-weight: 500; letter-spacing: 0.12em; margin: 0; }
+  .rc-weeks { list-style: none; margin: 0; padding: 0; }
+  .rc-weeks li { border-bottom: 1px solid var(--pc-rule-soft); }
+  .rc-weeks a { display: block; padding: 11px 6px; font-size: 13px; letter-spacing: 0.08em; text-decoration: none; }
+  .rc-weeks a:hover { background: var(--pc-rule-soft); color: var(--pc-accent); }
+  .rc-empty { font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); margin: 4px 0 0; }
+  .rc-empty a { color: var(--pc-accent); text-decoration: none; border-bottom: 1.5px solid transparent; }
+  .rc-empty a:hover { border-bottom-color: currentColor; }
+</style>
