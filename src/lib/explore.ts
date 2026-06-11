@@ -91,11 +91,58 @@ export const CATEGORIES: Category[] = [
     blurb: 'Claude, Codex, Manus, and the lanes between.',
     match: (s) =>
       s.startsWith('agent') ||
-      s === 'cast' ||
       s === 'codex' ||
       s === 'claude' ||
       s === 'manus' ||
       s === 'cc',
+  },
+  {
+    key: 'music',
+    label: 'Music & Casts',
+    blurb: 'The cast spells, the music hub, the listening rooms.',
+    match: (s) =>
+      s === 'cast' ||
+      s.startsWith('cast-') ||
+      s.startsWith('music') ||
+      s === 'spells' ||
+      s === 'song-of-the-day' ||
+      s === 'melody-bottle' ||
+      s.startsWith('listening-room') ||
+      s === 'spinning-stoop' ||
+      s === 'spinning-triptych' ||
+      s === 'radio' ||
+      s === 'town-music',
+  },
+  {
+    key: 'shrines',
+    label: 'Shrines & Stillness',
+    blurb: 'Water, bird, flame, stone, grass — the quiet rooms.',
+    match: (s) =>
+      s.startsWith('shrine') ||
+      s === 'aviary' ||
+      s === 'meditate' ||
+      s === 'sit' ||
+      s === 'sit-v2' ||
+      s === 'ritual-clock' ||
+      s === 'quiet-hours',
+  },
+  {
+    key: 'federation',
+    label: 'Rooms & Federation',
+    blurb: 'The room contract, the webring, the mesh between sites.',
+    match: (s) =>
+      s === 'room' ||
+      s === 'rooms' ||
+      s === 'room-maker' ||
+      s === 'room-weather' ||
+      s === 'webring' ||
+      s === 'federation' ||
+      s === 'for-nodes' ||
+      s === 'mesh' ||
+      s === 'mesh-local' ||
+      s === 'handshakes' ||
+      s === 'intercom' ||
+      s === 'messages',
   },
   {
     key: 'sing',

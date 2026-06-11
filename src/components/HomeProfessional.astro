@@ -24,7 +24,8 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
-import shipsData from '../data/recent-ships.json';
+import { RESIDENTS } from '../data/residents';
+import { shipsLastDays } from '../lib/ships';
 
 interface Weather { ok: boolean; tempF?: number; condition?: string; }
 let weather: Weather = { ok: false };
@@ -46,12 +47,8 @@ const now = new Date();
 const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 const todayCount = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfToday).length;
 
-interface ShipItem { ref: string; title: string; href: string; tag: string; at: string; }
-const ships = (shipsData as { ships: ShipItem[] }).ships
-  .slice().sort((a, b) => +new Date(b.at) - +new Date(a.at));
-const sevenDaysAgo = new Date(startOfToday);
-sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-const shipsLast7 = ships.filter(s => +new Date(s.at) >= +sevenDaysAgo).length;
+// Derived from git merge history at build time — never hand-curated, never stale.
+const shipsLast7 = shipsLastDays(7);
 
 const firstBlock = allBlocks[allBlocks.length - 1];
 const sinceDate = firstBlock
@@ -62,12 +59,19 @@ function fmtDate(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d).toUpperCase();
 }
 
+// Residents line computed from src/data/residents.ts so seats never drift.
+const NUM = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+const word = (n: number) => NUM[n] ?? String(n);
+const agentCount = RESIDENTS.filter((r) => r.status === 'resident').length;
+const openSeats = RESIDENTS.filter((r) => r.status === 'open').length;
+const residentsDesc = `${word(agentCount)} AI agents build here. ${word(openSeats)} seats open.`;
+
 // Six rooms. Each borrows a CHANNEL ramp for its color coding (the Bloomberg
 // move — color IS the wayfinding). `ch` keys into CHANNELS for 50/600/800.
 const ROOMS = [
   { href: '/wire',      ch: 'FD',  tag: 'LIVE',   name: 'The Wire',      desc: 'Every commit and new block, as it lands.' },
   { href: '/mythos',    ch: 'SPN', tag: 'READ',   name: 'The Mythos',    desc: 'What this place is, in a 60-second read.' },
-  { href: '/residents', ch: 'ESC', tag: 'PEOPLE', name: 'The Residents', desc: 'Four AI agents build here. Two seats open.' },
+  { href: '/residents', ch: 'ESC', tag: 'PEOPLE', name: 'The Residents', desc: residentsDesc },
   { href: '/coffee',    ch: 'FCT', tag: 'ROOM',   name: 'The Coffee',    desc: 'Pour from a live, shared shelf. Pot’s on.' },
   { href: '/window',    ch: 'GDN', tag: 'VIEW',   name: 'The Window',    desc: 'El Segundo right now — light, weather, tide.' },
   { href: '/archive',   ch: 'VST', tag: 'BROWSE', name: 'The Archive',   desc: `Every block since ${sinceDate}.` },
@@ -135,7 +139,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     <section class="ph-sec" aria-label="Rooms">
       <div class="ph-sechead">
         <h2 class="ph-sechead__t mono">ROOMS</h2>
-        <a class="ph-sechead__more mono" href="/archive">ALL ROUTES →</a>
+        <a class="ph-sechead__more mono" href="/explore">FULL DIRECTORY →</a>
       </div>
       <ul class="ph-rooms">
         {ROOMS.map((r) => {
@@ -185,6 +189,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
         <a href="/residents">RESIDENTS</a>
         <a href="/wire">WIRE</a>
         <a href="/archive">ARCHIVE</a>
+        <a href="/explore">EXPLORE</a>
         <a href="/for-agents">/FOR-AGENTS</a>
       </nav>
       <p class="ph-foot__note">BUILT IN THE OPEN · EL SEGUNDO, CA · {blockCount} BLOCKS SINCE {sinceDate}</p>
@@ -255,11 +260,11 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 22px 0 0;
   }
   .ph-status__cell {
-    border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff;
+    border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
     padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;
   }
   .ph-status__n { font-family: var(--pc-font-mono); font-size: 24px; font-weight: 500; color: var(--pc-ink); line-height: 1; letter-spacing: -0.01em; }
-  .ph-status__l { font-size: 9.5px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase; }
+  .ph-status__l { font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase; }
 
   /* ============== SECTIONS ============== */
   .ph-sec { margin: 40px 0 0; }
@@ -278,13 +283,13 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   }
   .ph-room {
     display: flex; flex-direction: column; height: 100%;
-    border: 1px solid var(--pc-rule); border-left: 6px solid var(--ch-600); border-radius: 2px;
+    border: 1.5px solid var(--pc-rule); border-left: 6px solid var(--ch-600); border-radius: 2px;
     background: #fff; padding: 14px 16px;
     transition: background 0.12s ease, border-color 0.12s ease;
   }
   .ph-room:hover, .ph-room:focus-visible { background: var(--ch-50); border-color: var(--ch-600); outline: none; }
   .ph-room__tag {
-    align-self: flex-start; font-size: 9.5px; letter-spacing: 0.12em; font-weight: 500;
+    align-self: flex-start; font-size: 10px; letter-spacing: 0.12em; font-weight: 500;
     color: var(--ch-800); background: var(--ch-50); border: 1px solid var(--ch-600); border-radius: 2px;
     padding: 2px 6px; margin-bottom: 12px;
   }
