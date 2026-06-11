@@ -26,6 +26,7 @@ import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import { RESIDENTS } from '../data/residents';
 import { shipsLastDays } from '../lib/ships';
+import { pickDailyBlock, todayPT, pickDailyIndex } from '../lib/daily';
 
 interface Weather { ok: boolean; tempF?: number; condition?: string; }
 let weather: Weather = { ok: false };
@@ -49,6 +50,17 @@ const todayCount = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfTo
 
 // Derived from git merge history at build time — never hand-curated, never stale.
 const shipsLast7 = shipsLastDays(7);
+
+// The daily loop: today's deterministic drop + tomorrow's number (the pick is
+// seeded by PT date, so tomorrow is knowable — the tease costs nothing and is
+// true). Client re-pick below covers stale deploys, same as /today.
+const dailyToday = todayPT();
+const dailyPick = pickDailyBlock(allBlocks);
+const dailySortedIds = [...allBlocks]
+  .sort((a, b) => a.data.id.localeCompare(b.data.id))
+  .map((b) => b.data.id);
+const tomorrowDate = new Date(Date.now() + 86_400_000);
+const dailyNextId = dailySortedIds[pickDailyIndex(dailySortedIds.length, tomorrowDate)] ?? null;
 
 const firstBlock = allBlocks[allBlocks.length - 1];
 const sinceDate = firstBlock
@@ -134,6 +146,29 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
         <span class="ph-status__l">EL SEGUNDO · <span id="ph-cond2">{condition}</span></span>
       </div>
     </section>
+
+    {/* ============== DAILY LOOP ============== */}
+    {dailyPick && (
+      <section
+        class="ph-daily mono"
+        aria-label="The daily loop"
+        data-built-day={dailyToday}
+        style={`--ch-50:${ramp('FCT').color50};--ch-600:${ramp('FCT').color600};--ch-800:${ramp('FCT').color800};`}
+      >
+        <span class="ph-daily__tag">DAILY</span>
+        <a class="ph-daily__drop" href="/today" id="ph-daily-drop">
+          TODAY'S DROP — № {dailyPick.data.id} · <span class="ph-daily__title" id="ph-daily-title">{dailyPick.data.title}</span>
+        </a>
+        <span class="ph-daily__also">
+          <a href="/zen-cats">THE CAT</a>
+          <span class="ph-daily__dot">·</span>
+          <a href="/song-of-the-day">THE SONG</a>
+        </span>
+        {dailyNextId && (
+          <span class="ph-daily__next" id="ph-daily-next">TOMORROW · № {dailyNextId} · 00:00 PT</span>
+        )}
+      </section>
+    )}
 
     {/* ============== ROOMS ============== */}
     <section class="ph-sec" aria-label="Rooms">
@@ -223,6 +258,42 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   })();
 </script>
 
+<script type="application/json" id="ph-daily-ids" set:html={JSON.stringify(dailySortedIds)} />
+
+<script>
+  // Stale-proof the daily strip: same daily-core math as /today. If this
+  // build's PT day has lapsed, recompute today's + tomorrow's picks and patch
+  // the strip — the front door's "come back tomorrow" must never be yesterday.
+  import { todayPT, pickDailyIndex } from '../lib/daily-core';
+
+  (function () {
+    const strip = document.querySelector<HTMLElement>('.ph-daily');
+    const idsEl = document.getElementById('ph-daily-ids');
+    if (!strip || !idsEl) return;
+    const builtDay = strip.dataset.builtDay || '';
+    if (!builtDay || builtDay === todayPT()) return;
+
+    let ids: string[] = [];
+    try { ids = JSON.parse(idsEl.textContent || '[]'); } catch { return; }
+    if (!ids.length) return;
+
+    const todayId = ids[pickDailyIndex(ids.length)];
+    const nextId = ids[pickDailyIndex(ids.length, new Date(Date.now() + 86_400_000))];
+    strip.dataset.builtDay = todayPT();
+
+    const drop = document.getElementById('ph-daily-drop');
+    if (drop && todayId) {
+      drop.textContent = `TODAY'S DROP — № ${todayId}`;
+      fetch(`/b/${todayId}.json`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b) => { if (b?.title) drop.textContent = `TODAY'S DROP — № ${todayId} · ${b.title}`; })
+        .catch(() => {});
+    }
+    const next = document.getElementById('ph-daily-next');
+    if (next && nextId) next.textContent = `TOMORROW · № ${nextId} · 00:00 PT`;
+  })();
+</script>
+
 <style>
   .ph {
     max-width: 1100px;
@@ -265,6 +336,22 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   }
   .ph-status__n { font-family: var(--pc-font-mono); font-size: 24px; font-weight: 500; color: var(--pc-ink); line-height: 1; letter-spacing: -0.01em; }
   .ph-status__l { font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase; }
+
+  /* ============== DAILY LOOP ============== */
+  .ph-daily {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px;
+    margin: 8px 0 0; padding: 10px 14px;
+    border: 1.5px solid var(--ch-600); border-left-width: 6px; border-radius: 2px;
+    background: var(--ch-50); font-size: 11px; letter-spacing: 0.08em;
+  }
+  .ph-daily__tag { font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--ch-800); }
+  .ph-daily__drop { color: var(--pc-ink); font-weight: 500; }
+  .ph-daily__drop:hover .ph-daily__title { border-bottom: 1.5px solid var(--ch-800); }
+  .ph-daily__title { color: var(--ch-800); }
+  .ph-daily__also a { color: var(--pc-ink-soft); font-weight: 500; }
+  .ph-daily__also a:hover { color: var(--ch-800); }
+  .ph-daily__dot { margin: 0 5px; color: var(--pc-ink-muted); }
+  .ph-daily__next { margin-left: auto; color: var(--pc-ink-muted); font-size: 10px; }
 
   /* ============== SECTIONS ============== */
   .ph-sec { margin: 40px 0 0; }
@@ -329,6 +416,8 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   @media (max-width: 760px) {
     .ph { padding: 0 16px 72px; }
     .ph-status { grid-template-columns: repeat(2, 1fr); }
+    .ph-daily__next { margin-left: 0; width: 100%; }
+    .ph-daily__title { display: none; } /* number-only on phones — the room is one tap away */
     .ph-rooms { grid-template-columns: repeat(2, 1fr); }
     .ph-row { grid-template-columns: 56px 46px 1fr; column-gap: 12px; }
     .ph-row__id { display: none; }
