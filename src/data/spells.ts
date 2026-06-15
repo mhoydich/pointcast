@@ -399,6 +399,42 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BATCH 13 ─────────────────────────────────────────────────
+  {
+    id: 'thunder',
+    label: 'thunder',
+    blurb: "A crack of lightning blazes across the page. Blink and you'll miss it.",
+    glyph: '🌩️',
+    kind: 'burst',
+    durationMs: 1400,
+    accent: '#fdf2d6',
+  },
+  {
+    id: 'bat',
+    label: 'bat',
+    blurb: 'A bat swoops across mid-screen as night falls. Click to shoo it home.',
+    glyph: '🦇',
+    kind: 'companion',
+    durationMs: 50_000,
+    accent: '#1b3a5b',
+  },
+  {
+    id: 'rainbow',
+    label: 'rainbow',
+    blurb: 'A gentle arc of color bridges the viewport. Quietly optimistic.',
+    glyph: '🌈',
+    kind: 'ambient',
+    accent: '#d4a437',
+  },
+  {
+    id: 'lava',
+    label: 'lava',
+    blurb: 'Retro lava lamp blobs drift slow and warm. Very 1973.',
+    glyph: '♨️',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
 ];
 
 /** Lookup helper. */

@@ -1215,6 +1215,130 @@
       }, dur);
     }
 
+    // ─── thunder (burst) ─────────────────────────────────────────
+    // Whole-viewport double-flash + 1–2 jagged bolt divs shaped by
+    // CSS clip-path. Motion-only — skip entirely in reduced-motion.
+    function castThunder(durationMs) {
+      if (reduce()) return;
+      var dur = durationMs || 1400;
+      var flash = document.createElement('div');
+      flash.className = 'spell-thunder-flash';
+      $layer.appendChild(flash);
+      active.bursts++;
+      setTimeout(function () {
+        if (flash.parentNode) flash.parentNode.removeChild(flash);
+        active.bursts = Math.max(0, active.bursts - 1);
+      }, dur + 100);
+      var boltCount = 1 + Math.floor(Math.random() * 2);
+      for (var i = 0; i < boltCount; i++) {
+        (function (idx) {
+          setTimeout(function () {
+            var bolt = document.createElement('div');
+            bolt.className = 'spell-thunder-bolt';
+            bolt.style.cssText = 'left:' + (15 + Math.random() * 60) + '%;';
+            $layer.appendChild(bolt);
+            active.bursts++;
+            setTimeout(function () {
+              if (bolt.parentNode) bolt.parentNode.removeChild(bolt);
+              active.bursts = Math.max(0, active.bursts - 1);
+            }, 700);
+          }, idx * 350);
+        })(i);
+      }
+    }
+
+    // ─── bat (companion) ─────────────────────────────────────────
+    // 🦇 swoops across a random mid-screen height (20–50% from top).
+    // Secondary swoop keyframe separates vertical oscillation from the
+    // horizontal walk — RTL variant folds in scaleX(-1) per fish pattern.
+    function castBat(durationMs) {
+      if (active.byId.bat) {
+        var prevBat = active.byId.bat;
+        if (prevBat && prevBat.parentNode) prevBat.parentNode.removeChild(prevBat);
+      }
+      var bat = document.createElement('button');
+      bat.className = 'spell-bat';
+      bat.type = 'button';
+      bat.setAttribute('aria-label', 'A swooping bat. Click to shoo it home.');
+      bat.title = 'click to shoo the bat';
+      bat.textContent = '🦇';
+      var ltr = Math.random() < 0.5;
+      bat.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var topPct = (20 + Math.random() * 30).toFixed(1);
+      var dur = (durationMs || 50000);
+      var walkSeconds = Math.max(8, Math.min(26, window.innerWidth / 65));
+      var swoopAnim = ltr ? 'spell-bat-swoop' : 'spell-bat-swoop-rtl';
+      bat.style.cssText =
+        'top:' + topPct + '%;' +
+        'animation:spell-bat-fly-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear forwards,' +
+        swoopAnim + ' 1.2s ease-in-out infinite;';
+      bat.addEventListener('click', function () {
+        if (bat.parentNode) bat.parentNode.removeChild(bat);
+        active.byId.bat = null;
+      });
+      $layer.appendChild(bat);
+      active.byId.bat = bat;
+      setTimeout(function () {
+        if (bat && bat.parentNode) bat.parentNode.removeChild(bat);
+        if (active.byId.bat === bat) active.byId.bat = null;
+      }, dur);
+    }
+
+    // ─── rainbow (ambient) ───────────────────────────────────────
+    // A 300vh circle with its center below the viewport — only the
+    // top arc is visible, creating a wide rainbow spanning the upper
+    // half of the screen. Concentric ring stops in the radial-gradient
+    // lay down ROYGBIV from inner to outer. Click to clear.
+    function castRainbow() {
+      if (active.byId.rainbow) return;
+      var r = document.createElement('button');
+      r.className = 'spell-rainbow';
+      r.type = 'button';
+      r.setAttribute('aria-label', 'Rainbow overlay. Click to clear the sky.');
+      r.title = 'click to clear the rainbow';
+      r.addEventListener('click', function () {
+        if (r.parentNode) r.parentNode.removeChild(r);
+        active.byId.rainbow = null;
+      });
+      $layer.appendChild(r);
+      active.byId.rainbow = r;
+    }
+
+    // ─── lava (ambient) ──────────────────────────────────────────
+    // 5 blobs of warm PC-palette colors rise and morph slowly against
+    // a dark amber backing. Negative animation-delay means each blob
+    // starts mid-cycle so the lamp looks alive on first cast.
+    function castLava() {
+      if (active.byId.lava) return;
+      var l = document.createElement('button');
+      l.className = 'spell-lava';
+      l.type = 'button';
+      l.setAttribute('aria-label', 'Lava lamp overlay. Click to cool down.');
+      l.title = 'click to cool down the lava';
+      var blobColors = ['#c4952e', '#8a2432', '#d4a437', '#b05a2f', '#7a1e2e'];
+      var html = '';
+      for (var i = 0; i < 5; i++) {
+        var sz = (12 + Math.random() * 14).toFixed(1);
+        var lx = (8 + Math.random() * 72).toFixed(1);
+        var dur2 = (12 + Math.random() * 10).toFixed(1);
+        var del = (-Math.random() * 16).toFixed(2);
+        html += '<span class="spell-lava__blob" style="' +
+          'width:' + sz + 'vw;height:' + sz + 'vw;' +
+          'left:' + lx + '%;' +
+          'background:' + blobColors[i] + ';' +
+          'animation-duration:' + dur2 + 's;' +
+          'animation-delay:' + del + 's;' +
+          '"></span>';
+      }
+      l.innerHTML = html;
+      l.addEventListener('click', function () {
+        if (l.parentNode) l.parentNode.removeChild(l);
+        active.byId.lava = null;
+      });
+      $layer.appendChild(l);
+      active.byId.lava = l;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1378,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'thunder':      castThunder(1400); break;
+        case 'bat':          castBat(50000); break;
+        case 'rainbow':      castRainbow(); break;
+        case 'lava':         castLava(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2675,165 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 13 ──────────────────────────────────────────── */
+
+  /* ── thunder (burst) ─────────────────────────────────────── */
+  .spell-thunder-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(240, 240, 255, 0.88);
+    pointer-events: none;
+    z-index: 36;
+    animation: spell-thunder-flash 1.4s ease-out forwards;
+  }
+  @keyframes spell-thunder-flash {
+    0%   { opacity: 0; }
+    4%   { opacity: 1; }
+    18%  { opacity: 0.3; }
+    28%  { opacity: 0.9; }
+    45%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+  .spell-thunder-bolt {
+    position: fixed;
+    top: 0;
+    width: 5px;
+    height: 72vh;
+    background: linear-gradient(to bottom, #fff 0%, #e8e8ff 40%, transparent 100%);
+    clip-path: polygon(65% 0%, 100% 0%, 35% 44%, 100% 44%, 0% 100%, 65% 52%, 0% 52%);
+    filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 18px #b8c8ff);
+    pointer-events: none;
+    z-index: 37;
+    transform-origin: top center;
+    animation: spell-thunder-bolt 0.65s ease-out forwards;
+  }
+  @keyframes spell-thunder-bolt {
+    0%   { opacity: 0; transform: scaleY(0.05); }
+    8%   { opacity: 1;  transform: scaleY(1); }
+    70%  { opacity: 0.9; }
+    100% { opacity: 0;  transform: scaleY(1); }
+  }
+
+  /* ── bat (companion) ─────────────────────────────────────── */
+  .spell-bat {
+    position: fixed;
+    top: 30%;
+    left: -48px;
+    width: 42px;
+    height: 42px;
+    line-height: 42px;
+    font-size: 34px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
+  }
+  @keyframes spell-bat-fly-ltr {
+    0%   { left: -48px; }
+    100% { left: calc(100vw + 48px); }
+  }
+  @keyframes spell-bat-fly-rtl {
+    0%   { left: calc(100vw + 48px); }
+    100% { left: -48px; }
+  }
+  @keyframes spell-bat-swoop {
+    0%   { transform: translateY(0); }
+    25%  { transform: translateY(-20px); }
+    50%  { transform: translateY(0); }
+    75%  { transform: translateY(14px); }
+    100% { transform: translateY(0); }
+  }
+  @keyframes spell-bat-swoop-rtl {
+    0%   { transform: translateY(0) scaleX(-1); }
+    25%  { transform: translateY(-20px) scaleX(-1); }
+    50%  { transform: translateY(0) scaleX(-1); }
+    75%  { transform: translateY(14px) scaleX(-1); }
+    100% { transform: translateY(0) scaleX(-1); }
+  }
+
+  /* ── rainbow (ambient) ───────────────────────────────────── */
+  /* Full-viewport dismiss button with ::after arc via radial-   */
+  /* gradient on a 300vh circle pushed below the fold.           */
+  .spell-rainbow {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 27;
+    overflow: hidden;
+  }
+  .spell-rainbow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -20vh;
+    transform: translateX(-50%);
+    width: 300vh;
+    height: 300vh;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 50% 50%,
+      transparent 32%,
+      rgba(117,   7, 135, 0.65) 32%, rgba(117,   7, 135, 0.65) 38%,
+      rgba(  0,   0, 205, 0.65) 38%, rgba(  0,   0, 205, 0.65) 44%,
+      rgba(  0, 128,  38, 0.65) 44%, rgba(  0, 128,  38, 0.65) 50%,
+      rgba(255, 237,   0, 0.65) 50%, rgba(255, 237,   0, 0.65) 56%,
+      rgba(255, 140,   0, 0.65) 56%, rgba(255, 140,   0, 0.65) 62%,
+      rgba(228,   3,   3, 0.65) 62%, rgba(228,   3,   3, 0.65) 68%,
+      transparent 68%
+    );
+    pointer-events: none;
+    will-change: opacity, transform;
+    animation: spell-rainbow-appear 3s ease-out forwards;
+  }
+  @keyframes spell-rainbow-appear {
+    from { opacity: 0; transform: translateX(-50%) scale(0.88); }
+    to   { opacity: 1; transform: translateX(-50%) scale(1); }
+  }
+
+  /* ── lava (ambient) ─────────────────────────────────────── */
+  .spell-lava {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(14, 7, 3, 0.88);
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 29;
+    overflow: hidden;
+  }
+  .spell-lava__blob {
+    position: absolute;
+    bottom: -18%;
+    border-radius: 50%;
+    opacity: 0.82;
+    filter: blur(3px);
+    will-change: transform, border-radius;
+    animation: spell-lava-rise 14s ease-in-out infinite;
+  }
+  @keyframes spell-lava-rise {
+    0%   { transform: translateY(0)     scale(1);    border-radius: 50%; }
+    20%  { transform: translateY(-30vh) scale(1.12); border-radius: 44% 56% 52% 48% / 50% 46% 54% 50%; }
+    40%  { transform: translateY(-58vh) scale(0.92); border-radius: 52% 48% 46% 54% / 54% 50% 50% 46%; }
+    60%  { transform: translateY(-72vh) scale(1.06); border-radius: 46% 54% 52% 48% / 50% 54% 46% 50%; }
+    80%  { transform: translateY(-40vh) scale(0.96); border-radius: 50%; }
+    100% { transform: translateY(0)     scale(1);    border-radius: 50%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-thunder-flash, .spell-thunder-bolt { display: none; }
+    .spell-bat { animation: none; left: 50%; transform: translateX(-50%); }
+    .spell-bat[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-rainbow::after { animation: none; opacity: 0.9; transform: translateX(-50%) scale(1); }
+    .spell-lava__blob { display: none; }
   }
 </style>
