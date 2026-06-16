@@ -1215,6 +1215,106 @@
       }, dur);
     }
 
+    // ─── rabbit (companion) ──────────────────────────────────────
+    // Faster cadence than frog: quick-quick-pause rhythm with taller
+    // arcs. Distinct feel even though both hop.
+    function castRabbit(durationMs) {
+      if (active.byId.rabbit) {
+        var prevR = active.byId.rabbit;
+        if (prevR && prevR.parentNode) prevR.parentNode.removeChild(prevR);
+      }
+      var rabbit = document.createElement('button');
+      rabbit.className = 'spell-rabbit';
+      rabbit.type = 'button';
+      rabbit.setAttribute('aria-label', 'A bounding rabbit. Click to let it go.');
+      rabbit.title = 'click to let the rabbit go';
+      rabbit.textContent = '🐇';
+      var ltr = Math.random() < 0.6;
+      rabbit.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 45000;
+      var walkSeconds = Math.max(8, Math.min(22, window.innerWidth / 72));
+      rabbit.style.cssText =
+        'animation:spell-rabbit-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-rabbit-bound 0.52s cubic-bezier(.25,0,.35,1) infinite;';
+      rabbit.addEventListener('click', function () {
+        if (rabbit.parentNode) rabbit.parentNode.removeChild(rabbit);
+        active.byId.rabbit = null;
+      });
+      $layer.appendChild(rabbit);
+      active.byId.rabbit = rabbit;
+      setTimeout(function () {
+        if (rabbit && rabbit.parentNode) rabbit.parentNode.removeChild(rabbit);
+        if (active.byId.rabbit === rabbit) active.byId.rabbit = null;
+      }, dur);
+    }
+
+    // ─── toast (burst) ───────────────────────────────────────────
+    // 8 bread/snack glyphs launch from the bottom in staggered arcs,
+    // spinning as they rise and tumble back through the bottom edge.
+    function castToast(durationMs) {
+      if (reduce()) return;
+      var dur = durationMs || 2600;
+      var snacks = ['🍞', '🧈', '🫓', '🍞', '🥐', '🍯', '🍞', '🥪'];
+      for (var i = 0; i < snacks.length; i++) {
+        var t = document.createElement('span');
+        t.className = 'spell-toast';
+        t.textContent = snacks[i];
+        var startX = (8 + Math.random() * 84).toFixed(1);
+        var rise = (38 + Math.random() * 30).toFixed(1);
+        var spin = (Math.random() < 0.5 ? 1 : -1) * (180 + Math.floor(Math.random() * 180));
+        var size = 20 + Math.floor(Math.random() * 16);
+        var tdur = dur - 200 + Math.floor(Math.random() * 400);
+        var delay = i * 110;
+        t.style.cssText =
+          'left:' + startX + 'vw;' +
+          'font-size:' + size + 'px;' +
+          '--spell-toast-rise:-' + rise + 'vh;' +
+          '--spell-toast-spin:' + spin + 'deg;' +
+          'animation:spell-toast-pop ' + tdur + 'ms cubic-bezier(.18,.89,.32,1.28) ' + delay + 'ms forwards;';
+        $layer.appendChild(t);
+        active.bursts++;
+        (function (el, total) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, total + 100);
+        })(t, tdur + delay);
+      }
+    }
+
+    // ─── disco (ambient) ─────────────────────────────────────────
+    // 5 radial-gradient spotlights sweep the viewport at independent
+    // speeds and phases. screen blend-mode keeps page content legible.
+    // Recasting while active is a no-op.
+    function castDisco() {
+      if (active.byId.disco) return;
+      var d = document.createElement('button');
+      d.className = 'spell-disco';
+      d.type = 'button';
+      d.setAttribute('aria-label', 'Disco lights. Click to turn them off.');
+      d.title = 'click to turn off the disco lights';
+      var colors = ['#a78bfa', '#f472b6', '#60a5fa', '#34d399', '#fb923c'];
+      var animNames = ['spell-disco-a', 'spell-disco-b', 'spell-disco-c', 'spell-disco-d', 'spell-disco-e'];
+      var html = '';
+      for (var i = 0; i < 5; i++) {
+        var size = 28 + Math.floor(Math.random() * 22);
+        var lightDur = (3.8 + Math.random() * 2.4).toFixed(2);
+        var lightDelay = (Math.random() * 2.5).toFixed(2);
+        html += '<span class="spell-disco__light" style="' +
+          'background:radial-gradient(circle at center,' + colors[i] + ' 0%,transparent 70%);' +
+          'width:' + size + 'vw;height:' + size + 'vw;' +
+          'animation:' + animNames[i] + ' ' + lightDur + 's ease-in-out ' + lightDelay + 's infinite alternate;' +
+          '"></span>';
+      }
+      d.innerHTML = html;
+      d.addEventListener('click', function () {
+        if (d.parentNode) d.parentNode.removeChild(d);
+        active.byId.disco = null;
+      });
+      $layer.appendChild(d);
+      active.byId.disco = d;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1354,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'rabbit':       castRabbit(45000); break;
+        case 'toast':        castToast(2600); break;
+        case 'disco':        castDisco(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2393,6 +2496,7 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
+    .spell-rabbit,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2444,6 +2548,8 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-rabbit { animation: none !important; left: 50% !important; } /* teleport */
+    .spell-disco__light { animation: none !important; } /* static lights */
   }
 
   /* ─── nouns: noun (companion) ───────────────────────────────── */
@@ -2547,5 +2653,92 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── rabbit (companion) ────────────────────────────────────── */
+  .spell-rabbit {
+    position: fixed;
+    bottom: 52px;
+    left: 0;
+    font-size: 28px;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 32;
+  }
+  @keyframes spell-rabbit-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 8px); }
+  }
+  @keyframes spell-rabbit-walk-rtl {
+    0%   { left: calc(100vw + 8px); }
+    100% { left: -40px; }
+  }
+  @keyframes spell-rabbit-bound {
+    0%   { transform: translateY(0); }
+    18%  { transform: translateY(-28px); }
+    30%  { transform: translateY(0); }
+    42%  { transform: translateY(-11px); }
+    52%  { transform: translateY(0); }
+    100% { transform: translateY(0); }
+  }
+
+  /* ─── toast (burst) ─────────────────────────────────────────── */
+  .spell-toast {
+    position: fixed;
+    bottom: 56px;
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-toast-pop {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+    8%   { opacity: 1; }
+    42%  { transform: translateY(var(--spell-toast-rise)) rotate(calc(var(--spell-toast-spin) * 0.5)); opacity: 1; }
+    92%  { opacity: 0.6; }
+    100% { transform: translateY(40px) rotate(var(--spell-toast-spin)); opacity: 0; }
+  }
+
+  /* ─── disco (ambient) ───────────────────────────────────────── */
+  .spell-disco {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 0, 18, 0.20);
+    pointer-events: auto;
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+    z-index: 29;
+    overflow: hidden;
+  }
+  .spell-disco__light {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.52;
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  @keyframes spell-disco-a {
+    0%   { transform: translate(5vw,  15vh); }
+    100% { transform: translate(70vw, 60vh); }
+  }
+  @keyframes spell-disco-b {
+    0%   { transform: translate(60vw, 10vh); }
+    100% { transform: translate(15vw, 65vh); }
+  }
+  @keyframes spell-disco-c {
+    0%   { transform: translate(30vw, 50vh); }
+    100% { transform: translate(75vw, 20vh); }
+  }
+  @keyframes spell-disco-d {
+    0%   { transform: translate(80vw, 40vh); }
+    100% { transform: translate(10vw, 30vh); }
+  }
+  @keyframes spell-disco-e {
+    0%   { transform: translate(45vw, 75vh); }
+    100% { transform: translate(55vw,  5vh); }
   }
 </style>
