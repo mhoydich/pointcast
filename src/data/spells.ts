@@ -399,6 +399,34 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── WRAP-UP BATCH (catalog ≥20, /spells live) ───────────────
+  {
+    id: 'dandelion',
+    label: 'dandelion',
+    blurb: 'Seeds scatter upward from a point, drift, and dissolve. Soft and fleeting.',
+    glyph: '🌼',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#d4a437',
+  },
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite soars across the top of the screen, bobbing on the wind.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'random',
+    label: 'random',
+    blurb: 'Cast me a spell. Any spell. Something from the catalog, picked by fate.',
+    glyph: '🎰',
+    kind: 'burst',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
