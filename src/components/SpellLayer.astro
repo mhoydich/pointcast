@@ -1215,6 +1215,128 @@
       }, dur);
     }
 
+    // ─── hearts (burst) ──────────────────────────────────────────
+    // 20 heart emoji fan outward from screen center using per-element
+    // dx/dy CSS custom props — same radial-scatter pattern as spark.
+    function castHearts(durationMs) {
+      if (reduce()) return;
+      var count = 20;
+      var cx = window.innerWidth / 2;
+      var cy = window.innerHeight / 2;
+      for (var i = 0; i < count; i++) {
+        var h = document.createElement('span');
+        h.className = 'spell-hearts';
+        var angle = Math.random() * 2 * Math.PI;
+        var dist = 80 + Math.random() * 320;
+        var dx = (Math.cos(angle) * dist).toFixed(1);
+        var dy = (Math.sin(angle) * dist).toFixed(1);
+        var size = 18 + Math.floor(Math.random() * 22);
+        var dur = (durationMs || 3000) - Math.floor(Math.random() * 400);
+        var delay = Math.floor(Math.random() * 180);
+        h.textContent = '❤️';
+        h.style.cssText =
+          'left:' + (cx - size / 2).toFixed(0) + 'px;top:' + (cy - size / 2).toFixed(0) + 'px;' +
+          'font-size:' + size + 'px;' +
+          '--spell-hearts-dx:' + dx + 'px;--spell-hearts-dy:' + dy + 'px;' +
+          'animation:spell-hearts-scatter ' + dur + 'ms ease-out ' + delay + 'ms forwards;';
+        $layer.appendChild(h);
+        active.bursts++;
+        (function (el, totalMs) {
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, totalMs + 100);
+        })(h, dur + delay);
+      }
+    }
+
+    // ─── snail (companion) ───────────────────────────────────────
+    // Slowest companion — ~16px/s (screen/16). No secondary animation;
+    // the patience is the entire personality.
+    function castSnail(durationMs) {
+      if (active.byId.snail) {
+        var prevSn = active.byId.snail;
+        if (prevSn && prevSn.parentNode) prevSn.parentNode.removeChild(prevSn);
+      }
+      var sn = document.createElement('button');
+      sn.className = 'spell-snail';
+      sn.type = 'button';
+      sn.setAttribute('aria-label', 'A snail, taking its time. Click to let it rest.');
+      sn.title = 'click to let the snail rest';
+      sn.textContent = '🐌';
+      var ltr = Math.random() < 0.6;
+      sn.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 120000;
+      var walkSeconds = Math.max(45, Math.min(90, window.innerWidth / 16));
+      sn.style.cssText =
+        'animation:spell-snail-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite;';
+      sn.addEventListener('click', function () {
+        if (sn.parentNode) sn.parentNode.removeChild(sn);
+        active.byId.snail = null;
+      });
+      $layer.appendChild(sn);
+      active.byId.snail = sn;
+      setTimeout(function () {
+        if (sn && sn.parentNode) sn.parentNode.removeChild(sn);
+        if (active.byId.snail === sn) active.byId.snail = null;
+      }, dur);
+    }
+
+    // ─── tide (ambient) ───────────────────────────────────────────
+    // Full-width band at the bottom that swells up 20px and recedes.
+    // Two layers: a wavy fill swell + a diffuse foam line above it.
+    // Recasting is a no-op; click to let the tide recede.
+    function castTide() {
+      if (active.byId.tide) return;
+      var t = document.createElement('button');
+      t.className = 'spell-tide';
+      t.type = 'button';
+      t.setAttribute('aria-label', 'A rising tide along the bottom. Click to let it recede.');
+      t.title = 'click to let the tide recede';
+      t.innerHTML =
+        '<span class="spell-tide__swell" aria-hidden="true"></span>' +
+        '<span class="spell-tide__foam"  aria-hidden="true"></span>';
+      t.addEventListener('click', function () {
+        if (t.parentNode) t.parentNode.removeChild(t);
+        active.byId.tide = null;
+      });
+      $layer.appendChild(t);
+      active.byId.tide = t;
+    }
+
+    // ─── rabbit (companion) ──────────────────────────────────────
+    // Faster than frog, lighter than pup — quick bounding hops.
+    // RTL hop uses the scaleX(-1)-in-keyframe pattern (same as frog).
+    function castRabbit(durationMs) {
+      if (active.byId.rabbit) {
+        var prevR = active.byId.rabbit;
+        if (prevR && prevR.parentNode) prevR.parentNode.removeChild(prevR);
+      }
+      var r = document.createElement('button');
+      r.className = 'spell-rabbit';
+      r.type = 'button';
+      r.setAttribute('aria-label', 'A bounding rabbit. Click to let it go.');
+      r.title = 'click to let the rabbit go';
+      r.textContent = '🐇';
+      var ltr = Math.random() < 0.5;
+      r.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 30000;
+      var walkSeconds = Math.max(8, Math.min(22, window.innerWidth / 90));
+      r.style.cssText =
+        'animation:spell-rabbit-walk-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite,' +
+        'spell-rabbit-hop' + (ltr ? '' : '-rtl') + ' 0.5s cubic-bezier(.4,0,.2,1) infinite;';
+      r.addEventListener('click', function () {
+        if (r.parentNode) r.parentNode.removeChild(r);
+        active.byId.rabbit = null;
+      });
+      $layer.appendChild(r);
+      active.byId.rabbit = r;
+      setTimeout(function () {
+        if (r && r.parentNode) r.parentNode.removeChild(r);
+        if (active.byId.rabbit === r) active.byId.rabbit = null;
+      }, dur);
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1376,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'hearts':    castHearts(3000); break;
+        case 'snail':     castSnail(120000); break;
+        case 'tide':      castTide(); break;
+        case 'rabbit':    castRabbit(30000); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2381,6 +2507,144 @@
     50%      { transform: rotate(3deg) translateY(-5px); }
   }
 
+  /* ─── hearts (burst) ────────────────────────────────────────── */
+  .spell-hearts {
+    position: fixed;
+    pointer-events: none;
+    z-index: 31;
+    will-change: transform, opacity;
+    line-height: 1;
+  }
+  @keyframes spell-hearts-scatter {
+    0%   { transform: translate(0, 0) scale(0.2); opacity: 1; }
+    25%  {
+      transform: translate(calc(var(--spell-hearts-dx) * 0.28), calc(var(--spell-hearts-dy) * 0.28)) scale(1.15);
+      opacity: 1;
+    }
+    80%  { opacity: 0.7; }
+    100% {
+      transform: translate(var(--spell-hearts-dx), var(--spell-hearts-dy)) scale(0.65);
+      opacity: 0;
+    }
+  }
+
+  /* ─── snail (companion) ──────────────────────────────────────── */
+  .spell-snail {
+    position: fixed;
+    bottom: 56px;
+    left: -44px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 30px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+  }
+  .spell-snail[data-dir='rtl'] { transform: scaleX(-1); }
+  @keyframes spell-snail-walk-ltr {
+    0%   { left: -44px; }
+    100% { left: calc(100vw + 44px); }
+  }
+  @keyframes spell-snail-walk-rtl {
+    0%   { left: calc(100vw + 44px); }
+    100% { left: -44px; }
+  }
+
+  /* ─── tide (ambient) ─────────────────────────────────────────── */
+  .spell-tide {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 56px;
+    height: 52px;
+    background: none;
+    border: 0;
+    padding: 0;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 31;
+    overflow: visible;
+  }
+  .spell-tide__swell {
+    position: absolute;
+    left: -5%;
+    width: 110%;
+    bottom: 0;
+    height: 100%;
+    background: linear-gradient(to top, rgba(74, 158, 255, 0.3) 0%, rgba(74, 158, 255, 0.06) 100%);
+    border-radius: 45% 55% 0 0 / 20px 20px 0 0;
+    animation: spell-tide-rise 10s ease-in-out infinite;
+  }
+  .spell-tide__foam {
+    position: absolute;
+    left: -12%;
+    width: 124%;
+    bottom: 48px;
+    height: 12px;
+    background: rgba(184, 212, 240, 0.5);
+    border-radius: 50%;
+    filter: blur(3px);
+    animation: spell-tide-foam 10s ease-in-out infinite;
+  }
+  @keyframes spell-tide-rise {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-20px); }
+  }
+  @keyframes spell-tide-foam {
+    0%, 100% { transform: translateY(0) scaleX(1); opacity: 0.6; }
+    50%       { transform: translateY(-20px) scaleX(1.04); opacity: 1; }
+  }
+
+  /* ─── rabbit (companion) ─────────────────────────────────────── */
+  .spell-rabbit {
+    position: fixed;
+    bottom: 56px;
+    left: -40px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    font-size: 28px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  }
+  @keyframes spell-rabbit-walk-ltr {
+    0%   { left: -40px; }
+    100% { left: calc(100vw + 40px); }
+  }
+  @keyframes spell-rabbit-walk-rtl {
+    0%   { left: calc(100vw + 40px); }
+    100% { left: -40px; }
+  }
+  /* Quick double-tap hop: launch, hang, land, mini-bounce. */
+  @keyframes spell-rabbit-hop {
+    0%, 100% { transform: translateY(0) scaleY(1); }
+    30%      { transform: translateY(-20px) scaleY(1.05); }
+    55%      { transform: translateY(0) scaleY(0.9); }
+    70%      { transform: translateY(-6px) scaleY(1.02); }
+    85%      { transform: translateY(0) scaleY(1); }
+  }
+  @keyframes spell-rabbit-hop-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0) scaleY(1); }
+    30%      { transform: scaleX(-1) translateY(-20px) scaleY(1.05); }
+    55%      { transform: scaleX(-1) translateY(0) scaleY(0.9); }
+    70%      { transform: scaleX(-1) translateY(-6px) scaleY(1.02); }
+    85%      { transform: scaleX(-1) translateY(0) scaleY(1); }
+  }
+
   /* ── reduced-motion ──────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .spell-cat,
@@ -2393,6 +2657,8 @@
     .spell-turtle,
     .spell-ghost,
     .spell-frog,
+    .spell-snail,
+    .spell-rabbit,
     .spell-breath__ring,
     .spell-breath__inner,
     .spell-candle__flame,
@@ -2419,7 +2685,9 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-snail,
+    .spell-rabbit { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2696,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-snail[data-dir='rtl'],
+    .spell-rabbit[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2444,6 +2714,7 @@
     .spell-fog__wisp { transform: none; } /* static wisps */
     .spell-campfire__glow { opacity: 0.5; } /* static glow */
     .spell-lantern { transform: rotate(0deg); } /* static lantern */
+    .spell-tide__swell, .spell-tide__foam { animation: none; } /* static water band */
   }
 
   /* ─── nouns: noun (companion) ───────────────────────────────── */
@@ -2547,5 +2818,6 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+    .spell-hearts { display: none; } /* hearts burst motion-only */
   }
 </style>
