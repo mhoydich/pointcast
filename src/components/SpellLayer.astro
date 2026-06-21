@@ -1215,6 +1215,106 @@
       }, dur);
     }
 
+    // ─── kite (companion) ────────────────────────────────────────
+    // Flies the sky lane at top ~12vh — above all floor/mid companions.
+    // A slow wind gust (spell-kite-wind) shifts it ±4vh for texture.
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite gliding past. Click to release it.');
+      kite.title = 'click to release the kite';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.5;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 55000;
+      var glideSeconds = Math.max(14, Math.min(32, window.innerWidth / 50));
+      kite.style.cssText =
+        'animation:spell-kite-glide-' + (ltr ? 'ltr' : 'rtl') + ' ' + glideSeconds + 's linear infinite,' +
+        'spell-kite-wind' + (ltr ? '' : '-rtl') + ' 5s ease-in-out infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── cricket (companion) ─────────────────────────────────────
+    // Hops across the floor in lazy arcs — 0.7s bounce cycle looks
+    // like a real insect spring-jump without any motion complexity.
+    function castCricket(durationMs) {
+      if (active.byId.cricket) {
+        var prev = active.byId.cricket;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var cricket = document.createElement('button');
+      cricket.className = 'spell-cricket';
+      cricket.type = 'button';
+      cricket.setAttribute('aria-label', 'A cricket hopping by. Click to send it on.');
+      cricket.title = 'click to hop it along';
+      cricket.textContent = '🦗';
+      var ltr = Math.random() < 0.5;
+      cricket.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = durationMs || 40000;
+      var hopSeconds = Math.max(10, Math.min(25, window.innerWidth / 60));
+      cricket.style.cssText =
+        'animation:spell-cricket-hop-' + (ltr ? 'ltr' : 'rtl') + ' ' + hopSeconds + 's linear infinite,' +
+        'spell-cricket-bounce' + (ltr ? '' : '-rtl') + ' 0.7s ease-in-out infinite;';
+      cricket.addEventListener('click', function () {
+        if (cricket.parentNode) cricket.parentNode.removeChild(cricket);
+        active.byId.cricket = null;
+      });
+      $layer.appendChild(cricket);
+      active.byId.cricket = cricket;
+      setTimeout(function () {
+        if (cricket && cricket.parentNode) cricket.parentNode.removeChild(cricket);
+        if (active.byId.cricket === cricket) active.byId.cricket = null;
+      }, dur);
+    }
+
+    // ─── lava (ambient) ──────────────────────────────────────────
+    // 7 blurred circular blobs cycle upward from the bottom on staggered
+    // negative-delay loops — the lava lamp effect without any JS timers.
+    function castLava() {
+      if (active.byId.lava) return;
+      var lava = document.createElement('button');
+      lava.className = 'spell-lava';
+      lava.type = 'button';
+      lava.setAttribute('aria-label', 'Lava lamp overlay. Click to cool it down.');
+      lava.title = 'click to cool the lava';
+      var colors = ['#c4952e', '#8a2432', '#d4a437', '#b84020', '#c4952e', '#8a2432', '#d4a437'];
+      var html = '';
+      for (var i = 0; i < 7; i++) {
+        var size = (44 + Math.random() * 52).toFixed(0);
+        var left = (4 + Math.random() * 86).toFixed(1);
+        var dur = (7 + Math.random() * 7).toFixed(1);
+        var delay = (-Math.random() * 14).toFixed(1);
+        html += '<span class="spell-lava__blob" style="' +
+          'width:' + size + 'px;height:' + size + 'px;' +
+          'left:' + left + '%;' +
+          'background:' + colors[i % colors.length] + ';' +
+          'animation-duration:' + dur + 's;' +
+          'animation-delay:' + delay + 's;' +
+          '" aria-hidden="true"></span>';
+      }
+      lava.innerHTML = html;
+      lava.addEventListener('click', function () {
+        if (lava.parentNode) lava.parentNode.removeChild(lava);
+        active.byId.lava = null;
+      });
+      $layer.appendChild(lava);
+      active.byId.lava = lava;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1354,9 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'kite':         castKite(55000); break;
+        case 'cricket':      castCricket(40000); break;
+        case 'lava':         castLava(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2547,5 +2650,120 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── batch 13: kite (companion) ────────────────────────────── */
+  /* Sky lane at top 12vh — the only companion that flies high.    */
+  .spell-kite {
+    position: fixed;
+    top: 12vh;
+    left: -50px;
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 34px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 2px 8px rgba(74, 158, 255, 0.4));
+  }
+  @keyframes spell-kite-glide-ltr {
+    0%   { left: -50px; }
+    100% { left: calc(100vw + 50px); }
+  }
+  @keyframes spell-kite-glide-rtl {
+    0%   { left: calc(100vw + 50px); }
+    100% { left: -50px; }
+  }
+  @keyframes spell-kite-wind {
+    0%, 100% { transform: translateY(0); }
+    25%       { transform: translateY(3.5vh); }
+    65%       { transform: translateY(-3.5vh); }
+  }
+  @keyframes spell-kite-wind-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    25%       { transform: scaleX(-1) translateY(3.5vh); }
+    65%       { transform: scaleX(-1) translateY(-3.5vh); }
+  }
+
+  /* ─── batch 13: cricket (companion) ─────────────────────────── */
+  .spell-cricket {
+    position: fixed;
+    bottom: 16px;
+    left: -36px;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 22px;
+    text-align: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 31;
+    filter: drop-shadow(0 1px 3px rgba(47, 143, 95, 0.3));
+  }
+  @keyframes spell-cricket-hop-ltr {
+    0%   { left: -36px; }
+    100% { left: calc(100vw + 36px); }
+  }
+  @keyframes spell-cricket-hop-rtl {
+    0%   { left: calc(100vw + 36px); }
+    100% { left: -36px; }
+  }
+  @keyframes spell-cricket-bounce {
+    0%, 100% { transform: translateY(0); }
+    40%       { transform: translateY(-22px); }
+    55%       { transform: translateY(-22px); }
+  }
+  @keyframes spell-cricket-bounce-rtl {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    40%       { transform: scaleX(-1) translateY(-22px); }
+    55%       { transform: scaleX(-1) translateY(-22px); }
+  }
+
+  /* ─── batch 13: lava (ambient) ──────────────────────────────── */
+  /* Full-viewport lava lamp: 7 warm blobs loop from bottom.       */
+  .spell-lava {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 29;
+    overflow: hidden;
+  }
+  .spell-lava__blob {
+    position: absolute;
+    bottom: -90px;
+    border-radius: 50%;
+    opacity: 0.42;
+    filter: blur(20px);
+    animation: spell-lava-rise linear infinite;
+    pointer-events: none;
+  }
+  @keyframes spell-lava-rise {
+    0%   { transform: translateY(0) scale(1); }
+    35%  { transform: translateY(-58vh) scale(1.18); opacity: 0.52; }
+    50%  { transform: translateY(-65vh) scale(1.1); }
+    85%  { transform: translateY(-8vh) scale(0.88); opacity: 0.32; }
+    100% { transform: translateY(0) scale(1); opacity: 0.42; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-kite { animation: none !important; left: 50% !important; transform: translateX(-50%); }
+    .spell-kite[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-cricket { animation: none !important; left: 50% !important; transform: translateX(-50%); }
+    .spell-cricket[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-lava__blob { display: none; }
   }
 </style>
