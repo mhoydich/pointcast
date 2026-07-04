@@ -27,6 +27,20 @@ import { CHANNELS } from '../lib/channels';
 import { RESIDENTS } from '../data/residents';
 import { shipsLastDays } from '../lib/ships';
 import { pickDailyBlock, todayPT, pickDailyIndex } from '../lib/daily';
+import { readFileSync } from 'node:fs';
+
+// Season Two heartbeat — HEARTBEAT.log at the repo root, one line per daily
+// pulse ("<ISO> · season two · pulse N · the pot, still on"). Build-time read
+// here; a client refresh from the raw GitHub file below keeps the count true
+// between deploys. If the log is missing the cell falls back to block count.
+interface Pulse { n: number; at: string }
+let pulse: Pulse | null = null;
+try {
+  const lines = readFileSync('HEARTBEAT.log', 'utf8').trim().split('\n').filter(Boolean);
+  const last = lines[lines.length - 1] ?? '';
+  const at = last.split(' · ')[0]?.trim();
+  if (lines.length > 0 && at) pulse = { n: lines.length, at };
+} catch { /* no log yet — cell falls back */ }
 
 interface Weather { ok: boolean; tempF?: number; condition?: string; }
 let weather: Weather = { ok: false };
@@ -125,14 +139,27 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
         <a href="/wire">READ THE LATEST →</a>
         <a href="/mythos">WHAT IS POINTCAST?</a>
       </p>
+      {latest[0] && (
+        <p class="ph-lead__now mono">
+          <span class="ph-lead__now-tag">NOW</span>
+          <a href={`/b/${latest[0].data.id}`}>{latest[0].data.title} · /{latest[0].data.id}</a>
+        </p>
+      )}
     </section>
 
     {/* ============== STATUS BAR ============== */}
     <section class="ph-status mono" aria-label="Live status">
-      <div class="ph-status__cell">
-        <span class="ph-status__n">{blockCount}</span>
-        <span class="ph-status__l">BLOCKS PUBLISHED</span>
-      </div>
+      {pulse ? (
+        <div class="ph-status__cell" title={`last pulse ${pulse.at}`}>
+          <span class="ph-status__n" id="ph-pulse-n">{pulse.n}</span>
+          <span class="ph-status__l">SEASON TWO · DAILY PULSE</span>
+        </div>
+      ) : (
+        <div class="ph-status__cell">
+          <span class="ph-status__n">{blockCount}</span>
+          <span class="ph-status__l">BLOCKS PUBLISHED</span>
+        </div>
+      )}
       <div class="ph-status__cell">
         <span class="ph-status__n">{shipsLast7}</span>
         <span class="ph-status__l">SHIPS · 7 DAYS</span>
@@ -253,8 +280,21 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
           set('ph-cond', c);       set('ph-cond2', c);
         }).catch(function () {});
     }
+    // Pulse count refreshes from the raw log on main so it stays true even
+    // when the site hasn't redeployed since yesterday's heartbeat commit.
+    function refreshPulse() {
+      if (!document.getElementById('ph-pulse-n')) return;
+      fetch('https://raw.githubusercontent.com/mhoydich/pointcast/main/HEARTBEAT.log', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (t) {
+          if (!t) return;
+          var n = t.trim().split('\n').filter(Boolean).length;
+          if (n > 0) set('ph-pulse-n', n);
+        }).catch(function () {});
+    }
     clock(); setInterval(clock, 30000);
     setInterval(refreshWeather, 300000);
+    refreshPulse();
   })();
 </script>
 
@@ -317,11 +357,19 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   /* ============== LEAD ============== */
   .ph-lead {
     border: 1.5px solid var(--pc-accent); border-left-width: 6px; border-radius: 2px;
-    background: #fff; padding: 22px 24px 20px; margin: 22px 0 0; max-width: 800px;
+    background: #fff; padding: 18px 20px 14px; margin: 22px 0 0; max-width: 800px;
   }
-  .ph-lead__kicker { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-accent); text-transform: uppercase; margin: 0 0 14px; font-weight: 500; }
-  .ph-lead__title { font-size: clamp(28px, 4vw, 42px); font-weight: 500; line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 14px; color: var(--pc-ink); }
-  .ph-lead__deck { font-size: clamp(15px, 1.7vw, 18px); line-height: 1.5; font-weight: 400; color: var(--pc-ink-soft); margin: 0 0 18px; max-width: 640px; }
+  .ph-lead__kicker { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-accent); text-transform: uppercase; margin: 0 0 10px; font-weight: 500; }
+  .ph-lead__title { font-size: clamp(26px, 3.4vw, 36px); font-weight: 500; line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 10px; color: var(--pc-ink); }
+  .ph-lead__deck { font-size: clamp(14px, 1.6vw, 16px); line-height: 1.5; font-weight: 400; color: var(--pc-ink-soft); margin: 0 0 14px; max-width: 640px; }
+  .ph-lead__now {
+    display: flex; align-items: baseline; gap: 10px; margin: 14px 0 0; padding-top: 10px;
+    border-top: 1px solid var(--pc-rule-soft); font-size: 11px; letter-spacing: 0.06em;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ph-lead__now-tag { font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--pc-accent); }
+  .ph-lead__now a { color: var(--pc-ink-soft); overflow: hidden; text-overflow: ellipsis; }
+  .ph-lead__now a:hover { color: var(--pc-accent); }
   .ph-lead__links { display: flex; flex-wrap: wrap; gap: 22px; margin: 0; font-size: 12px; letter-spacing: 0.08em; }
   .ph-lead__links a { color: var(--pc-accent); font-weight: 500; border-bottom: 1.5px solid transparent; padding-bottom: 1px; }
   .ph-lead__links a:hover { border-bottom-color: currentColor; }
