@@ -142,6 +142,21 @@ const DRUM_NOUN_ID = DRUMS[1].id;
          render; locked ones dim + show a lock badge + disabled click.
          When you cross a milestone the corresponding drum pops in with
          an unlock animation (JS below). -->
+    <section class="drum-pack-switcher" aria-label="Drum sound pack">
+      <p class="drum-pack-switcher__label">Sound pack</p>
+      <div class="drum-pack-switcher__buttons" role="group" aria-label="Choose drum sound pack">
+        <button type="button" class="drum-pack-switcher__button is-active" data-drum-pack="taiko" aria-pressed="true">
+          Taiko <span>(default)</span>
+        </button>
+        <span class="drum-pack-switcher__dot" aria-hidden="true">&middot;</span>
+        <button type="button" class="drum-pack-switcher__button" data-drum-pack="trap" aria-pressed="false">Trap</button>
+        <span class="drum-pack-switcher__dot" aria-hidden="true">&middot;</span>
+        <button type="button" class="drum-pack-switcher__button" data-drum-pack="jazz" aria-pressed="false">Jazz</button>
+        <span class="drum-pack-switcher__dot" aria-hidden="true">&middot;</span>
+        <button type="button" class="drum-pack-switcher__button" data-drum-pack="lofi" aria-pressed="false">Lo-fi</button>
+      </div>
+    </section>
+
     <div class="flex justify-center items-end flex-wrap gap-2 md:gap-3 mb-5">
       {DRUMS.map((d, i) => (
         <button
@@ -578,6 +593,69 @@ const DRUM_NOUN_ID = DRUMS[1].id;
   .hub-card--dark .hub-card__label,
   .hub-card--dark .hub-card__sub { color: rgba(255,255,255,0.85); }
 
+  .drum-pack-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 7px 10px;
+    margin: -2px 0 14px;
+    padding: 7px 10px;
+    border: 1px solid rgba(140, 122, 94, 0.28);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.52);
+  }
+  .drum-pack-switcher__label,
+  .drum-pack-switcher__button {
+    font-family: var(--pc-font-mono);
+    text-transform: uppercase;
+  }
+  .drum-pack-switcher__label {
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    color: rgba(95, 94, 90, 0.68);
+  }
+  .drum-pack-switcher__buttons {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 6px;
+  }
+  .drum-pack-switcher__button {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: rgba(18, 17, 14, 0.66);
+    cursor: pointer;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    line-height: 1;
+    padding: 5px 6px;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .drum-pack-switcher__button span {
+    color: rgba(194, 106, 74, 0.82);
+  }
+  .drum-pack-switcher__button:hover,
+  .drum-pack-switcher__button:focus-visible {
+    border-color: rgba(194, 106, 74, 0.45);
+    color: var(--pc-ink);
+    outline: none;
+  }
+  .drum-pack-switcher__button.is-active {
+    background: rgba(194, 106, 74, 0.12);
+    border-color: rgba(194, 106, 74, 0.5);
+    color: var(--pc-ink);
+    font-weight: 700;
+  }
+  .drum-pack-switcher__dot {
+    color: rgba(140, 122, 94, 0.52);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    line-height: 1;
+  }
+
   /* The tap bounce — snappy scale-down-then-up. Much faster than
      transition-transform defaults so rapid taps don't queue up. */
   .drum-tapped {
@@ -687,6 +765,12 @@ const DRUM_NOUN_ID = DRUMS[1].id;
       filter: brightness(1.08);
     }
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drum-pack-switcher__button {
+      transition: none;
+    }
+  }
 </style>
 
 <script>
@@ -700,9 +784,8 @@ const DRUM_NOUN_ID = DRUMS[1].id;
    *   • GET /api/drum every 5s so the global counter + your authoritative
    *     server count refresh in the background.
    *   • Presence: poll /api/visit and render the strip of who else is here.
-   *   • Sound: taiko drum on tap — low-frequency sine + noise burst for
-   *     attack. Different from the Yō-scale profile chimes elsewhere so
-   *     the drum room has its own sonic identity.
+   *   • Sound: inline drum synth on tap — selected sound pack remaps
+   *     timbre here, not the Yō-scale profile chimes used elsewhere.
    */
 
   const drumBtn = document.getElementById('drum-noun-btn') as HTMLButtonElement | null;
@@ -777,77 +860,179 @@ const DRUM_NOUN_ID = DRUMS[1].id;
     document.addEventListener(evt as any, primeAudio, { once: true, passive: true, capture: true });
   });
 
+  type NoiseFilter = { type: BiquadFilterType; frequency: number; q: number };
+  type DrumVoice = {
+    family: 'thump' | 'bell' | 'shaker';
+    oscillator?: OscillatorType;
+    pitchScale: number;
+    endRatio?: number;
+    sweepTime?: number;
+    attack: number;
+    decay: number;
+    gainScale: number;
+    noiseMs?: number;
+    noiseGain?: number;
+    noisePower?: number;
+    partials?: Array<{ mult: number; g: number; type: OscillatorType }>;
+    toneFilter?: NoiseFilter;
+    noiseFilter?: NoiseFilter;
+    filter?: NoiseFilter;
+  };
+  type DrumPackId = 'taiko' | 'trap' | 'jazz' | 'lofi';
+
+  const SOUND_PACK_KEY = 'pc:drumSoundPack';
+  const filt = (type: BiquadFilterType, frequency: number, q: number): NoiseFilter => ({ type, frequency, q });
+  const thump = (v: Partial<DrumVoice> = {}): DrumVoice => ({
+    family: 'thump', oscillator: 'sine', pitchScale: 1, endRatio: 0.5,
+    sweepTime: 0.12, attack: 0.003, decay: 0.28, gainScale: 1,
+    noiseMs: 0.04, noiseGain: 0.18, noisePower: 1, ...v,
+  });
+  const bell = (v: Partial<DrumVoice> = {}): DrumVoice => ({
+    family: 'bell', attack: 0.006, decay: 1.1, gainScale: 0.7, pitchScale: 1,
+    partials: [
+      { mult: 1, g: 0.55, type: 'triangle' },
+      { mult: 2.01, g: 0.25, type: 'sine' },
+      { mult: 3.03, g: 0.12, type: 'sine' },
+      { mult: 5, g: 0.05, type: 'sine' },
+    ], ...v,
+  });
+  const shaker = (v: Partial<DrumVoice> = {}): DrumVoice => ({
+    family: 'shaker', pitchScale: 1, attack: 0, decay: 0.18, gainScale: 0.9,
+    noiseMs: 0.12, noisePower: 2.2, filter: filt('bandpass', 5200, 3.5), ...v,
+  });
+  const SOUND_PACKS: Record<DrumPackId, DrumVoice[]> = {
+    taiko: [
+      thump({ noiseGain: 0.12 }), thump(), thump({ noiseGain: 0.28 }), bell(), shaker(),
+    ],
+    trap: [
+      thump({ pitchScale: 0.78, endRatio: 0.28, sweepTime: 0.22, attack: 0.002, decay: 0.58, gainScale: 1.08, noiseMs: 0.018, noiseGain: 0.05, noisePower: 1.4 }),
+      thump({ oscillator: 'triangle', pitchScale: 0.95, endRatio: 0.52, sweepTime: 0.08, attack: 0.002, decay: 0.22, gainScale: 0.9, noiseMs: 0.07, noiseGain: 0.34, noisePower: 1.1, noiseFilter: filt('bandpass', 1800, 1.4) }),
+      thump({ oscillator: 'triangle', pitchScale: 1.35, endRatio: 0.62, sweepTime: 0.045, attack: 0.001, decay: 0.12, gainScale: 0.72, noiseMs: 0.045, noiseGain: 0.42, noisePower: 0.8, noiseFilter: filt('highpass', 5200, 0.9) }),
+      bell({ attack: 0.003, decay: 0.45, gainScale: 0.55, pitchScale: 1.25, partials: [{ mult: 1, g: 0.5, type: 'sine' }, { mult: 2.4, g: 0.22, type: 'sine' }, { mult: 4.8, g: 0.1, type: 'triangle' }] }),
+      shaker({ noiseMs: 0.09, decay: 0.11, gainScale: 0.7, noisePower: 0.75, filter: filt('highpass', 6600, 0.9) }),
+    ],
+    jazz: [
+      thump({ pitchScale: 0.9, endRatio: 0.42, sweepTime: 0.16, attack: 0.006, decay: 0.34, gainScale: 0.72, noiseMs: 0.035, noiseGain: 0.08, noisePower: 1.8 }),
+      thump({ oscillator: 'triangle', pitchScale: 1.05, endRatio: 0.72, sweepTime: 0.05, attack: 0.004, decay: 0.2, gainScale: 0.65, noiseMs: 0.12, noiseGain: 0.38, noisePower: 2.5, noiseFilter: filt('bandpass', 2400, 1) }),
+      thump({ oscillator: 'triangle', pitchScale: 1.2, endRatio: 0.75, sweepTime: 0.035, attack: 0.003, decay: 0.14, gainScale: 0.58, noiseMs: 0.055, noiseGain: 0.3, noisePower: 1.4, noiseFilter: filt('highpass', 3600, 0.8) }),
+      bell({ attack: 0.004, decay: 1.4, gainScale: 0.45, pitchScale: 0.92, partials: [{ mult: 1, g: 0.4, type: 'triangle' }, { mult: 2.67, g: 0.18, type: 'sine' }, { mult: 3.9, g: 0.11, type: 'sine' }, { mult: 5.2, g: 0.08, type: 'sine' }] }),
+      shaker({ noiseMs: 0.18, decay: 0.26, gainScale: 0.55, noisePower: 1.4, filter: filt('bandpass', 4200, 1.2) }),
+    ],
+    lofi: [
+      thump({ pitchScale: 0.74, endRatio: 0.45, sweepTime: 0.17, attack: 0.004, decay: 0.42, gainScale: 0.78, noiseMs: 0.035, noiseGain: 0.09, noisePower: 1.6, toneFilter: filt('lowpass', 900, 0.7) }),
+      thump({ oscillator: 'triangle', pitchScale: 0.82, endRatio: 0.6, sweepTime: 0.08, attack: 0.004, decay: 0.24, gainScale: 0.62, noiseMs: 0.09, noiseGain: 0.3, noisePower: 1.9, toneFilter: filt('lowpass', 1200, 0.8), noiseFilter: filt('lowpass', 1800, 0.8) }),
+      thump({ oscillator: 'triangle', pitchScale: 0.95, endRatio: 0.7, sweepTime: 0.05, attack: 0.004, decay: 0.16, gainScale: 0.5, noiseMs: 0.065, noiseGain: 0.28, noisePower: 1.6, toneFilter: filt('lowpass', 2200, 0.8), noiseFilter: filt('bandpass', 2800, 0.8) }),
+      bell({ decay: 0.75, gainScale: 0.42, pitchScale: 0.84, toneFilter: filt('lowpass', 1800, 0.7), partials: [{ mult: 1, g: 0.46, type: 'triangle' }, { mult: 2.02, g: 0.16, type: 'sine' }, { mult: 3.01, g: 0.07, type: 'sine' }] }),
+      shaker({ noiseMs: 0.13, decay: 0.18, gainScale: 0.48, noisePower: 1.8, filter: filt('bandpass', 2600, 1) }),
+    ],
+  };
+
+  let currentSoundPack: DrumPackId = 'taiko';
+  try {
+    const saved = localStorage.getItem(SOUND_PACK_KEY);
+    if (saved && saved in SOUND_PACKS) currentSoundPack = saved as DrumPackId;
+  } catch {}
+
+  const soundPackButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-drum-pack]'),
+  );
+  function renderSoundPackButtons(): void {
+    soundPackButtons.forEach((btn) => {
+      const active = btn.dataset.drumPack === currentSoundPack;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+  soundPackButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.drumPack;
+      if (!next || !(next in SOUND_PACKS)) return;
+      currentSoundPack = next as DrumPackId;
+      try { localStorage.setItem(SOUND_PACK_KEY, currentSoundPack); } catch {}
+      renderSoundPackButtons();
+    });
+  });
+  renderSoundPackButtons();
+
+  function makeFilter(ctx: AudioContext, spec: NoiseFilter): BiquadFilterNode {
+    const filter = ctx.createBiquadFilter();
+    filter.type = spec.type;
+    filter.frequency.value = spec.frequency;
+    filter.Q.value = spec.q;
+    return filter;
+  }
+
+  function resolveVoice(drumIndex: number | null, kind: string, pitch: number): DrumVoice {
+    const pack = SOUND_PACKS[currentSoundPack] ?? SOUND_PACKS.taiko;
+    if (drumIndex !== null && pack[drumIndex]) return pack[drumIndex];
+    if (kind === 'bell') return pack[3] ?? SOUND_PACKS.taiko[3];
+    if (kind === 'shaker') return pack[4] ?? SOUND_PACKS.taiko[4];
+    if (pitch < 90) return pack[0] ?? SOUND_PACKS.taiko[0];
+    if (pitch > 140) return pack[2] ?? SOUND_PACKS.taiko[2];
+    return pack[1] ?? SOUND_PACKS.taiko[1];
+  }
+
   /**
-   * Drum synth — three timbre families for the rack:
+   * Drum synth — five rack voices, remapped by the selected sound pack:
    *
-   *   thump  — pitched sine with frequency drop + noise-burst attack.
-   *            Drives Low/Mid/High (pitch = 70/110/170).
-   *   bell   — triangle fundamental + inharmonic overtones, long decay.
-   *            Temple-bell / dora vibe. Unlocks at 10 personal drums.
-   *   shaker — bandpass-filtered noise, quick envelope, no pitch.
-   *            Hi-hat / maraca vibe. Unlocks at 100 personal drums.
+   *   taiko  — original sine drop, wooden attack, airy bell, maraca shaker.
+   *   trap   — 808-style low end, snare noise, crisp hat, short metallic bell.
+   *   jazz   — softer kick/snare brush palette, ride-like bell, loose shaker.
+   *   lofi   — lower pitch, filtered/noisy transients, muted tape-ish decay.
    *
-   * All three route through a master gain so envelope shaping stays
-   * consistent. Combo taps add a tiny pitch boost on thump for feedback.
+   * Combo taps still add a tiny pitch boost on thump for feedback.
    */
-  function playDrum(gain = 0.45, pitch = 110, kind: string = 'thump') {
+  function playDrum(gain = 0.45, pitch = 110, kind: string = 'thump', drumIndex: number | null = null) {
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const now = ctx.currentTime;
+    const voice = resolveVoice(drumIndex, kind, pitch);
 
-    if (kind === 'bell') {
-      // Bell — triangle fundamental + 2.01x and 3.03x partials (slightly
-      // detuned to avoid perfect harmonic = too-synthetic feel). Longer
-      // exponential decay (~1s) = airy, lingering.
+    if (voice.family === 'bell') {
       const master = ctx.createGain();
-      master.connect(ctx.destination);
+      if (voice.toneFilter) {
+        const filter = makeFilter(ctx, voice.toneFilter);
+        master.connect(filter);
+        filter.connect(ctx.destination);
+      } else {
+        master.connect(ctx.destination);
+      }
       master.gain.setValueAtTime(0, now);
-      master.gain.linearRampToValueAtTime(gain * 0.7, now + 0.006);
-      master.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+      master.gain.linearRampToValueAtTime(gain * voice.gainScale, now + voice.attack);
+      master.gain.exponentialRampToValueAtTime(0.001, now + voice.decay);
 
-      const partials = [
-        { mult: 1.0,  g: 0.55, type: 'triangle' as OscillatorType },
-        { mult: 2.01, g: 0.25, type: 'sine' as OscillatorType },
-        { mult: 3.03, g: 0.12, type: 'sine' as OscillatorType },
-        { mult: 5.0,  g: 0.05, type: 'sine' as OscillatorType },
-      ];
-      for (const p of partials) {
+      for (const p of voice.partials ?? []) {
         const osc = ctx.createOscillator();
         osc.type = p.type;
-        osc.frequency.value = pitch * p.mult;
+        osc.frequency.value = pitch * voice.pitchScale * p.mult;
         const g = ctx.createGain();
         g.gain.value = p.g;
         osc.connect(g);
         g.connect(master);
         osc.start(now);
-        osc.stop(now + 1.2);
+        osc.stop(now + voice.decay + 0.1);
       }
       return;
     }
 
-    if (kind === 'shaker') {
-      // Shaker — short noise burst through a bandpass filter (~4-6kHz).
-      // No pitch, just texture. Fast attack + decay feels like a maraca.
-      const bufSize = Math.floor(ctx.sampleRate * 0.12);
+    if (voice.family === 'shaker') {
+      const noiseMs = voice.noiseMs ?? 0.12;
+      const noisePower = voice.noisePower ?? 2.2;
+      const bufSize = Math.floor(ctx.sampleRate * noiseMs);
       const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < bufSize; i++) {
-        // Pink-ish noise with fast decay envelope.
-        const env = Math.pow(1 - i / bufSize, 2.2);
+        const env = Math.pow(1 - i / bufSize, noisePower);
         data[i] = (Math.random() * 2 - 1) * env;
       }
       const src = ctx.createBufferSource();
       src.buffer = buf;
 
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = 5200;
-      filter.Q.value = 3.5;
-
+      const filter = makeFilter(ctx, voice.filter ?? filt('bandpass', 5200, 3.5));
       const master = ctx.createGain();
-      master.gain.setValueAtTime(gain * 0.9, now);
-      master.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      master.gain.setValueAtTime(gain * voice.gainScale, now);
+      master.gain.exponentialRampToValueAtTime(0.001, now + voice.decay);
 
       src.connect(filter);
       filter.connect(master);
@@ -856,32 +1041,49 @@ const DRUM_NOUN_ID = DRUMS[1].id;
       return;
     }
 
-    // Default: thump — pitched sine sweep + noise attack.
+    // Thump — pitched oscillator sweep + noise attack.
     const out = ctx.createGain();
     out.connect(ctx.destination);
     out.gain.setValueAtTime(0, now);
-    out.gain.linearRampToValueAtTime(gain, now + 0.003);
-    out.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    out.gain.linearRampToValueAtTime(gain * voice.gainScale, now + voice.attack);
+    out.gain.exponentialRampToValueAtTime(0.001, now + voice.decay);
 
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(pitch, now);
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.5, now + 0.12);
-    osc.connect(out);
+    const sweepTime = voice.sweepTime ?? 0.12;
+    const endRatio = voice.endRatio ?? 0.5;
+    osc.type = voice.oscillator ?? 'sine';
+    const startPitch = Math.max(20, pitch * voice.pitchScale);
+    osc.frequency.setValueAtTime(startPitch, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, startPitch * endRatio), now + sweepTime);
+    if (voice.toneFilter) {
+      const toneFilter = makeFilter(ctx, voice.toneFilter);
+      osc.connect(toneFilter);
+      toneFilter.connect(out);
+    } else {
+      osc.connect(out);
+    }
     osc.start(now);
-    osc.stop(now + 0.3);
+    osc.stop(now + Math.max(voice.decay + 0.02, sweepTime + 0.04));
 
-    const bufSize = Math.floor(ctx.sampleRate * 0.04);
+    const noiseMs = voice.noiseMs ?? 0.04;
+    const noisePower = voice.noisePower ?? 1;
+    const bufSize = Math.floor(ctx.sampleRate * noiseMs);
     const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
     const noiseData = noiseBuf.getChannelData(0);
     for (let i = 0; i < bufSize; i++) {
-      noiseData[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+      noiseData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, noisePower);
     }
     const noise = ctx.createBufferSource();
     noise.buffer = noiseBuf;
     const noiseGain = ctx.createGain();
-    noiseGain.gain.value = pitch > 140 ? 0.28 : pitch < 90 ? 0.12 : 0.18;
-    noise.connect(noiseGain);
+    noiseGain.gain.value = voice.noiseGain ?? 0.18;
+    if (voice.noiseFilter) {
+      const noiseFilter = makeFilter(ctx, voice.noiseFilter);
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+    } else {
+      noise.connect(noiseGain);
+    }
     noiseGain.connect(out);
     noise.start(now);
   }
@@ -1465,7 +1667,7 @@ const DRUM_NOUN_ID = DRUMS[1].id;
     const kind = drumKind(drumIndex);
     const pitch = drumPitch(drumIndex);
     const pitchWithCombo = kind === 'thump' ? pitch + comboIdx * 6 : pitch;
-    playDrum(0.45, pitchWithCombo, kind);
+    playDrum(0.45, pitchWithCombo, kind, drumIndex);
 
     // Timeline — slot a dot for this tap
     timeline.push({ drum: drumIndex, mult, remote: false, t: now });
@@ -1620,8 +1822,12 @@ const DRUM_NOUN_ID = DRUMS[1].id;
         timeline.push({ drum: remoteDrumIdx, mult: remoteMult, remote: true, t: Date.now() });
         if (timeline.length > TIMELINE_SIZE * 2) timeline.shift();
         renderTimeline();
-        // Play remote drum with its own pitch, softer
-        if (hearOthers()) playDrum(0.35, pitch);
+        // Play remote drum softer. Keep untouched Taiko sessions on the
+        // previous call shape; selected packs replay the full rack voice.
+        if (hearOthers()) {
+          if (currentSoundPack === 'taiko') playDrum(0.35, pitch);
+          else playDrum(0.35, pitch, drumKind(remoteDrumIdx), remoteDrumIdx);
+        }
       }
       refreshJam();
     } catch { /* ignore */ }
