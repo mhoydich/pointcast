@@ -12,15 +12,30 @@
  * Same live town underneath: blocks collection, HEARTBEAT.log pulse,
  * ships-last-7, residents seats, and the El Segundo weather API —
  * the exact sources HomeProfessional reads — reformatted to fit a
- * 40×24-ish text screen. Letters navigate like a real BBS menu
+ * 40-column text screen. Letters navigate like a real BBS menu
  * ([W]ire, [M]ythos, … [X] log off to /), ESC exits to 2026.
+ *
+ * The toys (all progressive, page reads fine with JS off):
+ *   - pixel tri-stroke masthead logo drawn in inverse-video cells
+ *   - rotating 40-col status ticker under the title bar
+ *   - [S] SOUND — synthesized DTMF dial of (310) 555-0483 plus a
+ *     modem handshake on enable, Atari-ish key clicks after
+ *     (WebAudio, no assets, gated behind the toggle gesture)
+ *   - a live READY prompt: HELP, LIST, GOTO 10 (runs the 10 PRINT
+ *     loop, any key BREAKs), DIR, PING, HELLO, BYE (+++ NO CARRIER
+ *     then logs off), Atari-style "ERROR-" for everything else.
+ *     Menu letters still navigate instantly when the buffer is
+ *     empty — commands just can't start with a menu letter, which
+ *     is why the program runs with GOTO 10, not RUN.
+ *   - attract mode: like a real Atari left idle, the screen starts
+ *     slowly cycling hue after ~50s untouched; any input restores.
  *
  * Aesthetic register: sibling of /window-home and /rooms (the
  * geocities + sim city lane), NOT BLOCKS.md — this page is the
  * artifact, so the terminal look overrides the house grammar.
  * BlockLayout still wraps it so the footer bar, bell, and agent
  * meta stay mounted. Type-out boot honors prefers-reduced-motion
- * and any key/click skips it.
+ * (which also stills the ticker, blink, and attract mode).
  *
  * Font is self-hosted Press Start 2P (@fontsource, OFL) — 8×8
  * square glyphs like the Atari ROM charset. All screen text is
@@ -100,13 +115,34 @@ function wireRow(b: (typeof latest)[number]): string {
   return `${b.data.id} ${(b.data.channel ?? '??').padEnd(3)} ${stamp} ${t}`;
 }
 
+// Pixel masthead — a tri-stroke antenna in the spirit of the era,
+// drawn as inverse-video cells. 11 px wide, 2ch per px, 9ch lead
+// indent = exactly 40 columns.
+const LOGO = [
+  '..#..#..#..',
+  '..#..#..#..',
+  '.#...#...#.',
+  '.#...#...#.',
+  '#....#....#',
+].map((r) => '.'.repeat(9) + r);
+
+// Ticker feed — rotated one character at a time client-side.
+const tickerBase = ascii(
+  `*** ${tempF}F ${condition} IN EL SEGUNDO ` +
+  `*** ${blockCount} BLOCKS ON FILE ` +
+  (pulse ? `*** SEASON TWO PULSE ${pulse.n} ` : '') +
+  `*** THE POT IS ON ` +
+  (latest[0] ? `*** LATEST: ${latest[0].data.title} ` : '')
+);
+
 // ---- the screen, line by line ----
-interface Ln { text: string; inv?: boolean; href?: string; id?: string }
+interface Ln { text: string; inv?: boolean; href?: string; id?: string; act?: boolean }
 const inv = (text: string): Ln => ({ text: (' ' + ascii(text)).padEnd(W), inv: true });
 const BLANK: Ln = { text: ' ' };
 
 const lines: Ln[] = [
   inv('POINTCAST BULLETIN BOARD SYSTEM'),
+  { text: tickerBase.slice(0, W), id: 'a-ticker' },
   BLANK,
   { text: 'AWAITING RING .......... RING! RING!' },
   { text: 'CONNECT 1200 * NODE 1 * ATASCII OK' },
@@ -133,6 +169,7 @@ const lines: Ln[] = [
   { text: leader('[V] THE WINDOW', 'LIGHT + TIDE'), href: '/window' },
   { text: leader('[A] THE ARCHIVE', `${pad4(blockCount)} BLKS`), href: '/archive' },
   ...(dailyPick ? [{ text: leader('[T] TODAYS DROP', `NO.${dailyPick.data.id}`), href: '/today' }] : []),
+  { text: leader('[S] SOUND', 'OFF'), id: 'a-snd', act: true },
   { text: leader('[X] LOG OFF', 'BACK TO 2026'), href: '/' },
   BLANK,
   inv('NEW ON THE WIRE'),
@@ -140,6 +177,7 @@ const lines: Ln[] = [
   ...latest.map((b) => ({ text: wireRow(b), href: `/b/${b.data.id}` })),
   BLANK,
   { text: 'PRESS LETTER, OR CLICK. ESC LOGS OFF' },
+  { text: 'TYPE HELP AND HIT RETURN FOR MORE' },
   BLANK,
   { text: 'READY' },
 ];
@@ -147,20 +185,36 @@ const lines: Ln[] = [
 const title = '1988';
 const description =
   `The PointCast front door as a 1988 Atari 8-bit BBS - 40 columns, ATASCII blue, ` +
-  `same live town. ${blockCount} blocks on file. CONNECT 1200 and press a letter.`;
+  `same live town. ${blockCount} blocks on file. CONNECT 1200, press a letter, or type HELP.`;
 ---
 
 <BlockLayout title={title} description={description}>
-  <main class="atari" id="atari">
-    <div class="crt" role="region" aria-label="PointCast BBS, Atari terminal view">
+  <main
+    class="atari"
+    id="atari"
+    data-latest={latest.map((b) => b.data.id).join(',')}
+    data-blocks={pad4(blockCount)}
+  >
+    <div class="crt" id="a-crt" role="region" aria-label="PointCast BBS, Atari terminal view">
+      {LOGO.map((row) => (
+        <div class="ln logo" aria-hidden="true">
+          {row.split('').map((c) => (c === '#' ? <span class="px">{'  '}</span> : <span>{'  '}</span>))}
+        </div>
+      ))}
+      <div class="ln"> </div>
       {lines.map((l) =>
         l.href ? (
           <a class:list={['ln', { inv: l.inv }]} href={l.href}>{l.text}</a>
         ) : (
-          <div class:list={['ln', { inv: l.inv }]} id={l.id}>{l.text}</div>
+          <div
+            class:list={['ln', { inv: l.inv, act: l.act }]}
+            id={l.id}
+            aria-hidden={l.id === 'a-ticker' ? 'true' : undefined}
+            data-t={l.id === 'a-ticker' ? tickerBase : undefined}
+          >{l.text}</div>
         )
       )}
-      <div class="ln"><span class="cur" aria-hidden="true">&nbsp;</span></div>
+      <div class="ln" id="a-prompt"><span id="a-buf"></span><span class="cur" aria-hidden="true">&nbsp;</span></div>
     </div>
   </main>
 </BlockLayout>
@@ -214,6 +268,10 @@ const description =
       transparent 3px
     );
   }
+  /* attract mode — an idle Atari cycles colors so the CRT won't burn */
+  .crt.attract { animation: a-attract 26s linear infinite; }
+  @keyframes a-attract { to { filter: hue-rotate(360deg); } }
+
   .ln {
     display: block;
     white-space: pre;
@@ -226,12 +284,15 @@ const description =
     color: var(--a-screen);
     text-shadow: none;
   }
-  a.ln:hover, a.ln:focus-visible {
+  a.ln:hover, a.ln:focus-visible, .ln.act:hover {
     background: var(--a-bright);
     color: var(--a-screen);
     text-shadow: none;
     outline: none;
+    cursor: pointer;
   }
+  .ln.logo { line-height: 1; }
+  .px { background: var(--a-ink); }
   .cur {
     display: inline-block;
     width: 1ch;
@@ -246,6 +307,7 @@ const description =
 
   @media (prefers-reduced-motion: reduce) {
     .cur { animation: none; }
+    .crt.attract { animation: none; }
   }
 </style>
 
@@ -254,6 +316,9 @@ const description =
     var W = 40;
     var atari = document.getElementById('atari');
     if (!atari) return;
+    var crt = document.getElementById('a-crt');
+    var promptEl = document.getElementById('a-prompt');
+    var bufEl = document.getElementById('a-buf');
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     /* line-by-line boot, any key or click skips */
@@ -311,19 +376,184 @@ const description =
     }
     setInterval(wx, 300000);
 
-    /* BBS keys — letters navigate, ESC logs off to 2026 */
+    /* the ticker crawls under the masthead */
+    var tickEl = document.getElementById('a-ticker');
+    var tickBase = tickEl ? (tickEl.getAttribute('data-t') || '') : '';
+    if (tickEl && tickBase.length > W && !reduce) {
+      var off = 0;
+      setInterval(function () {
+        off = (off + 1) % tickBase.length;
+        var s = tickBase.slice(off, off + W);
+        if (s.length < W) s += tickBase.slice(0, W - s.length);
+        tickEl.textContent = s;
+      }, 160);
+    }
+
+    /* attract mode — idle 50s and the colors start to walk */
+    var idleT = null;
+    function bumpIdle() {
+      if (reduce || !crt) return;
+      crt.classList.remove('attract');
+      clearTimeout(idleT);
+      idleT = setTimeout(function () { crt.classList.add('attract'); }, 50000);
+    }
+    ['pointerdown', 'pointermove'].forEach(function (ev) {
+      document.addEventListener(ev, bumpIdle, { passive: true });
+    });
+    bumpIdle();
+
+    /* ---- sound: DTMF dial + handshake on enable, key clicks after ---- */
+    var AC = null, sndOn = false;
+    var sndEl = document.getElementById('a-snd');
+    try { sndOn = localStorage.getItem('pc1988:snd') === '1'; } catch (e) {}
+    function drawSnd() { if (sndEl) sndEl.textContent = leader('[S] SOUND', sndOn ? 'ON' : 'OFF'); }
+    drawSnd();
+    function ac() {
+      if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+      if (AC.state === 'suspended') AC.resume();
+      return AC;
+    }
+    function tone(f, t0, d, type, g) {
+      var c = ac(), o = c.createOscillator(), v = c.createGain(), t = c.currentTime + t0;
+      o.type = type || 'sine'; o.frequency.value = f;
+      v.gain.setValueAtTime(0, t);
+      v.gain.linearRampToValueAtTime(g || 0.05, t + 0.01);
+      v.gain.setValueAtTime(g || 0.05, t + Math.max(d - 0.02, 0.011));
+      v.gain.linearRampToValueAtTime(0, t + d);
+      o.connect(v); v.connect(c.destination);
+      o.start(t); o.stop(t + d);
+    }
+    function hiss(t0, d, g) {
+      var c = ac(), b = c.createBuffer(1, Math.floor(c.sampleRate * d), c.sampleRate);
+      var ch = b.getChannelData(0);
+      for (var j = 0; j < ch.length; j++) ch[j] = Math.random() * 2 - 1;
+      var s = c.createBufferSource(); s.buffer = b;
+      var v = c.createGain(); v.gain.value = g;
+      s.connect(v); v.connect(c.destination);
+      s.start(c.currentTime + t0);
+    }
+    function keyClick() {
+      if (!sndOn) return;
+      try { tone(1400, 0, 0.02, 'square', 0.03); } catch (e) {}
+    }
+    function dialUp() {
+      /* ATDT 3105550483 — DTMF pairs, ringback, answer tone, carrier hiss */
+      try {
+        var DT = { '1': [697, 1209], '2': [697, 1336], '3': [697, 1477], '4': [770, 1209], '5': [770, 1336], '6': [770, 1477], '7': [852, 1209], '8': [852, 1336], '9': [852, 1477], '0': [941, 1336] };
+        var t = 0.08;
+        '3105550483'.split('').forEach(function (d) {
+          tone(DT[d][0], t, 0.07, 'sine', 0.04);
+          tone(DT[d][1], t, 0.07, 'sine', 0.04);
+          t += 0.11;
+        });
+        tone(440, t + 0.15, 0.5, 'sine', 0.04);
+        tone(480, t + 0.15, 0.5, 'sine', 0.04);
+        tone(2225, t + 0.8, 0.5, 'sine', 0.04);
+        hiss(t + 1.25, 0.55, 0.015);
+        tone(1270, t + 1.3, 0.4, 'sine', 0.03);
+      } catch (e) {}
+    }
+    function toggleSound() {
+      sndOn = !sndOn;
+      try { localStorage.setItem('pc1988:snd', sndOn ? '1' : '0'); } catch (e) {}
+      drawSnd();
+      if (sndOn) { dialUp(); say(''); say('DIALING (310) 555-0483 ...'); say('CARRIER ACQUIRED. SOUND ON.'); ready(); }
+      else { say(''); say('SOUND OFF.'); ready(); }
+    }
+    if (sndEl) sndEl.addEventListener('click', function () { finishBoot(); toggleSound(); });
+
+    /* ---- the READY prompt is real ---- */
+    var buffer = '';
+    var running = null; /* GOTO 10 loop handle */
+    function drawBuf() { if (bufEl) bufEl.textContent = buffer; }
+    function say(text) {
+      var d = document.createElement('div');
+      d.className = 'ln on out';
+      d.textContent = (text || ' ').toUpperCase().replace(/[^\x20-\x7E]/g, '').slice(0, W) || ' ';
+      crt.insertBefore(d, promptEl);
+      var outs = crt.querySelectorAll('.out');
+      if (outs.length > 120) outs[0].parentNode.removeChild(outs[0]);
+      promptEl.scrollIntoView({ block: 'nearest' });
+    }
+    function ready() { say(' '); say('READY'); }
+    function breakRun() {
+      if (!running) return false;
+      clearInterval(running); running = null;
+      say(' '); say('BREAK AT LINE 10'); ready();
+      return true;
+    }
+    function exec(raw) {
+      var cmd = raw.trim().replace(/\s+/g, ' ');
+      say('>' + raw);
+      if (!cmd) { ready(); return; }
+      var c = cmd.toUpperCase();
+      if (c === 'HELP' || c === '?') {
+        say(' ');
+        say('COMMANDS: HELP LIST DIR PING HELLO');
+        say('GOTO 10 (RUNS THE PROGRAM) AND BYE.');
+        say('MENU LETTERS NAVIGATE. ESC LOGS OFF.');
+        ready();
+      } else if (c === 'LIST') {
+        say(' ');
+        say('10 PRINT "THE POT IS STILL ON. ";');
+        say('20 GOTO 10');
+        ready();
+      } else if (c === 'GOTO 10' || c === 'GOTO10' || c === 'GOT O10') {
+        var stream = 'THE POT IS STILL ON. ';
+        var n = 0;
+        running = setInterval(function () {
+          var s = '', q = n * W;
+          while (s.length < W) s += stream.charAt(q++ % stream.length);
+          say(s); n++;
+          if (n >= 14) breakRun();
+        }, 90);
+      } else if (c === 'DIR' || c === 'CATALOG' || c === 'CAT') {
+        var ids = (atari.getAttribute('data-latest') || '').split(',').filter(Boolean);
+        say(' ');
+        say('D1: *.BLK');
+        say(ids.map(function (x) { return x + '.BLK'; }).slice(0, 3).join('  '));
+        say(ids.map(function (x) { return x + '.BLK'; }).slice(3).join('  '));
+        say((atari.getAttribute('data-blocks') || '????') + ' BLOCKS ON FILE. [A] FOR ALL.');
+        ready();
+      } else if (c === 'PING') {
+        say(' '); say('PONG. 1200 BAUD. ZERO PACKET LOSS.'); ready();
+      } else if (c === 'HELLO' || c === 'HI') {
+        say(' '); say('HELLO, CALLER. THE POT IS ON.'); ready();
+      } else if (c === 'BYE' || c === 'LOGOFF' || c === 'EXIT' || c === 'QUIT' || c === '2026') {
+        say(' '); say('+++'); say('NO CARRIER');
+        setTimeout(function () { window.location.href = '/'; }, 900);
+      } else if (c.indexOf('ATDT') === 0 || c.indexOf('ATH') === 0) {
+        if (sndOn) dialUp();
+        say(' '); say('ALREADY CONNECTED, CALLER.'); ready();
+      } else {
+        say(' '); say('ERROR-   ' + c.slice(0, 28)); ready();
+      }
+    }
+
+    /* BBS keys — letters navigate, everything else types at READY */
     var KEYS = {
       w: '/wire', m: '/mythos', r: '/residents', c: '/coffee',
       v: '/window', a: '/archive', t: '/today', x: '/',
     };
     document.addEventListener('keydown', function (e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      var t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      var tg = e.target;
+      if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable)) return;
       if (booting) { finishBoot(); return; }
+      bumpIdle();
+      if (running) { e.preventDefault(); breakRun(); return; }
       if (e.key === 'Escape') { window.location.href = '/'; return; }
-      var dest = KEYS[e.key.toLowerCase()];
-      if (dest) window.location.href = dest;
+      if (e.key === 'Enter') { var b = buffer; buffer = ''; drawBuf(); keyClick(); exec(b); return; }
+      if (e.key === 'Backspace') { buffer = buffer.slice(0, -1); drawBuf(); keyClick(); e.preventDefault(); return; }
+      if (e.key.length === 1 && /[ -~]/.test(e.key)) {
+        var lower = e.key.toLowerCase();
+        if (buffer === '') {
+          if (lower === 's') { keyClick(); toggleSound(); return; }
+          if (KEYS[lower]) { keyClick(); window.location.href = KEYS[lower]; return; }
+        }
+        buffer = (buffer + e.key.toUpperCase()).slice(0, 38);
+        drawBuf(); keyClick();
+      }
     });
     document.addEventListener('click', function () { if (booting) finishBoot(); }, true);
   })();
