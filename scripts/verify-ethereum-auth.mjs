@@ -1,7 +1,7 @@
 // E2E check for /api/auth/ethereum — signs the exact message shape
 // src/lib/auth/client.ts::loginWithMetaMask() builds, with a throwaway key,
 // and asserts the full round trip: ok:true, pc_session cookie, session GET.
-// Usage: node tmp/e2e-ethereum-auth.mjs [baseUrl]
+// Usage: node scripts/verify-ethereum-auth.mjs [baseUrl]
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 const base = process.argv[2] ?? 'https://pointcast.xyz';
