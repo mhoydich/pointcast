@@ -1,0 +1,330 @@
+---
+/**
+ * /1988 — the front door as a 1988 Atari 8-bit BBS.
+ *
+ * An alternate homepage in the ATASCII register: GRAPHICS 0 blue,
+ * 40 columns hard-wrapped, inverse-video section bars, dot-leader
+ * status board, READY prompt with a blinking cursor. In 1988 there
+ * was no web — a "homepage" was the main menu of the board you
+ * dialed into, so this renders PointCast as the board you reached
+ * after CONNECT 1200.
+ *
+ * Same live town underneath: blocks collection, HEARTBEAT.log pulse,
+ * ships-last-7, residents seats, and the El Segundo weather API —
+ * the exact sources HomeProfessional reads — reformatted to fit a
+ * 40×24-ish text screen. Letters navigate like a real BBS menu
+ * ([W]ire, [M]ythos, … [X] log off to /), ESC exits to 2026.
+ *
+ * Aesthetic register: sibling of /window-home and /rooms (the
+ * geocities + sim city lane), NOT BLOCKS.md — this page is the
+ * artifact, so the terminal look overrides the house grammar.
+ * BlockLayout still wraps it so the footer bar, bell, and agent
+ * meta stay mounted. Type-out boot honors prefers-reduced-motion
+ * and any key/click skips it.
+ *
+ * Font is self-hosted Press Start 2P (@fontsource, OFL) — 8×8
+ * square glyphs like the Atari ROM charset. All screen text is
+ * sanitized to printable ASCII so nothing falls through to a
+ * mismatched fallback glyph.
+ */
+import '@fontsource/press-start-2p';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { RESIDENTS } from '../data/residents';
+import { shipsLastDays } from '../lib/ships';
+import { pickDailyBlock } from '../lib/daily';
+import { readFileSync } from 'node:fs';
+
+const W = 40; // GRAPHICS 0 — forty columns, no more
+
+// ---- live town data (same sources as HomeProfessional) ----
+interface Pulse { n: number; at: string }
+let pulse: Pulse | null = null;
+try {
+  const hb = readFileSync('HEARTBEAT.log', 'utf8').trim().split('\n').filter(Boolean);
+  const at = hb[hb.length - 1]?.split(' · ')[0]?.trim();
+  if (hb.length > 0 && at) pulse = { n: hb.length, at };
+} catch { /* no log yet — line drops out */ }
+
+interface Weather { ok: boolean; tempF?: number; condition?: string }
+let weather: Weather = { ok: false };
+try {
+  const res = await fetch('https://pointcast.xyz/api/weather?lat=33.92&lng=-118.42&label=el-segundo', {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (res.ok) weather = await res.json();
+} catch { /* stub below */ }
+const tempF = Math.round(weather.tempF ?? 62);
+const condition = (weather.condition ?? 'overcast');
+
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
+const blockCount = allBlocks.length;
+const latest = allBlocks.slice(0, 5);
+const startOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+const todayCount = allBlocks.filter((b) => new Date(b.data.timestamp) >= startOfToday).length;
+const shipsLast7 = shipsLastDays(7);
+const dailyPick = pickDailyBlock(allBlocks);
+const agentCount = RESIDENTS.filter((r) => r.status === 'resident').length;
+
+// ---- 40-column typesetting ----
+// Everything on screen is printable ASCII — the one honest way to keep
+// every glyph in the 8×8 charset (no middle dots, no em dashes).
+function ascii(s: string): string {
+  return s
+    .replace(/[—–]/g, '-')
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[·•]/g, '*')
+    .replace(/[^\x20-\x7E]/g, '')
+    .toUpperCase();
+}
+// "LABEL ..... VALUE" padded to exactly 40 columns, the period way.
+function leader(label: string, value: string): string {
+  const l = ascii(label);
+  let v = ascii(value);
+  const maxV = W - l.length - 4; // label + two spaces + >=2 dots
+  if (v.length > maxV) v = v.slice(0, maxV - 2) + '..';
+  return `${l} ${'.'.repeat(W - l.length - v.length - 2)} ${v}`;
+}
+const pad4 = (n: number) => String(n).padStart(4, '0');
+
+// Wire rows: "0483 FD  04JUL SEASON TWO OPENS ON TH.."
+const ptDay = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit' });
+const ptMon = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short' });
+function wireRow(b: (typeof latest)[number]): string {
+  const d = new Date(b.data.timestamp);
+  const stamp = `${ptDay.format(d)}${ptMon.format(d).toUpperCase()}`;
+  let t = ascii(b.data.title ?? '');
+  if (t.length > 25) t = t.slice(0, 23).trimEnd() + '..';
+  return `${b.data.id} ${(b.data.channel ?? '??').padEnd(3)} ${stamp} ${t}`;
+}
+
+// ---- the screen, line by line ----
+interface Ln { text: string; inv?: boolean; href?: string; id?: string }
+const inv = (text: string): Ln => ({ text: (' ' + ascii(text)).padEnd(W), inv: true });
+const BLANK: Ln = { text: ' ' };
+
+const lines: Ln[] = [
+  inv('POINTCAST BULLETIN BOARD SYSTEM'),
+  BLANK,
+  { text: 'AWAITING RING .......... RING! RING!' },
+  { text: 'CONNECT 1200 * NODE 1 * ATASCII OK' },
+  BLANK,
+  { text: 'WELCOME, CALLER. THIS IS THE POINT-' },
+  { text: 'A SMALL INTERNET TOWN BROADCASTING' },
+  { text: 'FROM EL SEGUNDO, CALIFORNIA.' },
+  BLANK,
+  inv('SYSTEM STATUS'),
+  BLANK,
+  { text: leader('BLOCKS ON FILE', pad4(blockCount)) },
+  { text: leader('NEW TODAY', pad4(todayCount)) },
+  { text: leader('SHIPS LAST 7 DAYS', pad4(shipsLast7)) },
+  ...(pulse ? [{ text: leader('SEASON TWO PULSE', pad4(pulse.n)) }] : []),
+  { text: leader('EL SEGUNDO WX', `${tempF}F ${condition}`), id: 'a-wx' },
+  { text: leader('LOCAL TIME', '--:-- PT'), id: 'a-clock' },
+  BLANK,
+  inv('MAIN MENU'),
+  BLANK,
+  { text: leader('[W] THE WIRE', 'EVERY COMMIT'), href: '/wire' },
+  { text: leader('[M] THE MYTHOS', '60-SEC READ'), href: '/mythos' },
+  { text: leader('[R] THE RESIDENTS', `${agentCount} AGENTS ON`), href: '/residents' },
+  { text: leader('[C] THE COFFEE', 'POT IS ON'), href: '/coffee' },
+  { text: leader('[V] THE WINDOW', 'LIGHT + TIDE'), href: '/window' },
+  { text: leader('[A] THE ARCHIVE', `${pad4(blockCount)} BLKS`), href: '/archive' },
+  ...(dailyPick ? [{ text: leader('[T] TODAYS DROP', `NO.${dailyPick.data.id}`), href: '/today' }] : []),
+  { text: leader('[X] LOG OFF', 'BACK TO 2026'), href: '/' },
+  BLANK,
+  inv('NEW ON THE WIRE'),
+  BLANK,
+  ...latest.map((b) => ({ text: wireRow(b), href: `/b/${b.data.id}` })),
+  BLANK,
+  { text: 'PRESS LETTER, OR CLICK. ESC LOGS OFF' },
+  BLANK,
+  { text: 'READY' },
+];
+
+const title = '1988';
+const description =
+  `The PointCast front door as a 1988 Atari 8-bit BBS - 40 columns, ATASCII blue, ` +
+  `same live town. ${blockCount} blocks on file. CONNECT 1200 and press a letter.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="atari" id="atari">
+    <div class="crt" role="region" aria-label="PointCast BBS, Atari terminal view">
+      {lines.map((l) =>
+        l.href ? (
+          <a class:list={['ln', { inv: l.inv }]} href={l.href}>{l.text}</a>
+        ) : (
+          <div class:list={['ln', { inv: l.inv }]} id={l.id}>{l.text}</div>
+        )
+      )}
+      <div class="ln"><span class="cur" aria-hidden="true">&nbsp;</span></div>
+    </div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  /* The bezel swallows the page — mood tints don't reach 1988. */
+  body { background: #0c1130 !important; }
+</style>
+
+<style>
+  .atari {
+    --a-screen: #2456c8;  /* GR.0 playfield blue */
+    --a-ink:    #aecbff;  /* default text luminance */
+    --a-bright: #e9f1ff;
+    --a-bezel:  #0c1130;
+    display: flex;
+    justify-content: center;
+    padding: 28px 8px 48px;
+    min-height: 82vh;
+    font-family: 'Press Start 2P', ui-monospace, monospace;
+    font-size: clamp(8px, 2.3vw, 14px);
+  }
+  .crt {
+    position: relative;
+    background: var(--a-screen);
+    color: var(--a-ink);
+    padding: 2em 1.5ch 2.5em;
+    width: 43ch;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    border-radius: 10px;
+    box-shadow:
+      0 0 0 10px #071838,
+      0 0 60px rgba(36, 86, 200, 0.55),
+      inset 0 0 80px rgba(4, 12, 48, 0.55);
+    text-shadow: 0 0 5px rgba(174, 203, 255, 0.38);
+  }
+  /* scanlines */
+  .crt::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+  .ln {
+    display: block;
+    white-space: pre;
+    line-height: 1.85;
+    color: inherit;
+    text-decoration: none;
+  }
+  .ln.inv {
+    background: var(--a-ink);
+    color: var(--a-screen);
+    text-shadow: none;
+  }
+  a.ln:hover, a.ln:focus-visible {
+    background: var(--a-bright);
+    color: var(--a-screen);
+    text-shadow: none;
+    outline: none;
+  }
+  .cur {
+    display: inline-block;
+    width: 1ch;
+    background: var(--a-ink);
+    animation: a-blink 1.06s steps(1) infinite;
+  }
+  @keyframes a-blink { 50% { background: transparent; } }
+
+  /* boot type-out — lines hidden until the script reveals them */
+  .atari.booting .ln { visibility: hidden; }
+  .atari.booting .ln.on { visibility: visible; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cur { animation: none; }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var W = 40;
+    var atari = document.getElementById('atari');
+    if (!atari) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* line-by-line boot, any key or click skips */
+    var lns = Array.prototype.slice.call(atari.querySelectorAll('.ln'));
+    var booting = false;
+    var timer = null;
+    if (!reduce && lns.length) {
+      booting = true;
+      atari.classList.add('booting');
+      var i = 0;
+      timer = setInterval(function () {
+        if (i < lns.length) { lns[i++].classList.add('on'); }
+        if (i >= lns.length) finishBoot();
+      }, 55);
+    }
+    function finishBoot() {
+      if (!booting) return;
+      booting = false;
+      if (timer) clearInterval(timer);
+      lns.forEach(function (l) { l.classList.add('on'); });
+      atari.classList.remove('booting');
+    }
+
+    /* 40-col dot-leader, mirrored from build-time typesetting */
+    function leader(label, value) {
+      value = value.toUpperCase().replace(/[^\x20-\x7E]/g, '');
+      var maxV = W - label.length - 4;
+      if (value.length > maxV) value = value.slice(0, maxV - 2) + '..';
+      var dots = new Array(W - label.length - value.length - 1).join('.');
+      return label + ' ' + dots + ' ' + value;
+    }
+
+    /* the clock keeps El Segundo time */
+    var clockEl = document.getElementById('a-clock');
+    var fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+    function tick() {
+      if (clockEl) clockEl.textContent = leader('LOCAL TIME', fmt.format(new Date()) + ' PT');
+    }
+    tick();
+    setInterval(tick, 15000);
+
+    /* weather refresh, every 5 min like /window-home */
+    var wxEl = document.getElementById('a-wx');
+    function wx() {
+      fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (j && wxEl && typeof j.tempF === 'number') {
+            wxEl.textContent = leader('EL SEGUNDO WX', Math.round(j.tempF) + 'F ' + (j.condition || ''));
+          }
+        })
+        .catch(function () {});
+    }
+    setInterval(wx, 300000);
+
+    /* BBS keys — letters navigate, ESC logs off to 2026 */
+    var KEYS = {
+      w: '/wire', m: '/mythos', r: '/residents', c: '/coffee',
+      v: '/window', a: '/archive', t: '/today', x: '/',
+    };
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (booting) { finishBoot(); return; }
+      if (e.key === 'Escape') { window.location.href = '/'; return; }
+      var dest = KEYS[e.key.toLowerCase()];
+      if (dest) window.location.href = dest;
+    });
+    document.addEventListener('click', function () { if (booting) finishBoot(); }, true);
+  })();
+</script>
