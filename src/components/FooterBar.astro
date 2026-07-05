@@ -142,6 +142,7 @@ const pingable = RESIDENTS.filter(
         aria-label="Type anything — /path navigates, ?question asks the cast, +spell casts, @agent pings, plain text says when room is on."
       />
       <span class="fb__omni-hint mono" aria-hidden="true">⌘K</span>
+      <div class="fb__suggest mono" id="fb-suggest" role="listbox" aria-label="Doors matching your path" hidden></div>
     </form>
 
     <div class="fb__right">
@@ -311,9 +312,6 @@ const pingable = RESIDENTS.filter(
         ></textarea>
         <div class="fb-ask__foot">
           <span class="fb-ask__count mono" id="fb-ask-count">0 / 2000</span>
-          <span class="fb-ask__seat fb-ask__seat--ai mono" id="fb-ai-seat" data-state="off" title="AI answer mode — wire-up in next sprint. The seat is here; the model isn't plugged in yet.">
-            <span aria-hidden="true">🤖</span> ai · soon
-          </span>
           <button type="submit" class="fb-btn fb-btn--send" id="fb-ask-send">
             <span aria-hidden="true">↗</span> Send
           </button>
@@ -982,6 +980,7 @@ const pingable = RESIDENTS.filter(
     $omni.addEventListener('input', function () {
       applyOmniMode();
       try { syncBubbleFromInput(); } catch (e) {}
+      try { refreshSuggest(); } catch (e) {}
     });
     $omni.addEventListener('focus', function () {
       applyOmniMode();
@@ -1025,6 +1024,9 @@ const pingable = RESIDENTS.filter(
       if (!bubbleState.persistUntil || Date.now() >= bubbleState.persistUntil) {
         if (!String($omni.value || '').trim()) hideBubble();
       }
+      // Suggest closes after a beat so a click on an item lands first
+      // (item mousedown also preventDefaults, this is the safety net).
+      setTimeout(function () { try { closeSuggest(); } catch (e) {} }, 140);
     });
 
     $omniForm.addEventListener('submit', function (e) {
@@ -1070,6 +1072,22 @@ const pingable = RESIDENTS.filter(
       }
       if (mode === 'ASK') {
         var body = raw.replace(/^\?\s*/, '');
+        // v5.1: honest intent shortcuts — common questions have instant
+        // in-town answers; no model, no spinner, no "ai · soon" seat.
+        // Anything that doesn't match stays a real ask to the cast.
+        var intent = matchAskIntent(body);
+        if (intent) {
+          $omni.value = '';
+          if (intent === 'random') {
+            loadTownIndex().then(function (feats) {
+              var f = feats && feats.length ? feats[Math.floor(Math.random() * feats.length)] : null;
+              window.location.href = f ? f.slug : '/explore';
+            });
+          } else {
+            window.location.href = intent;
+          }
+          return;
+        }
         openTray('ask');
         var tb = document.getElementById('fb-ask-body');
         if (tb) { tb.value = body; tb.dispatchEvent(new Event('input')); }
@@ -1100,12 +1118,187 @@ const pingable = RESIDENTS.filter(
         return;
       }
       if (raw.startsWith('/') || /^https?:\/\//.test(raw)) {
-        window.location.href = raw;
+        // v5.1: if a suggestion is highlighted, Enter takes that door;
+        // otherwise trust the typed path as before.
+        var picked = suggestPicked();
+        window.location.href = picked || raw;
         return;
       }
       var maybe = '/' + raw.replace(/^\/+/, '').split(/\s+/)[0];
       window.location.href = '/search?q=' + encodeURIComponent(raw) + '&from=' + encodeURIComponent(maybe);
     });
+
+    // ── v5.1: the omnibox knows the whole town ─────────────────────────
+    // Lazy directory from /explore.json — the same auto-built machine
+    // surface agents read, so the bar can never drift from the real page
+    // tree the way the old hand-curated ROUTES list did. Loaded once, on
+    // first '/' keystroke; ~450 {slug,title} pairs.
+    var townIndex = null;
+    function loadTownIndex() {
+      if (townIndex) return Promise.resolve(townIndex);
+      return fetch('/explore.json')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          townIndex = (d && d.features) ? d.features : [];
+          return townIndex;
+        })
+        .catch(function () { townIndex = []; return townIndex; });
+    }
+
+    var $suggest = document.getElementById('fb-suggest');
+    var suggestState = { items: [], sel: -1 };
+
+    function scoreDoor(f, q) {
+      // slug subsequence beats title substring; prefix beats infix.
+      var slug = f.slug.toLowerCase();
+      var score = -1;
+      if (slug === q) return 1000;
+      else if (slug.indexOf(q) === 0) score = 500 - slug.length;
+      else if (slug.indexOf(q) > -1) score = 250 - slug.indexOf(q);
+      else {
+        var qi = 0;
+        for (var i = 0; i < slug.length && qi < q.length; i++) if (slug[i] === q[qi]) qi++;
+        if (qi === q.length) score = 100 - slug.length;
+        else {
+          var title = (f.title || '').toLowerCase();
+          if (title.indexOf(q.replace(/^\//, '')) > -1) score = 50;
+        }
+      }
+      // Archived version variants (-v2…-v18 graveyards) stay findable but
+      // sink below their living siblings unless typed exactly.
+      if (score > 0 && /-v\d+$/.test(slug) && !/-v\d+$/.test(q)) score -= 120;
+      return score;
+    }
+
+    function closeSuggest() {
+      if (!$suggest) return;
+      $suggest.hidden = true;
+      $suggest.innerHTML = '';
+      suggestState.items = [];
+      suggestState.sel = -1;
+    }
+
+    function suggestPicked() {
+      if (suggestState.sel < 0 || !suggestState.items[suggestState.sel]) return null;
+      var slug = suggestState.items[suggestState.sel].slug;
+      closeSuggest();
+      return slug;
+    }
+
+    function paintSuggest() {
+      if (!$suggest) return;
+      if (!suggestState.items.length) { closeSuggest(); return; }
+      $suggest.innerHTML = '';
+      suggestState.items.forEach(function (f, i) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'fb__suggest-item' + (i === suggestState.sel ? ' is-sel' : '');
+        el.setAttribute('role', 'option');
+        el.setAttribute('aria-selected', i === suggestState.sel ? 'true' : 'false');
+        var s = document.createElement('span'); s.className = 'fb__suggest-slug'; s.textContent = f.slug;
+        var t = document.createElement('span'); t.className = 'fb__suggest-title'; t.textContent = f.title || '';
+        el.appendChild(s); el.appendChild(t);
+        el.addEventListener('mousedown', function (e) {
+          e.preventDefault(); // beat the input blur
+          window.location.href = f.slug;
+        });
+        $suggest.appendChild(el);
+      });
+      $suggest.hidden = false;
+    }
+
+    function refreshSuggest() {
+      var raw = $omni.value.trim().toLowerCase();
+      if (!raw.startsWith('/') || raw.length < 2) { closeSuggest(); return; }
+      loadTownIndex().then(function (feats) {
+        // stale keystroke guard — only paint for the current value
+        if ($omni.value.trim().toLowerCase() !== raw) return;
+        var scored = [];
+        for (var i = 0; i < feats.length; i++) {
+          var sc = scoreDoor(feats[i], raw);
+          if (sc >= 0) scored.push([sc, feats[i]]);
+        }
+        scored.sort(function (a, b) { return b[0] - a[0]; });
+        suggestState.items = scored.slice(0, 6).map(function (p) { return p[1]; });
+        suggestState.sel = suggestState.items.length ? 0 : -1;
+        paintSuggest();
+      });
+    }
+
+    $omni.addEventListener('keydown', function (e) {
+      if ($suggest && !$suggest.hidden) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var n = suggestState.items.length;
+          suggestState.sel = ((suggestState.sel + (e.key === 'ArrowDown' ? 1 : -1)) + n) % n;
+          paintSuggest();
+          return;
+        }
+        if (e.key === 'Escape') { closeSuggest(); return; }
+      }
+    });
+
+    // ── v5.1: glance state ──────────────────────────────────────────────
+    // Persistent chrome shouldn't sit on the page while you read. Scroll
+    // down past the fold and the bar slims to a sliver; scroll up, hover,
+    // tap, or focus and it returns. Never slims mid-interaction (open
+    // tray / focused input), never on short pages.
+    (function () {
+      var bar = document.getElementById('pc-fb');
+      if (!bar) return;
+      var lastY = window.scrollY;
+      var ticking = false;
+      function anyTrayOpen() {
+        return !!bar.querySelector('[data-open="true"]');
+      }
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        // setTimeout, not rAF — rAF stalls in backgrounded/embedded tabs
+        // and a stalled callback would leave `ticking` stuck true forever.
+        setTimeout(function () {
+          ticking = false;
+          var y = window.scrollY;
+          var dy = y - lastY;
+          lastY = y;
+          if (Math.abs(dy) < 6) return;
+          if (dy > 0 && y > 320 && !anyTrayOpen() && !bar.matches(':focus-within')) {
+            bar.setAttribute('data-slim', 'true');
+          } else if (dy < 0 || y <= 320) {
+            bar.removeAttribute('data-slim');
+          }
+        }, 32);
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      // Touch: a tap on the sliver wakes the bar instead of clicking through.
+      bar.addEventListener('touchstart', function () {
+        if (bar.getAttribute('data-slim') === 'true') bar.removeAttribute('data-slim');
+      }, { passive: true });
+      bar.addEventListener('mouseenter', function () {
+        if (bar.getAttribute('data-slim') === 'true') bar.removeAttribute('data-slim');
+      });
+      document.addEventListener('astro:after-swap', function () {
+        bar.removeAttribute('data-slim');
+        lastY = window.scrollY;
+      });
+    })();
+
+    // v5.1: honest ? intents — the questions visitors actually type,
+    // answered by the town's own doors. Everything else goes to the cast.
+    function matchAskIntent(q) {
+      var s = q.toLowerCase().trim();
+      if (!s) return null;
+      if (/^(what'?s\s+)?(new|latest|fresh|happening)\b/.test(s)) return '/wire';
+      if (/^(today|daily|drop)\b/.test(s)) return '/today';
+      if (/^(random|surprise|wander|anywhere)\b/.test(s)) return 'random';
+      if (/^(map|directory|rooms|all\s+(rooms|surfaces|pages))\b/.test(s)) return '/explore';
+      if (/^(music|listen|song|playing)\b/.test(s)) return '/music-hub';
+      if (/^(recap|(this|last)\s+week)\b/.test(s)) return '/recap';
+      if (/^(who|residents?|agents?)\b/.test(s)) return '/residents';
+      if (/^(weather|window|outside|sky)\b/.test(s)) return '/window';
+      if (/^(what\s+is\s+(this|pointcast)|mythos|about)\b/.test(s)) return '/mythos';
+      return null;
+    }
 
     var roomOn = true;
     try {
@@ -2180,6 +2373,7 @@ const pingable = RESIDENTS.filter(
      reads left→right "I am X · type anything · KIT". */
   .fb__omni {
     pointer-events: auto;
+    position: relative; /* anchors the v5.1 suggest popover */
     display: flex;
     align-items: center;
     gap: 6px;
@@ -3072,6 +3266,46 @@ const pingable = RESIDENTS.filter(
     font-weight: 700;
     cursor: not-allowed;
   }
+  /* v5.1 — suggest popover: the town's doors, matched as you type. */
+  .fb__suggest {
+    position: absolute;
+    left: 0; right: 0; bottom: calc(100% + 8px);
+    display: flex; flex-direction: column;
+    background: rgba(24, 20, 12, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    padding: 4px;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
+    max-height: 262px; overflow-y: auto;
+    z-index: 30;
+  }
+  /* Items are built in JS, so they carry no astro scope id — style them
+     through the scoped container with :global(). */
+  .fb__suggest :global(.fb__suggest-item) {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 7px 9px; border: 0; border-radius: 4px;
+    background: transparent; cursor: pointer; text-align: left;
+    font-family: inherit; width: 100%;
+  }
+  .fb__suggest :global(.fb__suggest-item.is-sel),
+  .fb__suggest :global(.fb__suggest-item:hover) { background: rgba(255, 255, 255, 0.1); }
+  .fb__suggest :global(.fb__suggest-slug) {
+    font-size: 12px; letter-spacing: 0.04em; color: #f3ead9; white-space: nowrap;
+  }
+  .fb__suggest :global(.fb__suggest-title) {
+    font-size: 10.5px; letter-spacing: 0.03em; color: rgba(243, 234, 217, 0.55);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* v5.1 — glance state: the bar slims to a sliver while you read. */
+  #pc-fb { transition: transform 0.18s ease; }
+  #pc-fb[data-slim='true'] { transform: translateY(calc(100% - 14px)); }
+  #pc-fb[data-slim='true']:hover,
+  #pc-fb[data-slim='true']:focus-within { transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    #pc-fb { transition: none; }
+  }
+
   .fb-ask__seat--ai[data-state='off'] {
     background: rgba(45, 31, 8, 0.05);
     border: 1px dashed #c5b284;
