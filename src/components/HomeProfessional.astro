@@ -27,6 +27,7 @@ import { CHANNELS } from '../lib/channels';
 import { RESIDENTS } from '../data/residents';
 import { shipsLastDays } from '../lib/ships';
 import { pickDailyBlock, todayPT, pickDailyIndex } from '../lib/daily';
+import { FEATURES, countByCategory } from '../lib/explore';
 import { readFileSync } from 'node:fs';
 
 // Season Two heartbeat — HEARTBEAT.log at the repo root, one line per daily
@@ -107,6 +108,35 @@ function ramp(code: string) {
   const c = (CHANNELS as Record<string, { color50: string; color600: string; color800: string }>)[code];
   return c ?? { color50: '#EEF4FA', color600: '#185FA5', color800: '#0B3E73' };
 }
+
+// THE TOWN board — every built service surfaced on the front door, fed by
+// the same auto-discovered FEATURES as /explore so a new room shows up here
+// on its next build. Pins are the canonical doors (resolved against
+// FEATURES, so a renamed route silently drops instead of 404ing); remaining
+// slots fill with the category's freshest rooms by git mtime.
+const FEAT = new Map(FEATURES.map((f) => [f.slug, f]));
+const catCounts = countByCategory();
+const TOWN_PANELS = [
+  { key: 'drum',       ch: 'SPN', label: 'DRUM HUB',            pins: ['/drum', '/drum-live', '/drum-school', '/drum-jam', '/drum-tv', '/drum-map'] },
+  { key: 'music',      ch: 'SPN', label: 'MUSIC & CASTS',       pins: ['/music-hub', '/cast', '/song-of-the-day', '/melody-bottle', '/radio', '/town-music'] },
+  { key: 'nouns',      ch: 'BTL', label: 'NOUNS BATTLER',       pins: ['/nouns-nation-battler', '/battle', '/nouns-nation-battler-tv', '/nouns-nation-battler-wiki', '/nouns-cards', '/nouns-cola'] },
+  { key: 'shrines',    ch: 'GDN', label: 'SHRINES & STILLNESS', pins: ['/shrines', '/meditate', '/aviary', '/sit', '/quiet-hours', '/night-sky'] },
+  { key: 'federation', ch: 'FD',  label: 'ROOMS & FEDERATION',  pins: ['/webring', '/room-maker', '/rooms', '/mesh', '/for-nodes', '/handshakes'] },
+  { key: 'collect',    ch: 'FCT', label: 'COLLECT & DROPS',     pins: ['/collect', '/marketplace', '/treasury', '/zen-cats', '/postcards', '/editions'] },
+  { key: 'games',      ch: 'ESC', label: 'GAMES & PLAY',        pins: ['/win95-games', '/sumo', '/noun-solitaire', '/nouns-mines-v2', '/gandalf', '/farm'] },
+  { key: 'local',      ch: 'ESC', label: 'EL SEGUNDO & LOCAL',  pins: ['/local', '/town', '/areas', '/civic', '/hermosa-beach', '/strand-corridor'] },
+].map((p) => {
+  const doors = p.pins
+    .map((slug) => FEAT.get(slug))
+    .filter((f): f is NonNullable<typeof f> => Boolean(f));
+  const have = new Set(doors.map((d) => d.slug));
+  const fill = FEATURES
+    .filter((f) => f.category === p.key && !have.has(f.slug))
+    .sort((a, b) => b.mtime - a.mtime);
+  while (doors.length < 6 && fill.length) doors.push(fill.shift()!);
+  return { ...p, doors, count: catCounts[p.key] ?? null };
+});
+const townTotal = FEATURES.length;
 
 const title = 'PointCast — agent-native broadcast from El Segundo';
 const description = `An agent-native broadcast from El Segundo, California. ${blockCount} blocks since ${sinceDate}, built in the open by humans and AI agents.`;
@@ -218,6 +248,32 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
           );
         })}
       </ul>
+    </section>
+
+    {/* ============== THE TOWN ============== */}
+    <section class="ph-sec" aria-label="The town — every built service">
+      <div class="ph-sechead">
+        <h2 class="ph-sechead__t mono">THE TOWN</h2>
+        <a class="ph-sechead__more mono" href="/explore">ALL {townTotal} SURFACES →</a>
+      </div>
+      <div class="ph-town">
+        {TOWN_PANELS.map((p) => {
+          const c = ramp(p.ch);
+          return (
+            <div class="ph-town__panel" style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
+              <p class="ph-town__head mono">
+                <span class="ph-town__label">{p.label}</span>
+                {p.count && <span class="ph-town__count">{p.count}</span>}
+              </p>
+              <ul class="ph-town__doors mono">
+                {p.doors.map((d) => (
+                  <li><a href={d.slug} title={d.title}>{d.slug}</a></li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </section>
 
     {/* ============== LATEST ============== */}
@@ -433,6 +489,30 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   .ph-room__go { margin-top: auto; font-size: 10.5px; letter-spacing: 0.1em; font-weight: 500; color: var(--pc-ink-muted); }
   .ph-room:hover .ph-room__go, .ph-room:focus-visible .ph-room__go { color: var(--ch-800); }
 
+  /* ============== THE TOWN ============== */
+  .ph-town {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .ph-town__panel {
+    border: 1.5px solid var(--pc-rule); border-top: 3px solid var(--ch-600); border-radius: 2px;
+    background: #fff; padding: 10px 12px 12px;
+  }
+  .ph-town__head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .ph-town__label { font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--ch-800); }
+  .ph-town__count { font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted); }
+  .ph-town__doors { list-style: none; margin: 0; padding: 0; }
+  .ph-town__doors a {
+    display: block; padding: 3px 4px; margin: 0 -4px; border-radius: 2px;
+    font-size: 11px; letter-spacing: 0.04em; color: var(--pc-ink-soft);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ph-town__doors a:hover, .ph-town__doors a:focus-visible {
+    background: var(--ch-50); color: var(--ch-800); outline: none;
+  }
+
   /* ============== LATEST ============== */
   .ph-latest { list-style: none; margin: 0; padding: 0; }
   .ph-latest > li { border-bottom: 1px solid var(--pc-rule-soft); }
@@ -466,6 +546,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     .ph-status { grid-template-columns: repeat(2, 1fr); }
     .ph-daily__next { margin-left: 0; width: 100%; }
     .ph-daily__title { display: none; } /* number-only on phones — the room is one tap away */
+    .ph-town { grid-template-columns: repeat(2, 1fr); }
     .ph-rooms { grid-template-columns: repeat(2, 1fr); }
     .ph-row { grid-template-columns: 56px 46px 1fr; column-gap: 12px; }
     .ph-row__id { display: none; }
@@ -473,6 +554,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   @media (max-width: 440px) {
     .ph-status { grid-template-columns: 1fr 1fr; }
     .ph-rooms { grid-template-columns: 1fr; }
+    .ph-town { grid-template-columns: 1fr; }
     .ph-row { grid-template-columns: 52px 1fr; }
     .ph-row__chan { display: none; }
   }
