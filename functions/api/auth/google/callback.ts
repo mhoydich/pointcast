@@ -132,6 +132,9 @@ export const onRequestGet: PagesFunction<GoogleEnv> = async ({ request, env }) =
     if (error instanceof IdentityConflictError) {
       return fail('identity-already-linked');
     }
-    throw error;
+    // This handler renders directly to the user's browser mid-navigation —
+    // a re-thrown KV hiccup would strand them on a raw 500 page. Keep the
+    // "every failure redirects" contract; a retry re-enters the flow clean.
+    return fail('server-error');
   }
 };
