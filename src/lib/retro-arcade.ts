@@ -12,7 +12,10 @@ export type ArcadeGameSlug =
   | 'nouns-snake'
   | 'nouns-slide'
   | 'nouns-reversi'
-  | 'nouns-breakout';
+  | 'nouns-breakout'
+  | 'noggle-crush'
+  | 'nouns-jam'
+  | 'nouns-jelly';
 
 export interface ArcadeGame {
   slug: ArcadeGameSlug;
@@ -22,7 +25,7 @@ export interface ArcadeGame {
   kicker: string;
   description: string;
   status: 'live' | 'next';
-  category: 'cards' | 'memory' | 'puzzle' | 'action' | 'strategy';
+  category: 'cards' | 'memory' | 'puzzle' | 'action' | 'strategy' | 'match';
   storageKey: string;
   achievementIds: string[];
 }
@@ -89,6 +92,26 @@ export const ARCADE_ACHIEVEMENTS = [
     id: 'brick-clear',
     name: 'Wall Breaker',
     description: 'Clear every brick in Nouns Breakout.',
+  },
+  {
+    id: 'crush-clear',
+    name: 'Noggle Crusher',
+    description: 'Beat the score target in Noggle Crush.',
+  },
+  {
+    id: 'jam-clear',
+    name: 'Jam Session',
+    description: 'Hit the score target in Nouns Jam.',
+  },
+  {
+    id: 'jelly-clear',
+    name: 'Squeaky Clean',
+    description: 'Scrub every jelly square in Nouns Jelly.',
+  },
+  {
+    id: 'cascade-chain',
+    name: 'Chain Reaction',
+    description: 'Trigger a triple cascade or pop ten noggles at once in a match game.',
   },
 ];
 
@@ -212,6 +235,42 @@ export const RETRO_ARCADE_GAMES: ArcadeGame[] = [
     category: 'action',
     storageKey: `${ARCADE_STORAGE_PREFIX}nouns-breakout`,
     achievementIds: ['first-win', 'three-game-streak', 'brick-clear'],
+  },
+  {
+    slug: 'noggle-crush',
+    name: 'Noggle Crush',
+    shortName: 'Crush',
+    path: '/noggle-crush',
+    kicker: 'MATCH 3 · SPECIALS',
+    description: 'Swap noggles, chain cascades, and earn striped and rainbow specials to beat the score target in 25 moves.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noggle-crush`,
+    achievementIds: ['first-win', 'three-game-streak', 'crush-clear', 'cascade-chain'],
+  },
+  {
+    slug: 'nouns-jam',
+    name: 'Nouns Jam',
+    shortName: 'Jam',
+    path: '/nouns-jam',
+    kicker: 'TAP BLAST · BIG GROUPS',
+    description: 'Pop groups of matching noggles, collapse the columns, and chase huge group bonuses in 30 taps.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jam`,
+    achievementIds: ['first-win', 'three-game-streak', 'jam-clear', 'cascade-chain'],
+  },
+  {
+    slug: 'nouns-jelly',
+    name: 'Nouns Jelly',
+    shortName: 'Jelly',
+    path: '/nouns-jelly',
+    kicker: 'MATCH 3 · CLEAR JELLY',
+    description: 'Every tile sits on jelly — match on top of it to scrub all 64 squares clean in 40 moves.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jelly`,
+    achievementIds: ['first-win', 'three-game-streak', 'jelly-clear', 'cascade-chain'],
   },
 ];
 
