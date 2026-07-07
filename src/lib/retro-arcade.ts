@@ -191,6 +191,11 @@ export const ARCADE_ACHIEVEMENTS = [
     name: 'Bubble Clear',
     description: 'Clear the bubble rack in Nouns Bubble Pop.',
   },
+  {
+    id: 'daily-sweep',
+    name: 'Daily Sweep',
+    description: "Finish all four of a day's Daily Challenge goals.",
+  },
 ];
 
 export const RETRO_ARCADE_GAMES: ArcadeGame[] = [

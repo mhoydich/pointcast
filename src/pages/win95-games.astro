@@ -81,9 +81,14 @@ const jsonLd = {
           <em data-resume-copy>No local game yet. Pick a table and make the first mark.</em>
         </a>
         <div class="daily">
-          <span>DAILY CHALLENGE</span>
-          <strong data-daily-date>Today</strong>
-          <em data-daily-copy>Four small goals from the same daily seed. Local-only, honor-system arcade.</em>
+          <span>DAILY CHALLENGE · <b data-daily-date>today</b></span>
+          <strong data-daily-streak>Loading…</strong>
+          <ul class="daily__goals" aria-label="Today's goals">
+            <li data-goal="0"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="1"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="2"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="3"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+          </ul>
         </div>
         <button class="reset" type="button" data-reset-stats>
           <span>RESET</span>
@@ -185,6 +190,98 @@ const jsonLd = {
     }).format(new Date());
   }
 
+  function writeJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage blocked */ }
+  }
+
+  const dailyKey = 'pc:arcade:daily';
+
+  function seedFrom(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  function prevDayKey(dayKey) {
+    const d = new Date(dayKey + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function statsSnapshot() {
+    const snap = {};
+    games.forEach((g) => {
+      const s = readJson(`pc:arcade:${g.slug}`, {});
+      snap[g.slug] = { plays: Number(s.plays || 0), clears: Number(s.clears || 0) };
+    });
+    return snap;
+  }
+
+  function snapSum(snap, field) {
+    return games.reduce((t, g) => t + ((snap[g.slug] && snap[g.slug][field]) || 0), 0);
+  }
+
+  // Four goals, chosen deterministically from the PT day so every browser sees the
+  // same challenge. Progress is measured against a snapshot taken the first time the
+  // hub loads each day — so the games themselves need no changes.
+  function dailyGoals(dayKey) {
+    const n = games.length;
+    const seed = seedFrom(dayKey);
+    const a = games[seed % n];
+    let b = games[(seed * 7 + 3) % n];
+    if (b.slug === a.slug) b = games[(seed * 7 + 5) % n];
+    const plays = (snap, slug) => (snap[slug] && snap[slug].plays) || 0;
+    const clears = (snap, slug) => (snap[slug] && snap[slug].clears) || 0;
+    return [
+      { label: `Warm up — play ${a.name}`, test: (cur, base) => plays(cur, a.slug) > plays(base, a.slug) },
+      { label: 'Get a clear — clear any game', test: (cur, base) => snapSum(cur, 'clears') > snapSum(base, 'clears') },
+      { label: `Featured clear — clear ${b.name}`, test: (cur, base) => clears(cur, b.slug) > clears(base, b.slug) },
+      { label: 'Sampler — play three different games', test: (cur, base) => games.filter((g) => plays(cur, g.slug) > plays(base, g.slug)).length >= 3 },
+    ];
+  }
+
+  function renderDaily() {
+    const dayKey = todaySeed();
+    let daily = readJson(dailyKey, null);
+    if (!daily || daily.date !== dayKey) {
+      const prev = daily || {};
+      daily = { date: dayKey, baseline: statsSnapshot(), doneToday: false, streak: prev.streak || 0, lastCompleted: prev.lastCompleted || null };
+      writeJson(dailyKey, daily);
+    }
+    const goals = dailyGoals(dayKey);
+    const cur = statsSnapshot();
+    let done = 0;
+    goals.forEach((goal, i) => {
+      const ok = !!goal.test(cur, daily.baseline);
+      if (ok) done++;
+      const li = document.querySelector(`[data-goal="${i}"]`);
+      if (li) {
+        li.classList.toggle('done', ok);
+        const lbl = li.querySelector('[data-goal-label]');
+        if (lbl) lbl.textContent = goal.label;
+      }
+    });
+    const all = done === goals.length;
+    if (all && !daily.doneToday) {
+      daily.doneToday = true;
+      daily.streak = daily.lastCompleted === prevDayKey(dayKey) ? (daily.streak || 0) + 1 : 1;
+      daily.lastCompleted = dayKey;
+      writeJson(dailyKey, daily);
+      const profile = readJson(profileKey, { achievements: [] });
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), 'daily-sweep']));
+      writeJson(profileKey, profile);
+      const node = document.querySelector('[data-achievement="daily-sweep"]');
+      if (node) node.classList.add('is-earned');
+    }
+    const dateEl = document.querySelector('[data-daily-date]');
+    if (dateEl) dateEl.textContent = dayKey;
+    const streakEl = document.querySelector('[data-daily-streak]');
+    if (streakEl) {
+      const streakBit = daily.streak ? ` · ${daily.streak}-day streak 🔥` : '';
+      streakEl.textContent = all ? `Swept!${streakBit || ' nicely done.'}` : `${done}/${goals.length} done${streakBit}`;
+    }
+  }
+
   function render() {
     const profile = readJson(profileKey, {});
     const totals = games.map((game) => {
@@ -210,9 +307,9 @@ const jsonLd = {
     document.querySelector('[data-resume-copy]').textContent = last?.plays
       ? `${last.plays} plays, ${last.clears} clears, best ${last.best}.`
       : 'No local game yet. Pick a table and make the first mark.';
-    document.querySelector('[data-daily-date]').textContent = todaySeed();
-    document.querySelector('[data-daily-copy]').textContent = games.map((game) => `${game.name}: ${game.target}`).join(' · ');
-    const achievements = new Set(profile.achievements || []);
+    renderDaily();
+    // Re-read the profile: renderDaily() may have just awarded 'daily-sweep'.
+    const achievements = new Set(readJson(profileKey, {}).achievements || []);
     document.querySelectorAll('[data-achievement]').forEach((node) => {
       node.classList.toggle('is-earned', achievements.has(node.dataset.achievement));
     });
@@ -249,6 +346,13 @@ const jsonLd = {
   .launcher span { margin:0; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; text-transform:uppercase; }
   .launcher strong { font-size:20px; line-height:1; }
   .launcher em { font-style:normal; line-height:1.35; }
+  .daily [data-daily-streak] { font-size:14px; }
+  .daily__goals { list-style:none; margin:2px 0 0; padding:0; display:grid; gap:5px; }
+  .daily__goals li { display:flex; align-items:flex-start; gap:7px; font-size:12px; line-height:1.25; color:#000; }
+  .daily .chk { flex:none; width:13px; height:13px; margin-top:1px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; }
+  .daily__goals li.done .chk { background:#2CC5A0; box-shadow:inset 0 0 0 1px #fff; }
+  .daily__goals li.done { color:#0a6a4a; }
+  .daily__goals li.done span { text-decoration:line-through; }
   .shelves { display:grid; gap:4px; padding:14px; }
   .shelf-label { display:flex; align-items:baseline; justify-content:space-between; margin:6px 2px 0; padding:6px 10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#000080; color:#fff; }
   .shelf-label span { font:700 12px/1 "Courier New",monospace; letter-spacing:.14em; }
