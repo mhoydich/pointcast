@@ -1,0 +1,384 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Noggle Crush';
+const description = 'A Windows 95 worthy Nouns match-3: swap noggles, chain cascades, earn striped and rainbow specials, and beat the score target in 25 moves.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/noggle-crush',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/noggle-crush',
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.desktop} jsonLd={jsonLd}>
+  <main class="desk" data-crush style={`--arcade-desktop:url('${ARCADE_ASSETS.desktop}');`}>
+    <section class="window" aria-labelledby="crush-title">
+      <header class="titlebar"><span id="crush-title">Noggle Crush</span><span class="buttons" aria-hidden="true"><i>_</i><i>□</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Crush menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-hint>Hint</button>
+        <a href="/win95-games">All games</a>
+        <a href="/nouns-jam">Jam</a>
+        <a href="/nouns-jelly">Jelly</a>
+      </nav>
+      <div class="toolbar">
+        <span>Score <strong data-score>0</strong></span>
+        <span>Moves <strong data-moves>25</strong></span>
+        <span>Target <strong data-target>3000</strong></span>
+        <span>Best <strong data-best>--</strong></span>
+        <p data-status>Swap two neighboring noggles to line up three or more.</p>
+      </div>
+      <div class="felt">
+        <div class="board" data-board aria-label="Noggle Crush board"></div>
+      </div>
+      <footer class="status">Match 4 makes a striped noggle (clears its row and column). Match 5 makes a rainbow noggle (swap it with anything to clear that color).</footer>
+      <div class="overlay" data-overlay hidden>
+        <div class="dialog">
+          <header class="titlebar"><span data-overlay-title>Level clear</span></header>
+          <p data-overlay-copy>Nice crushing.</p>
+          <button type="button" data-again>Play again</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const size = 8;
+  const moveLimit = 25;
+  const target = 3000;
+  const statsKey = 'pc:arcade:noggle-crush';
+  const profileKey = 'pc:arcade:profile';
+  const TYPES = [
+    { noun: 4, color: '#ff8ba8' },
+    { noun: 11, color: '#ffc96b' },
+    { noun: 27, color: '#7de08f' },
+    { noun: 52, color: '#7ec2ff' },
+    { noun: 73, color: '#c9a0f0' },
+    { noun: 98, color: '#fff27a' },
+  ];
+  const boardEl = document.querySelector<HTMLElement>('[data-board]');
+  const statusEl = document.querySelector<HTMLElement>('[data-status]');
+  const scoreEl = document.querySelector<HTMLElement>('[data-score]');
+  const movesEl = document.querySelector<HTMLElement>('[data-moves]');
+  const bestEl = document.querySelector<HTMLElement>('[data-best]');
+  const overlayEl = document.querySelector<HTMLElement>('[data-overlay]');
+  const overlayTitleEl = document.querySelector<HTMLElement>('[data-overlay-title]');
+  const overlayCopyEl = document.querySelector<HTMLElement>('[data-overlay-copy]');
+  let grid = []; // cells: { type, special: null | 'striped' | 'rainbow' } or null while falling
+  let score = 0;
+  let moves = moveLimit;
+  let selected = -1;
+  let busy = false;
+  let over = false;
+  let maxCascade = 0;
+
+  function readJson(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+  function writeJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+  function say(text) { if (statusEl) statusEl.textContent = text; }
+  function idx(x, y) { return y * size + x; }
+  function randomTile() { return { type: Math.floor(Math.random() * TYPES.length), special: null }; }
+
+  function updateArcadeProfile(won = false) {
+    const stats = readJson(statsKey, { plays: 0, clears: 0, bestScore: null });
+    stats.plays = Number(stats.plays || 0) + (won ? 0 : 1);
+    if (won) {
+      stats.clears = Number(stats.clears || 0) + 1;
+      stats.bestScore = stats.bestScore ? Math.max(stats.bestScore, score) : score;
+    }
+    writeJson(statsKey, stats);
+    const profile = readJson(profileKey, { achievements: [] });
+    profile.totalPlays = Number(profile.totalPlays || 0) + (won ? 0 : 1);
+    profile.lastPlayed = 'Crush';
+    if (won) {
+      profile.clears = Number(profile.clears || 0) + 1;
+      profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+      profile.lastCleared = 'Crush';
+      const earned = ['first-win', 'crush-clear'];
+      if (profile.clearStreak >= 3) earned.push('three-game-streak');
+      if (maxCascade >= 3) earned.push('cascade-chain');
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+    }
+    writeJson(profileKey, profile);
+  }
+
+  function findMatches() {
+    const hit = new Set();
+    const specials = []; // { index, kind } to create after clearing
+    const scan = (cells) => {
+      let run = [cells[0]];
+      const flush = () => {
+        if (run.length >= 3 && grid[run[0]] && grid[run[0]].special !== 'rainbow') {
+          run.forEach((i) => hit.add(i));
+          if (run.length === 4) specials.push({ index: run[1], kind: 'striped' });
+          if (run.length >= 5) specials.push({ index: run[2], kind: 'rainbow' });
+        }
+      };
+      for (let k = 1; k < cells.length; k++) {
+        const a = grid[cells[k]];
+        const b = grid[run[0]];
+        if (a && b && a.type === b.type && a.special !== 'rainbow' && b.special !== 'rainbow') run.push(cells[k]);
+        else { flush(); run = [cells[k]]; }
+      }
+      flush();
+    };
+    for (let y = 0; y < size; y++) scan(Array.from({ length: size }, (_, x) => idx(x, y)));
+    for (let x = 0; x < size; x++) scan(Array.from({ length: size }, (_, y) => idx(x, y)));
+    return { hit, specials };
+  }
+
+  function expandSpecials(hit) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const i of Array.from(hit)) {
+        const cell = grid[i];
+        if (cell?.special === 'striped') {
+          const x = i % size;
+          const y = Math.floor(i / size);
+          for (let k = 0; k < size; k++) {
+            if (!hit.has(idx(k, y)) && grid[idx(k, y)]) { hit.add(idx(k, y)); changed = true; }
+            if (!hit.has(idx(x, k)) && grid[idx(x, k)]) { hit.add(idx(x, k)); changed = true; }
+          }
+          cell.special = null;
+        }
+      }
+    }
+  }
+
+  function collapse() {
+    for (let x = 0; x < size; x++) {
+      const column = [];
+      for (let y = size - 1; y >= 0; y--) if (grid[idx(x, y)]) column.push(grid[idx(x, y)]);
+      for (let y = size - 1; y >= 0; y--) grid[idx(x, y)] = column[size - 1 - y] || randomTile();
+    }
+  }
+
+  function resolve(cascade = 1) {
+    const { hit, specials } = findMatches();
+    if (!hit.size) {
+      maxCascade = Math.max(maxCascade, cascade - 1);
+      if (cascade > 2) say(`Cascade x${cascade - 1}!`);
+      return endCheck();
+    }
+    expandSpecials(hit);
+    score += hit.size * 10 * cascade;
+    const keep = new Map(specials.filter((s) => hit.has(s.index)).map((s) => [s.index, s.kind]));
+    hit.forEach((i) => {
+      if (keep.has(i)) grid[i] = { type: grid[i].type, special: keep.get(i) };
+      else grid[i] = null;
+    });
+    render(hit);
+    window.setTimeout(() => {
+      collapse();
+      render();
+      window.setTimeout(() => resolve(cascade + 1), 140);
+    }, 200);
+  }
+
+  function clearColor(type) {
+    const hit = new Set();
+    grid.forEach((cell, i) => { if (cell && cell.type === type) hit.add(i); });
+    expandSpecials(hit);
+    score += hit.size * 15;
+    hit.forEach((i) => { grid[i] = null; });
+    render(hit);
+    window.setTimeout(() => {
+      collapse();
+      render();
+      window.setTimeout(() => resolve(2), 140);
+    }, 200);
+  }
+
+  function wouldMatch(a, b) {
+    const tmp = grid[a]; grid[a] = grid[b]; grid[b] = tmp;
+    const { hit } = findMatches();
+    grid[b] = grid[a]; grid[a] = tmp;
+    return hit.size > 0;
+  }
+
+  function anyMoveLeft() {
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const i = idx(x, y);
+      if (grid[i]?.special === 'rainbow') return true;
+      if (x + 1 < size && wouldMatch(i, idx(x + 1, y))) return true;
+      if (y + 1 < size && wouldMatch(i, idx(x, y + 1))) return true;
+    }
+    return false;
+  }
+
+  function endCheck() {
+    busy = false;
+    renderStats();
+    if (over) return;
+    if (score >= target) {
+      over = true;
+      updateArcadeProfile(true);
+      showOverlay('Level clear', `Score ${score} with ${moves} moves to spare. The noggles are crushed.`);
+      return;
+    }
+    if (moves <= 0) {
+      over = true;
+      showOverlay('Out of moves', `Final score ${score}. Target was ${target}. Run it back.`);
+      return;
+    }
+    if (!anyMoveLeft()) {
+      say('No moves left on the board. Reshuffling.');
+      do { grid = grid.map(() => randomTile()); } while (findMatches().hit.size || !anyMoveLeft());
+      render();
+    }
+  }
+
+  function showOverlay(title, copy) {
+    if (overlayTitleEl) overlayTitleEl.textContent = title;
+    if (overlayCopyEl) overlayCopyEl.textContent = copy;
+    overlayEl?.removeAttribute('hidden');
+  }
+
+  function trySwap(a, b) {
+    if (busy || over) return;
+    const cellA = grid[a];
+    const cellB = grid[b];
+    if (!cellA || !cellB) return;
+    if (cellA.special === 'rainbow' || cellB.special === 'rainbow') {
+      busy = true;
+      moves -= 1;
+      const other = cellA.special === 'rainbow' ? cellB : cellA;
+      grid[cellA.special === 'rainbow' ? a : b] = null;
+      say('Rainbow noggle! Clearing the whole color.');
+      clearColor(other.type);
+      return;
+    }
+    if (!wouldMatch(a, b)) { say('That swap makes no match.'); return; }
+    busy = true;
+    moves -= 1;
+    const tmp = grid[a]; grid[a] = grid[b]; grid[b] = tmp;
+    render();
+    window.setTimeout(() => resolve(1), 120);
+  }
+
+  function renderStats() {
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (movesEl) movesEl.textContent = String(moves);
+    const stats = readJson(statsKey, {});
+    if (bestEl) bestEl.textContent = stats.bestScore ? String(stats.bestScore) : '--';
+  }
+
+  function render(clearing = new Set()) {
+    if (!boardEl) return;
+    boardEl.innerHTML = grid.map((cell, i) => {
+      if (!cell) return `<button class="tile is-empty" data-index="${i}" aria-label="empty"></button>`;
+      const t = TYPES[cell.type];
+      const classes = ['tile'];
+      if (i === selected) classes.push('is-selected');
+      if (clearing.has(i)) classes.push('is-clearing');
+      if (cell.special === 'striped') classes.push('is-striped');
+      if (cell.special === 'rainbow') classes.push('is-rainbow');
+      return `<button class="${classes.join(' ')}" data-index="${i}" style="--tile:${t.color}" aria-label="noggle ${cell.type + 1}">
+        <img src="https://noun.pics/${t.noun}.svg" alt="" loading="lazy">
+      </button>`;
+    }).join('');
+    renderStats();
+  }
+
+  function hint() {
+    if (busy || over) return;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const i = idx(x, y);
+      const pairs = [x + 1 < size ? idx(x + 1, y) : -1, y + 1 < size ? idx(x, y + 1) : -1];
+      for (const j of pairs) {
+        if (j >= 0 && wouldMatch(i, j)) {
+          [i, j].forEach((k) => {
+            const el = boardEl?.querySelector(`[data-index="${k}"]`);
+            el?.classList.add('is-hint');
+            window.setTimeout(() => el?.classList.remove('is-hint'), 1200);
+          });
+          say('Try that highlighted swap.');
+          return;
+        }
+      }
+    }
+    say('No swaps found. Something is off — start a new game.');
+  }
+
+  function newGame() {
+    do { grid = Array.from({ length: size * size }, randomTile); } while (findMatches().hit.size || !anyMoveLeft());
+    score = 0;
+    moves = moveLimit;
+    selected = -1;
+    busy = false;
+    over = false;
+    maxCascade = 0;
+    overlayEl?.setAttribute('hidden', '');
+    updateArcadeProfile(false);
+    say(`Fresh board. Hit ${target} points in ${moveLimit} moves.`);
+    render();
+  }
+
+  boardEl?.addEventListener('click', (event) => {
+    const el = (event.target as HTMLElement).closest('[data-index]');
+    if (!el || busy || over) return;
+    const i = Number(el.getAttribute('data-index'));
+    if (selected < 0) { selected = i; render(); return; }
+    if (selected === i) { selected = -1; render(); return; }
+    const dx = Math.abs((selected % size) - (i % size));
+    const dy = Math.abs(Math.floor(selected / size) - Math.floor(i / size));
+    if (dx + dy === 1) {
+      const a = selected;
+      selected = -1;
+      trySwap(a, i);
+    } else {
+      selected = i;
+      render();
+    }
+  });
+  document.querySelector('[data-new]')?.addEventListener('click', newGame);
+  document.querySelector('[data-again]')?.addEventListener('click', newGame);
+  document.querySelector('[data-hint]')?.addEventListener('click', hint);
+  document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'n') newGame();
+    if (event.key.toLowerCase() === 'h') hint();
+  });
+  newGame();
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:18px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; }
+  .window { position:relative; max-width:920px; margin:0 auto; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; box-shadow:2px 2px 0 #000; }
+  .titlebar { display:flex; justify-content:space-between; min-height:28px; padding:3px 5px 3px 7px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:4px; }
+  .buttons i { display:grid; place-items:center; width:19px; height:18px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; }
+  .menubar { display:flex; flex-wrap:wrap; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { border:0; background:transparent; color:#000; padding:4px 8px; font:inherit; text-decoration:none; }
+  .menubar button:hover,.menubar a:hover { background:#000080; color:#fff; }
+  .toolbar { display:grid; grid-template-columns:repeat(4,96px) minmax(0,1fr); gap:6px; padding:7px; border-top:1px solid #fff; border-bottom:1px solid #808080; }
+  .toolbar span,.toolbar p,.status { margin:0; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 7px; font-size:12px; }
+  .toolbar strong { float:right; font-family:"Courier New",monospace; }
+  .felt { display:grid; place-items:center; min-height:560px; padding:18px; background:linear-gradient(rgba(0,62,48,.34),rgba(0,52,42,.58)),var(--arcade-desktop) center/cover; overflow:auto; }
+  .board { display:grid; grid-template-columns:repeat(8,52px); gap:3px; padding:10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#c0c0c0; }
+  /* Tiles are injected via innerHTML, so they miss Astro's scope attribute — anchor them to the scoped board instead. */
+  .board :global(.tile) { position:relative; width:52px; height:52px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:var(--tile,#c0c0c0); padding:0; cursor:pointer; transition:transform .12s; }
+  .board :global(.tile img) { width:40px; height:40px; image-rendering:pixelated; }
+  .board :global(.tile:hover) { transform:scale(1.06); }
+  .board :global(.tile.is-selected) { outline:3px solid #ffff00; outline-offset:-4px; }
+  .board :global(.tile.is-hint) { outline:3px solid #00ff80; outline-offset:-4px; }
+  .board :global(.tile.is-clearing) { transform:scale(.2); opacity:.2; transition:transform .18s,opacity .18s; }
+  .board :global(.tile.is-empty) { background:#9a9a9a; border-color:#808080 #fff #fff #808080; cursor:default; }
+  .board :global(.tile.is-striped) { background:repeating-linear-gradient(45deg,var(--tile),var(--tile) 6px,#fff 6px,#fff 10px); }
+  .board :global(.tile.is-rainbow) { background:conic-gradient(#ff8ba8,#ffc96b,#fff27a,#7de08f,#7ec2ff,#c9a0f0,#ff8ba8); }
+  .status { margin:4px; }
+  .overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,64,.45); }
+  .overlay[hidden] { display:none; }
+  .dialog { min-width:280px; max-width:360px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; box-shadow:3px 3px 0 #000; }
+  .dialog p { margin:0; padding:14px; font-size:13px; line-height:1.4; }
+  .dialog button { margin:0 14px 14px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; padding:6px 18px; font:inherit; cursor:pointer; }
+  .dialog button:active { border-color:#404040 #fff #fff #404040; }
+  @media (max-width:560px) { .desk{padding:8px}.toolbar{grid-template-columns:1fr 1fr}.toolbar p{grid-column:1/-1}.felt{padding:10px;justify-items:start}.board{grid-template-columns:repeat(8,38px)}.board :global(.tile){width:38px;height:38px}.board :global(.tile img){width:28px;height:28px} }
+</style>
