@@ -1,0 +1,297 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Pixel Pipes';
+const description = 'Tap to rotate chunky Win95 pipe tiles and connect the source to the drain.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'Game', '@id': 'https://pointcast.xyz/pixel-pipes', name: title, description, url: 'https://pointcast.xyz/pixel-pipes' };
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-pipes>
+    <section class="window" aria-labelledby="pipes-title">
+      <header class="titlebar"><span>Pixel Pipes</span><span class="buttons" aria-hidden="true"><i>_</i><i>[]</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Pixel Pipes menu">
+        <button type="button" data-new>Game</button>
+        <a href="/noggle-lights-out">Lights</a>
+        <a href="/nouns-wordsearch">Words</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="hero">
+        <div><p class="kicker">TAP · ROTATE · FLOW</p><h1 id="pipes-title">Connect flow.</h1><p>Tap tiles to rotate pipes. Source enters on the left, drain exits on the right.</p></div>
+        <div class="meters"><span>Moves <strong data-moves>0</strong></span><span>Best <strong data-best>--</strong></span></div>
+      </div>
+      <div class="play">
+        <div class="stage">
+          <canvas data-canvas width="336" height="336" aria-label="Pixel Pipes board"></canvas>
+          <div class="overlay" data-overlay hidden>
+            <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pipes-dialog-title">
+              <header class="dlgbar"><span id="pipes-dialog-title" data-dialog-title>Cleared</span><span class="buttons" aria-hidden="true"><i>x</i></span></header>
+              <div class="dlgbody"><p data-dialog-message>Flow connected.</p><button type="button" data-restart>New Game</button></div>
+            </div>
+          </div>
+        </div>
+        <aside class="nouncard">
+          <img src="https://noun.pics/91.svg" alt="" width="96" height="96" loading="lazy" />
+          <span>SOURCE TO DRAIN</span>
+        </aside>
+      </div>
+      <footer class="status" data-status aria-live="polite">Tap a pipe tile to rotate it.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-pipes]');
+  const canvas = root?.querySelector<HTMLCanvasElement>('[data-canvas]');
+  if (root && canvas) {
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const SIZE = 6;
+      const CELL = 56;
+      const slug = 'pixel-pipes';
+      const statsKey = 'pc:arcade:' + slug;
+      const profileKey = 'pc:arcade:profile';
+      const gameName = 'Pipes';
+      const badge = 'pipe-flow';
+      const movesEl = root.querySelector<HTMLElement>('[data-moves]');
+      const bestEl = root.querySelector<HTMLElement>('[data-best]');
+      const statusEl = root.querySelector<HTMLElement>('[data-status]');
+      const overlay = root.querySelector<HTMLElement>('[data-overlay]');
+      const dialogMessage = root.querySelector<HTMLElement>('[data-dialog-message]');
+      type PipeType = 'line' | 'corner' | 'tee' | 'cross';
+      type Tile = { type: PipeType; rot: number; path: boolean };
+      const targetDirs: Record<string, number[]> = {
+        '0,0': [3, 1],
+        '0,1': [3, 1],
+        '0,2': [3, 2],
+        '1,2': [0, 2],
+        '2,2': [0, 1],
+        '2,3': [3, 2],
+        '3,3': [0, 2],
+        '4,3': [0, 1],
+        '4,4': [3, 1],
+        '4,5': [3, 2],
+        '5,5': [0, 1],
+      };
+      let tiles: Tile[] = [];
+      let connected = new Set<number>();
+      let moves = 0;
+      let won = false;
+      let best = Number(readJson(statsKey, { plays: 0, clears: 0, bestMoves: 0 }).bestMoves || 0);
+      let pulse = 0;
+      let raf = 0;
+
+      function readJson(key: string, fallback: any) { try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; } }
+      function writeJson(key: string, value: any) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* localStorage unavailable */ } }
+      function key(r: number, c: number) { return r + ',' + c; }
+      function idx(r: number, c: number) { return r * SIZE + c; }
+      function rotateDirs(dirs: number[], rot: number) { return dirs.map((dir) => (dir + rot) % 4).sort(); }
+      function sameDirs(a: number[], b: number[]) { return a.length === b.length && a.slice().sort().every((v, i) => v === b.slice().sort()[i]); }
+      function baseDirs(type: PipeType) {
+        if (type === 'line') return [0, 2];
+        if (type === 'corner') return [0, 1];
+        if (type === 'tee') return [0, 1, 2];
+        return [0, 1, 2, 3];
+      }
+      function dirs(tile: Tile) { return rotateDirs(baseDirs(tile.type), tile.rot); }
+      function tileFor(target: number[]): Tile {
+        const type: PipeType = target.length === 4 ? 'cross' : target.length === 3 ? 'tee' : (Math.abs(target[0] - target[1]) === 2 ? 'line' : 'corner');
+        let targetRot = 0;
+        for (let rot = 0; rot < 4; rot++) if (sameDirs(rotateDirs(baseDirs(type), rot), target)) targetRot = rot;
+        return { type, rot: (targetRot + 1 + Math.floor(Math.random() * 3)) % 4, path: true };
+      }
+      function filler(r: number, c: number): Tile {
+        const types: PipeType[] = ['line', 'corner', 'tee'];
+        return { type: types[(r * 5 + c * 3) % types.length], rot: (r + c * 2) % 4, path: false };
+      }
+      function setStatus(text: string) { if (statusEl) statusEl.textContent = text; }
+      function recordPlay(clear: boolean) {
+        const stats = readJson(statsKey, { plays: 0, clears: 0, bestMoves: 0 });
+        if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+        if (clear) {
+          stats.clears = Number(stats.clears || 0) + 1;
+          stats.bestMoves = Number(stats.bestMoves || 0) ? Math.min(Number(stats.bestMoves), moves) : moves;
+        }
+        writeJson(statsKey, { plays: Number(stats.plays || 0), clears: Number(stats.clears || 0), bestMoves: Number(stats.bestMoves || 0) });
+        const profile = readJson(profileKey, { achievements: [], clearStreak: 0, totalPlays: 0, clears: 0 });
+        profile.lastPlayed = gameName;
+        if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+        if (clear) {
+          profile.clears = Number(profile.clears || 0) + 1;
+          profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+          profile.lastCleared = gameName;
+          const earned = ['first-win', badge];
+          if (profile.clearStreak >= 3) earned.push('three-game-streak');
+          profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+        }
+        writeJson(profileKey, profile);
+        best = Number(stats.bestMoves || best || 0);
+      }
+      function renderMeters() {
+        if (movesEl) movesEl.textContent = String(moves);
+        if (bestEl) bestEl.textContent = best ? String(best) : '--';
+      }
+      function newGame() {
+        tiles = [];
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const target = targetDirs[key(r, c)];
+            tiles.push(target ? tileFor(target) : filler(r, c));
+          }
+        }
+        moves = 0;
+        won = false;
+        if (overlay) overlay.hidden = true;
+        recordPlay(false);
+        updateConnected();
+        renderMeters();
+        setStatus('Tap pipes to connect source to drain.');
+      }
+      function updateConnected() {
+        connected = new Set();
+        const start = tiles[idx(0, 0)];
+        if (!dirs(start).includes(3)) return false;
+        const stack = [idx(0, 0)];
+        while (stack.length) {
+          const id = stack.pop();
+          if (id == null || connected.has(id)) continue;
+          connected.add(id);
+          const r = Math.floor(id / SIZE);
+          const c = id % SIZE;
+          for (const dir of dirs(tiles[id])) {
+            const nr = r + (dir === 2 ? 1 : dir === 0 ? -1 : 0);
+            const nc = c + (dir === 1 ? 1 : dir === 3 ? -1 : 0);
+            if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+            const next = idx(nr, nc);
+            const back = (dir + 2) % 4;
+            if (dirs(tiles[next]).includes(back)) stack.push(next);
+          }
+        }
+        return connected.has(idx(5, 5)) && dirs(tiles[idx(5, 5)]).includes(1);
+      }
+      function win() {
+        if (won) return;
+        won = true;
+        recordPlay(true);
+        renderMeters();
+        setStatus('Flow connected in ' + moves + ' moves.');
+        if (dialogMessage) dialogMessage.textContent = 'Flow connected in ' + moves + ' moves.';
+        if (overlay) overlay.hidden = false;
+      }
+      function tapTile(r: number, c: number) {
+        if (won) return;
+        const tile = tiles[idx(r, c)];
+        tile.rot = (tile.rot + 1) % 4;
+        moves++;
+        const solved = updateConnected();
+        renderMeters();
+        if (solved) win();
+        else setStatus('Move ' + moves + '. Flow reaches ' + connected.size + ' tiles.');
+      }
+      function drawTile(tile: Tile, r: number, c: number) {
+        const x = c * CELL;
+        const y = r * CELL;
+        const on = connected.has(idx(r, c));
+        ctx.fillStyle = '#c0c0c0';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y, CELL, 2);
+        ctx.fillRect(x, y, 2, CELL);
+        ctx.fillStyle = '#404040';
+        ctx.fillRect(x, y + CELL - 2, CELL, 2);
+        ctx.fillRect(x + CELL - 2, y, 2, CELL);
+        const cx = x + CELL / 2;
+        const cy = y + CELL / 2;
+        ctx.strokeStyle = on ? '#ffff00' : '#000080';
+        ctx.lineWidth = on ? 14 + pulse * 3 : 12;
+        ctx.lineCap = 'square';
+        for (const dir of dirs(tile)) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          if (dir === 0) ctx.lineTo(cx, y + 6);
+          if (dir === 1) ctx.lineTo(x + CELL - 6, cy);
+          if (dir === 2) ctx.lineTo(cx, y + CELL - 6);
+          if (dir === 3) ctx.lineTo(x + 6, cy);
+          ctx.stroke();
+        }
+        ctx.fillStyle = on ? '#2cc5a0' : '#9a9c8f';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      function draw(now: number) {
+        pulse = (Math.sin(now / 180) + 1) / 2;
+        ctx.fillStyle = '#9a9c8f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) drawTile(tiles[idx(r, c)], r, c);
+        ctx.fillStyle = '#008000';
+        ctx.fillRect(0, 18, 8, 20);
+        ctx.fillStyle = '#d22209';
+        ctx.fillRect(canvas.width - 8, canvas.height - 38, 8, 20);
+      }
+      function loop(now: number) {
+        draw(now);
+        raf = requestAnimationFrame(loop);
+      }
+      canvas.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+        const c = Math.floor(x / CELL);
+        const r = Math.floor(y / CELL);
+        if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+          canvas.setPointerCapture(event.pointerId);
+          tapTile(r, c);
+        }
+      });
+      root.querySelector<HTMLButtonElement>('[data-new]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+      root.querySelector<HTMLButtonElement>('[data-restart]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) cancelAnimationFrame(raf);
+        else raf = requestAnimationFrame(loop);
+      });
+      newGame();
+      raf = requestAnimationFrame(loop);
+    }
+  }
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:8px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; overflow-x:hidden; overscroll-behavior:none; }
+  .desk *, .desk *::before, .desk *::after { box-sizing:border-box; }
+  .window { width:min(100%,820px); margin:0 auto; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .titlebar,.dlgbar { min-height:26px; display:flex; align-items:center; justify-content:space-between; padding:3px 5px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:2px; }
+  .buttons i { min-width:18px; height:18px; display:grid; place-items:center; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; font-size:10px; }
+  .menubar { display:flex; flex-wrap:wrap; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { min-height:32px; border:0; background:transparent; color:#000; padding:6px 8px; font:inherit; font-size:13px; text-decoration:none; }
+  .menubar button:active,.menubar a:active { background:#000080; color:#fff; }
+  .hero { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; padding:10px; }
+  .kicker { margin:0 0 5px; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; color:#000080; }
+  h1 { margin:0; font-size:clamp(28px,9vw,54px); line-height:.94; }
+  .hero p:last-child { max-width:46ch; margin:6px 0 0; font-size:13px; }
+  .meters { display:flex; gap:6px; }
+  .meters span { min-width:72px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:5px 8px; font-size:12px; }
+  .meters strong { display:block; font:700 20px/1 "Courier New",monospace; color:#000080; }
+  .play { display:grid; grid-template-columns:auto 150px; gap:10px; align-items:start; justify-content:center; padding:0 10px 10px; }
+  .stage { position:relative; width:min(calc(100vw - 36px),336px); border:2px solid; border-color:#808080 #fff #fff #808080; background:#9a9c8f; }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .nouncard { display:grid; justify-items:center; gap:8px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:10px; font:700 11px/1 "Courier New",monospace; color:#000080; text-align:center; }
+  .nouncard img { width:96px; height:96px; image-rendering:pixelated; }
+  .overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
+  .overlay[hidden] { display:none; }
+  .dialog { width:min(300px,86%); background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .dlgbody { padding:14px; text-align:center; }
+  .dlgbody p { margin:0 0 12px; font-size:13px; }
+  .dlgbody button { min-width:120px; min-height:44px; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; font:inherit; font-weight:700; }
+  .dlgbody button:active { border-color:#404040 #fff #fff #404040; }
+  .status { margin:0 10px 10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 8px; font:12px/1.35 "Courier New",monospace; }
+  @media (max-width:620px) {
+    .play { grid-template-columns:1fr; justify-items:center; }
+    .nouncard { width:min(calc(100vw - 36px),336px); grid-template-columns:auto 1fr; align-items:center; }
+    .nouncard img { width:64px; height:64px; }
+  }
+</style>

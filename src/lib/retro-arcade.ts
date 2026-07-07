@@ -18,7 +18,17 @@ export type ArcadeGameSlug =
   | 'nouns-jelly'
   | 'noggle-crush-v2'
   | 'nouns-jam-v2'
-  | 'nouns-jelly-v2';
+  | 'nouns-jelly-v2'
+  | 'noun-flappy'
+  | 'noggle-stacker'
+  | 'nouns-wordsearch'
+  | 'noun-simon'
+  | 'noggle-lights-out'
+  | 'nouns-tripeaks'
+  | 'swipe-golf'
+  | 'noun-runner'
+  | 'pixel-pipes'
+  | 'nouns-bubble-pop';
 
 export interface ArcadeGame {
   slug: ArcadeGameSlug;
@@ -130,6 +140,56 @@ export const ARCADE_ACHIEVEMENTS = [
     id: 'jelly-campaign',
     name: 'Jelly Campaign',
     description: 'Scrub every level of Nouns Jelly v2, double jelly and all.',
+  },
+  {
+    id: 'flappy-gap-run',
+    name: 'Gap Runner',
+    description: 'Guide a Noun through twelve gaps in Noun Flappy.',
+  },
+  {
+    id: 'stacker-tower',
+    name: 'Noggle Tower',
+    description: 'Stack twelve clean rows in Noggle Stacker.',
+  },
+  {
+    id: 'wordsearch-sweep',
+    name: 'Word Sweep',
+    description: 'Find every hidden word in Nouns Wordsearch.',
+  },
+  {
+    id: 'simon-streak',
+    name: 'Simon Streak',
+    description: 'Repeat eight rounds in Noun Simon.',
+  },
+  {
+    id: 'lights-out-clear',
+    name: 'Lights Out',
+    description: 'Switch every noggle tile off in Noggle Lights Out.',
+  },
+  {
+    id: 'tripeaks-clear',
+    name: 'Peak Clear',
+    description: 'Clear all three peaks in Nouns TriPeaks.',
+  },
+  {
+    id: 'golf-nine',
+    name: 'Nine Hole Noun',
+    description: 'Finish all nine holes in Swipe Golf.',
+  },
+  {
+    id: 'runner-1200',
+    name: '1200 Meter Dash',
+    description: 'Run 1200 meters in Noun Runner.',
+  },
+  {
+    id: 'pipe-flow',
+    name: 'Pipe Flow',
+    description: 'Connect source to drain in Pixel Pipes.',
+  },
+  {
+    id: 'bubble-clear',
+    name: 'Bubble Clear',
+    description: 'Clear the bubble rack in Nouns Bubble Pop.',
   },
 ];
 
@@ -325,6 +385,126 @@ export const RETRO_ARCADE_GAMES: ArcadeGame[] = [
     category: 'match',
     storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jelly-v2`,
     achievementIds: ['first-win', 'three-game-streak', 'jelly-clear', 'jelly-campaign'],
+  },
+  {
+    slug: 'noun-flappy',
+    name: 'Noun Flappy',
+    shortName: 'Flappy',
+    path: '/noun-flappy',
+    kicker: 'TAP · HOP · GAPS',
+    description: 'Tap to hop a real Noun through scrolling noggle gaps and log a clear at twelve gates.',
+    status: 'live',
+    category: 'action',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noun-flappy`,
+    achievementIds: ['first-win', 'three-game-streak', 'flappy-gap-run'],
+  },
+  {
+    slug: 'noggle-stacker',
+    name: 'Noggle Stacker',
+    shortName: 'Stacker',
+    path: '/noggle-stacker',
+    kicker: 'TAP · DROP · TOWER',
+    description: 'Time a moving noggle slab, drop it cleanly, and build a twelve-row tower.',
+    status: 'live',
+    category: 'action',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noggle-stacker`,
+    achievementIds: ['first-win', 'three-game-streak', 'stacker-tower'],
+  },
+  {
+    slug: 'nouns-wordsearch',
+    name: 'Nouns Wordsearch',
+    shortName: 'Words',
+    path: '/nouns-wordsearch',
+    kicker: 'DRAG · WORDS · GRID',
+    description: 'Drag across a letter grid to find Nouns words with local best-time tracking.',
+    status: 'live',
+    category: 'puzzle',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-wordsearch`,
+    achievementIds: ['first-win', 'three-game-streak', 'wordsearch-sweep'],
+  },
+  {
+    slug: 'noun-simon',
+    name: 'Noun Simon',
+    shortName: 'Simon',
+    path: '/noun-simon',
+    kicker: 'TAP · FLASH · REPEAT',
+    description: 'Repeat the flashing Nouns color pattern as it grows round by round.',
+    status: 'live',
+    category: 'memory',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noun-simon`,
+    achievementIds: ['first-win', 'three-game-streak', 'simon-streak'],
+  },
+  {
+    slug: 'noggle-lights-out',
+    name: 'Noggle Lights Out',
+    shortName: 'Lights',
+    path: '/noggle-lights-out',
+    kicker: 'TAP · TOGGLE · CLEAR',
+    description: 'Classic Lights Out with beveled noggle tiles and a local best-move count.',
+    status: 'live',
+    category: 'puzzle',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noggle-lights-out`,
+    achievementIds: ['first-win', 'three-game-streak', 'lights-out-clear'],
+  },
+  {
+    slug: 'nouns-tripeaks',
+    name: 'Nouns TriPeaks',
+    shortName: 'TriPeaks',
+    path: '/nouns-tripeaks',
+    kicker: 'TAP · CARDS · PEAKS',
+    description: 'Tap exposed Nouns cards one rank up or down from the waste to clear all three peaks.',
+    status: 'live',
+    category: 'cards',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-tripeaks`,
+    achievementIds: ['first-win', 'three-game-streak', 'tripeaks-clear'],
+  },
+  {
+    slug: 'swipe-golf',
+    name: 'Swipe Golf',
+    shortName: 'Golf',
+    path: '/swipe-golf',
+    kicker: 'FLICK · PUTT · NINE',
+    description: 'Flick a Noun ball through nine small mini-putt holes with local best-stroke tracking.',
+    status: 'live',
+    category: 'action',
+    storageKey: `${ARCADE_STORAGE_PREFIX}swipe-golf`,
+    achievementIds: ['first-win', 'three-game-streak', 'golf-nine'],
+  },
+  {
+    slug: 'noun-runner',
+    name: 'Noun Runner',
+    shortName: 'Runner',
+    path: '/noun-runner',
+    kicker: 'JUMP · SLIDE · RUN',
+    description: 'Tap to jump, swipe down to slide, and carry a Noun 1200 meters through the desktop.',
+    status: 'live',
+    category: 'action',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noun-runner`,
+    achievementIds: ['first-win', 'three-game-streak', 'runner-1200'],
+  },
+  {
+    slug: 'pixel-pipes',
+    name: 'Pixel Pipes',
+    shortName: 'Pipes',
+    path: '/pixel-pipes',
+    kicker: 'TAP · ROTATE · FLOW',
+    description: 'Rotate pixel pipe tiles until the source connects cleanly to the drain.',
+    status: 'live',
+    category: 'puzzle',
+    storageKey: `${ARCADE_STORAGE_PREFIX}pixel-pipes`,
+    achievementIds: ['first-win', 'three-game-streak', 'pipe-flow'],
+  },
+  {
+    slug: 'nouns-bubble-pop',
+    name: 'Nouns Bubble Pop',
+    shortName: 'Bubbles',
+    path: '/nouns-bubble-pop',
+    kicker: 'DRAG · AIM · POP',
+    description: 'Touch-drag to aim, release to shoot, and match Nouns-colored bubbles off the rack.',
+    status: 'live',
+    category: 'puzzle',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-bubble-pop`,
+    achievementIds: ['first-win', 'three-game-streak', 'bubble-clear'],
   },
 ];
 
