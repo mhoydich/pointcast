@@ -540,6 +540,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'grey-hour',
+    name: 'The Grey Hour',
+    kicker: 'WIZARD · BREATH · FIVE WAYPOINTS',
+    description: 'A wizard-meditation journey: five procedural waypoints with shader scenes, synthesized soundscapes, and a breath engine guided by the Grey Wanderer.',
+    url: 'https://grey-hour.pages.dev',
+    path: '/grey-hour',
+    repo: 'https://github.com/mhoydich/gandalf-meditation',
+    channel: 'CH.GF',
+    kind: 'satellite',
+  },
+  {
     slug: 'sats-path',
     name: 'Sats Path',
     kicker: 'CAPITAL JOURNEY · BITCOIN READINESS',
