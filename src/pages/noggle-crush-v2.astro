@@ -37,7 +37,7 @@ const jsonLd = {
       <div class="felt">
         <div class="board" data-board aria-label="Noggle Crush board"></div>
       </div>
-      <footer class="status">Match 4 = striped (clears a row + column). Match 5 in a line = rainbow (clears a color). A cross-shaped match makes a BOMB that blows a 3×3.</footer>
+      <footer class="status">Match 4 = striped (row + column). Match 5 = rainbow (clears a color). Cross match = BOMB (3×3). NEW: swap two specials to combo them — striped+striped cross, bomb+bomb 5×5, rainbow+special superclears, rainbow+rainbow wipes the board.</footer>
       <div class="overlay" data-overlay hidden>
         <div class="dialog">
           <header class="titlebar"><span data-overlay-title>Level clear</span></header>
@@ -279,11 +279,78 @@ const jsonLd = {
     overlayEl?.removeAttribute('hidden');
   }
 
+  // Swapping two specials always works and fires a combo instead of a normal match.
+  function comboSwap(a, b) {
+    const A = grid[a];
+    const B = grid[b];
+    const sa = A.special;
+    const sb = B.special;
+    busy = true;
+    moves -= 1;
+    const hit = new Set();
+    const addRow = (y) => { for (let k = 0; k < size; k++) if (grid[idx(k, y)]) hit.add(idx(k, y)); };
+    const addCol = (x) => { for (let k = 0; k < size; k++) if (grid[idx(x, k)]) hit.add(idx(x, k)); };
+    const addBlast = (i, r) => {
+      const x = i % size, y = Math.floor(i / size);
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < size && ny < size && grid[idx(nx, ny)]) hit.add(idx(nx, ny));
+      }
+    };
+    const ax = a % size, ay = Math.floor(a / size);
+    // Consume the swapped specials up front so expandSpecials doesn't re-fire them.
+    A.special = null;
+    B.special = null;
+    if (sa === 'rainbow' && sb === 'rainbow') {
+      grid.forEach((c, i) => { if (c) hit.add(i); });
+      say('DOUBLE RAINBOW! Full board clear.');
+    } else if (sa === 'rainbow' || sb === 'rainbow') {
+      const other = sa === 'rainbow' ? B : A;
+      const kind = sa === 'rainbow' ? sb : sa;
+      grid.forEach((c, i) => {
+        if (c && c.type === other.type) {
+          if (kind === 'bomb') addBlast(i, 1);
+          else { addRow(Math.floor(i / size)); addCol(i % size); }
+          hit.add(i);
+        }
+      });
+      say(kind === 'bomb' ? 'Rainbow + bomb! A blast on every match.' : 'Rainbow + striped! Stripes fire everywhere.');
+    } else if (sa === 'bomb' && sb === 'bomb') {
+      addBlast(a, 2);
+      addBlast(b, 2);
+      say('Double bomb! 5×5 blast.');
+    } else if (sa === 'bomb' || sb === 'bomb') {
+      for (let d = -1; d <= 1; d++) {
+        addRow(Math.min(size - 1, Math.max(0, ay + d)));
+        addCol(Math.min(size - 1, Math.max(0, ax + d)));
+      }
+      say('Striped + bomb! Triple-thick cross.');
+    } else {
+      addRow(ay);
+      addCol(ax);
+      addRow(Math.floor(b / size));
+      addCol(b % size);
+      say('Double striped! Cross clear.');
+    }
+    hit.add(a);
+    hit.add(b);
+    expandSpecials(hit);
+    score += hit.size * 20;
+    hit.forEach((i) => { grid[i] = null; });
+    render(hit);
+    window.setTimeout(() => {
+      collapse();
+      render();
+      window.setTimeout(() => resolve(2), 140);
+    }, 200);
+  }
+
   function trySwap(a, b) {
     if (busy || over || won) return;
     const cellA = grid[a];
     const cellB = grid[b];
     if (!cellA || !cellB) return;
+    if (cellA.special && cellB.special) { comboSwap(a, b); return; }
     if (cellA.special === 'rainbow' || cellB.special === 'rainbow') {
       busy = true;
       moves -= 1;
