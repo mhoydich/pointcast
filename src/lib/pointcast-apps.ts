@@ -205,6 +205,9 @@ export const POINTCAST_APPS: PointcastApp[] = [
     description: 'A five-level Windows 95 Nouns match-3 campaign with striped, rainbow, and new bomb specials from cross-shaped matches.',
     url: 'https://pointcast.xyz/noggle-crush-v2',
     path: '/noggle-crush-v2',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
   },
   {
     slug: 'noun-flappy',
@@ -224,6 +227,9 @@ export const POINTCAST_APPS: PointcastApp[] = [
     description: 'A four-level Windows 95 Nouns tap-blast campaign where big pops leave bomb power-ups you tap to blast a 3x3.',
     url: 'https://pointcast.xyz/nouns-jam-v2',
     path: '/nouns-jam-v2',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
   },
   {
     slug: 'noggle-stacker',
@@ -243,6 +249,9 @@ export const POINTCAST_APPS: PointcastApp[] = [
     description: 'A four-level Windows 95 Nouns match-3 jelly campaign that adds double-layer jelly needing two matches to scrub clean.',
     url: 'https://pointcast.xyz/nouns-jelly-v2',
     path: '/nouns-jelly-v2',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
   },
   {
     slug: 'nouns-wordsearch',

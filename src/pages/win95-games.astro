@@ -3,7 +3,21 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import { ARCADE_ACHIEVEMENTS, ARCADE_ASSETS, RETRO_ARCADE_GAMES } from '../lib/retro-arcade';
 
 const title = 'Windows 95 Games';
-const description = 'PointCast Retro Arcade: a Windows 95 worthy Nouns game shelf with Solitaire, Memory, Pyramid, Mines, local stats, and achievements.';
+const description = 'PointCast Retro Arcade: a Windows 95 worthy Nouns game shelf — card games, puzzles, action, strategy, and a match-3 pack, with local stats and achievements.';
+const CATEGORY_LABELS: Record<string, string> = {
+  cards: 'CARD TABLE',
+  memory: 'MEMORY',
+  puzzle: 'PUZZLES',
+  action: 'ACTION',
+  strategy: 'STRATEGY',
+  match: 'MATCH-3 PACK',
+};
+// Derive groups from the games themselves so a new category can never be silently dropped;
+// known categories keep the label order above, unknown ones append with an uppercased key.
+const categoryOrder = [...Object.keys(CATEGORY_LABELS), ...RETRO_ARCADE_GAMES.map((game) => game.category).filter((c) => !(c in CATEGORY_LABELS))];
+const GAME_GROUPS = [...new Set(categoryOrder)]
+  .map((key) => ({ key, label: CATEGORY_LABELS[key] ?? key.toUpperCase(), games: RETRO_ARCADE_GAMES.filter((game) => game.category === key) }))
+  .filter((group) => group.games.length > 0);
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -78,14 +92,21 @@ const jsonLd = {
         </button>
       </section>
 
-      <section class="grid" aria-label="Arcade games">
-        {RETRO_ARCADE_GAMES.map((game) => (
-          <a class={`game game--${game.category}`} href={game.path} data-game-card={game.slug}>
-            <span>{game.kicker}</span>
-            <strong>{game.name}</strong>
-            <em>{game.description}</em>
-            <small data-game-stat={game.slug}>No local plays yet</small>
-          </a>
+      <section class="shelves" aria-label="Arcade games">
+        {GAME_GROUPS.map((group) => (
+          <div class="shelf" data-shelf={group.key}>
+            <h3 class="shelf-label"><span>{group.label}</span><em>{group.games.length} {group.games.length === 1 ? 'game' : 'games'}</em></h3>
+            <div class="grid">
+              {group.games.map((game) => (
+                <a class={`game game--${game.category}`} href={game.path} data-game-card={game.slug}>
+                  <span>{game.kicker}</span>
+                  <strong>{game.name}</strong>
+                  <em>{game.description}</em>
+                  <small data-game-stat={game.slug}>No local plays yet</small>
+                </a>
+              ))}
+            </div>
+          </div>
         ))}
       </section>
 
@@ -228,7 +249,11 @@ const jsonLd = {
   .launcher span { margin:0; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; text-transform:uppercase; }
   .launcher strong { font-size:20px; line-height:1; }
   .launcher em { font-style:normal; line-height:1.35; }
-  .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px; }
+  .shelves { display:grid; gap:4px; padding:14px; }
+  .shelf-label { display:flex; align-items:baseline; justify-content:space-between; margin:6px 2px 0; padding:6px 10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#000080; color:#fff; }
+  .shelf-label span { font:700 12px/1 "Courier New",monospace; letter-spacing:.14em; }
+  .shelf-label em { font:400 11px/1 "Courier New",monospace; font-style:normal; opacity:.75; }
+  .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:10px 0 14px; }
   .game { min-height:220px; display:grid; align-content:start; gap:10px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#fff; color:#000; padding:14px; text-decoration:none; }
   .game:hover { background:#000080; color:#fff; text-decoration:none; }
   .game strong { font-size:30px; line-height:1; }
