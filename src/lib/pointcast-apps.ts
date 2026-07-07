@@ -547,7 +547,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     url: 'https://grey-hour.pages.dev',
     path: '/grey-hour',
     repo: 'https://github.com/mhoydich/gandalf-meditation',
-    channel: 'CH.GF',
+    channel: 'CH.GDN',
     kind: 'satellite',
   },
   {
