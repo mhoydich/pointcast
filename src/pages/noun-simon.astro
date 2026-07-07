@@ -1,0 +1,299 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Noun Simon';
+const description = 'Repeat the flashing Nouns color pattern as it grows round by round.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'Game', '@id': 'https://pointcast.xyz/noun-simon', name: title, description, url: 'https://pointcast.xyz/noun-simon' };
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-simon>
+    <section class="window" aria-labelledby="simon-title">
+      <header class="titlebar"><span>Noun Simon</span><span class="buttons" aria-hidden="true"><i>_</i><i>[]</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Noun Simon menu">
+        <button type="button" data-new>Game</button>
+        <a href="/nouns-wordsearch">Words</a>
+        <a href="/noggle-lights-out">Lights</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="hero">
+        <div><p class="kicker">TAP · FLASH · REPEAT</p><h1 id="simon-title">Repeat eight.</h1><p>Watch the flash pattern, then tap the same pads in order.</p></div>
+        <div class="meters"><span>Round <strong data-round>0</strong></span><span>Best <strong data-best>--</strong></span></div>
+      </div>
+      <div class="boardwrap">
+        <div class="simonboard" data-board aria-label="Noun Simon pads">
+          <button class="pad pad--0" type="button" data-pad="0" aria-label="Blue pad"></button>
+          <button class="pad pad--1" type="button" data-pad="1" aria-label="Green pad"></button>
+          <div class="center"><img src="https://noun.pics/602.svg" alt="" width="108" height="108" loading="lazy" /><span data-center>START</span></div>
+          <button class="pad pad--2" type="button" data-pad="2" aria-label="Yellow pad"></button>
+          <button class="pad pad--3" type="button" data-pad="3" aria-label="Red pad"></button>
+        </div>
+        <div class="overlay" data-overlay>
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="simon-dialog-title">
+            <header class="dlgbar"><span id="simon-dialog-title" data-dialog-title>Ready</span><span class="buttons" aria-hidden="true"><i>x</i></span></header>
+            <div class="dlgbody"><p data-dialog-message>Start a new pattern.</p><button type="button" data-start>Start</button></div>
+          </div>
+        </div>
+      </div>
+      <footer class="status" data-status aria-live="polite">Press Start to begin.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-simon]');
+  if (root) {
+    const board = root.querySelector<HTMLElement>('[data-board]');
+    const pads = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-pad]'));
+    const roundEl = root.querySelector<HTMLElement>('[data-round]');
+    const bestEl = root.querySelector<HTMLElement>('[data-best]');
+    const centerEl = root.querySelector<HTMLElement>('[data-center]');
+    const statusEl = root.querySelector<HTMLElement>('[data-status]');
+    const overlay = root.querySelector<HTMLElement>('[data-overlay]');
+    const dialogTitle = root.querySelector<HTMLElement>('[data-dialog-title]');
+    const dialogMessage = root.querySelector<HTMLElement>('[data-dialog-message]');
+    const startBtn = root.querySelector<HTMLButtonElement>('[data-start]');
+    const slug = 'noun-simon';
+    const statsKey = 'pc:arcade:' + slug;
+    const profileKey = 'pc:arcade:profile';
+    const gameName = 'Simon';
+    const badge = 'simon-streak';
+    const tones = [261.63, 329.63, 392, 523.25];
+    let audio: AudioContext | null = null;
+    let pattern: number[] = [];
+    let inputIndex = 0;
+    let playing = false;
+    let accepting = false;
+    let playIndex = 0;
+    let flashPad = -1;
+    let flashOff = false;
+    let phaseUntil = 0;
+    let manualUntil = 0;
+    let delayUntil = 0;
+    let won = false;
+    let over = false;
+    let raf = 0;
+    let best = Number(readJson(statsKey, { plays: 0, clears: 0, bestScore: 0 }).bestScore || 0);
+
+    function readJson(key: string, fallback: any) { try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; } }
+    function writeJson(key: string, value: any) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* localStorage unavailable */ } }
+    function setStatus(text: string) { if (statusEl) statusEl.textContent = text; }
+    function renderMeters() {
+      if (roundEl) roundEl.textContent = String(pattern.length);
+      if (bestEl) bestEl.textContent = best ? String(best) : '--';
+      if (centerEl) centerEl.textContent = accepting ? 'TAP' : (playing ? 'WATCH' : (won ? 'WIN' : 'START'));
+    }
+    function recordPlay(clear: boolean) {
+      const stats = readJson(statsKey, { plays: 0, clears: 0, bestScore: 0 });
+      if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+      if (clear) {
+        stats.clears = Number(stats.clears || 0) + 1;
+        stats.bestScore = Math.max(Number(stats.bestScore || 0), pattern.length);
+      }
+      writeJson(statsKey, { plays: Number(stats.plays || 0), clears: Number(stats.clears || 0), bestScore: Number(stats.bestScore || 0) });
+      const profile = readJson(profileKey, { achievements: [], clearStreak: 0, totalPlays: 0, clears: 0 });
+      profile.lastPlayed = gameName;
+      if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+      if (clear) {
+        profile.clears = Number(profile.clears || 0) + 1;
+        profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+        profile.lastCleared = gameName;
+        const earned = ['first-win', badge];
+        if (profile.clearStreak >= 3) earned.push('three-game-streak');
+        profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+      }
+      writeJson(profileKey, profile);
+    }
+    function persistBest() {
+      best = Math.max(best, pattern.length);
+      const stats = readJson(statsKey, { plays: 0, clears: 0, bestScore: 0 });
+      stats.bestScore = Math.max(Number(stats.bestScore || 0), pattern.length);
+      writeJson(statsKey, { plays: Number(stats.plays || 0), clears: Number(stats.clears || 0), bestScore: Number(stats.bestScore || 0) });
+      renderMeters();
+    }
+    function ensureAudio() {
+      try {
+        audio = audio || new AudioContext();
+        if (audio.state === 'suspended') audio.resume();
+      } catch {
+        audio = null;
+      }
+    }
+    function beep(index: number) {
+      if (!audio) return;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = tones[index] || 330;
+      gain.gain.value = 0.05;
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + 0.13);
+    }
+    function showDialog(title: string, message: string, button: string) {
+      if (dialogTitle) dialogTitle.textContent = title;
+      if (dialogMessage) dialogMessage.textContent = message;
+      if (startBtn) startBtn.textContent = button;
+      if (overlay) overlay.hidden = false;
+    }
+    function hideDialog() { if (overlay) overlay.hidden = true; }
+    function newGame() {
+      ensureAudio();
+      pattern = [];
+      inputIndex = 0;
+      playing = false;
+      accepting = false;
+      delayUntil = 0;
+      won = false;
+      over = false;
+      hideDialog();
+      recordPlay(false);
+      setStatus('Watch round 1.');
+      nextRound();
+    }
+    function nextRound() {
+      pattern.push(Math.floor(Math.random() * 4));
+      inputIndex = 0;
+      accepting = false;
+      playing = true;
+      playIndex = 0;
+      flashOff = false;
+      flashPad = pattern[0];
+      phaseUntil = performance.now() + 520;
+      beep(flashPad);
+      persistBest();
+      renderMeters();
+    }
+    function win() {
+      if (won) return;
+      won = true;
+      accepting = false;
+      playing = false;
+      recordPlay(true);
+      persistBest();
+      setStatus('Eight rounds repeated.');
+      showDialog('Cleared!', 'Eight rounds repeated. Badge logged locally.', 'New Game');
+    }
+    function miss() {
+      over = true;
+      accepting = false;
+      playing = false;
+      persistBest();
+      setStatus('Pattern missed at round ' + pattern.length + '.');
+      showDialog('Game Over', 'Pattern missed at round ' + pattern.length + '.', 'New Game');
+    }
+    function pressPad(index: number) {
+      if (!accepting || over || won) return;
+      ensureAudio();
+      flashPad = index;
+      manualUntil = performance.now() + 170;
+      beep(index);
+      if (pattern[inputIndex] !== index) { miss(); return; }
+      inputIndex++;
+      if (inputIndex >= pattern.length) {
+        accepting = false;
+        setStatus('Round ' + pattern.length + ' matched.');
+        if (pattern.length >= 8) win();
+        else delayUntil = performance.now() + 760;
+      }
+      renderMeters();
+    }
+    function renderPads(now: number) {
+      pads.forEach((pad, index) => {
+        const lit = flashPad === index && (playing || now < manualUntil) && !flashOff;
+        pad.classList.toggle('is-lit', lit);
+      });
+      if (!playing && now >= manualUntil) flashPad = -1;
+    }
+    function loop(now: number) {
+      if (delayUntil && now >= delayUntil && !won && !over) {
+        delayUntil = 0;
+        nextRound();
+      }
+      if (playing && now >= phaseUntil) {
+        if (!flashOff) {
+          flashOff = true;
+          phaseUntil = now + 160;
+        } else {
+          playIndex++;
+          if (playIndex >= pattern.length) {
+            playing = false;
+            accepting = true;
+            flashPad = -1;
+            setStatus('Your turn. Repeat round ' + pattern.length + '.');
+          } else {
+            flashOff = false;
+            flashPad = pattern[playIndex];
+            phaseUntil = now + 500;
+            beep(flashPad);
+          }
+        }
+      }
+      renderPads(now);
+      renderMeters();
+      raf = requestAnimationFrame(loop);
+    }
+    pads.forEach((pad) => {
+      pad.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        pad.setPointerCapture(event.pointerId);
+        pressPad(Number(pad.dataset.pad || 0));
+      });
+    });
+    board?.addEventListener('pointermove', (event) => { if (accepting) event.preventDefault(); });
+    startBtn?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+    root.querySelector<HTMLButtonElement>('[data-new]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelAnimationFrame(raf);
+      else raf = requestAnimationFrame(loop);
+    });
+    showDialog('Ready', 'Start a new pattern.', 'Start');
+    renderMeters();
+    raf = requestAnimationFrame(loop);
+  }
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:8px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; overflow-x:hidden; overscroll-behavior:none; }
+  .desk *, .desk *::before, .desk *::after { box-sizing:border-box; }
+  .window { width:min(100%,760px); margin:0 auto; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .titlebar,.dlgbar { min-height:26px; display:flex; align-items:center; justify-content:space-between; padding:3px 5px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:2px; }
+  .buttons i { min-width:18px; height:18px; display:grid; place-items:center; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; font-size:10px; }
+  .menubar { display:flex; flex-wrap:wrap; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { min-height:32px; border:0; background:transparent; color:#000; padding:6px 8px; font:inherit; font-size:13px; text-decoration:none; }
+  .menubar button:active,.menubar a:active { background:#000080; color:#fff; }
+  .hero { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; padding:10px; }
+  .kicker { margin:0 0 5px; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; color:#000080; }
+  h1 { margin:0; font-size:clamp(28px,9vw,54px); line-height:.94; }
+  .hero p:last-child { max-width:42ch; margin:6px 0 0; font-size:13px; }
+  .meters { display:flex; gap:6px; }
+  .meters span { min-width:72px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:5px 8px; font-size:12px; }
+  .meters strong { display:block; font:700 20px/1 "Courier New",monospace; color:#000080; }
+  .boardwrap { position:relative; width:min(calc(100vw - 36px),360px); margin:4px auto 8px; }
+  .simonboard { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#101018; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .pad { aspect-ratio:1/1; min-height:130px; border:2px solid; border-color:#fff #404040 #404040 #fff; filter:saturate(.78) brightness(.76); }
+  .pad:active,.pad.is-lit { filter:saturate(1.35) brightness(1.45); box-shadow:0 0 0 3px #ffff00 inset,0 0 18px #ffff00; }
+  .pad--0 { background:#4a9eff; }
+  .pad--1 { background:#2cc5a0; }
+  .pad--2 { background:#f7c325; }
+  .pad--3 { background:#e84d6a; }
+  .center { position:absolute; inset:50%; width:118px; height:118px; transform:translate(-50%,-50%); display:grid; place-items:center; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; pointer-events:none; }
+  .center img { width:76px; height:76px; image-rendering:pixelated; }
+  .center span { position:absolute; bottom:6px; font:700 12px/1 "Courier New",monospace; color:#000080; }
+  .overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
+  .overlay[hidden] { display:none; }
+  .dialog { width:min(300px,86%); background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .dlgbody { padding:14px; text-align:center; }
+  .dlgbody p { margin:0 0 12px; font-size:13px; }
+  .dlgbody button { min-width:120px; min-height:44px; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; font:inherit; font-weight:700; }
+  .dlgbody button:active { border-color:#404040 #fff #fff #404040; }
+  .status { margin:0 8px 8px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 8px; font:12px/1.35 "Courier New",monospace; }
+  @media (max-width:390px) {
+    .pad { min-height:122px; }
+    .center { width:104px; height:104px; }
+    .center img { width:66px; height:66px; }
+  }
+</style>
