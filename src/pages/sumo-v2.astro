@@ -1,15 +1,18 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
-const title = 'Nouns Sumo V2 | PointCast';
-const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone.';
+const title = 'Nouns Sumo · Two-Player | PointCast';
+const description = 'A soft-room couch sumo game for two people, one keyboard or one phone, and a pair of Nouns on the rope.';
 ---
 
 <BaseLayout title={title} description={description}>
   <main class="sumo-room" data-sumo-v2-room>
     <section class="sumo-shell" aria-labelledby="sumo-title">
       <header class="sumo-header">
-        <p class="eyebrow">pointcast room</p>
+        <div class="header-topline">
+          <p class="eyebrow">pointcast room</p>
+          <button class="sound-toggle" type="button" aria-pressed="false" aria-label="Sound on" data-sound-toggle>🔊</button>
+        </div>
         <h1 id="sumo-title">Nouns Sumo · V2 · Two-Player</h1>
         <p class="lede">
           Player 1: hold A · Player 2: hold L · release in the green to push. On a phone, hold your half of the dohyō.
@@ -56,8 +59,12 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
           <div class="ring-sand"></div>
           <div class="ring-center"></div>
 
-          <div class="touch-zone touch-zone-left" role="button" aria-label="Player 1 touch zone" data-touch-zone="p1"></div>
-          <div class="touch-zone touch-zone-right" role="button" aria-label="Player 2 touch zone" data-touch-zone="p2"></div>
+          <div class="touch-zone touch-zone-left" role="button" aria-label="Player 1 touch zone" data-touch-zone="p1">
+            <span>P1 · hold</span>
+          </div>
+          <div class="touch-zone touch-zone-right" role="button" aria-label="Player 2 touch zone" data-touch-zone="p2">
+            <span>P2 · hold</span>
+          </div>
 
           <div class="sand-puff sand-puff-left" aria-hidden="true" data-puff-p1></div>
           <div class="sand-puff sand-puff-right" aria-hidden="true" data-puff-p2></div>
@@ -152,6 +159,7 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         <div class="match-actions">
           <button type="button" data-rematch>REMATCH</button>
           <button type="button" data-swap-nouns>SWAP NOUNS</button>
+          <button type="button" data-copy-result>COPY RESULT</button>
         </div>
       </section>
 
@@ -175,6 +183,8 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         roundLabel: room.querySelector('[data-round-label]'),
         matchState: room.querySelector('[data-match-state]'),
         announcer: room.querySelector('[data-announcer]'),
+        dohyo: room.querySelector('[data-dohyo]'),
+        soundToggle: room.querySelector('[data-sound-toggle]'),
         p1Fighter: room.querySelector('[data-p1-fighter]'),
         p2Fighter: room.querySelector('[data-p2-fighter]'),
         p1Meter: room.querySelector('[data-p1-meter]'),
@@ -189,6 +199,7 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         resultTitle: room.querySelector('[data-result-title]'),
         rematch: room.querySelector('[data-rematch]'),
         swapNouns: room.querySelector('[data-swap-nouns]'),
+        copyResult: room.querySelector('[data-copy-result]'),
         p1StatClashes: room.querySelector('[data-p1-stat-clashes]'),
         p1StatSweet: room.querySelector('[data-p1-stat-sweet]'),
         p1StatStumbles: room.querySelector('[data-p1-stat-stumbles]'),
@@ -204,9 +215,13 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
       const SWEET_MIN = 60;
       const OVERSHOOT_MIN = 95;
       const EDGE = 38;
+      const DANGER_X = EDGE - 6;
       const START_OFFSET = 14;
       const COMMIT_WINDOW = 190;
+      const SHIKIRI_MS = 900;
+      const FALSE_START_RESET = 760;
       const ROUND_PAUSE = 1200;
+      const SOUND_KEY = 'sumo-v2-muted';
 
       const calls = {
         start: [
@@ -233,6 +248,16 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
           'Too much charge. The feet forget the plan.',
           'Red zone. A small stumble in the sand.',
           'The dohyō punishes the overshoot.',
+        ],
+        matta: [
+          'Matta! {side} moved before Hakkeyoi.',
+          'Matta! {side} broke the breath.',
+          'Matta! {side} twitched in the shikiri.',
+        ],
+        danger: [
+          '{side} is on the tawara!',
+          '{side} feels the rope at their heels.',
+          '{side} is one shove from the sand.',
         ],
       };
 
@@ -266,8 +291,28 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         pendingId: null,
         pendingTimer: 0,
         raf: 0,
+        edgeDanger: '',
+        totalClashes: 0,
+        lastWinner: '',
         p1: player('p1', 'East', -START_OFFSET),
         p2: player('p2', 'West', START_OFFSET),
+      };
+
+      const audio = {
+        ctx: null,
+        muted: false,
+        noise: null,
+        primed: false,
+      };
+
+      const activePointers = {
+        p1: new Set(),
+        p2: new Set(),
+      };
+
+      const heldKeys = {
+        p1: false,
+        p2: false,
       };
 
       function randomSeed(except) {
@@ -284,6 +329,34 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         return Math.max(min, Math.min(max, value));
       }
 
+      function seedFromParam(raw, except) {
+        if (raw === null || raw.trim() === '') return randomSeed(except);
+
+        const value = Number(raw);
+        if (!Number.isFinite(value)) return randomSeed(except);
+
+        return clamp(Math.round(value), 0, 1199);
+      }
+
+      function seedsFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const east = seedFromParam(params.get('east'), undefined);
+        const west = seedFromParam(params.get('west'), east);
+
+        return { east, west };
+      }
+
+      function syncUrl() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('east', String(state.p1.seed));
+        url.searchParams.set('west', String(state.p2.seed));
+        window.history.replaceState(window.history.state, '', `${url.pathname}?${url.searchParams.toString()}${url.hash}`);
+      }
+
+      function canonicalMatchUrl() {
+        return `pointcast.xyz/sumo-v2/?east=${state.p1.seed}&west=${state.p2.seed}`;
+      }
+
       function pickLine(group) {
         const set = calls[group];
         return set[Math.floor(Math.random() * set.length)];
@@ -293,20 +366,179 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         return id === 'p1' ? 'p2' : 'p1';
       }
 
+      function readMuted() {
+        try {
+          return window.localStorage.getItem(SOUND_KEY) === 'true';
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function writeMuted() {
+        try {
+          window.localStorage.setItem(SOUND_KEY, audio.muted ? 'true' : 'false');
+        } catch (error) {
+          // localStorage can be blocked; the in-memory toggle still works.
+        }
+      }
+
+      function updateSoundToggle() {
+        if (!els.soundToggle) return;
+        els.soundToggle.textContent = audio.muted ? '🔇' : '🔊';
+        els.soundToggle.setAttribute('aria-pressed', audio.muted ? 'true' : 'false');
+        els.soundToggle.setAttribute('aria-label', audio.muted ? 'Sound muted' : 'Sound on');
+      }
+
+      function getAudioContext() {
+        if (audio.muted) return null;
+        if (audio.ctx) return audio.ctx;
+
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) return null;
+
+        audio.ctx = new AudioCtor();
+        return audio.ctx;
+      }
+
+      function primeAudio() {
+        audio.primed = true;
+        const ctx = getAudioContext();
+        if (!ctx) return null;
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+
+      function getNoiseBuffer(ctx) {
+        if (audio.noise && audio.noise.sampleRate === ctx.sampleRate) return audio.noise;
+
+        const length = Math.floor(ctx.sampleRate * 0.2);
+        const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < length; i += 1) {
+          const decay = 1 - i / length;
+          data[i] = (Math.random() * 2 - 1) * decay;
+        }
+
+        audio.noise = buffer;
+        return buffer;
+      }
+
+      function connectNode(node, gain, start, peak, duration) {
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(peak, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        node.connect(gain);
+        gain.connect(audio.ctx.destination);
+      }
+
+      function playClack() {
+        const ctx = primeAudio();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(780, now);
+        osc.frequency.exponentialRampToValueAtTime(520, now + 0.055);
+        connectNode(osc, gain, now, 0.038, 0.1);
+        osc.start(now);
+        osc.stop(now + 0.11);
+      }
+
+      function playThump() {
+        const ctx = primeAudio();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const body = ctx.createGain();
+        const noise = ctx.createBufferSource();
+        const tap = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(82, now);
+        osc.frequency.exponentialRampToValueAtTime(46, now + 0.13);
+        connectNode(osc, body, now, 0.052, 0.18);
+        osc.start(now);
+        osc.stop(now + 0.19);
+
+        noise.buffer = getNoiseBuffer(ctx);
+        tap.gain.setValueAtTime(0.024, now);
+        tap.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+        noise.connect(tap);
+        tap.connect(ctx.destination);
+        noise.start(now);
+        noise.stop(now + 0.06);
+      }
+
+      function playChime() {
+        const ctx = primeAudio();
+        if (!ctx) return;
+
+        [740, 1110].forEach((freq, index) => {
+          const now = ctx.currentTime + index * 0.035;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          connectNode(osc, gain, now, 0.03 - index * 0.008, 0.17);
+          osc.start(now);
+          osc.stop(now + 0.18);
+        });
+      }
+
+      function playGong() {
+        const ctx = primeAudio();
+        if (!ctx) return;
+
+        [126, 188].forEach((freq, index) => {
+          const now = ctx.currentTime + index * 0.025;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.78, now + 0.52);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.055 - index * 0.018, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.62);
+        });
+      }
+
+      function playSound(name) {
+        if (audio.muted || !audio.primed) return;
+        if (name === 'clack') playClack();
+        if (name === 'thump') playThump();
+        if (name === 'chime') playChime();
+        if (name === 'gong') playGong();
+      }
+
       function setAnnouncer(text) {
         els.announcer.textContent = text;
       }
 
       function setPhase(phase) {
+        const phaseLabels = {
+          shikiri: 'shikiri',
+          ready: 'Hakkeyoi',
+          charging: 'Hakkeyoi',
+          resolving: 'clash',
+          'false-start': 'Matta',
+          'round-over': 'round',
+          'match-over': 'match',
+        };
+
         state.phase = phase;
         room.dataset.phase = phase;
-        els.matchState.textContent = phase === 'match-over'
-          ? 'match'
-          : phase === 'round-over'
-            ? 'round'
-            : phase === 'resolving'
-              ? 'clash'
-              : 'Hakkeyoi';
+        els.matchState.textContent = phaseLabels[phase] || 'Hakkeyoi';
       }
 
       function setFighterState(id, fighterState) {
@@ -317,6 +549,32 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
       function updateFighters() {
         els.p1Fighter.style.setProperty('--x', `${state.p1.x}%`);
         els.p2Fighter.style.setProperty('--x', `${state.p2.x}%`);
+      }
+
+      function setTouchHeld(id, held) {
+        const zone = id === 'p1' ? els.p1Touch : els.p2Touch;
+        if (!zone) return;
+
+        if (held) zone.dataset.held = 'true';
+        else delete zone.dataset.held;
+      }
+
+      function updateEdgeDanger(options = {}) {
+        const announce = options.announce !== false;
+        const danger = state.p1.x <= -DANGER_X
+          ? 'p1'
+          : state.p2.x >= DANGER_X
+            ? 'p2'
+            : '';
+
+        if (danger) els.dohyo.dataset.danger = danger;
+        else delete els.dohyo.dataset.danger;
+
+        if (danger && announce && state.edgeDanger !== danger && state.phase !== 'round-over' && state.phase !== 'match-over') {
+          setAnnouncer(pickLine('danger').replace('{side}', state[danger].side));
+        }
+
+        state.edgeDanger = danger;
       }
 
       function updateMeters() {
@@ -338,7 +596,19 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
           [els.p2Wins, state.wins.p2],
         ].forEach(([wrap, wins]) => {
           Array.from(wrap.children).forEach((dot, index) => {
-            dot.dataset.lit = index < wins ? 'true' : 'false';
+            const wasLit = dot.dataset.lit === 'true';
+            const isLit = index < wins;
+
+            dot.dataset.lit = isLit ? 'true' : 'false';
+
+            if (isLit && !wasLit) {
+              dot.dataset.pop = 'true';
+              window.setTimeout(() => {
+                delete dot.dataset.pop;
+              }, 380);
+            }
+
+            if (!isLit) delete dot.dataset.pop;
           });
         });
       }
@@ -394,16 +664,53 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         updateMeters();
       }
 
+      function clearRoundEffects() {
+        els.dohyo.classList.remove('is-shaking');
+        els.p1Puff.classList.remove('is-active', 'is-big');
+        els.p2Puff.classList.remove('is-active', 'is-big');
+        delete els.dohyo.dataset.danger;
+        state.edgeDanger = '';
+      }
+
+      function startShikiri() {
+        clearPendingTimer();
+        setPhase('shikiri');
+        setAnnouncer('shikiri… HAKKEYOI!');
+        state.pendingTimer = window.setTimeout(() => {
+          state.pendingTimer = 0;
+          setPhase('ready');
+          playSound('clack');
+          setAnnouncer(pickLine('start'));
+          updateEdgeDanger({ announce: true });
+        }, SHIKIRI_MS);
+      }
+
+      function falseStart(id) {
+        if (state.phase !== 'shikiri') return;
+
+        clearPendingTimer();
+        setPhase('false-start');
+        setFighterState(id, 'false-start');
+        setAnnouncer(pickLine('matta').replace('{side}', state[id].side));
+
+        state.pendingTimer = window.setTimeout(() => {
+          state.pendingTimer = 0;
+          clearCycle();
+          state.p1.x = -START_OFFSET;
+          state.p2.x = START_OFFSET;
+          updateFighters();
+          startShikiri();
+        }, FALSE_START_RESET);
+      }
+
       function resetRound() {
         clearCycle();
+        clearRoundEffects();
         state.p1.x = -START_OFFSET;
         state.p2.x = START_OFFSET;
-        els.p1Puff.classList.remove('is-active');
-        els.p2Puff.classList.remove('is-active');
-        setPhase('ready');
-        setAnnouncer(pickLine('start'));
         updateFighters();
         updateScore();
+        startShikiri();
       }
 
       function setSeeds(randomize) {
@@ -416,22 +723,33 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         els.p2Seed.textContent = `seed ${state.p2.seed}`;
         els.p1Fighter.src = nounUrl(state.p1.seed);
         els.p2Fighter.src = nounUrl(state.p2.seed);
+        syncUrl();
       }
 
       function resetMatch(randomizeSeeds) {
         clearPendingTimer();
         state.round = 1;
         state.wins = { p1: 0, p2: 0 };
+        state.totalClashes = 0;
+        state.lastWinner = '';
         state.p1.stats = blankStats();
         state.p2.stats = blankStats();
         els.statSheet.hidden = true;
+        els.copyResult.textContent = 'COPY RESULT';
         setSeeds(randomizeSeeds);
         resetRound();
       }
 
       function beginCharge(id) {
         const p = state[id];
-        if (state.phase === 'round-over' || state.phase === 'match-over' || state.phase === 'resolving') return;
+        primeAudio();
+
+        if (state.phase === 'shikiri') {
+          falseStart(id);
+          return;
+        }
+
+        if (state.phase !== 'ready' && state.phase !== 'charging') return;
         if (p.inputDown || p.committed) return;
 
         p.inputDown = true;
@@ -444,7 +762,7 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
 
       function releaseCharge(id, auto = false) {
         const p = state[id];
-        if (state.phase === 'round-over' || state.phase === 'match-over' || state.phase === 'resolving') return;
+        if (state.phase !== 'ready' && state.phase !== 'charging') return;
         if (!p.charging || p.committed) return;
 
         recordCommit(p);
@@ -499,7 +817,9 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         const p2Active = p2.committed;
         if (!p1Active && !p2Active) return;
 
+        state.totalClashes += 1;
         setPhase('resolving');
+        playSound('thump');
 
         const p1Red = p1Active && p1.commitBand === 'red';
         const p2Red = p2Active && p2.commitBand === 'red';
@@ -538,6 +858,9 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
 
         if (p1Red || p2Red) setAnnouncer(pickLine('stumble'));
         updateFighters();
+        const priorDanger = state.edgeDanger;
+        updateEdgeDanger({ announce: false });
+        state.edgeDanger = priorDanger;
 
         window.setTimeout(() => {
           if (state.p1.x <= -EDGE) {
@@ -551,18 +874,24 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
           }
 
           clearCycle();
-          setPhase('ready');
+          startShikiri();
         }, 520);
       }
 
       function finishRound(winnerId) {
         const loserId = otherId(winnerId);
         state.wins[winnerId] += 1;
+        state.lastWinner = winnerId;
+        state.edgeDanger = '';
+        delete els.dohyo.dataset.danger;
         setPhase('round-over');
-        setFighterState(winnerId, 'lunge');
+        setFighterState(winnerId, 'winner');
         setFighterState(loserId, 'pushout');
-        (loserId === 'p1' ? els.p1Puff : els.p2Puff).classList.add('is-active');
+        els.dohyo.classList.add('is-shaking');
+        window.setTimeout(() => els.dohyo.classList.remove('is-shaking'), 260);
+        (loserId === 'p1' ? els.p1Puff : els.p2Puff).classList.add('is-active', 'is-big');
         setAnnouncer(pickLine(winnerId));
+        playSound('chime');
         updateScore();
 
         if (state.wins[winnerId] >= 3) {
@@ -581,8 +910,61 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         return `${Math.round((p.stats.sweet / p.stats.clashes) * 100)}%`;
       }
 
+      function resultCopy() {
+        const winnerId = state.lastWinner || (state.wins.p1 > state.wins.p2 ? 'p1' : 'p2');
+        const loserId = otherId(winnerId);
+        const winnerScore = state.wins[winnerId];
+        const loserScore = state.wins[loserId];
+
+        return `⚪ Noun ${state[winnerId].seed} def. Noun ${state[loserId].seed} — ${winnerScore}-${loserScore} · ${state.totalClashes} clashes · sumo at ${canonicalMatchUrl()}`;
+      }
+
+      function fallbackCopy(text) {
+        const field = document.createElement('textarea');
+        field.value = text;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.top = '-1000px';
+        document.body.appendChild(field);
+        field.select();
+
+        let copied = false;
+        try {
+          copied = document.execCommand('copy');
+        } catch (error) {
+          copied = false;
+        }
+
+        field.remove();
+        return copied;
+      }
+
+      async function copyResult() {
+        const text = resultCopy();
+        let copied = false;
+
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          }
+        } catch (error) {
+          copied = false;
+        }
+
+        if (!copied) copied = fallbackCopy(text);
+
+        els.copyResult.textContent = copied ? 'COPIED' : 'COPY BLOCKED';
+        els.copyResult.dataset.copied = copied ? 'true' : 'false';
+        window.setTimeout(() => {
+          els.copyResult.textContent = 'COPY RESULT';
+          delete els.copyResult.dataset.copied;
+        }, 1300);
+      }
+
       function finishMatch(winnerId) {
         setPhase('match-over');
+        playSound('gong');
         setAnnouncer(`${state[winnerId].side} takes the match. Salt, breath, bow.`);
         els.resultTitle.textContent = `${state[winnerId].side} wins the match`;
 
@@ -631,6 +1013,8 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         if (!id || isTextInput(event.target)) return;
         event.preventDefault();
         if (event.repeat) return;
+        heldKeys[id] = true;
+        setTouchHeld(id, true);
         beginCharge(id);
       });
 
@@ -638,34 +1022,63 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
         const id = playerForKey(event.code);
         if (!id || isTextInput(event.target)) return;
         event.preventDefault();
+        heldKeys[id] = false;
+        if (!activePointers[id].size) setTouchHeld(id, false);
         releaseCharge(id);
       });
 
-      function bindTouch(zone, id) {
-        zone.addEventListener('touchstart', (event) => {
+      function bindPress(zone, id) {
+        function endPointer(event) {
           event.preventDefault();
+          if (!activePointers[id].has(event.pointerId)) return;
+
+          activePointers[id].delete(event.pointerId);
+          if (activePointers[id].size || heldKeys[id]) return;
+
+          setTouchHeld(id, false);
+          releaseCharge(id);
+        }
+
+        zone.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          activePointers[id].add(event.pointerId);
+          setTouchHeld(id, true);
+          if (zone.setPointerCapture) zone.setPointerCapture(event.pointerId);
           beginCharge(id);
         }, { passive: false });
 
-        zone.addEventListener('touchend', (event) => {
-          event.preventDefault();
-          releaseCharge(id);
-        }, { passive: false });
-
-        zone.addEventListener('touchcancel', (event) => {
-          event.preventDefault();
-          releaseCharge(id);
-        }, { passive: false });
+        zone.addEventListener('pointerup', endPointer, { passive: false });
+        zone.addEventListener('pointercancel', endPointer, { passive: false });
+        zone.addEventListener('contextmenu', (event) => event.preventDefault());
       }
 
-      bindTouch(els.p1Touch, 'p1');
-      bindTouch(els.p2Touch, 'p2');
+      bindPress(els.p1Touch, 'p1');
+      bindPress(els.p2Touch, 'p2');
 
-      els.rematch.addEventListener('click', () => resetMatch(false));
-      els.swapNouns.addEventListener('click', () => resetMatch(true));
+      els.soundToggle.addEventListener('click', () => {
+        audio.muted = !audio.muted;
+        writeMuted();
+        updateSoundToggle();
+        if (!audio.muted) primeAudio();
+      });
 
-      state.p1.seed = randomSeed();
-      state.p2.seed = randomSeed(state.p1.seed);
+      els.rematch.addEventListener('click', () => {
+        primeAudio();
+        resetMatch(false);
+      });
+
+      els.swapNouns.addEventListener('click', () => {
+        primeAudio();
+        resetMatch(true);
+      });
+
+      els.copyResult.addEventListener('click', copyResult);
+
+      audio.muted = readMuted();
+      updateSoundToggle();
+      const initialSeeds = seedsFromUrl();
+      state.p1.seed = initialSeeds.east;
+      state.p2.seed = initialSeeds.west;
       resetMatch(false);
       state.raf = window.requestAnimationFrame(frame);
 
@@ -702,12 +1115,38 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     margin-bottom: 24px;
   }
 
+  .header-topline {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+  }
+
   .eyebrow {
     margin: 0 0 10px;
     color: var(--color-ink-soft, #6d6257);
     font-size: 0.78rem;
     letter-spacing: 0;
     text-transform: uppercase;
+  }
+
+  .sound-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    aspect-ratio: 1;
+    border: 1px solid rgba(36, 31, 26, 0.16);
+    border-radius: 5px;
+    background: rgba(255, 252, 242, 0.68);
+    color: var(--color-ink, #241f1a);
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sound-toggle:hover {
+    background: rgba(255, 255, 249, 0.92);
   }
 
   h1,
@@ -818,6 +1257,10 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     box-shadow: inset 0 0 0 2px rgba(255, 252, 242, 0.55);
   }
 
+  .win-dots span[data-pop="true"] {
+    animation: dot-pop 360ms cubic-bezier(0.18, 0.88, 0.24, 1.15);
+  }
+
   .round-card {
     display: grid;
     place-items: center;
@@ -855,6 +1298,10 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     touch-action: none;
   }
 
+  .dohyo.is-shaking {
+    animation: ring-shake 250ms steps(2, end);
+  }
+
   .ring-shadow,
   .ring-rope,
   .ring-sand,
@@ -890,6 +1337,31 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     z-index: 1;
   }
 
+  .ring-rope::before,
+  .ring-rope::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .ring-rope::before {
+    background: radial-gradient(circle at 15% 50%, rgba(210, 75, 62, 0.58), transparent 36%);
+    clip-path: inset(0 50% 0 0);
+  }
+
+  .ring-rope::after {
+    background: radial-gradient(circle at 85% 50%, rgba(210, 75, 62, 0.58), transparent 36%);
+    clip-path: inset(0 0 0 50%);
+  }
+
+  .dohyo[data-danger="p1"] .ring-rope::before,
+  .dohyo[data-danger="p2"] .ring-rope::after {
+    animation: rope-danger 780ms ease-in-out infinite;
+  }
+
   .ring-sand {
     width: 72%;
     height: 72%;
@@ -911,22 +1383,50 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
   }
 
   .touch-zone {
+    --touch-accent: rgba(120, 170, 112, 0.18);
     position: absolute;
     top: 9%;
     bottom: 9%;
     z-index: 7;
+    display: flex;
+    align-items: flex-end;
     border: 0;
     background: transparent;
+    color: rgba(36, 31, 26, 0.46);
+    font-size: clamp(0.62rem, 2.2vw, 0.78rem);
+    letter-spacing: 0;
+    text-transform: uppercase;
+    user-select: none;
+    -webkit-user-select: none;
+    padding-bottom: 15%;
   }
 
   .touch-zone-left {
     left: 8%;
     right: 50%;
+    justify-content: flex-start;
+    padding-left: 8%;
   }
 
   .touch-zone-right {
     left: 50%;
     right: 8%;
+    --touch-accent: rgba(91, 132, 178, 0.18);
+    justify-content: flex-end;
+    padding-right: 8%;
+  }
+
+  .touch-zone span {
+    opacity: 0.38;
+    pointer-events: none;
+  }
+
+  .touch-zone[data-held="true"] {
+    background: var(--touch-accent);
+  }
+
+  .touch-zone[data-held="true"] span {
+    opacity: 0.68;
   }
 
   .fighter {
@@ -980,6 +1480,10 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     animation: clash-shake 150ms steps(2, end) 3;
   }
 
+  .fighter[data-state="false-start"] {
+    animation: false-start-wobble 150ms steps(2, end) 4;
+  }
+
   .fighter-east[data-state="stumble"] {
     --tilt: -8deg;
     translate: -9px 4px;
@@ -993,6 +1497,10 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
   .fighter[data-state="pushout"] {
     opacity: 0.86;
     filter: drop-shadow(0 6px 0 rgba(71, 49, 31, 0.16));
+  }
+
+  .fighter[data-state="winner"] {
+    animation: winner-hop 320ms cubic-bezier(0.22, 0.9, 0.22, 1);
   }
 
   .sand-puff {
@@ -1021,6 +1529,12 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
 
   .sand-puff.is-active {
     animation: puff 560ms ease-out forwards;
+  }
+
+  .sand-puff.is-big {
+    width: 112px;
+    height: 42px;
+    animation: puff-big 640ms ease-out forwards;
   }
 
   .meters {
@@ -1210,6 +1724,10 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     background: rgba(255, 255, 249, 0.92);
   }
 
+  .match-actions button[data-copied="true"] {
+    background: rgba(120, 170, 112, 0.18);
+  }
+
   .sumo-footer {
     margin-top: 22px;
   }
@@ -1258,6 +1776,72 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     }
   }
 
+  @keyframes false-start-wobble {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+
+    50% {
+      translate: 5px 0;
+    }
+  }
+
+  @keyframes winner-hop {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+
+    44% {
+      translate: 0 -12px;
+    }
+  }
+
+  @keyframes ring-shake {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+
+    25% {
+      translate: -3px 1px;
+    }
+
+    50% {
+      translate: 3px -1px;
+    }
+
+    75% {
+      translate: -2px 0;
+    }
+  }
+
+  @keyframes rope-danger {
+    0%,
+    100% {
+      opacity: 0.16;
+    }
+
+    50% {
+      opacity: 0.44;
+    }
+  }
+
+  @keyframes dot-pop {
+    0% {
+      transform: scale(0.72);
+    }
+
+    58% {
+      transform: scale(1.32);
+    }
+
+    100% {
+      transform: scale(1);
+    }
+  }
+
   @keyframes puff {
     0% {
       opacity: 0;
@@ -1271,6 +1855,22 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
     100% {
       opacity: 0;
       transform: translateY(-72%) scale(1.42);
+    }
+  }
+
+  @keyframes puff-big {
+    0% {
+      opacity: 0;
+      transform: translateY(-50%) scale(0.72);
+    }
+
+    24% {
+      opacity: 0.9;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateY(-84%) scale(1.72);
     }
   }
 
@@ -1320,15 +1920,32 @@ const description = 'A two-human Nouns Sumo dohyō for one keyboard or one phone
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .dohyo,
     .fighter,
     .meter-fill,
-    .sand-puff {
+    .sand-puff,
+    .win-dots span,
+    .ring-rope::before,
+    .ring-rope::after {
       animation: none;
       transition: none;
     }
 
+    .dohyo {
+      translate: 0 0;
+    }
+
+    .dohyo[data-danger="p1"] .ring-rope::before,
+    .dohyo[data-danger="p2"] .ring-rope::after {
+      opacity: 0.22;
+    }
+
     .fighter[data-state] {
       translate: 0 0;
+    }
+
+    .win-dots span[data-pop="true"] {
+      transform: none;
     }
   }
 </style>
