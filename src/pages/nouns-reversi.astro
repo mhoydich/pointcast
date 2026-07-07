@@ -1,0 +1,604 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+const title = 'Nouns Reversi';
+const description = 'Windows 95 style Othello with Nouns discs. Outflank the CPU on an 8x8 board, flip trapped lines, and finish with more discs to win.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'Game', '@id': 'https://pointcast.xyz/nouns-reversi', name: title, description, url: 'https://pointcast.xyz/nouns-reversi' };
+---
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-reversi>
+    <section class="window" aria-labelledby="reversi-title">
+      <header class="titlebar"><span>Nouns Reversi</span><span class="buttons" aria-hidden="true"><i>_</i><i>□</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Nouns Reversi menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-hint aria-pressed="true">Hint: On</button>
+        <button type="button" data-level>CPU: Normal</button>
+        <button type="button" data-pause aria-pressed="false">Pause</button>
+        <a href="/noggle-drop">Drop</a> <a href="/nouns-2048">2048</a> <a href="/nouns-snake">Snake</a> <a href="/nouns-slide">Slide</a> <a href="/nouns-reversi">Reversi</a> <a href="/nouns-breakout">Breakout</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="hero">
+        <div>
+          <p class="kicker">Othello · Flip · Nouns</p>
+          <h1 id="reversi-title">Reversi</h1>
+          <p>Click a glowing cell to drop a red disc and flip the CPU line. Most discs wins.</p>
+        </div>
+        <div class="meters">
+          <span>You <strong data-you>2</strong></span>
+          <span>CPU <strong data-cpu>2</strong></span>
+          <span>Best <strong data-best>--</strong></span>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="boardframe">
+          <div class="board" role="grid" aria-label="Reversi board" data-board></div>
+          <div class="result" data-result hidden>
+            <div class="result-card">
+              <p class="result-kicker" data-result-kicker>Game Over</p>
+              <h2 data-result-title>You win</h2>
+              <p data-result-sub>Final 34 to 30</p>
+              <button type="button" data-new2>Play again</button>
+            </div>
+          </div>
+        </div>
+        <div class="side">
+          <div class="scorepod pod-you"><span>You (red)</span><strong data-you2>2</strong></div>
+          <div class="scorepod pod-cpu"><span>CPU (blue)</span><strong data-cpu2>2</strong></div>
+          <div class="turnpod" data-turn>Your move</div>
+        </div>
+      </div>
+      <div class="touchrow">
+        <button type="button" data-pass hidden>Pass</button>
+        <button type="button" data-new3>New Game</button>
+        <button type="button" data-hint2 aria-pressed="true">Toggle Hints</button>
+        <button type="button" data-pause2 aria-pressed="false">Pause</button>
+      </div>
+      <footer class="status" data-status>Ready. You play red. Corners are gold.</footer>
+    </section>
+  </main>
+</BlockLayout>
+<script>
+  const root = document.querySelector<HTMLElement>('[data-reversi]');
+  if (root) {
+    const N = 8;
+    const EMPTY = 0, YOU = 1, CPU = 2;
+    const slug = 'nouns-reversi';
+    const statsKey = 'pc:arcade:' + slug;
+    const profileKey = 'pc:arcade:profile';
+
+    function readJson(key: string, fallback: any) {
+      try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+    }
+    function writeJson(key: string, value: any) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage may be unavailable */ }
+    }
+
+    function recordPlay(clear: boolean, margin: number) {
+      const stats = readJson(statsKey, { plays: 0, clears: 0, bestTime: null, bestScore: null });
+      if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+      if (clear) {
+        stats.clears = Number(stats.clears || 0) + 1;
+        // bestScore persists the MAX winning margin across sessions.
+        stats.bestScore = Math.max(Number(stats.bestScore || 0), margin);
+      }
+      writeJson(statsKey, stats);
+      const profile = readJson(profileKey, { achievements: [] });
+      profile.lastPlayed = 'Reversi';
+      if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+      if (clear) {
+        profile.clears = Number(profile.clears || 0) + 1;
+        profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+        profile.lastCleared = 'Reversi';
+        const earned = ['first-win', 'reversi-win'];
+        if (profile.clearStreak >= 3) earned.push('three-game-streak');
+        profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+      }
+      writeJson(profileKey, profile);
+    }
+
+    // Positional weights: corners high, edges good, X/C-squares near empty corners bad.
+    const W = [
+      [120, -20, 20, 5, 5, 20, -20, 120],
+      [-20, -40, -5, -5, -5, -5, -40, -20],
+      [20, -5, 15, 3, 3, 15, -5, 20],
+      [5, -5, 3, 3, 3, 3, -5, 5],
+      [5, -5, 3, 3, 3, 3, -5, 5],
+      [20, -5, 15, 3, 3, 15, -5, 20],
+      [-20, -40, -5, -5, -5, -5, -40, -20],
+      [120, -20, 20, 5, 5, 20, -20, 120],
+    ];
+    const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+    const boardEl = root.querySelector<HTMLElement>('[data-board]');
+    const statusEl = root.querySelector<HTMLElement>('[data-status]');
+    const youEls = Array.from(root.querySelectorAll<HTMLElement>('[data-you],[data-you2]'));
+    const cpuEls = Array.from(root.querySelectorAll<HTMLElement>('[data-cpu],[data-cpu2]'));
+    const bestEl = root.querySelector<HTMLElement>('[data-best]');
+    const turnEl = root.querySelector<HTMLElement>('[data-turn]');
+    const resultEl = root.querySelector<HTMLElement>('[data-result]');
+    const resultTitle = root.querySelector<HTMLElement>('[data-result-title]');
+    const resultSub = root.querySelector<HTMLElement>('[data-result-sub]');
+    const resultKicker = root.querySelector<HTMLElement>('[data-result-kicker]');
+    const passBtn = root.querySelector<HTMLButtonElement>('[data-pass]');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Guard: if the required play surface is missing, do nothing rather than crash.
+    if (!boardEl) throw new Error('reversi: board element missing');
+
+    let grid: number[][] = [];
+    const cells: HTMLButtonElement[] = [];
+    let hints = true;
+    let busy = false;
+    let over = false;
+    let paused = false;
+    let recordedWin = false;      // guard so recordPlay(true) fires at most once per game
+    // pendingCpu marks that it is the CPU's turn but the scheduled move has not run
+    // (e.g. the tab was hidden / the game was paused). Used to safely resume.
+    let pendingCpu = false;
+    let levelIdx = 1; // 0 easy, 1 normal, 2 hard
+    const levels = ['Easy', 'Normal', 'Hard'];
+    let cpuTimer: number | null = null;
+
+    function setStatus(t: string) { if (statusEl) statusEl.textContent = t; }
+
+    function clearCpuTimer() {
+      if (cpuTimer !== null) { clearTimeout(cpuTimer); cpuTimer = null; }
+    }
+    function scheduleCpu(delay: number) {
+      clearCpuTimer();
+      pendingCpu = true;
+      if (paused) return; // will be (re)scheduled on resume
+      cpuTimer = window.setTimeout(runCpu, delay);
+    }
+
+    function inb(r: number, c: number) { return r >= 0 && r < N && c >= 0 && c < N; }
+
+    function flipsFor(g: number[][], r: number, c: number, p: number): [number, number][] {
+      if (g[r][c] !== EMPTY) return [];
+      const opp = p === YOU ? CPU : YOU;
+      const out: [number, number][] = [];
+      for (const [dr, dc] of DIRS) {
+        const line: [number, number][] = [];
+        let rr = r + dr, cc = c + dc;
+        while (inb(rr, cc) && g[rr][cc] === opp) { line.push([rr, cc]); rr += dr; cc += dc; }
+        if (line.length && inb(rr, cc) && g[rr][cc] === p) out.push(...line);
+      }
+      return out;
+    }
+    function legalMoves(g: number[][], p: number) {
+      const m: { r: number; c: number; flips: [number, number][] }[] = [];
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const f = flipsFor(g, r, c, p);
+        if (f.length) m.push({ r, c, flips: f });
+      }
+      return m;
+    }
+    function counts(g: number[][]) {
+      let y = 0, x = 0;
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        if (g[r][c] === YOU) y++; else if (g[r][c] === CPU) x++;
+      }
+      return { y, x };
+    }
+
+    function newGame() {
+      clearCpuTimer();
+      grid = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
+      grid[3][3] = YOU; grid[3][4] = CPU; grid[4][3] = CPU; grid[4][4] = YOU;
+      over = false; busy = false; paused = false; recordedWin = false; pendingCpu = false;
+      if (resultEl) resultEl.hidden = true;
+      if (passBtn) passBtn.hidden = true;
+      syncPauseButtons();
+      recordPlay(false, 0);
+      buildBoard();
+      render();
+      setStatus('Your move. Flip a blue line to gain ground.');
+    }
+
+    function buildBoard() {
+      boardEl!.textContent = '';
+      cells.length = 0;
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cell';
+        b.setAttribute('role', 'gridcell');
+        b.setAttribute('aria-label', `Row ${r + 1} column ${c + 1}`);
+        b.dataset.r = String(r); b.dataset.c = String(c);
+        b.addEventListener('click', () => onCellClick(r, c));
+        cells.push(b);
+        boardEl!.appendChild(b);
+      }
+    }
+
+    function discEl(p: number) {
+      const d = document.createElement('span');
+      d.className = 'disc ' + (p === YOU ? 'red' : 'blue');
+      const mark = document.createElement('span');
+      mark.className = 'noggle';
+      d.appendChild(mark);
+      return d;
+    }
+
+    function render(flash: [number, number][] = []) {
+      const moves = (over || busy) ? [] : legalMoves(grid, YOU);
+      const legalSet = new Set(moves.map(m => m.r * N + m.c));
+      for (let i = 0; i < cells.length; i++) {
+        const r = (i / N) | 0, c = i % N;
+        const cell = cells[i];
+        const v = grid[r][c];
+        cell.classList.toggle('legal', hints && !over && !busy && !paused && legalSet.has(i));
+        cell.classList.toggle('corner', (r === 0 || r === N - 1) && (c === 0 || c === N - 1));
+        cell.disabled = over || busy || paused || !legalSet.has(i);
+        const cur = cell.firstElementChild as HTMLElement | null;
+        const want = v === EMPTY ? '' : (v === YOU ? 'red' : 'blue');
+        const has = cur ? (cur.classList.contains('red') ? 'red' : 'blue') : '';
+        if (want !== has) {
+          cell.textContent = '';
+          if (v !== EMPTY) {
+            const d = discEl(v);
+            if (!reduce && flash.some(([fr, fc]) => fr === r && fc === c)) d.classList.add('flip');
+            cell.appendChild(d);
+          }
+        } else if (v !== EMPTY && !reduce && flash.some(([fr, fc]) => fr === r && fc === c)) {
+          const el = cell.firstElementChild as HTMLElement;
+          el.classList.remove('flip');
+          void el.offsetWidth;
+          el.classList.add('flip');
+        }
+      }
+      const { y, x } = counts(grid);
+      youEls.forEach(e => e.textContent = String(y));
+      cpuEls.forEach(e => e.textContent = String(x));
+      const stats = readJson(statsKey, { bestScore: null });
+      if (bestEl) bestEl.textContent = (stats.bestScore != null) ? '+' + stats.bestScore : '--';
+      if (turnEl && !over) {
+        turnEl.textContent = paused ? 'Paused' : (busy ? 'CPU thinking...' : 'Your move');
+      }
+    }
+
+    function apply(g: number[][], r: number, c: number, p: number, flips: [number, number][]) {
+      g[r][c] = p;
+      for (const [fr, fc] of flips) g[fr][fc] = p;
+    }
+
+    function onCellClick(r: number, c: number) {
+      if (over || busy || paused) return;
+      const flips = flipsFor(grid, r, c, YOU);
+      if (!flips.length) return;
+      apply(grid, r, c, YOU, flips);
+      busy = true;
+      render([[r, c], ...flips]);
+      setStatus(`Flipped ${flips.length}. CPU is planning...`);
+      scheduleCpu(reduce ? 120 : 620);
+    }
+
+    function evalBoard(g: number[][], p: number) {
+      const opp = p === YOU ? CPU : YOU;
+      let s = 0;
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        if (g[r][c] === p) s += W[r][c]; else if (g[r][c] === opp) s -= W[r][c];
+      }
+      const mob = legalMoves(g, p).length - legalMoves(g, opp).length;
+      return s + mob * 6;
+    }
+
+    function bestCpuMove() {
+      const moves = legalMoves(grid, CPU);
+      if (!moves.length) return null;
+      if (levelIdx === 0) return moves[(Math.random() * moves.length) | 0];
+      let best = moves[0], bestScore = -Infinity;
+      for (const m of moves) {
+        const g2 = grid.map(row => row.slice());
+        apply(g2, m.r, m.c, CPU, m.flips);
+        let score = evalBoard(g2, CPU);
+        if (levelIdx === 2) {
+          const reply = legalMoves(g2, YOU);
+          if (reply.length) {
+            let worst = Infinity;
+            for (const ry of reply) {
+              const g3 = g2.map(row => row.slice());
+              apply(g3, ry.r, ry.c, YOU, ry.flips);
+              worst = Math.min(worst, evalBoard(g3, CPU));
+            }
+            score = worst;
+          }
+        }
+        if (score > bestScore) { bestScore = score; best = m; }
+      }
+      return best;
+    }
+
+    function runCpu() {
+      cpuTimer = null;
+      pendingCpu = false;
+      if (over || paused) return;
+      const mv = bestCpuMove();
+      if (mv) {
+        apply(grid, mv.r, mv.c, CPU, mv.flips);
+        render([[mv.r, mv.c], ...mv.flips]);
+        setStatus(`CPU flipped ${mv.flips.length}.`);
+      } else {
+        setStatus('CPU has no move and passes.');
+      }
+      busy = false;
+      resolveTurns();
+    }
+
+    // Decide whose turn it is now. If the human has no move, either the CPU
+    // takes another turn (auto-pass) or, if neither can move, the game ends.
+    function resolveTurns() {
+      if (over) return;
+      const youMoves = legalMoves(grid, YOU);
+      if (youMoves.length) {
+        if (passBtn) passBtn.hidden = true;
+        busy = false;
+        render();
+        return;
+      }
+      const cpuMoves = legalMoves(grid, CPU);
+      if (!cpuMoves.length) { endGame(); return; }
+      // Human must pass; hand back to the CPU after a short beat.
+      if (passBtn) passBtn.hidden = true;
+      setStatus('You have no legal move. Passing to CPU...');
+      busy = true;
+      render();
+      scheduleCpu(reduce ? 120 : 700);
+    }
+
+    function endGame() {
+      over = true; busy = false; paused = false; pendingCpu = false;
+      clearCpuTimer();
+      if (passBtn) passBtn.hidden = true;
+      syncPauseButtons();
+      const { y, x } = counts(grid);
+      render();
+      const margin = y - x;
+      if (resultEl) resultEl.hidden = false;
+      if (y > x) {
+        if (resultKicker) resultKicker.textContent = 'You Win';
+        if (resultTitle) resultTitle.textContent = 'Red takes it';
+        if (resultSub) resultSub.textContent = `Final ${y} to ${x} (+${margin})`;
+        if (turnEl) turnEl.textContent = 'You win!';
+        setStatus(`You win ${y} to ${x}. Margin +${margin}.`);
+        if (!recordedWin) { recordedWin = true; recordPlay(true, margin); }
+      } else if (x > y) {
+        if (resultKicker) resultKicker.textContent = 'CPU Wins';
+        if (resultTitle) resultTitle.textContent = 'Blue takes it';
+        if (resultSub) resultSub.textContent = `Final ${x} to ${y}`;
+        if (turnEl) turnEl.textContent = 'CPU wins';
+        setStatus(`CPU wins ${x} to ${y}. New game?`);
+      } else {
+        if (resultKicker) resultKicker.textContent = 'Tie Game';
+        if (resultTitle) resultTitle.textContent = 'Dead even';
+        if (resultSub) resultSub.textContent = `${y} to ${x}`;
+        if (turnEl) turnEl.textContent = 'Tie';
+        setStatus(`Tied ${y} to ${x}.`);
+      }
+      // Re-read stats so the Best meter reflects the just-recorded margin.
+      const stats = readJson(statsKey, { bestScore: null });
+      if (bestEl) bestEl.textContent = (stats.bestScore != null) ? '+' + stats.bestScore : '--';
+    }
+
+    // Wiring
+    root.querySelectorAll('[data-new],[data-new2],[data-new3]').forEach(b => b.addEventListener('click', newGame));
+
+    // Pass button is a manual fallback (auto-pass handles the common case).
+    if (passBtn) passBtn.addEventListener('click', () => {
+      if (over || busy || paused) return;
+      if (legalMoves(grid, YOU).length) return;
+      resolveTurns();
+    });
+
+    function toggleHints() {
+      hints = !hints;
+      root.querySelectorAll('[data-hint],[data-hint2]').forEach(b => {
+        (b as HTMLElement).setAttribute('aria-pressed', String(hints));
+      });
+      const h = root.querySelector<HTMLElement>('[data-hint]');
+      if (h) h.textContent = 'Hint: ' + (hints ? 'On' : 'Off');
+      render();
+    }
+    root.querySelectorAll('[data-hint],[data-hint2]').forEach(b => b.addEventListener('click', toggleHints));
+
+    const levelBtn = root.querySelector<HTMLButtonElement>('[data-level]');
+    if (levelBtn) levelBtn.addEventListener('click', () => {
+      levelIdx = (levelIdx + 1) % 3;
+      levelBtn.textContent = 'CPU: ' + levels[levelIdx];
+      setStatus('CPU set to ' + levels[levelIdx] + '. Takes effect next move.');
+    });
+
+    function syncPauseButtons() {
+      const label = paused ? 'Resume' : 'Pause';
+      root.querySelectorAll('[data-pause],[data-pause2]').forEach(b => {
+        const el = b as HTMLElement;
+        el.textContent = label;
+        el.setAttribute('aria-pressed', String(paused));
+      });
+    }
+    function setPaused(p: boolean) {
+      if (over) return;
+      if (paused === p) return;
+      paused = p;
+      syncPauseButtons();
+      if (paused) {
+        clearCpuTimer();
+        setStatus('Paused. Resume to keep playing.');
+        render();
+      } else {
+        setStatus('Resumed.');
+        render();
+        // If it was the CPU's turn when we paused, get it moving again.
+        if (pendingCpu && !over) scheduleCpu(reduce ? 120 : 400);
+      }
+    }
+    root.querySelectorAll('[data-pause],[data-pause2]').forEach(b => b.addEventListener('click', () => setPaused(!paused)));
+
+    // Cancel any scheduled CPU move when the tab is hidden; re-drive on return
+    // so a mid-CPU-turn hide can never soft-lock the game.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearCpuTimer();
+      } else if (!over && !paused && pendingCpu) {
+        scheduleCpu(reduce ? 120 : 400);
+      }
+    });
+
+    newGame();
+  }
+</script>
+<style>
+  :global(body) { background: #008080; }
+  .desk {
+    background: #008080;
+    font-family: "MS Sans Serif", Tahoma, system-ui, sans-serif;
+    min-height: calc(100vh - 88px);
+    padding: 18px;
+    color: #000;
+  }
+  [data-reversi] .window {
+    max-width: 1040px;
+    margin: 0 auto;
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    box-shadow: 2px 2px 0 #000;
+  }
+  [data-reversi] .titlebar {
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff; font-weight: 700; font-size: 13px;
+    padding: 3px 5px; display: flex; justify-content: space-between; align-items: center;
+  }
+  [data-reversi] .buttons { display: flex; gap: 2px; }
+  [data-reversi] .buttons i {
+    width: 19px; height: 18px; display: grid; place-items: center;
+    border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0; color: #000; font-style: normal; font-size: 11px; line-height: 1;
+  }
+  [data-reversi] .menubar {
+    display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 5px;
+    border-bottom: 1px solid #808080; align-items: center;
+  }
+  [data-reversi] .menubar button, [data-reversi] .menubar a {
+    border: 0; background: transparent; color: #000; padding: 4px 8px;
+    text-decoration: none; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  [data-reversi] .menubar button:hover, [data-reversi] .menubar a:hover { background: #000080; color: #fff; }
+  [data-reversi] .menubar button:focus-visible, [data-reversi] .menubar a:focus-visible { outline: 1px dotted #000; outline-offset: -2px; }
+  [data-reversi] .hero {
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+    padding: 14px 16px 6px; flex-wrap: wrap;
+  }
+  [data-reversi] .kicker {
+    font: 700 10px/1 "Courier New", monospace; letter-spacing: .12em;
+    color: #000080; text-transform: uppercase; margin: 0 0 6px;
+  }
+  [data-reversi] h1 {
+    font-size: clamp(30px, 6vw, 64px); line-height: .94; font-weight: 700; margin: 0;
+  }
+  [data-reversi] .hero p:last-child { margin: 6px 0 0; font-size: 13px; max-width: 46ch; }
+  [data-reversi] .meters { display: flex; gap: 6px; }
+  [data-reversi] .meters span {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border: 2px solid; border-color: #808080 #fff #fff #808080; background: #fff;
+    padding: 4px 10px; font: 700 10px/1 "Courier New", monospace; text-transform: uppercase;
+    letter-spacing: .08em; color: #000080; min-width: 54px;
+  }
+  [data-reversi] .meters strong { font: 700 18px/1 "Courier New", monospace; color: #000; }
+  [data-reversi] .stage {
+    display: flex; gap: 16px; padding: 10px 16px 4px; align-items: flex-start; flex-wrap: wrap;
+  }
+  [data-reversi] .boardframe {
+    position: relative;
+    border: 2px solid; border-color: #808080 #fff #fff #808080; background: #fff;
+    padding: 8px;
+  }
+  [data-reversi] .board {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    width: min(70vw, 480px); background: #2c7a4b;
+    border: 2px solid #143f27; touch-action: manipulation;
+  }
+  [data-reversi] .cell {
+    aspect-ratio: 1 / 1; position: relative; padding: 0; cursor: default;
+    background: #2CC5A0; border: 1px solid #1f9c7e;
+    display: grid; place-items: center;
+  }
+  [data-reversi] .cell.corner { background: #F7C325; border-color: #b8901a; }
+  [data-reversi] .cell.legal {
+    cursor: pointer; background: #57e0bf; box-shadow: inset 0 0 0 2px #ffff00;
+  }
+  [data-reversi] .cell.corner.legal { background: #ffd94a; }
+  [data-reversi] .cell.legal::after {
+    content: ""; width: 26%; height: 26%; border-radius: 50%;
+    background: rgba(232, 77, 106, .55); box-shadow: 0 0 0 2px rgba(0,0,0,.15);
+  }
+  [data-reversi] .cell:not(:disabled):hover.legal { background: #7fead0; }
+  [data-reversi] .disc {
+    width: 82%; height: 82%; border-radius: 50%;
+    display: grid; place-items: center;
+    box-shadow: inset -2px -3px 4px rgba(0,0,0,.45), inset 2px 2px 3px rgba(255,255,255,.5), 1px 1px 2px rgba(0,0,0,.4);
+  }
+  [data-reversi] .disc.red { background: radial-gradient(circle at 34% 30%, #ff7d95, #E84D6A 55%, #D22209); }
+  [data-reversi] .disc.blue { background: radial-gradient(circle at 34% 30%, #8fc4ff, #4A9EFF 55%, #1f6fd6); }
+  [data-reversi] .noggle {
+    width: 44%; height: 20%; background: #fff; border-radius: 1px;
+    box-shadow: inset 0 0 0 2px #000;
+    position: relative;
+  }
+  [data-reversi] .noggle::before {
+    content: ""; position: absolute; left: 22%; top: 0; width: 30%; height: 100%; background: #000;
+  }
+  [data-reversi] .disc.flip { animation: rflip .34s ease; }
+  @keyframes rflip { 0% { transform: rotateY(0) scale(.6); } 55% { transform: rotateY(90deg) scale(.9); } 100% { transform: rotateY(0) scale(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    [data-reversi] .disc.flip { animation: none; }
+  }
+  [data-reversi] .side { display: flex; flex-direction: column; gap: 8px; min-width: 150px; flex: 1; }
+  [data-reversi] .scorepod {
+    display: flex; justify-content: space-between; align-items: center;
+    border: 2px solid; border-color: #808080 #fff #fff #808080; background: #fff;
+    padding: 8px 12px;
+  }
+  [data-reversi] .scorepod span { font: 700 11px/1 "Courier New", monospace; text-transform: uppercase; letter-spacing: .06em; }
+  [data-reversi] .scorepod strong { font: 700 24px/1 "Courier New", monospace; }
+  [data-reversi] .pod-you { border-left: 6px solid #E84D6A; }
+  [data-reversi] .pod-cpu { border-left: 6px solid #4A9EFF; }
+  [data-reversi] .turnpod {
+    border: 2px solid; border-color: #fff #404040 #404040 #fff; background: #c0c0c0;
+    padding: 10px 12px; font-weight: 700; text-align: center; font-size: 13px;
+  }
+  [data-reversi] .result {
+    position: absolute; inset: 8px; display: grid; place-items: center;
+    background: rgba(0, 0, 64, .55);
+  }
+  [data-reversi] .result[hidden] { display: none; }
+  [data-reversi] .result-card {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+    box-shadow: 3px 3px 0 #000; padding: 18px 22px; text-align: center; max-width: 82%;
+  }
+  [data-reversi] .result-kicker { font: 700 10px/1 "Courier New", monospace; letter-spacing: .14em; color: #000080; text-transform: uppercase; margin: 0 0 6px; }
+  [data-reversi] .result-card h2 { margin: 0 0 4px; font-size: clamp(22px, 4vw, 34px); }
+  [data-reversi] .result-card p:not(.result-kicker) { margin: 0 0 12px; font: 700 14px/1.2 "Courier New", monospace; }
+  [data-reversi] .result-card button, [data-reversi] .touchrow button {
+    font: inherit; font-size: 13px; padding: 6px 16px; cursor: pointer;
+    background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff;
+  }
+  [data-reversi] .result-card button:active, [data-reversi] .touchrow button:active {
+    border-color: #404040 #fff #fff #404040;
+  }
+  [data-reversi] .touchrow { display: flex; gap: 8px; padding: 8px 16px 2px; flex-wrap: wrap; }
+  [data-reversi] .status {
+    margin: 8px 16px 16px; border: 2px solid; border-color: #808080 #fff #fff #808080;
+    background: #fff; padding: 5px 10px; font-size: 12px; min-height: 22px;
+  }
+  @media (max-width: 760px) {
+    [data-reversi] .stage { padding: 8px 10px; }
+    [data-reversi] .board { width: min(92vw, 420px); }
+    [data-reversi] .hero { padding: 10px 12px 4px; }
+    [data-reversi] .side { flex-direction: row; flex-wrap: wrap; width: 100%; }
+    [data-reversi] .scorepod { flex: 1; min-width: 120px; }
+    [data-reversi] .turnpod { flex-basis: 100%; }
+    [data-reversi] .touchrow button { flex: 1; min-width: 30%; padding: 12px 8px; }
+    [data-reversi] .status { margin: 8px 10px 12px; }
+  }
+</style>
