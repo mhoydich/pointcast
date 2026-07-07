@@ -25,7 +25,7 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import { RESIDENTS } from '../data/residents';
-import { shipsLastDays } from '../lib/ships';
+import { shipsLastDays, shipsForHero } from '../lib/ships';
 import { pickDailyBlock, todayPT, pickDailyIndex } from '../lib/daily';
 import { FEATURES, countByCategory } from '../lib/explore';
 import { readFileSync } from 'node:fs';
@@ -65,6 +65,48 @@ const todayCount = allBlocks.filter(b => new Date(b.data.timestamp) >= startOfTo
 
 // Derived from git merge history at build time — never hand-curated, never stale.
 const shipsLast7 = shipsLastDays(7);
+
+// SHIPPED TODAY hero — slides derived from today's merged PRs (shipsForHero,
+// git-derived so the list can't go stale). SHIP_DOORS enriches known PRs with
+// a real door + copy; anything unlisted still renders from its commit subject
+// and links to /wire, so future ships appear with zero curation.
+const SHIP_DOORS: Record<number, { href: string; ch: string; name: string; desc: string; cta?: string }> = {
+  761: { href: '/grey-hour', ch: 'GDN', name: 'The Grey Hour joins the app shelf',
+         desc: 'A wizard-meditation satellite — sit with the grey hour, straight from the shelf.' },
+  760: { href: '/win95-games', ch: 'ESC', name: 'Crush v2 special combos + arcade shelves',
+         desc: 'Striped/bomb/rainbow combo pieces land in Noggle Crush v2, and the arcade hub reorganizes into labeled category shelves.' },
+  759: { href: '/win95-games', ch: 'ESC', name: 'Ten mobile games hit the Retro Arcade',
+         desc: 'Flappy, stacker, wordsearch, Simon, lights-out, TriPeaks, golf, runner, pipes, bubble pop — all touch-first, built for phones.' },
+  758: { href: '/drum', ch: 'SPN', name: 'Seven more games at the Drum House',
+         desc: 'Quickdraw, steps, fill, runner, catch, steady, split — the ten-drum-games set is complete, all live WebAudio.' },
+  757: { href: '/noggle-crush-v2', ch: 'ESC', name: 'Match-3 campaigns: Crush, Jam & Jelly v2',
+         desc: 'Level campaigns land on the match-3 trio — bombs from cross matches, tappable power-ups, double-layer jelly.' },
+  756: { href: '/b/0486', ch: 'FD', name: 'On the wire: six new games in the arcade',
+         desc: 'The broadcast note for the arcade expansion, block № 0486.', cta: 'READ THE BLOCK →' },
+  755: { href: '/noggle-crush', ch: 'ESC', name: 'The match-3 trio arrives',
+         desc: 'Noggle Crush, Nouns Jam, Nouns Jelly — a whole new match category with cascade achievements.' },
+  754: { href: '/win95-games', ch: 'ESC', name: 'Six Win95 Nouns games',
+         desc: 'Noggle Drop, 2048, Snake, Slide, Reversi and Breakout join the Retro Arcade.' },
+};
+function prettySubject(s: string): string {
+  const t = s.replace(/\s*\(#\d+\)\s*$/, '').replace(/^[a-z]+(\([^)]*\))?:\s*/, '');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+const heroData = shipsForHero();
+const heroShips = (heroData?.ships ?? [])
+  .map((s) => {
+    const door = SHIP_DOORS[s.num];
+    return {
+      num: s.num,
+      href: door?.href ?? '/wire',
+      ch: door?.ch ?? 'FD',
+      name: door?.name ?? prettySubject(s.subject),
+      desc: door?.desc ?? 'Fresh off the wire — merged to main today.',
+      cta: door?.cta ?? 'VISIT →',
+    };
+  });
+const heroDay = heroData?.day ?? '';
+const heroIsToday = heroDay === new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
 
 // The daily loop: today's deterministic drop + tomorrow's number (the pick is
 // seeded by PT date, so tomorrow is knowable — the tease costs nothing and is
@@ -176,6 +218,46 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
         </p>
       )}
     </section>
+
+    {/* ============== SHIPPED TODAY HERO ============== */}
+    {heroShips.length > 0 && (
+      <section class="ph-ships" aria-label="Shipped today" aria-roledescription="carousel">
+        <div class="ph-ships__head mono">
+          <span class="ph-ships__tag">{heroIsToday ? 'SHIPPED TODAY' : `SHIPPED ${heroDay}`}</span>
+          <span class="ph-ships__count">{heroShips.length} SHIPS</span>
+          <span class="ph-ships__ctrls">
+            <button class="ph-ships__btn" id="ph-ships-prev" type="button" aria-label="Previous ship">←</button>
+            <button class="ph-ships__btn" id="ph-ships-next" type="button" aria-label="Next ship">→</button>
+          </span>
+        </div>
+        <ul class="ph-ships__reel" id="ph-ships-reel">
+          {heroShips.map((s, i) => {
+            const c = ramp(s.ch);
+            return (
+              <li
+                class="ph-ships__slide"
+                data-active={i === 0 ? '' : undefined}
+                style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}
+                aria-label={`Ship ${i + 1} of ${heroShips.length}`}
+              >
+                <span class="ph-ships__pr mono">PR #{s.num}</span>
+                <a class="ph-ships__name" href={s.href}>{s.name}</a>
+                <span class="ph-ships__desc">{s.desc}</span>
+                <span class="ph-ships__links mono">
+                  <a class="ph-ships__visit" href={s.href}>{s.cta}</a>
+                  <a class="ph-ships__wire" href="/wire">SHIP LOG</a>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <div class="ph-ships__dots" id="ph-ships-dots" role="tablist" aria-label="Ships">
+          {heroShips.map((s, i) => (
+            <button type="button" role="tab" data-i={i} aria-selected={i === 0 ? 'true' : 'false'} aria-label={`Show ship ${i + 1}: ${s.name}`}></button>
+          ))}
+        </div>
+      </section>
+    )}
 
     {/* ============== STATUS BAR ============== */}
     <section class="ph-status mono" aria-label="Live status">
@@ -351,6 +433,44 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     clock(); setInterval(clock, 30000);
     setInterval(refreshWeather, 300000);
     refreshPulse();
+
+    // SHIPPED TODAY hero rotation — auto-advance every 6s; pauses on hover
+    // and focus, stops entirely for prefers-reduced-motion. Without JS the
+    // first slide stays visible, so the section degrades to a static hero.
+    (function () {
+      var reel = document.getElementById('ph-ships-reel');
+      var dots = document.getElementById('ph-ships-dots');
+      if (!reel || !dots) return;
+      var slides = reel.querySelectorAll('.ph-ships__slide');
+      var tabs = dots.querySelectorAll('button');
+      if (slides.length < 2) { dots.hidden = true; return; }
+      var i = 0, timer = null;
+      function show(n) {
+        i = (n + slides.length) % slides.length;
+        for (var k = 0; k < slides.length; k++) {
+          if (k === i) slides[k].setAttribute('data-active', '');
+          else slides[k].removeAttribute('data-active');
+          tabs[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
+        }
+      }
+      var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      function play() { if (!still && !timer) timer = setInterval(function () { show(i + 1); }, 6000); }
+      function pause() { if (timer) { clearInterval(timer); timer = null; } }
+      dots.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-i]');
+        if (b) { show(Number(b.dataset.i)); pause(); play(); }
+      });
+      var prev = document.getElementById('ph-ships-prev');
+      var next = document.getElementById('ph-ships-next');
+      if (prev) prev.addEventListener('click', function () { show(i - 1); pause(); play(); });
+      if (next) next.addEventListener('click', function () { show(i + 1); pause(); play(); });
+      var sec = reel.closest('.ph-ships');
+      sec.addEventListener('mouseenter', pause);
+      sec.addEventListener('mouseleave', play);
+      sec.addEventListener('focusin', pause);
+      sec.addEventListener('focusout', play);
+      play();
+    })();
   })();
 </script>
 
@@ -429,6 +549,49 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   .ph-lead__links { display: flex; flex-wrap: wrap; gap: 22px; margin: 0; font-size: 12px; letter-spacing: 0.08em; }
   .ph-lead__links a { color: var(--pc-accent); font-weight: 500; border-bottom: 1.5px solid transparent; padding-bottom: 1px; }
   .ph-lead__links a:hover { border-bottom-color: currentColor; }
+
+  /* ============== SHIPPED TODAY HERO ============== */
+  .ph-ships {
+    margin: 8px 0 0; border: 1.5px solid var(--pc-ink); border-radius: 2px; background: #fff;
+  }
+  .ph-ships__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; border-bottom: 1px solid var(--pc-rule-soft);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .ph-ships__tag { font-weight: 500; color: var(--pc-ink); }
+  .ph-ships__count { color: var(--pc-ink-muted); }
+  .ph-ships__ctrls { margin-left: auto; display: flex; gap: 4px; }
+  .ph-ships__btn {
+    font-family: var(--pc-font-mono); font-size: 11px; line-height: 1;
+    color: var(--pc-ink-soft); background: #fff; border: 1px solid var(--pc-rule); border-radius: 2px;
+    padding: 4px 9px; cursor: pointer;
+  }
+  .ph-ships__btn:hover { color: var(--pc-ink); border-color: var(--pc-ink); }
+  .ph-ships__reel { list-style: none; margin: 0; padding: 0; }
+  .ph-ships__slide {
+    display: none; flex-direction: column; align-items: flex-start; gap: 6px;
+    padding: 14px 16px 12px; border-left: 6px solid var(--ch-600); background: var(--ch-50);
+  }
+  .ph-ships__slide[data-active] { display: flex; }
+  .ph-ships__pr {
+    font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--ch-800);
+    background: #fff; border: 1px solid var(--ch-600); border-radius: 2px; padding: 2px 6px;
+  }
+  .ph-ships__name { font-size: clamp(18px, 2.4vw, 24px); font-weight: 500; line-height: 1.2; letter-spacing: -0.005em; color: var(--pc-ink); }
+  .ph-ships__name:hover { color: var(--ch-800); }
+  .ph-ships__desc { font-size: 13.5px; line-height: 1.45; color: var(--pc-ink-soft); max-width: 680px; }
+  .ph-ships__links { display: flex; gap: 18px; margin-top: 6px; font-size: 11px; letter-spacing: 0.1em; }
+  .ph-ships__visit { color: var(--ch-800); font-weight: 500; border-bottom: 1.5px solid transparent; padding-bottom: 1px; }
+  .ph-ships__visit:hover { border-bottom-color: currentColor; }
+  .ph-ships__wire { color: var(--pc-ink-muted); font-weight: 500; }
+  .ph-ships__wire:hover { color: var(--pc-ink); }
+  .ph-ships__dots { display: flex; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--pc-rule-soft); }
+  .ph-ships__dots button {
+    width: 22px; height: 6px; padding: 0; cursor: pointer;
+    background: var(--pc-rule-soft); border: 1px solid var(--pc-rule); border-radius: 2px;
+  }
+  .ph-ships__dots button[aria-selected="true"] { background: var(--pc-ink); border-color: var(--pc-ink); }
 
   /* ============== STATUS BAR ============== */
   .ph-status {
