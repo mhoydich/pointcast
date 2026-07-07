@@ -15,7 +15,10 @@ export type ArcadeGameSlug =
   | 'nouns-breakout'
   | 'noggle-crush'
   | 'nouns-jam'
-  | 'nouns-jelly';
+  | 'nouns-jelly'
+  | 'noggle-crush-v2'
+  | 'nouns-jam-v2'
+  | 'nouns-jelly-v2';
 
 export interface ArcadeGame {
   slug: ArcadeGameSlug;
@@ -112,6 +115,21 @@ export const ARCADE_ACHIEVEMENTS = [
     id: 'cascade-chain',
     name: 'Chain Reaction',
     description: 'Trigger a triple cascade or pop ten noggles at once in a match game.',
+  },
+  {
+    id: 'crush-campaign',
+    name: 'Crush Campaign',
+    description: 'Clear all five levels of Noggle Crush v2.',
+  },
+  {
+    id: 'jam-campaign',
+    name: 'Jam Campaign',
+    description: 'Clear all four levels of Nouns Jam v2.',
+  },
+  {
+    id: 'jelly-campaign',
+    name: 'Jelly Campaign',
+    description: 'Scrub every level of Nouns Jelly v2, double jelly and all.',
   },
 ];
 
@@ -271,6 +289,42 @@ export const RETRO_ARCADE_GAMES: ArcadeGame[] = [
     category: 'match',
     storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jelly`,
     achievementIds: ['first-win', 'three-game-streak', 'jelly-clear', 'cascade-chain'],
+  },
+  {
+    slug: 'noggle-crush-v2',
+    name: 'Noggle Crush v2',
+    shortName: 'Crush v2',
+    path: '/noggle-crush-v2',
+    kicker: 'CAMPAIGN · BOMBS',
+    description: 'A five-level match-3 campaign with striped and rainbow specials plus new bomb noggles from cross-shaped matches.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}noggle-crush-v2`,
+    achievementIds: ['first-win', 'three-game-streak', 'crush-clear', 'crush-campaign'],
+  },
+  {
+    slug: 'nouns-jam-v2',
+    name: 'Nouns Jam v2',
+    shortName: 'Jam v2',
+    path: '/nouns-jam-v2',
+    kicker: 'CAMPAIGN · BOMB DROPS',
+    description: 'A four-level tap-blast campaign where big pops leave bomb power-ups you tap to blast a 3x3.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jam-v2`,
+    achievementIds: ['first-win', 'three-game-streak', 'jam-clear', 'jam-campaign'],
+  },
+  {
+    slug: 'nouns-jelly-v2',
+    name: 'Nouns Jelly v2',
+    shortName: 'Jelly v2',
+    path: '/nouns-jelly-v2',
+    kicker: 'CAMPAIGN · DOUBLE JELLY',
+    description: 'A four-level jelly campaign that adds double-layer jelly needing two matches to scrub clean.',
+    status: 'live',
+    category: 'match',
+    storageKey: `${ARCADE_STORAGE_PREFIX}nouns-jelly-v2`,
+    achievementIds: ['first-win', 'three-game-streak', 'jelly-clear', 'jelly-campaign'],
   },
 ];
 
