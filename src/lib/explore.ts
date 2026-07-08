@@ -14,6 +14,7 @@
 
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { RETRO_ARCADE_GAMES } from './retro-arcade';
 
 const RAW_PAGES = import.meta.glob('../pages/*.astro', {
   query: '?raw',
@@ -75,7 +76,15 @@ export interface Category {
   match: (slug: string) => boolean;
 }
 
+const GAME_PAGE_SLUGS = new Set(RETRO_ARCADE_GAMES.map((game) => game.slug));
+
 export const CATEGORIES: Category[] = [
+  {
+    key: 'games',
+    label: 'Games',
+    blurb: 'The arcade cabinet, mobile games, and playable town doors.',
+    match: (s) => s === 'arcade' || s === 'win95-games' || GAME_PAGE_SLUGS.has(s),
+  },
   {
     key: 'drum',
     label: 'Drum Hub',
