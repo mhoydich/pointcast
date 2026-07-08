@@ -45,6 +45,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'arcade',
+    name: 'The PointCast Arcade',
+    kicker: 'ARCADE · 36 GAMES · NO SIGNUP',
+    description: 'The unified PointCast games front door: 26 Win95 arcade games, 10 Drum House games, and local achievements in one playable hub.',
+    url: 'https://pointcast.xyz/arcade',
+    path: '/arcade',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
