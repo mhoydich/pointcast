@@ -17,17 +17,17 @@
  * Tokens come from BlockLayout's :root (--pc-bg / --pc-ink / --pc-ink-soft /
  * --pc-ink-muted / --pc-rule / --pc-rule-soft / --pc-accent / --pc-font-*).
  *
- * Sections: masthead · lead panel · status bar · rooms · latest · footer.
- * Replaced the 15-section editorial home and the pixel-art town candidates
- * (/window-home, /visit) per Mike's "professional pointcast" brief.
+ * Sections: masthead · teletext ticker · verb-door lead · arcade marquee ·
+ * alive strip · shipped-today hero · directory strip · daily loop · latest ·
+ * footer.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
-import { RESIDENTS } from '../data/residents';
 import { shipsLastDays, shipsForHero } from '../lib/ships';
 import { pickDailyBlock, todayPT, pickDailyIndex } from '../lib/daily';
-import { FEATURES, countByCategory } from '../lib/explore';
+import { CATEGORIES, FEATURES } from '../lib/explore';
+import { RETRO_ARCADE_GAMES } from '../lib/retro-arcade';
 import { readFileSync } from 'node:fs';
 
 // Season Two heartbeat — HEARTBEAT.log at the repo root, one line per daily
@@ -57,7 +57,8 @@ const condition = (weather.condition ?? 'overcast').toLowerCase();
 const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
 const blockCount = allBlocks.length;
-const latest = allBlocks.slice(0, 6);
+const latest = allBlocks.slice(0, 4);
+const tickerBlocks = allBlocks.slice(0, 3);
 
 const now = new Date();
 const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -128,56 +129,57 @@ function fmtDate(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d).toUpperCase();
 }
 
-// Residents line computed from src/data/residents.ts so seats never drift.
-const NUM = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-const word = (n: number) => NUM[n] ?? String(n);
-const agentCount = RESIDENTS.filter((r) => r.status === 'resident').length;
-const openSeats = RESIDENTS.filter((r) => r.status === 'open').length;
-const residentsDesc = `${word(agentCount)} AI agents build here. ${word(openSeats)} seats open.`;
-
-// Six rooms. Each borrows a CHANNEL ramp for its color coding (the Bloomberg
-// move — color IS the wayfinding). `ch` keys into CHANNELS for 50/600/800.
-const ROOMS = [
-  { href: '/wire',      ch: 'FD',  tag: 'LIVE',   name: 'The Wire',      desc: 'Every commit and new block, as it lands.' },
-  { href: '/mythos',    ch: 'SPN', tag: 'READ',   name: 'The Mythos',    desc: 'What this place is, in a 60-second read.' },
-  { href: '/residents', ch: 'ESC', tag: 'PEOPLE', name: 'The Residents', desc: residentsDesc },
-  { href: '/coffee',    ch: 'FCT', tag: 'ROOM',   name: 'The Coffee',    desc: 'Pour from a live, shared shelf. Pot’s on.' },
-  { href: '/window',    ch: 'GDN', tag: 'VIEW',   name: 'The Window',    desc: 'El Segundo right now — light, weather, tide.' },
-  { href: '/archive',   ch: 'VST', tag: 'BROWSE', name: 'The Archive',   desc: `Every block since ${sinceDate}.` },
-] as const;
-
 function ramp(code: string) {
   const c = (CHANNELS as Record<string, { color50: string; color600: string; color800: string }>)[code];
   return c ?? { color50: '#EEF4FA', color600: '#185FA5', color800: '#0B3E73' };
 }
 
-// THE TOWN board — every built service surfaced on the front door, fed by
-// the same auto-discovered FEATURES as /explore so a new room shows up here
-// on its next build. Pins are the canonical doors (resolved against
-// FEATURES, so a renamed route silently drops instead of 404ing); remaining
-// slots fill with the category's freshest rooms by git mtime.
-const FEAT = new Map(FEATURES.map((f) => [f.slug, f]));
-const catCounts = countByCategory();
-const TOWN_PANELS = [
-  { key: 'drum',       ch: 'SPN', label: 'DRUM HUB',            pins: ['/drum', '/drum-live', '/drum-school', '/drum-jam', '/drum-tv', '/drum-map'] },
-  { key: 'music',      ch: 'SPN', label: 'MUSIC & CASTS',       pins: ['/music-hub', '/cast', '/song-of-the-day', '/melody-bottle', '/radio', '/town-music'] },
-  { key: 'nouns',      ch: 'BTL', label: 'NOUNS BATTLER',       pins: ['/nouns-nation-battler', '/battle', '/nouns-nation-battler-tv', '/nouns-nation-battler-wiki', '/nouns-cards', '/nouns-cola'] },
-  { key: 'shrines',    ch: 'GDN', label: 'SHRINES & STILLNESS', pins: ['/shrines', '/meditate', '/aviary', '/sit', '/quiet-hours', '/night-sky'] },
-  { key: 'federation', ch: 'FD',  label: 'ROOMS & FEDERATION',  pins: ['/webring', '/room-maker', '/rooms', '/mesh', '/for-nodes', '/handshakes'] },
-  { key: 'collect',    ch: 'FCT', label: 'COLLECT & DROPS',     pins: ['/collect', '/marketplace', '/treasury', '/zen-cats', '/postcards', '/editions'] },
-  { key: 'games',      ch: 'ESC', label: 'GAMES & PLAY',        pins: ['/nounle', '/win95-games', '/sumo', '/nouns-mines-v2', '/gandalf', '/farm'] },
-  { key: 'local',      ch: 'ESC', label: 'EL SEGUNDO & LOCAL',  pins: ['/local', '/town', '/areas', '/civic', '/hermosa-beach', '/strand-corridor'] },
-].map((p) => {
-  const doors = p.pins
-    .map((slug) => FEAT.get(slug))
-    .filter((f): f is NonNullable<typeof f> => Boolean(f));
-  const have = new Set(doors.map((d) => d.slug));
-  const fill = FEATURES
-    .filter((f) => f.category === p.key && !have.has(f.slug))
-    .sort((a, b) => b.mtime - a.mtime);
-  while (doors.length < 6 && fill.length) doors.push(fill.shift()!);
-  return { ...p, doors, count: catCounts[p.key] ?? null };
-});
+const arcadeCount = RETRO_ARCADE_GAMES.filter((game) => game.status === 'live').length;
+const drumGameCount = 10;
+const featuredSeeds = {
+  'noun-flappy': 428,
+  'swipe-golf': 214,
+  'nouns-2048': 711,
+  'noggle-crush-v2': 998,
+  'noun-runner': 83,
+  'solitaire-v2': 1194,
+} as const;
+const featuredArcade = Object.entries(featuredSeeds)
+  .map(([slug, noun]) => {
+    const game = RETRO_ARCADE_GAMES.find((g) => g.slug === slug);
+    return game ? { ...game, noun } : null;
+  })
+  .filter((game): game is NonNullable<typeof game> => Boolean(game));
+
+const verbDoors = [
+  { href: '/win95-games', ch: 'ESC', verb: 'PLAY', note: `${arcadeCount} games`, arrow: '→' },
+  { href: '/wire', ch: 'FD', verb: 'READ', note: 'latest wire', arrow: '→' },
+  { href: '/coffee', ch: 'FCT', verb: 'VISIT', note: 'coffee pot', arrow: '→' },
+] as const;
+
+const tickerSegments = [
+  ...tickerBlocks.map((b) => ({
+    href: `/b/${b.data.id}`,
+    ch: b.data.channel,
+    label: `LATEST /${b.data.id} ${b.data.title}`,
+  })),
+  { href: '/win95-games', ch: 'ESC', label: `${arcadeCount} GAMES IN THE ARCADE` },
+  { href: '/drum', ch: 'SPN', label: `${drumGameCount} DRUM GAMES LIVE` },
+  { href: '/coffee', ch: 'FCT', label: 'COFFEE POT ON', id: 'ph-coffee-ticker' },
+  { href: '/window', ch: 'GDN', label: `EL SEGUNDO ${tempF}F ${condition}` },
+  { href: '/wire', ch: 'FD', label: `${shipsLast7} SHIPS IN 7 DAYS` },
+];
+
+const directoryChips = [
+  { label: 'GAMES', ch: 'ESC' },
+  { label: CATEGORIES.find((c) => c.key === 'drum')?.label ?? 'Drum Hub', ch: 'SPN' },
+  { label: CATEGORIES.find((c) => c.key === 'music')?.label ?? 'Music & Casts', ch: 'SPN' },
+  { label: CATEGORIES.find((c) => c.key === 'nouns')?.label ?? 'Nouns Battler', ch: 'BTL' },
+  { label: CATEGORIES.find((c) => c.key === 'shrines')?.label ?? 'Shrines & Stillness', ch: 'GDN' },
+  { label: CATEGORIES.find((c) => c.key === 'federation')?.label ?? 'Rooms & Federation', ch: 'FD' },
+  { label: CATEGORIES.find((c) => c.key === 'collect')?.label ?? 'Collect & Drops', ch: 'FCT' },
+  { label: CATEGORIES.find((c) => c.key === 'local')?.label ?? 'El Segundo & Local', ch: 'ESC' },
+] as const;
 const townTotal = FEATURES.length;
 
 const title = 'PointCast — agent-native broadcast from El Segundo';
@@ -199,24 +201,127 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
       </p>
     </header>
 
+    {/* ============== TELETEXT TICKER ============== */}
+    <section class="ph-ticker mono" aria-label="Live teletext ticker">
+      <div class="ph-ticker__track">
+        <div class="ph-ticker__run">
+          {tickerSegments.map((seg) => {
+            const c = ramp(seg.ch);
+            return (
+              <a class="ph-ticker__item" href={seg.href} style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
+                <span class="ph-ticker__code">{seg.ch}</span>
+                <span id={seg.id}>{seg.label}</span>
+              </a>
+            );
+          })}
+        </div>
+        <div class="ph-ticker__run ph-ticker__run--copy" aria-hidden="true">
+          {tickerSegments.map((seg) => {
+            const c = ramp(seg.ch);
+            return (
+              <span class="ph-ticker__item" style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
+                <span class="ph-ticker__code">{seg.ch}</span>
+                <span>{seg.label}</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+
     {/* ============== LEAD ============== */}
     <section class="ph-lead">
       <p class="ph-lead__kicker mono">CH.FD · AGENT-NATIVE BROADCAST · LIVE SINCE {sinceDate}</p>
-      <h1 class="ph-lead__title">An agent-native broadcast from El&nbsp;Segundo.</h1>
-      <p class="ph-lead__deck">
-        PointCast is a small, live publication built in the open by humans and AI&nbsp;agents —
-        rooms you can walk into, a broadcast you can read, contracts you can fork.
-      </p>
-      <p class="ph-lead__links mono">
-        <a href="/wire">READ THE LATEST →</a>
-        <a href="/mythos">WHAT IS POINTCAST?</a>
-      </p>
-      {latest[0] && (
-        <p class="ph-lead__now mono">
-          <span class="ph-lead__now-tag">NOW</span>
-          <a href={`/b/${latest[0].data.id}`}>{latest[0].data.title} · /{latest[0].data.id}</a>
-        </p>
-      )}
+      <h1 class="ph-lead__title">Pick a door and enter the live town.</h1>
+      <ul class="ph-verbs" aria-label="Primary actions">
+        {verbDoors.map((door) => {
+          const c = ramp(door.ch);
+          return (
+            <li>
+              <a class="ph-verb" href={door.href} style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
+                <span class="ph-verb__word">{door.verb}</span>
+                <span class="ph-verb__arrow" aria-hidden="true">{door.arrow}</span>
+                <span class="ph-verb__note mono">{door.note}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    {/* ============== ARCADE MARQUEE ============== */}
+    <section class="ph-arcade" aria-label="The Arcade Marquee">
+      <div class="ph-arcade__head mono">
+        <span>THE ARCADE MARQUEE</span>
+        <span class="ph-arcade__counter">{arcadeCount} GAMES · FREE · NO SIGNUP</span>
+        <span class="ph-arcade__links">
+          <a href="/win95-games">ALL GAMES →</a>
+          <a href="/drum">DRUM GAMES →</a>
+        </span>
+      </div>
+      <div class="ph-arcade__field">
+        <ul class="ph-arcade__games">
+          {featuredArcade.map((game) => (
+            <li>
+              <a class="ph-game" href={game.path}>
+                <span class="ph-game__bar mono">
+                  <span>{game.shortName}</span>
+                  <span>LIVE</span>
+                </span>
+                <span class="ph-game__body">
+                  <img
+                    src={`https://noun.pics/${game.noun}.svg`}
+                    width="72"
+                    height="72"
+                    loading="lazy"
+                    alt={`Noun ${game.noun} for ${game.name}`}
+                  />
+                  <span class="ph-game__text">
+                    <span class="ph-game__name">{game.name}</span>
+                    <span class="ph-game__kicker mono">{game.kicker}</span>
+                  </span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <img
+          class="ph-arcade__walker"
+          src="https://noun.pics/512.svg"
+          width="48"
+          height="48"
+          loading="lazy"
+          alt="Pixelated walking Noun 512"
+        />
+      </div>
+    </section>
+
+    {/* ============== THE TOWN IS ALIVE ============== */}
+    <section class="ph-alive mono" aria-label="The town is alive">
+      <a class="ph-alive__tile" href="/window" style={`--ch-600:${ramp('GDN').color600};--ch-800:${ramp('GDN').color800};`}>
+        <span class="ph-alive__value"><span id="ph-temp2">{tempF}</span>°F</span>
+        <span class="ph-alive__label">EL SEGUNDO · <span id="ph-cond2">{condition}</span></span>
+      </a>
+      <a class="ph-alive__tile" href="/wire" style={`--ch-600:${ramp('FD').color600};--ch-800:${ramp('FD').color800};`}>
+        <span class="ph-alive__value">{todayCount}</span>
+        <span class="ph-alive__label">BLOCKS TODAY</span>
+      </a>
+      <a class="ph-alive__tile" href="/wire" style={`--ch-600:${ramp('BTL').color600};--ch-800:${ramp('BTL').color800};`}>
+        <span class="ph-alive__value">{shipsLast7}</span>
+        <span class="ph-alive__label">SHIPS · 7 DAYS</span>
+      </a>
+      <a class="ph-alive__tile" href="/today" style={`--ch-600:${ramp('FCT').color600};--ch-800:${ramp('FCT').color800};`}>
+        <span class="ph-alive__value" id="ph-pulse-n">{pulse?.n ?? blockCount}</span>
+        <span class="ph-alive__label">DAILY PULSE</span>
+      </a>
+      <a class="ph-alive__tile" href="/coffee" style={`--ch-600:${ramp('GF').color600};--ch-800:${ramp('GF').color800};`}>
+        <span class="ph-alive__value" id="ph-coffee-state">ON</span>
+        <span class="ph-alive__label" id="ph-coffee-label">COFFEE POT</span>
+      </a>
+      <a class="ph-alive__tile" href="/drum" style={`--ch-600:${ramp('SPN').color600};--ch-800:${ramp('SPN').color800};`}>
+        <span class="ph-alive__value">{drumGameCount}</span>
+        <span class="ph-alive__label">DRUM GAMES</span>
+      </a>
     </section>
 
     {/* ============== SHIPPED TODAY HERO ============== */}
@@ -259,30 +364,18 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
       </section>
     )}
 
-    {/* ============== STATUS BAR ============== */}
-    <section class="ph-status mono" aria-label="Live status">
-      {pulse ? (
-        <div class="ph-status__cell" title={`last pulse ${pulse.at}`}>
-          <span class="ph-status__n" id="ph-pulse-n">{pulse.n}</span>
-          <span class="ph-status__l">SEASON TWO · DAILY PULSE</span>
-        </div>
-      ) : (
-        <div class="ph-status__cell">
-          <span class="ph-status__n">{blockCount}</span>
-          <span class="ph-status__l">BLOCKS PUBLISHED</span>
-        </div>
-      )}
-      <div class="ph-status__cell">
-        <span class="ph-status__n">{shipsLast7}</span>
-        <span class="ph-status__l">SHIPS · 7 DAYS</span>
-      </div>
-      <div class="ph-status__cell">
-        <span class="ph-status__n">{todayCount}</span>
-        <span class="ph-status__l">NEW TODAY</span>
-      </div>
-      <div class="ph-status__cell">
-        <span class="ph-status__n"><span id="ph-temp2">{tempF}</span>°</span>
-        <span class="ph-status__l">EL SEGUNDO · <span id="ph-cond2">{condition}</span></span>
+    {/* ============== DIRECTORY STRIP ============== */}
+    <section class="ph-directory mono" aria-label="The town directory">
+      <a class="ph-directory__title" href="/explore">THE TOWN · {townTotal} SURFACES</a>
+      <div class="ph-directory__chips" aria-label="Directory categories">
+        {directoryChips.map((chip) => {
+          const c = ramp(chip.ch);
+          return (
+            <a class="ph-directory__chip" href="/explore" style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
+              {chip.label}
+            </a>
+          );
+        })}
       </div>
     </section>
 
@@ -308,55 +401,6 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
         )}
       </section>
     )}
-
-    {/* ============== ROOMS ============== */}
-    <section class="ph-sec" aria-label="Rooms">
-      <div class="ph-sechead">
-        <h2 class="ph-sechead__t mono">ROOMS</h2>
-        <a class="ph-sechead__more mono" href="/explore">FULL DIRECTORY →</a>
-      </div>
-      <ul class="ph-rooms">
-        {ROOMS.map((r) => {
-          const c = ramp(r.ch);
-          return (
-            <li>
-              <a class="ph-room" href={r.href} style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
-                <span class="ph-room__tag mono">{r.tag}</span>
-                <span class="ph-room__name">{r.name}</span>
-                <span class="ph-room__desc">{r.desc}</span>
-                <span class="ph-room__go mono" aria-hidden="true">OPEN →</span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-
-    {/* ============== THE TOWN ============== */}
-    <section class="ph-sec" aria-label="The town — every built service">
-      <div class="ph-sechead">
-        <h2 class="ph-sechead__t mono">THE TOWN</h2>
-        <a class="ph-sechead__more mono" href="/explore">ALL {townTotal} SURFACES →</a>
-      </div>
-      <div class="ph-town">
-        {TOWN_PANELS.map((p) => {
-          const c = ramp(p.ch);
-          return (
-            <div class="ph-town__panel" style={`--ch-50:${c.color50};--ch-600:${c.color600};--ch-800:${c.color800};`}>
-              <p class="ph-town__head mono">
-                <span class="ph-town__label">{p.label}</span>
-                {p.count && <span class="ph-town__count">{p.count}</span>}
-              </p>
-              <ul class="ph-town__doors mono">
-                {p.doors.map((d) => (
-                  <li><a href={d.slug} title={d.title}>{d.slug}</a></li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </section>
 
     {/* ============== LATEST ============== */}
     <section class="ph-sec" aria-label="Latest from the broadcast">
@@ -430,9 +474,22 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
           if (n > 0) set('ph-pulse-n', n);
         }).catch(function () {});
     }
+    function refreshCoffee() {
+      fetch('/api/coffee/today', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || d.count == null) return;
+          var n = Number(d.count) || 0;
+          set('ph-coffee-state', n);
+          set('ph-coffee-label', n === 1 ? 'CUP TODAY' : 'CUPS TODAY');
+          set('ph-coffee-ticker', n === 1 ? '1 CUP POURED TODAY' : n + ' CUPS POURED TODAY');
+        }).catch(function () {});
+    }
     clock(); setInterval(clock, 30000);
     setInterval(refreshWeather, 300000);
+    setInterval(refreshCoffee, 60000);
     refreshPulse();
+    refreshCoffee();
 
     // SHIPPED TODAY hero rotation — auto-advance every 6s; pauses on hover
     // and focus, stops entirely for prefers-reduced-motion. Without JS the
@@ -512,7 +569,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
 
 <style>
   .ph {
-    max-width: 1100px;
+    max-width: 1120px;
     margin: 0 auto;
     padding: 0 20px 88px;
     color: var(--pc-ink);
@@ -525,30 +582,258 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     padding: 18px 0 12px; border-bottom: 1.5px solid var(--pc-ink); flex-wrap: wrap;
   }
-  .ph-mast__mark { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; color: var(--pc-ink); }
+  .ph-mast__mark { font-size: 20px; font-weight: 500; letter-spacing: 0; color: var(--pc-ink); }
   .ph-mast__meta { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase; margin: 0; }
   .ph-mast__strong { color: var(--pc-ink); font-weight: 500; }
   .ph-mast__dot { margin: 0 7px; color: var(--pc-rule); }
 
+  /* ============== TELETEXT TICKER ============== */
+  .ph-ticker {
+    margin: 8px 0 0;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .ph-ticker__track {
+    display: flex;
+    width: max-content;
+    animation: phTicker 44s linear infinite;
+  }
+  .ph-ticker:hover .ph-ticker__track { animation-play-state: paused; }
+  .ph-ticker__run {
+    display: flex;
+    align-items: stretch;
+    flex: 0 0 auto;
+  }
+  .ph-ticker__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 7px 14px;
+    border-right: 1.5px solid var(--ch-600);
+    background: var(--ch-50);
+    color: var(--ch-800);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .ph-ticker__code {
+    color: #fff;
+    background: var(--ch-600);
+    border: 1px solid var(--ch-800);
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-weight: 500;
+  }
+  @keyframes phTicker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
   /* ============== LEAD ============== */
   .ph-lead {
     border: 1.5px solid var(--pc-accent); border-left-width: 6px; border-radius: 2px;
-    background: #fff; padding: 18px 20px 14px; margin: 22px 0 0; max-width: 800px;
+    background: #fff; padding: 16px 18px 18px; margin: 8px 0 0;
   }
   .ph-lead__kicker { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-accent); text-transform: uppercase; margin: 0 0 10px; font-weight: 500; }
-  .ph-lead__title { font-size: clamp(26px, 3.4vw, 36px); font-weight: 500; line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 10px; color: var(--pc-ink); }
-  .ph-lead__deck { font-size: clamp(14px, 1.6vw, 16px); line-height: 1.5; font-weight: 400; color: var(--pc-ink-soft); margin: 0 0 14px; max-width: 640px; }
-  .ph-lead__now {
-    display: flex; align-items: baseline; gap: 10px; margin: 14px 0 0; padding-top: 10px;
-    border-top: 1px solid var(--pc-rule-soft); font-size: 11px; letter-spacing: 0.06em;
-    overflow: hidden; white-space: nowrap;
+  .ph-lead__title { font-size: 36px; font-weight: 500; line-height: 1.08; letter-spacing: 0; margin: 0 0 14px; color: var(--pc-ink); max-width: 760px; }
+  .ph-verbs {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
   }
-  .ph-lead__now-tag { font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--pc-accent); }
-  .ph-lead__now a { color: var(--pc-ink-soft); overflow: hidden; text-overflow: ellipsis; }
-  .ph-lead__now a:hover { color: var(--pc-accent); }
-  .ph-lead__links { display: flex; flex-wrap: wrap; gap: 22px; margin: 0; font-size: 12px; letter-spacing: 0.08em; }
-  .ph-lead__links a { color: var(--pc-accent); font-weight: 500; border-bottom: 1.5px solid transparent; padding-bottom: 1px; }
-  .ph-lead__links a:hover { border-bottom-color: currentColor; }
+  .ph-verb {
+    min-height: 104px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 1fr auto;
+    align-items: center;
+    gap: 8px;
+    border: 1.5px solid var(--ch-600);
+    border-left-width: 6px;
+    border-radius: 2px;
+    background: var(--ch-50);
+    padding: 16px;
+    color: var(--ch-800);
+  }
+  .ph-verb:hover, .ph-verb:focus-visible {
+    background: #fff;
+    outline: 2px solid var(--ch-600);
+    outline-offset: -3px;
+  }
+  .ph-verb__word { font-size: 34px; line-height: 1; font-weight: 500; letter-spacing: 0; color: var(--pc-ink); }
+  .ph-verb__arrow { font-size: 34px; line-height: 1; font-weight: 500; color: var(--ch-800); }
+  .ph-verb__note {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  /* ============== ARCADE MARQUEE ============== */
+  .ph-arcade {
+    margin: 8px 0 0;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .ph-arcade__head {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+  .ph-arcade__head > span:first-child { color: var(--pc-ink); font-weight: 500; }
+  .ph-arcade__counter {
+    color: #fff;
+    background: #000080;
+    border: 1px solid #000;
+    border-radius: 2px;
+    padding: 3px 7px;
+    font-weight: 500;
+  }
+  .ph-arcade__links {
+    display: flex;
+    gap: 12px;
+    color: var(--pc-ink-muted);
+  }
+  .ph-arcade__links a { font-weight: 500; }
+  .ph-arcade__links a:hover { color: var(--pc-ink); }
+  .ph-arcade__field {
+    position: relative;
+    overflow: hidden;
+    min-height: 376px;
+    padding: 14px 14px 74px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px),
+      linear-gradient(0deg, rgba(255,255,255,0.12) 1px, transparent 1px),
+      #008080;
+    background-size: 16px 16px;
+  }
+  .ph-arcade__games {
+    position: relative;
+    z-index: 1;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .ph-game {
+    display: block;
+    min-height: 132px;
+    background: #c0c0c0;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    color: #000;
+  }
+  .ph-game:hover, .ph-game:focus-visible {
+    outline: 2px solid #ffff00;
+    outline-offset: 0;
+  }
+  .ph-game__bar {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .ph-game__body {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px;
+  }
+  .ph-game img {
+    display: block;
+    width: 72px;
+    height: 72px;
+    image-rendering: pixelated;
+    background: #fff;
+    border: 2px solid;
+    border-color: #404040 #fff #fff #404040;
+  }
+  .ph-game__text { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+  .ph-game__name { color: #000; font-size: 17px; line-height: 1.12; font-weight: 500; letter-spacing: 0; }
+  .ph-game__kicker { color: #111; font-size: 10px; line-height: 1.25; letter-spacing: 0.08em; text-transform: uppercase; }
+  .ph-arcade__walker {
+    position: absolute;
+    z-index: 0;
+    left: 12px;
+    bottom: 12px;
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    /* transform-only walk — animating `left` forced layout+repaint of the
+       whole marquee every frame (~1.5s/frame in testing) */
+    animation: phWalk 18s linear infinite;
+    will-change: transform;
+    --walk-span: calc(min(100vw, 1100px) - 130px);
+  }
+  @keyframes phWalk {
+    0% { transform: translateX(0) scaleX(1); }
+    45% { transform: translateX(var(--walk-span)) scaleX(1); }
+    50% { transform: translateX(var(--walk-span)) scaleX(-1); }
+    95% { transform: translateX(0) scaleX(-1); }
+    100% { transform: translateX(0) scaleX(1); }
+  }
+
+  /* ============== THE TOWN IS ALIVE ============== */
+  .ph-alive {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 0;
+  }
+  .ph-alive__tile {
+    min-height: 86px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1.5px solid var(--ch-800);
+    border-radius: 2px;
+    background: var(--ch-600);
+    color: #fff;
+    padding: 11px 12px 10px;
+    min-width: 0;
+  }
+  .ph-alive__tile:hover, .ph-alive__tile:focus-visible {
+    outline: 2px solid var(--pc-ink);
+    outline-offset: -3px;
+  }
+  .ph-alive__value {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ph-alive__label {
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.88);
+    overflow-wrap: anywhere;
+  }
 
   /* ============== SHIPPED TODAY HERO ============== */
   .ph-ships {
@@ -578,7 +863,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
     font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--ch-800);
     background: #fff; border: 1px solid var(--ch-600); border-radius: 2px; padding: 2px 6px;
   }
-  .ph-ships__name { font-size: clamp(18px, 2.4vw, 24px); font-weight: 500; line-height: 1.2; letter-spacing: -0.005em; color: var(--pc-ink); }
+  .ph-ships__name { font-size: 24px; font-weight: 500; line-height: 1.2; letter-spacing: 0; color: var(--pc-ink); }
   .ph-ships__name:hover { color: var(--ch-800); }
   .ph-ships__desc { font-size: 13.5px; line-height: 1.45; color: var(--pc-ink-soft); max-width: 680px; }
   .ph-ships__links { display: flex; gap: 18px; margin-top: 6px; font-size: 11px; letter-spacing: 0.1em; }
@@ -593,16 +878,52 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   }
   .ph-ships__dots button[aria-selected="true"] { background: var(--pc-ink); border-color: var(--pc-ink); }
 
-  /* ============== STATUS BAR ============== */
-  .ph-status {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 22px 0 0;
+  /* ============== DIRECTORY STRIP ============== */
+  .ph-directory {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px 14px;
+    align-items: center;
+    margin: 8px 0 0;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+    padding: 10px 12px;
   }
-  .ph-status__cell {
-    border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
-    padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;
+  .ph-directory__title {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    font-weight: 500;
+    white-space: nowrap;
   }
-  .ph-status__n { font-family: var(--pc-font-mono); font-size: 24px; font-weight: 500; color: var(--pc-ink); line-height: 1; letter-spacing: -0.01em; }
-  .ph-status__l { font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase; }
+  .ph-directory__title:hover { color: var(--pc-accent); }
+  .ph-directory__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .ph-directory__chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    background: var(--ch-50);
+    color: var(--ch-800);
+    padding: 4px 7px;
+    font-size: 10px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .ph-directory__chip:hover, .ph-directory__chip:focus-visible {
+    background: #fff;
+    outline: 1.5px solid var(--ch-600);
+    outline-offset: -2px;
+  }
 
   /* ============== DAILY LOOP ============== */
   .ph-daily {
@@ -621,7 +942,7 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   .ph-daily__next { margin-left: auto; color: var(--pc-ink-muted); font-size: 10px; }
 
   /* ============== SECTIONS ============== */
-  .ph-sec { margin: 40px 0 0; }
+  .ph-sec { margin: 22px 0 0; }
   .ph-sechead {
     display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
     padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1.5px solid var(--pc-ink);
@@ -629,52 +950,6 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   .ph-sechead__t { font-size: 12px; font-weight: 500; letter-spacing: 0.12em; color: var(--pc-ink); margin: 0; }
   .ph-sechead__more { font-size: 11px; letter-spacing: 0.08em; color: var(--pc-ink-muted); }
   .ph-sechead__more:hover { color: var(--pc-accent); }
-
-  /* ============== ROOMS ============== */
-  .ph-rooms {
-    list-style: none; margin: 0; padding: 0;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-  }
-  .ph-room {
-    display: flex; flex-direction: column; height: 100%;
-    border: 1.5px solid var(--pc-rule); border-left: 6px solid var(--ch-600); border-radius: 2px;
-    background: #fff; padding: 14px 16px;
-    transition: background 0.12s ease, border-color 0.12s ease;
-  }
-  .ph-room:hover, .ph-room:focus-visible { background: var(--ch-50); border-color: var(--ch-600); outline: none; }
-  .ph-room__tag {
-    align-self: flex-start; font-size: 10px; letter-spacing: 0.12em; font-weight: 500;
-    color: var(--ch-800); background: var(--ch-50); border: 1px solid var(--ch-600); border-radius: 2px;
-    padding: 2px 6px; margin-bottom: 12px;
-  }
-  .ph-room__name { font-size: 18px; font-weight: 500; letter-spacing: -0.005em; color: var(--pc-ink); margin-bottom: 5px; }
-  .ph-room__desc { font-size: 13.5px; line-height: 1.45; font-weight: 400; color: var(--pc-ink-soft); margin-bottom: 14px; }
-  .ph-room__go { margin-top: auto; font-size: 10.5px; letter-spacing: 0.1em; font-weight: 500; color: var(--pc-ink-muted); }
-  .ph-room:hover .ph-room__go, .ph-room:focus-visible .ph-room__go { color: var(--ch-800); }
-
-  /* ============== THE TOWN ============== */
-  .ph-town {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-  }
-  .ph-town__panel {
-    border: 1.5px solid var(--pc-rule); border-top: 3px solid var(--ch-600); border-radius: 2px;
-    background: #fff; padding: 10px 12px 12px;
-  }
-  .ph-town__head {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-    margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--pc-rule-soft);
-  }
-  .ph-town__label { font-size: 10px; letter-spacing: 0.12em; font-weight: 500; color: var(--ch-800); }
-  .ph-town__count { font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted); }
-  .ph-town__doors { list-style: none; margin: 0; padding: 0; }
-  .ph-town__doors a {
-    display: block; padding: 3px 4px; margin: 0 -4px; border-radius: 2px;
-    font-size: 11px; letter-spacing: 0.04em; color: var(--pc-ink-soft);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .ph-town__doors a:hover, .ph-town__doors a:focus-visible {
-    background: var(--ch-50); color: var(--ch-800); outline: none;
-  }
 
   /* ============== LATEST ============== */
   .ph-latest { list-style: none; margin: 0; padding: 0; }
@@ -703,21 +978,48 @@ const description = `An agent-native broadcast from El Segundo, California. ${bl
   .ph-foot__nav a:hover { color: var(--pc-accent); border-bottom-color: currentColor; }
   .ph-foot__note { font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted); margin: 0; }
 
+  @media (prefers-reduced-motion: reduce) {
+    .ph-ticker__track { width: auto; animation: none; }
+    .ph-ticker__run { flex-wrap: wrap; }
+    .ph-ticker__run--copy { display: none; }
+    .ph-arcade__walker { display: none; }
+  }
+
   /* ============== RESPONSIVE ============== */
   @media (max-width: 760px) {
     .ph { padding: 0 16px 72px; }
-    .ph-status { grid-template-columns: repeat(2, 1fr); }
+    .ph-lead__title { font-size: 30px; }
+    .ph-verb__word, .ph-verb__arrow { font-size: 28px; }
+    .ph-arcade__head { grid-template-columns: 1fr; align-items: start; }
+    .ph-arcade__links { flex-wrap: wrap; }
+    .ph-arcade__games { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ph-alive { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ph-directory { grid-template-columns: 1fr; }
+    .ph-directory__chips { justify-content: flex-start; }
     .ph-daily__next { margin-left: 0; width: 100%; }
     .ph-daily__title { display: none; } /* number-only on phones — the room is one tap away */
-    .ph-town { grid-template-columns: repeat(2, 1fr); }
-    .ph-rooms { grid-template-columns: repeat(2, 1fr); }
+    .ph-ships__name { font-size: 20px; }
     .ph-row { grid-template-columns: 56px 46px 1fr; column-gap: 12px; }
     .ph-row__id { display: none; }
   }
   @media (max-width: 440px) {
-    .ph-status { grid-template-columns: 1fr 1fr; }
-    .ph-rooms { grid-template-columns: 1fr; }
-    .ph-town { grid-template-columns: 1fr; }
+    .ph { padding-left: 12px; padding-right: 12px; }
+    .ph-mast { gap: 8px; }
+    .ph-mast__meta { font-size: 10px; letter-spacing: 0.08em; }
+    .ph-ticker__item { min-height: 30px; padding: 6px 10px; font-size: 10px; }
+    .ph-verbs { grid-template-columns: 1fr; }
+    .ph-verb { min-height: 86px; }
+    .ph-arcade__field { min-height: 430px; padding: 10px 10px 66px; }
+    .ph-arcade__games { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .ph-game { min-height: 156px; }
+    .ph-game__body { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 8px; padding: 10px 6px; }
+    .ph-game img { width: 58px; height: 58px; }
+    .ph-game__name { font-size: 14px; }
+    .ph-game__kicker { font-size: 9px; letter-spacing: 0.06em; }
+    .ph-alive { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ph-alive__tile { min-height: 78px; padding: 10px; }
+    .ph-alive__value { font-size: 21px; }
+    .ph-directory__title { white-space: normal; }
     .ph-row { grid-template-columns: 52px 1fr; }
     .ph-row__chan { display: none; }
   }
