@@ -94,3 +94,17 @@ export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
   const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
   return absolute ? `https://pointcast.xyz${path}` : path;
 }
+
+export function productRoutes(product: { slug: string; url: string; brand?: string; category?: string; name?: string; pairsWithMood?: string[] }) {
+  const lane = commerceLane(product);
+  const moods = product.pairsWithMood ?? [];
+  return {
+    detail: productPage(product.slug),
+    checkout: product.url,
+    checkoutHost: checkoutHost(product.url),
+    checkoutPolicy: CHECKOUT_POLICY.mode,
+    sourceKind: sourceKind(product),
+    lane: shopLaneUrl(lane, true),
+    pairings: pairingsUrls(moods),
+  };
+}
