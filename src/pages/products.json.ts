@@ -11,6 +11,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  checkoutRouting,
   checkoutHost,
   isPublicProduct,
   pairingsUrls,
@@ -39,6 +40,7 @@ export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const oldestProduct = products.at(-1)?.data.addedAt ?? null;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
@@ -49,6 +51,12 @@ export const GET: APIRoute = async ({ request }) => {
     description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
     generatedAt: lastModified.toISOString(),
     count: products.length,
+    freshness: {
+      latestProductAddedAt: products[0]?.data.addedAt.toISOString() ?? null,
+      oldestProductAddedAt: oldestProduct?.toISOString() ?? null,
+      sortedBy: 'addedAt-desc',
+      hiddenPolicy: 'draft products are always hidden; unavailable PointCast merch is hidden until active',
+    },
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
     checkoutPolicy: CHECKOUT_POLICY,
@@ -94,6 +102,7 @@ export const GET: APIRoute = async ({ request }) => {
           dek: p.data.dek ?? null,
           url: p.data.url,
           canonical: `https://pointcast.xyz/products/${p.data.slug}`,
+          checkoutRouting: checkoutRouting(p.data),
           checkoutHost: checkoutHost(p.data.url),
           sourceKind: kind,
           sourceLabel: sourceLabel(kind),

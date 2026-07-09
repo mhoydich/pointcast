@@ -8,6 +8,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  checkoutRouting,
   checkoutHost,
   isPublicProduct,
   pairingsUrls,
@@ -35,6 +36,7 @@ export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const oldestProduct = products.at(-1)?.data.addedAt ?? null;
   const countMatching = (pattern: RegExp) =>
     products.filter((product) => pattern.test(product.data.category || product.data.name)).length;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
@@ -52,6 +54,12 @@ export const GET: APIRoute = async ({ request }) => {
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
     blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
+    freshness: {
+      latestProductAddedAt: products[0]?.data.addedAt.toISOString() ?? null,
+      oldestProductAddedAt: oldestProduct?.toISOString() ?? null,
+      sortedBy: 'addedAt-desc',
+      hiddenPolicy: 'draft products are always hidden; unavailable PointCast merch is hidden until active',
+    },
     guides: [
       {
         slug: 'ai-shopify-seo-geo-llm-best-practices-2026',
@@ -108,6 +116,7 @@ export const GET: APIRoute = async ({ request }) => {
         currency: product.data.currency,
         productPage: `https://pointcast.xyz/products/${product.data.slug}`,
         checkoutUrl: product.data.url,
+        checkoutRouting: checkoutRouting(product.data),
         checkoutHost: checkoutHost(product.data.url),
         sourceKind: kind,
         sourceLabel: sourceLabel(kind),

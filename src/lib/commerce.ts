@@ -45,6 +45,22 @@ export function checkoutHost(url: string): string {
   }
 }
 
+export function checkoutRouting(product: { brand?: string; url: string }) {
+  const kind = sourceKind(product);
+  return {
+    mode: CHECKOUT_POLICY.mode,
+    payment: CHECKOUT_POLICY.payment,
+    pii: CHECKOUT_POLICY.pii,
+    pointcastRole: 'catalog-discovery-routing-only',
+    checkoutUrl: product.url,
+    checkoutHost: checkoutHost(product.url),
+    checkoutProvider: sourceLabel(kind),
+    sourceKind: kind,
+    linkRel: 'noopener noreferrer',
+    referrerPolicy: 'no-referrer',
+  };
+}
+
 export function productPage(slug: string): string {
   return `https://pointcast.xyz/products/${slug}`;
 }
