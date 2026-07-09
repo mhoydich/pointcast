@@ -6,6 +6,7 @@ import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  catalogFreshness,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -21,7 +22,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, X-PointCast-Catalog-Updated-At, ETag, Last-Modified',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -35,6 +36,7 @@ export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const freshness = catalogFreshness(products);
   const countMatching = (pattern: RegExp) =>
     products.filter((product) => pattern.test(product.data.category || product.data.name)).length;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
@@ -46,7 +48,9 @@ export const GET: APIRoute = async ({ request }) => {
     version: COMMERCE_VERSION,
     name: 'PointCast Commerce',
     description: 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: lastModified.toISOString(),
+    generatedAt: new Date().toISOString(),
+    catalogUpdatedAt: freshness.catalogUpdatedAt,
+    catalogFreshness: freshness,
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
@@ -134,6 +138,7 @@ export const GET: APIRoute = async ({ request }) => {
     headers: {
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'X-PointCast-Catalog-Updated-At': freshness.catalogUpdatedAt,
       ...CORS_HEADERS,
     },
   });

@@ -94,3 +94,29 @@ export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
   const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
   return absolute ? `https://pointcast.xyz${path}` : path;
 }
+
+export type CatalogFreshnessProduct = {
+  data: {
+    addedAt: Date;
+    availability?: string;
+    brand?: string;
+    url: string;
+  };
+};
+
+export function catalogFreshness(products: CatalogFreshnessProduct[]) {
+  const timestamps = products
+    .map((product) => product.data.addedAt)
+    .filter((date) => date instanceof Date && Number.isFinite(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const newest = timestamps.at(-1) ?? new Date(0);
+  const oldest = timestamps[0] ?? new Date(0);
+
+  return {
+    catalogUpdatedAt: newest.toISOString(),
+    catalogOldestAt: oldest.toISOString(),
+    publicProducts: products.length,
+    inStockProducts: products.filter((product) => product.data.availability === 'in-stock').length,
+    checkoutHosts: Array.from(new Set(products.map((product) => checkoutHost(product.data.url)))).sort(),
+  };
+}
