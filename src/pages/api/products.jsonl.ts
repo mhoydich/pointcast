@@ -12,6 +12,7 @@ import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
 import {
   COMMERCE_VERSION,
+  catalogFreshness,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -40,7 +41,8 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const freshness = catalogFreshness(products);
+  const lastModified = freshness.catalogUpdatedAt;
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -72,6 +74,8 @@ export const GET: APIRoute = async ({ request }) => {
       vibeProfile: p.data.vibeProfile ?? null,
       pairingsUrls: pairingsUrls(moods),
       addedAt: p.data.addedAt.toISOString(),
+      catalogGeneratedAt: freshness.generatedAt.toISOString(),
+      catalogUpdatedAt: freshness.catalogUpdatedAt.toISOString(),
       author: p.data.author,
       source: p.data.source ?? null,
     });

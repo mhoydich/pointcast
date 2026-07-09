@@ -6,6 +6,7 @@ import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  catalogFreshness,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -34,7 +35,8 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const freshness = catalogFreshness(products);
+  const lastModified = freshness.catalogUpdatedAt;
   const countMatching = (pattern: RegExp) =>
     products.filter((product) => pattern.test(product.data.category || product.data.name)).length;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
@@ -46,7 +48,18 @@ export const GET: APIRoute = async ({ request }) => {
     version: COMMERCE_VERSION,
     name: 'PointCast Commerce',
     description: 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: lastModified.toISOString(),
+    generatedAt: freshness.generatedAt.toISOString(),
+    catalogUpdatedAt: freshness.catalogUpdatedAt.toISOString(),
+    catalogFreshness: {
+      generatedAt: freshness.generatedAt.toISOString(),
+      newestProductAddedAt: freshness.catalogUpdatedAt.toISOString(),
+      oldestProductAddedAt: freshness.oldestProductAddedAt.toISOString(),
+      checkoutHosts: freshness.checkoutHosts,
+      sourceCounts: freshness.sourceCounts,
+      laneCounts: freshness.laneCounts,
+      moodCount: freshness.moodCount,
+      visibilityPolicy: 'Public feeds exclude drafts. PointCast merch is hidden unless in stock. Good Feels checkout remains outbound at getgoodfeels.com.',
+    },
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',

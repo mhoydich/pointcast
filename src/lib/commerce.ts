@@ -26,6 +26,20 @@ export const COMMERCE_LANE_LABELS: Record<CommerceLaneSlug, string> = {
   'json-api': 'JSON / API',
 };
 
+type CommerceProductData = {
+  addedAt: Date;
+  availability?: string;
+  brand?: string;
+  category?: string;
+  name?: string;
+  pairsWithMood?: string[];
+  url: string;
+};
+
+type CommerceProductEntry = {
+  data: CommerceProductData;
+};
+
 const SCHEMA_AVAILABILITY: Record<string, string> = {
   'in-stock': 'https://schema.org/InStock',
   'out-of-stock': 'https://schema.org/OutOfStock',
@@ -93,4 +107,36 @@ export function commerceLaneLabel(slug: CommerceLaneSlug): string {
 export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
   const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
   return absolute ? `https://pointcast.xyz${path}` : path;
+}
+
+export function catalogFreshness(products: CommerceProductEntry[], generatedAt = new Date()) {
+  const productDates = products
+    .map((product) => product.data.addedAt)
+    .filter((date) => Number.isFinite(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const oldestProduct = productDates[0] ?? new Date(0);
+  const newestProduct = productDates.at(-1) ?? new Date(0);
+  const hosts = Array.from(new Set(products.map((product) => checkoutHost(product.data.url)))).sort();
+  const sourceKinds = ['good-feels', 'pointcast-merch', 'external'] as const;
+  const lanes = Object.keys(COMMERCE_LANE_LABELS) as CommerceLaneSlug[];
+
+  return {
+    generatedAt,
+    catalogUpdatedAt: newestProduct,
+    oldestProductAddedAt: oldestProduct,
+    checkoutHosts: hosts,
+    sourceCounts: Object.fromEntries(
+      sourceKinds.map((kind) => [
+        kind,
+        products.filter((product) => sourceKind(product.data) === kind).length,
+      ]),
+    ) as Record<ReturnType<typeof sourceKind>, number>,
+    laneCounts: Object.fromEntries(
+      lanes.map((lane) => [
+        lane,
+        products.filter((product) => commerceLane(product.data) === lane).length,
+      ]),
+    ) as Record<CommerceLaneSlug, number>,
+    moodCount: new Set(products.flatMap((product) => product.data.pairsWithMood ?? [])).size,
+  };
 }
