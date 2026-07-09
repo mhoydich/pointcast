@@ -9,6 +9,7 @@ import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  catalogFreshness,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -39,6 +40,7 @@ export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const freshness = catalogFreshness(products);
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
@@ -48,6 +50,7 @@ export const GET: APIRoute = async ({ request }) => {
     name: 'PointCast products catalog',
     description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
     generatedAt: lastModified.toISOString(),
+    freshness,
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
@@ -110,6 +113,7 @@ export const GET: APIRoute = async ({ request }) => {
           pairsWithMood: moods,
           pairingsUrls: pairingsUrls(moods),
           addedAt: p.data.addedAt.toISOString(),
+          syncedAt: p.data.syncedAt?.toISOString() ?? null,
           author: p.data.author,
           source: p.data.source ?? null,
           schemaOrg: {

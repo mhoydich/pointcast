@@ -94,3 +94,26 @@ export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
   const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
   return absolute ? `https://pointcast.xyz${path}` : path;
 }
+
+export function latestDate(dates: Array<Date | undefined>): Date | null {
+  const timestamps = dates
+    .map((date) => date?.getTime())
+    .filter((time): time is number => typeof time === 'number' && Number.isFinite(time));
+
+  if (!timestamps.length) return null;
+  return new Date(Math.max(...timestamps));
+}
+
+export function catalogFreshness(products: Array<{ data: { addedAt: Date; syncedAt?: Date } }>) {
+  const latestProductAddedAt = latestDate(products.map((product) => product.data.addedAt));
+  const latestSyncedAt = latestDate(products.map((product) => product.data.syncedAt));
+
+  return {
+    latestProductAddedAt: latestProductAddedAt?.toISOString() ?? null,
+    latestSyncedAt: latestSyncedAt?.toISOString() ?? null,
+    status: latestSyncedAt ? 'synced' : 'unknown',
+    basis: latestSyncedAt
+      ? 'Product entries carry syncedAt from the source catalog mirror.'
+      : 'Product entries do not yet carry syncedAt; run npm run good-feels:sync to stamp source freshness.',
+  };
+}

@@ -289,6 +289,7 @@ function toPointCastProduct(product, currency) {
       .slice(0, 8),
     vibeProfile: metafieldString(metafields, 'vibe_profile') || undefined,
     addedAt: (product.createdAt || product.updatedAt || runStartedAt).slice(0, 10),
+    syncedAt: runStartedAt,
     author: 'cc',
     source: `Shopify Admin GraphQL sync ${runStartedAt} (${product.id})`,
     draft: product.status !== 'ACTIVE',

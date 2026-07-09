@@ -72,6 +72,7 @@ export const GET: APIRoute = async ({ request }) => {
       vibeProfile: p.data.vibeProfile ?? null,
       pairingsUrls: pairingsUrls(moods),
       addedAt: p.data.addedAt.toISOString(),
+      syncedAt: p.data.syncedAt?.toISOString() ?? null,
       author: p.data.author,
       source: p.data.source ?? null,
     });
