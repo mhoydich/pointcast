@@ -141,6 +141,7 @@ function toPointCastProduct(product) {
     pairsWithMood: pairingsForProduct(product, category),
     vibeProfile: 'good-feels',
     addedAt: (product.published_at || product.created_at || runStartedAt).slice(0, 10),
+    syncedAt: runStartedAt,
     author: 'codex',
     source: `Good Feels public Shopify catalog mirror (${product.id})`,
   });

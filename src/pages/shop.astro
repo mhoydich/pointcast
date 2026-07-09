@@ -9,6 +9,7 @@ import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import {
   CHECKOUT_POLICY,
+  catalogFreshness,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -31,6 +32,7 @@ const seltzerCount = products.filter((p) => /seltzer|drink|mix seltzer/i.test(p.
 const gummyCount = products.filter((p) => /gumm/i.test(p.data.category || p.data.name)).length;
 const enhancerCount = products.filter((p) => /enhancer/i.test(p.data.category || p.data.name)).length;
 const hosts = Array.from(new Set(products.map((p) => checkoutHost(p.data.url)))).sort();
+const catalog = catalogFreshness(products);
 const firstSlugByLane = new Map<string, string>();
 for (const product of products) {
   const lane = commerceLane(product.data);
@@ -76,6 +78,18 @@ const alternates = [
 function price(product: ProductEntry): string {
   if (product.data.priceUsd === undefined) return 'see shop';
   return `$${product.data.priceUsd.toFixed(2)} ${product.data.currency}`;
+}
+
+function shortDateTime(value: string | null): string {
+  if (!value) return 'not recorded';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(new Date(value));
 }
 ---
 
@@ -127,6 +141,21 @@ function price(product: ProductEntry): string {
       <div>
         <dt class="mono">CHECKOUT HOST</dt>
         <dd>{hosts.length === 1 ? hosts[0] : 'external'}</dd>
+      </div>
+    </dl>
+
+    <dl class="freshness" aria-label="Catalog freshness">
+      <div>
+        <dt class="mono">FEED GENERATED</dt>
+        <dd>{shortDateTime(catalog.generatedAt)}</dd>
+      </div>
+      <div>
+        <dt class="mono">SOURCE SYNC</dt>
+        <dd>{shortDateTime(catalog.latestSourceSyncedAt)}</dd>
+      </div>
+      <div>
+        <dt class="mono">FRESHNESS BASIS</dt>
+        <dd>{catalog.freshnessBasis}</dd>
       </div>
     </dl>
 
@@ -420,25 +449,40 @@ function price(product: ProductEntry): string {
       margin: 0 0 18px;
     }
 
-    .stats div {
+    .freshness {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: -8px 0 22px;
+    }
+
+    .stats div,
+    .freshness div {
       min-height: 88px;
       padding: 10px;
       border: 1px solid #d6d4cd;
       background: #fbfaf5;
     }
 
-    .stats dt {
+    .stats dt,
+    .freshness dt {
       margin: 0 0 12px;
       color: #5F5E5A;
       font-size: 9px;
     }
 
-    .stats dd {
+    .stats dd,
+    .freshness dd {
       margin: 0;
       color: #12110E;
       font-size: 19px;
       font-weight: 700;
       overflow-wrap: anywhere;
+    }
+
+    .freshness dd {
+      font-size: 14px;
+      line-height: 1.25;
     }
 
     .lanes {
@@ -783,6 +827,10 @@ function price(product: ProductEntry): string {
       .stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .freshness {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 560px) {
@@ -795,6 +843,7 @@ function price(product: ProductEntry): string {
       }
 
       .stats,
+      .freshness,
       .lanes,
       .coming {
         grid-template-columns: 1fr;

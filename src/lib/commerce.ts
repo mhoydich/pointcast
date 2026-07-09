@@ -97,26 +97,45 @@ export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
 
 export type CatalogFreshnessProduct = {
   data: {
+    slug?: string;
     addedAt: Date;
+    syncedAt?: Date;
     availability?: string;
     brand?: string;
     url: string;
   };
 };
 
-export function catalogFreshness(products: CatalogFreshnessProduct[]) {
-  const timestamps = products
+export function catalogFreshness(products: CatalogFreshnessProduct[], generatedAt = new Date()) {
+  const addedTimestamps = products
     .map((product) => product.data.addedAt)
     .filter((date) => date instanceof Date && Number.isFinite(date.getTime()))
     .sort((a, b) => a.getTime() - b.getTime());
-  const newest = timestamps.at(-1) ?? new Date(0);
-  const oldest = timestamps[0] ?? new Date(0);
+  const syncTimestamps = products
+    .map((product) => product.data.syncedAt)
+    .filter((date): date is Date => date instanceof Date && Number.isFinite(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const newestAddedAt = addedTimestamps.at(-1) ?? null;
+  const oldestAddedAt = addedTimestamps[0] ?? null;
+  const newestSyncedAt = syncTimestamps.at(-1) ?? null;
+  const availabilityCounts = products.reduce<Record<string, number>>((counts, product) => {
+    const availability = product.data.availability ?? 'unknown';
+    counts[availability] = (counts[availability] ?? 0) + 1;
+    return counts;
+  }, {});
+  const checkoutHosts = Array.from(new Set(products.map((product) => checkoutHost(product.data.url)))).sort();
 
   return {
-    catalogUpdatedAt: newest.toISOString(),
-    catalogOldestAt: oldest.toISOString(),
+    generatedAt: generatedAt.toISOString(),
+    catalogUpdatedAt: (newestSyncedAt ?? newestAddedAt ?? generatedAt).toISOString(),
+    catalogOldestAt: oldestAddedAt?.toISOString() ?? null,
+    latestProductAddedAt: newestAddedAt?.toISOString() ?? null,
+    latestSourceSyncedAt: newestSyncedAt?.toISOString() ?? null,
+    freshnessBasis: newestSyncedAt ? 'source-sync' : 'build-time',
     publicProducts: products.length,
     inStockProducts: products.filter((product) => product.data.availability === 'in-stock').length,
-    checkoutHosts: Array.from(new Set(products.map((product) => checkoutHost(product.data.url)))).sort(),
+    productCount: products.length,
+    availabilityCounts,
+    checkoutHosts,
   };
 }

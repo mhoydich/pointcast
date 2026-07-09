@@ -39,8 +39,8 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const lastModified = products[0]?.data.addedAt ?? new Date(0);
   const freshness = catalogFreshness(products);
+  const lastModified = new Date(freshness.catalogUpdatedAt);
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
@@ -114,6 +114,7 @@ export const GET: APIRoute = async ({ request }) => {
           pairsWithMood: moods,
           pairingsUrls: pairingsUrls(moods),
           addedAt: p.data.addedAt.toISOString(),
+          syncedAt: p.data.syncedAt?.toISOString() ?? null,
           author: p.data.author,
           source: p.data.source ?? null,
           schemaOrg: {
