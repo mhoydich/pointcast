@@ -40,6 +40,13 @@ export const GET: APIRoute = async ({ props }) => {
     dek: data.dek ?? null,
     canonical,
     jsonUrl: `${canonical}.json`,
+    links: {
+      html: canonical,
+      self: `${canonical}.json`,
+      catalog: 'https://pointcast.xyz/products.json',
+      shop: 'https://pointcast.xyz/shop.json',
+      checkout: data.url,
+    },
     checkoutUrl: data.url,
     checkoutHost: checkoutHost(data.url),
     checkoutPolicy: CHECKOUT_POLICY,
@@ -88,8 +95,8 @@ export const GET: APIRoute = async ({ props }) => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
-      'Access-Control-Allow-Origin': '*',
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'Access-Control-Allow-Origin': '*',
     },
   });
 };
