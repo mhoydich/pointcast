@@ -16,6 +16,7 @@ import {
   sourceLabel,
 } from '../../lib/commerce';
 import { respondWithConditionalCache } from '../../lib/http-cache';
+import goodFeelsSync from '../../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,6 +39,7 @@ export const GET: APIRoute = async ({ props, request }) => {
   const lane = commerceLane(data);
   const moods = data.pairsWithMood ?? [];
   const canonical = productPage(data.slug);
+  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
 
   const payload = {
     $schema: 'https://pointcast.xyz/products/{slug}.json',
@@ -45,6 +47,12 @@ export const GET: APIRoute = async ({ props, request }) => {
     canonical,
     html: canonical,
     json: `${canonical}.json`,
+    generatedAt: catalogCheckedAt.toISOString(),
+    catalogFreshness: {
+      checkedAt: catalogCheckedAt.toISOString(),
+      sourceUrl: goodFeelsSync.sourceUrl,
+      mirroredProductCount: goodFeelsSync.productCount,
+    },
     checkoutPolicy: CHECKOUT_POLICY,
     product: {
       slug: data.slug,
@@ -99,7 +107,9 @@ export const GET: APIRoute = async ({ props, request }) => {
     body: JSON.stringify(payload, null, 2),
     contentType: 'application/json; charset=utf-8',
     cacheControl: 'public, max-age=300',
-    lastModified: data.addedAt,
+    // Product facts can change without Shopify changing the original publish
+    // date, so conditional requests must follow the latest mirror check.
+    lastModified: catalogCheckedAt,
     headers: { 'X-PointCast-Commerce-Version': COMMERCE_VERSION, ...CORS_HEADERS },
   });
 };
