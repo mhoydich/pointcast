@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v1-2026-05-06';
+export const COMMERCE_VERSION = 'commerce-hub-v1-2026-07-10';
 
 export const CHECKOUT_POLICY = {
   mode: 'outbound-only',
@@ -51,6 +51,10 @@ export function productPage(slug: string): string {
 
 export function pairingsUrls(moods: string[] = []): string[] {
   return moods.map((mood) => `https://pointcast.xyz/pairings/${mood}`);
+}
+
+export function pairingsJsonUrls(moods: string[] = []): string[] {
+  return moods.map((mood) => `https://pointcast.xyz/pairings/${mood}.json`);
 }
 
 export function sourceKind(product: { brand?: string; url: string }): 'good-feels' | 'pointcast-merch' | 'external' {
