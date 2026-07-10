@@ -87,7 +87,10 @@ export const GET: APIRoute = async () => {
   ]);
 
   const productUrls: UrlTuple[] = products
-    .map((p) => [`https://pointcast.xyz/products/${p.data.slug}`, 'daily', '0.82'] satisfies UrlTuple)
+    .flatMap((p) => [
+      [`https://pointcast.xyz/products/${p.data.slug}`, 'daily', '0.82'] satisfies UrlTuple,
+      [`https://pointcast.xyz/products/${p.data.slug}.json`, 'daily', '0.8'] satisfies UrlTuple,
+    ])
     .sort((a, b) => a[0].localeCompare(b[0]));
 
   const moodSet = new Set<string>();
