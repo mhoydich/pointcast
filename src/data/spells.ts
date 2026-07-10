@@ -399,6 +399,42 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BATCH 13 ─────────────────────────────────────────────────
+  {
+    id: 'comet',
+    label: 'comet',
+    blurb: 'A bright comet tears across the sky, trailing light.',
+    glyph: '☄️',
+    kind: 'burst',
+    durationMs: 2400,
+    accent: '#fdf2d6',
+  },
+  {
+    id: 'cloud',
+    label: 'cloud',
+    blurb: 'A fluffy cloud drifts slowly across the top of the page. Unbothered.',
+    glyph: '☁️',
+    kind: 'companion',
+    durationMs: 80_000,
+    accent: '#b8d4f0',
+  },
+  {
+    id: 'sunrise',
+    label: 'sunrise',
+    blurb: 'A warm sunrise band rises from the bottom of the viewport. Morning is here.',
+    glyph: '🌅',
+    kind: 'ambient',
+    accent: '#c4952e',
+  },
+  {
+    id: 'typewriter',
+    label: 'typewriter',
+    blurb: 'A blinking cursor sits quietly in the corner, waiting.',
+    glyph: '⌨️',
+    kind: 'ambient',
+    accent: '#1f1b15',
+  },
 ];
 
 /** Lookup helper. */
