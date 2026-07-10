@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v1-2026-05-06';
+export const COMMERCE_VERSION = 'commerce-hub-v1-2026-07-10';
 
 export const CHECKOUT_POLICY = {
   mode: 'outbound-only',
@@ -43,6 +43,19 @@ export function checkoutHost(url: string): string {
   } catch {
     return 'external checkout';
   }
+}
+
+export function checkoutRoute(url: string) {
+  const host = checkoutHost(url);
+  return {
+    mode: CHECKOUT_POLICY.mode,
+    url,
+    host,
+    destination: host === 'external checkout' ? 'external storefront' : host,
+    payment: CHECKOUT_POLICY.payment,
+    pii: CHECKOUT_POLICY.pii,
+    pointcastRole: 'discovery-and-routing',
+  };
 }
 
 export function productPage(slug: string): string {
