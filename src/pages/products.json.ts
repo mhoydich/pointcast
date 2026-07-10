@@ -88,6 +88,7 @@ export const GET: APIRoute = async () => {
           dek: p.data.dek ?? null,
           url: p.data.url,
           canonical: `https://pointcast.xyz/products/${p.data.slug}`,
+          jsonUrl: `https://pointcast.xyz/products/${p.data.slug}.json`,
           checkoutHost: checkoutHost(p.data.url),
           sourceKind: kind,
           sourceLabel: sourceLabel(kind),

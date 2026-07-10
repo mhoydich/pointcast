@@ -87,7 +87,10 @@ export const GET: APIRoute = async () => {
     ...products.flatMap(({ data }) => data.pairsWithMood ?? []),
   ])).sort();
   const commerceUrls = [
-    ...products.map(({ data }) => [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75']),
+    ...products.flatMap(({ data }) => [
+      [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75'],
+      [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72'],
+    ]),
     ...moods.flatMap((mood) => [
       [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72'],
       [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7'],
