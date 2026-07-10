@@ -1,6 +1,6 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { GOAL_PRESETS, GOAL_TYPE_LABELS, HORIZON_BANDS, MACHINE_LOOPS, MACHINE_META, MACHINE_NOTES, MACHINE_PRINCIPLES, SEED_GOALS, type GoalType } from '../lib/goalMachine';
+import { GOAL_TYPE_LABELS, HORIZON_BANDS, MACHINE_LOOPS, MACHINE_META, MACHINE_NOTES, MACHINE_PRINCIPLES, SEED_GOALS, type GoalType } from '../lib/goalMachine';
 
 const title = `${MACHINE_META.title} — ${MACHINE_META.subtitle}`;
 const description = MACHINE_META.thesis;
@@ -16,12 +16,11 @@ const jsonLd = {
 };
 
 const goalTypeKeys = Object.keys(GOAL_TYPE_LABELS) as GoalType[];
-const goalPresetEntries = Object.entries(GOAL_PRESETS);
 ---
 
 <BlockLayout title={title} description={description} jsonLd={jsonLd}
   alternates={[{ type: 'application/json', href: '/goal.json', title: 'Goal machine (JSON)' }]}>
-  <div class="page" data-goal-presets={JSON.stringify(GOAL_PRESETS)}>
+  <div class="page">
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a><span aria-hidden="true">/</span>
       <a href="/university-of-el-segundo">university-of-el-segundo</a><span aria-hidden="true">/</span>
@@ -54,13 +53,6 @@ const goalPresetEntries = Object.entries(GOAL_PRESETS);
       <p class="kicker">SET IT</p>
       <h2>One goal. Declare it.</h2>
       <p class="lede">All fields are stored in this browser only. Nothing leaves your device until you log a corresponding ledger entry at <a href="/commons">/commons</a>.</p>
-      <div class="presets" aria-label="Goal presets">
-        <span>Preset jumps</span>
-        {goalPresetEntries.map(([id, preset]) => (
-          <a href={`/goal?preset=${id}#setup`}>{preset.label}</a>
-        ))}
-      </div>
-      <p class="preset-status" id="preset-status" aria-live="polite"></p>
       <form class="form" id="goal-form">
         <label>The goal (one sentence)<input name="title" required maxlength="180" placeholder="e.g., First Bench at Hilltop, built and open by 2026-08-01." /></label>
         <label>Why<input name="why" required maxlength="240" placeholder="Why this. Why now." /></label>
@@ -195,13 +187,6 @@ const goalPresetEntries = Object.entries(GOAL_PRESETS);
   .form { display: grid; gap: 12px; max-width: 720px; }
   .form label { display: flex; flex-direction: column; gap: 5px; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--gm-ink); }
   .form input, .form select { font-family: inherit; font-size: 15px; padding: 10px 12px; border: 2px solid var(--gm-ink); background: #fff; color: var(--gm-ink); border-radius: 0; }
-  .presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
-  .presets span,
-  .presets a { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
-  .presets span { color: #5a5450; margin-right: 4px; }
-  .presets a { padding: 9px 11px; background: #fff; color: var(--gm-ink); border: 2px solid var(--gm-ink); text-decoration: none; }
-  .presets a:hover { background: var(--gm-mustard); }
-  .preset-status { min-height: 18px; margin: -4px 0 12px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gm-rust); }
 
   .loop-list, .band-list, .seed-list, .rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   .loop { padding: 14px 16px; background: #fff; border: 2px solid var(--gm-ink); display: grid; gap: 6px; }
@@ -270,24 +255,6 @@ const goalPresetEntries = Object.entries(GOAL_PRESETS);
     for (const b of bands) if (daysIn < b) return b;
     return null;
   }
-  function readPresets() {
-    const raw = document.querySelector('.page')?.getAttribute('data-goal-presets') || '{}';
-    try { return JSON.parse(raw); } catch { return {}; }
-  }
-  function applyPresetFromUrl() {
-    const form = document.getElementById('goal-form');
-    if (!form || form.dataset.presetApplied === '1') return;
-    const id = new URLSearchParams(window.location.search).get('preset');
-    const preset = id ? readPresets()[id] : null;
-    if (!preset) return;
-    for (const key of ['title', 'why', 'type', 'dailyAction', 'horizon', 'cohortPartner', 'triggerCondition']) {
-      const field = form.elements[key];
-      if (field && preset[key] !== undefined) field.value = String(preset[key]);
-    }
-    form.dataset.presetApplied = '1';
-    const status = document.getElementById('preset-status');
-    if (status) status.textContent = `${preset.label || 'Goal preset'} loaded. Review it, then set the goal.`;
-  }
   function render() {
     const dashEl = document.getElementById('dashboard');
     const actionsEl = document.getElementById('actions');
@@ -339,7 +306,6 @@ const goalPresetEntries = Object.entries(GOAL_PRESETS);
     if (document.body.dataset.goalBound === '1') { render(); return; }
     document.body.dataset.goalBound = '1';
     const form = document.getElementById('goal-form');
-    applyPresetFromUrl();
     if (form) form.addEventListener('submit', (ev) => {
       ev.preventDefault();
       const fd = new FormData(form);

@@ -11,7 +11,6 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
-  checkoutRoute,
   checkoutHost,
   isPublicProduct,
   pairingsUrls,
@@ -20,14 +19,12 @@ import {
   sourceKind,
   sourceLabel,
 } from '../lib/commerce';
-import { respondWithConditionalCache } from '../lib/http-cache';
-import goodFeelsSync from '../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -37,11 +34,8 @@ export const OPTIONS: APIRoute = async () => {
   });
 };
 
-export const GET: APIRoute = async ({ request }) => {
-  const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
-    .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
-  const lastModified = catalogCheckedAt;
+export const GET: APIRoute = async () => {
+  const products = await getCollection('products', ({ data }) => isPublicProduct(data));
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
@@ -50,21 +44,11 @@ export const GET: APIRoute = async ({ request }) => {
     version: COMMERCE_VERSION,
     name: 'PointCast products catalog',
     description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: catalogCheckedAt.toISOString(),
-    catalogFreshness: {
-      checkedAt: catalogCheckedAt.toISOString(),
-      sourceUrl: goodFeelsSync.sourceUrl,
-      mirroredProductCount: goodFeelsSync.productCount,
-    },
+    generatedAt: new Date().toISOString(),
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
     checkoutPolicy: CHECKOUT_POLICY,
-    guide: {
-      title: 'AI Shopify SEO, GEO, and LLM best practices for 2026',
-      url: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
-      summary: 'Best-practices guide for AI-readable Shopify product catalogs, Product schema, Shopify Catalog readiness, JSON feeds, and outbound checkout mirrors.',
-    },
     seller: {
       name: 'Good Feels',
       url: 'https://getgoodfeels.com',
@@ -90,6 +74,7 @@ export const GET: APIRoute = async ({ request }) => {
       },
     ],
     products: products
+      .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime())
       .map((p) => {
         const kind = sourceKind(p.data);
         const lane = commerceLane(p.data);
@@ -102,9 +87,7 @@ export const GET: APIRoute = async ({ request }) => {
           dek: p.data.dek ?? null,
           url: p.data.url,
           canonical: `https://pointcast.xyz/products/${p.data.slug}`,
-          json: `https://pointcast.xyz/products/${p.data.slug}.json`,
           checkoutHost: checkoutHost(p.data.url),
-          checkout: checkoutRoute(p.data.url),
           sourceKind: kind,
           sourceLabel: sourceLabel(kind),
           laneSlug: lane,
@@ -147,14 +130,11 @@ export const GET: APIRoute = async ({ request }) => {
     } : {}),
   };
 
-  const body = JSON.stringify(payload, null, 2);
-  return respondWithConditionalCache({
-    request,
-    body,
-    contentType: 'application/json; charset=utf-8',
-    cacheControl: 'public, max-age=300',
-    lastModified,
+  return new Response(JSON.stringify(payload, null, 2), {
+    status: 200,
     headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,

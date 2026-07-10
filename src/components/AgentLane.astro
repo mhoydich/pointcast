@@ -67,11 +67,7 @@
 
   <div class="al__strip">
     <span class="al__stat mono">live: <strong id="al-count">—</strong></span>
-    <span class="al__stat al__stat--tail mono">
-      events:
-      <span class="al__chips" id="al-chips" aria-live="polite"></span>
-      <span class="al__rate mono"><strong id="al-rate">0</strong>/min</span>
-    </span>
+    <span class="al__stat mono">events tail · <span id="al-tail">— stream open —</span></span>
     <span class="al__stat mono">→ <a href="/town">/town</a> · <a href="/agents.json">/agents.json</a> · <a href="/llms.txt">/llms.txt</a></span>
   </div>
 </aside>
@@ -98,57 +94,6 @@
       .catch(function () {});
   }
 
-  var chipsEl = document.getElementById('al-chips');
-  var rateEl = document.getElementById('al-rate');
-  // Recent event timestamps for events/min calculation
-  var recentEventTs = [];
-  // Color per event type
-  var TYPE_COLORS = {
-    tap: '#a8ff3a',
-    ring: '#ff8a4a',
-    sing: '#5fbafd',
-    bell: '#ffd400',
-    snare: '#cfc6df',
-    kick: '#ff5f7a',
-    pad: '#a8ff3a',
-    lead: '#ffd400'
-  };
-
-  function chipFor(type) {
-    var span = document.createElement('span');
-    span.className = 'al__chip mono';
-    span.textContent = type || '?';
-    var c = TYPE_COLORS[type] || '#a8ff3a';
-    span.style.color = c;
-    span.style.borderColor = c;
-    return span;
-  }
-
-  function pruneRate() {
-    var cutoff = Date.now() - 60000;
-    while (recentEventTs.length && recentEventTs[0] < cutoff) recentEventTs.shift();
-    if (rateEl) rateEl.textContent = String(recentEventTs.length);
-  }
-
-  function pushChip(type, t) {
-    if (!chipsEl) return;
-    recentEventTs.push(t || Date.now());
-    pruneRate();
-    var chip = chipFor(type);
-    chipsEl.appendChild(chip);
-    // Fade-in
-    requestAnimationFrame(function () { chip.classList.add('al__chip--in'); });
-    // Cap visible chips at 4 — older ones fade + remove
-    while (chipsEl.children.length > 4) {
-      var oldChip = chipsEl.firstElementChild;
-      if (!oldChip) break;
-      oldChip.classList.add('al__chip--out');
-      (function (c) { setTimeout(function () { try { c.remove(); } catch (e) {} }, 320); })(oldChip);
-      // also remove from count immediately so we don't re-fade
-      chipsEl.removeChild(oldChip);
-    }
-  }
-
   var lastTs = Date.now() - 6000;
   function pollSounds() {
     fetch('/api/sounds?since=' + lastTs, { cache: 'no-store' })
@@ -156,12 +101,11 @@
       .then(function (data) {
         if (!data) return;
         var events = Array.isArray(data.events) ? data.events : [];
-        if (!events.length) { pruneRate(); return; }
+        if (!events.length) return;
         lastTs = events[events.length - 1].t || Date.now();
-        // Push the most recent up-to-3 events as chips
-        events.slice(-3).forEach(function (ev) {
-          pushChip(ev.type || '?', ev.t || Date.now());
-        });
+        var last = events[events.length - 1];
+        var pid = (last.pid || '').slice(0, 8) || '—';
+        tailEl.textContent = 'type=' + (last.type || '?') + ' · pid=' + pid;
       })
       .catch(function () {});
   }
@@ -170,8 +114,6 @@
   pollSounds();
   setInterval(pollVisit, 8000);
   setInterval(pollSounds, 2000);
-  // Refresh events/min readout independently so it ages even with no new events
-  setInterval(pruneRate, 5000);
 })();
 </script>
 
@@ -199,37 +141,8 @@
   .al__card-eyebrow { font-family: 'JetBrains Mono Variable', monospace; font-size: 9px; letter-spacing: 0.22em; color: #ff8a4a; }
   .al__card-title { font-family: 'JetBrains Mono Variable', monospace; font-size: 13px; letter-spacing: 0.06em; color: #a8ff3a; font-weight: 700; }
   .al__card-note { font-size: 12px; line-height: 1.4; color: #cfc6df; }
-  .al__strip { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 12px; background: #0a0a0a; border: 1px dashed #3b6e3b; font-size: 11px; letter-spacing: 0.14em; color: #cfc6df; align-items: center; }
+  .al__strip { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 12px; background: #0a0a0a; border: 1px dashed #3b6e3b; font-size: 11px; letter-spacing: 0.14em; color: #cfc6df; }
   .al__stat strong { color: #a8ff3a; }
   .al__stat a { color: #a8ff3a; text-decoration: none; }
   .al__stat a:hover { text-decoration: underline; }
-  .al__stat--tail { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
-  .al__chips {
-    display: inline-flex;
-    gap: 4px;
-    flex-wrap: nowrap;
-    overflow: hidden;
-  }
-  .al__chip {
-    padding: 2px 6px;
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    font-size: 9px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    background: rgba(168, 255, 58, 0.04);
-    opacity: 0;
-    transform: translateX(8px) scale(0.9);
-    transition: opacity 240ms, transform 240ms;
-    flex: none;
-  }
-  .al__chip--in {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  .al__chip--out {
-    opacity: 0;
-    transform: translateX(-8px) scale(0.9);
-  }
-  .al__rate { color: #cfc6df; font-size: 10px; opacity: 0.85; margin-left: auto; }
 </style>

@@ -14,7 +14,6 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
-  checkoutRoute,
   checkoutHost,
   isPublicProduct,
   pairingsUrls,
@@ -22,14 +21,12 @@ import {
   sourceKind,
   sourceLabel,
 } from '../../lib/commerce';
-import { respondWithConditionalCache } from '../../lib/http-cache';
-import goodFeelsSync from '../../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -39,11 +36,9 @@ export const OPTIONS: APIRoute = async () => {
   });
 };
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
-  const lastModified = catalogCheckedAt;
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -56,11 +51,9 @@ export const GET: APIRoute = async ({ request }) => {
       description: p.data.description,
       dek: p.data.dek ?? null,
       productPage: `https://pointcast.xyz/products/${p.data.slug}`,
-      productJson: `https://pointcast.xyz/products/${p.data.slug}.json`,
       shopUrl: p.data.url,
       checkoutUrl: p.data.url,
       checkoutHost: checkoutHost(p.data.url),
-      checkout: checkoutRoute(p.data.url),
       sourceKind: kind,
       sourceLabel: sourceLabel(kind),
       laneSlug: lane,
@@ -79,17 +72,14 @@ export const GET: APIRoute = async ({ request }) => {
       addedAt: p.data.addedAt.toISOString(),
       author: p.data.author,
       source: p.data.source ?? null,
-      catalogCheckedAt: catalogCheckedAt.toISOString(),
     });
   }).join('\n') + '\n';
 
-  return respondWithConditionalCache({
-    request,
-    body: lines,
-    contentType: 'application/x-ndjson; charset=utf-8',
-    cacheControl: 'public, max-age=300',
-    lastModified,
+  return new Response(lines, {
+    status: 200,
     headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,

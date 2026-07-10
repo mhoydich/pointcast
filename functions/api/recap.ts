@@ -61,16 +61,6 @@ function toSummary(recap: WeeklyRecap): WeeklyRecapSummary {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  // House kv-unbound pattern (see drop.ts / checkin.ts): an absent binding
-  // must degrade to an honest 503, never throw into a Cloudflare 1101.
-  if (!env.RECAPS) {
-    return jsonResponse(
-      { ok: false, reason: 'kv-unbound', hint: 'bind RECAPS in wrangler.toml, then redeploy' },
-      503,
-      { 'Cache-Control': 'no-store' },
-    );
-  }
-
   const url = new URL(request.url);
   const weekParam = url.searchParams.get('week');
   const recalc = url.searchParams.get('recalc') === 'true';

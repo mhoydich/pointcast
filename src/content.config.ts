@@ -285,26 +285,6 @@ const blocks = defineCollection({
     mood: z.string().regex(/^[a-z0-9][a-z0-9-]{0,38}$/, 'mood must be lowercase-hyphen slug, max 40 chars').optional(),
 
     draft: z.boolean().default(false),
-
-    /**
-     * Article quality gate (Mike 2026-05-12: "articles are eh").
-     *
-     * `featured: true` is the OPT-IN flag that lets a block claim the
-     * homepage LEAD slot. Without it the LEAD chain goes:
-     *   1. Morning Hero (data/morning-hero.json, has entry for today)
-     *   2. Ship-as-lead (recent-ships.json — most recent feature PR)
-     *   3. Latest featured block (this flag = true)
-     *   4. Last-resort fallback (latest block of any kind)
-     *
-     * Default false means generic agent-authored articles do NOT
-     * automatically claim the hero. Only blocks Mike or an agent
-     * explicitly marks featured: true can take the LEAD over a ship.
-     *
-     * Set when: the block is genuinely good and represents the
-     * editorial moment. Honor system; codex-review can enforce
-     * if it ever gets abused.
-     */
-    featured: z.boolean().default(false),
   }),
 });
 

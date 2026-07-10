@@ -8,7 +8,6 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
-  checkoutRoute,
   checkoutHost,
   isPublicProduct,
   pairingsUrls,
@@ -16,14 +15,12 @@ import {
   sourceKind,
   sourceLabel,
 } from '../lib/commerce';
-import { respondWithConditionalCache } from '../lib/http-cache';
-import goodFeelsSync from '../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -33,11 +30,9 @@ export const OPTIONS: APIRoute = async () => {
   });
 };
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
-  const lastModified = catalogCheckedAt;
   const countMatching = (pattern: RegExp) =>
     products.filter((product) => pattern.test(product.data.category || product.data.name)).length;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
@@ -49,27 +44,12 @@ export const GET: APIRoute = async ({ request }) => {
     version: COMMERCE_VERSION,
     name: 'PointCast Commerce',
     description: 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: catalogCheckedAt.toISOString(),
-    catalogFreshness: {
-      checkedAt: catalogCheckedAt.toISOString(),
-      sourceUrl: goodFeelsSync.sourceUrl,
-      mirroredProductCount: goodFeelsSync.productCount,
-    },
+    generatedAt: new Date().toISOString(),
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
-    pairingsJson: 'https://pointcast.xyz/pairings.json',
     blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
-    guides: [
-      {
-        slug: 'ai-shopify-seo-geo-llm-best-practices-2026',
-        title: 'AI Shopify SEO, GEO, and LLM best practices for 2026',
-        url: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
-        topics: ['shopify', 'seo', 'generative-engine-optimization', 'llm', 'structured-data', 'outbound-checkout'],
-        summary: 'Practical guide for building AI-readable Shopify commerce while keeping source catalog facts and checkout ownership clear.',
-      },
-    ],
     count: products.length,
     sources: [
       {
@@ -99,7 +79,7 @@ export const GET: APIRoute = async ({ request }) => {
       { slug: 'enhancers', label: commerceLaneLabel('enhancers'), url: shopLaneUrl('enhancers', true), count: countMatching(/enhancer/i), sourceKind: 'good-feels', status: 'live', description: 'Beverage enhancers and drops.' },
       { slug: 'pointcast-merch', label: commerceLaneLabel('pointcast-merch'), url: shopLaneUrl('pointcast-merch', true), count: countSource('pointcast-merch'), sourceKind: 'pointcast-merch', status: 'coming-soon', description: 'Draft or unavailable PointCast merch stays hidden until active.' },
       { slug: 'pairings', label: commerceLaneLabel('pairings'), url: 'https://pointcast.xyz/pairings', count: moodSlugs.length, sourceKind: 'pointcast', status: 'live', description: 'Mood routes that cross-index products.' },
-      { slug: 'json-api', label: commerceLaneLabel('json-api'), url: shopLaneUrl('json-api', true), count: 5, sourceKind: 'pointcast', status: 'live', description: 'Shop JSON, products JSON, pairings JSON, products JSONL, and blocks JSONL.' },
+      { slug: 'json-api', label: commerceLaneLabel('json-api'), url: shopLaneUrl('json-api', true), count: 4, sourceKind: 'pointcast', status: 'live', description: 'Shop JSON, products JSON, products JSONL, and blocks JSONL.' },
     ],
     products: products.map((product) => {
       const kind = sourceKind(product.data);
@@ -116,10 +96,8 @@ export const GET: APIRoute = async ({ request }) => {
         priceUsd: product.data.priceUsd ?? null,
         currency: product.data.currency,
         productPage: `https://pointcast.xyz/products/${product.data.slug}`,
-        productJson: `https://pointcast.xyz/products/${product.data.slug}.json`,
         checkoutUrl: product.data.url,
         checkoutHost: checkoutHost(product.data.url),
-        checkout: checkoutRoute(product.data.url),
         sourceKind: kind,
         sourceLabel: sourceLabel(kind),
         laneSlug: lane,
@@ -135,14 +113,11 @@ export const GET: APIRoute = async ({ request }) => {
     }),
   };
 
-  const body = JSON.stringify(payload, null, 2);
-  return respondWithConditionalCache({
-    request,
-    body,
-    contentType: 'application/json; charset=utf-8',
-    cacheControl: 'public, max-age=300',
-    lastModified,
+  return new Response(JSON.stringify(payload, null, 2), {
+    status: 200,
     headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
       ...CORS_HEADERS,

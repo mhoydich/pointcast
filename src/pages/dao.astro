@@ -153,13 +153,6 @@ function fmtDate(iso: string) {
   }).format(new Date(iso)) + ' UTC';
 }
 
-// A proposal past its close date renders as archive, not live-vote theater.
-// Build-time check here; a runtime re-check below covers stale deploys.
-const buildNow = Date.now();
-const isClosed = (p: (typeof PROPOSALS)[number]) => +new Date(p.closesAt) < buildNow;
-const liveCount = PROPOSALS.filter((p) => !isClosed(p)).length;
-const archivedCount = PROPOSALS.length - liveCount;
-
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -206,34 +199,20 @@ const jsonLd = {
         no moderation burden. Every position is a signed binary choice.
       </p>
       <dl class="facts">
-        <div><dt class="mono">PROPOSALS</dt><dd>{liveCount} live · {archivedCount} archived</dd></div>
+        <div><dt class="mono">PROPOSALS LIVE</dt><dd>{PROPOSALS.length}</dd></div>
         <div><dt class="mono">VOTING</dt><dd>Beacon-signed message</dd></div>
         <div><dt class="mono">ELIGIBILITY</dt><dd>Visit Nouns FA2 / DRUM</dd></div>
         <div><dt class="mono">BACKEND</dt><dd id="dao-backend-status">v1 · local</dd></div>
       </dl>
     </header>
 
-    {liveCount === 0 && (
-      <p class="dao-quiet">
-        No open votes right now. Past proposals stay readable below — new ones
-        land on <a href="/wire">the wire</a> first.
-      </p>
-    )}
-
-    <section class="proposals" aria-label="Proposals">
+    <section class="proposals" aria-label="Active proposals">
       {PROPOSALS.map((p) => (
-        <article
-          class={`prop${isClosed(p) ? ' prop--closed' : ''}`}
-          id={p.id}
-          data-proposal={p.id}
-          data-closes-at={p.closesAt}
-        >
+        <article class="prop" id={p.id} data-proposal={p.id}>
           <header class="prop__head">
             <span class="prop__id mono">{p.id}</span>
             <span class={`prop__kind mono prop__kind--${p.kind}`}>{p.kind.toUpperCase()}</span>
-            <span class="prop__window mono" data-window={p.id}>
-              {isClosed(p) ? 'CLOSED' : 'CLOSES'} · {fmtDate(p.closesAt)}
-            </span>
+            <span class="prop__window mono">CLOSES · {fmtDate(p.closesAt)}</span>
           </header>
           <h2 class="prop__title">{p.title}</h2>
           <p class="prop__summary">{p.summary}</p>
@@ -252,16 +231,13 @@ const jsonLd = {
                 data-proposal={p.id}
                 data-vote={o.code}
                 data-consequence={o.consequence}
-                disabled={isClosed(p)}
               >
                 <span class="prop__option-label">{o.label}</span>
                 <span class="prop__option-consequence">{o.consequence}</span>
               </button>
             ))}
           </div>
-          <p class="prop__status mono" data-vote-status={p.id}>
-            {isClosed(p) ? 'VOTING CLOSED · ARCHIVED' : 'NOT YET VOTED'}
-          </p>
+          <p class="prop__status mono" data-vote-status={p.id}>NOT YET VOTED</p>
         </article>
       ))}
     </section>
@@ -374,29 +350,6 @@ const jsonLd = {
       });
 
       renderStatus();
-    })();
-  </script>
-
-  <script is:inline>
-    // Runtime close-state re-check: a deploy built before a proposal's close
-    // date would otherwise keep rendering it as live forever (prod sat 25
-    // days stale once). The build-time state is the fast path; this corrects.
-    (function () {
-      'use strict';
-      var now = Date.now();
-      document.querySelectorAll('[data-closes-at]').forEach(function (art) {
-        var closes = Date.parse(art.getAttribute('data-closes-at') || '');
-        if (!closes || closes >= now || art.classList.contains('prop--closed')) return;
-        art.classList.add('prop--closed');
-        var pid = art.getAttribute('data-proposal');
-        var win = art.querySelector('[data-window="' + pid + '"]');
-        if (win) win.textContent = win.textContent.replace(/^CLOSES/, 'CLOSED');
-        art.querySelectorAll('.prop__option').forEach(function (b) { b.disabled = true; });
-        var status = art.querySelector('[data-vote-status="' + pid + '"]');
-        if (status && /NOT YET VOTED/.test(status.textContent)) {
-          status.textContent = 'VOTING CLOSED · ARCHIVED';
-        }
-      });
     })();
   </script>
 </BlockLayout>
@@ -671,29 +624,6 @@ const jsonLd = {
     background: #E7F4EF;
     color: #074638;
     border-color: #0F6E56;
-  }
-
-  /* ═════ ARCHIVED PROPOSALS ═════ */
-  .dao-quiet {
-    margin: 18px 0 0;
-    padding: 12px 14px;
-    border: 1.5px solid var(--pc-rule);
-    border-left-width: 6px;
-    border-radius: 2px;
-    background: #fafaf8;
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--pc-ink-soft);
-  }
-  .dao-quiet a { color: var(--pc-accent); text-decoration: none; }
-  .dao-quiet a:hover { text-decoration: underline; }
-
-  .prop--closed { opacity: 0.82; }
-  .prop--closed .prop__window { color: var(--pc-ink-muted); }
-  .prop--closed .prop__option {
-    opacity: 0.55;
-    cursor: not-allowed;
-    pointer-events: none;
   }
 
   /* ═════ PRINCIPLES ═════ */

@@ -1,62 +1,47 @@
 ---
 /**
- * FooterBar — v5: omnibox-first command line.
+ * FooterBar — v4 of the persistent dock.
  *
- * Mike 2026-05-07 (after the Home v2027 rebuild): "feel free to rethink
- * the footer bar in light of the changes. that's a seemingly important
- * long term feature, for navigation, control, communication, etc."
+ * Mike 2026-04-29: "take a big pass at the footer bar, eventually we
+ * want that to federate and have tools like ai queries, agents, etc,
+ * make it neat almost collectible, of course, use nouns, etc, think
+ * best practices, first principles, lets do great things".
  *
- * v4 was good architecture but the visual hierarchy worked against it.
- * The omnibox is the killer feature (one input that navigates, asks,
- * casts spells, pings agents) but it shared the bar with 4 decorative
- * noun stamps that pulled the eye away. With Home v2027 carrying
- * Operating Mode in the page itself, the footer no longer has to surface
- * what's happening — it can refocus on input, not display.
+ * Big think (v4):
+ *   - The bar IS your KIT — like a Stardew toolbar or a Game Boy
+ *     cartridge tray. Each slot is a numbered, noun-stamped tile.
+ *     Adding a tool = adding to your collection, not adding to a UI.
+ *   - Federation lives on the bar, not buried, so peers, friends'
+ *     agents, and shared rooms are first-class kit (data-driven via
+ *     src/data/dock-kit.ts + src/data/federation-peers.ts).
+ *   - AI queries are real — they POST to /api/ping (the inbox the
+ *     residents already poll). Visitor → cast inbox, no fake stream.
+ *   - Stamps use noun.pics/{seed}.svg for real Visit-Nouns-FA2 nouns
+ *     (per the no-procedural-lookalikes rule).
  *
- * v5 changes (surgical, not a rewrite):
+ * ZONES (three, unchanged from v3):
+ *   LEFT   you (noun + mood) → opens menu (kit binder)
+ *   CENTER omnibox + mode pill (GO·ASK·SAY·AGT) (⌘K)
+ *   RIGHT  KIT strip (4 stamps) · ON AIR · ≡
  *
- *   1. The 4 noun-stamp KIT buttons collapse into ONE `KIT` trigger that
- *      opens a small picker popover. Same four trays — Room / Ask /
- *      Agent / Fed — reached through one button instead of four. Frees
- *      ~200px of bar width for the omnibox. Existing trays unchanged.
+ * KIT (data → DOCK_KIT):
+ *   01 ROOM   toggle cursors+chat        (tray: status + room copy)
+ *   02 ASK    ask the cast               (tray: textarea → /api/ping)
+ *   03 AGENT  residents + ping a name    (tray: resident cards)
+ *   04 FED    federation peers           (tray: peer cards)
  *
- *   2. Layout reads left→right like a newspaper headline:
- *        [ you ][ omnibox + mode (large center) ][ KIT ][ ON AIR ][ ≡ ]
- *      Omnibox gets the visual weight. Font bumped so it reads like the
- *      page's command line, not a search box.
- *
- *   3. Rotating placeholder. Time-of-day default + page-context aware:
- *        morning  → "ask anything · ?question, /path, +spell"
- *        midday   → "type a path · /coffee, /studio, /b/0443"
- *        evening  → "say something · plain text broadcasts to room"
- *        late     → "what's playing · @drum, +breath, ?"
- *      On block pages, hint reads "+confetti or comment". On /studio,
- *      placeholder steps aside (it's not the primary input there).
- *
- *   4. The mode auto-detection logic from v4 is unchanged — `+` casts a
- *      spell, `>` runs an operator command, `?` asks the cast, `@` pings
- *      an agent, `/` navigates, plain text says (when room is on). The
- *      mode pill keeps updating live as you type; users learn the
- *      prefixes by feel rather than by clicking a mode button.
- *
- * ZONES:
- *   LEFT   you (noun + mood) → opens kit binder menu
- *   CENTER omnibox + mode pill — primary affordance, takes the bar
- *   RIGHT  KIT trigger (1 button → picker popover) · ON AIR · ≡ menu
- *
- * KIT trays (unchanged from v4):
- *   01 ROOM    cursors + chat
- *   02 ASK     residents inbox
- *   03 AGENT   ping a resident by name
- *   04 FED     federation peers
+ * MENU (≡ → kit binder):
+ *   You card · Mood + Soundtrack · KIT binder grid · Routes · Live pulse
  *
  * Persistent: soundtrack iframe transition:persist="pc-soundtrack" so
- *   ClientRouter soft-nav keeps audio alive. ⌘K focuses omnibox; ⌘1–⌘4
- *   still open the matching tray (kept for muscle memory).
+ *   ClientRouter soft-nav keeps audio alive.
  *
- * Events preserved exactly:
- *   pc:room:toggle, pc:room:chat, pc:mood-changed, pc:wallet-change,
- *   pc:spell:cast, pc:spell:clear, pc:dock:operator, pc:director-change.
+ * A11y: each tray + the menu are dialogs with focus management; Esc
+ *   closes; only one popover open at a time. Keyboard ⌘K focuses the
+ *   omnibox; ⌘1–⌘4 open the matching kit tray.
+ *
+ * Events preserved from v3:
+ *   pc:room:toggle, pc:room:chat, pc:mood-changed, pc:wallet-change.
  */
 import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
 import { MOOD_SPELLS, AUTO_CAST_KEY } from '../data/mood-spells';
@@ -138,77 +123,41 @@ const pingable = RESIDENTS.filter(
         type="text"
         id="fb-omni"
         name="q"
-        placeholder="type anything · /path · ?ask · +spell · @agent"
-        aria-label="Type anything — /path navigates, ?question asks the cast, +spell casts, @agent pings, plain text says when room is on."
+        placeholder="ask or go…"
+        aria-label="Ask, go, or say — type a path, /go, ?ask, or @agent"
       />
       <span class="fb__omni-hint mono" aria-hidden="true">⌘K</span>
-      <div class="fb__suggest mono" id="fb-suggest" role="listbox" aria-label="Doors matching your path" hidden></div>
     </form>
 
     <div class="fb__right">
-      <div class="fb__kit-wrap">
-        <button
-          type="button"
-          class="fb__kit-btn"
-          id="fb-kit-btn"
-          aria-haspopup="dialog"
-          aria-expanded="false"
-          aria-controls="fb-kit-picker"
-          title="Open kit (⌘K to focus omnibox)"
-        >
-          <span class="fb__kit-glyph" aria-hidden="true">◐</span>
-          <span class="fb__kit-label mono">KIT</span>
-          {/* Tiny dot indicator turns on when any kit slot is "active"
-              (e.g. room is ON, agent has unread). Updated live by the
-              same code that updated per-stamp dots in v4. */}
-          <span class="fb__kit-dot" id="fb-kit-dot" aria-hidden="true"></span>
-        </button>
-
-        <div
-          class="fb__kit-picker"
-          id="fb-kit-picker"
-          role="dialog"
-          aria-modal="false"
-          aria-label="Pick a kit tray"
-          hidden
-        >
-          <div class="fb__kit-picker-arrow" aria-hidden="true"></div>
-          <header class="fb__kit-picker-head">
-            <span class="fb__kit-picker-eyebrow mono">PICK A TRAY · ⌘1–4</span>
-          </header>
-          <ul class="fb__kit-picker-list" role="menu">
-            {DOCK_KIT.slice(0, 4).map((item) => (
-              <li role="none">
-                <button
-                  type="button"
-                  role="menuitem"
-                  class="fb__kit-pick"
-                  data-tray={item.tray}
-                  data-stamp-id={item.id}
-                  aria-controls={`fb-tray-${item.id}`}
-                  aria-label={`${item.name} — ${item.blurb}`}
-                  title={`${item.name} (⌘${item.number})`}
-                  style={`--stamp-accent: ${item.accent}`}
-                >
-                  <span class="fb__kit-pick-num mono" aria-hidden="true">{item.number}</span>
-                  <img
-                    class="fb__kit-pick-noun"
-                    src={`https://noun.pics/${item.nounSeed}.svg`}
-                    alt=""
-                    width="28"
-                    height="28"
-                    loading="lazy"
-                  />
-                  <span class="fb__kit-pick-text">
-                    <span class="fb__kit-pick-name mono">{item.name}</span>
-                    <span class="fb__kit-pick-blurb">{item.blurb}</span>
-                  </span>
-                  <span class="fb__kit-pick-dot" id={`fb-stamp-dot-${item.id}`} aria-hidden="true"></span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div class="fb__kit" role="toolbar" aria-label="PointCast kit">
+        {DOCK_KIT.map((item) => (
+          <button
+            type="button"
+            class="fb__stamp"
+            data-tray={item.tray}
+            data-stamp-id={item.id}
+            id={`fb-stamp-${item.id}`}
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls={`fb-tray-${item.id}`}
+            aria-label={`${item.name} — ${item.blurb}`}
+            title={`${item.name} (⌘${item.number})`}
+            style={`--stamp-accent: ${item.accent}`}
+          >
+            <span class="fb__stamp-num mono" aria-hidden="true">{item.number}</span>
+            <img
+              class="fb__stamp-noun"
+              src={`https://noun.pics/${item.nounSeed}.svg`}
+              alt=""
+              width="22"
+              height="22"
+              loading="lazy"
+            />
+            <span class="fb__stamp-glyph" aria-hidden="true">{item.glyph}</span>
+            <span class="fb__stamp-dot" id={`fb-stamp-dot-${item.id}`} aria-hidden="true"></span>
+          </button>
+        ))}
       </div>
 
       <span class="fb__on-air" aria-label="On air">
@@ -312,6 +261,9 @@ const pingable = RESIDENTS.filter(
         ></textarea>
         <div class="fb-ask__foot">
           <span class="fb-ask__count mono" id="fb-ask-count">0 / 2000</span>
+          <span class="fb-ask__seat fb-ask__seat--ai mono" id="fb-ai-seat" data-state="off" title="AI answer mode — wire-up in next sprint. The seat is here; the model isn't plugged in yet.">
+            <span aria-hidden="true">🤖</span> ai · soon
+          </span>
           <button type="submit" class="fb-btn fb-btn--send" id="fb-ask-send">
             <span aria-hidden="true">↗</span> Send
           </button>
@@ -626,8 +578,7 @@ const pingable = RESIDENTS.filter(
         </div>
         <div class="fb-you-actions">
           <button type="button" class="fb-btn" id="fb-btn-wallet">Connect wallet (Beacon)</button>
-          <a class="fb-btn fb-btn--ghost" href="/me">Your /me page</a>
-          <a class="fb-btn fb-btn--ghost" href="/profile">Wallet pairings</a>
+          <a class="fb-btn fb-btn--ghost" href="/profile">View profile</a>
         </div>
       </section>
 
@@ -779,21 +730,7 @@ const pingable = RESIDENTS.filter(
     var lastFocused = null;
 
     function getTrayEl(id) { return document.getElementById('fb-tray-' + id); }
-    /** v5: there's no per-tray stamp anymore — return the KIT button as
-        the anchor for tray positioning. Kept the function name so the
-        rest of the IIFE (which still references it) doesn't have to
-        change. */
-    function getStampEl(_id) { return document.getElementById('fb-kit-btn'); }
-
-    var $kitBtn = document.getElementById('fb-kit-btn');
-    var $kitPicker = document.getElementById('fb-kit-picker');
-
-    function closeKitPicker() {
-      if (!$kitPicker || $kitPicker.getAttribute('data-open') !== 'true') return;
-      $kitPicker.setAttribute('data-open', 'false');
-      setTimeout(function () { $kitPicker.hidden = true; }, 180);
-      if ($kitBtn) $kitBtn.setAttribute('aria-expanded', 'false');
-    }
+    function getStampEl(id) { return document.getElementById('fb-stamp-' + id); }
 
     function closeAll() {
       if ($menu.getAttribute('data-open') === 'true') {
@@ -802,16 +739,15 @@ const pingable = RESIDENTS.filter(
         $menuBtn.setAttribute('aria-expanded', 'false');
         $you.setAttribute('aria-expanded', 'false');
       }
-      closeKitPicker();
       document.querySelectorAll('.fb__tray').forEach(function (tr) {
         if (tr.getAttribute('data-open') === 'true') {
           tr.setAttribute('data-open', 'false');
           setTimeout(function () { tr.hidden = true; }, 200);
+          var stampId = tr.id.replace('fb-tray-', '');
+          var st = getStampEl(stampId);
+          if (st) st.setAttribute('aria-expanded', 'false');
         }
       });
-      // v5: only one entry point for trays — the KIT button. Reset its
-      // aria-expanded once any tray is closed.
-      if ($kitBtn) $kitBtn.setAttribute('aria-expanded', 'false');
       openPopover = null;
       document.removeEventListener('keydown', onEsc);
       if (lastFocused && typeof lastFocused.focus === 'function') {
@@ -875,34 +811,11 @@ const pingable = RESIDENTS.filter(
       } catch (e) {}
     }
 
-    // v5: KIT button toggles a picker popover. Picker items open trays.
-    function openKitPicker() {
-      closeAll();
-      if (!$kitPicker || !$kitBtn) return;
-      $kitPicker.hidden = false;
-      void $kitPicker.offsetWidth;
-      $kitPicker.setAttribute('data-open', 'true');
-      $kitBtn.setAttribute('aria-expanded', 'true');
-      lastFocused = document.activeElement;
-      setTimeout(function () {
-        var first = $kitPicker.querySelector('.fb__kit-pick');
-        if (first) try { first.focus(); } catch (e) {}
-      }, 30);
-      openPopover = 'kit-picker';
-      document.addEventListener('keydown', onEsc);
-    }
-    if ($kitBtn) {
-      $kitBtn.addEventListener('click', function () {
-        if (openPopover === 'kit-picker') closeAll();
-        else openKitPicker();
-      });
-    }
-    document.querySelectorAll('.fb__kit-pick').forEach(function (pk) {
-      pk.addEventListener('click', function () {
-        var id = pk.getAttribute('data-stamp-id');
-        // closeAll then openTray — same flow as the binder cards.
-        closeAll();
-        setTimeout(function () { openTray(id); }, 200);
+    document.querySelectorAll('.fb__stamp').forEach(function (st) {
+      st.addEventListener('click', function () {
+        var id = st.getAttribute('data-stamp-id');
+        if (openPopover === 'tray:' + id) closeAll();
+        else openTray(id);
       });
     });
     document.querySelectorAll('.fb-binder__open').forEach(function (bc) {
@@ -921,8 +834,7 @@ const pingable = RESIDENTS.filter(
       var t = e.target;
       if (!(t instanceof Element)) return;
       if (t.closest('.fb__tray') || t.closest('.fb__menu-panel') ||
-          t.closest('.fb__kit-btn') || t.closest('.fb__kit-picker') ||
-          t.closest('.fb-binder__open') ||
+          t.closest('.fb__stamp') || t.closest('.fb-binder__open') ||
           t.closest('#fb-menu-btn') || t.closest('#fb-you')) return;
       closeAll();
     });
@@ -980,53 +892,16 @@ const pingable = RESIDENTS.filter(
     $omni.addEventListener('input', function () {
       applyOmniMode();
       try { syncBubbleFromInput(); } catch (e) {}
-      try { refreshSuggest(); } catch (e) {}
     });
     $omni.addEventListener('focus', function () {
       applyOmniMode();
       try { syncBubbleFromInput(); } catch (e) {}
     });
-
-    /** v5: rotating placeholder.
-     *  - default text rotates by hour-of-day (morning/midday/evening/late)
-     *  - URL pathname overrides for context-aware hints (block pages,
-     *    studio, channels)
-     *  - re-runs on Astro view-transitions navigation so soft-nav between
-     *    routes refreshes the hint without a full reload */
-    function pickPlaceholder() {
-      var path = location.pathname || '/';
-      // Page-context overrides win first.
-      if (path.indexOf('/studio') === 0)   return 'go elsewhere · /coffee, /b/0443, ?ask…';
-      if (/^\/b\/\d+/.test(path))          return '+confetti, ?ask, or comment…';
-      if (path.indexOf('/drum') === 0)     return '+breath, +candle, or @drum…';
-      if (path.indexOf('/sparrow') === 0)  return '/path, ?ask, or @resident…';
-      // Time-of-day default.
-      var h = new Date().getHours();
-      if (h >= 5 && h < 11)  return 'ask anything · ?question, /path, +spell';
-      if (h >= 11 && h < 17) return 'type a path · /coffee, /studio, /b/0443';
-      if (h >= 17 && h < 22) return 'say something · plain text broadcasts to room';
-      return "what's playing · @drum, +breath, ?";
-    }
-    function refreshOmniPlaceholder() {
-      // Don't clobber a transient ack toast (set by operator commands).
-      if ($omni.dataset.toastUntil && Date.now() < +$omni.dataset.toastUntil) return;
-      var next = pickPlaceholder();
-      if ($omni.placeholder !== next) $omni.placeholder = next;
-    }
-    refreshOmniPlaceholder();
-    // Refresh once an hour so the time-of-day default rolls forward
-    // without a page reload (keeps the bar feeling alive on long sessions).
-    setInterval(refreshOmniPlaceholder, 60 * 60 * 1000);
-    document.addEventListener('astro:after-swap', refreshOmniPlaceholder);
-    window.addEventListener('popstate', refreshOmniPlaceholder);
     $omni.addEventListener('blur', function () {
       // Hide if not in a sent-snapshot window. Empty input still clears.
       if (!bubbleState.persistUntil || Date.now() >= bubbleState.persistUntil) {
         if (!String($omni.value || '').trim()) hideBubble();
       }
-      // Suggest closes after a beat so a click on an item lands first
-      // (item mousedown also preventDefaults, this is the safety net).
-      setTimeout(function () { try { closeSuggest(); } catch (e) {} }, 140);
     });
 
     $omniForm.addEventListener('submit', function (e) {
@@ -1058,36 +933,15 @@ const pingable = RESIDENTS.filter(
         var ack = runOperatorCommand(cmd, args);
         window.dispatchEvent(new CustomEvent('pc:dock:operator', { detail: { cmd: cmd, args: args, raw: rest } }));
         // Soft toast in the omnibox placeholder so user gets feedback.
+        var prevPlaceholder = $omni.placeholder;
         $omni.value = '';
         $omni.placeholder = ack;
-        // v5: mark a toast window so refreshOmniPlaceholder doesn't
-        // clobber the ack mid-flight (on hour-roll or astro nav).
-        $omni.dataset.toastUntil = String(Date.now() + 3000);
         applyOmniMode();
-        setTimeout(function () {
-          delete $omni.dataset.toastUntil;
-          refreshOmniPlaceholder();
-        }, 3000);
+        setTimeout(function () { $omni.placeholder = prevPlaceholder; }, 3000);
         return;
       }
       if (mode === 'ASK') {
         var body = raw.replace(/^\?\s*/, '');
-        // v5.1: honest intent shortcuts — common questions have instant
-        // in-town answers; no model, no spinner, no "ai · soon" seat.
-        // Anything that doesn't match stays a real ask to the cast.
-        var intent = matchAskIntent(body);
-        if (intent) {
-          $omni.value = '';
-          if (intent === 'random') {
-            loadTownIndex().then(function (feats) {
-              var f = feats && feats.length ? feats[Math.floor(Math.random() * feats.length)] : null;
-              window.location.href = f ? f.slug : '/explore';
-            });
-          } else {
-            window.location.href = intent;
-          }
-          return;
-        }
         openTray('ask');
         var tb = document.getElementById('fb-ask-body');
         if (tb) { tb.value = body; tb.dispatchEvent(new Event('input')); }
@@ -1113,192 +967,17 @@ const pingable = RESIDENTS.filter(
           else hideBubble();
         } catch (e) {}
         $omni.value = '';
-        refreshOmniPlaceholder();
+        $omni.placeholder = 'say something…';
         applyOmniMode();
         return;
       }
       if (raw.startsWith('/') || /^https?:\/\//.test(raw)) {
-        // v5.1: if a suggestion is highlighted, Enter takes that door;
-        // otherwise trust the typed path as before.
-        var picked = suggestPicked();
-        window.location.href = picked || raw;
+        window.location.href = raw;
         return;
       }
       var maybe = '/' + raw.replace(/^\/+/, '').split(/\s+/)[0];
       window.location.href = '/search?q=' + encodeURIComponent(raw) + '&from=' + encodeURIComponent(maybe);
     });
-
-    // ── v5.1: the omnibox knows the whole town ─────────────────────────
-    // Lazy directory from /explore.json — the same auto-built machine
-    // surface agents read, so the bar can never drift from the real page
-    // tree the way the old hand-curated ROUTES list did. Loaded once, on
-    // first '/' keystroke; ~450 {slug,title} pairs.
-    var townIndex = null;
-    function loadTownIndex() {
-      if (townIndex) return Promise.resolve(townIndex);
-      return fetch('/explore.json')
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          townIndex = (d && d.features) ? d.features : [];
-          return townIndex;
-        })
-        .catch(function () { townIndex = []; return townIndex; });
-    }
-
-    var $suggest = document.getElementById('fb-suggest');
-    var suggestState = { items: [], sel: -1 };
-
-    function scoreDoor(f, q) {
-      // slug subsequence beats title substring; prefix beats infix.
-      var slug = f.slug.toLowerCase();
-      var score = -1;
-      if (slug === q) return 1000;
-      else if (slug.indexOf(q) === 0) score = 500 - slug.length;
-      else if (slug.indexOf(q) > -1) score = 250 - slug.indexOf(q);
-      else {
-        var qi = 0;
-        for (var i = 0; i < slug.length && qi < q.length; i++) if (slug[i] === q[qi]) qi++;
-        if (qi === q.length) score = 100 - slug.length;
-        else {
-          var title = (f.title || '').toLowerCase();
-          if (title.indexOf(q.replace(/^\//, '')) > -1) score = 50;
-        }
-      }
-      // Archived version variants (-v2…-v18 graveyards) stay findable but
-      // sink below their living siblings unless typed exactly.
-      if (score > 0 && /-v\d+$/.test(slug) && !/-v\d+$/.test(q)) score -= 120;
-      return score;
-    }
-
-    function closeSuggest() {
-      if (!$suggest) return;
-      $suggest.hidden = true;
-      $suggest.innerHTML = '';
-      suggestState.items = [];
-      suggestState.sel = -1;
-    }
-
-    function suggestPicked() {
-      if (suggestState.sel < 0 || !suggestState.items[suggestState.sel]) return null;
-      var slug = suggestState.items[suggestState.sel].slug;
-      closeSuggest();
-      return slug;
-    }
-
-    function paintSuggest() {
-      if (!$suggest) return;
-      if (!suggestState.items.length) { closeSuggest(); return; }
-      $suggest.innerHTML = '';
-      suggestState.items.forEach(function (f, i) {
-        var el = document.createElement('button');
-        el.type = 'button';
-        el.className = 'fb__suggest-item' + (i === suggestState.sel ? ' is-sel' : '');
-        el.setAttribute('role', 'option');
-        el.setAttribute('aria-selected', i === suggestState.sel ? 'true' : 'false');
-        var s = document.createElement('span'); s.className = 'fb__suggest-slug'; s.textContent = f.slug;
-        var t = document.createElement('span'); t.className = 'fb__suggest-title'; t.textContent = f.title || '';
-        el.appendChild(s); el.appendChild(t);
-        el.addEventListener('mousedown', function (e) {
-          e.preventDefault(); // beat the input blur
-          window.location.href = f.slug;
-        });
-        $suggest.appendChild(el);
-      });
-      $suggest.hidden = false;
-    }
-
-    function refreshSuggest() {
-      var raw = $omni.value.trim().toLowerCase();
-      if (!raw.startsWith('/') || raw.length < 2) { closeSuggest(); return; }
-      loadTownIndex().then(function (feats) {
-        // stale keystroke guard — only paint for the current value
-        if ($omni.value.trim().toLowerCase() !== raw) return;
-        var scored = [];
-        for (var i = 0; i < feats.length; i++) {
-          var sc = scoreDoor(feats[i], raw);
-          if (sc >= 0) scored.push([sc, feats[i]]);
-        }
-        scored.sort(function (a, b) { return b[0] - a[0]; });
-        suggestState.items = scored.slice(0, 6).map(function (p) { return p[1]; });
-        suggestState.sel = suggestState.items.length ? 0 : -1;
-        paintSuggest();
-      });
-    }
-
-    $omni.addEventListener('keydown', function (e) {
-      if ($suggest && !$suggest.hidden) {
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          var n = suggestState.items.length;
-          suggestState.sel = ((suggestState.sel + (e.key === 'ArrowDown' ? 1 : -1)) + n) % n;
-          paintSuggest();
-          return;
-        }
-        if (e.key === 'Escape') { closeSuggest(); return; }
-      }
-    });
-
-    // ── v5.1: glance state ──────────────────────────────────────────────
-    // Persistent chrome shouldn't sit on the page while you read. Scroll
-    // down past the fold and the bar slims to a sliver; scroll up, hover,
-    // tap, or focus and it returns. Never slims mid-interaction (open
-    // tray / focused input), never on short pages.
-    (function () {
-      var bar = document.getElementById('pc-fb');
-      if (!bar) return;
-      var lastY = window.scrollY;
-      var ticking = false;
-      function anyTrayOpen() {
-        return !!bar.querySelector('[data-open="true"]');
-      }
-      function onScroll() {
-        if (ticking) return;
-        ticking = true;
-        // setTimeout, not rAF — rAF stalls in backgrounded/embedded tabs
-        // and a stalled callback would leave `ticking` stuck true forever.
-        setTimeout(function () {
-          ticking = false;
-          var y = window.scrollY;
-          var dy = y - lastY;
-          lastY = y;
-          if (Math.abs(dy) < 6) return;
-          if (dy > 0 && y > 320 && !anyTrayOpen() && !bar.matches(':focus-within')) {
-            bar.setAttribute('data-slim', 'true');
-          } else if (dy < 0 || y <= 320) {
-            bar.removeAttribute('data-slim');
-          }
-        }, 32);
-      }
-      window.addEventListener('scroll', onScroll, { passive: true });
-      // Touch: a tap on the sliver wakes the bar instead of clicking through.
-      bar.addEventListener('touchstart', function () {
-        if (bar.getAttribute('data-slim') === 'true') bar.removeAttribute('data-slim');
-      }, { passive: true });
-      bar.addEventListener('mouseenter', function () {
-        if (bar.getAttribute('data-slim') === 'true') bar.removeAttribute('data-slim');
-      });
-      document.addEventListener('astro:after-swap', function () {
-        bar.removeAttribute('data-slim');
-        lastY = window.scrollY;
-      });
-    })();
-
-    // v5.1: honest ? intents — the questions visitors actually type,
-    // answered by the town's own doors. Everything else goes to the cast.
-    function matchAskIntent(q) {
-      var s = q.toLowerCase().trim();
-      if (!s) return null;
-      if (/^(what'?s\s+)?(new|latest|fresh|happening)\b/.test(s)) return '/wire';
-      if (/^(today|daily|drop)\b/.test(s)) return '/today';
-      if (/^(random|surprise|wander|anywhere)\b/.test(s)) return 'random';
-      if (/^(map|directory|rooms|all\s+(rooms|surfaces|pages))\b/.test(s)) return '/explore';
-      if (/^(music|listen|song|playing)\b/.test(s)) return '/music-hub';
-      if (/^(recap|(this|last)\s+week)\b/.test(s)) return '/recap';
-      if (/^(who|residents?|agents?)\b/.test(s)) return '/residents';
-      if (/^(weather|window|outside|sky)\b/.test(s)) return '/window';
-      if (/^(what\s+is\s+(this|pointcast)|mythos|about)\b/.test(s)) return '/mythos';
-      return null;
-    }
 
     var roomOn = true;
     try {
@@ -1309,14 +988,11 @@ const pingable = RESIDENTS.filter(
     } catch (e) {}
 
     function applyRoomUI() {
-      // v5: room state lights the kit-btn dot + the per-tray dot in the
-      // picker; placeholder follows the rotating time-of-day/page-context
-      // logic instead of the v4 binary "say something…" / "ask or go…".
-      var kitBtnEl = document.getElementById('fb-kit-btn');
-      if (kitBtnEl) kitBtnEl.setAttribute('data-active', roomOn ? 'true' : 'false');
+      var stamp = getStampEl('room');
+      if (stamp) stamp.setAttribute('data-on', roomOn ? 'true' : 'false');
       var dot = document.getElementById('fb-stamp-dot-room');
-      if (dot) dot.setAttribute('data-on', roomOn ? 'true' : 'false');
-      try { refreshOmniPlaceholder(); } catch (e) {}
+      if (dot) dot.setAttribute('data-state', roomOn ? 'on' : 'off');
+      if ($omni) $omni.placeholder = roomOn ? 'say something…' : 'ask or go…';
       var label = document.getElementById('fb-tray-room-label');
       var btn = document.getElementById('fb-tray-room-toggle');
       if (label) label.textContent = roomOn ? 'Room: ON' : 'Room: OFF';
@@ -2161,18 +1837,13 @@ const pingable = RESIDENTS.filter(
       }, 3000);
     }
 
-    // Action button dispatcher — listens for clicks on .fb__action
-    // (top-of-tray quick-actions) AND .fb-spell__btn (the cast tray
-    // spell list rows). Routes to handlers by (tray, action).
-    // Mike 2026-05-05: spell list rows previously had data-tray /
-    // data-action attributes but weren't matched by this dispatcher,
-    // so chip clicks did nothing — you had to type +name in the bar.
-    // Adding `.fb-spell__btn` here wires the chips properly.
+    // Action button dispatcher — listens for clicks on .fb__action,
+    // routes to handlers by (tray, action).
     document.addEventListener('click', function (ev) {
       var t = ev.target;
       if (!(t instanceof Element)) return;
-      // Action buttons in tray headers + spell list rows in cast tray.
-      var actionBtn = t.closest('.fb__action, .fb-spell__btn');
+      // Action buttons in tray headers.
+      var actionBtn = t.closest('.fb__action');
       if (actionBtn) {
         var tray = actionBtn.getAttribute('data-tray');
         var action = actionBtn.getAttribute('data-action');
@@ -2367,29 +2038,21 @@ const pingable = RESIDENTS.filter(
   .fb__mood-label { font-size: 9px; letter-spacing: 0.1em; color: #f9c56c; white-space: nowrap; opacity: 0.85; }
   @media (max-width: 640px) { .fb__you-text { display: none; } }
 
-  /* v5: omnibox is the star — wider, taller, brighter on focus.
-     Removes the 480px cap so it expands into the space freed by the
-     KIT-button collapse. Left-aligned next to the YOU chip; the bar
-     reads left→right "I am X · type anything · KIT". */
   .fb__omni {
     pointer-events: auto;
-    position: relative; /* anchors the v5.1 suggest popover */
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 8px 5px 5px;
+    padding: 4px 8px 4px 4px;
     background: rgba(255, 253, 246, 0.08);
     border: 1px solid rgba(255, 180, 80, 0.18);
     border-radius: 3px;
     min-width: 0;
+    max-width: 480px;
+    margin: 0 auto;
     width: 100%;
-    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   }
-  .fb__omni:focus-within {
-    border-color: rgba(255, 200, 120, 0.7);
-    background: rgba(255, 253, 246, 0.16);
-    box-shadow: 0 0 0 1px rgba(255, 200, 120, 0.4);
-  }
+  .fb__omni:focus-within { border-color: rgba(255, 200, 120, 0.6); background: rgba(255, 253, 246, 0.14); }
   .fb__omni-mode {
     flex-shrink: 0;
     font-size: 9px;
@@ -2415,11 +2078,9 @@ const pingable = RESIDENTS.filter(
     border: 0;
     outline: 0;
     color: #fdf2d6;
-    /* v5: bumped from 12.5px so the omnibox reads as a command line,
-       not a tiny search box. */
-    font-size: 14px;
+    font-size: 12.5px;
     letter-spacing: 0.02em;
-    padding: 3px 0;
+    padding: 2px 0;
   }
   .fb__omni-input::placeholder { color: rgba(253, 242, 214, 0.4); }
   .fb__omni-hint {
@@ -2435,135 +2096,6 @@ const pingable = RESIDENTS.filter(
 
   .fb__right { pointer-events: auto; display: flex; align-items: center; gap: 8px; }
 
-  /* ───── v5: KIT trigger + picker popover ──────────────────────────── */
-  .fb__kit-wrap { position: relative; }
-  .fb__kit-btn {
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid rgba(255, 180, 80, 0.18);
-    border-radius: 3px;
-    color: #fdf2d6;
-    cursor: pointer;
-    line-height: 1;
-    box-shadow: inset 0 1px 0 rgba(255, 200, 120, 0.08);
-    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
-  }
-  .fb__kit-btn:hover {
-    background: rgba(255, 200, 120, 0.14);
-    border-color: rgba(255, 200, 120, 0.45);
-  }
-  .fb__kit-btn[aria-expanded='true'] {
-    background: rgba(255, 200, 120, 0.2);
-    border-color: rgba(255, 200, 120, 0.6);
-    box-shadow: 0 0 0 1px rgba(255, 200, 120, 0.3);
-  }
-  .fb__kit-glyph { font-size: 14px; line-height: 1; color: #f9c56c; }
-  .fb__kit-label { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; color: #fdf2d6; }
-  .fb__kit-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: transparent;
-    transition: background 0.18s ease;
-  }
-  .fb__kit-btn[data-active='true'] .fb__kit-dot { background: #2f8f5f; box-shadow: 0 0 6px rgba(47, 143, 95, 0.7); }
-  @media (max-width: 480px) { .fb__kit-label { display: none; } }
-
-  .fb__kit-picker {
-    position: absolute;
-    bottom: calc(100% + 12px);
-    right: 0;
-    width: 320px;
-    max-width: calc(100vw - 24px);
-    background: #1c1308;
-    border: 1px solid #d4a437;
-    border-radius: 4px;
-    padding: 12px;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 200, 120, 0.1);
-    color: #fdf2d6;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.18s ease, transform 0.18s ease;
-    z-index: 50;
-  }
-  .fb__kit-picker[data-open='true'] { opacity: 1; transform: translateY(0); }
-  .fb__kit-picker-arrow {
-    position: absolute;
-    bottom: -7px;
-    right: 18px;
-    width: 12px; height: 12px;
-    background: #1c1308;
-    border-right: 1px solid #d4a437;
-    border-bottom: 1px solid #d4a437;
-    transform: rotate(45deg);
-  }
-  .fb__kit-picker-head { margin: 0 0 8px; }
-  .fb__kit-picker-eyebrow {
-    font-size: 9px; letter-spacing: 0.2em;
-    color: rgba(253, 242, 214, 0.55);
-    text-transform: uppercase;
-  }
-  .fb__kit-picker-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
-  .fb__kit-pick {
-    appearance: none;
-    width: 100%;
-    display: grid;
-    grid-template-columns: 28px 32px 1fr 8px;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    background: rgba(255, 200, 120, 0.04);
-    border: 1px solid transparent;
-    border-radius: 3px;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
-  }
-  .fb__kit-pick:hover, .fb__kit-pick:focus-visible {
-    background: rgba(255, 200, 120, 0.12);
-    border-color: var(--stamp-accent, rgba(255, 200, 120, 0.45));
-    outline: 0;
-  }
-  .fb__kit-pick-num {
-    font-size: 10px; letter-spacing: 0.12em;
-    color: rgba(253, 242, 214, 0.6);
-  }
-  .fb__kit-pick-noun {
-    width: 28px; height: 28px;
-    background: #1a1004;
-    border-radius: 2px;
-    image-rendering: pixelated;
-    box-shadow: inset 0 0 0 1px #d4a437;
-  }
-  .fb__kit-pick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .fb__kit-pick-name {
-    font-size: 11px; letter-spacing: 0.14em; font-weight: 700;
-    color: #fdf2d6;
-  }
-  .fb__kit-pick-blurb {
-    font-size: 10px; line-height: 1.35;
-    color: rgba(253, 242, 214, 0.65);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .fb__kit-pick-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: transparent;
-    transition: background 0.18s;
-  }
-  /* Reuses the existing per-id #fb-stamp-dot-{id} live indicators —
-     same dom ids as v4 so the JS that lights them up still works. */
-  #fb-stamp-dot-room[data-on='true'],
-  #fb-stamp-dot-agent[data-on='true'] { background: #2f8f5f; box-shadow: 0 0 6px rgba(47, 143, 95, 0.7); }
-
-  /* ───── legacy v4 .fb__kit / .fb__stamp — no longer rendered, kept ─
-     so any out-of-tree code that imports the same CSS keeps compiling. */
   .fb__kit {
     display: inline-flex;
     align-items: center;
@@ -3266,46 +2798,6 @@ const pingable = RESIDENTS.filter(
     font-weight: 700;
     cursor: not-allowed;
   }
-  /* v5.1 — suggest popover: the town's doors, matched as you type. */
-  .fb__suggest {
-    position: absolute;
-    left: 0; right: 0; bottom: calc(100% + 8px);
-    display: flex; flex-direction: column;
-    background: rgba(24, 20, 12, 0.97);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 6px;
-    padding: 4px;
-    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
-    max-height: 262px; overflow-y: auto;
-    z-index: 30;
-  }
-  /* Items are built in JS, so they carry no astro scope id — style them
-     through the scoped container with :global(). */
-  .fb__suggest :global(.fb__suggest-item) {
-    display: flex; align-items: baseline; gap: 10px;
-    padding: 7px 9px; border: 0; border-radius: 4px;
-    background: transparent; cursor: pointer; text-align: left;
-    font-family: inherit; width: 100%;
-  }
-  .fb__suggest :global(.fb__suggest-item.is-sel),
-  .fb__suggest :global(.fb__suggest-item:hover) { background: rgba(255, 255, 255, 0.1); }
-  .fb__suggest :global(.fb__suggest-slug) {
-    font-size: 12px; letter-spacing: 0.04em; color: #f3ead9; white-space: nowrap;
-  }
-  .fb__suggest :global(.fb__suggest-title) {
-    font-size: 10.5px; letter-spacing: 0.03em; color: rgba(243, 234, 217, 0.55);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-
-  /* v5.1 — glance state: the bar slims to a sliver while you read. */
-  #pc-fb { transition: transform 0.18s ease; }
-  #pc-fb[data-slim='true'] { transform: translateY(calc(100% - 14px)); }
-  #pc-fb[data-slim='true']:hover,
-  #pc-fb[data-slim='true']:focus-within { transform: none; }
-  @media (prefers-reduced-motion: reduce) {
-    #pc-fb { transition: none; }
-  }
-
   .fb-ask__seat--ai[data-state='off'] {
     background: rgba(45, 31, 8, 0.05);
     border: 1px dashed #c5b284;

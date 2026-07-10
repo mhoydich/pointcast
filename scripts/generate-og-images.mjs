@@ -31,10 +31,8 @@ const CHANNELS = {
   GDN: { name: 'Garden',     color600: '#0F6E56', color800: '#074638' },
   ESC: { name: 'El Segundo', color600: '#534AB7', color800: '#332C7C' },
   FCT: { name: 'Faucet',     color600: '#BA7517', color800: '#834F0A' },
-  MNY: { name: 'Money',      color600: '#0B6B3A', color800: '#06451F' },
   VST: { name: 'Visit',      color600: '#5F5E5A', color800: '#38373A' },
   BTL: { name: 'Battler',    color600: '#8A2432', color800: '#551620' },
-  BDY: { name: 'Birthday',   color600: '#D86440', color800: '#8E3F25' },
 };
 
 function xmlEscape(s) {

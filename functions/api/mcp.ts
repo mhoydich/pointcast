@@ -66,7 +66,7 @@
  *   weather_get           ({station})  station weather
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
- *   channels_list         (no input)   channels with codes/slugs
+ *   channels_list         (no input)   9 channels with codes/slugs
  *   agents_manifest       (no input)   full /agents.json
  *   connector_links       (no input)   addable MCP links for AI clients
  *   apps_list             (no input)   PointCast app shelf for clients
@@ -349,7 +349,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'blocks_by_channel',
-    description: 'Recent blocks in a specific channel. Channel codes: FD (Front Door), CRT (Court), SPN (Spinning), GF (Good Feels), GDN (Garden), ESC (El Segundo), FCT (Faucet), MNY (Money), VST (Visit), BTL (Battler), BDY (Birthday).',
+    description: 'Recent blocks in a specific channel. Channel codes: FD (Front Door), CRT (Court), SPN (Spinning), GF (Good Feels), GDN (Garden), ESC (El Segundo), FCT (Faucet), VST (Visit), BTL (Battler), BDY (Birthday).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -401,7 +401,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'channels_list',
-    description: 'Every PointCast channel — code, slug, name, purpose, color.',
+    description: 'Every PointCast channel (9 of them) — code, slug, name, purpose, color.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -1369,7 +1369,7 @@ async function dispatchTool(
       const limit = Math.max(1, Math.min(50, Number(args.limit) || 10));
       const slugMap: Record<string, string> = {
         fd: 'front-door', crt: 'court', spn: 'spinning', gf: 'good-feels',
-        gdn: 'garden', esc: 'el-segundo', fct: 'faucet', mny: 'money', vst: 'visit',
+        gdn: 'garden', esc: 'el-segundo', fct: 'faucet', vst: 'visit',
         btl: 'battler', bdy: 'birthday',
       };
       const slug = slugMap[channel] || channel;
@@ -1384,7 +1384,7 @@ async function dispatchTool(
           ],
         };
       } catch {
-        return { content: [{ type: 'text', text: `channel "${channel}" not found — try FD, CRT, SPN, GF, GDN, ESC, FCT, MNY, VST, BTL, BDY` }], isError: true };
+        return { content: [{ type: 'text', text: `channel "${channel}" not found — try FD, CRT, SPN, GF, GDN, ESC, FCT, VST, BTL, BDY` }], isError: true };
       }
     }
     case 'blocks_search': {
@@ -2251,7 +2251,7 @@ const DISCOVERY_HTML = `<!doctype html>
   <li><code>weather_get</code> — weather for a station</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
-  <li><code>channels_list</code> — channels</li>
+  <li><code>channels_list</code> — 9 channels</li>
   <li><code>agents_manifest</code> — full /agents.json</li>
   <li><code>connector_links</code> — addable connector links</li>
   <li><code>apps_list</code> — client app shelf</li>

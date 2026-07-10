@@ -72,30 +72,6 @@ const jsonLd = {
       ))}
     </section>
 
-    {/* Wired 2026-05-08: surfaces visitor's local pc:inventory:v1 paddles
-        if any. Empty by default (client-side hydrates only when the key
-        exists). One-click "use this →" pre-fills the currentPaddle form
-        field below. Empty state nudges visitors to /me to seed. */}
-    <section class="section your-paddles" aria-label="Your paddles" id="your-paddles" data-state="empty">
-      <div class="your-paddles__head">
-        <p class="kicker">YOUR PADDLES · LOCAL TO THIS BROWSER</p>
-        <a href="/me" class="your-paddles__manage mono">+ MANAGE ON /me</a>
-      </div>
-
-      <div class="your-paddles__empty" id="your-paddles-empty">
-        <p>
-          No paddles in your local inventory yet. <a href="/me">Open /me</a> →
-          scroll to INVENTORY → click <strong>"Pickleball paddles"</strong> to
-          seed with 4 (11six24 Vapor 2 · Honolulu JNFK · Gearbox G2 Power ·
-          Vatic Prism 14mm), or add your own. Stored only in this browser.
-        </p>
-      </div>
-
-      <div class="your-paddles__list" id="your-paddles-list" hidden>
-        {/* Populated client-side from pc:inventory:v1 */}
-      </div>
-    </section>
-
     <section class="section register" aria-labelledby="register-heading">
       <div class="register__copy">
         <p class="kicker">PROFILE REGISTRY</p>
@@ -241,75 +217,6 @@ const jsonLd = {
           render(null);
         });
       }
-
-      // ─── Wire pc:inventory:v1 paddles into this page ────────────────
-      // Reads the visitor's local inventory and surfaces any items in
-      // the 'paddles' category. One-click "use this →" pre-fills the
-      // currentPaddle form field. Empty state nudges to /me to seed.
-      (function loadInventoryPaddles() {
-        var INV_KEY = 'pc:inventory:v1';
-        var section = document.getElementById('your-paddles');
-        var emptyEl = document.getElementById('your-paddles-empty');
-        var listEl  = document.getElementById('your-paddles-list');
-        if (!section || !emptyEl || !listEl) return;
-
-        var inv;
-        try {
-          inv = JSON.parse(localStorage.getItem(INV_KEY) || 'null');
-        } catch (e) { inv = null; }
-        if (!inv || !Array.isArray(inv.items)) return; // stays empty
-
-        var paddles = inv.items.filter(function (i) { return i && i.category === 'paddles'; });
-        if (!paddles.length) return; // also stays empty
-
-        section.dataset.state = 'has-paddles';
-        emptyEl.hidden = true;
-        listEl.hidden = false;
-
-        listEl.innerHTML = paddles.map(function (p) {
-          var brand = escapeHtml(p.brand || '');
-          var model = escapeHtml(p.model || '');
-          var notes = escapeHtml(p.notes || '');
-          var display = brand ? brand + ' ' + model : model;
-          return (
-            '<article class="your-paddle">' +
-              '<div class="your-paddle__main">' +
-                (brand ? '<span class="your-paddle__brand">' + brand + '</span>' : '') +
-                '<span class="your-paddle__model">' + model + '</span>' +
-                (notes ? '<p class="your-paddle__notes">' + notes + '</p>' : '') +
-              '</div>' +
-              '<div class="your-paddle__actions">' +
-                '<button type="button" class="your-paddle__use" data-use-paddle="' + escapeHtml(display) + '">' +
-                  'use this in form ↓' +
-                '</button>' +
-              '</div>' +
-            '</article>'
-          );
-        }).join('');
-
-        // Add the editorial header.
-        var head = document.createElement('p');
-        head.className = 'your-paddles__sub';
-        head.innerHTML = paddles.length + ' paddle' + (paddles.length === 1 ? '' : 's') +
-          ' in your local kit · click to import into the Paddle you use field';
-        listEl.insertBefore(head, listEl.firstChild);
-
-        // Wire up the use-this buttons.
-        listEl.querySelectorAll('[data-use-paddle]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var input = form.querySelector('input[name="currentPaddle"]');
-            if (!input) return;
-            input.value = btn.getAttribute('data-use-paddle') || '';
-            input.focus();
-            // Brief flash to confirm.
-            input.style.transition = 'background 0.4s ease';
-            input.style.background = '#fef3c7';
-            setTimeout(function () { input.style.background = ''; }, 800);
-            // Scroll the form into view if it's offscreen.
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          });
-        });
-      })();
     })();
   </script>
 </BlockLayout>
@@ -425,92 +332,6 @@ const jsonLd = {
   .section {
     padding: 34px 0;
     border-bottom: 1px solid var(--pc-rule-soft);
-  }
-
-  /* YOUR PADDLES — surfaces pc:inventory:v1 in the local kit. */
-  .your-paddles__head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px;
-    margin: 0 0 14px;
-  }
-  .your-paddles__head .kicker { color: #0f6258; }
-  .your-paddles__manage {
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    font-size: 11px; letter-spacing: 0.14em;
-    color: #0f6258; text-decoration: none;
-    text-transform: uppercase;
-  }
-  .your-paddles__manage:hover { color: #1f1b15; }
-  .your-paddles__empty {
-    padding: 14px 16px;
-    background: #f5f0e3;
-    border: 1px dashed #c4952e;
-    border-radius: 3px;
-    font-size: 14px;
-    line-height: 1.55;
-    color: var(--pc-ink-soft);
-  }
-  .your-paddles__empty a { color: #0f6258; text-decoration: underline; }
-  .your-paddles__empty strong { color: #1f1b15; }
-  .your-paddles__sub {
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--pc-ink-soft);
-    margin: 0 0 10px;
-    text-transform: uppercase;
-  }
-  .your-paddles__list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 10px;
-  }
-  .your-paddle {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    padding: 10px 12px;
-    background: #fff;
-    border: 1px solid var(--pc-rule-soft);
-    border-left: 3px solid #0f6258;
-    border-radius: 2px;
-  }
-  .your-paddle__main { min-width: 0; }
-  .your-paddle__brand {
-    display: inline;
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    font-size: 11px; letter-spacing: 0.06em;
-    color: #0f6258; font-weight: 700;
-    text-transform: uppercase;
-    margin-right: 4px;
-  }
-  .your-paddle__model {
-    font-size: 14px;
-    color: #1f1b15;
-    font-weight: 600;
-  }
-  .your-paddle__notes {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--pc-ink-soft);
-    margin: 4px 0 0;
-  }
-  .your-paddle__use {
-    align-self: center;
-    padding: 6px 10px;
-    background: #fff;
-    border: 1px solid #0f6258;
-    border-radius: 2px;
-    color: #0f6258;
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    font-size: 11px; letter-spacing: 0.06em;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-    white-space: nowrap;
-  }
-  .your-paddle__use:hover {
-    background: #0f6258;
-    color: #fff;
   }
 
   .modes,

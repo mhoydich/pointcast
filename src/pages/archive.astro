@@ -1,126 +1,75 @@
 ---
 /**
- * /archive — Home v2027 Wave 2: the giant chronological scroll.
+ * /archive — the chronological index of every PointCast Block.
  *
- * Mike 2026-05-07 (after Home v2027 Wave 1 shipped): "yep, wave 2, keep
- * going". The Wave 1 home pinned a single editorial lead + operating
- * mode + today/week. The archive page is its sibling — *all* of the
- * history, in one giant scroll, with mile markers and decreasing
- * density so a visitor can both zoom out (jump nav, sticky anchor) and
- * zoom in (full cards in the recent month).
+ * The homepage is the living feed — fast, editorial, curated. This is the
+ * complete archive: every block ever published, in reverse chronological
+ * order, with channel + type filters. Dense, scannable, agent-friendly.
  *
- * Design pattern (newspaper archive + NYT-style scroll):
+ * Not meant to compete with the homepage for discovery — meant to be the
+ * reference page agents cite and humans bookmark when looking for a
+ * specific dispatch or edition.
  *
- *   1. HERO — stats banner with block count + first/latest date.
- *   2. STICKY DATE ANCHOR — floating chip that appears on scroll,
- *      updates as the viewport crosses each month marker.
- *   3. JUMP NAV — sticky right sidebar listing every month; click to
- *      smooth-scroll, updates active state via IntersectionObserver.
- *   4. MONTH MARKERS — bigger than v1 dividers: month label + block
- *      count + latest title + first/last date for the month.
- *   5. DECREASING DENSITY — three tiers:
- *      • CURRENT MONTH (≤30 days):    full editorial cards, 3-col grid
- *      • RECENT MONTHS (30–90 days):  title + dek + meta, compact rows
- *      • DEEP (>90 days):             one-line lozenges, channel/id/date
- *      Caps the visual weight at the top so recent stuff reads as news;
- *      older months become reference material as you go deeper.
- *   6. URL HASH ROUTING — every month marker updates the hash on scroll
- *      so back/forward navigates between months and direct-link to a
- *      month works (`/archive#2026-04`).
- *   7. FILTERS preserved from v1 — channel + type + search remain on
- *      every density tier; "ALL" stays the default.
+ * Sibling endpoints:
+ *   - /archive.json — same data, machine-readable
+ *   - /blocks.json — the existing full archive with body content
+ *   - /c/{slug}   — per-channel subset
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS, CHANNEL_LIST } from '../lib/channels';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
 
-// ───── Data ────────────────────────────────────────────────────
 const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-const now = new Date();
-const monthMs = 30 * 24 * 60 * 60 * 1000;
-
-function tierForBlock(b: typeof blocks[number]): 'full' | 'compact' | 'deep' {
-  const ageMs = +now - +b.data.timestamp;
-  if (ageMs <= monthMs)         return 'full';
-  if (ageMs <= 3 * monthMs)     return 'compact';
-  return 'deep';
-}
-
-// ───── Aggregate counts (for filter chip badges) ───────────────
+// Count totals per channel + type for chip badges
 const channelCounts: Record<string, number> = {};
 const typeCounts: Record<string, number> = {};
 for (const b of blocks) {
   channelCounts[b.data.channel] = (channelCounts[b.data.channel] ?? 0) + 1;
-  typeCounts[b.data.type]       = (typeCounts[b.data.type]      ?? 0) + 1;
+  typeCounts[b.data.type] = (typeCounts[b.data.type] ?? 0) + 1;
 }
 
-// ───── Group into months ───────────────────────────────────────
-interface MonthGroup {
-  /** "2026-04" — used as anchor id, hash key, sort key. */
-  key: string;
-  /** "APRIL 2026" — display label. */
-  label: string;
-  /** "APR 2026" — short label for nav + sticky anchor. */
-  shortLabel: string;
-  blocks: typeof blocks;
-  /** Most-recent block (first in array since list is reverse-chrono). */
-  latest: typeof blocks[number];
-  /** Oldest block in the month (last in array). */
-  oldest: typeof blocks[number];
-  /** Count of blocks in this month. */
-  count: number;
-  /** Mixed density tier — `full` if any block is current month. */
-  tier: 'full' | 'compact' | 'deep';
+// Bucket blocks by year/month for visual grouping. The archive is
+// rendered as a single stream but we insert a month divider row when
+// the month changes between entries.
+interface Row {
+  kind: 'divider' | 'block';
+  month?: string; // "Apr 2026"
+  block?: typeof blocks[number];
 }
 
-const months: MonthGroup[] = [];
+const rows: Row[] = [];
+let currentMonthKey = '';
 for (const b of blocks) {
   const d = b.data.timestamp;
-  const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-  let group = months[months.length - 1];
-  if (!group || group.key !== key) {
-    const label = new Intl.DateTimeFormat('en-US', {
-      month: 'long', year: 'numeric', timeZone: 'UTC',
+  const mk = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+  if (mk !== currentMonthKey) {
+    currentMonthKey = mk;
+    const monthLabel = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
     }).format(d).toUpperCase();
-    const shortLabel = new Intl.DateTimeFormat('en-US', {
-      month: 'short', year: 'numeric', timeZone: 'UTC',
-    }).format(d).toUpperCase();
-    group = {
-      key, label, shortLabel, blocks: [], latest: b, oldest: b, count: 0,
-      tier: tierForBlock(b),
-    };
-    months.push(group);
+    rows.push({ kind: 'divider', month: monthLabel });
   }
-  group.blocks.push(b);
-  group.oldest = b;
-  group.count = group.blocks.length;
-  // Tier of the GROUP is the loosest tier across its blocks (i.e. if any
-  // block is "full" the whole month renders full; if all are deep, deep).
-  // Picking by the group's first block (the latest) is a good proxy — a
-  // month at most spans 31 days so everything in it lands in the same
-  // tier within tolerance.
-  group.tier = tierForBlock(group.latest);
+  rows.push({ kind: 'block', block: b });
 }
 
-// Latest + oldest for the hero stats banner.
-const latestDate = blocks[0]?.data.timestamp;
-const oldestDate = blocks[blocks.length - 1]?.data.timestamp;
-const yearRange = latestDate && oldestDate
-  ? (latestDate.getUTCFullYear() === oldestDate.getUTCFullYear()
-      ? `${latestDate.getUTCFullYear()}`
-      : `${oldestDate.getUTCFullYear()}–${latestDate.getUTCFullYear()}`)
-  : `${now.getUTCFullYear()}`;
+const firstYear = blocks.length > 0 ? blocks[blocks.length - 1].data.timestamp.getUTCFullYear() : new Date().getUTCFullYear();
+const latestYear = blocks.length > 0 ? blocks[0].data.timestamp.getUTCFullYear() : new Date().getUTCFullYear();
+const yearRange = firstYear === latestYear ? `${firstYear}` : `${firstYear}–${latestYear}`;
 
-function fmtMonthDay(d: Date): string {
+function formatDate(d: Date): string {
   return new Intl.DateTimeFormat('en-US', {
-    month: 'short', day: '2-digit', timeZone: 'UTC',
+    month: 'short',
+    day: '2-digit',
+    timeZone: 'UTC',
   }).format(d).toUpperCase();
 }
 
-function fmtDay(d: Date): string {
+function formatDay(d: Date): string {
   return String(d.getUTCDate()).padStart(2, '0');
 }
 
@@ -149,84 +98,80 @@ const jsonLd = {
         { '@type': 'ListItem', position: 2, name: 'Archive', item: 'https://pointcast.xyz/archive' },
       ],
     },
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/archive#itemlist',
+      numberOfItems: blocks.length,
+      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+      itemListElement: blocks.map((b, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        url: `https://pointcast.xyz/b/${b.data.id}`,
+        name: b.data.title,
+      })),
+    },
   ],
 };
 ---
 
 <BlockLayout
   title="Archive"
-  description={`Chronological index of every PointCast block. ${blocks.length} blocks across ${months.length} months, ${yearRange}.`}
+  description={`Chronological index of every PointCast block. ${blocks.length} blocks across ${Object.keys(channelCounts).length} channels, ${yearRange}.`}
   image="/images/og/archive.png"
   jsonLd={jsonLd}
   alternates={[{ type: 'application/json', href: '/archive.json', title: 'Archive (JSON)' }]}
 >
-  <div class="archive2027">
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>archive</span>
+    </nav>
 
-    <header class="archive__hero">
-      <p class="archive__crumb">
-        <a href="/">home</a>
-        <span aria-hidden="true">›</span>
-        <span>archive</span>
-      </p>
-      <p class="archive__kicker">
-        ARCHIVE · {blocks.length} BLOCKS · {months.length} MONTHS · {yearRange}
-      </p>
-      <h1 class="archive__title">Every block, chronologically.</h1>
-      <p class="archive__dek">
+    <header class="hero">
+      <p class="kicker">ARCHIVE · {blocks.length} BLOCKS · {yearRange}</p>
+      <h1 class="display">Every block, chronologically.</h1>
+      <p class="dek">
         The homepage is the living feed. This is the record. Every block
-        ever published, reverse-chronological, with mile markers per
-        month, decreasing density as you scroll deeper, and a jump nav
-        on the right. Sibling: <a href="/archive.json">/archive.json</a>.
+        ever published, reverse-chronological, with channel and type filters.
+        The archive mirror is at <a href="/archive.json">/archive.json</a>.
       </p>
-      {oldestDate && (
-        <p class="archive__since">
-          first block <time datetime={oldestDate.toISOString()}>{fmtMonthDay(oldestDate)} {oldestDate.getUTCFullYear()}</time>
-          {' · '}
-          latest <time datetime={latestDate?.toISOString()}>{latestDate ? fmtMonthDay(latestDate) : '—'}</time>
-        </p>
-      )}
     </header>
 
-    <section class="archive__filters" aria-label="Filters">
-      <div class="archive__filter-row">
-        <p class="archive__filter-label">CHANNEL</p>
-        <div class="archive__chips" data-filter-group="channel">
-          <button type="button" class="archive__chip archive__chip--active" data-filter="all" data-group="channel">
-            ALL <span class="archive__chip-count">{blocks.length}</span>
+    <section class="filters" aria-label="Filters">
+      <div class="filter-row">
+        <p class="filter-row__label">CHANNEL</p>
+        <div class="chips" data-filter-group="channel">
+          <button type="button" class="chip chip--active" data-filter="all" data-group="channel">
+            ALL <span class="chip__count">{blocks.length}</span>
           </button>
           {CHANNEL_LIST.filter((c) => (channelCounts[c.code] ?? 0) > 0).map((c) => (
-            <button
-              type="button"
-              class="archive__chip"
-              data-filter={c.code}
-              data-group="channel"
-              style={`--chip-c: ${c.color600}; --chip-c50: ${c.color50};`}
-            >
-              CH.{c.code} <span class="archive__chip-count">{channelCounts[c.code] ?? 0}</span>
+            <button type="button" class="chip" data-filter={c.code} data-group="channel" style={`--chip-c: ${c.color600}; --chip-c8: ${c.color800}; --chip-c50: ${c.color50};`}>
+              CH.{c.code} · {c.name} <span class="chip__count">{channelCounts[c.code] ?? 0}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div class="archive__filter-row">
-        <p class="archive__filter-label">TYPE</p>
-        <div class="archive__chips" data-filter-group="type">
-          <button type="button" class="archive__chip archive__chip--active" data-filter="all" data-group="type">
-            ALL <span class="archive__chip-count">{blocks.length}</span>
+      <div class="filter-row">
+        <p class="filter-row__label">TYPE</p>
+        <div class="chips" data-filter-group="type">
+          <button type="button" class="chip chip--active" data-filter="all" data-group="type">
+            ALL <span class="chip__count">{blocks.length}</span>
           </button>
           {BLOCK_TYPE_LIST.filter((t) => (typeCounts[t.code] ?? 0) > 0).map((t) => (
-            <button type="button" class="archive__chip" data-filter={t.code} data-group="type">
-              {t.label} <span class="archive__chip-count">{typeCounts[t.code] ?? 0}</span>
+            <button type="button" class="chip" data-filter={t.code} data-group="type">
+              {t.label} <span class="chip__count">{typeCounts[t.code] ?? 0}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div class="archive__filter-row">
-        <p class="archive__filter-label">SEARCH</p>
+      <div class="filter-row">
+        <p class="filter-row__label">SEARCH</p>
         <input
           type="search"
-          class="archive__search"
+          class="search"
           id="archive-search"
           placeholder="Title, channel, number…"
           aria-label="Search archive"
@@ -234,638 +179,461 @@ const jsonLd = {
       </div>
     </section>
 
-    <div class="archive__body">
-
-      {/* Sticky date anchor — appears on scroll past the hero, updates
-          as month markers cross the viewport. JS sets data-active. */}
-      <aside class="archive__anchor" id="archive-anchor" data-state="hidden" aria-hidden="true">
-        <span class="archive__anchor-month" id="archive-anchor-month">—</span>
-        <span class="archive__anchor-count" id="archive-anchor-count">—</span>
-      </aside>
-
-      <main class="archive__stream" id="archive-stream">
-        {months.map((m) => (
-          <section
-            class={`archive__month archive__month--${m.tier}`}
-            data-month={m.key}
-            id={`m-${m.key}`}
+    <section class="stream" id="archive-stream" aria-label="Archive">
+      {rows.map((row) => {
+        if (row.kind === 'divider') {
+          return (
+            <div class="divider" data-row="divider">
+              <span class="divider__month">{row.month}</span>
+              <span class="divider__rule" aria-hidden="true"></span>
+            </div>
+          );
+        }
+        const b = row.block!;
+        const ch = CHANNELS[b.data.channel];
+        const d = b.data.timestamp;
+        const isReadOrPost = b.data.type === 'READ' && (b.data as any).slug;
+        const href = isReadOrPost ? `/posts/${(b.data as any).slug}` : `/b/${b.data.id}`;
+        return (
+          <a
+            class="row"
+            href={href}
+            data-row="block"
+            data-channel={b.data.channel}
+            data-type={b.data.type}
+            data-search={`${b.data.title} ${b.data.id} ${ch.code} ${b.data.type} ${ch.name}`.toLowerCase()}
+            style={`--row-c: ${ch.color600}; --row-c8: ${ch.color800}; --row-c50: ${ch.color50};`}
           >
-            {/* MILE MARKER */}
-            <header class="archive__marker">
-              <div class="archive__marker-row">
-                <span class="archive__marker-label">{m.label}</span>
-                <span class="archive__marker-count mono">
-                  {m.count} {m.count === 1 ? 'BLOCK' : 'BLOCKS'}
-                </span>
-              </div>
-              <p class="archive__marker-latest">
-                <span class="archive__marker-eyebrow mono">LATEST</span>
-                <a href={`/b/${m.latest.data.id}`}>{m.latest.data.title}</a>
-                <span class="archive__marker-meta mono">CH.{m.latest.data.channel} · {fmtMonthDay(m.latest.data.timestamp)}</span>
-              </p>
-              <span class="archive__marker-rule" aria-hidden="true"></span>
-            </header>
+            <span class="row__date mono" aria-label={d.toISOString()}>
+              <span class="row__day">{formatDay(d)}</span>
+              <span class="row__month">{formatDate(d).split(' ')[0]}</span>
+            </span>
+            <span class="row__id mono">№{b.data.id}</span>
+            <span class="row__ch">CH.{ch.code}</span>
+            <span class="row__type mono">{b.data.type}</span>
+            <span class="row__title">{b.data.title}</span>
+            {b.data.dek && <span class="row__dek">{b.data.dek}</span>}
+          </a>
+        );
+      })}
+    </section>
 
-            {/* BLOCKS — three density tiers */}
-            {m.tier === 'full' && (
-              <div class="archive__grid archive__grid--full">
-                {m.blocks.map((b) => {
-                  const ch = CHANNELS[b.data.channel];
-                  const d = b.data.timestamp;
-                  return (
-                    <a
-                      class="archive__card"
-                      href={`/b/${b.data.id}`}
-                      data-row="block"
-                      data-channel={b.data.channel}
-                      data-type={b.data.type}
-                      data-search={`${b.data.title} ${b.data.id} ${ch.code} ${b.data.type} ${ch.name}`.toLowerCase()}
-                      style={`--card-c: ${ch.color600}; --card-c50: ${ch.color50};`}
-                    >
-                      <div class="archive__card-head mono">
-                        <span class="archive__card-id">/{b.data.id}</span>
-                        <span class="archive__card-ch">CH.{b.data.channel}</span>
-                        <time class="archive__card-date" datetime={d.toISOString()}>{fmtMonthDay(d)}</time>
-                      </div>
-                      <h3 class="archive__card-title">{b.data.title}</h3>
-                      {b.data.dek && <p class="archive__card-dek">{b.data.dek}</p>}
-                    </a>
-                  );
-                })}
-              </div>
-            )}
-
-            {m.tier === 'compact' && (
-              <ul class="archive__list archive__list--compact">
-                {m.blocks.map((b) => {
-                  const ch = CHANNELS[b.data.channel];
-                  const d = b.data.timestamp;
-                  return (
-                    <li
-                      data-row="block"
-                      data-channel={b.data.channel}
-                      data-type={b.data.type}
-                      data-search={`${b.data.title} ${b.data.id} ${ch.code} ${b.data.type} ${ch.name}`.toLowerCase()}
-                    >
-                      <a
-                        class="archive__row archive__row--compact"
-                        href={`/b/${b.data.id}`}
-                        style={`--row-c: ${ch.color600};`}
-                      >
-                        <span class="archive__row-date mono">
-                          <span class="archive__row-day">{fmtDay(d)}</span>
-                          <span class="archive__row-mon">{fmtMonthDay(d).split(' ')[0]}</span>
-                        </span>
-                        <span class="archive__row-tag mono">CH.{b.data.channel}</span>
-                        <span class="archive__row-id mono">/{b.data.id}</span>
-                        <span class="archive__row-title">
-                          {b.data.title}
-                          {b.data.dek && <span class="archive__row-dek"> — {b.data.dek}</span>}
-                        </span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {m.tier === 'deep' && (
-              <ul class="archive__list archive__list--deep">
-                {m.blocks.map((b) => {
-                  const ch = CHANNELS[b.data.channel];
-                  const d = b.data.timestamp;
-                  return (
-                    <li
-                      data-row="block"
-                      data-channel={b.data.channel}
-                      data-type={b.data.type}
-                      data-search={`${b.data.title} ${b.data.id} ${ch.code} ${b.data.type} ${ch.name}`.toLowerCase()}
-                    >
-                      <a
-                        class="archive__row archive__row--deep"
-                        href={`/b/${b.data.id}`}
-                        style={`--row-c: ${ch.color600};`}
-                      >
-                        <span class="archive__row-tag mono">CH.{b.data.channel}</span>
-                        <span class="archive__row-id mono">/{b.data.id}</span>
-                        <span class="archive__row-title">{b.data.title}</span>
-                        <time class="archive__row-date mono" datetime={d.toISOString()}>{fmtMonthDay(d)}</time>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        ))}
-
-        <footer class="archive__foot">
-          <p class="archive__foot-h mono">END OF ARCHIVE</p>
-          <p class="archive__foot-dek">
-            {blocks.length} blocks since {oldestDate ? fmtMonthDay(oldestDate) + ' ' + oldestDate.getUTCFullYear() : '—'}.
-            New blocks land daily — back to <a href="/">the home</a> for what shipped today.
-          </p>
-        </footer>
-      </main>
-
-      {/* Jump nav — sticky right sidebar with month list */}
-      <nav class="archive__jump" id="archive-jump" aria-label="Jump to month">
-        <p class="archive__jump-eyebrow mono">JUMP TO</p>
-        <ul>
-          {months.map((m) => (
-            <li>
-              <a
-                href={`#m-${m.key}`}
-                class="archive__jump-link"
-                data-jump={m.key}
-              >
-                <span class="archive__jump-label mono">{m.shortLabel}</span>
-                <span class="archive__jump-count mono">{m.count}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-    </div>
+    <aside class="agent-strip">
+      <p class="kicker">AGENT SURFACES</p>
+      <ul class="agent-strip__list">
+        <li><a href="/archive.json"><span class="mono">GET</span> /archive.json</a></li>
+        <li><a href="/blocks.json"><span class="mono">GET</span> /blocks.json</a></li>
+        <li><a href="/sitemap-blocks.xml"><span class="mono">GET</span> /sitemap-blocks.xml</a></li>
+        <li><a href="/rss.xml"><span class="mono">RSS</span> /rss.xml</a></li>
+      </ul>
+    </aside>
   </div>
+
+  <script is:inline>
+    // Two-axis filtering: channel ∩ type ∩ search. Hidden rows get
+    // display:none; month dividers are hidden if no visible blocks
+    // follow them (until the next divider).
+    (function () {
+      var stream = document.getElementById('archive-stream');
+      var search = document.getElementById('archive-search');
+      if (!stream || !search) return;
+
+      var state = { channel: 'all', type: 'all', q: '' };
+      var rows = Array.prototype.slice.call(stream.querySelectorAll('[data-row]'));
+      var chips = document.querySelectorAll('[data-group]');
+
+      function apply() {
+        var q = state.q.trim().toLowerCase();
+        var lastDividerEl = null;
+        var lastDividerHasVisible = false;
+
+        rows.forEach(function (r) {
+          if (r.dataset.row === 'divider') {
+            if (lastDividerEl) {
+              lastDividerEl.style.display = lastDividerHasVisible ? '' : 'none';
+            }
+            lastDividerEl = r;
+            lastDividerHasVisible = false;
+            return;
+          }
+          var matchCh = state.channel === 'all' || r.dataset.channel === state.channel;
+          var matchTy = state.type === 'all' || r.dataset.type === state.type;
+          var matchQ = !q || (r.dataset.search || '').indexOf(q) !== -1;
+          var show = matchCh && matchTy && matchQ;
+          r.style.display = show ? '' : 'none';
+          if (show) lastDividerHasVisible = true;
+        });
+
+        if (lastDividerEl) {
+          lastDividerEl.style.display = lastDividerHasVisible ? '' : 'none';
+        }
+      }
+
+      chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          var group = chip.dataset.group;
+          var siblings = document.querySelectorAll('[data-group="' + group + '"]');
+          siblings.forEach(function (s) { s.classList.remove('chip--active'); });
+          chip.classList.add('chip--active');
+          state[group] = chip.dataset.filter;
+          apply();
+        });
+      });
+
+      search.addEventListener('input', function () {
+        state.q = search.value || '';
+        apply();
+      });
+    })();
+  </script>
 </BlockLayout>
 
-<script is:inline>
-(() => {
-  // ───── Filters (channel + type + search) ─────────────────────
-  const stream = document.getElementById('archive-stream');
-  const search = document.getElementById('archive-search');
-  let active = { channel: 'all', type: 'all', q: '' };
-
-  function applyFilters() {
-    const blocks = stream?.querySelectorAll('[data-row="block"]');
-    if (!blocks) return;
-    const q = active.q.toLowerCase().trim();
-    blocks.forEach(el => {
-      const ch = el.getAttribute('data-channel') || '';
-      const ty = el.getAttribute('data-type') || '';
-      const sx = el.getAttribute('data-search') || '';
-      const channelHit = active.channel === 'all' || active.channel === ch;
-      const typeHit    = active.type    === 'all' || active.type    === ty;
-      const searchHit  = !q || sx.includes(q);
-      el.style.display = (channelHit && typeHit && searchHit) ? '' : 'none';
-    });
-    // Hide month sections that have no visible blocks left.
-    document.querySelectorAll('.archive__month').forEach(sec => {
-      const visible = sec.querySelectorAll('[data-row="block"]:not([style*="display: none"])').length;
-      sec.style.display = visible === 0 ? 'none' : '';
-    });
-  }
-
-  document.querySelectorAll('[data-group="channel"] .archive__chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-group="channel"] .archive__chip').forEach(b => b.classList.remove('archive__chip--active'));
-      btn.classList.add('archive__chip--active');
-      active.channel = btn.getAttribute('data-filter') || 'all';
-      applyFilters();
-    });
-  });
-  document.querySelectorAll('[data-group="type"] .archive__chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-group="type"] .archive__chip').forEach(b => b.classList.remove('archive__chip--active'));
-      btn.classList.add('archive__chip--active');
-      active.type = btn.getAttribute('data-filter') || 'all';
-      applyFilters();
-    });
-  });
-  search?.addEventListener('input', e => {
-    active.q = e.target.value;
-    applyFilters();
-  });
-
-  // ───── Sticky date anchor + jump nav active state ────────────
-  const anchorEl   = document.getElementById('archive-anchor');
-  const anchorMon  = document.getElementById('archive-anchor-month');
-  const anchorCnt  = document.getElementById('archive-anchor-count');
-  const jumpLinks  = document.querySelectorAll('.archive__jump-link');
-  const sections   = document.querySelectorAll('.archive__month');
-
-  function setActive(monthKey, label, count, totalLeft) {
-    if (!anchorEl) return;
-    anchorEl.dataset.state = 'shown';
-    anchorEl.setAttribute('aria-hidden', 'false');
-    if (anchorMon) anchorMon.textContent = label || '—';
-    if (anchorCnt) anchorCnt.textContent = (count != null && totalLeft != null)
-      ? `${count} block${count === 1 ? '' : 's'} · ${totalLeft} left in archive`
-      : '—';
-    jumpLinks.forEach(a => {
-      a.classList.toggle('archive__jump-link--active', a.getAttribute('data-jump') === monthKey);
-    });
-    if (history && history.replaceState) {
-      try { history.replaceState(null, '', `#m-${monthKey}`); } catch (e) {}
-    }
-  }
-
-  // Hide the anchor near the top of the page so it doesn't collide with
-  // the hero. Show it once we've scrolled past the filters.
-  function maybeHideAnchor() {
-    if (!anchorEl) return;
-    if (window.scrollY < 240) {
-      anchorEl.dataset.state = 'hidden';
-      anchorEl.setAttribute('aria-hidden', 'true');
-    }
-  }
-
-  // Compute prefix counts so the anchor can show "X left below".
-  const monthMeta = Array.from(sections).map(s => ({
-    key: s.getAttribute('data-month') || '',
-    label: s.querySelector('.archive__marker-label')?.textContent?.trim() || '',
-    count: s.querySelectorAll('[data-row="block"]').length,
-    el: s,
-  }));
-  let cumulativeRemaining = monthMeta.reduce((s, m) => s + m.count, 0);
-  for (const m of monthMeta) {
-    cumulativeRemaining -= m.count;
-    m.totalLeft = cumulativeRemaining;
-    m.cumLeft   = cumulativeRemaining; // alias
-  }
-
-  if ('IntersectionObserver' in window) {
-    const observer = new IntersectionObserver((entries) => {
-      // Sort entries by document order; pick the topmost intersecting one
-      // as the active section. Falls back to nearest-to-top on edge cases.
-      const top = entries
-        .filter(e => e.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (top) {
-        const key = top.target.getAttribute('data-month') || '';
-        const m = monthMeta.find(mm => mm.key === key);
-        if (m) setActive(m.key, m.label, m.count, m.totalLeft);
-      }
-      maybeHideAnchor();
-    }, {
-      // Trigger when a marker is in the top third of the viewport.
-      rootMargin: '-12% 0px -60% 0px',
-      threshold: 0,
-    });
-    sections.forEach(s => observer.observe(s));
-    window.addEventListener('scroll', maybeHideAnchor, { passive: true });
-  }
-
-  // ───── Smooth-scroll jump links ──────────────────────────────
-  jumpLinks.forEach(a => {
-    a.addEventListener('click', e => {
-      const key = a.getAttribute('data-jump');
-      if (!key) return;
-      const target = document.getElementById(`m-${key}`);
-      if (!target) return;
-      e.preventDefault();
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      // Update hash without jumping (smoothScroll handles position).
-      try { history.pushState(null, '', `#m-${key}`); } catch (err) {}
-    });
-  });
-
-  // Honor an inbound hash on load — scroll to that month after layout.
-  window.addEventListener('load', () => {
-    const h = (location.hash || '').replace(/^#m-/, '');
-    if (h && /^\d{4}-\d{2}$/.test(h)) {
-      const target = document.getElementById(`m-${h}`);
-      if (target) target.scrollIntoView({ behavior: 'auto', block: 'start' });
-    }
-  });
-})();
-</script>
-
 <style>
-  .archive2027 {
-    max-width: 1280px; margin: 0 auto; padding: 24px 20px 80px;
-    font-family: var(--font-body);
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 18px 16px 80px;
   }
 
-  /* HERO */
-  .archive__hero { margin: 0 0 24px; padding: 36px 0 28px; border-bottom: 1.5px solid var(--color-rule); }
-  .archive__crumb {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
-    color: var(--color-ink-soft); text-transform: uppercase;
-    margin: 0 0 16px;
-  }
-  .archive__crumb a { color: var(--color-ink-soft); text-decoration: none; }
-  .archive__crumb a:hover { color: var(--color-ink); }
-  .archive__crumb span { margin: 0 6px; }
-  .archive__kicker {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
-    color: var(--color-warm); text-transform: uppercase;
-    margin: 0 0 12px;
-  }
-  .archive__title {
-    font-family: var(--font-heading);
-    font-size: clamp(36px, 5vw, 60px);
-    line-height: 1.05; font-weight: 600;
-    margin: 0 0 14px;
-    letter-spacing: -0.02em;
-    color: var(--color-ink);
-  }
-  .archive__dek {
-    font-family: var(--font-serif);
-    font-size: clamp(16px, 1.4vw, 19px);
-    line-height: 1.5; color: var(--color-ink-soft);
-    max-width: 720px; margin: 0 0 14px;
-  }
-  .archive__since {
-    font-family: var(--font-mono); font-size: 11px;
-    color: var(--color-ink-soft); margin: 0;
-  }
-  .archive__since time { color: var(--color-ink); }
-
-  /* FILTERS */
-  .archive__filters {
-    margin: 0 0 28px;
-    padding: 16px 0;
-    display: grid; gap: 12px;
-  }
-  .archive__filter-row {
-    display: grid; grid-template-columns: 90px 1fr; gap: 14px;
-    align-items: start;
-  }
-  @media (max-width: 640px) {
-    .archive__filter-row { grid-template-columns: 1fr; gap: 6px; }
-  }
-  .archive__filter-label {
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
-    color: var(--color-ink-soft); text-transform: uppercase;
-    margin: 4px 0 0;
-  }
-  .archive__chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .archive__chip {
-    padding: 6px 10px;
-    border: 1.5px solid var(--color-rule);
-    background: #fff;
-    font-family: var(--font-mono); font-size: 10px;
-    letter-spacing: 0.12em; text-transform: uppercase;
-    cursor: pointer; border-radius: 2px;
-    color: var(--color-ink);
-  }
-  .archive__chip:hover { border-color: var(--chip-c, var(--color-warm)); }
-  .archive__chip--active {
-    background: var(--chip-c, var(--color-ink));
-    color: #fff;
-    border-color: var(--chip-c, var(--color-ink));
-  }
-  .archive__chip-count {
-    margin-left: 6px;
-    color: rgba(255, 255, 255, 0.65);
-  }
-  .archive__chip:not(.archive__chip--active) .archive__chip-count {
-    color: var(--color-ink-soft);
-  }
-  .archive__search {
-    padding: 8px 12px; font-family: var(--font-body);
-    border: 1.5px solid var(--color-rule); background: #fff;
-    border-radius: 2px; min-width: 220px;
-  }
-  .archive__search:focus { outline: 2px solid var(--color-warm); outline-offset: 2px; }
-
-  /* BODY: stream + jump nav */
-  .archive__body {
-    display: grid;
-    grid-template-columns: 1fr 200px;
-    gap: 32px;
-    align-items: start;
-    position: relative;
-  }
-  @media (max-width: 880px) {
-    .archive__body { grid-template-columns: 1fr; }
-    .archive__jump { display: none; }
-  }
-
-  /* STICKY DATE ANCHOR */
-  .archive__anchor {
-    position: fixed;
-    top: 80px; right: 24px;
-    background: var(--color-ink);
-    color: #fff;
-    padding: 8px 12px;
-    border-radius: 2px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    font-family: var(--font-mono);
-    z-index: 30;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    pointer-events: none;
-  }
-  .archive__anchor[data-state='hidden'] {
-    opacity: 0; transform: translateY(-6px);
-  }
-  .archive__anchor[data-state='shown'] {
-    opacity: 1; transform: translateY(0);
-  }
-  .archive__anchor-month { display: block; font-size: 11px; letter-spacing: 0.18em; font-weight: 700; }
-  .archive__anchor-count { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.7; margin-top: 2px; }
-
-  /* MONTH SECTION */
-  .archive__month { margin: 0 0 36px; }
-  .archive__month:first-child { margin-top: 0; }
-
-  /* MILE MARKER */
-  .archive__marker {
-    position: relative;
-    margin: 0 0 18px;
-    padding: 0 0 14px;
-  }
-  .archive__marker-row {
-    display: flex; align-items: baseline; justify-content: space-between;
-    gap: 12px;
-  }
-  .archive__marker-label {
-    font-family: var(--font-heading);
-    font-size: clamp(28px, 3.5vw, 40px); font-weight: 600;
-    letter-spacing: -0.01em; color: var(--color-ink);
-  }
-  .archive__marker-count {
-    font-size: 11px; letter-spacing: 0.18em;
-    color: var(--color-warm);
-  }
-  .archive__marker-latest {
-    margin: 8px 0 0;
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
-    font-size: 14px; line-height: 1.4;
-    color: var(--color-ink-soft);
-  }
-  .archive__marker-eyebrow {
-    font-size: 9px; letter-spacing: 0.2em;
-    color: var(--color-warm); text-transform: uppercase;
-  }
-  .archive__marker-latest a {
-    font-weight: 500; color: var(--color-ink); text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: border-color 0.12s;
-  }
-  .archive__marker-latest a:hover { border-color: var(--color-warm); }
-  .archive__marker-meta { font-size: 11px; color: var(--color-ink-soft); letter-spacing: 0.06em; }
-  .archive__marker-rule {
-    display: block; margin-top: 14px;
-    height: 2px; background: var(--color-ink);
-    width: 60px;
-  }
-  .archive__month--full  .archive__marker-rule { background: var(--color-warm); width: 80px; }
-
-  /* DENSITY: FULL — 3-col cards */
-  .archive__grid--full {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 14px;
-  }
-  .archive__card {
-    display: block;
-    padding: 14px 14px 14px;
-    border: 1.5px solid var(--color-rule);
-    border-left: 3px solid var(--card-c, var(--color-ink));
-    background: #fff;
-    border-radius: 2px;
-    color: inherit; text-decoration: none;
-    transition: border-color 0.12s, transform 0.12s;
-  }
-  .archive__card:hover {
-    border-color: var(--card-c, var(--color-warm));
-    transform: translateY(-1px);
-  }
-  .archive__card-head {
-    display: flex; gap: 10px; align-items: center;
-    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
-    margin: 0 0 8px;
-  }
-  .archive__card-id { color: var(--card-c, var(--color-warm)); }
-  .archive__card-date { margin-left: auto; }
-  .archive__card-title {
-    font-family: var(--font-heading);
-    font-size: 18px; line-height: 1.2; font-weight: 600;
-    margin: 0 0 6px; color: var(--color-ink);
-  }
-  .archive__card-dek {
-    font-family: var(--font-serif);
-    font-size: 13.5px; line-height: 1.45;
-    color: var(--color-ink-soft);
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* DENSITY: COMPACT — title + dek rows */
-  .archive__list--compact { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-  .archive__row--compact {
-    display: grid;
-    grid-template-columns: 56px 60px 60px 1fr;
-    gap: 10px;
-    align-items: baseline;
-    padding: 10px 12px;
-    border: 1px solid var(--color-rule);
-    background: #fff;
-    border-radius: 2px;
-    color: inherit; text-decoration: none;
-    transition: border-color 0.12s, background 0.12s;
-  }
-  .archive__row--compact:hover {
-    border-color: var(--row-c, var(--color-warm));
-    background: var(--color-card-hover);
-  }
-  .archive__row-date {
-    display: flex; flex-direction: column; align-items: flex-start;
-    line-height: 1; flex-shrink: 0;
-  }
-  .archive__row-day { font-size: 18px; font-weight: 700; color: var(--color-ink); }
-  .archive__row-mon { font-size: 9px; letter-spacing: 0.14em; color: var(--color-ink-soft); }
-  .archive__row-tag {
-    font-size: 10px; letter-spacing: 0.14em;
-    color: var(--row-c, var(--color-warm));
-  }
-  .archive__row-id {
-    font-size: 10px; color: var(--color-ink-soft);
-  }
-  .archive__row-title {
-    font-size: 14px; line-height: 1.4; color: var(--color-ink);
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .archive__row-dek { font-family: var(--font-serif); color: var(--color-ink-soft); }
-
-  /* DENSITY: DEEP — one-line lozenges */
-  .archive__list--deep { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
-  .archive__row--deep {
-    display: grid;
-    grid-template-columns: 60px 60px 1fr 70px;
-    gap: 12px;
-    align-items: baseline;
-    padding: 6px 12px;
-    color: inherit; text-decoration: none;
-    border-radius: 2px;
-    transition: background 0.12s;
-  }
-  .archive__row--deep:hover { background: var(--color-card); }
-  .archive__row--deep .archive__row-tag {
-    font-size: 10px; color: var(--row-c, var(--color-warm));
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
     letter-spacing: 0.12em;
-  }
-  .archive__row--deep .archive__row-id { font-size: 10px; color: var(--color-ink-soft); }
-  .archive__row--deep .archive__row-title {
-    font-size: 13px; color: var(--color-ink);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .archive__row--deep .archive__row-date {
-    flex-direction: row; gap: 4px;
-    font-size: 10px; color: var(--color-ink-soft);
-    text-align: right; justify-self: end;
+    text-transform: uppercase;
   }
 
-  /* JUMP NAV */
-  .archive__jump {
-    position: sticky; top: 80px; align-self: start;
-    border-left: 1px solid var(--color-rule);
-    padding: 4px 0 4px 16px;
-    max-height: calc(100vh - 100px);
-    overflow-y: auto;
-  }
-  .archive__jump-eyebrow {
-    font-size: 9px; letter-spacing: 0.2em;
-    color: var(--color-ink-soft); text-transform: uppercase;
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
     margin: 0 0 8px;
   }
-  .archive__jump ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 1px; }
-  .archive__jump-link {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: 4px 8px; gap: 8px;
-    color: var(--color-ink-soft); text-decoration: none;
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .hero {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1.5px solid var(--pc-ink);
+  }
+
+  .display {
+    font-family: var(--pc-font-sans);
+    font-size: clamp(2rem, 8vw, 3.4rem);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.018em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+  }
+
+  .dek {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 54ch;
+  }
+
+  .dek a { color: var(--pc-accent); }
+
+  /* ══════════ FILTERS ══════════ */
+  .filters {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--pc-rule);
     border-radius: 2px;
-    transition: background 0.12s, color 0.12s;
+    background: #fafaf8;
   }
-  .archive__jump-link:hover { background: var(--color-card-hover); color: var(--color-ink); }
-  .archive__jump-link--active {
-    background: var(--color-ink); color: #fff;
-  }
-  .archive__jump-link--active .archive__jump-count { color: rgba(255, 255, 255, 0.7); }
-  .archive__jump-label { font-size: 11px; letter-spacing: 0.12em; }
-  .archive__jump-count { font-size: 10px; color: var(--color-ink-soft); }
 
-  /* FOOT */
-  .archive__foot {
-    margin: 64px 0 0; padding: 32px 0;
-    border-top: 1px solid var(--color-rule);
+  .filter-row {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .filter-row__label {
+    margin: 0;
+    padding-top: 5px;
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border: 1px solid var(--chip-c, var(--pc-rule));
+    background: #fff;
+    font-family: var(--pc-font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--chip-c8, var(--pc-ink-soft));
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.12s;
+    line-height: 1.1;
+  }
+
+  .chip:hover {
+    background: var(--chip-c50, #f0eee8);
+  }
+
+  .chip--active {
+    background: var(--chip-c, var(--pc-ink));
+    border-color: var(--chip-c, var(--pc-ink));
+    color: #fff;
+  }
+
+  .chip__count {
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    opacity: 0.65;
+  }
+
+  .chip--active .chip__count {
+    opacity: 0.82;
+    color: #fff;
+  }
+
+  .search {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    font-family: var(--pc-font-sans);
+    font-size: 13.5px;
+    color: var(--pc-ink);
+    background: #fff;
+  }
+
+  .search:focus {
+    outline: 2px solid rgba(24, 95, 165, 0.18);
+    border-color: var(--pc-accent);
+  }
+
+  /* ══════════ STREAM ══════════ */
+  .stream {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .divider {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    margin: 22px 0 8px;
+  }
+
+  .divider:first-child {
+    margin-top: 4px;
+  }
+
+  .divider__month {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+
+  .divider__rule {
+    height: 1.5px;
+    background: var(--pc-ink);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 54px 68px 58px 54px 1fr;
+    grid-template-areas:
+      "date id ch type title"
+      ". . . . dek";
+    gap: 6px 12px;
+    padding: 10px 4px;
+    border-bottom: 1px dashed var(--pc-rule-soft);
+    color: var(--pc-ink);
+    text-decoration: none;
+    transition: background-color 0.1s, padding-left 0.12s;
+  }
+
+  .row:hover {
+    background: var(--row-c50, #fafaf8);
+    border-bottom-color: var(--row-c, var(--pc-rule));
+    padding-left: 8px;
+    text-decoration: none;
+  }
+
+  .row__date {
+    grid-area: date;
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    color: var(--pc-ink-muted);
+    gap: 2px;
+  }
+
+  .row__day {
+    font-family: var(--pc-font-mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--pc-ink);
+    letter-spacing: 0;
+  }
+
+  .row__month {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted);
+  }
+
+  .row__id {
+    grid-area: id;
+    align-self: center;
+    color: var(--pc-ink-muted);
+    font-size: 10.5px;
+  }
+
+  .row__ch {
+    grid-area: ch;
+    align-self: center;
+    display: inline-block;
+    padding: 2px 6px;
+    border: 1px solid var(--row-c);
+    background: var(--row-c50);
+    color: var(--row-c8);
+    font-family: var(--pc-font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    border-radius: 2px;
     text-align: center;
-  }
-  .archive__foot-h {
-    font-size: 11px; letter-spacing: 0.18em;
-    color: var(--color-warm);
-    margin: 0 0 8px;
-  }
-  .archive__foot-dek {
-    font-family: var(--font-serif);
-    font-size: 14px; color: var(--color-ink-soft);
-    margin: 0; max-width: 480px; margin-left: auto; margin-right: auto;
+    line-height: 1.2;
   }
 
-  @media (max-width: 600px) {
-    .archive2027 { padding: 16px 16px 60px; }
-    .archive__hero { padding: 24px 0; }
-    .archive__anchor { right: 12px; top: 64px; }
-    .archive__row--deep { grid-template-columns: auto auto 1fr auto; gap: 8px; }
+  .row__type {
+    grid-area: type;
+    align-self: center;
+    color: var(--pc-ink-muted);
+    font-size: 9.5px;
+  }
+
+  .row__title {
+    grid-area: title;
+    align-self: center;
+    font-family: var(--pc-font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--pc-ink);
+  }
+
+  .row:hover .row__title {
+    color: var(--row-c8, var(--pc-accent));
+  }
+
+  .row__dek {
+    grid-area: dek;
+    font-size: 13px;
+    color: var(--pc-ink-soft);
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+
+  /* ══════════ AGENT STRIP ══════════ */
+  .agent-strip {
+    margin-top: 32px;
+    padding: 14px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 2px;
+    background: #fafaf8;
+  }
+
+  .agent-strip__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 14px;
+  }
+
+  .agent-strip__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--pc-accent);
+    padding: 4px 0;
+  }
+
+  .agent-strip__list .mono {
+    color: var(--pc-ink-muted);
+    min-width: 36px;
+  }
+
+  /* ══════════ RESPONSIVE ══════════ */
+  @media (min-width: 720px) {
+    .filter-row {
+      grid-template-columns: 80px 1fr;
+    }
+
+    .row {
+      grid-template-columns: 64px 72px 82px 54px 1fr;
+      grid-template-areas: "date id ch type title";
+      gap: 6px 14px;
+    }
+
+    .row__dek {
+      display: none;
+    }
+
+    .agent-strip__list {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .row {
+      grid-template-columns: 40px 1fr auto;
+      grid-template-areas:
+        "date title type"
+        "date dek dek"
+        "date ch id";
+      row-gap: 4px;
+    }
+
+    .row__day {
+      font-size: 18px;
+    }
+
+    .row__id {
+      font-size: 9.5px;
+    }
   }
 </style>

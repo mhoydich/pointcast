@@ -21,7 +21,6 @@ Environment:
                            Default: https://getgoodfeels.com
 
 Options:
-  --check                  Check mirror freshness without writing files
   --dry-run                Print mapped products without writing JSON files
   --limit <n>              Max products to mirror. Default: 250
   --out <dir>              Output directory. Default: src/content/products
@@ -31,7 +30,6 @@ Options:
 
 const { values } = parseArgs({
   options: {
-    check: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
     limit: { type: 'string', default: '250' },
@@ -48,25 +46,11 @@ if (values.help) {
 const productsUrl = process.env.GOOD_FEELS_PRODUCTS_URL || 'https://getgoodfeels.com/collections/all/products.json?limit=250';
 const storeUrl = normalizeOrigin(process.env.GOOD_FEELS_STORE_URL || 'https://getgoodfeels.com');
 const outDir = path.resolve(process.cwd(), values.out);
-const syncMetadataFile = path.resolve(process.cwd(), 'src/data/commerce/good-feels-sync.json');
 const limit = parsePositiveInt(values.limit, '--limit');
 const runStartedAt = new Date().toISOString();
 
 const products = await fetchProducts();
 const mapped = products.slice(0, limit).map(toPointCastProduct);
-
-if (values.check) {
-  const freshness = await checkMirrorFreshness(mapped);
-  console.log(JSON.stringify({
-    current: freshness.changed.length === 0 && freshness.missing.length === 0 && freshness.stale.length === 0,
-    productsUrl,
-    storeUrl,
-    sourceCount: mapped.length,
-    ...freshness,
-  }, null, 2));
-  process.exitCode = freshness.changed.length || freshness.missing.length || freshness.stale.length ? 1 : 0;
-  process.exit();
-}
 
 if (values['dry-run']) {
   console.log(JSON.stringify({
@@ -94,15 +78,6 @@ if (values.prune) {
     console.log(`pruned stale Good Feels product -> ${path.relative(process.cwd(), file)}`);
   }
 }
-
-await mkdir(path.dirname(syncMetadataFile), { recursive: true });
-await writeFile(syncMetadataFile, `${JSON.stringify({
-  checkedAt: runStartedAt,
-  sourceUrl: productsUrl,
-  storeUrl,
-  productCount: mapped.length,
-}, null, 2)}\n`, 'utf8');
-console.log(`recorded catalog check -> ${path.relative(process.cwd(), syncMetadataFile)}`);
 
 console.log(`Good Feels mirror complete: ${mapped.length} product${mapped.length === 1 ? '' : 's'}`);
 
@@ -192,34 +167,6 @@ async function findStaleGoodFeelsFiles(freshSlugs) {
   return stale;
 }
 
-async function checkMirrorFreshness(freshProducts) {
-  const changed = [];
-  const missing = [];
-
-  for (const product of freshProducts) {
-    const file = path.join(outDir, `${product.slug}.json`);
-    let current;
-    try {
-      current = JSON.parse(await readFile(file, 'utf8'));
-    } catch (error) {
-      if (error?.code === 'ENOENT') {
-        missing.push(product.slug);
-        continue;
-      }
-      throw new Error(`Could not read ${path.relative(process.cwd(), file)}: ${error.message}`);
-    }
-
-    if (JSON.stringify(current) !== JSON.stringify(product)) changed.push(product.slug);
-  }
-
-  const freshSlugs = new Set(freshProducts.map((product) => product.slug));
-  const stale = (await findStaleGoodFeelsFiles(freshSlugs))
-    .map((file) => path.basename(file, '.json'))
-    .sort();
-
-  return { changed: changed.sort(), missing: missing.sort(), stale };
-}
-
 function isGoodFeelsEntry(data) {
   const brand = String(data.brand || '').toLowerCase();
   const url = String(data.url || '').toLowerCase();
@@ -254,8 +201,8 @@ function decodeHtml(value) {
 
 function servingLine(title, description) {
   const haystack = `${title} ${description}`;
-  const matches = unique(Array.from(haystack.matchAll(/\b(\d+(?:\.\d+)?)mg\s+(THC|CBD|CBN|CBG)\b/gi))
-    .map((match) => `${match[1]}mg ${match[2].toUpperCase()}`));
+  const matches = unique(Array.from(haystack.matchAll(/\b\d+(?:\.\d+)?mg\s+(?:THC|CBD|CBN|CBG)\b/gi))
+    .map((match) => match[0].replace(/\s+/g, ' ')));
   return matches.slice(0, 3).join(' + ');
 }
 

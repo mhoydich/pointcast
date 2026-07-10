@@ -3,13 +3,15 @@
 **PointCast v2.2 — the Blocks pivot, live edition**
 
 Author: Mike Hoydich × Claude
-Revision: **v2.2** (2026-05-02) — adds Money (`MNY`) and optional `spend` receipt metadata.
+Revision: **v2.2** (2026-04-30) — live on `main`, serving pointcast.xyz.
 
 Previous revisions:
-- **v2.2** (2026-05-02) — adds 11th channel MNY (Money) and
-  optional `spend` metadata for Link-backed agent spend receipts. Runtime
-  Link drafts live in `PC_MONEY_KV` and are promoted into immutable Blocks
-  by operator script after settlement.
+- **v2.2** (2026-04-30) — adds optional `spend` field on Block (Stripe Link
+  receipt sibling to `edition`). A Block carrying both is a "dual-rail"
+  block: `edition` is on-chain identity of the artifact (Tezos), `spend`
+  is off-chain receipt of what funded it (Stripe Link). Receipts publish
+  to existing channels for now (FD for agent-essay receipts; later channel
+  addition deferred per ongoing discussion). Per proposal #262.
 - **v2.1** (2026-04-17 evening) — adds 9th channel BTL (Battler),
   `media.thumbnail` + `media.ipfsFallback` schema fields, agent-layer
   surfaces (/manifesto, /glossary, /agents.json, /llms-full.txt),
@@ -62,27 +64,6 @@ type Block = {
   }
   media?: { kind: "image" | "audio" | "video" | "embed"; src: string }
   external?: { label: string; url: string }
-  spend?: {
-    agent: string
-    loop: string
-    amount_cents?: number
-    amount_usd?: number
-    currency?: "USD"
-    merchant: string
-    mode: "test" | "live"
-    status: "pending" | "approved" | "denied" | "settled" | "refunded"
-    link_session_id?: string
-    receipt_url?: string
-    approved_by?: string
-    credential_label?: string
-    requested_at?: ISO8601
-    approved_at?: ISO8601
-    settled_at?: ISO8601
-  }
-  // Runtime policy: live Link spend is capped at $20.00 in v0. Pending,
-  // approved, and settled unpromoted live drafts reserve against the cap.
-  // Public Blocks never store raw card credentials, payment method ids,
-  // webhook payloads, tokens, CVC, or full card numbers.
   meta?: Record<string, string>  // free-form agent-readable tags
 }
 ```
@@ -91,7 +72,7 @@ Every field except `id`, `channel`, `type`, `title`, and `timestamp` is optional
 
 ### Channels
 
-Eleven channels. Each has a code, a color, and a purpose. Do not add a twelfth without Mike's decision.
+Ten channels. Each has a code, a color, and a purpose. Do not add an eleventh without Mike's decision.
 
 | Code  | Name            | Color (hex / ramp)       | Purpose                                    |
 |-------|-----------------|--------------------------|--------------------------------------------|
@@ -102,7 +83,6 @@ Eleven channels. Each has a code, a color, and a purpose. Do not add a twelfth w
 | GDN   | Garden          | `#0F6E56` / teal-600     | Balcony, birds, wildlife, quiet noticing   |
 | ESC   | El Segundo      | `#534AB7` / purple-600   | ESCU fiction, local, community             |
 | FCT   | Faucet          | `#BA7517` / amber-600    | Free daily claims, giveaways               |
-| MNY   | Money           | `#0B6B3A` / emerald-700  | Agent allowances, spend receipts, payout splits |
 | VST   | Visit           | `#5F5E5A` / gray-600     | Human/agent visit log entries              |
 | BTL   | Battler         | `#8A2432` / oxblood-600  | Nouns Battler — deterministic Nouns duels  |
 | BDY   | Birthday        | `#D86440` / coral-600    | Birthdays celebrated on PointCast (indexed at /cake) |
@@ -126,7 +106,7 @@ Types govern internal treatment. Not about-ness (that's channel), but form.
 | TALK     | Voice Dispatch — 10-60 sec audio (RFC 0001) | Duration            |
 | BIRTHDAY | Open-edition card, one person per year, free FA2 | Recipient · Noun · claimed |
 
-Eleven channels × ten types = 110 combinations. Most will never appear. That's fine.
+Ten channels × ten types = 100 combinations. Most will never appear. That's fine.
 
 ---
 
@@ -141,10 +121,6 @@ Agent-legible, human-legible, permanent.
 /c/{channel}              # all blocks in a channel (e.g. /c/front-door)
 /c/{channel}.rss          # RSS feed per channel
 /c/{channel}.json         # JSON feed per channel
-/money                    # public agent spend ledger
-/money.json               # machine-readable agent spend ledger
-/api/link/webhook         # signed Link/Stripe receipt draft intake
-/api/link/receipts        # admin-only receipt draft listing for promotion
 /blocks.json              # full archive, paginated
 /sitemap-blocks.xml       # every block, for crawlers
 /for-agents               # manifest page — who this site is, how to read it

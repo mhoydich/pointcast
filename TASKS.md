@@ -32,7 +32,6 @@ All foundation, component, routing, and content-migration tasks landed in commit
 - [x] (CC) Per-block OG images via `scripts/generate-og-images.mjs` (1200×630 PNGs for all 48 blocks)
 - [ ] (CC) User-Agent-based stripped-HTML mode for known agent strings — `queued` (low priority — JSON-LD + /for-agents covers 95%)
 - [x] (CC) Spotify iframe facade on LISTEN-embed blocks (Manus QA 3.1) — home grid renders static chip, iframe mounts only on /b/[id]
-- [ ] (CC) Commerce: ensure outbound checkout links strip referrers (`rel="noopener noreferrer"` + `referrerpolicy="no-referrer"`) on `/shop`, `/products/{slug}`, and `/pairings/{mood}` — `handoff` — see `docs/codex-logs/2026-05-16-hourly-commerce-sprint.md`
 
 ---
 
