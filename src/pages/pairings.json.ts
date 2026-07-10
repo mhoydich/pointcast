@@ -53,7 +53,14 @@ export const GET: APIRoute = async ({ request }) => {
     };
   }).sort((a, b) => (b.blockCount + b.productCount) - (a.blockCount + a.productCount) || a.mood.localeCompare(b.mood));
 
-  const lastModified = products.reduce((latest, product) => product.data.addedAt > latest ? product.data.addedAt : latest, new Date(0));
+  const latestProductAt = products.reduce(
+    (latest, product) => product.data.addedAt > latest ? product.data.addedAt : latest,
+    new Date(0),
+  );
+  const lastModified = blocks.reduce(
+    (latest, block) => block.data.timestamp > latest ? block.data.timestamp : latest,
+    latestProductAt,
+  );
   const body = JSON.stringify({
     $schema: 'https://pointcast.xyz/pairings.json', version: COMMERCE_VERSION, name: 'PointCast Pairings',
     description: 'Mood routes cross-indexing PointCast editorial blocks with public products and outbound checkout destinations.',
