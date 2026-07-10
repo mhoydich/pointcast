@@ -69,6 +69,41 @@ export function isPublicProduct(product: { draft?: boolean; availability?: strin
   return true;
 }
 
+export function commerceCatalogMetadata(products: Array<{
+  data: {
+    addedAt: Date;
+    draft?: boolean;
+    availability?: string;
+    brand?: string;
+    url: string;
+  };
+}>, generatedAt = new Date()) {
+  const catalogUpdatedAt = products.reduce<Date | null>((latest, product) => {
+    const addedAt = product.data.addedAt;
+    if (!latest || addedAt.getTime() > latest.getTime()) return addedAt;
+    return latest;
+  }, null);
+
+  const sourceCounts = products.reduce<Record<ReturnType<typeof sourceKind>, number>>((counts, product) => {
+    const kind = sourceKind(product.data);
+    counts[kind] += 1;
+    return counts;
+  }, { 'good-feels': 0, 'pointcast-merch': 0, external: 0 });
+
+  return {
+    generatedAt: generatedAt.toISOString(),
+    catalogUpdatedAt: (catalogUpdatedAt ?? new Date(0)).toISOString(),
+    publicProductCount: products.length,
+    sourceCounts,
+    hiddenProductPolicy: {
+      drafts: 'hidden',
+      pointcastMerchOutOfStock: 'hidden',
+      checkout: CHECKOUT_POLICY.mode,
+      pii: CHECKOUT_POLICY.pii,
+    },
+  };
+}
+
 export function sourceLabel(kind: ReturnType<typeof sourceKind>): string {
   if (kind === 'good-feels') return 'Good Feels';
   if (kind === 'pointcast-merch') return 'PointCast Merch';

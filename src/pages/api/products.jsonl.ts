@@ -11,7 +11,9 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
 import {
+  CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  commerceCatalogMetadata,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -27,7 +29,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, X-PointCast-Catalog-Updated-At, X-PointCast-Generated-At, ETag, Last-Modified',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -41,6 +43,7 @@ export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
   const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const catalog = commerceCatalogMetadata(products);
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -58,6 +61,9 @@ export const GET: APIRoute = async ({ request }) => {
       checkoutHost: checkoutHost(p.data.url),
       sourceKind: kind,
       sourceLabel: sourceLabel(kind),
+      checkoutPolicyMode: CHECKOUT_POLICY.mode,
+      payment: CHECKOUT_POLICY.payment,
+      pii: CHECKOUT_POLICY.pii,
       laneSlug: lane,
       laneLabel: commerceLaneLabel(lane),
       laneUrl: shopLaneUrl(lane, true),
@@ -74,6 +80,11 @@ export const GET: APIRoute = async ({ request }) => {
       addedAt: p.data.addedAt.toISOString(),
       author: p.data.author,
       source: p.data.source ?? null,
+      feed: {
+        version: COMMERCE_VERSION,
+        generatedAt: catalog.generatedAt,
+        catalogUpdatedAt: catalog.catalogUpdatedAt,
+      },
     });
   }).join('\n') + '\n';
 
@@ -86,6 +97,8 @@ export const GET: APIRoute = async ({ request }) => {
     headers: {
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'X-PointCast-Catalog-Updated-At': catalog.catalogUpdatedAt,
+      'X-PointCast-Generated-At': catalog.generatedAt,
       ...CORS_HEADERS,
     },
   });

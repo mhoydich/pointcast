@@ -6,6 +6,7 @@ import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  commerceCatalogMetadata,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -21,7 +22,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, ETag, Last-Modified',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version, X-PointCast-Catalog-Updated-At, X-PointCast-Generated-At, ETag, Last-Modified',
 } as const;
 
 export const OPTIONS: APIRoute = async () => {
@@ -40,18 +41,21 @@ export const GET: APIRoute = async ({ request }) => {
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
   const moodSlugs = Array.from(new Set(products.flatMap((product) => product.data.pairsWithMood ?? []))).sort();
+  const catalog = commerceCatalogMetadata(products);
 
   const payload = {
     $schema: 'https://pointcast.xyz/shop.json',
     version: COMMERCE_VERSION,
     name: 'PointCast Commerce',
     description: 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: lastModified.toISOString(),
+    generatedAt: catalog.generatedAt,
+    catalogUpdatedAt: catalog.catalogUpdatedAt,
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
     blocksJsonl: 'https://pointcast.xyz/api/blocks.jsonl',
     checkoutPolicy: CHECKOUT_POLICY,
+    catalog,
     guides: [
       {
         slug: 'ai-shopify-seo-geo-llm-best-practices-2026',
@@ -134,6 +138,8 @@ export const GET: APIRoute = async ({ request }) => {
     headers: {
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'X-PointCast-Catalog-Updated-At': catalog.catalogUpdatedAt,
+      'X-PointCast-Generated-At': catalog.generatedAt,
       ...CORS_HEADERS,
     },
   });
