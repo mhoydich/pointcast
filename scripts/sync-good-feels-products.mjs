@@ -46,6 +46,7 @@ if (values.help) {
 const productsUrl = process.env.GOOD_FEELS_PRODUCTS_URL || 'https://getgoodfeels.com/collections/all/products.json?limit=250';
 const storeUrl = normalizeOrigin(process.env.GOOD_FEELS_STORE_URL || 'https://getgoodfeels.com');
 const outDir = path.resolve(process.cwd(), values.out);
+const syncMetadataFile = path.resolve(process.cwd(), 'src/data/commerce/good-feels-sync.json');
 const limit = parsePositiveInt(values.limit, '--limit');
 const runStartedAt = new Date().toISOString();
 
@@ -78,6 +79,15 @@ if (values.prune) {
     console.log(`pruned stale Good Feels product -> ${path.relative(process.cwd(), file)}`);
   }
 }
+
+await mkdir(path.dirname(syncMetadataFile), { recursive: true });
+await writeFile(syncMetadataFile, `${JSON.stringify({
+  checkedAt: runStartedAt,
+  sourceUrl: productsUrl,
+  storeUrl,
+  productCount: mapped.length,
+}, null, 2)}\n`, 'utf8');
+console.log(`recorded catalog check -> ${path.relative(process.cwd(), syncMetadataFile)}`);
 
 console.log(`Good Feels mirror complete: ${mapped.length} product${mapped.length === 1 ? '' : 's'}`);
 

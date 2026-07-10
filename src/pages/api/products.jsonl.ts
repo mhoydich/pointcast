@@ -23,6 +23,7 @@ import {
   sourceLabel,
 } from '../../lib/commerce';
 import { respondWithConditionalCache } from '../../lib/http-cache';
+import goodFeelsSync from '../../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -41,7 +42,8 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
+  const lastModified = catalogCheckedAt;
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -77,6 +79,7 @@ export const GET: APIRoute = async ({ request }) => {
       addedAt: p.data.addedAt.toISOString(),
       author: p.data.author,
       source: p.data.source ?? null,
+      catalogCheckedAt: catalogCheckedAt.toISOString(),
     });
   }).join('\n') + '\n';
 

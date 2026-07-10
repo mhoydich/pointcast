@@ -21,6 +21,7 @@ import {
   sourceLabel,
 } from '../lib/commerce';
 import { respondWithConditionalCache } from '../lib/http-cache';
+import goodFeelsSync from '../data/commerce/good-feels-sync.json';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,8 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async ({ request }) => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
-  const lastModified = products[0]?.data.addedAt ?? new Date(0);
+  const catalogCheckedAt = new Date(goodFeelsSync.checkedAt);
+  const lastModified = catalogCheckedAt;
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
 
@@ -48,7 +50,12 @@ export const GET: APIRoute = async ({ request }) => {
     version: COMMERCE_VERSION,
     name: 'PointCast products catalog',
     description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
-    generatedAt: lastModified.toISOString(),
+    generatedAt: catalogCheckedAt.toISOString(),
+    catalogFreshness: {
+      checkedAt: catalogCheckedAt.toISOString(),
+      sourceUrl: goodFeelsSync.sourceUrl,
+      mirroredProductCount: goodFeelsSync.productCount,
+    },
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
