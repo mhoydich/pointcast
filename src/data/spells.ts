@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'haiku',
+    label: 'haiku',
+    blurb: 'Three lines appear at center. Linger. Dissolve.',
+    glyph: '📜',
+    kind: 'burst',
+    durationMs: 4200,
+    accent: '#fdf2d6',
+  },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'otter',
+    label: 'otter',
+    blurb: 'A sleek otter glides across the bottom, head bobbing.',
+    glyph: '🦦',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#c4952e',
+  },
+  {
+    id: 'bunny',
+    label: 'bunny',
+    blurb: 'A bunny zips across in energetic leaps. Quick and earnest.',
+    glyph: '🐰',
+    kind: 'companion',
+    durationMs: 40_000,
+    accent: '#fdf2d6',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'moon',
+    label: 'moon',
+    blurb: 'A crescent moon glows softly in the corner. Patient company.',
+    glyph: '🌙',
+    kind: 'ambient',
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
