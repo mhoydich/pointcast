@@ -86,22 +86,44 @@ export const GET: APIRoute = async () => {
     ...blocks.flatMap(({ data }) => data.mood ? [data.mood] : []),
     ...products.flatMap(({ data }) => data.pairsWithMood ?? []),
   ])).sort();
+  const catalogLastmod = products.length > 0
+    ? products.reduce(
+        (latest, { data }) => data.addedAt > latest ? data.addedAt : latest,
+        products[0].data.addedAt,
+      ).toISOString().slice(0, 10)
+    : today;
+  const commerceRootUrls = new Set([
+    'https://pointcast.xyz/shop',
+    'https://pointcast.xyz/shop.json',
+    'https://pointcast.xyz/products',
+    'https://pointcast.xyz/products.json',
+    'https://pointcast.xyz/api/products.jsonl',
+    'https://pointcast.xyz/pairings',
+  ]);
   const commerceUrls = [
     ...products.flatMap(({ data }) => [
-      [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75'],
-      [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72'],
+      [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75', data.addedAt.toISOString().slice(0, 10)],
+      [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72', data.addedAt.toISOString().slice(0, 10)],
     ]),
     ...moods.flatMap((mood) => [
-      [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72'],
-      [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7'],
+      [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72', catalogLastmod],
+      [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7', catalogLastmod],
     ]),
   ];
-  const discoveryUrls = [...urls, ...commerceUrls];
+  const discoveryUrls = [
+    ...urls.map(([loc, changefreq, priority]) => [
+      loc,
+      changefreq,
+      priority,
+      commerceRootUrls.has(loc) ? catalogLastmod : today,
+    ]),
+    ...commerceUrls,
+  ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${discoveryUrls.map(([loc, changefreq, priority]) => `  <url>
+${discoveryUrls.map(([loc, changefreq, priority, lastmod]) => `  <url>
     <loc>${xmlEscape(loc)}</loc>
-    <lastmod>${today}</lastmod>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`).join('\n')}
