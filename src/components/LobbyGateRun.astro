@@ -44,12 +44,15 @@
 
   <div class="lobby-gate-run__actions">
     <a class="lobby-gate-run__start" href="/lobby/gate-one" data-gate-run-start>Start gate run</a>
+    <button type="button" data-gate-run-copy>Copy wristband</button>
     <button type="button" data-gate-run-reset>Reset wristband</button>
+    <span class="lobby-gate-run__copy-status" data-gate-run-copy-status aria-live="polite"></span>
   </div>
 </section>
 
 <script>
   const gateIds = ['knock', 'errands', 'bells', 'routes', 'again'];
+  const gateLabels = ['knock five times', 'do ten small things', 'ring eight notes', 'stamp six routes', 'keep going'];
   const gateRoutes = ['/lobby/gate-one', '/lobby/gate-two', '/lobby/gate-three', '/lobby/gate-four', '/lobby/gate-five'];
   const storageKey = 'pc:lobby-gates:v1';
 
@@ -100,6 +103,39 @@
     runRoot.querySelector('[data-gate-run-reset]')?.addEventListener('click', () => {
       writeRun({});
       paintRun();
+    });
+
+    runRoot.querySelector('[data-gate-run-copy]')?.addEventListener('click', async () => {
+      const state = readRun();
+      const completed = gateIds.filter((id) => state[id]?.complete).length;
+      const nextIndex = Math.min(completed, gateRoutes.length - 1);
+      const receipt = [
+        'POINTCAST LOBBY WRISTBAND',
+        `progress: ${completed}/${gateIds.length}`,
+        ...gateIds.map((id, index) => `${state[id]?.complete ? '[x]' : '[ ]'} gate ${index + 1} · ${gateLabels[index]}`),
+        `continue: https://pointcast.xyz${gateRoutes[nextIndex]}`,
+      ].join('\n');
+      const status = runRoot.querySelector('[data-gate-run-copy-status]');
+
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+        await Promise.race([
+          navigator.clipboard.writeText(receipt),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('clipboard timeout')), 800)),
+        ]);
+        if (status) status.textContent = 'wristband copied';
+      } catch {
+        const area = document.createElement('textarea');
+        area.value = receipt;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        const copied = document.execCommand('copy');
+        area.remove();
+        if (status) status.textContent = copied ? 'wristband copied' : 'copy unavailable';
+      }
     });
 
     paintRun();
@@ -242,6 +278,12 @@
 
   .lobby-gate-run__actions button {
     background: #fffdf8;
+  }
+
+  .lobby-gate-run__copy-status {
+    align-self: center;
+    color: #0f6e56;
+    font-size: 0.62rem;
   }
 
   @media (max-width: 760px) {

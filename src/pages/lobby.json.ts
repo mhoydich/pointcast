@@ -22,6 +22,18 @@ export const GET: APIRoute = () => {
       contract:
         'append-only for guestbook; currentlyHere is curated by editors. include handle, origin, color (hex), and a one-line message or note.',
     },
+    gate_run: {
+      storage: 'pc:lobby-gates:v1',
+      progress: 'client-local',
+      receipt: 'copyable plain text from /lobby',
+      gates: [
+        { id: 'knock', route: '/lobby/gate-one', task: 'knock five times' },
+        { id: 'errands', route: '/lobby/gate-two', task: 'do ten small things' },
+        { id: 'bells', route: '/lobby/gate-three', task: 'ring eight notes' },
+        { id: 'routes', route: '/lobby/gate-four', task: 'stamp six routes' },
+        { id: 'again', route: '/lobby/gate-five', task: 'keep going' },
+      ],
+    },
     related: {
       booth: '/booth',
       cb: '/cb',
