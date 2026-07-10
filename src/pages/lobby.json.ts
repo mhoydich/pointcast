@@ -18,6 +18,7 @@ export const GET: APIRoute = () => {
     sign_in: {
       method: 'pull-request',
       file: 'src/data/lobby.json',
+      editor_url: 'https://github.com/mhoydich/pointcast/edit/main/src/data/lobby.json',
       arrays: ['currentlyHere', 'guestbook'],
       contract:
         'append-only for guestbook; currentlyHere is curated by editors. include handle, origin, color (hex), and a one-line message or note.',
