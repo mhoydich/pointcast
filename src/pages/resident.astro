@@ -23,7 +23,7 @@ const description = 'Local resident loop status: current join-system task, last 
     <section class="runs">
       <div class="section-head">
         <h2>Last 10 runs</h2>
-        <p data-status>Start with <code>npm run resident</code> and <code>npm run oracle</code>.</p>
+        <p data-status>Loading <a href="/resident.json"><code>/resident.json</code></a>…</p>
       </div>
       <ol data-runs></ol>
     </section>
@@ -36,8 +36,8 @@ const description = 'Local resident loop status: current join-system task, last 
     if (el) el.textContent = text;
   };
 
-  async function loadStatus() {
-    const response = await fetch('http://127.0.0.1:8789/api/resident/status', { cache: 'no-store' });
+  async function loadStatus(url = '/resident.json') {
+    const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) throw new Error('resident endpoint offline');
     return response.json();
   }
@@ -59,10 +59,13 @@ const description = 'Local resident loop status: current join-system task, last 
     `).join('') || '<li class="empty">No resident runs yet.</li>';
   }
 
-  loadStatus().then(render).catch((error) => {
-    set('[data-status]', error.message + '. Run npm run oracle.');
-  });
-  setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
+  loadStatus().then(render).catch((error) => set('[data-status]', error.message));
+
+  // A local oracle supersedes the deploy snapshot during resident sessions.
+  const liveUrl = 'http://127.0.0.1:8789/api/resident/status';
+  const refreshLive = () => loadStatus(liveUrl).then(render).catch(() => {});
+  refreshLive();
+  setInterval(refreshLive, 15000);
 </script>
 
 <style>
