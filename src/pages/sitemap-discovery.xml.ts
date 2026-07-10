@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { getCollection } from 'astro:content';
+import { isPublicProduct } from '../lib/commerce';
 
 const urls = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
@@ -74,11 +76,27 @@ function xmlEscape(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
   const today = new Date().toISOString().slice(0, 10);
+  const [blocks, products] = await Promise.all([
+    getCollection('blocks', ({ data }) => !data.draft),
+    getCollection('products', ({ data }) => isPublicProduct(data)),
+  ]);
+  const moods = Array.from(new Set([
+    ...blocks.flatMap(({ data }) => data.mood ? [data.mood] : []),
+    ...products.flatMap(({ data }) => data.pairsWithMood ?? []),
+  ])).sort();
+  const commerceUrls = [
+    ...products.map(({ data }) => [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75']),
+    ...moods.flatMap((mood) => [
+      [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72'],
+      [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7'],
+    ]),
+  ];
+  const discoveryUrls = [...urls, ...commerceUrls];
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(([loc, changefreq, priority]) => `  <url>
+${discoveryUrls.map(([loc, changefreq, priority]) => `  <url>
     <loc>${xmlEscape(loc)}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>${changefreq}</changefreq>
