@@ -21,6 +21,7 @@ Environment:
                            Default: https://getgoodfeels.com
 
 Options:
+  --check                  Check mirror freshness without writing files
   --dry-run                Print mapped products without writing JSON files
   --limit <n>              Max products to mirror. Default: 250
   --out <dir>              Output directory. Default: src/content/products
@@ -30,6 +31,7 @@ Options:
 
 const { values } = parseArgs({
   options: {
+    check: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
     limit: { type: 'string', default: '250' },
@@ -52,6 +54,19 @@ const runStartedAt = new Date().toISOString();
 
 const products = await fetchProducts();
 const mapped = products.slice(0, limit).map(toPointCastProduct);
+
+if (values.check) {
+  const freshness = await checkMirrorFreshness(mapped);
+  console.log(JSON.stringify({
+    current: freshness.changed.length === 0 && freshness.missing.length === 0 && freshness.stale.length === 0,
+    productsUrl,
+    storeUrl,
+    sourceCount: mapped.length,
+    ...freshness,
+  }, null, 2));
+  process.exitCode = freshness.changed.length || freshness.missing.length || freshness.stale.length ? 1 : 0;
+  process.exit();
+}
 
 if (values['dry-run']) {
   console.log(JSON.stringify({
@@ -175,6 +190,34 @@ async function findStaleGoodFeelsFiles(freshSlugs) {
     if (isGoodFeelsEntry(data)) stale.push(file);
   }
   return stale;
+}
+
+async function checkMirrorFreshness(freshProducts) {
+  const changed = [];
+  const missing = [];
+
+  for (const product of freshProducts) {
+    const file = path.join(outDir, `${product.slug}.json`);
+    let current;
+    try {
+      current = JSON.parse(await readFile(file, 'utf8'));
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        missing.push(product.slug);
+        continue;
+      }
+      throw new Error(`Could not read ${path.relative(process.cwd(), file)}: ${error.message}`);
+    }
+
+    if (JSON.stringify(current) !== JSON.stringify(product)) changed.push(product.slug);
+  }
+
+  const freshSlugs = new Set(freshProducts.map((product) => product.slug));
+  const stale = (await findStaleGoodFeelsFiles(freshSlugs))
+    .map((file) => path.basename(file, '.json'))
+    .sort();
+
+  return { changed: changed.sort(), missing: missing.sort(), stale };
 }
 
 function isGoodFeelsEntry(data) {
