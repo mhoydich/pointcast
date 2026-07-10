@@ -399,6 +399,46 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'ladybug',
+    label: 'ladybug',
+    blurb: 'A ladybug marches across the bottom. Tiny, determined, cheerful.',
+    glyph: '🐞',
+    kind: 'companion',
+    durationMs: 42_000,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'rainbow',
+    label: 'rainbow',
+    blurb: 'A soft arc of color at the top of the screen. Good omen.',
+    glyph: '🌈',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
+  {
+    id: 'vinyl',
+    label: 'vinyl',
+    blurb: 'A spinning record in the corner. Lo-fi company.',
+    glyph: '⏺',
+    kind: 'ambient',
+    accent: '#1b3a5b',
+  },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'gems',
+    label: 'gems',
+    blurb: 'Gemstones scatter outward from center. Briefly dazzling.',
+    glyph: '💎',
+    kind: 'burst',
+    durationMs: 2800,
+    accent: '#a78bfa',
+  },
 ];
 
 /** Lookup helper. */
