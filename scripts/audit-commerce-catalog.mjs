@@ -3,15 +3,26 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const productsDir = path.resolve(process.cwd(), 'src/content/products');
+const productsDir = path.resolve(process.cwd(), process.env.COMMERCE_PRODUCTS_DIR || 'src/content/products');
 const files = (await readdir(productsDir)).filter((file) => file.endsWith('.json')).sort();
 const errors = [];
+const seenSlugs = new Map();
 let publicCount = 0;
 let hiddenCount = 0;
 
 for (const file of files) {
   const product = JSON.parse(await readFile(path.join(productsDir, file), 'utf8'));
   const label = product.slug || file;
+  const expectedFile = `${product.slug}.json`;
+
+  if (!product.slug || typeof product.slug !== 'string') {
+    errors.push(`${file}: product slug is required`);
+  } else {
+    if (file !== expectedFile) errors.push(`${label}: filename must be ${expectedFile}`);
+    const previous = seenSlugs.get(product.slug);
+    if (previous) errors.push(`${label}: duplicate slug also used by ${previous}`);
+    else seenSlugs.set(product.slug, file);
+  }
   const isPointCastMerch = /pointcast/i.test(product.brand || '');
   const isHidden = product.draft === true
     || (isPointCastMerch && product.availability !== 'in-stock');
