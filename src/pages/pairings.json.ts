@@ -47,6 +47,7 @@ export const GET: APIRoute = async ({ request }) => {
         currency: product.data.currency,
         availability: product.data.availability,
         productPage: `https://pointcast.xyz/products/${product.data.slug}`,
+        productJson: `https://pointcast.xyz/products/${product.data.slug}.json`,
         checkout: checkoutRoute(product.data.url),
       })),
     };

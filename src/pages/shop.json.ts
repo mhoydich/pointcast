@@ -109,6 +109,7 @@ export const GET: APIRoute = async ({ request }) => {
         priceUsd: product.data.priceUsd ?? null,
         currency: product.data.currency,
         productPage: `https://pointcast.xyz/products/${product.data.slug}`,
+        productJson: `https://pointcast.xyz/products/${product.data.slug}.json`,
         checkoutUrl: product.data.url,
         checkoutHost: checkoutHost(product.data.url),
         checkout: checkoutRoute(product.data.url),
