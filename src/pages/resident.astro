@@ -23,7 +23,10 @@ const description = 'Local resident loop status: current join-system task, last 
     <section class="runs">
       <div class="section-head">
         <h2>Last 10 runs</h2>
-        <p data-status>Start with <code>npm run resident</code> and <code>npm run oracle</code>.</p>
+        <div class="connection">
+          <p data-status aria-live="polite">Looking for the local oracle…</p>
+          <button type="button" data-retry hidden>Retry connection</button>
+        </div>
       </div>
       <ol data-runs></ol>
     </section>
@@ -42,6 +45,53 @@ const description = 'Local resident loop status: current join-system task, last 
     return response.json();
   }
 
+  function text(value, fallback = '') {
+    return typeof value === 'string' && value.trim() ? value : fallback;
+  }
+
+  function safeBlockPath(value) {
+    const path = text(value);
+    return /^\/(?:b|plans)\/[A-Za-z0-9/_-]+$/.test(path) ? path : '';
+  }
+
+  function renderRuns(runData) {
+    const runs = document.querySelector('[data-runs]');
+    if (!runs) return;
+    runs.replaceChildren();
+
+    const entries = Array.isArray(runData) ? runData.slice(0, 10) : [];
+    if (!entries.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No resident runs yet.';
+      runs.append(empty);
+      return;
+    }
+
+    for (const run of entries) {
+      const item = document.createElement('li');
+      item.className = run?.success ? 'ok' : 'fail';
+
+      const path = safeBlockPath(run?.blockPath);
+      const title = text(run?.taskId, 'untitled run');
+      const heading = path ? document.createElement('a') : document.createElement('strong');
+      if (path) heading.href = path;
+      heading.textContent = title;
+
+      const meta = document.createElement('span');
+      const minutes = Number.isFinite(Number(run?.minutes)) ? Number(run.minutes).toFixed(1) : '0.0';
+      meta.textContent = `${run?.success ? 'success' : 'fail'} · ${minutes}m · ${text(run?.finishedAt, 'time unknown')}`;
+
+      const artifacts = document.createElement('p');
+      const names = Array.isArray(run?.artifacts)
+        ? run.artifacts.slice(0, 5).map((value) => text(value)).filter(Boolean)
+        : [];
+      artifacts.textContent = names.join(', ') || 'no artifacts listed';
+      item.append(heading, meta, artifacts);
+      runs.append(item);
+    }
+  }
+
   function render(status) {
     const current = status.currentTask ? `${status.currentTask.id} · ${status.currentTask.project}` : status.running ? 'running' : 'idle';
     set('[data-current]', current);
@@ -49,20 +99,24 @@ const description = 'Local resident loop status: current join-system task, last 
     set('[data-fail]', String(status.failCount || 0));
     set('[data-hours]', String(status.computeHours || 0));
     set('[data-status]', status.running ? 'running now' : `updated ${status.updatedAt || 'never'}`);
-    const runs = document.querySelector('[data-runs]');
-    runs.innerHTML = (status.runs || []).map((run) => `
-      <li class="${run.success ? 'ok' : 'fail'}">
-        <a href="${run.blockPath || '#'}">${run.taskId}</a>
-        <span>${run.success ? 'success' : 'fail'} · ${Number(run.minutes || 0).toFixed(1)}m · ${run.finishedAt || ''}</span>
-        <p>${(run.artifacts || []).slice(0, 5).join(', ') || 'no artifacts listed'}</p>
-      </li>
-    `).join('') || '<li class="empty">No resident runs yet.</li>';
+    document.querySelector('[data-retry]')?.toggleAttribute('hidden', true);
+    renderRuns(status.runs);
   }
 
-  loadStatus().then(render).catch((error) => {
-    set('[data-status]', error.message + '. Run npm run oracle.');
-  });
-  setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
+  async function refresh() {
+    try {
+      render(await loadStatus());
+    } catch {
+      set('[data-current]', 'local oracle offline');
+      set('[data-status]', 'This console reads your machine only. Start npm run oracle, then retry.');
+      document.querySelector('[data-retry]')?.removeAttribute('hidden');
+      renderRuns([]);
+    }
+  }
+
+  document.querySelector('[data-retry]')?.addEventListener('click', refresh);
+  refresh();
+  setInterval(refresh, 15000);
 </script>
 
 <style>
@@ -164,6 +218,30 @@ const description = 'Local resident loop status: current join-system task, last 
     color: #6d665d;
   }
 
+  .connection {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .connection button {
+    border: 1px solid #1f1b18;
+    background: #fffaf0;
+    color: #8b2b25;
+    padding: 7px 10px;
+    font: 700 10px/1 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .connection button:hover,
+  .connection button:focus-visible {
+    background: #1f1b18;
+    color: #fffaf0;
+  }
+
   ol {
     list-style: none;
     padding: 0;
@@ -204,6 +282,11 @@ const description = 'Local resident loop status: current join-system task, last 
 
     .section-head {
       display: block;
+    }
+
+    .connection {
+      align-items: flex-start;
+      justify-content: space-between;
     }
   }
 </style>
