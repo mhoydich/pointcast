@@ -1215,6 +1215,141 @@
       }, dur);
     }
 
+    // ─── toast (burst) ──────────────────────────────────────────
+    function castToast(durationMs) {
+      if (reduce()) return;
+      var count = 6;
+      var cx = window.innerWidth / 2;
+      var cy = window.innerHeight * 0.72;
+      for (var i = 0; i < count; i++) {
+        var el = document.createElement('span');
+        var isGlass = i < 3;
+        el.className = isGlass ? 'spell-toast__glass' : 'spell-toast__bubble';
+        var startX = cx + (Math.random() - 0.5) * 220;
+        var riseHeight = 180 + Math.random() * 160;
+        var dur = (durationMs || 3500) * (0.75 + Math.random() * 0.3);
+        var delay = i * 110 + Math.random() * 60;
+        var rot = (Math.random() - 0.5) * 22;
+        if (isGlass) {
+          el.textContent = '🥂';
+          var sz = 28 + Math.floor(Math.random() * 14);
+          el.style.cssText =
+            'left:' + startX + 'px;top:' + cy + 'px;' +
+            'font-size:' + sz + 'px;' +
+            'animation:spell-toast-rise ' + dur + 'ms cubic-bezier(.2,.6,.4,1) ' + delay + 'ms forwards;' +
+            '--spell-toast-rise:' + riseHeight + 'px;' +
+            '--spell-toast-rot:' + rot + 'deg;';
+        } else {
+          var bSize = 4 + Math.floor(Math.random() * 6);
+          var bx = cx + (Math.random() - 0.5) * 280;
+          var brise = 100 + Math.random() * 140;
+          var bdur = 900 + Math.random() * 800;
+          var bdelay = Math.random() * 600;
+          el.style.cssText =
+            'left:' + bx + 'px;top:' + cy + 'px;' +
+            'width:' + bSize + 'px;height:' + bSize + 'px;' +
+            'background:rgba(212,164,55,' + (0.5 + Math.random() * 0.4) + ');' +
+            'animation:spell-toast-bubble ' + bdur + 'ms cubic-bezier(.2,.5,.4,1) ' + bdelay + 'ms forwards;' +
+            '--spell-toast-rise:' + brise + 'px;';
+        }
+        $layer.appendChild(el);
+        active.bursts++;
+        (function (node, totalMs) {
+          setTimeout(function () {
+            if (node && node.parentNode) node.parentNode.removeChild(node);
+            active.bursts = Math.max(0, active.bursts - 1);
+          }, totalMs + 200);
+        })(el, dur + delay);
+      }
+    }
+
+    // ─── kite (companion) ───────────────────────────────────────
+    function castKite(durationMs) {
+      if (active.byId.kite) {
+        var prev = active.byId.kite;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var kite = document.createElement('button');
+      kite.className = 'spell-kite';
+      kite.type = 'button';
+      kite.setAttribute('aria-label', 'A kite drifting by. Click to let it go.');
+      kite.title = 'click to let the kite go';
+      kite.textContent = '🪁';
+      var ltr = Math.random() < 0.6;
+      kite.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 55000);
+      var walkSeconds = Math.max(12, Math.min(36, window.innerWidth / 55));
+      kite.style.cssText = 'animation:spell-kite-drift-' + (ltr ? 'ltr' : 'rtl') + ' ' + walkSeconds + 's linear infinite;';
+      kite.addEventListener('click', function () {
+        if (kite.parentNode) kite.parentNode.removeChild(kite);
+        active.byId.kite = null;
+      });
+      $layer.appendChild(kite);
+      active.byId.kite = kite;
+      setTimeout(function () {
+        if (kite && kite.parentNode) kite.parentNode.removeChild(kite);
+        if (active.byId.kite === kite) active.byId.kite = null;
+      }, dur);
+    }
+
+    // ─── cricket (companion) ────────────────────────────────────
+    function castCricket(durationMs) {
+      if (active.byId.cricket) {
+        var prev = active.byId.cricket;
+        if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+      }
+      var cricket = document.createElement('button');
+      cricket.className = 'spell-cricket';
+      cricket.type = 'button';
+      cricket.setAttribute('aria-label', 'A cricket hopping by. Click to shoo it away.');
+      cricket.title = 'click to shoo the cricket';
+      cricket.textContent = '🦗';
+      var ltr = Math.random() < 0.6;
+      cricket.setAttribute('data-dir', ltr ? 'ltr' : 'rtl');
+      var dur = (durationMs || 40000);
+      var hopSeconds = Math.max(10, Math.min(30, window.innerWidth / 65));
+      cricket.style.cssText = 'animation:spell-cricket-hop-' + (ltr ? 'ltr' : 'rtl') + ' ' + hopSeconds + 's linear infinite;';
+      cricket.addEventListener('click', function () {
+        if (cricket.parentNode) cricket.parentNode.removeChild(cricket);
+        active.byId.cricket = null;
+      });
+      $layer.appendChild(cricket);
+      active.byId.cricket = cricket;
+      setTimeout(function () {
+        if (cricket && cricket.parentNode) cricket.parentNode.removeChild(cricket);
+        if (active.byId.cricket === cricket) active.byId.cricket = null;
+      }, dur);
+    }
+
+    // ─── cloud (ambient) ────────────────────────────────────────
+    function castCloud() {
+      if (active.byId.cloud) return; // no-op if already active
+      var wrap = document.createElement('div');
+      wrap.className = 'spell-cloud';
+      wrap.setAttribute('role', 'presentation');
+      var heights = [12, 22, 10, 18]; // % from top
+      var speeds  = [38, 52, 44, 60]; // seconds per crossing
+      var delays  = [0, -14, -28, -8]; // stagger start positions
+      var sizes   = [110, 80, 140, 90]; // px wide
+      for (var i = 0; i < 4; i++) {
+        var c = document.createElement('span');
+        c.className = 'spell-cloud__puff';
+        var w = sizes[i];
+        var h = Math.round(w * 0.55);
+        c.style.cssText =
+          'top:' + heights[i] + '%;' +
+          'width:' + w + 'px;height:' + h + 'px;' +
+          'animation:spell-cloud-drift ' + speeds[i] + 's linear ' + delays[i] + 's infinite;';
+        wrap.appendChild(c);
+      }
+      wrap.addEventListener('click', function () {
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        active.byId.cloud = null;
+      });
+      $layer.appendChild(wrap);
+      active.byId.cloud = wrap;
+    }
+
     // ─── dispatch ───────────────────────────────────────────────
     function castSpell(id) {
       switch (id) {
@@ -1254,6 +1389,10 @@
         case 'noggles':      castNoggles(5500); break;
         case 'proliferate':  castProliferate(4200); break;
         case 'lilnoun':      castLilnoun(45000); break;
+        case 'toast':     castToast(3500); break;
+        case 'kite':      castKite(55000); break;
+        case 'cricket':   castCricket(40000); break;
+        case 'cloud':     castCloud(); break;
         default:
           // Unknown spell — silent no-op; could surface a toast in the
           // bar but spells are meant to be playful, so we just ignore.
@@ -2419,7 +2558,9 @@
     .spell-bee,
     .spell-turtle,
     .spell-ghost,
-    .spell-frog { left: 50%; transform: translateX(-50%); }
+    .spell-frog,
+    .spell-kite,
+    .spell-cricket { left: 50%; transform: translateX(-50%); }
     .spell-pup[data-dir='rtl'],
     .spell-penguin[data-dir='rtl'],
     .spell-fish[data-dir='rtl'],
@@ -2428,7 +2569,9 @@
     .spell-bee[data-dir='rtl'],
     .spell-turtle[data-dir='rtl'],
     .spell-ghost[data-dir='rtl'],
-    .spell-frog[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
+    .spell-frog[data-dir='rtl'],
+    .spell-kite[data-dir='rtl'],
+    .spell-cricket[data-dir='rtl'] { transform: translateX(-50%) scaleX(-1); }
     .spell-breath__ring { transform: scale(0.85); }
     .spell-breath__inner { transform: scale(0.75); }
     .spell-rain__drop { display: none; } /* rain motion-only */
@@ -2547,5 +2690,161 @@
   @media (prefers-reduced-motion: reduce) {
     .spell-noun, .spell-lilnoun { animation: none !important; left: 50% !important; }
     .spell-noggles, .spell-proliferate { display: none; }
+  }
+
+  /* ─── toast (burst) ────────────────────────────────────────── */
+  .spell-toast__glass {
+    position: fixed;
+    pointer-events: none;
+    z-index: 32;
+    line-height: 1;
+    will-change: transform, opacity;
+  }
+  .spell-toast__bubble {
+    position: fixed;
+    pointer-events: none;
+    z-index: 32;
+    border-radius: 50%;
+    will-change: transform, opacity;
+  }
+  @keyframes spell-toast-rise {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+    10%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(calc(-1 * var(--spell-toast-rise))) rotate(var(--spell-toast-rot)); opacity: 0; }
+  }
+  @keyframes spell-toast-bubble {
+    0%   { transform: translateY(0) scale(1); opacity: 0; }
+    15%  { opacity: 0.8; }
+    85%  { opacity: 0.5; }
+    100% { transform: translateY(calc(-1 * var(--spell-toast-rise))) scale(0.4); opacity: 0; }
+  }
+
+  /* ─── kite (companion) ────────────────────────────────────── */
+  .spell-kite {
+    position: fixed;
+    top: 22%;
+    left: 0;
+    font-size: 36px;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 32;
+    will-change: left, transform;
+    transform-origin: center center;
+  }
+  @keyframes spell-kite-drift-ltr {
+    0%   { left: -48px; transform: rotate(-8deg) translateY(0); }
+    20%  { transform: rotate(-12deg) translateY(-18px); }
+    40%  { transform: rotate(-6deg) translateY(8px); }
+    60%  { transform: rotate(-10deg) translateY(-12px); }
+    80%  { transform: rotate(-5deg) translateY(4px); }
+    100% { left: calc(100vw + 16px); transform: rotate(-8deg) translateY(0); }
+  }
+  @keyframes spell-kite-drift-rtl {
+    0%   { left: calc(100vw + 16px); transform: rotate(8deg) scaleX(-1) translateY(0); }
+    20%  { transform: rotate(12deg) scaleX(-1) translateY(-18px); }
+    40%  { transform: rotate(6deg) scaleX(-1) translateY(8px); }
+    60%  { transform: rotate(10deg) scaleX(-1) translateY(-12px); }
+    80%  { transform: rotate(5deg) scaleX(-1) translateY(4px); }
+    100% { left: -48px; transform: rotate(8deg) scaleX(-1) translateY(0); }
+  }
+
+  /* ─── cricket (companion) ──────────────────────────────────── */
+  .spell-cricket {
+    position: fixed;
+    bottom: 54px;
+    left: 0;
+    font-size: 24px;
+    line-height: 1;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 32;
+    will-change: left, transform;
+  }
+  @keyframes spell-cricket-hop-ltr {
+    0%    { left: -32px; transform: translateY(0) scaleX(1); }
+    8%    { transform: translateY(-14px) scaleX(1); }
+    16%   { transform: translateY(0) scaleX(1); }
+    24%   { transform: translateY(-10px) scaleX(1); }
+    32%   { transform: translateY(0) scaleX(1); }
+    40%   { transform: translateY(-16px) scaleX(1); }
+    48%   { transform: translateY(0) scaleX(1); }
+    56%   { transform: translateY(-8px) scaleX(1); }
+    64%   { transform: translateY(0) scaleX(1); }
+    72%   { transform: translateY(-14px) scaleX(1); }
+    80%   { transform: translateY(0) scaleX(1); }
+    88%   { transform: translateY(-10px) scaleX(1); }
+    100%  { left: calc(100vw + 8px); transform: translateY(0) scaleX(1); }
+  }
+  @keyframes spell-cricket-hop-rtl {
+    0%    { left: calc(100vw + 8px); transform: translateY(0) scaleX(-1); }
+    8%    { transform: translateY(-14px) scaleX(-1); }
+    16%   { transform: translateY(0) scaleX(-1); }
+    24%   { transform: translateY(-10px) scaleX(-1); }
+    32%   { transform: translateY(0) scaleX(-1); }
+    40%   { transform: translateY(-16px) scaleX(-1); }
+    48%   { transform: translateY(0) scaleX(-1); }
+    56%   { transform: translateY(-8px) scaleX(-1); }
+    64%   { transform: translateY(0) scaleX(-1); }
+    72%   { transform: translateY(-14px) scaleX(-1); }
+    80%   { transform: translateY(0) scaleX(-1); }
+    88%   { transform: translateY(-10px) scaleX(-1); }
+    100%  { left: -32px; transform: translateY(0) scaleX(-1); }
+  }
+
+  /* ─── cloud (ambient) ──────────────────────────────────────── */
+  .spell-cloud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 28;
+    overflow: hidden;
+  }
+  .spell-cloud__puff {
+    position: absolute;
+    left: -160px;
+    background: rgba(240, 248, 255, 0.88);
+    border-radius: 50px;
+    box-shadow:
+      0 0 0 2px rgba(200, 220, 255, 0.3),
+      inset 0 -6px 12px rgba(180, 210, 255, 0.25);
+    will-change: left;
+  }
+  .spell-cloud__puff::before,
+  .spell-cloud__puff::after {
+    content: '';
+    position: absolute;
+    background: inherit;
+    border-radius: 50%;
+  }
+  .spell-cloud__puff::before {
+    width: 55%;
+    height: 130%;
+    top: -30%;
+    left: 18%;
+  }
+  .spell-cloud__puff::after {
+    width: 40%;
+    height: 110%;
+    top: -20%;
+    left: 50%;
+  }
+  @keyframes spell-cloud-drift {
+    0%   { left: -160px; }
+    100% { left: calc(100vw + 160px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spell-toast__glass, .spell-toast__bubble { display: none; }
+    .spell-kite { left: 50% !important; animation: none !important; }
+    .spell-cricket { left: 50% !important; animation: none !important; }
+    .spell-cloud__puff { animation: none !important; left: 30% !important; opacity: 0.6; }
   }
 </style>
