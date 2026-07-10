@@ -201,8 +201,8 @@ function decodeHtml(value) {
 
 function servingLine(title, description) {
   const haystack = `${title} ${description}`;
-  const matches = unique(Array.from(haystack.matchAll(/\b\d+(?:\.\d+)?mg\s+(?:THC|CBD|CBN|CBG)\b/gi))
-    .map((match) => match[0].replace(/\s+/g, ' ')));
+  const matches = unique(Array.from(haystack.matchAll(/\b(\d+(?:\.\d+)?)mg\s+(THC|CBD|CBN|CBG)\b/gi))
+    .map((match) => `${match[1]}mg ${match[2].toUpperCase()}`));
   return matches.slice(0, 3).join(' + ');
 }
 
