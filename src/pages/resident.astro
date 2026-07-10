@@ -37,7 +37,11 @@ const description = 'Local resident loop status: current join-system task, last 
   };
 
   async function loadStatus() {
-    const response = await fetch('http://127.0.0.1:8789/api/resident/status', { cache: 'no-store' });
+    const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const endpoint = isLocal
+      ? 'http://127.0.0.1:8789/api/resident/status'
+      : '/api/resident/status';
+    const response = await fetch(endpoint, { cache: 'no-store' });
     if (!response.ok) throw new Error('resident endpoint offline');
     return response.json();
   }
@@ -60,7 +64,10 @@ const description = 'Local resident loop status: current join-system task, last 
   }
 
   loadStatus().then(render).catch((error) => {
-    set('[data-status]', error.message + '. Run npm run oracle.');
+    const hint = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      ? ' Run npm run oracle.'
+      : ' No live run is being reported.';
+    set('[data-status]', error.message + '.' + hint);
   });
   setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
 </script>
