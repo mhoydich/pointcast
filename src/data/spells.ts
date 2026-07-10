@@ -399,6 +399,47 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── COMPANIONS (batch 14) ────────────────────────────────────
+  {
+    id: 'snail',
+    label: 'snail',
+    blurb: 'The most patient companion. Even slower than the turtle. Gets there eventually.',
+    glyph: '🐌',
+    kind: 'companion',
+    durationMs: 120_000,
+    accent: '#2f8f5f',
+  },
+  {
+    id: 'crab',
+    label: 'crab',
+    blurb: 'A crab scuttles sideways across the bottom. Feisty little commute.',
+    glyph: '🦀',
+    kind: 'companion',
+    durationMs: 65_000,
+    accent: '#8a2432',
+  },
+
+  // ─── BURSTS (batch 14) ────────────────────────────────────────
+  {
+    id: 'hearts',
+    label: 'hearts',
+    blurb: 'Colored hearts fan outward from center. Warm, brief, sweet.',
+    glyph: '❤️',
+    kind: 'burst',
+    durationMs: 2500,
+    accent: '#8a2432',
+  },
+
+  // ─── AMBIENT (batch 14) ───────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite sways in the corner with a dangling string. Breezy, patient.',
+    glyph: '🪁',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */
