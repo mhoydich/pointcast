@@ -399,6 +399,38 @@ export const SPELLS: Spell[] = [
     durationMs: 45_000,
     accent: '#5b6ea8',
   },
+
+  // ─── COMPANIONS (batch 13) ────────────────────────────────────
+  {
+    id: 'kite',
+    label: 'kite',
+    blurb: 'A kite drifts across mid-screen, bobbing on an invisible breeze.',
+    glyph: '🪁',
+    kind: 'companion',
+    durationMs: 55_000,
+    accent: '#d4a437',
+  },
+
+  // ─── BURSTS (batch 13) ────────────────────────────────────────
+  {
+    id: 'toast',
+    label: 'toast',
+    blurb: 'Slices of toast pop up from the bottom edge. Very important.',
+    glyph: '🍞',
+    kind: 'burst',
+    durationMs: 2600,
+    accent: '#c4952e',
+  },
+
+  // ─── AMBIENT (batch 13) ───────────────────────────────────────
+  {
+    id: 'ripple',
+    label: 'ripple',
+    blurb: 'Rings expand outward from the center. Patient, persistent.',
+    glyph: '💧',
+    kind: 'ambient',
+    accent: '#4A9EFF',
+  },
 ];
 
 /** Lookup helper. */
