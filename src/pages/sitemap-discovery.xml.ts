@@ -28,6 +28,7 @@ const urls = [
   ['https://pointcast.xyz/api/products.jsonl', 'daily', '0.8'],
   ['https://pointcast.xyz/api/blocks.jsonl', 'daily', '0.8'],
   ['https://pointcast.xyz/pairings', 'daily', '0.75'],
+  ['https://pointcast.xyz/pairings.json', 'daily', '0.75'],
   ['https://pointcast.xyz/.well-known/agents.json', 'daily', '0.8'],
   ['https://pointcast.xyz/.well-known/ai.json', 'daily', '0.8'],
   ['https://pointcast.xyz/llms.txt', 'daily', '0.9'],
@@ -99,6 +100,7 @@ export const GET: APIRoute = async () => {
     'https://pointcast.xyz/products.json',
     'https://pointcast.xyz/api/products.jsonl',
     'https://pointcast.xyz/pairings',
+    'https://pointcast.xyz/pairings.json',
   ]);
   const commerceUrls = [
     ...products.flatMap(({ data }) => [
