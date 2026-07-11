@@ -26,6 +26,7 @@ export const GET: APIRoute = () => {
       booth: '/booth',
       cb: '/cb',
       town: '/town',
+      guestbook_feed: '/lobby.xml',
     },
     ...lobby,
   };
