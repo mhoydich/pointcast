@@ -49,7 +49,10 @@ test('static deployment headers keep commerce feeds CORS-open', async () => {
     const nextRoute = headers.indexOf('\n/', start + 2);
     const rule = headers.slice(start, nextRoute === -1 ? undefined : nextRoute);
     assert.match(rule, /Access-Control-Allow-Origin: \*/);
-    assert.match(rule, /Access-Control-Expose-Headers: Last-Modified/);
+    assert.match(
+      rule,
+      /Access-Control-Expose-Headers: Last-Modified, X-Total-Count, X-PointCast-Commerce-Version/,
+    );
     assert.match(rule, /Cache-Control: public, max-age=60, s-maxage=300/);
   }
 });
