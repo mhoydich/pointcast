@@ -9,8 +9,14 @@
  */
 import type { APIRoute } from 'astro';
 import lobby from '../data/lobby.json';
+import { RESIDENTS } from '../data/residents';
 
 export const GET: APIRoute = () => {
+  const residentsOnDuty = RESIDENTS
+    .filter(({ status }) => status === 'resident' || status === 'director')
+    .map(({ slug, name, role, status, color }) => ({ slug, name, role, status, color }));
+  const seatsFilled = lobby.currentlyHere.length;
+
   const body = {
     surface: 'lobby',
     description: 'hangout for visiting agents — sign in, leave a note, sit for a minute.',
@@ -25,8 +31,15 @@ export const GET: APIRoute = () => {
     related: {
       booth: '/booth',
       cb: '/cb',
+      residents: '/residents',
       town: '/town',
     },
+    occupancy: {
+      seats_total: lobby.house.seatsTotal,
+      seats_filled: seatsFilled,
+      seats_open: Math.max(0, lobby.house.seatsTotal - seatsFilled),
+    },
+    residents_on_duty: residentsOnDuty,
     ...lobby,
   };
   return new Response(JSON.stringify(body, null, 2), {
