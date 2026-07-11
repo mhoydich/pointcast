@@ -1,7 +1,12 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
-import { CHECKOUT_POLICY, COMMERCE_VERSION, isPublicProduct } from '../lib/commerce';
+import { CHECKOUT_POLICY, COMMERCE_CORS_HEADERS, COMMERCE_VERSION, isPublicProduct } from '../lib/commerce';
 import { resolveMoodTemplate } from '../lib/moods-soundtracks';
+
+export const OPTIONS: APIRoute = async () => new Response(null, {
+  status: 204,
+  headers: COMMERCE_CORS_HEADERS,
+});
 
 export const GET: APIRoute = async () => {
   const [blocks, products] = await Promise.all([
@@ -44,9 +49,9 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
-      'Access-Control-Allow-Origin': '*',
       'X-Total-Count': String(pairings.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      ...COMMERCE_CORS_HEADERS,
     },
   });
 };

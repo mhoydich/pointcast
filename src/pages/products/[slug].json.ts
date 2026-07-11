@@ -2,6 +2,7 @@ import { getCollection, type CollectionEntry } from 'astro:content';
 import type { APIRoute, GetStaticPaths } from 'astro';
 import {
   CHECKOUT_POLICY,
+  COMMERCE_CORS_HEADERS,
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
@@ -14,6 +15,11 @@ import {
   sourceKind,
   sourceLabel,
 } from '../../lib/commerce';
+
+export const OPTIONS: APIRoute = async () => new Response(null, {
+  status: 204,
+  headers: COMMERCE_CORS_HEADERS,
+});
 
 export const getStaticPaths: GetStaticPaths = async () => {
   const products = await getCollection('products', ({ data }) => isPublicProduct(data));
@@ -96,7 +102,7 @@ export const GET: APIRoute = async ({ props }) => {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
-      'Access-Control-Allow-Origin': '*',
+      ...COMMERCE_CORS_HEADERS,
     },
   });
 };
