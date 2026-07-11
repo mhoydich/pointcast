@@ -5,6 +5,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
+  COMMERCE_CORS_HEADERS,
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
@@ -18,17 +19,10 @@ import {
   sourceLabel,
 } from '../lib/commerce';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
-} as const;
-
 export const OPTIONS: APIRoute = async () => {
   return new Response(null, {
     status: 204,
-    headers: CORS_HEADERS,
+    headers: COMMERCE_CORS_HEADERS,
   });
 };
 
@@ -133,7 +127,7 @@ export const GET: APIRoute = async () => {
       'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
-      ...CORS_HEADERS,
+      ...COMMERCE_CORS_HEADERS,
     },
   });
 };
