@@ -6,6 +6,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  checkoutActionLabel,
   checkoutHost,
   isPublicProduct,
   latestCommerceDate,
@@ -58,6 +59,7 @@ export const GET: APIRoute = async ({ props }) => {
       const kind = sourceKind(data);
       const lane = commerceLane(data);
       const links = productLinks(data.slug, data.url);
+      const host = checkoutHost(data.url);
       return {
         slug: data.slug,
         name: data.name,
@@ -72,7 +74,8 @@ export const GET: APIRoute = async ({ props }) => {
         productJson: links.self,
         links,
         checkoutUrl: data.url,
-        checkoutHost: checkoutHost(data.url),
+        checkoutHost: host,
+        checkoutAction: checkoutActionLabel(data.availability, host),
         sourceKind: kind,
         sourceLabel: sourceLabel(kind),
         laneSlug: lane,

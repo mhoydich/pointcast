@@ -9,6 +9,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  checkoutActionLabel,
   checkoutHost,
   isPublicProduct,
   pairingsJsonUrls,
@@ -88,6 +89,7 @@ export const GET: APIRoute = async () => {
       const lane = commerceLane(product.data);
       const moods = product.data.pairsWithMood ?? [];
       const links = productLinks(product.data.slug, product.data.url);
+      const host = checkoutHost(product.data.url);
       return {
         slug: product.data.slug,
         name: product.data.name,
@@ -102,7 +104,8 @@ export const GET: APIRoute = async () => {
         productJson: links.self,
         links,
         checkoutUrl: product.data.url,
-        checkoutHost: checkoutHost(product.data.url),
+        checkoutHost: host,
+        checkoutAction: checkoutActionLabel(product.data.availability, host),
         sourceKind: kind,
         sourceLabel: sourceLabel(kind),
         laneSlug: lane,

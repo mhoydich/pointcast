@@ -86,6 +86,22 @@ test('product detail checkout copy reflects upstream availability', async () => 
   assert.doesNotMatch(detail, /→ Buy on \{sourceHost\}/);
 });
 
+test('agent-readable product feeds expose availability-aware checkout actions', async () => {
+  const routes = [
+    'src/pages/products.json.ts',
+    'src/pages/products/[slug].json.ts',
+    'src/pages/api/products.jsonl.ts',
+    'src/pages/shop.json.ts',
+    'src/pages/pairings/[mood].json.ts',
+  ];
+
+  for (const route of routes) {
+    const source = await readFile(route, 'utf8');
+    assert.match(source, /checkoutActionLabel/);
+    assert.match(source, /checkoutAction: checkoutActionLabel\([^,]+, host\)/);
+  }
+});
+
 test('pairing feeds expose deterministic content freshness', async () => {
   const indexSource = await readFile('src/pages/pairings.json.ts', 'utf8');
   const detailSource = await readFile('src/pages/pairings/[mood].json.ts', 'utf8');

@@ -6,6 +6,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  checkoutActionLabel,
   checkoutHost,
   isPublicProduct,
   pairingsJsonUrls,
@@ -38,6 +39,7 @@ export const GET: APIRoute = async ({ props }) => {
   const moods = data.pairsWithMood ?? [];
   const links = productLinks(data.slug, data.url);
   const canonical = links.html;
+  const host = checkoutHost(data.url);
 
   const payload = {
     version: COMMERCE_VERSION,
@@ -50,7 +52,8 @@ export const GET: APIRoute = async ({ props }) => {
     jsonUrl: `${canonical}.json`,
     links,
     checkoutUrl: data.url,
-    checkoutHost: checkoutHost(data.url),
+    checkoutHost: host,
+    checkoutAction: checkoutActionLabel(data.availability, host),
     checkoutPolicy: CHECKOUT_POLICY,
     sourceKind: kind,
     sourceLabel: sourceLabel(kind),
