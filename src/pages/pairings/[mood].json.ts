@@ -8,6 +8,7 @@ import {
   commerceLaneLabel,
   checkoutHost,
   isPublicProduct,
+  productLinks,
   shopLaneUrl,
   sourceKind,
   sourceLabel,
@@ -55,6 +56,7 @@ export const GET: APIRoute = async ({ props }) => {
     .map(({ data }) => {
       const kind = sourceKind(data);
       const lane = commerceLane(data);
+      const links = productLinks(data.slug, data.url);
       return {
         slug: data.slug,
         name: data.name,
@@ -65,8 +67,9 @@ export const GET: APIRoute = async ({ props }) => {
         availability: data.availability,
         priceUsd: data.priceUsd ?? null,
         currency: data.currency,
-        productPage: `https://pointcast.xyz/products/${data.slug}`,
-        productJson: `https://pointcast.xyz/products/${data.slug}.json`,
+        productPage: links.html,
+        productJson: links.self,
+        links,
         checkoutUrl: data.url,
         checkoutHost: checkoutHost(data.url),
         sourceKind: kind,

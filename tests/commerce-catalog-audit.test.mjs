@@ -59,6 +59,7 @@ test('agent-readable product feeds expose a consistent outbound link map', async
     'src/pages/products/[slug].json.ts',
     'src/pages/api/products.jsonl.ts',
     'src/pages/shop.json.ts',
+    'src/pages/pairings/[mood].json.ts',
   ];
 
   for (const route of routes) {
