@@ -201,9 +201,16 @@ function decodeHtml(value) {
 
 function servingLine(title, description) {
   const haystack = `${title} ${description}`;
-  const matches = unique(Array.from(haystack.matchAll(/\b\d+(?:\.\d+)?mg\s+(?:THC|CBD|CBN|CBG)\b/gi))
-    .map((match) => match[0].replace(/\s+/g, ' ')));
-  return matches.slice(0, 3).join(' + ');
+  const matches = new Map();
+
+  for (const match of haystack.matchAll(/\b(\d+(?:\.\d+)?)mg\s+(THC|CBD|CBN|CBG)\b/gi)) {
+    const amount = match[1];
+    const cannabinoid = match[2].toUpperCase();
+    const key = `${amount}:${cannabinoid}`;
+    if (!matches.has(key)) matches.set(key, `${amount}mg ${cannabinoid}`);
+  }
+
+  return Array.from(matches.values()).slice(0, 3).join(' + ');
 }
 
 function inferEffects(product, category) {
