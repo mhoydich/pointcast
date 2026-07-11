@@ -22,6 +22,7 @@ Environment:
 
 Options:
   --dry-run                Print mapped products without writing JSON files
+  --check                  Check whether the local mirror matches the live catalog
   --limit <n>              Max products to mirror. Default: 250
   --out <dir>              Output directory. Default: src/content/products
   --prune                  Delete stale Good Feels product files not in the current mirror
@@ -30,6 +31,7 @@ Options:
 
 const { values } = parseArgs({
   options: {
+    check: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
     limit: { type: 'string', default: '250' },
@@ -51,6 +53,19 @@ const runStartedAt = new Date().toISOString();
 
 const products = await fetchProducts();
 const mapped = products.slice(0, limit).map(toPointCastProduct);
+
+if (values.check) {
+  const result = await inspectMirror(mapped);
+  console.log(JSON.stringify({
+    current: result.added.length === 0 && result.changed.length === 0 && result.stale.length === 0,
+    liveCount: mapped.length,
+    added: result.added,
+    changed: result.changed,
+    stale: result.stale,
+  }, null, 2));
+  if (result.added.length || result.changed.length || result.stale.length) process.exitCode = 1;
+  process.exit();
+}
 
 if (values['dry-run']) {
   console.log(JSON.stringify({
@@ -165,6 +180,32 @@ async function findStaleGoodFeelsFiles(freshSlugs) {
     if (isGoodFeelsEntry(data)) stale.push(file);
   }
   return stale;
+}
+
+async function inspectMirror(products) {
+  const added = [];
+  const changed = [];
+  const freshSlugs = new Set(products.map((product) => product.slug));
+
+  for (const product of products) {
+    const file = path.join(outDir, `${product.slug}.json`);
+    let local;
+    try {
+      local = JSON.parse(await readFile(file, 'utf8'));
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        added.push(product.slug);
+        continue;
+      }
+      throw new Error(`Could not read local mirror ${path.relative(process.cwd(), file)}: ${error.message}`);
+    }
+
+    if (JSON.stringify(local) !== JSON.stringify(product)) changed.push(product.slug);
+  }
+
+  const stale = (await findStaleGoodFeelsFiles(freshSlugs))
+    .map((file) => path.basename(file, '.json'));
+  return { added, changed, stale };
 }
 
 function isGoodFeelsEntry(data) {
