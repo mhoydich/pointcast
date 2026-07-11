@@ -52,6 +52,14 @@ export function checkoutHost(url: string): string {
   }
 }
 
+export function checkoutActionLabel(availability: string, host: string): string {
+  if (availability === 'preorder') return `Preorder on ${host}`;
+  if (availability === 'out-of-stock' || availability === 'discontinued') {
+    return `View availability on ${host}`;
+  }
+  return `Buy on ${host}`;
+}
+
 export function productPage(slug: string): string {
   return `https://pointcast.xyz/products/${slug}`;
 }

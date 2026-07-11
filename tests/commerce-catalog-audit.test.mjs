@@ -74,3 +74,14 @@ test('agent-readable product feeds expose a consistent outbound link map', async
   assert.match(commerce, /shop: 'https:\/\/pointcast\.xyz\/shop\.json'/);
   assert.match(commerce, /checkout: checkoutUrl/);
 });
+
+test('product detail checkout copy reflects upstream availability', async () => {
+  const commerce = await readFile('src/lib/commerce.ts', 'utf8');
+  const detail = await readFile('src/pages/products/[slug].astro', 'utf8');
+
+  assert.match(commerce, /availability === 'preorder'.*Preorder on/);
+  assert.match(commerce, /availability === 'out-of-stock' \|\| availability === 'discontinued'/);
+  assert.match(commerce, /View availability on/);
+  assert.match(detail, /checkoutActionLabel\(d\.availability, sourceHost\)/);
+  assert.doesNotMatch(detail, /→ Buy on \{sourceHost\}/);
+});
