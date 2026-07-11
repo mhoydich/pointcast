@@ -3,7 +3,10 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const productsDir = path.resolve(process.cwd(), 'src/content/products');
+const productsDir = path.resolve(
+  process.cwd(),
+  process.env.COMMERCE_PRODUCTS_DIR || 'src/content/products',
+);
 const files = (await readdir(productsDir)).filter((file) => file.endsWith('.json')).sort();
 const errors = [];
 let publicCount = 0;
@@ -18,9 +21,9 @@ for (const file of files) {
 
   if (isHidden) {
     hiddenCount += 1;
-    continue;
+  } else {
+    publicCount += 1;
   }
-  publicCount += 1;
 
   let checkout;
   try {
@@ -32,6 +35,7 @@ for (const file of files) {
 
   if (checkout.protocol !== 'https:') errors.push(`${label}: checkout must use HTTPS`);
   if (checkout.username || checkout.password) errors.push(`${label}: checkout URL must not contain credentials`);
+  if (checkout.port) errors.push(`${label}: checkout URL must not use a custom port`);
   if (checkout.search || checkout.hash) errors.push(`${label}: checkout URL must be canonical (no query or fragment)`);
   if (checkout.hostname === 'pointcast.xyz' || checkout.hostname.endsWith('.pointcast.xyz')) {
     errors.push(`${label}: checkout must stay outbound from PointCast`);
@@ -43,8 +47,10 @@ for (const file of files) {
     if (checkout.hostname.replace(/^www\./, '') !== 'getgoodfeels.com') {
       errors.push(`${label}: Good Feels checkout must use getgoodfeels.com`);
     }
-    if (!checkout.pathname.startsWith('/products/')) {
-      errors.push(`${label}: Good Feels checkout must deep-link to a product page`);
+    const expectedPath = `/products/${product.slug}`;
+    const checkoutPath = checkout.pathname.replace(/\/$/, '');
+    if (checkoutPath !== expectedPath) {
+      errors.push(`${label}: Good Feels checkout must use canonical path ${expectedPath}`);
     }
   }
 }
@@ -55,4 +61,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Commerce catalog audit passed: ${publicCount} public products, ${hiddenCount} hidden products, all checkout routes outbound and canonical.`);
+console.log(`Commerce catalog audit passed: ${publicCount} public products, ${hiddenCount} hidden products, all current and staged checkout routes outbound and canonical.`);
