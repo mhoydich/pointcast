@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -29,5 +29,26 @@ test('Shopify-hosted merch stays hidden until it is in stock', async () => {
     assert.match(result.stdout, /0 public products, 1 hidden product/);
   } finally {
     await rm(productsDir, { recursive: true, force: true });
+  }
+});
+
+test('static deployment headers keep commerce feeds CORS-open', async () => {
+  const headers = await readFile('public/_headers', 'utf8');
+  const routes = [
+    '/shop.json',
+    '/products.json',
+    '/products/*.json',
+    '/pairings.json',
+    '/pairings/*.json',
+    '/api/products.jsonl',
+  ];
+
+  for (const route of routes) {
+    const start = headers.indexOf(`\n${route}\n`);
+    assert.notEqual(start, -1, `${route} must have a static header rule`);
+    const nextRoute = headers.indexOf('\n/', start + 2);
+    const rule = headers.slice(start, nextRoute === -1 ? undefined : nextRoute);
+    assert.match(rule, /Access-Control-Allow-Origin: \*/);
+    assert.match(rule, /Cache-Control: public, max-age=60, s-maxage=300/);
   }
 });
