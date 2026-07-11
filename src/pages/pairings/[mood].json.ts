@@ -4,8 +4,13 @@ import {
   CHECKOUT_POLICY,
   COMMERCE_CORS_HEADERS,
   COMMERCE_VERSION,
+  commerceLane,
+  commerceLaneLabel,
   checkoutHost,
   isPublicProduct,
+  shopLaneUrl,
+  sourceKind,
+  sourceLabel,
 } from '../../lib/commerce';
 import { resolveMoodTemplate } from '../../lib/moods-soundtracks';
 
@@ -47,21 +52,34 @@ export const GET: APIRoute = async ({ props }) => {
   const products = allProducts
     .filter(({ data }) => data.pairsWithMood?.includes(mood))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime())
-    .map(({ data }) => ({
-      slug: data.slug,
-      name: data.name,
-      brand: data.brand,
-      dek: data.dek ?? null,
-      category: data.category ?? null,
-      effects: data.effects ?? [],
-      availability: data.availability,
-      priceUsd: data.priceUsd ?? null,
-      currency: data.currency,
-      productPage: `https://pointcast.xyz/products/${data.slug}`,
-      checkoutUrl: data.url,
-      checkoutHost: checkoutHost(data.url),
-      vibeProfile: data.vibeProfile ?? null,
-    }));
+    .map(({ data }) => {
+      const kind = sourceKind(data);
+      const lane = commerceLane(data);
+      return {
+        slug: data.slug,
+        name: data.name,
+        brand: data.brand,
+        dek: data.dek ?? null,
+        category: data.category ?? null,
+        effects: data.effects ?? [],
+        availability: data.availability,
+        priceUsd: data.priceUsd ?? null,
+        currency: data.currency,
+        productPage: `https://pointcast.xyz/products/${data.slug}`,
+        productJson: `https://pointcast.xyz/products/${data.slug}.json`,
+        checkoutUrl: data.url,
+        checkoutHost: checkoutHost(data.url),
+        sourceKind: kind,
+        sourceLabel: sourceLabel(kind),
+        laneSlug: lane,
+        laneLabel: commerceLaneLabel(lane),
+        laneUrl: shopLaneUrl(lane, true),
+        vibeProfile: data.vibeProfile ?? null,
+        updatedAt: (data.updatedAt ?? data.addedAt).toISOString(),
+      };
+    });
+
+  const canonical = `https://pointcast.xyz/pairings/${mood}`;
 
   return new Response(JSON.stringify({
     version: COMMERCE_VERSION,
@@ -69,7 +87,15 @@ export const GET: APIRoute = async ({ props }) => {
     label: template.label,
     description: template.dek,
     register: template.register,
-    url: `https://pointcast.xyz/pairings/${mood}`,
+    url: canonical,
+    jsonUrl: `${canonical}.json`,
+    links: {
+      html: canonical,
+      self: `${canonical}.json`,
+      index: 'https://pointcast.xyz/pairings.json',
+      catalog: 'https://pointcast.xyz/products.json',
+      shop: 'https://pointcast.xyz/shop.json',
+    },
     checkoutPolicy: CHECKOUT_POLICY,
     counts: { blocks: blocks.length, products: products.length },
     blocks,
