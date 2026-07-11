@@ -175,15 +175,24 @@ function isGoodFeelsEntry(data) {
 }
 
 function cleanDescription(value) {
-  return decodeHtml(String(value || '')
+  const description = decodeHtml(String(value || '')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<li[^>]*>/gi, ' ')
     .replace(/<\/(p|div|li|ul|ol|h[1-6])>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim())
-    .slice(0, 1200);
+    .trim());
+
+  // Some Shopify descriptions include product-page controls and legal chrome
+  // before the merchant-authored copy. Prefer the explicit content boundary
+  // so PointCast does not mirror flavor selectors or quantity controls as prose.
+  const contentMarker = /\bABOUT THIS PRODUCT\b/i.exec(description);
+  const productCopy = contentMarker
+    ? description.slice(contentMarker.index + contentMarker[0].length).trim()
+    : description;
+
+  return productCopy.slice(0, 1200);
 }
 
 function decodeHtml(value) {
