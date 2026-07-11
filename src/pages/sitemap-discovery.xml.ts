@@ -89,8 +89,8 @@ export const GET: APIRoute = async () => {
   ])).sort();
   const catalogLastmod = products.length > 0
     ? products.reduce(
-        (latest, { data }) => data.addedAt > latest ? data.addedAt : latest,
-        products[0].data.addedAt,
+        (latest, { data }) => (data.updatedAt ?? data.addedAt) > latest ? (data.updatedAt ?? data.addedAt) : latest,
+        products[0].data.updatedAt ?? products[0].data.addedAt,
       ).toISOString().slice(0, 10)
     : today;
   const commerceRootUrls = new Set([
@@ -104,8 +104,8 @@ export const GET: APIRoute = async () => {
   ]);
   const commerceUrls = [
     ...products.flatMap(({ data }) => [
-      [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75', data.addedAt.toISOString().slice(0, 10)],
-      [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72', data.addedAt.toISOString().slice(0, 10)],
+      [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75', (data.updatedAt ?? data.addedAt).toISOString().slice(0, 10)],
+      [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72', (data.updatedAt ?? data.addedAt).toISOString().slice(0, 10)],
     ]),
     ...moods.flatMap((mood) => [
       [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72', catalogLastmod],

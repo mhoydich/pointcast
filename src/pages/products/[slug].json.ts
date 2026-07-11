@@ -73,6 +73,7 @@ export const GET: APIRoute = async ({ props }) => {
     pairingsJsonUrls: pairingsJsonUrls(moods),
     vibeProfile: data.vibeProfile ?? null,
     addedAt: data.addedAt.toISOString(),
+    updatedAt: (data.updatedAt ?? data.addedAt).toISOString(),
     author: data.author,
     source: data.source ?? null,
     schemaOrg: {

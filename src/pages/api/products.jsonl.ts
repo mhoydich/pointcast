@@ -73,6 +73,7 @@ export const GET: APIRoute = async () => {
       pairingsUrls: pairingsUrls(moods),
       pairingsJsonUrls: pairingsJsonUrls(moods),
       addedAt: p.data.addedAt.toISOString(),
+      updatedAt: (p.data.updatedAt ?? p.data.addedAt).toISOString(),
       author: p.data.author,
       source: p.data.source ?? null,
     });

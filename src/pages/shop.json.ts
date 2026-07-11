@@ -39,6 +39,10 @@ export const GET: APIRoute = async () => {
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
   const moodSlugs = Array.from(new Set(products.flatMap((product) => product.data.pairsWithMood ?? []))).sort();
+  const catalogUpdatedAt = products.reduce<Date | null>((latest, product) => {
+    const updatedAt = product.data.updatedAt ?? product.data.addedAt;
+    return !latest || updatedAt > latest ? updatedAt : latest;
+  }, null);
 
   const payload = {
     $schema: 'https://pointcast.xyz/shop.json',
@@ -46,6 +50,7 @@ export const GET: APIRoute = async () => {
     name: 'PointCast Commerce',
     description: 'Unified commerce hub for Good Feels product discovery, PointCast merch lanes, pairings, and agent-readable catalog routes. Checkout stays outbound at canonical shop surfaces.',
     generatedAt: new Date().toISOString(),
+    catalogUpdatedAt: catalogUpdatedAt?.toISOString() ?? null,
     homepage: 'https://pointcast.xyz/shop',
     productsJson: 'https://pointcast.xyz/products.json',
     productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
@@ -112,6 +117,7 @@ export const GET: APIRoute = async () => {
         pairingsJsonUrls: pairingsJsonUrls(moods),
         vibeProfile: product.data.vibeProfile ?? null,
         addedAt: product.data.addedAt.toISOString(),
+        updatedAt: (product.data.updatedAt ?? product.data.addedAt).toISOString(),
         source: product.data.source ?? null,
       };
     }),
