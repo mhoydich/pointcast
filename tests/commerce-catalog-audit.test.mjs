@@ -96,3 +96,14 @@ test('pairing feeds expose deterministic content freshness', async () => {
   assert.match(detailSource, /\.\.\.blocks\.map\(\(block\) => new Date\(block\.timestamp\)\)/);
   assert.match(detailSource, /\.\.\.products\.map\(\(product\) => new Date\(product\.updatedAt\)\)/);
 });
+
+test('pairing sitemap freshness follows matching blocks and products', async () => {
+  const sitemapSource = await readFile('src/pages/sitemap-discovery.xml.ts', 'utf8');
+
+  assert.match(sitemapSource, /data\.mood === mood/);
+  assert.match(sitemapSource, /data\.pairsWithMood\?\.includes\(mood\)/);
+  assert.match(sitemapSource, /data\.timestamp/);
+  assert.match(sitemapSource, /data\.updatedAt \?\? data\.addedAt/);
+  assert.match(sitemapSource, /pairingLastmod/);
+  assert.doesNotMatch(sitemapSource, /pairings\/\$\{mood\}[^\n]+catalogLastmod/);
+});

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
-import { isPublicProduct } from '../lib/commerce';
+import { isPublicProduct, latestCommerceDate } from '../lib/commerce';
 
 const urls = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
@@ -107,10 +107,24 @@ export const GET: APIRoute = async () => {
       [`https://pointcast.xyz/products/${data.slug}`, 'weekly', '0.75', (data.updatedAt ?? data.addedAt).toISOString().slice(0, 10)],
       [`https://pointcast.xyz/products/${data.slug}.json`, 'weekly', '0.72', (data.updatedAt ?? data.addedAt).toISOString().slice(0, 10)],
     ]),
-    ...moods.flatMap((mood) => [
-      [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72', catalogLastmod],
-      [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7', catalogLastmod],
-    ]),
+    ...moods.flatMap((mood) => {
+      const pairingUpdatedAt = latestCommerceDate([
+        ...blocks
+          .filter(({ data }) => data.mood === mood)
+          .map(({ data }) => data.timestamp),
+        ...products
+          .filter(({ data }) => data.pairsWithMood?.includes(mood))
+          .map(({ data }) => data.updatedAt ?? data.addedAt),
+      ]);
+      const pairingLastmod = (pairingUpdatedAt ?? new Date(`${catalogLastmod}T00:00:00.000Z`))
+        .toISOString()
+        .slice(0, 10);
+
+      return [
+        [`https://pointcast.xyz/pairings/${mood}`, 'daily', '0.72', pairingLastmod],
+        [`https://pointcast.xyz/pairings/${mood}.json`, 'daily', '0.7', pairingLastmod],
+      ];
+    }),
   ];
   const discoveryUrls = [
     ...urls.map(([loc, changefreq, priority]) => [
