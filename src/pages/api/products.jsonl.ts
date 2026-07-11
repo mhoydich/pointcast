@@ -16,6 +16,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  commerceLastModified,
   checkoutActionLabel,
   checkoutHost,
   isPublicProduct,
@@ -37,6 +38,10 @@ export const OPTIONS: APIRoute = async () => {
 export const GET: APIRoute = async () => {
   const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
     .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+  const catalogUpdatedAt = products.reduce<Date | null>((latest, product) => {
+    const updatedAt = product.data.updatedAt ?? product.data.addedAt;
+    return !latest || updatedAt > latest ? updatedAt : latest;
+  }, null);
 
   const lines = products.map((p) => {
     const kind = sourceKind(p.data);
@@ -88,6 +93,7 @@ export const GET: APIRoute = async () => {
       'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(products.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'Last-Modified': commerceLastModified(catalogUpdatedAt),
       ...COMMERCE_CORS_HEADERS,
     },
   });

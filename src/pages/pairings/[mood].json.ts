@@ -6,6 +6,7 @@ import {
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
+  commerceLastModified,
   checkoutActionLabel,
   checkoutHost,
   isPublicProduct,
@@ -117,6 +118,7 @@ export const GET: APIRoute = async ({ props }) => {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'Last-Modified': commerceLastModified(updatedAt),
       ...COMMERCE_CORS_HEADERS,
     },
   });

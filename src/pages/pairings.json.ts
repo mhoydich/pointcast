@@ -1,6 +1,6 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
-import { CHECKOUT_POLICY, COMMERCE_CORS_HEADERS, COMMERCE_VERSION, isPublicProduct, latestCommerceDate } from '../lib/commerce';
+import { CHECKOUT_POLICY, COMMERCE_CORS_HEADERS, COMMERCE_VERSION, commerceLastModified, isPublicProduct, latestCommerceDate } from '../lib/commerce';
 import { resolveMoodTemplate } from '../lib/moods-soundtracks';
 
 export const OPTIONS: APIRoute = async () => new Response(null, {
@@ -58,6 +58,7 @@ export const GET: APIRoute = async () => {
       'Cache-Control': 'public, max-age=300',
       'X-Total-Count': String(pairings.length),
       'X-PointCast-Commerce-Version': COMMERCE_VERSION,
+      'Last-Modified': commerceLastModified(updatedAt),
       ...COMMERCE_CORS_HEADERS,
     },
   });

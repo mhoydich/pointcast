@@ -57,6 +57,20 @@ test('static deployment headers keep commerce feeds CORS-open', async () => {
 test('catalog feeds expose transport-level freshness to cross-origin agents', async () => {
   const commerce = await readFile('src/lib/commerce.ts', 'utf8');
   assert.match(commerce, /Last-Modified, X-Total-Count/);
+
+  const routes = [
+    'src/pages/products.json.ts',
+    'src/pages/shop.json.ts',
+    'src/pages/products/[slug].json.ts',
+    'src/pages/pairings.json.ts',
+    'src/pages/pairings/[mood].json.ts',
+    'src/pages/api/products.jsonl.ts',
+  ];
+
+  for (const route of routes) {
+    const source = await readFile(route, 'utf8');
+    assert.match(source, /'Last-Modified': commerceLastModified\(/, `${route} must emit content freshness`);
+  }
 });
 
 test('agent-readable product feeds expose a consistent outbound link map', async () => {

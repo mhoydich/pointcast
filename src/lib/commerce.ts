@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v2-2026-07-11';
+export const COMMERCE_VERSION = 'commerce-hub-v3-2026-07-11';
 
 export const COMMERCE_CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -88,6 +88,10 @@ export function latestCommerceDate(dates: Date[]): Date | null {
     (latest, date) => !latest || date > latest ? date : latest,
     null,
   );
+}
+
+export function commerceLastModified(date: Date | null): string {
+  return (date ?? new Date(0)).toUTCString();
 }
 
 export function sourceKind(product: { brand?: string; url: string }): 'good-feels' | 'pointcast-merch' | 'external' {
