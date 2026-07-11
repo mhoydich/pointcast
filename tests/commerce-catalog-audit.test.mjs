@@ -85,3 +85,14 @@ test('product detail checkout copy reflects upstream availability', async () => 
   assert.match(detail, /checkoutActionLabel\(d\.availability, sourceHost\)/);
   assert.doesNotMatch(detail, /→ Buy on \{sourceHost\}/);
 });
+
+test('pairing feeds expose deterministic content freshness', async () => {
+  const indexSource = await readFile('src/pages/pairings.json.ts', 'utf8');
+  const detailSource = await readFile('src/pages/pairings/[mood].json.ts', 'utf8');
+
+  assert.match(indexSource, /matchingBlocks\.map\(\(\{ data \}\) => data\.timestamp\)/);
+  assert.match(indexSource, /matchingProducts\.map\(\(\{ data \}\) => data\.updatedAt \?\? data\.addedAt\)/);
+  assert.match(indexSource, /updatedAt: updatedAt\?\.toISOString\(\) \?\? null/);
+  assert.match(detailSource, /\.\.\.blocks\.map\(\(block\) => new Date\(block\.timestamp\)\)/);
+  assert.match(detailSource, /\.\.\.products\.map\(\(product\) => new Date\(product\.updatedAt\)\)/);
+});

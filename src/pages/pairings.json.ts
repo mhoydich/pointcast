@@ -1,6 +1,6 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
-import { CHECKOUT_POLICY, COMMERCE_CORS_HEADERS, COMMERCE_VERSION, isPublicProduct } from '../lib/commerce';
+import { CHECKOUT_POLICY, COMMERCE_CORS_HEADERS, COMMERCE_VERSION, isPublicProduct, latestCommerceDate } from '../lib/commerce';
 import { resolveMoodTemplate } from '../lib/moods-soundtracks';
 
 export const OPTIONS: APIRoute = async () => new Response(null, {
@@ -19,14 +19,19 @@ export const GET: APIRoute = async () => {
 
   const pairings = [...moods].map((mood) => {
     const template = resolveMoodTemplate(mood);
-    const blockCount = blocks.filter(({ data }) => data.mood === mood).length;
-    const productCount = products.filter(({ data }) => data.pairsWithMood?.includes(mood)).length;
+    const matchingBlocks = blocks.filter(({ data }) => data.mood === mood);
+    const matchingProducts = products.filter(({ data }) => data.pairsWithMood?.includes(mood));
+    const updatedAt = latestCommerceDate([
+      ...matchingBlocks.map(({ data }) => data.timestamp),
+      ...matchingProducts.map(({ data }) => data.updatedAt ?? data.addedAt),
+    ]);
     return {
       mood,
       label: template.label,
       description: template.dek,
       register: template.register,
-      counts: { blocks: blockCount, products: productCount },
+      counts: { blocks: matchingBlocks.length, products: matchingProducts.length },
+      updatedAt: updatedAt?.toISOString() ?? null,
       url: `https://pointcast.xyz/pairings/${mood}`,
       jsonUrl: `https://pointcast.xyz/pairings/${mood}.json`,
     };
@@ -34,12 +39,14 @@ export const GET: APIRoute = async () => {
     const countDifference = (b.counts.blocks + b.counts.products) - (a.counts.blocks + a.counts.products);
     return countDifference || a.mood.localeCompare(b.mood);
   });
+  const updatedAt = latestCommerceDate(pairings.flatMap((pairing) => pairing.updatedAt ? [new Date(pairing.updatedAt)] : []));
 
   return new Response(JSON.stringify({
     version: COMMERCE_VERSION,
     name: 'PointCast commerce pairings',
     description: 'Agent-readable index of mood routes connecting PointCast blocks with public products.',
     generatedAt: new Date().toISOString(),
+    updatedAt: updatedAt?.toISOString() ?? null,
     homepage: 'https://pointcast.xyz/pairings',
     checkoutPolicy: CHECKOUT_POLICY,
     count: pairings.length,

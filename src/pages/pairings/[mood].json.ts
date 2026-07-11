@@ -8,6 +8,7 @@ import {
   commerceLaneLabel,
   checkoutHost,
   isPublicProduct,
+  latestCommerceDate,
   productLinks,
   shopLaneUrl,
   sourceKind,
@@ -83,6 +84,10 @@ export const GET: APIRoute = async ({ props }) => {
     });
 
   const canonical = `https://pointcast.xyz/pairings/${mood}`;
+  const updatedAt = latestCommerceDate([
+    ...blocks.map((block) => new Date(block.timestamp)),
+    ...products.map((product) => new Date(product.updatedAt)),
+  ]);
 
   return new Response(JSON.stringify({
     version: COMMERCE_VERSION,
@@ -92,6 +97,7 @@ export const GET: APIRoute = async ({ props }) => {
     register: template.register,
     url: canonical,
     jsonUrl: `${canonical}.json`,
+    updatedAt: updatedAt?.toISOString() ?? null,
     links: {
       html: canonical,
       self: `${canonical}.json`,

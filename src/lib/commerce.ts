@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v1-2026-07-11';
+export const COMMERCE_VERSION = 'commerce-hub-v2-2026-07-11';
 
 export const COMMERCE_CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +81,13 @@ export function pairingsUrls(moods: string[] = []): string[] {
 
 export function pairingsJsonUrls(moods: string[] = []): string[] {
   return moods.map((mood) => `https://pointcast.xyz/pairings/${mood}.json`);
+}
+
+export function latestCommerceDate(dates: Date[]): Date | null {
+  return dates.reduce<Date | null>(
+    (latest, date) => !latest || date > latest ? date : latest,
+    null,
+  );
 }
 
 export function sourceKind(product: { brand?: string; url: string }): 'good-feels' | 'pointcast-merch' | 'external' {
