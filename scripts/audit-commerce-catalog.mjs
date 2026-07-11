@@ -15,7 +15,19 @@ let hiddenCount = 0;
 for (const file of files) {
   const product = JSON.parse(await readFile(path.join(productsDir, file), 'utf8'));
   const label = product.slug || file;
-  const isPointCastMerch = /pointcast/i.test(product.brand || '');
+  let checkout;
+  try {
+    checkout = new URL(product.url);
+  } catch {
+    errors.push(`${label}: checkout URL is invalid`);
+    continue;
+  }
+
+  const checkoutHost = checkout.hostname.replace(/^www\./, '').toLowerCase();
+  // Keep this aligned with src/lib/commerce.ts#sourceKind: Shopify-hosted
+  // products are PointCast merch even when the upstream vendor name changes.
+  const isPointCastMerch = /pointcast/i.test(product.brand || '')
+    || checkoutHost.endsWith('.myshopify.com');
   const isHidden = product.draft === true
     || (isPointCastMerch && product.availability !== 'in-stock');
 
@@ -23,14 +35,6 @@ for (const file of files) {
     hiddenCount += 1;
   } else {
     publicCount += 1;
-  }
-
-  let checkout;
-  try {
-    checkout = new URL(product.url);
-  } catch {
-    errors.push(`${label}: checkout URL is invalid`);
-    continue;
   }
 
   if (checkout.protocol !== 'https:') errors.push(`${label}: checkout must use HTTPS`);
@@ -42,9 +46,9 @@ for (const file of files) {
   }
 
   const isGoodFeels = /good feels/i.test(product.brand || '')
-    || checkout.hostname.replace(/^www\./, '') === 'getgoodfeels.com';
+    || checkoutHost === 'getgoodfeels.com';
   if (isGoodFeels) {
-    if (checkout.hostname.replace(/^www\./, '') !== 'getgoodfeels.com') {
+    if (checkoutHost !== 'getgoodfeels.com') {
       errors.push(`${label}: Good Feels checkout must use getgoodfeels.com`);
     }
     const expectedPath = `/products/${product.slug}`;
