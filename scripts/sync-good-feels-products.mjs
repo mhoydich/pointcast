@@ -153,6 +153,7 @@ function toPointCastProduct(product) {
       serving && category ? `${serving} · ${category}` : serving,
       category,
     ]) || undefined,
+    serving: serving || undefined,
     pairsWithMood: pairingsForProduct(product, category),
     vibeProfile: 'good-feels',
     addedAt: (product.published_at || product.created_at || runStartedAt).slice(0, 10),

@@ -323,6 +323,8 @@ const products = defineCollection({
     ingredients: z.array(z.string()).optional(),
     /** Optional one-line subtitle. */
     dek: z.string().max(200).optional(),
+    /** Concise per-serving cannabinoid summary, e.g. "5mg THC + 1mg CBD". */
+    serving: z.string().max(120).optional(),
     /** Mood slugs this product pairs with. Drives /pairings/{mood} cross-index —
      *  a block with mood `late-night-calm` and a product with that slug in
      *  pairsWithMood co-surface on the same pairing page. Same slug shape

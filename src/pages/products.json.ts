@@ -90,6 +90,7 @@ export const GET: APIRoute = async () => {
           brand: p.data.brand,
           description: p.data.description,
           dek: p.data.dek ?? null,
+          serving: p.data.serving ?? null,
           url: p.data.url,
           canonical: links.html,
           jsonUrl: links.self,
