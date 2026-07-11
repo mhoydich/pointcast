@@ -4,7 +4,7 @@ export const COMMERCE_CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Expose-Headers': 'X-Total-Count, X-PointCast-Commerce-Version',
+  'Access-Control-Expose-Headers': 'Last-Modified, X-Total-Count, X-PointCast-Commerce-Version',
 } as const;
 
 export const CHECKOUT_POLICY = {
