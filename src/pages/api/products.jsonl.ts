@@ -20,6 +20,7 @@ import {
   isPublicProduct,
   pairingsUrls,
   pairingsJsonUrls,
+  productLinks,
   shopLaneUrl,
   sourceKind,
   sourceLabel,
@@ -40,14 +41,16 @@ export const GET: APIRoute = async () => {
     const kind = sourceKind(p.data);
     const lane = commerceLane(p.data);
     const moods = p.data.pairsWithMood ?? [];
+    const links = productLinks(p.data.slug, p.data.url);
     return JSON.stringify({
       slug: p.data.slug,
       name: p.data.name,
       brand: p.data.brand,
       description: p.data.description,
       dek: p.data.dek ?? null,
-      productPage: `https://pointcast.xyz/products/${p.data.slug}`,
-      productJson: `https://pointcast.xyz/products/${p.data.slug}.json`,
+      productPage: links.html,
+      productJson: links.self,
+      links,
       shopUrl: p.data.url,
       checkoutUrl: p.data.url,
       checkoutHost: checkoutHost(p.data.url),

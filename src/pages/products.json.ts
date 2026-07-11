@@ -15,6 +15,7 @@ import {
   isPublicProduct,
   pairingsUrls,
   pairingsJsonUrls,
+  productLinks,
   schemaAvailability,
   shopLaneUrl,
   sourceKind,
@@ -85,6 +86,7 @@ export const GET: APIRoute = async () => {
         const kind = sourceKind(p.data);
         const lane = commerceLane(p.data);
         const moods = p.data.pairsWithMood ?? [];
+        const links = productLinks(p.data.slug, p.data.url);
         return {
           slug: p.data.slug,
           name: p.data.name,
@@ -92,8 +94,9 @@ export const GET: APIRoute = async () => {
           description: p.data.description,
           dek: p.data.dek ?? null,
           url: p.data.url,
-          canonical: `https://pointcast.xyz/products/${p.data.slug}`,
-          jsonUrl: `https://pointcast.xyz/products/${p.data.slug}.json`,
+          canonical: links.html,
+          jsonUrl: links.self,
+          links,
           checkoutHost: checkoutHost(p.data.url),
           sourceKind: kind,
           sourceLabel: sourceLabel(kind),
@@ -120,7 +123,7 @@ export const GET: APIRoute = async () => {
             name: p.data.name,
             brand: p.data.brand,
             description: p.data.description,
-            url: `https://pointcast.xyz/products/${p.data.slug}`,
+            url: links.html,
             ...(p.data.image && p.data.image.length ? { image: p.data.image } : {}),
             ...(p.data.priceUsd !== undefined ? {
               offers: {

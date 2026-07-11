@@ -10,6 +10,7 @@ import {
   isPublicProduct,
   pairingsJsonUrls,
   pairingsUrls,
+  productLinks,
   schemaAvailability,
   shopLaneUrl,
   sourceKind,
@@ -35,7 +36,8 @@ export const GET: APIRoute = async ({ props }) => {
   const kind = sourceKind(data);
   const lane = commerceLane(data);
   const moods = data.pairsWithMood ?? [];
-  const canonical = `https://pointcast.xyz/products/${data.slug}`;
+  const links = productLinks(data.slug, data.url);
+  const canonical = links.html;
 
   const payload = {
     version: COMMERCE_VERSION,
@@ -46,13 +48,7 @@ export const GET: APIRoute = async ({ props }) => {
     dek: data.dek ?? null,
     canonical,
     jsonUrl: `${canonical}.json`,
-    links: {
-      html: canonical,
-      self: `${canonical}.json`,
-      catalog: 'https://pointcast.xyz/products.json',
-      shop: 'https://pointcast.xyz/shop.json',
-      checkout: data.url,
-    },
+    links,
     checkoutUrl: data.url,
     checkoutHost: checkoutHost(data.url),
     checkoutPolicy: CHECKOUT_POLICY,

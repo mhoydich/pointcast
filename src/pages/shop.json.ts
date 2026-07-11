@@ -12,6 +12,7 @@ import {
   isPublicProduct,
   pairingsJsonUrls,
   pairingsUrls,
+  productLinks,
   shopLaneUrl,
   sourceKind,
   sourceLabel,
@@ -92,6 +93,7 @@ export const GET: APIRoute = async () => {
       const kind = sourceKind(product.data);
       const lane = commerceLane(product.data);
       const moods = product.data.pairsWithMood ?? [];
+      const links = productLinks(product.data.slug, product.data.url);
       return {
         slug: product.data.slug,
         name: product.data.name,
@@ -102,8 +104,9 @@ export const GET: APIRoute = async () => {
         availability: product.data.availability,
         priceUsd: product.data.priceUsd ?? null,
         currency: product.data.currency,
-        productPage: `https://pointcast.xyz/products/${product.data.slug}`,
-        productJson: `https://pointcast.xyz/products/${product.data.slug}.json`,
+        productPage: links.html,
+        productJson: links.self,
+        links,
         checkoutUrl: product.data.url,
         checkoutHost: checkoutHost(product.data.url),
         sourceKind: kind,

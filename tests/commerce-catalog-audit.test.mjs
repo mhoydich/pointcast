@@ -52,3 +52,24 @@ test('static deployment headers keep commerce feeds CORS-open', async () => {
     assert.match(rule, /Cache-Control: public, max-age=60, s-maxage=300/);
   }
 });
+
+test('agent-readable product feeds expose a consistent outbound link map', async () => {
+  const routes = [
+    'src/pages/products.json.ts',
+    'src/pages/products/[slug].json.ts',
+    'src/pages/api/products.jsonl.ts',
+    'src/pages/shop.json.ts',
+  ];
+
+  for (const route of routes) {
+    const source = await readFile(route, 'utf8');
+    assert.match(source, /productLinks/);
+    assert.match(source, /links,/);
+  }
+
+  const commerce = await readFile('src/lib/commerce.ts', 'utf8');
+  assert.match(commerce, /self: `\$\{html\}\.json`/);
+  assert.match(commerce, /catalog: 'https:\/\/pointcast\.xyz\/products\.json'/);
+  assert.match(commerce, /shop: 'https:\/\/pointcast\.xyz\/shop\.json'/);
+  assert.match(commerce, /checkout: checkoutUrl/);
+});

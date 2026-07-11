@@ -56,6 +56,17 @@ export function productPage(slug: string): string {
   return `https://pointcast.xyz/products/${slug}`;
 }
 
+export function productLinks(slug: string, checkoutUrl: string) {
+  const html = productPage(slug);
+  return {
+    html,
+    self: `${html}.json`,
+    catalog: 'https://pointcast.xyz/products.json',
+    shop: 'https://pointcast.xyz/shop.json',
+    checkout: checkoutUrl,
+  } as const;
+}
+
 export function pairingsUrls(moods: string[] = []): string[] {
   return moods.map((mood) => `https://pointcast.xyz/pairings/${mood}`);
 }
