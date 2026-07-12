@@ -11,6 +11,7 @@
 import { getCollection } from 'astro:content';
 import type { APIRoute } from 'astro';
 import {
+  CHECKOUT_POLICY,
   COMMERCE_VERSION,
   commerceLane,
   commerceLaneLabel,
@@ -54,6 +55,7 @@ export const GET: APIRoute = async () => {
       shopUrl: p.data.url,
       checkoutUrl: p.data.url,
       checkoutHost: checkoutHost(p.data.url),
+      checkoutPolicy: CHECKOUT_POLICY,
       sourceKind: kind,
       sourceLabel: sourceLabel(kind),
       laneSlug: lane,

@@ -101,6 +101,7 @@ export const GET: APIRoute = async () => {
           effects: p.data.effects ?? [],
           ingredients: p.data.ingredients ?? [],
           pairsWithMood: moods,
+          vibeProfile: p.data.vibeProfile ?? null,
           pairingsUrls: pairingsUrls(moods),
           addedAt: p.data.addedAt.toISOString(),
           author: p.data.author,
