@@ -51,7 +51,7 @@ test('static deployment headers keep commerce feeds CORS-open', async () => {
     assert.match(rule, /Access-Control-Allow-Origin: \*/);
     assert.match(
       rule,
-      /Access-Control-Expose-Headers: Last-Modified, X-Total-Count, X-PointCast-Commerce-Version/,
+      /Access-Control-Expose-Headers: ETag, Last-Modified, X-Total-Count, X-PointCast-Commerce-Version/,
     );
     assert.match(rule, /Cache-Control: public, max-age=60, s-maxage=300/);
   }
@@ -59,7 +59,7 @@ test('static deployment headers keep commerce feeds CORS-open', async () => {
 
 test('catalog feeds expose transport-level freshness to cross-origin agents', async () => {
   const commerce = await readFile('src/lib/commerce.ts', 'utf8');
-  assert.match(commerce, /Last-Modified, X-Total-Count/);
+  assert.match(commerce, /ETag, Last-Modified, X-Total-Count/);
 
   const routes = [
     'src/pages/products.json.ts',
