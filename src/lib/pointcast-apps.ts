@@ -562,6 +562,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'satellite',
   },
   {
+    slug: 'dotpath',
+    name: 'dotpath',
+    kicker: 'LINKS · MINTED · TEZOS',
+    description: 'A link-in-bio page that is itself an FA2 token: claim a handle, the handle paints your dot-mark, and the whole page lives in your wallet — edit it forever or hand it on whole.',
+    url: 'https://dotpath.pages.dev',
+    path: '/dotpath',
+    repo: 'https://github.com/mhoydich/dotpath',
+    channel: 'CH.FD',
+    kind: 'satellite',
+  },
+  {
     slug: 'sats-path',
     name: 'Sats Path',
     kicker: 'CAPITAL JOURNEY · BITCOIN READINESS',
