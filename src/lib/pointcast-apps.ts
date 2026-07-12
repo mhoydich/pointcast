@@ -562,6 +562,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'satellite',
   },
   {
+    slug: 'rally',
+    name: 'Rally',
+    kicker: 'PICKLEBALL · COUNTERSIGNED ELO · TEZOS',
+    description: 'A self-declared pickleball rating on Tezos mainnet: declare a number to mint a soulbound player card, then only matches countersigned by everyone on the court can move it.',
+    url: 'https://tez-rally.pages.dev',
+    path: '/rally',
+    repo: 'https://tzkt.io/KT1X4iLYF11LvZhU6PFRamLioKjrcgDJEUoT/code',
+    channel: 'CH.CRT',
+    kind: 'satellite',
+  },
+  {
     slug: 'sats-path',
     name: 'Sats Path',
     kicker: 'CAPITAL JOURNEY · BITCOIN READINESS',
