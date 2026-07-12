@@ -97,6 +97,10 @@ export const GET: APIRoute = () => {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=300, s-maxage=600',
       'Access-Control-Allow-Origin': '*',
+      Link: [
+        '<https://pointcast.xyz/drum-scorebook>; rel="canonical"; type="text/html"',
+        '<https://pointcast.xyz/drum-agent-altar>; rel="related"; type="text/html"',
+      ].join(', '),
     },
   });
 };
