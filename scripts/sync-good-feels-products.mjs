@@ -201,7 +201,7 @@ function decodeHtml(value) {
 
 function servingLine(title, description) {
   const haystack = `${title} ${description}`;
-  const matches = unique(Array.from(haystack.matchAll(/\b\d+(?:\.\d+)?mg\s+(?:THC|CBD|CBN|CBG)\b/gi))
+  const matches = uniqueIgnoreCase(Array.from(haystack.matchAll(/\b\d+(?:\.\d+)?mg\s+(?:THC|CBD|CBN|CBG)\b/gi))
     .map((match) => match[0].replace(/\s+/g, ' ')));
   return matches.slice(0, 3).join(' + ');
 }
@@ -269,6 +269,16 @@ function firstNonEmpty(values) {
 
 function unique(values) {
   return Array.from(new Set(values));
+}
+
+function uniqueIgnoreCase(values) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const key = value.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function roundMoney(value) {
