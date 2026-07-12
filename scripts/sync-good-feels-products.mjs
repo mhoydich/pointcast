@@ -21,7 +21,7 @@ Environment:
                            Default: https://getgoodfeels.com
 
 Options:
-  --dry-run                Print mapped products without writing JSON files
+  --dry-run                Report catalog changes without writing JSON files
   --limit <n>              Max products to mirror. Default: 250
   --out <dir>              Output directory. Default: src/content/products
   --prune                  Delete stale Good Feels product files not in the current mirror
@@ -53,11 +53,13 @@ const products = await fetchProducts();
 const mapped = products.slice(0, limit).map(toPointCastProduct);
 
 if (values['dry-run']) {
+  const changes = await inspectMirror(mapped);
   console.log(JSON.stringify({
     dryRun: true,
     productsUrl,
     storeUrl,
     count: mapped.length,
+    changes,
     products: mapped,
   }, null, 2));
   process.exit(0);
@@ -165,6 +167,49 @@ async function findStaleGoodFeelsFiles(freshSlugs) {
     if (isGoodFeelsEntry(data)) stale.push(file);
   }
   return stale;
+}
+
+async function inspectMirror(freshProducts) {
+  const freshBySlug = new Map(freshProducts.map((product) => [product.slug, product]));
+  const localBySlug = new Map();
+
+  let files = [];
+  try {
+    files = await readdir(outDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  for (const entry of files) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    try {
+      const data = JSON.parse(await readFile(path.join(outDir, entry.name), 'utf8'));
+      if (isGoodFeelsEntry(data)) {
+        localBySlug.set(data.slug || entry.name.replace(/\.json$/, ''), data);
+      }
+    } catch {
+      // Invalid content files are handled by Astro validation; skip them here.
+    }
+  }
+
+  const added = [];
+  const updated = [];
+  const unchanged = [];
+  for (const [slug, fresh] of freshBySlug) {
+    const local = localBySlug.get(slug);
+    if (!local) added.push(slug);
+    else if (JSON.stringify(local) === JSON.stringify(fresh)) unchanged.push(slug);
+    else updated.push(slug);
+  }
+
+  const stale = Array.from(localBySlug.keys()).filter((slug) => !freshBySlug.has(slug));
+  return {
+    isFresh: added.length === 0 && updated.length === 0 && stale.length === 0,
+    added: added.sort(),
+    updated: updated.sort(),
+    stale: stale.sort(),
+    unchanged: unchanged.sort(),
+  };
 }
 
 function isGoodFeelsEntry(data) {
