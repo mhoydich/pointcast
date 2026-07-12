@@ -1,0 +1,427 @@
+---
+/**
+ * /drum-aurora — a breathing aurora for time spent.
+ *
+ * Mike: "more alters, shrines, prayer areas, not to existing for this
+ * pass, very 2026, colors, audios, visuals, results, presence, peace,
+ * pace, flow."
+ *
+ * Full-screen conic-gradient aurora rendered with OKLCH bands. The
+ * gradient breathes. Bands ACCRETE over time spent on the page —
+ * every 30 seconds, one more hue wedge becomes visible. So the page
+ * literally rewards stillness.
+ *
+ * Slow pad chord drones underneath, fading in over 60s. Click anywhere
+ * to ripple a radial flash + soft bell. Ripples fan out over the
+ * existing /api/room WebSocket signal lane, with /api/chamber as a
+ * polling fallback.
+ *
+ * localStorage tracks lifetime "minutes bathed".
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'Aurora · Time-Bathed Light · PointCast';
+const description =
+  'A breathing OKLCH aurora that accretes color the longer you stay. Slow pad drone underneath. Click to ripple.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Aurora',
+  url: 'https://pointcast.xyz/drum-aurora',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="da" id="da-main">
+    <DrumNav current="aurora" />
+
+    <div class="da__field" id="da-field">
+      <div class="da__layer da__layer--bg"></div>
+      <div class="da__layer da__layer--mid" id="da-layer-mid"></div>
+      <div class="da__layer da__layer--fg" id="da-layer-fg"></div>
+
+      <header class="da__chrome">
+        <span class="da__chrome-label">AURORA</span>
+        <span class="da__chrome-sep">·</span>
+        <span class="da__chrome-time" id="da-elapsed">00:00</span>
+        <span class="da__chrome-sep">·</span>
+        <span class="da__chrome-bands"><span id="da-bands">0</span>/12 BANDS</span>
+        <span class="da__chrome-sep">·</span>
+        <span class="da__chrome-live"><span id="da-here">0</span> HERE</span>
+      </header>
+
+      <div class="da__center">
+        <h1 class="da__title">stay still</h1>
+        <p class="da__tagline">a band lights up every 30 seconds you stay on this page</p>
+      </div>
+
+      <footer class="da__readout">
+        <div class="da__lifetime">
+          <span class="da__lifetime-label">LIFETIME BATHED</span>
+          <span class="da__lifetime-value" id="da-lifetime">0 MIN</span>
+        </div>
+      </footer>
+    </div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#da-main) { background: #0c0410; overflow-x: hidden; }
+  .da { position: relative; isolation: isolate; margin: 0 -32px; padding: 0; color: #f4e7c8; font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif); }
+  .da .drum-nav { position: absolute; top: 0; left: 32px; z-index: 4; opacity: 0.40; transform: scale(0.85); transform-origin: top left; }
+  .da__field { position: relative; width: 100%; height: calc(100vh - 80px); min-height: 600px; overflow: hidden; cursor: crosshair; }
+  .da__layer { position: absolute; inset: -20%; pointer-events: none; will-change: transform, opacity, filter; transition: opacity 1200ms ease-out; }
+  .da__layer--bg {
+    background: conic-gradient(from 0deg at 50% 50%,
+      oklch(0.18 0.04 280), oklch(0.22 0.06 240), oklch(0.16 0.05 320),
+      oklch(0.20 0.05 200), oklch(0.18 0.04 280));
+    filter: blur(60px);
+    animation: da-rotate-slow 90s linear infinite;
+  }
+  .da__layer--mid {
+    background: conic-gradient(from 0deg at 50% 50%,
+      oklch(0.40 0.20 22), oklch(0.45 0.22 60), oklch(0.50 0.24 100),
+      oklch(0.45 0.22 150), oklch(0.40 0.20 200), oklch(0.45 0.22 240),
+      oklch(0.50 0.24 280), oklch(0.45 0.22 320), oklch(0.40 0.20 22));
+    filter: blur(80px) saturate(0.6);
+    animation: da-rotate-mid 60s linear infinite;
+    opacity: 0;
+  }
+  .da__layer--fg {
+    background: conic-gradient(from 0deg at 50% 50%,
+      oklch(0.65 0.28 30), transparent 6%,
+      oklch(0.70 0.30 80) 12%, transparent 18%,
+      oklch(0.65 0.28 200) 24%, transparent 30%,
+      oklch(0.70 0.30 280) 36%, transparent 42%,
+      oklch(0.65 0.28 340) 48%, transparent 100%);
+    filter: blur(50px) saturate(1.2);
+    animation: da-rotate-fast 45s linear infinite reverse;
+    opacity: 0;
+    mix-blend-mode: screen;
+  }
+  @keyframes da-rotate-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes da-rotate-mid  { from { transform: rotate(0deg) scale(1.05); } to { transform: rotate(-360deg) scale(1.05); } }
+  @keyframes da-rotate-fast { from { transform: rotate(0deg) scale(0.95); } to { transform: rotate(360deg) scale(0.95); } }
+  .da__chrome {
+    position: absolute; top: clamp(16px, 2vh, 32px); right: clamp(20px, 3vw, 48px);
+    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
+    padding: 6px 16px; border: 1px solid rgba(244, 231, 200, 0.30); border-radius: 999px;
+    backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(244, 231, 200, 0.85); z-index: 3;
+  }
+  .da__chrome-label { font-weight: 700; letter-spacing: 0.30em; }
+  .da__chrome-sep { color: rgba(244, 231, 200, 0.40); }
+  .da__chrome-time { color: oklch(0.85 0.15 80); font-weight: 700; }
+  .da__chrome-bands { color: oklch(0.80 0.18 200); font-weight: 700; }
+  .da__chrome-live { color: oklch(0.88 0.18 150); font-weight: 700; }
+  .da__center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; z-index: 3; pointer-events: none;
+    transition: opacity 1500ms ease-out; padding: 0 24px;
+  }
+  .da__title {
+    margin: 0 0 12px; font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.04em;
+    color: rgba(244, 231, 200, 0.95);
+    text-shadow: 0 0 40px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+  .da__tagline {
+    margin: 0 auto; font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.4vw, 18px); color: rgba(244, 231, 200, 0.75);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6); max-width: 540px;
+  }
+  .da__field.da__field--deep .da__center { opacity: 0.55; }
+  .da__readout { position: absolute; bottom: clamp(16px, 2vh, 32px); left: 50%; transform: translateX(-50%); z-index: 3; }
+  .da__lifetime {
+    display: inline-flex; align-items: center; gap: 12px; padding: 6px 16px;
+    border: 1px solid rgba(244, 231, 200, 0.20); border-radius: 999px;
+    backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.30);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .da__lifetime-label { color: rgba(244, 231, 200, 0.55); }
+  .da__lifetime-value { color: oklch(0.85 0.20 80); font-weight: 700; }
+  .da__ripple {
+    position: absolute; width: 80px; height: 80px; border-radius: 50%;
+    background: radial-gradient(circle, oklch(0.85 0.30 var(--ripple-hue, 80)) 0%, transparent 60%);
+    transform: translate(-50%, -50%) scale(0.4); opacity: 0.85; pointer-events: none;
+    animation: da-ripple 1.4s ease-out 1 forwards; mix-blend-mode: screen; z-index: 2;
+  }
+  @keyframes da-ripple {
+    0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0.85; }
+    50%  { opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(8); opacity: 0; }
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  let padNodes = null;
+  function startPad() {
+    if (padNodes) return;
+    const a = ctx(); const t = a.currentTime;
+    const FREQS = [130.81, 196.00, 246.94, 293.66];
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1800;
+    const masterGain = a.createGain();
+    masterGain.gain.setValueAtTime(0.0001, t);
+    masterGain.gain.exponentialRampToValueAtTime(0.10, t + 60);
+    filt.connect(masterGain); masterGain.connect(a.destination);
+    const oscs = FREQS.map((f) => {
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.07 + Math.random() * 0.05;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.6;
+      lfo.connect(lfoGain); lfoGain.connect(o.detune);
+      lfo.start(t); o.connect(filt); o.start(t);
+      return { o, lfo };
+    });
+    padNodes = { oscs, filt, masterGain };
+  }
+  function playRippleBell(hue) {
+    const a = ctx(); const t = a.currentTime;
+    const f = 392 + (hue / 360) * 196;
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+    const g = a.createGain(); const g2 = a.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.20, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.07, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+    o.start(t); o.stop(t + 1.9); o2.start(t); o2.stop(t + 1.3);
+  }
+  const fieldEl = document.getElementById('da-field');
+  const midEl = document.getElementById('da-layer-mid');
+  const fgEl = document.getElementById('da-layer-fg');
+  const elapsedEl = document.getElementById('da-elapsed');
+  const bandsEl = document.getElementById('da-bands');
+  const hereEl = document.getElementById('da-here');
+  const lifetimeEl = document.getElementById('da-lifetime');
+  const LIFETIME_KEY = 'pc:aurora:lifetime-seconds';
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) {
+        sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(SID_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return 'sid-anon-' + Date.now();
+    }
+  }
+  const SID = ensureSid();
+  const SELF_SID = SID.slice(0, 8);
+  let lifetimeSeconds = 0;
+  try { lifetimeSeconds = parseInt(localStorage.getItem(LIFETIME_KEY) || '0', 10) || 0; } catch {}
+  let sessionStartedAt = Date.now();
+  let audioStarted = false;
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtElapsed(sec) { return `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`; }
+  function paint() {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    if (elapsedEl) elapsedEl.textContent = fmtElapsed(sessionSec);
+    const bands = Math.min(12, Math.floor(sessionSec / 30) + (sessionSec > 0 ? 1 : 0));
+    if (bandsEl) bandsEl.textContent = String(Math.max(0, bands - 1));
+    const midOpacity = (bands - 1) / 12;
+    if (midEl) midEl.style.opacity = String(Math.max(0, midOpacity));
+    const fgOpacity = bands < 6 ? 0 : Math.min(0.85, (bands - 6) / 6);
+    if (fgEl) fgEl.style.opacity = String(fgOpacity);
+    if (fieldEl) {
+      if (bands >= 4) fieldEl.classList.add('da__field--deep');
+      else fieldEl.classList.remove('da__field--deep');
+    }
+    const totalSec = lifetimeSeconds + sessionSec;
+    if (lifetimeEl) lifetimeEl.textContent = `${Math.floor(totalSec / 60)} MIN`;
+  }
+  setInterval(() => {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    try { localStorage.setItem(LIFETIME_KEY, String(lifetimeSeconds + sessionSec)); } catch {}
+  }, 10000);
+  window.addEventListener('beforeunload', () => {
+    const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    try { localStorage.setItem(LIFETIME_KEY, String(lifetimeSeconds + sessionSec)); } catch {}
+  });
+  setInterval(paint, 1000);
+  paint();
+
+  // ── Realtime ripples ─────────────────────────────────
+  let roomSocket = null;
+  let roomSocketReady = false;
+  let reconnectTimer = null;
+  let seenSignals = new Set();
+  let seenFallbackRipples = new Set();
+
+  function clampUnit(value, fallback = 0.5) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(1, n));
+  }
+
+  function drawRipple(xPct, yPct, hue, withBell) {
+    if (!fieldEl) return;
+    const rect = fieldEl.getBoundingClientRect();
+    const x = clampUnit(xPct) * rect.width;
+    const y = clampUnit(yPct) * rect.height;
+    const h = Number.isFinite(Number(hue)) ? Number(hue) : Math.floor((x / rect.width) * 360);
+    if (withBell && audioStarted) {
+      try { playRippleBell(h); } catch {}
+    }
+    const ripple = document.createElement('div');
+    ripple.className = 'da__ripple';
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    ripple.style.setProperty('--ripple-hue', String(h));
+    fieldEl.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 1500);
+  }
+
+  function socketUrl() {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const path = window.location.pathname || '/drum-aurora';
+    return `${proto}//${window.location.host}/api/room?url=${encodeURIComponent(path)}&sid=${encodeURIComponent(SID)}`;
+  }
+
+  function identifyRoom() {
+    if (!roomSocket || roomSocket.readyState !== WebSocket.OPEN) return;
+    try {
+      roomSocket.send(JSON.stringify({
+        type: 'identify',
+        tag: 'aurora',
+        currentPath: window.location.pathname || '/drum-aurora',
+      }));
+    } catch {}
+  }
+
+  function connectRoomSocket() {
+    if (typeof WebSocket === 'undefined') return;
+    if (roomSocket && (roomSocket.readyState === WebSocket.OPEN || roomSocket.readyState === WebSocket.CONNECTING)) return;
+    try { roomSocket = new WebSocket(socketUrl()); } catch { return; }
+    roomSocket.addEventListener('open', () => {
+      roomSocketReady = true;
+      identifyRoom();
+    });
+    roomSocket.addEventListener('message', (ev) => {
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (hereEl && typeof msg.humans === 'number') hereEl.textContent = String(msg.humans);
+      const signals = Array.isArray(msg.signals) ? msg.signals : [];
+      signals.forEach((sig) => {
+        if (!sig || sig.event !== 'aurora:ripple') return;
+        if (sig.sid === SELF_SID) return;
+        const key = sig.id || `${sig.sid}-${sig.at}`;
+        if (seenSignals.has(key)) return;
+        seenSignals.add(key);
+        drawRipple(
+          typeof sig.x === 'number' ? sig.x / 10000 : 0.5,
+          typeof sig.y === 'number' ? sig.y / 10000 : 0.5,
+          sig.hue,
+          true,
+        );
+      });
+      if (seenSignals.size > 200) seenSignals = new Set();
+    });
+    const scheduleReconnect = () => {
+      roomSocketReady = false;
+      if (reconnectTimer) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connectRoomSocket();
+      }, 1800);
+    };
+    roomSocket.addEventListener('close', scheduleReconnect);
+    roomSocket.addEventListener('error', () => {
+      scheduleReconnect();
+      try { roomSocket.close(); } catch {}
+    });
+  }
+
+  function sendSignal(xPct, yPct, hue) {
+    if (!roomSocketReady || !roomSocket || roomSocket.readyState !== WebSocket.OPEN) return false;
+    try {
+      roomSocket.send(JSON.stringify({
+        type: 'signal',
+        event: 'aurora:ripple',
+        x: Math.round(clampUnit(xPct) * 10000),
+        y: Math.round(clampUnit(yPct) * 10000),
+        hue,
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function pingAurora() {
+    try {
+      await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'aurora', action: 'ping', sessionId: SID }) });
+    } catch {}
+  }
+
+  async function postFallbackRipple(xPct, yPct, hue) {
+    try {
+      const res = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'aurora', action: 'ripple', sessionId: SID, x: xPct, y: yPct, hue }) });
+      const json = await res.json();
+      if (!json?.ok) return;
+      if (hereEl) hereEl.textContent = String(json.state?.visitors?.length || 0);
+      const latest = json.state?.ripples?.[0];
+      if (latest) seenFallbackRipples.add(`${latest.pid}-${latest.t}`);
+    } catch {}
+  }
+
+  async function fetchAuroraState() {
+    try {
+      const res = await fetch('/api/chamber?kind=aurora', { cache: 'no-store' });
+      const json = await res.json();
+      if (!json?.ok) return;
+      const visitors = json.state?.visitors || [];
+      const ripples = json.state?.ripples || [];
+      if (hereEl) hereEl.textContent = String(visitors.length);
+      const now = Date.now();
+      ripples.forEach((r) => {
+        if (now - r.t > 4000) return;
+        const key = `${r.pid}-${r.t}`;
+        if (seenFallbackRipples.has(key)) return;
+        seenFallbackRipples.add(key);
+        drawRipple(
+          typeof r.x === 'number' ? r.x : 0.5,
+          typeof r.y === 'number' ? r.y : 0.5,
+          r.hue,
+          true,
+        );
+      });
+      if (seenFallbackRipples.size > 200) seenFallbackRipples = new Set();
+    } catch {}
+  }
+
+  fieldEl?.addEventListener('click', (e) => {
+    if (!audioStarted) { audioStarted = true; try { startPad(); } catch {} }
+    const rect = fieldEl.getBoundingClientRect();
+    const xPct = (e.clientX - rect.left) / rect.width;
+    const yPct = (e.clientY - rect.top) / rect.height;
+    const hue = Math.floor(clampUnit(xPct) * 360);
+    drawRipple(xPct, yPct, hue, true);
+    sendSignal(xPct, yPct, hue);
+    postFallbackRipple(xPct, yPct, hue);
+  });
+  window.addEventListener('keydown', () => {
+    if (!audioStarted) { audioStarted = true; try { startPad(); } catch {} }
+  }, { once: true });
+  connectRoomSocket();
+  pingAurora();
+  setInterval(pingAurora, 8000);
+  fetchAuroraState();
+  setInterval(fetchAuroraState, 2000);
+</script>

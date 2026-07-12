@@ -1,5 +1,3 @@
-import * as lancedb from '@lancedb/lancedb';
-import { UMAP } from 'umap-js';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -25,6 +23,34 @@ const CHAT_MODELS = [
 
 function ollamaBase() {
   return (process.env.OLLAMA_HOST || 'http://127.0.0.1:11434').replace(/\/$/, '');
+}
+
+let lancedbModulePromise = null;
+let ollamaReachablePromise = null;
+let umapModulePromise = null;
+
+async function getLanceDb() {
+  if (process.env.POINTCAST_FAST_REINDEX === '1' || process.env.POINTCAST_DISABLE_LANCEDB === '1') {
+    return null;
+  }
+  if (!lancedbModulePromise) {
+    lancedbModulePromise = import('@lancedb/lancedb').catch((error) => {
+      console.warn(`[oracle] LanceDB unavailable: ${error.message}`);
+      return null;
+    });
+  }
+  return await lancedbModulePromise;
+}
+
+async function getUmap() {
+  if (!umapModulePromise) {
+    umapModulePromise = import('umap-js').catch((error) => {
+      console.warn(`[oracle] UMAP unavailable: ${error.message}`);
+      return null;
+    });
+  }
+  const umapPkg = await umapModulePromise;
+  return umapPkg?.UMAP || umapPkg?.default || umapPkg || null;
 }
 
 async function ensureDirs() {
@@ -77,9 +103,29 @@ async function ollamaJson(path, payload, timeoutMs = 45_000) {
   }
 }
 
+async function ollamaReachable() {
+  if (process.env.POINTCAST_DISABLE_OLLAMA === '1') return false;
+  if (!ollamaReachablePromise) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 750);
+    ollamaReachablePromise = fetch(`${ollamaBase()}/api/tags`, {
+      method: 'GET',
+      signal: controller.signal,
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => clearTimeout(timer));
+  }
+  return await ollamaReachablePromise;
+}
+
 export async function embedText(text) {
   const prompt = String(text || '').slice(0, 7000);
   const errors = [];
+  const useOllama = await ollamaReachable();
+  if (!useOllama) {
+    return { vector: hashVector(prompt), model: 'hash-fallback', fallback: true, errors: ['ollama unavailable'] };
+  }
   for (const model of EMBED_MODELS) {
     try {
       const json = await ollamaJson('/api/embeddings', { model, prompt }, 60_000);
@@ -95,6 +141,10 @@ export async function embedText(text) {
 
 async function chat(messages, options = {}) {
   const errors = [];
+  const useOllama = await ollamaReachable();
+  if (!useOllama) {
+    return { content: '', model: 'extractive-fallback', fallback: true, errors: ['ollama unavailable'] };
+  }
   for (const model of CHAT_MODELS) {
     try {
       const json = await ollamaJson('/api/chat', {
@@ -114,6 +164,8 @@ async function chat(messages, options = {}) {
 
 async function openOrCreateTable() {
   await ensureDirs();
+  const lancedb = await getLanceDb();
+  if (!lancedb) return null;
   const db = await lancedb.connect(LANCEDB_DIR);
   const names = await db.tableNames();
   if (!names.includes(TABLE_NAME)) return null;
@@ -157,14 +209,18 @@ export async function reindex({ force = false, recomputeAtlas = true } = {}) {
     });
   }
 
-  const db = await lancedb.connect(LANCEDB_DIR);
-  await db.createTable(TABLE_NAME, rows, { mode: 'overwrite' });
+  const lancedb = await getLanceDb();
+  if (lancedb) {
+    const db = await lancedb.connect(LANCEDB_DIR);
+    await db.createTable(TABLE_NAME, rows, { mode: 'overwrite' });
+  }
   await writeFile(MANIFEST_PATH, JSON.stringify({
     digest,
     indexedAt: new Date().toISOString(),
     blocks: rows.length,
     model,
     fallbackEmbeddings,
+    backend: lancedb ? 'lancedb' : 'lexical-fallback',
   }, null, 2));
 
   let atlas = null;
@@ -378,14 +434,23 @@ export async function computeAtlas({ rows = null } = {}) {
 
   let coords;
   try {
-    const vectors = tableRows.map((row) => row.vector);
-    const umap = new UMAP({
-      nComponents: 2,
-      nNeighbors: Math.max(3, Math.min(15, Math.floor(tableRows.length / 4))),
-      minDist: 0.08,
-      random: seededRandom(20260506),
-    });
-    coords = normalizePoints(umap.fit(vectors)).map((point, idx) => ({ id: tableRows[idx].id, ...point }));
+    if (process.env.POINTCAST_FAST_ATLAS === '1') {
+      coords = gridProjection(tableRows);
+    } else {
+      const vectors = tableRows.map((row) => row.vector);
+      const UMAP = await getUmap();
+      if (!UMAP) {
+        coords = gridProjection(tableRows);
+      } else {
+      const umap = new UMAP({
+        nComponents: 2,
+        nNeighbors: Math.max(3, Math.min(15, Math.floor(tableRows.length / 4))),
+        minDist: 0.08,
+        random: seededRandom(20260506),
+      });
+        coords = normalizePoints(umap.fit(vectors)).map((point, idx) => ({ id: tableRows[idx].id, ...point }));
+      }
+    }
   } catch {
     coords = gridProjection(tableRows);
   }

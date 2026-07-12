@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Volcano · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {
+    background:
+      linear-gradient(180deg, #1a0820 0%, #3a0a14 60%, #6a1410 100%);
+  }
+  .scene { position: fixed; inset: 0; overflow: hidden; }
+
+  /* sky stars */
+  .stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle 1px at 14% 12%, white, transparent),
+      radial-gradient(circle 1px at 32% 18%, white, transparent),
+      radial-gradient(circle 1px at 56% 8%,  white, transparent),
+      radial-gradient(circle 1px at 78% 16%, white, transparent),
+      radial-gradient(circle 1px at 88% 24%, white, transparent);
+    opacity: 0.45;
+  }
+
+  /* mountain silhouette */
+  .mtn {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 55%;
+    background:
+      linear-gradient(to bottom, #1a0a08 0%, #08040a 100%);
+    clip-path: polygon(
+      0 100%, 100% 100%, 100% 60%,
+      88% 56%, 78% 50%, 70% 35%, 62% 26%, 56% 18%, 50% 10%,
+      44% 18%, 38% 26%, 30% 38%, 22% 50%, 12% 56%, 0 60%);
+  }
+  /* lava streams */
+  .lava {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 55%;
+    pointer-events: none;
+    clip-path: polygon(
+      0 100%, 100% 100%, 100% 60%,
+      88% 56%, 78% 50%, 70% 35%, 62% 26%, 56% 18%, 50% 10%,
+      44% 18%, 38% 26%, 30% 38%, 22% 50%, 12% 56%, 0 60%);
+  }
+  .lava-stream {
+    position: absolute;
+    bottom: 0;
+    width: 8px;
+    background:
+      linear-gradient(to bottom,
+        #fff8d6 0 4%,
+        #ffb15a 4% 16%,
+        #ff5a1a 16% 50%,
+        #c8281a 50% 100%);
+    box-shadow:
+      0 0 14px rgba(255,140,40,0.7),
+      inset 0 0 4px rgba(255,200,80,0.5);
+    border-radius: 4px 4px 0 0;
+  }
+  .l1 { left: 50%; height: 70%; transform: translateX(-50%); width: 14px; }
+  .l2 { left: 38%; height: 50%; }
+  .l3 { left: 60%; height: 55%; }
+  .l4 { left: 28%; height: 30%; }
+  .l5 { left: 70%; height: 32%; }
+
+  /* lava pool at base */
+  .pool {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 16%;
+    background:
+      radial-gradient(ellipse at 50% 0%, #ff5a1a 0%, #c8281a 30%, #6a1410 70%, transparent 100%);
+    filter: blur(2px);
+  }
+
+  /* the crater fire */
+  #fire {
+    position: absolute;
+    left: 50%; bottom: 51%;
+    transform: translateX(-50%);
+    z-index: 3;
+  }
+
+  /* explosion sparks */
+  .embers {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .embers span {
+    position: absolute;
+    width: 4px; height: 4px;
+    background: #ffd066;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255,180,80,0.9);
+    animation: ember 5s linear infinite;
+  }
+  @keyframes ember {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx, 60px), var(--dy, -200px)) scale(0); opacity: 0; }
+  }
+
+  /* big sky glow above crater */
+  .skyglow {
+    position: absolute;
+    left: 50%; bottom: 52%;
+    transform: translateX(-50%);
+    width: 60vw; height: 50vh;
+    background: radial-gradient(ellipse at 50% 100%, rgba(255,140,40,0.6), transparent 60%);
+    filter: blur(20px);
+    pointer-events: none;
+    animation: bigPulse 2s ease-in-out infinite;
+  }
+  @keyframes bigPulse { 50% { opacity: 0.7; } }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="stars"></div>
+  <div class="skyglow"></div>
+  <div class="mtn"></div>
+  <div class="lava">
+    <div class="lava-stream l1"></div>
+    <div class="lava-stream l2"></div>
+    <div class="lava-stream l3"></div>
+    <div class="lava-stream l4"></div>
+    <div class="lava-stream l5"></div>
+  </div>
+  <div class="pool"></div>
+  <canvas id="fire" width="280" height="240"></canvas>
+  <div class="embers" id="embers"></div>
+</div>
+<script type="module">
+  import { PixelFire, PALETTES } from "./lib/fire.js";
+  import { mountChrome } from "./lib/chrome.js";
+  const c = document.getElementById("fire");
+  const fire = new PixelFire(c, { palette: PALETTES.hearth, scale: 4, intensity: 1 });
+  // narrow source for crater shape
+  const cols = c.width / 4;
+  const src = new Uint8Array(cols);
+  const center = cols / 2;
+  const radius = cols * 0.3;
+  for (let i = 0; i < cols; i++) src[i] = Math.abs(i - center) < radius ? 1 : 0;
+  fire.setSource(src);
+  fire.start();
+
+  // ambient embers above crater
+  const e = document.getElementById("embers");
+  setInterval(() => {
+    const span = document.createElement("span");
+    span.style.left = (45 + Math.random() * 10) + "%";
+    span.style.bottom = "50%";
+    span.style.setProperty("--dx", ((Math.random() - 0.5) * 200) + "px");
+    span.style.setProperty("--dy", -(150 + Math.random() * 200) + "px");
+    span.style.animationDuration = (3 + Math.random() * 4) + "s";
+    e.appendChild(span);
+    setTimeout(() => span.remove(), 8000);
+  }, 220);
+
+  mountChrome({ title: "volcano", mood: "tectonic boundary · obsidian beach · respect the mountain" });
+</script>
+</body>
+</html>

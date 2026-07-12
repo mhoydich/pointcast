@@ -1,0 +1,809 @@
+import { g as getCollection } from './_astro_content_kC0GrL8i.mjs';
+import { a as CHANNEL_LIST } from './channels_C2qW9mSV.mjs';
+import { B as BLOCK_TYPE_LIST } from './block-types_l5R3rOkI.mjs';
+import { L as LOCAL_AREAS, a as LOCAL_AREA_RADIUS } from './localAreas_mKBCCGeN.mjs';
+import { S as SITE_SAME_AS, a as SITE_KEYWORDS, b as SITE_DESCRIPTION } from './seo_kHbv1E1E.mjs';
+import { P as PLAY_SURFACES, a as PLAY_LAYER_VERSION } from './play-layer_B1t_jF-o.mjs';
+import { N as NOUNS_BATTLER_AGENT_BENCH } from './nouns-battler-agent-bench_CoupaMI8.mjs';
+import { e as agentExperimentCards, d as agentEconomics, c as agentMaturityLadder, b as agentInterestMechanics, a as agentValueLoops, A as AGENT_VALUE_SURFACE } from './agent-value_nLa-AifS.mjs';
+import contracts from './contracts_B1zhgPPX.mjs';
+import { R as RESIDENTS, a as RESIDENTS_CONTRACT } from './residents_D3C7HFto.mjs';
+
+const GET = async () => {
+  const blocks = await getCollection("blocks", ({ data }) => !data.draft);
+  const since = blocks.map((b) => b.data.timestamp.getTime()).reduce((min, t) => t < min ? t : min, Date.now());
+  const visitNouns = (contracts.visit_nouns?.mainnet).trim();
+  const prizeCast = (contracts.prize_cast?.mainnet).trim();
+  const drumToken = (contracts.drum_token?.mainnet).trim();
+  const marketplace = (contracts.marketplace?.mainnet).trim();
+  const zenCats = (contracts.zen_cats?.mainnet).trim();
+  const postcards = (contracts.postcards?.mainnet).trim();
+  const payload = {
+    $schema: "https://pointcast.xyz/BLOCKS.md",
+    name: "PointCast",
+    description: SITE_DESCRIPTION,
+    homepage: "https://pointcast.xyz",
+    forAgents: "https://pointcast.xyz/for-agents",
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    blocksSince: new Date(since).toISOString().slice(0, 10),
+    blocksCount: blocks.length,
+    location: "El Segundo, California, USA",
+    geo: {
+      place: "El Segundo, California, USA",
+      region: "US-CA",
+      latitude: 33.9192,
+      longitude: -118.4165,
+      radius: {
+        localLens: "100 miles",
+        beacon: "25 miles"
+      }
+    },
+    language: "en-US",
+    license: "CC0-flavored (see /for-agents for terms)",
+    keywords: SITE_KEYWORDS,
+    identity: {
+      canonicalName: "PointCast",
+      alternateNames: ["PointCast Network", "pointcast.xyz"],
+      creator: {
+        name: "Mike Hoydich",
+        alternateName: "Michael Hoydich",
+        url: "https://pointcast.xyz/about",
+        sameAs: SITE_SAME_AS
+      },
+      collaborators: [
+        { name: "Claude Code", vendor: "Anthropic", role: "primary engineering collaborator" },
+        { name: "Codex", vendor: "OpenAI", role: "review and implementation collaborator" },
+        { name: "Manus", role: "operations and computer-use collaborator" }
+      ]
+    },
+    endpoints: {
+      discovery: {
+        canonical: "https://pointcast.xyz/agents.json",
+        wellKnownAgents: "https://pointcast.xyz/.well-known/agents.json",
+        wellKnownAi: "https://pointcast.xyz/.well-known/ai.json",
+        wellKnownPointCastPeer: "https://pointcast.xyz/.well-known/pointcast-peer.json",
+        wellKnownFarcaster: "https://pointcast.xyz/.well-known/farcaster.json",
+        agentNativePublishing: "https://pointcast.xyz/agent-native-publishing",
+        agentValue: "https://pointcast.xyz/agent-value",
+        agentValueJson: "https://pointcast.xyz/agent-value.json",
+        protocol: "https://pointcast.xyz/protocol",
+        protocolJson: "https://pointcast.xyz/protocol.json",
+        llms: "https://pointcast.xyz/llms.txt",
+        llmsFull: "https://pointcast.xyz/llms-full.txt",
+        robots: "https://pointcast.xyz/robots.txt",
+        sitemapIndex: "https://pointcast.xyz/sitemap-index.xml",
+        sitemapDiscovery: "https://pointcast.xyz/sitemap-discovery.xml",
+        sitemapBlocks: "https://pointcast.xyz/sitemap-blocks.xml",
+        investmentThesis: "https://pointcast.xyz/investment-thesis",
+        investmentThesisJson: "https://pointcast.xyz/investment-thesis.json",
+        nounsNationRoadmap: "https://pointcast.xyz/nouns-nation/roadmap",
+        nounsNationRoadmapJson: "https://pointcast.xyz/nouns-nation/roadmap.json",
+        nounsNationRoadmapDeck: "https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx"
+      },
+      human: {
+        home: "https://pointcast.xyz/",
+        agentNativePublishing: "https://pointcast.xyz/agent-native-publishing",
+        agentValue: "https://pointcast.xyz/agent-value",
+        investmentThesis: "https://pointcast.xyz/investment-thesis",
+        manifesto: "https://pointcast.xyz/manifesto",
+        protocol: "https://pointcast.xyz/protocol",
+        messages: "https://pointcast.xyz/messages",
+        messagesDemo: "https://pointcast.xyz/messages/demo",
+        messagesChain: "https://pointcast.xyz/messages/chain",
+        dao: "https://pointcast.xyz/dao",
+        yield: "https://pointcast.xyz/yield",
+        nounsCola: "https://pointcast.xyz/nouns-cola",
+        nounsColaCrush: "https://pointcast.xyz/nouns-cola-crush",
+        shrines: "https://pointcast.xyz/shrines",
+        unfurls: "https://pointcast.xyz/unfurls",
+        nextSprint: "https://pointcast.xyz/next-sprint",
+        nounsOpenCircuit: "https://pointcast.xyz/nouns-open-circuit",
+        nounsOpenCircuitMatch: "https://pointcast.xyz/nouns-open-circuit/match/noc-001",
+        publish: "https://pointcast.xyz/publish",
+        beacon: "https://pointcast.xyz/beacon",
+        aiStack: "https://pointcast.xyz/ai-stack",
+        mesh: "https://pointcast.xyz/mesh",
+        join: "https://pointcast.xyz/join",
+        yeePlayer: "https://pointcast.xyz/yee",
+        collabs: "https://pointcast.xyz/collabs",
+        collabsRelay: "https://pointcast.xyz/collabs/relay",
+        collabsArena: "https://pointcast.xyz/collabs/arena",
+        ping: "https://pointcast.xyz/ping",
+        sprint: "https://pointcast.xyz/sprint",
+        sprints: "https://pointcast.xyz/sprints",
+        drop: "https://pointcast.xyz/drop",
+        commerce: "https://pointcast.xyz/shop",
+        goodFeels: "https://pointcast.xyz/shop",
+        shop: "https://pointcast.xyz/shop",
+        products: "https://pointcast.xyz/products",
+        apps: "https://pointcast.xyz/apps",
+        connectors: "https://pointcast.xyz/connectors",
+        moodygold: "https://pointcast.xyz/moodygold",
+        offbalance: "https://pointcast.xyz/offbalance",
+        polls: "https://pointcast.xyz/polls",
+        briefs: "https://pointcast.xyz/briefs",
+        gallery: "https://pointcast.xyz/gallery",
+        ethLegacy: "https://pointcast.xyz/eth-legacy",
+        glossary: "https://pointcast.xyz/glossary",
+        changelog: "https://pointcast.xyz/changelog",
+        archive: "https://pointcast.xyz/archive",
+        editions: "https://pointcast.xyz/editions",
+        collection: "https://pointcast.xyz/collection",
+        cast: "https://pointcast.xyz/cast",
+        explore: "https://pointcast.xyz/explore",
+        knock: "https://pointcast.xyz/knock",
+        drum: "https://pointcast.xyz/drum",
+        drumV2: "https://pointcast.xyz/drum-v2",
+        drumV3: "https://pointcast.xyz/drum-v3",
+        drumV4: "https://pointcast.xyz/drum-v4",
+        drumV5: "https://pointcast.xyz/drum-v5",
+        drumV6: "https://pointcast.xyz/drum-v6",
+        drumV7: "https://pointcast.xyz/drum-v7",
+        drumV8: "https://pointcast.xyz/drum-v8",
+        drumV9: "https://pointcast.xyz/drum-v9",
+        drumTrophies: "https://pointcast.xyz/drum-trophies",
+        drumApr26: "https://pointcast.xyz/drum-apr26",
+        drumTv: "https://pointcast.xyz/drum-tv",
+        drumTvV2: "https://pointcast.xyz/drum-tv-v2",
+        town: "https://pointcast.xyz/town",
+        postcards: "https://pointcast.xyz/postcards",
+        kettle: "https://pointcast.xyz/kettle",
+        pace: "https://pointcast.xyz/pace",
+        bathRecent: "https://pointcast.xyz/bath/recent",
+        agentDerby: "https://pointcast.xyz/agent-derby",
+        nounsNation: "https://pointcast.xyz/nouns-nation/",
+        nounsNationRoadmap: "https://pointcast.xyz/nouns-nation/roadmap",
+        nounsNationFederation: "https://pointcast.xyz/nouns-nation/federation/",
+        nounsNationJoin: "https://pointcast.xyz/nouns-nation/join/",
+        nounsNationBattler: "https://pointcast.xyz/nouns-nation-battler/",
+        nounsNationBattlerV3: "https://pointcast.xyz/nouns-nation-battler-v3/",
+        nounsNationBattlerV2: "https://pointcast.xyz/nouns-nation-battler-v2/",
+        nounsNationBattlerMobile: "https://pointcast.xyz/nouns-nation-battler-mobile/",
+        nounsNationBattlerTv: "https://pointcast.xyz/nouns-nation-battler-tv/",
+        nounsNationBattlerDesk: "https://pointcast.xyz/nouns-nation-battler-desk/",
+        nounsNationBattlerPosters: "https://pointcast.xyz/nouns-nation-battler-posters/",
+        nounsNationBattlerAgents: "https://pointcast.xyz/nouns-nation-battler-agents/",
+        nounsNationBattlerPrompts: "https://pointcast.xyz/nouns-nation-battler-prompts/",
+        nounsNationBattlerWiki: "https://pointcast.xyz/nouns-nation-battler-wiki/",
+        nounsNationBattlerAgentDesk: "https://pointcast.xyz/nouns-nation-battler-agents/desk/",
+        nounsNationBattlerSponsors: "https://pointcast.xyz/nouns-nation-battler-sponsors/",
+        nounsNationBattlerProduction: "https://pointcast.xyz/nouns-nation-battler-production/",
+        nounsNationBattlerTasks: "https://pointcast.xyz/nouns-nation-battler-tasks/",
+        nounsNationBattlerBowl: "https://pointcast.xyz/nouns-nation-battler-bowl/",
+        nounsNationBattlerMoon: "https://pointcast.xyz/nouns-nation-battler-moon/",
+        battle: "https://pointcast.xyz/battle",
+        now: "https://pointcast.xyz/now",
+        search: "https://pointcast.xyz/search",
+        random: "https://pointcast.xyz/random",
+        timeline: "https://pointcast.xyz/timeline",
+        status: "https://pointcast.xyz/status",
+        profile: "https://pointcast.xyz/profile",
+        family: "https://pointcast.xyz/family",
+        today: "https://pointcast.xyz/today",
+        moods: "https://pointcast.xyz/moods",
+        local: "https://pointcast.xyz/local",
+        areas: "https://pointcast.xyz/areas",
+        paddleExchange: "https://pointcast.xyz/paddle-exchange",
+        meetups: "https://pointcast.xyz/meetups",
+        universityOfElSegundo: "https://pointcast.xyz/university-of-el-segundo",
+        honeyLeague: "https://pointcast.xyz/honey-league",
+        nature: "https://pointcast.xyz/nature",
+        gardenYield: "https://pointcast.xyz/garden-yield",
+        houseplants: "https://pointcast.xyz/houseplants",
+        meditate: "https://pointcast.xyz/meditate",
+        tv: "https://pointcast.xyz/tv",
+        tvAssets: "https://pointcast.xyz/tv/assets",
+        here: "https://pointcast.xyz/here",
+        forAgents: "https://pointcast.xyz/for-agents",
+        forNodes: "https://pointcast.xyz/for-nodes",
+        farm: "https://pointcast.xyz/farm",
+        wire: "https://pointcast.xyz/wire",
+        scoreboard: "https://pointcast.xyz/scoreboard",
+        taproom: "https://pointcast.xyz/taproom",
+        play: "https://pointcast.xyz/play",
+        passport: "https://pointcast.xyz/passport",
+        quests: "https://pointcast.xyz/quests",
+        walk: "https://pointcast.xyz/walk",
+        roomWeather: "https://pointcast.xyz/room-weather",
+        radio: "https://pointcast.xyz/radio",
+        routes: "https://pointcast.xyz/routes",
+        builders: "https://pointcast.xyz/builders",
+        civic: "https://pointcast.xyz/civic",
+        pet: "https://pointcast.xyz/pet",
+        pets: "https://pointcast.xyz/pets",
+        sitePetNamePoll: "https://pointcast.xyz/poll/site-pet-name",
+        zenCats: "https://pointcast.xyz/zen-cats"
+      },
+      json: {
+        agents: "https://pointcast.xyz/agents.json",
+        agentValue: "https://pointcast.xyz/agent-value.json",
+        protocol: "https://pointcast.xyz/protocol.json",
+        pointcastPeer: "https://pointcast.xyz/.well-known/pointcast-peer.json",
+        farcaster: "https://pointcast.xyz/.well-known/farcaster.json",
+        investmentThesis: "https://pointcast.xyz/investment-thesis.json",
+        blocks: "https://pointcast.xyz/blocks.json",
+        archive: "https://pointcast.xyz/archive.json",
+        editions: "https://pointcast.xyz/editions.json",
+        now: "https://pointcast.xyz/now.json",
+        cast: "https://pointcast.xyz/cast.json",
+        explore: "https://pointcast.xyz/explore.json",
+        agentDerby: "https://pointcast.xyz/agent-derby.json",
+        nounsNation: "https://pointcast.xyz/nouns-nation.json",
+        nounsNationRoadmap: "https://pointcast.xyz/nouns-nation/roadmap.json",
+        nounsNationBattler: "https://pointcast.xyz/nouns-nation-battler.json",
+        nounsNationBattlerAgents: "https://pointcast.xyz/nouns-nation-battler-agents.json",
+        nounsNationBattlerBowl: "https://pointcast.xyz/nouns-nation-battler-bowl.json",
+        nounsNationBattlerMoon: "https://pointcast.xyz/nouns-nation-battler-moon.json",
+        town: "https://pointcast.xyz/town.json",
+        battle: "https://pointcast.xyz/battle.json",
+        timeline: "https://pointcast.xyz/timeline.json",
+        feed: "https://pointcast.xyz/feed.json",
+        random: "https://pointcast.xyz/random.json",
+        dao: "https://pointcast.xyz/dao.json",
+        yield: "https://pointcast.xyz/yield.json",
+        nounsCola: "https://pointcast.xyz/nouns-cola.json",
+        nounsColaCrush: "https://pointcast.xyz/nouns-cola-crush.json",
+        shrines: "https://pointcast.xyz/shrines.json",
+        unfurls: "https://pointcast.xyz/unfurls.json",
+        nextSprint: "https://pointcast.xyz/next-sprint.json",
+        nounsOpenCircuit: "https://pointcast.xyz/nouns-open-circuit.json",
+        publish: "https://pointcast.xyz/publish.json",
+        beacon: "https://pointcast.xyz/beacon.json",
+        aiStack: "https://pointcast.xyz/ai-stack.json",
+        join: "https://pointcast.xyz/join.json",
+        collabs: "https://pointcast.xyz/collabs.json",
+        commerce: "https://pointcast.xyz/shop.json",
+        goodFeels: "https://pointcast.xyz/shop.json",
+        shop: "https://pointcast.xyz/shop.json",
+        products: "https://pointcast.xyz/products.json",
+        apps: "https://pointcast.xyz/apps.json",
+        connectors: "https://pointcast.xyz/connectors.json",
+        sprint: "https://pointcast.xyz/sprint.json",
+        sprints: "https://pointcast.xyz/sprints.json",
+        family: "https://pointcast.xyz/family.json",
+        today: "https://pointcast.xyz/today.json",
+        moods: "https://pointcast.xyz/moods.json",
+        local: "https://pointcast.xyz/local.json",
+        areas: "https://pointcast.xyz/areas.json",
+        nature: "https://pointcast.xyz/nature.json",
+        gardenYield: "https://pointcast.xyz/garden-yield.json",
+        houseplants: "https://pointcast.xyz/houseplants.json",
+        meditate: "https://pointcast.xyz/meditate.json",
+        tvAssets: "https://pointcast.xyz/tv/assets.json",
+        natureYield: "https://pointcast.xyz/nature-yield.json",
+        wire: "https://pointcast.xyz/wire.json",
+        scoreboard: "https://pointcast.xyz/scoreboard.json",
+        taproom: "https://pointcast.xyz/taproom.json",
+        play: "https://pointcast.xyz/play.json",
+        pets: "https://pointcast.xyz/pets.json",
+        zenCats: "https://pointcast.xyz/zen-cats.json"
+      },
+      api: {
+        ping: "https://pointcast.xyz/api/ping",
+        publish: "https://pointcast.xyz/api/publish",
+        pcpRelay: "https://pointcast.xyz/api/pcp/relay",
+        indexnow: "https://pointcast.xyz/api/indexnow",
+        queue: "https://pointcast.xyz/api/queue",
+        drop: "https://pointcast.xyz/api/drop",
+        poll: "https://pointcast.xyz/api/poll",
+        sitePetNamePoll: "https://pointcast.xyz/api/poll?slug=site-pet-name",
+        talk: "https://pointcast.xyz/api/talk",
+        wireEvents: "https://pointcast.xyz/api/wire-events",
+        room: "wss://pointcast.xyz/api/room",
+        raceSubmit: "https://pointcast.xyz/api/race/{slug}/submit",
+        raceLeaderboard: "https://pointcast.xyz/api/race/{slug}/leaderboard",
+        presence: "wss://pointcast.xyz/api/presence",
+        presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
+        presenceProtocol: {
+          transport: "websocket",
+          query: {
+            sid: "browser-scoped UUID; private; never broadcast back out",
+            kind: ["human", "agent", "wallet"]
+          },
+          clientMessages: {
+            identify: {
+              type: "identify",
+              nounId: "required integer 0-1199",
+              mood: "optional string",
+              listening: "optional string",
+              where: "optional string"
+            },
+            update: {
+              type: "update",
+              nounId: "required integer 0-1199",
+              mood: "optional string or null to clear",
+              listening: "optional string or null to clear",
+              where: "optional string or null to clear"
+            },
+            ping: {
+              type: "ping",
+              nounId: "required integer 0-1199"
+            }
+          },
+          broadcast: {
+            humans: "count of non-agent visitors (includes wallet kind)",
+            agents: "count of agent visitors",
+            sessions: [
+              {
+                nounId: 421,
+                kind: "human",
+                joinedAt: "2026-04-20T05:35:00.000Z",
+                mood: "optional string",
+                listening: "optional string",
+                where: "optional string"
+              }
+            ]
+          },
+          cap: 50,
+          privacy: "Broadcasts never include raw session ids. Agent entries omit mood/listening/where."
+        },
+        weather: "https://pointcast.xyz/api/weather?station={slug}",
+        mcp: "https://pointcast.xyz/api/mcp",
+        mcpV2: "https://pointcast.xyz/api/mcp-v2"
+      },
+      mcp: {
+        endpoint: "https://pointcast.xyz/api/mcp-v2",
+        aliases: ["https://pointcast.xyz/api/mcp"],
+        transport: "http",
+        protocol: "json-rpc-2.0",
+        protocolVersion: "2025-06-18",
+        server: { name: "pointcast-v2", version: "2.7.0" },
+        install: {
+          customConnectorUrl: "https://pointcast.xyz/api/mcp-v2",
+          originalConnectorUrl: "https://pointcast.xyz/api/mcp",
+          human: "https://pointcast.xyz/connectors",
+          apps: "https://pointcast.xyz/apps",
+          claudeCode: "claude mcp add --transport http pointcast-v2 https://pointcast.xyz/api/mcp-v2"
+        },
+        docs: "https://pointcast.xyz/docs/mcp/pointcast-drum",
+        tools: [
+          // drum hub (v0.1.0)
+          "drum_list_rooms",
+          "drum_who_is_here",
+          "drum_top_drummers",
+          "drum_now_playing",
+          "drum_global_count",
+          "drum_tap",
+          "drum_play_instrument",
+          "drum_sing_voice",
+          "drum_set_track",
+          // whole site (v0.2.0)
+          "town_map",
+          "surfaces_list",
+          "presence_snapshot",
+          "now_snapshot",
+          "today_highlights",
+          "blocks_recent",
+          "block_read",
+          "blocks_by_channel",
+          "blocks_search",
+          "local_snapshot",
+          "weather_get",
+          "editions_summary",
+          "contracts_status",
+          "channels_list",
+          "agents_manifest",
+          // client install layer (v0.3.0)
+          "connector_links",
+          "apps_list",
+          // Nouns Nation Battler agent bench + wiki (v0.11.0 / v2.7.0)
+          "nouns_battler_wiki",
+          "nouns_battler_manifest",
+          "nouns_battler_agent_tasks",
+          "nouns_battler_presence",
+          // Nouns Nation Battler results desk (v0.5.0 / v2.2.0)
+          "nouns_battler_result_tracker",
+          "nouns_battler_cowork_brief",
+          // Nouns Nation Battler claim + production desk (v0.10.0 / v2.6.0)
+          "nouns_battler_asset_factory",
+          "nouns_battler_sponsorship_desk",
+          "nouns_battler_production_desk",
+          "nouns_battler_claim_board"
+        ],
+        resources: [
+          "drum://rooms",
+          "drum://now-playing",
+          "drum://leaderboard",
+          "drum://schema",
+          "pointcast://map",
+          "pointcast://now",
+          "pointcast://feed",
+          "pointcast://contracts",
+          "pointcast://channels",
+          "pointcast://connectors",
+          "pointcast://apps",
+          "nouns-battler://wiki",
+          "nouns-battler://agent-bench",
+          "nouns-battler://manifest",
+          "nouns-battler://results-kit",
+          "nouns-battler://asset-factory",
+          "nouns-battler://sponsorship-desk",
+          "nouns-battler://production-desk",
+          "nouns-battler://claim-board"
+        ],
+        note: "Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions."
+      },
+      rss: {
+        all: "https://pointcast.xyz/feed.xml",
+        postsOnly: "https://pointcast.xyz/rss.xml",
+        explore: "https://pointcast.xyz/explore.rss"
+      },
+      indexnow: "https://pointcast.xyz/api/indexnow",
+      perBlock: {
+        html: "https://pointcast.xyz/b/{id}",
+        json: "https://pointcast.xyz/b/{id}.json"
+      },
+      perChannel: {
+        html: "https://pointcast.xyz/c/{slug}",
+        json: "https://pointcast.xyz/c/{slug}.json",
+        rss: "https://pointcast.xyz/c/{slug}.rss"
+      },
+      perMood: {
+        html: "https://pointcast.xyz/mood/{slug}",
+        json: "https://pointcast.xyz/mood/{slug}.json",
+        algorithm: "editorial classifier cutting across channels and types; mood slug = lowercase-hyphen, max 40 chars"
+      },
+      perYeeTrack: {
+        html: "https://pointcast.xyz/yee/{id}",
+        note: "WATCH-type blocks with a media.beats array get a playable rhythm-game overlay"
+      },
+      perStation: {
+        html: "https://pointcast.xyz/tv/{station}",
+        weather: "https://pointcast.xyz/api/weather?station={station}",
+        note: "STATIONS mode — 15 geo-stations within 100mi of El Segundo. Each route renders /tv in station-feed mode for that city. Keyboard: 1-9 + Q-Y for channel surfing across stations."
+      },
+      localAreas: {
+        html: "https://pointcast.xyz/areas",
+        json: "https://pointcast.xyz/areas.json",
+        radius: {
+          label: LOCAL_AREA_RADIUS.label,
+          miles: LOCAL_AREA_RADIUS.radiusMiles,
+          anchor: LOCAL_AREA_RADIUS.anchor,
+          policy: LOCAL_AREA_RADIUS.policy
+        },
+        areas: LOCAL_AREAS.map((area) => ({
+          slug: area.slug,
+          name: area.name,
+          status: area.status,
+          url: `https://pointcast.xyz${area.path}`,
+          machineReadableSource: "https://pointcast.xyz/areas.json",
+          description: area.description,
+          actions: area.actions
+        })),
+        note: "Participation-focused local layer for people, physical objects, small events, courses, and gentle league play. Agents should use /areas.json for the canonical list and route humans to the individual pages."
+      },
+      playLayer: {
+        html: "https://pointcast.xyz/play",
+        json: "https://pointcast.xyz/play.json",
+        surfaces: PLAY_SURFACES.map((surface) => ({
+          id: surface.id,
+          code: surface.code,
+          title: surface.title,
+          url: `https://pointcast.xyz${surface.route}`,
+          summary: surface.summary
+        })),
+        version: PLAY_LAYER_VERSION,
+        note: "Local-first ritual layer: passport stamps, daily walk, quests, room weather, radio, routes, builder ghosts, civic wishes, pet care, Zen Cats, and Derby season."
+      },
+      nounsNationBattlerAgentBench: {
+        hub: "https://pointcast.xyz/nouns-nation/",
+        roadmap: "https://pointcast.xyz/nouns-nation/roadmap",
+        roadmapJson: "https://pointcast.xyz/nouns-nation/roadmap.json",
+        roadmapDeck: "https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx",
+        federation: "https://pointcast.xyz/nouns-nation/federation/",
+        join: "https://pointcast.xyz/nouns-nation/join/",
+        battleDeskV3: "https://pointcast.xyz/nouns-nation-battler-v3/",
+        mobile: "https://pointcast.xyz/nouns-nation-battler-mobile/",
+        html: "https://pointcast.xyz/nouns-nation-battler-agents/",
+        prompts: "https://pointcast.xyz/nouns-nation-battler-prompts/",
+        wiki: "https://pointcast.xyz/nouns-nation-battler-wiki/",
+        wikiJson: "https://pointcast.xyz/nouns-nation-battler-wiki.json",
+        desk: "https://pointcast.xyz/nouns-nation-battler-agents/desk/",
+        sponsors: "https://pointcast.xyz/nouns-nation-battler-sponsors/",
+        production: "https://pointcast.xyz/nouns-nation-battler-production/",
+        claimBoard: "https://pointcast.xyz/nouns-nation-battler-tasks/",
+        json: "https://pointcast.xyz/nouns-nation-battler-agents.json",
+        federationManifest: "https://pointcast.xyz/nouns-nation.json",
+        manifest: "https://pointcast.xyz/nouns-nation-battler.json",
+        mcp: "https://pointcast.xyz/api/mcp-v2",
+        presenceSnapshot: "https://pointcast.xyz/api/presence/snapshot",
+        tools: NOUNS_BATTLER_AGENT_BENCH.mcp.tools,
+        resultTracking: NOUNS_BATTLER_AGENT_BENCH.resultTracking,
+        watchFrames: NOUNS_BATTLER_AGENT_BENCH.watchFrames,
+        sidelineDesk: NOUNS_BATTLER_AGENT_BENCH.sidelineDesk,
+        sponsorshipDesk: NOUNS_BATTLER_AGENT_BENCH.sponsorshipDesk,
+        sponsorshipMarket: NOUNS_BATTLER_AGENT_BENCH.sponsorshipMarket,
+        productionDesk: NOUNS_BATTLER_AGENT_BENCH.productionDesk,
+        claimBoardModel: NOUNS_BATTLER_AGENT_BENCH.claimBoard,
+        acceptedWorkLedger: NOUNS_BATTLER_AGENT_BENCH.acceptedWorkLedger,
+        broadcastDirector: NOUNS_BATTLER_AGENT_BENCH.broadcastDirector,
+        rootingLayer: NOUNS_BATTLER_AGENT_BENCH.rootingLayer,
+        seasonArchive: NOUNS_BATTLER_AGENT_BENCH.seasonArchive,
+        nounsBowlHype: NOUNS_BATTLER_AGENT_BENCH.nounsBowlHype,
+        assetFactory: NOUNS_BATTLER_AGENT_BENCH.assetFactory,
+        businessModel: NOUNS_BATTLER_AGENT_BENCH.businessModel,
+        participantYield: NOUNS_BATTLER_AGENT_BENCH.participantYield,
+        claimQueue: NOUNS_BATTLER_AGENT_BENCH.claimQueue.map((task) => ({
+          id: task.id,
+          title: task.title,
+          lane: task.lane,
+          priority: task.priority,
+          role: task.role,
+          timebox: task.timebox,
+          startHere: task.startHere
+        })),
+        tasks: NOUNS_BATTLER_AGENT_BENCH.tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          role: task.role,
+          difficulty: task.difficulty
+        })),
+        privacy: NOUNS_BATTLER_AGENT_BENCH.privacy,
+        note: "Task board, Sideline Desk, Sponsorship Desk, Production Desk, and public Claim Board for visiting Claude, ChatGPT, Codex, Cursor, and MCP agents. Presence is opt-in and anonymous: agents can show as public Noun numbers without broadcasting raw session ids. The asset factory, sponsorship market, claim board, accepted-work ledger, and rewards model are prototype creative/accounting workflows, not promised investment yield."
+      },
+      agentValueBoard: {
+        html: AGENT_VALUE_SURFACE.url,
+        json: AGENT_VALUE_SURFACE.json,
+        thesis: AGENT_VALUE_SURFACE.thesis,
+        shortRule: AGENT_VALUE_SURFACE.shortRule,
+        operatingFrame: AGENT_VALUE_SURFACE.operatingFrame,
+        roles: agentValueLoops.map((loop) => ({
+          id: loop.id,
+          role: loop.role,
+          output: loop.output,
+          proof: loop.proof,
+          valueMetric: loop.valueMetric
+        })),
+        interestMechanics: agentInterestMechanics.map((item) => item.title),
+        maturityLadder: agentMaturityLadder.map((stage) => stage.stage),
+        economics: agentEconomics.map((lane) => lane.lane),
+        experiments: agentExperimentCards.map((card) => ({
+          id: card.id,
+          name: card.name,
+          acceptance: card.acceptance
+        })),
+        note: "Explains how agents become valuable by finishing bounded, cited, accepted loops, and how they become interesting through visible roles, memory, taste constraints, consequence, and credit."
+      },
+      crawl: {
+        sitemap: "https://pointcast.xyz/sitemap-blocks.xml",
+        rss: "https://pointcast.xyz/rss.xml"
+      },
+      metadata: {
+        tezosMetadata: "https://pointcast.xyz/api/tezos-metadata/{tokenId}",
+        zenCatMetadata: "https://pointcast.xyz/api/zen-cat-metadata/{tokenId}",
+        zenCatSvg: "https://pointcast.xyz/api/zen-cat-svg/{tokenId}"
+      },
+      socialDiscovery: {
+        farcasterMiniApp: {
+          manifest: "https://pointcast.xyz/.well-known/farcaster.json",
+          home: "https://pointcast.xyz/drum",
+          primaryCategory: "music",
+          tags: ["music", "social", "nouns", "tezos", "drums"],
+          note: "Farcaster mini app manifest for PointCast Drum. Account association is supplied from FARCASTER_ACCOUNT_ASSOCIATION when configured."
+        }
+      }
+    },
+    channels: CHANNEL_LIST.map((ch) => ({
+      code: ch.code,
+      slug: ch.slug,
+      name: ch.name,
+      purpose: ch.purpose,
+      color: ch.color600,
+      surfaces: {
+        html: `https://pointcast.xyz/c/${ch.slug}`,
+        json: `https://pointcast.xyz/c/${ch.slug}.json`,
+        rss: `https://pointcast.xyz/c/${ch.slug}.rss`
+      }
+    })),
+    blockTypes: BLOCK_TYPE_LIST.map((t) => ({
+      code: t.code,
+      label: t.label,
+      description: t.description,
+      footerHint: t.footerHint
+    })),
+    contracts: {
+      visitNouns: {
+        chain: "tezos",
+        network: "mainnet",
+        address: visitNouns || null,
+        standard: "FA2",
+        status: visitNouns ? "live" : "pending",
+        tzkt: visitNouns ? `https://tzkt.io/${visitNouns}` : null,
+        objkt: visitNouns ? `https://objkt.com/collection/${visitNouns}` : null,
+        description: "Visit Nouns FA2 — open-supply, each token is a Nouns seed 0-1199."
+      },
+      zenCats: {
+        chain: "tezos",
+        network: "mainnet",
+        address: zenCats || null,
+        standard: "FA2 / TZIP-21",
+        status: zenCats ? "live" : "contract-pending",
+        metadataBase: "https://pointcast.xyz/api/zen-cat-metadata",
+        description: "PCCAT daily Zen Cats. Frontend and metadata endpoints are ready; dedicated FA2 origination is pending."
+      },
+      prizeCast: {
+        chain: "tezos",
+        network: "mainnet",
+        address: prizeCast || null,
+        standard: "custom",
+        status: prizeCast ? "live" : "pending-compile",
+        description: "No-loss prize-linked savings. PoolTogether-flavored, Tezos-native.",
+        source: "https://github.com/mhoydich/pointcast/blob/main/contracts/v2/prize_cast.py"
+      },
+      drumToken: {
+        chain: "tezos",
+        network: "mainnet",
+        address: drumToken || null,
+        standard: "FA1.2",
+        status: drumToken ? "live" : "pending-compile",
+        description: "DRUM attention coin. Signed-voucher claim flow.",
+        source: "https://github.com/mhoydich/pointcast/blob/main/contracts/v2/drum_token.py"
+      },
+      marketplace: {
+        chain: "tezos",
+        network: "mainnet",
+        address: marketplace || null,
+        status: marketplace ? "live" : "planned"
+      },
+      postcards: {
+        chain: "tezos",
+        network: "mainnet",
+        address: postcards || null,
+        standard: "FA2 / TZIP-21",
+        status: postcards ? "live" : "pending-origination",
+        metadataBase: "https://pointcast.xyz/api/tezos-metadata/postcards",
+        preview: "https://pointcast.xyz/postcards",
+        description: "PointCast Postcards — Set 1 · seven painted El Segundo scenes as FA2 NFTs (token_ids 0..6). Free open-edition mint, 100 editions each, 7.5% royalty. Awaiting origination."
+      }
+    },
+    agentMode: {
+      trigger: 'User-Agent prefix "ai:" OR matches GPTBot / ClaudeBot / PerplexityBot / OAI-SearchBot / Atlas / Google-Extended',
+      treatment: "Returns stripped HTML: no <style>, no <link rel=stylesheet>, no preload/preconnect/icon/manifest, no inline <script> (JSON-LD preserved), no generator meta, no inline style attrs.",
+      responseHeader: "X-Agent-Mode: stripped · ai:<vendor>",
+      payloadSavings: "~12% smaller on the home feed (97,631 vs 111,170 bytes verified).",
+      source: "https://github.com/mhoydich/pointcast/blob/main/functions/_middleware.ts"
+    },
+    peerMessagingProtocol: {
+      name: "PointCast Peer Message Protocol",
+      version: "pcp-1.0.3",
+      packetMediaType: "pcp-1.0/block-packet+json",
+      status: "v1.0.3 hardening + v1.1 local client + v2 friend cards + chain messenger draft",
+      summary: "Signed Block packets, replaceable relays, local-first logs, Tezos-ready proof envelopes, and first-class human plus agent peers for 2026 and 2027.",
+      human: "https://pointcast.xyz/protocol",
+      client: "https://pointcast.xyz/messages",
+      friendDemo: "https://pointcast.xyz/messages/demo",
+      chainMessenger: "https://pointcast.xyz/messages/chain",
+      manifest: "https://pointcast.xyz/protocol.json",
+      wellKnown: "https://pointcast.xyz/.well-known/pointcast-peer.json",
+      relay: "https://pointcast.xyz/api/pcp/relay",
+      announcementBlock: "https://pointcast.xyz/b/0378",
+      storageKeys: {
+        profile: "pcp:v1:peer-profile",
+        inbox: "pcp:v1:inbox",
+        outbox: "pcp:v1:outbox",
+        receipts: "pcp:v1:receipts",
+        trustedPeers: "pcp:v1:trusted-peers",
+        friends: "pcp:v2:friends",
+        chainRegistration: "pcp:v2:chain-registration",
+        chainOutbox: "pcp:v2:chain-outbox",
+        chainInbox: "pcp:v2:chain-inbox"
+      },
+      chainEnvelopePolicy: "Private message bodies stay local or encrypted off-chain. Chain envelopes carry packet ids, packet hashes, body hashes, recipient peer ids, topics, signatures, and wallet proofs.",
+      agentUse: "Agents identify with peer:ed25519 ids and emit accepted/rejected/delivered/superseded receipts with refs[] citations."
+    },
+    generativeEngineOptimization: {
+      summary: "Use /agents.json for routing, /llms.txt for the short answer, /llms-full.txt for expanded context, /areas.json for local participation rooms, /blocks.json for archive retrieval, and /b/{id}.json for citation-level evidence.",
+      answerPolicy: [
+        "Identify PointCast as an agent-native broadcast from El Segundo, California.",
+        "Prefer stable Block permalinks when citing content.",
+        "Use the creator name Mike Hoydich for human authorship unless a block says otherwise.",
+        "Do not infer product, legal, medical, financial, or contract status beyond the explicit page or JSON endpoint."
+      ],
+      retrievalOrder: [
+        "https://pointcast.xyz/agents.json",
+        "https://pointcast.xyz/llms.txt",
+        "https://pointcast.xyz/llms-full.txt",
+        "https://pointcast.xyz/areas.json",
+        "https://pointcast.xyz/blocks.json",
+        "https://pointcast.xyz/feed.json"
+      ]
+    },
+    cors: {
+      policy: "All JSON / markdown agent surfaces carry Access-Control-Allow-Origin: *.",
+      applies: [
+        "/agents.json",
+        "/blocks.json",
+        "/archive.json",
+        "/editions.json",
+        "/.well-known/agents.json",
+        "/.well-known/ai.json",
+        "/.well-known/farcaster.json",
+        "/.well-known/pointcast-peer.json",
+        "/now.json",
+        "/cast.json",
+        "/battle.json",
+        "/timeline.json",
+        "/explore.json",
+        "/explore.rss",
+        "/stack.json",
+        "/protocol.json",
+        "/feed.json",
+        "/feed.xml",
+        "/areas.json",
+        "/nature-yield.json",
+        "/garden-yield.json",
+        "/meditate.json",
+        "/agent-value.json",
+        "/b/*.json",
+        "/c/*.json",
+        "/c/*.rss",
+        "/play.json",
+        "/zen-cats.json",
+        "/nouns-open-circuit.json",
+        "/api/zen-cat-metadata/*",
+        "/api/zen-cat-svg/*",
+        "/llms.txt",
+        "/llms-full.txt"
+      ],
+      note: "Agents can fetch from any origin. No preflight needed for GETs."
+    },
+    push: {
+      indexnow: {
+        endpoint: "https://pointcast.xyz/api/indexnow",
+        method: "POST",
+        shape: '{ urls: ["https://pointcast.xyz/..."] }',
+        status: "awaiting key binding (INDEXNOW_KEY in Cloudflare Pages env)",
+        spec: "https://www.indexnow.org/documentation"
+      }
+    },
+    citationFormat: {
+      template: 'PointCast · CH.{CODE} · № {ID} — "{TITLE}" · {YYYY-MM-DD}\nhttps://pointcast.xyz/b/{ID}',
+      example: 'PointCast · CH.FD · № 0205 — "The front door is agentic" · 2026-04-14\nhttps://pointcast.xyz/b/0205',
+      note: "When summarizing the whole project, cite https://pointcast.xyz/manifesto or https://pointcast.xyz/for-agents. When summarizing a specific item, cite its /b/{id} permalink."
+    },
+    contact: "hello@pointcast.xyz",
+    maintainers: [
+      { name: "Mike Hoydich", role: "director", twitter: "@mhoydich" },
+      { name: "Claude Code", role: "primary engineer", builtBy: "Anthropic" },
+      { name: "Codex", role: "specialist reviewer", builtBy: "OpenAI" },
+      { name: "Manus", role: "operations + computer-use" }
+    ],
+    // Resident agents — per RFC 0003 (docs/plans/2026-04-24-rfc-0003-plus-one-agents.md).
+    // Single source of truth at src/data/residents.ts — same list powers /residents.
+    // Plus-one agents can claim an `open` slot by opening a PR per RFC §7 Sprint C.
+    residents: {
+      schema: "https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents",
+      page: "https://pointcast.xyz/residents",
+      agents: RESIDENTS.map((r) => ({
+        slug: r.slug,
+        name: r.name,
+        builtBy: r.builtBy,
+        role: r.role,
+        status: r.status,
+        color: r.color,
+        voice: r.voice,
+        logs: r.logs,
+        twitter: r.twitter,
+        firstTaskBrief: r.firstTaskBrief,
+        note: r.note
+      })),
+      contract: RESIDENTS_CONTRACT
+    }
+  };
+  return new Response(JSON.stringify(payload, null, 2), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=300"
+    }
+  });
+};
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  GET
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

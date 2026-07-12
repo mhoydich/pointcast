@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plasma Reactor · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background: #02060a; }
+  .scene { position: fixed; inset: 0; display: grid; place-items: center; }
+
+  /* starfield */
+  .stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle 1px at 8% 18%, #b8e8ff, transparent),
+      radial-gradient(circle 1px at 22% 32%, #a4d4f4, transparent),
+      radial-gradient(circle 1px at 38% 12%, white, transparent),
+      radial-gradient(circle 1px at 54% 28%, #c4f4ff, transparent),
+      radial-gradient(circle 1px at 72% 14%, white, transparent),
+      radial-gradient(circle 1px at 86% 30%, #b4e4ff, transparent),
+      radial-gradient(circle 1px at 92% 52%, white, transparent),
+      radial-gradient(circle 1px at 14% 62%, #a8d8f4, transparent),
+      radial-gradient(circle 1px at 44% 74%, white, transparent),
+      radial-gradient(circle 1px at 68% 82%, #b4e4ff, transparent);
+    opacity: 0.85;
+  }
+
+  .reactor {
+    position: relative;
+    width: min(420px, 86vw);
+    height: min(420px, 86vw);
+  }
+  .ring {
+    position: absolute; inset: 0;
+    border: 6px solid #2a4a6a;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 0 30px rgba(80,180,255,0.4),
+      0 0 40px rgba(60,160,240,0.5);
+  }
+  .ring.r2 { inset: 8%; border-color: #1a3a5a; }
+  .ring.r3 { inset: 18%; border-color: #0a2a4a; box-shadow: inset 0 0 50px rgba(40,120,200,0.6); }
+
+  /* rotation marks on outer ring */
+  .ticks {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg 6deg, #5ab8f0 6deg 8deg,
+      transparent 8deg 36deg, #5ab8f0 36deg 38deg,
+      transparent 38deg 66deg, #5ab8f0 66deg 68deg,
+      transparent 68deg 96deg, #5ab8f0 96deg 98deg,
+      transparent 98deg 126deg, #5ab8f0 126deg 128deg,
+      transparent 128deg 156deg, #5ab8f0 156deg 158deg,
+      transparent 158deg 186deg, #5ab8f0 186deg 188deg,
+      transparent 188deg 216deg, #5ab8f0 216deg 218deg,
+      transparent 218deg 246deg, #5ab8f0 246deg 248deg,
+      transparent 248deg 276deg, #5ab8f0 276deg 278deg,
+      transparent 278deg 306deg, #5ab8f0 306deg 308deg,
+      transparent 308deg 336deg, #5ab8f0 336deg 338deg,
+      transparent 338deg 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 47%, black 47%, black 50%, transparent 50%);
+            mask: radial-gradient(circle, transparent 47%, black 47%, black 50%, transparent 50%);
+    animation: spin 20s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .core {
+    position: absolute; inset: 22%;
+    background: radial-gradient(circle at center, #050a14 30%, transparent 60%);
+    border-radius: 50%;
+    overflow: hidden;
+  }
+  #fire {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+
+  .label {
+    position: absolute;
+    left: 0; right: 0;
+    text-align: center;
+    color: #6acaf6;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+    z-index: 5;
+    text-shadow: 0 0 6px #6acaf6;
+  }
+  .label.top { top: -22px; }
+  .label.bot { bottom: -22px; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="stars"></div>
+  <div class="reactor">
+    <div class="ticks"></div>
+    <div class="ring"></div>
+    <div class="ring r2"></div>
+    <div class="ring r3"></div>
+    <div class="core"><canvas id="fire"></canvas></div>
+    <div class="label top">◀ PLASMA CORE · 88K ▶</div>
+    <div class="label bot">CONTAINMENT NOMINAL</div>
+  </div>
+</div>
+<script type="module">
+  import { PixelFire, PALETTES } from "./lib/fire.js";
+  import { mountChrome } from "./lib/chrome.js";
+
+  const c = document.getElementById("fire");
+  const setSize = () => {
+    const r = c.getBoundingClientRect();
+    c.width = Math.floor(r.width); c.height = Math.floor(r.height);
+  };
+  setSize(); window.addEventListener("resize", setSize);
+
+  const fire = new PixelFire(c, { palette: PALETTES.plasma, scale: 3, intensity: 1 });
+  // mask to a circle so the plasma stays inside the core
+  const mask = (col, row) => {
+    const cx = fire.cols / 2, cy = fire.rows / 2;
+    const r = Math.min(cx, cy) - 1;
+    return ((col - cx) ** 2 + (row - cy) ** 2) < r * r;
+  };
+  fire.setMask(mask);
+  fire.start();
+
+  mountChrome({ title: "plasma reactor", mood: "fusion-shard · steady at 88,000K" });
+</script>
+</body>
+</html>

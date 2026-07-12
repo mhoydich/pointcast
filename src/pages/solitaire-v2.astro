@@ -1,0 +1,887 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Solitaire v2';
+const description = 'A Windows 95 worthy Nouns Solitaire table for PointCast: playable Klondike, better cards, generated felt background, and local scorekeeping.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/solitaire-v2',
+  name: 'PointCast Solitaire v2',
+  description,
+  url: 'https://pointcast.xyz/solitaire-v2',
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Any',
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="solitaire" data-solitaire style={`--arcade-table:url('${ARCADE_ASSETS.table}'); --arcade-card-backs:url('${ARCADE_ASSETS.cardBacks}');`}>
+    <section class="window" aria-labelledby="solitaire-title">
+      <header class="titlebar">
+        <div class="titlebar__label">
+          <span class="titlebar__icon" aria-hidden="true"></span>
+          <span>PointCast Solitaire v2</span>
+        </div>
+        <div class="titlebar__buttons" aria-hidden="true">
+          <span>_</span><span>□</span><span>×</span>
+        </div>
+      </header>
+
+      <nav class="menubar" aria-label="Solitaire menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-undo>Undo</button>
+        <button type="button" data-hint>Hint</button>
+        <button type="button" data-auto>Auto</button>
+        <a href="/win95-games">Arcade</a>
+        <a href="/nouns-memory-v2">Memory</a>
+        <a href="/nouns-pyramid-v2">Pyramid</a>
+        <a href="/nouns-mines-v2">Mines</a>
+      </nav>
+
+      <div class="toolbar" aria-label="Game status">
+        <div>
+          <span>Score</span>
+          <strong data-score>0</strong>
+        </div>
+        <div>
+          <span>Moves</span>
+          <strong data-moves>0</strong>
+        </div>
+        <div>
+          <span>Time</span>
+          <strong data-time>00:00</strong>
+        </div>
+        <div>
+          <span>Best</span>
+          <strong data-best>--</strong>
+        </div>
+        <p data-status>Deal loaded. Click cards to move.</p>
+      </div>
+
+      <div class="felt">
+        <div class="top-row">
+          <button class="pile stock" type="button" data-stock aria-label="Draw from stock"></button>
+          <button class="pile waste" type="button" data-waste aria-label="Waste pile"></button>
+          <div class="spacer" aria-hidden="true"></div>
+          {['S', 'H', 'D', 'C'].map((suit) => (
+            <button class="pile foundation" type="button" data-foundation={suit} aria-label={`${suit} foundation`}>
+              <span>{suit}</span>
+            </button>
+          ))}
+        </div>
+
+        <div class="tableau" data-tableau aria-label="Solitaire tableau">
+          {Array.from({ length: 7 }, (_, index) => (
+            <button class="column" type="button" data-column={index} aria-label={`Column ${index + 1}`}></button>
+          ))}
+        </div>
+      </div>
+
+      <footer class="statusbar">
+        <span>Draw 1</span>
+        <span>Click-to-move</span>
+        <span>Generated table art</span>
+        <span>Nouns deck faces</span>
+      </footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  type Suit = 'S' | 'H' | 'D' | 'C';
+  type Zone = 'stock' | 'waste' | 'foundation' | 'tableau';
+  interface Card {
+    id: string;
+    suit: Suit;
+    rank: number;
+    faceUp: boolean;
+    noun: number;
+  }
+  interface Selection {
+    zone: Zone;
+    index?: number;
+    suit?: Suit;
+    start?: number;
+  }
+
+  const suits: Suit[] = ['S', 'H', 'D', 'C'];
+  const suitSymbols: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+  const suitNames: Record<Suit, string> = { S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs' };
+  const red = new Set<Suit>(['H', 'D']);
+  const ranks = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const root = document.querySelector<HTMLElement>('[data-solitaire]');
+  const stockEl = document.querySelector<HTMLButtonElement>('[data-stock]');
+  const wasteEl = document.querySelector<HTMLButtonElement>('[data-waste]');
+  const scoreEl = document.querySelector<HTMLElement>('[data-score]');
+  const movesEl = document.querySelector<HTMLElement>('[data-moves]');
+  const timeEl = document.querySelector<HTMLElement>('[data-time]');
+  const bestEl = document.querySelector<HTMLElement>('[data-best]');
+  const statusEl = document.querySelector<HTMLElement>('[data-status]');
+  const columns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-column]'));
+  const foundations = new Map<Suit, HTMLButtonElement>(
+    Array.from(document.querySelectorAll<HTMLButtonElement>('[data-foundation]')).map((el) => [el.dataset.foundation as Suit, el])
+  );
+
+  let stock: Card[] = [];
+  let waste: Card[] = [];
+  let tableau: Card[][] = [];
+  let foundation: Record<Suit, Card[]> = { S: [], H: [], D: [], C: [] };
+  let selected: Selection | null = null;
+  let score = 0;
+  let moves = 0;
+  let started = Date.now();
+  let timer: number | undefined;
+  let history: string[] = [];
+  let won = false;
+  const statsKey = 'pc:arcade:solitaire-v2';
+  const profileKey = 'pc:arcade:profile';
+
+  function readJson(key: string, fallback: any) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+
+  function writeJson(key: string, value: any) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function snapshot() {
+    history.push(JSON.stringify({ stock, waste, tableau, foundation, score, moves, started, won }));
+    if (history.length > 40) history.shift();
+  }
+
+  function recordPlay(clear = false) {
+    const stats = readJson(statsKey, { plays: 0, clears: 0, bestTime: null });
+    if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+    if (clear) {
+      const elapsed = Math.floor((Date.now() - started) / 1000);
+      stats.clears = Number(stats.clears || 0) + 1;
+      stats.bestTime = stats.bestTime ? Math.min(stats.bestTime, elapsed) : elapsed;
+    }
+    writeJson(statsKey, stats);
+    const profile = readJson(profileKey, { achievements: [] });
+    profile.lastPlayed = 'Solitaire';
+    if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+    if (clear) {
+      profile.clears = Number(profile.clears || 0) + 1;
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), 'first-win']));
+    }
+    writeJson(profileKey, profile);
+  }
+
+  function shuffle<T>(items: T[]) {
+    const out = items.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  function newDeck(): Card[] {
+    return shuffle(suits.flatMap((suit, suitIndex) =>
+      Array.from({ length: 13 }, (_, index) => {
+        const rank = index + 1;
+        return {
+          id: `${suit}${rank}`,
+          suit,
+          rank,
+          faceUp: false,
+          noun: (33 + suitIndex * 211 + rank * 47) % 1200,
+        };
+      })
+    ));
+  }
+
+  function startGame() {
+    const deck = newDeck();
+    tableau = Array.from({ length: 7 }, (_, column) => {
+      const pile = deck.splice(0, column + 1);
+      pile[pile.length - 1].faceUp = true;
+      return pile;
+    });
+    stock = deck;
+    waste = [];
+    foundation = { S: [], H: [], D: [], C: [] };
+    selected = null;
+    score = 0;
+    moves = 0;
+    history = [];
+    won = false;
+    started = Date.now();
+    if (timer) window.clearInterval(timer);
+    timer = window.setInterval(renderTime, 1000);
+    recordPlay(false);
+    setStatus('Fresh deal. Build down alternating colors; foundations build up.');
+    render();
+  }
+
+  function renderTime() {
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    if (timeEl) timeEl.textContent = `${minutes}:${seconds}`;
+  }
+
+  function setStatus(message: string) {
+    if (statusEl) statusEl.textContent = message;
+  }
+
+  function cardHtml(card: Card, selectedCard = false) {
+    const color = red.has(card.suit) ? 'red' : 'black';
+    if (!card.faceUp) {
+      return `<span class="card card--back" data-card="${card.id}">
+        <span class="card__backgrid"></span>
+        <span class="card__backnoun">⌐◨-◨</span>
+      </span>`;
+    }
+    return `<span class="card card--front card--${color}${selectedCard ? ' is-selected' : ''}" data-card="${card.id}">
+      <span class="card__corner card__corner--top">${ranks[card.rank]}<small>${suitSymbols[card.suit]}</small></span>
+      <img class="card__noun" src="https://noun.pics/${card.noun}.svg" alt="" loading="lazy">
+      <span class="card__rank">${ranks[card.rank]}</span>
+      <span class="card__suit">${suitSymbols[card.suit]}</span>
+      <span class="card__corner card__corner--bottom">${ranks[card.rank]}<small>${suitSymbols[card.suit]}</small></span>
+    </span>`;
+  }
+
+  function renderPile(el: HTMLElement | undefined | null, cards: Card[], label: string) {
+    if (!el) return;
+    const top = cards[cards.length - 1];
+    el.innerHTML = top ? cardHtml(top, isSelectedTop(label, top)) : `<span class="pile__empty">${label}</span>`;
+    el.classList.toggle('is-empty', !top);
+  }
+
+  function isSelectedTop(label: string, card: Card) {
+    return Boolean(selected && (
+      (selected.zone === 'waste' && label === 'waste' && waste[waste.length - 1]?.id === card.id) ||
+      (selected.zone === 'foundation' && selected.suit && foundation[selected.suit][foundation[selected.suit].length - 1]?.id === card.id)
+    ));
+  }
+
+  function render() {
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (movesEl) movesEl.textContent = String(moves);
+    const stats = readJson(statsKey, {});
+    if (bestEl) bestEl.textContent = stats.bestTime ? `${Math.floor(stats.bestTime / 60)}:${String(stats.bestTime % 60).padStart(2, '0')}` : '--';
+    renderTime();
+    renderPile(stockEl, stock.map((card) => ({ ...card, faceUp: false })), 'stock');
+    renderPile(wasteEl, waste, 'waste');
+    for (const suit of suits) {
+      const el = foundations.get(suit);
+      if (!el) continue;
+      renderPile(el, foundation[suit], suitSymbols[suit]);
+      el.dataset.label = suitNames[suit];
+    }
+    columns.forEach((el, columnIndex) => {
+      const pile = tableau[columnIndex];
+      el.innerHTML = pile.length
+        ? pile.map((card, cardIndex) => `<span class="slot-card" style="--i:${cardIndex}">${cardHtml(card, selected?.zone === 'tableau' && selected.index === columnIndex && cardIndex >= (selected.start ?? 99))}</span>`).join('')
+        : '<span class="column__empty">K</span>';
+      el.style.setProperty('--cards', String(pile.length));
+    });
+    root?.classList.toggle('has-selection', Boolean(selected));
+    if (!won && suits.every((suit) => foundation[suit].length === 13)) {
+      won = true;
+      setStatus('You cleared the board. Extremely Windows 95 behavior.');
+      recordPlay(true);
+      if (timer) window.clearInterval(timer);
+    }
+  }
+
+  function cardColor(card: Card) {
+    return red.has(card.suit) ? 'red' : 'black';
+  }
+
+  function canPlaceOnTableau(card: Card, target: Card | undefined) {
+    if (!target) return card.rank === 13;
+    return target.faceUp && cardColor(card) !== cardColor(target) && target.rank === card.rank + 1;
+  }
+
+  function canPlaceOnFoundation(card: Card, suit: Suit) {
+    if (card.suit !== suit) return false;
+    const top = foundation[suit][foundation[suit].length - 1];
+    return top ? card.rank === top.rank + 1 : card.rank === 1;
+  }
+
+  function selectedCards(): Card[] {
+    if (!selected) return [];
+    if (selected.zone === 'waste') return waste.slice(-1);
+    if (selected.zone === 'foundation' && selected.suit) return foundation[selected.suit].slice(-1);
+    if (selected.zone === 'tableau' && selected.index !== undefined && selected.start !== undefined) {
+      return tableau[selected.index].slice(selected.start);
+    }
+    return [];
+  }
+
+  function removeSelected(): Card[] {
+    if (!selected) return [];
+    if (selected.zone === 'waste') return waste.splice(waste.length - 1, 1);
+    if (selected.zone === 'foundation' && selected.suit) return foundation[selected.suit].splice(foundation[selected.suit].length - 1, 1);
+    if (selected.zone === 'tableau' && selected.index !== undefined && selected.start !== undefined) {
+      const moved = tableau[selected.index].splice(selected.start);
+      flipLast(selected.index);
+      return moved;
+    }
+    return [];
+  }
+
+  function flipLast(columnIndex: number) {
+    const pile = tableau[columnIndex];
+    const top = pile[pile.length - 1];
+    if (top && !top.faceUp) {
+      top.faceUp = true;
+      score += 5;
+    }
+  }
+
+  function finishMove(message: string, points = 0) {
+    selected = null;
+    moves += 1;
+    score += points;
+    setStatus(message);
+    render();
+  }
+
+  function selectWaste() {
+    const card = waste[waste.length - 1];
+    if (!card) return;
+    selected = { zone: 'waste' };
+    setStatus(`${ranks[card.rank]} ${suitSymbols[card.suit]} selected.`);
+    render();
+  }
+
+  function selectFoundation(suit: Suit) {
+    const card = foundation[suit][foundation[suit].length - 1];
+    if (!card) return;
+    selected = { zone: 'foundation', suit };
+    setStatus(`${ranks[card.rank]} ${suitSymbols[card.suit]} selected from foundation.`);
+    render();
+  }
+
+  function selectColumn(columnIndex: number, event: MouseEvent) {
+    const pile = tableau[columnIndex];
+    if (!pile.length) {
+      moveToColumn(columnIndex);
+      return;
+    }
+    const clicked = (event.target as HTMLElement).closest<HTMLElement>('[data-card]');
+    if (!clicked) {
+      moveToColumn(columnIndex);
+      return;
+    }
+    const cardIndex = pile.findIndex((card) => card.id === clicked.dataset.card);
+    const card = pile[cardIndex];
+    if (!card) return;
+    if (!card.faceUp && cardIndex === pile.length - 1) {
+      card.faceUp = true;
+      finishMove('Card flipped.', 5);
+      return;
+    }
+    if (!card.faceUp) return;
+    if (selected) {
+      moveToColumn(columnIndex);
+      return;
+    }
+    selected = { zone: 'tableau', index: columnIndex, start: cardIndex };
+    setStatus(`${ranks[card.rank]} ${suitSymbols[card.suit]} stack selected.`);
+    render();
+  }
+
+  function drawStock() {
+    snapshot();
+    selected = null;
+    if (stock.length) {
+      const card = stock.pop();
+      if (card) {
+        card.faceUp = true;
+        waste.push(card);
+        moves += 1;
+        setStatus('Drew one card.');
+      }
+    } else {
+      stock = waste.reverse().map((card) => ({ ...card, faceUp: false }));
+      waste = [];
+      moves += 1;
+      score = Math.max(0, score - 20);
+      setStatus('Waste recycled.');
+    }
+    render();
+  }
+
+  function moveToColumn(columnIndex: number) {
+    const cards = selectedCards();
+    const first = cards[0];
+    if (!selected || !first) return;
+    const target = tableau[columnIndex][tableau[columnIndex].length - 1];
+    if (!canPlaceOnTableau(first, target)) {
+      selected = null;
+      setStatus('That stack does not fit there.');
+      render();
+      return;
+    }
+    snapshot();
+    const moved = removeSelected();
+    tableau[columnIndex].push(...moved);
+    finishMove('Stack moved.', selected.zone === 'waste' ? 5 : 0);
+  }
+
+  function moveToFoundation(suit: Suit) {
+    const cards = selectedCards();
+    if (!selected || cards.length !== 1) {
+      if (!selected) selectFoundation(suit);
+      return;
+    }
+    const card = cards[0];
+    if (!canPlaceOnFoundation(card, suit)) {
+      selected = null;
+      setStatus('Foundation needs same suit in order.');
+      render();
+      return;
+    }
+    snapshot();
+    const moved = removeSelected();
+    foundation[suit].push(moved[0]);
+    finishMove(`Moved to ${suitNames[suit]}.`, 10);
+  }
+
+  function tryAutoMove() {
+    const wasteCard = waste[waste.length - 1];
+    if (wasteCard && suits.some((suit) => {
+      if (!canPlaceOnFoundation(wasteCard, suit)) return false;
+      selected = { zone: 'waste' };
+      moveToFoundation(suit);
+      return true;
+    })) return;
+    for (let i = 0; i < tableau.length; i++) {
+      const card = tableau[i][tableau[i].length - 1];
+      if (!card?.faceUp) continue;
+      for (const suit of suits) {
+        if (canPlaceOnFoundation(card, suit)) {
+          selected = { zone: 'tableau', index: i, start: tableau[i].length - 1 };
+          moveToFoundation(suit);
+          return;
+        }
+      }
+    }
+    setStatus('No obvious foundation move.');
+  }
+
+  stockEl?.addEventListener('click', drawStock);
+  wasteEl?.addEventListener('click', selectWaste);
+  foundations.forEach((el, suit) => el.addEventListener('click', () => moveToFoundation(suit)));
+  columns.forEach((el, index) => el.addEventListener('click', (event) => selectColumn(index, event)));
+  document.querySelector('[data-new]')?.addEventListener('click', startGame);
+  document.querySelector('[data-auto]')?.addEventListener('click', tryAutoMove);
+  document.querySelector('[data-undo]')?.addEventListener('click', () => {
+    const last = history.pop();
+    if (!last) {
+      setStatus('No undo in the stack.');
+      return;
+    }
+    const state = JSON.parse(last);
+    stock = state.stock;
+    waste = state.waste;
+    tableau = state.tableau;
+    foundation = state.foundation;
+    score = state.score;
+    moves = state.moves;
+    started = state.started;
+    selected = null;
+    setStatus('Undo restored.');
+    render();
+  });
+  document.querySelector('[data-hint]')?.addEventListener('click', () => {
+    const wasteCard = waste[waste.length - 1];
+    if (wasteCard && suits.some((suit) => canPlaceOnFoundation(wasteCard, suit))) {
+      setStatus(`Hint: move ${ranks[wasteCard.rank]} ${suitSymbols[wasteCard.suit]} to its foundation.`);
+      return;
+    }
+    for (let i = 0; i < tableau.length; i++) {
+      const card = tableau[i][tableau[i].length - 1];
+      if (card?.faceUp && suits.some((suit) => canPlaceOnFoundation(card, suit))) {
+        setStatus(`Hint: foundation can take ${ranks[card.rank]} ${suitSymbols[card.suit]}.`);
+        return;
+      }
+    }
+    setStatus('Hint: draw, or move a visible stack onto the opposite color.');
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      selected = null;
+      setStatus('Selection cleared.');
+      render();
+    }
+    if (event.key.toLowerCase() === 'n') startGame();
+    if (event.key === ' ') drawStock();
+  });
+
+  startGame();
+</script>
+
+<style>
+  :global(body) {
+    background: #008080;
+  }
+
+  .solitaire {
+    min-height: calc(100vh - 88px);
+    padding: 18px;
+    background:
+      linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25% 75%, rgba(255,255,255,0.05) 75%) 0 0 / 4px 4px,
+      #008080;
+    font-family: "MS Sans Serif", "Tahoma", "Geneva", system-ui, sans-serif;
+    color: #000;
+  }
+
+  .window {
+    max-width: 1180px;
+    margin: 0 auto;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+    padding: 3px 4px 3px 6px;
+    color: #fff;
+    background: linear-gradient(90deg, #000080, #1084d0);
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .titlebar__label,
+  .titlebar__buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .titlebar__icon {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #fff;
+    background:
+      linear-gradient(90deg, transparent 42%, #000 42% 58%, transparent 58%),
+      linear-gradient(#f8d35b 0 50%, #d84c4c 50%);
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.7);
+  }
+
+  .titlebar__buttons span {
+    display: grid;
+    place-items: center;
+    width: 19px;
+    height: 18px;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0;
+    color: #000;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .menubar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 28px;
+    padding: 3px 5px;
+    border-bottom: 1px solid #808080;
+  }
+
+  .menubar button,
+  .menubar a {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #000;
+    padding: 4px 8px;
+    font: inherit;
+    text-decoration: none;
+  }
+
+  .menubar button:hover,
+  .menubar a:hover {
+    background: #000080;
+    color: #fff;
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: repeat(4, 92px) minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px;
+    border-top: 1px solid #fff;
+    border-bottom: 1px solid #808080;
+  }
+
+  .toolbar div,
+  .toolbar p {
+    margin: 0;
+    border: 2px solid;
+    border-color: #808080 #fff #fff #808080;
+    background: #fff;
+    padding: 5px 7px;
+    min-width: 0;
+  }
+
+  .toolbar span {
+    display: block;
+    color: #404040;
+    font-size: 10px;
+  }
+
+  .toolbar strong {
+    font-family: "Courier New", monospace;
+    font-size: 18px;
+  }
+
+  .toolbar p {
+    display: flex;
+    align-items: center;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+
+  .felt {
+    min-height: 680px;
+    padding: 18px;
+    background:
+      linear-gradient(rgba(0, 62, 48, 0.38), rgba(0, 52, 42, 0.56)),
+      var(--arcade-table) center / cover;
+    border: 2px solid;
+    border-color: #808080 #fff #fff #808080;
+  }
+
+  .top-row {
+    display: grid;
+    grid-template-columns: repeat(2, 88px) minmax(24px, 1fr) repeat(4, 88px);
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+
+  .tableau {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(74px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  .pile,
+  .column {
+    position: relative;
+    border: 2px dashed rgba(255,255,255,0.62);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.14);
+    min-height: 124px;
+    padding: 0;
+    color: inherit;
+  }
+
+  .pile {
+    width: 88px;
+    height: 124px;
+  }
+
+  .foundation {
+    border-style: solid;
+    border-color: rgba(255,255,255,0.4);
+  }
+
+  .pile__empty,
+  .column__empty,
+  .foundation > span {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: rgba(255,255,255,0.68);
+    font: 700 30px/1 Georgia, serif;
+  }
+
+  .column {
+    width: 100%;
+    min-height: max(124px, calc(124px + max(0, var(--cards, 1) - 1) * 31px));
+  }
+
+  .slot-card {
+    position: absolute;
+    top: calc(var(--i) * 31px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 88px;
+    height: 124px;
+  }
+
+  .card {
+    position: relative;
+    display: block;
+    width: 88px;
+    height: 124px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    border: 2px solid;
+    border-color: #fff #606060 #606060 #fff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .card--front {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.92), rgba(230,230,218,0.92)),
+      #fff;
+  }
+
+  .card--back {
+    display: grid;
+    place-items: center;
+    background:
+      linear-gradient(rgba(0, 0, 128, 0.1), rgba(0, 0, 80, 0.24)),
+      var(--arcade-card-backs) center / 190px 190px,
+      linear-gradient(45deg, #000080 25%, transparent 25% 75%, #000080 75%) 0 0 / 10px 10px,
+      linear-gradient(45deg, #1084d0 25%, #0000a8 25% 75%, #1084d0 75%) 5px 5px / 10px 10px;
+  }
+
+  .card__backnoun {
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 36px;
+    border: 2px solid #fff;
+    background: #ffef5a;
+    color: #000;
+    font: 900 16px/1 "Courier New", monospace;
+    box-shadow: 2px 2px 0 #000;
+  }
+
+  .card--red {
+    color: #b00020;
+  }
+
+  .card--black {
+    color: #111;
+  }
+
+  .card.is-selected {
+    outline: 3px solid #ffff00;
+    outline-offset: -5px;
+    transform: translateY(-2px);
+  }
+
+  .card__corner {
+    position: absolute;
+    display: grid;
+    gap: 0;
+    width: 22px;
+    text-align: center;
+    font: 800 15px/0.95 Georgia, serif;
+    z-index: 2;
+  }
+
+  .card__corner small {
+    font-size: 14px;
+  }
+
+  .card__corner--top {
+    top: 5px;
+    left: 5px;
+  }
+
+  .card__corner--bottom {
+    right: 5px;
+    bottom: 5px;
+    transform: rotate(180deg);
+  }
+
+  .card__noun {
+    position: absolute;
+    left: 50%;
+    top: 22px;
+    width: 54px;
+    height: 54px;
+    transform: translateX(-50%);
+    image-rendering: pixelated;
+    filter: drop-shadow(1px 2px 0 rgba(0,0,0,0.22));
+  }
+
+  .card__rank {
+    position: absolute;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%);
+    color: #000;
+    font: 900 24px/1 "Arial Black", Impact, sans-serif;
+  }
+
+  .card__suit {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    font-size: 20px;
+  }
+
+  .statusbar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    padding: 4px;
+    border-top: 1px solid #808080;
+    font-size: 11px;
+  }
+
+  .statusbar span {
+    border: 1px solid;
+    border-color: #808080 #fff #fff #808080;
+    padding: 3px 6px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 860px) {
+    .solitaire {
+      padding: 8px;
+    }
+
+    .toolbar {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .toolbar p {
+      grid-column: 1 / -1;
+    }
+
+    .felt {
+      overflow-x: auto;
+      padding: 12px;
+    }
+
+    .top-row,
+    .tableau {
+      min-width: 720px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .titlebar,
+    .menubar,
+    .toolbar p {
+      font-size: 12px;
+    }
+
+    .statusbar {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .toolbar {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

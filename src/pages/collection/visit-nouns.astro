@@ -12,6 +12,7 @@
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
 import { CHANNELS } from '../../lib/channels';
+import { fetchJsonWithTimeout } from '../../lib/fetch-json';
 import contracts from '../../data/contracts.json';
 
 const KT1 = (contracts as any).visit_nouns?.mainnet ?? '';
@@ -23,9 +24,9 @@ let tokens: any[] = [];
 let fetchErr: string | null = null;
 try {
   if (KT1 && KT1.startsWith('KT1')) {
-    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${KT1}&limit=50&sort=firstTime`);
-    if (r.ok) tokens = await r.json();
-    else fetchErr = `TzKT returned ${r.status}`;
+    tokens = await fetchJsonWithTimeout<any[]>(
+      `https://api.tzkt.io/v1/tokens?contract=${KT1}&limit=50&sort=firstTime`,
+    );
   } else {
     fetchErr = 'contracts.visit_nouns.mainnet not set';
   }
@@ -39,14 +40,11 @@ const holdersByTokenId: Record<string, string> = {};
 if (tokens.length > 0) {
   for (const t of tokens) {
     try {
-      const r = await fetch(
+      const balances = await fetchJsonWithTimeout<any[]>(
         `https://api.tzkt.io/v1/tokens/balances?token.contract=${KT1}&token.tokenId=${t.tokenId}&balance.gt=0&limit=1`,
       );
-      if (r.ok) {
-        const balances = await r.json();
-        const owner = balances[0]?.account?.address;
-        if (owner) holdersByTokenId[String(t.tokenId)] = owner;
-      }
+      const owner = balances[0]?.account?.address;
+      if (owner) holdersByTokenId[String(t.tokenId)] = owner;
     } catch {
       // best-effort — leave the holder undefined if lookup fails
     }

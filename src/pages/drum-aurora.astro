@@ -12,9 +12,10 @@
  * literally rewards stillness.
  *
  * Slow pad chord drones underneath, fading in over 60s. Click anywhere
- * to ripple a radial flash + soft bell.
+ * to ripple a radial flash + soft bell for everyone in the room.
  *
- * No API. localStorage tracks lifetime "minutes bathed".
+ * Ripples fan out over /api/room signals; /api/chamber kind=aurora is
+ * the polling fallback. localStorage tracks lifetime "minutes bathed".
  */
 
 import BlockLayout from '../layouts/BlockLayout.astro';
@@ -49,6 +50,8 @@ const jsonLd = {
         <span class="da__chrome-time" id="da-elapsed">00:00</span>
         <span class="da__chrome-sep">·</span>
         <span class="da__chrome-bands"><span id="da-bands">0</span>/12 BANDS</span>
+        <span class="da__chrome-sep">·</span>
+        <span class="da__chrome-live"><span id="da-here">1</span> HERE</span>
       </header>
 
       <div class="da__center">
@@ -116,6 +119,7 @@ const jsonLd = {
   .da__chrome-sep { color: rgba(244, 231, 200, 0.40); }
   .da__chrome-time { color: oklch(0.85 0.15 80); font-weight: 700; }
   .da__chrome-bands { color: oklch(0.80 0.18 200); font-weight: 700; }
+  .da__chrome-live { color: oklch(0.86 0.18 150); font-weight: 700; }
   .da__center {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     text-align: center; z-index: 3; pointer-events: none;
@@ -194,19 +198,57 @@ const jsonLd = {
     o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
     o.start(t); o.stop(t + 1.9); o2.start(t); o2.stop(t + 1.3);
   }
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+  const SELF_SID = SID.slice(0, 8);
+  const SIGNAL_EVENT = 'aurora:ripple';
   const fieldEl = document.getElementById('da-field');
   const midEl = document.getElementById('da-layer-mid');
   const fgEl = document.getElementById('da-layer-fg');
   const elapsedEl = document.getElementById('da-elapsed');
   const bandsEl = document.getElementById('da-bands');
+  const hereEl = document.getElementById('da-here');
   const lifetimeEl = document.getElementById('da-lifetime');
   const LIFETIME_KEY = 'pc:aurora:lifetime-seconds';
   let lifetimeSeconds = 0;
   try { lifetimeSeconds = parseInt(localStorage.getItem(LIFETIME_KEY) || '0', 10) || 0; } catch {}
   let sessionStartedAt = Date.now();
   let audioStarted = false;
+  let roomWs = null;
+  let roomRetry = 0;
+  let lastSignalsSeen = new Set();
+  let lastRipplesSeen = new Set();
   function pad(n) { return String(n).padStart(2, '0'); }
   function fmtElapsed(sec) { return `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`; }
+  function clampUnit(value, fallback = 0.5) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(1, parsed));
+  }
+  function drawRipple(xPct, yPct, hue, withBell = false) {
+    if (!fieldEl) return;
+    const rect = fieldEl.getBoundingClientRect();
+    const x = clampUnit(xPct) * rect.width;
+    const y = clampUnit(yPct) * rect.height;
+    const safeHue = Number.isFinite(Number(hue)) ? Number(hue) : 180;
+    if (withBell && audioStarted) {
+      try { playRippleBell(safeHue); } catch {}
+    }
+    const ripple = document.createElement('div');
+    ripple.className = 'da__ripple';
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    ripple.style.setProperty('--ripple-hue', String(safeHue));
+    fieldEl.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 1500);
+  }
   function paint() {
     const sessionSec = Math.floor((Date.now() - sessionStartedAt) / 1000);
     if (elapsedEl) elapsedEl.textContent = fmtElapsed(sessionSec);
@@ -233,22 +275,105 @@ const jsonLd = {
   });
   setInterval(paint, 1000);
   paint();
+
+  function connectRoom() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/room?url=${encodeURIComponent(window.location.pathname)}&sid=${encodeURIComponent(SID)}`;
+      roomWs = new WebSocket(url);
+      roomWs.addEventListener('open', () => {
+        roomRetry = 0;
+        roomWs?.send(JSON.stringify({ type: 'identify', tag: 'aurora', currentPath: window.location.pathname }));
+      });
+      roomWs.addEventListener('message', (msg) => {
+        let data;
+        try { data = JSON.parse(msg.data); } catch { return; }
+        if (hereEl && typeof data.humans === 'number') hereEl.textContent = String(data.humans);
+        const signals = Array.isArray(data.signals) ? data.signals : [];
+        signals.forEach((signal) => {
+          if (!signal || signal.event !== SIGNAL_EVENT) return;
+          if (signal.sid === SELF_SID) return;
+          const key = signal.id || `${signal.sid || 'peer'}-${signal.at || 0}`;
+          if (lastSignalsSeen.has(key)) return;
+          lastSignalsSeen.add(key);
+          const x = clampUnit(Number(signal.x) / 10000, 0.5);
+          const y = clampUnit(Number(signal.y) / 10000, 0.5);
+          drawRipple(x, y, signal.hue, audioStarted);
+        });
+        if (lastSignalsSeen.size > 200) lastSignalsSeen = new Set();
+      });
+      roomWs.addEventListener('close', () => {
+        roomWs = null;
+        const delay = Math.min(8000, 600 * Math.pow(1.7, roomRetry++));
+        setTimeout(connectRoom, delay);
+      });
+      roomWs.addEventListener('error', () => {
+        try { roomWs?.close(); } catch {}
+      });
+    } catch {}
+  }
+
+  async function pingAurora() {
+    try {
+      await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'aurora', action: 'ping', sessionId: SID }) });
+    } catch {}
+  }
+
+  async function fetchAuroraState() {
+    try {
+      const r = await fetch('/api/chamber?kind=aurora', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j?.ok) return;
+      const visitors = j.state?.visitors || [];
+      const ripples = j.state?.ripples || [];
+      if (hereEl) hereEl.textContent = String(visitors.length || 1);
+      if (roomWs && roomWs.readyState === WebSocket.OPEN) return;
+      const now = Date.now();
+      ripples.forEach((ripple) => {
+        if (now - ripple.t > 4000) return;
+        const key = `${ripple.pid}-${ripple.t}`;
+        if (lastRipplesSeen.has(key)) return;
+        lastRipplesSeen.add(key);
+        drawRipple(ripple.x ?? 0.5, ripple.y ?? 0.5, ripple.hue, audioStarted);
+      });
+      if (lastRipplesSeen.size > 200) lastRipplesSeen = new Set();
+    } catch {}
+  }
+
   fieldEl?.addEventListener('click', (e) => {
     if (!audioStarted) { audioStarted = true; try { startPad(); } catch {} }
     const rect = fieldEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const hue = Math.floor((x / rect.width) * 360);
-    try { playRippleBell(hue); } catch {}
-    const ripple = document.createElement('div');
-    ripple.className = 'da__ripple';
-    ripple.style.left = `${x}px`;
-    ripple.style.top = `${y}px`;
-    ripple.style.setProperty('--ripple-hue', String(hue));
-    fieldEl.appendChild(ripple);
-    setTimeout(() => ripple.remove(), 1500);
+    const x = clampUnit((e.clientX - rect.left) / rect.width);
+    const y = clampUnit((e.clientY - rect.top) / rect.height);
+    const hue = Math.floor(x * 360);
+    drawRipple(x, y, hue, true);
+    if (roomWs && roomWs.readyState === WebSocket.OPEN) {
+      try {
+        roomWs.send(JSON.stringify({
+          type: 'signal',
+          event: SIGNAL_EVENT,
+          x: Math.round(x * 10000),
+          y: Math.round(y * 10000),
+          hue,
+        }));
+      } catch {}
+    }
+    fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'aurora', action: 'ripple', sessionId: SID, x, y, hue }) })
+      .then((r) => r.json())
+      .then((j) => {
+        const latest = j?.state?.ripples?.[0];
+        if (latest) lastRipplesSeen.add(`${latest.pid}-${latest.t}`);
+      })
+      .catch(() => {});
   });
   window.addEventListener('keydown', () => {
     if (!audioStarted) { audioStarted = true; try { startPad(); } catch {} }
   }, { once: true });
+  connectRoom();
+  pingAurora();
+  setInterval(pingAurora, 8000);
+  fetchAuroraState();
+  setInterval(fetchAuroraState, 2000);
 </script>

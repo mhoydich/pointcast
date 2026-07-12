@@ -15,6 +15,7 @@
  * manual intervention.
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import { fetchJsonWithTimeout } from '../../lib/fetch-json';
 
 const WALLET = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
 const TZKT = 'https://api.tzkt.io/v1';
@@ -42,11 +43,10 @@ interface Token {
 let tokens: Token[] = [];
 let fetchErr: string | null = null;
 try {
-  const r = await fetch(
+  const list = await fetchJsonWithTimeout<Token[]>(
     `${TZKT}/tokens/balances?account=${WALLET}&balance.gt=0&limit=${MAX_TOKENS}&sort.desc=lastLevel&token.metadata.artifactUri.ne=null`
   );
-  if (r.ok) tokens = await r.json();
-  else fetchErr = `TzKT returned ${r.status}`;
+  tokens = list;
 } catch (e: any) {
   fetchErr = e?.message || 'tzkt fetch failed';
 }

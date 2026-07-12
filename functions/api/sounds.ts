@@ -91,7 +91,23 @@ interface SoundEvent {
   seed: number;
   t: number;
   pid: string;
+  [key: string]: string | number | boolean;
 }
+
+const STRING_FIELDS = [
+  'action', 'bellId', 'button', 'cat', 'cellKey', 'chord', 'color',
+  'event', 'family', 'inst', 'mode', 'mood', 'note', 'pad', 'part',
+  'pinId', 'section', 'seatKey', 'stop', 'voice', 'winnerPid',
+];
+const NUMBER_FIELDS = [
+  'age', 'at', 'bpm', 'decay', 'delta', 'goal', 'hz', 'nounId', 'pitch',
+  'round', 'roomCount', 'step', 'value', 'vol', 'winnerNounId',
+];
+const BOOLEAN_FIELDS = ['auto'];
+const MAX_EXTRA_STRING_LENGTH = 80;
+const MAX_EXTRA_NUMBER_ABS = 1_000_000;
+const UNSAFE_TEXT_RE = /[<>&"`]/g;
+const SAFE_TEXT_RE = /[^a-zA-Z0-9 _.,:;#/+@()[\]-]/g;
 
 function json(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -110,12 +126,48 @@ async function loadBuffer(env: Env): Promise<SoundEvent[]> {
   } catch { return []; }
 }
 
+function normalizedString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value
+    .trim()
+    .slice(0, MAX_EXTRA_STRING_LENGTH)
+    .replace(UNSAFE_TEXT_RE, '')
+    .replace(SAFE_TEXT_RE, '');
+  return clean ? clean : null;
+}
+
+function normalizedNumber(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const clamped = Math.max(-MAX_EXTRA_NUMBER_ABS, Math.min(MAX_EXTRA_NUMBER_ABS, value));
+  return Math.round(clamped * 1000) / 1000;
+}
+
+function copyEventExtras(evt: SoundEvent, body: Record<string, unknown>) {
+  for (const field of STRING_FIELDS) {
+    const value = normalizedString(body[field]);
+    if (value !== null) evt[field] = value;
+  }
+  for (const field of NUMBER_FIELDS) {
+    const value = normalizedNumber(body[field]);
+    if (value !== null) evt[field] = value;
+  }
+  for (const field of BOOLEAN_FIELDS) {
+    if (typeof body[field] === 'boolean') evt[field] = body[field];
+    else if (body[field] === 1) evt[field] = true;
+    else if (body[field] === 0) evt[field] = false;
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' });
 
-  let body: { type?: unknown; seed?: unknown; sessionId?: unknown };
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as typeof body;
+    const parsed = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return json({ ok: false, reason: 'bad-body' }, { status: 400 });
+    }
+    body = parsed as Record<string, unknown>;
   } catch {
     return json({ ok: false, reason: 'bad-body' }, { status: 400 });
   }
@@ -135,6 +187,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const now = Date.now();
   const evt: SoundEvent = { type, seed, t: now, pid };
+  copyEventExtras(evt, body);
 
   // Read-modify-write with a soft cap — KV's eventual consistency means
   // two simultaneous POSTs might clobber, acceptable for playful room vibes.

@@ -1,0 +1,402 @@
+/**
+ * /api/chamber — shared state for the Presence Bus surfaces.
+ *
+ * Per Mike + codex 2026-05-05 overnight sprint plan: the wing has a
+ * lot of solo meditatives. The Presence Bus surfaces (drum-room,
+ * drum-echo, drum-procession, drum-now) need shared KV-backed state
+ * so visitors can see each other.
+ *
+ * Distinct from the existing /api/room (DO-backed cursor+chat per
+ * URL); this is a simple polling KV bus shared across multiple
+ * chamber-themed surfaces.
+ *
+ * One endpoint, multiple "kinds":
+ *
+ *   kind=lobby      — drum-room: visitors as brass lights + room-wide rings
+ *   kind=echo       — drum-echo: 5-hit phrases, async pickup
+ *   kind=procession — drum-procession: collective ceremonial advance
+ *   kind=now        — drum-now: who's here in the wing right now
+ *   kind=threshold  — drum-threshold: arrival candles
+ *   kind=offering   — drum-offering: visitor intentions archive
+ *   kind=aurora     — drum-aurora: cross-device ripples + presence fallback
+ *
+ * GET ?kind=foo → { ok, kind, state, now }
+ * POST { kind, action, sessionId, ... } → updated state
+ */
+
+import { sha256, type Env } from './visit';
+
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+function json(body: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers: { ...JSON_HEADERS, ...(init?.headers ?? {}) },
+  });
+}
+
+const KINDS = ['lobby', 'echo', 'procession', 'now', 'threshold', 'offering', 'duel', 'warhol', 'relay', 'aurora'] as const;
+type Kind = typeof KINDS[number];
+
+const TTL: Record<Kind, number> = {
+  lobby: 600,
+  echo: 7 * 24 * 3600,
+  procession: 14 * 24 * 3600,
+  now: 90,
+  threshold: 24 * 3600,
+  offering: 14 * 24 * 3600,
+  duel: 600,
+  warhol: 7 * 24 * 3600,
+  relay: 7 * 24 * 3600,
+  aurora: 600,
+};
+
+const PRESENCE_WINDOW_MS = 30000;
+
+interface Visitor { pid: string; joinedAt: number; lastSeen: number; nounId: number; hue: number; }
+interface Ring { pid: string; t: number; hue: number; nounId: number; x?: number; y?: number; }
+interface EchoPhrase { id: string; pid: string; t: number; pattern: number[]; replies: number; }
+interface ProcessionStep { pid: string; t: number; step: number; }
+interface Offering { pid: string; t: number; nounId: number; intention: string; hue: number; }
+
+interface LobbyState { visitors: Visitor[]; rings: Ring[]; ringCount: number; }
+interface EchoState { phrases: EchoPhrase[]; }
+interface ProcessionState { totalSteps: number; lastFiveSteps: ProcessionStep[]; }
+interface NowState { visitors: Visitor[]; lastUpdated: number; }
+interface ThresholdState { candles: { pid: string; name: string; nounId: number; lit: number }[]; }
+interface OfferingState { offerings: Offering[]; }
+
+interface DuelMatch {
+  matchId: string;
+  p1Pid: string; p1Hue: number; p1Noun: number; p1Taps: number;
+  p2Pid: string; p2Hue: number; p2Noun: number; p2Taps: number;
+  startedAt: number;
+  durationMs: number;
+  endedAt?: number;
+  winnerPid?: string;
+}
+interface DuelState {
+  waiting: { pid: string; hue: number; nounId: number; joinedAt: number } | null;
+  active: DuelMatch | null;
+  recent: DuelMatch[];
+}
+
+interface WarholTile { idx: number; hue: number; pidShort: string; t: number; nounId: number; }
+interface WarholState { tiles: WarholTile[]; touchCount: number; }
+
+interface RelayLink { pid: string; t: number; pattern: number[]; hue: number; nounId: number; }
+interface RelayState { chain: RelayLink[]; }
+interface AuroraState { visitors: Visitor[]; ripples: Ring[]; rippleCount: number; }
+
+function nounIdFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 1200;
+}
+function hueFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 7) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+function normalizedUnit(value: unknown): number | undefined {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, Math.min(1, parsed));
+}
+function normalizedHue(value: unknown): number | undefined {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return ((Math.round(parsed) % 360) + 360) % 360;
+}
+
+async function loadState<T>(env: Env, kind: Kind): Promise<T | null> {
+  if (!env.VISITS) return null;
+  const raw = await env.VISITS.get(`chamber:${kind}:state`);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as T; } catch { return null; }
+}
+async function saveState<T>(env: Env, kind: Kind, state: T): Promise<void> {
+  if (!env.VISITS) return;
+  await env.VISITS.put(`chamber:${kind}:state`, JSON.stringify(state), { expirationTtl: TTL[kind] });
+}
+
+export const onRequestOptions: PagesFunction<Env> = () =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const url = new URL(request.url);
+  const kind = (url.searchParams.get('kind') || '') as Kind;
+  if (!KINDS.includes(kind)) {
+    return json({ ok: false, reason: 'bad-kind', kinds: KINDS }, { status: 400 });
+  }
+  const state = await loadState<unknown>(env, kind);
+  return json(
+    { ok: true, kind, state, now: Date.now() },
+    { headers: { 'Cache-Control': 'private, max-age=0, must-revalidate' } },
+  );
+};
+
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' }, { status: 503 });
+
+  let body: { kind?: unknown; action?: unknown; sessionId?: unknown; pattern?: unknown; step?: unknown; intention?: unknown; name?: unknown; phraseId?: unknown; x?: unknown; y?: unknown; hue?: unknown };
+  try { body = await request.json() as typeof body; }
+  catch { return json({ ok: false, reason: 'bad-body' }, { status: 400 }); }
+
+  const kind = String(body.kind || '') as Kind;
+  if (!KINDS.includes(kind)) {
+    return json({ ok: false, reason: 'bad-kind' }, { status: 400 });
+  }
+  const action = String(body.action || '');
+  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 128) : '';
+  if (!sessionId) return json({ ok: false, reason: 'missing-session' }, { status: 400 });
+  const pid = (await sha256(sessionId)).slice(0, 10);
+  const nounId = nounIdFromString(pid);
+  const hue = hueFromString(pid);
+  const now = Date.now();
+
+  if (kind === 'lobby') {
+    const state = (await loadState<LobbyState>(env, 'lobby')) ?? { visitors: [], rings: [], ringCount: 0 };
+    state.visitors = state.visitors.filter((v) => now - v.lastSeen < PRESENCE_WINDOW_MS);
+
+    if (action === 'ping') {
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      state.rings = state.rings.filter((r) => now - r.t < 8000);
+      await saveState(env, 'lobby', state);
+      return json({ ok: true, state });
+    }
+    if (action === 'ring') {
+      const ring: Ring = { pid, t: now, hue: normalizedHue(body.hue) ?? hue, nounId };
+      const x = normalizedUnit(body.x);
+      const y = normalizedUnit(body.y);
+      if (typeof x === 'number') ring.x = x;
+      if (typeof y === 'number') ring.y = y;
+      state.rings.unshift(ring);
+      state.rings = state.rings.slice(0, 30);
+      state.ringCount += 1;
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      await saveState(env, 'lobby', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'aurora') {
+    const state = (await loadState<AuroraState>(env, 'aurora')) ?? { visitors: [], ripples: [], rippleCount: 0 };
+    state.visitors = state.visitors.filter((v) => now - v.lastSeen < PRESENCE_WINDOW_MS);
+
+    if (action === 'ping') {
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      state.ripples = state.ripples.filter((r) => now - r.t < 8000);
+      await saveState(env, 'aurora', state);
+      return json({ ok: true, state });
+    }
+
+    if (action === 'ripple') {
+      const x = normalizedUnit(body.x);
+      const y = normalizedUnit(body.y);
+      const rippleHue = normalizedHue(body.hue) ?? hue;
+      const ripple: Ring = { pid, t: now, hue: rippleHue, nounId };
+      if (typeof x === 'number') ripple.x = x;
+      if (typeof y === 'number') ripple.y = y;
+      state.ripples.unshift(ripple);
+      state.ripples = state.ripples.slice(0, 30);
+      state.rippleCount += 1;
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      await saveState(env, 'aurora', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'echo') {
+    const state = (await loadState<EchoState>(env, 'echo')) ?? { phrases: [] };
+    if (action === 'leave') {
+      const pattern = Array.isArray(body.pattern) ? (body.pattern as unknown[]).slice(0, 5).map((n) => Math.max(0, Math.min(2000, Number(n) || 0))) : [];
+      if (pattern.length !== 5) return json({ ok: false, reason: 'pattern-must-be-5' }, { status: 400 });
+      const id = `${pid.slice(0, 4)}${now.toString(36).slice(-4)}`;
+      state.phrases.unshift({ id, pid, t: now, pattern, replies: 0 });
+      state.phrases = state.phrases.slice(0, 60);
+      await saveState(env, 'echo', state);
+      return json({ ok: true, state, id });
+    }
+    if (action === 'pickup') {
+      const phraseId = String(body.phraseId || '');
+      const ph = state.phrases.find((p) => p.id === phraseId);
+      if (ph) {
+        ph.replies += 1;
+        await saveState(env, 'echo', state);
+      }
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'procession') {
+    const state = (await loadState<ProcessionState>(env, 'procession')) ?? { totalSteps: 0, lastFiveSteps: [] };
+    if (action === 'advance') {
+      state.totalSteps += 1;
+      state.lastFiveSteps.unshift({ pid, t: now, step: state.totalSteps });
+      state.lastFiveSteps = state.lastFiveSteps.slice(0, 5);
+      await saveState(env, 'procession', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'now') {
+    const state = (await loadState<NowState>(env, 'now')) ?? { visitors: [], lastUpdated: now };
+    state.visitors = state.visitors.filter((v) => now - v.lastSeen < PRESENCE_WINDOW_MS);
+    if (action === 'ping') {
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      state.lastUpdated = now;
+      await saveState(env, 'now', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'threshold') {
+    const state = (await loadState<ThresholdState>(env, 'threshold')) ?? { candles: [] };
+    if (action === 'light') {
+      const name = String(body.name || '').slice(0, 40).replace(/[<>]/g, '');
+      const existing = state.candles.find((c) => c.pid === pid);
+      if (existing) {
+        existing.name = name;
+        existing.nounId = nounId;
+        existing.lit = now;
+      } else {
+        state.candles.push({ pid, name, nounId, lit: now });
+        state.candles = state.candles.slice(-40);
+      }
+      await saveState(env, 'threshold', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'offering') {
+    const state = (await loadState<OfferingState>(env, 'offering')) ?? { offerings: [] };
+    if (action === 'leave') {
+      const intention = String(body.intention || '').slice(0, 80).replace(/[<>]/g, '');
+      if (!intention) return json({ ok: false, reason: 'missing-intention' }, { status: 400 });
+      state.offerings.unshift({ pid, t: now, nounId, intention, hue });
+      state.offerings = state.offerings.slice(0, 60);
+      await saveState(env, 'offering', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'duel') {
+    const state = (await loadState<DuelState>(env, 'duel')) ?? { waiting: null, active: null, recent: [] };
+    const DUEL_DUR_MS = 20000;
+    // End an expired active match before any action
+    if (state.active && now - state.active.startedAt >= state.active.durationMs) {
+      const m = state.active;
+      m.endedAt = now;
+      m.winnerPid = m.p1Taps === m.p2Taps ? '' : (m.p1Taps > m.p2Taps ? m.p1Pid : m.p2Pid);
+      state.recent.unshift(m);
+      state.recent = state.recent.slice(0, 10);
+      state.active = null;
+    }
+    if (action === 'join') {
+      // If pid is already in active, no-op
+      if (state.active && (state.active.p1Pid === pid || state.active.p2Pid === pid)) {
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      // If waiting and it's me, no-op (refresh joinedAt)
+      if (state.waiting && state.waiting.pid === pid) {
+        state.waiting.joinedAt = now;
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      // If waiting is someone else and there's no active match, start match
+      if (state.waiting && !state.active) {
+        const matchId = `m${now.toString(36).slice(-6)}${pid.slice(0, 4)}`;
+        const opp = state.waiting;
+        state.active = {
+          matchId,
+          p1Pid: opp.pid, p1Hue: opp.hue, p1Noun: nounIdFromString(opp.pid), p1Taps: 0,
+          p2Pid: pid, p2Hue: hue, p2Noun: nounId, p2Taps: 0,
+          startedAt: now,
+          durationMs: DUEL_DUR_MS,
+        };
+        state.waiting = null;
+      } else if (!state.waiting && !state.active) {
+        // Become the waiter
+        state.waiting = { pid, hue, nounId, joinedAt: now };
+      }
+      // Stale waiter: replace if older than 60s
+      if (state.waiting && now - state.waiting.joinedAt > 60000 && state.waiting.pid !== pid) {
+        state.waiting = { pid, hue, nounId, joinedAt: now };
+      }
+      await saveState(env, 'duel', state);
+      return json({ ok: true, state });
+    }
+    if (action === 'tap') {
+      if (state.active) {
+        if (state.active.p1Pid === pid) state.active.p1Taps += 1;
+        else if (state.active.p2Pid === pid) state.active.p2Taps += 1;
+        else return json({ ok: false, reason: 'not-in-match', state }, { status: 400 });
+        await saveState(env, 'duel', state);
+        return json({ ok: true, state });
+      }
+      return json({ ok: false, reason: 'no-match', state }, { status: 400 });
+    }
+    if (action === 'leave') {
+      if (state.waiting && state.waiting.pid === pid) state.waiting = null;
+      await saveState(env, 'duel', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'warhol') {
+    const state = (await loadState<WarholState>(env, 'warhol')) ?? { tiles: [], touchCount: 0 };
+    if (action === 'paint') {
+      const idx = Number(body.intention) | 0; // overload: idx field reused as 0..23
+      if (idx < 0 || idx > 23) return json({ ok: false, reason: 'bad-tile' }, { status: 400 });
+      // Replace any existing tile for that idx
+      state.tiles = state.tiles.filter((t) => t.idx !== idx);
+      state.tiles.push({ idx, hue, pidShort: pid.slice(0, 6), t: now, nounId });
+      state.touchCount += 1;
+      await saveState(env, 'warhol', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'relay') {
+    const state = (await loadState<RelayState>(env, 'relay')) ?? { chain: [] };
+    if (action === 'link') {
+      const pattern = Array.isArray(body.pattern)
+        ? (body.pattern as unknown[]).slice(0, 3).map((n) => Math.max(0, Math.min(2000, Number(n) || 0)))
+        : [];
+      if (pattern.length !== 3) return json({ ok: false, reason: 'pattern-must-be-3' }, { status: 400 });
+      state.chain.unshift({ pid, t: now, pattern, hue, nounId });
+      state.chain = state.chain.slice(0, 12);
+      await saveState(env, 'relay', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  return json({ ok: false, reason: 'unknown-action', action }, { status: 400 });
+};

@@ -79,9 +79,9 @@ script_name = "pointcast-presence"
 #   CLI:        npx wrangler kv namespace create "PC_RATES_KV"
 #               then paste the returned id into the block below.
 #
-# [[kv_namespaces]]
-# binding = "PC_RATES_KV"
-# id = "<paste-from-wrangler>"
+[[kv_namespaces]]
+binding = "PC_RATES_KV"
+id = "4dba32e73b4441eeadda5f5403d08d13"
 
 # PC_RACE_KV — Race System Phase 2 (RFC 0002) leaderboard store.
 # Keys: `race:{slug}` (full state + sorted entries list) and
@@ -133,24 +133,29 @@ id = "28cf78fddaaf4d2f9e3bc71dccfd9421"
 # binding = "TALK_AUDIO"
 # bucket_name = "pointcast-audio"
 
-# ── DrumRoom Durable Object — for /api/drum/room WebSocket fan-out ──
-# Enabling this requires the Cloudflare Pages paid tier. Until enabled,
-# /api/drum/room returns 503 and clients gracefully fall back to the
-# /api/sounds polling endpoint at 150ms. See docs/briefs/2026-04-26-drum-
-# realtime.md for the migration plan.
-#
-# Note 2026-04-26 — DRUM_ROOM Durable Object binding was activated then
-# reverted. Cloudflare Pages can't host DurableObject classes directly in
-# functions/ — the class needs to live in a separate Worker, and the Pages
-# project binds to that Worker via script_name = "pointcast-drum" (or
-# whatever we name it). Until that Worker is provisioned, /drum-v8 (and
-# v4/v5/v6/v7) continue using /api/sounds polling at 150ms — the
-# WebSocket fallback was designed exactly for this case.
-#
-# To enable later: deploy a small Worker (functions/durable/drum-room.ts
-# is ready as the class source) named `pointcast-drum`, then re-uncomment:
-#
-# [[durable_objects.bindings]]
-# name = "DRUM_ROOM"
-# class_name = "DrumRoom"
-# script_name = "pointcast-drum"  # separate Worker, NOT the Pages project
+# DrumRoom Durable Object — lives in the standalone pointcast-drum Worker.
+# This binding lets /api/drum/room proxy WebSocket upgrades to that worker,
+# which turns the drum-v4+ family from /api/sounds polling fallback into
+# real cross-device fan-out. Deploy workers/pointcast-drum before Pages.
+[[durable_objects.bindings]]
+name = "DRUM_ROOM"
+class_name = "DrumRoom"
+script_name = "pointcast-drum"
+
+# PC_STUDIO_KV — Studio compositions storage. Each entry is a small JSON
+# blob (template + bg + filter + anim + layers) keyed by short ID.
+# Consumed by /api/studio-publish (POST → write) and /api/studio-block/{id}
+# (GET → read), and by the /studio/share/{id} dynamic Page Function.
+[[kv_namespaces]]
+binding = "PC_STUDIO_KV"
+id = "edb8c2ae1ee4458081c9d1aca57675c1"
+
+# PC_CHECKIN_KV — community presence aggregates for /api/checkin.
+# Per-day aggregate counts (total, byArea, byMood) keyed `agg:YYYY-MM-DD`,
+# plus per-IP-per-day dedup marks keyed `mark:YYYY-MM-DD:{ipHash}`. All
+# TTL'd to 7 days. Surfaces on /me's "WHO ELSE IS HERE TODAY" band and
+# at /api/checkin GET. Hashes IPs with sha256(ip+date+salt) so today's
+# hash can't be linked to yesterday's.
+[[kv_namespaces]]
+binding = "PC_CHECKIN_KV"
+id = "e2eacfff98554fe0ad038aab9146f5c0"

@@ -1,0 +1,38 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { r as renderComponent, a as renderTemplate, m as maybeRenderHead } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$BaseLayout } from './BaseLayout_DxT1W98p.mjs';
+
+const $$About = createComponent(($$result, $$props, $$slots) => {
+  return renderTemplate`${renderComponent($$result, "BaseLayout", $$BaseLayout, { "title": "About", "description": "About Mike Hoydich — builder, creative technologist, and COO at Good Feels. Published with Claude from El Segundo.", "image": "/images/og-about.png" }, { "default": ($$result2) => renderTemplate` ${maybeRenderHead()}<div class="max-w-[34rem] mx-auto px-4 py-12 md:py-16"> <a href="/" class="inline-flex items-center gap-2 mb-8 font-mono text-[0.6rem] tracking-[0.18em] uppercase text-ink-soft hover:text-warm transition-colors">
+&larr; PointCast
+</a> <header class="mb-8"> <div class="kicker">About</div> <h1 class="font-serif text-[1.65rem] text-ink font-medium italic mb-3 leading-[1.15]">
+Michael Hoydich
+</h1> </header> <div class="text-[0.95rem] text-ink/80 space-y-5 leading-relaxed"> <p>
+Builder, writer, and creative technologist based in El Segundo, California.
+        Working at the intersection of technology, culture, and community — always
+        looking for new ways to create things that matter.
+</p> <div class="move-line"> <span class="move-label">Role</span> <span>COO at <a href="https://getgoodfeels.com" target="_blank" rel="noopener" class="text-warm underline underline-offset-2 decoration-warm/30 hover:decoration-warm font-semibold">Good Feels</a>. Builds in public, ships fast, cares about craft.</span> </div> <p>
+Active in the Tezos ecosystem — collecting and minting on-chain art through
+<a href="https://objkt.com" target="_blank" rel="noopener" class="text-warm underline underline-offset-2 decoration-warm/30 hover:decoration-warm">objkt</a> and
+<a href="https://www.fxhash.xyz" target="_blank" rel="noopener" class="text-warm underline underline-offset-2 decoration-warm/30 hover:decoration-warm">fxhash</a>.
+        Exploring on-chain creative tools, CC0 art, and public-domain culture.
+</p> <p>
+PointCast is published with Claude — real human-AI collaboration where
+        both parties bring something essential.
+</p> <div class="flex flex-wrap gap-2 pt-3"> <a href="https://x.com/mhoydich" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">X &nearr;</a> <a href="https://www.linkedin.com/in/mhoydich/" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">LinkedIn &nearr;</a> <a href="https://github.com/mhoydich" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">GitHub &nearr;</a> <a href="https://www.instagram.com/mhoydich/" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">Instagram &nearr;</a> <a href="https://www.are.na/michael-hoydich/channels" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">Are.na &nearr;</a> <a href="https://alpha.midjourney.com/@mhoydich?tab=spotlight" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">Midjourney &nearr;</a> <a href="https://ideogram.ai/@mhoydich" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">Ideogram &nearr;</a> <a href="https://soundcloud.com/mikeisnice" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">SoundCloud &nearr;</a> <a href="https://medium.com/@mhoydich" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card text-ink-soft hover:text-warm hover:bg-warm/8 transition-colors font-mono text-[0.6rem] tracking-[0.12em] uppercase">Medium &nearr;</a> </div> </div> </div> ` })}`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/about.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/about.astro";
+const $$url = "/about";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$About,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

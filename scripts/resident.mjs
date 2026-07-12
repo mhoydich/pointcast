@@ -83,6 +83,7 @@ function pickTask(tasks, { skipIds = new Set() } = {}) {
 function claudeCommand() {
   const envBin = process.env.CLAUDE_CODE_BIN;
   if (envBin) return envBin;
+  if (!process.env.ANTHROPIC_API_KEY) return '';
   return localCommandExists('claude-code') || localCommandExists('claude');
 }
 

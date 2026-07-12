@@ -1,0 +1,106 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { r as renderComponent, a as renderTemplate, m as maybeRenderHead } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$BlockLayout } from './BlockLayout_DHviHHrD.mjs';
+
+const $$NounsColaCaseStudy = createComponent(($$result, $$props, $$slots) => {
+  const STEPS = [
+    {
+      step: "01",
+      title: "Prompt the can into existence",
+      body: "The process started as language before it became liquid: Nouns, cola, PointCast, go team. AI made it easy to sketch possibility faster than a normal packaging or campaign cycle would allow."
+    },
+    {
+      step: "02",
+      title: "Turn prompts into surfaces",
+      body: "The project quickly stopped being a single image. It became a board, a game, a listening room, retailer concepts, mural systems, and campaign books. Each generated artifact changed what the beverage could plausibly become."
+    },
+    {
+      step: "03",
+      title: "Separate image speed from product truth",
+      body: "AI was strongest at world-building, mood, sequencing, and visual options. It was weaker where the beverage had to become real: formulation, labeling, compliance, co-packer constraints, and claims discipline."
+    },
+    {
+      step: "04",
+      title: "Use AI to compress the creative loop",
+      body: "Instead of waiting weeks between concepts, the project could test aesthetic territory in hours: arcade graphics, retailer assets, Vogue spreads, mural campaigns, and city-scale identity systems."
+    },
+    {
+      step: "05",
+      title: "Earn the beverage after earning the world",
+      body: "The key lesson was not “AI can invent a drink.” It was that AI can rapidly build the narrative, commercial, and cultural scaffolding around a drink, which makes the next real-world decisions much sharper."
+    }
+  ];
+  const OUTPUTS = [
+    { label: "Operating board", detail: "formulation, financing, profit, yield" },
+    { label: "Fundable brief", detail: "classic cola first, adaptogen lane second" },
+    { label: "Arcade game", detail: "generated graphics inside a playable surface" },
+    { label: "Listening room", detail: "sponsored mood environment with custom art" },
+    { label: "Print ads", detail: "10-ad campaign system" },
+    { label: "Vogue deck", detail: "12-slide campaign book from local ad plates" },
+    { label: "Mural rollout", detail: "city-scale visual identity thought experiment" }
+  ];
+  const LESSONS = [
+    "AI is best used here as a velocity engine for concepts, not as a substitute for beverage science.",
+    "The generated world can make a future product feel legible before the product physically exists.",
+    "A stronger artifact stack creates a more fundable story because the team can point at real surfaces instead of vague intention.",
+    "The line has to stay bright: generated assets accelerate taste and campaign thinking, but regulated product claims still need qualified review."
+  ];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        "@id": "https://pointcast.xyz/nouns-cola-case-study",
+        headline: "The journey to a Nouns beverage",
+        name: "The journey to a Nouns beverage",
+        description: "A PointCast case study on using AI generation to move from prompts to a fundable Nouns Cola concept.",
+        url: "https://pointcast.xyz/nouns-cola-case-study",
+        inLanguage: "en-US"
+      }
+    ]
+  };
+  return renderTemplate`${renderComponent($$result, "BlockLayout", $$BlockLayout, { "title": "The Journey To A Nouns Beverage", "description": "A PointCast case study on using AI generation to move from prompts to a fundable Nouns Cola concept.", "image": "/images/og/nouns-cola-case-study.png", "jsonLd": jsonLd, "alternates": [{ type: "application/json", href: "/nouns-cola-case-study.json", title: "Nouns Cola case study (JSON)" }], "frame": {
+    image: "https://pointcast.xyz/images/og/nouns-cola-case-study.png",
+    buttons: [
+      { label: "Open case study", action: "link", target: "https://pointcast.xyz/nouns-cola-case-study" },
+      { label: "Open board", action: "link", target: "https://pointcast.xyz/nouns-cola" },
+      { label: "Open brief", action: "link", target: "https://pointcast.xyz/nouns-cola-fundraise" },
+      { label: "Agent JSON", action: "link", target: "https://pointcast.xyz/nouns-cola-case-study.json" }
+    ]
+  } }, { "default": ($$result2) => renderTemplate` ${maybeRenderHead()}<div class="cola-page"> <nav class="crumb" aria-label="Breadcrumb"> <a href="/">Home</a> <span aria-hidden="true">/</span> <a href="/nouns-cola">Nouns Cola</a> <span aria-hidden="true">/</span> <span>case study</span> </nav> <header class="hero"> <div class="hero__copy"> <p class="kicker">NOUNS COLA / CASE STUDY</p> <h1 class="display">The journey to a Nouns beverage.</h1> <p class="dek">
+A working study in how AI generation moved the project from a loose
+          prompt into a stack of believable surfaces: product board, fundraise
+          logic, campaign systems, play, mood, and public-world thinking.
+</p> <div class="hero__actions" aria-label="Primary actions"> <a class="btn btn--primary" href="/nouns-cola-fundraise">Open fundable brief</a> <a class="btn btn--ghost" href="/nouns-cola">Open operating board</a> <a class="btn btn--ghost" href="/nouns-cola-posters-02">Poster set 02</a> <a class="btn btn--ghost" href="/nouns-cola-case-study.json">Agent JSON</a> </div> </div> <figure class="hero__visual"> <img src="/images/nouns-cola/nouns-cola-pack.png" alt="Nouns Cola cans and pilot pack" width="1600" height="1200"> <figcaption class="mono">PROMPT → WORLD → PILOT</figcaption> </figure> </header> <section class="status" aria-label="Case study status"> <div><span class="mono">MODE</span><strong>AI-generated concept stack</strong></div> <div><span class="mono">START</span><strong>prompt-first</strong></div> <div><span class="mono">END</span><strong>fundable beverage brief</strong></div> <div><span class="mono">LEARN</span><strong>speed vs truth</strong></div> <div><span class="mono">SURFACE</span><strong>PointCast</strong></div> </section> <section class="band"> <div class="section-head"> <p class="kicker">JOURNEY</p> <h2>From prompt to operating shape.</h2> </div> <ol class="timeline"> ${STEPS.map((item) => renderTemplate`<li> <span class="timeline__step mono">${item.step}</span> <div> <strong>${item.title}</strong> <p>${item.body}</p> </div> </li>`)} </ol> </section> <section class="band band--split"> <div class="section-head"> <p class="kicker">OUTPUT STACK</p> <h2>What AI actually produced around the beverage.</h2> <p>
+The point was not a single hero image. The point was the stack: each
+          asset made the beverage more discussable, more testable, and more
+          legible to collaborators.
+</p> </div> <div class="raise-table" aria-label="Output stack"> ${OUTPUTS.map((row) => renderTemplate`<div class="raise-row"> <span>${row.label}</span> <strong>${row.detail}</strong> </div>`)} </div> </section> <section class="band finance"> <div class="section-head"> <p class="kicker">KEY LESSONS</p> <h2>AI made the world quickly. Reality kept the edges honest.</h2> </div> <div class="finance__split"> <div class="finance-stack"> <p class="kicker">WHAT WORKED</p> ${[
+    ["Creative speed", "Brand worlds, campaign systems, and format exploration happened in hours instead of weeks."],
+    ["Commercial clarity", "Once the visuals existed, the board and brief could become much more concrete."],
+    ["Cultural range", "The project could test arcade, editorial, mural, and retail identities without heavy production cost."],
+    ["Team alignment", "Generated outputs gave everyone something precise to react to instead of just abstract taste."]
+  ].map(([label, copy]) => renderTemplate`<div class="finance-row"> <span>${label}</span> <strong>${copy}</strong> </div>`)} </div> <div class="waterfall"> <p class="kicker">GUARDRAILS</p> <ol> ${LESSONS.map((item) => renderTemplate`<li>${item}</li>`)} </ol> <p class="finance-note">
+Case study only. None of the generated visuals replace formulation,
+            labeling, legal review, or product-testing work.
+</p> </div> </div> </section> <section class="team"> <div> <p class="kicker">GO TEAM</p> <h2>The project got sharper because the artifacts got real.</h2> </div> <ul> <li><strong>AI tools</strong><span>accelerated image, campaign, and world-building loops</span></li> <li><strong>PointCast</strong><span>held the board, archive, game, room, and case study in one system</span></li> <li><strong>Humans</strong><span>still owned the taste, legal, and production judgment calls</span></li> <li><strong>Nouns Cola</strong><span>moved from vibe to operating concept</span></li> </ul> </section> <section class="sprint-callout" aria-label="Poster set 02"> <div> <p class="kicker">NEW POSTERS</p> <h2>Set 02 pushes the campaign one layer further.</h2> <p>
+A second ad set is now live as four individual AI-generated posters:
+          hero, night, pop, and mural. Same beverage world, sharper single-image
+          judgments.
+</p> </div> <a class="btn btn--primary" href="/nouns-cola-posters-02">Open poster set 02</a> </section> </div> ` })}`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/nouns-cola-case-study.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/nouns-cola-case-study.astro";
+const $$url = "/nouns-cola-case-study";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$NounsColaCaseStudy,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Solar Flare · Digital Fireplace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background: radial-gradient(ellipse at 50% 50%, #2a0410 0%, #050204 90%); }
+  .scene { position: fixed; inset: 0; display: grid; place-items: center; }
+
+  .sun {
+    position: relative;
+    width: min(420px, 60vmin);
+    height: min(420px, 60vmin);
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow:
+      0 0 80px rgba(255,180,80,0.7),
+      0 0 200px rgba(255,140,40,0.5);
+  }
+  #fire {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+  /* prominences — arcing loops of plasma */
+  .promo {
+    position: absolute;
+    width: 220%;
+    height: 90px;
+    border: 6px solid transparent;
+    border-top: 6px solid rgba(255,140,40,0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: arch 8s linear infinite;
+    transform-origin: 50% 100%;
+  }
+  .p1 { top: -10%; left: -60%; animation-delay: 0s; }
+  .p2 { top: 30%; right: -70%; transform: rotate(140deg); animation-delay: -2s; }
+  .p3 { bottom: -10%; left: -50%; transform: rotate(280deg); animation-delay: -5s; }
+  @keyframes arch {
+    0%   { opacity: 0; }
+    25%  { opacity: 0.7; }
+    100% { opacity: 0; }
+  }
+
+  /* corona wisps */
+  .corona {
+    position: absolute;
+    inset: -15%;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 50%, rgba(255,140,40,0.18) 60%, transparent 75%);
+    filter: blur(8px);
+    pointer-events: none;
+    animation: spinSlow 40s linear infinite;
+  }
+  @keyframes spinSlow { to { transform: rotate(360deg); } }
+
+  /* arc explosion */
+  .flare {
+    position: absolute;
+    top: 50%; right: -10%;
+    transform: translateY(-50%) rotate(-25deg);
+    width: 200px; height: 60px;
+    background: linear-gradient(to right,
+      rgba(255,200,100,0.95) 0%,
+      rgba(255,140,40,0.7) 50%,
+      transparent 100%);
+    filter: blur(4px);
+    border-radius: 50%;
+    animation: erupt 7s ease-out infinite;
+    transform-origin: 0 50%;
+  }
+  @keyframes erupt {
+    0%   { opacity: 0; transform: translateY(-50%) rotate(-25deg) scaleX(0.3); }
+    20%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-50%) rotate(-25deg) scaleX(2); }
+  }
+
+  .data {
+    position: absolute;
+    top: 5%; left: 5%;
+    color: #ffd066;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    letter-spacing: 2px;
+    text-shadow: 0 0 6px rgba(255,180,80,0.6);
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="data">
+    SOL · SDO/AIA<br>
+    BAND: 304Å<br>
+    CLASS: X8.2<br>
+    ★ TRANSMITTING ★
+  </div>
+  <div class="corona"></div>
+  <div class="sun">
+    <canvas id="fire"></canvas>
+    <div class="flare"></div>
+  </div>
+  <div class="promo p1"></div>
+  <div class="promo p2"></div>
+  <div class="promo p3"></div>
+</div>
+<script type="module">
+  import { PixelFire, PALETTES } from "./lib/fire.js";
+  import { mountChrome } from "./lib/chrome.js";
+  const c = document.getElementById("fire");
+  const setSize = () => { const r = c.getBoundingClientRect(); c.width = Math.floor(r.width); c.height = Math.floor(r.height); };
+  setSize(); window.addEventListener("resize", setSize);
+  const fire = new PixelFire(c, { palette: PALETTES.solar, scale: 3, intensity: 1 });
+  fire.setMask((col, row) => {
+    const cx = fire.cols / 2, cy = fire.rows / 2;
+    const r = Math.min(cx, cy);
+    return ((col - cx) ** 2 + (row - cy) ** 2) < r * r;
+  });
+  fire.start();
+  mountChrome({ title: "solar flare", mood: "X8.2 class · 1AU away · staring contest with our nearest star" });
+</script>
+</body>
+</html>

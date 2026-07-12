@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import process from 'node:process';
 
-function run(command, args) {
+const FETCH_TIMEOUT_HOOK = pathToFileURL(join(process.cwd(), 'scripts/fetch-timeout-hook.mjs')).href;
+
+function run(command, args, env = process.env) {
   console.log(`\n$ ${[command, ...args].join(' ')}`);
-  const result = spawnSync(command, args, { stdio: 'inherit' });
+  const result = spawnSync(command, args, { stdio: 'inherit', env });
 
   if (result.error) {
     console.error(result.error.message);
@@ -76,7 +80,11 @@ if (ancestor.status !== 0) {
   process.exit(1);
 }
 
-run('npm', ['run', 'build']);
+  const buildOutDir = join('/private/tmp', `pointcast-publish-${Date.now()}`);
+  run('node', ['node_modules/astro/bin/astro.mjs', 'build', '--outDir', buildOutDir], {
+    ...process.env,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--import=${FETCH_TIMEOUT_HOOK}`,
+  });
 
 const changed = output('git', ['status', '--porcelain']);
 

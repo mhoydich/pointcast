@@ -1,0 +1,156 @@
+# Cloudflare Pages project config.
+#
+# To enable the visit log, bind a KV namespace named VISITS to this project.
+# Two options:
+#
+#   OPTION A — Dashboard (easiest):
+#     1. Cloudflare dashboard → Workers & Pages → pointcast → Settings
+#     2. Functions → KV namespace bindings → Add binding
+#        Variable name: VISITS
+#        KV namespace:  (create new, call it "pointcast-visits")
+#     3. Save + redeploy.
+#
+#   OPTION B — Local CLI + commit:
+#     1. npx wrangler kv namespace create "VISITS"
+#     2. Copy the returned `id` into an [[kv_namespaces]] block below.
+#     3. Commit + redeploy.
+#
+# Until a binding exists, /api/visit responds with a graceful zero-state
+# (count=0, empty log) so the site still works.
+
+name = "pointcast"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "VISITS"
+id = "b456e586082a42c3b77cea450c79e7f7"
+
+# PC_PING_KV — async inbox for /ping form (POST /api/ping). 90-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_PING_KV`.
+[[kv_namespaces]]
+binding = "PC_PING_KV"
+id = "adb2efa1fecb460d896a99f5a2a35fc8"
+
+# PC_QUEUE_KV — sprint-pick queue from /sprint (POST /api/queue). 30-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_QUEUE_KV`.
+[[kv_namespaces]]
+binding = "PC_QUEUE_KV"
+id = "9f34cfebb2404343a008f999e08064e8"
+
+# PC_DROP_KV — paste-a-URL inbox from /drop (POST /api/drop). 60-day retention.
+# Created 2026-04-18 via `wrangler kv namespace create PC_DROP_KV`.
+[[kv_namespaces]]
+binding = "PC_DROP_KV"
+id = "d4bf332ab3564664942970641e1e2aca"
+
+# PC_POLLS_KV — Schelling-point poll vote store (POST /api/poll). Per-poll
+# tallies + per-address vote dedup. 180-day retention. Created 2026-04-18.
+[[kv_namespaces]]
+binding = "PC_POLLS_KV"
+id = "7a49bba243c346068d9440122f79c4f1"
+
+# Presence Durable Object — lives in a standalone Worker at
+# workers/presence/ because Pages Functions cannot export DO classes.
+# Deploy sequence:
+#   1. cd workers/presence && npx wrangler deploy
+#   2. npx wrangler pages deploy dist --project-name pointcast
+# Order matters on first ship — Pages needs the referenced script_name
+# to exist in the account before it'll resolve the binding.
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceRoom"
+script_name = "pointcast-presence"
+
+# ─── Sprint 18 scaffolds — awaiting Mike-side provisioning ──────────
+#
+# PC_RATES_KV — shared rate-limit counter store for functions/_rate-limit.ts.
+# Keys shaped `rl:<bucket>:<clientId>:<windowIdx>` with TTL = windowSec + 5.
+# Currently bucketed for /api/talk (5/10min) and /api/wire-events (60/min).
+# Until bound, rate limiting is advisory-only — endpoints return a
+# `X-RateLimit-Mode: degraded-no-kv` header and otherwise behave normally.
+#
+# Provision once with either path:
+#   DASHBOARD:  CF → Workers & Pages → pointcast → Settings → Functions
+#               → KV bindings → Add → name: PC_RATES_KV → new namespace
+#                 "pointcast-rates"
+#   CLI:        npx wrangler kv namespace create "PC_RATES_KV"
+#               then paste the returned id into the block below.
+#
+# [[kv_namespaces]]
+# binding = "PC_RATES_KV"
+# id = "<paste-from-wrangler>"
+
+# PC_RACE_KV — Race System Phase 2 (RFC 0002) leaderboard store.
+# Keys: `race:{slug}` (full state + sorted entries list) and
+#       `race:{slug}:entrant:{id}` (per-entrant dedup + upsert).
+# TTL: 90 days. Resolved races get snapshotted to
+# src/data/races/{slug}.json via a cron (Phase 5) — KV is the hot
+# store, not the archive.
+# Currently used by:
+#   POST /api/race/{slug}/submit     — 10/hr/IP via PC_RATES_KV
+#   GET  /api/race/{slug}/leaderboard — 60/min/IP via PC_RATES_KV
+# Until bound, both endpoints return `{ reason: 'kv-unbound' }` and
+# degrade to a read-only static UX — matches the Sprint 18 pattern.
+#
+# Provisioned 2026-04-24 17:00 PT — Mike approved on his way out.
+#
+[[kv_namespaces]]
+binding = "PC_RACE_KV"
+id = "28cf78fddaaf4d2f9e3bc71dccfd9421"
+
+# PC_CAKE_KV — public birthday registry + celebration guestbook for /cake v2.
+# Layout:
+#   - register:{handle} → JSON{ handle, birthday MM-DD, name?, about?, fp, at, status }
+#   - takenfp:{fp} → handle (one registration per fingerprint, light spam control)
+#   - celebrate:{blockId}:{ts}-{fp} → JSON{ blockId, handle, message?, fp, at }
+#   - celebratefp:{blockId}:{fp} → handle (one celebration per blockId per fingerprint)
+# Until bound, /api/cake/register + /api/cake/celebrate return 503 + the
+# /cake/register form + the celebrate UI degrade to "coming soon" notes.
+# Same env-guarded pattern as PC_PING_KV / PC_POLLS_KV / PC_RACE_KV.
+#
+# Provision once (Mike, from the CF dashboard or wrangler):
+#   wrangler kv namespace create PC_CAKE_KV → copy the returned id below
+#   then uncomment the binding block.
+#
+# [[kv_namespaces]]
+# binding = "PC_CAKE_KV"
+# id = "PASTE-ID-HERE"
+
+# TALK_AUDIO — R2 bucket for Voice Dispatch Phase 3 audio persistence.
+# Key layout + TTL + quota thinking in docs/plans/voice-dispatch-phase-3.md.
+# Gated behind env.TALK_AUDIO in functions/api/talk.ts, so adding/removing
+# the binding flips the behavior without a code change.
+#
+# Provision once (Mike, from the CF dashboard):
+#   CF → R2 → Create bucket → name: "pointcast-audio" → Standard class
+#   CF → Workers & Pages → pointcast → Settings → Functions
+#     → R2 bucket bindings → Add → variable: TALK_AUDIO → bucket: pointcast-audio
+#
+# [[r2_buckets]]
+# binding = "TALK_AUDIO"
+# bucket_name = "pointcast-audio"
+
+# ── DrumRoom Durable Object — for /api/drum/room WebSocket fan-out ──
+# Enabling this requires the Cloudflare Pages paid tier. Until enabled,
+# /api/drum/room returns 503 and clients gracefully fall back to the
+# /api/sounds polling endpoint at 150ms. See docs/briefs/2026-04-26-drum-
+# realtime.md for the migration plan.
+#
+# Note 2026-04-26 — DRUM_ROOM Durable Object binding was activated then
+# reverted. Cloudflare Pages can't host DurableObject classes directly in
+# functions/ — the class needs to live in a separate Worker, and the Pages
+# project binds to that Worker via script_name = "pointcast-drum" (or
+# whatever we name it). Until that Worker is provisioned, /drum-v8 (and
+# v4/v5/v6/v7) continue using /api/sounds polling at 150ms — the
+# WebSocket fallback was designed exactly for this case.
+#
+# To enable later: deploy a small Worker (functions/durable/drum-room.ts
+# is ready as the class source) named `pointcast-drum`, then re-uncomment:
+#
+# [[durable_objects.bindings]]
+# name = "DRUM_ROOM"
+# class_name = "DrumRoom"
+# script_name = "pointcast-drum"  # separate Worker, NOT the Pages project

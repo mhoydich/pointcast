@@ -146,6 +146,24 @@ interface VibeEntry {
   at: number;
 }
 
+/**
+ * Generic room-scoped interaction pulse. Pages that only need "someone
+ * clicked here" fan-out (Yee Choir, Aurora, lightweight games) can ride
+ * the existing /api/room WebSocket without inventing a new Durable Object.
+ * TTL 5s; clients dedupe via id and ignore their own sid echo when needed.
+ */
+interface SignalEntry {
+  id: string;
+  event: string;
+  sid: string;
+  fromNoun: number;
+  at: number;
+  room?: string;
+  x?: number;
+  y?: number;
+  hue?: number;
+}
+
 interface PublicSessionView {
   nounId: number;
   kind: PresenceKind;
@@ -183,12 +201,13 @@ interface BroadcastPayload {
   chat?: ChatEntry[]; // room chat ring buffer (last 20 entries)
   waves?: WaveEntry[]; // directional waves emitted in the last WAVE_TTL_MS
   vibes?: VibeEntry[]; // broadcast emoji reactions, TTL 6s
+  signals?: SignalEntry[]; // generic room-scoped interaction pulses, TTL 5s
   you?: PrivateSessionView;
 }
 
 type ClientMessage =
   | {
-      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat' | 'wave' | 'vibe';
+      type?: 'identify' | 'update' | 'ping' | 'cursor' | 'chat' | 'wave' | 'vibe' | 'signal';
       nounId?: unknown;
       mood?: unknown;
       listening?: unknown;
@@ -200,6 +219,8 @@ type ClientMessage =
       y?: unknown;
       msg?: unknown;
       currentPath?: unknown;
+      event?: unknown;
+      hue?: unknown;
       to?: unknown;
       emoji?: unknown;
       targetPath?: unknown;
@@ -231,6 +252,13 @@ const MAX_VIBE_BUFFER = 60;
 const MAX_VIBE_EMOJI_LEN = 8;
 const VIBE_RATE_PER_SESSION = 8;
 const VIBE_RATE_WINDOW_MS = 10_000;
+// Generic page-level interaction signals. These are intentionally small:
+// event name + optional viewport coords/hue only.
+const SIGNAL_TTL_MS = 5_000;
+const MAX_SIGNAL_BUFFER = 80;
+const SIGNAL_RATE_PER_SESSION = 24;
+const SIGNAL_RATE_WINDOW_MS = 10_000;
+const SIGNAL_EVENT_RE = /^[a-z0-9:_-]+$/i;
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
 const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
@@ -264,6 +292,26 @@ function normalizeText(value: unknown, maxLength: number): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLength);
+}
+
+function normalizeSignalEvent(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 48) return undefined;
+  if (!SIGNAL_EVENT_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function normalizeCoord(value: unknown): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, Math.min(CURSOR_COORD_MAX, Math.round(parsed)));
+}
+
+function normalizeHue(value: unknown): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return ((Math.round(parsed) % 360) + 360) % 360;
 }
 
 /**
@@ -374,6 +422,9 @@ export class PresenceRoom {
   // Phase 4 — broadcast vibes ring buffer + per-session rate map.
   vibes: VibeEntry[] = [];
   vibeRate: Map<string, number[]> = new Map();
+  // Generic room signals + per-session rate map.
+  signals: SignalEntry[] = [];
+  signalRate: Map<string, number[]> = new Map();
   lastActivity: number = 0;
   broadcastMode: 'idle' | 'fast' = 'idle';
 
@@ -535,6 +586,18 @@ export class PresenceRoom {
       return;
     }
 
+    // ─── Generic room signal ─────────────────────────────────
+    // Small page-level fan-out for click/ripple/burst interactions.
+    if (type === 'signal') {
+      const accepted = this.applySignal(sessionId, message);
+      if (accepted) {
+        this.lastActivity = Date.now();
+        this.ensureFastMode();
+        this.broadcast();
+      }
+      return;
+    }
+
     this.applyVisitorPatch(sessionId, message);
     if (hasOwn(message, 'tag')) {
       const tag = normalizeText(message.tag, 40);
@@ -676,6 +739,42 @@ export class PresenceRoom {
     this.vibes.push(entry);
     if (this.vibes.length > MAX_VIBE_BUFFER) {
       this.vibes.splice(0, this.vibes.length - MAX_VIBE_BUFFER);
+    }
+    return true;
+  }
+
+  applySignal(sessionId: string, patch: Record<string, unknown>): boolean {
+    const visitor = this.visitors.get(sessionId);
+    if (!visitor) return false;
+    const event = normalizeSignalEvent(patch.event);
+    if (!event) return false;
+
+    const now = Date.now();
+    const recent = (this.signalRate.get(sessionId) ?? []).filter(
+      (t) => now - t <= SIGNAL_RATE_WINDOW_MS,
+    );
+    if (recent.length >= SIGNAL_RATE_PER_SESSION) return false;
+    recent.push(now);
+    this.signalRate.set(sessionId, recent);
+
+    const entry: SignalEntry = {
+      id: `${sessionId.slice(0, 8)}-${now.toString(36)}-${this.signals.length.toString(36)}`,
+      event,
+      sid: sessionId.slice(0, 8),
+      fromNoun: visitor.nounId,
+      at: now,
+    };
+    if (visitor.currentPath) entry.room = visitor.currentPath;
+    const x = normalizeCoord(patch.x);
+    const y = normalizeCoord(patch.y);
+    const hue = normalizeHue(patch.hue);
+    if (typeof x === 'number') entry.x = x;
+    if (typeof y === 'number') entry.y = y;
+    if (typeof hue === 'number') entry.hue = hue;
+
+    this.signals.push(entry);
+    if (this.signals.length > MAX_SIGNAL_BUFFER) {
+      this.signals.splice(0, this.signals.length - MAX_SIGNAL_BUFFER);
     }
     return true;
   }
@@ -843,6 +942,11 @@ export class PresenceRoom {
       const cutoff = Date.now() - VIBE_TTL_MS;
       this.vibes = this.vibes.filter((v) => v.at >= cutoff);
       if (this.vibes.length) payload.vibes = [...this.vibes];
+    }
+    if (this.signals.length) {
+      const cutoff = Date.now() - SIGNAL_TTL_MS;
+      this.signals = this.signals.filter((s) => s.at >= cutoff);
+      if (this.signals.length) payload.signals = [...this.signals];
     }
 
     if (viewerSessionId) {

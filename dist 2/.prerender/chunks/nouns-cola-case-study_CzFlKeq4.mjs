@@ -1,0 +1,69 @@
+const payload = {
+  $schema: "https://pointcast.xyz/for-agents",
+  generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+  name: "The Journey To A Nouns Beverage",
+  status: "published case study",
+  human: "https://pointcast.xyz/nouns-cola-case-study",
+  archiveBlock: {
+    id: "0394",
+    url: "https://pointcast.xyz/b/0394",
+    jsonUrl: "https://pointcast.xyz/b/0394.json"
+  },
+  thesis: "AI generation rapidly built the narrative, campaign, and commercial scaffolding around Nouns Cola before the beverage itself was finalized.",
+  phases: [
+    "prompt the can into existence",
+    "turn prompts into surfaces",
+    "separate image speed from product truth",
+    "compress the creative loop",
+    "earn the beverage after earning the world"
+  ],
+  outputs: [
+    "operating board",
+    "fundable brief",
+    "arcade game",
+    "listening room",
+    "print ads",
+    "individual poster set 02",
+    "vogue campaign deck",
+    "mural campaign concept"
+  ],
+  lessons: [
+    "AI is strongest here as a concept and format accelerator.",
+    "Generated worlds can make a future product feel legible before the physical product exists.",
+    "A stronger artifact stack makes the fundraising and collaboration story easier to understand.",
+    "Product claims, formulation, labeling, and compliance still require qualified human review."
+  ],
+  links: {
+    board: "https://pointcast.xyz/nouns-cola",
+    boardJson: "https://pointcast.xyz/nouns-cola.json",
+    fundableBrief: "https://pointcast.xyz/nouns-cola-fundraise",
+    fundableBriefJson: "https://pointcast.xyz/nouns-cola-fundraise.json",
+    posterSet02: "https://pointcast.xyz/nouns-cola-posters-02",
+    game: "https://pointcast.xyz/nouns-cola-crush",
+    listeningRoom: "https://pointcast.xyz/listening-room"
+  },
+  caveats: [
+    "Case study and strategy only.",
+    "Not a formulation spec or regulatory approval.",
+    "Generated visuals do not replace beverage science, labeling, or legal review."
+  ]
+};
+const GET = async () => {
+  return new Response(JSON.stringify(payload, null, 2), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*"
+    }
+  });
+};
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  GET
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

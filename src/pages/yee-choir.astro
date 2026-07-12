@@ -4,11 +4,10 @@
  *
  * Sprint 4 of overnight plan. /yeeee was solo confetti; v2 was solo
  * fireworks. /yee-choir is COLLECTIVE: every visitor's clicks
- * broadcast to every other visitor (via /api/chamber kind=lobby —
- * we repurpose the lobby ring stream as a confetti ping). When
- * anyone clicks, EVERYONE'S sky bursts.
+ * broadcast to every other visitor via the existing /api/room WebSocket
+ * signal lane. /api/chamber kind=lobby remains a polling fallback.
  *
- * Pure-frontend over the existing chamber bus. No new endpoint.
+ * Pure-frontend over the existing presence room + chamber bus.
  */
 
 import BlockLayout from '../layouts/BlockLayout.astro';
@@ -145,6 +144,7 @@ const jsonLd = {
     } catch { return 'sid-anon-' + Date.now(); }
   }
   const SID = ensureSid();
+  const SELF_SID = SID.slice(0, 8);
 
   // ── Canvas ───────────────────────────────────────────
   const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('yc-canvas'));
@@ -228,9 +228,63 @@ const jsonLd = {
   }
   requestAnimationFrame(step);
 
-  // ── Chamber bus ──────────────────────────────────────
+  // ── Room signal + chamber fallback ───────────────────
   let lastRingsSeen = new Set();
+  let lastSignalsSeen = new Set();
   let totalBursts = 0;
+  let roomWs = null;
+  let roomRetry = 0;
+  const SIGNAL_EVENT = 'yee:ring';
+
+  function clampUnit(value, fallback = 0.5) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(1, parsed));
+  }
+
+  function spawnAndSound(xPct, yPct, hue) {
+    const safeHue = Number.isFinite(Number(hue)) ? Number(hue) : 80;
+    spawnBurst(clampUnit(xPct), clampUnit(yPct), safeHue);
+    try { playChord(Math.floor(safeHue / 72) % 5); } catch {}
+    totalBursts += 1;
+  }
+
+  function connectRoom() {
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${proto}//${window.location.host}/api/room?url=${encodeURIComponent(window.location.pathname)}&sid=${encodeURIComponent(SID)}`;
+      roomWs = new WebSocket(url);
+      roomWs.addEventListener('open', () => {
+        roomRetry = 0;
+        roomWs?.send(JSON.stringify({ type: 'identify', tag: 'yee', currentPath: window.location.pathname }));
+      });
+      roomWs.addEventListener('message', (msg) => {
+        let data;
+        try { data = JSON.parse(msg.data); } catch { return; }
+        if (hereEl && typeof data.humans === 'number') hereEl.textContent = String(data.humans);
+        const signals = Array.isArray(data.signals) ? data.signals : [];
+        signals.forEach((signal) => {
+          if (!signal || signal.event !== SIGNAL_EVENT) return;
+          if (signal.sid === SELF_SID) return;
+          const key = signal.id || `${signal.sid || 'peer'}-${signal.at || 0}`;
+          if (lastSignalsSeen.has(key)) return;
+          lastSignalsSeen.add(key);
+          const x = clampUnit(Number(signal.x) / 10000, 0.2 + Math.random() * 0.6);
+          const y = clampUnit(Number(signal.y) / 10000, 0.3 + Math.random() * 0.4);
+          spawnAndSound(x, y, signal.hue);
+        });
+        if (lastSignalsSeen.size > 200) lastSignalsSeen = new Set();
+      });
+      roomWs.addEventListener('close', () => {
+        roomWs = null;
+        const delay = Math.min(8000, 600 * Math.pow(1.7, roomRetry++));
+        setTimeout(connectRoom, delay);
+      });
+      roomWs.addEventListener('error', () => {
+        try { roomWs?.close(); } catch {}
+      });
+    } catch {}
+  }
 
   async function ping() {
     try {
@@ -247,6 +301,7 @@ const jsonLd = {
       const rings = j.state?.rings || [];
       if (hereEl) hereEl.textContent = String(visitors.length);
       if (burstsEl) burstsEl.textContent = String(j.state?.ringCount || 0);
+      if (roomWs && roomWs.readyState === WebSocket.OPEN) return;
 
       const now = Date.now();
       rings.forEach((r) => {
@@ -254,25 +309,37 @@ const jsonLd = {
         const key = `${r.pid}-${r.t}`;
         if (lastRingsSeen.has(key)) return;
         lastRingsSeen.add(key);
-        // Burst at random position; chord pitched to visitor's hue
-        spawnBurst(0.2 + Math.random() * 0.6, 0.3 + Math.random() * 0.4, r.hue);
-        try { playChord(Math.floor(r.hue / 72) % 5); } catch {}
-        totalBursts += 1;
+        const x = typeof r.x === 'number' ? r.x : 0.2 + Math.random() * 0.6;
+        const y = typeof r.y === 'number' ? r.y : 0.3 + Math.random() * 0.4;
+        spawnAndSound(x, y, r.hue);
       });
       if (lastRingsSeen.size > 200) lastRingsSeen = new Set();
     } catch {}
   }
-  async function ring() {
+  async function ring(event) {
+    const rect = canvas?.getBoundingClientRect?.() || document.getElementById('yc-main')?.getBoundingClientRect();
+    const x = rect ? clampUnit((event.clientX - rect.left) / rect.width) : 0.5;
+    const y = rect ? clampUnit((event.clientY - rect.top) / rect.height) : 0.5;
+    const hue = Math.round(x * 360);
+    spawnAndSound(x, y, hue);
+    if (roomWs && roomWs.readyState === WebSocket.OPEN) {
+      try {
+        roomWs.send(JSON.stringify({
+          type: 'signal',
+          event: SIGNAL_EVENT,
+          x: Math.round(x * 10000),
+          y: Math.round(y * 10000),
+          hue,
+        }));
+      } catch {}
+    }
     try {
       const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'lobby', action: 'ring', sessionId: SID }) });
+        body: JSON.stringify({ kind: 'lobby', action: 'ring', sessionId: SID, x, y, hue }) });
       const j = await r.json();
       if (j?.ok) {
         const myLatest = j.state.rings.find((rr) => rr.pid !== '');
-        // Optimistic burst — find my own ring in the recent list
         if (myLatest) {
-          spawnBurst(0.2 + Math.random() * 0.6, 0.3 + Math.random() * 0.4, myLatest.hue);
-          try { playChord(Math.floor(myLatest.hue / 72) % 5); } catch {}
           lastRingsSeen.add(`${myLatest.pid}-${myLatest.t}`);
         }
       }
@@ -282,6 +349,7 @@ const jsonLd = {
   // Click anywhere → ring
   document.getElementById('yc-main')?.addEventListener('click', ring);
 
+  connectRoom();
   ping();
   setInterval(ping, 8000);
   fetchState();

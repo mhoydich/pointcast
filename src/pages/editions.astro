@@ -17,6 +17,7 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
+import { fetchJsonWithTimeout } from '../lib/fetch-json';
 import contracts from '../data/contracts.json';
 import market from '../data/market.json';
 
@@ -29,17 +30,13 @@ let visitNounsSupply: { total: number; holders: number } | null = null;
 let visitNounsError: string | null = null;
 if (visitNounsKt1.startsWith('KT1')) {
   try {
-    const r = await fetch(`https://api.tzkt.io/v1/tokens?contract=${visitNounsKt1}&limit=10000&select=totalSupply,holdersCount`, {
-      headers: { Accept: 'application/json' },
-    });
-    if (r.ok) {
-      const list: Array<{ totalSupply: string; holdersCount: number }> = await r.json();
-      const total = list.reduce((sum, t) => sum + Number(t.totalSupply ?? 0), 0);
-      const holders = list.reduce((max, t) => Math.max(max, t.holdersCount ?? 0), 0);
-      visitNounsSupply = { total, holders };
-    } else {
-      visitNounsError = `tzkt returned ${r.status}`;
-    }
+    const list = await fetchJsonWithTimeout<Array<{ totalSupply: string; holdersCount: number }>>(
+      `https://api.tzkt.io/v1/tokens?contract=${visitNounsKt1}&limit=10000&select=totalSupply,holdersCount`,
+      { headers: { Accept: 'application/json' } },
+    );
+    const total = list.reduce((sum, t) => sum + Number(t.totalSupply ?? 0), 0);
+    const holders = list.reduce((max, t) => Math.max(max, t.holdersCount ?? 0), 0);
+    visitNounsSupply = { total, holders };
   } catch (e: any) {
     visitNounsError = e?.message || 'tzkt fetch failed';
   }

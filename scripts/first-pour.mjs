@@ -150,7 +150,8 @@ async function generateHero(date) {
     <circle cx="760" cy="432" r="86" fill="#d0a06a" opacity="0.28"/>
     <text x="96" y="760" font-family="Arial, sans-serif" font-size="48" fill="#fff8e6" opacity="0.86">FIRST POUR / ${date}</text>
   </svg>`;
-  await sharp(Buffer.from(svg)).png().toFile(out);
+  const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  await writeFile(out, buffer);
   return out;
 }
 

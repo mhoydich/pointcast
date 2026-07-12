@@ -1,0 +1,975 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { r as renderComponent, a as renderTemplate, m as maybeRenderHead, b as addAttribute } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$SparrowLayout } from './SparrowLayout_VSvjr4EN.mjs';
+import { a as CHANNEL_LIST } from './channels_C2qW9mSV.mjs';
+
+const $$About = createComponent(($$result, $$props, $$slots) => {
+  const Astro2 = $$result.createAstro($$props, $$slots);
+  Astro2.self = $$About;
+  const features = [
+    {
+      kicker: "dashboard",
+      title: "Tune-in home",
+      body: "Conic-gradient dial over the last 24 broadcasts, sliced by channel, with an ember needle that sweeps once every twelve seconds.",
+      kbd: "/sparrow"
+    },
+    {
+      kicker: "channels",
+      title: "9-channel rosette",
+      body: "Every channel — Front Door, Court, Spinning, Good Feels, Garden, El Segundo, Faucet, Visit, Battler — as a tinted card with a live count.",
+      kbd: "1…9"
+    },
+    {
+      kicker: "reel",
+      title: "Signal receipts",
+      body: "A dozen latest blocks as channel-tinted cards with pixel stamp, ember №, signal-strength bars, dek, and mood chip. Click any receipt; it morphs into the reader.",
+      kbd: "J / K"
+    },
+    {
+      kicker: "reader",
+      title: "Block reader",
+      body: "Full-page reading surface in Sparrow chrome — Gloock title, italic Didone dek, readable body, channel aside with save + companions + external + canonical links.",
+      kbd: "/sparrow/b/<id>"
+    },
+    {
+      kicker: "saved",
+      title: "Reading list",
+      body: "Local-first via browser localStorage. Press S on any block to save; list lives at /sparrow/saved. Sparrow does not phone home.",
+      kbd: "S"
+    },
+    {
+      kicker: "command",
+      title: "⌘K palette",
+      body: "Fuzzy search across routes, channels, and the 60 most recent blocks. Same shortcut macOS-wide — Ctrl+K on other platforms.",
+      kbd: "⌘K"
+    },
+    {
+      kicker: "filter",
+      title: "Mood chips",
+      body: "Each reel derives its own mood taxonomy from actual block data — chips only surface when they have results to show.",
+      kbd: "/"
+    },
+    {
+      kicker: "now-tuned",
+      title: "On-air indicator",
+      body: 'IntersectionObserver marks whichever receipt is centered in the viewport as "on-air" — ring highlight, and S targets that block by default.',
+      kbd: "—"
+    },
+    {
+      kicker: "theme",
+      title: "Blue-hour / dawn",
+      body: "Two OKLCH themes: blue-hour (default dark, twilight indigo + saffron ember) and dawn (light, bone paper + rust). Preference persists per browser.",
+      kbd: "T"
+    },
+    {
+      kicker: "feeds",
+      title: "Atom + manifest",
+      body: "Sparrow-branded Atom 1.0 at /sparrow/feed.xml and an agent-legible manifest at /sparrow.json describing every UI primitive, keyboard shortcut, and data source.",
+      kbd: "/sparrow.json"
+    },
+    {
+      kicker: "motion",
+      title: "Scroll-driven dial",
+      body: "A 2-pixel tuning bar at the top rail advances as you scroll — ember → lilac → moss gradient, powered by CSS scroll-timeline. Respects prefers-reduced-motion.",
+      kbd: "—"
+    },
+    {
+      kicker: "transitions",
+      title: "View transitions",
+      body: "Reel card → reader morph via Astro ClientRouter + transition:name. Back works the same way. No JS framework bundled.",
+      kbd: "—"
+    },
+    {
+      kicker: "offline",
+      title: "Works on the subway",
+      body: "Scoped service worker at /sparrow/sw.js precaches the shell + 9 channels + manifest + feed, then stale-while-revalidates. Block readers runtime-cache up to 48 entries. Offline fallback carries Sparrow chrome.",
+      kbd: "sw.js"
+    },
+    {
+      kicker: "install",
+      title: "PWA · standalone window",
+      body: "Installable via the browser install prompt. App shortcuts go to Front Door, your saved list, and this page. Runs in its own window, cached for cold reads.",
+      kbd: "install"
+    },
+    {
+      kicker: "visited",
+      title: "Last-visited receipts",
+      body: `Block readers log visits to localStorage. The reel softens titles you've already read and adds a small "read" chip — the saved star always wins if both apply.`,
+      kbd: "—"
+    },
+    {
+      kicker: "network",
+      title: "Offline pill",
+      body: 'The HUD grows an oxblood "offline" pill when navigator.onLine flips. Auto-clears when the network comes back.',
+      kbd: "—"
+    },
+    {
+      kicker: "memo",
+      title: "Technical memorandum",
+      body: "A one-off overview at /sparrow/deck in 1980s Bell Labs / Xerox PARC styling — cream paper, oxblood stamp, EB Garamond + Courier Prime, numbered sections, ASCII system diagram, figure plates, and a prompt appendix for AI image generation.",
+      kbd: "/deck"
+    },
+    {
+      kicker: "cheatsheet",
+      title: "Keyboard cheatsheet",
+      body: "Press ? anywhere to pop a grouped keyboard reference (Discovery / Reading / Display / Reader extras). Read-only — the palette is for doing, the cheatsheet is for remembering.",
+      kbd: "?"
+    },
+    {
+      kicker: "progress",
+      title: "Reading progress",
+      body: "A thin ember bar below the top rail on /sparrow/b/<id> fills as you scroll through the article body, driven by CSS view-timeline. Degrades silently on older browsers.",
+      kbd: "—"
+    },
+    {
+      kicker: "quote",
+      title: "Copy as quote",
+      body: 'Select any text in the reader body and an ember ✎ chip appears. Click it and the clipboard gets a formatted quote block: "…" — title · № · pointcast.xyz/b/<id>.',
+      kbd: "select"
+    },
+    {
+      kicker: "prefetch",
+      title: "Prefetch on hover + idle",
+      body: 'Hovering a receipt injects <link rel="prefetch"> for its reader; the reader itself prefetches prev + next during requestIdleCallback. Combined with the SW cache-first strategy, J/K paging is instant.',
+      kbd: "—"
+    },
+    {
+      kicker: "typography",
+      title: "Drop cap · text-wrap: pretty",
+      body: "The first paragraph of every block reader opens with a Didone drop cap in ember; body paragraphs use text-wrap: pretty and hanging-punctuation for cleaner rags.",
+      kbd: "—"
+    },
+    {
+      kicker: "jumps",
+      title: "Jump to top / bottom",
+      body: "0 scrolls smoothly to the top, $ to the bottom. Works on every Sparrow surface — useful mid-article and at the bottom of long channel reels.",
+      kbd: "0 / $"
+    },
+    {
+      kicker: "native",
+      title: "Menu-bar companion",
+      body: 'Sparrow.app — a macOS menu-bar ✦ that polls /sparrow/api/latest.json, pulses with a "new count" badge when blocks arrive, and fires notifications. Swift 5.9, AppKit + URLSession + UserNotifications, no external deps.',
+      kbd: "/connect"
+    },
+    {
+      kicker: "polling",
+      title: "Polling feed",
+      body: "A summary-only JSON feed at /sparrow/api/latest.json — snake_case, 24-block window, 2-min cache. Shaped for lightweight clients: the native app, shell scripts, a Raspberry Pi blinkt, anything.",
+      kbd: "/api"
+    },
+    {
+      kicker: "reactions",
+      title: "Named reactions",
+      body: "Three-chip reaction toolbar on every block reader — 🔥 lit, 🌿 evergreen, 💜 rare. Picks live in localStorage:sparrow:reactions for v0.7 (local-only). v0.8 fans them out as Nostr kind-7 events so counts aggregate across devices.",
+      kbd: "react"
+    },
+    {
+      kicker: "nostr",
+      title: "Reaction fan-out · NIP-07",
+      body: `If a NIP-07 browser extension is installed (Alby, nos2x, Flamingo), a "connect signer" pill appears next to the reaction toolbar. Once connected, each pick signs a kind-7 event r-tagged to the block's canonical URL and broadcasts to a relay pool — default damus / primal / nos.lol, configurable via sparrow:nostr-relays.`,
+      kbd: "NIP-07"
+    },
+    {
+      kicker: "aggregate",
+      title: "Reaction counts from relays",
+      body: "Every reader opens a kind-7 subscription filtered by {kinds:[7], #r:[canonical-block-url]} against the relay pool. Counts paint on each chip as events arrive; dedup by event id; works without a signer since reading is public. Sockets close on beforeunload.",
+      kbd: "REQ"
+    },
+    {
+      kicker: "unreact",
+      title: "Kind-5 delete on unreact",
+      body: "Toggling off a reaction you emitted fires a kind-5 delete event pointing at the original kind-7 event id (kept in sparrow:nostr-emitted). Optimistic: local state clears immediately, the retraction relays over best-effort.",
+      kbd: "kind-5"
+    },
+    {
+      kicker: "reel-counts",
+      title: "Cross-reel count badges",
+      body: `One REQ per relay with every visible block URL in #r paints a compact "🔥 3 · 🌿 1" row into each receipt's footer. Shared dedupe state with the reader keeps the two views in sync.`,
+      kbd: "batch"
+    },
+    {
+      kicker: "compose",
+      title: "Inline reply composer",
+      body: "Collapsible panel on every block reader. Subject + body → pc-ping-v1 POST to pointcast.xyz/api/ping with the parent block as sourceUrl, channel inherited, expand=true so cc stages it as a new block on the next tick. Magpie-routed multi-destination reply lands in v0.12.",
+      kbd: "reply"
+    },
+    {
+      kicker: "bridge",
+      title: "Magpie bridge awareness",
+      body: 'The composer probes 127.0.0.1:38473/health on load. When Magpie is alive, a "magpie · connected · N ready" pill lights up moss and the row below paints a readiness chip for every destination Magpie can reach (PointCast, Mastodon, Farcaster, bitchat, Bluesky, Twitter, LinkedIn, Instagram, Zora, Objkt, OpenSea).',
+      kbd: "magpie"
+    },
+    {
+      kicker: "route",
+      title: "Multi-destination via Magpie",
+      body: "Destination chips are checkboxes; PointCast is locked on. Tick extras (Mastodon, Farcaster, bitchat, etc.) and submit POSTs to Magpie /compose with the full destinations[] list. Any /compose failure falls back gracefully to direct /api/ping so the reply always lands in PointCast. Magpie native endpoint is spec'd in the manifest.",
+      kbd: "compose"
+    },
+    {
+      kicker: "native",
+      title: "Magpie /compose shipped",
+      body: "The Swift counterpart to v0.13 landed in Magpie v0.14 — AppState.handleComposeRequest builds an ephemeral ClipItem (not persisted) + PublishDraft and fans out via PublisherRegistry, returning the same result envelope as /broadcast so Sparrow's parser is unchanged. Upgrade Magpie; next time you tick extras, the first hop succeeds.",
+      kbd: "swift"
+    },
+    {
+      kicker: "mirror",
+      title: "Reading-list mirror",
+      body: "When Magpie's peer-node is alive, sparrow:saved mirrors to it via POST /reader-state on every toggle (600ms debounce). Fresh tabs pull GET /reader-state.json on load and apply newest-wins by updated_at. Your saved receipts stay in sync across Sparrow tabs on the same machine — no sign-in, no server-of-record, no telemetry.",
+      kbd: "mirror"
+    },
+    {
+      kicker: "sync",
+      title: "Visited + reactions ride the same rails",
+      body: "v0.16 extends the mirror beyond saved. writeVisited and writeReactions debounce into the same scheduleReaderMirror(); pulls apply newest-wins to visited IDs and the reactions map, then repaint .is-visited + rehydrate reaction chips. One POST carries all three keys; each key has its own updated_at so a stale tab can't clobber a live one.",
+      kbd: "sync"
+    },
+    {
+      kicker: "opml",
+      title: "OPML import + export",
+      body: "Toolbar on /sparrow/saved. Export bundles the Sparrow Atom + nine channel RSS feeds + one outline per saved block into a sparrow-saved-<date>.opml download. Import DOMParses any OPML file and unions /b/<id> matches into sparrow:saved — additive, never destructive. Entirely client-side; nothing uploaded off-device.",
+      kbd: "/saved"
+    },
+    {
+      kicker: "discovery",
+      title: "Bridge origin ladder",
+      body: "Shared resolveMagpieOrigin() probes localStorage override → magpie.local:38473 → 127.0.0.1:38473. First /health responder wins and caches on window.__sparrow; all Magpie-bound fetches (mirror, bridge pill, composer) share the resolution. Once Magpie ships the Bonjour advertisement in v0.19, .local just starts working.",
+      kbd: "mDNS"
+    },
+    {
+      kicker: "bonjour",
+      title: "Magpie advertises itself",
+      body: `Magpie v0.19 attaches NWListener.service — type _magpie._tcp, name "Magpie", port 38473, TXT record carrying version + /health + schema id + composer + mirror endpoints. macOS mDNS responder makes magpie.local resolve to the host; Sparrow's v0.18 ladder picks it up on the second rung. dns-sd -B _magpie._tcp shows the active instance.`,
+      kbd: "_magpie._tcp"
+    },
+    {
+      kicker: "peer-node",
+      title: "Sparrow.app mirrors on its own port",
+      body: "v0.20 ships a second peer-node inside the menu-bar companion: Sources/SparrowApp/SparrowServer.swift runs a loopback NWListener on 38474 exposing /health + /reader-state GET/POST with byte-identical newest-wins merge logic to Magpie. Advertises _sparrow._tcp via Bonjour. The web resolver ladder grows to 5 rungs (user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474) and tags the resolved peer kind so the bridge pill can label it. Reader-state sync works with just Sparrow.app running — Magpie is no longer a mirror prerequisite.",
+      kbd: "_sparrow._tcp · :38474"
+    },
+    {
+      kicker: "cross-device",
+      title: "Saved, visited, reactions — everywhere",
+      body: 'v0.21 closes the multi-machine loop. With a NIP-07 signer that supports NIP-44 (nos2x, recent Alby), the HUD gains a "sync · on/off" pill. Turning it on publishes an encrypted kind-30078 addressable event (d-tag sparrow-reader-state-v1) carrying the same {saved, visited, reactions} blob — self-encrypted to your own npub so only your signer can decrypt. On load, Sparrow REQs the newest event across the relay pool and merges newest-wins per key. Runs side-by-side with the LAN peer-node mirror; both fire on the same debounce. 4s floor between relay pushes to keep bandwidth polite.',
+      kbd: "kind 30078 · NIP-44"
+    },
+    {
+      kicker: "federation",
+      title: "/sparrow/friends — see what others are reading",
+      body: `v0.22 adds a federated reading-list surface. Flip "publish my saved list publicly" and Sparrow emits a separate unencrypted kind-30078 event (d-tag sparrow-public-saved-v1, scope-limited to just the saved block ids + a small client profile — no visited state, no reactions). Add friends by pasting a hex pubkey; Sparrow REQs each friend's latest public list from the relay pool and renders their saved blocks with titles + channel chips resolved via a server-shipped lookup. Two distinct consents: cross-device sync and public list — turn either on without the other.`,
+      kbd: "/sparrow/friends"
+    },
+    {
+      kicker: "npub + profiles",
+      title: "Bech32 decode + on-chain names",
+      body: "v0.23 smooths the federation rough edges. The /sparrow/friends form now accepts npub1… pasted from any Nostr client — a self-contained NIP-19 bech32 codec (inlined, no dependency) normalizes either input to hex. The HUD self-pubkey display also renders as short-npub. On load Sparrow REQs kind-0 metadata events for every friend, cached for 24h in sparrow:profiles; display_name or name auto-populates as an alias when the local one is empty. A 🛰 glyph appears next to names sourced from the relay so local aliases and federated names stay legible at a glance.",
+      kbd: "NIP-19 · NIP-01 kind 0"
+    },
+    {
+      kicker: "faces + checkmarks",
+      title: "Pictures, NIP-05 verify, F shortcut",
+      body: "v0.24 finishes the friends surface. Profile pictures render as 28px circles on the friends list (18px inline on feed cards) with lazy loading, no referrer, and a quiet onerror-hide so bad URLs don't leave a torn-page glyph. NIP-05 verification round-trips the claimed `<user>@<domain>` against the domain's /.well-known/nostr.json and confirms it points back at the same pubkey — ✓ moss when verified, ! oxblood on mismatch. Results cache for 7 days. Press F anywhere in Sparrow to jump to /sparrow/friends; the palette + cheatsheet learn the same shortcut.",
+      kbd: "F · NIP-05 · /.well-known/nostr.json"
+    },
+    {
+      kicker: "dashboard lane",
+      title: "Friends reading, right on /sparrow",
+      body: `v0.25 lands a compact friends lane between the rosette and the 12-latest reel on /sparrow. Each row: avatar · name · "saved" · № id · title · channel chip — sorted by each friend's most-recent event (their freshest save), capped at 6 rows so the dashboard doesn't drift toward a wall. Shares the kind-30078 consumer flow with /sparrow/friends and reads the same sparrow:profiles cache so hydration stays one-pass; server inlines a block lookup so titles resolve without per-block fetches. A dismiss × button sets sparrow:friends-lane-hidden so the lane collapses until you turn it back on from /sparrow/friends. Empty state nudges you to add friends; lane hides entirely if nobody's followed yet.`,
+      kbd: "dashboard · /sparrow"
+    },
+    {
+      kicker: "friends in motion",
+      title: "Live toasts, a soft chime, per-friend mute",
+      body: 'v0.26 turns friends from a panel into a presence. SparrowLayout opens a persistent streaming kind-30078 REQ with since=bootTime, so only events published while the tab is open trigger a bottom-right "just saved" toast — avatar · name · № id · title. Up to 3 visible, 7s TTL; click opens the block, × dismisses. An opt-in Web Audio chime (two-note fifth, no asset) rings alongside the toast when sparrow:friends-chime-enabled is on. Per-friend mute lands as a new `muted` field on sparrow:friends entries — muted friends drop out of the feed, dashboard lane, subscription, and toasts without losing their alias. Global opt-out via sparrow:friends-motion-disabled for quiet sessions.',
+      kbd: "live · since · mute"
+    },
+    {
+      kicker: "activity timeline",
+      title: "/sparrow/friends/activity — history, live-stitched",
+      body: 'v0.27 adds a dedicated timeline over every public saved-list event from your followed (non-muted) npubs. Dual subscription: a bounded initial pull (limit 50) for history and a second `since: bootTime` stream kept open until beforeunload. New events splice at the top with a moss pulse animation and a "new" pill that fades after 12 seconds — the page earns its "history, live" feel without a full repaint. Each card carries avatar · name · "saved N blocks" · relative timestamp · 3 preview receipts · "+N more". Title resolution uses a server-shipped block lookup; profiles + avatars read the same sparrow:profiles cache the rest of the federation surface uses.',
+      kbd: "/sparrow/friends/activity"
+    },
+    {
+      kicker: "signals recap",
+      title: "/sparrow/signals — three readings of the circle",
+      body: "v0.28 summarizes. Three panels over the same kind-30078 corpus the activity timeline streams. Most co-saved surfaces blocks saved by two or more followed signers (count-sorted, top 12, with inline saver chips) — overlap is the signal. Recent adds lists friends who published a fresh saved list in the last 7 days, newest first. Channel distribution bars every saved block across the 9 channels, proportional, each row linking to its /sparrow/ch/<slug>. Client-side aggregation only; no new server endpoint, no background job.",
+      kbd: "/sparrow/signals"
+    },
+    {
+      kicker: "signals, extended",
+      title: "First-picker · export JSON · channel panel",
+      body: "v0.29 sharpens the federation surface. In /sparrow/signals each co-saved row now carries a ⭐ first-picker chip — the friend with the earliest created_at among current savers. A new ⤓ export JSON button dumps the whole recap as sparrow-signals-<date>.json (schema sparrow-signals-v1 · friends, relays, newest events, top co-saved with savers + picker attribution, notes documenting the caveats). Each /sparrow/ch/<slug> gains its own scoped friends panel above the main reel — count-sorted saves that intersect this channel, top 6, with first-picker attribution. Hides when no friends publish into the channel; opt-out via localStorage.",
+      kbd: "⭐ · ⤓ · per-channel"
+    },
+    {
+      kicker: "ambient · digest scaffold",
+      title: '"Here now" presence + digest stub',
+      body: `v0.30 adds co-presence and a scaffold for email digests. Opt in via /sparrow/friends and Sparrow publishes an ephemeral kind-20078 event tagged t:sparrow-presence every 60s while the tab is foregrounded — relays in the 20000-29999 NIP-16 range never persist these, so liveness is moot the instant it's stale. A streaming subscriber paints a fixed bottom-left "✦ here now" strip with avatars of friends seen in the last 90s. Separately, /sparrow/signals gets a weekly-digest opt-in panel — worker not live yet, but subscription intent is captured locally with a documented shape so the sidecar can pick up the contract when infra ships. Worker never holds secret material — signed-payload pointers only.`,
+      kbd: "✦ here now · digest·worker"
+    },
+    {
+      kicker: "participation onramps",
+      title: "Join the federation — four visible steps",
+      body: `v0.31 closes the on-ramp gap. /sparrow/friends now opens with a live checklist — signer connected, public list on, at least one follow, ambient on — with ✓/○ ticks that repaint across tabs. Below it, an invite card builds a shareable link (/sparrow/friends?follow=<npub>) with one-click copy. The same URL, when opened on someone else's Sparrow, pre-fills the add-form and pulses the submit button so following is a single click. A starter seed card offers suggested pubkeys to one-click-follow so new users never land on an empty federation. OPML round-trip exports sparrow:friends as <outline type="nostr"> elements for portability between clients.`,
+      kbd: "/sparrow/friends?follow=npub1…"
+    },
+    {
+      kicker: "digest · curation · cross-device",
+      title: "Worker live · federation.json · friends in the mirror",
+      body: "v0.32 backs the federation layer with persistence. POST /api/sparrow/digest-subscribe is a real Cloudflare Pages Function now — validates sparrow-digest-subscription-v1, returns 202 Accept, stores in SPARROW_DIGEST_KV when bound (still acks without, so the v0.30 client stops retrying). GET /sparrow/federation.json is a new editorial endpoint carrying the starter seeds (hex + alias + note) so curation is a data edit, not a code change; friends.astro fetches on boot with a tiny internal fallback. The reader-state mirror learns two new keys — friends + profiles — so a user who follows someone on laptop sees them on desktop; window.__sparrow.scheduleReaderMirror is exposed so route-local pages can trigger a push after mutating those keys.",
+      kbd: "/api/sparrow/digest-subscribe · /sparrow/federation.json"
+    },
+    {
+      kicker: "native ambient · cron scaffold · DELETE",
+      title: "Sparrow.app hears the federation · worker shell lands",
+      body: 'v0.33 extends the federation layer into the native menu-bar companion. NostrRelayClient.swift (URLSessionWebSocketTask, zero dependencies) + FriendsService.swift (reads followed pubkeys from the SparrowServer reader-state mirror, subscribes to kind-20078 presence + kind-30078 saved events against the default relay pool) surface a live "✦ N friends here" menu item with aliases. The digest cron scaffold lands in workers/sparrow-digest/ — wrangler.toml (weekly Mon 08:00 UTC, MailChannels transport), src/index.ts (listAllSubscriptions + frequency gate + placeholder email + /dry-run), README documenting deploy + DNS lockdown + what ships in v0.34. DELETE /api/sparrow/digest-subscribe adds two unsubscribe modes: x-unsub-intent: local-clear (web-initiated, no token) and x-unsub-token (email-footer, 501 until v0.34).',
+      kbd: "macOS · workers/ · DELETE"
+    },
+    {
+      kicker: "unsubscribe · HMAC tokens",
+      title: "Signed unsubscribe URLs that can't be guessed",
+      body: "v0.34 turns the placeholder unsubscribe path into a real signed URL. workers/sparrow-digest/src/signing.ts is a Web Crypto HMAC-SHA256 codec — token shape is <email>.<expires_at>.<hex-hmac>, 30-day TTL, constant-time compare; buildUnsubUrl helper composes the email-footer link. DELETE /api/sparrow/digest-subscribe now verifies against SPARROW_DIGEST_SIGNING_KEY (400 on malformed/bad-hmac, 410 on expired, 200 on verify + KV delete). Token arrives via either x-unsub-token header OR ?unsub_token query param so email-footer clicks work from any browser. The signing key must be bound to both the Pages Function AND the cron worker with the same value; rotating invalidates outstanding tokens, which is the right tradeoff for a 30-day TTL.",
+      kbd: "workers/sparrow-digest/src/signing.ts"
+    },
+    {
+      kicker: "cron · nostr · retry",
+      title: "Live friends-saved summary in the digest email",
+      body: `v0.35 makes the cron worker actually do work. workers/sparrow-digest/src/nostr.ts is a TypeScript port of NostrRelayClient.swift (Web WebSocket + JSON frames, no deps); collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers with a 6s relay timeout and 500-event safety cap. workers/sparrow-digest/src/send.ts extracts MailChannels transport with retry-with-jitter — 3 attempts max, 800ms / 1600ms / 3200ms exponential-jitter backoff, 5xx/429/408 retriable, 401/403/422 fail-fast without touching last_sent_at so ops sees them and the next cron tick retries. renderDigestEmail now fetches each subscriber's kind-3 contact list + their friends' kind-30078 public saved events and surfaces "N of M followed signers published public saved lists · K total saved-block references" in the email body (text + HTML mirrors). Subscribers without npub get the existing short prompt.`,
+      kbd: "workers/sparrow-digest/src/nostr.ts · send.ts"
+    },
+    {
+      kicker: "ops · dead-letter",
+      title: "Failures don't silently rot — they get a record",
+      body: "v0.36 hardens the cron path with a dead-letter bucket. workers/sparrow-digest/src/deadletter.ts carries a KV-backed failure counter (`fail:<email>`, 60-day TTL) + dead-letter record (`dl:<email>`, 1-year TTL). Threshold: 3 consecutive retriable failures OR any non-retriable failure (401/403/422) → dead-letter immediately. scheduled() skips dead-lettered subs every tick and clears the counter on success. Two new fetch routes, bearer-token gated via SPARROW_OPS_TOKEN: GET /ops/dead-letter lists every dead-letter record newest-first; POST /ops/release?email=<addr> clears both dl: and fail: entries (sub row untouched) so the next cron tick retries cleanly. Missing token → 503 ops-not-configured (intentional so a forgotten binding is obvious).",
+      kbd: "/ops/dead-letter · /ops/release"
+    },
+    {
+      kicker: "hud · lane · pulse · density",
+      title: "A wordmark that knows where you are",
+      body: `v0.37 ships items 1, 2, and 4 of the v0.36 HUD shortlist (docs/plans/2026-04-28-sparrow-hud.md). (1) The wordmark sub-line drops the hard-coded "pointcast reader · v0.x" label and now reads {lane} · v{SPARROW_VERSION} — lane comes from src/lib/sparrow-lane.ts which maps Astro.url.pathname to one of six lanes (reading, federation, session, artifact, capability, meta), each with its own tint via [data-sp-lane="…"] selectors. (2) A moss federation-pulse dot sits inside the wordmark, dim by default; it pulses for 800ms whenever the v0.30 ambient watcher's onEvent receives a friend's kind-20078 presence event (the watcher dispatches sparrow:fed-pulse, the dot listens — cheap to fire even on surfaces where no one's listening). (3) A density toggle button persists "comfortable" / "compact" under sparrow:density and writes <html data-density>; surfaces opt in via [data-density="compact"] selectors. Layout-level baseline tightens HUD chrome for free. SW_VERSION → sparrow-v0.37.0; SPARROW_VERSION exported from sparrow-lane so the sub-line and the lane lib never drift.`,
+      kbd: "src/lib/sparrow-lane.ts · SparrowLayout.astro"
+    },
+    {
+      kicker: "tv · federation channel",
+      title: "/sparrow/tv/friends — what your follows are reading, on a wall",
+      body: `v0.38 adds the federation channel to TV mode. /sparrow/tv/friends is the same ten-foot ambient chrome as /sparrow/tv (slide rotation, channel-tinted radial wash, surface-detect, here-strip, vmin-scaled type), but the slide pool is hydrated from friends' kind-30078 sparrow-public-saved-v1 events instead of the broadcast itself. Pipeline: server pre-renders 12 fallback slides + a 60-block lookup map (id → title/dek/channel/type/mood/timestamp); client opens a WS REQ across the relay pool with { kinds:[30078], authors:<friends>, '#d':['sparrow-public-saved-v1'] }, collects newest-per-author, flattens saved IDs into a time-sorted slide list with friend-attribution chips ("✦ saved by Alice"), and replaces the fallback in place. Federation strip below the slides shows avatars of follows currently feeding the rotation + signer count. Empty state when no friends configured: a calm CTA pointing at /sparrow/friends. Privacy default: avatars hidden until sparrow:tv-private-ok="1" — count-only mode shows "N signers" without revealing who.`,
+      kbd: "/sparrow/tv/friends"
+    }
+  ];
+  const roadmap = [
+    {
+      v: "v0.1",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Reader home",
+      items: [
+        "Tuning dial + broadcast reel + channel rosette + beacon strip",
+        "⌘K command palette (routes · channels · 60 recent blocks)",
+        "Atom feed at /sparrow/feed.xml",
+        "Manifest at /sparrow.json with design-system tokens",
+        "Blue-hour default theme + dawn toggle + persisted preference"
+      ]
+    },
+    {
+      v: "v0.2",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Pages, reader, list",
+      items: [
+        "Per-channel pages /sparrow/ch/<slug> for all 9 channels",
+        "Block reader /sparrow/b/<id> with view-transition morph from the reel",
+        "Reading list /sparrow/saved — localStorage, no server",
+        "Numeric channel jumps (1…9) + G+letter jumps retained",
+        "Mood filter chips derived from actual block moods",
+        "Now-tuned IntersectionObserver + S save-toggle",
+        "Prev/next paging on the reader (K newer · J older)"
+      ]
+    },
+    {
+      v: "v0.3",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Offline & PWA",
+      items: [
+        "Scoped service worker at /sparrow/sw.js — precaches home + about + saved + deck + all 9 channel pages + manifest + feed",
+        "Stale-while-revalidate for the shell, cache-first for block readers (48-entry cap) and Astro / Google Fonts assets",
+        "Offline fallback page with Sparrow chrome for first-visit cold navigation",
+        "PWA install via /sparrow/manifest.webmanifest — standalone window, FD/Saved/About shortcuts",
+        "Offline pill in the HUD (pulses when navigator.onLine flips)",
+        "Install button appears when the browser fires beforeinstallprompt",
+        'Last-visited indicator on receipts — subtle desaturation + "read" chip'
+      ]
+    },
+    {
+      v: "v0.4",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Technical memorandum",
+      items: [
+        "/sparrow/deck — self-contained overview rendered as a 1980s Bell Labs / Xerox PARC technical memorandum",
+        "Cream paper + halftone texture, oxblood rubber-stamp, CRT phosphor terminal blocks",
+        "EB Garamond + Courier Prime + Space Mono typography, numbered sections, figure plates",
+        "ASCII system-architecture diagram; CSS-rendered dial + receipts figures",
+        "Full keyboard + data-model + implementation-notes + roadmap tables",
+        "Appendix B: DALL·E / Midjourney prompts for replacing the CSS figure plates with generated hero art",
+        "@media print rules — lands cleanly on A4/US-Letter"
+      ]
+    },
+    {
+      v: "v0.5",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Reader finesse",
+      items: [
+        "Reading-progress bar on /sparrow/b/<id> driven by CSS view-timeline",
+        "Keyboard cheatsheet overlay on ? — grouped into Discovery / Reading / Display / Reader extras",
+        "Copy-as-quote — selecting text inside the article body surfaces an ember ✎ chip; click copies a formatted quote with attribution",
+        "Hover + focus prefetch on every receipt; requestIdleCallback prefetch of prev + next on the reader",
+        "Drop caps on the first paragraph of every block; text-wrap: pretty + hanging-punctuation on body copy",
+        "Jump to top / bottom with 0 / $ (smooth scroll, works everywhere)"
+      ]
+    },
+    {
+      v: "v0.6",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Native companion",
+      items: [
+        "Sparrow.app shipped at github.com/mhoydich/sparrow-app — Swift 5.9, AppKit + URLSession + UserNotifications, no external deps",
+        'Menu-bar ✦ glyph; grows an ember "new count" badge when fresh blocks arrive',
+        "Polls /sparrow/api/latest.json on a configurable interval (30 s – 1 h, default 5 min)",
+        "Notification Center alerts (one per block up to 3; digest beyond)",
+        "Preferences panel — feed URL, poll interval, notifications toggle",
+        "LSUIElement: no Dock icon, no Cmd-Tab presence",
+        "Landing page at /sparrow/connect with build + run instructions",
+        "New data source at /sparrow/api/latest.json — snake_case, summary-only, 24-block window, 2-min CDN cache"
+      ]
+    },
+    {
+      v: "v0.7",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Named reactions",
+      items: [
+        "Three-chip reaction toolbar on every block reader — 🔥 lit, 🌿 evergreen, 💜 rare",
+        "Picks hydrate from localStorage:sparrow:reactions on load; active chips pulse their accent ring",
+        "Toggles are local to the browser for v0.7 — no server, no Nostr wire yet",
+        "Shape documented in sparrow.json (ui_primitives.reactions) so alternate clients mirror the same keys"
+      ]
+    },
+    {
+      v: "v0.8",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Reaction fan-out · NIP-07",
+      items: [
+        'Detect window.nostr — surface a "connect signer" pill in the reactions toolbar when a NIP-07 extension is present',
+        "On reaction ADD, sign a kind-7 event r-tagged to https://pointcast.xyz/b/<id> via window.nostr.signEvent",
+        "Fire-and-forget relay fan-out to the configured pool (default: damus, primal, nos.lol)",
+        "Emitted log (sparrow:nostr-emitted) prevents duplicate re-broadcasts on reload",
+        "Four signer states: local · available · connected · emitting — reflected in the pill colour + copy",
+        "Pubkey cached locally (sparrow:nostr-pubkey); Sparrow never holds secret material"
+      ]
+    },
+    {
+      v: "v0.9",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Reaction aggregation + unreact",
+      items: [
+        "Per-reader REQ subscription to the relay pool with filter {kinds:[7], #r:[canonical-block-url]}",
+        "Count badges paint on each chip as events arrive or from the last 200 stored per relay",
+        "Client-side dedupe by event id; kind resolved from content glyph or sparrow-<kind> tag",
+        "Reading works without a signer — aggregation is pure subscription",
+        "Kind-5 delete events fire on unreact when the local emitted log has the original event id",
+        "Optimistic local state on both react + unreact; failed relay hops are best-effort",
+        "beforeunload closes every open WebSocket — no leaks across navigation"
+      ]
+    },
+    {
+      v: "v0.10",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Cross-reel count badges",
+      items: [
+        "One REQ per relay with every visible block URL in #r (bulk fan-in, not N-per-page)",
+        `Compact "🔥 3 · 🌿 1" row paints into each receipt's .sp-r-foot as events arrive`,
+        "Block ID recovered from each event's r-tag via /b/<id> regex",
+        "Shared dedupe state (reactionCounts Map) — reader + reel stay consistent",
+        "No new storage keys; no new signer requirement; reading still public"
+      ]
+    },
+    {
+      v: "v0.11",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Inline reply composer",
+      items: [
+        "Collapsible <details> panel below the reactions toolbar on every /sparrow/b/<id>",
+        "Subject + body fields; channel inherits from the parent block; type pinned to NOTE",
+        "POSTs pc-ping-v1 to https://pointcast.xyz/api/ping with sourceUrl + expand=true",
+        "States: pending → ok (collapses after 2.2 s) / error (inline message)",
+        "3800-char counter flips oxblood when the body is over the /api/ping cap",
+        "No native / Magpie dependency — works everywhere the page loads"
+      ]
+    },
+    {
+      v: "v0.12",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Magpie bridge awareness",
+      items: [
+        "Composer probes 127.0.0.1:38473/health on load (1.2 s abort — non-blocking)",
+        "On connect, fetches /config.json and paints a readiness chip for every destination (PC + 10 others)",
+        "Three pill states: probing · connected (moss) · offline",
+        "Deep link to /magpie for multi-destination composition in the hosted UI",
+        "Submit path unchanged for v0.12 — still pc-ping-v1 direct; Magpie broadcast routing is v0.13"
+      ]
+    },
+    {
+      v: "v0.13",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Magpie-routed multi-destination reply (web side)",
+      items: [
+        "Destination chips become checkboxes; PointCast is locked on",
+        'Any non-PC checkbox + "connected" Magpie pill triggers POST http://127.0.0.1:38473/compose with { body, title, destinations[], channel, hints }',
+        "Graceful fallback: any /compose error (404 on older Magpie, network, or all-destinations-failed) routes the reply to direct /api/ping instead",
+        'Result span painted clearly: "magpie → <publisher list>" or "direct (magpie fallback: <reason>)"',
+        "Endpoint contract spec'd in sparrow.json.magpie_bridge.endpoint_contract for the native Swift side to implement"
+      ]
+    },
+    {
+      v: "v0.14",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Native /compose handler (Magpie side)",
+      items: [
+        "Magpie/Services/MagpieServer.swift: ComposeRequest struct + /compose route + handleCompose",
+        "Magpie/App/AppState.swift: composeHandler wired + handleComposeRequest — ephemeral ClipItem (id:nil, no DB write) + PublishDraft + PublisherRegistry.publish",
+        "Returns the same BroadcastResult envelope shape as /broadcast — Sparrow's v0.13 parser works unchanged",
+        "Preserves input destination order so clients can correlate results 1:1",
+        `Unknown / typo'd publisher ids surface as explicit "unknown publisher id" errors instead of silent drops`,
+        "No changes required to the Sparrow web client — it just starts hitting the real endpoint once Magpie is upgraded"
+      ]
+    },
+    {
+      v: "v0.15",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Reading-list mirror (via Magpie peer-node)",
+      items: [
+        'MagpieServer: GET /reader-state.json returns the stored { saved, ... } blob + schema tag "sparrow-reader-state-v1"',
+        "MagpieServer: POST /reader-state merges incoming with UserDefaults store using per-key updated_at (newest wins)",
+        "SparrowLayout debounces 600 ms then POSTs sparrow:saved as { saved: { value, updated_at } }",
+        "On load, if Magpie is probed alive, Sparrow GETs /reader-state.json and pulls newer-than-local saved with skipMirror flag (no loop)",
+        "sparrow:saved:updated_at is the local tie-breaker so offline toggles don't lose to stale remote state",
+        "Only fires when the peer-node has been seen alive this session — no dead-socket spam on solo browsers"
+      ]
+    },
+    {
+      v: "v0.16",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Visited + reactions on the same rails",
+      items: [
+        "writeVisited and writeReactions accept opts.skipMirror and trigger the same 600ms-debounced scheduleReaderMirror()",
+        "mirrorPush() sends all three keys in one POST: saved / visited / reactions each with its own { value, updated_at }",
+        "mirrorPull() iterates MIRROR_KEYS, applies newest-wins, and re-runs applyVisited + hydrateReactions so the DOM catches up with remote state",
+        "Three new localStorage tie-breaker keys: sparrow:visited:updated_at, sparrow:reactions:updated_at (joining sparrow:saved:updated_at from v0.15)",
+        "Magpie server code unchanged — its per-key newest-wins merge already handles any shape"
+      ]
+    },
+    {
+      v: "v0.17",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "OPML import / export",
+      items: [
+        'Toolbar above the receipts list on /sparrow/saved: "export saved ↓" + "import ↑" (file input hidden behind a pill label)',
+        "Export groups outlines into Sparrow, Saved blocks, Channels — OPML 2.0, UTF-8, stable filename sparrow-saved-<YYYY-MM-DD>.opml",
+        "Import uses DOMParser to scrape any outline's htmlUrl or xmlUrl for /b/<id> matches and unions with sparrow:saved",
+        "Additive merge — non-block outlines (channels, unrelated feeds) are ignored silently; nothing is ever removed by import",
+        "Updates sparrow:saved:updated_at so the mirror picks the import up on the next debounce",
+        "Entirely client-side; no bytes leave the browser except the user-initiated file selection"
+      ]
+    },
+    {
+      v: "v0.18",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Bridge origin ladder",
+      items: [
+        "resolveMagpieOrigin() probes a ranked list: sparrow:magpie-origin override → magpie.local:38473 → 127.0.0.1:38473",
+        "First /health responder wins and caches on window.__sparrow.magpieOrigin for the life of the page",
+        "All three Magpie call-sites (reader-state mirror, bridge pill + /config.json, composer /compose) share the resolved origin",
+        "localStorage override unblocks LAN, VM, reverse-proxy, and non-default-port setups without code changes",
+        "Ready for Magpie v0.19 Bonjour: once Magpie advertises, .local just starts working — no Sparrow changes needed"
+      ]
+    },
+    {
+      v: "v0.19",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Magpie Bonjour advertiser (Swift side)",
+      items: [
+        `Magpie's NWListener attaches .service with type _magpie._tcp, name "Magpie", port 38473`,
+        "TXT record carries version + /health path + schema id + composer + mirror endpoint hints",
+        "macOS mDNS responder transparently resolves magpie.local to the host running it",
+        "Sparrow's v0.18 ladder picks it up on the second rung with no web-side changes",
+        "Listener stays loopback-bound — advertisement is metadata-only, not a public socket",
+        "dns-sd -B _magpie._tcp surfaces the active instance for debugging"
+      ]
+    },
+    {
+      v: "v0.20",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Sparrow.app peer-node (Bonjour + HTTP)",
+      items: [
+        "Sources/SparrowApp/SparrowServer.swift — loopback NWListener on port 38474 with hand-rolled HTTP/1.1 parser",
+        "Routes: GET /health, GET /reader-state.json, POST /reader-state — same sparrow-reader-state-v1 shape as Magpie",
+        "Newest-wins merge logic (mergeReaderState) is byte-identical to Magpie's, so state is portable between peers",
+        'NWListener.service advertises _sparrow._tcp "Sparrow" with TXT record (version, /health, schema, /reader-state, peer: sparrow-app)',
+        "Web resolver ladder expands to 5 rungs: user override → magpie.local → 127.0.0.1:38473 → sparrow.local:38474 → 127.0.0.1:38474",
+        'window.__sparrow.magpiePeerKind records "magpie" vs "sparrow-app" so the bridge pill labels the active peer accurately',
+        "Composer still Magpie-only (needs PublisherRegistry) — falls back to direct /api/ping when Sparrow.app is the resolved peer",
+        "Settings.peerServerEnabled toggle (default: on); Settings.peerServerPort override"
+      ]
+    },
+    {
+      v: "v0.21",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Cross-device sync (NIP-44 + kind 30078)",
+      items: [
+        'Opt-in "sync · on/off" pill in the HUD — three visual states: unavailable (no NIP-44 signer) / off / on',
+        "Encrypts the sparrow-reader-state-v1 blob via window.nostr.nip44.encrypt(selfPubkey, plaintext) — self-encryption, only the same npub can decrypt",
+        "Publishes kind-30078 addressable events (d-tag: sparrow-reader-state-v1) so one event replaces the previous — no garbage pile on the relays",
+        "On page load + signer connect: REQ limit:1 across each configured relay, takes newest created_at, merges newest-wins per top-level key via the same MIRROR_KEYS apply callbacks the LAN mirror uses",
+        "Stacked debounce: 600ms LAN mirror → 1.2s Nostr queue → 4s relay floor (sparrow:sync-last-emitted-at) so rapid toggles coalesce",
+        "Runs alongside the LAN peer-node mirror — both fire on the same scheduleReaderMirror() debounce, state stays coherent because both use newest-wins-by-updated_at",
+        "Relay pool reuses the one already configured for reactions (damus + primal + nos.lol by default; sparrow:nostr-relays override)"
+      ]
+    },
+    {
+      v: "v0.22",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Federated reading lists (/sparrow/friends)",
+      items: [
+        "New route /sparrow/friends with three panels: publisher toggle · following list · their reading",
+        "Publisher emits a separate kind-30078 event with d-tag sparrow-public-saved-v1 (unencrypted) — narrower scope than the private sync, just saved ids + client profile",
+        "Two distinct consents: cross-device sync (v0.21, NIP-44) and public list (v0.22, unencrypted) — either can be on without the other",
+        "sparrow:friends localStorage holds {pubkey: hex, alias?}[]. Add/remove with a tiny form; alias is local-only, never broadcast",
+        'On load: REQs each configured relay for {kinds:[30078], authors:[friends], "#d":["sparrow-public-saved-v1"]} and renders the newest per author',
+        "Server ships a block lookup so saved ids resolve to title + channel chip; unknown blocks (from older Sparrow builds) degrade to a stub receipt",
+        "Hex-only for v0.22; npub1… bech32 decode is the tiny polish that lands next"
+      ]
+    },
+    {
+      v: "v0.23",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Federation polish — npub1 + profiles",
+      items: [
+        "Self-contained NIP-19 bech32 codec in /sparrow/friends (no dependency) — npubToHex / hexToNpub / parsePubkey",
+        "Add-form accepts npub1… alongside 64-hex; bad checksum triggers an inline setCustomValidity nudge",
+        "HUD self-pubkey display renders as short-npub instead of raw hex for cross-client legibility",
+        "NIP-01 kind-0 profile lookup on /sparrow/friends load — REQ {kinds:[0], authors:<friends>} against the relay pool",
+        "sparrow:profiles localStorage cache with 24h TTL; stores {name, display_name, picture, nip05, fetched_at}",
+        "display_name / name used as auto-alias when the local alias is empty; 🛰 glyph marks federation-sourced names",
+        "Picture rendering + NIP-05 verification round-trip deferred to v0.24"
+      ]
+    },
+    {
+      v: "v0.24",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Faces, checkmarks, and an F jump",
+      items: [
+        "Profile pictures on /sparrow/friends — 28px circles with lazy + no-referrer + onerror-hide; 18px inline on feed cards; ✦ placeholder when no kind-0 picture",
+        "NIP-05 verification via /.well-known/nostr.json?name=<user>; checks names[user] matches the pubkey (case-insensitive)",
+        `Verification cache: nip05_verified + nip05_verified_at on the profile, 7-day TTL; any failure (non-2xx, parse, CORS, mismatch) lands as "mismatch" so silent failure can't masquerade as verified`,
+        "✓ (moss pill) on verified nip05; ! (oxblood pill) on mismatch; dot while pending",
+        "F keyboard shortcut → /sparrow/friends from anywhere in Sparrow; cheatsheet + palette entries added",
+        "Reel-lane integration explicitly deferred to v0.25 to keep the sprint coherent"
+      ]
+    },
+    {
+      v: "v0.25",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Friends lane on the dashboard",
+      items: [
+        "Compact section between rosette and reel on /sparrow — one row per friend with their freshest save",
+        'Row layout: avatar · name · "saved" · № id · title · channel chip · "+N more"',
+        "Up to 6 rows, sorted by event created_at desc so freshest-updating friend leads",
+        "Server inlines a block lookup (id → title + channel + channelName) for every non-draft block so titles resolve without fetches",
+        "Shares the kind-30078 consumer flow with /sparrow/friends and reuses the sparrow:profiles cache for names + avatars",
+        'Dismiss × button sets sparrow:friends-lane-hidden="1" — re-enable from /sparrow/friends',
+        "Hidden entirely when no friends are followed; empty-state links to /sparrow/friends when following someone who hasn't published",
+        "Mobile: simplifies grid to avatar · name · title to keep the dashboard breathable"
+      ]
+    },
+    {
+      v: "v0.26",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Friends in motion — live toasts, chime, mute",
+      items: [
+        "Streaming kind-30078 REQ in SparrowLayout with since=bootTime; only events published while the tab is open fire a toast",
+        "Bottom-right toast stack, max 3 concurrent, 7s TTL, slide-in/fade-out animation, click to open the block, × to dismiss",
+        "Opt-in Web Audio chime (two-note perfect fifth, ~450ms) on new toasts — gated on sparrow:friends-chime-enabled, off by default, no asset request",
+        "Per-friend mute via new optional `muted` field on sparrow:friends entries; muted friends drop out of every consumer path (subscribe, feed render, dashboard lane, motion watcher)",
+        'Mute button on each /sparrow/friends row (🔈/🔇); row fades to 45% opacity when muted; "muted" pill next to pubkey',
+        'Global motion opt-out via localStorage["sparrow:friends-motion-disabled"] for quiet sessions without unfollowing',
+        'Dedicated activity timeline deferred to v0.27 — live toasts + mute covered the "in motion" promise coherent on their own'
+      ]
+    },
+    {
+      v: "v0.27",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "/sparrow/friends/activity — timeline, live-stitched",
+      items: [
+        "New route: three-panel layout — kicker + stats · back-link nav · per-event card feed",
+        "Dual subscription: initial pull (limit: 50) closes on EOSE; live pull (since: bootTime) stays open until beforeunload",
+        'Per-event card: avatar · name · "saved N blocks" · relative time · 3 preview receipts (title + channel chip) · "+N more"',
+        'Newest events pulse green (moss border + shadow animation + "new" pill) for 12s, then demote to normal styling',
+        "Full mute respect — authors filtered pre-subscribe AND re-checked on ingest so a fresh mute drops events immediately",
+        "Server-shipped block lookup resolves every saved id to title + channel without per-block round-trips",
+        "Reuses sparrow:profiles cache for avatars + display names — federation UI stays one-pass across /sparrow, /sparrow/friends, and the activity timeline",
+        "CTA added from /sparrow/friends feed head; palette entry + SW precache included"
+      ]
+    },
+    {
+      v: "v0.28",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "/sparrow/signals — three readings of the circle",
+      items: [
+        "New route — header kicker · back/forward nav to /sparrow/friends and /sparrow/friends/activity · three stacked aggregation panels",
+        'Panel 1 — most co-saved: blocks hit by 2+ followed signers, count-sorted desc, top 12, shows up to 4 saver names + "+N" overflow',
+        'Panel 2 — recent adds: friends who published a fresh saved list in the last 7 days, newest first, avatar + "published N · Xh ago" + freshest receipt',
+        "Panel 3 — channel distribution: proportional bar across all 9 channels summed from distinct saves; rows link to /sparrow/ch/<slug>",
+        "Uses a single kind-30078 REQ + the existing sparrow:profiles cache + server-shipped block lookup — no new round-trips",
+        "Respects mute — authors filtered pre-subscribe AND mid-paint, so a fresh mute drops events immediately",
+        "Defers opt-in email digest + per-channel top-N on /sparrow/ch/<slug> to v0.29"
+      ]
+    },
+    {
+      v: "v0.29",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Signals, extended — first-picker, export, channel panel",
+      items: [
+        "First-picker ⭐ chip on every /sparrow/signals Panel 1 row — earliest created_at among current savers wins attribution",
+        "⤓ export JSON button in the signals nav dumps the current recap as sparrow-signals-<YYYY-MM-DD>.json (schema sparrow-signals-v1)",
+        "Export bundle carries friends, relays, newest events per author, top co-saved list with full saver lists + first-picker timestamps, and notes documenting the caveat that kind-30078 is replaceable",
+        "New client-side friends panel on every /sparrow/ch/<slug> above the main reel — filters friends' saves to this channel's block set, count-sorted, top 6",
+        'Each channel panel row: ×N badge + block № + title + first-picker ⭐ chip; opt-out via localStorage["sparrow:ch-friends-hidden"]',
+        "Hides automatically when no friends are followed, all are muted, or no saves intersect this channel",
+        "Opt-in email digest deferred to v0.30 — the only remaining v0.28-era scope item, needs dedicated worker infra"
+      ]
+    },
+    {
+      v: "v0.30",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Ambient friends + digest scaffold",
+      items: [
+        "Ambient presence: opt-in kind-20078 (ephemeral, NIP-16) tagged t:sparrow-presence emitted every 60s while tab is foregrounded",
+        `Streaming subscriber tracks friends' presence and paints a fixed bottom-left "✦ here now" strip, avatars of friends seen within 90s`,
+        "Relays never persist presence events — liveness drops the moment you close the tab",
+        "Opt-in toggle added to /sparrow/friends publisher panel (sparrow:ambient-enabled)",
+        "Digest sidecar scaffold: subscribe form on /sparrow/signals writes sparrow-digest-subscription-v1 intent to localStorage",
+        'Intent also POSTed to /api/sparrow/digest-subscribe — 501 "worker not live" is the current placeholder, client-side message makes that clear',
+        "Full schema documented at sparrow.json.nostr.federated_lists.digest_sidecar so a Cloudflare Worker can pick up the contract when infra ships",
+        "Worker-side promise: stores only email + npub + relay pool + frequency; never secret material; signals bundle recomputed at send time"
+      ]
+    },
+    {
+      v: "v0.31",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Participation onramps for the federation layer",
+      items: [
+        '"Join the federation" checklist on /sparrow/friends — 4 live-updating steps (signer · public list · follow · ambient) with ✓/○ ticks that repaint across tabs via storage events',
+        "Invite card with copy-to-clipboard shareable link: /sparrow/friends?follow=<npub1…> — shown once signer is connected",
+        "Follow-by-URL deep link: ?follow=<npub|hex> pre-fills add-form, scrolls into view, pulses the submit button for 2 cycles (user still clicks to confirm)",
+        "Starter seed list — scaffolded suggested pubkeys with one-click follow; hides when every starter is already followed",
+        'OPML friends round-trip: export bundles sparrow:friends[] as <outline type="nostr" xmlUrl="nostr:npub1…" x-sparrow-pubkey="<hex>"> elements with alias + mute state',
+        "Import accepts either x-sparrow-pubkey attribute or nostr:npub1… xmlUrl; unions with existing; preserves mute state",
+        "parsePubkey shared by add-form + deep-link — accepts npub1… AND hex-64, normalizes to lowercase hex",
+        "Sparrow.app ambient pickup + digest worker stub both deferred to v0.32 (native work + worker infra deserve their own sprints)"
+      ]
+    },
+    {
+      v: "v0.32",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Digest worker · federation.json · friends in the mirror",
+      items: [
+        "POST /api/sparrow/digest-subscribe — Cloudflare Pages Function validates sparrow-digest-subscription-v1 and returns 202; stores in SPARROW_DIGEST_KV when bound, still acks without so the v0.30 client stops retrying",
+        "GET + HEAD + OPTIONS handlers documented; 400 on malformed body (bad JSON, unknown schema, invalid email, bad frequency); 413 past 8 KB",
+        "GET /sparrow/federation.json — editorial sparrow-federation-v1 payload with starters: [{hex, alias, note?}] — curator-maintained in src/pages/sparrow/federation.json.ts",
+        "friends.astro fetches /sparrow/federation.json on boot, sanitizes entries (requires valid 64-hex), falls back to a 2-item internal seed on failure",
+        "Reader-state mirror extends MIRROR_KEYS: friends (Array<{pubkey, alias?, muted?}>) + profiles ({[hex]: {name?, display_name?, picture?, nip05?, ...}}) each with own :updated_at",
+        "window.__sparrow.scheduleReaderMirror exposed by SparrowLayout so route-local pages can trigger push after mutating mirror-tracked keys",
+        "writeFriends + writeProfiles in friends.astro bump their ts-keys AND call the exposed scheduler so every change propagates",
+        "Sparrow.app ambient pickup deferred to v0.33 — native Swift Nostr client + tray UI work deserves its own sprint"
+      ]
+    },
+    {
+      v: "v0.33",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Native ambient pickup · digest cron scaffold · unsubscribe",
+      items: [
+        "Sparrow.app: NostrRelayClient.swift — URLSessionWebSocketTask-based Nostr client; REQ/EVENT/EOSE + CLOSE; zero dependencies; ~170 LOC",
+        "Sparrow.app: FriendsService.swift — reads followed pubkeys from SparrowServer's sparrow.readerState UserDefaults (mirrored by v0.32), subscribes to kind-20078 presence + kind-30078 saved events, tracks 90s freshness window with 20s decay",
+        'MenuBarController.setFriendsPresence(count, aliases) adds a "✦ N here · alias1, alias2, +K" menu item above the separator — hidden when zero',
+        "workers/sparrow-digest/ scaffold: wrangler.toml (weekly Mon 08 UTC cron, SPARROW_DIGEST_KV binding, MailChannels transport)",
+        "workers/sparrow-digest/src/index.ts: listAllSubscriptions + isDue frequency gate (weekly/biweekly/monthly) + renderDigestEmail placeholder + MailChannels POST + /dry-run fetch route for testing",
+        "DELETE /api/sparrow/digest-subscribe · two modes: x-unsub-intent: local-clear (web-initiated, 200 ok) and x-unsub-token (email-footer, 501 until v0.34 signing key lands)",
+        "CORS on the Pages Function now allows DELETE + x-unsub-intent + x-unsub-token headers"
+      ]
+    },
+    {
+      v: "v0.34",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "HMAC unsubscribe tokens",
+      items: [
+        "workers/sparrow-digest/src/signing.ts · Web Crypto HMAC-SHA256 · signUnsubToken / verifyUnsubToken / buildUnsubUrl",
+        "Token shape: <urlencoded-email>.<unix-seconds-expiry>.<lowercase-hex-hmac> · 30-day TTL",
+        "Constant-time HMAC compare so a timing oracle can't leak the correct prefix",
+        "DELETE /api/sparrow/digest-subscribe now verifies: 400 on malformed/bad-hmac/missing-secret, 410 on expired, 200 on verify + KV delete",
+        "Token accepted via x-unsub-token header OR ?unsub_token query param — email-footer links work from any browser without custom headers",
+        "Worker renderDigestEmail is now async and wires buildUnsubUrl into the footer — text + HTML both",
+        "SPARROW_DIGEST_SIGNING_KEY env binding required on BOTH the cron worker AND the Pages Function; rotating invalidates outstanding tokens",
+        "Verify helper inlined in the Pages Function (Pages and Workers are separate deploy targets) — byte-identical to the canonical copy in signing.ts",
+        "Cron dispatch + signals aggregation + Nostr client port + native NIP-01 profile lookup still pending — v0.35"
+      ]
+    },
+    {
+      v: "v0.35",
+      status: "shipped",
+      when: "2026-04-21",
+      title: "Nostr TS port · MailChannels retry · friends-saved email summary",
+      items: [
+        "workers/sparrow-digest/src/nostr.ts · TypeScript port of NostrRelayClient.swift · Web WebSocket + JSON frames · collectFromRelay + collectAcrossRelays + newestPerAuthorByDTag helpers",
+        "Per-relay timeout 6s, 500-event safety cap, defensive re-filter by author (relays may echo spam), dedup by event.id across relays",
+        "workers/sparrow-digest/src/send.ts · MailChannels extracted with retry-with-jitter · 3 attempts max · exponential ceilings 800ms / 1600ms / 3200ms with full jitter · 5xx/429/408 retriable · 401/403/422 fail-fast",
+        "Retriable failures leave last_sent_at untouched so the next cron tick cleanly retries · permanent failures surface in the run log but also don't touch last_sent_at (ops sees them + can redeploy)",
+        'renderDigestEmail v0.35 · subscribers with npub + relays get a live fetched "N of M followed signers published public saved lists · K total saved-block references" summary in both text and HTML',
+        'Subscribers without npub still get the short "open signals" prompt — no regression for early signups',
+        "Cron email signed-unsubscribe URL (v0.34) stitches cleanly with the new content",
+        "Full signals aggregation mirror (co-saves + channel distribution) + block-lookup KV prefetch + dead-letter bucket queued for v0.36"
+      ]
+    },
+    {
+      v: "v0.36",
+      status: "shipped",
+      when: "2026-04-22",
+      title: "Dead-letter bucket + ops endpoints",
+      items: [
+        "workers/sparrow-digest/src/deadletter.ts · KV-backed failure counter (fail:<email>) + dead-letter record (dl:<email>)",
+        "3 consecutive retriable failures → dead-letter. Any non-retriable failure (401/403/422) → immediate dead-letter",
+        "scheduled() skips dead-lettered subs every tick; released subs resume cleanly on the next tick (last_sent_at untouched through failure paths)",
+        "Successful send clears the failure counter — patience resets on recovery",
+        "/ops/dead-letter GET · bearer-token gated (SPARROW_OPS_TOKEN) · returns every dl:<email> record sorted newest-first",
+        "/ops/release POST ?email=<addr> · same auth · clears the dl:<email> + fail:<email> entries, sub row untouched",
+        `Ops routes return 503 "ops-not-configured" when the secret isn't set — intentional so a forgotten binding is obvious`,
+        "Aggregation module + block-lookup prefetch (rolled back during branch churn) re-land in v0.39"
+      ]
+    },
+    {
+      v: "v0.37",
+      status: "shipped",
+      when: "2026-04-28",
+      title: "HUD layout pass · lane · federation pulse · density",
+      items: [
+        "src/lib/sparrow-lane.ts — laneFor(pathname) maps Astro.url.pathname to one of six lanes (reading / federation / session / artifact / capability / meta) plus a short label",
+        'SPARROW_VERSION = "0.37" exported from sparrow-lane so the HUD sub-line and the lane lib can never drift',
+        'SparrowLayout sub-line drops the hard-coded "pointcast reader · v0.x" string; renders {label} · v{SPARROW_VERSION} with [data-sp-lane="…"] tint per lane',
+        "Federation pulse dot in the wordmark (.sp-fed-dot) — 800ms moss bloom on every kind-20078 friend-presence event; v0.30 ambient watcher dispatches sparrow:fed-pulse, the dot listens",
+        "Density toggle next to theme toggle — comfortable (default) ↔ compact; persists under sparrow:density; writes <html data-density>; layout-level baseline tightens HUD chrome in compact mode for free",
+        "SW_VERSION → sparrow-v0.37.0"
+      ]
+    },
+    {
+      v: "v0.38",
+      status: "shipped",
+      when: "2026-04-28",
+      title: "TV mode · Phase 2 — federation channel",
+      items: [
+        "/sparrow/tv/friends — federation-channel TV; same ten-foot ambient chrome as /sparrow/tv (slide rotation + channel-tinted wash + surface-detect + here-strip + vmin-scaled type)",
+        "Slide pool hydrated from friends' kind-30078 sparrow-public-saved-v1 events: WS REQ across the relay pool with { kinds:[30078], authors:<friends>, '#d':['sparrow-public-saved-v1'] }, newest-per-author, flatten saved IDs",
+        "Server pre-renders 12 fallback slides + a 60-block lookup map so the surface never looks broken before the WS catches up",
+        'Friend-attribution chip on each slide — moss outline + avatar + "saved by Alice" — hydrated from sparrow:profiles cache (display_name → name → 8-char hex)',
+        "Federation strip (.sptv-fed-strip) replaces the rosette: avatars of follows currently feeding the rotation + total signer count",
+        'Empty state when no friends configured: a calm CTA pointing at /sparrow/friends; "all channels" fallback link to /sparrow/tv',
+        'Privacy default: avatars hidden until sparrow:tv-private-ok="1"; count-only mode shows "N signers" without revealing who',
+        "/sparrow/tv + /sparrow/tv/friends added to SHELL_URLS for offline-first ambient broadcast"
+      ]
+    },
+    {
+      v: "v0.39",
+      status: "next",
+      when: "planned",
+      title: "TV Phase 2 finish + worker aggregation re-add",
+      items: [
+        "/sparrow/tv/saved — personal-channel TV; opt-in only via sparrow:tv-saved-ok (kitchen TVs don't leak personal lists by default)",
+        "/sparrow/tv/remote — phone-as-remote handshake (QR pair → state-only WebSocket back to the TV; controls limited to step / lock channel / unlock / wake)",
+        "Re-land workers/sparrow-digest/src/aggregate.ts (pure-function port of /sparrow/signals Panels 1 + 3) with HTML table rendering",
+        "Block-lookup prefetch from /blocks.json at cron start · cf.cacheTtl:300 · one fetch per tick, shared across subscribers",
+        "Native Sparrow.app gains NIP-01 kind-0 profile lookup so aliases auto-populate without going through the web"
+      ]
+    },
+    {
+      v: "v1.0",
+      status: "north star",
+      title: "The reader the broadcast deserves",
+      items: [
+        "Full offline archive (300+ blocks) in Service Worker + IndexedDB",
+        "Cross-client read state via Nostr kind 30023 addressable events",
+        "Agent-mode view served from /sparrow/llms.txt for machine readers",
+        "Federated reading lists — subscribe to a friend's list as a feed"
+      ]
+    }
+  ];
+  const stats = {
+    channels: CHANNEL_LIST.length,
+    kbShortcuts: 17,
+    // + F friends jump (v0.24)
+    routes: 10};
+  return renderTemplate`${renderComponent($$result, "SparrowLayout", $$SparrowLayout, { "title": "About — what Sparrow is", "description": "Overview of Sparrow — features shipped in v0.2 and the path from here to v1.0.", "canonicalPath": "/sparrow/about", "homeHref": "/sparrow", "data-astro-cid-mtvmvpx2": true }, { "default": ($$result2) => renderTemplate` ${maybeRenderHead()}<section class="sp-about-hero" data-astro-cid-mtvmvpx2> <span class="sp-kicker" data-astro-cid-mtvmvpx2>✦ about · sparrow</span> <h1 class="sp-about-title" data-astro-cid-mtvmvpx2>
+A reader for the<br data-astro-cid-mtvmvpx2> <em data-astro-cid-mtvmvpx2>living broadcast.</em> </h1> <p class="sp-about-dek" data-astro-cid-mtvmvpx2>
+Sparrow is a hosted, keyboard-first client for
+<a class="sp-link" href="/" data-astro-cid-mtvmvpx2>PointCast</a> — El Segundo's ongoing broadcast
+      of blocks across ${stats.channels} channels. It pairs with
+<a class="sp-link" href="/magpie" data-astro-cid-mtvmvpx2>Magpie</a>, the local-first publisher
+      Mike uses to push clips into the PointCast graph and its syndication
+      pool (Mastodon · Farcaster · bitchat · Zora · Objkt · more).
+</p> <ul class="sp-stats" data-astro-cid-mtvmvpx2> <li data-astro-cid-mtvmvpx2><strong data-astro-cid-mtvmvpx2>${stats.channels}</strong><span data-astro-cid-mtvmvpx2>channels</span></li> <li data-astro-cid-mtvmvpx2><strong data-astro-cid-mtvmvpx2>${stats.kbShortcuts}</strong><span data-astro-cid-mtvmvpx2>keyboard<br data-astro-cid-mtvmvpx2>shortcuts</span></li> <li data-astro-cid-mtvmvpx2><strong data-astro-cid-mtvmvpx2>${stats.routes}</strong><span data-astro-cid-mtvmvpx2>routes shipping</span></li> <li data-astro-cid-mtvmvpx2><strong data-astro-cid-mtvmvpx2>OKLCH</strong><span data-astro-cid-mtvmvpx2>color space</span></li> <li data-astro-cid-mtvmvpx2><strong data-astro-cid-mtvmvpx2>0 kB</strong><span data-astro-cid-mtvmvpx2>framework<br data-astro-cid-mtvmvpx2>runtime</span></li> </ul> <button type="button" class="sp-install-cta" data-sp-install-cta hidden data-astro-cid-mtvmvpx2> <span class="sp-install-cta-icon" data-astro-cid-mtvmvpx2>↓</span> <span class="sp-install-cta-label" data-astro-cid-mtvmvpx2>Install Sparrow as an app</span> <span class="sp-install-cta-hint" data-astro-cid-mtvmvpx2>runs offline · appears when your browser offers it</span> </button> <a class="sp-memo-cta" href="/sparrow/deck" data-astro-cid-mtvmvpx2> <span class="sp-memo-cta-stamp" data-astro-cid-mtvmvpx2>TM</span> <span class="sp-memo-cta-body" data-astro-cid-mtvmvpx2> <span class="sp-memo-cta-title" data-astro-cid-mtvmvpx2>Read the Technical Memorandum</span> <span class="sp-memo-cta-hint" data-astro-cid-mtvmvpx2>v0.4 · SPA-TM-26-0421 · a Bell Labs / Xerox PARC-style overview of Sparrow</span> </span> <span class="sp-memo-cta-arrow" data-astro-cid-mtvmvpx2>→</span> </a> <a class="sp-native-cta" href="/sparrow/connect" data-astro-cid-mtvmvpx2> <span class="sp-native-cta-glyph" aria-hidden="true" data-astro-cid-mtvmvpx2>✦</span> <span class="sp-native-cta-body" data-astro-cid-mtvmvpx2> <span class="sp-native-cta-title" data-astro-cid-mtvmvpx2>Get the native menu-bar companion</span> <span class="sp-native-cta-hint" data-astro-cid-mtvmvpx2>v0.6 · macOS 13+ · a small ✦ that pulses when new blocks land</span> </span> <span class="sp-native-cta-arrow" data-astro-cid-mtvmvpx2>→</span> </a> </section> <section class="sp-about-section" data-astro-cid-mtvmvpx2> <header class="sp-reel-head" data-astro-cid-mtvmvpx2> <span class="sp-kicker" data-astro-cid-mtvmvpx2>✦ v0.38 · what's in the build</span> </header> <ul class="sp-about-features" data-astro-cid-mtvmvpx2> ${features.map((f) => renderTemplate`<li class="sp-feature" data-astro-cid-mtvmvpx2> <span class="sp-feature-kbd" data-astro-cid-mtvmvpx2>${f.kbd}</span> <div class="sp-feature-text" data-astro-cid-mtvmvpx2> <span class="sp-kicker" style="color: var(--sp-mute);" data-astro-cid-mtvmvpx2>${f.kicker}</span> <h3 class="sp-feature-title" data-astro-cid-mtvmvpx2>${f.title}</h3> <p class="sp-feature-body" data-astro-cid-mtvmvpx2>${f.body}</p> </div> </li>`)} </ul> </section> <section class="sp-about-section" data-astro-cid-mtvmvpx2> <header class="sp-reel-head" data-astro-cid-mtvmvpx2> <span class="sp-kicker" data-astro-cid-mtvmvpx2>✦ roadmap · v0.1 → v1.0</span> </header> <ol class="sp-roadmap" data-astro-cid-mtvmvpx2> ${roadmap.map((r) => renderTemplate`<li${addAttribute(`sp-rm sp-rm--${r.status}`, "class")} data-astro-cid-mtvmvpx2> <header class="sp-rm-head" data-astro-cid-mtvmvpx2> <span class="sp-rm-v" data-astro-cid-mtvmvpx2>${r.v}</span> <span${addAttribute(`sp-rm-status sp-rm-status--${r.status}`, "class")} data-astro-cid-mtvmvpx2>${r.status}</span> ${r.when && renderTemplate`<span class="sp-rm-when" data-astro-cid-mtvmvpx2>${r.when}</span>`} </header> <h3 class="sp-rm-title" data-astro-cid-mtvmvpx2>${r.title}</h3> <ul class="sp-rm-items" data-astro-cid-mtvmvpx2> ${r.items.map((it) => renderTemplate`<li data-astro-cid-mtvmvpx2>${it}</li>`)} </ul> </li>`)} </ol> </section> <section class="sp-about-section" data-astro-cid-mtvmvpx2> <header class="sp-reel-head" data-astro-cid-mtvmvpx2> <span class="sp-kicker" data-astro-cid-mtvmvpx2>✦ design system · quick reference</span> </header> <div class="sp-design-grid" data-astro-cid-mtvmvpx2> <article class="sp-design-card" data-astro-cid-mtvmvpx2> <h3 data-astro-cid-mtvmvpx2>palette</h3> <p class="sp-aside-mono" data-astro-cid-mtvmvpx2>OKLCH, theme-aware via <code data-astro-cid-mtvmvpx2>color-mix()</code></p> <div class="sp-swatches" data-astro-cid-mtvmvpx2> <span style="--s: var(--sp-ink);" data-astro-cid-mtvmvpx2>ink</span> <span style="--s: var(--sp-blue-hour);" data-astro-cid-mtvmvpx2>blue-hour</span> <span style="--s: var(--sp-bone);" data-astro-cid-mtvmvpx2>bone</span> <span style="--s: var(--sp-ember);" data-astro-cid-mtvmvpx2>ember</span> <span style="--s: var(--sp-moss);" data-astro-cid-mtvmvpx2>moss</span> <span style="--s: var(--sp-oxblood);" data-astro-cid-mtvmvpx2>oxblood</span> <span style="--s: var(--sp-lilac);" data-astro-cid-mtvmvpx2>lilac</span> </div> </article> <article class="sp-design-card" data-astro-cid-mtvmvpx2> <h3 data-astro-cid-mtvmvpx2>channels</h3> <p class="sp-aside-mono" data-astro-cid-mtvmvpx2>one OKLCH token per channel, computed from pointcast brand hexes</p> <div class="sp-swatches" data-astro-cid-mtvmvpx2> ${CHANNEL_LIST.map((c) => renderTemplate`<span${addAttribute(`--s: var(--ch-${c.code.toLowerCase()});`, "style")} data-astro-cid-mtvmvpx2>${c.code}</span>`)} </div> </article> <article class="sp-design-card" data-astro-cid-mtvmvpx2> <h3 data-astro-cid-mtvmvpx2>typography</h3> <p class="sp-typespec" data-astro-cid-mtvmvpx2><span class="sp-typelabel" data-astro-cid-mtvmvpx2>display</span><strong style="font-family: var(--sp-display);" data-astro-cid-mtvmvpx2>Gloock</strong></p> <p class="sp-typespec" data-astro-cid-mtvmvpx2><span class="sp-typelabel" data-astro-cid-mtvmvpx2>ui</span><strong style="font-family: var(--sp-ui); letter-spacing: -0.01em;" data-astro-cid-mtvmvpx2>Inter Tight</strong></p> <p class="sp-typespec" data-astro-cid-mtvmvpx2><span class="sp-typelabel" data-astro-cid-mtvmvpx2>mono</span><strong style="font-family: var(--sp-mono);" data-astro-cid-mtvmvpx2>Departure Mono</strong></p> </article> <article class="sp-design-card" data-astro-cid-mtvmvpx2> <h3 data-astro-cid-mtvmvpx2>motion</h3> <p class="sp-aside-mono" data-astro-cid-mtvmvpx2>all animations respect <code data-astro-cid-mtvmvpx2>prefers-reduced-motion</code></p> <ul class="sp-motion-list" data-astro-cid-mtvmvpx2> <li data-astro-cid-mtvmvpx2>needle sweep (12s linear infinite)</li> <li data-astro-cid-mtvmvpx2>beacon radar sweep (6s)</li> <li data-astro-cid-mtvmvpx2>receiving pill pulse (2.4s)</li> <li data-astro-cid-mtvmvpx2>tuning progress bar (scroll-driven)</li> <li data-astro-cid-mtvmvpx2>reel → reader view-transition morph</li> </ul> </article> </div> </section> <aside class="sp-beacon" data-astro-cid-mtvmvpx2> <span class="sp-beacon-sweep" aria-hidden="true" data-astro-cid-mtvmvpx2></span> <span class="sp-beacon-kicker" data-astro-cid-mtvmvpx2>✦ sibling projects</span> <span class="sp-beacon-body" data-astro-cid-mtvmvpx2> <a class="sp-link" href="/" data-astro-cid-mtvmvpx2>pointcast</a> is the broadcast ·
+<a class="sp-link" href="/magpie" data-astro-cid-mtvmvpx2>magpie</a> is the publisher ·
+      sparrow is the reader
+</span> <a href="/sparrow" class="sp-link sp-beacon-cta" data-astro-cid-mtvmvpx2>back to reel →</a> </aside> ` })}`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/sparrow/about.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/sparrow/about.astro";
+const $$url = "/sparrow/about";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$About,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

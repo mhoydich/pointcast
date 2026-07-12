@@ -1,0 +1,1174 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { a as renderTemplate, b as addAttribute, m as maybeRenderHead, r as renderComponent } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$BaseLayout } from './BaseLayout_DxT1W98p.mjs';
+import 'clsx';
+
+var __freeze = Object.freeze;
+var __defProp = Object.defineProperty;
+var __template = (cooked, raw) => __freeze(__defProp(cooked, "raw", { value: __freeze(raw || cooked.slice()) }));
+var _a;
+const $$TidePool = createComponent(($$result, $$props, $$slots) => {
+  const STATION = "9410660";
+  const LAYOUT = [
+    "11111111111111111111",
+    "11111111111111111111",
+    "11000000000000000111",
+    "10000000000000000011",
+    "10000000000000000001",
+    "10000000000000000001",
+    "10000000000000000001",
+    "10000000000000000001",
+    "10000000000000000011",
+    "11000000000000000111",
+    "11111111111111111111",
+    "11111111111111111111"
+  ];
+  const COLS = 20;
+  const ROWS = LAYOUT.length;
+  const TILE = 16;
+  const W = COLS * TILE;
+  const H = ROWS * TILE;
+  return renderTemplate(_a || (_a = __template(["", '<aside class="tidepool" aria-label="Mid-century tide pool"', '> <header class="tidepool__head"> <p class="tidepool__kicker mono">TIDE POOL · CUT-PAPER · LIVE NOAA</p> <span class="tidepool__updated mono" data-tp-updated hidden></span> </header> <div class="tidepool__stage"> <div class="tidepool__svg-frame"> <svg class="tidepool__svg"', ' xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" data-tp-svg aria-label="Tide pool scene"> <defs>  <symbol id="tp-anemone" viewBox="0 0 24 24">  <path d="M3 22 Q12 14 21 22 Z" fill="#c64a3a"></path>  <path d="M5 22 Q4 13 7 12 Q8 16 7 22 Z" fill="#e2916b"></path> <path d="M8 22 Q7 10 10 9 Q11 14 10 22 Z" fill="#c64a3a"></path> <path d="M11 22 Q11 8 13 8 Q13 14 13 22 Z" fill="#e2916b"></path> <path d="M14 22 Q14 9 17 10 Q16 15 16 22 Z" fill="#c64a3a"></path> <path d="M17 22 Q17 12 20 13 Q19 17 19 22 Z" fill="#e2916b"></path>  <circle cx="7" cy="12.5" r="0.8" fill="#2b2620"></circle> <circle cx="10" cy="9.5" r="0.8" fill="#2b2620"></circle> <circle cx="13" cy="8.5" r="0.8" fill="#2b2620"></circle> <circle cx="17" cy="10.5" r="0.8" fill="#2b2620"></circle> <circle cx="20" cy="13.5" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-hermit-crab" viewBox="0 0 24 24">  <circle cx="13" cy="13" r="7.5" fill="#d4a82c"></circle> <circle cx="13" cy="13" r="5" fill="#c25d3f"></circle> <circle cx="13" cy="13" r="2.6" fill="#d4a82c"></circle> <path d="M13 13 L20 13" stroke="#2b2620" stroke-width="0.8" fill="none"></path>  <path d="M9 19 L7 22 L9 22 Z" fill="#2b2620"></path> <path d="M11 20 L10 23 L12 23 Z" fill="#2b2620"></path> <path d="M14 20 L14 23 L16 23 Z" fill="#2b2620"></path>  <path d="M5 14 L8 13 L7 16 Z" fill="#c25d3f"></path> <path d="M3 13 L7 12 L6 15 Z" fill="#2b2620" opacity="0.4"></path>  <circle cx="6" cy="11.5" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-snail" viewBox="0 0 24 24">  <path d="M2 20 Q3 14 9 14 L18 14 Q22 14 22 20 Z" fill="#5b3a52"></path>  <circle cx="13" cy="11" r="7" fill="#e2916b"></circle> <circle cx="13" cy="11" r="5" fill="#c64a3a"></circle> <circle cx="13" cy="11" r="3" fill="#e2916b"></circle> <circle cx="13" cy="11" r="1.2" fill="#2b2620"></circle>  <line x1="3" y1="14" x2="2" y2="11" stroke="#2b2620" stroke-width="0.8" stroke-linecap="round"></line> <line x1="5" y1="14" x2="5" y2="10" stroke="#2b2620" stroke-width="0.8" stroke-linecap="round"></line> <circle cx="2" cy="10.7" r="0.8" fill="#2b2620"></circle> <circle cx="5" cy="9.7" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-sea-star" viewBox="0 0 24 24">  <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18 21 L12 17 L6 21 L8 13.5 L2 9 L9.5 9 Z" fill="#c25d3f"></path> <path d="M12 5 L13.5 9.5 L18 9.5 L14.5 12.5 L15.5 17 L12 14.5 L8.5 17 L9.5 12.5 L6 9.5 L10.5 9.5 Z" fill="#d4a82c"></path>  <circle cx="12" cy="12" r="1" fill="#2b2620"></circle> </symbol> <symbol id="tp-urchin" viewBox="0 0 24 24">  <g fill="#5b3a52"> <path d="M12 1 L13 7 L11 7 Z"></path> <path d="M23 12 L17 13 L17 11 Z"></path> <path d="M12 23 L11 17 L13 17 Z"></path> <path d="M1 12 L7 11 L7 13 Z"></path> <path d="M20 4 L16 8 L15 7 Z"></path> <path d="M20 20 L17 16 L16 17 Z"></path> <path d="M4 20 L8 17 L9 16 Z"></path> <path d="M4 4 L9 7 L8 8 Z"></path> </g>  <circle cx="12" cy="12" r="6" fill="#5b3a52"></circle> <circle cx="12" cy="12" r="4" fill="#98a385"></circle>  <circle cx="12" cy="12" r="1" fill="#2b2620"></circle> </symbol> <symbol id="tp-sculpin" viewBox="0 0 24 24">  <path d="M2 12 Q5 6 14 6 Q20 6 22 12 Q20 18 14 18 Q5 18 2 12 Z" fill="#6e7039"></path>  <path d="M5 13 Q9 17 17 16 Q20 15 21 13 Q19 11 14 11 Q9 11 5 13 Z" fill="#98a385"></path>  <path d="M22 8 L26 6 L24 12 L26 18 L22 16 Z" fill="#6e7039"></path>  <path d="M10 6 L13 3 L15 6 Z" fill="#2b2620"></path>  <circle cx="6" cy="10" r="1.2" fill="#f4ead5"></circle> <circle cx="6" cy="10" r="0.6" fill="#2b2620"></circle> </symbol> <symbol id="tp-kelp" viewBox="0 0 24 24">  <path d="M12 23 L11 8 L13 8 L12 23 Z" fill="#3a5d2c"></path>  <path d="M12 15 Q4 12 6 6 Q11 7 12 12 Z" fill="#98a385"></path> <path d="M12 11 Q20 8 18 2 Q13 3 12 8 Z" fill="#6e7039"></path>  <line x1="12" y1="14" x2="7" y2="9" stroke="#2b2620" stroke-width="0.6" opacity="0.5"></line> <line x1="12" y1="10" x2="17" y2="5" stroke="#2b2620" stroke-width="0.6" opacity="0.5"></line> </symbol> <symbol id="tp-barnacle" viewBox="0 0 24 24">  <path d="M2 22 L7 8 L12 22 Z" fill="#ddb67b"></path> <path d="M3 22 L7 11 L11 22 Z" fill="#f4ead5"></path> <path d="M5 22 L7 16 L9 22 Z" fill="#2b2620"></path> <path d="M9 22 L13 12 L17 22 Z" fill="#ddb67b"></path> <path d="M10 22 L13 14 L16 22 Z" fill="#f4ead5"></path> <path d="M11.5 22 L13 18 L14.5 22 Z" fill="#2b2620"></path> <path d="M15 22 L19 14 L23 22 Z" fill="#ddb67b"></path> <path d="M16 22 L19 16 L22 22 Z" fill="#f4ead5"></path> <path d="M17.5 22 L19 19 L20.5 22 Z" fill="#2b2620"></path> </symbol>  <symbol id="tp-spritz" viewBox="0 0 24 24"> <g> <circle cx="4" cy="6" r="1.4" fill="#f4ead5"></circle> <circle cx="20" cy="5" r="1.2" fill="#d4a82c"></circle> <circle cx="22" cy="14" r="1.2" fill="#c25d3f"></circle> <circle cx="3" cy="17" r="1.0" fill="#98a385"></circle> <circle cx="14" cy="2" r="1.0" fill="#5b3a52"></circle> <path d="M11 22 L13 22 L12 24 Z" fill="#2c6770"></path> </g> </symbol>  <symbol id="tp-rock-shadow" viewBox="0 0 16 16"> <path d="M0 14 L2 4 L8 1 L14 3 L16 10 L14 16 L0 16 Z" fill="#5b5345"></path> </symbol> <symbol id="tp-rock" viewBox="0 0 16 16"> <path d="M0 13 L2 3 L8 0 L14 2 L16 9 L14 15 L0 15 Z" fill="#8b8378"></path> <path d="M2 3 L8 0 L14 2 L8 6 Z" fill="#a39684"></path> </symbol> </defs>  <rect x="0" y="0"', "", ' fill="#f4ead5"></rect>  <g data-tp-pool-bottom> ', ' </g>  <g fill="#b48650" opacity="0.85"> <circle cx="40" cy="76" r="1"></circle> <circle cx="92" cy="118" r="1"></circle> <circle cx="156" cy="86" r="1"></circle> <circle cx="220" cy="124" r="1"></circle> <circle cx="268" cy="92" r="1"></circle> <circle cx="76" cy="148" r="1"></circle> <circle cx="200" cy="148" r="1"></circle> </g>  <g data-tp-rocks> ', ` </g>  <g data-tp-water></g>  <g data-tp-ribbon></g>  <g data-tp-creatures></g>  <g data-tp-fx></g> </svg> </div> <div class="tidepool__hud"> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">TIDE</span> <span class="tidepool__hud-val mono" data-tp-tide-now>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">TREND</span> <span class="tidepool__hud-val mono" data-tp-trend>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">NEXT</span> <span class="tidepool__hud-val mono" data-tp-next>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">POOL</span> <span class="tidepool__hud-val mono" data-tp-count>0</span> </div> </div> </div> <div class="tidepool__palette" data-tp-palette hidden> <p class="tidepool__palette-title mono">PICK A CREATURE · ONE PER DAY</p> <ol class="tidepool__palette-grid" data-tp-palette-grid></ol> <button class="tidepool__palette-cancel mono" type="button" data-tp-palette-cancel>cancel</button> </div> <footer class="tidepool__foot mono"> <span data-tp-status>tap a pool tile to add a creature · tap your own to spritz</span> <button class="tidepool__reset" type="button" data-tp-reset>reset</button> </footer> </aside> <script>
+(function () {
+  'use strict';
+  var root = document.querySelector('aside.tidepool');
+  if (!root) return;
+  var svg = root.querySelector('[data-tp-svg]');
+  if (!svg) return;
+
+  var STATION = root.dataset.station || '9410660';
+  var TIDE_KEY = 'pc:tidepool:noaa:v1';
+  var CREATURES_KEY = 'pc:tidepool:creatures';
+  var LAST_ADD_KEY = 'pc:tidepool:lastAddDate';
+  var TTL_MS = 30 * 60 * 1000;
+
+  var TILE = 16;
+  var COLS = 20;
+  var ROWS = 12;
+  var W = COLS * TILE;
+  var H = ROWS * TILE;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var XLINK = 'http://www.w3.org/1999/xlink';
+
+  var LAYOUT = [
+    '11111111111111111111',
+    '11111111111111111111',
+    '11000000000000000111',
+    '10000000000000000011',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000011',
+    '11000000000000000111',
+    '11111111111111111111',
+    '11111111111111111111',
+  ];
+  function tileAt(gx, gy) {
+    if (gy < 0 || gy >= LAYOUT.length || gx < 0 || gx >= COLS) return '1';
+    return LAYOUT[gy].charAt(gx);
+  }
+
+  var KIND_LABELS = {
+    'anemone': 'Anemone',
+    'hermit-crab': 'Hermit Crab',
+    'snail': 'Snail',
+    'sea-star': 'Sea Star',
+    'urchin': 'Urchin',
+    'sculpin': 'Sculpin',
+    'kelp': 'Kelp Blade',
+    'barnacle': 'Barnacle',
+  };
+  var KINDS = Object.keys(KIND_LABELS);
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsRm(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function readCache(k) {
+    try {
+      var raw = lsGet(k);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.at || (Date.now() - p.at) > TTL_MS) return null;
+      return p.data;
+    } catch (e) { return null; }
+  }
+  function writeCache(k, d) {
+    try { lsSet(k, JSON.stringify({ at: Date.now(), data: d })); } catch (e) {}
+  }
+  function readCreatures() {
+    try {
+      var raw = lsGet(CREATURES_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function writeCreatures(arr) { lsSet(CREATURES_KEY, JSON.stringify(arr || [])); }
+
+  function laYmd(d) {
+    var fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    return fmt.format(d || new Date());
+  }
+
+  function noaaUrl() {
+    var date = laYmd().replace(/-/g, '');
+    var endDate = new Date();
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+    var endLA = laYmd(endDate).replace(/-/g, '');
+    return 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter' +
+      '?begin_date=' + date +
+      '&end_date=' + endLA +
+      '&station=' + STATION +
+      '&product=predictions' +
+      '&datum=MLLW' +
+      '&time_zone=lst_ldt' +
+      '&interval=hilo' +
+      '&units=english' +
+      '&format=json' +
+      '&application=pointcast-tidepool';
+  }
+
+  function parseNoaaTime(s) {
+    var p = s.split(/[\\s:-]/).map(Number);
+    if (p.length < 5) return null;
+    return Date.UTC(p[0], p[1] - 1, p[2], p[3], p[4]);
+  }
+  function nowLAOrd() {
+    var n = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date());
+    var get = function (t) {
+      var hit = n.find(function (x) { return x.type === t; });
+      return hit ? parseInt(hit.value, 10) : 0;
+    };
+    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'));
+  }
+  function fmtHHMM(s) {
+    var p = s.split(/[\\s:-]/).map(Number);
+    if (p.length < 5) return s;
+    var h = p[3], m = p[4];
+    var period = h >= 12 ? 'p' : 'a';
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + String(m).padStart(2, '0') + period;
+  }
+
+  var TIDE_STATE = {
+    predictions: null,
+    bracket: null,
+    nextLabel: '—',
+  };
+
+  function recomputeBracket() {
+    var p = TIDE_STATE.predictions;
+    if (!p || !p.length) return;
+    var now = nowLAOrd();
+    var prev = null, next = null;
+    for (var i = 0; i < p.length; i++) {
+      var t = parseNoaaTime(p[i].t);
+      if (t == null) continue;
+      if (t <= now) prev = { ord: t, v: parseFloat(p[i].v), type: p[i].type, raw: p[i] };
+      else { next = { ord: t, v: parseFloat(p[i].v), type: p[i].type, raw: p[i] }; break; }
+    }
+    if (!next) return;
+    if (!prev) prev = { ord: now - 6 * 3600 * 1000, v: 2.0, type: 'L' };
+    var frac = (now - prev.ord) / (next.ord - prev.ord);
+    if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+    var ease = (1 - Math.cos(Math.PI * frac)) / 2;
+    var level = prev.v + (next.v - prev.v) * ease;
+    var trend = next.v > prev.v ? 'rising' : 'falling';
+    TIDE_STATE.bracket = { prev: prev, next: next, frac: frac, level: level, trend: trend };
+    TIDE_STATE.nextLabel = (next.type === 'H' ? 'high' : 'low') + ' ' + fmtHHMM(next.raw.t);
+    paint();
+  }
+
+  function fetchTides() {
+    var cached = readCache(TIDE_KEY);
+    if (cached) { TIDE_STATE.predictions = cached; recomputeBracket(); return; }
+    fetch(noaaUrl(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.predictions) {
+          writeCache(TIDE_KEY, data.predictions);
+          TIDE_STATE.predictions = data.predictions;
+          recomputeBracket();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function fillRatio(level) {
+    if (level == null) return 0.55;
+    var min = -1.0, max = 6.5;
+    var f = (level - min) / (max - min);
+    if (f < 0.18) f = 0.18;
+    if (f > 0.96) f = 0.96;
+    return f;
+  }
+
+  function el(name, attrs, children) {
+    var e = document.createElementNS(SVG_NS, name);
+    if (attrs) for (var k in attrs) {
+      if (Object.prototype.hasOwnProperty.call(attrs, k)) {
+        if (k === 'href') e.setAttributeNS(XLINK, 'href', attrs[k]);
+        e.setAttribute(k, attrs[k]);
+      }
+    }
+    if (children) {
+      if (typeof children === 'string') e.textContent = children;
+      else children.forEach(function (c) { if (c) e.appendChild(c); });
+    }
+    return e;
+  }
+
+  function paintWater() {
+    var g = svg.querySelector('[data-tp-water]');
+    if (!g) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var b = TIDE_STATE.bracket;
+    var level = b ? b.level : 2.0;
+    var f = fillRatio(level);
+
+    var POOL_TOP_Y = 2 * TILE;          // 32
+    var POOL_BOTTOM_Y = 9 * TILE;       // 144
+    var POOL_DEPTH = POOL_BOTTOM_Y - POOL_TOP_Y; // 112
+    var waterTop = POOL_BOTTOM_Y - Math.round(POOL_DEPTH * f);
+    if (waterTop < POOL_TOP_Y - 4) waterTop = POOL_TOP_Y - 4;
+
+    // For each column find pool extent and draw two bands.
+    for (var gx = 0; gx < COLS; gx++) {
+      var poolStart = -1, poolEnd = -1;
+      for (var gy = 0; gy < ROWS; gy++) {
+        if (tileAt(gx, gy) === '0') {
+          if (poolStart < 0) poolStart = gy;
+          poolEnd = gy;
+        }
+      }
+      if (poolStart < 0) continue;
+      var topPx = poolStart * TILE;
+      var botPx = (poolEnd + 1) * TILE;
+      var actualTop = Math.max(waterTop, topPx);
+      if (actualTop >= botPx) continue;
+      var x = gx * TILE;
+      var midY = actualTop + (botPx - actualTop) * 0.5;
+      g.appendChild(el('rect', { x: x, y: actualTop, width: TILE, height: midY - actualTop, fill: '#5a93a0' }));
+      g.appendChild(el('rect', { x: x, y: midY, width: TILE, height: botPx - midY, fill: '#2c6770' }));
+    }
+
+    // Surface stroke — clean ink line with two paper-cut highlights.
+    g.appendChild(el('rect', {
+      x: 16, y: waterTop - 1, width: W - 32, height: 2, fill: '#1f3a4d',
+    }));
+    // Foam dabs (Charley Harper-style two-tone dot accents)
+    var phase = Math.floor(Date.now() / 1200);
+    for (var i = 0; i < 5; i++) {
+      var fx = 28 + i * 56 + (phase % 8) - 4;
+      g.appendChild(el('circle', { cx: fx, cy: waterTop - 2, r: 1.2, fill: '#f4ead5' }));
+    }
+  }
+
+  function paintRibbon() {
+    var g = svg.querySelector('[data-tp-ribbon]');
+    if (!g) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var b = TIDE_STATE.bracket;
+    if (!b) return;
+
+    var rx = 6, ry = 4, rw = W - 12, rh = 14;
+    g.appendChild(el('rect', { x: rx, y: ry, width: rw, height: rh, fill: '#fff', stroke: '#2b2620', 'stroke-width': '1' }));
+
+    var prev = b.prev, next = b.next;
+    var lo = Math.min(prev.v, next.v);
+    var hi = Math.max(prev.v, next.v);
+    var span = Math.max(0.01, hi - lo);
+
+    // 30 path samples — cosine eased curve.
+    var d = '';
+    for (var i = 0; i < 30; i++) {
+      var t = i / 29;
+      var ease = (1 - Math.cos(Math.PI * t)) / 2;
+      var lv = prev.v + (next.v - prev.v) * ease;
+      var px = rx + 4 + t * (rw - 8);
+      var py = ry + rh - 2 - ((lv - lo) / span) * (rh - 4);
+      d += (i === 0 ? 'M' : 'L') + px.toFixed(1) + ' ' + py.toFixed(1);
+    }
+    g.appendChild(el('path', { d: d, stroke: '#2b2620', 'stroke-width': '1', fill: 'none', 'stroke-linecap': 'round' }));
+
+    // tomato dot for "now"
+    var curT = b.frac;
+    var cease = (1 - Math.cos(Math.PI * curT)) / 2;
+    var clv = prev.v + (next.v - prev.v) * cease;
+    var cpx = rx + 4 + curT * (rw - 8);
+    var cpy = ry + rh - 2 - ((clv - lo) / span) * (rh - 4);
+    g.appendChild(el('circle', { cx: cpx, cy: cpy, r: 2.3, fill: '#c25d3f' }));
+    g.appendChild(el('circle', { cx: cpx, cy: cpy, r: 1, fill: '#f4ead5' }));
+
+    // small endpoint labels
+    g.appendChild(el('text', {
+      x: rx + 5, y: ry + rh - 4, 'font-size': '6', 'font-family': 'ui-monospace, monospace',
+      fill: '#2b2620', opacity: '0.7',
+    }, prev.type === 'H' ? 'H ' + prev.v.toFixed(1) : 'L ' + prev.v.toFixed(1)));
+    g.appendChild(el('text', {
+      x: rx + rw - 5, y: ry + rh - 4, 'font-size': '6', 'font-family': 'ui-monospace, monospace',
+      'text-anchor': 'end', fill: '#2b2620', opacity: '0.7',
+    }, next.type === 'H' ? 'H ' + next.v.toFixed(1) : 'L ' + next.v.toFixed(1)));
+  }
+
+  function paintCreatures() {
+    var g = svg.querySelector('[data-tp-creatures]');
+    var fxG = svg.querySelector('[data-tp-fx]');
+    if (!g || !fxG) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    while (fxG.firstChild) fxG.removeChild(fxG.firstChild);
+
+    var creatures = readCreatures();
+    var todayY = laYmd();
+
+    creatures.forEach(function (c, idx) {
+      if (tileAt(c.gx, c.gy) !== '0') return;
+      var size = 22; // creature symbol size in px (slightly larger than tile)
+      var ox = c.gx * TILE + (TILE - size) / 2;
+      var oy = c.gy * TILE + (TILE - size) / 2;
+
+      // Subtle bob for floating things.
+      var dy = 0;
+      if (c.kind === 'kelp') {
+        dy = Math.sin((Date.now() / 700) + c.gx * 0.5) * 0.6;
+      } else if (c.kind === 'anemone' || c.kind === 'sea-star' || c.kind === 'urchin') {
+        dy = Math.sin((Date.now() / 1100) + c.gx) * 0.4;
+      }
+
+      var u = el('use', {
+        href: '#tp-' + c.kind,
+        x: ox.toFixed(2),
+        y: (oy + dy).toFixed(2),
+        width: size,
+        height: size,
+        'data-creature-idx': String(idx),
+        'data-mine': c.mine ? '1' : '0',
+      });
+      u.style.cursor = 'pointer';
+      g.appendChild(u);
+
+      // Owner mark — small mustard dot on bottom-right tile corner.
+      if (c.mine) {
+        fxG.appendChild(el('circle', {
+          cx: c.gx * TILE + TILE - 2,
+          cy: c.gy * TILE + TILE - 2,
+          r: 1.2,
+          fill: '#d4a82c',
+        }));
+      }
+
+      // Spritz overlay — animates for 1500ms after spritzAt.
+      if (c.spritzedDate === todayY && c.spritzAt) {
+        var elapsed = Date.now() - c.spritzAt;
+        if (elapsed >= 0 && elapsed < 1500) {
+          var phase = elapsed / 1500; // 0..1
+          var spread = 4 + phase * 8;
+          var op = 1 - phase;
+          fxG.appendChild(el('use', {
+            href: '#tp-spritz',
+            x: (ox - spread / 2).toFixed(2),
+            y: (oy - spread / 2).toFixed(2),
+            width: size + spread,
+            height: size + spread,
+            opacity: op.toFixed(2),
+          }));
+        }
+      }
+    });
+  }
+
+  function paintHud() {
+    var b = TIDE_STATE.bracket;
+    var nowEl = root.querySelector('[data-tp-tide-now]');
+    var trendEl = root.querySelector('[data-tp-trend]');
+    var nextEl = root.querySelector('[data-tp-next]');
+    var stamp = root.querySelector('[data-tp-updated]');
+    if (b) {
+      if (nowEl) nowEl.textContent = b.level.toFixed(1) + ' ft';
+      if (trendEl) trendEl.textContent = b.trend;
+      if (nextEl) nextEl.textContent = TIDE_STATE.nextLabel;
+    }
+    var creatures = readCreatures();
+    var countEl = root.querySelector('[data-tp-count]');
+    if (countEl) countEl.textContent = creatures.length + ' alive';
+    if (stamp) {
+      try {
+        stamp.textContent = 'updated ' + new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date());
+        stamp.hidden = false;
+      } catch (e) {}
+    }
+  }
+
+  function paint() {
+    paintWater();
+    paintRibbon();
+    paintCreatures();
+    paintHud();
+  }
+
+  // ───── interaction ─────
+  function pickTileFromEvent(ev) {
+    var rect = svg.getBoundingClientRect();
+    var sx = (ev.clientX - rect.left) / rect.width * W;
+    var sy = (ev.clientY - rect.top) / rect.height * H;
+    return { gx: Math.floor(sx / TILE), gy: Math.floor(sy / TILE) };
+  }
+
+  function findCreatureAt(gx, gy) {
+    var cs = readCreatures();
+    for (var i = cs.length - 1; i >= 0; i--) {
+      if (cs[i].gx === gx && cs[i].gy === gy) return { creature: cs[i], idx: i };
+    }
+    return null;
+  }
+
+  function spritz(creatureIdx) {
+    var cs = readCreatures();
+    var today = laYmd();
+    var c = cs[creatureIdx];
+    if (!c) return;
+    if (c.spritzedDate === today) {
+      flashStatus('already spritzed today · come back tomorrow');
+      return;
+    }
+    c.spritzedDate = today;
+    c.spritzAt = Date.now();
+    cs[creatureIdx] = c;
+    writeCreatures(cs);
+    flashStatus('spritzed · ✨');
+    paint();
+  }
+
+  function openPalette(gx, gy) {
+    var today = laYmd();
+    if (lsGet(LAST_ADD_KEY) === today) {
+      flashStatus('one creature per day · spritz an existing one instead');
+      return;
+    }
+    var pal = root.querySelector('[data-tp-palette]');
+    var grid = root.querySelector('[data-tp-palette-grid]');
+    if (!pal || !grid) return;
+    grid.innerHTML = '';
+    KINDS.forEach(function (kind) {
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tidepool__palette-btn mono';
+      btn.dataset.kind = kind;
+      btn.dataset.gx = String(gx);
+      btn.dataset.gy = String(gy);
+
+      var preview = document.createElementNS(SVG_NS, 'svg');
+      preview.setAttribute('viewBox', '0 0 24 24');
+      preview.setAttribute('class', 'tidepool__palette-preview');
+      var u = document.createElementNS(SVG_NS, 'use');
+      u.setAttributeNS(XLINK, 'href', '#tp-' + kind);
+      u.setAttribute('href', '#tp-' + kind);
+      u.setAttribute('width', '24');
+      u.setAttribute('height', '24');
+      preview.appendChild(u);
+      btn.appendChild(preview);
+
+      var label = document.createElement('span');
+      label.textContent = KIND_LABELS[kind];
+      btn.appendChild(label);
+
+      li.appendChild(btn);
+      grid.appendChild(li);
+    });
+    pal.hidden = false;
+  }
+
+  function placeCreature(kind, gx, gy) {
+    if (tileAt(gx, gy) !== '0') return;
+    var existing = findCreatureAt(gx, gy);
+    if (existing) {
+      flashStatus('that tile is taken');
+      return;
+    }
+    var cs = readCreatures();
+    cs.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      kind: kind,
+      gx: gx, gy: gy,
+      addedAt: new Date().toISOString(),
+      spritzedDate: null,
+      spritzAt: null,
+      mine: true,
+    });
+    writeCreatures(cs);
+    lsSet(LAST_ADD_KEY, laYmd());
+    closePalette();
+    flashStatus('added a ' + (KIND_LABELS[kind] || kind).toLowerCase() + ' · come back tomorrow for another');
+    paint();
+  }
+
+  function closePalette() {
+    var pal = root.querySelector('[data-tp-palette]');
+    if (pal) pal.hidden = true;
+  }
+
+  var statusTimer = null;
+  function flashStatus(msg) {
+    var elx = root.querySelector('[data-tp-status]');
+    if (!elx) return;
+    elx.textContent = msg;
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () {
+      elx.textContent = 'tap a pool tile to add a creature · tap your own to spritz';
+    }, 4000);
+  }
+
+  svg.addEventListener('click', function (ev) {
+    var hit = pickTileFromEvent(ev);
+    var at = findCreatureAt(hit.gx, hit.gy);
+    if (at) { spritz(at.idx); return; }
+    if (tileAt(hit.gx, hit.gy) === '0') openPalette(hit.gx, hit.gy);
+  });
+
+  root.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!(t instanceof Element)) return;
+    if (t.matches('[data-tp-palette-cancel]')) { closePalette(); return; }
+    if (t.matches('[data-tp-reset]')) {
+      if (window.confirm('Empty your local copy of the pool? (Other visitors\\' shared pool would not be affected — this is your local-first v1.)')) {
+        lsRm(CREATURES_KEY);
+        lsRm(LAST_ADD_KEY);
+        flashStatus('pool reset · welcome back');
+        paint();
+      }
+      return;
+    }
+    var paletteBtn = t.closest('.tidepool__palette-btn');
+    if (paletteBtn) {
+      var k = paletteBtn.dataset.kind;
+      var gx = parseInt(paletteBtn.dataset.gx, 10);
+      var gy = parseInt(paletteBtn.dataset.gy, 10);
+      if (k && isFinite(gx) && isFinite(gy)) placeCreature(k, gx, gy);
+    }
+  });
+
+  // Animate water + spritz at 12fps so kelp + foam + spritz actually move.
+  var rafToken = null;
+  function tick() {
+    paintWater();
+    paintCreatures();
+    rafToken = requestAnimationFrame(tick);
+  }
+
+  function init() {
+    fetchTides();
+    setInterval(recomputeBracket, 30 * 1000);
+    paint();
+    setInterval(paintHud, 30 * 1000);
+    if (rafToken) cancelAnimationFrame(rafToken);
+    tick();
+  }
+  try { init(); } catch (e) {}
+  document.addEventListener('astro:page-load', function () { try { init(); } catch (e) {} });
+})();
+<\/script>`], ["", '<aside class="tidepool" aria-label="Mid-century tide pool"', '> <header class="tidepool__head"> <p class="tidepool__kicker mono">TIDE POOL · CUT-PAPER · LIVE NOAA</p> <span class="tidepool__updated mono" data-tp-updated hidden></span> </header> <div class="tidepool__stage"> <div class="tidepool__svg-frame"> <svg class="tidepool__svg"', ' xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" data-tp-svg aria-label="Tide pool scene"> <defs>  <symbol id="tp-anemone" viewBox="0 0 24 24">  <path d="M3 22 Q12 14 21 22 Z" fill="#c64a3a"></path>  <path d="M5 22 Q4 13 7 12 Q8 16 7 22 Z" fill="#e2916b"></path> <path d="M8 22 Q7 10 10 9 Q11 14 10 22 Z" fill="#c64a3a"></path> <path d="M11 22 Q11 8 13 8 Q13 14 13 22 Z" fill="#e2916b"></path> <path d="M14 22 Q14 9 17 10 Q16 15 16 22 Z" fill="#c64a3a"></path> <path d="M17 22 Q17 12 20 13 Q19 17 19 22 Z" fill="#e2916b"></path>  <circle cx="7" cy="12.5" r="0.8" fill="#2b2620"></circle> <circle cx="10" cy="9.5" r="0.8" fill="#2b2620"></circle> <circle cx="13" cy="8.5" r="0.8" fill="#2b2620"></circle> <circle cx="17" cy="10.5" r="0.8" fill="#2b2620"></circle> <circle cx="20" cy="13.5" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-hermit-crab" viewBox="0 0 24 24">  <circle cx="13" cy="13" r="7.5" fill="#d4a82c"></circle> <circle cx="13" cy="13" r="5" fill="#c25d3f"></circle> <circle cx="13" cy="13" r="2.6" fill="#d4a82c"></circle> <path d="M13 13 L20 13" stroke="#2b2620" stroke-width="0.8" fill="none"></path>  <path d="M9 19 L7 22 L9 22 Z" fill="#2b2620"></path> <path d="M11 20 L10 23 L12 23 Z" fill="#2b2620"></path> <path d="M14 20 L14 23 L16 23 Z" fill="#2b2620"></path>  <path d="M5 14 L8 13 L7 16 Z" fill="#c25d3f"></path> <path d="M3 13 L7 12 L6 15 Z" fill="#2b2620" opacity="0.4"></path>  <circle cx="6" cy="11.5" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-snail" viewBox="0 0 24 24">  <path d="M2 20 Q3 14 9 14 L18 14 Q22 14 22 20 Z" fill="#5b3a52"></path>  <circle cx="13" cy="11" r="7" fill="#e2916b"></circle> <circle cx="13" cy="11" r="5" fill="#c64a3a"></circle> <circle cx="13" cy="11" r="3" fill="#e2916b"></circle> <circle cx="13" cy="11" r="1.2" fill="#2b2620"></circle>  <line x1="3" y1="14" x2="2" y2="11" stroke="#2b2620" stroke-width="0.8" stroke-linecap="round"></line> <line x1="5" y1="14" x2="5" y2="10" stroke="#2b2620" stroke-width="0.8" stroke-linecap="round"></line> <circle cx="2" cy="10.7" r="0.8" fill="#2b2620"></circle> <circle cx="5" cy="9.7" r="0.8" fill="#2b2620"></circle> </symbol> <symbol id="tp-sea-star" viewBox="0 0 24 24">  <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18 21 L12 17 L6 21 L8 13.5 L2 9 L9.5 9 Z" fill="#c25d3f"></path> <path d="M12 5 L13.5 9.5 L18 9.5 L14.5 12.5 L15.5 17 L12 14.5 L8.5 17 L9.5 12.5 L6 9.5 L10.5 9.5 Z" fill="#d4a82c"></path>  <circle cx="12" cy="12" r="1" fill="#2b2620"></circle> </symbol> <symbol id="tp-urchin" viewBox="0 0 24 24">  <g fill="#5b3a52"> <path d="M12 1 L13 7 L11 7 Z"></path> <path d="M23 12 L17 13 L17 11 Z"></path> <path d="M12 23 L11 17 L13 17 Z"></path> <path d="M1 12 L7 11 L7 13 Z"></path> <path d="M20 4 L16 8 L15 7 Z"></path> <path d="M20 20 L17 16 L16 17 Z"></path> <path d="M4 20 L8 17 L9 16 Z"></path> <path d="M4 4 L9 7 L8 8 Z"></path> </g>  <circle cx="12" cy="12" r="6" fill="#5b3a52"></circle> <circle cx="12" cy="12" r="4" fill="#98a385"></circle>  <circle cx="12" cy="12" r="1" fill="#2b2620"></circle> </symbol> <symbol id="tp-sculpin" viewBox="0 0 24 24">  <path d="M2 12 Q5 6 14 6 Q20 6 22 12 Q20 18 14 18 Q5 18 2 12 Z" fill="#6e7039"></path>  <path d="M5 13 Q9 17 17 16 Q20 15 21 13 Q19 11 14 11 Q9 11 5 13 Z" fill="#98a385"></path>  <path d="M22 8 L26 6 L24 12 L26 18 L22 16 Z" fill="#6e7039"></path>  <path d="M10 6 L13 3 L15 6 Z" fill="#2b2620"></path>  <circle cx="6" cy="10" r="1.2" fill="#f4ead5"></circle> <circle cx="6" cy="10" r="0.6" fill="#2b2620"></circle> </symbol> <symbol id="tp-kelp" viewBox="0 0 24 24">  <path d="M12 23 L11 8 L13 8 L12 23 Z" fill="#3a5d2c"></path>  <path d="M12 15 Q4 12 6 6 Q11 7 12 12 Z" fill="#98a385"></path> <path d="M12 11 Q20 8 18 2 Q13 3 12 8 Z" fill="#6e7039"></path>  <line x1="12" y1="14" x2="7" y2="9" stroke="#2b2620" stroke-width="0.6" opacity="0.5"></line> <line x1="12" y1="10" x2="17" y2="5" stroke="#2b2620" stroke-width="0.6" opacity="0.5"></line> </symbol> <symbol id="tp-barnacle" viewBox="0 0 24 24">  <path d="M2 22 L7 8 L12 22 Z" fill="#ddb67b"></path> <path d="M3 22 L7 11 L11 22 Z" fill="#f4ead5"></path> <path d="M5 22 L7 16 L9 22 Z" fill="#2b2620"></path> <path d="M9 22 L13 12 L17 22 Z" fill="#ddb67b"></path> <path d="M10 22 L13 14 L16 22 Z" fill="#f4ead5"></path> <path d="M11.5 22 L13 18 L14.5 22 Z" fill="#2b2620"></path> <path d="M15 22 L19 14 L23 22 Z" fill="#ddb67b"></path> <path d="M16 22 L19 16 L22 22 Z" fill="#f4ead5"></path> <path d="M17.5 22 L19 19 L20.5 22 Z" fill="#2b2620"></path> </symbol>  <symbol id="tp-spritz" viewBox="0 0 24 24"> <g> <circle cx="4" cy="6" r="1.4" fill="#f4ead5"></circle> <circle cx="20" cy="5" r="1.2" fill="#d4a82c"></circle> <circle cx="22" cy="14" r="1.2" fill="#c25d3f"></circle> <circle cx="3" cy="17" r="1.0" fill="#98a385"></circle> <circle cx="14" cy="2" r="1.0" fill="#5b3a52"></circle> <path d="M11 22 L13 22 L12 24 Z" fill="#2c6770"></path> </g> </symbol>  <symbol id="tp-rock-shadow" viewBox="0 0 16 16"> <path d="M0 14 L2 4 L8 1 L14 3 L16 10 L14 16 L0 16 Z" fill="#5b5345"></path> </symbol> <symbol id="tp-rock" viewBox="0 0 16 16"> <path d="M0 13 L2 3 L8 0 L14 2 L16 9 L14 15 L0 15 Z" fill="#8b8378"></path> <path d="M2 3 L8 0 L14 2 L8 6 Z" fill="#a39684"></path> </symbol> </defs>  <rect x="0" y="0"', "", ' fill="#f4ead5"></rect>  <g data-tp-pool-bottom> ', ' </g>  <g fill="#b48650" opacity="0.85"> <circle cx="40" cy="76" r="1"></circle> <circle cx="92" cy="118" r="1"></circle> <circle cx="156" cy="86" r="1"></circle> <circle cx="220" cy="124" r="1"></circle> <circle cx="268" cy="92" r="1"></circle> <circle cx="76" cy="148" r="1"></circle> <circle cx="200" cy="148" r="1"></circle> </g>  <g data-tp-rocks> ', ` </g>  <g data-tp-water></g>  <g data-tp-ribbon></g>  <g data-tp-creatures></g>  <g data-tp-fx></g> </svg> </div> <div class="tidepool__hud"> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">TIDE</span> <span class="tidepool__hud-val mono" data-tp-tide-now>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">TREND</span> <span class="tidepool__hud-val mono" data-tp-trend>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">NEXT</span> <span class="tidepool__hud-val mono" data-tp-next>—</span> </div> <div class="tidepool__hud-row"> <span class="tidepool__hud-key mono">POOL</span> <span class="tidepool__hud-val mono" data-tp-count>0</span> </div> </div> </div> <div class="tidepool__palette" data-tp-palette hidden> <p class="tidepool__palette-title mono">PICK A CREATURE · ONE PER DAY</p> <ol class="tidepool__palette-grid" data-tp-palette-grid></ol> <button class="tidepool__palette-cancel mono" type="button" data-tp-palette-cancel>cancel</button> </div> <footer class="tidepool__foot mono"> <span data-tp-status>tap a pool tile to add a creature · tap your own to spritz</span> <button class="tidepool__reset" type="button" data-tp-reset>reset</button> </footer> </aside> <script>
+(function () {
+  'use strict';
+  var root = document.querySelector('aside.tidepool');
+  if (!root) return;
+  var svg = root.querySelector('[data-tp-svg]');
+  if (!svg) return;
+
+  var STATION = root.dataset.station || '9410660';
+  var TIDE_KEY = 'pc:tidepool:noaa:v1';
+  var CREATURES_KEY = 'pc:tidepool:creatures';
+  var LAST_ADD_KEY = 'pc:tidepool:lastAddDate';
+  var TTL_MS = 30 * 60 * 1000;
+
+  var TILE = 16;
+  var COLS = 20;
+  var ROWS = 12;
+  var W = COLS * TILE;
+  var H = ROWS * TILE;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var XLINK = 'http://www.w3.org/1999/xlink';
+
+  var LAYOUT = [
+    '11111111111111111111',
+    '11111111111111111111',
+    '11000000000000000111',
+    '10000000000000000011',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000001',
+    '10000000000000000011',
+    '11000000000000000111',
+    '11111111111111111111',
+    '11111111111111111111',
+  ];
+  function tileAt(gx, gy) {
+    if (gy < 0 || gy >= LAYOUT.length || gx < 0 || gx >= COLS) return '1';
+    return LAYOUT[gy].charAt(gx);
+  }
+
+  var KIND_LABELS = {
+    'anemone': 'Anemone',
+    'hermit-crab': 'Hermit Crab',
+    'snail': 'Snail',
+    'sea-star': 'Sea Star',
+    'urchin': 'Urchin',
+    'sculpin': 'Sculpin',
+    'kelp': 'Kelp Blade',
+    'barnacle': 'Barnacle',
+  };
+  var KINDS = Object.keys(KIND_LABELS);
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function lsRm(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function readCache(k) {
+    try {
+      var raw = lsGet(k);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.at || (Date.now() - p.at) > TTL_MS) return null;
+      return p.data;
+    } catch (e) { return null; }
+  }
+  function writeCache(k, d) {
+    try { lsSet(k, JSON.stringify({ at: Date.now(), data: d })); } catch (e) {}
+  }
+  function readCreatures() {
+    try {
+      var raw = lsGet(CREATURES_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function writeCreatures(arr) { lsSet(CREATURES_KEY, JSON.stringify(arr || [])); }
+
+  function laYmd(d) {
+    var fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    return fmt.format(d || new Date());
+  }
+
+  function noaaUrl() {
+    var date = laYmd().replace(/-/g, '');
+    var endDate = new Date();
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+    var endLA = laYmd(endDate).replace(/-/g, '');
+    return 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter' +
+      '?begin_date=' + date +
+      '&end_date=' + endLA +
+      '&station=' + STATION +
+      '&product=predictions' +
+      '&datum=MLLW' +
+      '&time_zone=lst_ldt' +
+      '&interval=hilo' +
+      '&units=english' +
+      '&format=json' +
+      '&application=pointcast-tidepool';
+  }
+
+  function parseNoaaTime(s) {
+    var p = s.split(/[\\\\s:-]/).map(Number);
+    if (p.length < 5) return null;
+    return Date.UTC(p[0], p[1] - 1, p[2], p[3], p[4]);
+  }
+  function nowLAOrd() {
+    var n = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date());
+    var get = function (t) {
+      var hit = n.find(function (x) { return x.type === t; });
+      return hit ? parseInt(hit.value, 10) : 0;
+    };
+    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'));
+  }
+  function fmtHHMM(s) {
+    var p = s.split(/[\\\\s:-]/).map(Number);
+    if (p.length < 5) return s;
+    var h = p[3], m = p[4];
+    var period = h >= 12 ? 'p' : 'a';
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + String(m).padStart(2, '0') + period;
+  }
+
+  var TIDE_STATE = {
+    predictions: null,
+    bracket: null,
+    nextLabel: '—',
+  };
+
+  function recomputeBracket() {
+    var p = TIDE_STATE.predictions;
+    if (!p || !p.length) return;
+    var now = nowLAOrd();
+    var prev = null, next = null;
+    for (var i = 0; i < p.length; i++) {
+      var t = parseNoaaTime(p[i].t);
+      if (t == null) continue;
+      if (t <= now) prev = { ord: t, v: parseFloat(p[i].v), type: p[i].type, raw: p[i] };
+      else { next = { ord: t, v: parseFloat(p[i].v), type: p[i].type, raw: p[i] }; break; }
+    }
+    if (!next) return;
+    if (!prev) prev = { ord: now - 6 * 3600 * 1000, v: 2.0, type: 'L' };
+    var frac = (now - prev.ord) / (next.ord - prev.ord);
+    if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+    var ease = (1 - Math.cos(Math.PI * frac)) / 2;
+    var level = prev.v + (next.v - prev.v) * ease;
+    var trend = next.v > prev.v ? 'rising' : 'falling';
+    TIDE_STATE.bracket = { prev: prev, next: next, frac: frac, level: level, trend: trend };
+    TIDE_STATE.nextLabel = (next.type === 'H' ? 'high' : 'low') + ' ' + fmtHHMM(next.raw.t);
+    paint();
+  }
+
+  function fetchTides() {
+    var cached = readCache(TIDE_KEY);
+    if (cached) { TIDE_STATE.predictions = cached; recomputeBracket(); return; }
+    fetch(noaaUrl(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.predictions) {
+          writeCache(TIDE_KEY, data.predictions);
+          TIDE_STATE.predictions = data.predictions;
+          recomputeBracket();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function fillRatio(level) {
+    if (level == null) return 0.55;
+    var min = -1.0, max = 6.5;
+    var f = (level - min) / (max - min);
+    if (f < 0.18) f = 0.18;
+    if (f > 0.96) f = 0.96;
+    return f;
+  }
+
+  function el(name, attrs, children) {
+    var e = document.createElementNS(SVG_NS, name);
+    if (attrs) for (var k in attrs) {
+      if (Object.prototype.hasOwnProperty.call(attrs, k)) {
+        if (k === 'href') e.setAttributeNS(XLINK, 'href', attrs[k]);
+        e.setAttribute(k, attrs[k]);
+      }
+    }
+    if (children) {
+      if (typeof children === 'string') e.textContent = children;
+      else children.forEach(function (c) { if (c) e.appendChild(c); });
+    }
+    return e;
+  }
+
+  function paintWater() {
+    var g = svg.querySelector('[data-tp-water]');
+    if (!g) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var b = TIDE_STATE.bracket;
+    var level = b ? b.level : 2.0;
+    var f = fillRatio(level);
+
+    var POOL_TOP_Y = 2 * TILE;          // 32
+    var POOL_BOTTOM_Y = 9 * TILE;       // 144
+    var POOL_DEPTH = POOL_BOTTOM_Y - POOL_TOP_Y; // 112
+    var waterTop = POOL_BOTTOM_Y - Math.round(POOL_DEPTH * f);
+    if (waterTop < POOL_TOP_Y - 4) waterTop = POOL_TOP_Y - 4;
+
+    // For each column find pool extent and draw two bands.
+    for (var gx = 0; gx < COLS; gx++) {
+      var poolStart = -1, poolEnd = -1;
+      for (var gy = 0; gy < ROWS; gy++) {
+        if (tileAt(gx, gy) === '0') {
+          if (poolStart < 0) poolStart = gy;
+          poolEnd = gy;
+        }
+      }
+      if (poolStart < 0) continue;
+      var topPx = poolStart * TILE;
+      var botPx = (poolEnd + 1) * TILE;
+      var actualTop = Math.max(waterTop, topPx);
+      if (actualTop >= botPx) continue;
+      var x = gx * TILE;
+      var midY = actualTop + (botPx - actualTop) * 0.5;
+      g.appendChild(el('rect', { x: x, y: actualTop, width: TILE, height: midY - actualTop, fill: '#5a93a0' }));
+      g.appendChild(el('rect', { x: x, y: midY, width: TILE, height: botPx - midY, fill: '#2c6770' }));
+    }
+
+    // Surface stroke — clean ink line with two paper-cut highlights.
+    g.appendChild(el('rect', {
+      x: 16, y: waterTop - 1, width: W - 32, height: 2, fill: '#1f3a4d',
+    }));
+    // Foam dabs (Charley Harper-style two-tone dot accents)
+    var phase = Math.floor(Date.now() / 1200);
+    for (var i = 0; i < 5; i++) {
+      var fx = 28 + i * 56 + (phase % 8) - 4;
+      g.appendChild(el('circle', { cx: fx, cy: waterTop - 2, r: 1.2, fill: '#f4ead5' }));
+    }
+  }
+
+  function paintRibbon() {
+    var g = svg.querySelector('[data-tp-ribbon]');
+    if (!g) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var b = TIDE_STATE.bracket;
+    if (!b) return;
+
+    var rx = 6, ry = 4, rw = W - 12, rh = 14;
+    g.appendChild(el('rect', { x: rx, y: ry, width: rw, height: rh, fill: '#fff', stroke: '#2b2620', 'stroke-width': '1' }));
+
+    var prev = b.prev, next = b.next;
+    var lo = Math.min(prev.v, next.v);
+    var hi = Math.max(prev.v, next.v);
+    var span = Math.max(0.01, hi - lo);
+
+    // 30 path samples — cosine eased curve.
+    var d = '';
+    for (var i = 0; i < 30; i++) {
+      var t = i / 29;
+      var ease = (1 - Math.cos(Math.PI * t)) / 2;
+      var lv = prev.v + (next.v - prev.v) * ease;
+      var px = rx + 4 + t * (rw - 8);
+      var py = ry + rh - 2 - ((lv - lo) / span) * (rh - 4);
+      d += (i === 0 ? 'M' : 'L') + px.toFixed(1) + ' ' + py.toFixed(1);
+    }
+    g.appendChild(el('path', { d: d, stroke: '#2b2620', 'stroke-width': '1', fill: 'none', 'stroke-linecap': 'round' }));
+
+    // tomato dot for "now"
+    var curT = b.frac;
+    var cease = (1 - Math.cos(Math.PI * curT)) / 2;
+    var clv = prev.v + (next.v - prev.v) * cease;
+    var cpx = rx + 4 + curT * (rw - 8);
+    var cpy = ry + rh - 2 - ((clv - lo) / span) * (rh - 4);
+    g.appendChild(el('circle', { cx: cpx, cy: cpy, r: 2.3, fill: '#c25d3f' }));
+    g.appendChild(el('circle', { cx: cpx, cy: cpy, r: 1, fill: '#f4ead5' }));
+
+    // small endpoint labels
+    g.appendChild(el('text', {
+      x: rx + 5, y: ry + rh - 4, 'font-size': '6', 'font-family': 'ui-monospace, monospace',
+      fill: '#2b2620', opacity: '0.7',
+    }, prev.type === 'H' ? 'H ' + prev.v.toFixed(1) : 'L ' + prev.v.toFixed(1)));
+    g.appendChild(el('text', {
+      x: rx + rw - 5, y: ry + rh - 4, 'font-size': '6', 'font-family': 'ui-monospace, monospace',
+      'text-anchor': 'end', fill: '#2b2620', opacity: '0.7',
+    }, next.type === 'H' ? 'H ' + next.v.toFixed(1) : 'L ' + next.v.toFixed(1)));
+  }
+
+  function paintCreatures() {
+    var g = svg.querySelector('[data-tp-creatures]');
+    var fxG = svg.querySelector('[data-tp-fx]');
+    if (!g || !fxG) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    while (fxG.firstChild) fxG.removeChild(fxG.firstChild);
+
+    var creatures = readCreatures();
+    var todayY = laYmd();
+
+    creatures.forEach(function (c, idx) {
+      if (tileAt(c.gx, c.gy) !== '0') return;
+      var size = 22; // creature symbol size in px (slightly larger than tile)
+      var ox = c.gx * TILE + (TILE - size) / 2;
+      var oy = c.gy * TILE + (TILE - size) / 2;
+
+      // Subtle bob for floating things.
+      var dy = 0;
+      if (c.kind === 'kelp') {
+        dy = Math.sin((Date.now() / 700) + c.gx * 0.5) * 0.6;
+      } else if (c.kind === 'anemone' || c.kind === 'sea-star' || c.kind === 'urchin') {
+        dy = Math.sin((Date.now() / 1100) + c.gx) * 0.4;
+      }
+
+      var u = el('use', {
+        href: '#tp-' + c.kind,
+        x: ox.toFixed(2),
+        y: (oy + dy).toFixed(2),
+        width: size,
+        height: size,
+        'data-creature-idx': String(idx),
+        'data-mine': c.mine ? '1' : '0',
+      });
+      u.style.cursor = 'pointer';
+      g.appendChild(u);
+
+      // Owner mark — small mustard dot on bottom-right tile corner.
+      if (c.mine) {
+        fxG.appendChild(el('circle', {
+          cx: c.gx * TILE + TILE - 2,
+          cy: c.gy * TILE + TILE - 2,
+          r: 1.2,
+          fill: '#d4a82c',
+        }));
+      }
+
+      // Spritz overlay — animates for 1500ms after spritzAt.
+      if (c.spritzedDate === todayY && c.spritzAt) {
+        var elapsed = Date.now() - c.spritzAt;
+        if (elapsed >= 0 && elapsed < 1500) {
+          var phase = elapsed / 1500; // 0..1
+          var spread = 4 + phase * 8;
+          var op = 1 - phase;
+          fxG.appendChild(el('use', {
+            href: '#tp-spritz',
+            x: (ox - spread / 2).toFixed(2),
+            y: (oy - spread / 2).toFixed(2),
+            width: size + spread,
+            height: size + spread,
+            opacity: op.toFixed(2),
+          }));
+        }
+      }
+    });
+  }
+
+  function paintHud() {
+    var b = TIDE_STATE.bracket;
+    var nowEl = root.querySelector('[data-tp-tide-now]');
+    var trendEl = root.querySelector('[data-tp-trend]');
+    var nextEl = root.querySelector('[data-tp-next]');
+    var stamp = root.querySelector('[data-tp-updated]');
+    if (b) {
+      if (nowEl) nowEl.textContent = b.level.toFixed(1) + ' ft';
+      if (trendEl) trendEl.textContent = b.trend;
+      if (nextEl) nextEl.textContent = TIDE_STATE.nextLabel;
+    }
+    var creatures = readCreatures();
+    var countEl = root.querySelector('[data-tp-count]');
+    if (countEl) countEl.textContent = creatures.length + ' alive';
+    if (stamp) {
+      try {
+        stamp.textContent = 'updated ' + new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date());
+        stamp.hidden = false;
+      } catch (e) {}
+    }
+  }
+
+  function paint() {
+    paintWater();
+    paintRibbon();
+    paintCreatures();
+    paintHud();
+  }
+
+  // ───── interaction ─────
+  function pickTileFromEvent(ev) {
+    var rect = svg.getBoundingClientRect();
+    var sx = (ev.clientX - rect.left) / rect.width * W;
+    var sy = (ev.clientY - rect.top) / rect.height * H;
+    return { gx: Math.floor(sx / TILE), gy: Math.floor(sy / TILE) };
+  }
+
+  function findCreatureAt(gx, gy) {
+    var cs = readCreatures();
+    for (var i = cs.length - 1; i >= 0; i--) {
+      if (cs[i].gx === gx && cs[i].gy === gy) return { creature: cs[i], idx: i };
+    }
+    return null;
+  }
+
+  function spritz(creatureIdx) {
+    var cs = readCreatures();
+    var today = laYmd();
+    var c = cs[creatureIdx];
+    if (!c) return;
+    if (c.spritzedDate === today) {
+      flashStatus('already spritzed today · come back tomorrow');
+      return;
+    }
+    c.spritzedDate = today;
+    c.spritzAt = Date.now();
+    cs[creatureIdx] = c;
+    writeCreatures(cs);
+    flashStatus('spritzed · ✨');
+    paint();
+  }
+
+  function openPalette(gx, gy) {
+    var today = laYmd();
+    if (lsGet(LAST_ADD_KEY) === today) {
+      flashStatus('one creature per day · spritz an existing one instead');
+      return;
+    }
+    var pal = root.querySelector('[data-tp-palette]');
+    var grid = root.querySelector('[data-tp-palette-grid]');
+    if (!pal || !grid) return;
+    grid.innerHTML = '';
+    KINDS.forEach(function (kind) {
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tidepool__palette-btn mono';
+      btn.dataset.kind = kind;
+      btn.dataset.gx = String(gx);
+      btn.dataset.gy = String(gy);
+
+      var preview = document.createElementNS(SVG_NS, 'svg');
+      preview.setAttribute('viewBox', '0 0 24 24');
+      preview.setAttribute('class', 'tidepool__palette-preview');
+      var u = document.createElementNS(SVG_NS, 'use');
+      u.setAttributeNS(XLINK, 'href', '#tp-' + kind);
+      u.setAttribute('href', '#tp-' + kind);
+      u.setAttribute('width', '24');
+      u.setAttribute('height', '24');
+      preview.appendChild(u);
+      btn.appendChild(preview);
+
+      var label = document.createElement('span');
+      label.textContent = KIND_LABELS[kind];
+      btn.appendChild(label);
+
+      li.appendChild(btn);
+      grid.appendChild(li);
+    });
+    pal.hidden = false;
+  }
+
+  function placeCreature(kind, gx, gy) {
+    if (tileAt(gx, gy) !== '0') return;
+    var existing = findCreatureAt(gx, gy);
+    if (existing) {
+      flashStatus('that tile is taken');
+      return;
+    }
+    var cs = readCreatures();
+    cs.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      kind: kind,
+      gx: gx, gy: gy,
+      addedAt: new Date().toISOString(),
+      spritzedDate: null,
+      spritzAt: null,
+      mine: true,
+    });
+    writeCreatures(cs);
+    lsSet(LAST_ADD_KEY, laYmd());
+    closePalette();
+    flashStatus('added a ' + (KIND_LABELS[kind] || kind).toLowerCase() + ' · come back tomorrow for another');
+    paint();
+  }
+
+  function closePalette() {
+    var pal = root.querySelector('[data-tp-palette]');
+    if (pal) pal.hidden = true;
+  }
+
+  var statusTimer = null;
+  function flashStatus(msg) {
+    var elx = root.querySelector('[data-tp-status]');
+    if (!elx) return;
+    elx.textContent = msg;
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () {
+      elx.textContent = 'tap a pool tile to add a creature · tap your own to spritz';
+    }, 4000);
+  }
+
+  svg.addEventListener('click', function (ev) {
+    var hit = pickTileFromEvent(ev);
+    var at = findCreatureAt(hit.gx, hit.gy);
+    if (at) { spritz(at.idx); return; }
+    if (tileAt(hit.gx, hit.gy) === '0') openPalette(hit.gx, hit.gy);
+  });
+
+  root.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!(t instanceof Element)) return;
+    if (t.matches('[data-tp-palette-cancel]')) { closePalette(); return; }
+    if (t.matches('[data-tp-reset]')) {
+      if (window.confirm('Empty your local copy of the pool? (Other visitors\\\\' shared pool would not be affected — this is your local-first v1.)')) {
+        lsRm(CREATURES_KEY);
+        lsRm(LAST_ADD_KEY);
+        flashStatus('pool reset · welcome back');
+        paint();
+      }
+      return;
+    }
+    var paletteBtn = t.closest('.tidepool__palette-btn');
+    if (paletteBtn) {
+      var k = paletteBtn.dataset.kind;
+      var gx = parseInt(paletteBtn.dataset.gx, 10);
+      var gy = parseInt(paletteBtn.dataset.gy, 10);
+      if (k && isFinite(gx) && isFinite(gy)) placeCreature(k, gx, gy);
+    }
+  });
+
+  // Animate water + spritz at 12fps so kelp + foam + spritz actually move.
+  var rafToken = null;
+  function tick() {
+    paintWater();
+    paintCreatures();
+    rafToken = requestAnimationFrame(tick);
+  }
+
+  function init() {
+    fetchTides();
+    setInterval(recomputeBracket, 30 * 1000);
+    paint();
+    setInterval(paintHud, 30 * 1000);
+    if (rafToken) cancelAnimationFrame(rafToken);
+    tick();
+  }
+  try { init(); } catch (e) {}
+  document.addEventListener('astro:page-load', function () { try { init(); } catch (e) {} });
+})();
+<\/script>`])), maybeRenderHead(), addAttribute(STATION, "data-station"), addAttribute(`0 0 ${W} ${H}`, "viewBox"), addAttribute(W, "width"), addAttribute(H, "height"), LAYOUT.map(
+    (row, gy) => row.split("").map(
+      (t, gx) => t === "0" ? renderTemplate`<rect${addAttribute(gx * TILE, "x")}${addAttribute(gy * TILE, "y")}${addAttribute(TILE, "width")}${addAttribute(TILE, "height")} fill="#ddb67b"></rect>` : null
+    )
+  ), LAYOUT.map(
+    (row, gy) => row.split("").map(
+      (t, gx) => t === "1" ? renderTemplate`<g${addAttribute(`translate(${gx * TILE}, ${gy * TILE})`, "transform")}> <use href="#tp-rock-shadow" x="1" y="1"${addAttribute(TILE, "width")}${addAttribute(TILE, "height")}></use> <use href="#tp-rock" x="0" y="0"${addAttribute(TILE, "width")}${addAttribute(TILE, "height")}></use> </g>` : null
+    )
+  ));
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/components/TidePool.astro", void 0);
+
+const $$Tidepool = createComponent(($$result, $$props, $$slots) => {
+  const title = "TIDE POOL · pointcast.xyz";
+  const description = "A pixel tide pool somewhere south of El Porto. Real NOAA tides drive the water level. Add a creature, spritz one, sit by it.";
+  return renderTemplate`${renderComponent($$result, "BaseLayout", $$BaseLayout, { "title": title, "description": description, "data-astro-cid-grz7b74w": true }, { "default": ($$result2) => renderTemplate` ${maybeRenderHead()}<main class="tidepool-page" data-astro-cid-grz7b74w> <header class="tidepool-page__head" data-astro-cid-grz7b74w> <nav class="tidepool-page__crumb mono" data-astro-cid-grz7b74w> <a href="/" data-astro-cid-grz7b74w>← home</a> <span aria-hidden="true" data-astro-cid-grz7b74w>/</span> <span data-astro-cid-grz7b74w>tidepool</span> </nav> <h1 class="tidepool-page__title" data-astro-cid-grz7b74w>A tide pool somewhere south of El Porto.</h1> <p class="tidepool-page__dek" data-astro-cid-grz7b74w>
+The water level moves with the actual tide off Los Angeles
+        (NOAA station 9410660). Add one creature per day. Spritz one
+        creature per day. There is no losing and no winning — it is a
+        pool, and the ocean does most of the work.
+</p> </header> ${renderComponent($$result2, "TidePool", $$TidePool, { "data-astro-cid-grz7b74w": true })} <section class="tidepool-page__notes" data-astro-cid-grz7b74w> <h2 class="tidepool-page__notes-title" data-astro-cid-grz7b74w>Notes</h2> <ul class="tidepool-page__notes-list" data-astro-cid-grz7b74w> <li data-astro-cid-grz7b74w> <strong data-astro-cid-grz7b74w>Tides are real.</strong> The chart at the top of the
+          canvas is the next high or low for Los Angeles. The little
+          orange dot is where we are right now in that bracket.
+</li> <li data-astro-cid-grz7b74w> <strong data-astro-cid-grz7b74w>Eight kinds of creatures.</strong> Anemone, hermit
+          crab, snail, sea star, urchin, sculpin, kelp blade, barnacle.
+          Each is a 12×12 pixel sprite drawn in a 1989-Mac-game palette.
+</li> <li data-astro-cid-grz7b74w> <strong data-astro-cid-grz7b74w>One per day.</strong> You can add one creature per
+          LA-day. You can spritz one creature per LA-day per creature.
+          Soft cap, no streak, no points.
+</li> <li data-astro-cid-grz7b74w> <strong data-astro-cid-grz7b74w>v1 is local-first.</strong> Your pool lives in this
+          browser. A shared pool that other visitors can see and tend
+          is the next ship.
+</li> <li data-astro-cid-grz7b74w> <strong data-astro-cid-grz7b74w>Cozy is the goal.</strong> You can leave the page
+          open and the water level will keep changing. Some days the
+          pool is full and the kelp drifts. Other days it sits low and
+          the rocks bake.
+</li> </ul> </section> </main> ` })}`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/tidepool.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/tidepool.astro";
+const $$url = "/tidepool";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$Tidepool,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

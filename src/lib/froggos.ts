@@ -61,6 +61,14 @@ function mutezToXtz(value: unknown): number | null {
   return Number.isFinite(n) ? n / 1_000_000 : null;
 }
 
+function withTimeout(ms = 5000): AbortSignal | undefined {
+  try {
+    return AbortSignal.timeout(ms);
+  } catch {
+    return undefined;
+  }
+}
+
 function ipfsGateway(uri?: string | null): string | null {
   if (!uri) return null;
   if (uri.startsWith('ipfs://')) return `https://ipfs.io/ipfs/${uri.slice(7)}`;
@@ -195,6 +203,7 @@ export async function fetchFroggosData(): Promise<FroggosData> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: QUERY, variables: { path: FROGGOS_PATH } }),
+      signal: withTimeout(),
     });
 
     if (!response.ok) {

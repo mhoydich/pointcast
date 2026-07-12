@@ -1,0 +1,201 @@
+<!DOCTYPE html><html lang="en" data-astro-cid-2bd4mm5a> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SPARROW · Technical Memorandum · SPA-TM-26-0421</title><meta name="description" content="Technical memorandum — an overview of Sparrow, a reader client for PointCast, presented in the typographic vocabulary of 1980s Bell Labs and Xerox PARC research papers."><link rel="canonical" href="https://pointcast.xyz/sparrow/deck"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/_astro/deck@_@astro.DQg3cB70.css"></head> <body data-astro-cid-2bd4mm5a> <article class="doc" data-astro-cid-2bd4mm5a> <!-- ─── LETTERHEAD ─────────────────────────────────────────── --> <header class="letterhead" data-astro-cid-2bd4mm5a> <div data-astro-cid-2bd4mm5a> <h1 class="letterhead-title" data-astro-cid-2bd4mm5a>POINTCAST · Research & Broadcast Group</h1> <div class="letterhead-sub" data-astro-cid-2bd4mm5a>El Segundo, California · In-House Computing & Information Systems</div> </div> <div class="letterhead-stamp" aria-label="classification stamp" data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>TECHNICAL</strong>
+MEMORANDUM
+</div> </header> <div class="document-control" data-astro-cid-2bd4mm5a> <span data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>Document</strong> SPA-TM-26-0421</span> <span data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>Rev</strong> A</span> <span data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>Date</strong> 2026-04-21</span> <span data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>Pages</strong> 1 of 7</span> <span data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>Class</strong> UNCLASSIFIED · DISTRIBUTION: UNLIMITED</span> </div> <!-- ─── TITLE ──────────────────────────────────────────────── --> <div class="title-block" data-astro-cid-2bd4mm5a> <p class="title-kicker" data-astro-cid-2bd4mm5a>Memorandum · Subject</p> <h1 class="title" data-astro-cid-2bd4mm5a>SPARROW — A Reader Client for<br data-astro-cid-2bd4mm5a><em data-astro-cid-2bd4mm5a>the Living Broadcast.</em></h1> <p class="byline" data-astro-cid-2bd4mm5a>
+PREPARED BY: M. HOYDICH (MH) · CLAUDE CODE (CC) &nbsp;|&nbsp; GROUP: POINTCAST R&amp;B
+</p> </div> <!-- ─── ABSTRACT ───────────────────────────────────────────── --> <section class="abstract" aria-label="abstract" data-astro-cid-2bd4mm5a> <h2 data-astro-cid-2bd4mm5a>Abstract</h2> <p data-astro-cid-2bd4mm5a>
+We describe <strong data-astro-cid-2bd4mm5a>SPARROW</strong>, a hosted reader client for the
+          PointCast broadcast graph. Sparrow renders PointCast's 214+
+          addressable <em data-astro-cid-2bd4mm5a>blocks</em> — distributed across nine editorial
+          channels — as an interactive, keyboard-driven dashboard; a
+          per-channel browser; and a full-page reader. The system is a thin
+          client in the literal sense: zero application runtime is shipped,
+          no user state is persisted on the server, and the complete
+          experience loads and operates offline after first visit via a
+          scoped Service Worker. The presentation layer is designed to
+          reward attention at the desk and to degrade gracefully on the
+          train.
+</p> <p data-astro-cid-2bd4mm5a>
+This memorandum documents the interface, the keyboard protocol,
+          the data model, and the road ahead. Implementation references
+          the public repository at <code data-astro-cid-2bd4mm5a>github.com/mhoydich/pointcast</code>.
+</p> </section> <!-- ─── 1.0 INTRODUCTION ───────────────────────────────────── --> <section class="sec" id="s1" aria-labelledby="s1-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s1-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>1.0</span> Introduction</h2> <p data-astro-cid-2bd4mm5a>
+PointCast is an ongoing public broadcast anchored in El Segundo,
+          California. Its canonical unit is the <em data-astro-cid-2bd4mm5a>block</em>: a typed,
+          numbered, immutable record that belongs to exactly one of nine
+          channels. New blocks arrive irregularly — when Mike has something
+          to say; when Claude has finished building; when a visit or a
+          match is logged. The broadcast is legible to humans as a set
+          of web pages and to agents as a set of well-formed JSON
+          endpoints.
+</p> <p data-astro-cid-2bd4mm5a>
+Sparrow addresses the <em data-astro-cid-2bd4mm5a>reading</em> half of that broadcast. It
+          complements MAGPIE (the publishing sibling, documented in
+<a href="/magpie" data-astro-cid-2bd4mm5a>/magpie</a>) which handles the inverse problem:
+          getting new blocks <em data-astro-cid-2bd4mm5a>into</em> the graph and fanning them out
+          across syndication targets. Where Magpie is a specimen book —
+          pressed clippings, field-guide chrome — Sparrow is a cockpit:
+          a dial, a reel, a beacon, a set of shortcuts.
+</p> <p data-astro-cid-2bd4mm5a>
+The design decisions recorded in this memorandum are biased
+          toward durability over novelty. Interfaces that resemble the
+          Xerox Star and the Bell Labs printed research paper tend to
+          age well precisely because they grew out of the twin
+          constraints — limited pixels and limited ink — that the web
+          has re-introduced in the form of mobile screens and scarce
+          attention.
+</p> </section> <!-- ─── 2.0 SYSTEM ARCHITECTURE ────────────────────────────── --> <section class="sec" id="s2" aria-labelledby="s2-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s2-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>2.0</span> System Architecture</h2> <p data-astro-cid-2bd4mm5a>
+The SPARROW / MAGPIE / POINTCAST triple is a directed graph
+          with a canonical center and two poles: one that writes, one
+          that reads.
+</p> <figure class="fig" data-astro-cid-2bd4mm5a> <div class="fig-plate" data-astro-cid-2bd4mm5a>
+             +-----------------+       +--------------------+
+             |    MAGPIE       |       |     SPARROW        |
+             | (publisher)     |       | (reader)           |
+             |  macOS peer-    |       |  hosted web        |
+             |  node + CLI     |       |  PWA · offline     |
+             +--------+--------+       +----------+---------+
+                      |                           |
+                      | /api/ping                 | /blocks.json
+                      | pc-ping-v1                | /b/&lt;id&gt;.json
+                      v                           v
+                +===========================================+
+                |            POINTCAST                      |
+                |   canonical broadcast · blocks[] · feeds  |
+                |   channels{FD,CRT,SPN,GF,GDN,ESC,FCT,VST,BTL}|
+                +===========================================+
+                      ^                           ^
+                      |                           |
+                      +--&gt; Mastodon · Farcaster · bitchat · ...
+                           (syndication fanout, v0.9)
+</div> <figcaption class="fig-caption" data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>Fig. 1</strong>
+The PointCast broadcast sits at the centre. MAGPIE writes into
+            the graph and onward to peer networks; SPARROW reads. Both sides
+            speak HTTP + JSON against the same canonical root. Neither holds
+            user state; the browser does.
+</figcaption> </figure> <p data-astro-cid-2bd4mm5a>
+The separation of concerns is strict. Sparrow does not author
+          blocks. Magpie does not render them for general consumption.
+          PointCast is the single source of truth; everything else is a
+          view or a transport.
+</p> </section> <!-- ─── 3.0 USER INTERFACE ─────────────────────────────────── --> <section class="sec" id="s3" aria-labelledby="s3-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s3-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>3.0</span> User Interface</h2> <h3 class="sub-head" data-astro-cid-2bd4mm5a>3.1 The Tuning Dial</h3> <p data-astro-cid-2bd4mm5a>
+The dashboard is anchored on a circular <em data-astro-cid-2bd4mm5a>tuning dial</em> —
+          a conic gradient whose nine slices are sized to the channel
+          distribution of the last twenty-four blocks. A needle sweeps
+          the dial at 12-second intervals; the centre displays the
+          cumulative block count.
+</p> <figure class="fig" data-astro-cid-2bd4mm5a> <div style="display: grid; place-items: center; padding: 10px;" data-astro-cid-2bd4mm5a> <div class="fig-dial" aria-hidden="true" data-astro-cid-2bd4mm5a></div> <div class="fig-dial-label" data-astro-cid-2bd4mm5a>now tuning · 142 blocks received · last 24 windowed</div> </div> <figcaption class="fig-caption" data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>Fig. 2</strong>
+The dial, reduced. Slice widths reflect momentary channel
+            activity; the hue set derives from PointCast's editorial
+            palette, re-mapped into OKLCH for perceptual uniformity.
+</figcaption> </figure> <h3 class="sub-head" data-astro-cid-2bd4mm5a>3.2 Channel Rosette</h3> <p data-astro-cid-2bd4mm5a>
+Below the dial, the nine channels are rendered as a petal grid —
+          code, name, recent count, and a one-line purpose. Each petal
+          is a link and a digit (see §4.0). The channels are summarized
+          in TABLE I.
+</p> <table class="t" data-astro-cid-2bd4mm5a> <thead data-astro-cid-2bd4mm5a> <tr data-astro-cid-2bd4mm5a> <th data-astro-cid-2bd4mm5a>Code</th><th data-astro-cid-2bd4mm5a>Key</th><th data-astro-cid-2bd4mm5a>Name</th><th data-astro-cid-2bd4mm5a>Purpose</th> </tr> </thead> <tbody data-astro-cid-2bd4mm5a> <tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>FD</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>1</code></td> <td data-astro-cid-2bd4mm5a>Front Door</td> <td data-astro-cid-2bd4mm5a>AI, interfaces, agent-era thinking.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>CRT</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>2</code></td> <td data-astro-cid-2bd4mm5a>Court</td> <td data-astro-cid-2bd4mm5a>Pickleball — matches, paddles, drills.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>SPN</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>3</code></td> <td data-astro-cid-2bd4mm5a>Spinning</td> <td data-astro-cid-2bd4mm5a>Music, playlists, listening notes.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>GF</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>4</code></td> <td data-astro-cid-2bd4mm5a>Good Feels</td> <td data-astro-cid-2bd4mm5a>Cannabis/hemp, product drops, brand ops.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>GDN</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>5</code></td> <td data-astro-cid-2bd4mm5a>Garden</td> <td data-astro-cid-2bd4mm5a>Balcony, birds, wildlife, quiet noticing.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>ESC</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>6</code></td> <td data-astro-cid-2bd4mm5a>El Segundo</td> <td data-astro-cid-2bd4mm5a>ESCU fiction, local, community.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>FCT</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>7</code></td> <td data-astro-cid-2bd4mm5a>Faucet</td> <td data-astro-cid-2bd4mm5a>Free daily claims, giveaways.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>VST</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>8</code></td> <td data-astro-cid-2bd4mm5a>Visit</td> <td data-astro-cid-2bd4mm5a>Human and agent visit log entries.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>BTL</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>9</code></td> <td data-astro-cid-2bd4mm5a>Battler</td> <td data-astro-cid-2bd4mm5a>Nouns Battler — deterministic duels. Every match is a block.</td> </tr><tr data-astro-cid-2bd4mm5a> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>BDY</code></td> <td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>10</code></td> <td data-astro-cid-2bd4mm5a>Birthday</td> <td data-astro-cid-2bd4mm5a>Birthdays celebrated on PointCast — one block per person per year, one Noun per person forever. Indexed at /cake.</td> </tr> </tbody> </table> <h3 class="sub-head" data-astro-cid-2bd4mm5a>3.3 Broadcast Reel</h3> <p data-astro-cid-2bd4mm5a>
+The reel displays the dozen most recent blocks as
+          channel-tinted <em data-astro-cid-2bd4mm5a>receipts</em>. Each receipt carries a
+          pixel-stamp (channel · type), a number, a date, a title
+          set in high-contrast Didone, a dek, a signal-strength bar,
+          and an optional mood chip.
+</p> <figure class="fig" data-astro-cid-2bd4mm5a> <div class="fig-receipts" data-astro-cid-2bd4mm5a> <div class="fig-receipt" data-astro-cid-2bd4mm5a> <span class="stamp" data-astro-cid-2bd4mm5a>FD · READ</span> <div class="tt" data-astro-cid-2bd4mm5a>The front door is agentic</div> </div> <div class="fig-receipt" data-astro-cid-2bd4mm5a> <span class="stamp" data-astro-cid-2bd4mm5a>GDN · NOTE</span> <div class="tt" data-astro-cid-2bd4mm5a>Tuesday morning — Blueboon, GG4…</div> </div> <div class="fig-receipt" data-astro-cid-2bd4mm5a> <span class="stamp" data-astro-cid-2bd4mm5a>SPN · LISTEN</span> <div class="tt" data-astro-cid-2bd4mm5a>Copland · Appalachian Spring</div> </div> </div> <figcaption class="fig-caption" data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>Fig. 3</strong>
+Three receipts, representative. Hovering prefetches the
+            reader page; clicking morphs the card into the full-page
+            article via the View Transitions API.
+</figcaption> </figure> <h3 class="sub-head" data-astro-cid-2bd4mm5a>3.4 Block Reader</h3> <p data-astro-cid-2bd4mm5a>
+Each block is available at <code data-astro-cid-2bd4mm5a>/sparrow/b/&lt;id&gt;</code>
+in a reader-optimized layout: EB-Garamond-class serif title,
+          italic framing (<em data-astro-cid-2bd4mm5a>dek</em>), single-column body set at 64ch
+          measure, right-side aside for channel, companions, external
+          link, and canonical URL. Navigation is J / K (older / newer),
+          S to save to the local reading list.
+</p> </section> <!-- ─── 4.0 KEYBOARD PROTOCOL ──────────────────────────────── --> <section class="sec" id="s4" aria-labelledby="s4-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s4-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>4.0</span> Keyboard Protocol</h2> <p data-astro-cid-2bd4mm5a>
+Sparrow is keyboard-first. All shortcuts honor the platform's
+          input focus rules: a shortcut fires only when focus is not
+          within a form field or a content-editable surface. The
+          protocol is fixed in TABLE II.
+</p> <table class="t" data-astro-cid-2bd4mm5a> <thead data-astro-cid-2bd4mm5a><tr data-astro-cid-2bd4mm5a><th data-astro-cid-2bd4mm5a>Keys</th><th data-astro-cid-2bd4mm5a>Action</th><th data-astro-cid-2bd4mm5a>Scope</th></tr></thead> <tbody data-astro-cid-2bd4mm5a> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>⌘K</code> / <code data-astro-cid-2bd4mm5a>Ctrl+K</code></td><td data-astro-cid-2bd4mm5a>Open command palette</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>J</code></td><td data-astro-cid-2bd4mm5a>Focus next receipt; on reader, navigate to older block</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>K</code></td><td data-astro-cid-2bd4mm5a>Focus previous receipt; on reader, navigate to newer block</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>1</code>…<code data-astro-cid-2bd4mm5a>9</code></td><td data-astro-cid-2bd4mm5a>Jump to channel by index (1=FD … 9=BTL)</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>G F</code>…<code data-astro-cid-2bd4mm5a>G B</code></td><td data-astro-cid-2bd4mm5a>Jump to channel by first letter</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>S</code></td><td data-astro-cid-2bd4mm5a>Save (or unsave) the focused or now-tuned block</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>/</code></td><td data-astro-cid-2bd4mm5a>Focus the reel search input</td><td data-astro-cid-2bd4mm5a>Dashboards, channels</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>T</code></td><td data-astro-cid-2bd4mm5a>Toggle theme: blue-hour ↔ dawn</td><td data-astro-cid-2bd4mm5a>Global</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a><code data-astro-cid-2bd4mm5a>Esc</code></td><td data-astro-cid-2bd4mm5a>Close overlays (palette, modals)</td><td data-astro-cid-2bd4mm5a>Global</td></tr> </tbody> </table> </section> <!-- ─── 5.0 DATA MODEL ─────────────────────────────────────── --> <section class="sec" id="s5" aria-labelledby="s5-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s5-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>5.0</span> Data Model</h2> <p data-astro-cid-2bd4mm5a>
+Blocks are JSON records held in the canonical PointCast
+          content collection. Sparrow depends only on public fields
+          — the same fields exposed by <code data-astro-cid-2bd4mm5a>/blocks.json</code>. A
+          representative record (<em data-astro-cid-2bd4mm5a>id</em>: 0205) is shown in
+          LISTING 1.
+</p> <div class="term" data-astro-cid-2bd4mm5a>{
+  &quot;id&quot;: &quot;0205&quot;,
+  &quot;channel&quot;: &quot;FD&quot;,
+  &quot;type&quot;: &quot;READ&quot;,
+  &quot;title&quot;: &quot;The front door is agentic&quot;,
+  &quot;dek&quot;: &quot;Seeing the Future No. 0205 —
+          Atlas, Comet, Dia, Claude-in-Chrome.&quot;,
+  &quot;timestamp&quot;: &quot;2026-04-14T09:00:00-08:00&quot;,
+  &quot;author&quot;: &quot;cc&quot;,
+  &quot;mood&quot;: &quot;primitive&quot;,
+  &quot;companions&quot;: []
+}</div> <p data-astro-cid-2bd4mm5a>
+Sparrow maintains no server-side user state. Local preferences
+          live in the browser's <code data-astro-cid-2bd4mm5a>localStorage</code> under three
+          keys: <code data-astro-cid-2bd4mm5a>sparrow:theme</code>, <code data-astro-cid-2bd4mm5a>sparrow:saved</code>
+(reading list), and <code data-astro-cid-2bd4mm5a>sparrow:visited</code> (last-read
+          ledger). An addressable manifest at
+<code data-astro-cid-2bd4mm5a>/sparrow.json</code> mirrors the design-system tokens
+          and data-source contract so alternate clients can be written
+          against the same surface.
+</p> </section> <!-- ─── 6.0 IMPLEMENTATION NOTES ───────────────────────────── --> <section class="sec" id="s6" aria-labelledby="s6-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s6-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>6.0</span> Implementation Notes</h2> <p data-astro-cid-2bd4mm5a>
+The deployed client is authored in Astro + TypeScript + plain
+          HTML. No runtime JavaScript framework is shipped; interaction
+          is handled by a single inline script in the shared layout.
+          Color is specified in OKLCH for perceptual stability across
+          the two themes. Typography pairs Gloock (Didone display),
+          Inter Tight (UI), and Departure Mono (monospace data).
+</p> <p data-astro-cid-2bd4mm5a>
+A scoped service worker at <code data-astro-cid-2bd4mm5a>/sparrow/sw.js</code>
+precaches the shell, runtime-caches block readers with a
+          48-entry LRU trim, and ships an inline offline fallback page
+          in Sparrow chrome for cold first-visit failures. A PWA
+          manifest at <code data-astro-cid-2bd4mm5a>/sparrow/manifest.webmanifest</code>
+registers three app shortcuts and a standalone display mode.
+</p> <p data-astro-cid-2bd4mm5a>
+View transitions between receipt and reader use Astro's
+<code data-astro-cid-2bd4mm5a>ClientRouter</code> and named <code data-astro-cid-2bd4mm5a>transition:name</code>
+attributes. Scroll-driven animations (the top tuning-bar and
+          the reading progress indicator, v0.4) use the CSS
+<code data-astro-cid-2bd4mm5a>scroll-timeline</code> API with graceful fallback.
+<code data-astro-cid-2bd4mm5a>prefers-reduced-motion</code> is honored throughout.
+</p> </section> <!-- ─── 7.0 FUTURE WORK ────────────────────────────────────── --> <section class="sec" id="s7" aria-labelledby="s7-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="s7-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>7.0</span> Future Work</h2> <table class="t" data-astro-cid-2bd4mm5a> <thead data-astro-cid-2bd4mm5a><tr data-astro-cid-2bd4mm5a><th data-astro-cid-2bd4mm5a>Release</th><th data-astro-cid-2bd4mm5a>Status</th><th data-astro-cid-2bd4mm5a>Summary</th></tr></thead> <tbody data-astro-cid-2bd4mm5a> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.1</td><td data-astro-cid-2bd4mm5a>Shipped</td><td data-astro-cid-2bd4mm5a>Reader home, dial, rosette, reel, command palette, Atom feed.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.2</td><td data-astro-cid-2bd4mm5a>Shipped</td><td data-astro-cid-2bd4mm5a>Per-channel pages, block reader with view transition, reading list, numeric + G+letter channel shortcuts.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.3</td><td data-astro-cid-2bd4mm5a>Shipped</td><td data-astro-cid-2bd4mm5a>Scoped service worker, PWA install, offline fallback, last-visited indicator, offline pill.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.4</td><td data-astro-cid-2bd4mm5a>In progress</td><td data-astro-cid-2bd4mm5a>Reader finesse — reading-progress bar, keyboard cheatsheet overlay (?), copy-as-quote, prefetch-on-hover, drop-caps + <code data-astro-cid-2bd4mm5a>text-wrap: pretty</code>.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.5</td><td data-astro-cid-2bd4mm5a>Planned</td><td data-astro-cid-2bd4mm5a>Native macOS menu-bar companion; Bonjour mirror of the reading list; global hotkey.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.6</td><td data-astro-cid-2bd4mm5a>Planned</td><td data-astro-cid-2bd4mm5a>Nostr kind-7 reactions keyed to block IDs; inline reply composer via Magpie.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v0.7</td><td data-astro-cid-2bd4mm5a>Planned</td><td data-astro-cid-2bd4mm5a>NIP-44-encrypted cross-device sync of saved + visited; OPML import / export.</td></tr> <tr data-astro-cid-2bd4mm5a><td data-astro-cid-2bd4mm5a>v1.0</td><td data-astro-cid-2bd4mm5a>North star</td><td data-astro-cid-2bd4mm5a>Full offline archive (IndexedDB); cross-client read state via Nostr addressable events; <code data-astro-cid-2bd4mm5a>/sparrow/llms.txt</code> for agent consumption; federated reading lists.</td></tr> </tbody> </table> </section> <!-- ─── REFERENCES ─────────────────────────────────────────── --> <section class="sec" id="refs" aria-labelledby="refs-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="refs-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>R.</span> References</h2> <ol class="lite" style="font-family: var(--mono); font-size: 12.5px;" data-astro-cid-2bd4mm5a> <li data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>PointCast</strong>. Canonical broadcast.
+<a href="/" data-astro-cid-2bd4mm5a>pointcast.xyz</a> · <a href="/blocks.json" data-astro-cid-2bd4mm5a>/blocks.json</a>.
+</li> <li data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>Magpie</strong>. macOS publisher + syndication fanout.
+<a href="/magpie" data-astro-cid-2bd4mm5a>pointcast.xyz/magpie</a> ·
+<a href="/magpie.json" data-astro-cid-2bd4mm5a>/magpie.json</a>.
+</li> <li data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>BLOCKS.md</strong>. Block schema specification.
+            See repository root.
+</li> <li data-astro-cid-2bd4mm5a> <strong data-astro-cid-2bd4mm5a>Sparrow manifest</strong>. Machine-legible
+            description of this client, its UI primitives, and the
+            keyboard protocol. <a href="/sparrow.json" data-astro-cid-2bd4mm5a>/sparrow.json</a>.
+</li> <li data-astro-cid-2bd4mm5a>
+Sutherland, I. E. <em data-astro-cid-2bd4mm5a>Sketchpad: A Man-Machine Graphical
+            Communication System</em>. MIT Lincoln Laboratory, 1963.
+            (On the value of interactive systems that reward attention.)
+</li> <li data-astro-cid-2bd4mm5a>
+Kay, A., &amp; Goldberg, A. <em data-astro-cid-2bd4mm5a>Personal Dynamic Media</em>.
+            Xerox PARC, 1977. (On thin clients, shared documents,
+            and documents-as-media.)
+</li> </ol> </section> <!-- ─── APPENDIX A ─────────────────────────────────────────── --> <section class="sec" id="appa" aria-labelledby="appa-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="appa-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>A.</span> Appendix — Manifest Surface</h2> <p data-astro-cid-2bd4mm5a>
+The canonical agent-legible description of Sparrow ships at
+<code data-astro-cid-2bd4mm5a><a href="/sparrow.json" data-astro-cid-2bd4mm5a>/sparrow.json</a></code>. An
+          Atom 1.0 feed ships at
+<code data-astro-cid-2bd4mm5a><a href="/sparrow/feed.xml" data-astro-cid-2bd4mm5a>/sparrow/feed.xml</a></code>.
+          Alternate clients — terminal, phone, native desk —
+          should resolve those two URLs and nothing else.
+</p> </section> <!-- ─── APPENDIX B — AI IMAGE PROMPTS ──────────────────────── --> <section class="sec" id="appb" aria-labelledby="appb-h" data-astro-cid-2bd4mm5a> <h2 class="sec-head" id="appb-h" data-astro-cid-2bd4mm5a><span class="sec-num" data-astro-cid-2bd4mm5a>B.</span> Appendix — AI Image Prompts for Figure Plates</h2> <p data-astro-cid-2bd4mm5a>
+The figures in this memorandum are rendered live in CSS.
+          Should the reader wish to drop bitmap plates in their place —
+          paste these prompts into
+<a href="https://chatgpt.com/images/" data-astro-cid-2bd4mm5a>chatgpt.com/images/</a>,
+          Midjourney, DALL·E 3, or the image model of the day. Each
+          prompt is self-contained.
+</p> <div class="prompt" data-astro-cid-2bd4mm5a> <h3 class="prompt-head" data-astro-cid-2bd4mm5a>Prompt 1 — Cover Plate</h3> <p class="prompt-body" data-astro-cid-2bd4mm5a>A 1984 Bell Labs research memorandum cover, cream paper, high-contrast halftone photograph at the top of a wooden writing desk with a Xerox Star 8010 workstation in the background, an IBM Selectric typewriter to the left, and a single crisp black sparrow silhouette perched on the edge of the desk. Top-left stamp in oxblood ink reading "POINTCAST · R&amp;B GROUP". Monospace document code "SPA-TM-26-0421" below. Grainy newsprint halftone. Strictly monochrome with a single oxblood accent. 4:5 portrait, archival scan look.</p> <p class="prompt-meta" data-astro-cid-2bd4mm5a>aspect · 4:5 · use · cover plate above the letterhead</p> </div> <div class="prompt" data-astro-cid-2bd4mm5a> <h3 class="prompt-head" data-astro-cid-2bd4mm5a>Prompt 2 — Fig. 1 (System Diagram)</h3> <p class="prompt-body" data-astro-cid-2bd4mm5a>A hand-drafted engineering diagram, pencil and india ink on graph paper, showing three labeled rectangles — one marked "MAGPIE (publisher)", one marked "SPARROW (reader)", one larger double-ruled rectangle in the center marked "POINTCAST (canonical broadcast)". Arrows with spline curves connect MAGPIE → POINTCAST and POINTCAST → SPARROW. Small labeled peripheral boxes below POINTCAST read "Mastodon · Farcaster · bitchat · Nostr relay". Drafting-board style, architect's lettering, subtle scan artifacts, no color. 16:9.</p> <p class="prompt-meta" data-astro-cid-2bd4mm5a>aspect · 16:9 · use · drop into Fig. 1 plate area</p> </div> <div class="prompt" data-astro-cid-2bd4mm5a> <h3 class="prompt-head" data-astro-cid-2bd4mm5a>Prompt 3 — Fig. 2 (Tuning Dial)</h3> <p class="prompt-body" data-astro-cid-2bd4mm5a>A macro photograph of a vintage shortwave radio tuning dial, circular face, nine segmented arcs in muted jewel tones, a slim brass needle just past the top, centered numerals reading "142" in a transitional serif, dusted with fine grain, warm desk lamp lighting from the upper left, slight aperture blur, mid-century industrial design, Dieter Rams era. Shot on Kodachrome, 1983. Square.</p> <p class="prompt-meta" data-astro-cid-2bd4mm5a>aspect · 1:1 · use · replace the CSS dial figure in §3.1</p> </div> <div class="prompt" data-astro-cid-2bd4mm5a> <h3 class="prompt-head" data-astro-cid-2bd4mm5a>Prompt 4 — Fig. 3 (Receipts)</h3> <p class="prompt-body" data-astro-cid-2bd4mm5a>Three paper library cards fanned across a scratched oak desk, each card stamped with a two-letter channel code ("FD", "GDN", "SPN") in oxblood, a perforated edge at the top, a title typed in hot-lead Didone, date stamped in rubber in the corner. One card sits slightly askew. Overhead studio light. Photojournalism style, 1980s, mid-contrast. 3:2.</p> <p class="prompt-meta" data-astro-cid-2bd4mm5a>aspect · 3:2 · use · replace Fig. 3 receipts grid</p> </div> <div class="prompt" data-astro-cid-2bd4mm5a> <h3 class="prompt-head" data-astro-cid-2bd4mm5a>Prompt 5 — Closing Spot</h3> <p class="prompt-body" data-astro-cid-2bd4mm5a>A single small sparrow rendered in the black-ink style of a 19th-century wood engraving, perched on the end of a taut copper antenna wire, faint halftone cream paper behind, oxblood margin rule at the base, typewriter caption reading "— end of memorandum —". Very restrained. Square.</p> <p class="prompt-meta" data-astro-cid-2bd4mm5a>aspect · 1:1 · use · pre-footer ornament</p> </div> <p data-astro-cid-2bd4mm5a>
+These prompts aim for the aesthetic of Bell Labs' Technical
+          Journal plates and Xerox PARC internal reports. Crucially,
+          the rendered CSS figures already convey the information —
+          the plates would be ornamental, not load-bearing.
+</p> </section> <!-- ─── MEMO FOOT ─────────────────────────────────────────── --> <footer class="memo-foot" data-astro-cid-2bd4mm5a> <div data-astro-cid-2bd4mm5a> <div data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>POINTCAST · R&amp;B GROUP</strong></div> <div data-astro-cid-2bd4mm5a>EL SEGUNDO · CALIFORNIA · 2026</div> </div> <div style="text-align: right;" data-astro-cid-2bd4mm5a> <div data-astro-cid-2bd4mm5a><strong data-astro-cid-2bd4mm5a>SPA-TM-26-0421</strong></div> <div data-astro-cid-2bd4mm5a>PAGE END · DISTRIBUTION UNLIMITED</div> </div> </footer> <nav class="memo-nav" data-astro-cid-2bd4mm5a> <a href="/sparrow" data-astro-cid-2bd4mm5a>← sparrow</a> <a href="/sparrow/about" data-astro-cid-2bd4mm5a>about</a> <a href="/sparrow.json" data-astro-cid-2bd4mm5a>manifest</a> <a href="/sparrow/feed.xml" data-astro-cid-2bd4mm5a>atom</a> <a href="javascript:window.print()" data-astro-cid-2bd4mm5a>print →</a> </nav> </article> </body></html>

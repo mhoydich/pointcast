@@ -1,0 +1,228 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Nouns Mines v2';
+const description = 'A Windows 95 worthy Nouns Mines board: flag mines, reveal safe tiles, and clear the desktop.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/nouns-mines-v2',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/nouns-mines-v2',
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.desktop} jsonLd={jsonLd}>
+  <main class="desk" data-mines style={`--arcade-desktop:url('${ARCADE_ASSETS.desktop}');`}>
+    <section class="window" aria-labelledby="mines-title">
+      <header class="titlebar"><span>Nouns Mines v2</span><span class="buttons" aria-hidden="true"><i>_</i><i>□</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Mines menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-mode>Flag mode: off</button>
+        <a href="/win95-games">All games</a>
+        <a href="/solitaire-v2">Solitaire</a>
+        <a href="/nouns-memory-v2">Memory</a>
+        <a href="/nouns-pyramid-v2">Pyramid</a>
+      </nav>
+      <div class="toolbar">
+        <span>Mines <strong data-mines-left>10</strong></span>
+        <span>Time <strong data-time>00:00</strong></span>
+        <span>Clears <strong data-clears>0</strong></span>
+        <p data-status>Open safe tiles. Right-click or flag mode marks mines.</p>
+      </div>
+      <div class="felt">
+        <div class="board" data-board aria-label="Nouns Mines board"></div>
+      </div>
+      <footer class="status">Avoid mine tiles. Numbers show adjacent mines. Clear all safe tiles to win.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const width = 9;
+  const height = 9;
+  const mineCount = 10;
+  const statsKey = 'pc:arcade:nouns-mines-v2';
+  const profileKey = 'pc:arcade:profile';
+  const boardEl = document.querySelector<HTMLElement>('[data-board]');
+  const statusEl = document.querySelector<HTMLElement>('[data-status]');
+  const minesLeftEl = document.querySelector<HTMLElement>('[data-mines-left]');
+  const timeEl = document.querySelector<HTMLElement>('[data-time]');
+  const clearsEl = document.querySelector<HTMLElement>('[data-clears]');
+  const modeEl = document.querySelector<HTMLButtonElement>('[data-mode]');
+  let board = [];
+  let started = Date.now();
+  let timer;
+  let gameOver = false;
+  let flagMode = false;
+
+  function readJson(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+  function writeJson(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+  function updateArcadeProfile(won = false) {
+    const stats = readJson(statsKey, { plays: 0, clears: 0, bestTime: null });
+    stats.plays = Number(stats.plays || 0) + (won ? 0 : 1);
+    if (won) {
+      const elapsed = Math.floor((Date.now() - started) / 1000);
+      stats.clears = Number(stats.clears || 0) + 1;
+      stats.bestTime = stats.bestTime ? Math.min(stats.bestTime, elapsed) : elapsed;
+    }
+    writeJson(statsKey, stats);
+    const profile = readJson(profileKey, { achievements: [] });
+    profile.totalPlays = Number(profile.totalPlays || 0) + (won ? 0 : 1);
+    profile.lastPlayed = 'Mines';
+    if (won) {
+      profile.clears = Number(profile.clears || 0) + 1;
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), 'first-win', 'mine-sweep']));
+    }
+    writeJson(profileKey, profile);
+  }
+  function say(text) { if (statusEl) statusEl.textContent = text; }
+  function indexOf(x, y) { return y * width + x; }
+  function neighbors(cell) {
+    const out = [];
+    for (let y = cell.y - 1; y <= cell.y + 1; y++) {
+      for (let x = cell.x - 1; x <= cell.x + 1; x++) {
+        if (x === cell.x && y === cell.y) continue;
+        if (x >= 0 && y >= 0 && x < width && y < height) out.push(board[indexOf(x, y)]);
+      }
+    }
+    return out;
+  }
+  function makeBoard() {
+    board = Array.from({ length: width * height }, (_, index) => ({
+      index,
+      x: index % width,
+      y: Math.floor(index / width),
+      mine: false,
+      open: false,
+      flag: false,
+      count: 0,
+      noun: (101 + index * 37) % 1200,
+    }));
+    const picks = new Set();
+    while (picks.size < mineCount) picks.add(Math.floor(Math.random() * board.length));
+    picks.forEach((index) => { board[index].mine = true; });
+    board.forEach((cell) => { cell.count = neighbors(cell).filter((n) => n.mine).length; });
+  }
+  function formatTime() {
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    return `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
+  }
+  function renderStats() {
+    if (timeEl) timeEl.textContent = formatTime();
+    if (minesLeftEl) minesLeftEl.textContent = String(mineCount - board.filter((cell) => cell.flag).length);
+    const stats = readJson(statsKey, {});
+    if (clearsEl) clearsEl.textContent = String(stats.clears || 0);
+  }
+  function render() {
+    if (!boardEl) return;
+    boardEl.innerHTML = board.map((cell) => {
+      const label = cell.open
+        ? cell.mine ? 'mine' : cell.count ? String(cell.count) : ''
+        : cell.flag ? '⚑' : '';
+      return `<button class="cell ${cell.open ? 'is-open' : ''} ${cell.flag ? 'is-flagged' : ''} ${cell.mine && gameOver ? 'is-mine' : ''}" data-index="${cell.index}" aria-label="tile ${cell.x + 1},${cell.y + 1}">
+        ${cell.open && !cell.mine && !cell.count ? `<img src="https://noun.pics/${cell.noun}.svg" alt="" loading="lazy">` : `<span>${label}</span>`}
+      </button>`;
+    }).join('');
+    renderStats();
+  }
+  function flood(cell) {
+    if (cell.open || cell.flag) return;
+    cell.open = true;
+    if (cell.count === 0 && !cell.mine) neighbors(cell).forEach(flood);
+  }
+  function winCheck() {
+    const safeOpen = board.filter((cell) => !cell.mine && cell.open).length;
+    if (safeOpen === board.length - mineCount) {
+      gameOver = true;
+      window.clearInterval(timer);
+      updateArcadeProfile(true);
+      say('Board cleared. Nouns survived the desktop.');
+      render();
+    }
+  }
+  function openCell(index) {
+    if (gameOver) return;
+    const cell = board[index];
+    if (!cell || cell.flag || cell.open) return;
+    if (cell.mine) {
+      cell.open = true;
+      gameOver = true;
+      window.clearInterval(timer);
+      say('Mine hit. New game is waiting.');
+      render();
+      return;
+    }
+    flood(cell);
+    say(cell.count ? `Opened a ${cell.count}.` : 'Opened a safe Noun patch.');
+    render();
+    winCheck();
+  }
+  function flagCell(index) {
+    if (gameOver) return;
+    const cell = board[index];
+    if (!cell || cell.open) return;
+    cell.flag = !cell.flag;
+    say(cell.flag ? 'Flag placed.' : 'Flag removed.');
+    render();
+  }
+  function newGame() {
+    window.clearInterval(timer);
+    makeBoard();
+    started = Date.now();
+    gameOver = false;
+    flagMode = false;
+    if (modeEl) modeEl.textContent = 'Flag mode: off';
+    timer = window.setInterval(renderStats, 1000);
+    updateArcadeProfile(false);
+    say('Fresh board. Open safe tiles.');
+    render();
+  }
+  boardEl?.addEventListener('click', (event) => {
+    const cell = (event.target as HTMLElement).closest('[data-index]');
+    if (!cell) return;
+    const index = Number(cell.dataset.index);
+    flagMode ? flagCell(index) : openCell(index);
+  });
+  boardEl?.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    const cell = (event.target as HTMLElement).closest('[data-index]');
+    if (cell) flagCell(Number(cell.dataset.index));
+  });
+  document.querySelector('[data-new]')?.addEventListener('click', newGame);
+  modeEl?.addEventListener('click', () => {
+    flagMode = !flagMode;
+    modeEl.textContent = `Flag mode: ${flagMode ? 'on' : 'off'}`;
+  });
+  newGame();
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:18px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; }
+  .window { max-width:920px; margin:0 auto; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; box-shadow:2px 2px 0 #000; }
+  .titlebar { display:flex; justify-content:space-between; min-height:28px; padding:3px 5px 3px 7px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:4px; }
+  .buttons i { display:grid; place-items:center; width:19px; height:18px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; }
+  .menubar { display:flex; flex-wrap:wrap; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { border:0; background:transparent; color:#000; padding:4px 8px; font:inherit; text-decoration:none; }
+  .menubar button:hover,.menubar a:hover { background:#000080; color:#fff; }
+  .toolbar { display:grid; grid-template-columns:repeat(3,100px) minmax(0,1fr); gap:6px; padding:7px; border-top:1px solid #fff; border-bottom:1px solid #808080; }
+  .toolbar span,.toolbar p,.status { margin:0; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 7px; font-size:12px; }
+  .toolbar strong { float:right; font-family:"Courier New",monospace; }
+  .felt { display:grid; place-items:center; min-height:620px; padding:18px; background:linear-gradient(rgba(0,62,48,.34),rgba(0,52,42,.58)),var(--arcade-desktop) center/cover; overflow:auto; }
+  .board { display:grid; grid-template-columns:repeat(9,42px); gap:3px; padding:10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#c0c0c0; }
+  .cell { width:42px; height:42px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; padding:0; font:900 18px/1 "Courier New",monospace; }
+  .cell:active,.cell.is-open { border-color:#808080 #fff #fff #808080; background:#e6e6e6; }
+  .cell.is-flagged { color:#b00020; }
+  .cell.is-mine { background:#ff8080; }
+  .cell img { width:28px; height:28px; image-rendering:pixelated; }
+  .status { margin:4px; }
+  @media (max-width:560px) { .desk{padding:8px}.toolbar{grid-template-columns:1fr 1fr}.toolbar p{grid-column:1/-1}.felt{padding:10px; justify-items:start}.board{grid-template-columns:repeat(9,34px)}.cell{width:34px;height:34px}.cell img{width:23px;height:23px} }
+</style>

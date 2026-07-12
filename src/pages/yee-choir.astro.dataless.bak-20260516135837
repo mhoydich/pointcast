@@ -1,0 +1,394 @@
+---
+/**
+ * /yee-choir — collective confetti chamber.
+ *
+ * Sprint 4 of overnight plan. /yeeee was solo confetti; v2 was solo
+ * fireworks. /yee-choir is COLLECTIVE: every visitor's clicks
+ * broadcast to every other visitor (via /api/chamber kind=lobby —
+ * we repurpose the lobby ring stream as a confetti ping). When
+ * anyone clicks, EVERYONE'S sky bursts.
+ *
+ * Uses the existing /api/room WebSocket signal lane for instant fan-out,
+ * with the chamber KV bus retained as a polling fallback.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumNav from '../components/DrumNav.astro';
+
+const title = 'YEE Choir · Collective Confetti · PointCast';
+const description =
+  'Every visitor\'s click bursts confetti for everyone. Multi-player /yeeee.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'YEE Choir',
+  url: 'https://pointcast.xyz/yee-choir',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
+  <main class="yc" id="yc-main">
+    <div class="yc__bg" id="yc-bg"></div>
+
+    <header class="yc__chrome">
+      <span class="yc__chrome-label">YEE CHOIR</span>
+      <span class="yc__chrome-sep">·</span>
+      <span><span id="yc-here">0</span> HERE</span>
+      <span class="yc__chrome-sep">·</span>
+      <span><span id="yc-bursts">0</span> BURSTS · ALL TIME</span>
+    </header>
+
+    <h1 class="yc__hero">YEE</h1>
+    <p class="yc__tagline">click anywhere · everyone sees · everyone hears</p>
+
+    <canvas id="yc-canvas" class="yc__canvas"></canvas>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(#yc-main) { background: #0c0410; overflow: hidden; }
+  .yc {
+    position: relative; isolation: isolate; margin: 0 -32px; padding: 0;
+    width: 100vw; height: calc(100vh - 80px); min-height: 600px;
+    overflow: hidden; cursor: crosshair; user-select: none;
+    color: #f4e7c8;
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+  }
+  .yc .drum-nav { display: none; }
+  .yc__bg {
+    position: absolute; inset: -10%; z-index: 0;
+    background: conic-gradient(from 0deg at 50% 50%,
+      oklch(0.55 0.30 0), oklch(0.60 0.30 60), oklch(0.65 0.28 120),
+      oklch(0.60 0.30 180), oklch(0.55 0.30 240), oklch(0.60 0.30 300),
+      oklch(0.55 0.30 0));
+    filter: blur(50px) saturate(1.4);
+    animation: yc-bg 40s linear infinite;
+    will-change: transform;
+  }
+  @keyframes yc-bg { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .yc::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.40) 100%);
+    z-index: 1;
+  }
+
+  .yc__chrome {
+    position: absolute; top: 24px; right: 32px; z-index: 5;
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 6px 16px; border: 2px solid #ffffff; border-radius: 999px;
+    backdrop-filter: blur(10px); background: rgba(0, 0, 0, 0.40);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .yc__chrome-label { font-weight: 800; letter-spacing: 0.30em; color: #ffffff; }
+  .yc__chrome-sep { color: rgba(255, 255, 255, 0.4); }
+  #yc-here, #yc-bursts { color: oklch(0.90 0.20 80); font-weight: 700; }
+
+  .yc__hero {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    margin: 0; z-index: 2;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(80px, 18vw, 280px); font-weight: 400; letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 80px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.55);
+    pointer-events: none; line-height: 1;
+  }
+  .yc__tagline {
+    position: absolute; top: calc(50% + clamp(60px, 10vw, 160px));
+    left: 50%; transform: translateX(-50%); margin: 0; z-index: 2;
+    font-family: 'Lora', Georgia, serif; font-style: italic;
+    font-size: clamp(14px, 1.6vw, 22px);
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+    pointer-events: none; white-space: nowrap;
+  }
+  .yc__canvas {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    width: 100%; height: 100%;
+  }
+</style>
+
+<script>
+  let actx = null;
+  function ctx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function playChord(rootIdx) {
+    const a = ctx(); const t = a.currentTime;
+    const ROOTS = [261.63, 329.63, 392.00, 523.25, 659.25];
+    const root = ROOTS[rootIdx % ROOTS.length];
+    [1, 1.25, 1.5].forEach((ratio, i) => {
+      const f = root * ratio;
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = a.createGain();
+      const off = i * 0.012;
+      g.gain.setValueAtTime(0.0001, t + off);
+      g.gain.exponentialRampToValueAtTime(0.18, t + off + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 1.2);
+      o.connect(g).connect(a.destination);
+      o.start(t + off); o.stop(t + off + 1.3);
+    });
+  }
+
+  // ── Identity ─────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
+      return sid;
+    } catch { return 'sid-anon-' + Date.now(); }
+  }
+  const SID = ensureSid();
+
+  // ── Canvas ───────────────────────────────────────────
+  const canvas = /** @type {HTMLCanvasElement} */(document.getElementById('yc-canvas'));
+  const c2d = canvas?.getContext('2d');
+  const hereEl = document.getElementById('yc-here');
+  const burstsEl = document.getElementById('yc-bursts');
+  let pieces = [];
+  const MAX_PIECES = 800;
+
+  function resize() {
+    if (!canvas) return;
+    canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  // Pre-load Noun bank
+  const NOUNS = [];
+  for (let i = 0; i < 24; i++) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = `https://noun.pics/${Math.floor(Math.random() * 1200)}.svg`;
+    NOUNS.push(img);
+  }
+
+  function spawnBurst(xPct, yPct, hue) {
+    if (!canvas) return;
+    const cx = xPct * canvas.width;
+    const cy = yPct * canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const count = 28 + Math.floor(Math.random() * 14);
+    for (let i = 0; i < count; i++) {
+      if (pieces.length >= MAX_PIECES) pieces.shift();
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (3 + Math.random() * 8) * dpr;
+      const isNoun = Math.random() < 0.5;
+      pieces.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - speed * 0.3,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.3,
+        size: (12 + Math.random() * 16) * dpr,
+        life: 1.0,
+        decay: 0.008 + Math.random() * 0.006,
+        hue: (hue + (Math.random() - 0.5) * 80 + 360) % 360,
+        kind: isNoun ? 'noun' : (Math.random() < 0.5 ? 'square' : 'circle'),
+        nounIdx: Math.floor(Math.random() * NOUNS.length),
+      });
+    }
+  }
+
+  function step() {
+    if (!c2d || !canvas) return requestAnimationFrame(step);
+    c2d.globalCompositeOperation = 'destination-out';
+    c2d.fillStyle = 'rgba(0, 0, 0, 0.10)';
+    c2d.fillRect(0, 0, canvas.width, canvas.height);
+    c2d.globalCompositeOperation = 'lighter';
+    const grav = 0.18 * (window.devicePixelRatio || 1);
+    pieces.forEach((p) => {
+      p.vy += grav;
+      p.x += p.vx; p.y += p.vy;
+      p.rot += p.rotSpeed;
+      p.life -= p.decay;
+      if (p.life <= 0) return;
+      c2d.save();
+      c2d.translate(p.x, p.y);
+      c2d.rotate(p.rot);
+      c2d.globalAlpha = Math.max(0, p.life);
+      if (p.kind === 'noun' && NOUNS[p.nounIdx]?.complete) {
+        c2d.drawImage(NOUNS[p.nounIdx], -p.size / 2, -p.size / 2, p.size, p.size);
+      } else {
+        c2d.fillStyle = `oklch(0.80 0.30 ${p.hue})`;
+        if (p.kind === 'square') c2d.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        else { c2d.beginPath(); c2d.arc(0, 0, p.size / 2, 0, Math.PI * 2); c2d.fill(); }
+      }
+      c2d.restore();
+    });
+    pieces = pieces.filter((p) => p.life > 0 && p.y < canvas.height + 100);
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  // ── Realtime bus ─────────────────────────────────────
+  const SELF_SID = SID.slice(0, 8);
+  let lastRingsSeen = new Set();
+  let lastSignalsSeen = new Set();
+  let roomSocket = null;
+  let roomSocketReady = false;
+  let reconnectTimer = null;
+
+  function clampUnit(value, fallback = 0.5) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(1, n));
+  }
+
+  function playBurst(xPct, yPct, hue) {
+    const x = clampUnit(xPct);
+    const y = clampUnit(yPct);
+    const h = Number.isFinite(Number(hue)) ? Number(hue) : 80;
+    spawnBurst(x, y, h);
+    try { playChord(Math.floor(h / 72) % 5); } catch {}
+  }
+
+  function socketUrl() {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const path = window.location.pathname || '/yee-choir';
+    return `${proto}//${window.location.host}/api/room?url=${encodeURIComponent(path)}&sid=${encodeURIComponent(SID)}`;
+  }
+
+  function sendRoomIdentify() {
+    if (!roomSocket || roomSocket.readyState !== WebSocket.OPEN) return;
+    try {
+      roomSocket.send(JSON.stringify({
+        type: 'identify',
+        tag: 'yee',
+        currentPath: window.location.pathname || '/yee-choir',
+      }));
+    } catch {}
+  }
+
+  function connectRoomSocket() {
+    if (typeof WebSocket === 'undefined') return;
+    if (roomSocket && (roomSocket.readyState === WebSocket.OPEN || roomSocket.readyState === WebSocket.CONNECTING)) return;
+    try { roomSocket = new WebSocket(socketUrl()); } catch { return; }
+    roomSocket.addEventListener('open', () => {
+      roomSocketReady = true;
+      sendRoomIdentify();
+    });
+    roomSocket.addEventListener('message', (ev) => {
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (hereEl && typeof msg.humans === 'number') hereEl.textContent = String(msg.humans);
+      const signals = Array.isArray(msg.signals) ? msg.signals : [];
+      signals.forEach((sig) => {
+        if (!sig || sig.event !== 'yee:ring') return;
+        if (sig.sid === SELF_SID) return;
+        const key = sig.id || `${sig.sid}-${sig.at}`;
+        if (lastSignalsSeen.has(key)) return;
+        lastSignalsSeen.add(key);
+        playBurst(
+          typeof sig.x === 'number' ? sig.x / 10000 : 0.5,
+          typeof sig.y === 'number' ? sig.y / 10000 : 0.5,
+          sig.hue,
+        );
+      });
+      if (lastSignalsSeen.size > 200) lastSignalsSeen = new Set();
+    });
+    const scheduleReconnect = () => {
+      roomSocketReady = false;
+      if (reconnectTimer) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connectRoomSocket();
+      }, 1800);
+    };
+    roomSocket.addEventListener('close', scheduleReconnect);
+    roomSocket.addEventListener('error', () => {
+      scheduleReconnect();
+      try { roomSocket.close(); } catch {}
+    });
+  }
+
+  function sendSignal(xPct, yPct, hue) {
+    if (!roomSocketReady || !roomSocket || roomSocket.readyState !== WebSocket.OPEN) return false;
+    try {
+      roomSocket.send(JSON.stringify({
+        type: 'signal',
+        event: 'yee:ring',
+        x: Math.round(clampUnit(xPct) * 10000),
+        y: Math.round(clampUnit(yPct) * 10000),
+        hue,
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function ping() {
+    try {
+      await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'lobby', action: 'ping', sessionId: SID }) });
+    } catch {}
+  }
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/chamber?kind=lobby', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j?.ok) return;
+      const visitors = j.state?.visitors || [];
+      const rings = j.state?.rings || [];
+      if (hereEl) hereEl.textContent = String(visitors.length);
+      if (burstsEl) burstsEl.textContent = String(j.state?.ringCount || 0);
+
+      const now = Date.now();
+      rings.forEach((r) => {
+        if (now - r.t > 4000) return;
+        const key = `${r.pid}-${r.t}`;
+        if (lastRingsSeen.has(key)) return;
+        lastRingsSeen.add(key);
+        playBurst(
+          typeof r.x === 'number' ? r.x : 0.2 + Math.random() * 0.6,
+          typeof r.y === 'number' ? r.y : 0.3 + Math.random() * 0.4,
+          r.hue,
+        );
+      });
+      if (lastRingsSeen.size > 200) lastRingsSeen = new Set();
+    } catch {}
+  }
+  async function postFallbackRing(xPct, yPct, hue) {
+    try {
+      const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'lobby', action: 'ring', sessionId: SID, x: xPct, y: yPct, hue }) });
+      const j = await r.json();
+      if (j?.ok) {
+        if (hereEl) hereEl.textContent = String(j.state?.visitors?.length || 0);
+        if (burstsEl) burstsEl.textContent = String(j.state?.ringCount || 0);
+        const myLatest = j.state.rings?.[0];
+        if (myLatest) {
+          lastRingsSeen.add(`${myLatest.pid}-${myLatest.t}`);
+        }
+      }
+    } catch {}
+  }
+  function ring(ev) {
+    const root = document.getElementById('yc-main');
+    const rect = root?.getBoundingClientRect();
+    const xPct = rect ? (ev.clientX - rect.left) / rect.width : 0.5;
+    const yPct = rect ? (ev.clientY - rect.top) / rect.height : 0.5;
+    const hue = Math.floor(clampUnit(xPct) * 360);
+    playBurst(xPct, yPct, hue);
+    sendSignal(xPct, yPct, hue);
+    postFallbackRing(xPct, yPct, hue);
+  }
+
+  // Click anywhere → ring
+  document.getElementById('yc-main')?.addEventListener('click', ring);
+
+  connectRoomSocket();
+  ping();
+  setInterval(ping, 8000);
+  fetchState();
+  setInterval(fetchState, 2000);
+</script>

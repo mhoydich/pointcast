@@ -1,0 +1,120 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { r as renderComponent, a as renderTemplate, m as maybeRenderHead } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$BlockLayout } from './BlockLayout_DHviHHrD.mjs';
+
+const $$NounsColaFundraise = createComponent(($$result, $$props, $$slots) => {
+  const FORMULAS = [
+    {
+      name: "Formula 01 · Classic Cola",
+      status: "launch first",
+      thesis: "A clean beverage pilot with the lowest formulation and labeling complexity.",
+      fit: "Best route for first capital in, first cans out."
+    },
+    {
+      name: "Formula 02 · Calm Focus",
+      status: "gated R&D",
+      thesis: "Ashwagandha-led functional lane for stress-support positioning, if counsel and formulation review clear it.",
+      fit: "Most evidence-backed adaptogen path, but still not a casual launch claim."
+    },
+    {
+      name: "Formula 03 · Stamina",
+      status: "later experiment",
+      thesis: "Rhodiola or Panax ginseng daytime lane aimed at fatigue and resilience.",
+      fit: "Interesting, but evidence and formulation risk are not as clean for the opening round."
+    }
+  ];
+  const EVIDENCE = [
+    {
+      ingredient: "Ashwagandha",
+      target: "stress / sleep support",
+      read: "best-supported adaptogen lane",
+      caution: "thyroid, liver, sedatives, pregnancy, interaction risk"
+    },
+    {
+      ingredient: "Rhodiola rosea",
+      target: "fatigue / focus",
+      read: "mixed evidence",
+      caution: "insomnia, stimulation, medication interactions"
+    },
+    {
+      ingredient: "Panax ginseng",
+      target: "vitality / fatigue",
+      read: "modest evidence",
+      caution: "blood sugar, sleep, clotting, autoimmune concerns"
+    }
+  ];
+  const CAPITAL = [
+    { use: "Classic cola pilot", amount: "$96k", note: "formula, run deposit, inventory, freight, compliance" },
+    { use: "Adaptogen R&D reserve", amount: "$12k", note: "formulator work, ingredient review, sample rounds, label draft" },
+    { use: "PointCast launch media", amount: "$12k", note: "sampling, updates, sponsor credits, conversion surfaces" }
+  ];
+  const RULES = [
+    "Raise against the pilot everyone can understand.",
+    "Keep adaptogen claims conservative until counsel and labeling review are complete.",
+    "Use PointCast to show gates, proofs, and receipts in public.",
+    "Do not frame preorders or sponsor crates as financial upside."
+  ];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": "https://pointcast.xyz/nouns-cola-fundraise",
+        name: "Nouns Cola Fundable Brief",
+        description: "Fundable launch brief for Nouns Cola: classic cola first, adaptogen lane second, with formulation gates and a clean capital plan.",
+        url: "https://pointcast.xyz/nouns-cola-fundraise",
+        inLanguage: "en-US"
+      }
+    ]
+  };
+  return renderTemplate`${renderComponent($$result, "BlockLayout", $$BlockLayout, { "title": "Nouns Cola Fundable Brief", "description": "Fundable launch brief for Nouns Cola: classic cola first, adaptogen lane second, with formulation gates and a clean capital plan.", "image": "/images/og/nouns-cola-fundraise.png", "jsonLd": jsonLd, "alternates": [{ type: "application/json", href: "/nouns-cola-fundraise.json", title: "Nouns Cola fundable brief (JSON)" }], "frame": {
+    image: "https://pointcast.xyz/images/og/nouns-cola-fundraise.png",
+    buttons: [
+      { label: "Open brief", action: "link", target: "https://pointcast.xyz/nouns-cola-fundraise" },
+      { label: "Open board", action: "link", target: "https://pointcast.xyz/nouns-cola" },
+      { label: "Open sprint", action: "link", target: "https://pointcast.xyz/next-sprint" },
+      { label: "Agent JSON", action: "link", target: "https://pointcast.xyz/nouns-cola-fundraise.json" }
+    ]
+  } }, { "default": ($$result2) => renderTemplate` ${maybeRenderHead()}<div class="cola-page"> <nav class="crumb" aria-label="Breadcrumb"> <a href="/">Home</a> <span aria-hidden="true">/</span> <a href="/nouns-cola">Nouns Cola</a> <span aria-hidden="true">/</span> <span>fundable brief</span> </nav> <header class="hero"> <div class="hero__copy"> <p class="kicker">NOUNS COLA / FUNDABLE BRIEF</p> <h1 class="display">Classic cola first. Adaptogen lane second.</h1> <p class="dek">
+The clean pitch is not a miracle tonic. It is a legible beverage
+          pilot with public economics, clear gates, and a reserved functional
+          branch that only advances when the evidence, labeling, and safety
+          work can support it.
+</p> <div class="hero__actions" aria-label="Primary actions"> <a class="btn btn--primary" href="/nouns-cola">Open operating board</a> <a class="btn btn--ghost" href="/next-sprint">Open sprint</a> <a class="btn btn--ghost" href="/nouns-cola-case-study">AI case study</a> <a class="btn btn--ghost" href="/nouns-cola-fundraise.json">Agent JSON</a> </div> </div> <figure class="hero__visual"> <img src="/images/nouns-cola/nouns-cola-pack.png" alt="Nouns Cola cans and pilot pack" width="1600" height="1200"> <figcaption class="mono">FUND THE PILOT / EARN THE NEXT SKU</figcaption> </figure> </header> <section class="status" aria-label="Brief status"> <div><span class="mono">THESIS</span><strong>classic first</strong></div> <div><span class="mono">R&D</span><strong>adaptogen gated</strong></div> <div><span class="mono">CAPITAL</span><strong>$120k target</strong></div> <div><span class="mono">CLAIMS</span><strong>conservative</strong></div> <div><span class="mono">SURFACE</span><strong>PointCast</strong></div> </section> <section class="band"> <div class="section-head"> <p class="kicker">WHY THIS WORKS</p> <h2>Fund the thing that can ship without hand-waving.</h2> <p>
+Investors, sponsors, and collaborators can underwrite a classic cola
+          pilot because the sensory target, cost stack, and route to shelf are
+          easy to explain. Adaptogens stay in the document as upside, but not
+          as the core dependency for the first run.
+</p> </div> <div class="contribution-grid" aria-label="Formula roadmap"> ${FORMULAS.map((item) => renderTemplate`<article class="contribution"> <span class="mono">${item.status}</span> <strong>${item.name}</strong> <p>${item.thesis}</p> <em>${item.fit}</em> </article>`)} </div> </section> <section class="band band--split"> <div class="section-head"> <p class="kicker">EFFECTS / EVIDENCE</p> <h2>Keep the formulations honest.</h2> <p>
+The evidence does not support spraying every adaptogen buzzword onto a
+          can. The best-supported path is stress-support positioning with
+          ashwagandha, and even that lane needs careful safety and label work.
+</p> </div> <div class="raise-table" aria-label="Adaptogen evidence matrix"> ${EVIDENCE.map((row) => renderTemplate`<div class="raise-row"> <span>${row.ingredient} · ${row.target}</span> <strong>${row.read}</strong> </div>`)} <div class="raise-row raise-row--total"> <span>Main rule</span> <strong>effects are R&D, not free claims</strong> </div> </div> </section> <section class="band finance"> <div class="section-head"> <p class="kicker">CAPITAL PLAN</p> <h2>Put most of the money under the pilot, not the story.</h2> <p>
+The adaptation here is simple: reserve a real but modest amount for
+          formula research, and keep the majority of capital focused on the run
+          everyone already understands.
+</p> </div> <div class="finance__split"> <div class="finance-stack"> <p class="kicker">USES OF CAPITAL</p> ${CAPITAL.map((row) => renderTemplate`<div class="finance-row"> <span>${row.use}</span> <strong>${row.amount}</strong> <small>${row.note}</small> </div>`)} </div> <div class="waterfall"> <p class="kicker">PUBLISHABLE RULES</p> <ol> ${RULES.map((item) => renderTemplate`<li>${item}</li>`)} </ol> <p class="finance-note">
+This is still planning and product strategy, not an investment
+            offering. Food, supplement, label, and marketing claims all need
+            qualified review before sale.
+</p> </div> </div> </section> <section class="team"> <div> <p class="kicker">GO TEAM</p> <h2>Now the project sounds like a pilot, not a mood board.</h2> </div> <ul> <li><strong>Formulator</strong><span>prove base cola, then test functional branch</span></li> <li><strong>Counsel</strong><span>clear claims, labels, and ingredient risk</span></li> <li><strong>Fundraiser</strong><span>sell the pilot and the gates, not fantasy upside</span></li> <li><strong>PointCast</strong><span>publish evidence, receipts, and next moves</span></li> </ul> </section> <section class="sprint-callout" aria-label="AI case study"> <div> <p class="kicker">CASE STUDY</p> <h2>The journey to a Nouns beverage.</h2> <p>
+A new PointCast case study tracks how AI generation moved Nouns Cola
+          from prompt to board to campaign system to a more fundable product
+          story, and where human judgment still had to take over.
+</p> </div> <a class="btn btn--primary" href="/nouns-cola-case-study">Open case study</a> </section> </div> ` })}`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/nouns-cola-fundraise.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/nouns-cola-fundraise.astro";
+const $$url = "/nouns-cola-fundraise";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$NounsColaFundraise,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

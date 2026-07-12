@@ -8,7 +8,11 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://pointcast.xyz',
+  publicDir: '/private/tmp/pointcast-empty-public',
   integrations: [sitemap()],
+  markdown: {
+    syntaxHighlight: false,
+  },
   vite: {
     plugins: [
       // Taquito + @airgap/beacon-sdk reference Node globals (process, Buffer,

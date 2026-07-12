@@ -856,9 +856,10 @@ const PAGES = [
 
 async function svgToPng(svg, outPath) {
   await fs.mkdir(path.dirname(outPath), { recursive: true });
-  await sharp(Buffer.from(svg))
+  const buffer = await sharp(Buffer.from(svg))
     .png({ compressionLevel: 9, quality: 90 })
-    .toFile(outPath);
+    .toBuffer();
+  await fs.writeFile(outPath, buffer);
 }
 
 async function main() {

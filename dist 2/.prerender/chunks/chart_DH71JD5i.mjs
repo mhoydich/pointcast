@@ -1,0 +1,300 @@
+import { c as createComponent } from './astro-component_DWMcTjG3.mjs';
+import 'piccolore';
+import { r as renderComponent, a as renderTemplate, m as maybeRenderHead, b as addAttribute } from './prerender_CmTjnOuJ.mjs';
+import { $ as $$BlockLayout } from './BlockLayout_DHviHHrD.mjs';
+import { g as getCollection } from './_astro_content_kC0GrL8i.mjs';
+import { g as getChartOfTheDay } from './chart-of-the-day_BJJik1Ha.mjs';
+
+const $$Chart = createComponent(async ($$result, $$props, $$slots) => {
+  const blocks = (await getCollection("blocks", ({ data }) => !data.draft)).sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+  const chart = getChartOfTheDay(blocks);
+  const latestBlock = blocks[0] ?? null;
+  const description = `${chart.title}: ${chart.dek}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    "@id": "https://pointcast.xyz/chart",
+    name: chart.title,
+    description,
+    url: "https://pointcast.xyz/chart",
+    dateModified: chart.generatedAt,
+    temporalCoverage: `${chart.points[0]?.date}/${chart.points.at(-1)?.date}`,
+    variableMeasured: chart.metric
+  };
+  return renderTemplate`${renderComponent($$result, "BlockLayout", $$BlockLayout, { "title": "Chart", "description": description, "image": "/images/og/og-home-v2.png", "jsonLd": jsonLd, "alternates": [{ type: "application/json", href: "/chart.json", title: "Chart of the Day (JSON)" }] }, { "default": async ($$result2) => renderTemplate` ${maybeRenderHead()}<main class="chart-page" id="chart-of-day"> <nav class="crumb" aria-label="Breadcrumb"> <a href="/">Home</a> <span aria-hidden="true">/</span> <span>chart</span> </nav> <section class="hero" aria-labelledby="chart-title"> <div class="hero__copy"> <p class="kicker">${chart.kicker}</p> <h1 id="chart-title">${chart.title}</h1> <p>${chart.dek}</p> </div> <aside${addAttribute(`score score--${chart.trend}`, "class")} aria-label="Today's chart value"> <span>${chart.date}</span> <strong>${chart.value}</strong> <em>${chart.metric}</em> </aside> </section> <section class="chart-card" aria-labelledby="bar-chart-title"> <div class="chart-card__head"> <div> <p class="kicker">TWO-WEEK LEDGER</p> <h2 id="bar-chart-title">Blocks per PT day</h2> </div> <p class="trend">${chart.trendLabel}</p> </div> <ol class="bars" aria-label="Blocks published per day for the last 14 days"> ${chart.points.map((point) => {
+    const height = Math.max(6, Math.round(point.value / chart.maxValue * 100));
+    return renderTemplate`<li${addAttribute(point.label === "Today" ? "bar bar--today" : "bar", "class")}> <a${addAttribute(point.latestId ? `/b/${point.latestId}` : "/archive", "href")}${addAttribute(`${point.date}: ${point.value} ${chart.unit}`, "aria-label")}> <span class="bar__value">${point.value}</span> <span class="bar__stick"${addAttribute(`height: ${height}%`, "style")}></span> <span class="bar__label">${point.label}</span> </a> </li>`;
+  })} </ol> </section> <section class="notes" aria-label="Chart notes"> <article> <p class="kicker">READ</p> <h2>${chart.insight}</h2> <p>
+This chart is generated from the immutable block ledger at build time.
+          It rotates its framing daily, but the numbers come from the same source
+          humans and agents can inspect in <a href="/blocks.json">/blocks.json</a>.
+</p> </article> <article> <p class="kicker">OPEN</p> <div class="link-grid"> <a href="/chart.json">/chart.json</a> <a href="/chartmaker">/chartmaker</a> <a href="/now">/now</a> <a href="/app">/app</a> ${latestBlock && renderTemplate`<a${addAttribute(`/b/${latestBlock.data.id}`, "href")}>latest block</a>`} </div> </article> </section> </main> ` })} <style>
+  :global(body:has(#chart-of-day)) {
+    background: #f5f0e6;
+  }
+
+  .chart-page {
+    --ink: #15130f;
+    --muted: #665f55;
+    --paper: #fffdf7;
+    --blue: #185fa5;
+    --green: #0f6e56;
+    --red: #8a2432;
+    --gold: #ba7517;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 22px 16px 82px;
+    color: var(--ink);
+  }
+
+  .crumb,
+  .kicker,
+  .score span,
+  .score em,
+  .trend,
+  .bar__label,
+  .bar__value,
+  .link-grid a {
+    font-family: var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 320px);
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .hero__copy,
+  .score,
+  .chart-card,
+  .notes article {
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  .hero__copy {
+    padding: clamp(20px, 4vw, 40px);
+  }
+
+  .kicker {
+    margin: 0 0 10px;
+    color: var(--red);
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  h1 {
+    max-width: 760px;
+    margin: 0;
+    font-size: clamp(44px, 8vw, 92px);
+    line-height: 0.9;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+
+  .hero p,
+  .notes p {
+    max-width: 720px;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  .score {
+    display: grid;
+    align-content: center;
+    gap: 10px;
+    padding: 22px;
+  }
+
+  .score span,
+  .score em {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .score strong {
+    font-size: clamp(82px, 16vw, 150px);
+    line-height: 0.85;
+    color: var(--blue);
+  }
+
+  .score--up strong { color: var(--green); }
+  .score--down strong { color: var(--gold); }
+
+  .chart-card {
+    margin-top: 16px;
+    padding: clamp(16px, 3vw, 28px);
+  }
+
+  .chart-card__head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .chart-card h2,
+  .notes h2 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: 0.98;
+    font-weight: 620;
+  }
+
+  .trend {
+    max-width: 230px;
+    margin: 0;
+    color: var(--blue);
+    font-size: 10px;
+    font-weight: 800;
+    text-align: right;
+  }
+
+  .bars {
+    display: grid;
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+    align-items: end;
+    gap: 8px;
+    height: 320px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .bar,
+  .bar a {
+    min-width: 0;
+    height: 100%;
+  }
+
+  .bar a {
+    display: grid;
+    grid-template-rows: 26px 1fr 24px;
+    gap: 7px;
+    align-items: end;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .bar__value {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .bar__stick {
+    display: block;
+    width: 100%;
+    min-height: 6px;
+    border: 1px solid var(--ink);
+    background: linear-gradient(180deg, #f3c258, #185fa5);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+
+  .bar--today .bar__stick {
+    background: linear-gradient(180deg, #f3c258, #0f6e56);
+  }
+
+  .bar__label {
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.45fr);
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .notes article {
+    padding: 18px;
+  }
+
+  .notes a {
+    color: var(--blue);
+  }
+
+  .link-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .link-grid a {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    font-size: 10px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  @media (max-width: 760px) {
+    .hero,
+    .notes {
+      grid-template-columns: 1fr;
+    }
+
+    .chart-card__head {
+      display: grid;
+      align-items: start;
+    }
+
+    .trend {
+      text-align: left;
+    }
+
+    .bars {
+      gap: 5px;
+      height: 260px;
+    }
+
+    .bar a {
+      grid-template-rows: 24px 1fr 32px;
+    }
+
+    .bar__label {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      margin: 0 auto;
+    }
+  }
+</style>`;
+}, "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/chart.astro", void 0);
+
+const $$file = "/Users/michaelhoydich/Documents/join us yee/pointcast-shipping/src/pages/chart.astro";
+const $$url = "/chart";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$Chart,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };

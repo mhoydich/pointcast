@@ -18,6 +18,7 @@
  *   kind=now        — drum-now: who's here in the wing right now
  *   kind=threshold  — drum-threshold: arrival candles
  *   kind=offering   — drum-offering: visitor intentions archive
+ *   kind=aurora     — drum-aurora: shared ripple fallback for clients without WS
  *
  * GET ?kind=foo → { ok, kind, state, now }
  * POST { kind, action, sessionId, ... } → updated state
@@ -39,7 +40,7 @@ function json(body: unknown, init?: ResponseInit): Response {
   });
 }
 
-const KINDS = ['lobby', 'echo', 'procession', 'now', 'threshold', 'offering', 'duel', 'warhol', 'relay'] as const;
+const KINDS = ['lobby', 'echo', 'procession', 'now', 'threshold', 'offering', 'duel', 'warhol', 'relay', 'aurora'] as const;
 type Kind = typeof KINDS[number];
 
 const TTL: Record<Kind, number> = {
@@ -52,15 +53,17 @@ const TTL: Record<Kind, number> = {
   duel: 600,
   warhol: 7 * 24 * 3600,
   relay: 7 * 24 * 3600,
+  aurora: 600,
 };
 
 const PRESENCE_WINDOW_MS = 30000;
 
 interface Visitor { pid: string; joinedAt: number; lastSeen: number; nounId: number; hue: number; }
-interface Ring { pid: string; t: number; hue: number; nounId: number; }
+interface Ring { pid: string; t: number; hue: number; nounId: number; x?: number; y?: number; }
 interface EchoPhrase { id: string; pid: string; t: number; pattern: number[]; replies: number; }
 interface ProcessionStep { pid: string; t: number; step: number; }
 interface Offering { pid: string; t: number; nounId: number; intention: string; hue: number; }
+interface AuroraRipple { pid: string; t: number; hue: number; nounId: number; x?: number; y?: number; }
 
 interface LobbyState { visitors: Visitor[]; rings: Ring[]; ringCount: number; }
 interface EchoState { phrases: EchoPhrase[]; }
@@ -68,6 +71,7 @@ interface ProcessionState { totalSteps: number; lastFiveSteps: ProcessionStep[];
 interface NowState { visitors: Visitor[]; lastUpdated: number; }
 interface ThresholdState { candles: { pid: string; name: string; nounId: number; lit: number }[]; }
 interface OfferingState { offerings: Offering[]; }
+interface AuroraState { visitors: Visitor[]; ripples: AuroraRipple[]; rippleCount: number; }
 
 interface DuelMatch {
   matchId: string;
@@ -99,6 +103,16 @@ function hueFromString(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 7) - h + s.charCodeAt(i)) | 0;
   return Math.abs(h) % 360;
+}
+function normalizedUnit(value: unknown): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, Math.min(1, parsed));
+}
+function normalizedHue(value: unknown): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return ((Math.round(parsed) % 360) + 360) % 360;
 }
 
 async function loadState<T>(env: Env, kind: Kind): Promise<T | null> {
@@ -139,7 +153,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' }, { status: 503 });
 
-  let body: { kind?: unknown; action?: unknown; sessionId?: unknown; pattern?: unknown; step?: unknown; intention?: unknown; name?: unknown; phraseId?: unknown };
+  let body: { kind?: unknown; action?: unknown; sessionId?: unknown; pattern?: unknown; step?: unknown; intention?: unknown; name?: unknown; phraseId?: unknown; x?: unknown; y?: unknown; hue?: unknown };
   try { body = await request.json() as typeof body; }
   catch { return json({ ok: false, reason: 'bad-body' }, { status: 400 }); }
 
@@ -168,13 +182,49 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ ok: true, state });
     }
     if (action === 'ring') {
-      state.rings.unshift({ pid, t: now, hue, nounId });
+      const ringHue = normalizedHue(body.hue) ?? hue;
+      const ring: Ring = { pid, t: now, hue: ringHue, nounId };
+      const x = normalizedUnit(body.x);
+      const y = normalizedUnit(body.y);
+      if (typeof x === 'number') ring.x = x;
+      if (typeof y === 'number') ring.y = y;
+      state.rings.unshift(ring);
       state.rings = state.rings.slice(0, 30);
       state.ringCount += 1;
       const existing = state.visitors.find((v) => v.pid === pid);
       if (existing) existing.lastSeen = now;
       else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
       await saveState(env, 'lobby', state);
+      return json({ ok: true, state });
+    }
+  }
+
+  if (kind === 'aurora') {
+    const state = (await loadState<AuroraState>(env, 'aurora')) ?? { visitors: [], ripples: [], rippleCount: 0 };
+    state.visitors = state.visitors.filter((v) => now - v.lastSeen < PRESENCE_WINDOW_MS);
+    state.ripples = state.ripples.filter((r) => now - r.t < 8000);
+
+    if (action === 'ping') {
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      await saveState(env, 'aurora', state);
+      return json({ ok: true, state });
+    }
+    if (action === 'ripple') {
+      const rippleHue = normalizedHue(body.hue) ?? hue;
+      const ripple: AuroraRipple = { pid, t: now, hue: rippleHue, nounId };
+      const x = normalizedUnit(body.x);
+      const y = normalizedUnit(body.y);
+      if (typeof x === 'number') ripple.x = x;
+      if (typeof y === 'number') ripple.y = y;
+      state.ripples.unshift(ripple);
+      state.ripples = state.ripples.slice(0, 40);
+      state.rippleCount += 1;
+      const existing = state.visitors.find((v) => v.pid === pid);
+      if (existing) existing.lastSeen = now;
+      else state.visitors.push({ pid, joinedAt: now, lastSeen: now, nounId, hue });
+      await saveState(env, 'aurora', state);
       return json({ ok: true, state });
     }
   }

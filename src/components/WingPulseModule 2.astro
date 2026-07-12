@@ -1,0 +1,201 @@
+---
+/**
+ * WingPulseModule — homepage entry point to the wing.
+ *
+ * Mike: 'a module for the homepage when you just land.' Visitors
+ * arrive at /, see a brass-and-velvet strip showing live wing
+ * presence, with a tap-to-enter CTA. Polls /api/chamber on hydrate.
+ *
+ * Sits with the other top-of-page strips (FreshStrip, VisitorHereStrip,
+ * MoodChip). Same horizontal-strip rhythm; different palette so it
+ * advertises the wing.
+ */
+---
+
+<section class="wpm" id="wpm-root" aria-label="The wing — live presence">
+  <a class="wpm__pill" href="/drum-room">
+    <span class="wpm__brass">●</span>
+    <span class="wpm__label">THE WING</span>
+    <span class="wpm__sep">·</span>
+    <span class="wpm__count" id="wpm-count">— here now</span>
+    <span class="wpm__sep">·</span>
+    <span class="wpm__rings" id="wpm-rings">— rings this min</span>
+    <span class="wpm__cta">enter →</span>
+  </a>
+  <div class="wpm__lights" id="wpm-lights" aria-hidden="true"></div>
+</section>
+
+<style>
+  .wpm {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 14px;
+    margin: 12px 0 8px;
+    flex-wrap: wrap;
+
+    --wpm-velvet: #1a0820;
+    --wpm-brass: #d4a437;
+    --wpm-brass-deep: #6b4d12;
+    --wpm-flame: #f6c15e;
+    --wpm-cream: #f4e7c8;
+  }
+
+  .wpm__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    border: 1.5px solid var(--wpm-brass-deep);
+    border-radius: 999px;
+    text-decoration: none;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, Menlo, monospace);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--wpm-cream);
+    background: linear-gradient(180deg, rgba(26, 8, 32, 0.95) 0%, rgba(12, 4, 16, 0.95) 100%);
+    transition: transform 120ms, border-color 200ms, box-shadow 200ms;
+    box-shadow: 0 4px 16px rgba(212, 164, 55, 0.16);
+  }
+  .wpm__pill:hover {
+    transform: translateY(-1px);
+    border-color: var(--wpm-brass);
+    box-shadow: 0 6px 22px rgba(212, 164, 55, 0.30);
+    text-decoration: none;
+  }
+
+  .wpm__brass {
+    color: var(--wpm-flame);
+    font-size: 9px;
+    text-shadow: 0 0 8px rgba(246, 193, 94, 0.65);
+    animation: wpm-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes wpm-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+  }
+
+  .wpm__label { color: var(--wpm-brass); font-weight: 800; letter-spacing: 0.30em; }
+  .wpm__sep { color: var(--wpm-brass-deep); }
+  .wpm__count, .wpm__rings { color: var(--wpm-cream); font-weight: 600; opacity: 0.85; }
+  .wpm__cta { color: var(--wpm-flame); font-weight: 700; margin-left: 4px; }
+
+  .wpm__lights {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 10px;
+    flex-wrap: wrap;
+  }
+  .wpm__light {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: oklch(0.65 0.20 var(--hue, 60));
+    box-shadow: 0 0 6px oklch(0.75 0.30 var(--hue, 60) / 0.65);
+    transition: transform 200ms, opacity 600ms;
+  }
+  .wpm__light--ringing {
+    animation: wpm-ring 0.6s ease-out 1;
+  }
+  @keyframes wpm-ring {
+    0%   { transform: scale(1); opacity: 1; }
+    50%  { transform: scale(2.4); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Mobile: ring lights wrap below pill */
+  @media (max-width: 720px) {
+    .wpm { padding: 6px 10px; }
+    .wpm__pill { font-size: 11px; padding: 7px 14px; gap: 8px; }
+    .wpm__rings { display: none; }
+  }
+</style>
+
+<script>
+  // Poll lobby for live presence + rings.
+  // No identity needed — read-only.
+  const countEl = document.getElementById('wpm-count');
+  const ringsEl = document.getElementById('wpm-rings');
+  const lightsEl = document.getElementById('wpm-lights');
+
+  let lastRingsSeen = new Set();
+  let ringsThisMin = 0;
+  let ringsResetAt = 0;
+
+  function pruneRingsCount() {
+    if (Date.now() - ringsResetAt > 60000) {
+      ringsThisMin = 0;
+      ringsResetAt = Date.now();
+    }
+  }
+
+  function paintLights(visitors) {
+    if (!lightsEl) return;
+    const present = new Set(visitors.map((v) => v.pid));
+    Array.from(lightsEl.querySelectorAll('.wpm__light')).forEach((el) => {
+      if (!present.has(el.dataset.pid)) el.remove();
+    });
+    visitors.slice(0, 16).forEach((v) => {
+      let el = lightsEl.querySelector(`[data-pid="${v.pid}"]`);
+      if (!el) {
+        el = document.createElement('span');
+        el.className = 'wpm__light';
+        el.dataset.pid = v.pid;
+        lightsEl.appendChild(el);
+      }
+      el.style.setProperty('--hue', String(v.hue));
+    });
+  }
+
+  function paintRingFlash(rings) {
+    pruneRingsCount();
+    if (!Array.isArray(rings) || !lightsEl) return;
+    const now = Date.now();
+    rings.forEach((r) => {
+      const key = `${r.pid}-${r.t}`;
+      if (lastRingsSeen.has(key)) return;
+      if (now - r.t > 6000) return;
+      lastRingsSeen.add(key);
+      ringsThisMin += 1;
+      // Flash the corresponding light if present
+      const light = lightsEl.querySelector(`[data-pid="${r.pid}"]`);
+      if (light) {
+        light.classList.remove('wpm__light--ringing');
+        void (light as HTMLElement).offsetWidth;
+        light.classList.add('wpm__light--ringing');
+        setTimeout(() => light.classList.remove('wpm__light--ringing'), 700);
+      }
+    });
+    if (lastRingsSeen.size > 200) lastRingsSeen = new Set();
+  }
+
+  async function refresh() {
+    try {
+      // Fetch both lobby (rings + brass lights) and now (wing-wide visitors)
+      const [lobbyRes, nowRes] = await Promise.all([
+        fetch('/api/chamber?kind=lobby', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/chamber?kind=now', { cache: 'no-store' }).catch(() => null),
+      ]);
+      const lobby = lobbyRes?.ok ? await lobbyRes.json() : null;
+      const now = nowRes?.ok ? await nowRes.json() : null;
+
+      const visitors = (now?.state?.visitors) || (lobby?.state?.visitors) || [];
+      const rings = lobby?.state?.rings || [];
+
+      if (countEl) {
+        const n = visitors.length;
+        countEl.textContent = n === 1 ? '1 here now' : `${n} here now`;
+      }
+      paintLights(visitors);
+      paintRingFlash(rings);
+      pruneRingsCount();
+      if (ringsEl) ringsEl.textContent = `${ringsThisMin} rings this min`;
+    } catch {}
+  }
+
+  if (countEl || lightsEl) {
+    refresh();
+    setInterval(refresh, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+</script>

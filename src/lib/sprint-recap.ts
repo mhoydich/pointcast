@@ -29,7 +29,10 @@ export interface SprintRecap {
 // Globbed at build time: every .md under docs/sprints/. README is filtered out
 // in the parse step so the convention "drop a file, it shows up next build"
 // stays intact. Path is relative to THIS file (src/lib/sprint-recap.ts).
-const RECAP_FILES = import.meta.glob('../../docs/sprints/*.md', {
+const RECAP_FILES = import.meta.glob([
+  '../../docs/sprints/*.md',
+  '!../../docs/sprints/2026-04-18-llms-full-refresh.md',
+], {
   query: '?raw',
   import: 'default',
   eager: true,
