@@ -12,7 +12,10 @@
  */
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
+import BellButton from '../components/BellButton.astro';
 import FooterBar from '../components/FooterBar.astro';
+import FooterBarV6 from '../components/FooterBarV6.astro';
+import IntercomWidget from '../components/IntercomWidget.astro';
 import SpellLayer from '../components/SpellLayer.astro';
 import CursorRoom from '../components/CursorRoom.astro';
 import FreshnessChip from '../components/FreshnessChip.astro';
@@ -62,7 +65,12 @@ const {
 const siteBase = Astro.site || new URL('https://pointcast.xyz');
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
-const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+const siteTitle =
+  title === 'Home' || title === ''
+    ? 'PointCast'
+    : title.includes('PointCast')
+      ? title
+      : `${title} — PointCast`;
 const identityJsonLd = buildIdentityJsonLd();
 ---
 
@@ -172,10 +180,32 @@ const identityJsonLd = buildIdentityJsonLd();
       <slot />
     </main>
     <FooterBar />
+    {/* v6.2 walking bar mounted globally as opt-in. Hidden by default
+        via CSS; localStorage flag pc:bar:v6=on flips html.bar-v6-on
+        which reveals it. v5 stays mounted because it provides the
+        omnibox + spell-cast handlers; v6 visually overlays as the
+        scene (buildings + walker + companions + pets + peers). */}
+    <FooterBarV6 />
+    {/* Universal bell — fixed bottom-right pill that POSTs /api/bell
+        and plays a soft tone. Available on every BlockLayout page. */}
+    <BellButton />
+    <IntercomWidget />
     <SpellLayer />
     <CursorRoom />
     <FreshnessChip />
     <FirstSee />
+
+    {/* Bar variant opt-in. Inline so it runs before the bars paint —
+        no flash of v6 for visitors who haven't opted in. */}
+    <script is:inline>
+      (function () {
+        try {
+          if (localStorage.getItem('pc:bar:v6') === 'on') {
+            document.documentElement.classList.add('bar-v6-on');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </body>
 </html>
 

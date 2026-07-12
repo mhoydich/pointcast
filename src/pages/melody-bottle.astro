@@ -1,0 +1,862 @@
+---
+/**
+ * /melody-bottle — async share-via-iMessage melody phrases.
+ *
+ * Melodic sibling to /drum-bottle. Same URL-as-message format
+ * (9 bytes → 12 base64url chars) but each step encodes a pentatonic
+ * pitch instead of a drum hit. Lets you send a short tune the way
+ * you'd send a drum phrase: paste a link, hear the tune.
+ *
+ * Mechanic:
+ *   • 16 steps × 4 bits per step = 64 bits = 8 bytes
+ *   • Each 4-bit step: 0 = rest, 1..15 = pentatonic notes
+ *   • Pentatonic notes are C major: C-D-E-G-A across 3 octaves
+ *     (C4..A6), giving 15 distinct pitches that always sound good
+ *     together. Rest in any step = silence on that beat.
+ *   • Tempo: 1 byte (offset from 40, range 40..220 BPM)
+ *   • Total: 9 bytes = 12 base64url chars. Same URL size as /drum-bottle.
+ *
+ * Why pentatonic: the URL format constrains us to 4 bits per step.
+ * With 16 possible values (0=rest + 15 pitches), pentatonic gives
+ * 3 full octaves (5 notes × 3) which is more musical range than
+ * chromatic would (which would give just over 1 octave). Pentatonic
+ * also means anyone can hit any cell and it sounds intentional —
+ * no "wrong notes" in a pentatonic scale, only different colors.
+ *
+ * URL format: /melody-bottle?p=<12 chars>&from=<4-char pid>
+ *
+ * Two modes (same as drum-bottle):
+ *   • Empty (no ?p=): composer. Click cells to set pitches, hear
+ *     the tune, copy share link.
+ *   • Received (?p= present): plays the received melody, "record
+ *     a reply" wipes to composer mode.
+ *
+ * Shipped 2026-05-14 (Thursday overnight). First non-drum surface
+ * in the async-music register. Same audio-scheduler backbone as the
+ * drum pages but with sine-wave melodic synthesis instead of
+ * percussive triangles. — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Melody Bottle — record a tune, send the link, they hear it"
+  description="Melodic sibling to drum-bottle. Same URL-as-message format (12 base64url chars), but each step is a pentatonic pitch instead of a drum hit. Make a 1-bar tune, paste anywhere a link works, recipients hear it on any device. C-major pentatonic across 3 octaves so every cell sounds intentional."
+  image="/images/og-drum.png"
+>
+  <main class="mbo" id="mbo" data-built={built}>
+    <header class="mbo__hero">
+      <p class="mbo__kicker">MELODY · BOTTLE · pentatonic · sibling of /drum-bottle</p>
+      <h1 class="mbo__title" id="mbo-title">Record a tune. Send the link.</h1>
+      <p class="mbo__sub" id="mbo-sub">A 1-bar melody encoded in 12 characters of URL. Click cells on the piano roll to set pitches — every cell is in C-major pentatonic across 3 octaves, so anything you choose sounds intentional. Copy the link, paste in iMessage. Recipients hear your tune on any device.</p>
+    </header>
+
+    <section class="mbo__stage">
+
+      <!-- Received banner -->
+      <div class="mbo__banner" id="mbo-banner" hidden>
+        <span class="mbo__banner-icon">🎵</span>
+        <span class="mbo__banner-body">
+          <span class="mbo__banner-from" id="mbo-from">from someone</span>
+          <span class="mbo__banner-meta" id="mbo-meta">1 bar · pentatonic · 100 BPM</span>
+        </span>
+        <button class="mbo__banner-action" id="mbo-banner-action" type="button">▶ play</button>
+      </div>
+
+      <!-- Piano roll -->
+      <div class="mbo__roll-wrap">
+        <div class="mbo__roll" id="mbo-roll" role="grid" aria-label="Melody pitch editor"></div>
+        <div class="mbo__pitch-labels" id="mbo-pitch-labels" aria-hidden="true"></div>
+      </div>
+
+      <!-- Transport -->
+      <div class="mbo__transport">
+        <button class="mbo__btn mbo__btn--play" id="mbo-play" type="button">▶ play</button>
+        <button class="mbo__btn mbo__btn--stop" id="mbo-stop" type="button" hidden>⏹ stop</button>
+        <div class="mbo__bpm-wrap" id="mbo-bpm-wrap">
+          <label class="mbo__bpm-label" for="mbo-bpm">BPM</label>
+          <input class="mbo__bpm" id="mbo-bpm" type="range" min="60" max="180" step="2" value="100" />
+          <span class="mbo__bpm-readout" id="mbo-bpm-readout">100</span>
+        </div>
+      </div>
+
+      <!-- Compose actions -->
+      <div class="mbo__actions" id="mbo-actions-compose">
+        <button class="mbo__action mbo__action--primary" id="mbo-copy" type="button">↗ copy share link</button>
+        <a class="mbo__action" id="mbo-sms" href="#">↗ send via iMessage</a>
+        <a class="mbo__action" href="/drum-shelf">📚 your shelf</a>
+        <button class="mbo__action mbo__action--ghost" id="mbo-clear" type="button">clear</button>
+        <button class="mbo__action mbo__action--ghost" id="mbo-random" type="button">🎲 randomize</button>
+      </div>
+
+      <!-- Receive actions -->
+      <div class="mbo__actions" id="mbo-actions-receive" hidden>
+        <button class="mbo__action mbo__action--primary" id="mbo-reply" type="button">✍ record a reply</button>
+        <a class="mbo__action" href="/drum-shelf">📚 your shelf</a>
+        <a class="mbo__action" href="/drum-bottle">↗ /drum-bottle</a>
+        <a class="mbo__action" href="/drum-mailbox">↗ /drum-mailbox</a>
+      </div>
+
+    </section>
+
+    <section class="mbo__notes">
+      <h2 class="mbo__notes-h">How a melody bottle works</h2>
+      <p>Every cell on the piano roll is a 4-bit value: 0 means rest, 1..15 are the fifteen pentatonic notes from C4 to A6. The roll is 4 bits × 16 steps = 64 bits = 8 bytes, plus 1 byte for tempo. Total 9 bytes — exactly 12 base64url characters. Same URL length as <a href="/drum-bottle">/drum-bottle</a>.</p>
+      <p>Why pentatonic: with only 4 bits per step, you can encode at most 16 distinct pitches. Pentatonic gives you 3 full octaves of intentionally-consonant notes (C-D-E-G-A repeated), versus chromatic which would give just over 1 octave with all the "wrong notes" available. <em>Every cell on this roll sounds good with every other cell.</em> There are no mistakes in pentatonic.</p>
+      <p>Sister surfaces (drum, not melody, but same async URL-as-message paradigm): <a href="/drum-bottle">/drum-bottle</a> (drum phrases), <a href="/drum-call-and-response">/drum-call-and-response</a> (Q+A drums), <a href="/drum-octet">/drum-octet</a> (8-person drum chains), <a href="/drum-genesis">/drum-genesis</a> (remix combinator), <a href="/drum-medley">/drum-medley</a> (mixtape of bottles), <a href="/drum-shelf">/drum-shelf</a> (your local jukebox), <a href="/drum-mailbox">/drum-mailbox</a> (the directory).</p>
+    </section>
+
+    <div class="mbo__toast" id="mbo-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --mbo-ink: #0a1230;
+      --mbo-mid: #14193a;
+      --mbo-flame: #f6c15e;
+      --mbo-coral: #ff6b8a;
+      --mbo-mint: #8aeac0;
+      --mbo-sky: #7ac8ed;
+      --mbo-mauve: #c9a8ef;
+      --mbo-cream: #f4e7c8;
+      --mbo-cream-dim: #b8aa84;
+      --mbo-cream-dimmer: #6a6e8a;
+    }
+
+    body:has(.mbo) {
+      background:
+        radial-gradient(circle at 18% 5%, #14193a 0%, transparent 50%),
+        radial-gradient(circle at 82% 95%, #2a1640 0%, transparent 55%),
+        var(--mbo-ink);
+      color: var(--mbo-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .mbo { max-width: 780px; margin: 0 auto; padding: 36px 24px 64px; }
+
+    /* HERO */
+    .mbo__hero { margin-bottom: 32px; }
+    .mbo__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--mbo-mauve);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .mbo__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 16px;
+    }
+    .mbo__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--mbo-cream-dim);
+      margin: 0;
+    }
+    .mbo__sub a { color: var(--mbo-mauve); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* STAGE */
+    .mbo__stage {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 36px;
+    }
+
+    /* BANNER */
+    .mbo__banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin: 0 0 18px;
+      background: rgba(201, 168, 239, 0.10);
+      border: 1px solid rgba(201, 168, 239, 0.30);
+      border-radius: 10px;
+    }
+    .mbo__banner-icon { font-size: 22px; }
+    .mbo__banner-body { flex: 1; display: flex; flex-direction: column; }
+    .mbo__banner-from {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--mbo-mauve);
+    }
+    .mbo__banner-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--mbo-cream-dim);
+      margin-top: 2px;
+    }
+    .mbo__banner-action {
+      border: 1px solid rgba(201, 168, 239, 0.6);
+      background: rgba(201, 168, 239, 0.15);
+      color: var(--mbo-mauve);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .mbo__banner-action:hover { background: rgba(201, 168, 239, 0.25); }
+
+    /* PIANO ROLL */
+    .mbo__roll-wrap {
+      display: grid;
+      grid-template-columns: 1fr 50px;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 560px) {
+      .mbo__roll-wrap { grid-template-columns: 1fr 38px; gap: 6px; }
+    }
+    .mbo__roll {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      gap: 2px;
+      aspect-ratio: 16 / 15;
+      background: rgba(0,0,0,0.30);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .mbo__roll-cell {
+      background: rgba(244,231,200,0.05);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 2px;
+      cursor: pointer;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      transition: background 80ms ease;
+    }
+    .mbo__roll-cell:hover { background: rgba(244,231,200,0.14); }
+    .mbo__roll-cell--on {
+      background: var(--cell-color, var(--mbo-mauve));
+      border-color: var(--cell-color, var(--mbo-mauve));
+      box-shadow: 0 0 6px var(--cell-color, var(--mbo-mauve));
+    }
+    /* Octave coloring: low octave (C4..A4), mid octave (C5..A5), high octave (C6..A6) */
+    .mbo__roll-cell--oct-low.mbo__roll-cell--on  { --cell-color: #ff8a70; }
+    .mbo__roll-cell--oct-mid.mbo__roll-cell--on  { --cell-color: #c9a8ef; }
+    .mbo__roll-cell--oct-high.mbo__roll-cell--on { --cell-color: #8aeac0; }
+    .mbo__roll-cell--play {
+      box-shadow: 0 0 0 2px var(--mbo-cream);
+      transform: scale(0.92);
+    }
+    /* Beat dividers — first cell of each beat (cols 5/9/13) gets a slim left border */
+    .mbo__roll-cell:nth-child(16n + 5),
+    .mbo__roll-cell:nth-child(16n + 9),
+    .mbo__roll-cell:nth-child(16n + 13) {
+      box-shadow: inset 2px 0 0 rgba(244,231,200,0.08);
+    }
+
+    /* Pitch labels (rightmost column) */
+    .mbo__pitch-labels {
+      display: grid;
+      grid-template-rows: repeat(15, 1fr);
+      gap: 2px;
+      padding: 4px 0;
+    }
+    .mbo__pitch-label {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      color: var(--mbo-cream-dimmer);
+      padding-right: 4px;
+    }
+    .mbo__pitch-label--high { color: #8aeac0; }
+    .mbo__pitch-label--mid  { color: #c9a8ef; }
+    .mbo__pitch-label--low  { color: #ff8a70; }
+
+    /* TRANSPORT */
+    .mbo__transport {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .mbo__btn {
+      border: 1px solid rgba(244,231,200,0.25);
+      background: rgba(244,231,200,0.08);
+      color: var(--mbo-cream);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .mbo__btn:hover { background: rgba(244,231,200,0.16); }
+    .mbo__btn--play {
+      background: rgba(201, 168, 239, 0.15);
+      border-color: rgba(201, 168, 239, 0.45);
+      color: var(--mbo-mauve);
+    }
+    .mbo__btn--play:hover { background: rgba(201, 168, 239, 0.25); }
+    .mbo__bpm-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 220px;
+    }
+    .mbo__bpm-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--mbo-cream-dim);
+    }
+    .mbo__bpm {
+      flex: 1;
+      accent-color: var(--mbo-mauve);
+      cursor: pointer;
+    }
+    .mbo__bpm-readout {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--mbo-mauve);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* ACTIONS */
+    .mbo__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .mbo__action {
+      flex: 0 0 auto;
+      border: 1px solid rgba(244,231,200,0.18);
+      background: rgba(244,231,200,0.06);
+      color: var(--mbo-cream);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .mbo__action:hover {
+      background: rgba(244,231,200,0.14);
+      border-color: rgba(244,231,200,0.35);
+    }
+    .mbo__action--primary {
+      background: rgba(255,107,138,0.15);
+      border-color: rgba(255,107,138,0.45);
+      color: var(--mbo-coral);
+    }
+    .mbo__action--primary:hover { background: rgba(255,107,138,0.25); }
+    .mbo__action--ghost {
+      color: var(--mbo-cream-dim);
+      background: transparent;
+      border-color: rgba(244,231,200,0.10);
+    }
+
+    /* NOTES */
+    .mbo__notes { max-width: 720px; }
+    .mbo__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      color: var(--mbo-cream);
+      margin: 0 0 12px;
+    }
+    .mbo__notes p { font-size: 14px; line-height: 1.6; color: var(--mbo-cream-dim); margin: 0 0 12px; }
+    .mbo__notes em { color: var(--mbo-mauve); font-style: italic; }
+    .mbo__notes strong { color: var(--mbo-cream); font-weight: 600; }
+    .mbo__notes a { color: var(--mbo-coral); text-decoration: underline; text-underline-offset: 3px; }
+    .mbo__notes code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--mbo-mint);
+    }
+
+    /* TOAST */
+    .mbo__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--mbo-mauve);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(201,168,239,0.4);
+    }
+    .mbo__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // 15 pentatonic pitches: C4 D4 E4 G4 A4 C5 D5 E5 G5 A5 C6 D6 E6 G6 A6
+    // Index 0 = rest, 1..15 = pitch 0..14 (1 = C4, 15 = A6)
+    // Row order in the UI: high pitches on top, so row 0 = A6, row 14 = C4
+    const PENT_FREQS = [
+      261.63, 293.66, 329.63, 392.00, 440.00,  // C4 D4 E4 G4 A4
+      523.25, 587.33, 659.25, 783.99, 880.00,  // C5 D5 E5 G5 A5
+      1046.50, 1174.66, 1318.51, 1567.98, 1760.00, // C6 D6 E6 G6 A6
+    ];
+    const PENT_NAMES = [
+      'C4', 'D4', 'E4', 'G4', 'A4',
+      'C5', 'D5', 'E5', 'G5', 'A5',
+      'C6', 'D6', 'E6', 'G6', 'A6',
+    ];
+    const PITCH_COUNT = 15;
+    const STEPS = 16;
+
+    // Convert UI row (top=0=A6) → pitch index (0=C4..14=A6)
+    function rowToPitchIdx(row: number) {
+      return PITCH_COUNT - 1 - row;
+    }
+    function pitchIdxToRow(p: number) {
+      return PITCH_COUNT - 1 - p;
+    }
+    // Step encoding: 0 = rest, 1..15 = pitch+1
+    type StepValue = number;  // 0=rest, 1..15=pitch+1
+    let steps: StepValue[] = new Array(STEPS).fill(0);
+    let bpm = 100;
+    let isReceived = false;
+    let fromPid = '';
+    let myPid = '';
+    let isPlaying = false;
+    let playStep = 0;
+    let playTimer: number | null = null;
+
+    // ---- URL codec ----
+    // Pack 2 steps per byte: low nibble = step[2i], high nibble = step[2i+1]
+    function encode(s: StepValue[], bp: number): string {
+      const bytes = new Uint8Array(9);
+      for (let i = 0; i < 8; i++) {
+        const a = s[2 * i] & 0x0f;
+        const b = s[2 * i + 1] & 0x0f;
+        bytes[i] = a | (b << 4);
+      }
+      bytes[8] = Math.max(0, Math.min(180, bp - 40));
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function decode(code: string): { steps: StepValue[]; bpm: number } | null {
+      if (!code) return null;
+      const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let bin: string;
+      try { bin = atob(padded); } catch { return null; }
+      if (bin.length < 9) return null;
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const out: StepValue[] = new Array(STEPS).fill(0);
+      for (let i = 0; i < 8; i++) {
+        const b = bytes[i];
+        out[2 * i]     = b & 0x0f;
+        out[2 * i + 1] = (b >> 4) & 0x0f;
+      }
+      const bp = 40 + bytes[8];
+      if (bp < 40 || bp > 220) return null;
+      return { steps: out, bpm: bp };
+    }
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.4;
+      masterGain.connect(ctx.destination);
+    }
+    function playNote(pitchIdx: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const freq = PENT_FREQS[pitchIdx];
+      // Soft pluck: sine + slight harmonic, ADSR-ish
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.45);
+      // Soft harmonic at 2x
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 2;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.008);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc2.connect(g2).connect(masterGain);
+      scheduler.trackSource(osc2);
+      osc2.start(t);
+      osc2.stop(t + 0.25);
+    }
+
+    // ---- grid render ----
+    function renderGrid() {
+      const roll = document.getElementById('mbo-roll')!;
+      const labels = document.getElementById('mbo-pitch-labels')!;
+      roll.innerHTML = '';
+      labels.innerHTML = '';
+      for (let row = 0; row < PITCH_COUNT; row++) {
+        const pitchIdx = rowToPitchIdx(row);
+        const octave = pitchIdx < 5 ? 'low' : pitchIdx < 10 ? 'mid' : 'high';
+        for (let col = 0; col < STEPS; col++) {
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          // The cell is "on" iff steps[col] == pitchIdx + 1
+          const isOn = steps[col] === pitchIdx + 1;
+          cell.className = `mbo__roll-cell mbo__roll-cell--oct-${octave}` + (isOn ? ' mbo__roll-cell--on' : '');
+          cell.dataset.row = String(row);
+          cell.dataset.col = String(col);
+          cell.dataset.pitch = String(pitchIdx);
+          cell.setAttribute('aria-label', `${PENT_NAMES[pitchIdx]} at step ${col + 1}`);
+          cell.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleCell(row, col);
+          });
+          roll.appendChild(cell);
+        }
+        // Pitch label
+        const label = document.createElement('span');
+        label.className = `mbo__pitch-label mbo__pitch-label--${octave}`;
+        label.textContent = PENT_NAMES[pitchIdx];
+        labels.appendChild(label);
+      }
+    }
+
+    function toggleCell(row: number, col: number) {
+      const pitchIdx = rowToPitchIdx(row);
+      const value = pitchIdx + 1;  // 1..15
+      if (steps[col] === value) {
+        // Same cell clicked → turn off
+        steps[col] = 0;
+      } else {
+        // Different pitch or empty → set this pitch (only one per step)
+        steps[col] = value;
+      }
+      renderGrid();
+      // Quick audition click — play the note when set (but not when cleared)
+      if (steps[col] !== 0) {
+        playNote(pitchIdx);
+      }
+      updateSmsLink();
+    }
+
+    // ---- transport ----
+    function stepMs() { return (60_000 / bpm) / 4; }
+    function tick() {
+      document.querySelectorAll('.mbo__roll-cell--play').forEach((el) => el.classList.remove('mbo__roll-cell--play'));
+      const roll = document.getElementById('mbo-roll')!;
+      const val = steps[playStep];
+      // Light the active cell visually
+      if (val !== 0) {
+        const pitchIdx = val - 1;
+        const row = pitchIdxToRow(pitchIdx);
+        const cell = roll.children[row * STEPS + playStep] as HTMLElement;
+        if (cell) cell.classList.add('mbo__roll-cell--play');
+        playNote(pitchIdx);
+      }
+      // Also light up the playhead column subtly even for rests
+      // (Skip for now to keep it clean; the active note is enough)
+      playStep = (playStep + 1) % STEPS;
+    }
+    function startPlay() {
+      if (isPlaying) return;
+      ensureCtx();
+      isPlaying = true;
+      playStep = 0;
+      document.getElementById('mbo-play')!.hidden = true;
+      document.getElementById('mbo-stop')!.hidden = false;
+      tick();
+      const loop = () => {
+        if (!isPlaying) return;
+        tick();
+        playTimer = window.setTimeout(loop, stepMs());
+      };
+      playTimer = window.setTimeout(loop, stepMs());
+    }
+    function stopPlay() {
+      isPlaying = false;
+      if (playTimer != null) { clearTimeout(playTimer); playTimer = null; }
+      document.querySelectorAll('.mbo__roll-cell--play').forEach((el) => el.classList.remove('mbo__roll-cell--play'));
+      document.getElementById('mbo-play')!.hidden = false;
+      document.getElementById('mbo-stop')!.hidden = true;
+    }
+
+    // ---- url ----
+    function shareUrl(): string {
+      const code = encode(steps, bpm);
+      const base = `${location.origin}/melody-bottle?p=${code}`;
+      return fromPid ? `${base}&from=${fromPid}` : base;
+    }
+    function smsHref(): string {
+      return `sms:&body=${encodeURIComponent('🎵 ' + shareUrl())}`;
+    }
+    function updateSmsLink() {
+      const a = document.getElementById('mbo-sms')! as HTMLAnchorElement;
+      a.href = smsHref();
+    }
+
+    // ---- shelf (localStorage, shared with drum-bottle/call/octet) ----
+    // /drum-shelf reads this same key and renders by kind. We add 'melody'
+    // as a new kind alongside 'bottle' / 'call' / 'octet'.
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+    const SHELF_MAX = 100;
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+      kind?: 'bottle' | 'call' | 'octet' | 'melody';
+    }
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+    function saveShelf(items: ShelfItem[]) {
+      try {
+        localStorage.setItem(SHELF_KEY, JSON.stringify({ v: SHELF_VERSION, items }));
+      } catch { /* fail silently */ }
+    }
+    function saveToShelf(dir: 'made' | 'received') {
+      const code = encode(steps, bpm);
+      const items = loadShelf();
+      const key = `${code}::${dir}::${fromPid}::melody`;
+      const existing = items.findIndex((it) =>
+        `${it.code}::${it.dir}::${it.from}::${it.kind || 'bottle'}` === key);
+      const entry: ShelfItem = { code, bpm, from: fromPid, dir, t: Date.now(), kind: 'melody' };
+      if (existing >= 0) items[existing] = entry;
+      else items.unshift(entry);
+      items.sort((a, b) => b.t - a.t);
+      if (items.length > SHELF_MAX) items.length = SHELF_MAX;
+      saveShelf(items);
+    }
+    async function copyText(text: string, msg: string) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          showToast(msg);
+        } else throw new Error('no clipboard');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); showToast(msg); }
+        catch { showToast(text); }
+        finally { ta.remove(); }
+      }
+    }
+    function showToast(msg: string) {
+      const el = document.getElementById('mbo-toast')!;
+      el.textContent = msg;
+      el.classList.add('mbo__toast--show');
+      setTimeout(() => el.classList.remove('mbo__toast--show'), 2400);
+    }
+
+    // ---- session/pid ----
+    async function sha256Hex(input: string): Promise<string> {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    function patternEmpty(s: StepValue[]): boolean {
+      for (const v of s) if (v !== 0) return false;
+      return true;
+    }
+
+    // ---- mode switching ----
+    function enterReceivedMode(s: StepValue[], bp: number, from: string) {
+      steps = s;
+      bpm = bp;
+      fromPid = from;
+      isReceived = true;
+      document.getElementById('mbo-title')!.textContent = 'Someone sent you a tune.';
+      document.getElementById('mbo-sub')!.innerHTML = 'Click play to hear it. You can record a reply and send it back. All cells stay pentatonic so any change you make still sounds intentional. Saved to your <a href="/drum-shelf" style="color:var(--mbo-mauve)">shelf</a>.';
+      document.getElementById('mbo-banner')!.hidden = false;
+      const fromEl = document.getElementById('mbo-from')!;
+      fromEl.textContent = from ? `from ${from}` : 'from someone';
+      document.getElementById('mbo-meta')!.textContent = `1 bar · pentatonic · ${bp} BPM`;
+      document.getElementById('mbo-actions-compose')!.hidden = true;
+      document.getElementById('mbo-actions-receive')!.hidden = false;
+      (document.getElementById('mbo-bpm') as HTMLInputElement).value = String(bp);
+      document.getElementById('mbo-bpm-readout')!.textContent = String(bp);
+      renderGrid();
+    }
+    function enterComposeMode() {
+      steps = new Array(STEPS).fill(0);
+      bpm = 100;
+      isReceived = false;
+      document.getElementById('mbo-title')!.textContent = 'Record a tune. Send the link.';
+      document.getElementById('mbo-sub')!.innerHTML = 'A 1-bar melody encoded in 12 characters of URL. Click cells on the piano roll to set pitches — every cell is in C-major pentatonic across 3 octaves, so anything you choose sounds intentional. Copy the link, paste in iMessage. Recipients hear your tune on any device.';
+      document.getElementById('mbo-banner')!.hidden = true;
+      document.getElementById('mbo-actions-compose')!.hidden = false;
+      document.getElementById('mbo-actions-receive')!.hidden = true;
+      (document.getElementById('mbo-bpm') as HTMLInputElement).value = '100';
+      document.getElementById('mbo-bpm-readout')!.textContent = '100';
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete('p');
+        u.searchParams.delete('from');
+        history.replaceState({}, '', u.toString());
+      } catch { /* ignore */ }
+      renderGrid();
+      updateSmsLink();
+    }
+
+    function randomize() {
+      // Pleasing-ish: mostly mid octave, some rests, occasional jumps
+      steps = new Array(STEPS).fill(0).map((_, i) => {
+        const r = Math.random();
+        if (r < 0.35) return 0;  // 35% rests
+        // Pitch range: bias toward mid octave (5..9)
+        const oct = Math.random();
+        if (oct < 0.15) return 1 + Math.floor(Math.random() * 5);          // low octave
+        if (oct < 0.85) return 6 + Math.floor(Math.random() * 5);          // mid octave (preferred)
+        return 11 + Math.floor(Math.random() * 5);                          // high octave
+      });
+      renderGrid();
+      updateSmsLink();
+    }
+
+    // ---- init ----
+    async function init() {
+      const sessionId = getOrCreateSession();
+      myPid = (await sha256Hex(sessionId)).slice(0, 10);
+      fromPid = myPid.slice(0, 4);
+
+      const params = new URLSearchParams(location.search);
+      const code = params.get('p') || '';
+      const sender = (params.get('from') || '').replace(/[^a-z0-9]/gi, '').slice(0, 4);
+
+      if (code) {
+        const decoded = decode(code);
+        if (decoded) {
+          enterReceivedMode(decoded.steps, decoded.bpm, sender);
+          // Save the received tune to the shared shelf
+          saveToShelf('received');
+        } else {
+          enterComposeMode();
+          showToast('couldn\'t decode that melody');
+        }
+      } else {
+        enterComposeMode();
+      }
+
+      // Transport
+      document.getElementById('mbo-play')!.addEventListener('click', startPlay);
+      document.getElementById('mbo-stop')!.addEventListener('click', stopPlay);
+      document.getElementById('mbo-banner-action')!.addEventListener('click', () => {
+        if (isPlaying) stopPlay(); else startPlay();
+      });
+
+      // BPM
+      const bpmInput = document.getElementById('mbo-bpm') as HTMLInputElement;
+      bpmInput.addEventListener('input', () => {
+        bpm = parseInt(bpmInput.value, 10) || 100;
+        document.getElementById('mbo-bpm-readout')!.textContent = String(bpm);
+        updateSmsLink();
+      });
+
+      // Actions
+      document.getElementById('mbo-copy')!.addEventListener('click', () => {
+        if (patternEmpty(steps)) { showToast('add some notes first'); return; }
+        saveToShelf('made');
+        copyText(shareUrl(), 'copied · saved to shelf');
+      });
+      document.getElementById('mbo-clear')!.addEventListener('click', () => {
+        steps = new Array(STEPS).fill(0);
+        renderGrid();
+        updateSmsLink();
+      });
+      document.getElementById('mbo-random')!.addEventListener('click', () => {
+        randomize();
+        showToast('random pentatonic phrase');
+      });
+      document.getElementById('mbo-reply')!.addEventListener('click', () => {
+        stopPlay();
+        enterComposeMode();
+        showToast('blank slate · make your reply');
+      });
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (isPlaying) stopPlay(); else startPlay();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

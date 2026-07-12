@@ -20,6 +20,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import { BLOCK_TYPES } from '../lib/block-types';
+import { amountCentsForSpend, formatUsd } from '../lib/money';
 
 /**
  * Footer meta line — one string per type, picked by footerHint.
@@ -27,6 +28,10 @@ import { BLOCK_TYPES } from '../lib/block-types';
  */
 function footerMeta(data: CollectionEntry<'blocks'>['data'], hint: string): string | null {
   const ed = data.edition;
+  if (data.spend) {
+    const amount = formatUsd(amountCentsForSpend(data.spend));
+    return `${amount} · ${data.spend.merchant} · ${data.spend.status.toUpperCase()}`;
+  }
   const supplyStr = (s: number | 'open' | undefined) => (s === 'open' ? '∞' : String(s ?? '—'));
   // For internal URLs (pointcast.xyz/*) show the pathname — "/drum ↗" reads
   // better than "pointcast.xyz ↗" when the user is already on pointcast.xyz.
@@ -81,6 +86,8 @@ const { block, detail = false } = Astro.props;
 const data = block.data;
 const channel = CHANNELS[data.channel];
 const typeSpec = BLOCK_TYPES[data.type];
+const spend = data.spend;
+const spendAmountLabel = spend ? formatUsd(amountCentsForSpend(spend)) : null;
 
 /** Extract a YouTube video id from any canonical URL shape. Returns null
  *  when the url isn't YouTube (so callers can fall through to Vimeo, etc). */
@@ -188,7 +195,12 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     {/* Per-type kicker above the title — the "flair" row that distinguishes
         a dispatch from a note from a visit from a listen. Channel already
         provides the color; kicker provides the register. */}
-    {data.type === 'READ' && (
+    {spend && (
+      <p class="block-card__kicker block-card__kicker--spend">
+        MONEY · {(spend.mode ?? 'live').toUpperCase()} · {spendAmountLabel}
+      </p>
+    )}
+    {!spend && data.type === 'READ' && (
       <p class="block-card__kicker block-card__kicker--read">
         DISPATCH · Nº {data.id}
         {(data as any).meta?.series ? ` · ${(data as any).meta.series.toUpperCase()}` : ''}
@@ -506,7 +518,8 @@ const sizeClass = sizeClassMap[data.size ?? '1x1'] ?? 'span-1x1';
     color: var(--pc-ink-muted, #5F5E5A);
   }
   .block-card__kicker--mint,
-  .block-card__kicker--faucet {
+  .block-card__kicker--faucet,
+  .block-card__kicker--spend {
     /* Drop-channel money kicker pops harder */
     background: var(--ch-50);
     border: 1px solid var(--ch-600);

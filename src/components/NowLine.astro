@@ -46,6 +46,10 @@ const latestTime = latest
       {latest && <> · latest {latestTime}</>}
       {dominant && <> · recent center: {dominant.name}</>}
     </p>
+    <p class="now-line__live" id="now-line-live" data-state="idle" aria-live="polite">
+      <span class="now-line__live-dot" aria-hidden="true"></span>
+      <span id="now-line-live-text">checking the wing…</span>
+    </p>
   </div>
   <nav class="now-line__links" aria-label="Now line links">
     {latest && <a href={`/b/${latest.data.id}`}>latest block</a>}
@@ -53,6 +57,69 @@ const latestTime = latest
     <a href="/wire">wire</a>
   </nav>
 </aside>
+
+<script>
+  // NowLine live pulse — Mike 2026-05-07 overnight sprint 2.
+  // Polls /api/chamber?kind=lobby + ?kind=now every 8s. Surfaces a tiny live
+  // line so the homepage feels current even when SSR'd content is stale.
+  const liveEl = document.getElementById('now-line-live');
+  const liveTextEl = document.getElementById('now-line-live-text');
+  const pulseEl = document.querySelector('.now-line__pulse');
+
+  function ago(ms: number): string {
+    const s = Math.max(1, Math.round(ms / 1000));
+    if (s < 60) return `${s}s ago`;
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.round(m / 60)}h ago`;
+  }
+
+  let prev = '';
+  async function refresh() {
+    if (!liveEl || !liveTextEl) return;
+    try {
+      const [lobbyRes, nowRes] = await Promise.all([
+        fetch('/api/chamber?kind=lobby', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/chamber?kind=now', { cache: 'no-store' }).catch(() => null),
+      ]);
+      const lobby = lobbyRes && lobbyRes.ok ? await lobbyRes.json() : null;
+      const now = nowRes && nowRes.ok ? await nowRes.json() : null;
+
+      const visitors = now?.state?.visitors?.length ?? lobby?.state?.visitors?.length ?? 0;
+      const rings = Array.isArray(lobby?.state?.rings) ? lobby.state.rings : [];
+      const lastRingT = rings.reduce((m: number, r: any) => Math.max(m, Number(r.t) || 0), 0);
+      const ringAge = lastRingT ? Date.now() - lastRingT : Infinity;
+
+      let line = '';
+      let state = 'idle';
+      if (visitors > 0 && lastRingT && ringAge < 5 * 60 * 1000) {
+        line = `${visitors} in the wing · last ring ${ago(ringAge)}`;
+        state = 'live';
+      } else if (visitors > 0) {
+        line = `${visitors} ${visitors === 1 ? 'visitor' : 'visitors'} in the wing`;
+        state = 'live';
+      } else if (lastRingT && ringAge < 30 * 60 * 1000) {
+        line = `wing quiet · last ring ${ago(ringAge)}`;
+        state = 'soft';
+      } else {
+        line = 'wing is still · tap the brass pad to ring';
+        state = 'idle';
+      }
+
+      if (line !== prev) {
+        liveTextEl.textContent = line;
+        liveEl.dataset.state = state;
+        if (pulseEl) (pulseEl as HTMLElement).dataset.state = state;
+        prev = line;
+      }
+    } catch {}
+  }
+  if (liveEl) {
+    refresh();
+    setInterval(refresh, 8000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  }
+</script>
 
 <style>
   .now-line {
@@ -72,6 +139,48 @@ const latestTime = latest
     border-radius: 50%;
     background: #c95c2e;
     box-shadow: 0 0 0 4px #fbe7dc;
+    animation: now-line-throb 2.4s ease-in-out infinite;
+  }
+  .now-line__pulse[data-state='live'] {
+    animation-duration: 1.2s;
+    background: #d2542a;
+  }
+  .now-line__pulse[data-state='soft'] {
+    animation-duration: 3.6s;
+  }
+  .now-line__pulse[data-state='idle'] {
+    animation: none;
+    opacity: 0.55;
+  }
+  @keyframes now-line-throb {
+    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 4px #fbe7dc; }
+    50%      { transform: scale(1.18); box-shadow: 0 0 0 6px #fbe7dc; }
+  }
+
+  .now-line__live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 0 !important;
+    color: var(--pc-ink-muted, #6a6970);
+    font-family: var(--pc-font-mono);
+    font-size: 11px !important;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    transition: color 240ms;
+  }
+  .now-line__live[data-state='live'] {
+    color: #c95c2e;
+  }
+  .now-line__live[data-state='soft'] {
+    color: #88715a;
+  }
+  .now-line__live-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.65;
+    flex: none;
   }
 
   .now-line__copy {

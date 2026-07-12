@@ -1,0 +1,258 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Nouns Memory v2';
+const description = 'A Windows 95 worthy Nouns memory game: flip pairs, clear the tray, keep a local best score.';
+const nouns = Array.from({ length: 12 }, (_, index) => (57 + index * 83) % 1200);
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/nouns-memory-v2',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/nouns-memory-v2',
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-memory style={`--arcade-table:url('${ARCADE_ASSETS.table}'); --arcade-card-backs:url('${ARCADE_ASSETS.cardBacks}');`}>
+    <section class="window" aria-labelledby="memory-title">
+      <header class="titlebar">
+        <span>Nouns Memory v2</span>
+        <span class="buttons" aria-hidden="true"><i>_</i><i>□</i><i>x</i></span>
+      </header>
+      <nav class="menubar" aria-label="Memory menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-difficulty="16">4x4</button>
+        <button type="button" data-difficulty="20">5x4</button>
+        <button type="button" data-difficulty="24">6x4</button>
+        <a href="/solitaire-v2">Solitaire</a>
+        <a href="/nouns-pyramid-v2">Pyramid</a>
+        <a href="/nouns-mines-v2">Mines</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="hero">
+        <div>
+          <p class="kicker">WINDOWS 95 · NOUNS · PAIRS</p>
+          <h1 id="memory-title">Clear the desktop tray.</h1>
+          <p>Flip two cards. Match the Noun. Misses stay honest. Your best run stays local to this browser.</p>
+        </div>
+        <div class="meters">
+          <span>Moves <strong data-moves>0</strong></span>
+          <span>Found <strong data-found>0/12</strong></span>
+          <span>Best <strong data-best>--</strong></span>
+        </div>
+      </div>
+      <div class="board" data-board>
+        {nouns.flatMap((noun) => [noun, noun]).map((noun, index) => (
+          <button class="tile" type="button" data-index={index} data-noun={noun} aria-label="Hidden Noun card">
+            <span class="back">PC</span>
+            <span class="front"><img src={`https://noun.pics/${noun}.svg`} alt={`Noun ${noun}`} loading="lazy" /><b>#{noun}</b></span>
+          </button>
+        ))}
+      </div>
+      <footer class="status" data-status>Ready. Find the matching Nouns.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-memory]');
+  const board = document.querySelector<HTMLElement>('[data-board]');
+  const status = document.querySelector<HTMLElement>('[data-status]');
+  const movesEl = document.querySelector<HTMLElement>('[data-moves]');
+  const foundEl = document.querySelector<HTMLElement>('[data-found]');
+  const bestEl = document.querySelector<HTMLElement>('[data-best]');
+  const statsKey = 'pc:arcade:nouns-memory-v2';
+  const profileKey = 'pc:arcade:profile';
+  const allNouns = Array.from({ length: 12 }, (_, index) => (57 + index * 83) % 1200);
+  let first: HTMLButtonElement | null = null;
+  let lock = false;
+  let moves = 0;
+  let found = 0;
+  let pairs = 12;
+  let misses = 0;
+  let started = Date.now();
+
+  function readJson(key: string, fallback: any) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+
+  function writeJson(key: string, value: any) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function recordPlay(clear = false) {
+    const stats = readJson(statsKey, { plays: 0, clears: 0, bestMoves: null });
+    if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+    if (clear) {
+      stats.clears = Number(stats.clears || 0) + 1;
+      stats.bestMoves = stats.bestMoves ? Math.min(stats.bestMoves, moves) : moves;
+    }
+    writeJson(statsKey, stats);
+    const profile = readJson(profileKey, { achievements: [] });
+    profile.lastPlayed = 'Memory';
+    if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+    if (clear) {
+      profile.clears = Number(profile.clears || 0) + 1;
+      profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+      profile.lastCleared = 'Memory';
+      const earned = ['first-win'];
+      if (profile.clearStreak >= 3) earned.push('three-game-streak');
+      if (misses === 0) earned.push('perfect-memory');
+      if (moves <= pairs + 2) earned.push('fast-clear');
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+    }
+    writeJson(profileKey, profile);
+  }
+
+  function shuffleTiles() {
+    if (!board) return;
+    const tiles = Array.from(board.children);
+    for (let i = tiles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      board.appendChild(tiles[j]);
+      [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+    }
+  }
+
+  function render() {
+    if (movesEl) movesEl.textContent = String(moves);
+    if (foundEl) foundEl.textContent = `${found}/${pairs}`;
+    const stats = readJson(statsKey, {});
+    if (bestEl) bestEl.textContent = stats.bestMoves || '--';
+  }
+
+  function say(text: string) {
+    if (status) status.textContent = text;
+  }
+
+  function rebuildTiles(totalCards = pairs * 2) {
+    pairs = totalCards / 2;
+    const nouns = allNouns.slice(0, pairs);
+    if (!board) return;
+    board.innerHTML = nouns.flatMap((noun) => [noun, noun]).map((noun, index) => `
+      <button class="tile" type="button" data-index="${index}" data-noun="${noun}" aria-label="Hidden Noun card">
+        <span class="back">PC</span>
+        <span class="front"><img src="https://noun.pics/${noun}.svg" alt="Noun ${noun}" loading="lazy"><b>#${noun}</b></span>
+      </button>
+    `).join('');
+    board.dataset.size = String(totalCards);
+    document.querySelectorAll<HTMLButtonElement>('.tile').forEach((tile) => tile.addEventListener('click', () => flip(tile)));
+  }
+
+  function newGame(totalCards = pairs * 2) {
+    rebuildTiles(totalCards);
+    first = null;
+    lock = false;
+    moves = 0;
+    found = 0;
+    misses = 0;
+    started = Date.now();
+    document.querySelectorAll<HTMLButtonElement>('.tile').forEach((tile) => {
+      tile.classList.remove('is-open', 'is-found');
+      tile.disabled = false;
+    });
+    shuffleTiles();
+    recordPlay(false);
+    say('Fresh tray. Find the matching Nouns.');
+    render();
+  }
+
+  function win() {
+    recordPlay(true);
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    say(`Tray cleared in ${moves} moves and ${elapsed}s. Very tidy.`);
+    root?.classList.add('did-win');
+    render();
+    window.setTimeout(() => root?.classList.remove('did-win'), 900);
+  }
+
+  function flip(tile: HTMLButtonElement) {
+    if (lock || tile.disabled || tile.classList.contains('is-open')) return;
+    tile.classList.add('is-open');
+    if (!first) {
+      first = tile;
+      say('Pick its twin.');
+      return;
+    }
+    moves += 1;
+    const match = first.dataset.noun === tile.dataset.noun;
+    if (match) {
+      first.classList.add('is-found');
+      tile.classList.add('is-found');
+      first.disabled = true;
+      tile.disabled = true;
+      found += 1;
+      say(`Pair found: Noun #${tile.dataset.noun}.`);
+      first = null;
+      if (found === pairs) win();
+      render();
+      return;
+    }
+    lock = true;
+    misses += 1;
+    say('No match. The tray remembers.');
+    window.setTimeout(() => {
+      first?.classList.remove('is-open');
+      tile.classList.remove('is-open');
+      first = null;
+      lock = false;
+      render();
+    }, 680);
+    render();
+  }
+
+  document.querySelector('[data-new]')?.addEventListener('click', () => newGame(pairs * 2));
+  document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((button) => {
+    button.addEventListener('click', () => newGame(Number(button.dataset.difficulty || 24)));
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'n') newGame(pairs * 2);
+    if (event.key === 'Escape' && first && !lock) {
+      first.classList.remove('is-open');
+      first = null;
+      say('Selection cleared.');
+    }
+  });
+  newGame(24);
+</script>
+
+<style>
+  :global(body) { background: #008080; }
+  .desk { min-height: calc(100vh - 88px); padding: 18px; background: #008080; font-family: "MS Sans Serif", Tahoma, system-ui, sans-serif; }
+  .window { max-width: 1040px; margin: 0 auto; border: 2px solid; border-color: #fff #404040 #404040 #fff; background: #c0c0c0; box-shadow: 2px 2px 0 #000; }
+  .titlebar { display:flex; justify-content:space-between; align-items:center; min-height:28px; padding:3px 5px 3px 7px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:4px; }
+  .buttons i { display:grid; place-items:center; width:19px; height:18px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; }
+  .menubar { display:flex; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button, .menubar a { border:0; background:transparent; color:#000; padding:4px 8px; font:inherit; text-decoration:none; }
+  .menubar button:hover, .menubar a:hover { background:#000080; color:#fff; }
+  .hero { display:grid; grid-template-columns:minmax(0,1fr) 260px; gap:12px; padding:14px; border-top:1px solid #fff; border-bottom:1px solid #808080; }
+  .kicker { margin:0 0 8px; font:700 10px/1 "Courier New", monospace; letter-spacing:.12em; color:#000080; }
+  h1 { margin:0; font-size:clamp(34px,7vw,72px); line-height:.92; font-weight:700; }
+  p { max-width:680px; line-height:1.45; }
+  .meters { display:grid; gap:6px; align-content:start; }
+  .meters span, .status { border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:7px; }
+  .meters strong { float:right; font-family:"Courier New", monospace; }
+  .board { display:grid; grid-template-columns:repeat(6, minmax(92px,1fr)); gap:12px; padding:18px; background:linear-gradient(rgba(0,62,48,.34),rgba(0,52,42,.58)), var(--arcade-table) center/cover; }
+  .board[data-size="16"] { grid-template-columns:repeat(4, minmax(92px,1fr)); }
+  .board[data-size="20"] { grid-template-columns:repeat(5, minmax(92px,1fr)); }
+  /* Board cells are injected via innerHTML, so they miss Astro's scope attribute — anchor them to the scoped board instead. */
+  .board :global(.tile) { position:relative; height:132px; border:0; background:transparent; perspective:700px; }
+  .board :global(.tile:not(:disabled)) { cursor:pointer; }
+  .board :global(.tile:not(:disabled):hover .back) { outline:3px solid #ffff00; outline-offset:-7px; }
+  .board :global(.tile span) { position:absolute; inset:0; display:grid; place-items:center; border-radius:7px; border:2px solid; border-color:#fff #606060 #606060 #fff; box-shadow:2px 2px 0 rgba(0,0,0,.45); backface-visibility:hidden; transition:transform .18s ease; }
+  .board :global(.back) { background:linear-gradient(rgba(0,0,128,.1),rgba(0,0,80,.24)),var(--arcade-card-backs) center/190px 190px,linear-gradient(45deg,#000080 25%,#1084d0 25% 50%,#000080 50% 75%,#1084d0 75%) 0 0/14px 14px; color:#ffff00; font:900 28px/1 "Courier New", monospace; }
+  .board :global(.front) { transform:rotateY(180deg); background:#fffef5; }
+  .board :global(.front img) { width:72px; height:72px; image-rendering:pixelated; }
+  .board :global(.front b) { font:700 12px/1 "Courier New", monospace; }
+  .board :global(.tile.is-open .back), .board :global(.tile.is-found .back) { transform:rotateY(180deg); }
+  .board :global(.tile.is-open .front), .board :global(.tile.is-found .front) { transform:rotateY(0); }
+  .board :global(.tile.is-found .front) { outline:4px solid #ffff00; outline-offset:-8px; }
+  .status { margin:4px; font-size:12px; }
+  .did-win .window { animation: win .9s steps(2,end); }
+  @keyframes win { 50% { filter:hue-rotate(100deg) saturate(1.6); } }
+  @media (max-width:760px) { .desk{padding:8px}.hero{grid-template-columns:1fr}.board{grid-template-columns:repeat(4, minmax(72px,1fr)); gap:8px; padding:10px}.board :global(.tile){height:112px}.board :global(.front img){width:58px;height:58px} }
+</style>

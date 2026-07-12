@@ -19,6 +19,14 @@ const pick = pickDailyBlock(blocks);
 const todayStr = todayPT();
 const seedNum = daySeed();
 
+// Ordered id list for the client-side stale-proof re-pick (same sort
+// contract as pickDailyBlock). If a deploy goes stale, the browser
+// recomputes today's pick from this list + daily-core and re-hydrates
+// from /b/{id}.json — "today" can never freeze again.
+const sortedIds = [...blocks]
+  .sort((a, b) => a.data.id.localeCompare(b.data.id))
+  .map((b) => b.data.id);
+
 if (!pick) {
   // Should never happen (we have ~70 blocks). Guard anyway.
   throw new Error('/today — no blocks available for daily pick');
@@ -167,13 +175,17 @@ const jsonLd = {
   </div>
 </BlockLayout>
 
+<script type="application/json" id="today-ids" set:html={JSON.stringify(sortedIds)} />
+
 <script is:inline>
   (function () {
     var article = document.querySelector('.pick');
     if (!article) return;
 
-    var blockId = article.dataset.blockId || '';
-    var today = article.dataset.today || '';
+    // Read live from the dataset (not captured at load) — the stale-proof
+    // re-pick script may rewrite these before the visitor interacts.
+    function curId() { return article.dataset.blockId || ''; }
+    function curDay() { return article.dataset.today || ''; }
 
     var btn = document.getElementById('collect-btn');
     var btnLabel = btn ? btn.querySelector('.collect-btn__label') : null;
@@ -219,13 +231,20 @@ const jsonLd = {
     function paint() {
       var arr = readCollected();
       if (totalEl) totalEl.textContent = String(arr.length);
-      if (streakEl) streakEl.textContent = String(computeStreak(arr, today));
-      var has = arr.some(function (c) { return c && c.date === today; });
-      if (has && btn) {
+      if (streakEl) streakEl.textContent = String(computeStreak(arr, curDay()));
+      var has = arr.some(function (c) { return c && c.date === curDay(); });
+      if (!btn) return;
+      if (has) {
         btn.classList.add('collect-btn--claimed');
         btn.disabled = true;
         if (btnLabel) btnLabel.textContent = '✓ COLLECTED';
         if (btnHint) btnHint.textContent = 'COME BACK TOMORROW';
+      } else {
+        // A re-pick can move "today" past a claimed date — re-arm the button.
+        btn.classList.remove('collect-btn--claimed');
+        btn.disabled = false;
+        if (btnLabel) btnLabel.textContent = 'COLLECT TODAY';
+        if (btnHint) btnHint.textContent = 'TAP TO CLAIM';
       }
     }
 
@@ -257,11 +276,11 @@ const jsonLd = {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
         var arr = readCollected();
-        if (arr.some(function (c) { return c && c.date === today; })) {
+        if (arr.some(function (c) { return c && c.date === curDay(); })) {
           paint();  // already collected; just repaint
           return;
         }
-        arr.push({ date: today, blockId: blockId, at: new Date().toISOString() });
+        arr.push({ date: curDay(), blockId: curId(), at: new Date().toISOString() });
         writeCollected(arr);
         chime(720, 0.16);
         setTimeout(function () { chime(900, 0.14); }, 140);
@@ -274,6 +293,104 @@ const jsonLd = {
     }
 
     paint();
+    document.addEventListener('pc:today-repick', paint);
+  })();
+</script>
+
+<script>
+  // Stale-proof re-pick: if this page was built on an earlier PT day,
+  // recompute today's pick in the browser (same daily-core math, same
+  // sorted-id contract) and re-hydrate the card from /b/{id}.json.
+  import { todayPT, daySeed, pickDailyIndex } from '../lib/daily-core';
+
+  (function () {
+    const article = document.querySelector<HTMLElement>('.pick');
+    const idsEl = document.getElementById('today-ids');
+    if (!article || !idsEl) return;
+
+    const builtDay = article.dataset.today || '';
+    const liveDay = todayPT();
+    if (!builtDay || builtDay === liveDay) return;
+
+    let ids: string[] = [];
+    try { ids = JSON.parse(idsEl.textContent || '[]'); } catch { return; }
+    if (!Array.isArray(ids) || ids.length === 0) return;
+
+    const id = ids[pickDailyIndex(ids.length)];
+    if (!id) return;
+
+    // Claim-correctness first (works even if the hydrate fetch fails):
+    article.dataset.blockId = id;
+    article.dataset.today = liveDay;
+    article.dataset.seed = String(daySeed());
+
+    const set = (sel: string, text: string) => {
+      const el = article.querySelector(sel);
+      if (el) el.textContent = text;
+    };
+
+    // Date line + links + QR are derivable without the fetch.
+    const kickerTime = document.querySelector('.masthead__kicker time');
+    if (kickerTime) {
+      kickerTime.setAttribute('datetime', liveDay);
+      kickerTime.textContent = new Intl.DateTimeFormat('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+        timeZone: 'America/Los_Angeles',
+      }).format(new Date());
+    }
+    const target = `https://pointcast.xyz/b/${id}`;
+    const open = article.querySelector<HTMLAnchorElement>('.pick__open');
+    if (open) open.href = `/b/${id}`;
+    const art = article.querySelector<HTMLAnchorElement>('.pick__art');
+    if (art) art.href = `/b/${id}`;
+    const qrImg = article.querySelector<HTMLImageElement>('.pick__qr img');
+    if (qrImg) {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=216x216&margin=2&data=${encodeURIComponent(target)}`;
+      qrImg.alt = `QR to ${target}`;
+    }
+    set('.pick__qr .mono', `→ phone · /b/${id}`);
+
+    document.dispatchEvent(new CustomEvent('pc:today-repick'));
+
+    // Presentation hydrate from the per-block machine surface.
+    fetch(`/b/${id}.json`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (!b || !b.id) return;
+        set('.pick__title', b.title || `Block № ${id}`);
+        const typeCode = (typeof b.type === 'string' ? b.type : b.type?.code) || 'READ';
+        set('.pick__id', `№ ${id} · ${typeCode}`);
+        const dek = article.querySelector('.pick__dek');
+        if (dek) {
+          if (b.dek) dek.textContent = b.dek;
+          else (dek as HTMLElement).style.display = 'none';
+        }
+        const img = article.querySelector<HTMLImageElement>('.pick__art img');
+        const thumb = b.media?.thumbnail ?? (b.noun != null ? `https://noun.pics/${b.noun}.svg` : null);
+        if (img && thumb) img.src = thumb;
+        else if (art && !thumb) art.style.display = 'none';
+        // Channel chip — /b/{id}.json serves channel as an expanded object
+        // ({code, name, color600, color800}), with a string fallback just in
+        // case the shape ever slims down.
+        const chObj = typeof b.channel === 'string'
+          ? { code: b.channel, name: '', color600: '', color800: '' }
+          : (b.channel ?? null);
+        const chip = article.querySelector<HTMLElement>('.pick__channel');
+        if (chip && chObj?.code) {
+          chip.textContent = chObj.name ? `CH.${chObj.code} · ${chObj.name}` : `CH.${chObj.code}`;
+          if (chObj.color600 && chObj.color800) {
+            chip.style.background = `color-mix(in oklab, ${chObj.color600} 16%, transparent)`;
+            chip.style.color = chObj.color800;
+          } else {
+            chip.style.background = 'transparent';
+            chip.style.color = 'inherit';
+            chip.style.border = '1px solid currentColor';
+          }
+        }
+        const meta = article.querySelector<HTMLElement>('.pick__meta');
+        if (meta) meta.style.display = 'none';
+      })
+      .catch(() => {});
   })();
 </script>
 

@@ -1,0 +1,387 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Nouns Pyramid v2';
+const description = 'A Windows 95 Nouns pyramid card game: remove pairs that add to 13 and clear the table.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/nouns-pyramid-v2',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/nouns-pyramid-v2',
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-pyramid style={`--arcade-table:url('${ARCADE_ASSETS.table}'); --arcade-card-backs:url('${ARCADE_ASSETS.cardBacks}');`}>
+    <section class="window" aria-labelledby="pyramid-title">
+      <header class="titlebar"><span>Nouns Pyramid v2</span><span class="buttons" aria-hidden="true"><i>_</i><i>□</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Pyramid menu">
+        <button type="button" data-new>Game</button>
+        <button type="button" data-undo>Undo</button>
+        <button type="button" data-hint>Hint</button>
+        <button type="button" data-draw>Draw</button>
+        <a href="/solitaire-v2">Solitaire</a>
+        <a href="/nouns-memory-v2">Memory</a>
+        <a href="/nouns-mines-v2">Mines</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="toolbar">
+        <span>Score <strong data-score>0</strong></span>
+        <span>Stock <strong data-stock-count>0</strong></span>
+        <span>Cleared <strong data-cleared>0/28</strong></span>
+        <span>Recycle <strong data-recycles>0</strong></span>
+        <p data-status>Remove pairs that add to 13. Kings clear alone.</p>
+      </div>
+      <div class="felt">
+        <div class="pyramid" data-grid></div>
+        <div class="draw-zone">
+          <button class="pile" type="button" data-stock aria-label="Draw card"><span>PC</span></button>
+          <button class="pile waste" type="button" data-waste aria-label="Waste"></button>
+        </div>
+      </div>
+      <footer class="status">A=1, J=11, Q=12, K=13. Only uncovered cards can move.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  type Suit = 'S' | 'H' | 'D' | 'C';
+  interface Card { id: string; suit: Suit; rank: number; noun: number; removed: boolean; }
+  const suits: Suit[] = ['S', 'H', 'D', 'C'];
+  const symbols: Record<Suit, string> = { S:'♠', H:'♥', D:'♦', C:'♣' };
+  const ranks = ['', 'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const grid = document.querySelector<HTMLElement>('[data-grid]');
+  const stockButton = document.querySelector<HTMLButtonElement>('[data-stock]');
+  const wasteButton = document.querySelector<HTMLButtonElement>('[data-waste]');
+  const scoreEl = document.querySelector<HTMLElement>('[data-score]');
+  const stockCountEl = document.querySelector<HTMLElement>('[data-stock-count]');
+  const clearedEl = document.querySelector<HTMLElement>('[data-cleared]');
+  const recyclesEl = document.querySelector<HTMLElement>('[data-recycles]');
+  const statusEl = document.querySelector<HTMLElement>('[data-status]');
+  let pyramid: Card[] = [];
+  let stock: Card[] = [];
+  let waste: Card[] = [];
+  let selected: { source: 'pyramid' | 'waste'; index?: number } | null = null;
+  let score = 0;
+  let recycles = 0;
+  let history: string[] = [];
+  let won = false;
+  let moves = 0;
+  const statsKey = 'pc:arcade:nouns-pyramid-v2';
+  const profileKey = 'pc:arcade:profile';
+
+  function readJson(key: string, fallback: any) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+
+  function writeJson(key: string, value: any) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function snapshot() {
+    history.push(JSON.stringify({ pyramid, stock, waste, selected, score, recycles, won }));
+    if (history.length > 40) history.shift();
+  }
+
+  function recordPlay(clear = false) {
+    const stats = readJson(statsKey, { plays: 0, clears: 0 });
+    if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+    if (clear) stats.clears = Number(stats.clears || 0) + 1;
+    writeJson(statsKey, stats);
+    const profile = readJson(profileKey, { achievements: [] });
+    profile.lastPlayed = 'Pyramid';
+    if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+    if (clear) {
+      profile.clears = Number(profile.clears || 0) + 1;
+      profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+      profile.lastCleared = 'Pyramid';
+      const earned = ['first-win', 'pyramid-clear'];
+      if (profile.clearStreak >= 3) earned.push('three-game-streak');
+      if (recycles === 0) earned.push('fast-clear');
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+    }
+    writeJson(profileKey, profile);
+  }
+
+  function shuffle<T>(items: T[]) {
+    const out = items.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  function deck() {
+    return shuffle(suits.flatMap((suit, suitIndex) => Array.from({ length: 13 }, (_, index) => {
+      const rank = index + 1;
+      return { id: `${suit}${rank}`, suit, rank, noun: (91 + suitIndex * 199 + rank * 61) % 1200, removed: false };
+    })));
+  }
+
+  function say(text: string) { if (statusEl) statusEl.textContent = text; }
+  function describe(card: Card) { return `${ranks[card.rank]} ${symbols[card.suit]}`; }
+  function cardHtml(card: Card, active = false) {
+    const red = card.suit === 'H' || card.suit === 'D';
+    return `<span class="card ${red ? 'red' : 'black'}${active ? ' is-selected' : ''}">
+      <b>${ranks[card.rank]}<small>${symbols[card.suit]}</small></b>
+      <img src="https://noun.pics/${card.noun}.svg" alt="" loading="lazy">
+      <em>${card.rank}</em>
+    </span>`;
+  }
+
+  function isCovered(index: number) {
+    let row = 0;
+    let first = 0;
+    while (index >= first + row + 1) { first += row + 1; row += 1; }
+    if (row === 6) return false;
+    const offset = index - first;
+    const belowFirst = first + row + 1;
+    return !pyramid[belowFirst + offset]?.removed || !pyramid[belowFirst + offset + 1]?.removed;
+  }
+
+  function selectedCard() {
+    if (!selected) return null;
+    return selected.source === 'waste' ? waste[waste.length - 1] : pyramid[selected.index ?? -1];
+  }
+
+  function openPyramidCards() {
+    return pyramid
+      .map((card, index) => ({ card, index }))
+      .filter(({ card, index }) => !card.removed && !isCovered(index));
+  }
+
+  function findMate(card: Card, source: 'pyramid' | 'waste', index?: number) {
+    const needed = 13 - card.rank;
+    const wasteCard = waste[waste.length - 1];
+    if (source !== 'waste' && wasteCard?.rank === needed) return { source: 'waste' as const };
+    return openPyramidCards().find((item) => item.card.rank === needed && !(source === 'pyramid' && item.index === index));
+  }
+
+  function clearSelection() { selected = null; }
+  function removeSelection() {
+    if (!selected) return;
+    if (selected.source === 'waste') waste.pop();
+    else if (selected.index !== undefined) pyramid[selected.index].removed = true;
+    selected = null;
+  }
+
+  function render() {
+    if (!grid) return;
+    let html = '';
+    let cursor = 0;
+    for (let row = 0; row < 7; row++) {
+      html += `<div class="row row-${row}">`;
+      for (let col = 0; col <= row; col++) {
+        const index = cursor++;
+        const card = pyramid[index];
+        const covered = card && !card.removed && isCovered(index);
+        const playable = card && !card.removed && !covered;
+        const active = selected?.source === 'pyramid' && selected.index === index;
+        html += `<button class="slot ${playable ? 'is-playable' : ''}" type="button" data-index="${index}" ${!card || card.removed ? 'disabled' : ''}>
+          ${card?.removed ? '<span class="empty"></span>' : cardHtml(card, active)}
+          ${covered ? '<span class="cover">locked</span>' : ''}
+        </button>`;
+      }
+      html += '</div>';
+    }
+    grid.innerHTML = html;
+    const topWaste = waste[waste.length - 1];
+    if (wasteButton) wasteButton.innerHTML = topWaste ? cardHtml(topWaste, selected?.source === 'waste') : '<span class="empty-label">waste</span>';
+    if (stockButton) stockButton.innerHTML = stock.length ? '<span>PC</span>' : '<span class="empty-label">stock</span>';
+    const cleared = pyramid.filter((card) => card.removed).length;
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (stockCountEl) stockCountEl.textContent = String(stock.length);
+    if (clearedEl) clearedEl.textContent = `${cleared}/28`;
+    if (recyclesEl) recyclesEl.textContent = String(recycles);
+    if (!won && cleared === 28) {
+      won = true;
+      recordPlay(true);
+      say('Pyramid cleared. Save the bitmap in your heart.');
+    }
+  }
+
+  function tryCard(source: 'pyramid' | 'waste', index?: number) {
+    const card = source === 'waste' ? waste[waste.length - 1] : pyramid[index ?? -1];
+    if (!card || card.removed) return;
+    if (source === 'pyramid' && index !== undefined && isCovered(index)) {
+      say('That card is still covered.');
+      return;
+    }
+    if (card.rank === 13) {
+      snapshot();
+      if (source === 'waste') waste.pop();
+      else if (index !== undefined) pyramid[index].removed = true;
+      selected = null;
+      score += 13;
+      moves += 1;
+      say('King clears alone.');
+      render();
+      return;
+    }
+    const other = selectedCard();
+    if (!selected || !other) {
+      const mate = findMate(card, source, index);
+      if (mate) {
+        snapshot();
+        if (source === 'waste') waste.pop();
+        else if (index !== undefined) pyramid[index].removed = true;
+        if (mate.source === 'waste') waste.pop();
+        else pyramid[mate.index].removed = true;
+        selected = null;
+        score += 13;
+        moves += 1;
+        say(`Auto-paired ${describe(card)} with ${source === 'waste' ? 'an exposed card' : 'its mate'}.`);
+        render();
+        return;
+      }
+      selected = { source, index };
+      say(`${describe(card)} selected. Need ${13 - card.rank}.`);
+      render();
+      return;
+    }
+    if (selected.source === source && selected.index === index) {
+      selected = null;
+      render();
+      return;
+    }
+    if (other.rank + card.rank === 13) {
+      snapshot();
+      removeSelection();
+      if (source === 'waste') waste.pop();
+      else if (index !== undefined) pyramid[index].removed = true;
+      score += 13;
+      moves += 1;
+      say('Pair cleared.');
+    } else {
+      say('Not thirteen.');
+      selected = { source, index };
+    }
+    render();
+  }
+
+  function draw() {
+    selected = null;
+    if (stock.length) {
+      snapshot();
+      waste.push(stock.pop()!);
+      moves += 1;
+      say('Drawn.');
+    } else if (waste.length) {
+      snapshot();
+      stock = waste.reverse();
+      waste = [];
+      recycles += 1;
+      score = Math.max(0, score - 5);
+      moves += 1;
+      say('Stock recycled.');
+    } else {
+      say('No cards left.');
+    }
+    render();
+  }
+
+  function newGame() {
+    const cards = deck();
+    pyramid = cards.splice(0, 28);
+    stock = cards;
+    waste = [];
+    selected = null;
+    score = 0;
+    recycles = 0;
+    moves = 0;
+    history = [];
+    won = false;
+    recordPlay(false);
+    say('Remove pairs that add to 13. Kings clear alone.');
+    render();
+  }
+
+  grid?.addEventListener('click', (event) => {
+    const slot = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-index]');
+    if (slot) tryCard('pyramid', Number(slot.dataset.index));
+  });
+  stockButton?.addEventListener('click', draw);
+  wasteButton?.addEventListener('click', () => tryCard('waste'));
+  document.querySelector('[data-new]')?.addEventListener('click', newGame);
+  document.querySelector('[data-draw]')?.addEventListener('click', draw);
+  document.querySelector('[data-undo]')?.addEventListener('click', () => {
+    const last = history.pop();
+    if (!last) {
+      say('No undo in the stack.');
+      return;
+    }
+    const state = JSON.parse(last);
+    pyramid = state.pyramid;
+    stock = state.stock;
+    waste = state.waste;
+    selected = state.selected;
+    score = state.score;
+    recycles = state.recycles;
+    say('Undo restored.');
+    render();
+  });
+  document.querySelector('[data-hint]')?.addEventListener('click', () => {
+    const openCards = openPyramidCards();
+    const wasteCard = waste[waste.length - 1];
+    for (const { card } of openCards) {
+      if (card.rank === 13) {
+        say(`Hint: clear the exposed ${ranks[card.rank]} ${symbols[card.suit]}.`);
+        return;
+      }
+      if (wasteCard && card.rank + wasteCard.rank === 13) {
+        say(`Hint: pair waste ${ranks[wasteCard.rank]} with exposed ${ranks[card.rank]}.`);
+        return;
+      }
+    }
+    for (let i = 0; i < openCards.length; i++) {
+      for (let j = i + 1; j < openCards.length; j++) {
+        if (openCards[i].card.rank + openCards[j].card.rank === 13) {
+          say(`Hint: pair ${ranks[openCards[i].card.rank]} and ${ranks[openCards[j].card.rank]}.`);
+          return;
+        }
+      }
+    }
+    say('Hint: draw from the stock.');
+  });
+  newGame();
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:18px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; }
+  .window { max-width:1120px; margin:0 auto; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; box-shadow:2px 2px 0 #000; }
+  .titlebar { display:flex; justify-content:space-between; min-height:28px; padding:3px 5px 3px 7px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:4px; }
+  .buttons i { display:grid; place-items:center; width:19px; height:18px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; }
+  .menubar { display:flex; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { border:0; background:transparent; color:#000; padding:4px 8px; font:inherit; text-decoration:none; }
+  .menubar button:hover,.menubar a:hover { background:#000080; color:#fff; }
+  .toolbar { display:grid; grid-template-columns:repeat(4,96px) minmax(0,1fr); gap:6px; padding:7px; border-top:1px solid #fff; border-bottom:1px solid #808080; }
+  .toolbar span,.toolbar p,.status { margin:0; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 7px; font-size:12px; }
+  .toolbar strong { float:right; font-family:"Courier New",monospace; }
+  .felt { display:grid; grid-template-columns:minmax(0,1fr) 116px; gap:18px; min-height:650px; padding:18px; background:linear-gradient(rgba(0,62,48,.34),rgba(0,52,42,.58)),var(--arcade-table) center/cover; overflow:auto; }
+  .pyramid { min-width:760px; display:grid; gap:10px; align-content:start; }
+  /* Board cells are injected via innerHTML, so they miss Astro's scope attribute — anchor them to the scoped board instead. */
+  .felt :global(.row) { display:flex; justify-content:center; gap:10px; }
+  .felt :global(.slot),.pile { position:relative; width:86px; height:120px; border:0; background:transparent; padding:0; }
+  .felt :global(.slot.is-playable),.pile { cursor:pointer; }
+  .felt :global(.slot.is-playable:hover .card),.pile:hover :global(.card),.pile:hover > :global(span:first-child:not(.empty-label)) { outline:3px solid #ffff00; outline-offset:-7px; }
+  .felt :global(.card) { position:absolute; inset:0; display:grid; place-items:center; border-radius:7px; border:2px solid; border-color:#fff #606060 #606060 #fff; background:#fffef5; box-shadow:2px 2px 0 rgba(0,0,0,.45); overflow:hidden; }
+  .felt :global(.card.red) { color:#b00020; }
+  .felt :global(.card.black) { color:#111; }
+  .felt :global(.card b) { position:absolute; top:6px; left:6px; display:grid; font:800 15px/.95 Georgia,serif; }
+  .felt :global(.card b small) { font-size:14px; }
+  .felt :global(.card img) { width:58px; height:58px; image-rendering:pixelated; filter:drop-shadow(1px 2px 0 rgba(0,0,0,.2)); }
+  .felt :global(.card em) { position:absolute; right:7px; bottom:5px; color:#000; font:900 18px/1 "Arial Black",Impact,sans-serif; font-style:normal; }
+  .felt :global(.card.is-selected) { outline:4px solid #ffff00; outline-offset:-7px; transform:translateY(-2px); }
+  .felt :global(.cover) { position:absolute; inset:0; display:grid; place-items:end center; padding-bottom:7px; border-radius:7px; background:rgba(0,0,0,.28); color:#fff; font:700 10px/1 "Courier New",monospace; text-transform:uppercase; pointer-events:none; }
+  .felt :global(.empty),.felt :global(.empty-label) { position:absolute; inset:0; display:grid; place-items:center; border:2px dashed rgba(255,255,255,.55); border-radius:7px; color:rgba(255,255,255,.72); font:700 13px/1 "Courier New",monospace; text-transform:uppercase; }
+  .draw-zone { display:grid; align-content:start; gap:14px; }
+  .pile > :global(span:first-child:not(.empty-label)) { position:absolute; inset:0; display:grid; place-items:center; border-radius:7px; border:2px solid; border-color:#fff #606060 #606060 #fff; background:linear-gradient(rgba(0,0,128,.1),rgba(0,0,80,.24)),var(--arcade-card-backs) center/190px 190px,linear-gradient(45deg,#000080 25%,#1084d0 25% 50%,#000080 50% 75%,#1084d0 75%) 0 0/14px 14px; color:#ffff00; font:900 28px/1 "Courier New",monospace; box-shadow:2px 2px 0 rgba(0,0,0,.45); }
+  .status { margin:4px; }
+  @media (max-width:760px) { .desk{padding:8px}.toolbar{grid-template-columns:1fr 1fr}.toolbar p{grid-column:1/-1}.felt{grid-template-columns:1fr; padding:10px}.draw-zone{display:flex}.pyramid{min-width:660px}.felt :global(.slot),.pile{width:74px;height:104px}.felt :global(.card img){width:46px;height:46px} }
+</style>

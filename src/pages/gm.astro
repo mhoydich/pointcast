@@ -1,0 +1,685 @@
+---
+/**
+ * /gm — Good Morning, El Segundo.
+ *
+ * The warm front door. Time-aware greeting, live weather from Open-Meteo,
+ * streak (from `pc_streak`), circle preview (from `pc_circle`), one daily
+ * intention, and one suggested action — all rotated by date so everyone
+ * sees the same pick on the same day.
+ *
+ * Centered, max-width 520px. Generous whitespace. This page breathes.
+ *
+ * No SSR — all dynamic state hydrates client-side. Weather is a live
+ * fetch on page load (Open-Meteo, no API key required) with a graceful
+ * "weather loading…" fallback when the call fails.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Good Morning, El Segundo';
+const description =
+  'The warm front door of PointCast — time-aware greeting, live weather, your streak, your circle, and one thing to do today. From El Segundo, with coffee.';
+
+// ── Daily intentions / affirmations ─────────────────────────────────────────
+// 30 lines, picked deterministically by local date so a visitor and a
+// friend see the same line on the same day. New ones can be appended
+// freely; the seed wraps with modulo.
+const INTENTIONS = [
+  'Today is a good day to build something.',
+  "The tide comes in. The tide goes out. You're still here.",
+  'Small steps count twice on the coast.',
+  'Someone in your life is thinking of you right now.',
+  "The jacarandas don't rush. Neither should you.",
+  'What if today is the day it clicks?',
+  'Your streak is your proof.',
+  'El Segundo mornings start with flour and finish with salt air.',
+  'The doves are on the railing again.',
+  'Be the person your Noun thinks you are.',
+  'Slow is smooth, smooth is fast.',
+  'The marine layer always burns off. Always.',
+  'Make one thing a little better today.',
+  'Coffee first. Decisions second.',
+  'A small town is just a few good doors.',
+  'Pay attention to the light. The light is the day.',
+  'You are allowed to begin again, mid-morning.',
+  'The pelicans fly low because the wind is cold above.',
+  'A walk is also work.',
+  "Don't be afraid of an easy day.",
+  'You are the only one keeping score.',
+  'The bakery opens at six, the ocean opens at all hours.',
+  'A small kindness counts as productivity.',
+  'The block you skip is the block you remember.',
+  'Tap the drum. The drum taps back.',
+  'Whatever you build today, build it close to home.',
+  'A cup of coffee is a contract with the morning.',
+  'Show up before you feel ready. The feeling follows.',
+  'The fog will lift. It always does.',
+  'You belong to this morning.',
+];
+
+// ── One thing to do — daily rotation ────────────────────────────────────────
+const ACTIONS: Array<{ label: string; href: string; sub: string }> = [
+  { label: "Listen to today's pick on /spinning", href: '/spinning', sub: 'one record, one room' },
+  { label: 'Tap the drum', href: '/drum', sub: 'the count keeps going' },
+  { label: 'Walk the dunes before the marine layer burns off', href: '/dunes', sub: 'eyes on the horizon' },
+  { label: "Check in — let your circle know you're here", href: '/me', sub: 'a small wave is enough' },
+  { label: 'Read the latest block', href: '/blocks', sub: 'one new thing, written today' },
+  { label: 'Set your mood for the day', href: '/me', sub: 'pick a color for the morning' },
+  { label: 'Ring an altar on /dispatch-drum', href: '/dispatch-drum', sub: 'a small ceremony' },
+  { label: 'Try Noun Solitaire', href: '/solitaire', sub: 'one quiet round' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/gm',
+  url: 'https://pointcast.xyz/gm',
+  name: title,
+  description,
+  inLanguage: 'en-US',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  about: 'a daily warm front door for PointCast — greeting, weather, streak, circle, one action.',
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <!-- Inline JSON-LD — BaseLayout doesn't accept a jsonLd prop, so we
+       slot it directly. -->
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+
+  <main class="gm" data-intentions={JSON.stringify(INTENTIONS)} data-actions={JSON.stringify(ACTIONS)}>
+
+    {/* ─────────────── 1. GREETING ─────────────── */}
+    <section class="gm__greeting" aria-label="Greeting">
+      <p class="gm__kicker mono" id="gm-kicker">EL SEGUNDO · 33.92°N 118.42°W</p>
+      <h1 class="gm__hello" id="gm-hello">Good morning, El Segundo.</h1>
+      <p class="gm__date" id="gm-date">—</p>
+      <p class="gm__intention" id="gm-intention">—</p>
+    </section>
+
+    {/* ─────────────── 2. WEATHER ─────────────── */}
+    <section class="gm__weather" aria-label="Weather">
+      <p class="gm__label mono">WEATHER NOW</p>
+      <p class="gm__weather-line mono" id="gm-weather">weather loading…</p>
+    </section>
+
+    {/* ─────────────── 3. STREAK ─────────────── */}
+    <section class="gm__streak" aria-label="Your streak">
+      <p class="gm__label mono">YOUR STREAK</p>
+      <div class="gm__streak-row">
+        <div class="gm__streak-num">
+          <span class="gm__streak-prefix mono">DAY</span>
+          <span class="gm__streak-value" id="gm-streak-current">1</span>
+        </div>
+        <p class="gm__streak-meta mono" id="gm-streak-meta">welcome — come back tomorrow and this number grows.</p>
+      </div>
+    </section>
+
+    {/* ─────────────── 4. THE CIRCLE ─────────────── */}
+    <section class="gm__circle" aria-label="Your circle">
+      <p class="gm__label mono"><span id="gm-circle-label">YOUR CIRCLE · 3 PEOPLE</span></p>
+      <ul class="gm__circle-list" id="gm-circle-list">
+        {/* hydrated client-side from pc_circle (or the mock fallback) */}
+      </ul>
+      <a class="gm__circle-invite mono" href="/circle">Invite someone → /circle</a>
+    </section>
+
+    {/* ─────────────── 5. ONE THING TO DO ─────────────── */}
+    <section class="gm__action" aria-label="One thing to do today">
+      <p class="gm__label mono">ONE THING TO DO</p>
+      <a class="gm__action-btn" id="gm-action" href="/">
+        <span class="gm__action-label" id="gm-action-label">—</span>
+        <span class="gm__action-sub mono" id="gm-action-sub">—</span>
+        <span class="gm__action-arrow" aria-hidden="true">→</span>
+      </a>
+    </section>
+
+    {/* ─────────────── 6. FOOTER ─────────────── */}
+    <footer class="gm__footer">
+      <p class="gm__footer-tag">pointcast.xyz · a small internet town from El Segundo</p>
+      <nav class="gm__footer-nav mono" aria-label="Footer">
+        <a href="/">home</a>
+        <span aria-hidden="true">·</span>
+        <a href="/drum">drum</a>
+        <span aria-hidden="true">·</span>
+        <a href="/battle">battle</a>
+        <span aria-hidden="true">·</span>
+        <a href="/studio">studio</a>
+        <span aria-hidden="true">·</span>
+        <a href="/profile">profile</a>
+      </nav>
+    </footer>
+
+  </main>
+
+  <script is:inline>
+    /* Inline script (not bundled) so Astro's ClientRouter re-runs it on
+       every navigation, not just the first page load. Also listens for
+       astro:page-load explicitly so a soft view-transition also hydrates. */
+    (function pcGmInit() {
+      function init() {
+        var root = document.querySelector('main.gm');
+        if (!root) return;
+
+      // ── Read embedded data ────────────────────────────────────────────────
+      var INTENTIONS = JSON.parse(root.dataset.intentions || '[]');
+      var ACTIONS = JSON.parse(root.dataset.actions || '[]');
+
+      // ── Date helpers ──────────────────────────────────────────────────────
+      var now = new Date();
+      var hour = now.getHours();
+      // 1-based local-day-of-year. Deterministic seed so the same intention
+      // and action surface for every visitor on the same calendar day.
+      var __start = new Date(now.getFullYear(), 0, 0);
+      var __diff = (now.getTime() - __start.getTime()) + ((__start.getTimezoneOffset() - now.getTimezoneOffset()) * 60000);
+      var dayOfYear = Math.floor(__diff / 86400000);
+
+      // ── 1. Greeting + date + intention ────────────────────────────────────
+      var helloEl = document.getElementById('gm-hello');
+      var greeting = 'Good morning, El Segundo.';
+      if (hour >= 21) greeting = 'Goodnight, El Segundo.';
+      else if (hour >= 17) greeting = 'Good evening, El Segundo.';
+      else if (hour >= 12) greeting = 'Good afternoon, El Segundo.';
+      if (helloEl) helloEl.textContent = greeting;
+
+      var dateEl = document.getElementById('gm-date');
+      if (dateEl) {
+        try {
+          dateEl.textContent = now.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        } catch (e) {
+          dateEl.textContent = now.toDateString();
+        }
+      }
+
+      var intentionEl = document.getElementById('gm-intention');
+      if (intentionEl && INTENTIONS.length) {
+        intentionEl.textContent = INTENTIONS[dayOfYear % INTENTIONS.length];
+      }
+
+      // ── 2. Weather (Open-Meteo, El Segundo) ───────────────────────────────
+      var weatherEl = document.getElementById('gm-weather');
+      // WMO weather-code → friendly English. Source: Open-Meteo docs.
+      var WMO = {
+        0: 'clear skies', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast',
+        45: 'fog', 48: 'freezing fog',
+        51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle',
+        56: 'freezing drizzle', 57: 'freezing drizzle',
+        61: 'light rain', 63: 'rain', 65: 'heavy rain',
+        66: 'freezing rain', 67: 'freezing rain',
+        71: 'light snow', 73: 'snow', 75: 'heavy snow', 77: 'snow grains',
+        80: 'rain showers', 81: 'rain showers', 82: 'heavy rain showers',
+        85: 'snow showers', 86: 'heavy snow showers',
+        95: 'thunderstorm', 96: 'thunderstorm with hail', 99: 'severe thunderstorm'
+      };
+      function compass(deg) {
+        var dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        return dirs[Math.round(deg / 45) % 8];
+      }
+      var weatherUrl =
+        'https://api.open-meteo.com/v1/forecast?latitude=33.9192&longitude=-118.4165' +
+        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m' +
+        '&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America/Los_Angeles';
+      fetch(weatherUrl)
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('weather ' + r.status)); })
+        .then(function (data) {
+          var c = data && data.current;
+          if (!c || !weatherEl) return;
+          var temp = Math.round(c.temperature_2m);
+          var feels = Math.round(c.apparent_temperature);
+          var wind = Math.round(c.wind_speed_10m);
+          var dir = compass(c.wind_direction_10m);
+          var cond = WMO[c.weather_code] || 'mild';
+          weatherEl.textContent = temp + '°F · ' + cond + ' · wind ' + wind + 'mph ' + dir + ' · feels like ' + feels + '°F';
+        })
+        .catch(function () {
+          if (weatherEl) weatherEl.textContent = 'weather unavailable · check back in a minute';
+        });
+
+      // ── 3. Streak (reads same key as StreakBadge: pc_streak) ──────────────
+      function todayYMD() {
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      }
+      function daysBetween(a, b) {
+        var pa = a.split('-').map(Number);
+        var pb = b.split('-').map(Number);
+        return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
+      }
+      function readStreak() {
+        try {
+          var raw = localStorage.getItem('pc_streak');
+          if (!raw) return null;
+          var p = JSON.parse(raw);
+          if (p && typeof p.current === 'number' && typeof p.longest === 'number' && typeof p.lastVisit === 'string') return p;
+        } catch (e) {}
+        return null;
+      }
+      function writeStreak(s) {
+        try { localStorage.setItem('pc_streak', JSON.stringify(s)); } catch (e) {}
+      }
+      var firstVisit = false;
+      var today = todayYMD();
+      var prev = readStreak();
+      var next;
+      if (!prev) {
+        firstVisit = true;
+        next = { current: 1, longest: 1, lastVisit: today };
+      } else if (prev.lastVisit === today) {
+        next = prev;
+      } else {
+        var gap = daysBetween(prev.lastVisit, today);
+        var currentN = gap === 1 ? prev.current + 1 : 1;
+        next = { current: currentN, longest: Math.max(prev.longest, currentN), lastVisit: today };
+      }
+      writeStreak(next);
+
+      var streakValEl = document.getElementById('gm-streak-current');
+      if (streakValEl) streakValEl.textContent = String(next.current);
+      var streakMetaEl = document.getElementById('gm-streak-meta');
+      if (streakMetaEl) {
+        streakMetaEl.textContent = firstVisit
+          ? 'welcome — come back tomorrow and this number grows.'
+          : 'your longest: ' + next.longest + ' day' + (next.longest === 1 ? '' : 's');
+      }
+
+      // ── 4. Circle (pc_circle, with mock fallback) ─────────────────────────
+      var MOCK_CIRCLE = [
+        { name: 'Morgan', nounId: 421, lastSeen: '2h ago',     mood: 'hype'  },
+        { name: 'Daniel', nounId: 88,  lastSeen: 'yesterday',  mood: 'chill' },
+        { name: 'Mom',    nounId: 7,   lastSeen: '3 days ago', mood: 'quiet' }
+      ];
+      var circle = MOCK_CIRCLE;
+      try {
+        var rawCircle = localStorage.getItem('pc_circle');
+        if (rawCircle) {
+          var parsed = JSON.parse(rawCircle);
+          if (Array.isArray(parsed) && parsed.length) circle = parsed;
+        }
+      } catch (e) {}
+
+      var listEl = document.getElementById('gm-circle-list');
+      var labelEl = document.getElementById('gm-circle-label');
+      if (labelEl) labelEl.textContent = 'YOUR CIRCLE · ' + circle.length + ' ' + (circle.length === 1 ? 'PERSON' : 'PEOPLE');
+      if (listEl) {
+        listEl.innerHTML = '';
+        for (var i = 0; i < circle.length; i++) {
+          var p = circle[i];
+          var li = document.createElement('li');
+          li.className = 'gm__circle-item';
+          var img = document.createElement('img');
+          img.className = 'gm__circle-avatar';
+          img.width = 48;
+          img.height = 48;
+          img.alt = p.name + ' · Noun #' + p.nounId;
+          img.loading = 'lazy';
+          img.src = 'https://noun.pics/' + p.nounId;
+          var meta = document.createElement('div');
+          meta.className = 'gm__circle-meta';
+          var nameEl = document.createElement('span');
+          nameEl.className = 'gm__circle-name';
+          nameEl.textContent = p.name;
+          var sub = document.createElement('span');
+          sub.className = 'gm__circle-sub mono';
+          var moodPart = p.mood ? ' · mood: ' + p.mood : '';
+          sub.textContent = 'Noun #' + p.nounId + ' · ' + p.lastSeen + moodPart;
+          meta.appendChild(nameEl);
+          meta.appendChild(sub);
+          li.appendChild(img);
+          li.appendChild(meta);
+          listEl.appendChild(li);
+        }
+      }
+
+      // ── 5. One thing to do (daily rotation) ───────────────────────────────
+      var action = ACTIONS[dayOfYear % ACTIONS.length] || ACTIONS[0];
+      if (action) {
+        var aEl = document.getElementById('gm-action');
+        var al = document.getElementById('gm-action-label');
+        var asub = document.getElementById('gm-action-sub');
+        if (aEl) aEl.setAttribute('href', action.href);
+        if (al) al.textContent = action.label;
+        if (asub) asub.textContent = action.sub;
+      }
+      } /* end init() */
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+      } else {
+        init();
+      }
+      // ClientRouter / view transitions: re-run after each soft navigation.
+      document.addEventListener('astro:page-load', init);
+    })();
+  </script>
+
+  <style>
+    .gm {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: clamp(48px, 8vw, 88px) 24px 64px;
+      font-family: 'Inter', 'Outfit', system-ui, -apple-system, sans-serif;
+      color: var(--color-ink);
+    }
+
+    .gm .mono {
+      font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: var(--color-ink-soft);
+    }
+
+    .gm__label {
+      margin: 0 0 12px;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    }
+
+    /* ── 1. Greeting ── */
+    .gm__greeting {
+      margin-bottom: 56px;
+    }
+
+    .gm__kicker {
+      margin: 0 0 28px;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: color-mix(in srgb, var(--color-ink) 50%, transparent);
+    }
+
+    .gm__hello {
+      margin: 0 0 14px;
+      font-family: var(--font-serif);
+      font-weight: 500;
+      font-size: clamp(34px, 6vw, 44px);
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      color: var(--color-ink);
+    }
+
+    .gm__date {
+      margin: 0 0 20px;
+      font-size: 16px;
+      color: color-mix(in srgb, var(--color-ink) 70%, transparent);
+    }
+
+    .gm__intention {
+      margin: 0;
+      font-style: italic;
+      font-size: 18px;
+      line-height: 1.5;
+      color: color-mix(in srgb, var(--color-ink) 65%, transparent);
+      max-width: 460px;
+    }
+
+    /* ── 2. Weather ── */
+    .gm__weather {
+      margin-bottom: 56px;
+      padding: 16px 18px;
+      border: 1px solid var(--color-rule);
+      border-left: 3px solid var(--color-warm);
+      background: color-mix(in srgb, var(--color-warm) 4%, var(--color-card));
+      border-radius: 2px;
+    }
+
+    .gm__weather-line {
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: none;
+      color: var(--color-ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── 3. Streak ── */
+    .gm__streak {
+      margin-bottom: 56px;
+    }
+
+    .gm__streak-row {
+      display: flex;
+      align-items: baseline;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .gm__streak-num {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 8px 18px 10px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--color-warm) 12%, transparent);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-warm) 35%, transparent),
+        0 8px 32px -10px color-mix(in srgb, var(--color-warm) 60%, transparent);
+    }
+
+    .gm__streak-prefix {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      color: color-mix(in srgb, var(--color-warm) 80%, var(--color-ink));
+    }
+
+    .gm__streak-value {
+      font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+      font-size: clamp(48px, 9vw, 64px);
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      color: color-mix(in srgb, var(--color-warm) 75%, var(--color-ink));
+    }
+
+    .gm__streak-meta {
+      margin: 0;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: none;
+      color: color-mix(in srgb, var(--color-ink) 60%, transparent);
+      flex: 1 1 200px;
+    }
+
+    /* ── 4. Circle ── */
+    .gm__circle {
+      margin-bottom: 56px;
+    }
+
+    .gm__circle-list {
+      list-style: none;
+      margin: 0 0 14px;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .gm__circle-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--color-card) 70%, transparent);
+      transition: background 0.15s ease;
+    }
+
+    .gm__circle-item:hover {
+      background: var(--color-card-hover);
+    }
+
+    .gm__circle-avatar {
+      flex: 0 0 48px;
+      width: 48px;
+      height: 48px;
+      border-radius: 4px;
+      image-rendering: pixelated;
+      background: color-mix(in srgb, var(--color-warm) 8%, var(--color-card));
+      border: 1px solid var(--color-rule);
+    }
+
+    .gm__circle-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .gm__circle-name {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--color-ink);
+    }
+
+    .gm__circle-sub {
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: none;
+      color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    }
+
+    .gm__circle-invite {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: none;
+      color: var(--color-warm);
+      text-decoration: none;
+      border-bottom: 1px dashed color-mix(in srgb, var(--color-warm) 60%, transparent);
+      padding-bottom: 1px;
+    }
+
+    .gm__circle-invite:hover {
+      color: color-mix(in srgb, var(--color-warm) 70%, var(--color-ink));
+    }
+
+    /* ── 5. One thing to do ── */
+    .gm__action {
+      margin-bottom: 64px;
+    }
+
+    .gm__action-btn {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 22px;
+      border: 1px solid color-mix(in srgb, var(--color-warm) 50%, var(--color-rule));
+      border-radius: 8px;
+      background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-warm) 12%, var(--color-card)) 0%,
+        var(--color-card) 100%
+      );
+      color: var(--color-ink);
+      text-decoration: none;
+      box-shadow: 0 8px 24px -16px color-mix(in srgb, var(--color-warm) 80%, transparent);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .gm__action-btn:hover {
+      transform: translateY(-1px);
+      background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-warm) 18%, var(--color-card)) 0%,
+        var(--color-card-hover) 100%
+      );
+      box-shadow: 0 14px 32px -18px color-mix(in srgb, var(--color-warm) 100%, transparent);
+    }
+
+    .gm__action-label {
+      flex: 1;
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .gm__action-sub {
+      display: none;
+    }
+
+    @media (min-width: 480px) {
+      .gm__action-btn {
+        flex-wrap: wrap;
+      }
+      .gm__action-sub {
+        display: inline-block;
+        flex-basis: 100%;
+        margin-top: 4px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: none;
+        color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+        order: 3;
+      }
+    }
+
+    .gm__action-arrow {
+      flex: 0 0 auto;
+      font-size: 22px;
+      color: var(--color-warm);
+      transition: transform 0.15s ease;
+    }
+
+    .gm__action-btn:hover .gm__action-arrow {
+      transform: translateX(3px);
+    }
+
+    /* ── 6. Footer ── */
+    .gm__footer {
+      padding-top: 32px;
+      border-top: 1px solid var(--color-rule);
+      text-align: center;
+    }
+
+    .gm__footer-tag {
+      margin: 0 0 12px;
+      font-size: 13px;
+      font-style: italic;
+      color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+    }
+
+    .gm__footer-nav {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--color-ink) 60%, transparent);
+    }
+
+    .gm__footer-nav a {
+      color: inherit;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      padding-bottom: 1px;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .gm__footer-nav a:hover {
+      color: var(--color-warm);
+      border-bottom-color: color-mix(in srgb, var(--color-warm) 50%, transparent);
+    }
+
+    .gm__footer-nav span {
+      color: color-mix(in srgb, var(--color-ink) 30%, transparent);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .gm__action-btn,
+      .gm__action-arrow,
+      .gm__circle-item {
+        transition: none;
+      }
+    }
+  </style>
+</BaseLayout>

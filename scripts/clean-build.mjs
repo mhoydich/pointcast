@@ -16,3 +16,7 @@ if (existsSync(dist)) {
     rmSync(dist, { recursive: true, force: true });
   }
 }
+// Repeated local Astro builds can leave stale prerender chunks.
+// The project builds to .dist-build so older local dist/ artifacts never
+// block production builds.
+rmSync(join(root, '.dist-build'), { recursive: true, force: true });

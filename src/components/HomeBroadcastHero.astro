@@ -1,0 +1,332 @@
+---
+/**
+ * HomeBroadcastHero — woodblock hero at the very top of /.
+ *
+ * 2026-05-16 evolution. Pulls the woodblock register (HomeHorizonStrip /
+ * /next / /sunset) up to the first thing a visitor sees, so the homepage
+ * leads with "this is a broadcast" instead of "here are some cards".
+ *
+ * Layout:
+ *   - Full-width 1200×320 SVG El Segundo panel (sky bands, sun, mountain
+ *     silhouette, refinery, wave crests). Same flat-color register the
+ *     rest of the site uses.
+ *   - Status chyron at the top of the panel — PHASE · DATE · NODE · ROOMS
+ *   - Big italic title + one-line subtitle over the lower-left
+ *   - Three pill CTAs: into the meditation room, the webring, /next
+ *
+ * Time-of-day responsive: phase + sun position drift through the day,
+ * full night palette swap when phase = NIGHT or OVERNIGHT. Mirrors the
+ * pattern from /next.
+ */
+import { knownNodes } from '../data/nodes-registry';
+import { seedArtifacts } from '../data/artifacts/seed';
+
+const now = new Date();
+const h = now.getHours();
+const todayStr = now.toISOString().slice(0, 10);
+
+function phase(hh: number): string {
+  if (hh < 5) return 'OVERNIGHT';
+  if (hh < 11) return 'MORNING';
+  if (hh < 17) return 'AFTERNOON';
+  if (hh < 21) return 'EVENING';
+  return 'NIGHT';
+}
+const todayPhase = phase(h);
+const isNight = todayPhase === 'NIGHT' || todayPhase === 'OVERNIGHT';
+
+// Sun drifts across the panel during daylight; off-canvas otherwise.
+const sunVisible = h >= 6 && h < 20;
+const sunX = sunVisible ? 100 + ((h - 6) / 14) * 1000 : 0;
+const sunY = 70 - Math.sin(((h - 6) / 14) * Math.PI) * 30;
+
+const palette = isNight
+  ? { sky: ['#0a1530', '#0f1f3a', '#142844', '#1c324d'], sea: '#0a1d36',
+      waves: ['#1e4264', '#16344f', '#11283e'], mountain: '#1a2533',
+      sun: '#ffd28a', sunHalo: '#ff8a4a', flare: '#ff8a4a' }
+  : { sky: ['#c8d8e3', '#a9c3d4', '#e8b8a0', '#d8624a'], sea: '#1f4561',
+      waves: ['#a9c3d4', '#7da4bc', '#5b85a0'], mountain: '#5e6f7d',
+      sun: '#fbd8a3', sunHalo: '#f3a070', flare: '#f3a070' };
+
+const nodes = knownNodes();
+const artifactCount = seedArtifacts().length;
+---
+
+<section class={`bcast${isNight ? ' bcast--night' : ''}`} aria-label="PointCast broadcast hero">
+  <svg
+    class="bcast__svg"
+    viewBox="0 0 1200 320"
+    preserveAspectRatio="xMidYMid slice"
+    role="img"
+    aria-labelledby="bcast-title-svg"
+  >
+    <title id="bcast-title-svg">A flat-color woodblock view of El Segundo — sky, mountains, refinery silhouette, sea.</title>
+
+    {/* sky bands */}
+    <rect x="0" y="0"   width="1200" height="56"  fill={palette.sky[0]}/>
+    <rect x="0" y="56"  width="1200" height="28"  fill={palette.sky[1]}/>
+    <rect x="0" y="84"  width="1200" height="24"  fill={palette.sky[2]}/>
+    <rect x="0" y="108" width="1200" height="16"  fill={palette.sky[3]} opacity={isNight ? 1 : 0.85}/>
+
+    {/* stars at night — small constellation across the top band */}
+    {isNight && (
+      <g fill="#f5e9c4">
+        <circle cx="60"   cy="14" r="0.9" opacity="0.85"/>
+        <circle cx="138"  cy="22" r="1.1" opacity="0.95"/>
+        <circle cx="232"  cy="10" r="0.8" opacity="0.7"/>
+        <circle cx="334"  cy="32" r="1.0" opacity="0.9"/>
+        <circle cx="446"  cy="18" r="0.9" opacity="0.85"/>
+        <circle cx="556"  cy="28" r="1.2" opacity="1"/>
+        <circle cx="668"  cy="12" r="0.7" opacity="0.6"/>
+        <circle cx="782"  cy="24" r="1.0" opacity="0.85"/>
+        <circle cx="898"  cy="16" r="0.9" opacity="0.8"/>
+        <circle cx="1014" cy="30" r="1.1" opacity="0.9"/>
+        <circle cx="1118" cy="20" r="0.8" opacity="0.7"/>
+      </g>
+    )}
+
+    {/* sun (daylight only) */}
+    {sunVisible && <circle cx={sunX} cy={sunY} r="22" fill={palette.sunHalo} opacity="0.9"/>}
+    {sunVisible && <circle cx={sunX} cy={sunY} r="14" fill={palette.sun}/>}
+
+    {/* mountain silhouette */}
+    <path
+      d="M0 128 L120 100 L180 116 L260 90 L340 114 L420 96 L520 122 L600 106 L700 124 L800 116 L900 128 L1000 120 L1100 126 L1200 122 L1200 140 L0 140 Z"
+      fill={palette.mountain}
+    />
+
+    {/* refinery — left third */}
+    <g fill="#1f1b15">
+      <rect x="44" y="92" width="5" height="38"/>
+      <rect x="58" y="100" width="3" height="30"/>
+      <rect x="70" y="84" width="8" height="46"/>
+      <rect x="86" y="96" width="5" height="34"/>
+      <rect x="100" y="76" width="10" height="54"/>
+      <rect x="120" y="92" width="6" height="38"/>
+      <rect x="138" y="98" width="4" height="32"/>
+      <rect x="154" y="88" width="7" height="42"/>
+      {/* flare */}
+      <rect x="105" y="64" width="2" height="12"/>
+    </g>
+    <circle cx="106" cy="62" r={isNight ? 5 : 3} fill={palette.flare}/>
+    {isNight && <circle cx="106" cy="62" r="8" fill="#ffd28a" opacity="0.5"/>}
+
+    {/* sea */}
+    <rect x="0" y="140" width="1200" height="180" fill={palette.sea}/>
+
+    {/* wave crests */}
+    <g class="bcast-wave bcast-wave--1" fill="none" stroke={palette.waves[0]} stroke-width="2" stroke-linecap="round">
+      {Array.from({ length: 40 }).map((_, i) => (
+        <path d={`M${i * 32 - 12} 168 q 8 -6 16 0 q 8 6 16 0`} />
+      ))}
+    </g>
+    <g class="bcast-wave bcast-wave--2" fill="none" stroke={palette.waves[1]} stroke-width="2" stroke-linecap="round">
+      {Array.from({ length: 40 }).map((_, i) => (
+        <path d={`M${i * 32 + 6} 202 q 8 -5 16 0 q 8 5 16 0`} />
+      ))}
+    </g>
+    <g class="bcast-wave bcast-wave--3" fill="none" stroke={palette.waves[2]} stroke-width="2" stroke-linecap="round">
+      {Array.from({ length: 40 }).map((_, i) => (
+        <path d={`M${i * 32 - 4} 240 q 8 -5 16 0 q 8 5 16 0`} />
+      ))}
+    </g>
+
+    {/* tiny boat on the horizon */}
+    <g>
+      <path d="M1060 140 L1060 126 L1072 140 Z" fill="#fbf7ee"/>
+      <rect x="1059" y="140" width="14" height="2.5" fill="#1f1b15"/>
+    </g>
+  </svg>
+
+  {/* status chyron — top of the panel */}
+  <p class="bcast__chyron mono">
+    <span class="bcast__dot" aria-hidden="true"></span>
+    <span>{todayPhase} · {todayStr}</span>
+    <span class="bcast__dim" aria-hidden="true">·</span>
+    <span>EL SEGUNDO · 33.916°N 118.416°W</span>
+    <span class="bcast__dim" aria-hidden="true">·</span>
+    <span>{nodes.length} NODE · 1 ROOM · {artifactCount} ARTIFACTS</span>
+    <a href="/webring" class="bcast__chyron-cta">webring →</a>
+  </p>
+
+  {/* identity overlay — lower left */}
+  <div class="bcast__overlay">
+    <p class="bcast__kicker mono">A LIVE BROADCAST · SINCE 2025-01-14</p>
+    <h1 class="bcast__title">PointCast</h1>
+    <p class="bcast__dek">An agent-native broadcast from El Segundo, California. Rooms with hours, contracts you can fork, artifacts you can pin to a wall.</p>
+    <div class="bcast__ctas">
+      <a class="bcast__cta bcast__cta--primary" href="/r/meditate">enter the meditation room →</a>
+      <a class="bcast__cta" href="/webring">walk the webring →</a>
+      <a class="bcast__cta" href="/next">today's town →</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .bcast {
+    position: relative;
+    margin: 0 0 28px;
+    border-radius: 4px;
+    overflow: hidden;
+    line-height: 0;
+    box-shadow: 0 10px 36px rgba(31, 27, 21, 0.18);
+    background: #1f1b15;
+  }
+  .bcast--night { box-shadow: 0 14px 48px rgba(0, 0, 0, 0.55); background: #050b18; }
+
+  .bcast__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1200 / 320;
+  }
+
+  /* Chyron */
+  .bcast__chyron {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 6px 12px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: rgba(253, 242, 214, 0.92);
+    background: rgba(15, 29, 46, 0.55);
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(240, 198, 177, 0.22);
+    border-radius: 3px;
+    text-transform: uppercase;
+    line-height: 1.3;
+  }
+  .bcast__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #d8624a;
+    box-shadow: 0 0 8px rgba(216, 98, 74, 0.65);
+    animation: bcast-pulse 2.2s ease-in-out infinite;
+    flex: 0 0 auto;
+  }
+  .bcast--night .bcast__dot { background: #f5c66b; box-shadow: 0 0 10px rgba(245, 198, 107, 0.7); }
+  .bcast__dim { color: rgba(253, 242, 214, 0.45); }
+  .bcast__chyron-cta {
+    margin-left: auto;
+    color: #f0c6b1;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(240, 198, 177, 0.4);
+  }
+  .bcast__chyron-cta:hover { color: #fff; border-bottom-color: currentColor; }
+  .bcast--night .bcast__chyron-cta { color: #f5c66b; }
+  @keyframes bcast-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  /* Wave breathing */
+  .bcast-wave { will-change: transform; transform-origin: center; }
+  .bcast-wave--1 { animation: bcast-wave-a 9.5s ease-in-out infinite; }
+  .bcast-wave--2 { animation: bcast-wave-a 11s  ease-in-out -2.4s infinite; }
+  .bcast-wave--3 { animation: bcast-wave-b 13s  ease-in-out -5.1s infinite; }
+  @keyframes bcast-wave-a { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+  @keyframes bcast-wave-b { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .bcast-wave { animation: none !important; }
+    .bcast__dot { animation: none !important; }
+  }
+
+  /* Identity overlay */
+  .bcast__overlay {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    bottom: 18px;
+    color: #fdf2d6;
+    line-height: 1.35;
+  }
+  .bcast__kicker {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #f0c6b1;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  .bcast--night .bcast__kicker { color: #f5c66b; }
+  .bcast__title {
+    margin: 0 0 6px;
+    font-family: var(--font-heading, 'Syne', sans-serif);
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .bcast__dek {
+    margin: 0 0 16px;
+    font-family: var(--font-serif, 'Lora', Georgia, serif);
+    font-size: clamp(14px, 1.2vw, 16px);
+    line-height: 1.5;
+    color: rgba(253, 242, 214, 0.88);
+    max-width: 560px;
+  }
+  .bcast__ctas {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .bcast__cta {
+    padding: 8px 16px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 999px;
+    color: #fdf2d6;
+    background: rgba(253, 242, 214, 0.1);
+    border: 1px solid rgba(253, 242, 214, 0.3);
+    transition: background 0.16s ease, color 0.16s ease;
+  }
+  .bcast__cta:hover {
+    background: rgba(253, 242, 214, 0.2);
+    color: #fff;
+  }
+  .bcast__cta--primary {
+    background: #d8624a;
+    color: #fff;
+    border-color: #d8624a;
+  }
+  .bcast__cta--primary:hover {
+    background: #b94e3a;
+  }
+  .bcast--night .bcast__cta--primary {
+    background: #f5c66b;
+    color: #1f1b15;
+    border-color: #f5c66b;
+  }
+  .bcast--night .bcast__cta--primary:hover {
+    background: #ffd98a;
+  }
+
+  /* Mobile */
+  @media (max-width: 720px) {
+    .bcast__chyron {
+      font-size: 9px;
+      gap: 6px 10px;
+      padding: 5px 10px;
+    }
+    .bcast__chyron-cta { display: none; }
+    .bcast__overlay {
+      left: 18px;
+      right: 18px;
+      bottom: 14px;
+    }
+    .bcast__dek { font-size: 13px; margin-bottom: 12px; }
+    .bcast__cta { font-size: 10px; padding: 7px 12px; letter-spacing: 0.1em; }
+  }
+</style>

@@ -1,0 +1,600 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Tide — slow swells of sound that come and go" description="A drone that breathes on a long scale. Volume rises and falls on a slow sine cycle — 30 seconds to 3 minutes per cycle. Optional gulls at low tide, optional wave wash at high tide. Audio shaped like dynamics, not like a song.">
+  <main class="ct" id="ct" data-built={built}>
+    <header class="ct__hero">
+      <p class="ct__kicker">CAST · TIDE · swell · ebb · come and go</p>
+      <h1 class="ct__title">Tide.</h1>
+      <p class="ct__sub">A drone that breathes on a long scale. Volume rises and falls on a slow sine cycle. 30 seconds to 3 minutes per full breath. Optional gulls at the low end. Optional wave wash at the peak. Audio shaped like dynamics, not like a song.</p>
+    </header>
+
+    <section class="ct__panel">
+      <div class="ct__set">
+        <p class="ct__set-label">CHORD</p>
+        <div class="ct__pills" id="ct-chord-pills">
+          <button class="ct__pill ct__pill--active" data-chord="Cmaj7">C maj7</button>
+          <button class="ct__pill" data-chord="Am9">A m9</button>
+          <button class="ct__pill" data-chord="Dm11">D m11</button>
+          <button class="ct__pill" data-chord="Emaj7">E maj7</button>
+          <button class="ct__pill" data-chord="Fsus2">F sus2</button>
+          <button class="ct__pill" data-chord="Gsus4">G sus4</button>
+        </div>
+      </div>
+      <div class="ct__set">
+        <p class="ct__set-label">PERIOD · <span id="ct-period-val">90</span>s per swell</p>
+        <input type="range" class="ct__period" id="ct-period" min="30" max="180" value="90"/>
+      </div>
+      <div class="ct__set">
+        <p class="ct__set-label">LAYERS</p>
+        <div class="ct__pills">
+          <button class="ct__pill" id="ct-gulls" aria-pressed="false">gulls (low tide)</button>
+          <button class="ct__pill" id="ct-wash"  aria-pressed="false">wave wash (high tide)</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="ct__stage">
+      <canvas class="ct__viz" id="ct-viz" width="1200" height="240"></canvas>
+      <div class="ct__readouts">
+        <div class="ct__readout">
+          <span class="ct__readout-label">CYCLE</span>
+          <span class="ct__readout-val" id="ct-cycle">—</span>
+        </div>
+        <div class="ct__readout">
+          <span class="ct__readout-label">LEVEL</span>
+          <span class="ct__readout-val" id="ct-level">—</span>
+        </div>
+        <div class="ct__readout">
+          <span class="ct__readout-label">STATE</span>
+          <span class="ct__readout-val" id="ct-state">at rest</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="ct__transport">
+      <button class="ct__play" id="ct-play" type="button">
+        <span class="ct__play-icon" id="ct-play-icon">▶</span>
+        <span class="ct__play-label" id="ct-play-label">PULL TIDE IN</span>
+      </button>
+      <div class="ct__vol">
+        <span class="ct__vol-label">MASTER</span>
+        <input type="range" class="ct__vol-range" id="ct-vol" min="0" max="100" value="60"/>
+      </div>
+    </section>
+
+    <section class="ct__about">
+      <h2 class="ct__about-h">What makes tide tide</h2>
+      <p>Most music is shaped by harmony — chord changes that move you forward. Tide is shaped by <em>dynamics</em> — volume rising and falling on a slow cycle while the harmony barely changes. Brian Eno called this "ambient music" in 1978; tape composers had been doing it for decades before that.</p>
+      <p>The page holds one chord (your pick of six) and runs the master gain through a sine LFO with period equal to whatever you slide. At full volume you're at high tide; at silence you're at low tide. Optional sub-layers come in only at the right phase: gulls fire occasionally during the low half of the cycle, wave wash crests during the high half.</p>
+      <p>Sound architecture: each chord is a 4-voice detuned-saw pad through a soft low-pass at 1.4kHz. Gulls are 900-1300Hz triangle blips with pitch sweeps, scheduled every 4-12s during low tide. Wave wash is bandpassed white noise (1100-2400Hz) modulated by the high half of the cycle.</p>
+      <p>Pair with <a href="/cast-cradle">/cast-cradle</a> (one-way fade for sleep), <a href="/cast-wander">/cast-wander</a> (generative chord progression), <a href="/cast-room">/cast-room</a> (synth ambience for behind another tab).</p>
+    </section>
+  </main>
+
+  <style is:global>
+    :root {
+      --ct-ink: #060816;
+      --ct-deep: #0e1828;
+      --ct-flame: #f6c15e;
+      --ct-flame-deep: #d68f2c;
+      --ct-cream: #f4e7c8;
+      --ct-cream-dim: #c8b48a;
+      --ct-cream-dimmer: #8b7a5a;
+      --ct-water: #4a8fb3;
+      --ct-water-deep: #2a5878;
+      --ct-foam: #c8e0ed;
+    }
+
+    body:has(.ct) {
+      background:
+        radial-gradient(circle at 50% 0%, #0e2030 0%, transparent 50%),
+        var(--ct-ink);
+      color: var(--ct-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .ct { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    .ct__hero { text-align: center; margin-bottom: 32px; }
+    .ct__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px; letter-spacing: 0.18em;
+      color: var(--ct-flame-deep);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .ct__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 900;
+      font-size: clamp(56px, 12vw, 140px);
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      margin: 0 0 16px;
+      color: var(--ct-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+    .ct__sub {
+      max-width: 720px; margin: 0 auto;
+      font-size: 17px; line-height: 1.5;
+      color: var(--ct-cream-dim);
+    }
+
+    /* PANEL */
+    .ct__panel {
+      display: grid;
+      grid-template-columns: 2fr 1.5fr 1.6fr;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    @media (max-width: 880px) { .ct__panel { grid-template-columns: 1fr; } }
+    .ct__set {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .ct__set-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--ct-cream-dimmer);
+      margin: 0 0 8px;
+    }
+    .ct__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ct__pill {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(246,193,94,0.28);
+      background: transparent;
+      color: var(--ct-cream);
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .ct__pill:hover { background: rgba(246,193,94,0.10); }
+    .ct__pill--active, .ct__pill[aria-pressed="true"] {
+      background: var(--ct-flame);
+      color: #2a1a08;
+      border-color: var(--ct-flame);
+    }
+    .ct__period { width: 100%; accent-color: var(--ct-flame); }
+
+    /* STAGE */
+    .ct__stage {
+      background:
+        linear-gradient(180deg, var(--ct-deep) 0%, #08111a 100%);
+      border: 1px solid rgba(74,143,179,0.32);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 22px;
+      box-shadow: inset 0 0 60px rgba(0,0,0,0.4);
+    }
+    .ct__viz {
+      width: 100%;
+      height: 240px;
+      background: rgba(0,0,0,0.32);
+      border-radius: 12px;
+      display: block;
+      margin-bottom: 14px;
+    }
+    .ct__readouts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 600px) { .ct__readouts { grid-template-columns: 1fr; } }
+    .ct__readout {
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .ct__readout-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: var(--ct-cream-dimmer);
+    }
+    .ct__readout-val {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--ct-cream);
+    }
+
+    /* TRANSPORT */
+    .ct__transport {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+    .ct__play {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 26px;
+      border-radius: 12px;
+      border: 0;
+      background: var(--ct-flame);
+      color: #2a1a08;
+      cursor: pointer;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      box-shadow: 0 4px 14px rgba(246,193,94,0.32);
+    }
+    .ct__play:hover { background: var(--ct-flame-deep); }
+    .ct__vol {
+      flex: 1;
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ct__vol-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--ct-cream-dimmer);
+    }
+    .ct__vol-range { width: 100%; accent-color: var(--ct-flame); }
+
+    /* ABOUT */
+    .ct__about {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 24px 0 0;
+      border-top: 1px solid rgba(246,193,94,0.14);
+    }
+    .ct__about-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--ct-cream);
+      margin: 0 0 12px;
+    }
+    .ct__about p {
+      font-size: 15px; line-height: 1.6;
+      color: var(--ct-cream-dim);
+      margin: 0 0 12px;
+    }
+    .ct__about em { color: var(--ct-flame); font-style: normal; }
+    .ct__about a { color: var(--ct-flame); text-decoration: none; }
+    .ct__about a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // Chord defs: array of MIDI offsets from a tonic
+    type Chord = { rootMidi: number; intervals: number[]; name: string };
+    const CHORDS: Record<string, Chord> = {
+      'Cmaj7':  { name: 'C maj7',  rootMidi: 60, intervals: [0, 4, 7, 11, 14] },
+      'Am9':    { name: 'A m9',    rootMidi: 57, intervals: [0, 3, 7, 10, 14, 17] },
+      'Dm11':   { name: 'D m11',   rootMidi: 62, intervals: [0, 3, 7, 10, 14, 17, 22] },
+      'Emaj7':  { name: 'E maj7',  rootMidi: 64, intervals: [0, 4, 7, 11, 14] },
+      'Fsus2':  { name: 'F sus2',  rootMidi: 65, intervals: [0, 2, 7, 9, 14] },
+      'Gsus4':  { name: 'G sus4',  rootMidi: 67, intervals: [0, 5, 7, 12, 17] },
+    };
+
+    let currentChord: keyof typeof CHORDS = 'Cmaj7';
+    let periodSec = 90;
+    let masterVol = 0.6;
+    let gullsOn = false;
+    let washOn = false;
+    let playing = false;
+
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    let padNodes: { osc: OscillatorNode; gain: GainNode }[] = [];
+    let padFilter: BiquadFilterNode | null = null;
+    let washSrc: AudioBufferSourceNode | null = null;
+    let washGain: GainNode | null = null;
+    let noiseBuf: AudioBuffer | null = null;
+    let startCtxTime = 0;
+    let gullTimer: number | null = null;
+    let washMod: number | null = null;
+    let rafId: number | null = null;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0;
+      masterGain.connect(ctx.destination);
+    }
+    function midiToHz(m: number) { return 440 * Math.pow(2, (m - 69) / 12); }
+    function getNoiseBuffer(ac: AudioContext): AudioBuffer {
+      if (noiseBuf) return noiseBuf;
+      const len = ac.sampleRate * 4;
+      const b = ac.createBuffer(1, len, ac.sampleRate);
+      const data = b.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      noiseBuf = b;
+      return b;
+    }
+
+    function startPad() {
+      if (!ctx || !scheduler || !masterGain) return;
+      const c = CHORDS[currentChord];
+      padFilter = ctx.createBiquadFilter();
+      padFilter.type = 'lowpass';
+      padFilter.Q.value = 0.7;
+      padFilter.frequency.value = 1400;
+      padFilter.connect(masterGain);
+      padNodes = [];
+      for (const offset of c.intervals) {
+        for (const detune of [-7, 7]) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.value = midiToHz(c.rootMidi + offset);
+          osc.detune.value = detune;
+          g.gain.value = 0.05 / c.intervals.length;
+          osc.connect(g).connect(padFilter);
+          scheduler.trackSource(osc);
+          osc.start();
+          padNodes.push({ osc, gain: g });
+        }
+      }
+    }
+
+    function startWash() {
+      if (!ctx || !scheduler || !masterGain || washSrc) return;
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      src.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1700;
+      bp.Q.value = 0.5;
+      const g = ctx.createGain();
+      g.gain.value = 0;  // gated by the wash modulator
+      src.connect(bp).connect(g).connect(masterGain);
+      scheduler.trackSource(src);
+      src.start();
+      washSrc = src;
+      washGain = g;
+    }
+    function stopWash() {
+      if (washSrc) {
+        try { washSrc.stop(); } catch {}
+        try { washSrc.disconnect(); } catch {}
+        washSrc = null;
+      }
+      washGain = null;
+      if (washMod != null) { clearInterval(washMod); washMod = null; }
+    }
+
+    function fireGull(t: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(900 + Math.random() * 400, t);
+      osc.frequency.linearRampToValueAtTime(1200 + Math.random() * 200, t + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(700, t + 0.35);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.42);
+    }
+
+    function scheduleGulls() {
+      if (!gullsOn || !ctx) return;
+      // Only fire if we're in the low half of the cycle
+      const elapsed = ctx.currentTime - startCtxTime;
+      const phase = (elapsed % periodSec) / periodSec;  // 0..1
+      // tide level: gain envelope = sin²(phase * π) shifted so phase 0 = low tide
+      // We'll model: tideLevel = (sin(phase * 2π - π/2) + 1) / 2  → 0 at phase 0, 1 at phase 0.5, 0 at phase 1
+      const tide = (Math.sin(phase * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+      if (tide < 0.45) {
+        fireGull(ctx.currentTime + 0.02);
+      }
+      const delay = 4000 + Math.random() * 8000;
+      gullTimer = window.setTimeout(scheduleGulls, delay);
+    }
+
+    function modulateWash() {
+      if (!playing || !ctx || !washGain) return;
+      const elapsed = ctx.currentTime - startCtxTime;
+      const phase = (elapsed % periodSec) / periodSec;
+      const tide = (Math.sin(phase * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+      // wash audible mainly at high tide (tide > 0.5)
+      const target = Math.max(0, (tide - 0.5) * 2) * 0.32;
+      washGain.gain.setTargetAtTime(target, ctx.currentTime, 0.5);
+    }
+
+    function startTide() {
+      ensureCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      playing = true;
+      startCtxTime = ctx.currentTime + 0.1;
+      startPad();
+      if (washOn) { startWash(); washMod = window.setInterval(modulateWash, 200); }
+      if (gullsOn) scheduleGulls();
+      document.getElementById('ct-play-icon')!.textContent = '■';
+      document.getElementById('ct-play-label')!.textContent = 'LET TIDE GO OUT';
+      tickAnim();
+    }
+    function stopTide() {
+      playing = false;
+      if (gullTimer != null) { clearTimeout(gullTimer); gullTimer = null; }
+      stopWash();
+      if (scheduler) scheduler.stopAll();
+      padNodes = [];
+      padFilter = null;
+      if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+      document.getElementById('ct-play-icon')!.textContent = '▶';
+      document.getElementById('ct-play-label')!.textContent = 'PULL TIDE IN';
+      document.getElementById('ct-state')!.textContent = 'at rest';
+      document.getElementById('ct-level')!.textContent = '—';
+      document.getElementById('ct-cycle')!.textContent = '—';
+      drawViz(0, 0);
+    }
+
+    function tickAnim() {
+      if (!playing || !ctx) return;
+      const elapsed = ctx.currentTime - startCtxTime;
+      const phase = (elapsed % periodSec) / periodSec;
+      const tide = (Math.sin(phase * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+      // Apply gain envelope to master
+      const target = tide * masterVol;
+      if (masterGain) masterGain.gain.setTargetAtTime(target, ctx.currentTime, 0.08);
+      // readouts
+      const cycleNum = Math.floor(elapsed / periodSec) + 1;
+      document.getElementById('ct-cycle')!.textContent = `#${cycleNum} · ${Math.floor(phase * 100)}%`;
+      document.getElementById('ct-level')!.textContent = `${Math.round(tide * 100)}%`;
+      let stateText = 'rising';
+      if (phase < 0.25) stateText = 'flooding';
+      else if (phase < 0.5) stateText = 'rising';
+      else if (phase < 0.75) stateText = 'cresting';
+      else stateText = 'ebbing';
+      if (tide < 0.05) stateText = 'low tide';
+      else if (tide > 0.95) stateText = 'high tide';
+      document.getElementById('ct-state')!.textContent = stateText;
+      drawViz(phase, tide);
+      rafId = requestAnimationFrame(tickAnim);
+    }
+
+    function drawViz(phase: number, tide: number) {
+      const canvas = document.getElementById('ct-viz') as HTMLCanvasElement;
+      const c2 = canvas.getContext('2d')!;
+      const W = canvas.width, H = canvas.height;
+      // Sky gradient varies with tide
+      const skyTop = `rgb(${10 + Math.floor(tide * 60)},${20 + Math.floor(tide * 60)},${40 + Math.floor(tide * 80)})`;
+      const skyBot = '#0a1525';
+      const grad = c2.createLinearGradient(0, 0, 0, H * 0.6);
+      grad.addColorStop(0, skyTop);
+      grad.addColorStop(1, skyBot);
+      c2.fillStyle = grad;
+      c2.fillRect(0, 0, W, H * 0.6);
+      // Water level
+      const waterTopY = H * (0.95 - tide * 0.65);  // higher tide = water rises in viz
+      c2.fillStyle = '#142d44';
+      c2.fillRect(0, waterTopY, W, H - waterTopY);
+      // Sine wave over the water for surface texture
+      c2.strokeStyle = `rgba(74,143,179,${0.5 + tide * 0.4})`;
+      c2.lineWidth = 1.2;
+      c2.beginPath();
+      for (let x = 0; x < W; x += 2) {
+        const phaseShift = phase * Math.PI * 2;
+        const y = waterTopY + Math.sin((x / W) * Math.PI * 6 + phaseShift) * 4 - 2;
+        if (x === 0) c2.moveTo(x, y);
+        else c2.lineTo(x, y);
+      }
+      c2.stroke();
+      // Foam line at high tide
+      if (tide > 0.6) {
+        c2.strokeStyle = `rgba(200,224,237,${(tide - 0.6) * 2})`;
+        c2.lineWidth = 0.8;
+        c2.beginPath();
+        for (let x = 0; x < W; x += 3) {
+          const y = waterTopY + Math.sin((x / W) * Math.PI * 12 + phase * Math.PI * 4) * 2 - 1;
+          if (x === 0) c2.moveTo(x, y);
+          else c2.lineTo(x, y);
+        }
+        c2.stroke();
+      }
+      // Phase indicator: small disc tracing the sine cycle
+      const indicX = phase * W;
+      c2.fillStyle = '#f6c15e';
+      c2.beginPath();
+      c2.arc(indicX, 16, 4, 0, Math.PI * 2);
+      c2.fill();
+      // Y-axis level meter on right edge
+      const meterX = W - 18;
+      c2.strokeStyle = 'rgba(244,231,200,0.18)';
+      c2.lineWidth = 1;
+      c2.strokeRect(meterX, 8, 10, H - 16);
+      c2.fillStyle = '#f6c15e';
+      const meterH = (H - 18) * tide;
+      c2.fillRect(meterX + 1, H - 9 - meterH, 8, meterH);
+    }
+
+    function syncPills() {
+      document.querySelectorAll('#ct-chord-pills .ct__pill').forEach(el =>
+        el.classList.toggle('ct__pill--active', el.getAttribute('data-chord') === currentChord));
+      document.getElementById('ct-gulls')!.setAttribute('aria-pressed', String(gullsOn));
+      document.getElementById('ct-wash')!.setAttribute('aria-pressed', String(washOn));
+    }
+
+    function init() {
+      syncPills();
+      drawViz(0, 0);
+
+      document.getElementById('ct-chord-pills')!.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest('[data-chord]');
+        if (!btn) return;
+        const wasPlaying = playing;
+        if (wasPlaying) stopTide();
+        currentChord = btn.getAttribute('data-chord') as keyof typeof CHORDS;
+        syncPills();
+        if (wasPlaying) startTide();
+      });
+
+      document.getElementById('ct-gulls')!.addEventListener('click', () => {
+        gullsOn = !gullsOn;
+        syncPills();
+        if (playing && gullsOn) scheduleGulls();
+        if (!gullsOn && gullTimer != null) { clearTimeout(gullTimer); gullTimer = null; }
+      });
+      document.getElementById('ct-wash')!.addEventListener('click', () => {
+        washOn = !washOn;
+        syncPills();
+        if (playing) {
+          if (washOn) {
+            startWash();
+            washMod = window.setInterval(modulateWash, 200);
+          } else {
+            stopWash();
+          }
+        }
+      });
+
+      const periodSlider = document.getElementById('ct-period') as HTMLInputElement;
+      periodSlider.addEventListener('input', () => {
+        periodSec = parseInt(periodSlider.value);
+        document.getElementById('ct-period-val')!.textContent = String(periodSec);
+      });
+
+      const volSlider = document.getElementById('ct-vol') as HTMLInputElement;
+      volSlider.addEventListener('input', () => {
+        masterVol = parseInt(volSlider.value) / 100;
+      });
+
+      document.getElementById('ct-play')!.addEventListener('click', () => {
+        if (playing) stopTide();
+        else startTide();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!ctx) return;
+        if (document.hidden && playing) ctx.suspend().catch(() => {});
+        else if (!document.hidden && playing) ctx.resume().catch(() => {});
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

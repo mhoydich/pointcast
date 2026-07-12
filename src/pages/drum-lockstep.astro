@@ -1,0 +1,520 @@
+---
+/**
+ * /drum-lockstep — the whole internet tries to hit the same beat.
+ *
+ * The metronome is the wall clock: beat N fires at Date.now() % 750 === 0,
+ * so every browser on Earth computes the identical grid with no server
+ * sync at all. Tap with the tick. Your offset in milliseconds is your
+ * score — DIALED under 40ms, LOCKED under 80, DRIFTING under 150.
+ *
+ * Taps broadcast on the /api/sounds bus with the offset packed in `seed`
+ * (offset + 500, clamped 0..1000), so everyone sees everyone else's taps
+ * land on the same groove meter. The conductor is time itself.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Drum Lockstep · one beat, every timezone · PointCast';
+const description = 'A metronome derived from the wall clock — every browser on Earth computes the same tick. Tap with it. Your offset in milliseconds is your score. See who else is locked in.';
+---
+<BlockLayout title={title} description={description} image="/images/og-drum.png">
+  <main class="dk" id="dk">
+    <header class="dk__head">
+      <h1 class="dk__title">LOCKSTEP</h1>
+      <p class="dk__sub">the same beat, everywhere · 80 bpm off the wall clock · tap with the tick</p>
+    </header>
+
+    <section class="dk__stage">
+      <button class="dk__target" id="dk-target" type="button" aria-label="Tap on the beat">
+        <span class="dk__ring" id="dk-ring"></span>
+        <span class="dk__core-dot"></span>
+        <span class="dk__verdict" id="dk-verdict"></span>
+      </button>
+    </section>
+
+    <section class="dk__meter-wrap">
+      <div class="dk__meter" id="dk-meter">
+        <span class="dk__meter-center"></span>
+        <span class="dk__meter-label dk__meter-label--early">early</span>
+        <span class="dk__meter-label dk__meter-label--late">late</span>
+      </div>
+      <div class="dk__stats">
+        <span class="dk__stat"><strong id="dk-rank">—</strong><em>lock</em></span>
+        <span class="dk__stat"><strong id="dk-avg">—</strong><em>avg ms</em></span>
+        <span class="dk__stat"><strong id="dk-streak">0</strong><em>in a row</em></span>
+      </div>
+    </section>
+
+    <footer class="dk__foot">
+      <span class="dk__here" id="dk-here">arm the sound · tap anywhere</span>
+      <span class="dk__mute" id="dk-mute" role="button" tabindex="0">🔔 tick on</span>
+    </footer>
+
+    <nav class="dk__siblings">
+      <a href="/drum-says">/drum-says</a>
+      <a href="/drum-hero">/drum-hero</a>
+      <a href="/drum-live-pulse">/drum-live-pulse</a>
+      <a href="/drum">/drum</a>
+    </nav>
+  </main>
+
+  <style is:global>
+    :root {
+      --dk-ink: #060a12;
+      --dk-flame: #f6c15e;
+      --dk-coral: #ff6b8a;
+      --dk-sky: #7ac8ed;
+      --dk-mint: #8aeac0;
+      --dk-cream: #f4e7c8;
+      --dk-dim: #8a8a9a;
+    }
+    html, body { background: var(--dk-ink); margin: 0; }
+    body:has(.dk) {
+      background: radial-gradient(circle at 50% 42%, #101a30 0%, transparent 60%), var(--dk-ink);
+      color: var(--dk-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+    .dk {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 26px 16px 50px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 92vh;
+    }
+    .dk__head { text-align: center; }
+    .dk__title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(26px, 7vw, 42px);
+      letter-spacing: 0.34em;
+      margin: 0;
+      color: var(--dk-flame);
+      text-shadow: 0 0 18px rgba(246,193,94,0.4);
+    }
+    .dk__sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--dk-dim);
+      margin: 8px 0 0;
+    }
+
+    /* TARGET */
+    .dk__stage { display: flex; justify-content: center; flex: 1; align-items: center; }
+    .dk__target {
+      position: relative;
+      width: min(64vmin, 340px);
+      height: min(64vmin, 340px);
+      border-radius: 50%;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .dk__target:active { transform: scale(0.98); }
+    .dk__core-dot {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--dk-flame);
+      box-shadow: 0 0 22px rgba(246,193,94,0.75);
+    }
+    .dk__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid rgba(246,193,94,0.9);
+      transform: scale(1);
+      opacity: 0.25;
+      pointer-events: none;
+    }
+    /* ring animation driven from JS via --dk-phase (1 → 0 over the beat) */
+    .dk__verdict {
+      position: absolute;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+    .dk__verdict--show { opacity: 1; }
+    .dk__verdict--dialed { color: var(--dk-mint); text-shadow: 0 0 12px rgba(138,234,192,0.7); }
+    .dk__verdict--locked { color: var(--dk-sky); }
+    .dk__verdict--drifting { color: var(--dk-flame); }
+    .dk__verdict--loose { color: var(--dk-coral); }
+
+    /* GROOVE METER */
+    .dk__meter-wrap { display: flex; flex-direction: column; gap: 12px; }
+    .dk__meter {
+      position: relative;
+      height: 56px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(244,231,200,0.10);
+      overflow: hidden;
+    }
+    .dk__meter-center {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 50%;
+      width: 2px;
+      background: rgba(246,193,94,0.8);
+      box-shadow: 0 0 10px rgba(246,193,94,0.5);
+    }
+    .dk__meter-label {
+      position: absolute;
+      bottom: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--dk-dim);
+      opacity: 0.7;
+    }
+    .dk__meter-label--early { left: 10px; }
+    .dk__meter-label--late { right: 10px; }
+    .dk__tick {
+      position: absolute;
+      top: 8px;
+      width: 4px;
+      height: 26px;
+      border-radius: 2px;
+      transform: translateX(-50%);
+      animation: dkTickFade 4s linear forwards;
+    }
+    .dk__tick--mine { height: 34px; top: 5px; }
+    @keyframes dkTickFade {
+      0% { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+    .dk__stats { display: flex; justify-content: center; gap: 30px; }
+    .dk__stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .dk__stat strong {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 26px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--dk-cream);
+    }
+    .dk__stat em {
+      font-style: normal;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--dk-dim);
+    }
+    #dk-rank { color: var(--dk-flame); font-family: 'JetBrains Mono', monospace; font-size: 18px; letter-spacing: 0.14em; padding-top: 5px; }
+
+    /* FOOT */
+    .dk__foot {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .dk__here, .dk__mute {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--dk-dim);
+      padding: 6px 12px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 12px;
+    }
+    .dk__here strong { color: var(--dk-flame); font-weight: 600; }
+    .dk__mute { cursor: pointer; user-select: none; }
+    .dk__mute:hover { background: rgba(244,231,200,0.08); }
+
+    .dk__siblings {
+      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    }
+    .dk__siblings a { color: #d4a437; text-decoration: none; }
+    .dk__siblings a:hover { text-decoration: underline; }
+  </style>
+
+  <script>
+    // The conductor is the wall clock. Beat every 750ms (80 bpm), accent
+    // every 4th — beatIndex = floor(Date.now()/750), same in every browser.
+    const BEAT_MS = 750;
+    const DIALED = 40, LOCKED = 80, DRIFTING = 150;
+
+    let SESSION_ID = '';
+    let MY_PID = '';
+    let lastT = 0;
+    let pollTimer: number | null = null;
+    let tickOn = true;
+    let armed = false;
+
+    let streak = 0;
+    const myOffsets: number[] = []; // rolling window
+    const pidSeen = new Map<string, number>(); // pid → lastSeen
+
+    const PALETTE = ['#ff6b8a', '#8aeac0', '#7ac8ed', '#c9a8ef', '#f4a050', '#ffd56b', '#ff9bd4', '#6be5d4'];
+    function hashStr(s: string) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+    function pidColor(pid: string) {
+      if (pid === MY_PID) return '#f6c15e';
+      return PALETTE[hashStr(pid) % PALETTE.length];
+    }
+    async function sha256Hex(input: string) {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+    function getOrCreateSession() {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    // ---- audio ----
+    let actx: AudioContext | null = null;
+    function ctx(): AudioContext {
+      if (!actx) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        actx = new AC();
+      }
+      if (actx!.state === 'suspended') actx!.resume();
+      return actx!;
+    }
+    function playTick(accent: boolean) {
+      if (!tickOn || !armed) return;
+      const a = ctx(); const t = a.currentTime + 0.002;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(accent ? 1320 : 880, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(accent ? 0.16 : 0.09, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.1);
+    }
+    function playTap(quality: number) {
+      // quality 0..3 = dialed..loose
+      const a = ctx(); const t = a.currentTime + 0.002;
+      const freqs = [660, 550, 440, 300];
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freqs[quality], t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.4);
+    }
+    function playOther() {
+      const a = ctx(); const t = a.currentTime + 0.002;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(392, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.1, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.35);
+    }
+
+    // ---- metronome loop (visual always on; audio once armed) ----
+    const ring = document.getElementById('dk-ring')!;
+    let lastBeatIdx = -1;
+    function metronomeFrame() {
+      const now = Date.now();
+      const beatIdx = Math.floor(now / BEAT_MS);
+      const phase = (now % BEAT_MS) / BEAT_MS;   // 0 just ticked → 1 about to tick
+      // ring contracts toward the core as the beat approaches
+      const scale = 1.6 - phase * 1.35;           // 1.6 → 0.25
+      ring.style.transform = `scale(${Math.max(scale, 0.22)})`;
+      ring.style.opacity = String(0.15 + phase * 0.75);
+      if (beatIdx !== lastBeatIdx) {
+        lastBeatIdx = beatIdx;
+        playTick(beatIdx % 4 === 0);
+      }
+      requestAnimationFrame(metronomeFrame);
+    }
+
+    // ---- scoring ----
+    function signedOffset(tapMs: number) {
+      // distance to NEAREST tick: negative = early, positive = late
+      const mod = tapMs % BEAT_MS;
+      return mod <= BEAT_MS / 2 ? mod : mod - BEAT_MS;
+    }
+    function verdictFor(absOff: number): [string, number] {
+      if (absOff <= DIALED) return ['dialed', 0];
+      if (absOff <= LOCKED) return ['locked', 1];
+      if (absOff <= DRIFTING) return ['drifting', 2];
+      return ['loose', 3];
+    }
+
+    const verdictEl = document.getElementById('dk-verdict')!;
+    const rankEl = document.getElementById('dk-rank')!;
+    const avgEl = document.getElementById('dk-avg')!;
+    const streakEl = document.getElementById('dk-streak')!;
+    const meterEl = document.getElementById('dk-meter')!;
+    const hereEl = document.getElementById('dk-here')!;
+    let verdictTimer = 0;
+
+    function dropTick(offset: number, pid: string, mine: boolean) {
+      const el = document.createElement('span');
+      el.className = 'dk__tick' + (mine ? ' dk__tick--mine' : '');
+      // map -375..375 → 0..100% (clamp to ±250 for readability)
+      const clamped = Math.max(-250, Math.min(250, offset));
+      el.style.left = `${50 + (clamped / 250) * 46}%`;
+      el.style.background = pidColor(pid);
+      meterEl.appendChild(el);
+      el.addEventListener('animationend', () => el.remove(), { once: true });
+      if (meterEl.children.length > 90) meterEl.children[3]?.remove();
+    }
+
+    function refreshStats() {
+      if (myOffsets.length === 0) { return; }
+      const recent = myOffsets.slice(-8);
+      const avg = Math.round(recent.reduce((s, o) => s + Math.abs(o), 0) / recent.length);
+      avgEl.textContent = String(avg);
+      const [name] = verdictFor(avg);
+      rankEl.textContent = name.toUpperCase();
+      streakEl.textContent = String(streak);
+    }
+
+    function refreshHere() {
+      const now = Date.now();
+      let others = 0;
+      pidSeen.forEach((seen, pid) => { if (pid !== MY_PID && now - seen < 25000) others++; });
+      if (!armed) {
+        hereEl.innerHTML = 'arm the sound · tap anywhere';
+      } else if (others === 0) {
+        hereEl.innerHTML = 'just you on the beat · share the link';
+      } else if (others === 1) {
+        hereEl.innerHTML = '<strong>1</strong> other drummer in lockstep with you';
+      } else {
+        hereEl.innerHTML = `<strong>${others}</strong> drummers in lockstep with you`;
+      }
+    }
+
+    function handleTap() {
+      const now = Date.now();
+      if (!armed) { armed = true; ctx(); refreshHere(); return; }
+      const off = signedOffset(now);
+      const absOff = Math.abs(off);
+      const [name, q] = verdictFor(absOff);
+      playTap(q);
+      dropTick(off, MY_PID, true);
+      myOffsets.push(off);
+      if (myOffsets.length > 64) myOffsets.shift();
+      streak = absOff <= LOCKED ? streak + 1 : 0;
+      // verdict flash
+      verdictEl.textContent = `${name} · ${off > 0 ? '+' : ''}${Math.round(off)}ms`;
+      verdictEl.className = `dk__verdict dk__verdict--show dk__verdict--${name}`;
+      clearTimeout(verdictTimer);
+      verdictTimer = window.setTimeout(() => verdictEl.classList.remove('dk__verdict--show'), 700);
+      refreshStats();
+      pidSeen.set(MY_PID, now);
+      broadcastTap(off);
+    }
+
+    // ---- bus ----
+    async function broadcastTap(offset: number) {
+      // pack signed offset into seed: 0..1000, 500 = perfect
+      const seed = Math.max(0, Math.min(1000, Math.round(offset) + 500));
+      try {
+        await fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'tap', seed, sessionId: SESSION_ID }),
+        });
+      } catch { /* best effort */ }
+    }
+    async function pollOnce() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastT}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data.events) return;
+        for (const ev of data.events) {
+          if (ev.type !== 'tap') continue;
+          if (ev.t <= lastT) continue;
+          lastT = Math.max(lastT, ev.t);
+          pidSeen.set(ev.pid, Date.now());
+          if (ev.pid === MY_PID) continue;
+          const off = (typeof ev.seed === 'number' ? ev.seed : 500) - 500;
+          dropTick(off, ev.pid, false);
+          if (armed) playOther();
+        }
+      } catch { /* best effort */ }
+    }
+    function startPolling() {
+      if (pollTimer != null) return;
+      const tick = async () => {
+        await pollOnce();
+        refreshHere();
+        pollTimer = window.setTimeout(tick, 1500);
+      };
+      pollTimer = window.setTimeout(tick, 400);
+    }
+    function stopPolling() {
+      if (pollTimer != null) { clearTimeout(pollTimer); pollTimer = null; }
+    }
+
+    // ---- wire up ----
+    async function init() {
+      SESSION_ID = getOrCreateSession();
+      MY_PID = (await sha256Hex(SESSION_ID)).slice(0, 10);
+
+      document.getElementById('dk-target')!.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        handleTap();
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleTap(); }
+      });
+      const muteEl = document.getElementById('dk-mute')!;
+      const toggleMute = () => {
+        tickOn = !tickOn;
+        muteEl.textContent = tickOn ? '🔔 tick on' : '🔕 tick off';
+      };
+      muteEl.addEventListener('click', toggleMute);
+      muteEl.addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).code === 'Enter') toggleMute();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopPolling();
+        else startPolling();
+      });
+
+      requestAnimationFrame(metronomeFrame);
+      startPolling();
+      refreshHere();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

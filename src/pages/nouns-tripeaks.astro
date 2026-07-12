@@ -1,0 +1,295 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ASSETS } from '../lib/retro-arcade';
+
+const title = 'Nouns TriPeaks';
+const description = 'Tap exposed Nouns cards one rank up or down from the waste to clear all three peaks.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'Game', '@id': 'https://pointcast.xyz/nouns-tripeaks', name: title, description, url: 'https://pointcast.xyz/nouns-tripeaks' };
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.table} jsonLd={jsonLd}>
+  <main class="desk" data-tripeaks>
+    <section class="window" aria-labelledby="tripeaks-title">
+      <header class="titlebar"><span>Nouns TriPeaks</span><span class="buttons" aria-hidden="true"><i>_</i><i>[]</i><i>x</i></span></header>
+      <nav class="menubar" aria-label="Nouns TriPeaks menu">
+        <button type="button" data-new>Game</button>
+        <a href="/solitaire-v2">Solitaire</a>
+        <a href="/nouns-pyramid-v2">Pyramid</a>
+        <a href="/win95-games">All games</a>
+      </nav>
+      <div class="hero">
+        <div><p class="kicker">TAP · CARDS · PEAKS</p><h1 id="tripeaks-title">Clear the peaks.</h1><p>Tap exposed cards one rank above or below the waste. Tap stock if stuck.</p></div>
+        <div class="meters"><span>Left <strong data-left>16</strong></span><span>Time <strong data-time>0:00</strong></span><span>Best <strong data-best>--</strong></span></div>
+      </div>
+      <div class="table">
+        <div class="peaks" data-peaks aria-label="Nouns TriPeaks cards"></div>
+        <div class="stockrow">
+          <button type="button" class="stock" data-stock>STOCK <strong data-stock-count>18</strong></button>
+          <div class="waste" data-waste aria-label="Waste card"></div>
+        </div>
+        <div class="overlay" data-overlay hidden>
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="tripeaks-dialog-title">
+            <header class="dlgbar"><span id="tripeaks-dialog-title" data-dialog-title>Cleared</span><span class="buttons" aria-hidden="true"><i>x</i></span></header>
+            <div class="dlgbody"><p data-dialog-message>All peaks cleared.</p><button type="button" data-restart>New Game</button></div>
+          </div>
+        </div>
+      </div>
+      <footer class="status" data-status aria-live="polite">Legal exposed cards are highlighted.</footer>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-tripeaks]');
+  if (root) {
+    const peaksEl = root.querySelector<HTMLElement>('[data-peaks]');
+    const wasteEl = root.querySelector<HTMLElement>('[data-waste]');
+    const leftEl = root.querySelector<HTMLElement>('[data-left]');
+    const timeEl = root.querySelector<HTMLElement>('[data-time]');
+    const bestEl = root.querySelector<HTMLElement>('[data-best]');
+    const stockCountEl = root.querySelector<HTMLElement>('[data-stock-count]');
+    const statusEl = root.querySelector<HTMLElement>('[data-status]');
+    const overlay = root.querySelector<HTMLElement>('[data-overlay]');
+    const dialogTitle = root.querySelector<HTMLElement>('[data-dialog-title]');
+    const dialogMessage = root.querySelector<HTMLElement>('[data-dialog-message]');
+    const slug = 'nouns-tripeaks';
+    const statsKey = 'pc:arcade:' + slug;
+    const profileKey = 'pc:arcade:profile';
+    const gameName = 'TriPeaks';
+    const badge = 'tripeaks-clear';
+    type Card = { id: number; rank: number; seed: number; row: number; col: number; blockedBy: number[]; alive: boolean };
+    const layout = [
+      { row: 0, col: 1, blockedBy: [3, 4] },
+      { row: 0, col: 3, blockedBy: [5, 6] },
+      { row: 0, col: 5, blockedBy: [7, 8] },
+      { row: 1, col: 0, blockedBy: [9, 10] },
+      { row: 1, col: 1, blockedBy: [10, 11] },
+      { row: 1, col: 2, blockedBy: [11, 12] },
+      { row: 1, col: 3, blockedBy: [12, 13] },
+      { row: 1, col: 4, blockedBy: [13, 14] },
+      { row: 1, col: 5, blockedBy: [14, 15] },
+      { row: 2, col: 0, blockedBy: [] },
+      { row: 2, col: 1, blockedBy: [] },
+      { row: 2, col: 2, blockedBy: [] },
+      { row: 2, col: 3, blockedBy: [] },
+      { row: 2, col: 4, blockedBy: [] },
+      { row: 2, col: 5, blockedBy: [] },
+      { row: 2, col: 6, blockedBy: [] },
+    ];
+    const solution = [9, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15, 8, 0, 1, 2];
+    const solutionRanks = [6, 5, 4, 3, 2, 1, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4];
+    let cards: Card[] = [];
+    let waste = 7;
+    let stock: number[] = [];
+    let startTime = 0;
+    let elapsed = 0;
+    let won = false;
+    let over = false;
+    let raf = 0;
+    let best = Number(readJson(statsKey, { plays: 0, clears: 0, bestTime: 0 }).bestTime || 0);
+
+    function readJson(key: string, fallback: any) { try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; } }
+    function writeJson(key: string, value: any) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* localStorage unavailable */ } }
+    function fmt(seconds: number) {
+      const s = Math.max(0, Math.floor(seconds));
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    function rankLabel(rank: number) { return rank === 1 ? 'A' : rank === 11 ? 'J' : rank === 12 ? 'Q' : rank === 13 ? 'K' : String(rank); }
+    function oneAway(a: number, b: number) {
+      const diff = Math.abs(a - b);
+      return diff === 1 || diff === 12;
+    }
+    function setStatus(text: string) { if (statusEl) statusEl.textContent = text; }
+    function recordPlay(clear: boolean) {
+      const stats = readJson(statsKey, { plays: 0, clears: 0, bestTime: 0 });
+      if (!clear) stats.plays = Number(stats.plays || 0) + 1;
+      if (clear) {
+        stats.clears = Number(stats.clears || 0) + 1;
+        const current = Math.max(1, Math.floor(elapsed));
+        stats.bestTime = Number(stats.bestTime || 0) ? Math.min(Number(stats.bestTime), current) : current;
+      }
+      writeJson(statsKey, { plays: Number(stats.plays || 0), clears: Number(stats.clears || 0), bestTime: Number(stats.bestTime || 0) });
+      const profile = readJson(profileKey, { achievements: [], clearStreak: 0, totalPlays: 0, clears: 0 });
+      profile.lastPlayed = gameName;
+      if (!clear) profile.totalPlays = Number(profile.totalPlays || 0) + 1;
+      if (clear) {
+        profile.clears = Number(profile.clears || 0) + 1;
+        profile.clearStreak = Number(profile.clearStreak || 0) + 1;
+        profile.lastCleared = gameName;
+        const earned = ['first-win', badge];
+        if (profile.clearStreak >= 3) earned.push('three-game-streak');
+        profile.achievements = Array.from(new Set([...(profile.achievements || []), ...earned]));
+      }
+      writeJson(profileKey, profile);
+      best = Number(stats.bestTime || best || 0);
+    }
+    function exposed(card: Card) {
+      return card.alive && card.blockedBy.every((id) => !cards[id]?.alive);
+    }
+    function legal(card: Card) {
+      return exposed(card) && oneAway(card.rank, waste);
+    }
+    function left() { return cards.filter((card) => card.alive).length; }
+    function renderMeters() {
+      if (leftEl) leftEl.textContent = String(left());
+      if (timeEl) timeEl.textContent = fmt(elapsed);
+      if (bestEl) bestEl.textContent = best ? fmt(best) : '--';
+      if (stockCountEl) stockCountEl.textContent = String(stock.length);
+    }
+    function renderWaste() {
+      if (!wasteEl) return;
+      wasteEl.innerHTML = '<span>' + rankLabel(waste) + '</span><img src="https://noun.pics/' + (700 + waste) + '.svg" alt="" loading="lazy" />';
+    }
+    function renderCards() {
+      if (!peaksEl) return;
+      peaksEl.innerHTML = '';
+      for (const card of cards) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'card';
+        button.style.gridColumn = String(card.col + 1);
+        button.style.gridRow = String(card.row + 1);
+        button.dataset.id = String(card.id);
+        button.disabled = !card.alive;
+        button.classList.toggle('is-gone', !card.alive);
+        button.classList.toggle('is-covered', card.alive && !exposed(card));
+        button.classList.toggle('is-legal', legal(card));
+        button.innerHTML = card.alive
+          ? '<span>' + rankLabel(card.rank) + '</span><img src="https://noun.pics/' + card.seed + '.svg" alt="" loading="lazy" />'
+          : '';
+        button.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          button.setPointerCapture(event.pointerId);
+          playCard(card.id);
+        });
+        peaksEl.appendChild(button);
+      }
+      renderMeters();
+    }
+    function buildCards() {
+      cards = layout.map((item, id) => ({
+        id,
+        rank: 1,
+        seed: 160 + id * 37,
+        row: item.row,
+        col: item.col,
+        blockedBy: item.blockedBy,
+        alive: true,
+      }));
+      solution.forEach((id, index) => { cards[id].rank = solutionRanks[index]; });
+      stock = [8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      waste = 7;
+    }
+    function playCard(id: number) {
+      if (won || over) return;
+      const card = cards[id];
+      if (!card || !legal(card)) {
+        setStatus('That card is not exposed or not one rank away.');
+        return;
+      }
+      card.alive = false;
+      waste = card.rank;
+      renderWaste();
+      renderCards();
+      if (left() === 0) win();
+      else setStatus('Played ' + rankLabel(waste) + '. Continue from the highlighted cards.');
+    }
+    function drawStock() {
+      if (won || over) return;
+      if (!stock.length) {
+        if (!cards.some((card) => legal(card))) {
+          over = true;
+          setStatus('Stock empty. No legal moves remain.');
+          showDialog('Game Over', 'No legal moves remain.', 'New Game');
+        }
+        return;
+      }
+      waste = stock.shift() || waste;
+      renderWaste();
+      renderCards();
+      setStatus('Stock flipped to ' + rankLabel(waste) + '.');
+    }
+    function showDialog(title: string, message: string, button: string) {
+      if (dialogTitle) dialogTitle.textContent = title;
+      if (dialogMessage) dialogMessage.textContent = message;
+      const btn = root.querySelector<HTMLButtonElement>('[data-restart]');
+      if (btn) btn.textContent = button;
+      if (overlay) overlay.hidden = false;
+    }
+    function win() {
+      if (won) return;
+      won = true;
+      elapsed = (performance.now() - startTime) / 1000;
+      recordPlay(true);
+      renderMeters();
+      setStatus('All peaks cleared in ' + fmt(elapsed) + '.');
+      showDialog('Cleared!', 'All peaks cleared in ' + fmt(elapsed) + '.', 'New Game');
+    }
+    function newGame() {
+      cancelAnimationFrame(raf);
+      buildCards();
+      elapsed = 0;
+      startTime = performance.now();
+      won = false;
+      over = false;
+      if (overlay) overlay.hidden = true;
+      recordPlay(false);
+      renderWaste();
+      renderCards();
+      setStatus('Legal exposed cards are highlighted.');
+      raf = requestAnimationFrame(loop);
+    }
+    function loop(now: number) {
+      if (!won && !over) elapsed = (now - startTime) / 1000;
+      renderMeters();
+      raf = requestAnimationFrame(loop);
+    }
+    root.querySelector<HTMLButtonElement>('[data-stock]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); drawStock(); });
+    root.querySelector<HTMLButtonElement>('[data-new]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+    root.querySelector<HTMLButtonElement>('[data-restart]')?.addEventListener('pointerdown', (event) => { event.preventDefault(); newGame(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelAnimationFrame(raf);
+      else { startTime = performance.now() - elapsed * 1000; raf = requestAnimationFrame(loop); }
+    });
+    newGame();
+  }
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:8px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; overflow-x:hidden; overscroll-behavior:none; }
+  .desk *, .desk *::before, .desk *::after { box-sizing:border-box; }
+  .window { width:min(100%,820px); margin:0 auto; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .titlebar,.dlgbar { min-height:26px; display:flex; align-items:center; justify-content:space-between; padding:3px 5px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .buttons { display:flex; gap:2px; }
+  .buttons i { min-width:18px; height:18px; display:grid; place-items:center; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; color:#000; font-style:normal; font-size:10px; }
+  .menubar { display:flex; flex-wrap:wrap; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar button,.menubar a { min-height:32px; border:0; background:transparent; color:#000; padding:6px 8px; font:inherit; font-size:13px; text-decoration:none; }
+  .menubar button:active,.menubar a:active { background:#000080; color:#fff; }
+  .hero { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; padding:10px; }
+  .kicker { margin:0 0 5px; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; color:#000080; }
+  h1 { margin:0; font-size:clamp(28px,9vw,54px); line-height:.94; }
+  .hero p:last-child { max-width:46ch; margin:6px 0 0; font-size:13px; }
+  .meters { display:flex; flex-wrap:wrap; gap:6px; }
+  .meters span { min-width:70px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:5px 8px; font-size:12px; }
+  .meters strong { display:block; font:700 18px/1 "Courier New",monospace; color:#000080; }
+  .table { position:relative; width:min(calc(100vw - 36px),350px); margin:0 auto 8px; padding:8px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#0b4f42; touch-action:none; }
+  .peaks { display:grid; grid-template-columns:repeat(7,44px); grid-template-rows:repeat(3,62px); gap:4px; justify-content:center; }
+  .card,.waste { width:44px; height:62px; position:relative; overflow:hidden; background:#fff; border:2px solid; border-color:#fff #404040 #404040 #fff; padding:0; font:700 16px/1 "Courier New",monospace; color:#000080; }
+  .card img,.waste img { position:absolute; inset:14px 2px 2px; width:38px; height:38px; object-fit:cover; opacity:.82; }
+  .card span,.waste span { position:absolute; z-index:1; top:3px; left:4px; padding:1px 2px; background:#fff; }
+  .card.is-covered { filter:grayscale(1) brightness(.65); }
+  .card.is-legal { box-shadow:0 0 0 3px #ffff00; }
+  .card.is-gone { visibility:hidden; }
+  .stockrow { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:10px; }
+  .stock { min-width:88px; min-height:62px; background:#000080; color:#fff; border:2px solid; border-color:#fff #404040 #404040 #fff; font:700 12px/1.2 "Courier New",monospace; }
+  .stock strong { display:block; margin-top:4px; font-size:20px; }
+  .overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.45); }
+  .overlay[hidden] { display:none; }
+  .dialog { width:min(300px,86%); background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; box-shadow:2px 2px 0 #000; }
+  .dlgbody { padding:14px; text-align:center; }
+  .dlgbody p { margin:0 0 12px; font-size:13px; }
+  .dlgbody button { min-width:120px; min-height:44px; background:#c0c0c0; border:2px solid; border-color:#fff #404040 #404040 #fff; font:inherit; font-weight:700; }
+  .dlgbody button:active,.stock:active,.card:active { border-color:#404040 #fff #fff #404040; }
+  .status { margin:0 10px 10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:6px 8px; font:12px/1.35 "Courier New",monospace; }
+</style>

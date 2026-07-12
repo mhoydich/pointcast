@@ -1,0 +1,949 @@
+---
+/**
+ * /drum-live-stars — constellation of drummers, every tap a shooting trail.
+ *
+ * The five live-drum surfaces (drum-live, drum-live-tv, drum-live-pulse,
+ * drum-live-loop, drum-live-bus) all share one /api/sounds bus. They each
+ * picked a different rendering register. The four shapes had a gap: none
+ * of them visualised the social *connection* between drummers — you could
+ * tell others were there (their dots, their cells, their ripples), but
+ * you couldn't see your tap reaching them or theirs reaching you.
+ *
+ * /drum-live-stars closes that gap. Every active pid in the last 60s is
+ * a star at its hash-pinned position in the night sky. Every 'drum'
+ * event on the bus fires a shooting trail from the source star to a
+ * *partner star*, deterministically chosen from the active set by
+ * hash(pid + t + seed). The pairing shifts each tap, so over a minute
+ * of room activity you see a flickering web of connections: A → C, then
+ * C → F, then F → A. The drums become a conversation, made visible.
+ *
+ * Mechanics:
+ *   • Stars: DOM divs at left/top% from hash(pid). Per-pid colour, twinkle.
+ *   • Trails: SVG <line> overlay with stroke-dashoffset CSS animation —
+ *     a short bright dash travels source→partner, tail fades to nothing,
+ *     partner star briefly enlarges + chimes when the dash arrives.
+ *   • If only 1 active star (lonely room), partner = random background
+ *     position so the trail still has somewhere to go.
+ *   • 4 tap pads at the bottom (low/mid/high/bell, same voicings as
+ *     /drum-live) so this is a player AND a viewer. Bus broadcast on tap.
+ *   • Audio default OFF — sky surfaces should be silent until invited.
+ *
+ * Wall-clock detail: partner pairing uses event timestamp `t`, so EVERY
+ * client computes the same partner for the same event. Two phones
+ * watching the same bus see the same trails drawn, same colours, same
+ * directions. No extra coordination needed.
+ *
+ * Shipped 2026-05-14 (Thursday overnight). Sixth surface in the
+ * live-drum register; first to map the social mesh visibly. — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Live Stars — a constellation of drummers, every tap a shooting trail"
+  description="The sixth live-drum surface. Every drummer is a star pinned to the night sky. Every tap fires a shooting trail to a partner star, deterministic, room-wide. The conversation between drummers made visible."
+  image="/images/og-drum.png"
+>
+  <main class="dls" id="dls" data-built={built}>
+    <!-- Background ambience: a sprinkle of static far-away stars -->
+    <div class="dls__bg" id="dls-bg" aria-hidden="true"></div>
+
+    <!-- Stars layer: one div per active pid -->
+    <div class="dls__stars" id="dls-stars" aria-label="Active drummers as stars"></div>
+
+    <!-- Trails layer: SVG strokes drawn between active stars -->
+    <svg class="dls__trails" id="dls-trails" aria-hidden="true" preserveAspectRatio="none">
+      <defs>
+        <filter id="dls-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.4" />
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- HUD top-left -->
+    <header class="dls__hud dls__hud--tl">
+      <span class="dls__live" id="dls-live">● LIVE</span>
+      <h1 class="dls__title">Drum Live Stars</h1>
+      <p class="dls__sub" id="dls-sub">a constellation of drummers · every tap a shooting trail</p>
+      <p class="dls__count" id="dls-count">first to arrive — tap a pad below</p>
+    </header>
+
+    <!-- HUD top-right -->
+    <div class="dls__hud dls__hud--tr">
+      <button class="dls__chip" id="dls-audio" type="button" aria-pressed="false">🔇 audio off</button>
+      <a class="dls__chip dls__chip--link" href="/drum-live-bus">↗ four siblings</a>
+    </div>
+
+    <!-- Pads at the bottom -->
+    <div class="dls__pads" id="dls-pads">
+      <button class="dls__pad dls__pad--low" data-voice="low" type="button" aria-label="Tap low — 70 Hz">
+        <span class="dls__pad-glyph">▬</span>
+        <span class="dls__pad-key">1</span>
+      </button>
+      <button class="dls__pad dls__pad--mid" data-voice="mid" type="button" aria-label="Tap mid — 120 Hz">
+        <span class="dls__pad-glyph">◆</span>
+        <span class="dls__pad-key">2</span>
+      </button>
+      <button class="dls__pad dls__pad--high" data-voice="high" type="button" aria-label="Tap high — 200 Hz">
+        <span class="dls__pad-glyph">▲</span>
+        <span class="dls__pad-key">3</span>
+      </button>
+      <button class="dls__pad dls__pad--bell" data-voice="bell" type="button" aria-label="Tap bell — 600 Hz">
+        <span class="dls__pad-glyph">✦</span>
+        <span class="dls__pad-key">4</span>
+      </button>
+    </div>
+
+    <!-- About strip -->
+    <footer class="dls__about">
+      <p>
+        Every drummer with this page open is a star, pinned to one position by their pid.
+        Every tap from any sibling page (<a href="/drum-live">drum-live</a>,
+        <a href="/drum-live-pulse">pulse</a>, <a href="/drum-live-loop">loop</a>,
+        <a href="/drum-live-tv">tv</a>) fires a shooting trail from the source star to a partner
+        star — deterministically paired by <code>hash(pid + t + seed)</code>, so every device
+        watching the bus draws the same trail. Connections shift each tap; the web of who's
+        talking to whom flickers across the sky.
+      </p>
+    </footer>
+  </main>
+
+  <style is:global>
+    :root {
+      --dls-ink: #03060f;
+      --dls-deep: #0a1230;
+      --dls-mid: #1a1f3e;
+      --dls-cream: #f4e7c8;
+      --dls-cream-dim: #6a6e8a;
+      --dls-flame: #f6c15e;
+      --dls-coral: #ff6b8a;
+      --dls-sky: #7ac8ed;
+      --dls-mint: #8aeac0;
+      --dls-mauve: #c9a8ef;
+    }
+
+    html, body { background: var(--dls-ink); margin: 0; padding: 0; height: 100%; }
+    body:has(.dls) {
+      background:
+        radial-gradient(ellipse at 50% 30%, #14193a 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 90%, #2a1640 0%, transparent 50%),
+        var(--dls-ink);
+      color: var(--dls-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .dls {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    /* BACKGROUND — static sprinkled stars, painted in JS at init */
+    .dls__bg {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .dls__bg-star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: rgba(244, 231, 200, 0.4);
+      border-radius: 50%;
+      box-shadow: 0 0 4px rgba(244, 231, 200, 0.3);
+      animation: dls-bg-twinkle 6s ease-in-out infinite;
+    }
+    @keyframes dls-bg-twinkle {
+      0%, 100% { opacity: 0.3; }
+      50%      { opacity: 0.8; }
+    }
+
+    /* TRAILS — SVG layer between bg and stars */
+    .dls__trails {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .dls__trail {
+      stroke-linecap: round;
+      stroke-width: 1.6;
+      vector-effect: non-scaling-stroke;
+      fill: none;
+      animation: dls-trail-fade 1500ms cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+    }
+    @keyframes dls-trail-fade {
+      0%   { opacity: 0; stroke-dashoffset: var(--dash-len, 200); }
+      18%  { opacity: 1; }
+      80%  { opacity: 0.6; stroke-dashoffset: 0; }
+      100% { opacity: 0; stroke-dashoffset: 0; }
+    }
+    .dls__arrival {
+      r: 0;
+      animation: dls-arrival 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      pointer-events: none;
+    }
+    @keyframes dls-arrival {
+      0%   { r: 0; opacity: 0; stroke-width: 2; }
+      40%  { r: 8; opacity: 0.9; stroke-width: 1.5; }
+      100% { r: 18; opacity: 0; stroke-width: 0.5; }
+    }
+
+    /* STARS — active drummers as DOM nodes */
+    .dls__stars {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .dls__star {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--star-color, #f6c15e);
+      box-shadow:
+        0 0 8px var(--star-color, #f6c15e),
+        0 0 18px color-mix(in srgb, var(--star-color, #f6c15e) 60%, transparent),
+        0 0 32px color-mix(in srgb, var(--star-color, #f6c15e) 30%, transparent);
+      transition: width 240ms ease, height 240ms ease;
+      animation: dls-star-twinkle var(--twinkle-dur, 5s) ease-in-out infinite;
+      animation-delay: var(--twinkle-delay, 0s);
+    }
+    .dls__star--self {
+      box-shadow:
+        0 0 10px var(--star-color, #f6c15e),
+        0 0 24px color-mix(in srgb, var(--star-color, #f6c15e) 70%, transparent),
+        0 0 42px color-mix(in srgb, var(--star-color, #f6c15e) 35%, transparent),
+        inset 0 0 4px rgba(255, 255, 255, 0.5);
+    }
+    .dls__star--struck {
+      animation: dls-star-strike 900ms ease-out;
+    }
+    @keyframes dls-star-twinkle {
+      0%, 100% { opacity: 0.7; }
+      50%      { opacity: 1.0; }
+    }
+    @keyframes dls-star-strike {
+      0%   { transform: translate(-50%, -50%) scale(1); }
+      30%  { transform: translate(-50%, -50%) scale(1.6); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    .dls__star-label {
+      position: absolute;
+      left: 50%;
+      top: 100%;
+      margin-top: 6px;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      color: var(--dls-cream-dim);
+      white-space: nowrap;
+      opacity: 0.6;
+    }
+    .dls__star--self .dls__star-label {
+      color: var(--dls-flame);
+      opacity: 0.9;
+    }
+
+    /* HUD top-left */
+    .dls__hud {
+      position: absolute;
+      z-index: 5;
+      pointer-events: auto;
+    }
+    .dls__hud--tl {
+      top: 24px;
+      left: 24px;
+      max-width: 360px;
+    }
+    .dls__live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 4px;
+      background: rgba(255, 107, 138, 0.15);
+      color: var(--dls-coral);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      animation: dls-blink 2s ease-in-out infinite;
+    }
+    @keyframes dls-blink {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.5; }
+    }
+    .dls__title {
+      margin: 12px 0 4px;
+      font-family: 'Gloock', 'Times New Roman', serif;
+      font-size: 28px;
+      letter-spacing: -0.01em;
+      color: var(--dls-cream);
+    }
+    .dls__sub {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--dls-cream-dim);
+      letter-spacing: 0.02em;
+    }
+    .dls__count {
+      margin: 0;
+      font-size: 13px;
+      color: var(--dls-cream);
+      font-weight: 500;
+    }
+    .dls__count strong {
+      color: var(--dls-flame);
+      font-weight: 700;
+    }
+
+    /* HUD top-right */
+    .dls__hud--tr {
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .dls__chip {
+      border: 1px solid rgba(244, 231, 200, 0.18);
+      background: rgba(10, 18, 48, 0.7);
+      color: var(--dls-cream-dim);
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      backdrop-filter: blur(6px);
+    }
+    .dls__chip:hover {
+      color: var(--dls-cream);
+      border-color: rgba(244, 231, 200, 0.4);
+    }
+    .dls__chip[aria-pressed="true"] {
+      color: var(--dls-flame);
+      border-color: rgba(246, 193, 94, 0.5);
+      background: rgba(246, 193, 94, 0.08);
+    }
+
+    /* PADS — small bottom row */
+    .dls__pads {
+      position: absolute;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 5;
+    }
+    .dls__pad {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      border: 1px solid rgba(244, 231, 200, 0.15);
+      background: rgba(10, 18, 48, 0.7);
+      color: var(--dls-cream);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      cursor: pointer;
+      transition: transform 80ms ease, box-shadow 200ms ease;
+      backdrop-filter: blur(6px);
+      font-family: inherit;
+    }
+    .dls__pad:hover  { border-color: rgba(244, 231, 200, 0.35); }
+    .dls__pad:active { transform: translateY(2px) scale(0.96); }
+    .dls__pad--struck {
+      box-shadow: 0 0 22px var(--pad-glow, rgba(246, 193, 94, 0.7));
+      border-color: var(--pad-glow, rgba(246, 193, 94, 0.7));
+    }
+    .dls__pad-glyph {
+      font-size: 18px;
+      line-height: 1;
+    }
+    .dls__pad-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--dls-cream-dim);
+      letter-spacing: 0.05em;
+    }
+    .dls__pad--low  { color: #f6c15e; --pad-glow: rgba(246, 193, 94, 0.7);  }
+    .dls__pad--mid  { color: #ff8a70; --pad-glow: rgba(255, 138, 112, 0.7); }
+    .dls__pad--high { color: #c9a8ef; --pad-glow: rgba(201, 168, 239, 0.7); }
+    .dls__pad--bell { color: #8aeac0; --pad-glow: rgba(138, 234, 192, 0.7); }
+
+    /* ABOUT footer */
+    .dls__about {
+      position: absolute;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 640px;
+      width: calc(100% - 64px);
+      z-index: 4;
+      pointer-events: auto;
+      padding: 0 12px;
+    }
+    .dls__about p {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--dls-cream-dim);
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+    .dls__about a {
+      color: var(--dls-sky);
+      text-decoration: none;
+      border-bottom: 1px dotted rgba(122, 200, 237, 0.4);
+    }
+    .dls__about a:hover { color: var(--dls-cream); }
+    .dls__about code {
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 10px;
+      color: var(--dls-mint);
+      background: rgba(10, 18, 48, 0.7);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    @media (max-width: 720px) {
+      .dls__hud--tl { max-width: 240px; }
+      .dls__title { font-size: 22px; }
+      .dls__about { display: none; }
+      .dls__pad { width: 56px; height: 56px; }
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // ---- state ----
+    let SESSION_ID = '';
+    let MY_PID = '';
+    let lastT = 0;
+    let pollTimer: number | null = null;
+    let audioOn = false;
+
+    // Map pid -> { lastSeen, color, taps, el }
+    interface StarInfo {
+      pid: string;
+      color: string;
+      lastSeen: number;
+      taps: number;        // count in last 30s, for size scaling
+      el: HTMLDivElement;  // DOM star node
+    }
+    const stars = new Map<string, StarInfo>();
+    // Tap timestamps per pid (for size scaling)
+    const pidTaps = new Map<string, number[]>();
+    // Recent trails fired (for "connections" counter)
+    const recentTrails: number[] = [];
+
+    const PALETTE = [
+      '#ff6b8a', '#8aeac0', '#7ac8ed', '#c9a8ef',
+      '#f4a050', '#ffd56b', '#ff9bd4', '#6be5d4',
+      '#a8d870', '#e89070', '#b894e8', '#70c0d8',
+    ];
+
+    function hashStr(s: string): number {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+
+    function pidColor(pid: string): string {
+      if (pid === MY_PID) return '#f6c15e';
+      return PALETTE[hashStr(pid) % PALETTE.length];
+    }
+
+    // Stable position from pid. Stay away from edges and from the HUD.
+    function pidPos(pid: string): { x: number; y: number } {
+      const h1 = hashStr(pid + 'x');
+      const h2 = hashStr(pid + 'y');
+      // x: 0.10..0.90 — full width minus margins
+      const x = 0.10 + ((h1 % 1000) / 1000) * 0.80;
+      // y: 0.22..0.72 — avoid top HUD (top 22%) and bottom pads (bottom 28%)
+      const y = 0.22 + ((h2 % 1000) / 1000) * 0.50;
+      return { x, y };
+    }
+
+    async function sha256Hex(input: string): Promise<string> {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    // ---- background star sprinkle ----
+    function paintBackground() {
+      const bg = document.getElementById('dls-bg')!;
+      // Deterministic seed from page URL so refreshes look the same
+      const baseSeed = hashStr('drum-live-stars-bg');
+      const count = 60;
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < count; i++) {
+        const star = document.createElement('span');
+        star.className = 'dls__bg-star';
+        const h1 = hashStr(`bg-${baseSeed}-${i}-x`);
+        const h2 = hashStr(`bg-${baseSeed}-${i}-y`);
+        const h3 = hashStr(`bg-${baseSeed}-${i}-d`);
+        const h4 = hashStr(`bg-${baseSeed}-${i}-s`);
+        star.style.left  = `${(h1 % 1000) / 10}%`;
+        star.style.top   = `${(h2 % 1000) / 10}%`;
+        star.style.animationDelay    = `${(h3 % 60) / 10}s`;
+        star.style.animationDuration = `${4 + (h4 % 40) / 10}s`;
+        const size = 1 + (h4 % 3);
+        star.style.width  = `${size}px`;
+        star.style.height = `${size}px`;
+        frag.appendChild(star);
+      }
+      bg.appendChild(frag);
+    }
+
+    // ---- star management ----
+    function ensureStar(pid: string): StarInfo {
+      let info = stars.get(pid);
+      if (info) return info;
+      const color = pidColor(pid);
+      const pos = pidPos(pid);
+      const isSelf = pid === MY_PID;
+      const el = document.createElement('div');
+      el.className = 'dls__star' + (isSelf ? ' dls__star--self' : '');
+      el.style.left = `${pos.x * 100}%`;
+      el.style.top  = `${pos.y * 100}%`;
+      el.style.setProperty('--star-color', color);
+      // Stagger twinkle per pid
+      const dur = 4 + (hashStr(pid + 'd') % 30) / 10;
+      const del = (hashStr(pid + 'l') % 30) / 10;
+      el.style.setProperty('--twinkle-dur', `${dur}s`);
+      el.style.setProperty('--twinkle-delay', `${del}s`);
+      const label = document.createElement('span');
+      label.className = 'dls__star-label';
+      label.textContent = isSelf ? 'you' : pid.slice(0, 4);
+      el.appendChild(label);
+      document.getElementById('dls-stars')!.appendChild(el);
+      info = { pid, color, lastSeen: Date.now(), taps: 0, el };
+      stars.set(pid, info);
+      return info;
+    }
+
+    function pruneStars(now: number) {
+      // Remove stars not seen in 60s
+      stars.forEach((info, pid) => {
+        if (now - info.lastSeen > 60_000) {
+          info.el.remove();
+          stars.delete(pid);
+          pidTaps.delete(pid);
+        }
+      });
+    }
+
+    function refreshStarSizes(now: number) {
+      stars.forEach((info, pid) => {
+        const taps = (pidTaps.get(pid) || []).filter((t) => now - t < 30_000);
+        pidTaps.set(pid, taps);
+        info.taps = taps.length;
+        // Base 8px, grow with log(taps), cap at 18px
+        const size = Math.min(18, 8 + Math.log2(taps.length + 1) * 2.5);
+        info.el.style.width  = `${size}px`;
+        info.el.style.height = `${size}px`;
+      });
+    }
+
+    function strikeStar(pid: string) {
+      const info = stars.get(pid);
+      if (!info) return;
+      info.el.classList.remove('dls__star--struck');
+      // Force reflow so animation restarts
+      void info.el.offsetWidth;
+      info.el.classList.add('dls__star--struck');
+      setTimeout(() => info.el.classList.remove('dls__star--struck'), 900);
+    }
+
+    // ---- trail layer ----
+    function activePidsExcept(pid: string, now: number): string[] {
+      const out: string[] = [];
+      stars.forEach((info, p) => {
+        if (p === pid) return;
+        if (now - info.lastSeen < 45_000) out.push(p);
+      });
+      return out;
+    }
+
+    function partnerForEvent(srcPid: string, t: number, seed: number, now: number): { x: number; y: number; pid: string | null } {
+      const others = activePidsExcept(srcPid, now);
+      if (others.length === 0) {
+        // Lonely: pick a deterministic far position
+        const h = hashStr(srcPid + ':' + t + ':' + seed);
+        const x = 0.15 + ((h % 700) / 1000);
+        const y = 0.25 + ((Math.floor(h / 1000) % 450) / 1000);
+        return { x, y, pid: null };
+      }
+      const h = hashStr(srcPid + ':' + t + ':' + seed);
+      const partnerPid = others[h % others.length];
+      const pos = pidPos(partnerPid);
+      return { x: pos.x, y: pos.y, pid: partnerPid };
+    }
+
+    function fireTrail(srcPid: string, t: number, seed: number) {
+      const now = Date.now();
+      const srcPos = pidPos(srcPid);
+      const partner = partnerForEvent(srcPid, t, seed, now);
+      const srcInfo = stars.get(srcPid);
+      const srcColor = srcInfo ? srcInfo.color : pidColor(srcPid);
+
+      const svg = document.getElementById('dls-trails')! as unknown as SVGSVGElement;
+      const w = svg.clientWidth;
+      const h = svg.clientHeight;
+      // SVG uses pixel coords (no viewBox so it matches the screen)
+      const x1 = srcPos.x * w;
+      const y1 = srcPos.y * h;
+      const x2 = partner.x * w;
+      const y2 = partner.y * h;
+      const dist = Math.hypot(x2 - x1, y2 - y1);
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('class', 'dls__trail');
+      line.setAttribute('x1', String(x1));
+      line.setAttribute('y1', String(y1));
+      line.setAttribute('x2', String(x2));
+      line.setAttribute('y2', String(y2));
+      line.setAttribute('stroke', srcColor);
+      // Short bright dash that travels: dasharray of (short, rest), animate offset
+      const dashLen = Math.min(80, Math.max(30, dist * 0.18));
+      line.setAttribute('stroke-dasharray', `${dashLen} ${dist}`);
+      line.style.setProperty('--dash-len', String(dist + dashLen));
+      line.setAttribute('filter', 'url(#dls-glow)');
+      svg.appendChild(line);
+
+      strikeStar(srcPid);
+
+      // Arrival ping at the partner (delayed to match dash travel time)
+      const arrivalDelay = 700; // ~ when dash reaches partner
+      setTimeout(() => {
+        if (partner.pid) strikeStar(partner.pid);
+        const ping = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ping.setAttribute('class', 'dls__arrival');
+        ping.setAttribute('cx', String(x2));
+        ping.setAttribute('cy', String(y2));
+        ping.setAttribute('fill', 'none');
+        ping.setAttribute('stroke', srcColor);
+        svg.appendChild(ping);
+        ping.addEventListener('animationend', () => ping.remove(), { once: true });
+        // Optional chime at arrival
+        if (audioOn && partner.pid) {
+          playArrivalChime(partner.pid, seed);
+        }
+      }, arrivalDelay);
+
+      line.addEventListener('animationend', () => line.remove(), { once: true });
+
+      recentTrails.push(now);
+    }
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.4;
+      masterGain.connect(ctx.destination);
+    }
+
+    // Voice frequencies (match /drum-live)
+    const VOICES: Record<string, { freq: number; bell?: boolean }> = {
+      low:  { freq:  70 },
+      mid:  { freq: 120 },
+      high: { freq: 200 },
+      bell: { freq: 600, bell: true },
+    };
+
+    function voiceFromSeed(seed: number): string {
+      const keys = ['low', 'mid', 'high', 'bell'];
+      return keys[Math.abs(seed) % keys.length];
+    }
+
+    function playVoice(pid: string, voice: string, isSelf: boolean) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const cfg = VOICES[voice] || VOICES.low;
+      // Per-pid pitch shift ±4 semitones (so different stars sound different)
+      const semis = ((hashStr(pid) % 9) - 4);
+      const shifted = cfg.freq * Math.pow(2, semis / 12);
+      const vel = isSelf ? 1.0 : 0.55;
+
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = cfg.bell ? 'sine' : 'triangle';
+      osc.frequency.value = shifted;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.45 * vel, t + 0.005);
+      const tail = cfg.bell ? 0.9 : 0.4;
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+
+      if (cfg.bell) {
+        // Bell shimmer at 2x + 3x
+        for (const mult of [2, 3]) {
+          const o = ctx.createOscillator();
+          const gg = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = shifted * mult;
+          gg.gain.setValueAtTime(0.0001, t);
+          gg.gain.exponentialRampToValueAtTime(0.12 * vel / mult, t + 0.01);
+          gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.6 / mult);
+          o.connect(gg).connect(masterGain);
+          scheduler.trackSource(o);
+          o.start(t);
+          o.stop(t + 0.65);
+        }
+      }
+    }
+
+    const PENT_FREQS = [
+      261.63, 293.66, 329.63, 392.00, 440.00,  // C4 D4 E4 G4 A4
+      523.25, 587.33, 659.25, 783.99, 880.00,  // C5 D5 E5 G5 A5
+    ];
+
+    function playArrivalChime(partnerPid: string, seed: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      const t = ctx.currentTime + 0.005;
+      const freq = PENT_FREQS[(hashStr(partnerPid) + Math.abs(seed)) % PENT_FREQS.length];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.55);
+    }
+
+    // ---- HUD ----
+    function refreshHud() {
+      const now = Date.now();
+      // Active stars
+      let active = 0;
+      let othersActive = 0;
+      stars.forEach((info, pid) => {
+        if (now - info.lastSeen < 30_000) {
+          active++;
+          if (pid !== MY_PID) othersActive++;
+        }
+      });
+      // Trails in last 30s
+      while (recentTrails.length && now - recentTrails[0] > 30_000) recentTrails.shift();
+      const trails30 = recentTrails.length;
+
+      const el = document.getElementById('dls-count')!;
+      if (active === 0) {
+        el.innerHTML = 'first to arrive — tap a pad below';
+      } else if (othersActive === 0) {
+        el.innerHTML = `just you so far · share the link · <strong>${trails30}</strong> taps so far`;
+      } else {
+        const trailLine = trails30 > 0 ? ` · <strong>${trails30}</strong> trails in 30s` : '';
+        const star = othersActive === 1 ? 'star' : 'stars';
+        el.innerHTML = `<strong>${othersActive}</strong> other ${star} in the sky${trailLine}`;
+      }
+    }
+
+    // ---- bus + poll ----
+    async function broadcastTap(voice: string) {
+      const seed = ['low', 'mid', 'high', 'bell'].indexOf(voice);
+      try {
+        await fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed, sessionId: SESSION_ID }),
+        });
+      } catch { /* best effort */ }
+    }
+
+    async function pollOnce() {
+      try {
+        const r = await fetch(`/api/sounds?since=${lastT}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data.events) return;
+        const now = Date.now();
+        for (const ev of data.events) {
+          if (ev.type !== 'drum') continue;
+          if (ev.t <= lastT) continue;
+          lastT = Math.max(lastT, ev.t);
+          // Update or create the source star
+          ensureStar(ev.pid);
+          const info = stars.get(ev.pid)!;
+          info.lastSeen = now;
+          // Record tap for size scaling
+          const taps = pidTaps.get(ev.pid) || [];
+          taps.push(now);
+          pidTaps.set(ev.pid, taps);
+          // Don't render audio or trail for own taps (already handled locally)
+          if (ev.pid === MY_PID) continue;
+          // Fire the trail (visual always; audio only if enabled)
+          fireTrail(ev.pid, ev.t, ev.seed || 0);
+          if (audioOn) {
+            const voice = voiceFromSeed(ev.seed || 0);
+            playVoice(ev.pid, voice, false);
+          }
+        }
+      } catch { /* best effort */ }
+    }
+
+    function startPolling() {
+      if (pollTimer != null) return;
+      const tick = async () => {
+        await pollOnce();
+        pruneStars(Date.now());
+        refreshStarSizes(Date.now());
+        refreshHud();
+        pollTimer = window.setTimeout(tick, 1500);
+      };
+      pollTimer = window.setTimeout(tick, 400);
+    }
+    function stopPolling() {
+      if (pollTimer != null) { clearTimeout(pollTimer); pollTimer = null; }
+    }
+
+    // ---- local taps ----
+    function tapLocal(voice: string) {
+      ensureStar(MY_PID);
+      const info = stars.get(MY_PID)!;
+      info.lastSeen = Date.now();
+      const taps = pidTaps.get(MY_PID) || [];
+      taps.push(Date.now());
+      pidTaps.set(MY_PID, taps);
+      // Local sound + trail (we draw our own trail rather than wait for bus)
+      ensureCtx();
+      playVoice(MY_PID, voice, true);
+      // We pass our local timestamp so the partner-selection is consistent
+      // with what *other* clients will compute from the bus reply.
+      fireTrail(MY_PID, Date.now(), ['low','mid','high','bell'].indexOf(voice));
+      // Visual feedback on the pad
+      const pad = document.querySelector(`.dls__pad[data-voice="${voice}"]`) as HTMLElement;
+      if (pad) {
+        pad.classList.remove('dls__pad--struck');
+        void pad.offsetWidth;
+        pad.classList.add('dls__pad--struck');
+        setTimeout(() => pad.classList.remove('dls__pad--struck'), 220);
+      }
+      refreshStarSizes(Date.now());
+      refreshHud();
+      broadcastTap(voice);
+    }
+
+    // ---- audio toggle ----
+    function setAudio(on: boolean) {
+      audioOn = on;
+      const btn = document.getElementById('dls-audio')! as HTMLButtonElement;
+      btn.textContent = on ? '🔊 audio on' : '🔇 audio off';
+      btn.setAttribute('aria-pressed', String(on));
+      if (on) ensureCtx();
+    }
+
+    async function init() {
+      SESSION_ID = getOrCreateSession();
+      MY_PID = (await sha256Hex(SESSION_ID)).slice(0, 10);
+
+      paintBackground();
+
+      // Pad clicks
+      document.querySelectorAll('.dls__pad').forEach((pad) => {
+        pad.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          const v = (pad as HTMLElement).dataset.voice || 'low';
+          tapLocal(v);
+        });
+      });
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        const map: Record<string, string> = {
+          'Digit1': 'low',  'KeyQ': 'low',
+          'Digit2': 'mid',  'KeyW': 'mid',
+          'Digit3': 'high', 'KeyE': 'high',
+          'Digit4': 'bell', 'KeyR': 'bell',
+        };
+        if (map[e.code]) {
+          e.preventDefault();
+          tapLocal(map[e.code]);
+        }
+      });
+
+      // Audio toggle
+      document.getElementById('dls-audio')!.addEventListener('click', () => {
+        setAudio(!audioOn);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopPolling();
+        else startPolling();
+      });
+
+      // Window resize redraws nothing — trails are pixel-positioned at fire
+      // time, so they finish at their original coords even if the page resizes
+      // mid-animation. Stars use % so they reflow automatically.
+
+      // UI tick every 1s so star sizes decay and HUD count stays fresh
+      setInterval(() => {
+        const now = Date.now();
+        refreshStarSizes(now);
+        refreshHud();
+      }, 1000);
+
+      refreshHud();
+      startPolling();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

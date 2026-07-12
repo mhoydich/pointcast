@@ -1,0 +1,375 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ARCADE_ACHIEVEMENTS, ARCADE_ASSETS, RETRO_ARCADE_GAMES } from '../lib/retro-arcade';
+
+const title = 'Windows 95 Games';
+const description = 'PointCast Retro Arcade: a Windows 95 worthy Nouns game shelf — card games, puzzles, action, strategy, and a match-3 pack, with local stats and achievements.';
+const CATEGORY_LABELS: Record<string, string> = {
+  cards: 'CARD TABLE',
+  memory: 'MEMORY',
+  puzzle: 'PUZZLES',
+  action: 'ACTION',
+  strategy: 'STRATEGY',
+  match: 'MATCH-3 PACK',
+};
+// Derive groups from the games themselves so a new category can never be silently dropped;
+// known categories keep the label order above, unknown ones append with an uppercased key.
+const categoryOrder = [...Object.keys(CATEGORY_LABELS), ...RETRO_ARCADE_GAMES.map((game) => game.category).filter((c) => !(c in CATEGORY_LABELS))];
+const GAME_GROUPS = [...new Set(categoryOrder)]
+  .map((key) => ({ key, label: CATEGORY_LABELS[key] ?? key.toUpperCase(), games: RETRO_ARCADE_GAMES.filter((game) => game.category === key) }))
+  .filter((group) => group.games.length > 0);
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/win95-games',
+  name: 'PointCast Retro Arcade',
+  description,
+  url: 'https://pointcast.xyz/win95-games',
+  hasPart: RETRO_ARCADE_GAMES.map((game) => ({
+    '@type': 'Game',
+    name: game.name,
+    description: game.description,
+    url: `https://pointcast.xyz${game.path}`,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} image={ARCADE_ASSETS.desktop} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/win95-games.json', title: 'PointCast Retro Arcade JSON' }]}>
+  <main class="desk" data-arcade-hub style={`--arcade-desktop:url('${ARCADE_ASSETS.desktop}'); --arcade-table:url('${ARCADE_ASSETS.table}'); --arcade-card-backs:url('${ARCADE_ASSETS.cardBacks}');`}>
+    <section class="window" aria-labelledby="games-title">
+      <header class="titlebar">
+        <span>PointCast Retro Arcade</span>
+        <span aria-hidden="true">_ □ x</span>
+      </header>
+
+      <nav class="menubar" aria-label="Arcade menu">
+        <a href="/">Home</a>
+        <a href="/app">App</a>
+        <a href="/apps">Apps</a>
+        <a href="/win95-games.json">JSON</a>
+      </nav>
+
+      <section class="hero">
+        <p>WINDOWS 95 · NOUNS · LOCAL ARCADE</p>
+        <h1 id="games-title">A little desktop of card things.</h1>
+        <span>Shared table art, saved local progress, achievements, and small games that feel like they belong together.</span>
+      </section>
+
+      <section class="profile" aria-label="Local arcade profile">
+        <div>
+          <span>Total plays</span>
+          <strong data-total-plays>0</strong>
+        </div>
+        <div>
+          <span>Cleared games</span>
+          <strong data-clears>0</strong>
+        </div>
+        <div>
+          <span>Favorite</span>
+          <strong data-favorite>--</strong>
+        </div>
+        <div>
+          <span>Last played</span>
+          <strong data-last-played>--</strong>
+        </div>
+      </section>
+
+      <section class="launcher" aria-label="Arcade quick actions">
+        <a class="resume" href="/solitaire-v2" data-resume>
+          <span>RESUME</span>
+          <strong data-resume-title>Start Solitaire</strong>
+          <em data-resume-copy>No local game yet. Pick a table and make the first mark.</em>
+        </a>
+        <div class="daily">
+          <span>DAILY CHALLENGE · <b data-daily-date>today</b></span>
+          <strong data-daily-streak>Loading…</strong>
+          <ul class="daily__goals" aria-label="Today's goals">
+            <li data-goal="0"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="1"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="2"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+            <li data-goal="3"><i class="chk" aria-hidden="true"></i><span data-goal-label>—</span></li>
+          </ul>
+        </div>
+        <button class="reset" type="button" data-reset-stats>
+          <span>RESET</span>
+          <strong>Clear local stats</strong>
+          <em>Only this browser. No server account, no remote wipe.</em>
+        </button>
+      </section>
+
+      <section class="shelves" aria-label="Arcade games">
+        {GAME_GROUPS.map((group) => (
+          <div class="shelf" data-shelf={group.key}>
+            <h3 class="shelf-label"><span>{group.label}</span><em>{group.games.length} {group.games.length === 1 ? 'game' : 'games'}</em></h3>
+            <div class="grid">
+              {group.games.map((game) => (
+                <a class={`game game--${game.category}`} href={game.path} data-game-card={game.slug}>
+                  <span>{game.kicker}</span>
+                  <strong>{game.name}</strong>
+                  <em>{game.description}</em>
+                  <small data-game-stat={game.slug}>No local plays yet</small>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section class="achievements" aria-labelledby="achievements-title">
+        <div>
+          <p>ACHIEVEMENTS</p>
+          <h2 id="achievements-title">Local badges, no account required.</h2>
+        </div>
+        <ul>
+          {ARCADE_ACHIEVEMENTS.map((achievement) => (
+            <li data-achievement={achievement.id}>
+              <strong>{achievement.name}</strong>
+              <span>{achievement.description}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const games = [
+    { slug: 'solitaire-v2', name: 'Solitaire', path: '/solitaire-v2', target: 'Best time' },
+    { slug: 'nouns-memory-v2', name: 'Memory', path: '/nouns-memory-v2', target: 'Fewest moves' },
+    { slug: 'nouns-pyramid-v2', name: 'Pyramid', path: '/nouns-pyramid-v2', target: 'Clear the pyramid' },
+    { slug: 'nouns-mines-v2', name: 'Mines', path: '/nouns-mines-v2', target: 'Safe clear' },
+    { slug: 'noggle-drop', name: 'Drop', path: '/noggle-drop', target: 'High score' },
+    { slug: 'nouns-2048', name: '2048', path: '/nouns-2048', target: 'Reach 2048' },
+    { slug: 'nouns-snake', name: 'Snake', path: '/nouns-snake', target: 'Longest run' },
+    { slug: 'nouns-slide', name: 'Slide', path: '/nouns-slide', target: 'Solve the Noun' },
+    { slug: 'nouns-reversi', name: 'Reversi', path: '/nouns-reversi', target: 'Beat the CPU' },
+    { slug: 'nouns-breakout', name: 'Breakout', path: '/nouns-breakout', target: 'Clear the wall' },
+    { slug: 'noggle-crush', name: 'Crush', path: '/noggle-crush', target: 'Best score' },
+    { slug: 'nouns-jam', name: 'Jam', path: '/nouns-jam', target: 'Best score' },
+    { slug: 'nouns-jelly', name: 'Jelly', path: '/nouns-jelly', target: 'Fewest moves' },
+    { slug: 'noggle-crush-v2', name: 'Crush v2', path: '/noggle-crush-v2', target: 'Clear 5 levels' },
+    { slug: 'nouns-jam-v2', name: 'Jam v2', path: '/nouns-jam-v2', target: 'Clear 4 levels' },
+    { slug: 'nouns-jelly-v2', name: 'Jelly v2', path: '/nouns-jelly-v2', target: 'Clear 4 levels' },
+    { slug: 'noun-flappy', name: 'Flappy', path: '/noun-flappy', target: 'Clear 12 gates' },
+    { slug: 'noggle-stacker', name: 'Stacker', path: '/noggle-stacker', target: 'Stack 12 rows' },
+    { slug: 'nouns-wordsearch', name: 'Words', path: '/nouns-wordsearch', target: 'Find every word' },
+    { slug: 'noun-simon', name: 'Simon', path: '/noun-simon', target: 'Repeat 8 rounds' },
+    { slug: 'noggle-lights-out', name: 'Lights', path: '/noggle-lights-out', target: 'Lights out' },
+    { slug: 'nouns-tripeaks', name: 'TriPeaks', path: '/nouns-tripeaks', target: 'Clear the peaks' },
+    { slug: 'swipe-golf', name: 'Golf', path: '/swipe-golf', target: 'Finish 9 holes' },
+    { slug: 'noun-runner', name: 'Runner', path: '/noun-runner', target: 'Run 1200m' },
+    { slug: 'pixel-pipes', name: 'Pipes', path: '/pixel-pipes', target: 'Connect flow' },
+    { slug: 'nouns-bubble-pop', name: 'Bubbles', path: '/nouns-bubble-pop', target: 'Clear the rack' },
+  ];
+  const profileKey = 'pc:arcade:profile';
+
+  function readJson(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || '') || fallback; } catch { return fallback; }
+  }
+
+  function formatBest(game, stats) {
+    if (stats.bestTime) {
+      const minutes = Math.floor(stats.bestTime / 60);
+      const seconds = String(stats.bestTime % 60).padStart(2, '0');
+      return `${minutes}:${seconds}`;
+    }
+    if (stats.bestLevel) return `lvl ${stats.bestLevel}`;
+    if (stats.bestMoves) return `${stats.bestMoves} moves`;
+    if (stats.bestScore) return `${stats.bestScore} pts`;
+    if (game.slug === 'nouns-pyramid-v2' && stats.clears) return `${stats.clears} clears`;
+    return '--';
+  }
+
+  function todaySeed() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  }
+
+  function writeJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage blocked */ }
+  }
+
+  const dailyKey = 'pc:arcade:daily';
+
+  function seedFrom(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  function prevDayKey(dayKey) {
+    const d = new Date(dayKey + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function statsSnapshot() {
+    const snap = {};
+    games.forEach((g) => {
+      const s = readJson(`pc:arcade:${g.slug}`, {});
+      snap[g.slug] = { plays: Number(s.plays || 0), clears: Number(s.clears || 0) };
+    });
+    return snap;
+  }
+
+  function snapSum(snap, field) {
+    return games.reduce((t, g) => t + ((snap[g.slug] && snap[g.slug][field]) || 0), 0);
+  }
+
+  // Four goals, chosen deterministically from the PT day so every browser sees the
+  // same challenge. Progress is measured against a snapshot taken the first time the
+  // hub loads each day — so the games themselves need no changes.
+  function dailyGoals(dayKey) {
+    const n = games.length;
+    const seed = seedFrom(dayKey);
+    const a = games[seed % n];
+    let b = games[(seed * 7 + 3) % n];
+    if (b.slug === a.slug) b = games[(seed * 7 + 5) % n];
+    const plays = (snap, slug) => (snap[slug] && snap[slug].plays) || 0;
+    const clears = (snap, slug) => (snap[slug] && snap[slug].clears) || 0;
+    return [
+      { label: `Warm up — play ${a.name}`, test: (cur, base) => plays(cur, a.slug) > plays(base, a.slug) },
+      { label: 'Get a clear — clear any game', test: (cur, base) => snapSum(cur, 'clears') > snapSum(base, 'clears') },
+      { label: `Featured clear — clear ${b.name}`, test: (cur, base) => clears(cur, b.slug) > clears(base, b.slug) },
+      { label: 'Sampler — play three different games', test: (cur, base) => games.filter((g) => plays(cur, g.slug) > plays(base, g.slug)).length >= 3 },
+    ];
+  }
+
+  function renderDaily() {
+    const dayKey = todaySeed();
+    let daily = readJson(dailyKey, null);
+    if (!daily || daily.date !== dayKey) {
+      const prev = daily || {};
+      daily = { date: dayKey, baseline: statsSnapshot(), doneToday: false, streak: prev.streak || 0, lastCompleted: prev.lastCompleted || null };
+      writeJson(dailyKey, daily);
+    }
+    const goals = dailyGoals(dayKey);
+    const cur = statsSnapshot();
+    let done = 0;
+    goals.forEach((goal, i) => {
+      const ok = !!goal.test(cur, daily.baseline);
+      if (ok) done++;
+      const li = document.querySelector(`[data-goal="${i}"]`);
+      if (li) {
+        li.classList.toggle('done', ok);
+        const lbl = li.querySelector('[data-goal-label]');
+        if (lbl) lbl.textContent = goal.label;
+      }
+    });
+    const all = done === goals.length;
+    if (all && !daily.doneToday) {
+      daily.doneToday = true;
+      daily.streak = daily.lastCompleted === prevDayKey(dayKey) ? (daily.streak || 0) + 1 : 1;
+      daily.lastCompleted = dayKey;
+      writeJson(dailyKey, daily);
+      const profile = readJson(profileKey, { achievements: [] });
+      profile.achievements = Array.from(new Set([...(profile.achievements || []), 'daily-sweep']));
+      writeJson(profileKey, profile);
+      const node = document.querySelector('[data-achievement="daily-sweep"]');
+      if (node) node.classList.add('is-earned');
+    }
+    const dateEl = document.querySelector('[data-daily-date]');
+    if (dateEl) dateEl.textContent = dayKey;
+    const streakEl = document.querySelector('[data-daily-streak]');
+    if (streakEl) {
+      const streakBit = daily.streak ? ` · ${daily.streak}-day streak 🔥` : '';
+      streakEl.textContent = all ? `Swept!${streakBit || ' nicely done.'}` : `${done}/${goals.length} done${streakBit}`;
+    }
+  }
+
+  function render() {
+    const profile = readJson(profileKey, {});
+    const totals = games.map((game) => {
+      const stats = readJson(`pc:arcade:${game.slug}`, {});
+      const plays = Number(stats.plays || 0);
+      const clears = Number(stats.clears || 0);
+      const stat = document.querySelector(`[data-game-stat="${game.slug}"]`);
+      const best = formatBest(game, stats);
+      if (stat) stat.textContent = plays ? `${plays} plays · ${clears} clears · best ${best}` : `Daily: ${game.target}`;
+      return { ...game, plays, clears, best };
+    });
+    const totalPlays = totals.reduce((sum, game) => sum + game.plays, 0);
+    const clears = totals.reduce((sum, game) => sum + game.clears, 0);
+    const favorite = totals.slice().sort((a, b) => b.plays - a.plays)[0];
+    const last = totals.find((game) => game.name === profile.lastPlayed) || favorite;
+    document.querySelector('[data-total-plays]').textContent = String(totalPlays);
+    document.querySelector('[data-clears]').textContent = String(clears);
+    document.querySelector('[data-favorite]').textContent = favorite?.plays ? favorite.name : '--';
+    document.querySelector('[data-last-played]').textContent = profile.lastPlayed || '--';
+    const resume = document.querySelector('[data-resume]');
+    if (resume && last?.plays) resume.setAttribute('href', last.path);
+    document.querySelector('[data-resume-title]').textContent = last?.plays ? `Resume ${last.name}` : 'Start Solitaire';
+    document.querySelector('[data-resume-copy]').textContent = last?.plays
+      ? `${last.plays} plays, ${last.clears} clears, best ${last.best}.`
+      : 'No local game yet. Pick a table and make the first mark.';
+    renderDaily();
+    // Re-read the profile: renderDaily() may have just awarded 'daily-sweep'.
+    const achievements = new Set(readJson(profileKey, {}).achievements || []);
+    document.querySelectorAll('[data-achievement]').forEach((node) => {
+      node.classList.toggle('is-earned', achievements.has(node.dataset.achievement));
+    });
+  }
+
+  document.querySelector('[data-reset-stats]')?.addEventListener('click', () => {
+    if (!window.confirm('Clear local Retro Arcade stats in this browser?')) return;
+    localStorage.removeItem(profileKey);
+    games.forEach((game) => localStorage.removeItem(`pc:arcade:${game.slug}`));
+    render();
+  });
+
+  render();
+</script>
+
+<style>
+  :global(body) { background:#008080; }
+  .desk { min-height:calc(100vh - 88px); padding:18px; background:#008080; font-family:"MS Sans Serif",Tahoma,system-ui,sans-serif; color:#000; }
+  .window { max-width:1120px; margin:0 auto; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#c0c0c0; box-shadow:2px 2px 0 #000; }
+  .titlebar { display:flex; justify-content:space-between; min-height:28px; padding:4px 7px; background:linear-gradient(90deg,#000080,#1084d0); color:#fff; font-weight:700; font-size:13px; }
+  .menubar { display:flex; gap:2px; padding:4px 5px; border-bottom:1px solid #808080; }
+  .menubar a { color:#000; padding:4px 8px; text-decoration:none; }
+  .menubar a:hover { background:#000080; color:#fff; }
+  .hero { padding:28px; border-top:1px solid #fff; border-bottom:1px solid #808080; background:linear-gradient(rgba(0,40,46,.2),rgba(0,34,39,.54)),var(--arcade-desktop) center/cover; color:#fff; text-shadow:1px 1px 0 #000; }
+  .hero p,.game span,.achievements p,.profile span { margin:0 0 10px; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; text-transform:uppercase; }
+  h1 { max-width:820px; margin:0; font-size:clamp(44px,8vw,96px); line-height:.9; }
+  .hero > span { display:block; max-width:720px; margin-top:12px; font-size:18px; line-height:1.35; }
+  .profile { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; }
+  .profile div,.achievements { border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; padding:10px; }
+  .profile strong { display:block; overflow-wrap:anywhere; font:700 20px/1 "Courier New",monospace; }
+  .launcher { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:4px; padding:4px; border-top:1px solid #fff; }
+  .launcher a,.launcher div,.launcher button { display:grid; gap:7px; min-height:92px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#efefef; color:#000; padding:10px; text-align:left; text-decoration:none; font:inherit; }
+  .launcher a:hover,.launcher button:hover { background:#000080; color:#fff; }
+  .launcher span { margin:0; font:700 10px/1 "Courier New",monospace; letter-spacing:.12em; text-transform:uppercase; }
+  .launcher strong { font-size:20px; line-height:1; }
+  .launcher em { font-style:normal; line-height:1.35; }
+  .daily [data-daily-streak] { font-size:14px; }
+  .daily__goals { list-style:none; margin:2px 0 0; padding:0; display:grid; gap:5px; }
+  .daily__goals li { display:flex; align-items:flex-start; gap:7px; font-size:12px; line-height:1.25; color:#000; }
+  .daily .chk { flex:none; width:13px; height:13px; margin-top:1px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#fff; }
+  .daily__goals li.done .chk { background:#2CC5A0; box-shadow:inset 0 0 0 1px #fff; }
+  .daily__goals li.done { color:#0a6a4a; }
+  .daily__goals li.done span { text-decoration:line-through; }
+  .shelves { display:grid; gap:4px; padding:14px; }
+  .shelf-label { display:flex; align-items:baseline; justify-content:space-between; margin:6px 2px 0; padding:6px 10px; border:2px solid; border-color:#808080 #fff #fff #808080; background:#000080; color:#fff; }
+  .shelf-label span { font:700 12px/1 "Courier New",monospace; letter-spacing:.14em; }
+  .shelf-label em { font:400 11px/1 "Courier New",monospace; font-style:normal; opacity:.75; }
+  .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:10px 0 14px; }
+  .game { min-height:220px; display:grid; align-content:start; gap:10px; border:2px solid; border-color:#fff #404040 #404040 #fff; background:#fff; color:#000; padding:14px; text-decoration:none; }
+  .game:hover { background:#000080; color:#fff; text-decoration:none; }
+  .game strong { font-size:30px; line-height:1; }
+  .game em,.game small { color:inherit; font-style:normal; line-height:1.4; }
+  .game small { align-self:end; border-top:1px solid currentColor; padding-top:8px; font-family:"Courier New",monospace; }
+  .achievements { margin:0 14px 14px; }
+  .achievements h2 { margin:0; font-size:28px; line-height:1; }
+  .achievements ul { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:12px 0 0; padding:0; list-style:none; }
+  .achievements li { min-height:88px; border:1px solid #808080; background:#efefef; padding:10px; opacity:.62; }
+  .achievements li.is-earned { opacity:1; background:#ffffcc; box-shadow:inset 0 0 0 2px #ffff00; }
+  .achievements strong,.achievements span { display:block; }
+  .achievements span { margin-top:5px; line-height:1.35; }
+  @media (max-width:860px) { .grid,.profile,.launcher,.achievements ul{grid-template-columns:repeat(2,minmax(0,1fr));} .resume{grid-column:1/-1;} }
+  @media (max-width:560px) { .desk{padding:8px}.grid,.profile,.launcher,.achievements ul{grid-template-columns:1fr}.resume{grid-column:auto}.hero{padding:18px}.game{min-height:150px} }
+</style>

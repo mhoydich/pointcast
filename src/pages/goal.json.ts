@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { GOAL_TYPE_LABELS, HORIZON_BANDS, MACHINE_LOOPS, MACHINE_META, MACHINE_NOTES, MACHINE_PRINCIPLES, SEED_GOALS } from '../lib/goalMachine';
+import { GOAL_PRESETS, GOAL_TYPE_LABELS, HORIZON_BANDS, MACHINE_LOOPS, MACHINE_META, MACHINE_NOTES, MACHINE_PRINCIPLES, SEED_GOALS } from '../lib/goalMachine';
 
 export const GET: APIRoute = async () => {
   const payload = {
@@ -11,12 +11,20 @@ export const GET: APIRoute = async () => {
     authors: MACHINE_META.authors,
     principles: MACHINE_PRINCIPLES,
     goalTypes: GOAL_TYPE_LABELS,
+    goalPresets: Object.fromEntries(Object.entries(GOAL_PRESETS).map(([id, preset]) => [
+      id,
+      {
+        ...preset,
+        human: `https://pointcast.xyz/goal?preset=${id}#setup`,
+      },
+    ])),
     seedGoals: SEED_GOALS,
     machineLoops: MACHINE_LOOPS,
     horizonBands: HORIZON_BANDS,
     notes: MACHINE_NOTES,
     counts: {
       seedGoals: SEED_GOALS.length,
+      presets: Object.keys(GOAL_PRESETS).length,
       principles: MACHINE_PRINCIPLES.length,
       loops: MACHINE_LOOPS.length,
       bands: HORIZON_BANDS.length,
