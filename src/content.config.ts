@@ -334,6 +334,8 @@ const products = defineCollection({
     vibeProfile: z.string().max(60).optional(),
     /** When this entry was first added to PointCast. */
     addedAt: z.coerce.date(),
+    /** Most recent source-catalog update, when supplied by the merchant mirror. */
+    updatedAt: z.coerce.date().optional(),
     /** Author + source — same VOICE.md rules as blocks. Default cc; if
      *  Mike personally curated, set author='mike' + source. */
     author: z.enum(['cc', 'mike', 'mh+cc', 'codex', 'manus', 'guest']).default('cc'),

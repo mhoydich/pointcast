@@ -74,6 +74,12 @@ export function productPage(slug: string): string {
   return `https://pointcast.xyz/products/${slug}`;
 }
 
+/** Stable catalog freshness signal; unlike generatedAt it changes only with product data. */
+export function catalogUpdatedAt(products: Array<{ data: { addedAt: Date; updatedAt?: Date } }>): string | null {
+  if (products.length === 0) return null;
+  return new Date(Math.max(...products.map(({ data }) => (data.updatedAt ?? data.addedAt).getTime()))).toISOString();
+}
+
 export function pairingsUrls(moods: string[] = []): string[] {
   return moods.map((mood) => `https://pointcast.xyz/pairings/${mood}`);
 }

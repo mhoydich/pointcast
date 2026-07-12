@@ -9,6 +9,7 @@ import { getCollection } from 'astro:content';
 import {
   CHECKOUT_POLICY,
   COMMERCE_VERSION,
+  catalogUpdatedAt,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
@@ -46,6 +47,7 @@ export const GET: APIRoute = async () => {
     name: 'PointCast products catalog',
     description: 'Structured product entries surfaced via PointCast for commerce discovery and agent routing. Checkout stays outbound at canonical shop surfaces.',
     generatedAt: new Date().toISOString(),
+    catalogUpdatedAt: catalogUpdatedAt(products),
     count: products.length,
     homepage: 'https://pointcast.xyz/products',
     shop: 'https://pointcast.xyz/shop',
@@ -106,6 +108,7 @@ export const GET: APIRoute = async () => {
           vibeProfile: p.data.vibeProfile ?? null,
           pairingsUrls: pairingsUrls(moods),
           addedAt: p.data.addedAt.toISOString(),
+          updatedAt: (p.data.updatedAt ?? p.data.addedAt).toISOString(),
           author: p.data.author,
           source: p.data.source ?? null,
           schemaOrg: {

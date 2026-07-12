@@ -83,3 +83,11 @@ test('commerce JSON surfaces expose the shared outbound checkout contract', () =
     assert.match(source, /checkout: outboundCheckout\(/, `${path} must expose explicit checkout routing`);
   }
 });
+
+test('catalog feeds expose merchant-backed freshness timestamps', () => {
+  assert.match(productsJson, /catalogUpdatedAt: catalogUpdatedAt\(products\)/);
+  assert.match(shopJson, /catalogUpdatedAt: catalogUpdatedAt\(products\)/);
+  assert.match(productsJson, /updatedAt: \(p\.data\.updatedAt \?\? p\.data\.addedAt\)\.toISOString\(\)/);
+  assert.match(productsJsonl, /updatedAt: \(p\.data\.updatedAt \?\? p\.data\.addedAt\)\.toISOString\(\)/);
+  assert.match(productJson, /updatedAt: \(data\.updatedAt \?\? data\.addedAt\)\.toISOString\(\)/);
+});
