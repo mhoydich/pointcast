@@ -109,6 +109,17 @@ test('product detail checkout copy reflects upstream availability', async () => 
   assert.doesNotMatch(detail, /→ Buy on \{sourceHost\}/);
 });
 
+test('product detail discovery metadata mirrors the visible breadcrumb trail', async () => {
+  const detail = await readFile('src/pages/products/[slug].astro', 'utf8');
+
+  assert.match(detail, /'@graph': \[/);
+  assert.match(detail, /'@type': 'BreadcrumbList'/);
+  assert.match(detail, /position: 1, name: 'Home', item: 'https:\/\/pointcast\.xyz\/'/);
+  assert.match(detail, /position: 2, name: 'Shop', item: 'https:\/\/pointcast\.xyz\/shop'/);
+  assert.match(detail, /position: 3, name: 'Products', item: 'https:\/\/pointcast\.xyz\/products'/);
+  assert.match(detail, /position: 4, name: d\.name, item: `https:\/\/pointcast\.xyz\/products\/\$\{d\.slug\}`/);
+});
+
 test('agent-readable product feeds expose availability-aware checkout actions', async () => {
   const routes = [
     'src/pages/products.json.ts',
