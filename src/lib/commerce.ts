@@ -45,6 +45,19 @@ export function checkoutHost(url: string): string {
   }
 }
 
+/** Checkout must leave PointCast over HTTPS; this site never accepts orders. */
+export function isOutboundCheckoutUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    return parsed.protocol === 'https:'
+      && host !== 'pointcast.xyz'
+      && !host.endsWith('.pointcast.xyz');
+  } catch {
+    return false;
+  }
+}
+
 export function productPage(slug: string): string {
   return `https://pointcast.xyz/products/${slug}`;
 }
@@ -64,6 +77,7 @@ export function sourceKind(product: { brand?: string; url: string }): 'good-feel
 
 export function isPublicProduct(product: { draft?: boolean; availability?: string; brand?: string; url: string }): boolean {
   if (product.draft) return false;
+  if (!isOutboundCheckoutUrl(product.url)) return false;
   const kind = sourceKind(product);
   if (kind === 'pointcast-merch' && product.availability && product.availability !== 'in-stock') return false;
   return true;
