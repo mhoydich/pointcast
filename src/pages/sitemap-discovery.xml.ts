@@ -1,6 +1,10 @@
 import type { APIRoute } from 'astro';
+import { getCollection } from 'astro:content';
+import { isPublicProduct } from '../lib/commerce';
 
-const urls = [
+type SitemapEntry = [loc: string, changefreq: string, priority: string];
+
+const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-value', 'weekly', '0.9'],
@@ -74,7 +78,33 @@ function xmlEscape(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
+  const [products, blocks] = await Promise.all([
+    getCollection('products', ({ data }) => isPublicProduct(data)),
+    getCollection('blocks', ({ data }) => !data.draft),
+  ]);
+
+  const moods = new Set<string>();
+  blocks.forEach(({ data }) => {
+    if (data.mood) moods.add(data.mood);
+  });
+  products.forEach(({ data }) => {
+    (data.pairsWithMood ?? []).forEach((mood) => moods.add(mood));
+  });
+
+  const dynamicUrls: SitemapEntry[] = [
+    ...products.map(({ data }) => [
+      `https://pointcast.xyz/products/${data.slug}`,
+      'daily',
+      '0.8',
+    ] as SitemapEntry),
+    ...Array.from(moods).sort().map((mood) => [
+      `https://pointcast.xyz/pairings/${mood}`,
+      'daily',
+      '0.7',
+    ] as SitemapEntry),
+  ];
+  const urls = [...staticUrls, ...dynamicUrls];
   const today = new Date().toISOString().slice(0, 10);
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
