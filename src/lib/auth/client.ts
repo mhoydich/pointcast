@@ -177,7 +177,14 @@ export async function loginWithKukai(): Promise<PointCastUser | null> {
     'Issued At': new Date().toISOString(),
     Nonce: createNonce(),
   });
-  const signature = await wallet.sign(utf8ToHex(message));
+  // BeaconWallet.sign() only supports operation payloads and throws
+  // UnsupportedActionError for raw bytes — go through requestSignPayload
+  // with signingType 'raw', same as signTezosPayload() in ../tezos.
+  const { signature } = await wallet.client.requestSignPayload({
+    signingType: 'raw' as any,
+    payload: utf8ToHex(message),
+    sourceAddress: address,
+  });
   const payload = await postJson<{ ok: true; user: PointCastUser }>('/api/auth/tezos', {
     address,
     publicKey,

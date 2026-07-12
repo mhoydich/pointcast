@@ -1,0 +1,559 @@
+---
+/**
+ * /mist — the workbench.
+ *
+ * Continuation of the 2014 Ethereum Mist vision (Alex Van de Sande's
+ * dApp browser demo) — App Catalog by action, Identity Picker, editable
+ * contracts as Terms of Use. The Mist team lost to Electron RCEs and
+ * full-node sync. We don't have either problem: PointCast is Astro
+ * static + Cloudflare Workers + L2 reads + 2026 wallet UX.
+ *
+ * Decision record: docs/decisions/2026-05-07-mist-room-decision.md.
+ *
+ * v0 scope (this commit):
+ *  - vertical sidebar with the four 2014-Mist categories
+ *  - App Catalog grid, populated from src/lib/eth/config.ts
+ *  - placeholder wallet panel (hydration in PR #3 commit b)
+ *  - placeholder Nouns DAO live tile (hydration in PR #3 commit c)
+ *
+ * Quiet launch — the room is not on the homepage. Comes online via /wire,
+ * agents.json, and direct link.
+ */
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ShareThis from '../components/ShareThis.astro';
+import {
+  APP_CATALOG,
+  CATEGORY_META,
+  type AppCard,
+  type AppCategory,
+} from '../lib/eth/config';
+
+const categories = (Object.keys(CATEGORY_META) as AppCategory[]).sort(
+  (a, b) => CATEGORY_META[a].order - CATEGORY_META[b].order,
+);
+
+const cardsByCategory: Record<AppCategory, AppCard[]> = {
+  'money-together': [],
+  'new-societies': [],
+  'information-is-power': [],
+  'make-together': [],
+};
+for (const card of APP_CATALOG) {
+  cardsByCategory[card.category].push(card);
+}
+
+const totalCardCount = APP_CATALOG.length;
+const liveCardCount = APP_CATALOG.filter((c) => c.status === 'live').length;
+
+const chainLabel: Record<NonNullable<AppCard['chain']>, string> = {
+  tezos: 'tz',
+  ethereum: 'eth',
+  base: 'base',
+  farcaster: 'fc',
+  multi: 'multi',
+};
+
+const kindLabel: Record<AppCard['kind'], string> = {
+  pointcast: 'in-house',
+  dapp: 'dapp',
+  window: 'window',
+};
+---
+
+<BaseLayout
+  title="/mist · the workbench"
+  description="A continuation of the 2014 Ethereum Mist vision — App Catalog by action, populated with real PointCast surfaces and the Ethereum dApps the Mist team would have wanted in their launcher. Coordination primitives as default apps."
+  canonical="/mist"
+>
+  <main class="mist" aria-labelledby="mist-title">
+    <header class="mist__head">
+      <p class="mist__kicker mono">/mist · workbench · 2026.05</p>
+      <h1 id="mist-title" class="mist__title">The workbench</h1>
+      <p class="mist__lede">
+        In November 2014, eight months before Ethereum mainnet shipped,
+        Alex Van de Sande walked through a UI mockup he called Mist —
+        a vertical sidebar, an App Catalog grouped by <em>action</em>
+        instead of by name, an Identity Picker, and smart-contract code
+        rendered as the Terms of Use. The browser shipped, sync got
+        painful, Electron got dangerous, and by 2019 the project was
+        archived.
+      </p>
+      <p class="mist__lede mist__lede--second">
+        This is the room that picks up where it stopped — same bones,
+        2026 stack. The catalog is real. The window onto Ethereum is
+        live. The coffee pot, still on.
+      </p>
+      <ul class="mist__counts mono" aria-label="Catalog counts">
+        <li><strong>{totalCardCount}</strong> apps</li>
+        <li><strong>{liveCardCount}</strong> live</li>
+        <li><strong>4</strong> categories</li>
+        <li><strong>2</strong> chains</li>
+      </ul>
+    </header>
+
+    <section class="mist__wallet" aria-labelledby="wallet-title" data-mist-wallet-panel>
+      <h2 id="wallet-title" class="mist__section-title mono">Identity</h2>
+      <div class="mist__wallet-card" data-mist-wallet-card>
+        <p class="mist__wallet-empty">
+          <span class="mist__wallet-dot" aria-hidden="true"></span>
+          No wallet connected. Use the <strong>connect wallet</strong> button in the corner. Tezos works today, Ethereum lands with this room — sign once, your address joins your PointCast user.
+        </p>
+      </div>
+    </section>
+
+    <div class="mist__split">
+      <aside class="mist__sidebar" aria-label="Categories">
+        <p class="mist__sidebar-kicker mono">App Catalog</p>
+        <ul class="mist__nav" role="list">
+          {categories.map((cat) => (
+            <li class="mist__nav-item">
+              <a href={`#${cat}`} class="mist__nav-link" data-cat={cat}>
+                <span class="mist__nav-name">{CATEGORY_META[cat].title}</span>
+                <span class="mist__nav-tagline mono">{CATEGORY_META[cat].tagline}</span>
+                <span class="mist__nav-count mono">{cardsByCategory[cat].length}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p class="mist__sidebar-foot mono">
+          The 2014 mockup arranged dapps by action, not name —<br />
+          <em>Money Together</em>, <em>New Societies</em>, <em>Information is Power</em>.<br />
+          PointCast keeps the categories.
+        </p>
+      </aside>
+
+      <section class="mist__catalog" aria-label="App Catalog">
+        {categories.map((cat) => (
+          <section id={cat} class="mist__cat" aria-labelledby={`${cat}-title`}>
+            <header class="mist__cat-head">
+              <h2 id={`${cat}-title`} class="mist__cat-title">{CATEGORY_META[cat].title}</h2>
+              <p class="mist__cat-tagline mono">{CATEGORY_META[cat].tagline}</p>
+            </header>
+            <ul class="mist__grid" role="list">
+              {cardsByCategory[cat].map((card) => (
+                <li class={`mist__tile mist__tile--${card.kind} ${card.status === 'soon' ? 'mist__tile--soon' : ''}`}>
+                  <a
+                    href={card.href}
+                    class="mist__tile-link"
+                    target={card.kind === 'dapp' ? '_blank' : undefined}
+                    rel={card.kind === 'dapp' ? 'noopener noreferrer' : undefined}
+                  >
+                    <div class="mist__tile-top">
+                      <span class="mist__tile-kind mono">{kindLabel[card.kind]}</span>
+                      {card.chain && <span class="mist__tile-chain mono">{chainLabel[card.chain]}</span>}
+                    </div>
+                    <h3 class="mist__tile-name">{card.title}</h3>
+                    <p class="mist__tile-blurb">{card.blurb}</p>
+                    <span class={`mist__tile-go mono mist__tile-go--${card.status ?? 'live'}`}>
+                      {card.status === 'soon' ? 'soon →' : card.kind === 'dapp' ? 'open ↗' : 'enter →'}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </section>
+    </div>
+
+    <section class="mist__exits" aria-label="Mist exits">
+      <p class="mist__footer-line mono">
+        Continuation, not clone. The 2014 team didn't get full-node sync to work.<br />
+        We sidestepped it by going static + L2.
+      </p>
+      <p class="mist__footer-meta mono">— cc, Sprint 33, 2026-05-07</p>
+      <nav class="mist__exit-nav" aria-label="Outbound">
+        <a href="/" class="mist__exit mono">← the front door</a>
+        <a href="/eth-legacy" class="mist__exit mono">/eth-legacy</a>
+        <a href="/visit-nouns" class="mist__exit mono">/visit-nouns</a>
+        <a href="/coffee" class="mist__exit mono">/coffee</a>
+        <a href="https://www.youtube.com/watch?v=IgNjs_WaFSc" class="mist__exit mono" target="_blank" rel="noopener noreferrer">
+          The original Mist demo (2014) ↗
+        </a>
+      </nav>
+      <ShareThis url="/mist" kind="mist" />
+    </section>
+  </main>
+</BaseLayout>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Identity panel hydration — minimal v0.
+  //
+  // Listens for the existing pc:wallet-change event broadcast by
+  // src/components/WalletConnect.astro and src/lib/auth/client.ts. When a
+  // wallet is connected (Tezos OR Ethereum), shows the address and provider.
+  //
+  // PR #3 commit b: ENS reverse-lookup + balance read for EVM wallets.
+  // PR #3 commit c: Nouns DAO live-auction tile + identity picker UI.
+  // ---------------------------------------------------------------------------
+  type Wallet = {
+    chain: 'tezos' | 'eth' | 'solana';
+    address: string;
+    provider: 'kukai' | 'metamask' | 'phantom';
+  };
+
+  const STORAGE_KEY = 'pc:wallet';
+  const CARD = document.querySelector<HTMLElement>('[data-mist-wallet-card]');
+
+  function loadWallet(): Wallet | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as Wallet) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function shortAddr(addr: string): string {
+    if (!addr) return '';
+    if (addr.length <= 14) return addr;
+    return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  }
+
+  function chainLabel(chain: Wallet['chain']): string {
+    if (chain === 'tezos') return 'Tezos';
+    if (chain === 'eth') return 'Ethereum';
+    return 'Solana';
+  }
+
+  function render(wallet: Wallet | null): void {
+    if (!CARD) return;
+    if (!wallet) {
+      CARD.innerHTML = `
+        <p class="mist__wallet-empty">
+          <span class="mist__wallet-dot" aria-hidden="true"></span>
+          No wallet connected. Use the <strong>connect wallet</strong> button in the corner. Tezos works today, Ethereum lands with this room — sign once, your address joins your PointCast user.
+        </p>
+      `;
+      return;
+    }
+    const chain = chainLabel(wallet.chain);
+    CARD.innerHTML = `
+      <div class="mist__wallet-connected">
+        <div class="mist__wallet-line">
+          <span class="mist__wallet-dot mist__wallet-dot--live" aria-hidden="true"></span>
+          <span class="mist__wallet-chain mono">${chain} · ${wallet.provider}</span>
+        </div>
+        <p class="mist__wallet-address mono" title="${wallet.address}">${shortAddr(wallet.address)}</p>
+        <p class="mist__wallet-hint">
+          Identity locked. ENS name + balance load with the next commit. The 2014 Mist had an Identity Picker here — choose <em>which me</em> is signing — that's coming when you have more than one EVM address linked.
+        </p>
+      </div>
+    `;
+  }
+
+  // Initial render from localStorage
+  render(loadWallet());
+
+  // React to connect/disconnect from elsewhere on the page
+  window.addEventListener('pc:wallet-change', (e: Event) => {
+    const detail = (e as CustomEvent<Wallet | null>).detail;
+    render(detail);
+  });
+</script>
+
+<style>
+  .mist {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 20px 96px;
+    color: var(--color-ink);
+  }
+  .mono {
+    font-family: var(--font-mono, 'JetBrains Mono Variable', ui-monospace, monospace);
+    font-feature-settings: 'tnum' on;
+  }
+
+  /* ---------- header ---------- */
+  .mist__head { margin-bottom: 36px; }
+  .mist__kicker {
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin-bottom: 8px;
+  }
+  .mist__title {
+    font-size: clamp(2.4rem, 5vw, 3.6rem);
+    line-height: 1.05;
+    margin: 0 0 18px;
+    color: var(--color-ink);
+  }
+  .mist__lede {
+    font-size: 1.05rem;
+    line-height: 1.65;
+    margin: 0 0 14px;
+    max-width: 64ch;
+    color: var(--color-ink-soft);
+  }
+  .mist__lede--second { color: var(--color-ink); }
+  .mist__counts {
+    display: flex;
+    gap: 18px;
+    list-style: none;
+    padding: 0;
+    margin: 18px 0 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .mist__counts strong {
+    color: var(--color-warm);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  /* ---------- wallet panel ---------- */
+  .mist__wallet { margin: 32px 0 28px; }
+  .mist__section-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 10px;
+  }
+  .mist__wallet-card {
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    padding: 18px 20px;
+    background: var(--color-card);
+  }
+  .mist__wallet-empty,
+  .mist__wallet-connected { margin: 0; }
+  .mist__wallet-empty {
+    color: var(--color-ink-soft);
+    font-size: 0.95rem;
+    line-height: 1.55;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .mist__wallet-empty strong { color: var(--color-ink); }
+  .mist__wallet-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--color-rule);
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+  .mist__wallet-dot--live { background: #4ea36b; }
+  .mist__wallet-line {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .mist__wallet-chain {
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+  }
+  .mist__wallet-address {
+    font-size: 1.05rem;
+    color: var(--color-ink);
+    margin: 0 0 8px;
+    word-break: break-all;
+  }
+  .mist__wallet-hint {
+    font-size: 0.86rem;
+    color: var(--color-ink-soft);
+    line-height: 1.5;
+    margin: 0;
+    max-width: 60ch;
+  }
+  .mist__wallet-hint em { color: var(--color-warm); font-style: italic; }
+
+  /* ---------- two-column layout ---------- */
+  .mist__split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    margin-top: 28px;
+  }
+  @media (min-width: 880px) {
+    .mist__split {
+      grid-template-columns: 240px 1fr;
+      gap: 48px;
+    }
+  }
+
+  /* ---------- sidebar ---------- */
+  .mist__sidebar { position: sticky; top: 24px; align-self: start; }
+  .mist__sidebar-kicker {
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0 0 12px;
+  }
+  .mist__nav { list-style: none; padding: 0; margin: 0 0 24px; }
+  .mist__nav-item { border-top: 1px solid var(--color-rule); }
+  .mist__nav-item:last-child { border-bottom: 1px solid var(--color-rule); }
+  .mist__nav-link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    row-gap: 2px;
+    padding: 12px 4px;
+    text-decoration: none;
+    transition: background-color 120ms ease;
+  }
+  .mist__nav-link:hover { background: var(--color-card); }
+  .mist__nav-name {
+    grid-column: 1; grid-row: 1;
+    font-size: 0.95rem;
+    color: var(--color-ink);
+  }
+  .mist__nav-count {
+    grid-column: 2; grid-row: 1 / span 2;
+    align-self: center;
+    font-size: 0.75rem;
+    color: var(--color-warm);
+    font-weight: 600;
+  }
+  .mist__nav-tagline {
+    grid-column: 1; grid-row: 2;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .mist__sidebar-foot {
+    font-size: 0.7rem;
+    line-height: 1.6;
+    color: var(--color-ink-soft);
+    letter-spacing: 0.05em;
+  }
+  .mist__sidebar-foot em {
+    color: var(--color-warm);
+    font-style: normal;
+  }
+
+  /* ---------- catalog ---------- */
+  .mist__cat { margin-bottom: 48px; scroll-margin-top: 24px; }
+  .mist__cat-head { margin-bottom: 16px; }
+  .mist__cat-title {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    color: var(--color-ink);
+  }
+  .mist__cat-tagline {
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin: 0;
+  }
+
+  .mist__grid {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  @media (min-width: 640px) {
+    .mist__grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1080px) {
+    .mist__grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .mist__tile {
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    background: var(--color-card);
+    transition: border-color 120ms ease, transform 120ms ease;
+  }
+  .mist__tile:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .mist__tile--soon { opacity: 0.65; }
+  .mist__tile--window { background: linear-gradient(140deg, var(--color-card) 0%, color-mix(in oklab, var(--color-warm) 8%, var(--color-card)) 100%); }
+
+  .mist__tile-link {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px 14px;
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+  }
+  .mist__tile-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .mist__tile-kind,
+  .mist__tile-chain {
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+  .mist__tile-chain { color: var(--color-warm); }
+  .mist__tile-name {
+    font-size: 1.05rem;
+    margin: 0;
+    color: var(--color-ink);
+  }
+  .mist__tile-blurb {
+    font-size: 0.86rem;
+    line-height: 1.5;
+    margin: 0;
+    color: var(--color-ink-soft);
+    flex-grow: 1;
+  }
+  .mist__tile-go {
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-warm);
+    margin-top: 4px;
+  }
+  .mist__tile-go--soon { color: var(--color-ink-soft); }
+
+  /* ---------- exits ---------- */
+  .mist__exits {
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1px solid var(--color-rule);
+  }
+  .mist__footer-line {
+    color: var(--color-ink-soft);
+    line-height: 1.6;
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+  }
+  .mist__footer-meta {
+    color: var(--color-ink-soft);
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  .mist__exit-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .mist__exit {
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .mist__exit:hover {
+    color: var(--color-warm);
+    border-bottom-color: var(--color-warm);
+  }
+</style>

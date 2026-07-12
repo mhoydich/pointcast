@@ -1,0 +1,851 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import PixelIcon from '../components/PixelIcon.astro';
+import { CHANNELS } from '../lib/channels';
+import { ARCADE_ACHIEVEMENTS, RETRO_ARCADE_GAMES } from '../lib/retro-arcade';
+
+const title = 'Arcade';
+const description =
+  'The grand unified PointCast arcade hub: 26 Win95 arcade games, 10 Drum House games, no signup, and local achievements.';
+
+const liveArcadeGames = RETRO_ARCADE_GAMES.filter((game) => game.status === 'live');
+const achievementCount = ARCADE_ACHIEVEMENTS.length;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  cards: 'CARD TABLE',
+  memory: 'MEMORY',
+  puzzle: 'PUZZLES',
+  action: 'ACTION',
+  strategy: 'STRATEGY',
+  match: 'MATCH-3 PACK',
+};
+
+const categoryOrder = [
+  ...Object.keys(CATEGORY_LABELS),
+  ...liveArcadeGames.map((game) => game.category).filter((category) => !(category in CATEGORY_LABELS)),
+];
+const GAME_GROUPS = [...new Set(categoryOrder)]
+  .map((key) => ({
+    key,
+    label: CATEGORY_LABELS[key] ?? key.toUpperCase(),
+    games: liveArcadeGames.filter((game) => game.category === key),
+  }))
+  .filter((group) => group.games.length > 0);
+
+const DRUM_GAMES = [
+  {
+    slug: 'drum-says',
+    name: 'Drum Says',
+    path: '/drum-says',
+    kicker: 'ECHO · FOUR DRUMS',
+    description:
+      'A Noun calls a pattern on four drums. Echo it back. Every round adds one more hit. How long can you hold the thread?',
+  },
+  {
+    slug: 'drum-hero',
+    name: 'Drum Hero',
+    path: '/drum-hero',
+    kicker: 'FOUR LANES · 60 SEC',
+    description:
+      'Notes fall. You strike. PERFECT under 60ms. A new procedural beatmap every run — sixty seconds, one grade, no mercy.',
+  },
+  {
+    slug: 'drum-lockstep',
+    name: 'Drum Lockstep',
+    path: '/drum-lockstep',
+    kicker: 'WALL CLOCK · METRONOME',
+    description:
+      'A metronome derived from the wall clock — every browser on Earth computes the same tick. Tap with it. Your offset in milliseconds is your score. See who else is locked in.',
+  },
+  {
+    slug: 'drum-quickdraw',
+    name: 'Quick Draw',
+    path: '/drum-quickdraw',
+    kicker: 'REACTION · TEN DRAWS',
+    description:
+      'The pad flashes when you least expect it. Slap it fast — but not too fast: feints and false starts are fouls. Ten draws, one average, one grade.',
+  },
+  {
+    slug: 'drum-steps',
+    name: 'Tempo Steps',
+    path: '/drum-steps',
+    kicker: 'BPM CLIMB · 3 LIVES',
+    description:
+      'An orb pulses on the beat. Tap SPACE on every pulse. Eight clean hits climb a rung and the tempo steps up — 100 BPM to 220, three lives, no drift allowed.',
+  },
+  {
+    slug: 'drum-fill',
+    name: 'Drum Fill',
+    path: '/drum-fill',
+    kicker: '8-STEP · FILL GAP',
+    description:
+      'An eight-step groove loops with one hit missing. Tap the moment the playhead crosses the empty cell to fill it with a tom. Every clean bar mutes one more step and pushes the tempo up.',
+  },
+  {
+    slug: 'drum-runner',
+    name: 'Beat Runner',
+    path: '/drum-runner',
+    kicker: 'RUN · JUMP · GROOVE',
+    description:
+      'A Noun auto-runs El Segundo. Cones roll in on the grid — jump on the beat to clear them. Three lives, endless meters, a groove that speeds up the further you go.',
+  },
+  {
+    slug: 'drum-catch',
+    name: 'Beat Catcher',
+    path: '/drum-catch',
+    kicker: 'CATCH · DOWNBEAT',
+    description:
+      'Coffee-bean notes rain down four columns in time with the beat. Slide your Noun to catch them — nail the downbeat for double. Three lives, sixty seconds, one best score.',
+  },
+  {
+    slug: 'drum-steady',
+    name: 'Steady Hands',
+    path: '/drum-steady',
+    kicker: 'SILENT TEMPO · 32 BEATS',
+    description:
+      'Four clicks set the pulse, then silence. Keep the tempo by feel for 32 beats. Lowest average drift wins — how steady are your hands?',
+  },
+  {
+    slug: 'drum-split',
+    name: 'Split Hands',
+    path: '/drum-split',
+    kicker: 'TWO HANDS · ONE CLOCK',
+    description:
+      'Left hand holds a steady pulse. Right hand chases the syncope. Keep both alive against one clock for sixteen bars — limb independence as a rhythm game.',
+  },
+] as const;
+
+// Hand-maintained launch shelf per Mike's directive: ten recent mobile arcade games
+// plus the seven newest Drum House rooms.
+const NEW_SLUGS = [
+  'noun-flappy',
+  'noggle-stacker',
+  'nouns-wordsearch',
+  'noun-simon',
+  'noggle-lights-out',
+  'nouns-tripeaks',
+  'swipe-golf',
+  'noun-runner',
+  'pixel-pipes',
+  'nouns-bubble-pop',
+  'drum-quickdraw',
+  'drum-steps',
+  'drum-fill',
+  'drum-runner',
+  'drum-catch',
+  'drum-steady',
+  'drum-split',
+] as const;
+
+type GameTile = {
+  slug: string;
+  name: string;
+  shortName?: string;
+  path: string;
+  kicker: string;
+  description: string;
+  category: string;
+  source: 'arcade' | 'drum';
+  noun: number;
+  achievementCount?: number;
+};
+
+function seedFor(slug: string, salt: number): number {
+  let hash = 2166136261;
+  for (let i = 0; i < slug.length; i += 1) {
+    hash ^= slug.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) + salt) % 1200;
+}
+
+const arcadeTiles: GameTile[] = liveArcadeGames.map((game) => ({
+  ...game,
+  source: 'arcade',
+  noun: seedFor(game.slug, 311),
+  achievementCount: game.achievementIds.length,
+}));
+const drumTiles: GameTile[] = DRUM_GAMES.map((game) => ({
+  ...game,
+  category: 'drum',
+  source: 'drum',
+  noun: seedFor(game.slug, 727),
+}));
+const allGames = [...arcadeTiles, ...drumTiles];
+const gameBySlug = new Map(allGames.map((game) => [game.slug, game]));
+const newSlugSet = new Set<string>(NEW_SLUGS);
+const newGames = NEW_SLUGS
+  .map((slug) => gameBySlug.get(slug))
+  .filter((game): game is GameTile => Boolean(game));
+
+const totalGames = allGames.length;
+const statLine = `${totalGames} GAMES · FREE · NO SIGNUP · ${achievementCount} ACHIEVEMENTS`;
+const surprisePathsJson = JSON.stringify(allGames.map((game) => game.path));
+
+function ramp(code: string) {
+  const c = (CHANNELS as Record<string, { color50: string; color600: string; color800: string }>)[code];
+  return c ?? { color50: '#EEF4FA', color600: '#185FA5', color800: '#0B3E73' };
+}
+
+const arcadeRamp = ramp('ESC');
+const drumRamp = ramp('SPN');
+
+function sourceLabel(game: GameTile): string {
+  if (game.source === 'drum') return 'DRUM HOUSE';
+  return `${game.category.toUpperCase()} · ${game.achievementCount ?? 0} ACHV`;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/arcade',
+  name: 'The PointCast Arcade',
+  description,
+  url: 'https://pointcast.xyz/arcade',
+  numberOfItems: totalGames,
+  hasPart: allGames.map((game) => ({
+    '@type': 'Game',
+    name: game.name,
+    description: game.description,
+    url: `https://pointcast.xyz${game.path}`,
+    genre: game.source === 'drum' ? 'Rhythm game' : game.category,
+  })),
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="play">
+    <section class="play-hero" aria-labelledby="play-title">
+      <div class="play-hero__bar mono">
+        <span><PixelIcon name="cabinet" size={18} class="play-icon" /> CH.ARCADE · POINTCAST ARCADE</span>
+        <span>{statLine}</span>
+      </div>
+      <div class="play-hero__stage">
+        <div class="play-hero__copy">
+          <p class="play-hero__kicker mono">ARCADE CABINET · DRUM HOUSE · LOCAL BADGES</p>
+          <h1 id="play-title" class="play-hero__title">
+            <span>PLAY</span>
+            <em>The PointCast Arcade</em>
+          </h1>
+          <p class="play-hero__stats mono">{statLine}</p>
+          <a class="play-surprise mono" href="/win95-games" data-surprise>
+            <PixelIcon name="dice" size={22} class="play-icon" />
+            <span>SURPRISE ME</span>
+          </a>
+        </div>
+
+        <div class="play-hero__art" aria-hidden="true">
+          <div class="play-cabinet">
+            <div class="play-cabinet__screen">
+              <img src="https://noun.pics/428.svg" width="92" height="92" loading="lazy" alt="" />
+              <img src="https://noun.pics/512.svg" width="92" height="92" loading="lazy" alt="" />
+              <img src="https://noun.pics/998.svg" width="92" height="92" loading="lazy" alt="" />
+            </div>
+            <div class="play-cabinet__controls">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <img
+            class="play-hero__walker"
+            src="https://noun.pics/214.svg"
+            width="58"
+            height="58"
+            loading="lazy"
+            alt=""
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="play-section play-section--new" aria-labelledby="new-title">
+      <header class="play-section__head" style={`--ch-50:${arcadeRamp.color50};--ch-600:${arcadeRamp.color600};--ch-800:${arcadeRamp.color800};`}>
+        <h2 id="new-title" class="mono"><PixelIcon name="sparkle-new" size={18} class="play-icon" /> NEW THIS WEEK</h2>
+        <span class="play-section__count mono">{newGames.length} NEW</span>
+      </header>
+      <div class="play-grid play-grid--new">
+        {newGames.map((game) => (
+          <a class:list={['play-game', game.source === 'drum' && 'play-game--drum']} href={game.path}>
+            <span class="play-game__bar mono">
+              <span>{game.shortName ?? game.name}</span>
+              <span class="play-game__badge">NEW</span>
+            </span>
+            <span class="play-game__body">
+              <img
+                src={`https://noun.pics/${game.noun}.svg`}
+                width="72"
+                height="72"
+                loading="lazy"
+                alt={`Noun ${game.noun} for ${game.name}`}
+              />
+              <span class="play-game__text">
+                <strong>{game.name}</strong>
+                <span class="play-game__meta mono">{sourceLabel(game)}</span>
+                <span>{game.description}</span>
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section
+      class="play-section play-section--arcade"
+      id="arcade"
+      aria-labelledby="arcade-title"
+      style={`--ch-50:${arcadeRamp.color50};--ch-600:${arcadeRamp.color600};--ch-800:${arcadeRamp.color800};`}
+    >
+      <header class="play-section__head">
+        <h2 id="arcade-title" class="mono"><PixelIcon name="joystick" size={18} class="play-icon" /> THE ARCADE</h2>
+        <span class="play-section__count mono">{liveArcadeGames.length} GAMES · {achievementCount} ACHIEVEMENTS</span>
+      </header>
+
+      <div class="play-shelves">
+        {GAME_GROUPS.map((group) => (
+          <section class="play-shelf" aria-labelledby={`arcade-${group.key}`}>
+            <header class="play-shelf__head">
+              <h3 id={`arcade-${group.key}`} class="mono">{group.label}</h3>
+              <span class="mono">{group.games.length} {group.games.length === 1 ? 'GAME' : 'GAMES'}</span>
+            </header>
+            <div class="play-grid">
+              {group.games.map((game) => {
+                const tile = gameBySlug.get(game.slug)!;
+                return (
+                  <a class="play-game" href={game.path}>
+                    <span class="play-game__bar mono">
+                      <span>{game.shortName}</span>
+                      <span>{newSlugSet.has(game.slug) ? 'NEW' : 'LIVE'}</span>
+                    </span>
+                    <span class="play-game__body">
+                      <img
+                        src={`https://noun.pics/${tile.noun}.svg`}
+                        width="72"
+                        height="72"
+                        loading="lazy"
+                        alt={`Noun ${tile.noun} for ${game.name}`}
+                      />
+                      <span class="play-game__text">
+                        <strong>{game.name}</strong>
+                        <span class="play-game__meta mono">{game.category.toUpperCase()} · {game.achievementIds.length} ACHV</span>
+                        <span>{game.description}</span>
+                      </span>
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+
+    <section
+      class="play-section play-section--drum"
+      id="drum-house"
+      aria-labelledby="drum-title"
+      style={`--ch-50:${drumRamp.color50};--ch-600:${drumRamp.color600};--ch-800:${drumRamp.color800};`}
+    >
+      <header class="play-section__head">
+        <h2 id="drum-title" class="mono"><PixelIcon name="drum" size={18} class="play-icon" /> THE DRUM HOUSE</h2>
+        <a class="play-section__link mono" href="/drum">ALL DRUM ROOMS →</a>
+      </header>
+      <div class="play-grid play-grid--drum">
+        {drumTiles.map((game) => (
+          <a class="play-game play-game--drum" href={game.path}>
+            <span class="play-game__bar mono">
+              <span>{game.name}</span>
+              <span>{newSlugSet.has(game.slug) ? 'NEW' : 'LIVE'}</span>
+            </span>
+            <span class="play-game__body">
+              <img
+                src={`https://noun.pics/${game.noun}.svg`}
+                width="72"
+                height="72"
+                loading="lazy"
+                alt={`Noun ${game.noun} for ${game.name}`}
+              />
+              <span class="play-game__text">
+                <strong>{game.name}</strong>
+                <span class="play-game__meta mono">{game.kicker}</span>
+                <span>{game.description}</span>
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <footer class="play-foot mono" aria-label="Arcade hub links">
+      <a href="/win95-games"><PixelIcon name="cabinet" size={16} class="play-icon" /> CLASSIC HUB</a>
+      <a href="/drum"><PixelIcon name="drum" size={16} class="play-icon" /> DRUM</a>
+      <a href="/explore"><PixelIcon name="trophy" size={16} class="play-icon" /> EXPLORE</a>
+      <a href="/"><PixelIcon name="joystick" size={16} class="play-icon" /> HOME</a>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ surprisePathsJson }}>
+  (function () {
+    var link = document.querySelector('[data-surprise]');
+    if (!link) return;
+    var paths = [];
+    try { paths = JSON.parse(surprisePathsJson); } catch (e) { paths = []; }
+    if (!paths.length) return;
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+      var next = paths[Math.floor(Math.random() * paths.length)] || '/arcade';
+      window.location.href = next;
+    });
+  })();
+</script>
+
+<style>
+  .play {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 20px 88px;
+    color: var(--pc-ink);
+    overflow-x: clip;
+  }
+  .play :global(.play-icon) {
+    flex: 0 0 auto;
+    display: inline-block;
+    vertical-align: -0.18em;
+  }
+  .play .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    line-height: 1.35;
+    text-transform: uppercase;
+  }
+  .play a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .play strong {
+    font-weight: 500;
+  }
+
+  .play-hero {
+    margin: 16px 0 8px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .play-hero__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    color: var(--pc-ink);
+  }
+  .play-hero__bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .play-hero__stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 8px;
+    min-height: 430px;
+    padding: 14px;
+    overflow: hidden;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.13) 1px, transparent 1px),
+      linear-gradient(0deg, rgba(255,255,255,0.13) 1px, transparent 1px),
+      #008080;
+    background-size: 16px 16px;
+  }
+  .play-hero__stage::before {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border: 1.5px solid rgba(255,255,255,0.45);
+    pointer-events: none;
+  }
+  .play-hero__copy {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: 0;
+    padding: 18px;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0;
+    color: #000;
+  }
+  .play-hero__kicker,
+  .play-hero__stats {
+    margin: 0;
+  }
+  .play-hero__kicker {
+    color: #000080;
+    font-weight: 500;
+  }
+  .play-hero__title {
+    display: grid;
+    gap: 2px;
+    margin: 12px 0 14px;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .play-hero__title span {
+    display: block;
+    font-size: 96px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  .play-hero__title em {
+    display: block;
+    max-width: 640px;
+    font-style: normal;
+    font-size: 34px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.05;
+  }
+  .play-hero__stats {
+    max-width: 680px;
+    padding: 5px 7px;
+    border: 1px solid #000;
+    background: #000080;
+    color: #fff;
+    font-weight: 500;
+  }
+  .play-surprise {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    margin-top: 14px;
+    padding: 11px 14px;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #ffff00;
+    color: #000;
+    font-weight: 500;
+  }
+  .play-surprise:hover,
+  .play-surprise:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 2px;
+    background: #fff;
+  }
+
+  .play-hero__art {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  .play-cabinet {
+    width: min(100%, 330px);
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0;
+    padding: 12px;
+  }
+  .play-cabinet__screen {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    min-height: 150px;
+    padding: 10px;
+    border: 2px solid;
+    border-color: #404040 #fff #fff #404040;
+    background: #000080;
+  }
+  .play-cabinet__screen img,
+  .play-game img,
+  .play-hero__walker {
+    image-rendering: pixelated;
+  }
+  .play-cabinet__screen img {
+    width: 100%;
+    height: auto;
+    align-self: center;
+    background: #fff;
+    border: 1.5px solid #000;
+  }
+  .play-cabinet__controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 0 2px;
+  }
+  .play-cabinet__controls span {
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid #000;
+    background: #ff0000;
+  }
+  .play-cabinet__controls span:nth-child(2) { background: #ffff00; }
+  .play-cabinet__controls span:nth-child(3) { background: #00a651; }
+  .play-cabinet__controls span:nth-child(4) { background: #1084d0; }
+  .play-hero__walker {
+    position: absolute;
+    bottom: 22px;
+    left: 8px;
+    width: 58px;
+    height: 58px;
+    animation: playWalker 9s steps(18, end) infinite;
+  }
+  @keyframes playWalker {
+    from { transform: translateX(0); }
+    to { transform: translateX(280px); }
+  }
+
+  .play-section {
+    margin: 8px 0 0;
+    border: 1.5px solid var(--ch-600, var(--pc-ink));
+    border-radius: 2px;
+    background: #fff;
+  }
+  .play-section--new {
+    --ch-50: #eef4fa;
+    --ch-600: #185fa5;
+    --ch-800: #0b3e73;
+  }
+  .play-section__head,
+  .play-shelf__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1.5px solid var(--ch-600);
+    background: var(--ch-50);
+    color: var(--ch-800);
+  }
+  .play-section__head h2,
+  .play-shelf__head h3 {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+  .play-section__count,
+  .play-section__link,
+  .play-shelf__head span {
+    color: var(--ch-800);
+    font-weight: 500;
+  }
+  .play-section__link:hover,
+  .play-section__link:focus-visible {
+    outline: 1.5px solid var(--ch-600);
+    outline-offset: 2px;
+  }
+  .play-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+    gap: 8px;
+    padding: 8px;
+  }
+  .play-shelves {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+  .play-shelf {
+    border: 1.5px solid var(--ch-600);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .play-shelf .play-grid {
+    padding: 8px;
+  }
+
+  .play-game {
+    display: block;
+    min-width: 0;
+    min-height: 186px;
+    border: 2px solid;
+    border-color: #fff #404040 #404040 #fff;
+    background: #c0c0c0;
+    color: #000;
+  }
+  .play-game:hover,
+  .play-game:focus-visible {
+    outline: 2px solid #ffff00;
+    outline-offset: 0;
+  }
+  .play-game--drum {
+    border-color: #fff var(--ch-800) var(--ch-800) #fff;
+  }
+  .play-game__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+    padding: 5px 6px;
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff;
+    font-weight: 500;
+  }
+  .play-game--drum .play-game__bar {
+    background: linear-gradient(90deg, var(--ch-800), var(--ch-600));
+  }
+  .play-game__bar span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .play-game__badge {
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    padding: 0 4px;
+  }
+  .play-game__body {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 9px;
+    padding: 10px 8px 9px;
+  }
+  .play-game__body img {
+    width: 72px;
+    height: 72px;
+    border: 1.5px solid #404040;
+    background: #fff;
+  }
+  .play-game__text {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.25;
+    color: #111;
+  }
+  .play-game__text strong {
+    font-size: 15px;
+    line-height: 1.1;
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+  .play-game__meta {
+    color: #000080;
+    font-weight: 500;
+  }
+  .play-game--drum .play-game__meta {
+    color: var(--ch-800);
+  }
+
+  .play-foot {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 0;
+    padding: 8px;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 2px;
+    background: #fff;
+  }
+  .play-foot a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 8px;
+    border: 1.5px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font-weight: 500;
+  }
+  .play-foot a:hover,
+  .play-foot a:focus-visible {
+    outline: 2px solid var(--pc-ink);
+    outline-offset: -3px;
+    background: #ffff00;
+  }
+
+  @media (max-width: 900px) {
+    .play-hero__stage {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+    .play-hero__art {
+      min-height: 230px;
+    }
+    .play-hero__title span {
+      font-size: 72px;
+    }
+    .play-hero__title em {
+      font-size: 28px;
+    }
+    .play-foot {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 680px) {
+    .play {
+      padding: 0 12px 96px;
+    }
+    .play-hero__bar,
+    .play-section__head,
+    .play-shelf__head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .play-hero__stage {
+      padding: 8px;
+    }
+    .play-hero__stage::before {
+      inset: 8px;
+    }
+    .play-hero__copy {
+      padding: 14px;
+    }
+    .play-hero__title span {
+      font-size: 56px;
+    }
+    .play-hero__title em {
+      font-size: 23px;
+    }
+    .play-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .play-game__body {
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 7px;
+      padding: 8px 6px;
+    }
+    .play-game__body img {
+      width: 52px;
+      height: 52px;
+    }
+    .play-game__text {
+      font-size: 11px;
+    }
+    .play-game__text strong {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .play-grid,
+    .play-foot {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .play-hero__walker {
+      animation: none;
+    }
+  }
+</style>

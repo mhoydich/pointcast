@@ -1,0 +1,492 @@
+---
+/**
+ * /circle/join/{code} — invite landing page for new circle members.
+ *
+ * Codes are 8-char random strings generated client-side on /circle and
+ * stored in localStorage. They aren't pre-known at build time, so:
+ *
+ *   1. This page is `[...code].astro` with `getStaticPaths` returning a
+ *      single placeholder path (`/circle/join/_`). That generates exactly
+ *      one HTML file at `dist/circle/join/_/index.html`.
+ *   2. A splat in `public/_redirects` rewrites every other
+ *      `/circle/join/<code>` URL to that placeholder with a 200 (transparent
+ *      rewrite — the URL bar still shows the real code).
+ *   3. The JS reads `window.location.pathname` to recover the real code.
+ *
+ * Net effect: any /circle/join/<code> URL renders the same single page,
+ * with the actual code visible in the URL and hydrated into the UI.
+ *
+ * ─── DURABLE OBJECT JOIN (future, not implemented) ───────────────────────
+ * Real join would POST { code, nounId, name } to /api/circle/{code}/join,
+ * which routes through PRESENCE-style Durable Object (CircleRoom) keyed
+ * by the code. For v1 we store the join intent locally so the joiner has
+ * a "you're in" experience even before the sync layer ships.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import '../../../styles/global.css';
+
+export async function getStaticPaths() {
+  // Single placeholder. The CF Pages _redirects splat rewrites every
+  // /circle/join/<code> path to /circle/join/_ so the same HTML serves
+  // for any code; the JS reads the real code from window.location.
+  return [{ params: { code: '_' } }];
+}
+
+const NOUN_MAX = 1199;
+
+const title = 'Join a Circle';
+const description = "Someone invited you into their circle on PointCast — a small internet town from El Segundo. Pick a noun, choose a name, you're in.";
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="join">
+
+    {/* Step 1 — invite greeting */}
+    <section class="join__step join__step--greeting" id="join-step-1">
+      <p class="join__crumb mono">
+        <a href="/">home</a> <span aria-hidden="true">›</span>
+        <a href="/circle">circle</a> <span aria-hidden="true">›</span>
+        <span>join</span>
+      </p>
+      <p class="join__kicker mono">CIRCLE INVITE</p>
+      <h1 class="join__title">You've been invited.</h1>
+      <p class="join__lead">
+        Someone wants you in their circle on PointCast.
+      </p>
+      <p class="join__about">
+        PointCast is a small internet town from El Segundo. A daily check-in,
+        a quiet group of people you keep close, and a few rooms worth coming
+        back to. No accounts, no feeds — just presence.
+      </p>
+      <p class="join__code-row mono">
+        invite code · <strong id="join-code-display">—</strong>
+      </p>
+      <button type="button" class="join__primary" id="join-step-1-next">
+        SET UP MY NOUN →
+      </button>
+      <p class="join__bail mono">
+        Not sure? <a href="/">Look around first</a>.
+      </p>
+    </section>
+
+    {/* Step 2 — pick noun + name */}
+    <section class="join__step join__step--setup" id="join-step-2" hidden>
+      <p class="join__kicker mono">STEP 2 OF 2</p>
+      <h2 class="join__subtitle">Who are you, in this circle?</h2>
+      <p class="join__lead">
+        Pick a noun and a name. The noun is your face. The name is what your
+        circle sees when you check in.
+      </p>
+
+      <p class="join__field-label mono">PICK A NOUN</p>
+      <div class="join__nouns" id="join-nouns" role="radiogroup" aria-label="Pick a noun"></div>
+      <button type="button" class="join__shuffle mono" id="join-shuffle">
+        ↻ SHUFFLE
+      </button>
+
+      <label class="join__field" for="join-name">
+        <span class="join__field-label mono">YOUR NAME</span>
+        <input
+          type="text"
+          id="join-name"
+          class="join__name-input"
+          placeholder="what should they call you?"
+          maxlength="20"
+          aria-label="Your name in this circle"
+        />
+        <span class="join__name-counter mono"><span id="join-name-count">0</span>/20</span>
+      </label>
+
+      <button type="button" class="join__primary" id="join-submit" disabled>
+        JOIN CIRCLE →
+      </button>
+      <p class="join__notice mono" id="join-notice" hidden role="status" aria-live="polite"></p>
+      <button type="button" class="join__back mono" id="join-back">← back</button>
+    </section>
+
+    {/* Step 3 — confirmation */}
+    <section class="join__step join__step--done" id="join-step-3" hidden>
+      <img id="join-done-noun" class="join__done-noun" src="" alt="" width="120" height="120" />
+      <p class="join__kicker mono">YOU'RE IN</p>
+      <h2 class="join__title">Welcome.</h2>
+      <p class="join__lead">
+        Come back tomorrow — your streak starts now.
+      </p>
+      <p class="join__about">
+        Each day you visit, your streak grows. Each time you check in, your
+        circle sees you've been around. That's the whole game.
+      </p>
+      <div class="join__done-actions">
+        <a class="join__primary" href="/circle">OPEN YOUR CIRCLE →</a>
+        <a class="join__secondary mono" href="/">explore PointCast</a>
+      </div>
+    </section>
+
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ NOUN_MAX }}>
+(() => {
+  const KEY = 'pc:circle-join:v1';
+  const NOUN_KEY = 'pc:visitor-noun-id';
+  const CURRENT_NOUN_KEY = 'pc:currentNoun';
+  const FONT_NOUN = 'https://noun.pics';
+
+  // ─── Recover the invite code from the URL ───────────────────────────────
+  // We're served via the /circle/join/* → /circle/join/_ rewrite, so the URL
+  // bar shows the real path and we extract the code from it. Defensive fallbacks
+  // for empty / placeholder paths.
+  function readCodeFromUrl() {
+    try {
+      const path = window.location.pathname.replace(/\/+$/, ''); // drop trailing slash
+      const parts = path.split('/').filter(Boolean);
+      // Expect: ['circle', 'join', '<code>']  — anything past 'join' is the code.
+      const idx = parts.indexOf('join');
+      if (idx === -1) return null;
+      const tail = parts.slice(idx + 1).join('/');
+      if (!tail || tail === '_') return null;
+      return tail.toUpperCase();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const code = readCodeFromUrl();
+
+  // ─── Step controls ──────────────────────────────────────────────────────
+  function show(step) {
+    document.getElementById('join-step-1').hidden = step !== 1;
+    document.getElementById('join-step-2').hidden = step !== 2;
+    document.getElementById('join-step-3').hidden = step !== 3;
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  }
+
+  // ─── Render code chip ──────────────────────────────────────────────────
+  const codeDisplay = document.getElementById('join-code-display');
+  if (codeDisplay) codeDisplay.textContent = code || 'no code in URL';
+
+  // If no code is present, gently surface that — but don't block, the
+  // visitor can still set themselves up and land on /circle.
+  if (!code) {
+    const lead = document.querySelector('#join-step-1 .join__lead');
+    if (lead) {
+      lead.textContent = "We couldn't read an invite code from this link, but you can still set up your circle identity below.";
+    }
+  }
+
+  // ─── Noun picker ────────────────────────────────────────────────────────
+  let pickedNoun = null;
+  const NOUN_GRID_SIZE = 12; // 4 cols × 3 rows
+
+  function randomSeeds(n, avoid) {
+    const seen = new Set();
+    if (avoid != null) seen.add(avoid);
+    const out = [];
+    while (out.length < n) {
+      const s = Math.floor(Math.random() * (NOUN_MAX + 1));
+      if (seen.has(s)) continue;
+      seen.add(s);
+      out.push(s);
+    }
+    return out;
+  }
+
+  function renderNounGrid() {
+    const grid = document.getElementById('join-nouns');
+    if (!grid) return;
+    const seeds = randomSeeds(NOUN_GRID_SIZE);
+    grid.innerHTML = '';
+    for (const seed of seeds) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'join__noun-btn';
+      btn.dataset.seed = String(seed);
+      btn.title = 'Noun #' + seed;
+      btn.innerHTML =
+        '<img src="' + FONT_NOUN + '/' + seed + '.svg" alt="Noun #' + seed +
+        '" width="80" height="80" loading="lazy" />' +
+        '<span class="join__noun-id mono">#' + seed + '</span>';
+      btn.addEventListener('click', () => {
+        pickedNoun = seed;
+        grid.querySelectorAll('.join__noun-btn').forEach(b => {
+          b.classList.toggle('is-active', b === btn);
+        });
+        updateSubmitState();
+      });
+      grid.appendChild(btn);
+    }
+    // Reset selection — the picked noun might not be in the new grid.
+    pickedNoun = null;
+    updateSubmitState();
+  }
+
+  document.getElementById('join-shuffle')?.addEventListener('click', renderNounGrid);
+
+  // ─── Name input ─────────────────────────────────────────────────────────
+  const nameInput = document.getElementById('join-name');
+  const nameCount = document.getElementById('join-name-count');
+
+  nameInput?.addEventListener('input', () => {
+    if (nameCount) nameCount.textContent = String(nameInput.value.length);
+    updateSubmitState();
+  });
+
+  function updateSubmitState() {
+    const submit = document.getElementById('join-submit');
+    const nameVal = (nameInput?.value || '').trim();
+    const ready = pickedNoun !== null && nameVal.length > 0;
+    if (submit) submit.disabled = !ready;
+  }
+
+  // ─── Step navigation ────────────────────────────────────────────────────
+  document.getElementById('join-step-1-next')?.addEventListener('click', () => {
+    show(2);
+    if (!document.getElementById('join-nouns')?.children.length) {
+      renderNounGrid();
+    }
+  });
+
+  document.getElementById('join-back')?.addEventListener('click', () => show(1));
+
+  document.getElementById('join-submit')?.addEventListener('click', () => {
+    const name = (nameInput?.value || '').trim().slice(0, 20);
+    if (!name || pickedNoun === null) {
+      const notice = document.getElementById('join-notice');
+      if (notice) {
+        notice.textContent = 'pick a noun and a name';
+        notice.hidden = false;
+        setTimeout(() => { notice.hidden = true; }, 2200);
+      }
+      return;
+    }
+
+    // ── Persist locally ──────────────────────────────────────────────────
+    // Store the join intent. When DO sync ships, this is also the moment
+    // we'd POST /api/circle/{code}/join.
+    try {
+      const payload = {
+        $v: 1,
+        code: code || null,
+        name,
+        noun: pickedNoun,
+        joinedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(KEY, JSON.stringify(payload));
+    } catch (e) {}
+
+    // Mirror the noun choice to the keys other PointCast surfaces read.
+    try { localStorage.setItem(NOUN_KEY, String(pickedNoun)); } catch (e) {}
+    try { localStorage.setItem(CURRENT_NOUN_KEY, String(pickedNoun)); } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent('pc:noun-change', { detail: { seed: pickedNoun } }));
+    } catch (e) {}
+
+    // Touch the streak so "your streak starts now" is literally true on
+    // first visit. StreakBadge owns the schema; we initialize a day-1
+    // entry only if no streak record exists yet.
+    try {
+      const existing = localStorage.getItem('pc_streak');
+      if (!existing) {
+        const today = new Date();
+        const ymd = today.getFullYear() + '-' +
+          String(today.getMonth() + 1).padStart(2, '0') + '-' +
+          String(today.getDate()).padStart(2, '0');
+        localStorage.setItem('pc_streak', JSON.stringify({
+          current: 1, longest: 1, lastVisit: ymd,
+        }));
+      }
+    } catch (e) {}
+
+    // ── Confirmation ─────────────────────────────────────────────────────
+    const doneNoun = document.getElementById('join-done-noun');
+    if (doneNoun) {
+      doneNoun.src = FONT_NOUN + '/' + pickedNoun + '.svg';
+      doneNoun.alt = name + ' (Noun #' + pickedNoun + ')';
+    }
+    const doneTitle = document.querySelector('#join-step-3 .join__title');
+    if (doneTitle) doneTitle.textContent = 'Welcome, ' + name + '.';
+
+    show(3);
+  });
+
+  // ─── Boot ───────────────────────────────────────────────────────────────
+  show(1);
+})();
+</script>
+
+<style>
+  .join {
+    max-width: 620px; margin: 0 auto; padding: 32px 20px 80px;
+    font-family: var(--font-body);
+  }
+  .mono { font-family: var(--font-mono); }
+
+  .join__step {
+    background: var(--color-card); border: 1.5px solid var(--color-rule);
+    border-radius: 5px; padding: 32px 28px;
+  }
+  @media (max-width: 520px) { .join__step { padding: 24px 20px; } }
+
+  .join__crumb {
+    font-size: 11px; letter-spacing: 0.16em; color: var(--color-ink-soft);
+    text-transform: uppercase; margin: 0 0 18px;
+  }
+  .join__crumb a { color: var(--color-ink-soft); text-decoration: none; }
+  .join__crumb a:hover { color: var(--color-ink); }
+  .join__crumb span { margin: 0 6px; }
+
+  .join__kicker {
+    font-size: 11px; letter-spacing: 0.18em; color: var(--color-warm);
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .join__title {
+    font-family: var(--font-heading);
+    font-size: clamp(30px, 5vw, 48px); line-height: 1.05;
+    font-weight: 600; letter-spacing: -0.02em; margin: 0 0 16px;
+    color: var(--color-ink);
+  }
+  .join__subtitle {
+    font-family: var(--font-heading);
+    font-size: clamp(24px, 4vw, 36px); line-height: 1.1;
+    font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px;
+    color: var(--color-ink);
+  }
+  .join__lead {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.4vw, 18px); line-height: 1.55;
+    color: var(--color-ink); margin: 0 0 12px;
+  }
+  .join__about {
+    font-size: 14px; line-height: 1.55; color: var(--color-ink-soft);
+    margin: 0 0 22px;
+  }
+
+  .join__code-row {
+    margin: 0 0 24px; padding: 12px 14px;
+    background: #fbf7ee; border: 1.5px dashed var(--color-rule);
+    border-radius: 3px;
+    font-size: 12px; letter-spacing: 0.06em; color: var(--color-ink-soft);
+  }
+  .join__code-row strong {
+    font-size: 14px; letter-spacing: 0.18em; color: var(--color-warm);
+    font-weight: 700;
+  }
+
+  .join__primary {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 100%; padding: 16px 20px;
+    background: var(--color-warm); color: #fff;
+    border: none; border-radius: 4px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.18em;
+    font-weight: 600; text-decoration: none;
+    transition: background 0.14s, transform 0.06s;
+  }
+  .join__primary:hover { background: var(--color-ink); }
+  .join__primary:active { transform: scale(0.99); }
+  .join__primary:disabled {
+    background: var(--color-rule); color: #fff;
+    cursor: not-allowed; opacity: 0.7;
+  }
+  .join__primary:disabled:hover { background: var(--color-rule); }
+
+  .join__secondary {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 14px 18px;
+    background: none; color: var(--color-ink-soft);
+    border: 1.5px solid var(--color-rule); border-radius: 4px;
+    text-decoration: none; cursor: pointer;
+    font-size: 11px; letter-spacing: 0.16em; font-weight: 600;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .join__secondary:hover { color: var(--color-ink); border-color: var(--color-ink); }
+
+  .join__bail {
+    margin: 14px 0 0; font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-ink-soft); text-align: center;
+  }
+  .join__bail a { color: var(--color-warm); text-decoration: none; }
+  .join__bail a:hover { text-decoration: underline; }
+
+  .join__field-label {
+    display: block; font-size: 10px; letter-spacing: 0.18em;
+    color: var(--color-ink-soft); text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+
+  /* ── Noun grid ── */
+  .join__nouns {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin: 0 0 12px;
+  }
+  @media (max-width: 480px) { .join__nouns { grid-template-columns: repeat(3, 1fr); } }
+  .join__noun-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 6px;
+    background: #fff; border: 1.5px solid var(--color-rule); border-radius: 3px;
+    cursor: pointer; font-family: inherit;
+    transition: border-color 0.12s, transform 0.08s, background 0.12s;
+  }
+  .join__noun-btn:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .join__noun-btn img {
+    width: 100%; height: auto; aspect-ratio: 1; background: #1a1004;
+    border-radius: 2px; image-rendering: pixelated;
+  }
+  .join__noun-id {
+    font-size: 9px; letter-spacing: 0.06em; color: var(--color-ink-soft);
+  }
+  .join__noun-btn.is-active {
+    border-color: var(--color-warm); background: #fbf7ee;
+    box-shadow: 0 0 0 2px var(--color-warm);
+  }
+  .join__noun-btn.is-active .join__noun-id { color: var(--color-warm); font-weight: 700; }
+
+  .join__shuffle {
+    background: none; border: 1px solid var(--color-rule); border-radius: 2px;
+    padding: 6px 12px; cursor: pointer; margin: 0 0 22px;
+    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .join__shuffle:hover { color: var(--color-warm); border-color: var(--color-warm); }
+
+  /* ── Name field ── */
+  .join__field {
+    display: block; margin: 0 0 22px; position: relative;
+  }
+  .join__name-input {
+    width: 100%; padding: 14px 16px;
+    background: #fff; border: 1.5px solid var(--color-rule); border-radius: 3px;
+    font-family: var(--font-heading); font-size: clamp(18px, 2.4vw, 22px);
+    color: var(--color-ink); transition: border-color 0.12s;
+  }
+  .join__name-input:focus { outline: none; border-color: var(--color-warm); }
+  .join__name-input::placeholder { color: var(--color-ink-soft); opacity: 0.55; font-weight: 400; }
+  .join__name-counter {
+    position: absolute; right: 8px; bottom: -16px;
+    font-size: 9px; letter-spacing: 0.08em; color: var(--color-ink-soft);
+  }
+
+  .join__notice {
+    margin: 12px 0 0; font-size: 11px; letter-spacing: 0.1em;
+    color: var(--color-warm); text-align: center;
+  }
+  .join__back {
+    display: block; margin: 14px auto 0;
+    background: none; border: none; padding: 4px 8px;
+    color: var(--color-ink-soft); cursor: pointer;
+    font-size: 11px; letter-spacing: 0.12em;
+  }
+  .join__back:hover { color: var(--color-ink); }
+
+  /* ── Done step ── */
+  .join__step--done { text-align: center; }
+  .join__done-noun {
+    width: 120px; height: 120px;
+    background: #1a1004; border-radius: 6px;
+    image-rendering: pixelated; margin: 0 auto 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  .join__step--done .join__lead { font-style: italic; }
+  .join__done-actions {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 22px;
+  }
+</style>

@@ -1,0 +1,950 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Drum Taiko';
+const description =
+  'Five procedural taiko-style rhythm games for PointCast, with Noun drummers, cozy scoring, and synthesized festival drums.';
+---
+
+<BaseLayout title={title} description={description}>
+  <main class="taiko-page min-h-screen bg-[#17120f] text-[#fff5df]">
+    <section class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+      <header class="taiko-header">
+        <div>
+          <p class="eyebrow">PointCast rhythm room</p>
+          <h1>Drum Taiko</h1>
+        </div>
+        <div class="score-panel" aria-live="polite">
+          <div>
+            <span>Score</span>
+            <strong id="scoreValue">0</strong>
+          </div>
+          <div>
+            <span>Streak</span>
+            <strong id="streakValue">0</strong>
+          </div>
+          <div>
+            <span>Last</span>
+            <strong id="judgeValue">READY</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="stage">
+        <div class="drummer-wrap">
+          <div class="sun-disc" aria-hidden="true"></div>
+          <img id="nounDrummer" class="noun-drummer" src="https://noun.pics/0.svg" alt="Noun drummer" />
+          <div class="headband" aria-hidden="true"></div>
+          <div class="odaiko" aria-hidden="true">
+            <div class="drum-face">
+              <span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-wrap">
+          <div class="pattern-bar" id="patternBar" aria-label="Taiko patterns"></div>
+
+          <div class="song-meta">
+            <div>
+              <p id="patternKicker">Pattern 1</p>
+              <h2 id="patternTitle">Yatai Lantern Walk</h2>
+            </div>
+            <p id="patternDescription">
+              A slow festival pull: wide ō-daiko hits, clipped rim calls, room to breathe.
+            </p>
+          </div>
+
+          <div class="lane-shell">
+            <div class="target-line" aria-hidden="true"></div>
+            <div class="lane-labels" aria-hidden="true">
+              <span>DON</span>
+              <span>KA</span>
+              <span>RIM</span>
+            </div>
+            <div id="noteLane" class="note-lane" aria-label="Upcoming notes"></div>
+          </div>
+
+          <div class="controls">
+            <button id="startBtn" class="primary-btn" type="button">Start loop</button>
+            <button id="pauseBtn" class="secondary-btn" type="button">Pause</button>
+            <button id="resetBtn" class="secondary-btn" type="button">Reset</button>
+          </div>
+
+          <div class="tap-grid" aria-label="Taiko tap controls">
+            <button class="tap-zone don-zone" type="button" data-hit="don">
+              <span>DON</span>
+              <small>big drum</small>
+            </button>
+            <button class="tap-zone ka-zone" type="button" data-hit="ka">
+              <span>KA</span>
+              <small>small drum</small>
+            </button>
+            <button class="tap-zone rim-zone" type="button" data-hit="rim">
+              <span>RIM</span>
+              <small>edge click</small>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern-notes" aria-label="Pattern notes">
+        <article>
+          <strong>Hit window</strong>
+          <span>PERFECT under 32ms, GOOD under 60ms, MISS after that.</span>
+        </article>
+        <article>
+          <strong>Keys</strong>
+          <span>D or F for DON, J or K for KA, Space for RIM.</span>
+        </article>
+        <article>
+          <strong>Audio</strong>
+          <span>All drum voices are synthesized in-browser with Web Audio.</span>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const patterns = [
+      {
+        title: 'Yatai Lantern Walk',
+        kicker: 'Pattern 1',
+        bpm: 92,
+        steps: 32,
+        seedBase: 86,
+        description: 'A slow festival pull: wide odaiko hits, clipped rim calls, room to breathe.',
+        notes: [
+          ['don', 0], ['ka', 4], ['don', 8], ['rim', 12],
+          ['don', 16], ['ka', 20], ['don', 24], ['ka', 28]
+        ]
+      },
+      {
+        title: 'Donko Bayashi March',
+        kicker: 'Pattern 2',
+        bpm: 108,
+        steps: 32,
+        seedBase: 214,
+        description: 'A tighter village cadence with paired body hits and bright shime replies.',
+        notes: [
+          ['don', 0], ['don', 3], ['ka', 6], ['rim', 7],
+          ['don', 8], ['ka', 11], ['don', 14], ['ka', 15],
+          ['don', 16], ['don', 19], ['ka', 22], ['rim', 23],
+          ['don', 24], ['ka', 27], ['don', 30], ['rim', 31]
+        ]
+      },
+      {
+        title: 'Hachijo Call Circle',
+        kicker: 'Pattern 3',
+        bpm: 118,
+        steps: 32,
+        seedBase: 377,
+        description: 'Call, answer, call again: alternating don and ka phrases for a small troupe.',
+        notes: [
+          ['don', 0], ['ka', 2], ['ka', 4], ['don', 6],
+          ['rim', 8], ['ka', 10], ['don', 12], ['ka', 14],
+          ['don', 16], ['don', 18], ['ka', 20], ['rim', 22],
+          ['ka', 24], ['don', 26], ['ka', 28], ['don', 30]
+        ]
+      },
+      {
+        title: 'Miyake Hill Climb',
+        kicker: 'Pattern 4',
+        bpm: 132,
+        steps: 32,
+        seedBase: 512,
+        description: 'A forward-leaning sprint: low drum anchors under quick rim chatter.',
+        notes: [
+          ['don', 0], ['rim', 2], ['ka', 3], ['don', 4],
+          ['ka', 6], ['rim', 7], ['don', 8], ['ka', 10],
+          ['rim', 11], ['don', 12], ['ka', 14], ['rim', 15],
+          ['don', 16], ['rim', 18], ['ka', 19], ['don', 20],
+          ['ka', 22], ['rim', 23], ['don', 24], ['ka', 26],
+          ['rim', 27], ['don', 28], ['ka', 30], ['rim', 31]
+        ]
+      },
+      {
+        title: 'PointCast Odaiko Finale',
+        kicker: 'Pattern 5',
+        bpm: 124,
+        steps: 64,
+        seedBase: 777,
+        description: 'A big-drum solo for the block party: spacious thunder, sharp edges, no hard fail.',
+        notes: [
+          ['don', 0], ['don', 4], ['ka', 6], ['rim', 7],
+          ['don', 8], ['ka', 11], ['don', 14], ['rim', 15],
+          ['don', 16], ['ka', 18], ['rim', 19], ['don', 22],
+          ['ka', 24], ['don', 26], ['rim', 27], ['ka', 30],
+          ['don', 32], ['don', 34], ['ka', 36], ['rim', 39],
+          ['don', 40], ['ka', 42], ['don', 44], ['rim', 47],
+          ['don', 48], ['ka', 50], ['rim', 51], ['don', 52],
+          ['ka', 54], ['rim', 55], ['don', 56], ['ka', 58],
+          ['don', 60], ['rim', 62], ['don', 63]
+        ]
+      }
+    ];
+
+    const state = {
+      patternIndex: 0,
+      audio: null,
+      master: null,
+      convolver: null,
+      running: false,
+      startTime: 0,
+      pauseOffset: 0,
+      score: 0,
+      streak: 0,
+      judged: new Set(),
+      animationId: null
+    };
+
+    const lane = document.getElementById('noteLane');
+    const patternBar = document.getElementById('patternBar');
+    const scoreValue = document.getElementById('scoreValue');
+    const streakValue = document.getElementById('streakValue');
+    const judgeValue = document.getElementById('judgeValue');
+    const patternTitle = document.getElementById('patternTitle');
+    const patternKicker = document.getElementById('patternKicker');
+    const patternDescription = document.getElementById('patternDescription');
+    const nounDrummer = document.getElementById('nounDrummer');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const lanes = { don: 24, ka: 50, rim: 76 };
+
+    function currentPattern() {
+      return patterns[state.patternIndex];
+    }
+
+    function stepDuration(pattern = currentPattern()) {
+      return 60 / pattern.bpm / 4;
+    }
+
+    function loopDuration(pattern = currentPattern()) {
+      return pattern.steps * stepDuration(pattern);
+    }
+
+    function noteTime(note, pattern = currentPattern()) {
+      return note[1] * stepDuration(pattern);
+    }
+
+    function ensureAudio() {
+      if (state.audio) return;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      state.audio = new AudioContext();
+      state.master = state.audio.createGain();
+      state.master.gain.value = 0.82;
+
+      state.convolver = state.audio.createConvolver();
+      state.convolver.buffer = makeImpulse(state.audio, 1.45, 1.8);
+
+      const dry = state.audio.createGain();
+      const wet = state.audio.createGain();
+      dry.gain.value = 0.82;
+      wet.gain.value = 0.28;
+
+      state.master.connect(dry);
+      state.master.connect(state.convolver);
+      state.convolver.connect(wet);
+      dry.connect(state.audio.destination);
+      wet.connect(state.audio.destination);
+    }
+
+    function makeImpulse(ctx, seconds, decay) {
+      const rate = ctx.sampleRate;
+      const length = Math.floor(rate * seconds);
+      const impulse = ctx.createBuffer(2, length, rate);
+      for (let channel = 0; channel < 2; channel++) {
+        const data = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+          const fade = Math.pow(1 - i / length, decay);
+          data[i] = (Math.random() * 2 - 1) * fade;
+        }
+      }
+      return impulse;
+    }
+
+    function hitDon(when = state.audio.currentTime) {
+      const ctx = state.audio;
+      const body = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      const noise = makeNoise(ctx, 0.22);
+      const noiseFilter = ctx.createBiquadFilter();
+      const noiseGain = ctx.createGain();
+
+      body.type = 'sine';
+      body.frequency.setValueAtTime(92, when);
+      body.frequency.exponentialRampToValueAtTime(54, when + 0.18);
+      bodyGain.gain.setValueAtTime(0.001, when);
+      bodyGain.gain.exponentialRampToValueAtTime(1.0, when + 0.012);
+      bodyGain.gain.exponentialRampToValueAtTime(0.001, when + 0.52);
+
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.setValueAtTime(520, when);
+      noiseFilter.frequency.exponentialRampToValueAtTime(120, when + 0.2);
+      noiseGain.gain.setValueAtTime(0.24, when);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, when + 0.22);
+
+      body.connect(bodyGain).connect(state.master);
+      noise.connect(noiseFilter).connect(noiseGain).connect(state.master);
+      body.start(when);
+      body.stop(when + 0.56);
+      noise.start(when);
+      noise.stop(when + 0.24);
+    }
+
+    function hitKa(when = state.audio.currentTime) {
+      const ctx = state.audio;
+      const body = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      const noise = makeNoise(ctx, 0.11);
+      const noiseFilter = ctx.createBiquadFilter();
+      const noiseGain = ctx.createGain();
+
+      body.type = 'triangle';
+      body.frequency.setValueAtTime(285, when);
+      body.frequency.exponentialRampToValueAtTime(210, when + 0.08);
+      bodyGain.gain.setValueAtTime(0.001, when);
+      bodyGain.gain.exponentialRampToValueAtTime(0.45, when + 0.008);
+      bodyGain.gain.exponentialRampToValueAtTime(0.001, when + 0.16);
+
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.value = 1500;
+      noiseFilter.Q.value = 1.7;
+      noiseGain.gain.setValueAtTime(0.22, when);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, when + 0.09);
+
+      body.connect(bodyGain).connect(state.master);
+      noise.connect(noiseFilter).connect(noiseGain).connect(state.master);
+      body.start(when);
+      body.stop(when + 0.18);
+      noise.start(when);
+      noise.stop(when + 0.11);
+    }
+
+    function hitRim(when = state.audio.currentTime) {
+      const ctx = state.audio;
+      const click = makeNoise(ctx, 0.055);
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      filter.type = 'highpass';
+      filter.frequency.value = 2200;
+      gain.gain.setValueAtTime(0.34, when);
+      gain.gain.exponentialRampToValueAtTime(0.001, when + 0.055);
+
+      click.connect(filter).connect(gain).connect(state.master);
+      click.start(when);
+      click.stop(when + 0.06);
+    }
+
+    function makeNoise(ctx, seconds) {
+      const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      return source;
+    }
+
+    function playVoice(type) {
+      ensureAudio();
+      if (state.audio.state === 'suspended') state.audio.resume();
+      if (type === 'don') hitDon();
+      if (type === 'ka') hitKa();
+      if (type === 'rim') hitRim();
+      pulseDrum(type);
+    }
+
+    function renderPatternButtons() {
+      patternBar.innerHTML = '';
+      patterns.forEach((pattern, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pattern-chip';
+        button.textContent = `${index + 1}. ${pattern.title}`;
+        button.setAttribute('aria-pressed', String(index === state.patternIndex));
+        button.addEventListener('click', () => selectPattern(index));
+        patternBar.appendChild(button);
+      });
+    }
+
+    function selectPattern(index) {
+      state.patternIndex = index;
+      hardReset(false);
+      renderStaticNotes();
+      renderMeta();
+      renderPatternButtons();
+    }
+
+    function renderMeta() {
+      const pattern = currentPattern();
+      patternTitle.textContent = pattern.title;
+      patternKicker.textContent = `${pattern.kicker} · ${pattern.bpm} BPM · ${pattern.steps} steps`;
+      patternDescription.textContent = pattern.description;
+      const randomOffset = Math.floor(Math.random() * 83);
+      nounDrummer.src = `https://noun.pics/${(pattern.seedBase + randomOffset) % 1200}.svg`;
+    }
+
+    function renderStaticNotes() {
+      lane.innerHTML = '';
+      currentPattern().notes.forEach((note, index) => {
+        const el = document.createElement('span');
+        el.className = `note note-${note[0]}`;
+        el.dataset.index = String(index);
+        el.dataset.type = note[0];
+        el.style.top = `${lanes[note[0]]}%`;
+        el.style.left = '100%';
+        el.textContent = note[0].toUpperCase();
+        lane.appendChild(el);
+      });
+    }
+
+    function elapsedLoopTime() {
+      if (!state.audio) return state.pauseOffset;
+      const elapsed = state.running ? state.audio.currentTime - state.startTime : state.pauseOffset;
+      return ((elapsed % loopDuration()) + loopDuration()) % loopDuration();
+    }
+
+    function animate() {
+      const pattern = currentPattern();
+      const loop = loopDuration(pattern);
+      const now = elapsedLoopTime();
+      const travel = 2.15;
+      const notes = lane.querySelectorAll('.note');
+
+      pattern.notes.forEach((note, index) => {
+        const el = notes[index];
+        const t = noteTime(note, pattern);
+        let untilHit = t - now;
+        if (untilHit < -0.28) untilHit += loop;
+        const x = 18 + (untilHit / travel) * 82;
+        el.style.left = `${x}%`;
+        el.classList.toggle('near', Math.abs(untilHit) < 0.12);
+        el.classList.toggle('past', untilHit < -0.06);
+
+        if (state.running && untilHit < -0.08 && untilHit > -0.28 && !state.judged.has(index)) {
+          state.judged.add(index);
+          registerJudge('MISS', 0, true);
+        }
+
+        if (untilHit > loop - 0.2) state.judged.delete(index);
+      });
+
+      state.animationId = requestAnimationFrame(animate);
+    }
+
+    function judgeTap(type) {
+      playVoice(type);
+      if (!state.running) return;
+
+      const pattern = currentPattern();
+      const now = elapsedLoopTime();
+      const loop = loopDuration(pattern);
+      let best = null;
+
+      pattern.notes.forEach((note, index) => {
+        if (note[0] !== type || state.judged.has(index)) return;
+        const t = noteTime(note, pattern);
+        let delta = now - t;
+        if (delta > loop / 2) delta -= loop;
+        if (delta < -loop / 2) delta += loop;
+        const abs = Math.abs(delta);
+        if (!best || abs < best.abs) best = { index, abs };
+      });
+
+      if (!best || best.abs > 0.06) {
+        registerJudge('MISS', 0, true);
+        return;
+      }
+
+      state.judged.add(best.index);
+      if (best.abs <= 0.032) {
+        registerJudge('PERFECT', 120, false);
+      } else {
+        registerJudge('GOOD', 70, false);
+      }
+    }
+
+    function registerJudge(label, points, miss) {
+      if (miss) {
+        state.streak = 0;
+      } else {
+        state.streak += 1;
+        state.score += points + Math.min(80, state.streak * 4);
+      }
+      scoreValue.textContent = String(state.score);
+      streakValue.textContent = String(state.streak);
+      judgeValue.textContent = label;
+      judgeValue.dataset.judge = label.toLowerCase();
+    }
+
+    function startLoop() {
+      ensureAudio();
+      if (state.audio.state === 'suspended') state.audio.resume();
+      if (state.running) return;
+      state.running = true;
+      state.startTime = state.audio.currentTime - state.pauseOffset;
+      startBtn.textContent = 'Loop running';
+      animate();
+    }
+
+    function pauseLoop() {
+      if (!state.running) return;
+      state.pauseOffset = elapsedLoopTime();
+      state.running = false;
+      startBtn.textContent = 'Resume loop';
+      if (state.animationId) cancelAnimationFrame(state.animationId);
+      animate();
+    }
+
+    function hardReset(resetScore = true) {
+      if (state.animationId) cancelAnimationFrame(state.animationId);
+      state.running = false;
+      state.pauseOffset = 0;
+      state.judged.clear();
+      startBtn.textContent = 'Start loop';
+      if (resetScore) {
+        state.score = 0;
+        state.streak = 0;
+        scoreValue.textContent = '0';
+        streakValue.textContent = '0';
+        judgeValue.textContent = 'READY';
+        delete judgeValue.dataset.judge;
+      }
+      animate();
+    }
+
+    function pulseDrum(type) {
+      document.body.dataset.hit = type;
+      window.clearTimeout(window.__taikoPulse);
+      window.__taikoPulse = window.setTimeout(() => {
+        delete document.body.dataset.hit;
+      }, 120);
+    }
+
+    document.querySelectorAll('[data-hit]').forEach((button) => {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        judgeTap(button.dataset.hit);
+      });
+    });
+
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (key === 'd' || key === 'f') judgeTap('don');
+      if (key === 'j' || key === 'k') judgeTap('ka');
+      if (event.code === 'Space') {
+        event.preventDefault();
+        judgeTap('rim');
+      }
+    });
+
+    startBtn.addEventListener('click', startLoop);
+    pauseBtn.addEventListener('click', pauseLoop);
+    resetBtn.addEventListener('click', () => hardReset(true));
+
+    renderPatternButtons();
+    renderMeta();
+    renderStaticNotes();
+    animate();
+  </script>
+
+  <style>
+    .taiko-page {
+      font-family: "Departure Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(230, 72, 55, 0.18), transparent 30%),
+        linear-gradient(135deg, #17120f 0%, #241714 48%, #101315 100%);
+    }
+
+    .taiko-header {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      align-items: end;
+    }
+
+    @media (min-width: 760px) {
+      .taiko-header {
+        grid-template-columns: 1fr auto;
+      }
+    }
+
+    .eyebrow,
+    #patternKicker {
+      margin: 0 0 0.35rem;
+      color: #f4b35e;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 7vw, 5.8rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      text-shadow: 0 5px 0 #4c1c17;
+    }
+
+    .score-panel {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      gap: 0.5rem;
+      width: min(100%, 26rem);
+    }
+
+    .score-panel div,
+    .pattern-notes article {
+      border: 2px solid #5b342b;
+      background: rgba(255, 245, 223, 0.08);
+      box-shadow: 4px 4px 0 #000;
+      padding: 0.75rem;
+    }
+
+    .score-panel span,
+    .pattern-notes span {
+      display: block;
+      color: #d8c5a4;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+
+    .score-panel strong {
+      display: block;
+      margin-top: 0.25rem;
+      color: #fff5df;
+      font-size: 1.15rem;
+    }
+
+    #judgeValue[data-judge="perfect"] { color: #8fe388; }
+    #judgeValue[data-judge="good"] { color: #f4d35e; }
+    #judgeValue[data-judge="miss"] { color: #ff806b; }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      align-items: stretch;
+    }
+
+    @media (min-width: 980px) {
+      .stage {
+        grid-template-columns: minmax(270px, 0.78fr) minmax(0, 1.4fr);
+      }
+    }
+
+    .drummer-wrap,
+    .game-wrap {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid #6f3d31;
+      background: #261813;
+      box-shadow: 7px 7px 0 #050505;
+    }
+
+    .drummer-wrap {
+      min-height: 24rem;
+      display: grid;
+      place-items: center;
+      isolation: isolate;
+    }
+
+    .sun-disc {
+      position: absolute;
+      width: 17rem;
+      height: 17rem;
+      border-radius: 999px;
+      background: #d94a38;
+      box-shadow: inset -14px -14px 0 rgba(0, 0, 0, 0.2);
+      transform: translateY(-2.5rem);
+      z-index: -2;
+    }
+
+    .noun-drummer {
+      width: min(58vw, 15rem);
+      image-rendering: pixelated;
+      transform: translateY(-1.9rem);
+      filter: drop-shadow(8px 8px 0 rgba(0, 0, 0, 0.45));
+      z-index: 2;
+    }
+
+    .headband {
+      position: absolute;
+      top: 5.8rem;
+      left: 50%;
+      width: 8rem;
+      height: 1rem;
+      transform: translateX(-50%) rotate(-3deg);
+      background: #fff5df;
+      border: 2px solid #30120f;
+      z-index: 3;
+    }
+
+    .headband::after {
+      content: "";
+      position: absolute;
+      right: -2.6rem;
+      top: 0.2rem;
+      width: 2.8rem;
+      height: 0.55rem;
+      background: #fff5df;
+      border: 2px solid #30120f;
+      transform: rotate(18deg);
+    }
+
+    .odaiko {
+      position: absolute;
+      bottom: 1.4rem;
+      width: min(82%, 21rem);
+      aspect-ratio: 1.8 / 1;
+      border: 8px solid #2e1510;
+      border-radius: 999px;
+      background: #9a4633;
+      box-shadow: inset 0 0 0 10px #d69255, inset 0 0 0 18px #5d2b20, 8px 8px 0 #050505;
+      z-index: 1;
+    }
+
+    .drum-face {
+      position: absolute;
+      inset: 13%;
+      border-radius: inherit;
+      background: #f0c178;
+      border: 4px solid #2e1510;
+    }
+
+    .drum-face span {
+      position: absolute;
+      inset: 22%;
+      border-radius: inherit;
+      border: 3px dashed rgba(46, 21, 16, 0.42);
+    }
+
+    body[data-hit="don"] .odaiko,
+    body[data-hit="ka"] .odaiko,
+    body[data-hit="rim"] .odaiko {
+      transform: scale(1.025);
+    }
+
+    .game-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+      min-height: 31rem;
+    }
+
+    .pattern-bar {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.2rem;
+    }
+
+    .pattern-chip,
+    .primary-btn,
+    .secondary-btn,
+    .tap-zone {
+      min-height: 44px;
+      border: 2px solid #5b342b;
+      background: #fff5df;
+      color: #1c1411;
+      box-shadow: 3px 3px 0 #050505;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .pattern-chip {
+      flex: 0 0 auto;
+      padding: 0.55rem 0.7rem;
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+
+    .pattern-chip[aria-pressed="true"] {
+      background: #ef5542;
+      color: #fff5df;
+    }
+
+    .song-meta {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      align-items: end;
+    }
+
+    @media (min-width: 760px) {
+      .song-meta {
+        grid-template-columns: 0.9fr 1fr;
+      }
+    }
+
+    .song-meta h2 {
+      margin: 0;
+      font-size: clamp(1.35rem, 3vw, 2.5rem);
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .song-meta p:last-child {
+      margin: 0;
+      color: #e4d4b7;
+      line-height: 1.45;
+    }
+
+    .lane-shell {
+      position: relative;
+      min-height: 15.5rem;
+      border: 2px solid #6f3d31;
+      background:
+        linear-gradient(90deg, transparent 0 18%, rgba(244, 179, 94, 0.12) 18% 19%, transparent 19%),
+        repeating-linear-gradient(0deg, rgba(255, 245, 223, 0.07) 0 1px, transparent 1px 31%);
+      overflow: hidden;
+    }
+
+    .target-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 18%;
+      width: 4px;
+      background: #f4d35e;
+      box-shadow: 0 0 18px rgba(244, 211, 94, 0.65);
+      z-index: 3;
+    }
+
+    .lane-labels {
+      position: absolute;
+      inset: 0 auto 0 0.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      color: rgba(255, 245, 223, 0.42);
+      font-size: 0.7rem;
+      z-index: 1;
+    }
+
+    .note-lane {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+
+    .note {
+      position: absolute;
+      width: clamp(3rem, 8vw, 4.9rem);
+      height: 2.25rem;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      border: 2px solid #1c1411;
+      border-radius: 0;
+      color: #1c1411;
+      font-size: 0.72rem;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.7);
+      transition: transform 80ms linear, filter 80ms linear;
+    }
+
+    .note-don { background: #ef5542; color: #fff5df; }
+    .note-ka { background: #f4d35e; }
+    .note-rim { background: #8fd3ff; }
+
+    .note.near {
+      transform: translate(-50%, -50%) scale(1.12);
+      filter: brightness(1.15);
+    }
+
+    .note.past {
+      opacity: 0.62;
+    }
+
+    .controls,
+    .tap-grid,
+    .pattern-notes {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .controls {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .primary-btn {
+      background: #ef5542;
+      color: #fff5df;
+    }
+
+    .secondary-btn {
+      background: #f2c078;
+    }
+
+    .tap-grid {
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 640px) {
+      .tap-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .tap-zone {
+      min-height: 5.2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    .tap-zone span {
+      font-size: 1.3rem;
+    }
+
+    .tap-zone small {
+      margin-top: 0.25rem;
+      color: rgba(28, 20, 17, 0.72);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+
+    .don-zone { background: #ef5542; color: #fff5df; }
+    .don-zone small { color: rgba(255, 245, 223, 0.76); }
+    .ka-zone { background: #f4d35e; }
+    .rim-zone { background: #8fd3ff; }
+
+    .pattern-notes {
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 860px) {
+      .pattern-notes {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .pattern-notes strong {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: #fff5df;
+      text-transform: uppercase;
+    }
+
+    button:focus-visible {
+      outline: 3px solid #8fd3ff;
+      outline-offset: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .note,
+      .odaiko {
+        transition: none;
+      }
+    }
+  </style>
+</BaseLayout>

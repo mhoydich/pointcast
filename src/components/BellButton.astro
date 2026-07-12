@@ -1,0 +1,222 @@
+---
+/**
+ * BellButton — universal ring-the-bell affordance.
+ *
+ * Mike 2026-05-16: "make a ring the bell on every page". A small
+ * fixed-position pill at the bottom-right of every BlockLayout page.
+ * On click:
+ *
+ *   1. Plays a soft Web Audio bell tone (small triangle wave decaying
+ *      over 600ms — pleasant, not jarring)
+ *   2. POSTs /api/bell with an anonymized session id (so the global
+ *      counter on the worker side has a who-rang-when log)
+ *   3. Renders a transient receipt above the button: "ding · 47 today"
+ *   4. Stores last-rung-at locally so a rate-limit prevents accidental
+ *      double-rings within 1.5s
+ *
+ * Lives above the FooterBar so the existing chrome (ROOM/ALONE/KIT/
+ * ON AIR) keeps its real estate. Hidden when the user prefers
+ * reduced-motion + audio-disabled? No — it's not an animation, it's a
+ * primitive verb. Reduced-motion just skips the visual pulse, not the
+ * action.
+ */
+---
+
+<div class="bell" data-bell-root>
+  <button type="button" class="bell__btn" data-bell-btn aria-label="Ring the bell — say you're here">
+    <span class="bell__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+      </svg>
+    </span>
+    <span class="bell__label mono">ring the bell</span>
+  </button>
+  <p class="bell__receipt mono" data-bell-receipt hidden></p>
+</div>
+
+<style>
+  .bell {
+    position: fixed;
+    right: 16px;
+    bottom: 92px; /* above FooterBar (its strip sits at the bottom edge) */
+    z-index: 1900; /* above most overlays, below modals */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    pointer-events: none; /* let children opt-in */
+  }
+  .bell__btn {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #c4952e;
+    color: #fff;
+    border: 1.5px solid rgba(31, 27, 21, 0.18);
+    border-radius: 999px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow:
+      0 4px 14px rgba(31, 27, 21, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: transform 0.12s ease, background 0.16s ease, box-shadow 0.16s ease;
+  }
+  .bell__btn:hover {
+    background: #d8a833;
+    transform: translateY(-1px);
+  }
+  .bell__btn:active {
+    transform: translateY(0) scale(0.97);
+  }
+  .bell__btn[data-bell-active] {
+    animation: bell-ring 0.6s ease-out;
+  }
+  @keyframes bell-ring {
+    0%   { transform: rotate(0deg); }
+    20%  { transform: rotate(-12deg); }
+    40%  { transform: rotate(10deg); }
+    60%  { transform: rotate(-6deg); }
+    80%  { transform: rotate(4deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .bell__icon { display: inline-flex; flex: 0 0 auto; }
+  .bell__receipt {
+    pointer-events: auto;
+    padding: 5px 10px;
+    background: rgba(31, 27, 21, 0.92);
+    color: #fdf2d6;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(31, 27, 21, 0.32);
+    animation: bell-receipt 2.6s ease forwards;
+  }
+  .bell__receipt[hidden] { display: none; }
+  @keyframes bell-receipt {
+    0%   { opacity: 0; transform: translateY(6px); }
+    10%  { opacity: 1; transform: translateY(0); }
+    80%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-6px); }
+  }
+
+  @media (max-width: 600px) {
+    .bell { right: 10px; bottom: 78px; }
+    .bell__btn { padding: 7px 12px; font-size: 10px; }
+    .bell__label { display: none; } /* icon-only on mobile to save room */
+    .bell__btn { gap: 0; padding: 9px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bell__btn,
+    .bell__btn[data-bell-active] { animation: none !important; }
+    .bell__receipt { animation: none !important; }
+  }
+</style>
+
+<script is:inline>
+(() => {
+  const root = document.querySelector('[data-bell-root]');
+  if (!root) return;
+  const btn = root.querySelector('[data-bell-btn]');
+  const receipt = root.querySelector('[data-bell-receipt]');
+  if (!btn || !receipt) return;
+
+  const STORAGE_KEY = 'pc:bell:v1';
+  const RATE_LIMIT_MS = 1500;
+
+  function state() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function saveState(s) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+  }
+
+  function playTone() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.5);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.65);
+      setTimeout(() => ctx.close().catch(() => {}), 800);
+    } catch (_) { /* audio is optional */ }
+  }
+
+  function showReceipt(text) {
+    receipt.textContent = text;
+    receipt.hidden = false;
+    // Restart the CSS animation by toggling the attribute.
+    receipt.removeAttribute('hidden');
+    receipt.style.animation = 'none';
+    requestAnimationFrame(() => {
+      receipt.style.animation = '';
+    });
+    setTimeout(() => { receipt.hidden = true; }, 2700);
+  }
+
+  function getFrom() {
+    const s = state();
+    if (s.from) return s.from;
+    const from = 'anon-' + Math.random().toString(36).slice(2, 8);
+    saveState({ ...s, from });
+    return from;
+  }
+
+  let inFlight = false;
+  btn.addEventListener('click', async () => {
+    if (inFlight) return;
+    const s = state();
+    const lastAt = s.lastRungAt ? Number(s.lastRungAt) : 0;
+    const sinceLast = Date.now() - lastAt;
+    if (sinceLast < RATE_LIMIT_MS) {
+      showReceipt('easy, one ring at a time');
+      return;
+    }
+    inFlight = true;
+    btn.setAttribute('data-bell-active', '');
+    playTone();
+    setTimeout(() => btn.removeAttribute('data-bell-active'), 650);
+
+    let rings = (s.localRings || 0) + 1;
+    let serverOk = false;
+    try {
+      const res = await fetch('/api/bell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: getFrom() }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body.rings === 'number') {
+          rings = body.rings;
+          serverOk = true;
+        }
+      }
+    } catch (_) { /* offline is OK */ }
+
+    saveState({ ...s, lastRungAt: Date.now(), localRings: rings, from: getFrom() });
+    const label = serverOk ? `ding · ${rings} rings` : `ding · ${rings} (local)`;
+    showReceipt(label);
+    inFlight = false;
+  });
+})();
+</script>

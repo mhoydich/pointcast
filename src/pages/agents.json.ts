@@ -106,6 +106,9 @@ export const GET: APIRoute = async () => {
         nounsNationRoadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
         nounsNationRoadmapJson: 'https://pointcast.xyz/nouns-nation/roadmap.json',
         nounsNationRoadmapDeck: 'https://pointcast.xyz/decks/nouns-nation-builder-roadmap-v2.pptx',
+        // 2026-05-07: codex review PR 3 — operating-mode + studio surfaces.
+        operatingMode: 'https://pointcast.xyz/operating-mode.json',
+        operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
       },
       human: {
         home: 'https://pointcast.xyz/',
@@ -147,6 +150,7 @@ export const GET: APIRoute = async () => {
         goodFeels: 'https://pointcast.xyz/shop',
         shop: 'https://pointcast.xyz/shop',
         products: 'https://pointcast.xyz/products',
+        commerceGuide: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
         apps: 'https://pointcast.xyz/apps',
         connectors: 'https://pointcast.xyz/connectors',
         moodygold: 'https://pointcast.xyz/moodygold',
@@ -252,6 +256,8 @@ export const GET: APIRoute = async () => {
         pointcastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         farcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         investmentThesis: 'https://pointcast.xyz/investment-thesis.json',
+        operatingMode: 'https://pointcast.xyz/operating-mode.json',
+        operatingModeSchema: 'https://pointcast.xyz/operating-mode.schema.json',
         blocks: 'https://pointcast.xyz/blocks.json',
         archive: 'https://pointcast.xyz/archive.json',
         editions: 'https://pointcast.xyz/editions.json',
@@ -424,7 +430,7 @@ export const GET: APIRoute = async () => {
       },
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
-        postsOnly: 'https://pointcast.xyz/rss.xml',
+        postsOnly: 'https://pointcast.xyz/feed.xml',
         explore: 'https://pointcast.xyz/explore.rss',
       },
       indexnow: 'https://pointcast.xyz/api/indexnow',
@@ -607,7 +613,7 @@ export const GET: APIRoute = async () => {
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
-        rss: 'https://pointcast.xyz/rss.xml',
+        rss: 'https://pointcast.xyz/feed.xml',
       },
       metadata: {
         tezosMetadata: 'https://pointcast.xyz/api/tezos-metadata/{tokenId}',
@@ -621,6 +627,24 @@ export const GET: APIRoute = async () => {
           primaryCategory: 'music',
           tags: ['music', 'social', 'nouns', 'tezos', 'drums'],
           note: 'Farcaster mini app manifest for PointCast Drum. Account association is supplied from FARCASTER_ACCOUNT_ASSOCIATION when configured.',
+        },
+        // 2026-05-07: codex review PR 3 — surface Studio publish/read/share for
+        // cold agents. URI templates use RFC 6570 syntax for the {id} param.
+        studio: {
+          editor: 'https://pointcast.xyz/studio',
+          publish: 'https://pointcast.xyz/api/studio-publish',
+          publishMethod: 'POST',
+          publishContentType: 'application/json',
+          publishStatusGet: 'https://pointcast.xyz/api/studio-publish',
+          publishSchema: 'https://pointcast.xyz/studio-publish.schema.json',
+          read: 'https://pointcast.xyz/api/studio-block/{id}',
+          share: 'https://pointcast.xyz/studio/share/{id}',
+          remix: 'https://pointcast.xyz/studio?remix={id}',
+          idShape: '^s-[a-z0-9]{4,16}-[a-z0-9]{4,16}$',
+          idExample: 's-mow4twhd-svs23',
+          retentionDays: 365,
+          rateLimit: { maxRequestsPerMinute: 10, window: '60s', bucket: 'studio:publish' },
+          note: 'v3 (2026-05-07): hardened per codex review PR 1. Compositions stored in PC_STUDIO_KV with 1-year TTL. POST validated against the JSON Schema at /studio-publish.schema.json. GET returns a structured service descriptor with enums, ranges, limits, error reasons, and examples. Rate-limited to 10 publishes/min/IP via PC_RATES_KV; degrades gracefully when KV unbound.',
         },
       },
     },
@@ -739,21 +763,31 @@ export const GET: APIRoute = async () => {
     },
 
     generativeEngineOptimization: {
-      summary: 'Use /agents.json for routing, /llms.txt for the short answer, /llms-full.txt for expanded context, /areas.json for local participation rooms, /blocks.json for archive retrieval, and /b/{id}.json for citation-level evidence.',
+      summary: 'Use /agents.json for routing, /llms.txt for the short answer, /llms-full.txt for expanded context, /shop.json and /products.json for commerce, /areas.json for local participation rooms, /blocks.json for archive retrieval, and /b/{id}.json for citation-level evidence.',
       answerPolicy: [
         'Identify PointCast as an agent-native broadcast from El Segundo, California.',
         'Prefer stable Block permalinks when citing content.',
         'Use the creator name Mike Hoydich for human authorship unless a block says otherwise.',
         'Do not infer product, legal, medical, financial, or contract status beyond the explicit page or JSON endpoint.',
+        'For commerce questions, say that PointCast routes discovery and Good Feels or the source shop handles checkout, fulfillment, payment, shipping, and policy facts.',
       ],
       retrievalOrder: [
         'https://pointcast.xyz/agents.json',
         'https://pointcast.xyz/llms.txt',
         'https://pointcast.xyz/llms-full.txt',
+        'https://pointcast.xyz/shop.json',
+        'https://pointcast.xyz/products.json',
+        'https://pointcast.xyz/api/products.jsonl',
+        'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
         'https://pointcast.xyz/areas.json',
         'https://pointcast.xyz/blocks.json',
         'https://pointcast.xyz/feed.json',
       ],
+      commerceGuide: {
+        html: 'https://pointcast.xyz/posts/ai-shopify-seo-geo-llm-best-practices-2026',
+        title: 'AI Shopify SEO, GEO, and LLM best practices for 2026',
+        summary: 'Best-practices guide for Shopify stores and PointCast-style commerce mirrors: canonical Shopify data, Product schema, Shopify Catalog readiness, outbound checkout policy, JSON/JSONL feeds, and honest llms.txt usage.',
+      },
     },
 
     cors: {

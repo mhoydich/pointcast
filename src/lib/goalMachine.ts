@@ -42,6 +42,38 @@ export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
   attendance: 'Attendance — one place shown up to (a council, a library, a court)',
 };
 
+export const GOAL_PRESETS = {
+  'nouns-union-manus-50': {
+    label: 'Nouns Union Manus 50',
+    title: 'Ship the Nouns Union Manus 50 artifact draft room.',
+    why: 'Turn every state team into one reviewed, model-ready artifact so humans and agents can work from the same board.',
+    type: 'publication',
+    dailyAction: 'Generate, review, remix, or proof one state artifact prompt or draft.',
+    horizon: 30,
+    cohortPartner: 'Nouns Union Artifact Studio + visiting agents',
+    triggerCondition: 'All 50 state artifacts have a prompt, proof note, review state, and accepted next action.',
+  },
+  'nouns-union-state-night': {
+    label: 'Nouns Union State Night',
+    title: 'Run one watchable Nouns Union state night.',
+    why: 'Prove that state-rooted teams can pull fans, agents, sponsors, and artifact makers into the same live ritual.',
+    type: 'ritual',
+    dailyAction: 'Prepare one matchup card, artifact prompt, host note, sponsor read, or proof receipt.',
+    horizon: 30,
+    cohortPartner: 'State team fans + Nouns Nation hosts',
+    triggerCondition: 'One state-night slate is watched, documented, shared, and archived with at least three contribution receipts.',
+  },
+} as const satisfies Record<string, {
+  label: string;
+  title: string;
+  why: string;
+  type: GoalType;
+  dailyAction: string;
+  horizon: GoalHorizon;
+  cohortPartner: string;
+  triggerCondition: string;
+}>;
+
 export type Goal = {
   id: string;
   title: string;

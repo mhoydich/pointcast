@@ -1,12 +1,22 @@
 # Sitting with Gandalf
 
-A self-contained fantasy smoking and meditation companion for a quiet pause: timer, two V8 generated wizard scenes, cozy visual moods, ambient fire/rain/road/starlight audio, actual Noun-backed Wizard Nouns collectibles in earlier versions, a deterministic WN-7.1 creation protocol, an optional "Myth" listen-along, lantern view, phase guidance, and a small local session log.
+A self-contained fantasy smoking and meditation companion for a quiet pause: a V9 pixel-art Council Hall with five Fellowship rooms, council prompts, local letters and journal, procedural ambient audio, plus the earlier V8 simple sit, Wizard Nouns, keepsakes, spellbook, lantern view, phase guidance, and local session log.
 
 Open `index.html` in a browser. The page has no build step and references only local files.
 
 ## Versions
 
-The app defaults to V8, with a V8/V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The selected version is saved locally after the V8 release is seen once.
+The app defaults to V9, with a V9/V8/V1/V2/V3/V4/V5/V6/V7 toggle in the masthead. The selected version is saved locally after the V9 release is seen once.
+
+### V9
+
+- Makes the Council Hall the default home view: a saturated, pixel-art isometric building with five clickable doorways.
+- Adds five companion rooms: Gandalf warm hearth, Frodo candlelit hobbit-hole, Samwise green garden, Aragorn stone watchpost, and Galadriel silver mirror-light.
+- Gives each companion a posture, question, answer set, palette, guidance voice, and procedural ambient sound: hearth-fire, kettle-tick, garden-rain, wind-on-stone, and water-drip.
+- Adds a Council prompt before every sit. One of three answers colors the room, timer caption, letter tone, and locally stored tendency counts.
+- Adds post-sit Letters: short locally composed notes signed and dated by the companion, persisted under `sitting-with-gandalf-journal-v9`.
+- Adds a Journal view that shows newest letters first without clearing prior Gandalf, keepsake, resource, spellbook, sigil, or log data.
+- Keeps V1-V8 accessible from the version switch.
 
 ### V8
 

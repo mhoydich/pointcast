@@ -8,6 +8,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://pointcast.xyz',
+  outDir: './.dist-build',
   integrations: [sitemap()],
   vite: {
     plugins: [

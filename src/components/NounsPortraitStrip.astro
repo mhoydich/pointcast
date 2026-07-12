@@ -37,9 +37,9 @@ const portraits = [
     <a class="nouns-portraits__collection" href="/collection/visit-nouns">Collection</a>
   </div>
 
-  <div class="nouns-portraits__grid">
-    {portraits.map((portrait) => (
-      <article class="noun-card">
+  <div class="nouns-portraits__grid" id="nouns-portraits-grid">
+    {portraits.map((portrait, i) => (
+      <article class="noun-card" data-noun-idx={i}>
         <a class="noun-card__art" href={`https://noun.pics/${portrait.id}.svg`} target="_blank" rel="noopener" aria-label={`Open Noun ${portrait.id} art`}>
           <img
             src={`https://noun.pics/${portrait.id}.svg`}
@@ -48,6 +48,7 @@ const portraits = [
             height="220"
             loading={context === 'home' ? 'eager' : 'lazy'}
           />
+          <span class="noun-card__spot" aria-hidden="true">✦ in the spotlight</span>
         </a>
         <div class="noun-card__body">
           <p class="noun-card__id">Noun #{portrait.id}</p>
@@ -68,6 +69,36 @@ const portraits = [
     ))}
   </div>
 </section>
+
+<script>
+  // Spotlight rotator — Mike 2026-05-07 overnight sprint 3 (collect zone).
+  // Rotates a "✦ in the spotlight" callout through the five Nouns every 4.5s
+  // so the strip feels alive without polling. Pauses if user hovers any card.
+  const grid = document.getElementById('nouns-portraits-grid');
+  if (grid) {
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.noun-card'));
+    if (cards.length > 0) {
+      let cursor = Math.floor(Math.random() * cards.length);
+      let paused = false;
+      function light() {
+        cards.forEach((c, i) => c.classList.toggle('noun-card--spotlit', i === cursor));
+      }
+      function tick() {
+        if (paused) return;
+        cursor = (cursor + 1) % cards.length;
+        light();
+      }
+      grid.addEventListener('mouseenter', () => { paused = true; }, true);
+      grid.addEventListener('mouseleave', () => { paused = false; }, true);
+      light();
+      setInterval(tick, 4500);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) paused = true;
+        else { paused = false; tick(); }
+      });
+    }
+  }
+</script>
 
 <style>
   .nouns-portraits {
@@ -146,6 +177,12 @@ const portraits = [
     min-width: 0;
     border: 1px solid var(--pc-rule, #d6d4cd);
     background: var(--pc-paper, #fffaf0);
+    transition: border-color 320ms, box-shadow 320ms, transform 320ms;
+  }
+  .noun-card--spotlit {
+    border-color: #d4a437;
+    box-shadow: 0 4px 14px rgba(212, 164, 55, 0.30);
+    transform: translateY(-1px);
   }
 
   .noun-card__art {
@@ -154,6 +191,28 @@ const portraits = [
     background: #f2f2f2;
     border-bottom: 1px solid var(--pc-rule, #d6d4cd);
     overflow: hidden;
+    position: relative;
+  }
+  .noun-card__spot {
+    position: absolute;
+    left: 6px; bottom: 6px;
+    padding: 3px 7px;
+    background: rgba(26, 8, 32, 0.86);
+    color: #f6c15e;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    box-shadow: 0 2px 8px rgba(212, 164, 55, 0.30);
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 320ms, transform 320ms;
+    pointer-events: none;
+  }
+  .noun-card--spotlit .noun-card__spot {
+    opacity: 1;
+    transform: translateY(0);
   }
 
   .noun-card__art img {

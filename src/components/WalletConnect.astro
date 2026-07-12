@@ -16,30 +16,40 @@
  *                            (e.g. the Noun modal's Mint button when user isn't connected)
  *
  * The Mint flow reads wallet state directly from localStorage on click.
+ *
+ * DOM contract: no element IDs — everything is keyed off data attributes
+ * scoped to a `[data-wallet-connect]` root, and all listeners live on
+ * document/window via delegation. Two reasons, both load-bearing:
+ *   1. BaseLayout mounts <ClientRouter /> site-wide. Astro caches this module
+ *      across view transitions, so element-bound listeners die with the old
+ *      DOM. Delegated listeners re-query the live DOM at event time.
+ *   2. Pages may mount the component more than once (/coffee has it in the
+ *      masthead and the Mintables header). getElementById could only ever
+ *      wire the first copy.
  */
 ---
 
-<div id="wallet-connect" class="relative inline-flex">
+<div data-wallet-connect class="relative inline-flex">
   <button
-    id="wallet-connect-btn"
+    data-wc-btn
     type="button"
     class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-rule/50 bg-card/80 hover:border-warm hover:bg-card transition-colors font-mono text-[0.58rem] tracking-[0.16em] uppercase text-ink-soft hover:text-ink cursor-pointer"
     aria-haspopup="menu"
     aria-expanded="false"
   >
-    <svg id="wallet-connect-icon" class="w-3 h-3 text-warm" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+    <svg data-wc-icon class="w-3 h-3 text-warm" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
       <circle cx="6" cy="6" r="3"/>
     </svg>
-    <span id="wallet-connect-label">connect wallet</span>
+    <span data-wc-label>connect wallet</span>
   </button>
 
   <div
-    id="wallet-menu"
+    data-wc-menu
     class="hidden absolute top-full right-0 mt-2 w-64 bg-paper border border-rule rounded-lg shadow-xl z-50 overflow-hidden"
     role="menu"
   >
     <!-- When disconnected: list of wallets -->
-    <div id="wallet-menu-connect" class="divide-y divide-rule/30">
+    <div data-wc-menu-connect class="divide-y divide-rule/30">
       <button
         data-wallet="kukai"
         type="button"
@@ -52,21 +62,6 @@
           <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Tezos · browser wallet</p>
         </div>
       </button>
-      <!-- Tezos-only for now. MetaMask + Phantom hidden per diagnosis in
-           docs/wallet-metamask-diagnosis.md (Manus task 9MSNEGn8CCtFzsYG8UsmUt).
-           The window.ethereum path is brittle on mobile Safari and WalletConnect
-           v2 deep-links drop silently; all current PointCast tokens are on Tezos,
-           so surfacing EVM/Solana options creates broken paths without utility.
-           Re-enable when Zora (Base) integration is scoped with Wagmi or the
-           Zora SDK. The handler code below (data-wallet cases) is preserved so
-           uncomment + deploy flips them back on. -->
-      <div class="p-3 bg-card/60 border-b border-rule/30">
-        <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/60 mb-1">Other chains</p>
-        <p class="text-[0.78rem] text-ink-soft leading-snug italic">
-          Tezos only for now &mdash; Ethereum + Solana arrive with the Zora drop.
-        </p>
-      </div>
-      <!--
       <button
         data-wallet="metamask"
         type="button"
@@ -76,9 +71,13 @@
         <span class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5 shrink-0">eth</span>
         <div class="flex-1 min-w-0">
           <p class="text-[0.9rem] text-ink font-medium leading-tight">MetaMask</p>
-          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Ethereum · Base · L2s</p>
+          <p class="font-mono text-[0.5rem] tracking-[0.16em] uppercase text-ink-soft/60 mt-0.5">Ethereum &middot; Base &middot; L2s</p>
         </div>
       </button>
+      <!-- Phantom (Solana) stays parked per the 2026-04-17 Manus diagnosis;
+           Solana is out of scope for /mist v0. Coinbase Smart Wallet (passkey,
+           ERC-4337) lands in a follow-up alongside ERC-1271 verify support
+           in functions/api/auth/ethereum.ts.
       <button
         data-wallet="phantom"
         type="button"
@@ -95,12 +94,12 @@
     </div>
 
     <!-- When connected: shows address + disconnect -->
-    <div id="wallet-menu-connected" class="hidden p-3">
+    <div data-wc-menu-connected class="hidden p-3">
       <p class="font-mono text-[0.5rem] tracking-[0.18em] uppercase text-ink-soft/60">connected to</p>
-      <p id="wallet-menu-chain" class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5">—</p>
-      <p id="wallet-menu-address" class="font-mono text-[0.7rem] text-ink mt-2 break-all leading-snug">—</p>
+      <p data-wc-chain class="font-mono text-[0.58rem] tracking-[0.16em] uppercase text-warm mt-0.5">—</p>
+      <p data-wc-address class="font-mono text-[0.7rem] text-ink mt-2 break-all leading-snug">—</p>
       <button
-        id="wallet-disconnect"
+        data-wc-disconnect
         type="button"
         class="mt-3 w-full px-3 py-2 rounded-md bg-card border border-rule/40 hover:border-warm text-ink-soft hover:text-warm font-mono text-[0.58rem] tracking-[0.14em] uppercase cursor-pointer transition-colors"
       >
@@ -156,62 +155,55 @@
   }
 
   // ---------------------------------------------------------------------------
-  // UI
+  // UI — per-instance rendering, always against the live DOM
   // ---------------------------------------------------------------------------
-  const btn = document.getElementById('wallet-connect-btn') as HTMLButtonElement | null;
-  const label = document.getElementById('wallet-connect-label');
-  const icon = document.getElementById('wallet-connect-icon');
-  const menu = document.getElementById('wallet-menu');
-  const menuConnect = document.getElementById('wallet-menu-connect');
-  const menuConnected = document.getElementById('wallet-menu-connected');
-  const menuChain = document.getElementById('wallet-menu-chain');
-  const menuAddress = document.getElementById('wallet-menu-address');
+  function roots(): HTMLElement[] {
+    return Array.from(document.querySelectorAll<HTMLElement>('[data-wallet-connect]'));
+  }
 
-  function renderState(): void {
+  function renderAll(): void {
     const w = loadWallet();
-    if (w) {
-      if (label) label.textContent = shortAddress(w.address);
-      if (icon) icon.classList.add('text-warm');
-      menuConnect?.classList.add('hidden');
-      menuConnected?.classList.remove('hidden');
-      if (menuChain) menuChain.textContent = `${w.provider} · ${w.chain}`;
-      if (menuAddress) menuAddress.textContent = w.address;
-      btn?.classList.add('border-warm/50');
-    } else {
-      if (label) label.textContent = 'connect wallet';
-      menuConnect?.classList.remove('hidden');
-      menuConnected?.classList.add('hidden');
-      btn?.classList.remove('border-warm/50');
+    for (const root of roots()) {
+      const label = root.querySelector('[data-wc-label]');
+      const btn = root.querySelector('[data-wc-btn]');
+      const menuConnect = root.querySelector('[data-wc-menu-connect]');
+      const menuConnected = root.querySelector('[data-wc-menu-connected]');
+      if (w) {
+        if (label) label.textContent = shortAddress(w.address);
+        menuConnect?.classList.add('hidden');
+        menuConnected?.classList.remove('hidden');
+        const chain = root.querySelector('[data-wc-chain]');
+        const address = root.querySelector('[data-wc-address]');
+        if (chain) chain.textContent = `${w.provider} · ${w.chain}`;
+        if (address) address.textContent = w.address;
+        btn?.classList.add('border-warm/50');
+      } else {
+        if (label) label.textContent = 'connect wallet';
+        menuConnect?.classList.remove('hidden');
+        menuConnected?.classList.add('hidden');
+        btn?.classList.remove('border-warm/50');
+      }
     }
   }
 
-  function openMenu(): void {
-    menu?.classList.remove('hidden');
-    btn?.setAttribute('aria-expanded', 'true');
+  function openMenu(root: HTMLElement): void {
+    root.querySelector('[data-wc-menu]')?.classList.remove('hidden');
+    root.querySelector('[data-wc-btn]')?.setAttribute('aria-expanded', 'true');
   }
-  function closeMenu(): void {
-    menu?.classList.add('hidden');
-    btn?.setAttribute('aria-expanded', 'false');
+  function closeMenu(root: HTMLElement): void {
+    root.querySelector('[data-wc-menu]')?.classList.add('hidden');
+    root.querySelector('[data-wc-btn]')?.setAttribute('aria-expanded', 'false');
   }
-  function toggleMenu(): void {
-    if (menu?.classList.contains('hidden')) openMenu(); else closeMenu();
+  function closeAllMenus(except?: HTMLElement): void {
+    for (const root of roots()) {
+      if (root !== except) closeMenu(root);
+    }
   }
-
-  btn?.addEventListener('click', toggleMenu);
-
-  // Close menu when clicking outside
-  document.addEventListener('click', (e) => {
-    const target = e.target as Node;
-    if (!document.getElementById('wallet-connect')?.contains(target)) closeMenu();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMenu();
-  });
-
-  // External trigger from Noun modal's Mint button
-  window.addEventListener('pc:open-wallet-menu', () => {
-    openMenu();
-  });
+  function toggleMenu(root: HTMLElement): void {
+    const hidden = root.querySelector('[data-wc-menu]')?.classList.contains('hidden');
+    closeAllMenus(root);
+    if (hidden) openMenu(root); else closeMenu(root);
+  }
 
   // ---------------------------------------------------------------------------
   // Connect flows
@@ -244,8 +236,8 @@
       const address: string = perms.address;
       if (!address) throw new Error('No address returned');
       saveWallet({ chain: 'tezos', address, provider: 'kukai' });
-      renderState();
-      closeMenu();
+      renderAll();
+      closeAllMenus();
     } catch (err) {
       console.warn('Kukai connect failed:', err);
       alert('Kukai connection cancelled or failed.');
@@ -253,19 +245,46 @@
   }
 
   async function connectMetaMask(): Promise<void> {
-    const eth = (window as any).ethereum;
-    if (!eth) {
-      window.open('https://metamask.io/download/', '_blank');
-      return;
-    }
+    // We delegate to src/lib/auth/client.ts loginWithMetaMask() so the
+    // connect goes through the full server-side SIWE-shaped flow:
+    //   1. eth_requestAccounts → get address
+    //   2. build "PointCast Ethereum Login" message (Origin / Issued At /
+    //      Nonce / Chain ID) — same shape as /api/auth/tezos
+    //   3. personal_sign over the message
+    //   4. POST /api/auth/ethereum → server verifies signature with viem,
+    //      upserts user, sets pc_session HttpOnly cookie
+    //   5. persistWallet() inside client.ts writes pc:wallet localStorage
+    //      and dispatches pc:wallet-change. Our renderAll() picks it up.
+    //
+    // If MetaMask isn't installed, client.ts opens the install URL itself
+    // (handles mobile Safari → assign vs window.open).
     try {
-      const accounts: string[] = await eth.request({ method: 'eth_requestAccounts' });
-      if (!accounts?.[0]) throw new Error('No accounts returned');
-      saveWallet({ chain: 'eth', address: accounts[0], provider: 'metamask' });
-      renderState();
-      closeMenu();
-    } catch (err) {
-      console.warn('MetaMask connect failed:', err);
+      const { loginWithMetaMask } = await import('../lib/auth/client');
+      const user = await loginWithMetaMask();
+      if (!user) {
+        // null without throw means SSR or open-install path — nothing to do here.
+        return;
+      }
+      renderAll();
+      closeAllMenus();
+    } catch (err: any) {
+      console.warn('MetaMask sign-in failed:', err);
+      // User-rejection / pending-request / not-installed are silent;
+      // surface only real failures. EIP-1193 puts the code in err.code
+      // (4001 = user rejected, -32002 = request already pending) — the
+      // message text varies by MetaMask version, so check both.
+      const code = err?.code ?? err?.cause?.code;
+      const reason = err?.message ?? '';
+      if (
+        code === 4001 ||
+        code === -32002 ||
+        reason === 'metamask-not-available' ||
+        reason.includes('User rejected') ||
+        reason.includes('rejected') ||
+        reason.includes('already pending') ||
+        reason.includes('-32002')
+      ) return;
+      alert('MetaMask sign-in failed. Tap again to retry.');
     }
   }
 
@@ -280,24 +299,14 @@
       const address = resp.publicKey?.toString?.() ?? resp.publicKey ?? '';
       if (!address) throw new Error('No pubkey returned');
       saveWallet({ chain: 'solana', address, provider: 'phantom' });
-      renderState();
-      closeMenu();
+      renderAll();
+      closeAllMenus();
     } catch (err) {
       console.warn('Phantom connect failed:', err);
     }
   }
 
-  document.querySelectorAll<HTMLElement>('[data-wallet]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const kind = el.dataset.wallet;
-      if (kind === 'kukai') connectKukai();
-      else if (kind === 'metamask') connectMetaMask();
-      else if (kind === 'phantom') connectPhantom();
-    });
-  });
-
-  // Disconnect
-  document.getElementById('wallet-disconnect')?.addEventListener('click', async () => {
+  async function disconnect(): Promise<void> {
     const w = loadWallet();
     if (w?.provider === 'kukai') {
       // Best-effort: Beacon sessions get cleared on the dApp side via `clearActiveAccount`
@@ -311,12 +320,71 @@
     } else if (w?.provider === 'phantom') {
       try { await (window as any).solana?.disconnect?.(); } catch { /* ignore */ }
     }
+    // Clear the server session too. pc_session is HttpOnly, so DELETE
+    // /api/auth/session (via logout()) is the only way to drop it — without
+    // this, the stale session makes the next sign-in from a different
+    // address merge into the previous user's account, or 409 forever if
+    // that address already has its own account.
+    try {
+      const { logout } = await import('../lib/auth/client');
+      await logout();
+    } catch { /* best-effort — local disconnect still proceeds */ }
     saveWallet(null);
-    renderState();
-    closeMenu();
+    renderAll();
+    closeAllMenus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delegated listeners — bound once to document/window, so they survive
+  // Astro view transitions and cover every mounted instance.
+  // ---------------------------------------------------------------------------
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const root = target.closest<HTMLElement>('[data-wallet-connect]');
+    if (!root) {
+      closeAllMenus();
+      return;
+    }
+    if (target.closest('[data-wc-btn]')) {
+      toggleMenu(root);
+      return;
+    }
+    const walletBtn = target.closest<HTMLElement>('[data-wallet]');
+    if (walletBtn) {
+      const kind = walletBtn.dataset.wallet;
+      if (kind === 'kukai') connectKukai();
+      else if (kind === 'metamask') connectMetaMask();
+      else if (kind === 'phantom') connectPhantom();
+      return;
+    }
+    if (target.closest('[data-wc-disconnect]')) {
+      disconnect();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllMenus();
+  });
+
+  // External trigger from the Noun modal's Mint button, /drum, /market, etc.
+  window.addEventListener('pc:open-wallet-menu', () => {
+    const first = roots()[0];
+    if (first) openMenu(first);
+  });
+
+  // client.ts persistWallet() and our own saveWallet() both dispatch this —
+  // keeps every mounted instance in sync however the wallet state changed.
+  window.addEventListener('pc:wallet-change', () => {
+    renderAll();
+  });
+
+  // Re-render after every view-transition swap (fires on first load too
+  // when ClientRouter is active).
+  document.addEventListener('astro:page-load', () => {
+    renderAll();
   });
 
   // Initial render + broadcast so listeners know the wallet at load
-  renderState();
+  renderAll();
   broadcast(loadWallet());
 </script>

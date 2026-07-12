@@ -8,9 +8,9 @@
   const RESOURCE_LEVELS_KEY = "sitting-with-gandalf-resource-levels";
   const SPELLBOOK_KEY = "sitting-with-gandalf-spellbook";
   const DEFAULT_MINUTES = 15;
-  const RELEASE_VERSION = "v8";
-  const SETTINGS_RELEASE = "v8-simple-room";
-  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]);
+  const RELEASE_VERSION = "v10";
+  const SETTINGS_RELEASE = "v10-atelier";
+  const versions = new Set(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v9b", "v10"]);
   const renderStyles = {
     storybook: {
       name: "Storybook glow",
@@ -1631,19 +1631,29 @@
   ];
 
   const savedSettings = loadSettings();
-  const savedRelease = savedSettings.release === SETTINGS_RELEASE;
+  const hasSavedSettings = savedSettings && typeof savedSettings === "object";
+  const savedRelease = savedSettings.release === SETTINGS_RELEASE || (hasSavedSettings && typeof savedSettings.release === "string");
   const requestedVersion = (() => {
     const params = new URLSearchParams(window.location.search);
     const explicitVersion = params.get("version") || params.get("v");
     if (versions.has(explicitVersion)) {
       return explicitVersion;
     }
-    return params.has("v8") ? RELEASE_VERSION : "";
+    if (params.has("v10")) {
+      return RELEASE_VERSION;
+    }
+    if (params.has("v9b")) {
+      return "v9b";
+    }
+    if (params.has("v9")) {
+      return "v9";
+    }
+    return params.has("v8") ? "v8" : "";
   })();
   const initialVersion = requestedVersion || RELEASE_VERSION;
   const initialRenderStyle = savedRelease && renderStyles[savedSettings.renderStyle]
     ? savedSettings.renderStyle
-    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7"
+    : initialVersion === "v4" || initialVersion === "v5" || initialVersion === "v6" || initialVersion === "v7" || initialVersion === "v9"
       ? "pixel"
       : "storybook";
   const initialNounsGandalf = savedRelease && nounsGandalfs.some((card) => card.id === savedSettings.nounsActive)
@@ -2216,6 +2226,10 @@
 
   function isSimpleVersion(version = state.version) {
     return version === "v8";
+  }
+
+  function isAtelierVersion(version = state.version) {
+    return version === "v10";
   }
 
   function activeV8Scene() {
@@ -3627,11 +3641,11 @@
       dom.ambienceStep.textContent = "A";
       dom.settleStep.textContent = "B";
     }
-    dom.ritualSummary.textContent = isSimpleVersion(next) ? "Scene, feeling, tally" : isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
-    dom.blendLabel.textContent = isSimpleVersion(next) ? "Feeling" : isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
-    dom.smokeLabel.textContent = isSimpleVersion(next) || isNatureVersion(next) ? "Atmosphere" : "Smoke";
-    dom.ringLabel.textContent = isSimpleVersion(next) ? "breaths" : isCollectibleVersion(next) ? "cards" : isNatureVersion(next) ? "cues" : "rings";
-    dom.startButton.textContent = state.running ? "Running" : isSimpleVersion(next) ? "Begin sit" : isCollectibleVersion(next) ? activeRitual().startLabel : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
+    dom.ritualSummary.textContent = isAtelierVersion(next) ? "Studio pairings and notes" : isSimpleVersion(next) ? "Scene, feeling, tally" : isCollectibleVersion(next) ? activeRitual().summary : isNatureVersion(next) ? "Session scent and tally" : "Pipe leaf and tally";
+    dom.blendLabel.textContent = isAtelierVersion(next) ? "Studio tone" : isSimpleVersion(next) ? "Feeling" : isCollectibleVersion(next) ? activeRitual().blendLabel : isNatureVersion(next) ? "Session scent" : "Pipe leaf";
+    dom.smokeLabel.textContent = isAtelierVersion(next) || isSimpleVersion(next) || isNatureVersion(next) ? "Atmosphere" : "Smoke";
+    dom.ringLabel.textContent = isAtelierVersion(next) ? "notes" : isSimpleVersion(next) ? "breaths" : isCollectibleVersion(next) ? "cards" : isNatureVersion(next) ? "cues" : "rings";
+    dom.startButton.textContent = state.running ? "Running" : isAtelierVersion(next) ? "Begin atelier" : isSimpleVersion(next) ? "Begin sit" : isCollectibleVersion(next) ? activeRitual().startLabel : isNatureVersion(next) ? "Start nature sit" : "Start quiet sit";
     if (!isCollectibleVersion(next) && !isSimpleVersion(next)) {
       replaceBlendOptions(
         isNatureVersion(next)
@@ -3645,7 +3659,10 @@
       return;
     }
 
-    if (isSimpleVersion(next)) {
+    if (isAtelierVersion(next)) {
+      dom.phaseHint.textContent = "Pick one fire and one canvas before the sit begins.";
+      setGuide("V10 ready", "The Gandalf Atelier", "Ten fires, seven abstract Gandalfs, and one chair facing the easel.");
+    } else if (isSimpleVersion(next)) {
       if (state.renderStyle !== "storybook") {
         setRenderStyle("storybook");
       }
@@ -4824,7 +4841,7 @@
   setMode(state.mode);
   updateTimer();
   updateV8Panel();
-  updateGuideIdle(isSimpleVersion() ? "V8 ready" : isCollectibleVersion() ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
+  updateGuideIdle(isAtelierVersion() ? "V10 ready" : isSimpleVersion() ? "V8 ready" : isCollectibleVersion() ? (state.version === "v7" ? "V7 ready" : state.version === "v6" ? "V6 ready" : "V5 ready") : isNatureVersion() ? (state.version === "v4" ? "V4 ready" : "Nature ready") : "Next");
   requestAnimationFrame(tick);
   requestAnimationFrame(drawSmoke);
 })();

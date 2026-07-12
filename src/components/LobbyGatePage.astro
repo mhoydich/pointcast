@@ -1,0 +1,658 @@
+---
+type GateTask = {
+  label: string;
+  note?: string;
+  noun?: number;
+  href?: string;
+};
+
+type LobbyGate = {
+  id: string;
+  number: string;
+  title: string;
+  eyebrow: string;
+  target: number;
+  actionLabel: string;
+  completeLabel: string;
+  nextHref: string;
+  nextLabel: string;
+  type: 'tap' | 'checklist' | 'bells' | 'routes' | 'draw';
+  tasks?: readonly GateTask[];
+};
+
+const { gate } = Astro.props as { gate: LobbyGate };
+const tasks = gate.tasks ?? [];
+---
+
+<section
+  class="lobby-gate-page"
+  data-gate-page
+  data-gate-id={gate.id}
+  data-gate-type={gate.type}
+  data-gate-target={gate.target}
+  data-gate-complete-label={gate.completeLabel}
+  aria-labelledby="lobby-gate-title"
+>
+  <header class="lobby-gate-page__header">
+    <a href="/lobby#lobby-gates" class="lobby-gate-page__back">/lobby</a>
+    <p class="lobby-gate-page__eyebrow">{gate.eyebrow}</p>
+    <div class="lobby-gate-page__title-row">
+      <span>{gate.number}</span>
+      <h1 id="lobby-gate-title">{gate.title}</h1>
+    </div>
+  </header>
+
+  <div class="lobby-gate-page__status-board">
+    <div class="lobby-gate-page__meter" aria-label="Gate progress">
+      <span data-gate-count>0/{gate.target}</span>
+      <div class="lobby-gate-page__track" aria-hidden="true">
+        <span data-gate-bar></span>
+      </div>
+    </div>
+    <p data-gate-status aria-live="polite">Gate waiting.</p>
+  </div>
+
+  {gate.type === 'tap' && (
+    <div class="lobby-gate-page__single">
+      <button type="button" data-gate-hit>
+        <strong>{gate.actionLabel}</strong>
+        <span>hit the plate until the door likes you</span>
+      </button>
+    </div>
+  )}
+
+  {(gate.type === 'checklist' || gate.type === 'bells' || gate.type === 'routes') && (
+    <div class:list={['lobby-gate-page__tasks', `is-${gate.type}`]}>
+      {tasks.map((task, index) => (
+        <button
+          type="button"
+          data-gate-task={index}
+          data-task-noun={typeof task.noun === 'number' ? task.noun : undefined}
+          data-task-href={task.href}
+        >
+          <span class="lobby-gate-page__task-number">{String(index + 1).padStart(2, '0')}</span>
+          {typeof task.noun === 'number' && (
+            <span class="lobby-gate-page__noun">
+              <img
+                src={`https://noun.pics/${task.noun}.svg`}
+                alt=""
+                aria-hidden="true"
+                width="58"
+                height="58"
+                loading={index < 4 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+            </span>
+          )}
+          <span class="lobby-gate-page__task-copy">
+            <strong>{task.label}</strong>
+            {task.note && <small>{task.note}</small>}
+            {task.href && <code>{task.href}</code>}
+          </span>
+        </button>
+      ))}
+    </div>
+  )}
+
+  {gate.type === 'draw' && (
+    <div class="lobby-gate-page__draw">
+      <button type="button" data-gate-draw>
+        <strong>{gate.actionLabel}</strong>
+        <span>pull a tiny instruction from the machine</span>
+      </button>
+      <ol class="lobby-gate-page__draw-list" aria-label="Drawn keep-going tasks">
+        {tasks.map((task, index) => (
+          <li data-draw-item={index}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <strong>{task.label}</strong>
+            {task.note && <small>{task.note}</small>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )}
+
+  <footer class="lobby-gate-page__footer">
+    <a href={gate.nextHref} data-gate-next hidden>{gate.nextLabel}</a>
+    <button type="button" data-gate-reset>Reset this gate</button>
+  </footer>
+</section>
+
+<script>
+  import { playEmojiChime, playNounVoice } from '../lib/chimes';
+
+  const storageKey = 'pc:lobby-gates:v1';
+
+  function readGateRun() {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function writeGateRun(state) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch {}
+  }
+
+  function normalizeGateState(raw) {
+    return {
+      count: Number(raw?.count) || 0,
+      done: Array.isArray(raw?.done) ? raw.done.map(Number).filter(Number.isFinite) : [],
+      complete: Boolean(raw?.complete),
+    };
+  }
+
+  function initLobbyGatePage() {
+    const gateRoot = document.querySelector('[data-gate-page]');
+    if (!gateRoot || gateRoot.hasAttribute('data-gate-bound')) return;
+    gateRoot.setAttribute('data-gate-bound', '');
+
+    const gateId = gateRoot.getAttribute('data-gate-id') || 'gate';
+    const gateType = gateRoot.getAttribute('data-gate-type') || 'tap';
+    const target = Number(gateRoot.getAttribute('data-gate-target')) || 1;
+    const completeLabel = gateRoot.getAttribute('data-gate-complete-label') || '';
+    let runState = readGateRun();
+    let gateState = normalizeGateState(runState[gateId]);
+
+    const countNode = gateRoot.querySelector('[data-gate-count]');
+    const barNode = gateRoot.querySelector('[data-gate-bar]');
+    const statusNode = gateRoot.querySelector('[data-gate-status]');
+    const nextLink = gateRoot.querySelector('[data-gate-next]');
+    const hitButton = gateRoot.querySelector('[data-gate-hit]');
+    const drawButton = gateRoot.querySelector('[data-gate-draw]');
+    const taskButtons = Array.from(gateRoot.querySelectorAll('[data-gate-task]'));
+    const drawItems = Array.from(gateRoot.querySelectorAll('[data-draw-item]'));
+
+    function saveGate() {
+      runState = readGateRun();
+      runState[gateId] = gateState;
+      writeGateRun(runState);
+    }
+
+    function ping(seed) {
+      if (Number.isFinite(seed)) {
+        playNounVoice(seed, 0.18);
+        return;
+      }
+      playEmojiChime();
+    }
+
+    function statusText(count) {
+      const left = Math.max(0, target - count);
+      if (gateState.complete) {
+        const label = gateRoot.querySelector('[data-gate-next]')?.textContent?.trim() || 'next page';
+        return `Open. ${label} is lit.`;
+      }
+      if (gateType === 'tap') return `${left} knock${left === 1 ? '' : 's'} left.`;
+      if (gateType === 'draw') return `${left} keep-going slip${left === 1 ? '' : 's'} still inside.`;
+      return `${count}/${target} stamped.`;
+    }
+
+    function completeGate() {
+      if (gateState.complete) return;
+      gateState.complete = true;
+      gateRoot.setAttribute('data-just-completed', '');
+      setTimeout(() => gateRoot.removeAttribute('data-just-completed'), 700);
+    }
+
+    function paintGate() {
+      const count = Math.min(target, Math.max(0, gateState.count));
+      if (countNode) countNode.textContent = `${count}/${target}`;
+      if (barNode) barNode.style.inlineSize = `${(count / target) * 100}%`;
+      if (count >= target) completeGate();
+      gateRoot.toggleAttribute('data-complete', gateState.complete);
+      if (statusNode) {
+        statusNode.textContent = gateState.complete
+          ? completeLabel || statusText(count)
+          : statusText(count);
+      }
+      nextLink?.toggleAttribute('hidden', !gateState.complete);
+      hitButton?.toggleAttribute('disabled', gateState.complete);
+      drawButton?.toggleAttribute('disabled', gateState.complete);
+
+      const done = new Set(gateState.done);
+      taskButtons.forEach((button) => {
+        const index = Number(button.getAttribute('data-gate-task'));
+        const isDone = done.has(index);
+        button.toggleAttribute('data-done', isDone);
+        button.toggleAttribute('disabled', gateState.complete);
+        button.setAttribute('aria-pressed', isDone ? 'true' : 'false');
+      });
+
+      drawItems.forEach((item) => {
+        const index = Number(item.getAttribute('data-draw-item'));
+        item.toggleAttribute('data-revealed', index < count);
+      });
+    }
+
+    hitButton?.addEventListener('click', () => {
+      if (gateState.complete) return;
+      gateState.count = Math.min(target, gateState.count + 1);
+      ping(40 + gateState.count * 19);
+      if (gateState.count >= target) completeGate();
+      saveGate();
+      paintGate();
+    });
+
+    taskButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        if (gateState.complete) return;
+        const index = Number(button.getAttribute('data-gate-task'));
+        const done = new Set(gateState.done);
+        if (done.has(index)) {
+          done.delete(index);
+        } else {
+          done.add(index);
+          const nounAttr = button.getAttribute('data-task-noun');
+          const noun = nounAttr === null ? Number.NaN : Number(nounAttr);
+          ping(Number.isFinite(noun) ? noun : 180 + index * 37);
+        }
+        gateState.done = Array.from(done).sort((a, b) => a - b);
+        gateState.count = gateState.done.length;
+        if (gateState.count >= target) completeGate();
+        saveGate();
+        paintGate();
+      });
+    });
+
+    drawButton?.addEventListener('click', () => {
+      if (gateState.complete) return;
+      gateState.count = Math.min(target, gateState.count + 1);
+      ping(620 + gateState.count * 23);
+      if (gateState.count >= target) completeGate();
+      saveGate();
+      paintGate();
+    });
+
+    gateRoot.querySelector('[data-gate-reset]')?.addEventListener('click', () => {
+      gateState = normalizeGateState({});
+      runState = readGateRun();
+      delete runState[gateId];
+      writeGateRun(runState);
+      paintGate();
+    });
+
+    paintGate();
+  }
+
+  initLobbyGatePage();
+  document.addEventListener('astro:page-load', initLobbyGatePage);
+</script>
+
+<style>
+  .lobby-gate-page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    color: #1a1208;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .lobby-gate-page__header {
+    position: relative;
+    border: 2px solid #1a1208;
+    background:
+      repeating-linear-gradient(0deg, rgba(26, 18, 8, 0.045) 0 8px, transparent 8px 16px),
+      linear-gradient(90deg, rgba(255, 210, 74, 0.42), rgba(74, 214, 255, 0.28) 55%, rgba(255, 107, 157, 0.22)),
+      #fffdf8;
+    box-shadow: 8px 8px 0 rgba(26, 18, 8, 0.14);
+    padding: 1rem;
+  }
+
+  .lobby-gate-page__back {
+    display: inline-block;
+    border: 1px solid #1a1208;
+    background: #fffdf8;
+    color: #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 0.45rem 0.6rem;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__eyebrow {
+    margin: 1rem 0 0.45rem;
+    color: #8a2432;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__title-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+  }
+
+  .lobby-gate-page__title-row > span {
+    display: grid;
+    place-items: center;
+    inline-size: 4.2rem;
+    block-size: 4.2rem;
+    border: 2px solid #1a1208;
+    background: #1a1208;
+    color: #ffd24a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 1.2rem;
+    font-weight: 900;
+  }
+
+  .lobby-gate-page h1 {
+    margin: 0;
+    color: #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(1.8rem, 6vw, 4rem);
+    letter-spacing: 0;
+    line-height: 0.95;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__status-board {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+    gap: 1px;
+    margin: 1.25rem 0;
+    border: 2px solid #1a1208;
+    background: #1a1208;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__meter,
+  .lobby-gate-page__status-board p {
+    margin: 0;
+    background: #fffdf8;
+    padding: 0.9rem;
+  }
+
+  .lobby-gate-page__meter {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    font-size: 0.8rem;
+  }
+
+  .lobby-gate-page__status-board p {
+    color: #0f6e56;
+    font-size: 0.72rem;
+    line-height: 1.6;
+  }
+
+  .lobby-gate-page__track {
+    height: 13px;
+    border: 1px solid #1a1208;
+    background: #f1ead8;
+  }
+
+  .lobby-gate-page__track span {
+    display: block;
+    inline-size: 0;
+    block-size: 100%;
+    background: repeating-linear-gradient(90deg, #ff6b6b 0 12px, #ffd24a 12px 20px, #4ad6ff 20px 28px);
+    transition: inline-size 180ms ease;
+  }
+
+  .lobby-gate-page__single button,
+  .lobby-gate-page__draw > button {
+    display: grid;
+    place-items: center;
+    gap: 0.5rem;
+    inline-size: 100%;
+    min-height: 330px;
+    border: 3px solid #1a1208;
+    border-radius: 0;
+    background:
+      linear-gradient(90deg, rgba(255, 210, 74, 0.52), transparent 42%, rgba(74, 214, 255, 0.28)),
+      repeating-linear-gradient(45deg, #fffdf8 0 14px, #f5ecd1 14px 28px);
+    box-shadow: inset 0 0 0 12px rgba(26, 18, 8, 0.08);
+    color: #1a1208;
+    cursor: pointer;
+    font: inherit;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__single strong,
+  .lobby-gate-page__draw strong {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: clamp(2.8rem, 14vw, 7rem);
+    letter-spacing: 0;
+    line-height: 0.9;
+  }
+
+  .lobby-gate-page__single span,
+  .lobby-gate-page__draw > button span {
+    max-width: 28rem;
+    color: #5f5e5a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+  }
+
+  .lobby-gate-page__tasks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .lobby-gate-page__tasks.is-bells {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .lobby-gate-page__tasks button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    min-height: 96px;
+    border: 2px solid #1a1208;
+    border-radius: 0;
+    background: #fffdf8;
+    color: #1a1208;
+    cursor: pointer;
+    font: inherit;
+    padding: 0.75rem;
+    text-align: left;
+  }
+
+  .lobby-gate-page__tasks.is-bells button {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .lobby-gate-page__tasks button[data-done] {
+    background:
+      linear-gradient(135deg, rgba(15, 110, 86, 0.18), rgba(255, 210, 74, 0.18)),
+      #fffdf8;
+    box-shadow: inset 0 0 0 5px rgba(15, 110, 86, 0.18);
+  }
+
+  .lobby-gate-page__task-number {
+    display: grid;
+    place-items: center;
+    inline-size: 2.35rem;
+    block-size: 2.35rem;
+    background: #1a1208;
+    color: #ffd24a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-weight: 900;
+  }
+
+  .lobby-gate-page__noun {
+    display: grid;
+    place-items: center;
+    inline-size: 70px;
+    block-size: 70px;
+    border: 1px solid #1a1208;
+    background: #f5ecd1;
+  }
+
+  .lobby-gate-page__noun img {
+    inline-size: 58px;
+    block-size: 58px;
+    image-rendering: pixelated;
+  }
+
+  .lobby-gate-page__task-copy {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .lobby-gate-page__task-copy strong,
+  .lobby-gate-page__task-copy small,
+  .lobby-gate-page__task-copy code {
+    overflow-wrap: anywhere;
+  }
+
+  .lobby-gate-page__task-copy strong {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__task-copy small,
+  .lobby-gate-page__task-copy code {
+    color: #5f5e5a;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__draw {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .lobby-gate-page__draw-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+    background: #1a1208;
+    list-style: none;
+  }
+
+  .lobby-gate-page__draw-list li {
+    display: grid;
+    gap: 0.3rem;
+    min-height: 114px;
+    padding: 0.75rem;
+    background: #f3eee0;
+    color: #8d8475;
+    opacity: 0.42;
+  }
+
+  .lobby-gate-page__draw-list li[data-revealed] {
+    background: #fffdf8;
+    color: #1a1208;
+    opacity: 1;
+  }
+
+  .lobby-gate-page__draw-list span,
+  .lobby-gate-page__draw-list strong,
+  .lobby-gate-page__draw-list small {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__draw-list span {
+    color: #8a2432;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .lobby-gate-page__draw-list strong {
+    font-size: 0.78rem;
+  }
+
+  .lobby-gate-page__draw-list small {
+    color: #5f5e5a;
+    font-size: 0.64rem;
+  }
+
+  .lobby-gate-page__footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  .lobby-gate-page__footer a,
+  .lobby-gate-page__footer button {
+    border: 2px solid #1a1208;
+    border-radius: 0;
+    background: #fffdf8;
+    color: #1a1208;
+    cursor: pointer;
+    font: 800 0.75rem/1 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    padding: 0.9rem 1rem;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .lobby-gate-page__footer a {
+    background: #ffd24a;
+    box-shadow: 5px 5px 0 rgba(26, 18, 8, 0.18);
+  }
+
+  .lobby-gate-page[data-complete] .lobby-gate-page__header {
+    animation: gate-flash 680ms ease;
+  }
+
+  .lobby-gate-page[data-just-completed] .lobby-gate-page__footer a {
+    animation: gate-pop 620ms ease;
+  }
+
+  button[disabled] {
+    cursor: default;
+  }
+
+  @keyframes gate-pop {
+    0% { transform: translateY(0) scale(1); }
+    35% { transform: translateY(-4px) scale(1.03); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
+  @keyframes gate-flash {
+    0%, 100% { filter: none; }
+    40% { filter: saturate(1.45) brightness(1.08); }
+  }
+
+  @media (max-width: 760px) {
+    .lobby-gate-page {
+      padding-inline: 0.85rem;
+    }
+
+    .lobby-gate-page__status-board,
+    .lobby-gate-page__tasks,
+    .lobby-gate-page__tasks.is-bells,
+    .lobby-gate-page__draw-list {
+      grid-template-columns: 1fr;
+    }
+
+    .lobby-gate-page__title-row {
+      grid-template-columns: 1fr;
+    }
+
+    .lobby-gate-page__single button,
+    .lobby-gate-page__draw > button {
+      min-height: 260px;
+    }
+  }
+</style>

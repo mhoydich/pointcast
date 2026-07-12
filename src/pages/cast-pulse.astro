@@ -1,0 +1,868 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Pulse — rhythm sandbox with synth drums, swing, fills" description="Step sequencer for groove. 4 synth voices, 16 steps, swing, tempo, fills, save four of your own patterns. No app store, no signup, no samples needed.">
+  <main class="cp" id="cp" data-built={built}>
+    <header class="cp__hero">
+      <p class="cp__kicker">CAST · PULSE · step sequencer · swing · synth drums · pattern memory</p>
+      <h1 class="cp__title">Pulse.</h1>
+      <p class="cp__sub">A rhythm sandbox. Four synth voices, sixteen steps, swing dial, random fills. Save four of your own patterns. Built for fooling around.</p>
+    </header>
+
+    <section class="cp__transport">
+      <button class="cp__play" id="cp-play" type="button" aria-label="Play / stop">
+        <span id="cp-play-icon">▶</span>
+      </button>
+      <div class="cp__tempo-wrap">
+        <span class="cp__tempo-label">TEMPO</span>
+        <span class="cp__tempo-val" id="cp-tempo-val">110</span>
+        <span class="cp__tempo-unit">BPM</span>
+      </div>
+      <button class="cp__fill" id="cp-fill" type="button" title="Random fill">FILL</button>
+      <button class="cp__clear" id="cp-clear" type="button" title="Clear">CLEAR</button>
+      <div class="cp__vol-wrap">
+        <span class="cp__vol-icon">♪</span>
+        <input type="range" class="cp__vol" id="cp-vol" min="0" max="100" value="65"/>
+      </div>
+    </section>
+
+    <section class="cp__grid-wrap">
+      <div class="cp__beat-ribbon" id="cp-beat-ribbon"></div>
+      <div class="cp__rows" id="cp-rows"></div>
+    </section>
+
+    <section class="cp__sliders">
+      <div class="cp__slide">
+        <label class="cp__slide-label" for="cp-bpm">TEMPO 60–180</label>
+        <input type="range" class="cp__slide-range" id="cp-bpm" min="60" max="180" step="1" value="110"/>
+      </div>
+      <div class="cp__slide">
+        <label class="cp__slide-label" for="cp-swing">SWING 0–60%</label>
+        <input type="range" class="cp__slide-range" id="cp-swing" min="0" max="60" step="1" value="0"/>
+      </div>
+    </section>
+
+    <section class="cp__patterns">
+      <p class="cp__patterns-label">PATTERNS</p>
+      <div class="cp__patterns-row">
+        <button class="cp__preset" data-preset="house">house</button>
+        <button class="cp__preset" data-preset="break">break</button>
+        <button class="cp__preset" data-preset="dembow">dembow</button>
+        <button class="cp__preset" data-preset="jazz">jazz</button>
+        <button class="cp__preset" data-preset="kraut">kraut</button>
+        <button class="cp__preset" data-preset="halftime">halftime</button>
+      </div>
+      <p class="cp__patterns-label cp__patterns-label--save">YOUR SLOTS</p>
+      <div class="cp__slots-row" id="cp-slots-row">
+        <button class="cp__slot" data-slot="1"><span class="cp__slot-num">1</span><span class="cp__slot-state" id="cp-slot-1-state">empty</span></button>
+        <button class="cp__slot" data-slot="2"><span class="cp__slot-num">2</span><span class="cp__slot-state" id="cp-slot-2-state">empty</span></button>
+        <button class="cp__slot" data-slot="3"><span class="cp__slot-num">3</span><span class="cp__slot-state" id="cp-slot-3-state">empty</span></button>
+        <button class="cp__slot" data-slot="4"><span class="cp__slot-num">4</span><span class="cp__slot-state" id="cp-slot-4-state">empty</span></button>
+      </div>
+      <p class="cp__slot-hint" id="cp-slot-hint">Tap a slot to load · long-press (1s) or double-tap to save the current pattern there.</p>
+    </section>
+
+    <footer class="cp__footer">
+      <p class="cp__footer-line">Synth voices: kick is a 60→35Hz sine drop, snare is filtered noise + 200Hz blip, hat is high-passed noise, perc is a 1200Hz square chirp. No samples — Web Audio only.</p>
+      <p class="cp__footer-line">Saves stay on this device. The other cast surfaces: <a href="/cast-jam">/cast-jam</a> · <a href="/cast-loop">/cast-loop</a> · <a href="/cast-metronome">/cast-metronome</a> · <a href="/cast-wander">/cast-wander</a> · <a href="/cast-wheel">/cast-wheel</a>.</p>
+    </footer>
+  </main>
+
+  <style is:global>
+    :root {
+      --cp-walnut: #5a3422;
+      --cp-walnut-dark: #2f1a0e;
+      --cp-flame: #f6c15e;
+      --cp-flame-deep: #d68f2c;
+      --cp-cream: #f4e7c8;
+      --cp-cream-dim: #d9c89e;
+      --cp-ink: #1a0820;
+      --cp-rose: #e6788c;
+      --cp-mint: #9bd7b8;
+    }
+
+    body:has(.cp) {
+      background: radial-gradient(circle at 30% 0%, #2a160c 0%, var(--cp-ink) 60%);
+      color: var(--cp-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .cp {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .cp__hero { text-align: center; margin-bottom: 36px; }
+    .cp__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--cp-flame-deep);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .cp__title {
+      font-family: 'Inter Tight', 'Inter', sans-serif;
+      font-weight: 900;
+      font-size: clamp(56px, 12vw, 128px);
+      letter-spacing: -0.04em;
+      line-height: 0.9;
+      margin: 0 0 16px;
+      color: var(--cp-flame);
+      text-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .cp__sub {
+      max-width: 620px;
+      margin: 0 auto;
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--cp-cream-dim);
+    }
+
+    /* TRANSPORT */
+    .cp__transport {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 0 auto 32px;
+      max-width: 720px;
+      padding: 16px 20px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(246,193,94,0.18);
+      border-radius: 20px;
+    }
+    .cp__play {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--cp-flame);
+      color: var(--cp-walnut-dark);
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(246,193,94,0.35);
+      transition: transform 100ms ease, background 100ms ease;
+    }
+    .cp__play:hover { transform: scale(1.04); }
+    .cp__play:active { transform: scale(0.96); }
+    .cp__tempo-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 8px 16px;
+      background: rgba(246,193,94,0.08);
+      border-radius: 12px;
+    }
+    .cp__tempo-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: var(--cp-cream-dim);
+    }
+    .cp__tempo-val {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 28px;
+      color: var(--cp-flame);
+    }
+    .cp__tempo-unit {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cp-cream-dim);
+    }
+    .cp__fill, .cp__clear {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(246,193,94,0.32);
+      background: transparent;
+      color: var(--cp-cream);
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .cp__fill:hover, .cp__clear:hover { background: rgba(246,193,94,0.12); }
+    .cp__vol-wrap { display: flex; align-items: center; gap: 8px; }
+    .cp__vol-icon { color: var(--cp-flame-deep); font-size: 16px; }
+    .cp__vol { width: 90px; accent-color: var(--cp-flame); }
+
+    /* GRID */
+    .cp__grid-wrap {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(246,193,94,0.16);
+      border-radius: 20px;
+      padding: 18px 16px 22px;
+      margin-bottom: 28px;
+    }
+    .cp__beat-ribbon {
+      display: grid;
+      grid-template-columns: 80px repeat(16, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .cp__beat-ribbon-spacer { }
+    .cp__beat-marker {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--cp-cream-dim);
+      text-align: center;
+      padding: 2px 0;
+      border-radius: 4px;
+      transition: background 80ms linear, color 80ms linear;
+    }
+    .cp__beat-marker--downbeat { color: var(--cp-flame-deep); }
+    .cp__beat-marker--active {
+      background: var(--cp-flame);
+      color: var(--cp-walnut-dark);
+    }
+
+    .cp__rows {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cp__row {
+      display: grid;
+      grid-template-columns: 80px repeat(16, 1fr);
+      gap: 4px;
+      align-items: center;
+    }
+    .cp__row-label {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding-left: 4px;
+    }
+    .cp__row-name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--cp-cream);
+    }
+    .cp__row-hint {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--cp-cream-dim);
+    }
+    .cp__step {
+      aspect-ratio: 1 / 1;
+      min-height: 28px;
+      border-radius: 6px;
+      border: 0;
+      background: rgba(244,231,200,0.06);
+      cursor: pointer;
+      transition: background 80ms ease, transform 60ms ease, box-shadow 80ms ease;
+      padding: 0;
+    }
+    .cp__step:hover { background: rgba(244,231,200,0.14); }
+    .cp__step--downbeat { background: rgba(244,231,200,0.10); }
+    .cp__step--on {
+      background: var(--cp-flame);
+      box-shadow: 0 2px 8px rgba(246,193,94,0.4);
+    }
+    .cp__step--on.cp__step--kick { background: var(--cp-flame); }
+    .cp__step--on.cp__step--snare { background: var(--cp-rose); box-shadow: 0 2px 8px rgba(230,120,140,0.4); }
+    .cp__step--on.cp__step--hat { background: var(--cp-cream); box-shadow: 0 2px 8px rgba(244,231,200,0.4); }
+    .cp__step--on.cp__step--perc { background: var(--cp-mint); box-shadow: 0 2px 8px rgba(155,215,184,0.4); }
+    .cp__step--playing {
+      transform: scale(1.18);
+      outline: 2px solid var(--cp-flame);
+    }
+
+    /* SLIDERS */
+    .cp__sliders {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+      padding: 0 8px;
+    }
+    @media (max-width: 600px) { .cp__sliders { grid-template-columns: 1fr; } }
+    .cp__slide-label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--cp-cream-dim);
+      margin-bottom: 6px;
+    }
+    .cp__slide-range {
+      width: 100%;
+      accent-color: var(--cp-flame);
+    }
+
+    /* PATTERNS */
+    .cp__patterns {
+      background: rgba(0,0,0,0.22);
+      border: 1px solid rgba(246,193,94,0.14);
+      border-radius: 18px;
+      padding: 18px 20px;
+      margin-bottom: 28px;
+    }
+    .cp__patterns-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: var(--cp-cream-dim);
+      margin: 0 0 10px;
+    }
+    .cp__patterns-label--save { margin-top: 18px; }
+    .cp__patterns-row, .cp__slots-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .cp__preset {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(246,193,94,0.28);
+      background: transparent;
+      color: var(--cp-cream);
+      cursor: pointer;
+      transition: background 100ms ease, transform 60ms ease;
+    }
+    .cp__preset:hover { background: rgba(246,193,94,0.14); }
+    .cp__preset:active { transform: scale(0.97); }
+    .cp__slot {
+      flex: 1;
+      min-width: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(246,193,94,0.24);
+      background: transparent;
+      color: var(--cp-cream);
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .cp__slot:hover { background: rgba(246,193,94,0.1); }
+    .cp__slot--filled { border-color: var(--cp-flame); background: rgba(246,193,94,0.08); }
+    .cp__slot-num {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--cp-flame);
+    }
+    .cp__slot-state {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--cp-cream-dim);
+    }
+    .cp__slot-hint {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cp-cream-dim);
+      margin: 12px 0 0;
+      line-height: 1.5;
+    }
+
+    /* FOOTER */
+    .cp__footer {
+      margin-top: 36px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(246,193,94,0.14);
+      text-align: center;
+    }
+    .cp__footer-line {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cp-cream-dim);
+      line-height: 1.6;
+      margin: 0 0 8px;
+    }
+    .cp__footer-line a {
+      color: var(--cp-flame);
+      text-decoration: none;
+    }
+    .cp__footer-line a:hover { text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      .cp__beat-ribbon, .cp__row {
+        grid-template-columns: 60px repeat(16, 1fr);
+        gap: 3px;
+      }
+      .cp__step { min-height: 22px; border-radius: 4px; }
+      .cp__row-name { font-size: 12px; }
+      .cp__row-hint { font-size: 8px; }
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    // ---- types ----
+    type Voice = 'kick' | 'snare' | 'hat' | 'perc';
+    type Pattern = Record<Voice, boolean[]>;
+
+    const VOICES: Voice[] = ['kick', 'snare', 'hat', 'perc'];
+    const STEPS = 16;
+    const STORAGE_KEY = 'pc-cp-slots-v1';
+    const STORAGE_TEMPO = 'pc-cp-tempo-v1';
+    const STORAGE_SWING = 'pc-cp-swing-v1';
+
+    function emptyPattern(): Pattern {
+      return {
+        kick: new Array(STEPS).fill(false),
+        snare: new Array(STEPS).fill(false),
+        hat: new Array(STEPS).fill(false),
+        perc: new Array(STEPS).fill(false),
+      };
+    }
+
+    // ---- presets ----
+    const PRESETS: Record<string, Pattern> = {
+      house: {
+        kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0].map(Boolean),
+        snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+        hat:   [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0].map(Boolean),
+        perc:  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,1,0].map(Boolean),
+      },
+      break: {
+        kick:  [1,0,0,0, 0,0,1,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+        snare: [0,0,0,0, 1,0,0,0, 0,0,1,0, 0,1,0,0].map(Boolean),
+        hat:   [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1].map(Boolean),
+        perc:  [0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0].map(Boolean),
+      },
+      dembow: {
+        kick:  [1,0,0,1, 0,1,0,0, 1,0,0,1, 0,1,0,0].map(Boolean),
+        snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+        hat:   [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+        perc:  [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0].map(Boolean),
+      },
+      jazz: {
+        kick:  [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0].map(Boolean),
+        snare: [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0].map(Boolean),
+        hat:   [1,0,0,1, 1,0,0,1, 1,0,0,1, 1,0,0,1].map(Boolean),
+        perc:  [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,1,0,0].map(Boolean),
+      },
+      kraut: {
+        kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0].map(Boolean),
+        snare: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0].map(Boolean),
+        hat:   [0,1,0,1, 0,1,0,1, 0,1,0,1, 0,1,0,1].map(Boolean),
+        perc:  [0,0,0,1, 0,0,0,0, 0,0,0,1, 0,0,0,0].map(Boolean),
+      },
+      halftime: {
+        kick:  [1,0,0,0, 0,0,0,0, 1,0,0,1, 0,0,0,0].map(Boolean),
+        snare: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0].map(Boolean),
+        hat:   [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0].map(Boolean),
+        perc:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,1,0].map(Boolean),
+      },
+    };
+
+    // ---- state ----
+    let pattern: Pattern = JSON.parse(JSON.stringify(PRESETS.house));
+    let tempo = 110;
+    let swing = 0;
+    let volume = 0.65;
+    let playing = false;
+    let stepIdx = 0;
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    let noiseBuf: AudioBuffer | null = null;
+    let nextStepTime = 0;
+    let scheduleTimer: number | null = null;
+
+    // ---- noise buffer (one-shot prep) ----
+    function getNoiseBuffer(ac: AudioContext): AudioBuffer {
+      if (noiseBuf) return noiseBuf;
+      const len = ac.sampleRate * 0.5;
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      noiseBuf = buf;
+      return buf;
+    }
+
+    // ---- voice synths ----
+    function playKick(t: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, t);
+      osc.frequency.exponentialRampToValueAtTime(35, t + 0.13);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(1.0, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    }
+
+    function playSnare(t: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      // noise body
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2200;
+      bp.Q.value = 0.8;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.55, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      src.connect(bp).connect(g).connect(masterGain);
+      scheduler.trackSource(src);
+      src.start(t);
+      src.stop(t + 0.2);
+      // tone blip
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = 210;
+      og.gain.setValueAtTime(0.0001, t);
+      og.gain.exponentialRampToValueAtTime(0.35, t + 0.003);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+      osc.connect(og).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    }
+
+    function playHat(t: number, open = false) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 7000;
+      const g = ctx.createGain();
+      const dec = open ? 0.22 : 0.05;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.28, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      src.connect(hp).connect(g).connect(masterGain);
+      scheduler.trackSource(src);
+      src.start(t);
+      src.stop(t + dec + 0.02);
+    }
+
+    function playPerc(t: number) {
+      if (!ctx || !scheduler || !masterGain) return;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1200, t);
+      osc.frequency.exponentialRampToValueAtTime(600, t + 0.05);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+
+    function playStep(voice: Voice, t: number) {
+      switch (voice) {
+        case 'kick': playKick(t); break;
+        case 'snare': playSnare(t); break;
+        case 'hat': playHat(t, false); break;
+        case 'perc': playPerc(t); break;
+      }
+    }
+
+    // ---- transport ----
+    function stepDurationSec(): number {
+      // 16th notes: a quarter = 60/tempo, 16th = quarter/4
+      return (60 / tempo) / 4;
+    }
+
+    function stepTimeOffset(i: number): number {
+      // Apply swing: delay odd 16ths (1,3,5,...) by up to ~33% of step duration
+      const isOddSixteenth = i % 2 === 1;
+      if (!isOddSixteenth) return 0;
+      const dur = stepDurationSec();
+      return dur * (swing / 100) * 0.66;
+    }
+
+    function startTransport() {
+      if (!ctx) {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        scheduler = createAudioScheduler(ctx);
+        masterGain = ctx.createGain();
+        masterGain.gain.value = volume;
+        masterGain.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      playing = true;
+      stepIdx = 0;
+      nextStepTime = ctx.currentTime + 0.06;
+      tick();
+    }
+
+    function tick() {
+      if (!playing || !ctx || !scheduler) return;
+      const lookAhead = 0.15;   // seconds
+      const intervalMs = 25;
+      while (nextStepTime < ctx.currentTime + lookAhead) {
+        const i = stepIdx;
+        const fireAt = nextStepTime + stepTimeOffset(i);
+        for (const v of VOICES) {
+          if (pattern[v][i]) playStep(v, fireAt);
+        }
+        scheduler.schedule(() => { markPlayhead(i); }, nextStepTime);
+        const dur = stepDurationSec();
+        nextStepTime += dur;
+        stepIdx = (stepIdx + 1) % STEPS;
+      }
+      scheduleTimer = window.setTimeout(tick, intervalMs);
+    }
+
+    function stopTransport() {
+      playing = false;
+      if (scheduleTimer != null) { clearTimeout(scheduleTimer); scheduleTimer = null; }
+      if (scheduler) scheduler.stopAll();
+      clearPlayhead();
+      stepIdx = 0;
+    }
+
+    // ---- render ----
+    function renderRibbon() {
+      const ribbon = document.getElementById('cp-beat-ribbon')!;
+      ribbon.innerHTML = '<div class="cp__beat-ribbon-spacer"></div>' +
+        Array.from({ length: STEPS }, (_, i) => {
+          const isDownbeat = i % 4 === 0;
+          return `<div class="cp__beat-marker${isDownbeat ? ' cp__beat-marker--downbeat' : ''}" data-i="${i}">${isDownbeat ? (i / 4 + 1) : '·'}</div>`;
+        }).join('');
+    }
+
+    function renderRows() {
+      const rowsEl = document.getElementById('cp-rows')!;
+      const labels: Record<Voice, [string, string]> = {
+        kick: ['kick', '60→35Hz sine'],
+        snare: ['snare', 'noise + 200Hz'],
+        hat: ['hat', 'HP noise'],
+        perc: ['perc', '1.2kHz square'],
+      };
+      rowsEl.innerHTML = VOICES.map(v => `
+        <div class="cp__row" data-voice="${v}">
+          <div class="cp__row-label">
+            <span class="cp__row-name">${labels[v][0]}</span>
+            <span class="cp__row-hint">${labels[v][1]}</span>
+          </div>
+          ${pattern[v].map((on, i) => `<button class="cp__step cp__step--${v}${i % 4 === 0 ? ' cp__step--downbeat' : ''}${on ? ' cp__step--on' : ''}" data-voice="${v}" data-i="${i}" aria-label="${v} step ${i+1}"></button>`).join('')}
+        </div>
+      `).join('');
+    }
+
+    function markPlayhead(i: number) {
+      document.querySelectorAll('.cp__step--playing').forEach(el => el.classList.remove('cp__step--playing'));
+      document.querySelectorAll('.cp__beat-marker--active').forEach(el => el.classList.remove('cp__beat-marker--active'));
+      document.querySelectorAll(`.cp__step[data-i="${i}"]`).forEach(el => el.classList.add('cp__step--playing'));
+      document.querySelector(`.cp__beat-marker[data-i="${i}"]`)?.classList.add('cp__beat-marker--active');
+    }
+
+    function clearPlayhead() {
+      document.querySelectorAll('.cp__step--playing').forEach(el => el.classList.remove('cp__step--playing'));
+      document.querySelectorAll('.cp__beat-marker--active').forEach(el => el.classList.remove('cp__beat-marker--active'));
+    }
+
+    function refreshStep(v: Voice, i: number) {
+      const el = document.querySelector(`.cp__step[data-voice="${v}"][data-i="${i}"]`);
+      if (!el) return;
+      el.classList.toggle('cp__step--on', pattern[v][i]);
+    }
+
+    // ---- slots ----
+    type Slots = Record<string, Pattern | null>;
+    function loadSlots(): Slots {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+      return { '1': null, '2': null, '3': null, '4': null };
+    }
+    function saveSlots(s: Slots) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {}
+    }
+    function refreshSlotChips() {
+      const slots = loadSlots();
+      for (const n of ['1','2','3','4']) {
+        const stateEl = document.getElementById(`cp-slot-${n}-state`);
+        const btn = document.querySelector(`.cp__slot[data-slot="${n}"]`);
+        if (slots[n]) {
+          stateEl!.textContent = 'saved';
+          btn!.classList.add('cp__slot--filled');
+        } else {
+          stateEl!.textContent = 'empty';
+          btn!.classList.remove('cp__slot--filled');
+        }
+      }
+    }
+
+    // ---- wire up ----
+    function init() {
+      renderRibbon();
+      renderRows();
+      refreshSlotChips();
+
+      // restore tempo / swing
+      try {
+        const t = parseInt(localStorage.getItem(STORAGE_TEMPO) || '');
+        if (!Number.isNaN(t) && t >= 60 && t <= 180) tempo = t;
+        const s = parseInt(localStorage.getItem(STORAGE_SWING) || '');
+        if (!Number.isNaN(s) && s >= 0 && s <= 60) swing = s;
+      } catch {}
+      (document.getElementById('cp-bpm') as HTMLInputElement).value = String(tempo);
+      (document.getElementById('cp-swing') as HTMLInputElement).value = String(swing);
+      document.getElementById('cp-tempo-val')!.textContent = String(tempo);
+
+      // play / stop
+      document.getElementById('cp-play')!.addEventListener('click', () => {
+        if (playing) {
+          stopTransport();
+          document.getElementById('cp-play-icon')!.textContent = '▶';
+        } else {
+          startTransport();
+          document.getElementById('cp-play-icon')!.textContent = '■';
+        }
+      });
+
+      // step toggles (delegated)
+      document.getElementById('cp-rows')!.addEventListener('click', e => {
+        const tgt = e.target as HTMLElement;
+        if (!tgt.classList.contains('cp__step')) return;
+        const v = tgt.getAttribute('data-voice') as Voice;
+        const i = parseInt(tgt.getAttribute('data-i') || '0');
+        pattern[v][i] = !pattern[v][i];
+        refreshStep(v, i);
+      });
+
+      // tempo
+      const bpmEl = document.getElementById('cp-bpm') as HTMLInputElement;
+      bpmEl.addEventListener('input', () => {
+        tempo = parseInt(bpmEl.value);
+        document.getElementById('cp-tempo-val')!.textContent = String(tempo);
+        try { localStorage.setItem(STORAGE_TEMPO, String(tempo)); } catch {}
+      });
+
+      // swing
+      const swingEl = document.getElementById('cp-swing') as HTMLInputElement;
+      swingEl.addEventListener('input', () => {
+        swing = parseInt(swingEl.value);
+        try { localStorage.setItem(STORAGE_SWING, String(swing)); } catch {}
+      });
+
+      // volume
+      const volEl = document.getElementById('cp-vol') as HTMLInputElement;
+      volEl.addEventListener('input', () => {
+        volume = parseInt(volEl.value) / 100;
+        if (masterGain && ctx) {
+          masterGain.gain.setTargetAtTime(volume, ctx.currentTime, 0.02);
+        }
+      });
+
+      // fill (randomize)
+      document.getElementById('cp-fill')!.addEventListener('click', () => {
+        const densities: Record<Voice, number> = { kick: 0.25, snare: 0.18, hat: 0.55, perc: 0.18 };
+        for (const v of VOICES) {
+          for (let i = 0; i < STEPS; i++) {
+            pattern[v][i] = Math.random() < densities[v];
+          }
+        }
+        renderRows();
+      });
+
+      // clear
+      document.getElementById('cp-clear')!.addEventListener('click', () => {
+        pattern = emptyPattern();
+        renderRows();
+      });
+
+      // presets
+      document.querySelectorAll('.cp__preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const name = btn.getAttribute('data-preset')!;
+          const p = PRESETS[name];
+          if (!p) return;
+          pattern = JSON.parse(JSON.stringify(p));
+          renderRows();
+        });
+      });
+
+      // slots — tap to load, long-press / double-tap to save
+      let pressTimer: number | null = null;
+      let lastTap = 0;
+      document.querySelectorAll('.cp__slot').forEach(btn => {
+        const num = btn.getAttribute('data-slot')!;
+
+        btn.addEventListener('pointerdown', () => {
+          if (pressTimer != null) clearTimeout(pressTimer);
+          pressTimer = window.setTimeout(() => {
+            const slots = loadSlots();
+            slots[num] = JSON.parse(JSON.stringify(pattern));
+            saveSlots(slots);
+            refreshSlotChips();
+            document.getElementById('cp-slot-hint')!.textContent = `Saved to slot ${num}.`;
+            pressTimer = null;
+          }, 900);
+        });
+        const cancelPress = () => {
+          if (pressTimer != null) { clearTimeout(pressTimer); pressTimer = null; }
+        };
+        btn.addEventListener('pointerup', cancelPress);
+        btn.addEventListener('pointerleave', cancelPress);
+        btn.addEventListener('pointercancel', cancelPress);
+
+        btn.addEventListener('click', () => {
+          const now = Date.now();
+          if (now - lastTap < 350) {
+            // double-tap → save
+            const slots = loadSlots();
+            slots[num] = JSON.parse(JSON.stringify(pattern));
+            saveSlots(slots);
+            refreshSlotChips();
+            document.getElementById('cp-slot-hint')!.textContent = `Saved to slot ${num}.`;
+            lastTap = 0;
+            return;
+          }
+          lastTap = now;
+          // single click → load (if filled)
+          const slots = loadSlots();
+          const p = slots[num];
+          if (p) {
+            pattern = JSON.parse(JSON.stringify(p));
+            renderRows();
+            document.getElementById('cp-slot-hint')!.textContent = `Loaded slot ${num}.`;
+          } else {
+            document.getElementById('cp-slot-hint')!.textContent = `Slot ${num} is empty. Long-press or double-tap to save.`;
+          }
+        });
+      });
+
+      // visibility — pause on tab switch
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && playing) {
+          stopTransport();
+          document.getElementById('cp-play-icon')!.textContent = '▶';
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

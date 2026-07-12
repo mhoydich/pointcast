@@ -428,6 +428,12 @@ const el = {
   reenactmentKicker: document.querySelector("#reenactmentKicker"),
   reenactmentHeadline: document.querySelector("#reenactmentHeadline"),
   reenactmentMeta: document.querySelector("#reenactmentMeta"),
+  reenactmentVisualLayer: document.querySelector("#reenactmentVisualLayer"),
+  reenactmentPressure: document.querySelector("#reenactmentPressure"),
+  reenactmentArrows: document.querySelector("#reenactmentArrows"),
+  reenactmentSpotlight: document.querySelector("#reenactmentSpotlight"),
+  reenactmentBeatPhase: document.querySelector("#reenactmentBeatPhase"),
+  reenactmentBeatCue: document.querySelector("#reenactmentBeatCue"),
   tvClock: document.querySelector("#tvClock"),
   tvLeftGang: document.querySelector("#tvLeftGang"),
   tvLeftAlive: document.querySelector("#tvLeftAlive"),
@@ -479,6 +485,7 @@ const state = {
   interstitialClock: 0,
   interstitialSignature: "",
   reenactment: null,
+  reenactmentVisuals: null,
   challenge: null,
   challengeProgress: null,
   challengeClock: 0,
@@ -581,6 +588,15 @@ function buildSnapshot() {
     speed: state.speed,
     weather: state.weather,
     reenactment: state.reenactment,
+    reenactmentVisuals: state.reenactmentVisuals ? {
+      active: state.reenactmentVisuals.active,
+      shape: state.reenactmentVisuals.shape,
+      phaseLabel: state.reenactmentVisuals.phaseLabel,
+      visualBeat: state.reenactmentVisuals.visualCue,
+      pressureLane: state.reenactmentVisuals.pressureLane,
+      surgeTeam: state.reenactmentVisuals.surgeTeam === null ? null : gangs[state.reenactmentVisuals.surgeTeam]?.short,
+      beatClock: Math.round(state.reenactmentVisuals.beatClock),
+    } : null,
     autoNext: state.autoNext,
     rootingFor: state.rootingFor,
     field: {
@@ -1055,6 +1071,71 @@ function pickReenactmentGangs(setup) {
   return [gangPool[first], gangPool[second]];
 }
 
+function reenactmentVisualProfile(shape = "close") {
+  const profiles = {
+    close: {
+      phaseLabel: "Close finish choreography",
+      pressureLane: "auction",
+      surgeTeam: null,
+      visualCue: "Windy lane squeeze: both gangs hold formation until the late gust.",
+      className: "visual-close",
+      spotlight: { x: 0.5, y: 0.5 },
+    },
+    comeback: {
+      phaseLabel: "Comeback choreography",
+      pressureLane: "meme",
+      surgeTeam: 0,
+      visualCue: "Pinned early, then the winner gets a scheduled belief surge.",
+      className: "visual-comeback",
+      spotlight: { x: 0.37, y: 0.62 },
+    },
+    blowout: {
+      phaseLabel: "Blowout choreography",
+      pressureLane: "prop",
+      surgeTeam: 0,
+      visualCue: "Hot rout arrows: the winner owns lane pressure from the open.",
+      className: "visual-blowout",
+      spotlight: { x: 0.62, y: 0.35 },
+    },
+    upset: {
+      phaseLabel: "Upset choreography",
+      pressureLane: "auction",
+      surgeTeam: 0,
+      visualCue: "Underdog auction noise: belief spike and faster specials are visible.",
+      className: "visual-upset",
+      spotlight: { x: 0.45, y: 0.45 },
+    },
+    overtime: {
+      phaseLabel: "Overtime choreography",
+      pressureLane: "center",
+      surgeTeam: null,
+      visualCue: "Sudden-death rift: center spotlight and high-pressure replay cadence.",
+      className: "visual-overtime",
+      spotlight: { x: 0.5, y: 0.5 },
+    },
+  };
+  return profiles[shape] || profiles.close;
+}
+
+function createReenactmentVisuals(setup) {
+  if (!setup) return null;
+  const shape = setup.shape || "close";
+  const profile = reenactmentVisualProfile(shape);
+  return {
+    active: true,
+    shape,
+    phaseLabel: profile.phaseLabel,
+    beatClock: 0,
+    pressureLane: profile.pressureLane,
+    surgeTeam: profile.surgeTeam,
+    visualCue: profile.visualCue,
+    className: profile.className,
+    spotlight: profile.spotlight,
+    pulseClock: 120,
+    surgeFired: false,
+  };
+}
+
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -1187,6 +1268,34 @@ function applyReenactmentBias(setup) {
   if (setup.shape === "overtime") state.specialClock = 58;
 }
 
+function applyReenactmentVisualSetup(setup, bounds) {
+  if (!setup || !state.reenactmentVisuals) return;
+  const shape = state.reenactmentVisuals.shape;
+  state.units.forEach((unit) => {
+    if (shape === "comeback") {
+      unit.x += unit.team === 0 ? -bounds.width * 0.035 : -bounds.width * 0.02;
+      unit.guard = unit.team === 1 ? Math.max(unit.guard, 30) : unit.guard;
+    }
+    if (shape === "blowout") {
+      unit.x += unit.team === 0 ? bounds.width * 0.045 : bounds.width * 0.025;
+      unit.haste = unit.team === 0 ? Math.max(unit.haste, 42) : unit.haste;
+    }
+    if (shape === "upset" && unit.team === 0) {
+      unit.special = Math.max(22, unit.special - 42);
+      unit.node?.classList.add("reenactment-belief");
+    }
+    if (shape === "overtime") {
+      unit.x += unit.team === 0 ? bounds.width * 0.055 : -bounds.width * 0.055;
+      unit.node?.classList.add("reenactment-sudden");
+    }
+    if (shape === "close") {
+      unit.y += Math.sin(unit.index) * 8;
+    }
+    unit.x = clamp(unit.x, bounds.minX, bounds.maxX);
+    unit.y = clamp(unit.y, bounds.minY, bounds.maxY);
+  });
+}
+
 function resetMatch(setup = null) {
   clearTimeout(state.nextTimer);
   state.units.forEach((unit) => unit.node?.remove());
@@ -1223,6 +1332,7 @@ function resetMatch(setup = null) {
     headline: setup.headline || "Nouns reenactment launched",
     guardrail: setup.guardrail || "Informational alt-broadcast setup, not an official replay.",
   } : null;
+  state.reenactmentVisuals = createReenactmentVisuals(setup);
   state.battleType = setup ? battleTypeForReenactment(setup.shape) : currentBattleType();
   state.bossField = currentBossField(state.battleType);
   armChallenge();
@@ -1268,10 +1378,12 @@ function resetMatch(setup = null) {
     }
   }
   applyReenactmentBias(setup);
+  applyReenactmentVisualSetup(setup, bounds);
 
   if (setup) {
     addLog(`${setup.sourceResult || setup.winner + " " + setup.score} becomes ${gangs[0].name} vs ${gangs[1].name}.`);
     addLog(`${setup.field}: ${setup.modifier}. ${setup.guardrail || "Informational setup only."}`);
+    addLog(`Visual reenactment: ${state.reenactmentVisuals.visualCue}`);
   } else {
     addLog(`${gangs[0].name} and ${gangs[1].name} enter the field, ${count} strong on each side.`);
   }
@@ -2735,6 +2847,67 @@ function quickSimChallenge(winnerSide, loserSide, winnerScore, loserScore) {
   scoreChallenge(side, challenge.target, challenge.metric, "quick sim");
 }
 
+function updateReenactmentVisuals(dt, bounds) {
+  const visuals = state.reenactmentVisuals;
+  if (!visuals?.active || !state.reenactment?.active) return;
+  visuals.beatClock += dt;
+  visuals.pulseClock -= dt;
+
+  const left = aliveUnits(0).length;
+  const right = aliveUnits(1).length;
+  const closeGap = Math.abs(left - right) <= 3;
+  if (visuals.shape === "close") {
+    visuals.visualCue = closeGap
+      ? "Late gust beat: survivor counts are tight, next special owns the screen."
+      : "Windy lane squeeze: both gangs keep the result close enough to read.";
+    visuals.surgeTeam = closeGap ? null : (left < right ? 0 : 1);
+  }
+  if (visuals.shape === "comeback" && !visuals.surgeFired && visuals.beatClock > 520) {
+    visuals.surgeFired = true;
+    visuals.surgeTeam = 0;
+    visuals.visualCue = "Scheduled comeback surge: the pinned winner side gets its belief wave.";
+    aliveUnits(0).forEach((unit) => {
+      unit.morale = Math.min(1.48, unit.morale + 0.2);
+      unit.haste = Math.max(unit.haste, 46);
+      unit.special = Math.max(0, unit.special - 28);
+    });
+    recordMove(gangs[0].short, "reenactment comeback surge");
+    addOccasionalLog(`${gangs[0].name} hit the reenactment comeback surge.`);
+    flashField("reenactment-surge", 1100);
+  }
+  if (visuals.shape === "blowout" && visuals.pulseClock <= 0) {
+    visuals.pulseClock = 150;
+    visuals.surgeTeam = 0;
+    visuals.visualCue = "Hot rout pulse: the winner keeps pushing lane pressure.";
+    aliveUnits(0).forEach((unit) => {
+      unit.morale = Math.min(1.45, unit.morale + 0.04);
+      unit.special = Math.max(0, unit.special - 8);
+    });
+  }
+  if (visuals.shape === "upset" && visuals.pulseClock <= 0) {
+    visuals.pulseClock = 132;
+    visuals.surgeTeam = 0;
+    visuals.visualCue = "Auction-floor belief spike: the underdog special clock gets loud.";
+    const underdogs = aliveUnits(0);
+    underdogs.forEach((unit) => {
+      unit.guard = Math.max(unit.guard, 18);
+      unit.special = Math.max(0, unit.special - 12);
+    });
+    if (underdogs.length) cueReplay(`Upset belief spike · ${gangs[0].short}`, underdogs[Math.floor(Math.random() * underdogs.length)]);
+  }
+  if (visuals.shape === "overtime") {
+    visuals.visualCue = "Sudden-death rift: center spotlight, high damage, no scripted winner.";
+    visuals.surgeTeam = null;
+    if (visuals.pulseClock <= 0) {
+      visuals.pulseClock = 88;
+      const center = { x: bounds.width / 2, y: bounds.height / 2 };
+      aliveUnits().forEach((unit) => {
+        if (distance(unit, center) < bounds.width * 0.23) unit.morale = Math.min(1.52, unit.morale + 0.05);
+      });
+    }
+  }
+}
+
 function update(time = 0) {
   const elapsed = state.lastTime ? time - state.lastTime : 16;
   state.lastTime = time;
@@ -2752,6 +2925,7 @@ function update(time = 0) {
     state.challengeClock -= dt;
     state.replayClock = Math.max(0, state.replayClock - dt);
     state.interstitialClock = Math.max(0, state.interstitialClock - dt);
+    updateReenactmentVisuals(dt, bounds);
     if (state.specialClock <= 0) {
       state.specialClock = rand(260, 430);
       gangCall();
@@ -2860,6 +3034,7 @@ function render() {
   renderRooting(left, right);
   renderScout();
   renderReenactmentBanner(left, right);
+  renderReenactmentVisuals(left, right);
   renderTv(left, right);
   broadcastSnapshot();
 }
@@ -2875,7 +3050,45 @@ function renderReenactmentBanner(left, right) {
   const source = setup.sourceResult || `${setup.league || "Sports"}: ${setup.winner || gangs[0].short} ${setup.score || ""} vs ${setup.loser || gangs[1].short}`;
   el.reenactmentKicker.textContent = `${setup.league || "Sports"} ${shape} reenactment`;
   el.reenactmentHeadline.textContent = setup.headline || source;
-  el.reenactmentMeta.textContent = `${source} · ${left}-${right} alive · ${setup.field || fieldName()} · ${setup.guardrail || "Informational alt-broadcast setup."}`;
+  const visualBeat = state.reenactmentVisuals?.visualCue ? ` · ${state.reenactmentVisuals.visualCue}` : "";
+  el.reenactmentMeta.textContent = `${source} · ${left}-${right} alive · ${setup.field || fieldName()}${visualBeat} · ${setup.guardrail || "Informational alt-broadcast setup."}`;
+}
+
+function renderReenactmentVisuals(left, right) {
+  const visuals = state.reenactmentVisuals;
+  const active = Boolean(visuals?.active && state.reenactment?.active);
+  if (!el.reenactmentVisualLayer) return;
+  el.reenactmentVisualLayer.hidden = !active;
+  const visualClasses = ["visual-close", "visual-comeback", "visual-blowout", "visual-upset", "visual-overtime"];
+  el.field.classList.remove(...visualClasses);
+  if (!active) return;
+  const bounds = fieldBounds();
+  const laneMap = { prop: 0.31, auction: 0.5, meme: 0.69, center: 0.5 };
+  const y = bounds.height * (laneMap[visuals.pressureLane] || 0.5);
+  const pressureWidth = visuals.pressureLane === "center" ? bounds.width * 0.28 : bounds.width * 0.68;
+  const pressureHeight = visuals.pressureLane === "center" ? Math.min(bounds.width, bounds.height) * 0.22 : Math.min(bounds.width, bounds.height) * 0.12;
+  const direction = visuals.surgeTeam === 1 ? -1 : 1;
+  el.field.classList.add(visuals.className);
+  el.reenactmentVisualLayer.dataset.shape = visuals.shape;
+  el.reenactmentVisualLayer.dataset.lane = visuals.pressureLane;
+  el.reenactmentVisualLayer.dataset.surgeTeam = visuals.surgeTeam === null ? "none" : String(visuals.surgeTeam);
+  if (el.reenactmentPressure) {
+    el.reenactmentPressure.style.left = `${bounds.width / 2}px`;
+    el.reenactmentPressure.style.top = `${y}px`;
+    el.reenactmentPressure.style.width = `${pressureWidth}px`;
+    el.reenactmentPressure.style.height = `${pressureHeight}px`;
+  }
+  if (el.reenactmentArrows) {
+    el.reenactmentArrows.style.left = `${bounds.width * (direction === 1 ? 0.34 : 0.66)}px`;
+    el.reenactmentArrows.style.top = `${y}px`;
+    el.reenactmentArrows.style.scale = `${direction} 1`;
+  }
+  if (el.reenactmentSpotlight) {
+    el.reenactmentSpotlight.style.left = `${bounds.width * (visuals.spotlight?.x || 0.5)}px`;
+    el.reenactmentSpotlight.style.top = `${bounds.height * (visuals.spotlight?.y || 0.5)}px`;
+  }
+  if (el.reenactmentBeatPhase) el.reenactmentBeatPhase.textContent = visuals.phaseLabel;
+  if (el.reenactmentBeatCue) el.reenactmentBeatCue.textContent = `${visuals.visualCue} ${left}-${right} alive.`;
 }
 
 function renderRivalryBadge() {

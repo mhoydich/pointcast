@@ -1,0 +1,358 @@
+---
+/**
+ * /webring — the federation directory.
+ *
+ * Sprint 10 of the live-artifacts arc · Distribution #4.
+ *
+ * The page that answers "what's the broadcast right now?" in one
+ * screen. Four bands:
+ *
+ *   1. ROOMS HERE — every room hosted on this node, pulled from the
+ *      same builders the renderers use (single source of truth)
+ *   2. RECENT ACROSS THE BROADCAST — last 8 SignalEvents
+ *   3. FRESH ON THE WALLS — the most recent addable artifacts
+ *   4. ON THE WEBRING — every node in the registry, with status badge
+ *      + a link to its /node.json
+ *
+ * Lives at /webring (not /rooms — that's the pixel-iso town view).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { knownNodes } from '../data/nodes-registry';
+import { buildMeditateRoom } from '../data/rooms/meditate';
+import { seedArtifacts } from '../data/artifacts/seed';
+import { sortAndCap, type SignalEvent } from '../lib/signal-contract';
+import recentShipsData from '../data/recent-ships.json';
+
+interface ShipRow { ref: string; title: string; href: string; tag: string; at: string; }
+
+// ─── Rooms hosted on this node ──────────────────────────────────────
+const meditate = buildMeditateRoom();
+const localRooms = [
+  {
+    id: meditate.id,
+    title: meditate.title,
+    url: `/r/${meditate.id}`,
+    jsonUrl: `/${meditate.id}.json`,
+    visualizer: meditate.visualizer?.type ?? 'breath',
+    status: 'open' as const,
+    description: meditate.description,
+    artifact: meditate.artifact,
+  },
+];
+
+// ─── Recent SignalEvents ────────────────────────────────────────────
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+const ships = (recentShipsData as { ships: ShipRow[] }).ships;
+
+const eventsAll: SignalEvent[] = [];
+for (const b of blocks) {
+  eventsAll.push({
+    id: `blk_${b.data.id}`,
+    at: new Date(b.data.timestamp).toISOString(),
+    kind: 'block_published',
+    nodeId: 'pointcast',
+    headline: b.data.title,
+    href: `/b/${b.data.id}`,
+  });
+}
+for (const s of ships) {
+  eventsAll.push({
+    id: `ship_${s.ref.replace(/[#/]/g, '')}`,
+    at: new Date(s.at).toISOString(),
+    kind: 'ship_landed',
+    nodeId: 'pointcast',
+    headline: s.title,
+    href: s.href,
+  });
+}
+const recentEvents = sortAndCap(eventsAll, 8);
+
+// ─── Latest artifacts across rooms ──────────────────────────────────
+const artifacts = seedArtifacts();
+const latestArtifacts = artifacts
+  .slice()
+  .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+  .slice(0, 4);
+
+// ─── Nodes registry ─────────────────────────────────────────────────
+const nodes = knownNodes();
+
+const title = 'PointCast — the webring';
+const description = `${localRooms.length} rooms here, ${nodes.length} nodes on the webring, ${recentEvents.length} recent events. The live broadcast surface.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="wr">
+
+    <header class="wr__head">
+      <p class="kicker mono">THE BROADCAST · LIVE</p>
+      <h1>Rooms, signals, nodes.</h1>
+      <p class="dek">
+        Everything PointCast hosts right now. <a href="/r/meditate">{localRooms.length} room{localRooms.length === 1 ? '' : 's'} here</a>,
+        <a href="/r/federation/demo">{nodes.length} node{nodes.length === 1 ? '' : 's'} on the webring</a>,
+        <a href="/signal-feed.json">{recentEvents.length} recent signals</a>, and
+        <a href="/r/wall">{latestArtifacts.length} fresh artifacts</a> on the walls.
+      </p>
+    </header>
+
+    {/* ─── Rooms here ─── */}
+    <section class="wr__band">
+      <header class="wr__band-head">
+        <h2 class="wr__band-h">Rooms here</h2>
+        <a class="wr__band-cta mono" href="/node.json">/node.json</a>
+      </header>
+      <ul class="wr__rooms">
+        {localRooms.map((r) => (
+          <li class="wr__room">
+            {r.artifact?.image && (
+              <img class="wr__room-img" src={r.artifact.image} alt={r.artifact.name} loading="lazy" />
+            )}
+            <div class="wr__room-body">
+              <header class="wr__room-head">
+                <a class="wr__room-title" href={r.url}>{r.title}</a>
+                <span class={`wr__badge wr__badge--${r.status}`}>{r.status}</span>
+              </header>
+              <p class="wr__room-desc">{r.description}</p>
+              <p class="wr__room-meta mono">
+                visualizer · {r.visualizer}
+                <span aria-hidden="true"> · </span>
+                <a href={r.jsonUrl}>{r.jsonUrl}</a>
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ─── Recent across the broadcast ─── */}
+    <section class="wr__band">
+      <header class="wr__band-head">
+        <h2 class="wr__band-h">Recent across the broadcast</h2>
+        <a class="wr__band-cta mono" href="/signal-feed.json">/signal-feed.json</a>
+      </header>
+      <ol class="wr__events">
+        {recentEvents.map((e) => (
+          <li class="wr__event">
+            <span class={`wr__event-kind wr__event-kind--${e.kind.replace(/_/g, '-')}`}>
+              {e.kind.replace(/_/g, ' ')}
+            </span>
+            <a class="wr__event-link" href={e.href ?? '#'}>{e.headline}</a>
+            <time class="wr__event-time mono" datetime={e.at}>
+              {new Date(e.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </time>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    {/* ─── Fresh on the walls ─── */}
+    <section class="wr__band">
+      <header class="wr__band-head">
+        <h2 class="wr__band-h">Fresh on the walls</h2>
+        <a class="wr__band-cta mono" href="/r/wall">→ /r/wall</a>
+      </header>
+      <ul class="wr__artifacts">
+        {latestArtifacts.map((a) => (
+          <li class="wr__artifact">
+            <span class={`wr__art-kind wr__art-kind--${a.kind}`}>{a.kind}</span>
+            <span class="wr__art-room mono">/r/{a.roomId}</span>
+            <p class="wr__art-title">{a.title}</p>
+            {a.caption && <p class="wr__art-cap">{a.caption}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* ─── On the webring ─── */}
+    <section class="wr__band">
+      <header class="wr__band-head">
+        <h2 class="wr__band-h">On the webring</h2>
+        <a class="wr__band-cta mono" href="/nodes.json">/nodes.json</a>
+      </header>
+      <ul class="wr__nodes">
+        {nodes.map((n) => (
+          <li class="wr__node">
+            <header class="wr__node-head">
+              <span class="wr__node-id mono">{n.id}</span>
+              <a class="wr__node-name" href={n.home}>{n.name}</a>
+              <span class={`wr__badge wr__badge--${n.status === 'live' ? 'open' : n.status}`}>{n.status}</span>
+            </header>
+            <p class="wr__node-desc">{n.description}</p>
+            <p class="wr__node-meta mono">
+              {n.location && <span>{n.location}</span>}
+              {n.location && n.operator && <span aria-hidden="true"> · </span>}
+              {n.operator && <span>operator: {n.operator}</span>}
+              <span aria-hidden="true"> · </span>
+              <a href={n.nodeJsonUrl}>{n.nodeJsonUrl.replace(/^https?:\/\//, '')}</a>
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p class="wr__add mono">
+        Add your node: open a PR appending to <code>src/data/nodes-registry.ts</code> in the
+        <a href="https://github.com/mhoydich/pointcast">pointcast</a> repo. See
+        <a href="/docs/run-your-own-node.md">run your own node</a>.
+      </p>
+    </section>
+
+    {/* ─── Foot ─── */}
+    <footer class="wr__foot mono">
+      <strong>protocol surfaces:</strong>
+      <a href="/room-contract/v1.json">room-contract v1</a>
+      <a href="/federation-contract/v1.json">federation v1</a>
+      <a href="/artifact-contract/v1.json">artifact v1</a>
+      <a href="/signal-contract/v1.json">signal v1</a>
+      <a href="/embed.js">embed.js</a>
+      <a href="/room-maker">/room-maker</a>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .wr {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    background: #f7f5ef;
+    min-height: calc(100vh - 88px);
+    color: #1f1b15;
+    font-family: var(--font-body, ui-sans-serif, system-ui);
+  }
+
+  .wr__head { margin: 0 0 32px; max-width: 760px; }
+  .wr__head .kicker { font-size: 10px; letter-spacing: 0.18em; color: #6a6154; text-transform: uppercase; margin: 0 0 12px; }
+  .wr__head h1 {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: clamp(30px, 4vw, 46px);
+    font-weight: 500; margin: 0 0 14px; letter-spacing: -0.01em;
+  }
+  .wr__head .dek { margin: 0; font-size: 15px; line-height: 1.65; color: #4a4434; }
+  .wr__head .dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  .wr__band { margin: 0 0 36px; }
+  .wr__band-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid #ddd9cc;
+  }
+  .wr__band-h {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: 20px; font-weight: 500; margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .wr__band-cta { font-size: 11px; letter-spacing: 0.14em; color: #6a6154; text-decoration: none; text-transform: uppercase; }
+  .wr__band-cta:hover { color: #1f1b15; }
+
+  /* Rooms */
+  .wr__rooms { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .wr__room {
+    display: grid; grid-template-columns: 1fr; gap: 12px;
+    padding: 14px 16px; background: #fff; border: 1px solid #ddd9cc; border-radius: 8px;
+  }
+  @media (min-width: 640px) {
+    .wr__room { grid-template-columns: 100px 1fr; align-items: start; }
+  }
+  .wr__room-img { width: 100px; height: 100px; object-fit: cover; border-radius: 4px; background: #1f1b15; }
+  .wr__room-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 6px; }
+  .wr__room-title {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: 18px; font-weight: 500;
+    color: #1f1b15; text-decoration: none; border-bottom: 1px solid transparent;
+  }
+  .wr__room-title:hover { border-bottom-color: currentColor; }
+  .wr__room-desc { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: #4a4434; }
+  .wr__room-meta { margin: 0; font-size: 11px; color: #6a6154; letter-spacing: 0.04em; }
+  .wr__room-meta a { color: #6a6154; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .wr__room-meta a:hover { color: #1f1b15; border-bottom-color: currentColor; }
+
+  .wr__badge {
+    font-family: ui-monospace, monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+    padding: 2px 7px; border-radius: 2px; text-transform: uppercase;
+  }
+  .wr__badge--open       { background: #d6e6e1; color: #1f5b48; }
+  .wr__badge--closed     { background: #ddd9cc; color: #6a6154; }
+  .wr__badge--scheduled  { background: #e1ebed; color: #1b3a5b; }
+  .wr__badge--beta       { background: #f5e6d4; color: #874c1d; }
+  .wr__badge--incubating { background: #efe7d6; color: #7c5c1f; }
+
+  /* Events */
+  .wr__events { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .wr__event {
+    display: grid; grid-template-columns: 110px 1fr auto; gap: 12px;
+    align-items: baseline; padding: 8px 12px;
+    background: #fff; border: 1px solid #ddd9cc; border-radius: 6px;
+    font-size: 13px;
+  }
+  .wr__event-kind {
+    font-family: ui-monospace, monospace;
+    font-size: 9px; letter-spacing: 0.16em; font-weight: 700;
+    padding: 3px 6px; border-radius: 2px; text-transform: uppercase; text-align: center;
+  }
+  .wr__event-kind--block-published       { background: #efe7d6; color: #7c5c1f; }
+  .wr__event-kind--ship-landed           { background: #f5e6d4; color: #874c1d; }
+  .wr__event-kind--room-opened           { background: #d6e6e1; color: #1f5b48; }
+  .wr__event-kind--room-closed           { background: #ddd9cc; color: #6a6154; }
+  .wr__event-kind--federation-subscribed { background: #e1ebed; color: #1b3a5b; }
+  .wr__event-kind--verb-fired            { background: #e8e0e6; color: #5b2a4a; }
+  .wr__event-link { color: #1f1b15; text-decoration: none; line-height: 1.4; border-bottom: 1px solid transparent; }
+  .wr__event-link:hover { border-bottom-color: currentColor; }
+  .wr__event-time { font-size: 11px; color: #6a6154; letter-spacing: 0.04em; }
+
+  /* Artifacts */
+  .wr__artifacts { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .wr__artifact { padding: 12px 14px; background: #fff; border: 1px solid #ddd9cc; border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .wr__art-kind {
+    font-family: ui-monospace, monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.18em;
+    padding: 2px 6px; border-radius: 2px; text-transform: uppercase; align-self: flex-start;
+  }
+  .wr__art-kind--svg       { background: #e1ebed; color: #1b3a5b; }
+  .wr__art-kind--one-liner { background: #f3eccd; color: #7a5d18; }
+  .wr__art-kind--polaroid  { background: #f5e6d4; color: #874c1d; }
+  .wr__art-kind--link      { background: #d6e6e1; color: #1f5b48; }
+  .wr__art-room { font-size: 10px; color: #6a6154; letter-spacing: 0.04em; }
+  .wr__art-title {
+    margin: 0; font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: 14px; line-height: 1.3; color: #1f1b15;
+  }
+  .wr__art-cap { margin: 0; font-size: 12px; color: #6a6154; font-style: italic; line-height: 1.4; }
+
+  /* Nodes */
+  .wr__nodes { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .wr__node { padding: 14px 16px; background: #fff; border: 1px solid #ddd9cc; border-radius: 8px; }
+  .wr__node-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; }
+  .wr__node-id {
+    font-size: 10px; letter-spacing: 0.18em; color: #1b3a5b;
+    padding: 2px 7px; background: rgba(27,58,91,0.08); border-radius: 2px; text-transform: uppercase;
+  }
+  .wr__node-name {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: 17px; font-weight: 500;
+    color: #1f1b15; text-decoration: none; border-bottom: 1px solid transparent;
+  }
+  .wr__node-name:hover { border-bottom-color: currentColor; }
+  .wr__node-desc { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: #4a4434; }
+  .wr__node-meta { margin: 0; font-size: 11px; color: #6a6154; letter-spacing: 0.04em; }
+  .wr__node-meta a { color: #6a6154; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .wr__node-meta a:hover { color: #1f1b15; border-bottom-color: currentColor; }
+
+  .wr__add {
+    margin: 14px 0 0; padding: 12px 14px;
+    background: #fbf7eb; border: 1px dashed #d8cdb8; border-radius: 6px;
+    font-size: 11px; color: #6a6154; line-height: 1.55;
+  }
+  .wr__add a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .wr__add code { background: rgba(31,27,21,0.06); padding: 1px 5px; border-radius: 2px; font-size: 11px; }
+
+  .wr__foot {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px;
+    margin: 24px 0 0; padding-top: 18px; border-top: 1px dashed #ddd9cc;
+    font-size: 11px; color: #6a6154;
+  }
+  .wr__foot strong {
+    color: #4a4434; letter-spacing: 0.18em; text-transform: uppercase; font-size: 10px; font-weight: 500;
+  }
+  .wr__foot a { color: #1f1b15; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .wr__foot a:hover { border-bottom-color: #1f1b15; }
+</style>

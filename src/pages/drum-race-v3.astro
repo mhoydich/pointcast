@@ -1,0 +1,717 @@
+---
+/**
+ * /drum-race-v3 — drum race with tracks, kits, power-ups, stats dashboard.
+ *
+ * v3 over v2:
+ *   - 3 RACE TRACKS with distinct backdrops, tempos, and per-kit drum voices:
+ *       1. MARINA SPRINT     · 88 BPM  · jazz kit (warm muted kick, brush snare,
+ *                                                   chime bell, upright bass)
+ *       2. NIGHT HIGHWAY     · 110 BPM · electronic kit (808 kick, clap, blip
+ *                                                        bell, synth lead)
+ *       3. MOUNTAIN PASS     · 96 BPM  · orchestral kit (timpani kick, snare
+ *                                                        roll, glock bell, horn)
+ *   - POWER-UPS during races:
+ *       ⚡ TURBO (random, 1 in 14 beats) — next 3 perfect taps count double
+ *       ⛨ SHIELD                         — next miss won't break streak
+ *       ✦ BOOST                          — instant +15 advance, no cost
+ *   - STATS DASHBOARD with career totals: per-track × per-difficulty best time
+ *     matrix, win count per noun, total accuracy %.
+ *   - Saved per-track ghosts (so each track has its own previous-best replay).
+ *
+ * Storage shape (localStorage `pc-drum-race-v3-stats`):
+ *   { bests: { [track-diff]: { time_ms, streak, taps[] } },
+ *     wins:  { [nounId]: number },
+ *     totals: { perfects, goods, oks, misses, races, victories } }
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Drum Race v3 · tracks · kits · power-ups · PointCast';
+const description = '4 Nouns, 3 tracks, 3 difficulties, per-track drum kits, power-ups during the race, career stats dashboard.';
+
+const RACERS = [
+  { id: 313,  name: 'Marine Layer',    color: '#9ed6f0' },
+  { id: 523,  name: 'Block Runner',    color: '#a8ff3a' },
+  { id: 1042, name: 'Release Train',   color: '#ffd400' },
+  { id: 287,  name: '—',               color: '#f6c15e' },
+];
+
+const TRACKS = [
+  { id: 'marina',   name: 'MARINA SPRINT',  bpm: 88,  bg: 'linear-gradient(180deg, #9ed6f0 0%, #f5d9b8 60%, #c8a978 100%)', accent: '#5fbafd' },
+  { id: 'highway',  name: 'NIGHT HIGHWAY',  bpm: 110, bg: 'linear-gradient(180deg, #1a0820 0%, #6f59c0 50%, #ff5f7a 100%)', accent: '#f6c15e' },
+  { id: 'mountain', name: 'MOUNTAIN PASS',  bpm: 96,  bg: 'linear-gradient(180deg, #5a3422 0%, #7d9a7c 50%, #f5d9b8 100%)', accent: '#a8ff3a' },
+];
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="dr3" id="dr3-main" data-state="idle">
+    <header class="dr3__header">
+      <h1 class="dr3__title">DRUM RACE · V3</h1>
+      <p class="dr3__tag">3 tracks · 3 difficulties · 3 power-ups · career stats</p>
+    </header>
+
+    <section class="dr3__track-picker">
+      <span class="dr3__sec-label">TRACK:</span>
+      {TRACKS.map((t, i) => (
+        <button class={`dr3__track-btn ${i === 0 ? 'dr3__track-btn--active' : ''}`} data-track={t.id} type="button">
+          <span class="dr3__track-name">{t.name}</span>
+          <span class="dr3__track-bpm">{t.bpm} bpm</span>
+        </button>
+      ))}
+    </section>
+
+    <section class="dr3__diff">
+      <span class="dr3__sec-label">DIFFICULTY:</span>
+      <button class="dr3__diff-btn" data-diff="chill"  type="button">🌅 CHILL</button>
+      <button class="dr3__diff-btn dr3__diff-btn--active" data-diff="normal" type="button">⚡ NORMAL</button>
+      <button class="dr3__diff-btn" data-diff="hard"   type="button">🔥 HARD</button>
+      <span class="dr3__best" id="dr3-best">best: — · streak —</span>
+    </section>
+
+    <section class="dr3__hud">
+      <span class="dr3__hud-cell">METRO <span id="dr3-metro">○○○○</span></span>
+      <span class="dr3__hud-cell">BPM <strong id="dr3-bpm">100</strong></span>
+      <span class="dr3__hud-cell">STREAK <strong id="dr3-streak">0</strong> (HI <span id="dr3-streak-hi">0</span>)</span>
+      <span class="dr3__hud-cell">MULT <strong id="dr3-mult">1.0×</strong></span>
+      <span class="dr3__hud-cell">TIME <strong id="dr3-time">0.0s</strong></span>
+      <span class="dr3__hud-cell" id="dr3-state">— ready —</span>
+      <span class="dr3__powerup" id="dr3-powerup" hidden></span>
+    </section>
+
+    <section class="dr3__track-stage" id="dr3-track-stage">
+      <div class="dr3__finish" aria-hidden="true">
+        <span class="dr3__finish-flag">⚑</span>
+        <span class="dr3__finish-line"></span>
+      </div>
+      {RACERS.map((r, i) => (
+        <div class={`dr3__lane ${i === 0 ? 'dr3__lane--player' : ''}`} data-i={i} style={`--lane-color: ${r.color};`}>
+          <div class="dr3__lane-meta">
+            <span class="dr3__lane-num">{i === 0 ? '🎯' : '🤖'}</span>
+            <span class="dr3__lane-name">#{r.id} · {r.name}</span>
+          </div>
+          <div class="dr3__lane-track">
+            {i === 0 && (
+              <div class="dr3__ghost" id="dr3-ghost" aria-hidden="true">
+                <img src={`https://noun.pics/${r.id}.svg`} alt="" width="56" height="56" loading="lazy"/>
+              </div>
+            )}
+            <div class="dr3__noun" id={`dr3-noun-${i}`} data-i={i}>
+              <img src={`https://noun.pics/${r.id}.svg`} alt={`Noun ${r.id}`} width="56" height="56" loading="lazy"/>
+            </div>
+            {i === 0 && (
+              <div class="dr3__powerup-icon" id="dr3-powerup-icon" hidden></div>
+            )}
+            <div class="dr3__progress" id={`dr3-progress-${i}`}></div>
+          </div>
+        </div>
+      ))}
+    </section>
+
+    <section class="dr3__pad-area">
+      <button class="dr3__pad" id="dr3-pad" type="button" aria-label="Tap on the beat">
+        <span class="dr3__pad-text" id="dr3-pad-text">▶ START RACE</span>
+        <span class="dr3__pad-hint">spacebar or click · P to use power-up</span>
+      </button>
+      <div class="dr3__feedback" id="dr3-feedback" aria-live="polite"></div>
+      <div class="dr3__pb" id="dr3-pb" hidden>★ PERSONAL BEST ★</div>
+    </section>
+
+    <section class="dr3__panel">
+      <button class="dr3__btn" id="dr3-reset" type="button">↻ NEW RACE</button>
+      <button class="dr3__btn" id="dr3-clear-ghost" type="button">✕ CLEAR GHOST (this track)</button>
+      <button class="dr3__btn" id="dr3-clear-stats" type="button">⚠ RESET ALL STATS</button>
+      <a class="dr3__btn dr3__btn--link" href="/drum-race-v2">v2 →</a>
+      <a class="dr3__btn dr3__btn--link" href="/drum-race">v1 →</a>
+    </section>
+
+    <section class="dr3__stats">
+      <h2 class="dr3__stats-title">CAREER · STATS DASHBOARD</h2>
+      <div class="dr3__stats-grid">
+        <div class="dr3__stats-card">
+          <h3>BEST TIMES (s)</h3>
+          <table class="dr3__stats-table" id="dr3-bests-table">
+            <thead><tr><th>TRACK</th><th>CHILL</th><th>NORMAL</th><th>HARD</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="dr3__stats-card">
+          <h3>RACES</h3>
+          <dl class="dr3__stats-list" id="dr3-totals-list">
+            <div><dt>races</dt><dd id="dr3-stat-races">0</dd></div>
+            <div><dt>wins</dt><dd id="dr3-stat-wins">0</dd></div>
+            <div><dt>perfects</dt><dd id="dr3-stat-perfects">0</dd></div>
+            <div><dt>goods</dt><dd id="dr3-stat-goods">0</dd></div>
+            <div><dt>oks</dt><dd id="dr3-stat-oks">0</dd></div>
+            <div><dt>misses</dt><dd id="dr3-stat-misses">0</dd></div>
+            <div><dt>accuracy</dt><dd id="dr3-stat-acc">0%</dd></div>
+          </dl>
+        </div>
+        <div class="dr3__stats-card">
+          <h3>WIN COUNT BY NOUN</h3>
+          <div class="dr3__win-grid" id="dr3-win-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="dr3__win" id="dr3-win" hidden>
+      <div class="dr3__win-card">
+        <h2 class="dr3__win-title" id="dr3-win-title">🏆 WINNER</h2>
+        <img class="dr3__win-noun" id="dr3-win-noun" src="" alt="" width="96" height="96"/>
+        <p class="dr3__win-stats" id="dr3-win-stats">— stats —</p>
+        <button class="dr3__btn dr3__btn--big" id="dr3-win-again" type="button">↻ RACE AGAIN</button>
+      </div>
+    </section>
+
+    <section class="dr3__rules">
+      <p><strong>POWER-UPS:</strong> ⚡ TURBO (next 3 perfects count double) · ⛨ SHIELD (next miss preserves streak) · ✦ BOOST (instant +15 advance). Press <kbd>P</kbd> to use whatever's collected. Power-ups drop ~1 every 14 beats.</p>
+      <p><strong>KITS:</strong> each track has its own drum voices. Marina = warm jazz, Highway = electronic, Mountain = orchestral.</p>
+    </section>
+
+    <section class="dr3__siblings">
+      <a href="/drum-race">/drum-race · v1</a>
+      <a href="/drum-race-v2">/drum-race-v2</a>
+      <a href="/drum-audiophile-v3">/drum-audiophile-v3</a>
+      <a href="/noun-cinema-v3">/noun-cinema-v3</a>
+      <a href="/drum-map">/drum-map</a>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .dr3 { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; font-family: var(--pc-font-sans, system-ui, sans-serif); color: #f4e7c8; background: linear-gradient(180deg, #1a0a06 0%, #0c0408 100%); min-height: 100vh; }
+  .dr3__header { text-align: center; margin: 18px 0 14px; }
+  .dr3__title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(34px, 6.5vw, 64px); letter-spacing: 0.18em; margin: 0; color: #f6c15e; text-shadow: 0 0 24px rgba(246, 193, 94, 0.40); }
+  .dr3__tag { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #d4a437; opacity: 0.85; margin: 6px 0 0; }
+
+  .dr3__track-picker, .dr3__diff { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .dr3__sec-label { letter-spacing: 0.20em; color: #d4a437; text-transform: uppercase; }
+  .dr3__track-btn, .dr3__diff-btn { padding: 7px 12px; border: 2px solid #5a3422; background: #1a0a06; color: #d4a437; font-family: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; cursor: pointer; transition: border-color 200ms, transform 100ms; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+  .dr3__track-btn:hover, .dr3__diff-btn:hover { border-color: #d4a437; transform: translateY(-1px); }
+  .dr3__track-btn--active, .dr3__diff-btn--active { border-color: #f6c15e; background: #2a1408; color: #f6c15e; box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.35); }
+  .dr3__track-name { font-size: 11px; letter-spacing: 0.16em; }
+  .dr3__track-bpm { font-size: 8px; opacity: 0.75; letter-spacing: 0.20em; }
+  .dr3__best { margin-left: auto; color: #cfc6df; opacity: 0.85; letter-spacing: 0.10em; }
+
+  .dr3__hud { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.5); margin-bottom: 14px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a437; }
+  .dr3__hud-cell strong { color: #f6c15e; padding-left: 4px; font-size: 14px; }
+  .dr3__powerup { padding: 4px 10px; border: 2px solid currentColor; border-radius: 999px; font-weight: 800; letter-spacing: 0.20em; animation: dr3-power-pulse 1.4s ease-in-out infinite; margin-left: auto; }
+  .dr3__powerup[data-kind='turbo']  { color: #ffd400; background: rgba(255, 212, 0, 0.10); }
+  .dr3__powerup[data-kind='shield'] { color: #5fbafd; background: rgba(95, 186, 253, 0.10); }
+  .dr3__powerup[data-kind='boost']  { color: #a8ff3a; background: rgba(168, 255, 58, 0.10); }
+  @keyframes dr3-power-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+  .dr3__track-stage { position: relative; padding: 14px; border: 3px solid #5a3422; background: var(--track-bg, linear-gradient(180deg, #2a1810 0%, #3a2418 50%, #1a0a06 100%)); box-shadow: 6px 6px 0 0 #050310, inset 0 0 60px rgba(0, 0, 0, 0.55); transition: background 600ms; }
+  .dr3__finish { position: absolute; right: 14px; top: 14px; bottom: 14px; width: 28px; pointer-events: none; z-index: 2; }
+  .dr3__finish-flag { position: absolute; top: -2px; left: 6px; font-size: 22px; color: #f6c15e; text-shadow: 0 0 12px rgba(246, 193, 94, 0.65); }
+  .dr3__finish-line { position: absolute; top: 26px; bottom: 0; left: 0; width: 14px; background: repeating-linear-gradient(45deg, #f4e7c8 0 6px, #1a0a06 6px 12px); border-left: 2px solid #f6c15e; }
+  .dr3__lane { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed rgba(212, 164, 55, 0.20); }
+  .dr3__lane:last-of-type { border-bottom: none; }
+  .dr3__lane-meta { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; letter-spacing: 0.10em; color: #d4a437; }
+  .dr3__lane-name { color: #f4e7c8; opacity: 0.85; }
+  .dr3__lane--player { background: rgba(212, 164, 55, 0.04); border-left: 3px solid #f6c15e; padding-left: 4px; }
+  .dr3__lane--player .dr3__lane-name { color: #f6c15e; font-weight: 800; }
+  .dr3__lane-track { position: relative; height: 60px; background: linear-gradient(180deg, rgba(5, 3, 16, 0.8) 0%, rgba(26, 10, 6, 0.8) 100%); border: 1px solid rgba(212, 164, 55, 0.25); border-radius: 4px; padding-right: 28px; overflow: hidden; }
+  .dr3__progress { position: absolute; top: 0; bottom: 0; left: 0; background: linear-gradient(90deg, var(--lane-color, #d4a437) 0%, transparent 100%); opacity: 0.20; transition: width 220ms; width: 0%; }
+  .dr3__noun, .dr3__ghost { position: absolute; top: 50%; left: 0; transform: translate(0, -50%); width: 56px; height: 56px; image-rendering: pixelated; transition: left 220ms; }
+  .dr3__noun { z-index: 2; filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, 0.45)); }
+  .dr3__noun.dr3__noun--hit { filter: drop-shadow(0 0 8px var(--lane-color, #f6c15e)) drop-shadow(2px 4px 0 rgba(0, 0, 0, 0.45)); }
+  .dr3__noun img, .dr3__ghost img { width: 100%; height: 100%; image-rendering: pixelated; }
+  .dr3__ghost { z-index: 1; opacity: 0.30; mix-blend-mode: screen; filter: blur(0.5px); display: none; }
+  .dr3__ghost--active { display: block; }
+  .dr3__powerup-icon { position: absolute; right: 30px; top: 50%; transform: translate(0, -50%); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; pointer-events: none; animation: dr3-powerup-bob 1.4s ease-in-out infinite; z-index: 3; }
+  .dr3__powerup-icon[data-kind='turbo']  { background: rgba(255, 212, 0, 0.85); color: #1a0a06; box-shadow: 0 0 14px rgba(255, 212, 0, 0.65); }
+  .dr3__powerup-icon[data-kind='shield'] { background: rgba(95, 186, 253, 0.85); color: #1a0a06; box-shadow: 0 0 14px rgba(95, 186, 253, 0.65); }
+  .dr3__powerup-icon[data-kind='boost']  { background: rgba(168, 255, 58, 0.85); color: #1a0a06; box-shadow: 0 0 14px rgba(168, 255, 58, 0.65); }
+  @keyframes dr3-powerup-bob { 0%, 100% { transform: translate(0, -50%) scale(1); } 50% { transform: translate(0, calc(-50% - 4px)) scale(1.10); } }
+
+  .dr3__pad-area { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 22px 0 14px; }
+  .dr3__pad { padding: 22px 38px; border: 3px solid #d4a437; border-radius: 12px; background: linear-gradient(180deg, #2a1408 0%, #1a0a06 100%); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-weight: 800; cursor: pointer; transition: transform 60ms, box-shadow 60ms; box-shadow: 4px 4px 0 0 #050310; min-width: 280px; }
+  .dr3__pad:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #050310; border-color: #f6c15e; }
+  .dr3__pad--tapped { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 #050310; background: linear-gradient(180deg, #5a3422 0%, #3a2410 100%); }
+  .dr3__pad-text { display: block; font-size: 18px; letter-spacing: 0.20em; }
+  .dr3__pad-hint { display: block; font-size: 9px; letter-spacing: 0.18em; color: #d4a437; opacity: 0.65; margin-top: 4px; }
+  .dr3__feedback { font-family: 'JetBrains Mono Variable', monospace; font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: #cfc6df; min-height: 24px; }
+  .dr3__feedback[data-kind='perfect'] { color: #f6c15e; text-shadow: 0 0 10px rgba(246, 193, 94, 0.65); }
+  .dr3__feedback[data-kind='good']    { color: #a8ff3a; }
+  .dr3__feedback[data-kind='ok']      { color: #d4a437; }
+  .dr3__feedback[data-kind='miss']    { color: #b8431a; }
+  .dr3__feedback[data-kind='shield']  { color: #5fbafd; }
+  .dr3__feedback[data-kind='turbo']   { color: #ffd400; }
+  .dr3__feedback[data-kind='boost']   { color: #a8ff3a; }
+  .dr3__pb { font-family: 'JetBrains Mono Variable', monospace; font-size: 18px; font-weight: 800; letter-spacing: 0.30em; color: #f6c15e; padding: 8px 16px; border: 2px solid #f6c15e; background: rgba(246, 193, 94, 0.10); animation: dr3-pb-pulse 1.2s ease-in-out infinite; }
+  @keyframes dr3-pb-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+  .dr3__panel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 2px solid #5a3422; background: rgba(26, 8, 6, 0.65); margin: 14px 0; }
+  .dr3__btn { padding: 9px 16px; border: 2px solid #d4a437; background: linear-gradient(180deg, #2a1408 0%, #1a0a06 100%); color: #f6c15e; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; cursor: pointer; box-shadow: 2px 2px 0 0 #050310; text-decoration: none; }
+  .dr3__btn:hover { transform: translate(-1px, -1px); border-color: #f6c15e; }
+  .dr3__btn--big { padding: 12px 22px; font-size: 13px; }
+
+  .dr3__stats { padding: 16px; border: 2px solid #5a3422; background: rgba(0, 0, 0, 0.45); margin: 18px 0; }
+  .dr3__stats-title { font-family: 'JetBrains Mono Variable', monospace; font-size: 14px; letter-spacing: 0.24em; margin: 0 0 14px; color: #f6c15e; text-transform: uppercase; }
+  .dr3__stats-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+  .dr3__stats-card { padding: 12px; border: 1.5px solid #5a3422; background: rgba(26, 8, 6, 0.65); }
+  .dr3__stats-card h3 { font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; letter-spacing: 0.22em; margin: 0 0 8px; color: #d4a437; text-transform: uppercase; }
+  .dr3__stats-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; }
+  .dr3__stats-table th, .dr3__stats-table td { padding: 5px 8px; text-align: left; border-bottom: 1px dashed rgba(212, 164, 55, 0.20); color: #f4e7c8; }
+  .dr3__stats-table th { font-weight: 800; letter-spacing: 0.14em; color: #d4a437; }
+  .dr3__stats-table td.dr3__stats-best { color: #f6c15e; font-weight: 800; }
+  .dr3__stats-list { font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin: 0; }
+  .dr3__stats-list div { display: flex; justify-content: space-between; }
+  .dr3__stats-list dt { color: #d4a437; letter-spacing: 0.12em; text-transform: uppercase; }
+  .dr3__stats-list dd { color: #f6c15e; font-weight: 800; margin: 0; }
+  .dr3__win-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .dr3__win-cell { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono Variable', monospace; font-size: 10px; color: #f4e7c8; }
+  .dr3__win-cell img { width: 22px; height: 22px; image-rendering: pixelated; }
+  .dr3__win-cell strong { color: #f6c15e; }
+  @media (max-width: 720px) { .dr3__stats-grid { grid-template-columns: 1fr; } }
+
+  .dr3__win { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 4, 6, 0.85); z-index: 100; padding: 20px; }
+  .dr3__win[hidden] { display: none; }
+  .dr3__win-card { padding: 28px 36px; border: 4px double #f6c15e; background: #1a0a06; text-align: center; box-shadow: 0 0 0 4px #050310, 0 0 40px rgba(246, 193, 94, 0.50); animation: dr3-win-pop 0.6s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes dr3-win-pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .dr3__win-title { font-family: 'JetBrains Mono Variable', monospace; font-size: clamp(28px, 4vw, 48px); letter-spacing: 0.20em; margin: 0 0 12px; color: #f6c15e; }
+  .dr3__win-noun { display: block; margin: 12px auto; image-rendering: pixelated; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6)); }
+  .dr3__win-stats { font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; color: #cfc6df; margin: 16px 0; letter-spacing: 0.10em; line-height: 1.5; white-space: pre-line; }
+
+  .dr3__confetti { position: fixed; pointer-events: none; width: 8px; height: 8px; z-index: 99; animation: dr3-confetti-fall 3s linear forwards; }
+  @keyframes dr3-confetti-fall { from { transform: translateY(0) rotate(0); opacity: 1; } to { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+
+  .dr3__rules { padding: 14px 18px; border: 2px dashed rgba(212, 164, 55, 0.45); background: rgba(0, 0, 0, 0.3); color: #cfc6df; font-family: 'JetBrains Mono Variable', monospace; font-size: 11px; line-height: 1.55; margin: 14px 0; }
+  .dr3__rules p { margin: 4px 0; }
+  .dr3__rules strong { color: #f6c15e; }
+  .dr3__rules kbd { padding: 1px 6px; border: 1px solid #d4a437; border-radius: 3px; background: #1a0820; color: #f6c15e; font-size: 11px; }
+
+  .dr3__siblings { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; font-family: 'JetBrains Mono Variable', monospace; font-size: 12px; }
+  .dr3__siblings a { color: #d4a437; text-decoration: none; }
+  .dr3__siblings a:hover { color: #f6c15e; text-decoration: underline; }
+
+  @media (max-width: 720px) { .dr3__lane { grid-template-columns: 130px 1fr; } .dr3__noun, .dr3__ghost { width: 44px; height: 44px; } }
+</style>
+
+<script>
+  type Voice = 'kick' | 'snare' | 'bell' | 'lead';
+  type Diff = 'chill' | 'normal' | 'hard';
+  type TrackId = 'marina' | 'highway' | 'mountain';
+  type PowerKind = 'turbo' | 'shield' | 'boost';
+
+  interface Racer { id: number; name: string; color: string; }
+  interface AIProfile { acc_chill: number; acc_norm: number; acc_hard: number; speed: number; voice: Voice; }
+  const RACERS: Racer[] = [
+    { id: 313,  name: 'Marine Layer',    color: '#9ed6f0' },
+    { id: 523,  name: 'Block Runner',    color: '#a8ff3a' },
+    { id: 1042, name: 'Release Train',   color: '#ffd400' },
+    { id: 287,  name: '—',               color: '#f6c15e' },
+  ];
+  const AI: Record<number, AIProfile> = {
+    1: { acc_chill: 0.55, acc_norm: 0.78, acc_hard: 0.92, speed: 1.05, voice: 'snare' },
+    2: { acc_chill: 0.50, acc_norm: 0.72, acc_hard: 0.88, speed: 1.00, voice: 'bell' },
+    3: { acc_chill: 0.45, acc_norm: 0.65, acc_hard: 0.85, speed: 1.10, voice: 'lead' },
+  };
+  const TRACKS: { id: TrackId; name: string; bpm: number; bg: string }[] = [
+    { id: 'marina',   name: 'MARINA SPRINT',  bpm: 88,  bg: 'linear-gradient(180deg, #9ed6f0 0%, #f5d9b8 60%, #c8a978 100%)' },
+    { id: 'highway',  name: 'NIGHT HIGHWAY',  bpm: 110, bg: 'linear-gradient(180deg, #1a0820 0%, #6f59c0 50%, #ff5f7a 100%)' },
+    { id: 'mountain', name: 'MOUNTAIN PASS',  bpm: 96,  bg: 'linear-gradient(180deg, #5a3422 0%, #7d9a7c 50%, #f5d9b8 100%)' },
+  ];
+  const FINISH = 100;
+  let track: TrackId = 'marina';
+  let difficulty: Diff = 'normal';
+
+  // Web Audio
+  let actx: AudioContext | null = null;
+  function ctx() { if (!actx) { const AC = (window as any).AudioContext || (window as any).webkitAudioContext; actx = new AC(); } if (actx && actx.state === 'suspended') actx.resume(); return actx!; }
+
+  // ─── Per-track drum kits ────────────────────────────────────
+  // Each track defines its own variant of (kick/snare/bell/lead).
+  // MARINA = warm jazz · HIGHWAY = electronic · MOUNTAIN = orchestral.
+  const KITS: Record<TrackId, Record<Voice, (t: number) => void>> = {
+    marina: {
+      // Soft warm kick, low-passed
+      kick: (t: number) => { const a = ctx(), o = a.createOscillator(), g = a.createGain(), lp = a.createBiquadFilter(); o.type = 'sine'; o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.18); lp.type = 'lowpass'; lp.frequency.value = 200; g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.30); o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.32); },
+      // Brush snare = filtered noise + soft tone
+      snare: (t: number) => { const a = ctx(), buf = a.createBuffer(1, a.sampleRate * 0.18, a.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.6; const n = a.createBufferSource(); n.buffer = buf; const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400; const g = a.createGain(); g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.20); n.connect(lp).connect(g).connect(a.destination); n.start(t); n.stop(t + 0.22); },
+      // Chime bell — two partials, long decay
+      bell: (t: number) => { const a = ctx(); [880, 1320].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime([0.14, 0.08][i], t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 1.5); }); },
+      // Upright bass — sine pulse with quick attack
+      lead: (t: number) => { const a = ctx(); const D = [0, 5, 7, 10, 12], deg = D[Math.floor(Math.random() * D.length)]; const f = 110 * Math.pow(2, deg / 12); const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.20, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.4); },
+    },
+    highway: {
+      // 808-style kick — long sub
+      kick: (t: number) => { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(60, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.45); g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6); },
+      // Clap — multi-noise burst
+      snare: (t: number) => { const a = ctx(); for (let i = 0; i < 3; i++) { const buf = a.createBuffer(1, a.sampleRate * 0.06, a.sampleRate); const d = buf.getChannelData(0); for (let j = 0; j < d.length; j++) d[j] = Math.random() * 2 - 1; const n = a.createBufferSource(); n.buffer = buf; const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 0.8; const g = a.createGain(); g.gain.setValueAtTime(0.20, t + i * 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.012 + 0.10); n.connect(bp).connect(g).connect(a.destination); n.start(t + i * 0.012); n.stop(t + i * 0.012 + 0.12); } },
+      // Blip bell — square wave short
+      bell: (t: number) => { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'square'; o.frequency.setValueAtTime(2200, t); g.gain.setValueAtTime(0.10, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2); },
+      // Synth lead — saw with envelope
+      lead: (t: number) => { const a = ctx(); const D = [0, 4, 7, 12, 14], deg = D[Math.floor(Math.random() * D.length)]; const f = 264 * Math.pow(2, deg / 12); const o = a.createOscillator(), g = a.createGain(), lpf = a.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); lpf.type = 'lowpass'; lpf.frequency.setValueAtTime(2800, t); lpf.frequency.exponentialRampToValueAtTime(700, t + 0.4); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.18, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4); o.connect(lpf).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.45); },
+    },
+    mountain: {
+      // Timpani-like kick
+      kick: (t: number) => { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.40); g.gain.setValueAtTime(0.50, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6); },
+      // Snare roll — buzzy noise
+      snare: (t: number) => { const a = ctx(), buf = a.createBuffer(1, a.sampleRate * 0.16, a.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = a.createBufferSource(); n.buffer = buf; const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 1.6; const g = a.createGain(); g.gain.setValueAtTime(0.30, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22); n.connect(bp).connect(g).connect(a.destination); n.start(t); n.stop(t + 0.24); },
+      // Glockenspiel — bright
+      bell: (t: number) => { const a = ctx(); [1760, 3520].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime([0.16, 0.10][i], t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 1.1); }); },
+      // Horn — square + lowpass
+      lead: (t: number) => { const a = ctx(); const D = [0, 4, 7, 11, 12], deg = D[Math.floor(Math.random() * D.length)]; const f = 220 * Math.pow(2, deg / 12); const o = a.createOscillator(), g = a.createGain(), lpf = a.createBiquadFilter(); o.type = 'square'; o.frequency.setValueAtTime(f, t); lpf.type = 'lowpass'; lpf.frequency.value = 1600; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.06); g.gain.linearRampToValueAtTime(0.10, t + 0.30); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); o.connect(lpf).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6); },
+    },
+  };
+  function play(voice: Voice, t: number) { try { KITS[track][voice](t); } catch {} }
+  function pTick(t: number) { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(880, t); g.gain.setValueAtTime(0.10, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.05); }
+  function pTickAccent(t: number) { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(1320, t); g.gain.setValueAtTime(0.14, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06); o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.07); }
+  function sndPickup(t: number) { const a = ctx(); [800, 1200, 1600].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t + i * 0.05); g.gain.setValueAtTime(0.16, t + i * 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.05 + 0.18); o.connect(g).connect(a.destination); o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.2); }); }
+  function sndWin() { const a = ctx(); [1320, 1760, 2200, 2640].forEach((f, i) => { try { KITS[track].bell(a.currentTime + i * 0.18); } catch {} }); }
+
+  // ─── Stats (localStorage-backed) ────────────────────────────
+  interface Stats { bests: Record<string, { time_ms: number; streak: number; taps: number[] }>; wins: Record<string, number>; totals: { perfects: number; goods: number; oks: number; misses: number; races: number; victories: number }; }
+  function loadStats(): Stats {
+    try { const raw = localStorage.getItem('pc-drum-race-v3-stats'); if (raw) { return JSON.parse(raw); } } catch {}
+    return { bests: {}, wins: {}, totals: { perfects: 0, goods: 0, oks: 0, misses: 0, races: 0, victories: 0 } };
+  }
+  function saveStats(s: Stats) { try { localStorage.setItem('pc-drum-race-v3-stats', JSON.stringify(s)); } catch {} }
+  function bestKey(t: TrackId, d: Diff) { return `${t}-${d}`; }
+  let stats = loadStats();
+
+  function fmtTime(ms: number) { return `${(ms / 1000).toFixed(1)}`; }
+  function renderStats() {
+    const tbody = document.querySelector('#dr3-bests-table tbody');
+    if (tbody) {
+      tbody.innerHTML = TRACKS.map(t => {
+        const c = stats.bests[bestKey(t.id, 'chill')];
+        const n = stats.bests[bestKey(t.id, 'normal')];
+        const h = stats.bests[bestKey(t.id, 'hard')];
+        return `<tr><td>${t.name}</td><td class="${c ? 'dr3__stats-best' : ''}">${c ? fmtTime(c.time_ms) : '—'}</td><td class="${n ? 'dr3__stats-best' : ''}">${n ? fmtTime(n.time_ms) : '—'}</td><td class="${h ? 'dr3__stats-best' : ''}">${h ? fmtTime(h.time_ms) : '—'}</td></tr>`;
+      }).join('');
+    }
+    const ti = stats.totals;
+    document.getElementById('dr3-stat-races')!.textContent = String(ti.races);
+    document.getElementById('dr3-stat-wins')!.textContent = String(ti.victories);
+    document.getElementById('dr3-stat-perfects')!.textContent = String(ti.perfects);
+    document.getElementById('dr3-stat-goods')!.textContent = String(ti.goods);
+    document.getElementById('dr3-stat-oks')!.textContent = String(ti.oks);
+    document.getElementById('dr3-stat-misses')!.textContent = String(ti.misses);
+    const totalTaps = ti.perfects + ti.goods + ti.oks + ti.misses;
+    const acc = totalTaps > 0 ? Math.round(((ti.perfects + ti.goods) / totalTaps) * 100) : 0;
+    document.getElementById('dr3-stat-acc')!.textContent = `${acc}%`;
+    const wg = document.getElementById('dr3-win-grid');
+    if (wg) {
+      wg.innerHTML = RACERS.map(r => {
+        const w = stats.wins[String(r.id)] || 0;
+        return `<div class="dr3__win-cell"><img src="https://noun.pics/${r.id}.svg" alt=""/><span>#${r.id} <strong>${w}w</strong></span></div>`;
+      }).join('');
+    }
+    const b = stats.bests[bestKey(track, difficulty)];
+    const bestEl = document.getElementById('dr3-best');
+    if (bestEl) bestEl.textContent = b ? `best: ${fmtTime(b.time_ms)}s · streak ${b.streak}` : 'best: — · streak —';
+  }
+
+  // ─── State ──────────────────────────────────────────────────
+  type Phase = 'idle' | 'countdown' | 'racing' | 'won';
+  let phase: Phase = 'idle';
+  let progress = [0, 0, 0, 0];
+  let streak = 0, streakHigh = 0;
+  let raceTimer: number | null = null;
+  let lastBeatT = 0;
+  let beatCount = 0;
+  let countdownTimer: number | null = null;
+  let perfects = 0, goods = 0, oks = 0, misses = 0;
+  let raceStartT = 0;
+  let myTaps: number[] = [];
+  let ghostTaps: number[] = [];
+  let ghostProgress = 0;
+  let ghostTickIdx = 0;
+  let collected: PowerKind | null = null;
+  let turboCharges = 0;
+  let shieldArmed = false;
+  let lanePowerup: { kind: PowerKind; pct: number } | null = null;
+
+  const trackStage = document.getElementById('dr3-track-stage') as HTMLElement;
+  const padEl = document.getElementById('dr3-pad') as HTMLButtonElement;
+  const padText = document.getElementById('dr3-pad-text');
+  const stateEl = document.getElementById('dr3-state');
+  const streakEl = document.getElementById('dr3-streak');
+  const streakHiEl = document.getElementById('dr3-streak-hi');
+  const multEl = document.getElementById('dr3-mult');
+  const metroEl = document.getElementById('dr3-metro');
+  const bpmEl = document.getElementById('dr3-bpm');
+  const timeEl = document.getElementById('dr3-time');
+  const feedbackEl = document.getElementById('dr3-feedback');
+  const pbEl = document.getElementById('dr3-pb');
+  const winEl = document.getElementById('dr3-win');
+  const winTitleEl = document.getElementById('dr3-win-title');
+  const winNounEl = document.getElementById('dr3-win-noun') as HTMLImageElement | null;
+  const winStatsEl = document.getElementById('dr3-win-stats');
+  const ghostEl = document.getElementById('dr3-ghost');
+  const powerEl = document.getElementById('dr3-powerup');
+  const powerIconEl = document.getElementById('dr3-powerup-icon');
+
+  function paintRacer(i: number) {
+    const p = progress[i];
+    const noun = document.getElementById(`dr3-noun-${i}`);
+    const prog = document.getElementById(`dr3-progress-${i}`);
+    if (noun) {
+      const trackW = (noun.parentElement as HTMLElement).clientWidth - 56 - 28;
+      const x = (p / 100) * trackW;
+      (noun as HTMLElement).style.left = `${x}px`;
+    }
+    if (prog) (prog as HTMLElement).style.width = `${p}%`;
+  }
+  function paintGhost() {
+    if (!ghostEl) return;
+    const trackW = (ghostEl.parentElement as HTMLElement).clientWidth - 56 - 28;
+    (ghostEl as HTMLElement).style.left = `${(ghostProgress / 100) * trackW}px`;
+  }
+  function bumpRacer(i: number) { const noun = document.getElementById(`dr3-noun-${i}`); if (noun) { noun.classList.add('dr3__noun--hit'); setTimeout(() => noun.classList.remove('dr3__noun--hit'), 110); } }
+  function setMultiplier(): number { if (streak >= 8) return 2.0; if (streak >= 4) return 1.5; return 1.0; }
+  function updateHud() {
+    if (streakEl) streakEl.textContent = String(streak);
+    if (streakHiEl) streakHiEl.textContent = String(streakHigh);
+    if (multEl) multEl.textContent = `${setMultiplier().toFixed(1)}×`;
+    if (timeEl) timeEl.textContent = phase === 'racing' ? `${((performance.now() - raceStartT) / 1000).toFixed(1)}s` : '0.0s';
+    if (powerEl) {
+      if (collected) { powerEl.hidden = false; powerEl.dataset.kind = collected; powerEl.textContent = `[P] ${collected.toUpperCase()}`; }
+      else { powerEl.hidden = true; }
+    }
+  }
+  function feedback(kind: 'perfect' | 'good' | 'ok' | 'miss' | 'shield' | 'turbo' | 'boost', msg: string) {
+    if (!feedbackEl) return;
+    feedbackEl.textContent = msg;
+    feedbackEl.dataset.kind = kind;
+  }
+
+  function maybeSpawnPowerup() {
+    if (lanePowerup || phase !== 'racing') return;
+    if (Math.random() < 1 / 14) {
+      const kinds: PowerKind[] = ['turbo', 'shield', 'boost'];
+      const k = kinds[Math.floor(Math.random() * kinds.length)];
+      const pct = 35 + Math.random() * 50; // spawn between 35-85% of track
+      lanePowerup = { kind: k, pct };
+      if (powerIconEl) {
+        powerIconEl.hidden = false;
+        powerIconEl.dataset.kind = k;
+        powerIconEl.textContent = k === 'turbo' ? '⚡' : k === 'shield' ? '⛨' : '✦';
+        const trackW = (powerIconEl.parentElement as HTMLElement).clientWidth - 28;
+        (powerIconEl as HTMLElement).style.left = `${(pct / 100) * trackW}px`;
+      }
+    }
+  }
+  function checkPowerupPickup() {
+    if (!lanePowerup || phase !== 'racing') return;
+    if (progress[0] >= lanePowerup.pct) {
+      const k = lanePowerup.kind;
+      if (k === 'boost') {
+        progress[0] = Math.min(100, progress[0] + 15);
+        feedback('boost', `✦ BOOST! +15`);
+      } else {
+        collected = k;
+        feedback(k as any, `${k === 'turbo' ? '⚡' : '⛨'} ${k.toUpperCase()} collected · press P`);
+      }
+      try { sndPickup(ctx().currentTime + 0.02); } catch {}
+      if (powerIconEl) powerIconEl.hidden = true;
+      lanePowerup = null;
+      updateHud();
+      paintRacer(0);
+      if (progress[0] >= FINISH) win(0);
+    }
+  }
+  function usePowerup() {
+    if (!collected || phase !== 'racing') return;
+    if (collected === 'turbo') { turboCharges = 3; feedback('turbo', '⚡ TURBO active · next 3 perfects 2×'); }
+    else if (collected === 'shield') { shieldArmed = true; feedback('shield', '⛨ SHIELD armed · next miss saved'); }
+    collected = null;
+    updateHud();
+  }
+
+  function tick() {
+    if (phase !== 'racing') return;
+    const a = ctx();
+    const t = a.currentTime + 0.02;
+    try { (beatCount % 4 === 0) ? pTickAccent(t) : pTick(t); } catch {}
+    if (metroEl) metroEl.textContent = ['●○○○', '○●○○', '○○●○', '○○○●'][beatCount % 4];
+    lastBeatT = performance.now();
+    const accField: Record<Diff, keyof AIProfile> = { chill: 'acc_chill', normal: 'acc_norm', hard: 'acc_hard' };
+    for (let i = 1; i < RACERS.length; i++) {
+      const profile = AI[i];
+      const acc = (profile as any)[accField[difficulty]] as number;
+      if (Math.random() < acc) {
+        const dx = (3 + Math.random() * 3) * profile.speed;
+        progress[i] = Math.min(100, progress[i] + dx);
+        bumpRacer(i);
+        try { play(profile.voice, a.currentTime + 0.04 + Math.random() * 0.10); } catch {}
+        paintRacer(i);
+        if (progress[i] >= FINISH && phase === 'racing') return win(i);
+      }
+    }
+    beatCount++;
+    maybeSpawnPowerup();
+    updateHud();
+  }
+  function ghostStep() {
+    if (phase !== 'racing' || ghostTaps.length === 0) return;
+    const elapsed = performance.now() - raceStartT;
+    while (ghostTickIdx < ghostTaps.length && ghostTaps[ghostTickIdx] <= elapsed) {
+      ghostProgress = Math.min(100, ghostProgress + 6);
+      ghostTickIdx++;
+    }
+    paintGhost();
+    if (ghostProgress < 100) requestAnimationFrame(ghostStep);
+  }
+
+  function win(idx: number) {
+    if (phase === 'won') return;
+    phase = 'won';
+    if (raceTimer) { clearInterval(raceTimer); raceTimer = null; }
+    const r = RACERS[idx];
+    const elapsed = performance.now() - raceStartT;
+    let pbBeat = false;
+    stats.totals.races++;
+    stats.totals.perfects += perfects;
+    stats.totals.goods += goods;
+    stats.totals.oks += oks;
+    stats.totals.misses += misses;
+    if (idx === 0) {
+      stats.totals.victories++;
+      stats.wins[String(r.id)] = (stats.wins[String(r.id)] || 0) + 1;
+      const key = bestKey(track, difficulty);
+      const prev = stats.bests[key];
+      if (!prev || elapsed < prev.time_ms) { stats.bests[key] = { time_ms: elapsed, streak: streakHigh, taps: myTaps.slice() }; pbBeat = true; }
+    } else {
+      stats.wins[String(r.id)] = (stats.wins[String(r.id)] || 0) + 1;
+    }
+    saveStats(stats);
+    renderStats();
+    const total = perfects + goods + oks + misses;
+    const accuracy = total > 0 ? Math.round(((perfects + goods) / total) * 100) : 0;
+    if (winTitleEl) winTitleEl.textContent = idx === 0 ? `🏆 YOU WIN${pbBeat ? ' · PB!' : ''}` : `🤖 ${r.name.toUpperCase()} WINS`;
+    if (winNounEl) winNounEl.src = `https://noun.pics/${r.id}.svg`;
+    if (winStatsEl) winStatsEl.textContent = `Noun #${r.id} · ${(elapsed / 1000).toFixed(1)}s · streak hi ${streakHigh}\nTRACK: ${TRACKS.find(t => t.id === track)?.name} · ${difficulty.toUpperCase()}\nAccuracy ${accuracy}% (P${perfects}/G${goods}/O${oks}/M${misses})`;
+    if (winEl) winEl.hidden = false;
+    if (pbBeat && pbEl) { pbEl.hidden = false; setTimeout(() => { if (pbEl) pbEl.hidden = true; }, 4000); }
+    sndWin(); celebrate();
+  }
+
+  function attemptTap() {
+    if (phase !== 'racing') return;
+    const now = performance.now();
+    const offset = Math.abs(now - lastBeatT);
+    let kind: 'perfect' | 'good' | 'ok' | 'miss' = 'miss';
+    let baseDx = 0;
+    if (offset <= 80) { kind = 'perfect'; baseDx = 6; streak++; perfects++; }
+    else if (offset <= 200) { kind = 'good'; baseDx = 3; streak = 0; goods++; }
+    else if (offset <= 400) { kind = 'ok'; baseDx = 1; streak = 0; oks++; }
+    else { kind = 'miss'; baseDx = 0; misses++; if (shieldArmed) { shieldArmed = false; feedback('shield', '⛨ SHIELD held · streak preserved'); } else { streak = 0; } }
+    streakHigh = Math.max(streakHigh, streak);
+    let mult = setMultiplier();
+    if (kind === 'perfect' && turboCharges > 0) { mult *= 2; turboCharges--; if (turboCharges === 0) feedback('turbo', '⚡ TURBO depleted'); }
+    const dx = baseDx * mult;
+    progress[0] = Math.min(100, progress[0] + dx);
+    bumpRacer(0);
+    if (kind !== 'miss') { try { play(AI[1].voice === 'snare' ? 'kick' : 'kick', ctx().currentTime + 0.02); } catch {} }
+    if (kind !== 'miss' || (shieldArmed === false && kind === 'miss')) feedback(kind, kind === 'perfect' ? `★ PERFECT  +${dx.toFixed(1)}` : kind === 'good' ? `✓ GOOD  +${dx.toFixed(1)}` : kind === 'ok' ? `· OK  +${dx.toFixed(1)}` : `✗ MISS`);
+    updateHud();
+    paintRacer(0);
+    myTaps.push(now - raceStartT);
+    if (padEl) { padEl.classList.add('dr3__pad--tapped'); setTimeout(() => padEl.classList.remove('dr3__pad--tapped'), 80); }
+    checkPowerupPickup();
+    if (progress[0] >= FINISH) win(0);
+  }
+
+  function startCountdown() {
+    if (phase !== 'idle' && phase !== 'won') return;
+    phase = 'countdown';
+    progress = [0, 0, 0, 0];
+    streak = 0; streakHigh = 0; beatCount = 0; perfects = 0; goods = 0; oks = 0; misses = 0;
+    myTaps = []; ghostProgress = 0; ghostTickIdx = 0;
+    collected = null; turboCharges = 0; shieldArmed = false; lanePowerup = null;
+    if (powerIconEl) powerIconEl.hidden = true;
+    paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost();
+    ghostTaps = (stats.bests[bestKey(track, difficulty)]?.taps || []).slice();
+    if (ghostEl) ghostEl.classList.toggle('dr3__ghost--active', ghostTaps.length > 0);
+    updateHud();
+    if (winEl) winEl.hidden = true; if (pbEl) pbEl.hidden = true;
+    if (feedbackEl) { feedbackEl.textContent = ''; delete feedbackEl.dataset.kind; }
+    let n = 3;
+    if (padText) padText.textContent = `${n}…`;
+    if (stateEl) stateEl.textContent = '— get ready —';
+    if (countdownTimer) clearInterval(countdownTimer);
+    ctx();
+    try { pTickAccent(ctx().currentTime + 0.02); } catch {}
+    countdownTimer = window.setInterval(() => {
+      n--;
+      if (n > 0) { if (padText) padText.textContent = `${n}…`; try { pTickAccent(ctx().currentTime + 0.02); } catch {} }
+      else { if (countdownTimer) clearInterval(countdownTimer); startRace(); }
+    }, 800);
+  }
+  function startRace() {
+    phase = 'racing';
+    raceStartT = performance.now();
+    if (padText) padText.textContent = '🥁 TAP ON THE BEAT';
+    if (stateEl) stateEl.textContent = `— racing · ${track.toUpperCase()} —`;
+    lastBeatT = performance.now();
+    if (raceTimer) clearInterval(raceTimer);
+    const t = TRACKS.find(x => x.id === track)!;
+    const stepMs = 60000 / t.bpm;
+    tick();
+    raceTimer = window.setInterval(tick, stepMs);
+    if (ghostTaps.length > 0) requestAnimationFrame(ghostStep);
+  }
+  function reset() {
+    phase = 'idle';
+    if (raceTimer) { clearInterval(raceTimer); raceTimer = null; }
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    progress = [0, 0, 0, 0]; streak = 0; streakHigh = 0; beatCount = 0; ghostProgress = 0;
+    collected = null; turboCharges = 0; shieldArmed = false; lanePowerup = null;
+    if (powerIconEl) powerIconEl.hidden = true;
+    paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost();
+    updateHud();
+    if (padText) padText.textContent = '▶ START RACE';
+    if (stateEl) stateEl.textContent = '— ready —';
+    if (feedbackEl) { feedbackEl.textContent = ''; delete feedbackEl.dataset.kind; }
+    if (metroEl) metroEl.textContent = '○○○○';
+    if (winEl) winEl.hidden = true; if (pbEl) pbEl.hidden = true;
+  }
+  function setDiff(d: Diff) {
+    if (phase === 'racing' || phase === 'countdown') return;
+    difficulty = d;
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.dr3__diff-btn')).forEach(b => b.classList.toggle('dr3__diff-btn--active', b.dataset.diff === d));
+    renderStats();
+  }
+  function setTrack(t: TrackId) {
+    if (phase === 'racing' || phase === 'countdown') return;
+    track = t;
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.dr3__track-btn')).forEach(b => b.classList.toggle('dr3__track-btn--active', b.dataset.track === t));
+    const trackData = TRACKS.find(x => x.id === t)!;
+    if (trackStage) trackStage.style.background = trackData.bg;
+    if (bpmEl) bpmEl.textContent = String(trackData.bpm);
+    renderStats();
+  }
+  function clearGhost() {
+    delete stats.bests[bestKey(track, difficulty)];
+    saveStats(stats);
+    ghostTaps = []; renderStats();
+    feedback('ok', '✕ ghost cleared for this track/difficulty');
+  }
+  function clearAllStats() {
+    if (confirm('Reset ALL stats and ghosts?')) {
+      stats = { bests: {}, wins: {}, totals: { perfects: 0, goods: 0, oks: 0, misses: 0, races: 0, victories: 0 } };
+      saveStats(stats); renderStats();
+    }
+  }
+
+  if (padEl) padEl.addEventListener('click', () => { if (phase === 'idle' || phase === 'won') startCountdown(); else if (phase === 'racing') attemptTap(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); if (phase === 'idle' || phase === 'won') startCountdown(); else if (phase === 'racing') attemptTap(); }
+    if (e.key === 'p' || e.key === 'P') usePowerup();
+    if (e.key === 'r' || e.key === 'R') reset();
+  });
+  document.getElementById('dr3-reset')?.addEventListener('click', reset);
+  document.getElementById('dr3-clear-ghost')?.addEventListener('click', clearGhost);
+  document.getElementById('dr3-clear-stats')?.addEventListener('click', clearAllStats);
+  document.getElementById('dr3-win-again')?.addEventListener('click', () => { reset(); startCountdown(); });
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.dr3__diff-btn')).forEach(b => b.addEventListener('click', () => setDiff(b.dataset.diff as Diff)));
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.dr3__track-btn')).forEach(b => b.addEventListener('click', () => setTrack(b.dataset.track as TrackId)));
+
+  function celebrate() { const colors = ['#f6c15e', '#ff8a4a', '#ff5f7a', '#a8ff3a', '#5fbafd', '#b09bf0']; for (let i = 0; i < 60; i++) { const c = document.createElement('div'); c.className = 'dr3__confetti'; c.style.background = colors[i % colors.length]; c.style.left = `${Math.random() * 100}vw`; c.style.top = `${-20 - Math.random() * 100}px`; c.style.animationDelay = `${Math.random() * 0.6}s`; c.style.animationDuration = `${2.4 + Math.random() * 1.6}s`; document.body.appendChild(c); setTimeout(() => c.remove(), 4000); } }
+
+  setTrack('marina');
+  setTimeout(() => { paintRacer(0); paintRacer(1); paintRacer(2); paintRacer(3); paintGhost(); renderStats(); }, 50);
+</script>

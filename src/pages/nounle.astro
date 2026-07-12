@@ -1,0 +1,454 @@
+---
+/**
+ * /nounle — guess the Noun of the day.
+ *
+ * One mystery Noun per PT calendar day, the same for the whole town (seeded
+ * by daySeed(), the shared /today + /noun-loom pattern). Six guesses. Each
+ * guess un-hides one horizontal band of the real noun.pics art AND narrows a
+ * higher/lower range on the seed — so you triangulate with both the picture
+ * and the number. Solve it for a spoiler-free share grid + a streak.
+ *
+ * HONESTY NOTE: Nouns' on-chain traits (background/body/glasses/head) are NOT
+ * available anywhere in this repo — there's no seed→trait table — so this game
+ * deliberately gives NO fake "you matched 2 traits" feedback. The only signals
+ * are honest and 100%-offline: (a) higher/lower on the numeric seed, and
+ * (b) the progressive reveal of the real art. Game logic touches the network
+ * zero times; only the <img> art fetches noun.pics. Bands are CSS overlays
+ * over an <img>, never canvas pixel-reads, so there's no CORS/tainted-canvas
+ * trap. Chosen over the panel-runner-up NOUNGRAM; Tidepool was already shipped.
+ *
+ * Playful arcade register (saturated, chunky, mono) per the games ethos —
+ * the Bloomberg-terminal grammar is for the broadcast, not the toys.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { daySeed, todayPT } from '../lib/daily-core';
+
+const NOUN_COUNT = 1200;          // Visit Nouns FA2 seeds 0–1199
+const MAX_GUESSES = 6;
+const BANDS = 6;
+const LAUNCH = '2026-07-06';      // Nounle #1
+
+const todayStr = todayPT();
+const answer = daySeed() % NOUN_COUNT;
+
+// Puzzle number = days since launch (stable, shared, no server).
+const puzzleNo = Math.max(
+  1,
+  Math.round((Date.parse(todayStr) - Date.parse(LAUNCH)) / 86_400_000) + 1,
+);
+
+// Cozy reveal captions, picked by the day so the reveal teaches a little town
+// instead of just firing confetti. cc voice, not Mike's.
+const CAPTIONS = [
+  'one of twelve hundred, and today it was this one.',
+  'the town all looked at the same face this morning.',
+  'a noun is forever. this one was just for today.',
+  'seed found. the pot, still on.',
+  'every day a different stranger at the door.',
+  'the marine layer burned off and there it was.',
+  'noggles on. see you at the next one.',
+  'small town, twelve hundred neighbors, one a day.',
+];
+const caption = CAPTIONS[answer % CAPTIONS.length];
+
+const title = `Nounle #${puzzleNo} — guess the Noun of the day`;
+const description =
+  'Guess the Noun of the day in six tries. One shared mystery Noun for the whole town each day — the art reveals band by band and the range narrows with every guess. A cozy daily puzzle over the 1,200 Visit Nouns.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/nounle',
+  name: 'Nounle',
+  url: 'https://pointcast.xyz/nounle',
+  description,
+  genre: ['Puzzle', 'Daily'],
+  gamePlatform: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main
+    class="nl"
+    data-answer={answer}
+    data-day={todayStr}
+    data-puzzle={puzzleNo}
+    data-count={NOUN_COUNT}
+    data-max={MAX_GUESSES}
+    data-bands={BANDS}
+    data-launch={LAUNCH}
+    data-caption={caption}
+  >
+    <header class="nl-head">
+      <h1 class="nl-title">NOUNLE</h1>
+      <p class="nl-sub mono">
+        <span id="nl-num">#{puzzleNo}</span> · GUESS THE NOUN OF THE DAY ·
+        <span id="nl-left">{MAX_GUESSES}</span> LEFT
+      </p>
+    </header>
+
+    {/* ── the reveal stage ── */}
+    <div class="nl-stage" id="nl-stage">
+      <img
+        class="nl-art"
+        id="nl-art"
+        src={`https://noun.pics/${answer}.svg`}
+        alt="Today's mystery Noun, mostly hidden"
+        width="320" height="320" draggable="false"
+      />
+      <div class="nl-bands" id="nl-bands" aria-hidden="true">
+        {Array.from({ length: BANDS }).map((_, i) => (
+          <span class="nl-band" style={`top:${(i * 100) / BANDS}%;height:${100 / BANDS}%`}></span>
+        ))}
+      </div>
+      <div class="nl-solved-flag mono" id="nl-flag" hidden></div>
+    </div>
+
+    {/* ── guess input ── */}
+    <form class="nl-guess" id="nl-guess" autocomplete="off">
+      <span class="nl-range mono" id="nl-range">0 – {NOUN_COUNT - 1}</span>
+      <div class="nl-picker">
+        <button type="button" class="nl-step" id="nl-minus" aria-label="lower seed">–</button>
+        <div class="nl-pick-view">
+          <img class="nl-pick-art" id="nl-pick-art" src={`https://noun.pics/0.svg`} alt="" width="56" height="56" />
+          <input
+            class="nl-input mono" id="nl-input" type="number"
+            inputmode="numeric" min="0" max={NOUN_COUNT - 1} value="600"
+            aria-label="Guess a Noun seed number"
+          />
+        </div>
+        <button type="button" class="nl-step" id="nl-plus" aria-label="higher seed">+</button>
+      </div>
+      <button type="submit" class="nl-go mono" id="nl-go">GUESS</button>
+    </form>
+
+    {/* ── past guesses ── */}
+    <ol class="nl-rows mono" id="nl-rows" aria-label="Your guesses"></ol>
+
+    {/* ── result ── */}
+    <section class="nl-result" id="nl-result" hidden>
+      <p class="nl-result-line mono" id="nl-result-line"></p>
+      <p class="nl-caption" id="nl-caption"></p>
+      <div class="nl-share-grid mono" id="nl-share-grid"></div>
+      <div class="nl-streak mono" id="nl-streak"></div>
+      <div class="nl-actions">
+        <button type="button" class="nl-go mono" id="nl-share">COPY RESULT</button>
+        <a class="nl-alt mono" href="/today">TODAY'S DROP →</a>
+      </div>
+      <p class="nl-next mono" id="nl-next"></p>
+    </section>
+
+    <p class="nl-foot mono">
+      one shared Noun a day · <a href="/explore">more games</a> ·
+      <a href="/nounle.json">/nounle.json</a>
+    </p>
+  </main>
+</BlockLayout>
+
+<script type="application/json" id="nl-boot" set:html={JSON.stringify({ answer, day: todayStr, puzzleNo, caption })} />
+
+<script>
+  import { daySeed, todayPT } from '../lib/daily-core';
+
+  (function () {
+    'use strict';
+    const root = document.querySelector<HTMLElement>('.nl');
+    if (!root) return;
+    const N = +(root.dataset.count || 1200);
+    const MAX = +(root.dataset.max || 6);
+    const BANDS = +(root.dataset.bands || 6);
+    const LAUNCH = root.dataset.launch || '2026-07-06';
+    const LS = 'pc:nounle:v1';
+
+    // ── stale-proof: recompute the day/answer in the browser, so a deploy
+    // built yesterday still serves today's puzzle (same trick as /today). ──
+    let day = todayPT();
+    let answer = daySeed() % N;
+    let puzzleNo = Math.max(1, Math.round((Date.parse(day) - Date.parse(LAUNCH)) / 86_400_000) + 1);
+    // If the built-in matches the live day, trust the server value (identical).
+    if (root.dataset.day === day) answer = +(root.dataset.answer || answer);
+
+    const $ = (id: string) => document.getElementById(id);
+    const art = $('nl-art') as HTMLImageElement;
+    const bandsWrap = $('nl-bands')!;
+    const bands = Array.from(bandsWrap.querySelectorAll<HTMLElement>('.nl-band'));
+    const input = $('nl-input') as HTMLInputElement;
+    const pickArt = $('nl-pick-art') as HTMLImageElement;
+    const rangeEl = $('nl-range')!;
+    const rowsEl = $('nl-rows')!;
+    const leftEl = $('nl-left')!;
+    const form = $('nl-guess') as HTMLFormElement;
+    const flag = $('nl-flag')!;
+    const result = $('nl-result')!;
+
+    art.src = `https://noun.pics/${answer}.svg`;
+    ($('nl-num') as HTMLElement).textContent = '#' + puzzleNo;
+
+    type State = { day: string; guesses: number[]; solved: boolean; done: boolean; streak: number; best: number };
+    function load(): State {
+      try {
+        const s = JSON.parse(localStorage.getItem(LS) || '{}');
+        if (s && s.day === day && Array.isArray(s.guesses)) return s;
+        // New day — keep streak/best, reset the board.
+        return { day, guesses: [], solved: false, done: false, streak: s.streak || 0, best: s.best || 0 };
+      } catch { return { day, guesses: [], solved: false, done: false, streak: 0, best: 0 }; }
+    }
+    function save(s: State) { try { localStorage.setItem(LS, JSON.stringify(s)); } catch {} }
+    let st = load();
+
+    let lo = 0, hi = N - 1;
+    function clampPreview() {
+      let v = parseInt(input.value, 10);
+      if (isNaN(v)) v = Math.floor((lo + hi) / 2);
+      v = Math.max(0, Math.min(N - 1, v));
+      input.value = String(v);
+      pickArt.src = `https://noun.pics/${v}.svg`;
+    }
+
+    function revealBands(n: number) {
+      // Reveal top-to-bottom; also ease the blur down as more shows.
+      for (let i = 0; i < bands.length; i++) bands[i].classList.toggle('cleared', i < n);
+      const blur = Math.max(0, 7 - n * 1.1);
+      art.style.filter = n >= BANDS ? 'none' : `blur(${blur.toFixed(1)}px)`;
+    }
+
+    function pushRow(seed: number, verdict: 'up' | 'down' | 'hit') {
+      const li = document.createElement('li');
+      li.className = 'nl-row nl-row--' + verdict;
+      const im = document.createElement('img');
+      im.className = 'nl-row-art'; im.width = 34; im.height = 34; im.alt = '';
+      im.src = `https://noun.pics/${seed}.svg`;
+      const num = document.createElement('span'); num.className = 'nl-row-num'; num.textContent = '#' + seed;
+      const tag = document.createElement('span'); tag.className = 'nl-row-tag';
+      tag.textContent = verdict === 'hit' ? '✓ THE NOUN' : verdict === 'up' ? '↑ HIGHER' : '↓ LOWER';
+      li.appendChild(im); li.appendChild(num); li.appendChild(tag);
+      rowsEl.appendChild(li);
+    }
+
+    function narrowFrom(seed: number) {
+      if (seed < answer) lo = Math.max(lo, seed + 1);
+      else if (seed > answer) hi = Math.min(hi, seed - 1);
+      rangeEl.textContent = `${lo} – ${hi}`;
+    }
+
+    function shareGrid(): string {
+      // Spoiler-free: one row, ⬛ per used miss, 🟩 on the solve, ⬜ unused.
+      let row = '';
+      const used = st.guesses.length;
+      for (let i = 0; i < MAX; i++) {
+        if (i < used - (st.solved ? 1 : 0)) row += '⬛';
+        else if (i === used - 1 && st.solved) row += '🟩';
+        else row += '⬜';
+      }
+      const score = st.solved ? `${used}/${MAX}` : `X/${MAX}`;
+      return `Nounle #${puzzleNo} ${score}\n${row}\npointcast.xyz/nounle`;
+    }
+
+    function finish() {
+      const resultLine = $('nl-result-line')!;
+      const cap = $('nl-caption')!;
+      const streakEl = $('nl-streak')!;
+      const grid = $('nl-share-grid')!;
+      const nextEl = $('nl-next')!;
+      revealBands(BANDS);
+      flag.hidden = false;
+      flag.textContent = st.solved ? `#${answer}` : `IT WAS #${answer}`;
+      flag.classList.toggle('nl-flag--win', st.solved);
+      form.hidden = true;
+      result.hidden = false;
+      resultLine.textContent = st.solved
+        ? `Solved in ${st.guesses.length}/${MAX}. Streak ${st.streak}.`
+        : `Out of guesses. The Noun was #${answer}.`;
+      cap.textContent = root.dataset.caption || '';
+      grid.textContent = st.solved
+        ? new Array(st.guesses.length - 1).fill('⬛').join('') + '🟩'
+        : new Array(MAX).fill('⬛').join('');
+      streakEl.textContent = `● STREAK ${st.streak}  ·  ★ BEST ${st.best}`;
+      // Countdown to the next PT midnight.
+      function tick() {
+        const now = new Date();
+        const p = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        }).formatToParts(now).reduce((a: any, x) => (a[x.type] = x.value, a), {});
+        const secs = (23 - +p.hour) * 3600 + (59 - +p.minute) * 60 + (59 - +p.second);
+        const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+        const ss = String(secs % 60).padStart(2, '0');
+        nextEl.textContent = `next noun in ${hh}:${mm}:${ss}`;
+      }
+      tick(); setInterval(tick, 1000);
+      if (st.solved) chime();
+    }
+
+    function guess(seed: number) {
+      if (st.done) return;
+      st.guesses.push(seed);
+      if (seed === answer) {
+        st.solved = true; st.done = true;
+        st.streak = (st.streak || 0) + 1;
+        st.best = Math.max(st.best || 0, st.streak);
+        pushRow(seed, 'hit');
+      } else {
+        narrowFrom(seed);
+        pushRow(seed, seed < answer ? 'up' : 'down');
+        revealBands(st.guesses.length);
+        if (st.guesses.length >= MAX) { st.done = true; st.streak = 0; }
+      }
+      leftEl.textContent = String(Math.max(0, MAX - st.guesses.length));
+      save(st);
+      if (st.done) finish();
+      else { input.value = String(Math.floor((lo + hi) / 2)); clampPreview(); }
+    }
+
+    function chime() {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        [523, 659, 784, 1047].forEach((f, i) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = 'triangle'; o.frequency.value = f;
+          const t = ctx.currentTime + i * 0.09;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + 0.28);
+          o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.3);
+        });
+      } catch {}
+    }
+
+    // ── replay saved state ──
+    function replay() {
+      lo = 0; hi = N - 1;
+      for (const s of st.guesses) {
+        if (s === answer) pushRow(s, 'hit');
+        else { narrowFrom(s); pushRow(s, s < answer ? 'up' : 'down'); }
+      }
+      revealBands(st.solved || st.done ? BANDS : st.guesses.length);
+      leftEl.textContent = String(Math.max(0, MAX - st.guesses.length));
+      if (st.done) finish();
+    }
+
+    // ── wire up ──
+    input.value = String(Math.floor((lo + hi) / 2));
+    clampPreview();
+    input.addEventListener('input', clampPreview);
+    ($('nl-minus') as HTMLElement).addEventListener('click', () => { input.value = String(Math.max(lo, (parseInt(input.value, 10) || 0) - 1)); clampPreview(); });
+    ($('nl-plus') as HTMLElement).addEventListener('click', () => { input.value = String(Math.min(hi, (parseInt(input.value, 10) || 0) + 1)); clampPreview(); });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      clampPreview();
+      const v = parseInt(input.value, 10);
+      if (!isNaN(v) && !st.guesses.includes(v)) guess(v);
+    });
+    ($('nl-share') as HTMLElement).addEventListener('click', function () {
+      const txt = shareGrid();
+      const btn = this as HTMLElement;
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+        .then(() => { btn.textContent = 'COPIED ✓'; setTimeout(() => (btn.textContent = 'COPY RESULT'), 1600); })
+        .catch(() => { window.prompt('Copy your result:', txt); });
+    });
+
+    replay();
+  })();
+</script>
+
+<style>
+  .nl {
+    max-width: 560px; margin: 0 auto; padding: 22px 18px 90px;
+    color: var(--pc-ink); text-align: center;
+    font-family: var(--pc-font-sans);
+  }
+  .nl .mono { font-family: var(--pc-font-mono); }
+  .nl a { color: var(--pc-accent); text-decoration: none; }
+  .nl a:hover { text-decoration: underline; }
+  /* Elements toggled via the `hidden` property (nl-guess is display:flex,
+     which would otherwise beat the UA [hidden]{display:none} rule). */
+  .nl [hidden] { display: none !important; }
+
+  .nl-head { margin-bottom: 16px; }
+  .nl-title {
+    font-family: var(--pc-font-mono); font-weight: 500; letter-spacing: 0.14em;
+    font-size: clamp(30px, 8vw, 46px); margin: 0; color: var(--pc-ink);
+  }
+  .nl-sub { font-size: 11px; letter-spacing: 0.12em; color: var(--pc-ink-muted); text-transform: uppercase; margin: 6px 0 0; }
+
+  /* ── stage ── */
+  .nl-stage {
+    position: relative; width: min(320px, 82vw); aspect-ratio: 1; margin: 0 auto 18px;
+    border: 3px solid var(--pc-ink); border-radius: 4px; overflow: hidden;
+    background: #0d0b14; box-shadow: 0 6px 0 rgba(18,17,14,0.16);
+  }
+  .nl-art {
+    width: 100%; height: 100%; display: block; image-rendering: pixelated;
+    filter: blur(7px); transition: filter 0.5s ease;
+  }
+  .nl-bands { position: absolute; inset: 0; pointer-events: none; }
+  .nl-band {
+    position: absolute; left: 0; width: 100%;
+    background: repeating-linear-gradient(45deg, #2b2540 0 8px, #241f38 8px 16px);
+    border-bottom: 1px solid rgba(0,0,0,0.4);
+    transition: opacity 0.45s ease, transform 0.45s ease;
+  }
+  .nl-band.cleared { opacity: 0; transform: translateY(-4px); }
+  .nl-solved-flag {
+    position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+    background: var(--pc-ink); color: #fff; font-size: 12px; letter-spacing: 0.1em;
+    padding: 3px 10px; border-radius: 2px;
+  }
+  .nl-solved-flag.nl-flag--win { background: #2f8f5b; }
+
+  /* ── guess ── */
+  .nl-guess { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .nl-range { font-size: 12px; letter-spacing: 0.1em; color: var(--pc-ink-soft); }
+  .nl-picker { display: flex; align-items: center; gap: 10px; }
+  .nl-step {
+    width: 44px; height: 44px; border: 2px solid var(--pc-ink); border-radius: 4px;
+    background: #fff; font-size: 22px; line-height: 1; cursor: pointer; color: var(--pc-ink);
+  }
+  .nl-step:active { transform: translateY(1px); }
+  .nl-pick-view {
+    display: flex; align-items: center; gap: 8px;
+    border: 2px solid var(--pc-rule); border-radius: 4px; padding: 5px 8px; background: #fff;
+  }
+  .nl-pick-art { width: 44px; height: 44px; image-rendering: pixelated; border-radius: 2px; background: #eee; }
+  .nl-input {
+    width: 88px; font-size: 22px; text-align: center; border: 0; outline: none;
+    color: var(--pc-ink); background: transparent; letter-spacing: 0.02em;
+    -moz-appearance: textfield;
+  }
+  .nl-input::-webkit-outer-spin-button, .nl-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .nl-go {
+    border: 2px solid var(--pc-ink); border-radius: 4px; background: var(--pc-accent);
+    color: #fff; font-size: 13px; letter-spacing: 0.14em; font-weight: 500;
+    padding: 11px 26px; cursor: pointer; box-shadow: 0 3px 0 rgba(18,17,14,0.28);
+  }
+  .nl-go:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(18,17,14,0.28); }
+
+  /* ── rows ── */
+  .nl-rows { list-style: none; margin: 0 auto 8px; padding: 0; max-width: 340px; display: flex; flex-direction: column; gap: 6px; }
+  .nl-row {
+    display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+    border: 1.5px solid var(--pc-rule); border-radius: 3px; padding: 5px 10px; background: #fff; text-align: left;
+  }
+  .nl-row-art { image-rendering: pixelated; border-radius: 2px; background: #eee; }
+  .nl-row-num { font-size: 13px; letter-spacing: 0.04em; color: var(--pc-ink); }
+  .nl-row-tag { font-size: 11px; letter-spacing: 0.08em; font-weight: 500; }
+  .nl-row--up { border-color: #c9862a; } .nl-row--up .nl-row-tag { color: #a8670f; }
+  .nl-row--down { border-color: #3a6ea8; } .nl-row--down .nl-row-tag { color: #275089; }
+  .nl-row--hit { border-color: #2f8f5b; background: #eef8f1; } .nl-row--hit .nl-row-tag { color: #1c6b41; }
+
+  /* ── result ── */
+  .nl-result { border-top: 2px solid var(--pc-ink); padding-top: 16px; margin-top: 6px; }
+  .nl-result-line { font-size: 14px; letter-spacing: 0.06em; margin: 0 0 6px; color: var(--pc-ink); }
+  .nl-caption { font-size: 15px; line-height: 1.5; color: var(--pc-ink-soft); margin: 0 0 12px; font-style: italic; }
+  .nl-share-grid { font-size: 20px; letter-spacing: 4px; margin: 0 0 10px; }
+  .nl-streak { font-size: 11px; letter-spacing: 0.12em; color: var(--pc-ink-muted); margin-bottom: 12px; }
+  .nl-actions { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .nl-alt { font-size: 12px; letter-spacing: 0.1em; }
+  .nl-next { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-ink-muted); margin: 12px 0 0; }
+  .nl-foot { font-size: 11px; letter-spacing: 0.08em; color: var(--pc-ink-muted); margin-top: 26px; }
+
+  @media (max-width: 420px) {
+    .nl-input { width: 70px; font-size: 20px; }
+    .nl-pick-art { width: 38px; height: 38px; }
+  }
+</style>

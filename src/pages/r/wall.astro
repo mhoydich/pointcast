@@ -1,0 +1,212 @@
+---
+/**
+ * /r/wall — the addable-artifact gallery.
+ *
+ * Sprint 7 of the live-artifacts arc. Renders artifacts grouped by
+ * roomId so each room's wall is visible side-by-side. A future
+ * RoomRenderer pass folds the per-room strip back into the room
+ * itself; this page is the inventory.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  ARTIFACT_CONTRACT_SCHEMA,
+  artifactsForRoom,
+  formatCreator,
+  type Artifact,
+} from '../../lib/artifact-contract';
+import { seedArtifacts } from '../../data/artifacts/seed';
+
+const artifacts = seedArtifacts();
+const roomsOnTheWall = Array.from(new Set(artifacts.map((a) => a.roomId)));
+
+function fmtAt(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+const title = 'The wall — artifacts pinned to PointCast rooms';
+const description = `${artifacts.length} addable artifacts across ${roomsOnTheWall.length} rooms. SVG, one-liners, Polaroids, links.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="wall">
+
+    <header class="wall__head">
+      <p class="kicker mono">ADDABLE LIVE ARTIFACTS · CONTRACT <a href={ARTIFACT_CONTRACT_SCHEMA}>v1</a></p>
+      <h1>The wall.</h1>
+      <p class="dek">
+        Visitors and agents can drop tiny artifacts onto a room's wall — an SVG,
+        a one-liner, a Polaroid, an outbound link. Each is pinned to a
+        <code>roomId</code> that matches a <a href="/room-contract/v1.json">RoomSpec</a>.
+        The wall page is the raw inventory; a follow-up PR folds a per-room strip
+        back into each room. Feed at <a href="/artifacts.json">/artifacts.json</a>.
+      </p>
+    </header>
+
+    {roomsOnTheWall.map((roomId) => {
+      const items: Artifact[] = artifactsForRoom(artifacts, roomId);
+      return (
+        <section class="wall__room" aria-labelledby={`wall-${roomId}-h`}>
+          <header class="wall__room-head">
+            <h2 id={`wall-${roomId}-h`} class="wall__room-h">
+              <a href={`/r/${roomId}`}>/r/{roomId}</a>
+              <span class="wall__count mono">{items.length} pinned</span>
+            </h2>
+          </header>
+          <ul class="wall__cards">
+            {items.map((a) => (
+              <li class={`wall__card wall__card--${a.kind}`}>
+                <header class="wall__card-head">
+                  <span class={`wall__kind wall__kind--${a.kind}`}>{a.kind}</span>
+                  <span class="wall__creator mono">{formatCreator(a)}</span>
+                  <span class="wall__when mono">{fmtAt(a.createdAt)}</span>
+                </header>
+                <h3 class="wall__title">{a.title}</h3>
+                {a.caption && <p class="wall__caption">{a.caption}</p>}
+                <div class="wall__body">
+                  {a.kind === 'svg' && a.content.kind === 'svg' && (
+                    <div class="wall__svg" set:html={a.content.svg} />
+                  )}
+                  {a.kind === 'one-liner' && a.content.kind === 'one-liner' && (
+                    <blockquote class="wall__oneliner">{a.content.text}</blockquote>
+                  )}
+                  {a.kind === 'polaroid' && a.content.kind === 'polaroid' && (
+                    <figure class="wall__polaroid">
+                      <img src={a.content.image} alt={a.content.alt} loading="lazy"/>
+                    </figure>
+                  )}
+                  {a.kind === 'link' && a.content.kind === 'link' && (
+                    <a class="wall__link" href={a.content.url}>
+                      {a.content.preview ?? a.content.url}
+                      <span aria-hidden="true">↗</span>
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    })}
+
+    <footer class="wall__foot mono">
+      <span><strong>more:</strong></span>
+      <a href="/artifacts.json">/artifacts.json (feed)</a>
+      <a href="/r/meditate">/r/meditate</a>
+      <a href="/room-maker">/room-maker</a>
+      <a href="/embed-demo">/embed-demo</a>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<style>
+  .wall {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    background: #f7f5ef;
+    min-height: calc(100vh - 88px);
+    color: #1f1b15;
+    font-family: var(--font-body, ui-sans-serif, system-ui);
+  }
+  .wall__head { margin: 0 0 32px; max-width: 740px; }
+  .wall__head .kicker {
+    font-size: 10px; letter-spacing: 0.18em; color: #6a6154;
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .wall__head .kicker a { color: #1f1b15; text-decoration: underline; }
+  .wall__head h1 {
+    font-family: var(--font-serif, Georgia, serif);
+    font-style: italic; font-size: clamp(30px, 3.8vw, 42px);
+    font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;
+  }
+  .wall__head .dek { margin: 0; font-size: 15px; line-height: 1.6; color: #4a4434; }
+  .wall__head .dek a { color: #c4952e; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .wall__head .dek code { background: rgba(31,27,21,0.07); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
+
+  .wall__room { margin: 0 0 36px; }
+  .wall__room-head { margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid #ddd9cc; }
+  .wall__room-h {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px; letter-spacing: 0.08em; margin: 0;
+    display: flex; align-items: baseline; gap: 16px;
+  }
+  .wall__room-h a { color: #1f1b15; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .wall__room-h a:hover { border-bottom-color: #1f1b15; }
+  .wall__count {
+    font-size: 11px; color: #6a6154; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+
+  .wall__cards {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
+  }
+  .wall__card {
+    background: #fff; border: 1px solid #ddd9cc; border-radius: 8px;
+    padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .wall__card-head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 10px; color: #6a6154;
+  }
+  .wall__kind {
+    font-family: ui-monospace, monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.18em; padding: 2px 6px; border-radius: 2px; text-transform: uppercase;
+  }
+  .wall__kind--svg       { background: #e1ebed; color: #1b3a5b; }
+  .wall__kind--one-liner { background: #f3eccd; color: #7a5d18; }
+  .wall__kind--polaroid  { background: #f5e6d4; color: #874c1d; }
+  .wall__kind--link      { background: #d6e6e1; color: #1f5b48; }
+  .wall__creator, .wall__when {
+    font-size: 10px; letter-spacing: 0.04em; color: #6a6154;
+  }
+  .wall__when { margin-left: auto; }
+  .wall__title {
+    font-family: var(--font-serif, Georgia, serif); font-style: italic;
+    font-size: 16px; font-weight: 500; line-height: 1.25; margin: 0; color: #1f1b15;
+  }
+  .wall__caption {
+    margin: 0; font-size: 12px; color: #6a6154; font-style: italic; line-height: 1.4;
+  }
+  .wall__body { margin-top: 2px; }
+
+  .wall__svg { background: #f7f5ef; border-radius: 4px; overflow: hidden; line-height: 0; }
+  .wall__svg svg { display: block; width: 100%; height: auto; }
+  .wall__oneliner {
+    margin: 0; padding: 10px 12px; background: #fbf7eb;
+    border-left: 3px solid #c4952e; border-radius: 2px;
+    font-family: var(--font-serif, Georgia, serif); font-style: italic;
+    font-size: 14px; line-height: 1.5; color: #2a2418;
+  }
+  .wall__polaroid {
+    margin: 0; padding: 10px 10px 16px; background: #fbf7eb;
+    border: 1px solid #ddd9cc; border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(31,27,21,0.08); transform: rotate(-1.2deg);
+  }
+  .wall__polaroid img {
+    display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+    background: #1f1b15; border-radius: 2px;
+  }
+  .wall__link {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px; background: #f0f6f3; border: 1px solid #c4d8cd;
+    border-radius: 4px; color: #1f5b48; text-decoration: none;
+    font-family: ui-monospace, monospace; font-size: 12px;
+  }
+  .wall__link:hover { background: #c4d8cd; color: #1f1b15; }
+
+  .wall__foot {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px;
+    margin: 24px 0 0; padding-top: 18px; border-top: 1px dashed #ddd9cc;
+    font-size: 11px; color: #6a6154;
+  }
+  .wall__foot strong {
+    color: #4a4434; letter-spacing: 0.18em; text-transform: uppercase;
+    font-size: 10px; font-weight: 500;
+  }
+  .wall__foot a { color: #1f1b15; text-decoration: none; border-bottom: 1px solid #ddd9cc; }
+  .wall__foot a:hover { border-bottom-color: #1f1b15; }
+</style>

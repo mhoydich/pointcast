@@ -73,7 +73,7 @@ in the next 150ms poll.
 | `weather_get`         | `{ station }`        | Local weather for a station (default `el-segundo`)            |
 | `editions_summary`    | none                 | Every mintable on PointCast (mirror of /editions.json)        |
 | `contracts_status`    | none                 | Live Tezos contract addresses + status                        |
-| `channels_list`       | none                 | 9 channels — code, slug, name, purpose                        |
+| `channels_list`       | none                 | channels — code, slug, name, purpose                          |
 | `agents_manifest`     | none                 | Full /agents.json                                             |
 | `connector_links`     | none                 | Addable MCP connector links for AI clients                    |
 | `apps_list`           | none                 | PointCast app shelf for the client                            |

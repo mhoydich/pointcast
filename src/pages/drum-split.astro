@@ -1,0 +1,744 @@
+---
+/**
+ * /drum-split — Split Hands. Two hands, two patterns, one clock.
+ *
+ * Your LEFT hand (F, or the left half of the stage) keeps a dead-steady
+ * quarter-note pulse — one tap on every beat. Your RIGHT hand (J, or the
+ * right half) chases a syncopated cue pattern that rains down its own
+ * highway, telegraphed a beat ahead. Both hands are judged against a
+ * shared beat clock: PERFECT under 60ms, GOOD under 130ms. Every clean
+ * hit tops up a shared GROOVE bar; a miss or bad-timing on either hand
+ * drains it. Hold the split for sixteen bars to clear. Score is bars
+ * survived × accuracy, best in localStorage. A quiet backing keeps time.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Split Hands · two hands, two patterns · PointCast';
+const description = 'Left hand holds a steady pulse. Right hand chases the syncope. Keep both alive against one clock for sixteen bars — limb independence as a rhythm game.';
+---
+<BlockLayout title={title} description={description} image="/images/og-drum.png">
+  <main class="dsp" id="dsp">
+    <header class="dsp__hud">
+      <div class="dsp__hud-left">
+        <span class="dsp__bar" id="dsp-bar">—</span>
+        <span class="dsp__bar-label">bar / 16</span>
+      </div>
+      <div class="dsp__hud-mid">
+        <span class="dsp__judge" id="dsp-judge"></span>
+      </div>
+      <div class="dsp__hud-right">
+        <span class="dsp__points" id="dsp-points">0</span>
+        <span class="dsp__acc" id="dsp-acc">100%</span>
+      </div>
+    </header>
+
+    <div class="dsp__groove" aria-label="Groove bar">
+      <div class="dsp__groove-fill" id="dsp-groove"></div>
+      <span class="dsp__groove-label">GROOVE</span>
+    </div>
+
+    <section class="dsp__stage">
+      <canvas class="dsp__canvas" id="dsp-canvas"></canvas>
+      <div class="dsp__overlay" id="dsp-overlay">
+        <h1 class="dsp__title">SPLIT HANDS</h1>
+        <p class="dsp__sub">left hand steady · right hand syncope · F / J or tap</p>
+        <p class="dsp__best" id="dsp-best-line">best — · bars —</p>
+        <button class="dsp__go" id="dsp-go" type="button">▶ COUNT ME IN</button>
+      </div>
+      <div class="dsp__hands" id="dsp-hands">
+        <button class="dsp__hand dsp__hand--left" data-hand="0" type="button" aria-label="Left hand — steady pulse (F)"><span>F · STEADY</span></button>
+        <button class="dsp__hand dsp__hand--right" data-hand="1" type="button" aria-label="Right hand — syncopated cue (J)"><span>J · SYNCOPE</span></button>
+      </div>
+    </section>
+
+    <nav class="dsp__siblings">
+      <a href="/drum-hero">/drum-hero</a>
+      <a href="/drum-says">/drum-says</a>
+      <a href="/drum-lockstep">/drum-lockstep</a>
+      <a href="/drum">/drum</a>
+    </nav>
+  </main>
+
+  <style is:global>
+    html, body { background: #07050f; margin: 0; }
+    body:has(.dsp) {
+      color: #f4e7c8;
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .dsp {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 14px 12px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 94vh;
+    }
+
+    /* HUD */
+    .dsp__hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 6px;
+      min-height: 44px;
+    }
+    .dsp__hud-left { display: flex; align-items: baseline; gap: 8px; }
+    .dsp__bar {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 34px;
+      color: #f6c15e;
+      font-variant-numeric: tabular-nums;
+      min-width: 40px;
+    }
+    .dsp__bar-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #8a8a9a; }
+    .dsp__judge {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+    .dsp__judge--perfect { color: #8aeac0; text-shadow: 0 0 12px rgba(138,234,192,0.7); }
+    .dsp__judge--good { color: #7ac8ed; }
+    .dsp__judge--miss { color: #ff6b8a; }
+    .dsp__hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+    .dsp__points {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dsp__acc { font-size: 11px; color: #8a8a9a; font-variant-numeric: tabular-nums; }
+
+    /* GROOVE BAR */
+    .dsp__groove {
+      position: relative;
+      height: 16px;
+      border-radius: 9px;
+      overflow: hidden;
+      background: rgba(244,231,200,0.08);
+      border: 1px solid rgba(244,231,200,0.10);
+    }
+    .dsp__groove-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 100%;
+      background: linear-gradient(90deg, #1f9a68, #8aeac0);
+      transition: width 120ms linear, background 200ms ease;
+    }
+    .dsp__groove-fill.dsp__groove-fill--mid { background: linear-gradient(90deg, #d08a1a, #f6c15e); }
+    .dsp__groove-fill.dsp__groove-fill--low { background: linear-gradient(90deg, #c22646, #ff6b8a); }
+    .dsp__groove-label {
+      position: absolute;
+      top: 50%; left: 10px;
+      transform: translateY(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      color: rgba(7,5,15,0.72);
+      font-weight: 700;
+      pointer-events: none;
+    }
+
+    /* STAGE */
+    .dsp__stage {
+      position: relative;
+      flex: 1;
+      min-height: 420px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(244,231,200,0.10);
+      background: linear-gradient(180deg, #0b0818 0%, #140a24 80%, #1c0e2e 100%);
+    }
+    .dsp__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    .dsp__overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(7,5,15,0.82);
+      backdrop-filter: blur(3px);
+      z-index: 3;
+      text-align: center;
+      padding: 20px;
+    }
+    .dsp__overlay--hidden { display: none; }
+    .dsp__title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(28px, 7.5vw, 50px);
+      letter-spacing: 0.2em;
+      margin: 0;
+      color: #f6c15e;
+      text-shadow: 0 0 20px rgba(246,193,94,0.5);
+    }
+    .dsp__sub, .dsp__best {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #8a8a9a;
+      margin: 0;
+      max-width: 340px;
+      line-height: 1.6;
+    }
+    .dsp__best { color: #d4a437; }
+    .dsp__go {
+      margin-top: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      color: #07050f;
+      background: #f6c15e;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 30px;
+      cursor: pointer;
+      transition: transform 100ms ease, background 160ms ease;
+    }
+    .dsp__go:hover { transform: translateY(-1px); background: #ffd98a; }
+
+    /* HAND TAP ZONES (mobile + mouse) */
+    .dsp__hands {
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 32%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      z-index: 2;
+    }
+    .dsp__hand {
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .dsp__hand + .dsp__hand { border-left: 1px solid rgba(244,231,200,0.08); }
+    .dsp__hand span {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+      color: rgba(244,231,200,0.32);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .dsp__hand--left.dsp__hand--flash { background: linear-gradient(180deg, transparent, rgba(138,234,192,0.16)); }
+    .dsp__hand--right.dsp__hand--flash { background: linear-gradient(180deg, transparent, rgba(122,200,237,0.16)); }
+
+    .dsp__siblings {
+      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    }
+    .dsp__siblings a { color: #d4a437; text-decoration: none; }
+    .dsp__siblings a:hover { text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      .dsp__stage { min-height: 360px; }
+      .dsp__hand span { font-size: 10px; }
+    }
+  </style>
+
+  <script>
+    // Hand → one voice each. Left = grounded G3, right = brighter D4.
+    const HAND_FREQS = [196.0, 293.66];               // G3, D4
+    const LEFT_COLOR = '#8aeac0';                     // mint — steady pulse
+    const RIGHT_COLOR = '#7ac8ed';                    // blue — syncope cue
+    const NOUN_POOL = [385, 92, 523, 742, 1042, 287, 612, 928, 1189, 64];
+
+    const BPM = 120;
+    const BEAT_MS = 60_000 / BPM;                     // 500ms per beat
+    const BAR_MS = BEAT_MS * 4;                       // one bar
+    const TOTAL_BARS = 16;
+    const LEAD_MS = BAR_MS;                           // one-bar count-in
+    const APPROACH_MS = 1300;                         // cue travel top → strike
+    const PERFECT_MS = 60;
+    const GOOD_MS = 130;
+    const GROOVE_MAX = 100;
+
+    // Right-hand syncopated pattern pool, eighth-slots 0..7 (odd = offbeat).
+    const R_PATTERNS: number[][] = [
+      [1, 3, 5, 7],
+      [1, 2, 5, 6],
+      [0, 3, 4, 7],
+      [1, 3, 4, 6],
+      [1, 3, 5, 6, 7],
+      [1, 2, 3, 5, 7],
+      [1, 4, 5, 7],
+      [0, 1, 4, 5, 7],
+    ];
+
+    type Hand = 0 | 1;
+    type Cue = { hand: Hand; at: number; judged: boolean; hit: boolean };
+    type Burst = { hand: Hand; born: number; color: string };
+
+    let cues: Cue[] = [];
+    let running = false;
+    let startAt = 0;
+    let endAt = 0;
+    let groove = GROOVE_MAX;
+    let barsSurvived = 0;
+    let counts = { perfect: 0, good: 0, miss: 0 };
+    let bursts: Burst[] = [];
+    let rafId = 0;
+    let grooveTimer = 0;
+    let SESSION_ID = '';
+
+    // ---- audio ----
+    let actx: AudioContext | null = null;
+    function ctx(): AudioContext {
+      if (!actx) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        actx = new AC();
+      }
+      if (actx!.state === 'suspended') actx!.resume();
+      return actx!;
+    }
+    function pClick(t: number, accent = false) {
+      const a = ctx();
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'square';
+      o.frequency.value = accent ? 1250 : 880;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(accent ? 0.055 : 0.03, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.06);
+    }
+    function pBass(t: number) {
+      const a = ctx();
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(98, t);
+      o.frequency.exponentialRampToValueAtTime(63, t + 0.18);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.34);
+    }
+    function pHit(hand: Hand, quality: 'perfect' | 'good') {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const f = HAND_FREQS[hand];
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = quality === 'perfect' ? 'triangle' : 'sine';
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(quality === 'perfect' ? 0.34 : 0.24, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.45);
+      if (quality === 'perfect') {
+        const o2 = a.createOscillator(); const g2 = a.createGain();
+        o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
+        g2.gain.setValueAtTime(0.0001, t);
+        g2.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+        o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.3);
+      }
+    }
+    function pThud() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(74, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+    }
+    function pFail() {
+      const a = ctx(); const t = a.currentTime + 0.005;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(92, t);
+      o.frequency.exponentialRampToValueAtTime(48, t + 0.5);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.65);
+    }
+    function pClear() {
+      const a = ctx(); const chord = [261.63, 329.63, 392.0, 523.25]; const t0 = a.currentTime + 0.02;
+      chord.forEach((f, i) => {
+        const t = t0 + i * 0.1;
+        const o = a.createOscillator(); const g = a.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+        o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6);
+      });
+    }
+
+    // Backing pulse: soft click every beat, bass on the downbeat — one bar ahead.
+    function scheduleGroove() {
+      if (!running) return;
+      const a = ctx();
+      const now = a.currentTime;
+      const elapsed = performance.now() - startAt;
+      const beatIdx = Math.ceil(elapsed / BEAT_MS);
+      for (let b = beatIdx; b < beatIdx + 4; b++) {
+        const at = now + (b * BEAT_MS - elapsed) / 1000;
+        if (at < now) continue;
+        pClick(at, b % 4 === 0);
+        if (b % 4 === 0) pBass(at);
+      }
+      grooveTimer = window.setTimeout(scheduleGroove, BEAT_MS * 2);
+    }
+
+    // ---- chart ----
+    function generateChart(): Cue[] {
+      const out: Cue[] = [];
+      for (let bar = 0; bar < TOTAL_BARS; bar++) {
+        const barStart = LEAD_MS + bar * BAR_MS;
+        // LEFT hand — dead-steady quarter pulse, one per beat.
+        for (let beat = 0; beat < 4; beat++) {
+          out.push({ hand: 0, at: Math.round(barStart + beat * BEAT_MS), judged: false, hit: false });
+        }
+        // RIGHT hand — a syncopated pattern, thinned early, dense late.
+        const pat = R_PATTERNS[Math.floor(Math.random() * R_PATTERNS.length)];
+        const density = 0.55 + 0.42 * (bar / (TOTAL_BARS - 1));
+        for (const slot of pat) {
+          if (Math.random() > density) continue;
+          out.push({ hand: 1, at: Math.round(barStart + slot * (BEAT_MS / 2)), judged: false, hit: false });
+        }
+      }
+      out.sort((a, b) => a.at - b.at);
+      return out;
+    }
+
+    // ---- Nouns ----
+    const nounImgs: HTMLImageElement[] = [new Image(), new Image()];
+    function loadNouns() {
+      const pool = NOUN_POOL.slice();
+      for (let i = 0; i < 2; i++) {
+        const id = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        nounImgs[i].src = `https://noun.pics/${id}.svg`;
+      }
+    }
+
+    // ---- canvas ----
+    const canvas = document.getElementById('dsp-canvas') as HTMLCanvasElement;
+    const cx = canvas.getContext('2d')!;
+    let W = 0, H = 0, DPR = 1;
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      const r = canvas.getBoundingClientRect();
+      W = r.width; H = r.height;
+      canvas.width = W * DPR; canvas.height = H * DPR;
+      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+
+    const STRIKE_Y_FRAC = 0.8;
+    const handX = (hand: Hand) => (hand === 0 ? W * 0.25 : W * 0.75);
+    const handColor = (hand: Hand) => (hand === 0 ? LEFT_COLOR : RIGHT_COLOR);
+
+    function draw(nowMs: number) {
+      cx.clearRect(0, 0, W, H);
+      const strikeY = H * STRIKE_Y_FRAC;
+      const elapsed = nowMs - startAt;
+
+      // centre divider between the two hands
+      cx.strokeStyle = 'rgba(244,231,200,0.08)';
+      cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(W / 2, 0); cx.lineTo(W / 2, H); cx.stroke();
+
+      // downbeat pulse ring — the shared clock
+      const rel = elapsed - LEAD_MS;
+      const beatPhase = ((rel % BEAT_MS) + BEAT_MS) % BEAT_MS;
+      const pulse = 1 - Math.min(beatPhase / 160, 1);
+      if (rel > -BEAT_MS && pulse > 0) {
+        cx.strokeStyle = `rgba(246,193,94,${0.14 * pulse})`;
+        cx.lineWidth = 2;
+        cx.beginPath(); cx.moveTo(6, strikeY); cx.lineTo(W - 6, strikeY); cx.stroke();
+      }
+
+      // strike line
+      cx.strokeStyle = 'rgba(246,193,94,0.85)';
+      cx.lineWidth = 3;
+      cx.beginPath(); cx.moveTo(8, strikeY); cx.lineTo(W - 8, strikeY); cx.stroke();
+
+      // strike pads + Noun drummers
+      for (const hand of [0, 1] as Hand[]) {
+        const x = handX(hand);
+        cx.fillStyle = handColor(hand) + '22';
+        cx.beginPath(); cx.arc(x, strikeY, Math.min(W * 0.12, 30), 0, Math.PI * 2); cx.fill();
+        const img = nounImgs[hand];
+        if (img.complete && img.naturalWidth > 0) {
+          const s = Math.min(W * 0.2, 66);
+          cx.save();
+          cx.globalAlpha = 0.9;
+          cx.drawImage(img, x - s / 2, strikeY - s - 26, s, s);
+          cx.restore();
+        }
+      }
+
+      // labels above each highway
+      cx.font = "700 10px 'JetBrains Mono', monospace";
+      cx.textAlign = 'center';
+      cx.fillStyle = LEFT_COLOR + 'cc';
+      cx.fillText('STEADY · F', W * 0.25, 18);
+      cx.fillStyle = RIGHT_COLOR + 'cc';
+      cx.fillText('SYNCOPE · J', W * 0.75, 18);
+
+      // falling cues
+      for (const c of cues) {
+        if (c.judged && c.hit) continue;
+        const dt = c.at - elapsed;
+        if (dt > APPROACH_MS || dt < -220) continue;
+        const y = strikeY * (1 - dt / APPROACH_MS);
+        const x = handX(c.hand);
+        const r = Math.min(W * 0.09, 20);
+        if (c.hand === 0) {
+          // left = filled disc (grounded)
+          cx.fillStyle = c.judged ? 'rgba(120,120,140,0.35)' : LEFT_COLOR;
+          cx.beginPath(); cx.arc(x, y, r, 0, Math.PI * 2); cx.fill();
+          cx.fillStyle = 'rgba(255,255,255,0.22)';
+          cx.beginPath(); cx.arc(x - r * 0.25, y - r * 0.3, r * 0.32, 0, Math.PI * 2); cx.fill();
+        } else {
+          // right = diamond (syncope reads differently at a glance)
+          cx.save();
+          cx.translate(x, y); cx.rotate(Math.PI / 4);
+          cx.fillStyle = c.judged ? 'rgba(120,120,140,0.35)' : RIGHT_COLOR;
+          const d = r * 1.15;
+          cx.fillRect(-d / 2, -d / 2, d, d);
+          cx.restore();
+        }
+      }
+
+      // hit bursts
+      const now = performance.now();
+      bursts = bursts.filter((b) => now - b.born < 300);
+      for (const b of bursts) {
+        const age = (now - b.born) / 300;
+        const x = handX(b.hand);
+        cx.strokeStyle = b.color;
+        cx.globalAlpha = 1 - age;
+        cx.lineWidth = 3;
+        cx.beginPath(); cx.arc(x, strikeY, 14 + age * 32, 0, Math.PI * 2); cx.stroke();
+        cx.globalAlpha = 1;
+      }
+    }
+
+    // ---- hud ----
+    const judgeEl = document.getElementById('dsp-judge')!;
+    const barEl = document.getElementById('dsp-bar')!;
+    const pointsEl = document.getElementById('dsp-points')!;
+    const accEl = document.getElementById('dsp-acc')!;
+    const grooveFill = document.getElementById('dsp-groove') as HTMLElement;
+    let judgeTimer = 0;
+
+    function accuracy(): number {
+      const total = counts.perfect + counts.good + counts.miss;
+      return total > 0 ? (counts.perfect + counts.good) / total : 0;
+    }
+    function liveScore(): number {
+      return Math.round(barsSurvived * accuracy() * 100);
+    }
+    function showJudge(kind: 'perfect' | 'good' | 'miss') {
+      judgeEl.textContent = kind === 'perfect' ? 'PERFECT' : kind === 'good' ? 'GOOD' : 'MISS';
+      judgeEl.className = `dsp__judge dsp__judge--${kind}`;
+      clearTimeout(judgeTimer);
+      judgeTimer = window.setTimeout(() => { judgeEl.textContent = ''; }, 420);
+    }
+    function updateHud() {
+      barEl.textContent = running ? String(Math.min(barsSurvived + 1, TOTAL_BARS)) : String(barsSurvived);
+      pointsEl.textContent = String(liveScore());
+      accEl.textContent = `${Math.round(accuracy() * 100)}%`;
+      grooveFill.style.width = `${Math.max(0, groove)}%`;
+      grooveFill.classList.toggle('dsp__groove-fill--mid', groove <= 55 && groove > 28);
+      grooveFill.classList.toggle('dsp__groove-fill--low', groove <= 28);
+    }
+
+    // ---- input / judging ----
+    function strike(hand: Hand) {
+      if (!running) return;
+      flashHand(hand);
+      const elapsed = performance.now() - startAt;
+      let best: Cue | null = null;
+      let bestAbs = Infinity;
+      for (const c of cues) {
+        if (c.hand !== hand || c.judged) continue;
+        const off = Math.abs(c.at - elapsed);
+        if (off < bestAbs) { bestAbs = off; best = c; }
+      }
+      if (!best || bestAbs > GOOD_MS) {
+        // bad timing — no cue in the window. Off-pattern taps bruise the groove.
+        pThud();
+        groove = Math.max(0, groove - 5);
+        updateHud();
+        if (groove <= 0) endRun(false);
+        return;
+      }
+      best.judged = true;
+      best.hit = true;
+      const color = handColor(hand);
+      if (bestAbs <= PERFECT_MS) {
+        counts.perfect++;
+        groove = Math.min(GROOVE_MAX, groove + 3);
+        pHit(hand, 'perfect');
+        showJudge('perfect');
+        bursts.push({ hand, born: performance.now(), color: LEFT_COLOR });
+      } else {
+        counts.good++;
+        groove = Math.min(GROOVE_MAX, groove + 1.5);
+        pHit(hand, 'good');
+        showJudge('good');
+        bursts.push({ hand, born: performance.now(), color });
+      }
+      updateHud();
+      broadcast(hand);
+    }
+
+    function sweepMisses(elapsed: number) {
+      let missed = false;
+      for (const c of cues) {
+        if (c.judged) continue;
+        if (elapsed - c.at > GOOD_MS) {
+          c.judged = true;
+          counts.miss++;
+          groove = Math.max(0, groove - 12);
+          missed = true;
+        }
+      }
+      if (missed) { showJudge('miss'); updateHud(); }
+    }
+
+    // ---- run loop ----
+    function frame() {
+      if (!running) return;
+      const now = performance.now();
+      const elapsed = now - startAt;
+      barsSurvived = Math.max(0, Math.min(TOTAL_BARS, Math.floor((elapsed - LEAD_MS) / BAR_MS)));
+      sweepMisses(elapsed);
+      if (!running) return;                 // sweepMisses may have ended the run
+      draw(now);
+      if (elapsed % 4 < 20) updateHud();     // keep bar counter fresh
+      if (elapsed >= endAt) { endRun(true); return; }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    const overlay = document.getElementById('dsp-overlay')!;
+    const goBtn = document.getElementById('dsp-go') as HTMLButtonElement;
+    const bestLine = document.getElementById('dsp-best-line')!;
+    const titleEl = overlay.querySelector('.dsp__title') as HTMLElement;
+    const subEl = overlay.querySelector('.dsp__sub') as HTMLElement;
+
+    function endRun(cleared: boolean) {
+      if (!running) return;
+      running = false;
+      cancelAnimationFrame(rafId);
+      clearTimeout(grooveTimer);
+      if (cleared) { barsSurvived = TOTAL_BARS; pClear(); } else { pFail(); }
+      updateHud();
+      const score = liveScore();
+      const accPct = Math.round(accuracy() * 100);
+      titleEl.textContent = cleared ? 'CLEARED · 16 BARS' : `GROOVE LOST · BAR ${barsSurvived}`;
+      subEl.textContent = `${score} pts · ${barsSurvived}/16 bars · ${accPct}% · ${counts.perfect} perfect · ${counts.miss} miss`;
+      goBtn.textContent = '▶ RUN IT BACK';
+      try {
+        const prev = Number(localStorage.getItem('pc-drum-split-best') || 0);
+        if (score > prev) {
+          localStorage.setItem('pc-drum-split-best', String(score));
+          localStorage.setItem('pc-drum-split-bars', String(barsSurvived));
+        }
+        const b = Math.max(score, prev);
+        const bb = score > prev ? barsSurvived : (localStorage.getItem('pc-drum-split-bars') || barsSurvived);
+        bestLine.textContent = `best ${b} · bars ${bb}`;
+      } catch {
+        bestLine.textContent = `best ${score} · bars ${barsSurvived}`;
+      }
+      overlay.classList.remove('dsp__overlay--hidden');
+    }
+
+    function startRun() {
+      ctx();
+      resize();
+      loadNouns();
+      cues = generateChart();
+      groove = GROOVE_MAX;
+      barsSurvived = 0;
+      counts = { perfect: 0, good: 0, miss: 0 };
+      bursts = [];
+      updateHud();
+      overlay.classList.add('dsp__overlay--hidden');
+      running = true;
+      startAt = performance.now();
+      endAt = LEAD_MS + TOTAL_BARS * BAR_MS + 300;
+      scheduleGroove();
+      rafId = requestAnimationFrame(frame);
+    }
+
+    // ---- input wiring ----
+    const KEY_HANDS: Record<string, Hand> = { f: 0, j: 1 };
+    const handBtns = Array.from(document.querySelectorAll('.dsp__hand')) as HTMLButtonElement[];
+    function flashHand(hand: Hand) {
+      const el = handBtns[hand];
+      el.classList.add('dsp__hand--flash');
+      setTimeout(() => el.classList.remove('dsp__hand--flash'), 100);
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      const hand = KEY_HANDS[e.key.toLowerCase()];
+      if (hand !== undefined) { e.preventDefault(); strike(hand); }
+    });
+    handBtns.forEach((el) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        strike(Number(el.dataset.hand) as Hand);
+      });
+    });
+    goBtn.addEventListener('click', startRun);
+
+    // ---- shared bus (best effort, throttled) ----
+    let lastBroadcast = 0;
+    function getOrCreateSession() {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+    function broadcast(hand: Hand) {
+      const now = Date.now();
+      if (now - lastBroadcast < 900) return;   // don't flood the bus at fast tap rates
+      lastBroadcast = now;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed: hand, sessionId: SESSION_ID }),
+        }).catch(() => {});
+      } catch { /* best effort */ }
+    }
+
+    // init
+    SESSION_ID = getOrCreateSession();
+    resize();
+    updateHud();
+    try {
+      const b = Number(localStorage.getItem('pc-drum-split-best') || 0);
+      const bb = localStorage.getItem('pc-drum-split-bars');
+      if (b > 0) bestLine.textContent = `best ${b} · bars ${bb || '—'}`;
+    } catch {}
+  </script>
+</BlockLayout>

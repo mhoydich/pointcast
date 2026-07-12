@@ -12,8 +12,9 @@
  * file is just the data plumbing.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { RETRO_ARCADE_GAMES } from './retro-arcade';
 
 const RAW_PAGES = import.meta.glob('../pages/*.astro', {
   query: '?raw',
@@ -38,9 +39,10 @@ export interface Feature {
  */
 function readMtimes(): Record<string, number> {
   try {
-    const out = execSync(
-      'git log --name-only --pretty=format:__COMMIT__%ct -- src/pages/*.astro',
-      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    const out = execFileSync(
+      'git',
+      ['log', '--name-only', '--pretty=format:__COMMIT__%ct', '--', 'src/pages'],
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 8_000 },
     );
     const map: Record<string, number> = {};
     let currentTs = 0;
@@ -57,7 +59,10 @@ function readMtimes(): Record<string, number> {
       }
     }
     return map;
-  } catch {
+  } catch (err) {
+    // Loud on purpose: a silent {} here empties the NEW THIS WEEK shelf and
+    // zeroes every mtime, which reads downstream as "nothing ships here".
+    console.warn('[explore] git mtime extraction failed — recent/stale shelves will be empty:', err);
     return {};
   }
 }
@@ -71,7 +76,15 @@ export interface Category {
   match: (slug: string) => boolean;
 }
 
+const GAME_PAGE_SLUGS = new Set(RETRO_ARCADE_GAMES.map((game) => game.slug));
+
 export const CATEGORIES: Category[] = [
+  {
+    key: 'games',
+    label: 'Games',
+    blurb: 'The arcade cabinet, mobile games, and playable town doors.',
+    match: (s) => s === 'arcade' || s === 'win95-games' || GAME_PAGE_SLUGS.has(s),
+  },
   {
     key: 'drum',
     label: 'Drum Hub',
@@ -90,11 +103,58 @@ export const CATEGORIES: Category[] = [
     blurb: 'Claude, Codex, Manus, and the lanes between.',
     match: (s) =>
       s.startsWith('agent') ||
-      s === 'cast' ||
       s === 'codex' ||
       s === 'claude' ||
       s === 'manus' ||
       s === 'cc',
+  },
+  {
+    key: 'music',
+    label: 'Music & Casts',
+    blurb: 'The cast spells, the music hub, the listening rooms.',
+    match: (s) =>
+      s === 'cast' ||
+      s.startsWith('cast-') ||
+      s.startsWith('music') ||
+      s === 'spells' ||
+      s === 'song-of-the-day' ||
+      s === 'melody-bottle' ||
+      s.startsWith('listening-room') ||
+      s === 'spinning-stoop' ||
+      s === 'spinning-triptych' ||
+      s === 'radio' ||
+      s === 'town-music',
+  },
+  {
+    key: 'shrines',
+    label: 'Shrines & Stillness',
+    blurb: 'Water, bird, flame, stone, grass — the quiet rooms.',
+    match: (s) =>
+      s.startsWith('shrine') ||
+      s === 'aviary' ||
+      s === 'meditate' ||
+      s === 'sit' ||
+      s === 'sit-v2' ||
+      s === 'ritual-clock' ||
+      s === 'quiet-hours',
+  },
+  {
+    key: 'federation',
+    label: 'Rooms & Federation',
+    blurb: 'The room contract, the webring, the mesh between sites.',
+    match: (s) =>
+      s === 'room' ||
+      s === 'rooms' ||
+      s === 'room-maker' ||
+      s === 'room-weather' ||
+      s === 'webring' ||
+      s === 'federation' ||
+      s === 'for-nodes' ||
+      s === 'mesh' ||
+      s === 'mesh-local' ||
+      s === 'handshakes' ||
+      s === 'intercom' ||
+      s === 'messages',
   },
   {
     key: 'sing',

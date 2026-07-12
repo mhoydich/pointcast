@@ -1,0 +1,1008 @@
+---
+/**
+ * /drum-octet — eight people, eight beats, one URL.
+ *
+ * Polylogue surface for the async-drum register. Where /drum-bottle is
+ * monologue (1 phrase you send) and /drum-call-and-response is dialogue
+ * (call + answer), /drum-octet is the chain: 1..8 beats, each one
+ * contributed by a different person. The name nods to a musical octet —
+ * eight players, one piece.
+ *
+ * Distinct from /drum-relay (2026-04-30, server-backed infinite chain
+ * over /api/drum-relay). This one is purely client-side; the whole
+ * 8-beat chain travels in the URL.
+ *
+ * Mechanic:
+ *   • A beat = 4 voices × 4 sixteenth-cells = 16 bits = 2 bytes
+ *   • Round N stores N beats + 1 byte BPM + 1 byte round-count = 2N+2 bytes
+ *   • Round 1: 4 bytes → 6 base64url chars
+ *   • Round 8: 18 bytes → 24 base64url chars (same length as /call-and-response)
+ *   • ?from=abcd-efgh-ijkl-... chains the contributors' pids in order
+ *
+ * Three modes derived from URL state:
+ *   1. Empty (no ?p=). Round 1: one editable beat-grid. Toggle cells,
+ *      copy share-link. The chain begins.
+ *   2. In-progress (?p=, N < 8). N read-only beats lit on the left,
+ *      one editable empty beat as "your turn", grey placeholders for
+ *      the rounds beyond. Toggle your beat, send on.
+ *   3. Sealed (?p=, N = 8). All 8 beats read-only. Play loops through
+ *      the whole 8-beat phrase. "Start a new chain" wipes and resets.
+ *
+ * Visual: a horizontal strip of 8 mini-grids, one per beat. Already-
+ * filled beats are bright; "your turn" beat is highlighted; future
+ * beats are faint placeholders. Each beat has the contributor's pid
+ * shown beneath. Playhead sweeps through all filled beats in order.
+ *
+ * Shipped 2026-05-14 (Thursday overnight). — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Octet — eight people, eight beats, one URL"
+  description="The polylogue companion to /drum-bottle. 1..8 beats, each one contributed by a different person. Start with one beat, send the link; they add theirs, send on. After 8 rounds the chain is sealed and plays as one continuous loop. No server, no accounts — the whole chain lives in the URL."
+  image="/images/og-drum.png"
+>
+  <main class="dot" id="dot" data-built={built}>
+    <header class="dot__hero">
+      <p class="dot__kicker">DRUM · OCTET · 1..8 contributors · chain in a URL</p>
+      <h1 class="dot__title" id="dot-title">Eight people, eight beats.</h1>
+      <p class="dot__sub" id="dot-sub">Where <a href="/drum-bottle">drum-bottle</a> is a monologue and <a href="/drum-call-and-response">drum-call-and-response</a> is a dialogue, this is the polylogue. You contribute one beat — 4 voices × 4 cells — and send the link to someone. They add their beat. They send it on. After 8 rounds the chain is sealed and loops as one 8-beat phrase that eight people built together. None of them had to be in the same room. None had to be online at the same time.</p>
+    </header>
+
+    <section class="dot__stage">
+
+      <div class="dot__banner" id="dot-banner" hidden>
+        <span class="dot__banner-icon" id="dot-banner-icon">🔗</span>
+        <span class="dot__banner-body">
+          <span class="dot__banner-title" id="dot-banner-title">round 2 of 8</span>
+          <span class="dot__banner-meta" id="dot-banner-meta">chain: abcd → efgh</span>
+        </span>
+        <button class="dot__banner-action" id="dot-banner-action" type="button">▶ play so far</button>
+      </div>
+
+      <!-- Beat strip -->
+      <div class="dot__strip" id="dot-strip"></div>
+
+      <!-- Voice legend -->
+      <div class="dot__legend">
+        <span class="dot__legend-item dot__legend-item--low">▬ LOW</span>
+        <span class="dot__legend-item dot__legend-item--mid">◆ MID</span>
+        <span class="dot__legend-item dot__legend-item--high">▲ HIGH</span>
+        <span class="dot__legend-item dot__legend-item--bell">✦ BELL</span>
+      </div>
+
+      <!-- Transport -->
+      <div class="dot__transport">
+        <button class="dot__btn dot__btn--play" id="dot-play" type="button">▶ play</button>
+        <button class="dot__btn dot__btn--stop" id="dot-stop" type="button" hidden>⏹ stop</button>
+        <div class="dot__bpm-wrap">
+          <label class="dot__bpm-label" for="dot-bpm">BPM</label>
+          <input class="dot__bpm" id="dot-bpm" type="range" min="60" max="180" step="2" value="100" />
+          <span class="dot__bpm-readout" id="dot-bpm-readout">100</span>
+        </div>
+      </div>
+
+      <!-- Mode-specific actions -->
+      <div class="dot__actions" id="dot-actions-start" hidden>
+        <button class="dot__action dot__action--primary" id="dot-start-send" type="button">↗ start the chain · copy link</button>
+        <a class="dot__action" id="dot-start-sms" href="#">↗ via iMessage</a>
+        <button class="dot__action dot__action--ghost" id="dot-start-clear" type="button">clear</button>
+      </div>
+      <div class="dot__actions" id="dot-actions-mid" hidden>
+        <button class="dot__action dot__action--primary" id="dot-mid-send" type="button">↗ add your beat · pass it on</button>
+        <a class="dot__action" id="dot-mid-sms" href="#">↗ via iMessage</a>
+        <button class="dot__action dot__action--ghost" id="dot-mid-clear" type="button">clear my beat</button>
+      </div>
+      <div class="dot__actions" id="dot-actions-sealed" hidden>
+        <button class="dot__action dot__action--primary" id="dot-sealed-new" type="button">✍ start a new chain</button>
+        <button class="dot__action" id="dot-sealed-copy" type="button">↗ copy this chain's link</button>
+        <a class="dot__action" href="/drum-mailbox">↗ /drum-mailbox</a>
+      </div>
+
+    </section>
+
+    <section class="dot__notes">
+      <h2 class="dot__notes-h">How an octet works</h2>
+      <p>A beat = 4 voices × 4 sixteenth-notes = 16 bits = <strong>2 bytes</strong>. Round N stores N beats plus 1 byte for BPM and 1 byte for round-count, so round 1 is 4 bytes (6 base64url chars) and round 8 is 18 bytes (24 chars — same length as a <a href="/drum-call-and-response">call-and-response</a> URL). The whole chain travels in the link.</p>
+      <p>Three modes, decided by what's in the URL:</p>
+      <ul>
+        <li><strong>Empty</strong> (no <code>?p=</code>): round 1. You make the first beat. Copy, send.</li>
+        <li><strong>In progress</strong> (<code>?p=</code> with N &lt; 8 beats): you see all N filled beats read-only, one editable empty beat for your contribution, faint placeholders for the rounds beyond. Add yours, send on.</li>
+        <li><strong>Sealed</strong> (<code>?p=</code> with N = 8): all 8 beats are locked in. Play loops the full phrase forever. The chain is a finished collaboration between eight people who never had to be in the same room — or even online at the same time.</li>
+      </ul>
+      <p>The <code>?from=abcd-efgh-ijkl-mnop-...</code> chain records who contributed each beat in order. You can recognise a sealed chain just from its from-chain — every octet is a small social object.</p>
+      <p>Distinct from <a href="/drum-relay">/drum-relay</a>, which is a server-backed (KV) infinite chain across all visitors. <em>Drum-octet</em> is purely client-side, capped at 8, and lives entirely in the URL.</p>
+      <p>Sister surfaces: <a href="/drum-bottle">/drum-bottle</a> (1 phrase), <a href="/drum-call-and-response">/drum-call-and-response</a> (2 phrases · Q+A), <a href="/drum-shelf">/drum-shelf</a> (local history). Directory: <a href="/drum-mailbox">/drum-mailbox</a>.</p>
+    </section>
+
+    <div class="dot__toast" id="dot-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --dot-ink: #0a1230;
+      --dot-mid: #14193a;
+      --dot-flame: #f6c15e;
+      --dot-coral: #ff6b8a;
+      --dot-mint: #8aeac0;
+      --dot-sky: #7ac8ed;
+      --dot-mauve: #c9a8ef;
+      --dot-cream: #f4e7c8;
+      --dot-cream-dim: #b8aa84;
+      --dot-cream-dimmer: #7a7058;
+    }
+
+    body:has(.dot) {
+      background:
+        radial-gradient(circle at 18% 8%, #1a1e58 0%, transparent 50%),
+        radial-gradient(circle at 82% 92%, #2a1640 0%, transparent 55%),
+        var(--dot-ink);
+      color: var(--dot-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .dot { max-width: 880px; margin: 0 auto; padding: 36px 24px 64px; }
+
+    /* HERO */
+    .dot__hero { margin-bottom: 32px; }
+    .dot__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--dot-coral);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .dot__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 16px;
+    }
+    .dot__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--dot-cream-dim);
+      margin: 0;
+    }
+    .dot__sub a {
+      color: var(--dot-sky);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* STAGE */
+    .dot__stage {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 36px;
+    }
+
+    /* BANNER */
+    .dot__banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin: 0 0 18px;
+      background: rgba(138, 234, 192, 0.10);
+      border: 1px solid rgba(138, 234, 192, 0.30);
+      border-radius: 10px;
+    }
+    .dot__banner-icon { font-size: 22px; }
+    .dot__banner-body { flex: 1; display: flex; flex-direction: column; }
+    .dot__banner-title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--dot-mint);
+    }
+    .dot__banner-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--dot-cream-dim);
+      margin-top: 2px;
+    }
+    .dot__banner-action {
+      border: 1px solid rgba(138, 234, 192, 0.6);
+      background: rgba(138, 234, 192, 0.15);
+      color: var(--dot-mint);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dot__banner-action:hover { background: rgba(138, 234, 192, 0.25); }
+
+    /* STRIP — 8 beat slots horizontally */
+    .dot__strip {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 720px) {
+      .dot__strip { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    }
+    @media (max-width: 420px) {
+      .dot__strip { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .dot__beat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 6px;
+      background: rgba(0,0,0,0.30);
+      border-radius: 8px;
+      border: 1px solid rgba(244,231,200,0.08);
+      transition: border-color 200ms ease, opacity 200ms ease;
+    }
+    .dot__beat--filled  { border-color: rgba(244,231,200,0.20); }
+    .dot__beat--your-turn {
+      border-color: var(--dot-flame);
+      background: rgba(246, 193, 94, 0.06);
+      box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.20);
+    }
+    .dot__beat--future { opacity: 0.30; }
+    .dot__beat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 3px;
+      aspect-ratio: 1;
+    }
+    .dot__cell {
+      background: rgba(244,231,200,0.06);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 80ms ease, transform 60ms ease;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+    }
+    .dot__cell:hover { background: rgba(244,231,200,0.16); }
+    .dot__cell--on  { background: var(--cell-color); border-color: var(--cell-color); }
+    .dot__cell--low.dot__cell--on  { --cell-color: #f6c15e; }
+    .dot__cell--mid.dot__cell--on  { --cell-color: #ff8a70; }
+    .dot__cell--high.dot__cell--on { --cell-color: #c9a8ef; }
+    .dot__cell--bell.dot__cell--on { --cell-color: #8aeac0; }
+    .dot__cell--play {
+      box-shadow: 0 0 0 2px var(--dot-cream);
+      transform: scale(0.92);
+    }
+    .dot__beat--locked .dot__cell { cursor: not-allowed; }
+    .dot__beat--locked .dot__cell:hover { background: rgba(244,231,200,0.06); }
+    .dot__beat--locked .dot__cell--on:hover { background: var(--cell-color); }
+    .dot__beat-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      color: var(--dot-cream-dimmer);
+    }
+    .dot__beat-n { color: var(--dot-cream-dim); }
+    .dot__beat--your-turn .dot__beat-n { color: var(--dot-flame); }
+    .dot__beat-pid { font-weight: 600; }
+    .dot__beat--your-turn .dot__beat-pid { color: var(--dot-flame); }
+
+    /* LEGEND */
+    .dot__legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 6px 0;
+      margin-bottom: 16px;
+      justify-content: center;
+    }
+    .dot__legend-item {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--dot-cream-dim);
+    }
+    .dot__legend-item--low  { color: #f6c15e; }
+    .dot__legend-item--mid  { color: #ff8a70; }
+    .dot__legend-item--high { color: #c9a8ef; }
+    .dot__legend-item--bell { color: #8aeac0; }
+
+    /* TRANSPORT */
+    .dot__transport {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .dot__btn {
+      border: 1px solid rgba(244,231,200,0.25);
+      background: rgba(244,231,200,0.08);
+      color: var(--dot-cream);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+    }
+    .dot__btn:hover { background: rgba(244,231,200,0.16); }
+    .dot__btn--play {
+      background: rgba(246,193,94,0.15);
+      border-color: rgba(246,193,94,0.45);
+      color: var(--dot-flame);
+    }
+    .dot__btn--play:hover { background: rgba(246,193,94,0.25); }
+    .dot__bpm-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 220px;
+    }
+    .dot__bpm-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--dot-cream-dim);
+    }
+    .dot__bpm {
+      flex: 1;
+      accent-color: var(--dot-flame);
+      cursor: pointer;
+    }
+    .dot__bpm-readout {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--dot-flame);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    /* ACTIONS */
+    .dot__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .dot__action {
+      flex: 0 0 auto;
+      border: 1px solid rgba(244,231,200,0.18);
+      background: rgba(244,231,200,0.06);
+      color: var(--dot-cream);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .dot__action:hover {
+      background: rgba(244,231,200,0.14);
+      border-color: rgba(244,231,200,0.35);
+    }
+    .dot__action--primary {
+      background: rgba(255,107,138,0.15);
+      border-color: rgba(255,107,138,0.45);
+      color: var(--dot-coral);
+    }
+    .dot__action--primary:hover { background: rgba(255,107,138,0.25); }
+    .dot__action--ghost {
+      color: var(--dot-cream-dim);
+      background: transparent;
+      border-color: rgba(244,231,200,0.10);
+    }
+
+    /* NOTES */
+    .dot__notes { max-width: 720px; }
+    .dot__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      color: var(--dot-cream);
+      margin: 0 0 12px;
+    }
+    .dot__notes p, .dot__notes li {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--dot-cream-dim);
+      margin: 0 0 12px;
+    }
+    .dot__notes ul { list-style: none; padding-left: 0; margin: 0 0 12px; }
+    .dot__notes li { padding-left: 18px; position: relative; margin-bottom: 6px; }
+    .dot__notes li::before { content: '·'; position: absolute; left: 6px; color: var(--dot-flame); }
+    .dot__notes em { color: var(--dot-flame); font-style: italic; }
+    .dot__notes strong { color: var(--dot-cream); font-weight: 600; }
+    .dot__notes code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--dot-mint);
+    }
+    .dot__notes a {
+      color: var(--dot-coral);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* TOAST */
+    .dot__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--dot-flame);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(246,193,94,0.4);
+    }
+    .dot__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    const VOICES_PER_BEAT = 4;
+    const CELLS_PER_BEAT  = 4;
+    const MAX_BEATS       = 8;
+    const VOICE_NAMES = ['low', 'mid', 'high', 'bell'] as const;
+    type Voice = typeof VOICE_NAMES[number];
+
+    type Beat = boolean[][];
+    let beats: Beat[] = [];
+    let myBeat: Beat = newBeat();
+    let bpm = 100;
+    let mode: 'start' | 'mid' | 'sealed' = 'start';
+    let chain: string[] = [];
+    let myPid = '';
+
+    let isPlaying = false;
+    let playStep = 0;
+    let playTimer: number | null = null;
+
+    function newBeat(): Beat {
+      return Array.from({ length: VOICES_PER_BEAT }, () => Array(CELLS_PER_BEAT).fill(false));
+    }
+    function beatEmpty(b: Beat): boolean {
+      for (const row of b) for (const v of row) if (v) return false;
+      return true;
+    }
+
+    // ---- URL codec ----
+    function encodeBeats(bs: Beat[], bp: number): string {
+      const N = bs.length;
+      const bytes = new Uint8Array(2 * N + 2);
+      for (let n = 0; n < N; n++) {
+        let bits = 0;
+        for (let r = 0; r < VOICES_PER_BEAT; r++) {
+          for (let c = 0; c < CELLS_PER_BEAT; c++) {
+            const idx = r * CELLS_PER_BEAT + c;
+            if (bs[n][r][c]) bits |= (1 << idx);
+          }
+        }
+        bytes[2 * n]     = bits & 0xff;
+        bytes[2 * n + 1] = (bits >> 8) & 0xff;
+      }
+      bytes[2 * N]     = Math.max(0, Math.min(180, bp - 40));
+      bytes[2 * N + 1] = N & 0xff;
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function decodeBeats(code: string): { beats: Beat[]; bpm: number } | null {
+      if (!code) return null;
+      const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let bin: string;
+      try { bin = atob(padded); } catch { return null; }
+      if (bin.length < 4 || bin.length > 18 || bin.length % 2 !== 0) return null;
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const N = (bin.length - 2) / 2;
+      if (!Number.isInteger(N) || N < 1 || N > MAX_BEATS) return null;
+      const bs: Beat[] = [];
+      for (let n = 0; n < N; n++) {
+        const bits = bytes[2 * n] | (bytes[2 * n + 1] << 8);
+        const b = newBeat();
+        for (let r = 0; r < VOICES_PER_BEAT; r++) {
+          for (let c = 0; c < CELLS_PER_BEAT; c++) {
+            const idx = r * CELLS_PER_BEAT + c;
+            b[r][c] = !!(bits & (1 << idx));
+          }
+        }
+        bs.push(b);
+      }
+      const bp = 40 + bytes[2 * N];
+      if (bp < 40 || bp > 220) return null;
+      return { beats: bs, bpm: bp };
+    }
+
+    // ---- strip render ----
+    function renderStrip() {
+      const wrap = document.getElementById('dot-strip')!;
+      wrap.innerHTML = '';
+      const myTurnIdx = beats.length;
+
+      for (let i = 0; i < MAX_BEATS; i++) {
+        const beatEl = document.createElement('div');
+        let cls = 'dot__beat';
+        let pattern: Beat | null = null;
+        let pidLabel = '—';
+        let isLocked = true;
+
+        if (i < beats.length) {
+          cls += ' dot__beat--filled dot__beat--locked';
+          pattern = beats[i];
+          pidLabel = chain[i] || '—';
+        } else if (i === myTurnIdx && mode === 'mid') {
+          cls += ' dot__beat--your-turn';
+          pattern = myBeat;
+          pidLabel = myPid.slice(0, 4) + '*';
+          isLocked = false;
+        } else if (i === 0 && mode === 'start') {
+          cls += ' dot__beat--your-turn';
+          pattern = myBeat;
+          pidLabel = myPid.slice(0, 4) + '*';
+          isLocked = false;
+        } else {
+          cls += ' dot__beat--future dot__beat--locked';
+          pattern = newBeat();
+          pidLabel = '—';
+        }
+
+        beatEl.className = cls;
+        beatEl.dataset.idx = String(i);
+
+        const label = document.createElement('div');
+        label.className = 'dot__beat-label';
+        const n = document.createElement('span');
+        n.className = 'dot__beat-n';
+        n.textContent = `#${i + 1}`;
+        const pid = document.createElement('span');
+        pid.className = 'dot__beat-pid';
+        pid.textContent = pidLabel;
+        label.appendChild(n);
+        label.appendChild(pid);
+        beatEl.appendChild(label);
+
+        const grid = document.createElement('div');
+        grid.className = 'dot__beat-grid';
+        for (let r = 0; r < VOICES_PER_BEAT; r++) {
+          for (let c = 0; c < CELLS_PER_BEAT; c++) {
+            const cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = `dot__cell dot__cell--${VOICE_NAMES[r]}` + (pattern[r][c] ? ' dot__cell--on' : '');
+            cell.dataset.beatIdx = String(i);
+            cell.dataset.row = String(r);
+            cell.dataset.col = String(c);
+            if (!isLocked) {
+              cell.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleMyCell(r, c);
+              });
+            } else {
+              cell.disabled = true;
+              cell.style.pointerEvents = 'none';
+            }
+            grid.appendChild(cell);
+          }
+        }
+        beatEl.appendChild(grid);
+        wrap.appendChild(beatEl);
+      }
+    }
+
+    function toggleMyCell(r: number, c: number) {
+      myBeat[r][c] = !myBeat[r][c];
+      renderStrip();
+    }
+
+    // ---- audio ----
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(ctx.destination);
+    }
+    const VOICE_CFG: Record<Voice, { freq: number; bell: boolean }> = {
+      low:  { freq:  70, bell: false },
+      mid:  { freq: 120, bell: false },
+      high: { freq: 200, bell: false },
+      bell: { freq: 600, bell: true  },
+    };
+    function playVoice(voice: Voice) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const cfg = VOICE_CFG[voice];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = cfg.bell ? 'sine' : 'triangle';
+      osc.frequency.value = cfg.freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.004);
+      const tail = cfg.bell ? 1.0 : 0.35;
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+      if (cfg.bell) {
+        for (const mult of [2, 3]) {
+          const o = ctx.createOscillator();
+          const gg = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = cfg.freq * mult;
+          gg.gain.setValueAtTime(0.0001, t);
+          gg.gain.exponentialRampToValueAtTime(0.14 / mult, t + 0.008);
+          gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.7 / mult);
+          o.connect(gg).connect(masterGain);
+          scheduler.trackSource(o);
+          o.start(t);
+          o.stop(t + 0.75);
+        }
+      }
+    }
+
+    // ---- transport ----
+    function stepDurationMs() {
+      return (60_000 / bpm) / 4;
+    }
+    function playableBeats(): Beat[] {
+      const out: Beat[] = [...beats];
+      if ((mode === 'start' || mode === 'mid') && !beatEmpty(myBeat)) out.push(myBeat);
+      return out;
+    }
+    function tick() {
+      document.querySelectorAll('.dot__cell--play').forEach((el) => el.classList.remove('dot__cell--play'));
+      const seq = playableBeats();
+      if (seq.length === 0) return;
+      const totalCells = seq.length * CELLS_PER_BEAT;
+      const beatIdx = Math.floor(playStep / CELLS_PER_BEAT);
+      const cellIdx = playStep % CELLS_PER_BEAT;
+      const beat = seq[beatIdx];
+      const stripBeats = document.querySelectorAll('.dot__beat');
+      const stripEl = stripBeats[beatIdx] as HTMLElement | undefined;
+      for (let r = 0; r < VOICES_PER_BEAT; r++) {
+        if (stripEl) {
+          const cell = stripEl.querySelectorAll('.dot__cell')[r * CELLS_PER_BEAT + cellIdx] as HTMLElement | undefined;
+          if (cell) cell.classList.add('dot__cell--play');
+        }
+        if (beat[r][cellIdx]) playVoice(VOICE_NAMES[r]);
+      }
+      playStep = (playStep + 1) % totalCells;
+    }
+    function startPlay() {
+      if (isPlaying) return;
+      ensureCtx();
+      const seq = playableBeats();
+      if (seq.length === 0) {
+        showToast('nothing to play yet · toggle some cells');
+        return;
+      }
+      isPlaying = true;
+      playStep = 0;
+      document.getElementById('dot-play')!.hidden = true;
+      document.getElementById('dot-stop')!.hidden = false;
+      tick();
+      const loop = () => {
+        if (!isPlaying) return;
+        tick();
+        playTimer = window.setTimeout(loop, stepDurationMs());
+      };
+      playTimer = window.setTimeout(loop, stepDurationMs());
+    }
+    function stopPlay() {
+      isPlaying = false;
+      if (playTimer != null) { clearTimeout(playTimer); playTimer = null; }
+      document.querySelectorAll('.dot__cell--play').forEach((el) => el.classList.remove('dot__cell--play'));
+      document.getElementById('dot-play')!.hidden = false;
+      document.getElementById('dot-stop')!.hidden = true;
+    }
+
+    // ---- share-link ----
+    function shareUrl(): string {
+      const seq = [...beats];
+      if ((mode === 'start' || mode === 'mid') && !beatEmpty(myBeat)) seq.push(myBeat);
+      const code = encodeBeats(seq, bpm);
+      const fromChain = [...chain];
+      if ((mode === 'start' || mode === 'mid') && !beatEmpty(myBeat)) fromChain.push(myPid.slice(0, 4));
+      const fromStr = fromChain.filter(Boolean).join('-');
+      const base = `${location.origin}/drum-octet?p=${code}`;
+      return fromStr ? `${base}&from=${fromStr}` : base;
+    }
+    function smsHref(): string {
+      return `sms:&body=${encodeURIComponent('🥁🔗 ' + shareUrl())}`;
+    }
+
+    // ---- shelf (localStorage history of bottles + calls + octets) ----
+    // Shared format with /drum-bottle and /drum-call-and-response. Read by
+    // /drum-shelf. Capped at 100; dedupe by code+dir+from+kind.
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+    const SHELF_MAX = 100;
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+      kind?: 'bottle' | 'call' | 'octet';
+    }
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+    function saveShelf(items: ShelfItem[]) {
+      try {
+        localStorage.setItem(SHELF_KEY, JSON.stringify({ v: SHELF_VERSION, items }));
+      } catch { /* fail silently */ }
+    }
+    function saveToShelf(dir: 'made' | 'received') {
+      const seq = [...beats];
+      if ((mode === 'start' || mode === 'mid') && !beatEmpty(myBeat)) seq.push(myBeat);
+      const code = encodeBeats(seq, bpm);
+      const fromChain = [...chain];
+      if ((mode === 'start' || mode === 'mid') && !beatEmpty(myBeat)) fromChain.push(myPid.slice(0, 4));
+      const from = fromChain.filter(Boolean).join('-');
+      const items = loadShelf();
+      const key = `${code}::${dir}::${from}::octet`;
+      const existing = items.findIndex((it) => `${it.code}::${it.dir}::${it.from}::${it.kind || 'bottle'}` === key);
+      const entry: ShelfItem = { code, bpm, from, dir, t: Date.now(), kind: 'octet' };
+      if (existing >= 0) items[existing] = entry;
+      else items.unshift(entry);
+      items.sort((a, b) => b.t - a.t);
+      if (items.length > SHELF_MAX) items.length = SHELF_MAX;
+      saveShelf(items);
+    }
+    async function copyText(text: string, successMsg: string) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          showToast(successMsg);
+        } else throw new Error('no clipboard');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showToast(successMsg); }
+        catch { showToast(text); }
+        finally { ta.remove(); }
+      }
+    }
+    function showToast(msg: string) {
+      const el = document.getElementById('dot-toast')!;
+      el.textContent = msg;
+      el.classList.add('dot__toast--show');
+      setTimeout(() => el.classList.remove('dot__toast--show'), 2600);
+    }
+
+    // ---- session/pid ----
+    async function sha256Hex(input: string): Promise<string> {
+      const buf = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+
+    // ---- mode plumbing ----
+    function setMode(m: typeof mode) {
+      mode = m;
+      const banner = document.getElementById('dot-banner')!;
+      const aStart = document.getElementById('dot-actions-start')!;
+      const aMid   = document.getElementById('dot-actions-mid')!;
+      const aSeal  = document.getElementById('dot-actions-sealed')!;
+      const title  = document.getElementById('dot-title')!;
+      const sub    = document.getElementById('dot-sub')!;
+      const bannerTitle = document.getElementById('dot-banner-title')!;
+      const bannerMeta  = document.getElementById('dot-banner-meta')!;
+      const bannerIcon  = document.getElementById('dot-banner-icon')!;
+      const bpmInput = document.getElementById('dot-bpm') as HTMLInputElement;
+
+      banner.hidden = true;
+      aStart.hidden = true;
+      aMid.hidden = true;
+      aSeal.hidden = true;
+
+      if (m === 'start') {
+        title.textContent = 'Eight people, eight beats.';
+        sub.innerHTML = 'Round 1 — you start. Add cells to your beat (the highlighted slot), then copy the link and send it. The next person will see your beat and add theirs to the chain.';
+        aStart.hidden = false;
+        bpmInput.disabled = false;
+        updateSmsLink('dot-start-sms');
+      } else if (m === 'mid') {
+        title.textContent = `Round ${beats.length + 1} of ${MAX_BEATS}.`;
+        sub.innerHTML = `${beats.length} ${beats.length === 1 ? 'person has' : 'people have'} added a beat so far. <strong>Your turn.</strong> Add cells to beat #${beats.length + 1}, then pass the link on.`;
+        banner.hidden = false;
+        bannerIcon.textContent = '🔗';
+        bannerTitle.textContent = `round ${beats.length + 1} of ${MAX_BEATS}`;
+        bannerMeta.textContent = `chain: ${chain.filter(Boolean).join(' → ') || '?'}`;
+        aMid.hidden = false;
+        bpmInput.value = String(bpm);
+        document.getElementById('dot-bpm-readout')!.textContent = String(bpm);
+        bpmInput.disabled = true;
+        updateSmsLink('dot-mid-sms');
+      } else {
+        title.textContent = `Chain sealed. 8 people, 8 beats.`;
+        sub.innerHTML = `Every beat in this chain was added by someone different. The phrase loops as one continuous 8-beat groove. <strong>${chain.filter(Boolean).join(' → ')}</strong>`;
+        banner.hidden = false;
+        bannerIcon.textContent = '🔒';
+        bannerTitle.textContent = 'chain sealed';
+        bannerMeta.textContent = `${MAX_BEATS} beats · ${bpm} BPM · loops`;
+        aSeal.hidden = false;
+        bpmInput.value = String(bpm);
+        document.getElementById('dot-bpm-readout')!.textContent = String(bpm);
+        bpmInput.disabled = true;
+      }
+      renderStrip();
+    }
+
+    function updateSmsLink(id: string) {
+      const a = document.getElementById(id) as HTMLAnchorElement | null;
+      if (a) a.href = smsHref();
+    }
+
+    // ---- init ----
+    async function init() {
+      const sessionId = getOrCreateSession();
+      myPid = (await sha256Hex(sessionId)).slice(0, 10);
+
+      const params = new URLSearchParams(location.search);
+      const code = params.get('p') || '';
+      const fromStr = (params.get('from') || '').replace(/[^a-z0-9-]/gi, '');
+      chain = fromStr ? fromStr.split('-').filter(Boolean).map((s) => s.slice(0, 4)) : [];
+
+      if (code) {
+        const decoded = decodeBeats(code);
+        if (decoded) {
+          beats = decoded.beats;
+          bpm = decoded.bpm;
+          while (chain.length < beats.length) chain.push('—');
+          chain.length = beats.length;
+          if (beats.length >= MAX_BEATS) {
+            setMode('sealed');
+          } else {
+            setMode('mid');
+          }
+          // Save to shelf as 'received' — we landed on someone's chain link
+          saveToShelf('received');
+        } else {
+          setMode('start');
+          showToast('couldn\'t decode that octet');
+        }
+      } else {
+        setMode('start');
+      }
+
+      // Transport
+      document.getElementById('dot-play')!.addEventListener('click', () => startPlay());
+      document.getElementById('dot-stop')!.addEventListener('click', () => stopPlay());
+      document.getElementById('dot-banner-action')!.addEventListener('click', () => {
+        if (isPlaying) stopPlay(); else startPlay();
+      });
+
+      // BPM
+      const bpmInput = document.getElementById('dot-bpm') as HTMLInputElement;
+      bpmInput.addEventListener('input', () => {
+        if (mode !== 'start') return;
+        bpm = parseInt(bpmInput.value, 10) || 100;
+        document.getElementById('dot-bpm-readout')!.textContent = String(bpm);
+        updateSmsLink('dot-start-sms');
+      });
+
+      // Start-mode actions
+      document.getElementById('dot-start-send')!.addEventListener('click', () => {
+        if (beatEmpty(myBeat)) { showToast('add some cells to your beat first'); return; }
+        saveToShelf('made');
+        copyText(shareUrl(), 'copied · chain begins · saved to shelf');
+      });
+      document.getElementById('dot-start-clear')!.addEventListener('click', () => {
+        myBeat = newBeat();
+        renderStrip();
+      });
+
+      // Mid-mode actions
+      document.getElementById('dot-mid-send')!.addEventListener('click', () => {
+        if (beatEmpty(myBeat)) { showToast('add some cells to your beat first'); return; }
+        saveToShelf('made');
+        copyText(shareUrl(), `copied · chain at ${beats.length + 1}/${MAX_BEATS} · saved to shelf`);
+      });
+      document.getElementById('dot-mid-clear')!.addEventListener('click', () => {
+        myBeat = newBeat();
+        renderStrip();
+      });
+
+      // Sealed-mode actions
+      document.getElementById('dot-sealed-copy')!.addEventListener('click', () => {
+        copyText(location.href, 'copied this chain\'s link');
+      });
+      document.getElementById('dot-sealed-new')!.addEventListener('click', () => {
+        stopPlay();
+        beats = [];
+        myBeat = newBeat();
+        bpm = 100;
+        chain = [];
+        try {
+          const u = new URL(location.href);
+          u.searchParams.delete('p');
+          u.searchParams.delete('from');
+          history.replaceState({}, '', u.toString());
+        } catch { /* ignore */ }
+        setMode('start');
+        showToast('new chain · round 1');
+      });
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (isPlaying) stopPlay(); else startPlay();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>

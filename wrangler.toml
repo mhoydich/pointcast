@@ -21,7 +21,9 @@
 name = "pointcast"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+# Astro outDir moved to .dist-build (astro.config.mjs) — "dist" here was a
+# stale footgun that would upload pre-May artifacts on a bare `pages deploy`.
+pages_build_output_dir = ".dist-build"
 
 [[kv_namespaces]]
 binding = "VISITS"
@@ -79,9 +81,9 @@ script_name = "pointcast-presence"
 #   CLI:        npx wrangler kv namespace create "PC_RATES_KV"
 #               then paste the returned id into the block below.
 #
-# [[kv_namespaces]]
-# binding = "PC_RATES_KV"
-# id = "<paste-from-wrangler>"
+[[kv_namespaces]]
+binding = "PC_RATES_KV"
+id = "4dba32e73b4441eeadda5f5403d08d13"
 
 # PC_RACE_KV — Race System Phase 2 (RFC 0002) leaderboard store.
 # Keys: `race:{slug}` (full state + sorted entries list) and
@@ -111,13 +113,21 @@ id = "28cf78fddaaf4d2f9e3bc71dccfd9421"
 # /cake/register form + the celebrate UI degrade to "coming soon" notes.
 # Same env-guarded pattern as PC_PING_KV / PC_POLLS_KV / PC_RACE_KV.
 #
-# Provision once (Mike, from the CF dashboard or wrangler):
-#   wrangler kv namespace create PC_CAKE_KV → copy the returned id below
-#   then uncomment the binding block.
-#
-# [[kv_namespaces]]
-# binding = "PC_CAKE_KV"
-# id = "PASTE-ID-HERE"
+# Provisioned 2026-06-10 overnight sprint via `wrangler kv namespace create
+# PC_CAKE_KV` (cc, under Mike's wrangler login) — restores /api/cake register
+# + celebrate, and /api/sing's guestbook path.
+[[kv_namespaces]]
+binding = "PC_CAKE_KV"
+id = "f1a03cafe35a415c82c45d83cb5d7ff9"
+
+# RECAPS — weekly recap store for /api/recap + /recap pages. Was referenced
+# by functions/api/recap.ts since the April recap sprint but never bound:
+# every GET /api/recap threw on env.RECAPS.get → Cloudflare 1101 → hard 500
+# (live on prod until tonight). Provisioned 2026-06-10 overnight sprint (cc).
+# The handler now also guards with the house kv-unbound 503 pattern.
+[[kv_namespaces]]
+binding = "RECAPS"
+id = "ecefee7718034dcd805b4231d2f31ac7"
 
 # TALK_AUDIO — R2 bucket for Voice Dispatch Phase 3 audio persistence.
 # Key layout + TTL + quota thinking in docs/plans/voice-dispatch-phase-3.md.
@@ -154,3 +164,32 @@ id = "28cf78fddaaf4d2f9e3bc71dccfd9421"
 # name = "DRUM_ROOM"
 # class_name = "DrumRoom"
 # script_name = "pointcast-drum"  # separate Worker, NOT the Pages project
+
+# PC_STUDIO_KV — Studio compositions storage. Each entry is a small JSON
+# blob (template + bg + filter + anim + layers) keyed by short ID.
+# Consumed by /api/studio-publish (POST → write) and /api/studio-block/{id}
+# (GET → read), and by the /studio/share/{id} dynamic Page Function.
+[[kv_namespaces]]
+binding = "PC_STUDIO_KV"
+id = "edb8c2ae1ee4458081c9d1aca57675c1"
+
+# PC_CHECKIN_KV — community presence aggregates for /api/checkin.
+# Per-day aggregate counts (total, byArea, byMood) keyed `agg:YYYY-MM-DD`,
+# plus per-IP-per-day dedup marks keyed `mark:YYYY-MM-DD:{ipHash}`. All
+# TTL'd to 7 days. Surfaces on /me's "WHO ELSE IS HERE TODAY" band and
+# at /api/checkin GET. Hashes IPs with sha256(ip+date+salt) so today's
+# hash can't be linked to yesterday's.
+[[kv_namespaces]]
+binding = "PC_CHECKIN_KV"
+id = "e2eacfff98554fe0ad038aab9146f5c0"
+
+# USERS — auth store for wallet + social sign-in (functions/api/auth/*).
+# Keys: `user:{userId}`, `identity:{provider}:{id}`, `session:{token}` —
+# layout in functions/api/auth/session.ts. Sessions TTL 30 days. This
+# binding was referenced by /api/auth/ethereum, /api/auth/tezos, and
+# /api/auth/session since the May auth sprint but never created, so every
+# MetaMask/Kukai sign-in 500'd with `kv-not-bound`. Created 2026-07-05
+# via `wrangler kv namespace create USERS`.
+[[kv_namespaces]]
+binding = "USERS"
+id = "c2a214c713974d6ab7d8735b492374cc"

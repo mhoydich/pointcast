@@ -1,0 +1,494 @@
+---
+// /drumhouse — The Drum House.
+// One roof over every drum surface on PointCast. Nouns forward.
+// Built 2026-05-31 by cc, on a brief from Mike:
+//   "a drum site that takes all the pointcast drum projects and is a neat
+//    site for people to visit, keep nouns forward. music carries messages,
+//    reaches many, maybe this is a future communicator."
+// Standalone dark page — intentionally bypasses DrumLayout (white bg),
+// same pattern as /drum-apr26.
+
+// --- Enumerate every drum surface from the filesystem at build time. ---
+// New /drum* pages added by any agent show up here automatically.
+const modules = import.meta.glob('./drum*.astro');
+const allSlugs = Object.keys(modules)
+  .map((p) => p.replace('./', '').replace('.astro', ''))
+  .filter((s) => s !== 'drumhouse')
+  .sort();
+
+const surfaceCount = allSlugs.length;
+
+// Humanize a slug into a room name. 'drum' -> 'Classic', 'drum-bell-fall' -> 'Bell Fall'.
+function human(slug) {
+  if (slug === 'drum') return 'Classic';
+  const tail = slug.replace(/^drum-?/, '');
+  return tail
+    .split('-')
+    .map((w) => (/^v\d+$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
+// Ordered buckets. First rule that matches a slug wins; the rest fall to "More Rooms".
+const CATS = [
+  {
+    id: 'lineage', name: 'The Lineage',
+    blurb: 'The numbered evolution — each version a new instrument bolted onto the same shared pulse.',
+    test: (s) => /^drum(-v\d+|-apr26)?$/.test(s) || /octet|quintet|taiko|conductor|medley|genesis/.test(s),
+  },
+  {
+    id: 'quiet', name: 'Quiet Rooms',
+    blurb: 'Screensavers for a real attention. Press begin, set the tab aside, listen.',
+    test: (s) => /garden|rain|snow|temple|shrine|rosary|saint|koan|vespers|altar|lantern|bath|meditate|mantra|aurora|prayer|bell|pendulum|tide|threshold|offering|confessional|zen|holding|pavilion|atrium|booth|moon|station/.test(s),
+  },
+  {
+    id: 'wire', name: 'The Wire',
+    blurb: 'Where a drum carries a message. Postcards, shouts, marquees — the talking drum, made literal.',
+    test: (s) => /postcard|letter|mailbox|bulletin|graffiti|sticker|shout|applause|walkie|name-card|^drum-card$|marquee|press|emoji|parade|procession|bottle/.test(s),
+  },
+  {
+    id: 'stage', name: 'Stage & TV',
+    blurb: 'Cast views for the big screen — AirPlay it, Chromecast it, let the room watch itself.',
+    test: (s) => /tv|live|warhol|viz|now$|pulse/.test(s),
+  },
+  {
+    id: 'games', name: 'Games & Duels',
+    blurb: 'Two drummers enter. Races, duels, leagues, piñatas — rhythm with a scoreboard.',
+    test: (s) => /race|duel|^drum-vs$|league|battle|pinata|relay|call-and-response|scorebook|fives|gauntlet|roulette|bingo/.test(s),
+  },
+  {
+    id: 'radio', name: 'Radio & Jukebox',
+    blurb: 'Drum along to something already playing — paste a track, the room loads it together.',
+    test: (s) => /radio|jukebox|audiophile|concert|solo|jam|loop|^drum-v3$/.test(s),
+  },
+  {
+    id: 'agents', name: 'Agents & On-chain',
+    blurb: 'Trophies on Tezos, agent altars, the school — where the drum meets the chain.',
+    test: (s) => /troph|agent|academy|school|ambient/.test(s),
+  },
+];
+
+const buckets = CATS.map((c) => ({ ...c, items: [] }));
+const more = [];
+for (const slug of allSlugs) {
+  const cat = CATS.find((c) => c.test(slug));
+  (cat ? buckets.find((b) => b.id === cat.id).items : more).push(slug);
+}
+const sections = [...buckets, { id: 'more', name: 'More Rooms', blurb: 'The long tail — everything else under the roof.', items: more }]
+  .filter((s) => s.items.length > 0);
+
+// Curated featured surfaces — the canonical eleven plus the doors worth opening first.
+const featured = [
+  { slug: 'drum',          name: 'Classic',    tag: 'v1',       line: 'The original. One pad, every tap heard by every visitor on every other surface.' },
+  { slug: 'drum-v2',       name: 'Collab',     tag: 'v2',       line: 'Pentatonic harmony, a live leaderboard, the DRUM token accumulator. Tap in key with strangers.' },
+  { slug: 'drum-v3',       name: 'Spotify',    tag: 'v3',       line: 'Paste a Spotify URL and the whole room loads it together. Drum along, in time.' },
+  { slug: 'drum-v4',       name: 'Orchestra',  tag: 'v4',       line: 'Twelve instruments, six genre auto-play presets. Conduct, or let it conduct you.' },
+  { slug: 'drum-v5',       name: 'Loops',      tag: 'v5',       line: 'A multi-track step sequencer. Build a pattern, share it as a URL hash.' },
+  { slug: 'drum-v6',       name: 'Choir',      tag: 'v6',       line: 'Twelve vocal-formant voices over four chord progressions. The room sings.' },
+  { slug: 'drum-v8',       name: 'Symphony',   tag: 'v8',       line: 'A forty-two-piece classical orchestra in the browser. No conductor required.' },
+  { slug: 'drum-v9',       name: 'The Lounge', tag: 'v9',       line: 'Eight saxophones. A Kenny G smooth-jazz tribute. Yes, really.' },
+  { slug: 'drum-altars',   name: 'Altars',     tag: 'ritual',   line: 'Five timbres — bell, bowl, chime, gong, drone — each dedicated to a Noun seed for the week.' },
+  { slug: 'drum-trophies', name: 'Trophies',   tag: 'on-chain', line: 'Ten badges on the Visit Nouns FA2 contract. Earn the rhythm, mint the proof. Tezos.' },
+  { slug: 'drum-tv-v2',    name: 'The Venue',  tag: 'cast',     line: 'The big-screen view. Cast it to a TV and let the whole room drum at the wall.' },
+  { slug: 'drum-apr26',    name: 'Sequencer',  tag: 'special',  line: 'An eight-pad beat machine, special edition. Dark room, bright pads.' },
+];
+
+// Build-time snapshot of the live leaderboard + global counter.
+// Refreshed client-side from /api/drum and /api/drum/top (both CORS-open).
+const globalSnapshot = 24182;
+const topSnapshot = [
+  { rank: 1, nounId: 253,  count: 7272 },
+  { rank: 2, nounId: 752,  count: 6599 },
+  { rank: 3, nounId: 156,  count: 4398 },
+  { rank: 4, nounId: 886,  count: 4195 },
+  { rank: 5, nounId: 805,  count: 2444 },
+  { rank: 6, nounId: 1008, count: 852 },
+  { rank: 7, nounId: 680,  count: 687 },
+  { rank: 8, nounId: 731,  count: 643 },
+  { rank: 9, nounId: 662,  count: 380 },
+  { rank: 10, nounId: 554, count: 243 },
+];
+
+const built = new Date().toISOString();
+const odometer = String(globalSnapshot).padStart(8, '0').split('');
+
+// A Warhol-ish palette to tint the index chips deterministically.
+const WARHOL = ['#ff69b4','#ffeb3b','#1e90ff','#ff6b35','#b026ff','#00e5ff','#ff2d7b','#ffd700','#008080','#cc5533','#e8a317','#c4a35a'];
+function tint(slug) {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  return WARHOL[h % WARHOL.length];
+}
+// Deterministic Noun seed (0–1199) for a surface, for the chip avatar.
+function nounSeed(slug) {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 131 + slug.charCodeAt(i)) >>> 0;
+  return h % 1200;
+}
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Drum House — every drum on PointCast, one roof</title>
+  <meta name="description" content={`${surfaceCount} drum surfaces on pointcast.xyz, gathered under one roof. The talking drum was the first long-distance network. Music carries messages, reaches many — a future communicator. Nouns forward, on Tezos.`} />
+  <meta name="theme-color" content="#06060d" />
+  <link rel="canonical" href="https://pointcast.xyz/drumhouse" />
+  <meta property="og:title" content="The Drum House — every drum on PointCast" />
+  <meta property="og:description" content="Every drum surface on PointCast, one roof. Music carries messages, reaches many. Nouns forward." />
+  <meta property="og:image" content="https://pointcast.xyz/images/og-drum.png" />
+  <meta property="og:url" content="https://pointcast.xyz/drumhouse" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PointCast" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="The Drum House — every drum on PointCast" />
+  <meta name="twitter:description" content="Every drum surface on PointCast, one roof. Music carries messages, reaches many." />
+  <meta name="twitter:image" content="https://pointcast.xyz/images/og-drum.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <script type="application/ld+json" is:inline set:html={JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'The Drum House',
+    url: 'https://pointcast.xyz/drumhouse',
+    description: `${surfaceCount} collaborative drum surfaces on PointCast, gathered under one roof.`,
+    isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+    author: { '@type': 'Person', name: 'Michael Hoydich', url: 'https://pointcast.xyz/about' },
+  })} />
+
+  <style is:global>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:    #06060d;
+      --bg2:   #0e0e1c;
+      --bg3:   #16162a;
+      --ink:   #f3efe6;
+      --dim:   rgba(243,239,230,0.55);
+      --faint: rgba(243,239,230,0.32);
+      --rule:  rgba(196,163,90,0.18);
+      --gold:  #c4a35a;
+      --pink:  #ff2d7b;
+      --cyan:  #00e5ff;
+      --orange:#ff6b35;
+      --purple:#b026ff;
+      --yellow:#ffd700;
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; }
+
+    /* slow rothko fields behind everything */
+    .fields { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    .field { position: absolute; left: -10%; width: 120%; height: 38vh; filter: blur(60px); opacity: 0.06; }
+    .f1 { top: 5%;  background: radial-gradient(ellipse at 30% 50%, var(--pink), transparent 70%);   animation: drift 14s ease-in-out infinite; }
+    .f2 { top: 40%; background: radial-gradient(ellipse at 70% 50%, var(--cyan), transparent 70%);   animation: drift 18s ease-in-out infinite reverse; }
+    .f3 { top: 70%; background: radial-gradient(ellipse at 40% 50%, var(--orange), transparent 70%); animation: drift 22s ease-in-out infinite; }
+    @keyframes drift { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-26px); } }
+
+    .wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 22px; }
+
+    /* ---- top strip ---- */
+    .strip {
+      border-bottom: 1.5px solid var(--rule);
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .strip .wrap { display: flex; align-items: center; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+    .strip a:hover { color: var(--gold); }
+    .strip .sep { color: var(--faint); }
+    .strip .grow { flex: 1; }
+    .wordmark { color: var(--ink); letter-spacing: 0.24em; font-size: 13px; }
+
+    /* ---- hero ---- */
+    .hero { padding: 60px 0 30px; text-align: center; }
+    .kicker {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.46em;
+      text-transform: uppercase; color: var(--gold); opacity: 0.8; margin-bottom: 22px;
+    }
+    .hero h1 {
+      font-family: var(--font-display); font-weight: 900;
+      font-size: clamp(2.8rem, 8vw, 5.4rem); line-height: 0.95; letter-spacing: 0.01em;
+      background: linear-gradient(135deg, var(--pink), var(--orange) 55%, var(--yellow));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 34px rgba(255,45,123,0.22));
+    }
+    .hero .lede {
+      max-width: 640px; margin: 22px auto 0; font-size: 1.08rem; color: var(--dim);
+    }
+    .hero .lede b { color: var(--ink); font-weight: 600; }
+
+    /* ---- the hit counter (geocities, but nounish) ---- */
+    .counter { margin: 38px auto 6px; display: inline-flex; flex-direction: column; align-items: center; gap: 8px; }
+    .counter .label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--faint); }
+    .odometer { display: inline-flex; gap: 4px; padding: 10px 12px; background: #000; border: 1px solid var(--rule); border-radius: 6px; box-shadow: inset 0 0 24px rgba(255,107,53,0.16); }
+    .odometer .digit {
+      font-family: var(--font-mono); font-weight: 500; font-size: 2rem; width: 1.1ch; text-align: center;
+      color: var(--orange); text-shadow: 0 0 12px rgba(255,107,53,0.7); font-variant-numeric: tabular-nums;
+    }
+    .counter .sub { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; color: var(--faint); }
+    .counter .sub b { color: var(--cyan); }
+
+    .cta-row { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .cta {
+      font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 12px 22px; border: 1.5px solid var(--rule); border-radius: 6px; color: var(--ink);
+      transition: all 0.15s ease; background: var(--bg2);
+    }
+    .cta:hover { border-color: var(--gold); background: rgba(196,163,90,0.08); transform: translateY(-1px); }
+    .cta.hot { border-color: var(--pink); color: var(--pink); }
+    .cta.hot:hover { background: rgba(255,45,123,0.1); border-color: var(--pink); }
+
+    /* ---- section heads ---- */
+    .sec { padding: 46px 0 8px; }
+    .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; border-bottom: 1px solid var(--rule); padding-bottom: 10px; }
+    .sec-head h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; color: var(--gold); letter-spacing: 0.02em; }
+    .sec-head .blurb { font-size: 0.86rem; color: var(--dim); flex: 1; }
+    .sec-head .n { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.1em; }
+
+    /* ---- featured grid ---- */
+    .feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .card {
+      position: relative; display: flex; gap: 14px; padding: 16px; border-radius: 10px;
+      background: var(--bg2); border: 1px solid var(--rule); transition: all 0.18s ease; overflow: hidden;
+    }
+    .card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent, var(--gold)); opacity: 0.7; }
+    .card:hover { border-color: var(--gold); background: var(--bg3); transform: translateY(-2px); }
+    .card .face { width: 64px; height: 64px; border-radius: 8px; flex-shrink: 0; image-rendering: pixelated; background: var(--bg3); border: 1px solid var(--rule); }
+    .card .meta { min-width: 0; }
+    .card .name { font-family: var(--font-display); font-weight: 700; font-size: 1.18rem; color: var(--ink); }
+    .card .tag { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--bg); background: var(--gold); padding: 1px 6px; border-radius: 3px; margin-left: 8px; vertical-align: middle; }
+    .card .line { font-size: 0.82rem; color: var(--dim); margin-top: 5px; }
+
+    /* ---- leaderboard ---- */
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .drummer { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--rule); border-radius: 8px; }
+    .drummer .rk { font-family: var(--font-mono); font-size: 11px; color: var(--gold); width: 22px; }
+    .drummer .av { width: 40px; height: 40px; border-radius: 6px; image-rendering: pixelated; border: 1px solid var(--rule); background: var(--bg3); }
+    .drummer .who { min-width: 0; }
+    .drummer .id { font-family: var(--font-mono); font-size: 11px; color: var(--ink); }
+    .drummer .ct { font-family: var(--font-mono); font-size: 12px; color: var(--cyan); font-variant-numeric: tabular-nums; }
+    .drummer.gold { border-color: rgba(255,215,0,0.4); }
+
+    /* ---- index chips ---- */
+    .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+    .chip {
+      display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px;
+      background: var(--bg2); border: 1px solid var(--rule); transition: all 0.13s ease;
+    }
+    .chip:hover { border-color: var(--c); background: var(--bg3); transform: translateX(2px); }
+    .chip .dot { width: 26px; height: 26px; border-radius: 5px; flex-shrink: 0; image-rendering: pixelated; border: 1px solid rgba(0,0,0,0.4); background-size: cover; background-position: center; }
+    .chip .nm { font-size: 0.82rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chip .sl { font-family: var(--font-mono); font-size: 9px; color: var(--faint); }
+
+    /* ---- philosophy ---- */
+    .philo { margin: 60px 0 10px; padding: 40px 30px; border: 1px solid var(--rule); border-radius: 14px; background: linear-gradient(160deg, rgba(255,45,123,0.05), rgba(0,229,255,0.04)); text-align: center; }
+    .philo .mark { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.4em; text-transform: uppercase; color: var(--gold); opacity: 0.7; }
+    .philo h3 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 16px 0; color: var(--ink); line-height: 1.2; }
+    .philo p { max-width: 620px; margin: 0 auto 12px; color: var(--dim); font-size: 1rem; }
+    .philo p b { color: var(--ink); font-weight: 600; }
+
+    /* ---- footer ---- */
+    .foot { margin: 50px 0 20px; padding-top: 26px; border-top: 1px solid var(--rule); text-align: center; }
+    .sign { font-family: var(--font-display); font-style: italic; font-size: 0.95rem; color: var(--gold); opacity: 0.65; }
+    .loc { margin-top: 14px; display: inline-block; padding: 4px 16px; border: 1px solid var(--rule); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.34em; color: var(--gold); opacity: 0.5; }
+    .built { margin-top: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.1em; }
+
+    @media (max-width: 560px) {
+      .hero { padding: 40px 0 20px; }
+      .odometer .digit { font-size: 1.5rem; }
+      .sec-head { flex-direction: column; gap: 4px; }
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body data-built={built}>
+  <div class="fields" aria-hidden="true">
+    <div class="field f1"></div><div class="field f2"></div><div class="field f3"></div>
+  </div>
+
+  <!-- top strip -->
+  <div class="strip">
+    <div class="wrap">
+      <a href="/" class="wordmark">POINTCAST</a>
+      <span class="sep">·</span>
+      <span>The Drum House</span>
+      <span class="grow"></span>
+      <a href="/drum">enter the room →</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- hero -->
+    <header class="hero">
+      <p class="kicker">Before the wire · the drum</p>
+      <h1>The Drum House</h1>
+      <p class="lede">
+        Every drum on PointCast, under one roof. The talking drum was humanity's first
+        long-distance network — a beat that crossed valleys faster than a runner could.
+        <b>Music carries messages. It reaches many.</b> Maybe this is a future communicator.
+      </p>
+
+      <div class="counter">
+        <span class="label">Drums tapped, all surfaces, all visitors</span>
+        <div class="odometer" id="odo">
+          {odometer.map((d) => <span class="digit">{d}</span>)}
+        </div>
+        <span class="sub"><b id="surfaceN">{surfaceCount}</b> surfaces · one shared 150ms pulse · tap one, every other room hears it</span>
+      </div>
+
+      <div class="cta-row">
+        <a class="cta hot" href="/drum">▶ Start drumming</a>
+        <a class="cta" href="#featured">The doors</a>
+        <a class="cta" href="#index">All {surfaceCount} rooms</a>
+        <a class="cta" href="/drum-trophies">On-chain trophies</a>
+      </div>
+    </header>
+
+    <!-- featured doors -->
+    <section class="sec" id="featured">
+      <div class="sec-head">
+        <h2>The Doors</h2>
+        <span class="blurb">The ones to open first. Each face is a Noun, picked deterministically per room.</span>
+      </div>
+      <div class="feat">
+        {featured.map((f, i) => (
+          <a class="card" href={`/${f.slug}`} style={`--accent:${WARHOL[i % WARHOL.length]}`}>
+            <img class="face" loading="lazy" width="64" height="64"
+              src={`https://noun-api.com/beta/pfp?name=${f.slug}&size=128`} alt={`${f.name} Noun`} />
+            <div class="meta">
+              <div class="name">{f.name}<span class="tag">{f.tag}</span></div>
+              <p class="line">{f.line}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <!-- leaderboard -->
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Top Drummers</h2>
+        <span class="blurb">All-time taps, anonymized. Each is a real on-chain Noun. Live from <code>/api/drum/top</code>.</span>
+      </div>
+      <div class="board" id="board">
+        {topSnapshot.map((d) => (
+          <div class={`drummer${d.rank === 1 ? ' gold' : ''}`}>
+            <span class="rk">#{d.rank}</span>
+            <img class="av" loading="lazy" width="40" height="40"
+              src={`https://noun.pics/${d.nounId}.svg`} alt={`Noun ${d.nounId}`} />
+            <div class="who">
+              <div class="id">noun #{d.nounId}</div>
+              <div class="ct">{d.count.toLocaleString()}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- philosophy -->
+    <section class="philo">
+      <span class="mark">The future philosophy</span>
+      <h3>A drum is a message anyone can send and everyone can hear.</h3>
+      <p>
+        Long before the telegraph, villages spoke in rhythm — the <b>talking drum</b> relayed
+        births, warnings, and welcomes across miles of forest. No literacy required, no wire to lay.
+        Just a pulse, and the whole valley listening.
+      </p>
+      <p>
+        PointCast's drums run on the same idea, on new infrastructure. Tap a pad here and a visitor
+        on any of the other {surfaceCount} surfaces hears it inside 150 milliseconds. The taps accrue
+        to a <b>DRUM token on Tezos</b>; the badges are Nouns you can hold. <b>Music carries messages.
+        It reaches many.</b> Maybe the oldest network is also the next one.
+      </p>
+    </section>
+
+    <!-- the full index -->
+    <section class="sec" id="index">
+      <div class="sec-head">
+        <h2>Every Room</h2>
+        <span class="blurb">All {surfaceCount} drum surfaces, auto-gathered from the build. New ones appear here the day they ship.</span>
+      </div>
+      {sections.map((s) => (
+        <div style="margin-bottom: 26px;">
+          <div class="sec-head" style="border:none; padding-bottom:2px; margin-bottom:10px;">
+            <h2 style="font-size:1.05rem; color:var(--ink);">{s.name}</h2>
+            <span class="blurb">{s.blurb}</span>
+            <span class="n">{s.items.length}</span>
+          </div>
+          <div class="chips">
+            {s.items.map((slug) => (
+              <a class="chip" href={`/${slug}`} style={`--c:${tint(slug)}`}>
+                <span class="dot" style={`background-color:${tint(slug)}; background-image:url(https://noun-api.com/beta/pfp?name=${slug}&size=52)`}></span>
+                <span style="min-width:0;">
+                  <span class="nm" style="display:block;">{human(slug)}</span>
+                  <span class="sl">/{slug}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+
+    <!-- footer -->
+    <footer class="foot">
+      <p class="sign">Michael Hoydich · Claude Opus 4.8 — El Segundo, 2026</p>
+      <span class="loc">33.9192 N / 118.4165 W</span>
+      <p class="built">the coffee pot, still on · a broadcast is slow on purpose</p>
+    </footer>
+  </div>
+
+  <script is:inline>
+    // Live-refresh the global counter and leaderboard from the CORS-open API.
+    (async () => {
+      const fmt = (n) => String(n).padStart(8, '0').split('');
+      try {
+        const r = await fetch('/api/drum');
+        if (r.ok) {
+          const { globalTotal } = await r.json();
+          if (typeof globalTotal === 'number') {
+            const odo = document.getElementById('odo');
+            const digits = fmt(globalTotal);
+            odo.innerHTML = digits.map((d) => `<span class="digit">${d}</span>`).join('');
+          }
+        }
+      } catch (e) { /* keep the build-time snapshot */ }
+
+      try {
+        const r = await fetch('/api/drum/top');
+        if (r.ok) {
+          const { entries } = await r.json();
+          if (Array.isArray(entries) && entries.length) {
+            const board = document.getElementById('board');
+            board.innerHTML = entries.map((d) => `
+              <div class="drummer${d.rank === 1 ? ' gold' : ''}">
+                <span class="rk">#${d.rank}</span>
+                <img class="av" loading="lazy" width="40" height="40" src="https://noun.pics/${d.nounId}.svg" alt="Noun ${d.nounId}" />
+                <div class="who">
+                  <div class="id">noun #${d.nounId}</div>
+                  <div class="ct">${Number(d.count).toLocaleString()}</div>
+                </div>
+              </div>`).join('');
+          }
+        }
+      } catch (e) { /* keep the snapshot */ }
+    })();
+  </script>
+</body>
+</html>

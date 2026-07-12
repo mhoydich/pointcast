@@ -1,0 +1,398 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout title="Cast Wheel — interactive circle of fifths" description="An interactive circle of fifths. Click any key to hear it and see its relationships: relative minor, dominant, subdominant. The iconic music-theory diagram, made playable.">
+  <main class="cw" id="cw" data-built={built}>
+    <header class="cw__hero">
+      <p class="cw__kicker">CAST · WHEEL · circle of fifths</p>
+      <h1 class="cw__title">The wheel.</h1>
+      <p class="cw__sub">Click any segment. Hear its chord. The wheel shows you which keys live next to each other — clockwise is up a fifth (C → G → D → A), counter-clockwise is down. Inner ring is the relative minor of each outer key.</p>
+    </header>
+
+    <section class="cw__stage">
+      <svg class="cw__svg" viewBox="-200 -200 400 400" id="cw-svg" role="img" aria-label="Circle of fifths">
+        <!-- 12 outer major segments + 12 inner minor segments populated by JS -->
+        <g id="cw-major"></g>
+        <g id="cw-minor"></g>
+        <!-- Center label -->
+        <g id="cw-center" pointer-events="none">
+          <circle cx="0" cy="0" r="52" fill="#0a0610" stroke="rgba(244,231,200,0.18)" stroke-width="1"/>
+          <text x="0" y="-8" text-anchor="middle" class="cw__center-key" id="cw-center-key">—</text>
+          <text x="0" y="14" text-anchor="middle" class="cw__center-detail" id="cw-center-detail">click a key</text>
+          <text x="0" y="32" text-anchor="middle" class="cw__center-rel" id="cw-center-rel"></text>
+        </g>
+      </svg>
+
+      <aside class="cw__info">
+        <p class="cw__info-label">RELATIONSHIPS</p>
+        <ul class="cw__info-list" id="cw-info-list">
+          <li>Pick a key on the wheel to see its closest neighbors.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="cw__transport">
+      <button class="cw__btn" id="cw-walk" type="button">▶ walk the wheel</button>
+      <button class="cw__btn cw__btn--ghost" id="cw-walk-rev" type="button">↩ counter-clockwise</button>
+      <div class="cw__vol">
+        <span class="cw__vol-icon">♪</span>
+        <input type="range" class="cw__vol-slider" id="cw-vol" min="0" max="100" value="55" aria-label="Volume"/>
+      </div>
+    </section>
+
+    <section class="cw__tips">
+      <h2 class="cw__tips-title">How to read it</h2>
+      <ul class="cw__tips-list">
+        <li><strong>Clockwise</strong> = up a perfect fifth. C → G → D → A → E → B → F♯ → C♯ → … the right side adds sharps, the left side adds flats.</li>
+        <li><strong>Adjacent</strong> keys (any two next to each other) share <em>six of seven</em> notes. That's why modulating to a neighbor sounds natural.</li>
+        <li><strong>Inner ring</strong> = relative minor. A minor shares all its notes with C major; they're the same key, just centered on a different tonic.</li>
+        <li><strong>The I-IV-V chord pattern</strong> uses three adjacent keys: your home key (I), one clockwise step (V dominant), one counter-clockwise step (IV subdominant). Three-quarters of pop music.</li>
+      </ul>
+    </section>
+
+    <footer class="cw__foot">
+      <p>Built {built.slice(0,10)} · just-intonation-ish equal-temperament sine triads · no CDN</p>
+      <p>← <a href="/drum-academy">/drum-academy</a> · <a href="/cast-jam">/cast-jam</a> · <a href="/cast-metronome">/cast-metronome</a> · <a href="/town-music">/town-music</a> · <a href="/">PointCast home</a></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --cw-bg: #0a0610;
+    --cw-walnut: #5a3422;
+    --cw-flame: #f6c15e;
+    --cw-cream: #f4e7c8;
+    --cw-velvet: #1a0820;
+    --cw-line: rgba(244,231,200,0.10);
+    --cw-text: #f4e7c8;
+    --cw-text-mute: rgba(244,231,200,0.62);
+    --cw-text-quiet: rgba(244,231,200,0.38);
+    --cw-good: #a8ff3a;
+    --cw-display: 'Inter Tight', system-ui, sans-serif;
+    --cw-body: 'Inter', system-ui, sans-serif;
+    --cw-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  body { background: var(--cw-bg); color: var(--cw-text); font-family: var(--cw-body); }
+
+  .cw { max-width: 920px; margin: 0 auto; padding: 32px 22px 60px 22px; display: flex; flex-direction: column; gap: 28px; }
+
+  .cw__kicker { font-family: var(--cw-mono); font-size: 11px; letter-spacing: 0.7px; color: var(--cw-flame); text-transform: uppercase; margin: 0 0 12px 0; }
+  .cw__title { font-family: var(--cw-display); font-weight: 900; font-size: clamp(40px, 7vw, 60px); line-height: 0.96; letter-spacing: -0.025em; margin: 0 0 14px 0;
+    background: linear-gradient(180deg, var(--cw-cream), var(--cw-flame));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .cw__sub { font-family: var(--cw-body); font-size: 15px; line-height: 1.55; color: var(--cw-text-mute); max-width: 620px; margin: 0; }
+
+  /* STAGE */
+  .cw__stage {
+    display: grid; grid-template-columns: 1fr 280px; gap: 28px; align-items: center;
+    padding: 28px; background: rgba(244,231,200,0.03); border: 1px solid var(--cw-line); border-radius: 16px;
+  }
+  @media (max-width: 720px) { .cw__stage { grid-template-columns: 1fr; } }
+
+  .cw__svg { width: 100%; max-width: 420px; height: auto; margin: 0 auto; display: block; }
+  .cw__seg {
+    fill: rgba(244,231,200,0.04);
+    stroke: rgba(244,231,200,0.16);
+    stroke-width: 1.2;
+    cursor: pointer;
+    transition: fill 0.18s ease, stroke 0.18s ease;
+  }
+  .cw__seg:hover { fill: rgba(244,231,200,0.12); stroke: var(--cw-flame); }
+  .cw__seg--active { fill: rgba(246,193,94,0.30); stroke: var(--cw-flame); stroke-width: 2; }
+  .cw__seg--dom { fill: rgba(168,255,58,0.18); stroke: var(--cw-good); }
+  .cw__seg--sub { fill: rgba(159,121,201,0.18); stroke: #b39ddb; }
+  .cw__seg--rel-minor { fill: rgba(232,179,192,0.18); stroke: #e8b3c0; }
+  .cw__seg-label {
+    font-family: var(--cw-display); font-weight: 700;
+    font-size: 16px; fill: var(--cw-text);
+    pointer-events: none; user-select: none;
+  }
+  .cw__seg-label--minor { font-size: 12px; font-weight: 500; fill: var(--cw-text-mute); }
+  .cw__seg-label--active { fill: var(--cw-flame); }
+
+  .cw__center-key { font-family: var(--cw-display); font-weight: 800; font-size: 22px; fill: var(--cw-text); letter-spacing: -0.02em; }
+  .cw__center-detail { font-family: var(--cw-mono); font-size: 9px; fill: var(--cw-text-mute); letter-spacing: 0.4px; text-transform: uppercase; }
+  .cw__center-rel { font-family: var(--cw-mono); font-size: 9.5px; fill: var(--cw-flame); letter-spacing: 0.3px; }
+
+  /* INFO */
+  .cw__info-label { font-family: var(--cw-mono); font-size: 10px; letter-spacing: 0.7px; color: var(--cw-text-quiet); text-transform: uppercase; margin: 0 0 14px 0; }
+  .cw__info-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .cw__info-list li { font-family: var(--cw-body); font-size: 13.5px; line-height: 1.5; color: var(--cw-text-mute); padding: 10px 12px; border-radius: 8px; background: rgba(244,231,200,0.04); border-left: 3px solid transparent; }
+  .cw__info-list li.cw__info-row strong { font-family: var(--cw-display); font-weight: 700; color: var(--cw-text); margin-right: 8px; }
+  .cw__info-list li.cw__info-row[data-rel="dom"] { border-left-color: var(--cw-good); }
+  .cw__info-list li.cw__info-row[data-rel="sub"] { border-left-color: #b39ddb; }
+  .cw__info-list li.cw__info-row[data-rel="rel"] { border-left-color: #e8b3c0; }
+  .cw__info-list li.cw__info-row[data-rel="home"] { border-left-color: var(--cw-flame); }
+  .cw__info-list li.cw__info-row span { font-family: var(--cw-mono); font-size: 11.5px; color: var(--cw-text-quiet); margin-left: 4px; }
+
+  /* TRANSPORT */
+  .cw__transport { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 18px; background: rgba(244,231,200,0.04); border: 1px solid var(--cw-line); border-radius: 12px; }
+  .cw__btn {
+    background: var(--cw-flame); color: var(--cw-velvet);
+    border: 0; padding: 10px 18px; border-radius: 999px;
+    font-family: var(--cw-display); font-weight: 700; font-size: 13px;
+    cursor: pointer; transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .cw__btn:hover:not(:disabled) { transform: scale(1.04); background: #ffd58a; }
+  .cw__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cw__btn--ghost { background: transparent; color: var(--cw-text-mute); border: 1px solid var(--cw-line); }
+  .cw__btn--ghost:hover:not(:disabled) { background: rgba(244,231,200,0.10); color: var(--cw-text); border-color: var(--cw-flame); }
+  .cw__vol { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .cw__vol-icon { font-size: 14px; color: var(--cw-text-mute); }
+  .cw__vol-slider { width: 100px; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(244,231,200,0.16); border-radius: 2px; outline: 0; cursor: pointer; }
+  .cw__vol-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cw-flame); cursor: pointer; }
+
+  /* TIPS */
+  .cw__tips { padding: 22px 24px; background: rgba(244,231,200,0.03); border: 1px solid var(--cw-line); border-radius: 12px; }
+  .cw__tips-title { font-family: var(--cw-display); font-weight: 700; font-size: 18px; margin: 0 0 12px 0; letter-spacing: -0.01em; }
+  .cw__tips-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .cw__tips-list li { font-family: var(--cw-body); font-size: 13.5px; line-height: 1.55; color: var(--cw-text-mute); }
+  .cw__tips-list strong { color: var(--cw-flame); font-weight: 600; }
+  .cw__tips-list em { color: var(--cw-text); font-style: normal; font-weight: 500; }
+
+  /* FOOT */
+  .cw__foot { padding-top: 24px; border-top: 1px solid var(--cw-line); font-family: var(--cw-mono); font-size: 11px; color: var(--cw-text-quiet); line-height: 1.7; text-align: center; }
+  .cw__foot a { color: var(--cw-flame); text-decoration: none; }
+  .cw__foot a:hover { text-decoration: underline; }
+</style>
+
+<script>
+  import { createAudioScheduler, type AudioScheduler } from '../lib/audio-scheduler';
+
+  // ============================================================
+  //  CAST · WHEEL — interactive circle of fifths
+  // ============================================================
+
+  // Clockwise from 12 o'clock: C, G, D, A, E, B, F♯, C♯/D♭, A♭, E♭, B♭, F
+  const MAJOR = [
+    { key: 'C',  rel: 'a',  semi: 0  },
+    { key: 'G',  rel: 'e',  semi: 7  },
+    { key: 'D',  rel: 'b',  semi: 2  },
+    { key: 'A',  rel: 'f♯', semi: 9  },
+    { key: 'E',  rel: 'c♯', semi: 4  },
+    { key: 'B',  rel: 'g♯', semi: 11 },
+    { key: 'F♯', rel: 'd♯', semi: 6  },
+    { key: 'D♭', rel: 'b♭', semi: 1  },
+    { key: 'A♭', rel: 'f',  semi: 8  },
+    { key: 'E♭', rel: 'c',  semi: 3  },
+    { key: 'B♭', rel: 'g',  semi: 10 },
+    { key: 'F',  rel: 'd',  semi: 5  },
+  ];
+
+  // ---------- Audio ----------
+  let ctx: AudioContext | null = null;
+  let masterGain: GainNode | null = null;
+  let sched: AudioScheduler | null = null;
+  let volume = 55;
+
+  function ac(): AudioContext {
+    if (ctx) return ctx;
+    ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    masterGain = ctx.createGain(); masterGain.gain.value = volume / 100;
+    masterGain.connect(ctx.destination);
+    sched = createAudioScheduler(ctx);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && ctx && ctx.state !== 'running' && walking) sched?.resume();
+    });
+    return ctx;
+  }
+
+  function playChord(semi: number, isMinor: boolean, when?: number, hold = 1.0) {
+    const c = ac(); if (c.state === 'suspended') c.resume();
+    const t = when ?? (c.currentTime + 0.02);
+    const rootHz = 261.63 * Math.pow(2, semi / 12); // C4 reference
+    const intervals = isMinor ? [0, 3, 7] : [0, 4, 7];
+    intervals.forEach((iv, i) => {
+      const o = c.createOscillator(); const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.value = rootHz * Math.pow(2, iv / 12);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.10, t + 0.04);
+      g.gain.setValueAtTime(0.10, t + hold - 0.20);
+      g.gain.exponentialRampToValueAtTime(0.001, t + hold);
+      o.connect(g); g.connect(masterGain!);
+      sched!.trackSource(o); o.start(t); o.stop(t + hold + 0.05);
+    });
+  }
+
+  // ---------- SVG layout ----------
+  const OUTER_R = 180;
+  const MID_R = 110;
+  const INNER_R = 50;
+  // Each segment spans 30°. Start at -90° (top center) and go clockwise.
+  const SEG_DEG = 30;
+
+  function polarToCart(r: number, deg: number): [number, number] {
+    const rad = (deg - 90) * Math.PI / 180;
+    return [r * Math.cos(rad), r * Math.sin(rad)];
+  }
+
+  function arcPath(r1: number, r2: number, startDeg: number, endDeg: number): string {
+    const [x1a, y1a] = polarToCart(r2, startDeg);
+    const [x2a, y2a] = polarToCart(r2, endDeg);
+    const [x2b, y2b] = polarToCart(r1, endDeg);
+    const [x1b, y1b] = polarToCart(r1, startDeg);
+    const large = (endDeg - startDeg) > 180 ? 1 : 0;
+    return `M ${x1a.toFixed(2)} ${y1a.toFixed(2)} A ${r2} ${r2} 0 ${large} 1 ${x2a.toFixed(2)} ${y2a.toFixed(2)} L ${x2b.toFixed(2)} ${y2b.toFixed(2)} A ${r1} ${r1} 0 ${large} 0 ${x1b.toFixed(2)} ${y1b.toFixed(2)} Z`;
+  }
+
+  function labelPos(r: number, midDeg: number): [number, number] {
+    return polarToCart(r, midDeg);
+  }
+
+  function renderWheel() {
+    const major = document.getElementById('cw-major')!;
+    const minor = document.getElementById('cw-minor')!;
+    const majorParts: string[] = [];
+    const minorParts: string[] = [];
+    MAJOR.forEach((m, i) => {
+      const startDeg = i * SEG_DEG - SEG_DEG / 2; // -15° for the first to center C at top
+      const endDeg = startDeg + SEG_DEG;
+      const midDeg = startDeg + SEG_DEG / 2;
+      const [lx, ly] = labelPos((OUTER_R + MID_R) / 2, midDeg);
+      const [lx2, ly2] = labelPos((MID_R + INNER_R) / 2, midDeg);
+      // Outer (major) segment
+      majorParts.push(`<path class="cw__seg" d="${arcPath(MID_R, OUTER_R, startDeg, endDeg)}" data-idx="${i}" data-mode="maj"/>`);
+      majorParts.push(`<text class="cw__seg-label" x="${lx.toFixed(1)}" y="${(ly + 6).toFixed(1)}" text-anchor="middle" data-text-idx="${i}" data-text-mode="maj">${m.key}</text>`);
+      // Inner (minor) segment
+      minorParts.push(`<path class="cw__seg" d="${arcPath(INNER_R, MID_R, startDeg, endDeg)}" data-idx="${i}" data-mode="min"/>`);
+      minorParts.push(`<text class="cw__seg-label cw__seg-label--minor" x="${lx2.toFixed(1)}" y="${(ly2 + 4).toFixed(1)}" text-anchor="middle" data-text-idx="${i}" data-text-mode="min">${m.rel}</text>`);
+    });
+    major.innerHTML = majorParts.join('');
+    minor.innerHTML = minorParts.join('');
+
+    document.querySelectorAll<SVGPathElement>('.cw__seg').forEach(p => {
+      p.addEventListener('click', () => {
+        const idx = Number(p.dataset.idx);
+        const mode = p.dataset.mode as 'maj' | 'min';
+        selectKey(idx, mode);
+      });
+    });
+  }
+
+  // ---------- Selection logic ----------
+  let selectedIdx: number | null = null;
+  let selectedMode: 'maj' | 'min' = 'maj';
+  let walking = false;
+  let walkTimer: number | null = null;
+
+  function selectKey(idx: number, mode: 'maj' | 'min') {
+    selectedIdx = idx;
+    selectedMode = mode;
+    const m = MAJOR[idx];
+    playChord(m.semi, mode === 'min', undefined, 1.0);
+    // Highlight relationships:
+    // home (this segment), dom (idx+1 clockwise), sub (idx-1 counter), rel (the OTHER ring at same idx)
+    const domIdx = (idx + 1) % 12;
+    const subIdx = (idx - 1 + 12) % 12;
+
+    document.querySelectorAll<SVGPathElement>('.cw__seg').forEach(seg => {
+      seg.classList.remove('cw__seg--active', 'cw__seg--dom', 'cw__seg--sub', 'cw__seg--rel-minor');
+    });
+    document.querySelectorAll<SVGTextElement>('[data-text-idx]').forEach(t => t.classList.remove('cw__seg-label--active'));
+
+    const segAt = (i: number, m: 'maj' | 'min') => document.querySelector<SVGPathElement>(`.cw__seg[data-idx="${i}"][data-mode="${m}"]`);
+    const txtAt = (i: number, m: 'maj' | 'min') => document.querySelector<SVGTextElement>(`[data-text-idx="${i}"][data-text-mode="${m}"]`);
+
+    segAt(idx, mode)?.classList.add('cw__seg--active');
+    txtAt(idx, mode)?.classList.add('cw__seg-label--active');
+    segAt(domIdx, mode)?.classList.add('cw__seg--dom');
+    segAt(subIdx, mode)?.classList.add('cw__seg--sub');
+    // The relative ring at the same idx
+    segAt(idx, mode === 'maj' ? 'min' : 'maj')?.classList.add('cw__seg--rel-minor');
+
+    renderInfo(idx, mode);
+    renderCenter(idx, mode);
+  }
+
+  function renderCenter(idx: number, mode: 'maj' | 'min') {
+    const m = MAJOR[idx];
+    const keyLabel = mode === 'maj' ? m.key : m.rel;
+    const modeLabel = mode === 'maj' ? 'major · ionian' : 'minor · aeolian';
+    const relLabel = mode === 'maj' ? `rel · ${m.rel} minor` : `rel · ${m.key} major`;
+    document.getElementById('cw-center-key')!.textContent = keyLabel;
+    document.getElementById('cw-center-detail')!.textContent = modeLabel;
+    document.getElementById('cw-center-rel')!.textContent = relLabel;
+  }
+
+  function renderInfo(idx: number, mode: 'maj' | 'min') {
+    const m = MAJOR[idx];
+    const domIdx = (idx + 1) % 12;
+    const subIdx = (idx - 1 + 12) % 12;
+    const rel = mode === 'maj' ? m.rel : MAJOR[idx].key;
+    const ul = document.getElementById('cw-info-list')!;
+    const keyLabel = mode === 'maj' ? m.key : m.rel;
+    ul.innerHTML = `
+      <li class="cw__info-row" data-rel="home"><strong>${keyLabel}</strong> ${mode === 'maj' ? 'major' : 'minor'} <span>home · tonic · I</span></li>
+      <li class="cw__info-row" data-rel="dom"><strong>${mode === 'maj' ? MAJOR[domIdx].key : MAJOR[domIdx].rel}</strong> <span>+5 · dominant · V (clockwise neighbor)</span></li>
+      <li class="cw__info-row" data-rel="sub"><strong>${mode === 'maj' ? MAJOR[subIdx].key : MAJOR[subIdx].rel}</strong> <span>−5 · subdominant · IV (counter-clockwise neighbor)</span></li>
+      <li class="cw__info-row" data-rel="rel"><strong>${rel}</strong> <span>${mode === 'maj' ? 'relative minor' : 'relative major'} · same notes, different home</span></li>
+    `;
+  }
+
+  // ---------- Walk mode ----------
+  function walkWheel(forward: boolean) {
+    if (walking) return;
+    walking = true;
+    const walkBtn = document.getElementById('cw-walk') as HTMLButtonElement;
+    const walkRev = document.getElementById('cw-walk-rev') as HTMLButtonElement;
+    walkBtn.disabled = true; walkRev.disabled = true;
+    walkBtn.textContent = '◼ walking…';
+    let i = selectedIdx ?? 0;
+    let step = 0;
+    const totalSteps = 12;
+    const stepDur = 800; // ms
+    const tick = () => {
+      if (!walking) return;
+      selectKey(i, 'maj');
+      step++;
+      if (step >= totalSteps) {
+        walking = false;
+        walkBtn.disabled = false; walkRev.disabled = false;
+        walkBtn.textContent = '▶ walk the wheel';
+        return;
+      }
+      i = forward ? (i + 1) % 12 : (i - 1 + 12) % 12;
+      walkTimer = window.setTimeout(tick, stepDur);
+    };
+    tick();
+  }
+  function stopWalk() {
+    if (walkTimer) clearTimeout(walkTimer);
+    walking = false;
+    const walkBtn = document.getElementById('cw-walk') as HTMLButtonElement;
+    const walkRev = document.getElementById('cw-walk-rev') as HTMLButtonElement;
+    walkBtn.disabled = false; walkRev.disabled = false;
+    walkBtn.textContent = '▶ walk the wheel';
+  }
+
+  // ---------- Init ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    renderWheel();
+    document.getElementById('cw-walk')?.addEventListener('click', () => {
+      if (walking) stopWalk(); else walkWheel(true);
+    });
+    document.getElementById('cw-walk-rev')?.addEventListener('click', () => {
+      if (walking) stopWalk(); else walkWheel(false);
+    });
+    document.getElementById('cw-vol')?.addEventListener('input', (e) => {
+      volume = Number((e.target as HTMLInputElement).value);
+      if (masterGain) masterGain.gain.setTargetAtTime(volume / 100, ac().currentTime, 0.04);
+    });
+    document.addEventListener('keydown', (e) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      // ← / → walk through the wheel
+      if (e.key === 'ArrowRight' && selectedIdx !== null) { e.preventDefault(); selectKey((selectedIdx + 1) % 12, selectedMode); }
+      else if (e.key === 'ArrowLeft' && selectedIdx !== null) { e.preventDefault(); selectKey((selectedIdx - 1 + 12) % 12, selectedMode); }
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (selectedIdx !== null) { e.preventDefault(); selectKey(selectedIdx, selectedMode === 'maj' ? 'min' : 'maj'); }
+      }
+    });
+  });
+</script>
+</BlockLayout>

@@ -1,0 +1,1604 @@
+---
+/**
+ * /me — your personal start experience.
+ *
+ * Mike 2026-05-07 (after the Home v2027 + Footer v5 + Studio publish
+ * stack landed): "let's keep improving the start experience, how about
+ * check-ins, profile, etc."
+ *
+ * /profile already exists but is wallet-focused (every Tezos pairing this
+ * browser has done). /me is the IDENTITY-and-day page — what you'd see
+ * when you sit down at the PointCast desk:
+ *
+ *   - WHO YOU ARE       — noun + name + mood + area
+ *   - TODAY             — one-tap check-in card with area + mood
+ *   - STREAK            — current + longest, reusing StreakBadge
+ *   - THIS WEEK         — last 7 days of check-ins, small grid
+ *   - THINGS YOU'VE MADE — Studio compositions you published
+ *   - QUICK ACTIONS     — change noun, set mood, jump into /studio etc.
+ *
+ * All client-side via localStorage `pc:me:v1`. No auth required, no
+ * server state. The schema is intentionally small (a few KB) so it can
+ * fit alongside the existing pc:streak / pc:wallets keys without
+ * crowding the storage budget.
+ *
+ * Returning visitors see their state restored. First-timers see a
+ * zero-state with "pick a noun" + "say where you are" + "set a mood"
+ * as the obvious next steps.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import StreakBadge from '../components/StreakBadge.astro';
+
+// ─── Static data: areas + moods ──────────────────────────────────────────────
+// South-Bay-anchored area slugs. Lightweight on purpose — agents update the
+// list when more rooms come online; this is just the picker, not the truth.
+const AREAS = [
+  { slug: 'el-segundo',       label: 'EL SEGUNDO' },
+  { slug: 'manhattan-beach',  label: 'MANHATTAN BEACH' },
+  { slug: 'hermosa-beach',    label: 'HERMOSA BEACH' },
+  { slug: 'redondo-beach',    label: 'REDONDO BEACH' },
+  { slug: 'venice',           label: 'VENICE' },
+  { slug: 'palos-verdes',     label: 'PALOS VERDES' },
+  { slug: 'santa-monica',     label: 'SANTA MONICA' },
+  { slug: 'culver-city',      label: 'CULVER CITY' },
+  { slug: 'lax',              label: 'NEAR LAX' },
+  { slug: 'long-beach',       label: 'LONG BEACH' },
+  { slug: 'downtown-la',      label: 'DOWNTOWN LA' },
+  { slug: 'elsewhere',        label: 'ELSEWHERE' },
+];
+
+const MOODS = [
+  { id: 'chill',   label: 'CHILL',   blurb: 'taking it slow' },
+  { id: 'hype',    label: 'HYPE',    blurb: 'amped, momentum-on' },
+  { id: 'focus',   label: 'FOCUS',   blurb: 'heads-down work' },
+  { id: 'flow',    label: 'FLOW',    blurb: 'in the zone' },
+  { id: 'curious', label: 'CURIOUS', blurb: 'exploring, learning' },
+  { id: 'quiet',   label: 'QUIET',   blurb: 'observing, recharging' },
+];
+
+// Visit Nouns FA2 covers seeds 0..NOUN_MAX. Surprise pulls a fully
+// random seed from the catalog (Mike 2026-05-08: "very similar nouns
+// when refresh, is it the whole catalog" — was previously a 16-seed
+// hand-picked pool, repeats every ~12 shuffles. Now 1200 seeds.).
+const NOUN_MAX = 1199;
+
+const title = 'You · /me';
+const description = 'Your PointCast start experience — daily check-in, mood, area, streak, and the things you have made. All local-first, zero auth. Sibling of /profile (wallets).';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="me2027">
+
+    <header class="me__hero">
+      <p class="me__crumb">
+        <a href="/">home</a> <span aria-hidden="true">›</span> <span>me</span>
+      </p>
+      <p class="me__kicker" id="me-kicker">YOU · YOUR START EXPERIENCE</p>
+      <h1 class="me__title" id="me-title">Hello, visitor.</h1>
+      <p class="me__dek" id="me-dek">
+        Local-first identity — saved in this browser only, no auth required.
+        Set a noun, drop a mood, check in for the day.
+        <a href="/profile" class="me__profile-link">Your wallet pairings live at /profile.</a>
+      </p>
+    </header>
+
+    {/* ──────────── 1. YOU CARD ──────────── */}
+    <section class="me__band you" aria-label="You">
+      <div class="you__noun-wrap">
+        <img id="me-noun-img" class="you__noun" src="" alt="" width="160" height="160" />
+        <button type="button" class="you__noun-shuffle" id="me-shuffle-noun" title="Surprise me with a different noun">
+          <span aria-hidden="true">↻</span>
+          <span class="mono">SURPRISE</span>
+        </button>
+      </div>
+      <div class="you__body">
+        <p class="me__eyebrow mono">YOU</p>
+        <label class="you__name-row" for="me-name-input">
+          <input
+            type="text"
+            id="me-name-input"
+            class="you__name-input"
+            placeholder="give yourself a name"
+            maxlength="40"
+            aria-label="Your display name"
+          />
+          <span class="you__name-pencil" aria-hidden="true">✎</span>
+          <span class="you__name-status mono" id="me-name-status">click to edit</span>
+        </label>
+        <div class="you__chips">
+          <span class="you__chip" id="me-chip-mood">
+            <span class="mono">MOOD</span>
+            <strong id="me-chip-mood-val">— set a mood</strong>
+          </span>
+          <span class="you__chip" id="me-chip-area">
+            <span class="mono">AREA</span>
+            <strong id="me-chip-area-val">— pick an area</strong>
+          </span>
+          <span class="you__chip" id="me-chip-since">
+            <span class="mono">SINCE</span>
+            <strong id="me-chip-since-val">first visit</strong>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    {/* ──────────── 2. CHECK IN ──────────── */}
+    <section class="me__band checkin" aria-label="Check in">
+      <header class="band__head">
+        <p class="me__eyebrow mono">TODAY</p>
+        <span class="checkin__last mono" id="me-checkin-last">never checked in</span>
+      </header>
+
+      <div class="checkin__row">
+        <div class="checkin__col checkin__col--area">
+          <p class="me__field-label mono">AREA</p>
+          <div class="checkin__chips" role="radiogroup" aria-label="Area">
+            {AREAS.map(a => (
+              <button type="button" class="checkin__chip" data-area={a.slug}>{a.label}</button>
+            ))}
+          </div>
+        </div>
+        <div class="checkin__col checkin__col--mood">
+          <p class="me__field-label mono">MOOD</p>
+          <div class="checkin__chips" role="radiogroup" aria-label="Mood">
+            {MOODS.map(m => (
+              <button type="button" class="checkin__chip checkin__chip--mood" data-mood={m.id} title={m.blurb}>
+                <strong>{m.label}</strong>
+                <span>{m.blurb}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="me-checkin-btn" class="checkin__cta">
+        <span class="checkin__cta-glyph" aria-hidden="true">✓</span>
+        <span class="checkin__cta-label" id="me-checkin-label">CHECK IN</span>
+      </button>
+      <p class="checkin__notice mono" id="me-checkin-notice" hidden role="status" aria-live="polite"></p>
+    </section>
+
+    {/* ──────────── 2b. WHO ELSE IS HERE TODAY ──────────── */}
+    <section class="me__band community" aria-label="Community presence" id="me-community" data-state="loading">
+      <header class="band__head">
+        <p class="me__eyebrow mono">WHO ELSE IS HERE TODAY</p>
+        <span class="community__date mono" id="me-community-date">—</span>
+      </header>
+      <div class="community__row">
+        <div class="community__stat">
+          <strong class="community__num" id="me-community-total">—</strong>
+          <span class="community__label mono">CHECK-IN<span id="me-community-plural">S</span></span>
+        </div>
+        <div class="community__stat community__stat--mood">
+          <span class="community__pill-label mono">TOP MOOD</span>
+          <strong class="community__pill" id="me-community-top-mood">—</strong>
+        </div>
+        <div class="community__stat community__stat--area">
+          <span class="community__pill-label mono">TOP AREA</span>
+          <strong class="community__pill" id="me-community-top-area">—</strong>
+        </div>
+      </div>
+      <p class="community__note mono" id="me-community-note">
+        Aggregated across everyone who checked in today. IPs are hashed daily — no record of who you are, just that someone was here. <a href="/api/checkin">/api/checkin</a> for the live JSON.
+      </p>
+    </section>
+
+    {/* ──────────── 3. STREAK ──────────── */}
+    <section class="me__band streak-band" aria-label="Streak">
+      <p class="me__eyebrow mono">STREAK</p>
+      <StreakBadge variant="full" />
+    </section>
+
+    {/* ──────────── 4. THIS WEEK ──────────── */}
+    <section class="me__band week" aria-label="This week">
+      <header class="band__head">
+        <p class="me__eyebrow mono">THIS WEEK</p>
+        <span class="week__count mono" id="me-week-count">0 check-ins</span>
+      </header>
+      <ol class="week__list" id="me-week-list">
+        <li class="week__empty">
+          You haven't checked in this week yet. Use the card above — it takes a click.
+        </li>
+      </ol>
+    </section>
+
+    {/* ──────────── 5. THINGS YOU'VE MADE ──────────── */}
+    <section class="me__band made" aria-label="Things you have made">
+      <header class="band__head">
+        <p class="me__eyebrow mono">THINGS YOU'VE MADE</p>
+        <a href="/studio" class="band__cta mono">+ NEW IN STUDIO</a>
+      </header>
+      <ol class="made__list" id="me-made-list">
+        <li class="made__empty">
+          You haven't published any Studio compositions on this device yet.
+          <a href="/studio">Open Studio</a> and ship one — they show up here automatically.
+        </li>
+      </ol>
+    </section>
+
+    {/* ──────────── 5.5 INVENTORY ──────────── */}
+    <section class="me__band inv" aria-label="Inventory" id="me-inventory">
+      <header class="band__head">
+        <p class="me__eyebrow mono">INVENTORY · YOUR KIT</p>
+        <span class="inv__count mono" id="me-inv-count" aria-live="polite">0 items</span>
+        <a href="/inventory" class="band__cta mono">FULLER VIEW · /inventory →</a>
+      </header>
+      <p class="inv__dek">
+        Stuff you actually own. Paddles, drums, wheels, houseplants, books — whatever
+        you bring to PointCast. Stored locally only, never sent to a server.
+        Tied into <a href="/paddle-exchange">/paddle-exchange</a> + <a href="/honey-league">/honey-league</a>
+        (paddles), <a href="/houseplants">/houseplants</a> (plants), and the SUSPECT
+        check-in extension.
+      </p>
+
+      {/* Quick-start row — only shown when inventory is empty. */}
+      <div class="inv__quickstarts" id="me-inv-quickstarts" hidden>
+        <p class="inv__quickstart-h mono">QUICK START</p>
+        <button type="button" class="inv__quickstart-btn" data-quickstart="paddles">
+          <span class="mono">+</span> Pickleball paddles
+          <span class="inv__quickstart-blurb">11six24 Vapor 2 · Honolulu JNFK · Gearbox G2 Power · Vatic Prism 14mm</span>
+        </button>
+        <button type="button" class="inv__quickstart-btn" data-quickstart="houseplants">
+          <span class="mono">+</span> A few houseplants
+          <span class="inv__quickstart-blurb">monstera · pothos · snake plant</span>
+        </button>
+      </div>
+
+      {/* Add-item form. */}
+      <form class="inv__add" id="me-inv-add" autocomplete="off">
+        <div class="inv__add-row">
+          <label class="inv__field">
+            <span class="inv__field-label mono">CATEGORY</span>
+            <select class="inv__select" id="inv-add-category" required>
+              <option value="paddles">paddles</option>
+              <option value="drums">drums</option>
+              <option value="wheels">wheels</option>
+              <option value="plants">plants</option>
+              <option value="tech">tech</option>
+              <option value="books">books</option>
+              <option value="other">other</option>
+            </select>
+          </label>
+          <label class="inv__field inv__field--brand">
+            <span class="inv__field-label mono">BRAND</span>
+            <input type="text" class="inv__input" id="inv-add-brand" placeholder="e.g. 11six24" maxlength="40" />
+          </label>
+          <label class="inv__field inv__field--model">
+            <span class="inv__field-label mono">MODEL</span>
+            <input type="text" class="inv__input" id="inv-add-model" placeholder="e.g. Vapor 2" maxlength="60" required />
+          </label>
+        </div>
+        <div class="inv__add-row inv__add-row--bottom">
+          <label class="inv__field inv__field--notes">
+            <span class="inv__field-label mono">NOTES (OPTIONAL)</span>
+            <input type="text" class="inv__input" id="inv-add-notes" placeholder="e.g. 14mm core, lead tape on neck" maxlength="120" />
+          </label>
+          <button type="submit" class="inv__add-btn mono">+ ADD</button>
+        </div>
+      </form>
+
+      {/* Items grouped by category. */}
+      <div class="inv__groups" id="me-inv-groups">
+        <p class="inv__empty">No items yet — add one above, or pick a quick-start.</p>
+      </div>
+    </section>
+
+    {/* ──────────── 5.7 BAR VARIANT (opt-in) ──────────── */}
+    <section class="me__band bar-toggle" aria-label="Bar variant">
+      <p class="me__eyebrow mono">BAR · BETA</p>
+      <div class="bar-toggle__row">
+        <div class="bar-toggle__copy">
+          <p class="bar-toggle__h">Walking bar v6.</p>
+          <p class="bar-toggle__dek">
+            Replaces the v5 dock with a horizontal slice of a pixel-art town —
+            5 buildings, your noun walks, companions follow, pets persist,
+            other visitors' nouns walk in your bar. v5 stays mounted underneath
+            for omnibox + spell casts. Stored in <code>pc:bar:v6</code>.
+          </p>
+        </div>
+        <button type="button" class="bar-toggle__btn mono" id="me-bar-toggle" data-state="off">
+          <span class="bar-toggle__btn-label">OFF</span>
+          <span class="bar-toggle__btn-sub">click to enable</span>
+        </button>
+      </div>
+
+      {/* T2: Ambient audio toggle (the bar's surf layer) */}
+      <div class="bar-toggle__row bar-toggle__row--secondary">
+        <div class="bar-toggle__copy">
+          <p class="bar-toggle__h">Ambient audio.</p>
+          <p class="bar-toggle__dek">
+            Soft procedural surf, a gentle low-passed wash with slow wave
+            swells. Plus a single bell at the top of each hour while you're
+            here. Volume capped low (~0.10). Requires the bar ON above.
+            Stored in <code>pc:bar:audio</code>.
+          </p>
+        </div>
+        <button type="button" class="bar-toggle__btn mono" id="me-bar-audio-toggle" data-state="off">
+          <span class="bar-toggle__btn-label">OFF</span>
+          <span class="bar-toggle__btn-sub">click to enable</span>
+        </button>
+      </div>
+    </section>
+
+    {/* ──────────── 5.8 YOUR TRACES (T7) ──────────── */}
+    <section class="me__band traces" aria-label="Your traces today">
+      <header class="band__head">
+        <p class="me__eyebrow mono">YOUR TRACES · LOCAL TO THIS BROWSER</p>
+        <span class="traces__date mono" id="me-traces-date">today</span>
+      </header>
+      <p class="traces__dek">
+        What you've actually done. Numbers pulled from your local
+        storage — not sent to a server. PointCast pivots from a site
+        you VISIT to a place that remembers what you did.
+      </p>
+      <dl class="traces__grid">
+        <div class="trace">
+          <dt id="me-traces-checkins">0</dt>
+          <dd>check-ins today</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-taps">0</dt>
+          <dd>drum taps · total</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-spells">0</dt>
+          <dd>spells cast · total</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-streak">0</dt>
+          <dd>day streak</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-inventory">0</dt>
+          <dd>items in kit</dd>
+        </div>
+        <div class="trace">
+          <dt id="me-traces-pet">—</dt>
+          <dd>pet (right-click in bar to adopt)</dd>
+        </div>
+      </dl>
+    </section>
+
+    {/* ──────────── 6. QUICK ACTIONS ──────────── */}
+    <section class="me__band actions" aria-label="Quick actions">
+      <p class="me__eyebrow mono">QUICK ACTIONS</p>
+      <div class="actions__grid">
+        <a class="actions__btn" href="/studio">
+          <span class="actions__btn-label">STUDIO</span>
+          <span class="actions__btn-blurb">Make a block</span>
+        </a>
+        <a class="actions__btn" href="/coffee">
+          <span class="actions__btn-label">COFFEE</span>
+          <span class="actions__btn-blurb">Pour a mug</span>
+        </a>
+        <a class="actions__btn" href="/window">
+          <span class="actions__btn-label">WINDOW</span>
+          <span class="actions__btn-blurb">El Segundo right now</span>
+        </a>
+        <a class="actions__btn" href="/drum">
+          <span class="actions__btn-label">DRUM</span>
+          <span class="actions__btn-blurb">Tap, ring, sing</span>
+        </a>
+        <a class="actions__btn" href="/archive">
+          <span class="actions__btn-label">ARCHIVE</span>
+          <span class="actions__btn-blurb">Every block, ever</span>
+        </a>
+        <a class="actions__btn" href="/profile">
+          <span class="actions__btn-label">PROFILE</span>
+          <span class="actions__btn-blurb">Wallet pairings</span>
+        </a>
+      </div>
+    </section>
+
+    {/* ──────────── 7. STATE FOOT ──────────── */}
+    <footer class="me__foot">
+      <p class="mono">
+        Stored in this browser only · localStorage key <code>pc:me:v1</code> ·
+        <button type="button" class="me__reset-btn" id="me-reset-btn">reset everything</button>
+      </p>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ NOUN_MAX, AREAS, MOODS }}>
+(() => {
+  const KEY = 'pc:me:v1';
+  const SCHEMA_VERSION = 1;
+  const FONT_NOUN = 'https://noun.pics';
+
+  function randomNoun(avoid) {
+    let seed = Math.floor(Math.random() * (NOUN_MAX + 1));
+    // If asked to avoid a seed (e.g. on re-shuffle), retry up to 5 times.
+    for (let i = 0; avoid != null && seed === avoid && i < 5; i++) {
+      seed = Math.floor(Math.random() * (NOUN_MAX + 1));
+    }
+    return seed;
+  }
+
+  // ─── Default state for first-timers ─────────────────────────────────────
+  function defaults() {
+    const seed = randomNoun();
+    return {
+      $v: SCHEMA_VERSION,
+      name: '',
+      noun: seed,
+      area: null,
+      mood: null,
+      firstVisitAt: new Date().toISOString(),
+      lastCheckinAt: null,
+      checkins: [], // { at: iso, area: slug, mood: id }
+    };
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return defaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || parsed.$v !== SCHEMA_VERSION) {
+        return defaults();
+      }
+      // Normalize any missing fields against defaults.
+      return Object.assign(defaults(), parsed, { $v: SCHEMA_VERSION });
+    } catch (e) {
+      return defaults();
+    }
+  }
+
+  function save(state) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) { /* private mode etc — ignore */ }
+  }
+
+  let state = load();
+
+  // ─── Mirror to existing keys other components read ───────────────────────
+  // pc:currentNoun is read by the FooterBar and CursorRoom. Keep them in sync
+  // so changing your noun on /me updates the dock and the cursor too.
+  function syncCurrentNoun() {
+    try { localStorage.setItem('pc:currentNoun', String(state.noun)); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('pc:noun-change', { detail: { seed: state.noun } })); } catch (e) {}
+  }
+  // pc:mood is the mood-changed event payload other surfaces listen to.
+  function syncMood() {
+    if (!state.mood) return;
+    try { localStorage.setItem('pc:mood', state.mood); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: state.mood } })); } catch (e) {}
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+  function fmtRelative(iso) {
+    if (!iso) return '—';
+    const now = Date.now();
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return '—';
+    const diff = now - t;
+    const mins = Math.round(diff / 60000);
+    if (mins < 1)   return 'just now';
+    if (mins < 60)  return mins + 'm ago';
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24)   return hrs + 'h ago';
+    const days = Math.round(hrs / 24);
+    if (days < 30)  return days + 'd ago';
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+  function fmtDay(iso) {
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+  function findArea(slug) { return AREAS.find(a => a.slug === slug); }
+  function findMood(id)   { return MOODS.find(m => m.id === id); }
+
+  function render() {
+    // Title bar
+    const name = (state.name || '').trim() || 'visitor';
+    const titleEl = document.getElementById('me-title');
+    if (titleEl) titleEl.textContent = name === 'visitor' ? 'Hello, visitor.' : 'Hello, ' + name + '.';
+
+    // YOU card
+    const nounImg = document.getElementById('me-noun-img');
+    if (nounImg) {
+      nounImg.src = FONT_NOUN + '/' + state.noun + '.svg';
+      nounImg.alt = 'Noun #' + state.noun;
+    }
+    const nameInput = document.getElementById('me-name-input');
+    if (nameInput && document.activeElement !== nameInput) nameInput.value = state.name || '';
+    const nameStatus = document.getElementById('me-name-status');
+    if (nameStatus) nameStatus.textContent = state.name ? 'click to edit' : 'click to give yourself a name';
+
+    const moodChip = document.getElementById('me-chip-mood-val');
+    if (moodChip) {
+      const m = findMood(state.mood);
+      moodChip.textContent = m ? m.label + ' · ' + m.blurb : '— set a mood';
+    }
+    const areaChip = document.getElementById('me-chip-area-val');
+    if (areaChip) {
+      const a = findArea(state.area);
+      areaChip.textContent = a ? a.label : '— pick an area';
+    }
+    const sinceChip = document.getElementById('me-chip-since-val');
+    if (sinceChip) {
+      sinceChip.textContent = state.firstVisitAt
+        ? fmtDay(state.firstVisitAt)
+        : 'first visit';
+    }
+
+    // Check-in card — selected state
+    document.querySelectorAll('[data-area]').forEach(b => {
+      b.classList.toggle('is-active', b.getAttribute('data-area') === state.area);
+    });
+    document.querySelectorAll('[data-mood]').forEach(b => {
+      b.classList.toggle('is-active', b.getAttribute('data-mood') === state.mood);
+    });
+    const checkinLast = document.getElementById('me-checkin-last');
+    if (checkinLast) {
+      checkinLast.textContent = state.lastCheckinAt
+        ? 'last check-in ' + fmtRelative(state.lastCheckinAt)
+        : 'never checked in';
+    }
+    // CTA reflects today / not today
+    const checkinLabel = document.getElementById('me-checkin-label');
+    const checkedInToday = state.lastCheckinAt && fmtDay(state.lastCheckinAt) === todayStr();
+    if (checkinLabel) {
+      checkinLabel.textContent = checkedInToday
+        ? 'CHECKED IN TODAY · UPDATE'
+        : 'CHECK IN';
+    }
+
+    // This week
+    const weekList = document.getElementById('me-week-list');
+    const weekCountEl = document.getElementById('me-week-count');
+    if (weekList) {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const recent = (state.checkins || []).filter(c => new Date(c.at).getTime() >= sevenDaysAgo);
+      if (weekCountEl) weekCountEl.textContent = recent.length + ' check-in' + (recent.length === 1 ? '' : 's');
+      weekList.innerHTML = '';
+      if (recent.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'week__empty';
+        li.textContent = "You haven't checked in this week yet. Use the card above — it takes a click.";
+        weekList.appendChild(li);
+      } else {
+        for (const c of recent) {
+          const li = document.createElement('li');
+          li.className = 'week__row';
+          const a = findArea(c.area);
+          const m = findMood(c.mood);
+          li.innerHTML = '<time class="mono">' + fmtDay(c.at) + '</time>' +
+            '<span class="mono week__row-area">' + (a ? a.label : '—') + '</span>' +
+            '<span class="mono week__row-mood">' + (m ? m.label : '—') + '</span>' +
+            '<span class="mono week__row-rel">' + fmtRelative(c.at) + '</span>';
+          weekList.appendChild(li);
+        }
+      }
+    }
+
+    // Things you've made — from pc:studio:published
+    const madeList = document.getElementById('me-made-list');
+    if (madeList) {
+      let pubs = [];
+      try {
+        const raw = localStorage.getItem('pc:studio:published');
+        pubs = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(pubs)) pubs = [];
+      } catch (e) {}
+      madeList.innerHTML = '';
+      if (pubs.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'made__empty';
+        li.innerHTML = "You haven't published any Studio compositions on this device yet. <a href=\"/studio\">Open Studio</a> and ship one — they show up here automatically.";
+        madeList.appendChild(li);
+      } else {
+        for (const p of pubs.slice(0, 12)) {
+          const li = document.createElement('li');
+          li.className = 'made__row';
+          li.innerHTML = '<a href="/studio/share/' + p.id + '" class="made__link">' +
+            '<span class="mono made__id">' + p.id + '</span>' +
+            '<span class="made__title">' + (p.title || p.tpl || 'untitled') + '</span>' +
+            '<span class="mono made__rel">' + fmtRelative(p.at) + '</span>' +
+            '</a>';
+          madeList.appendChild(li);
+        }
+      }
+    }
+  }
+
+  // ─── Event wiring ────────────────────────────────────────────────────────
+  document.getElementById('me-shuffle-noun')?.addEventListener('click', () => {
+    state.noun = randomNoun(state.noun);
+    save(state);
+    syncCurrentNoun();
+    render();
+  });
+
+  document.getElementById('me-name-input')?.addEventListener('input', e => {
+    state.name = e.target.value.slice(0, 40);
+    save(state);
+    // Don't re-render — would fight focus.
+    const titleEl = document.getElementById('me-title');
+    if (titleEl) titleEl.textContent = state.name.trim() ? 'Hello, ' + state.name.trim() + '.' : 'Hello, visitor.';
+  });
+  document.getElementById('me-name-input')?.addEventListener('blur', render);
+
+  document.querySelectorAll('[data-area]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.area = btn.getAttribute('data-area');
+      save(state);
+      render();
+    });
+  });
+  document.querySelectorAll('[data-mood]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mood = btn.getAttribute('data-mood');
+      save(state);
+      syncMood();
+      render();
+    });
+  });
+
+  document.getElementById('me-checkin-btn')?.addEventListener('click', async () => {
+    if (!state.area || !state.mood) {
+      const notice = document.getElementById('me-checkin-notice');
+      if (notice) {
+        notice.textContent = 'pick an area + a mood first';
+        notice.hidden = false;
+        setTimeout(() => { notice.hidden = true; }, 2400);
+      }
+      return;
+    }
+    const now = new Date().toISOString();
+    const today = fmtDay(now);
+    // De-dupe to one check-in per day — replace today's entry if it exists.
+    const others = (state.checkins || []).filter(c => fmtDay(c.at) !== today);
+    state.checkins = [{ at: now, area: state.area, mood: state.mood }, ...others].slice(0, 30);
+    state.lastCheckinAt = now;
+    save(state);
+    render();
+
+    // Fire-and-forget POST to the community aggregate. Failures are
+    // silent — the local check-in already succeeded; community presence
+    // is bonus signal.
+    try {
+      const r = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: state.area, mood: state.mood }),
+      });
+      const data = await r.json().catch(() => null);
+      if (data?.today) renderCommunity(data.today);
+    } catch (e) { /* offline / blocked / 503 — skip */ }
+
+    // Touch the streak too — StreakBadge reads pc_streak on its own load,
+    // but a same-session check-in shouldn't be a no-op. The badge inits on
+    // page load; we ping its display by triggering a refresh of the
+    // existing pc_streak value if it's already today.
+    try {
+      const raw = localStorage.getItem('pc_streak');
+      const s = raw ? JSON.parse(raw) : null;
+      if (!s || s.lastVisit !== today) {
+        // Defer to StreakBadge's own logic on next page nav.
+      }
+    } catch (e) {}
+
+    const notice = document.getElementById('me-checkin-notice');
+    if (notice) {
+      const a = findArea(state.area);
+      const m = findMood(state.mood);
+      notice.textContent = '✓ checked in · ' + (a ? a.label : '') + ' · ' + (m ? m.label : '');
+      notice.hidden = false;
+      setTimeout(() => { notice.hidden = true; }, 3200);
+    }
+  });
+
+  document.getElementById('me-reset-btn')?.addEventListener('click', () => {
+    if (!confirm('Reset your /me state? This clears name, mood, area, and check-in history. Your wallet pairings on /profile are NOT touched.')) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    state = load();
+    save(state);
+    render();
+  });
+
+  // ─── Community presence ─────────────────────────────────────────────────
+  const AREA_LABELS = AREAS.reduce((m, a) => (m[a.slug] = a.label, m), {});
+  const MOOD_LABELS = MOODS.reduce((m, x) => (m[x.id] = x.label, m), {});
+
+  function renderCommunity(today) {
+    const root = document.getElementById('me-community');
+    if (!root) return;
+    if (!today) {
+      root.dataset.state = 'unavailable';
+      const note = document.getElementById('me-community-note');
+      if (note) note.textContent = 'Community aggregates unavailable right now — your local check-in still saved.';
+      return;
+    }
+    const total = Number(today.total) || 0;
+    const totalEl = document.getElementById('me-community-total');
+    if (totalEl) totalEl.textContent = String(total);
+    const plural = document.getElementById('me-community-plural');
+    if (plural) plural.textContent = total === 1 ? '' : 'S';
+    const dateEl = document.getElementById('me-community-date');
+    if (dateEl) dateEl.textContent = today.date || '—';
+    const moodEl = document.getElementById('me-community-top-mood');
+    if (moodEl) moodEl.textContent = today.topMood ? (MOOD_LABELS[today.topMood] || today.topMood) : '—';
+    const areaEl = document.getElementById('me-community-top-area');
+    if (areaEl) areaEl.textContent = today.topArea ? (AREA_LABELS[today.topArea] || today.topArea) : '—';
+    root.dataset.state = total > 0 ? 'live' : 'empty';
+  }
+
+  async function fetchCommunity() {
+    try {
+      const r = await fetch('/api/checkin', { method: 'GET' });
+      if (!r.ok) { renderCommunity(null); return; }
+      const data = await r.json();
+      renderCommunity(data?.today);
+    } catch (e) { renderCommunity(null); }
+  }
+
+  // ─── Inventory ─────────────────────────────────────────────────────────
+  // Separate localStorage key (pc:inventory:v1) so it doesn't bloat pc:me:v1.
+  // Schema is intentionally simple: a flat array of items grouped by category
+  // at render time. Categories aren't enforced at storage time — strings come
+  // from the form's <select>, but loosely-typed so future agents can add
+  // their own without a migration.
+  const INV_KEY = 'pc:inventory:v1';
+  const INV_VERSION = 1;
+  const INV_CATEGORIES = ['paddles', 'drums', 'wheels', 'plants', 'tech', 'books', 'other'];
+  const QUICKSTARTS = {
+    paddles: [
+      { brand: '11six24',  model: 'Vapor 2',     notes: '' },
+      { brand: 'Honolulu', model: 'JNFK',        notes: '' },
+      { brand: 'Gearbox',  model: 'G2 Power',    notes: '' },
+      { brand: 'Vatic',    model: 'Prism 14mm',  notes: '' },
+    ],
+    houseplants: [
+      { category: 'plants', brand: '',          model: 'Monstera deliciosa', notes: '' },
+      { category: 'plants', brand: '',          model: 'Pothos',             notes: '' },
+      { category: 'plants', brand: '',          model: 'Snake plant',        notes: '' },
+    ],
+  };
+
+  function invDefaults() {
+    return { $v: INV_VERSION, items: [] };
+  }
+
+  function invLoad() {
+    try {
+      const raw = localStorage.getItem(INV_KEY);
+      if (!raw) return invDefaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || parsed.$v !== INV_VERSION) {
+        return invDefaults();
+      }
+      return Object.assign(invDefaults(), parsed, { $v: INV_VERSION });
+    } catch (e) {
+      return invDefaults();
+    }
+  }
+
+  function invSave(inv) {
+    try { localStorage.setItem(INV_KEY, JSON.stringify(inv)); } catch (e) {}
+  }
+
+  function invMakeId() {
+    return 'i-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  }
+
+  let inv = invLoad();
+
+  function invAdd(item) {
+    const norm = {
+      id: invMakeId(),
+      category: (item.category || 'other').toLowerCase(),
+      brand: (item.brand || '').trim(),
+      model: (item.model || '').trim(),
+      notes: (item.notes || '').trim(),
+      addedAt: new Date().toISOString(),
+    };
+    if (!norm.model) return false;
+    inv.items.push(norm);
+    invSave(inv);
+    invRender();
+    return true;
+  }
+
+  function invRemove(id) {
+    inv.items = inv.items.filter(i => i.id !== id);
+    invSave(inv);
+    invRender();
+  }
+
+  function invQuickstart(kind) {
+    const seeds = QUICKSTARTS[kind];
+    if (!seeds || !seeds.length) return;
+    const defaultCategory = kind === 'paddles' ? 'paddles' : 'plants';
+    for (const s of seeds) {
+      invAdd({
+        category: s.category || defaultCategory,
+        brand: s.brand,
+        model: s.model,
+        notes: s.notes,
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function invRender() {
+    const groupsEl = document.getElementById('me-inv-groups');
+    const countEl = document.getElementById('me-inv-count');
+    const quickstartsEl = document.getElementById('me-inv-quickstarts');
+    if (!groupsEl) return;
+
+    if (countEl) {
+      const n = inv.items.length;
+      countEl.textContent = n + (n === 1 ? ' item' : ' items');
+    }
+
+    if (quickstartsEl) quickstartsEl.hidden = inv.items.length > 0;
+
+    if (!inv.items.length) {
+      groupsEl.innerHTML = '<p class="inv__empty">No items yet — add one above, or pick a quick-start.</p>';
+      return;
+    }
+
+    // Group by category, preserving INV_CATEGORIES order; unknown categories
+    // come last alphabetically.
+    const byCat = {};
+    for (const item of inv.items) {
+      const c = item.category || 'other';
+      if (!byCat[c]) byCat[c] = [];
+      byCat[c].push(item);
+    }
+    const orderedCats = INV_CATEGORIES.filter(c => byCat[c]);
+    const otherCats = Object.keys(byCat).filter(c => !INV_CATEGORIES.includes(c)).sort();
+    const cats = orderedCats.concat(otherCats);
+
+    let html = '';
+    for (const cat of cats) {
+      const items = byCat[cat];
+      html += '<section class="inv__group">';
+      html += '<header class="inv__group-head"><h3 class="mono inv__group-label">' + escapeHtml(cat) + '</h3>';
+      html += '<span class="inv__group-count mono">' + items.length + '</span></header>';
+      html += '<ul class="inv__list">';
+      for (const item of items) {
+        const display = item.brand
+          ? '<span class="inv__brand">' + escapeHtml(item.brand) + '</span> <span class="inv__model">' + escapeHtml(item.model) + '</span>'
+          : '<span class="inv__model">' + escapeHtml(item.model) + '</span>';
+        html += '<li class="inv__row">';
+        html += '<div class="inv__row-main">' + display;
+        if (item.notes) html += '<p class="inv__notes">' + escapeHtml(item.notes) + '</p>';
+        html += '</div>';
+        html += '<button type="button" class="inv__remove" data-remove="' + escapeHtml(item.id) + '" aria-label="Remove ' + escapeHtml(item.brand + ' ' + item.model) + '">×</button>';
+        html += '</li>';
+      }
+      html += '</ul>';
+      html += '</section>';
+    }
+    groupsEl.innerHTML = html;
+
+    // Wire up remove buttons.
+    groupsEl.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => invRemove(btn.getAttribute('data-remove')));
+    });
+  }
+
+  // Form wiring.
+  document.getElementById('me-inv-add')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const catEl = document.getElementById('inv-add-category');
+    const brandEl = document.getElementById('inv-add-brand');
+    const modelEl = document.getElementById('inv-add-model');
+    const notesEl = document.getElementById('inv-add-notes');
+    if (!modelEl?.value.trim()) {
+      modelEl?.focus();
+      return;
+    }
+    const ok = invAdd({
+      category: catEl?.value || 'other',
+      brand: brandEl?.value || '',
+      model: modelEl?.value || '',
+      notes: notesEl?.value || '',
+    });
+    if (ok) {
+      if (brandEl) brandEl.value = '';
+      if (modelEl) modelEl.value = '';
+      if (notesEl) notesEl.value = '';
+      modelEl?.focus();
+    }
+  });
+
+  document.querySelectorAll('[data-quickstart]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const kind = btn.getAttribute('data-quickstart');
+      if (kind) invQuickstart(kind);
+    });
+  });
+
+  invRender();
+
+  // ─── Walking-bar v6 opt-in toggle ───────────────────────────────────
+  // Reads/writes pc:bar:v6 = 'on' | 'off' (or unset). When 'on', the
+  // global FooterBarV6 (mounted in BlockLayout) becomes visible.
+  const BAR_KEY = 'pc:bar:v6';
+  const barBtn = document.getElementById('me-bar-toggle');
+  function paintBarToggle() {
+    if (!barBtn) return;
+    let on = false;
+    try { on = localStorage.getItem(BAR_KEY) === 'on'; } catch (e) {}
+    barBtn.dataset.state = on ? 'on' : 'off';
+    const lbl = barBtn.querySelector('.bar-toggle__btn-label');
+    const sub = barBtn.querySelector('.bar-toggle__btn-sub');
+    if (lbl) lbl.textContent = on ? 'ON' : 'OFF';
+    if (sub) sub.textContent = on ? 'click to disable' : 'click to enable';
+    if (on) document.documentElement.classList.add('bar-v6-on');
+    else    document.documentElement.classList.remove('bar-v6-on');
+  }
+  barBtn?.addEventListener('click', () => {
+    let on = false;
+    try { on = localStorage.getItem(BAR_KEY) === 'on'; } catch (e) {}
+    const next = !on;
+    try { localStorage.setItem(BAR_KEY, next ? 'on' : 'off'); } catch (e) {}
+    paintBarToggle();
+  });
+  paintBarToggle();
+
+  // T2: Ambient audio toggle — pc:bar:audio = on | off. Dispatches a
+  // pc:bar:audio-change CustomEvent so FooterBarV6 (which owns the
+  // AudioContext) can start/stop without re-reading localStorage.
+  const AUDIO_KEY = 'pc:bar:audio';
+  const audioBtn = document.getElementById('me-bar-audio-toggle');
+  function paintAudioToggle() {
+    if (!audioBtn) return;
+    let on = false;
+    try { on = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
+    audioBtn.dataset.state = on ? 'on' : 'off';
+    const lbl = audioBtn.querySelector('.bar-toggle__btn-label');
+    const sub = audioBtn.querySelector('.bar-toggle__btn-sub');
+    if (lbl) lbl.textContent = on ? 'ON' : 'OFF';
+    if (sub) sub.textContent = on ? 'click to disable' : 'click to enable';
+  }
+  audioBtn?.addEventListener('click', () => {
+    let on = false;
+    try { on = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
+    const next = !on;
+    try { localStorage.setItem(AUDIO_KEY, next ? 'on' : 'off'); } catch (e) {}
+    paintAudioToggle();
+    // Fire a custom event so FooterBarV6 can react immediately (start
+    // the AudioContext now — we're still inside the click handler, so
+    // browsers honor the user-gesture autoplay rule).
+    window.dispatchEvent(new CustomEvent('pc:bar:audio-change', { detail: { on: next } }));
+  });
+  paintAudioToggle();
+
+  // ─── T7: YOUR TRACES ───────────────────────────────────────────────
+  // Reads existing local storage keys to surface what you've actually
+  // done. Real-time updates when you check in or cast a spell on
+  // this page (other pages contribute via their own writes, picked up
+  // on next visit).
+  function paintTraces() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dateEl = document.getElementById('me-traces-date');
+    if (dateEl) dateEl.textContent = todayStr;
+
+    // Check-ins today — from pc:me:v1.checkins
+    const checkinsEl = document.getElementById('me-traces-checkins');
+    if (checkinsEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc:me:v1');
+        if (raw) {
+          const me = JSON.parse(raw);
+          const list = Array.isArray(me?.checkins) ? me.checkins : [];
+          for (const c of list) {
+            if (typeof c?.at === 'string' && c.at.slice(0, 10) === todayStr) n++;
+          }
+        }
+      } catch (e) {}
+      checkinsEl.textContent = String(n);
+    }
+
+    // Drum taps total — pc:drumLocalCount
+    const tapsEl = document.getElementById('me-traces-taps');
+    if (tapsEl) {
+      let n = 0;
+      try { n = Number(localStorage.getItem('pc:drumLocalCount')) || 0; } catch (e) {}
+      tapsEl.textContent = String(n);
+    }
+
+    // Spells cast total — pc:spells:total (incremented below on event)
+    const spellsEl = document.getElementById('me-traces-spells');
+    if (spellsEl) {
+      let n = 0;
+      try { n = Number(localStorage.getItem('pc:spells:total')) || 0; } catch (e) {}
+      spellsEl.textContent = String(n);
+    }
+
+    // Day streak — pc_streak.current
+    const streakEl = document.getElementById('me-traces-streak');
+    if (streakEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc_streak');
+        if (raw) {
+          const s = JSON.parse(raw);
+          n = Number(s?.current) || 0;
+        }
+      } catch (e) {}
+      streakEl.textContent = String(n);
+    }
+
+    // Inventory items — pc:inventory:v1.items.length
+    const invEl = document.getElementById('me-traces-inventory');
+    if (invEl) {
+      let n = 0;
+      try {
+        const raw = localStorage.getItem('pc:inventory:v1');
+        if (raw) {
+          const inv = JSON.parse(raw);
+          n = Array.isArray(inv?.items) ? inv.items.length : 0;
+        }
+      } catch (e) {}
+      invEl.textContent = String(n);
+    }
+
+    // Pet — pc:pet:v1.pet.name + emoji
+    const petEl = document.getElementById('me-traces-pet');
+    if (petEl) {
+      let label = '—';
+      try {
+        const raw = localStorage.getItem('pc:pet:v1');
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p?.pet?.name) {
+            label = (p.pet.emoji || '🐾') + ' ' + p.pet.name;
+          }
+        }
+      } catch (e) {}
+      petEl.textContent = label;
+    }
+  }
+
+  // Increment spell counter when spells fire (this page or elsewhere).
+  window.addEventListener('pc:spell:cast', () => {
+    try {
+      const cur = Number(localStorage.getItem('pc:spells:total')) || 0;
+      localStorage.setItem('pc:spells:total', String(cur + 1));
+    } catch (e) {}
+    paintTraces();
+  });
+
+  paintTraces();
+
+  // Initial paint
+  syncCurrentNoun();
+  render();
+  fetchCommunity();
+})();
+</script>
+
+<style>
+  .me2027 {
+    max-width: 980px; margin: 0 auto; padding: 24px 20px 80px;
+    font-family: var(--font-body);
+  }
+
+  /* HERO */
+  .me__hero { margin: 0 0 28px; padding: 24px 0 24px; border-bottom: 1.5px solid var(--color-rule); }
+  .me__crumb {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--color-ink-soft); text-transform: uppercase; margin: 0 0 14px;
+  }
+  .me__crumb a { color: var(--color-ink-soft); text-decoration: none; }
+  .me__crumb a:hover { color: var(--color-ink); }
+  .me__crumb span { margin: 0 6px; }
+  .me__kicker {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--color-warm); text-transform: uppercase; margin: 0 0 12px;
+  }
+  .me__title {
+    font-family: var(--font-heading);
+    font-size: clamp(36px, 5vw, 60px); line-height: 1.05;
+    font-weight: 600; letter-spacing: -0.02em; margin: 0 0 14px;
+    color: var(--color-ink);
+  }
+  .me__dek {
+    font-family: var(--font-serif);
+    font-size: clamp(15px, 1.3vw, 18px); line-height: 1.5;
+    color: var(--color-ink-soft); max-width: 680px; margin: 0;
+  }
+  .me__profile-link { color: var(--color-warm); text-decoration: none; }
+  .me__profile-link:hover { text-decoration: underline; }
+
+  /* BANDS */
+  .me__band { margin: 0 0 36px; padding: 20px; background: var(--color-card); border: 1.5px solid var(--color-rule); border-radius: 3px; }
+  .band__head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin: 0 0 14px;
+  }
+  .me__eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; color: var(--color-warm);
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .band__cta {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--color-ink-soft); text-transform: uppercase; text-decoration: none;
+    padding: 4px 8px; border: 1px solid var(--color-rule); border-radius: 2px;
+  }
+  .band__cta:hover { color: var(--color-ink); border-color: var(--color-ink); }
+  .me__field-label {
+    font-size: 10px; letter-spacing: 0.16em; color: var(--color-ink-soft);
+    text-transform: uppercase; margin: 0 0 8px;
+  }
+
+  /* YOU CARD */
+  .you {
+    display: grid; grid-template-columns: 180px 1fr; gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 600px) { .you { grid-template-columns: 1fr; } }
+  .you__noun-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .you__noun {
+    width: 160px; height: 160px;
+    background: #1a1004; border-radius: 4px;
+    image-rendering: pixelated;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+  .you__noun-shuffle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border: 1.5px solid var(--color-rule);
+    background: #fff; cursor: pointer; border-radius: 2px;
+    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+  }
+  .you__noun-shuffle:hover { border-color: var(--color-warm); color: var(--color-ink); }
+  .you__body { min-width: 0; }
+  /* Mike 2026-05-08: "click to name doesn't seem to be working." The
+     row is now a <label for=me-name-input> so any click in the row
+     focuses the input. The input itself shows a dashed underline by
+     default so it's obviously editable, plus a pencil glyph to
+     reinforce. Solid underline on focus; warm on focus. */
+  .you__name-row {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin: 0 0 14px;
+    cursor: text;
+  }
+  .you__name-input {
+    font-family: var(--font-heading); font-size: clamp(28px, 4vw, 40px);
+    font-weight: 600; letter-spacing: -0.01em;
+    background: none;
+    /* Explicit per-side border so Tailwind preflight's "border: 0 solid"
+       reset doesn't squash our dashed underline. */
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom-width: 1.5px;
+    border-bottom-style: dashed;
+    border-bottom-color: var(--color-rule);
+    padding: 2px 0;
+    outline: 0; color: var(--color-ink);
+    transition: border-bottom-color 0.12s, border-bottom-style 0.12s;
+    min-width: 240px; max-width: 100%; flex: 1 1 240px;
+  }
+  .you__name-input::placeholder { color: var(--color-ink-soft); opacity: 0.55; font-weight: 400; }
+  .you__name-input:hover { border-bottom-color: var(--color-warm); }
+  .you__name-input:focus {
+    border-bottom-style: solid;
+    border-bottom-color: var(--color-warm);
+  }
+  .you__name-pencil {
+    font-size: 16px; color: var(--color-ink-soft);
+    transition: color 0.12s;
+  }
+  .you__name-row:hover .you__name-pencil,
+  .you__name-row:focus-within .you__name-pencil { color: var(--color-warm); }
+  .you__name-status {
+    font-size: 10px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .you__name-row:focus-within .you__name-status { color: var(--color-warm); }
+  .you__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .you__chip {
+    display: inline-flex; align-items: baseline; gap: 8px;
+    padding: 6px 10px; border: 1px solid var(--color-rule);
+    background: #fff; border-radius: 2px;
+    font-size: 13px;
+  }
+  .you__chip span { font-size: 9px; letter-spacing: 0.16em; color: var(--color-ink-soft); }
+  .you__chip strong { font-weight: 500; color: var(--color-ink); }
+
+  /* CHECK IN */
+  .checkin__last { font-size: 11px; color: var(--color-ink-soft); }
+  .checkin__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 16px; }
+  @media (max-width: 720px) { .checkin__row { grid-template-columns: 1fr; } }
+  .checkin__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .checkin__chip {
+    padding: 6px 10px; border: 1.5px solid var(--color-rule);
+    background: #fff; cursor: pointer; border-radius: 2px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--color-ink);
+  }
+  .checkin__chip:hover { border-color: var(--color-warm); }
+  .checkin__chip.is-active {
+    background: var(--color-ink); color: #fff; border-color: var(--color-ink);
+  }
+  .checkin__chip--mood {
+    display: flex; flex-direction: column; align-items: flex-start;
+    padding: 8px 12px; line-height: 1.2; gap: 2px;
+  }
+  .checkin__chip--mood strong { font-size: 11px; letter-spacing: 0.14em; }
+  .checkin__chip--mood span { font-size: 10px; text-transform: none; letter-spacing: 0; color: var(--color-ink-soft); font-family: var(--font-body); }
+  .checkin__chip--mood.is-active span { color: rgba(255,255,255,0.75); }
+  .checkin__cta {
+    width: 100%; padding: 14px;
+    background: var(--color-warm); color: #fff; border: none;
+    cursor: pointer; border-radius: 3px;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.16em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background 0.12s;
+  }
+  .checkin__cta:hover { background: var(--color-ink); }
+  .checkin__cta-glyph { font-size: 16px; }
+  .checkin__notice {
+    margin: 10px 0 0; font-size: 11px; letter-spacing: 0.1em; color: var(--color-warm);
+  }
+
+  /* COMMUNITY */
+  .community__date { font-size: 11px; letter-spacing: 0.14em; color: var(--color-ink-soft); }
+  .community__row {
+    display: grid; grid-template-columns: auto 1fr 1fr; gap: 24px;
+    align-items: end; margin: 0 0 12px;
+  }
+  @media (max-width: 600px) { .community__row { grid-template-columns: 1fr; gap: 12px; } }
+  .community__stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .community__num {
+    font-family: var(--font-heading); font-size: 56px; font-weight: 600;
+    line-height: 1; color: var(--color-ink); letter-spacing: -0.02em;
+  }
+  .community__label {
+    font-size: 10px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .community__pill-label {
+    font-size: 9px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .community__pill {
+    display: inline-block; padding: 6px 12px;
+    /* Hex literals: Tailwind v4 @theme defines --color-* tokens for the
+       UTILITY class generator but doesn't always emit them as runtime
+       :root vars usable with var(). Hardcode here so the pill bgs are
+       visible. Brand-stable values from src/styles/global.css. */
+    background-color: #1f1b15; color: #fff;
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em;
+    border-radius: 2px; font-weight: 500;
+  }
+  .community__stat--mood .community__pill { background-color: #c4952e; }
+  .community__stat--area .community__pill { background-color: #1b3a5b; }
+  .community__note {
+    font-size: 11px; color: var(--color-ink-soft);
+    margin: 0; line-height: 1.55;
+  }
+  .community__note a { color: var(--color-warm); }
+
+  .community[data-state='loading'] .community__num { opacity: 0.4; }
+  .community[data-state='unavailable'] .community__pill { opacity: 0.4; }
+  .community[data-state='empty'] .community__pill { opacity: 0.4; }
+
+  /* WEEK */
+  .week__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .week__row {
+    display: grid; grid-template-columns: 100px 1fr 100px 100px; gap: 12px;
+    align-items: baseline; padding: 8px 12px;
+    border: 1px solid var(--color-rule); background: #fff; border-radius: 2px;
+    font-size: 12px;
+  }
+  .week__row time, .week__row-area, .week__row-mood, .week__row-rel { font-size: 11px; }
+  .week__row-area { color: var(--color-warm); letter-spacing: 0.12em; }
+  .week__row-mood { color: var(--color-accent); letter-spacing: 0.12em; }
+  .week__row-rel { color: var(--color-ink-soft); justify-self: end; }
+  @media (max-width: 600px) { .week__row { grid-template-columns: 1fr 1fr; } .week__row time, .week__row-rel { grid-column: span 2; } }
+  .week__empty { font-size: 13px; color: var(--color-ink-soft); padding: 8px 12px; }
+  .week__count { font-size: 11px; color: var(--color-ink-soft); }
+
+  /* MADE */
+  .made__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .made__row { background: #fff; border: 1px solid var(--color-rule); border-radius: 2px; }
+  .made__link {
+    display: grid; grid-template-columns: 130px 1fr 80px; gap: 12px;
+    align-items: baseline; padding: 8px 12px; color: var(--color-ink); text-decoration: none;
+  }
+  .made__link:hover { background: var(--color-card-hover); }
+  .made__id { font-size: 10px; color: var(--color-ink-soft); letter-spacing: 0.06em; }
+  .made__title { font-size: 13px; }
+  .made__rel { font-size: 10px; color: var(--color-ink-soft); justify-self: end; }
+  .made__empty { padding: 8px 12px; font-size: 13px; color: var(--color-ink-soft); }
+  .made__empty a { color: var(--color-warm); }
+
+  /* INVENTORY */
+  .inv__count {
+    font-size: 11px; letter-spacing: 0.14em; color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .inv__dek {
+    font-size: 13px; line-height: 1.5; color: var(--color-ink-soft);
+    margin: 0 0 16px; max-width: 680px;
+  }
+  .inv__dek a { color: var(--color-warm); text-decoration: none; }
+  .inv__dek a:hover { text-decoration: underline; }
+
+  .inv__quickstarts {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px;
+    padding: 12px; background: #fbf7ee;
+    border: 1px dashed var(--color-rule); border-radius: 3px;
+  }
+  .inv__quickstart-h {
+    flex-basis: 100%; font-size: 10px; letter-spacing: 0.18em; color: var(--color-warm);
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .inv__quickstart-btn {
+    flex: 1 1 240px; min-width: 0; text-align: left; padding: 10px 12px;
+    background: #fff; border: 1.5px solid var(--color-rule); border-left: 3px solid var(--color-warm);
+    border-radius: 2px; cursor: pointer; font-family: inherit; color: var(--color-ink);
+    font-size: 13px; line-height: 1.4;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .inv__quickstart-btn:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .inv__quickstart-btn .mono { color: var(--color-warm); margin-right: 4px; font-weight: 700; }
+  .inv__quickstart-blurb {
+    display: block; margin-top: 4px; font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.06em; color: var(--color-ink-soft);
+  }
+
+  .inv__add { margin: 0 0 18px; }
+  .inv__add-row {
+    display: grid; grid-template-columns: 130px 1fr 1.5fr; gap: 10px;
+    margin: 0 0 10px;
+  }
+  .inv__add-row--bottom {
+    grid-template-columns: 1fr 110px;
+  }
+  .inv__field { display: flex; flex-direction: column; min-width: 0; }
+  .inv__field-label {
+    font-size: 9px; letter-spacing: 0.18em; color: var(--color-ink-soft);
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .inv__select, .inv__input {
+    width: 100%; padding: 8px 10px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule); border-radius: 2px;
+    font-family: inherit; font-size: 13px; color: var(--color-ink);
+  }
+  .inv__select:focus, .inv__input:focus {
+    outline: none; border-color: var(--color-warm);
+  }
+  .inv__add-btn {
+    align-self: flex-end; padding: 9px 14px;
+    background: var(--color-ink); color: #fff;
+    border: 1.5px solid var(--color-ink); border-radius: 2px;
+    font-size: 11px; letter-spacing: 0.16em; font-weight: 700;
+    cursor: pointer; transition: background 0.12s;
+  }
+  .inv__add-btn:hover { background: var(--color-warm); border-color: var(--color-warm); }
+
+  .inv__empty {
+    padding: 12px 14px; font-size: 13px; color: var(--color-ink-soft);
+    text-align: center;
+    border: 1px dashed var(--color-rule); border-radius: 2px;
+    margin: 0;
+  }
+
+  .inv__group { margin: 0 0 16px; }
+  .inv__group:last-child { margin-bottom: 0; }
+  .inv__group-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0; margin: 0 0 6px;
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .inv__group-label {
+    font-size: 11px; letter-spacing: 0.2em; font-weight: 700;
+    color: var(--color-ink); text-transform: uppercase; margin: 0;
+  }
+  .inv__group-count {
+    font-size: 10px; color: var(--color-ink-soft); letter-spacing: 0.1em;
+  }
+  .inv__list { list-style: none; padding: 0; margin: 0; }
+  .inv__row {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px dashed var(--color-rule);
+  }
+  .inv__row:last-child { border-bottom: 0; }
+  .inv__row-main { min-width: 0; }
+  .inv__brand {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-warm); font-weight: 700; text-transform: uppercase;
+  }
+  .inv__model {
+    font-size: 14px; color: var(--color-ink); font-weight: 600;
+    margin-left: 4px;
+  }
+  .inv__notes {
+    font-size: 12px; line-height: 1.4; color: var(--color-ink-soft);
+    margin: 2px 0 0;
+  }
+  .inv__remove {
+    width: 22px; height: 22px;
+    background: transparent; border: 1px solid var(--color-rule); border-radius: 2px;
+    color: var(--color-ink-soft); cursor: pointer; font-size: 14px; line-height: 1;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .inv__remove:hover { color: #c0392b; border-color: #c0392b; }
+
+  @media (max-width: 600px) {
+    .inv__add-row { grid-template-columns: 1fr; }
+    .inv__add-row--bottom { grid-template-columns: 1fr; }
+    .inv__add-btn { width: 100%; }
+  }
+
+  /* BAR TOGGLE (v6 opt-in) */
+  .bar-toggle__row {
+    display: grid;
+    grid-template-columns: 1fr 160px;
+    gap: 16px;
+    align-items: center;
+  }
+  .bar-toggle__row--secondary {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--color-rule);
+  }
+  .bar-toggle__copy { min-width: 0; }
+  .bar-toggle__h {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-ink);
+    margin: 0 0 4px;
+  }
+  .bar-toggle__dek {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+  .bar-toggle__dek code {
+    background: var(--color-card);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .bar-toggle__btn {
+    cursor: pointer;
+    padding: 14px 12px;
+    background: #fff;
+    border: 1.5px solid var(--color-rule);
+    border-left: 3px solid #6a6154;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    color: var(--color-ink);
+    text-align: center;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .bar-toggle__btn:hover { transform: translateY(-1px); }
+  .bar-toggle__btn[data-state='on'] {
+    border-left-color: #2f8f5f;
+    background: #f0f8f3;
+  }
+  .bar-toggle__btn-label {
+    display: block;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--color-ink);
+    margin-bottom: 3px;
+  }
+  .bar-toggle__btn[data-state='on'] .bar-toggle__btn-label { color: #2f8f5f; }
+  .bar-toggle__btn-sub {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  @media (max-width: 600px) {
+    .bar-toggle__row { grid-template-columns: 1fr; }
+  }
+
+  /* T7: YOUR TRACES — local activity counters */
+  .traces__date {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  .traces__dek {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0 0 16px;
+    max-width: 600px;
+  }
+  .traces__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0;
+    margin: 0;
+    border: 1.5px solid var(--color-rule);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .trace {
+    padding: 16px 18px;
+    border-right: 1.5px solid var(--color-rule);
+    border-bottom: 1.5px solid var(--color-rule);
+  }
+  .trace dt {
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--color-ink);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .trace dd {
+    margin: 8px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-soft);
+    text-transform: uppercase;
+  }
+  /* Last-row borders cleanup. */
+  @media (min-width: 481px) {
+    .trace:nth-child(3n) { border-right: 0; }
+    .trace:nth-last-child(-n+3) { border-bottom: 0; }
+  }
+  @media (max-width: 480px) {
+    .traces__grid { grid-template-columns: 1fr 1fr; }
+    .trace { border-right: 1.5px solid var(--color-rule); }
+    .trace:nth-child(2n) { border-right: 0; }
+    .trace:nth-last-child(-n+2) { border-bottom: 0; }
+  }
+
+  /* QUICK ACTIONS */
+  .actions__grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
+  }
+  .actions__btn {
+    display: block; padding: 14px 14px;
+    background: #fff; border: 1.5px solid var(--color-rule);
+    border-left: 3px solid var(--color-warm);
+    border-radius: 2px; text-decoration: none; color: inherit;
+    transition: border-color 0.12s, transform 0.12s;
+  }
+  .actions__btn:hover { border-color: var(--color-warm); transform: translateY(-1px); }
+  .actions__btn-label {
+    display: block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--color-ink); margin-bottom: 4px;
+  }
+  .actions__btn-blurb { display: block; font-size: 12px; color: var(--color-ink-soft); }
+
+  /* FOOT */
+  .me__foot {
+    margin-top: 36px; padding-top: 16px;
+    border-top: 1px solid var(--color-rule);
+    font-size: 11px; color: var(--color-ink-soft);
+  }
+  .me__foot code {
+    background: var(--color-card); padding: 1px 4px; border-radius: 2px;
+    font-size: 11px;
+  }
+  .me__reset-btn {
+    background: none; border: none; padding: 0;
+    color: var(--color-nouns-red, #E84D6A); cursor: pointer;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    text-decoration: underline; margin-left: 8px;
+  }
+  .me__reset-btn:hover { color: var(--color-ink); }
+</style>

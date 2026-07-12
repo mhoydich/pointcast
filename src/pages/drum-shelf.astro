@@ -1,0 +1,1140 @@
+---
+/**
+ * /drum-shelf — your local-only wallet of bottles, calls, octets & melodies.
+ *
+ * Reads localStorage['pc-drum-shelf'] (written by /drum-bottle,
+ * /drum-call-and-response, /drum-octet, and /melody-bottle on every
+ * copy-share-link or received-mode load). Renders the list newest-first
+ * as a column of rows, each showing:
+ *
+ *   • CSS-only mini-preview shaped per kind:
+ *       - bottle: 16 × 4 grid
+ *       - call-and-response: two stacked 16 × 4 grids (call on top, response on bottom)
+ *       - octet: horizontal strip of 8 small 4 × 4 beat-grids
+ *   • Direction chip: 'made' or 'received'
+ *   • Kind chip: 'bottle' / 'call+resp' / 'octet'
+ *   • Pid / chain label (from sender or 'by you' or 'abcd → efgh → ijkl')
+ *   • BPM + relative time-ago
+ *   • Open button → opens the correct surface based on `kind`
+ *
+ * Capacity 100 items, capped at write-time. Local-only, never leaves
+ * the device. Clear-shelf button at bottom wipes the storage.
+ *
+ * Storage shape (v: 1):
+ *   { v: 1, items: [{code, bpm, from, dir, t, kind?}, ...] }
+ *   `kind` is 'bottle' | 'call' | 'octet'; omitted = 'bottle' (legacy).
+ *   Each composing surface writes its own kind; the shelf reads them
+ *   uniformly.
+ *
+ * Shipped 2026-05-14 as bottle-only. Multi-kind support added the
+ * same day after PRs #679 (/drum-call-and-response) and #681
+ * (/drum-octet) made the async register a true family. — drum-claude
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const built = new Date().toISOString();
+---
+<BlockLayout
+  title="Drum Shelf — your local bottle list"
+  description="Every drum-bottle you copy or receive lands here. Local-only — lives in your browser's localStorage, never goes to a server. Open old phrases, replay them, copy the link again to re-share."
+  image="/images/og-drum.png"
+>
+  <main class="dsh" id="dsh" data-built={built}>
+    <header class="dsh__hero">
+      <p class="dsh__kicker">DRUM · SHELF · local-only · 100 max</p>
+      <h1 class="dsh__title">Your bottle shelf.</h1>
+      <p class="dsh__sub">Every <a href="/drum-bottle">bottle</a>, <a href="/drum-call-and-response">call &amp; response</a>, or <a href="/drum-octet">octet</a> you copy or receive lands here. Lives only in your browser's <code>localStorage</code> — nothing about it goes to a server, no account, no sync across devices. A recently-touched list, not an archive.</p>
+    </header>
+
+    <section class="dsh__list" id="dsh-list">
+      <!-- JS injects rows here -->
+    </section>
+
+    <section class="dsh__empty" id="dsh-empty" hidden>
+      <p class="dsh__empty-icon">🍾</p>
+      <p class="dsh__empty-msg">No bottles yet.</p>
+      <p class="dsh__empty-sub">Go make one over at <a href="/drum-bottle">/drum-bottle</a>, copy the link to your clipboard, and it'll show up here.</p>
+    </section>
+
+    <footer class="dsh__footer" id="dsh-footer" hidden>
+      <div class="dsh__footer-buttons">
+        <button class="dsh__play-all" id="dsh-play-all" type="button">▶ play all</button>
+        <button class="dsh__stop-all" id="dsh-stop-all" type="button" hidden>⏹ stop</button>
+        <button class="dsh__clear" id="dsh-clear" type="button">clear shelf</button>
+      </div>
+      <span class="dsh__count" id="dsh-count"></span>
+    </footer>
+
+    <section class="dsh__notes">
+      <h2 class="dsh__notes-h">A note on local-only</h2>
+      <p>The shelf is yours and only yours. There is no server-side copy. If you clear your browser data, switch devices, or open this page in an incognito window, it'll be empty — the same way pasting a URL into a private window doesn't give you your history.</p>
+      <p>Bottles you've sent live in their share URLs, not here. If you've copied a link and sent it somewhere, that URL is the permanent record. The shelf is just a recently-touched list so you can find a phrase you made an hour ago without going hunting through your texts.</p>
+      <p>Sister: <a href="/drum-bottle">/drum-bottle</a> (the composer/player). <a href="/drum-live-bus">/drum-live-bus</a> (5 synchronous-drum surfaces).</p>
+    </section>
+
+    <div class="dsh__toast" id="dsh-toast" aria-live="polite"></div>
+  </main>
+
+  <style is:global>
+    :root {
+      --dsh-ink: #0a1230;
+      --dsh-mid: #14193a;
+      --dsh-flame: #f6c15e;
+      --dsh-coral: #ff6b8a;
+      --dsh-mint: #8aeac0;
+      --dsh-sky: #7ac8ed;
+      --dsh-mauve: #c9a8ef;
+      --dsh-cream: #f4e7c8;
+      --dsh-cream-dim: #b8aa84;
+      --dsh-cream-dimmer: #6e6850;
+    }
+
+    body:has(.dsh) {
+      background:
+        radial-gradient(circle at 20% 10%, #1a1e58 0%, transparent 50%),
+        radial-gradient(circle at 80% 90%, #2a1640 0%, transparent 55%),
+        var(--dsh-ink);
+      color: var(--dsh-cream);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .dsh {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+
+    /* HERO */
+    .dsh__hero { margin-bottom: 28px; }
+    .dsh__kicker {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--dsh-coral);
+      text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+    .dsh__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: clamp(32px, 5.5vw, 52px);
+      letter-spacing: -0.025em;
+      line-height: 1.04;
+      margin: 0 0 14px;
+    }
+    .dsh__sub {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--dsh-cream-dim);
+      margin: 0;
+    }
+    .dsh__sub a {
+      color: var(--dsh-flame);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .dsh__sub code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(244,231,200,0.08);
+      color: var(--dsh-mint);
+    }
+
+    /* LIST */
+    .dsh__list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .dsh__row {
+      display: grid;
+      grid-template-columns: 132px 1fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(244,231,200,0.10);
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background 160ms ease, border-color 160ms ease, transform 100ms ease;
+    }
+    .dsh__row:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(244,231,200,0.30);
+    }
+    .dsh__row:active { transform: translateY(1px); }
+    @media (max-width: 560px) {
+      .dsh__row { grid-template-columns: 100px 1fr auto; gap: 12px; padding: 10px 12px; }
+    }
+
+    /* Mini-grid preview */
+    .dsh__mini {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 2px;
+      aspect-ratio: 16 / 4;
+      background: rgba(0,0,0,0.30);
+      border-radius: 4px;
+      padding: 3px;
+    }
+    .dsh__mini-cell {
+      background: rgba(244,231,200,0.06);
+      border-radius: 1px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .dsh__mini-cell--on  { background: var(--mini-color); }
+    .dsh__mini-cell--low.dsh__mini-cell--on  { --mini-color: #f6c15e; }
+    .dsh__mini-cell--mid.dsh__mini-cell--on  { --mini-color: #ff8a70; }
+    .dsh__mini-cell--high.dsh__mini-cell--on { --mini-color: #c9a8ef; }
+    .dsh__mini-cell--bell.dsh__mini-cell--on { --mini-color: #8aeac0; }
+
+    /* Stacked mini for call-and-response (two 16×4 minis) */
+    .dsh__mini-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .dsh__mini-stack .dsh__mini:first-child {
+      border-left: 2px solid var(--dsh-flame);
+    }
+    .dsh__mini-stack .dsh__mini:last-child {
+      border-left: 2px solid var(--dsh-sky);
+    }
+
+    /* Strip mini for octet (horizontal row of small 4×4 beats) */
+    .dsh__mini-strip {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      aspect-ratio: 8 / 1;
+    }
+    .dsh__mini-beat {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 1px;
+      background: rgba(0,0,0,0.30);
+      border-radius: 2px;
+      padding: 1px;
+      aspect-ratio: 1;
+    }
+    .dsh__mini-beat--empty { opacity: 0.20; }
+
+    /* Melody mini: 15-row pentatonic piano roll, condensed */
+    .dsh__mini-melody {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      gap: 1px;
+      aspect-ratio: 16 / 7;
+      background: rgba(0,0,0,0.35);
+      border-radius: 4px;
+      padding: 2px;
+    }
+    .dsh__melody-cell {
+      background: transparent;
+      border-radius: 1px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .dsh__melody-cell--on { background: var(--melody-color); }
+    .dsh__melody-cell--low.dsh__melody-cell--on  { --melody-color: #ff8a70; }
+    .dsh__melody-cell--mid.dsh__melody-cell--on  { --melody-color: #c9a8ef; }
+    .dsh__melody-cell--high.dsh__melody-cell--on { --melody-color: #8aeac0; }
+
+    /* Meta column */
+    .dsh__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .dsh__meta-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .dsh__chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .dsh__chip--made {
+      background: rgba(255,107,138,0.15);
+      color: var(--dsh-coral);
+    }
+    .dsh__chip--received {
+      background: rgba(122,200,237,0.15);
+      color: var(--dsh-sky);
+    }
+    /* Kind chips — what flavor of phrase this is */
+    .dsh__chip--kind-bottle {
+      background: rgba(246, 193, 94, 0.12);
+      color: var(--dsh-flame);
+    }
+    .dsh__chip--kind-call {
+      background: rgba(122, 200, 237, 0.12);
+      color: var(--dsh-sky);
+    }
+    .dsh__chip--kind-octet {
+      background: rgba(138, 234, 192, 0.12);
+      color: var(--dsh-mint);
+    }
+    .dsh__chip--kind-melody {
+      background: rgba(201, 168, 239, 0.12);
+      color: var(--dsh-mauve);
+    }
+    .dsh__from {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--dsh-cream);
+    }
+    .dsh__bpm {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-flame);
+    }
+    .dsh__time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-cream-dimmer);
+    }
+
+    /* Open arrow */
+    .dsh__open {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--dsh-coral);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    @media (max-width: 560px) {
+      .dsh__open { font-size: 9px; }
+    }
+
+    /* EMPTY STATE */
+    .dsh__empty {
+      text-align: center;
+      padding: 48px 24px;
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(244,231,200,0.20);
+      border-radius: 16px;
+      margin-bottom: 28px;
+    }
+    .dsh__empty-icon { font-size: 48px; margin: 0 0 12px; }
+    .dsh__empty-msg {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--dsh-cream);
+      margin: 0 0 6px;
+    }
+    .dsh__empty-sub {
+      font-size: 14px;
+      color: var(--dsh-cream-dim);
+      margin: 0;
+    }
+    .dsh__empty-sub a {
+      color: var(--dsh-flame);
+      text-decoration: underline;
+    }
+
+    /* FOOTER */
+    .dsh__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      margin-bottom: 32px;
+      border-top: 1px solid rgba(244,231,200,0.10);
+      padding-top: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .dsh__footer-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .dsh__play-all, .dsh__stop-all {
+      border: 1px solid rgba(246,193,94,0.45);
+      background: rgba(246,193,94,0.12);
+      color: var(--dsh-flame);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .dsh__play-all:hover, .dsh__stop-all:hover {
+      background: rgba(246,193,94,0.22);
+    }
+    .dsh__stop-all {
+      border-color: rgba(255,107,138,0.45);
+      background: rgba(255,107,138,0.12);
+      color: var(--dsh-coral);
+    }
+    .dsh__stop-all:hover { background: rgba(255,107,138,0.22); }
+    .dsh__clear {
+      border: 1px solid rgba(244,231,200,0.18);
+      background: transparent;
+      color: var(--dsh-cream-dim);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .dsh__clear:hover {
+      color: var(--dsh-coral);
+      border-color: rgba(255,107,138,0.40);
+      background: rgba(255,107,138,0.06);
+    }
+    .dsh__count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--dsh-cream-dim);
+    }
+
+    /* Now-playing row highlight */
+    .dsh__row--playing {
+      border-color: var(--dsh-flame) !important;
+      box-shadow: 0 0 0 2px rgba(246, 193, 94, 0.30);
+      background: rgba(246, 193, 94, 0.06) !important;
+    }
+    .dsh__row--playing::before {
+      content: '▶';
+      position: absolute;
+      left: -22px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--dsh-flame);
+      font-size: 14px;
+      animation: dshPulse 1.2s ease-in-out infinite;
+    }
+    .dsh__row { position: relative; }
+    @keyframes dshPulse {
+      0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+      50%      { opacity: 1.0; transform: translateY(-50%) scale(1.15); }
+    }
+
+    /* NOTES */
+    .dsh__notes {
+      max-width: 680px;
+    }
+    .dsh__notes-h {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      color: var(--dsh-cream);
+      margin: 0 0 12px;
+    }
+    .dsh__notes p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--dsh-cream-dim);
+      margin: 0 0 12px;
+    }
+    .dsh__notes a {
+      color: var(--dsh-coral);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* TOAST */
+    .dsh__toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,0.85);
+      color: var(--dsh-flame);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 50;
+      border: 1px solid rgba(246,193,94,0.4);
+    }
+    .dsh__toast--show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <script>
+    import { createAudioScheduler } from '../lib/audio-scheduler';
+
+    const ROWS = 4;
+    const STEPS = 16;
+    const VOICE_NAMES = ['low', 'mid', 'high', 'bell'] as const;
+    type Voice = typeof VOICE_NAMES[number];
+    const SHELF_KEY = 'pc-drum-shelf';
+    const SHELF_VERSION = 1;
+
+    type Kind = 'bottle' | 'call' | 'octet' | 'melody';
+    interface ShelfItem {
+      code: string;
+      bpm: number;
+      from: string;
+      dir: 'made' | 'received';
+      t: number;
+      kind?: Kind;  // legacy items without `kind` default to 'bottle'
+    }
+    function itemKind(item: ShelfItem): Kind {
+      return item.kind || 'bottle';
+    }
+
+    function loadShelf(): ShelfItem[] {
+      try {
+        const raw = localStorage.getItem(SHELF_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!parsed || parsed.v !== SHELF_VERSION || !Array.isArray(parsed.items)) return [];
+        return parsed.items as ShelfItem[];
+      } catch { return []; }
+    }
+
+    function clearShelf() {
+      try { localStorage.removeItem(SHELF_KEY); } catch { /* ignore */ }
+    }
+
+    // ---- decoders ----
+    // /drum-bottle: 9 bytes → 4 voices × 16 cells, 1-bar phrase
+    function decodeBottle(code: string): boolean[][] | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 9) return null;
+      const p: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const idx = r * 16 + c;
+          p[r][c] = !!(bytes[idx >> 3] & (1 << (idx & 7)));
+        }
+      }
+      return p;
+    }
+    // /drum-call-and-response: 18 bytes → 2 phrases (call + response)
+    function decodeCall(code: string): { call: boolean[][]; resp: boolean[][] } | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 17) return null;
+      const a: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      const b: boolean[][] = Array.from({ length: 4 }, () => Array(16).fill(false));
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const idx = r * 16 + c;
+          a[r][c] = !!(bytes[idx >> 3] & (1 << (idx & 7)));
+          b[r][c] = !!(bytes[8 + (idx >> 3)] & (1 << (idx & 7)));
+        }
+      }
+      return { call: a, resp: b };
+    }
+    // /melody-bottle: 9 bytes → 16 steps × 4-bit pitch (0=rest, 1..15=pentatonic)
+    function decodeMelody(code: string): { steps: number[]; bpm: number } | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 9) return null;
+      const steps: number[] = new Array(16).fill(0);
+      for (let i = 0; i < 8; i++) {
+        const b = bytes[i];
+        steps[2 * i]     = b & 0x0f;
+        steps[2 * i + 1] = (b >> 4) & 0x0f;
+      }
+      const bp = 40 + bytes[8];
+      if (bp < 40 || bp > 220) return null;
+      return { steps, bpm: bp };
+    }
+    // /drum-octet: 4..18 bytes → N beats × 4 voices × 4 cells
+    function decodeOctet(code: string): boolean[][][] | null {
+      const bytes = b64UrlToBytes(code);
+      if (!bytes || bytes.length < 4 || bytes.length > 18 || bytes.length % 2 !== 0) return null;
+      const N = (bytes.length - 2) / 2;
+      if (N < 1 || N > 8) return null;
+      const beats: boolean[][][] = [];
+      for (let n = 0; n < N; n++) {
+        const bits = bytes[2 * n] | (bytes[2 * n + 1] << 8);
+        const beat = Array.from({ length: 4 }, () => Array(4).fill(false));
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            const idx = r * 4 + c;
+            beat[r][c] = !!(bits & (1 << idx));
+          }
+        }
+        beats.push(beat);
+      }
+      return beats;
+    }
+    function b64UrlToBytes(code: string): Uint8Array | null {
+      if (!code) return null;
+      const b64 = code.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      let bin: string;
+      try { bin = atob(padded); } catch { return null; }
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function timeAgo(t: number): string {
+      const now = Date.now();
+      const diff = Math.max(0, now - t);
+      const s = Math.floor(diff / 1000);
+      if (s < 30)      return 'just now';
+      if (s < 60)      return `${s}s ago`;
+      const m = Math.floor(s / 60);
+      if (m < 60)      return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24)      return `${h}h ago`;
+      const d = Math.floor(h / 24);
+      if (d < 7)       return `${d}d ago`;
+      const w = Math.floor(d / 7);
+      if (w < 5)       return `${w}w ago`;
+      const mo = Math.floor(d / 30);
+      return `${mo}mo ago`;
+    }
+
+    // Mini-grid for bottle's 4×16 phrase shape
+    function makeBottleMini(pattern: boolean[][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini';
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const cell = document.createElement('span');
+          cell.className = `dsh__mini-cell dsh__mini-cell--${VOICE_NAMES[r]}` + (pattern[r][c] ? ' dsh__mini-cell--on' : '');
+          wrap.appendChild(cell);
+        }
+      }
+      return wrap;
+    }
+    // Melody piano-roll mini: 15 rows × 16 cols, one cell per column
+    function makeMelodyMini(stepsArr: number[]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-melody';
+      // 15 pitch rows × 16 step cols (pitch 14=A6 top, pitch 0=C4 bottom)
+      for (let row = 0; row < 15; row++) {
+        for (let col = 0; col < 16; col++) {
+          const cell = document.createElement('span');
+          const pitchIdx = 14 - row;  // row 0 = pitch 14 (A6, top)
+          const isOn = stepsArr[col] === pitchIdx + 1;
+          const octave = pitchIdx < 5 ? 'low' : pitchIdx < 10 ? 'mid' : 'high';
+          cell.className = `dsh__melody-cell dsh__melody-cell--${octave}` + (isOn ? ' dsh__melody-cell--on' : '');
+          wrap.appendChild(cell);
+        }
+      }
+      return wrap;
+    }
+    // Two stacked minis for call-and-response (call on top, response on bottom)
+    function makeCallMini(call: boolean[][], resp: boolean[][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-stack';
+      wrap.appendChild(makeBottleMini(call));
+      wrap.appendChild(makeBottleMini(resp));
+      return wrap;
+    }
+    // Horizontal strip of N small beat-grids for octet
+    function makeOctetMini(beats: boolean[][][]): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'dsh__mini-strip';
+      const SLOTS = 8;
+      for (let i = 0; i < SLOTS; i++) {
+        const beatEl = document.createElement('span');
+        beatEl.className = 'dsh__mini-beat' + (i < beats.length ? ' dsh__mini-beat--filled' : ' dsh__mini-beat--empty');
+        if (i < beats.length) {
+          for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+              const cell = document.createElement('span');
+              cell.className = `dsh__mini-cell dsh__mini-cell--${VOICE_NAMES[r]}` + (beats[i][r][c] ? ' dsh__mini-cell--on' : '');
+              beatEl.appendChild(cell);
+            }
+          }
+        }
+        wrap.appendChild(beatEl);
+      }
+      return wrap;
+    }
+
+    function urlFor(item: ShelfItem): string {
+      const kind = itemKind(item);
+      const slug = kind === 'call'   ? '/drum-call-and-response'
+                : kind === 'octet'  ? '/drum-octet'
+                : kind === 'melody' ? '/melody-bottle'
+                :                     '/drum-bottle';
+      return `${slug}?p=${encodeURIComponent(item.code)}` +
+        (item.from ? `&from=${encodeURIComponent(item.from)}` : '');
+    }
+
+    function makePreview(item: ShelfItem): HTMLElement {
+      const kind = itemKind(item);
+      if (kind === 'call') {
+        const decoded = decodeCall(item.code);
+        if (decoded) return makeCallMini(decoded.call, decoded.resp);
+      } else if (kind === 'octet') {
+        const decoded = decodeOctet(item.code);
+        if (decoded) return makeOctetMini(decoded);
+      } else if (kind === 'melody') {
+        const decoded = decodeMelody(item.code);
+        if (decoded) return makeMelodyMini(decoded.steps);
+      } else {
+        const decoded = decodeBottle(item.code);
+        if (decoded) return makeBottleMini(decoded);
+      }
+      const fallback = document.createElement('div');
+      fallback.className = 'dsh__mini';
+      return fallback;
+    }
+
+    function kindLabel(kind: Kind): { label: string; chars: string } {
+      if (kind === 'call')   return { label: 'call+resp', chars: '24 chars' };
+      if (kind === 'octet')  return { label: 'octet',     chars: '6..24 ch' };
+      if (kind === 'melody') return { label: 'melody',    chars: '12 chars' };
+      return                        { label: 'bottle',    chars: '12 chars' };
+    }
+
+    function fromLine(item: ShelfItem): string {
+      const kind = itemKind(item);
+      if (kind === 'octet') {
+        // Octet's from is a chain like "abcd-efgh-ijkl"
+        const parts = item.from.split('-').filter(Boolean);
+        if (item.dir === 'made') {
+          return parts.length > 1 ? `chain · ${parts.join(' → ')}` : `started by you`;
+        }
+        return parts.length > 0 ? `chain · ${parts.join(' → ')}` : `from someone`;
+      }
+      if (kind === 'call') {
+        const parts = item.from.split('-').filter(Boolean);
+        if (parts.length === 2) return `${parts[0]} → ${parts[1]}`;
+        if (parts.length === 1) return item.dir === 'made' ? 'call by you' : `from ${parts[0]}`;
+        return item.dir === 'made' ? 'by you' : 'from someone';
+      }
+      // bottle
+      return item.dir === 'made' ? 'by you' : (item.from ? `from ${item.from}` : 'from someone');
+    }
+
+    function makeRow(item: ShelfItem): HTMLElement {
+      const a = document.createElement('a');
+      a.href = urlFor(item);
+      a.className = 'dsh__row';
+
+      // Preview column
+      a.appendChild(makePreview(item));
+
+      // Meta column
+      const meta = document.createElement('div');
+      meta.className = 'dsh__meta';
+
+      const kind = itemKind(item);
+      const kl = kindLabel(kind);
+
+      const line1 = document.createElement('div');
+      line1.className = 'dsh__meta-line';
+      const chip = document.createElement('span');
+      chip.className = `dsh__chip dsh__chip--${item.dir}`;
+      chip.textContent = item.dir;
+      line1.appendChild(chip);
+      const kindChip = document.createElement('span');
+      kindChip.className = `dsh__chip dsh__chip--kind dsh__chip--kind-${kind}`;
+      kindChip.textContent = kl.label;
+      line1.appendChild(kindChip);
+      const from = document.createElement('span');
+      from.className = 'dsh__from';
+      from.textContent = fromLine(item);
+      line1.appendChild(from);
+      meta.appendChild(line1);
+
+      const line2 = document.createElement('div');
+      line2.className = 'dsh__meta-line';
+      const bpm = document.createElement('span');
+      bpm.className = 'dsh__bpm';
+      bpm.textContent = `${item.bpm} BPM`;
+      line2.appendChild(bpm);
+      const time = document.createElement('span');
+      time.className = 'dsh__time';
+      time.textContent = '· ' + timeAgo(item.t);
+      line2.appendChild(time);
+      meta.appendChild(line2);
+
+      a.appendChild(meta);
+
+      const open = document.createElement('span');
+      open.className = 'dsh__open';
+      open.textContent = 'open →';
+      a.appendChild(open);
+
+      return a;
+    }
+
+    function showToast(msg: string) {
+      const el = document.getElementById('dsh-toast')!;
+      el.textContent = msg;
+      el.classList.add('dsh__toast--show');
+      setTimeout(() => el.classList.remove('dsh__toast--show'), 2400);
+    }
+
+    function render() {
+      const items = loadShelf().sort((a, b) => b.t - a.t);
+      const listEl = document.getElementById('dsh-list')!;
+      const emptyEl = document.getElementById('dsh-empty')!;
+      const footerEl = document.getElementById('dsh-footer')!;
+      const countEl = document.getElementById('dsh-count')!;
+
+      listEl.innerHTML = '';
+
+      if (items.length === 0) {
+        emptyEl.hidden = false;
+        footerEl.hidden = true;
+        return;
+      }
+
+      emptyEl.hidden = true;
+      footerEl.hidden = false;
+
+      const made = items.filter((i) => i.dir === 'made').length;
+      const received = items.length - made;
+      const bottles = items.filter((i) => itemKind(i) === 'bottle').length;
+      const calls   = items.filter((i) => itemKind(i) === 'call').length;
+      const octets  = items.filter((i) => itemKind(i) === 'octet').length;
+      const melodies = items.filter((i) => itemKind(i) === 'melody').length;
+      const kindBits: string[] = [];
+      if (bottles)  kindBits.push(`${bottles} bottle${bottles === 1 ? '' : 's'}`);
+      if (calls)    kindBits.push(`${calls} call${calls === 1 ? '' : 's'}`);
+      if (octets)   kindBits.push(`${octets} octet${octets === 1 ? '' : 's'}`);
+      if (melodies) kindBits.push(`${melodies} melod${melodies === 1 ? 'y' : 'ies'}`);
+      countEl.textContent = `${kindBits.join(' · ')} · ${made} made · ${received} received`;
+
+      const frag = document.createDocumentFragment();
+      for (const item of items) {
+        frag.appendChild(makeRow(item));
+      }
+      listEl.appendChild(frag);
+    }
+
+    // ---- Play All jukebox engine ----
+    // Walks the shelf newest-first, plays each item's pattern once at its
+    // native BPM, then moves to the next item. Loops the whole sequence
+    // until stopped.
+    //
+    // Per-kind step counts:
+    //   bottle: 16 cells × 1 bar
+    //   call+resp: 16 + 16 = 32 cells (call then response)
+    //   octet: N beats × 4 cells = 4..32 cells
+    let ctx: AudioContext | null = null;
+    let scheduler: ReturnType<typeof createAudioScheduler> | null = null;
+    let masterGain: GainNode | null = null;
+    function ensureCtx() {
+      if (ctx) return;
+      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      scheduler = createAudioScheduler(ctx);
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(ctx.destination);
+    }
+    const VOICE_CFG: Record<Voice, { freq: number; bell: boolean }> = {
+      low:  { freq:  70, bell: false },
+      mid:  { freq: 120, bell: false },
+      high: { freq: 200, bell: false },
+      bell: { freq: 600, bell: true  },
+    };
+    function playVoice(voice: Voice) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const cfg = VOICE_CFG[voice];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = cfg.bell ? 'sine' : 'triangle';
+      osc.frequency.value = cfg.freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.45, t + 0.004);
+      const tail = cfg.bell ? 1.0 : 0.35;
+      g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+      if (cfg.bell) {
+        for (const mult of [2, 3]) {
+          const o = ctx.createOscillator();
+          const gg = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = cfg.freq * mult;
+          gg.gain.setValueAtTime(0.0001, t);
+          gg.gain.exponentialRampToValueAtTime(0.12 / mult, t + 0.008);
+          gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.7 / mult);
+          o.connect(gg).connect(masterGain);
+          scheduler.trackSource(o);
+          o.start(t);
+          o.stop(t + 0.75);
+        }
+      }
+    }
+
+    // Pentatonic frequencies for /melody-bottle playback (C major across 3 oct)
+    const PENT_FREQS = [
+      261.63, 293.66, 329.63, 392.00, 440.00,
+      523.25, 587.33, 659.25, 783.99, 880.00,
+      1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
+    ];
+
+    // Per-item playback shape — decoded once and cached for the item
+    interface PlayShape {
+      kind: Kind;
+      totalSteps: number;
+      bpm: number;
+      // For step s, return [voice -> hit?] (4-tuple) for drum kinds
+      stepHit(s: number): boolean[];
+      // For step s, return pitch index 0..14 or -1 for rest (melody only)
+      melodyHit?(s: number): number;
+    }
+    function shapeFor(item: ShelfItem): PlayShape | null {
+      const kind = itemKind(item);
+      if (kind === 'bottle') {
+        const p = decodeBottle(item.code);
+        if (!p) return null;
+        return {
+          kind, totalSteps: 16, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % 16;
+            return [p[0][c], p[1][c], p[2][c], p[3][c]];
+          },
+        };
+      }
+      if (kind === 'call') {
+        const d = decodeCall(item.code);
+        if (!d) return null;
+        return {
+          kind, totalSteps: 32, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % 32;
+            const which = c < 16 ? d.call : d.resp;
+            const col = c % 16;
+            return [which[0][col], which[1][col], which[2][col], which[3][col]];
+          },
+        };
+      }
+      if (kind === 'octet') {
+        const beats = decodeOctet(item.code);
+        if (!beats) return null;
+        const total = beats.length * 4;
+        return {
+          kind, totalSteps: total, bpm: item.bpm,
+          stepHit(s) {
+            const c = s % total;
+            const beatIdx = Math.floor(c / 4);
+            const cellIdx = c % 4;
+            const beat = beats[beatIdx];
+            return [beat[0][cellIdx], beat[1][cellIdx], beat[2][cellIdx], beat[3][cellIdx]];
+          },
+        };
+      }
+      if (kind === 'melody') {
+        const m = decodeMelody(item.code);
+        if (!m) return null;
+        return {
+          kind, totalSteps: 16, bpm: m.bpm,
+          stepHit() { return [false, false, false, false]; },  // unused for melody
+          melodyHit(s) {
+            const v = m.steps[s % 16];
+            return v === 0 ? -1 : v - 1;  // 0 in storage = rest, else pitch idx
+          },
+        };
+      }
+      return null;
+    }
+
+    // Melodic pluck — same as /melody-bottle's playNote
+    function playPentatonicNote(pitchIdx: number) {
+      ensureCtx();
+      if (!ctx || !scheduler || !masterGain) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime + 0.005;
+      const freq = PENT_FREQS[pitchIdx];
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.15, t + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.connect(g).connect(masterGain);
+      scheduler.trackSource(osc);
+      osc.start(t);
+      osc.stop(t + 0.45);
+      // 2x harmonic shimmer
+      const o2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o2.type = 'sine';
+      o2.frequency.value = freq * 2;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.008);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o2.connect(g2).connect(masterGain);
+      scheduler.trackSource(o2);
+      o2.start(t);
+      o2.stop(t + 0.25);
+    }
+
+    let playAllState: {
+      playing: boolean;
+      items: ShelfItem[];
+      idx: number;
+      step: number;
+      shape: PlayShape | null;
+      timer: number | null;
+    } = { playing: false, items: [], idx: 0, step: 0, shape: null, timer: null };
+
+    function highlightPlayingRow(idx: number | null) {
+      document.querySelectorAll('.dsh__row--playing').forEach((el) => el.classList.remove('dsh__row--playing'));
+      if (idx == null) return;
+      const rows = document.querySelectorAll('.dsh__row');
+      const row = rows[idx] as HTMLElement | undefined;
+      if (row) row.classList.add('dsh__row--playing');
+    }
+
+    function loadNextItemShape() {
+      const item = playAllState.items[playAllState.idx];
+      if (!item) {
+        playAllState.shape = null;
+        return;
+      }
+      playAllState.shape = shapeFor(item);
+      // Skip undecodable items
+      while (!playAllState.shape && playAllState.items.length > 0) {
+        playAllState.idx = (playAllState.idx + 1) % playAllState.items.length;
+        playAllState.shape = shapeFor(playAllState.items[playAllState.idx]);
+        if (playAllState.idx === 0 && !playAllState.shape) break; // looped fully with nothing playable
+      }
+    }
+
+    function tickPlayAll() {
+      if (!playAllState.playing) return;
+      const shape = playAllState.shape;
+      if (!shape) {
+        stopPlayAll();
+        return;
+      }
+      // Fire voices/pitch at this step
+      if (shape.kind === 'melody' && shape.melodyHit) {
+        const pitch = shape.melodyHit(playAllState.step);
+        if (pitch >= 0) playPentatonicNote(pitch);
+      } else {
+        const hits = shape.stepHit(playAllState.step);
+        for (let v = 0; v < 4; v++) {
+          if (hits[v]) playVoice(VOICE_NAMES[v]);
+        }
+      }
+      playAllState.step++;
+      if (playAllState.step >= shape.totalSteps) {
+        // Move to next item
+        playAllState.step = 0;
+        playAllState.idx = (playAllState.idx + 1) % playAllState.items.length;
+        loadNextItemShape();
+        highlightPlayingRow(playAllState.idx);
+      }
+      // Schedule next tick at current item's tempo (60/BPM/4 sec per cell)
+      const stepMs = (60_000 / (playAllState.shape?.bpm || 100)) / 4;
+      playAllState.timer = window.setTimeout(tickPlayAll, stepMs);
+    }
+
+    function startPlayAll() {
+      if (playAllState.playing) return;
+      ensureCtx();
+      const items = loadShelf().sort((a, b) => b.t - a.t);
+      if (items.length === 0) {
+        showToast('shelf is empty');
+        return;
+      }
+      playAllState.items = items;
+      playAllState.idx = 0;
+      playAllState.step = 0;
+      playAllState.playing = true;
+      loadNextItemShape();
+      if (!playAllState.shape) {
+        showToast('nothing playable on the shelf');
+        playAllState.playing = false;
+        return;
+      }
+      document.getElementById('dsh-play-all')!.hidden = true;
+      document.getElementById('dsh-stop-all')!.hidden = false;
+      highlightPlayingRow(playAllState.idx);
+      tickPlayAll();
+    }
+
+    function stopPlayAll() {
+      playAllState.playing = false;
+      if (playAllState.timer != null) {
+        clearTimeout(playAllState.timer);
+        playAllState.timer = null;
+      }
+      document.getElementById('dsh-play-all')!.hidden = false;
+      document.getElementById('dsh-stop-all')!.hidden = true;
+      highlightPlayingRow(null);
+    }
+
+    function init() {
+      render();
+      document.getElementById('dsh-clear')!.addEventListener('click', () => {
+        if (!confirm('Wipe the shelf? This can\'t be undone.')) return;
+        stopPlayAll();
+        clearShelf();
+        showToast('shelf cleared');
+        render();
+      });
+      document.getElementById('dsh-play-all')!.addEventListener('click', startPlayAll);
+      document.getElementById('dsh-stop-all')!.addEventListener('click', stopPlayAll);
+
+      // Keyboard: Space toggles play/stop when not focused in input
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (playAllState.playing) stopPlayAll();
+          else startPlayAll();
+        }
+      });
+
+      // Listen for storage changes from other tabs (other /drum-bottle windows)
+      window.addEventListener('storage', (e) => {
+        if (e.key === SHELF_KEY) {
+          // If we're playing and shelf changed, restart with the new ordering
+          const wasPlaying = playAllState.playing;
+          stopPlayAll();
+          render();
+          if (wasPlaying) startPlayAll();
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</BlockLayout>
