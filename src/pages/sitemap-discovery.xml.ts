@@ -98,6 +98,11 @@ export const GET: APIRoute = async () => {
       'daily',
       '0.8',
     ] as SitemapEntry),
+    ...products.map(({ data }) => [
+      `https://pointcast.xyz/products/${data.slug}.json`,
+      'daily',
+      '0.75',
+    ] as SitemapEntry),
     ...Array.from(moods).sort().map((mood) => [
       `https://pointcast.xyz/pairings/${mood}`,
       'daily',

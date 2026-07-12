@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const robots = await readFile(new URL('../public/robots.txt', import.meta.url), 'utf8');
 const sitemap = await readFile(new URL('../src/pages/sitemap-discovery.xml.ts', import.meta.url), 'utf8');
+const productDetail = await readFile(new URL('../src/pages/products/[slug].astro', import.meta.url), 'utf8');
+const productJson = await readFile(new URL('../src/pages/products/[slug].json.ts', import.meta.url), 'utf8');
 const commercePages = await Promise.all([
   '../src/pages/shop.astro',
   '../src/pages/products/[slug].astro',
@@ -25,6 +27,14 @@ test('every crawler group can reach public JSONL feeds', () => {
 test('discovery sitemap advertises the public JSONL feeds', () => {
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/api\/products\.jsonl/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/api\/blocks\.jsonl/);
+});
+
+test('product detail pages expose discoverable per-product JSON', () => {
+  assert.match(productDetail, /href: `\/products\/\$\{d\.slug\}\.json`/);
+  assert.match(sitemap, /https:\/\/pointcast\.xyz\/products\/\$\{data\.slug\}\.json/);
+  assert.match(productJson, /isPublicProduct\(data\)/);
+  assert.match(productJson, /checkoutPolicy: CHECKOUT_POLICY/);
+  assert.match(productJson, /'Access-Control-Allow-Origin': '\*'/);
 });
 
 test('outbound product checkout links are marked sponsored', () => {
