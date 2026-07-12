@@ -50,13 +50,36 @@ const description = 'Local resident loop status: current join-system task, last 
     set('[data-hours]', String(status.computeHours || 0));
     set('[data-status]', status.running ? 'running now' : `updated ${status.updatedAt || 'never'}`);
     const runs = document.querySelector('[data-runs]');
-    runs.innerHTML = (status.runs || []).map((run) => `
-      <li class="${run.success ? 'ok' : 'fail'}">
-        <a href="${run.blockPath || '#'}">${run.taskId}</a>
-        <span>${run.success ? 'success' : 'fail'} · ${Number(run.minutes || 0).toFixed(1)}m · ${run.finishedAt || ''}</span>
-        <p>${(run.artifacts || []).slice(0, 5).join(', ') || 'no artifacts listed'}</p>
-      </li>
-    `).join('') || '<li class="empty">No resident runs yet.</li>';
+    runs.replaceChildren();
+
+    const recentRuns = Array.isArray(status.runs) ? status.runs : [];
+    if (!recentRuns.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No resident runs yet.';
+      runs.append(empty);
+      return;
+    }
+
+    recentRuns.forEach((run) => {
+      const item = document.createElement('li');
+      item.className = run.success ? 'ok' : 'fail';
+
+      const task = document.createElement('a');
+      task.href = typeof run.blockPath === 'string' && run.blockPath.startsWith('/') ? run.blockPath : '#';
+      task.textContent = String(run.taskId || 'untitled task');
+
+      const meta = document.createElement('span');
+      meta.textContent = `${run.success ? 'success' : 'fail'} · ${Number(run.minutes || 0).toFixed(1)}m · ${run.finishedAt || ''}`;
+
+      const artifacts = document.createElement('p');
+      artifacts.textContent = Array.isArray(run.artifacts) && run.artifacts.length
+        ? run.artifacts.slice(0, 5).map(String).join(', ')
+        : 'no artifacts listed';
+
+      item.append(task, meta, artifacts);
+      runs.append(item);
+    });
   }
 
   loadStatus().then(render).catch((error) => {
