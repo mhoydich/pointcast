@@ -6,6 +6,8 @@ const robots = await readFile(new URL('../public/robots.txt', import.meta.url), 
 const sitemap = await readFile(new URL('../src/pages/sitemap-discovery.xml.ts', import.meta.url), 'utf8');
 const productDetail = await readFile(new URL('../src/pages/products/[slug].astro', import.meta.url), 'utf8');
 const productJson = await readFile(new URL('../src/pages/products/[slug].json.ts', import.meta.url), 'utf8');
+const agentsManifest = await readFile(new URL('../src/pages/agents.json.ts', import.meta.url), 'utf8');
+const forAgents = await readFile(new URL('../src/pages/for-agents.astro', import.meta.url), 'utf8');
 const commercePages = await Promise.all([
   '../src/pages/shop.astro',
   '../src/pages/products/[slug].astro',
@@ -35,6 +37,12 @@ test('product detail pages expose discoverable per-product JSON', () => {
   assert.match(productJson, /isPublicProduct\(data\)/);
   assert.match(productJson, /checkoutPolicy: CHECKOUT_POLICY/);
   assert.match(productJson, /'Access-Control-Allow-Origin': '\*'/);
+});
+
+test('agent entry points advertise aggregate and per-product commerce JSON', () => {
+  assert.match(agentsManifest, /productsJsonl: 'https:\/\/pointcast\.xyz\/api\/products\.jsonl'/);
+  assert.match(agentsManifest, /productDetailTemplate: 'https:\/\/pointcast\.xyz\/products\/\{slug\}\.json'/);
+  assert.match(forAgents, /<code>\/products\/\{'\{slug\}'\}\.json<\/code>/);
 });
 
 test('outbound product checkout links are marked sponsored', () => {

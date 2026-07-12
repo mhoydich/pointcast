@@ -291,6 +291,8 @@ export const GET: APIRoute = async () => {
         goodFeels: 'https://pointcast.xyz/shop.json',
         shop: 'https://pointcast.xyz/shop.json',
         products: 'https://pointcast.xyz/products.json',
+        productsJsonl: 'https://pointcast.xyz/api/products.jsonl',
+        productDetailTemplate: 'https://pointcast.xyz/products/{slug}.json',
         apps: 'https://pointcast.xyz/apps.json',
         connectors: 'https://pointcast.xyz/connectors.json',
         sprint: 'https://pointcast.xyz/sprint.json',
