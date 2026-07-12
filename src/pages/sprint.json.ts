@@ -33,6 +33,8 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=60',
+      'Access-Control-Allow-Origin': '*',
+      Link: '<https://pointcast.xyz/sprint>; rel="alternate"; type="text/html", <https://pointcast.xyz/sprints.json>; rel="related"; type="application/json"',
     },
   });
 };
