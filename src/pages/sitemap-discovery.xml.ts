@@ -108,6 +108,11 @@ export const GET: APIRoute = async () => {
       'daily',
       '0.7',
     ] as SitemapEntry),
+    ...Array.from(moods).sort().map((mood) => [
+      `https://pointcast.xyz/pairings/${mood}.json`,
+      'daily',
+      '0.65',
+    ] as SitemapEntry),
   ];
   const urls = [...staticUrls, ...dynamicUrls];
   const today = new Date().toISOString().slice(0, 10);

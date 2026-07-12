@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v1-2026-07-12';
+export const COMMERCE_VERSION = 'commerce-hub-v2-2026-07-12';
 
 export const CHECKOUT_POLICY = {
   mode: 'outbound-only',
