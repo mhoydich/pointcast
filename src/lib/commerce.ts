@@ -1,4 +1,4 @@
-export const COMMERCE_VERSION = 'commerce-hub-v2-2026-07-12';
+export const COMMERCE_VERSION = 'commerce-hub-v3-2026-07-12';
 
 export const CHECKOUT_POLICY = {
   mode: 'outbound-only',
@@ -43,6 +43,18 @@ export function checkoutHost(url: string): string {
   } catch {
     return 'external checkout';
   }
+}
+
+/** Machine-readable routing contract shared by every product feed. */
+export function outboundCheckout(url: string) {
+  return {
+    mode: 'outbound-only' as const,
+    url,
+    host: checkoutHost(url),
+    opensOn: 'merchant-site' as const,
+    paymentHandledBy: 'merchant' as const,
+    pointCastCaptures: [] as const,
+  };
 }
 
 /** Checkout must leave PointCast over HTTPS; this site never accepts orders. */

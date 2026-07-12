@@ -8,6 +8,9 @@ const productDetail = await readFile(new URL('../src/pages/products/[slug].astro
 const productJson = await readFile(new URL('../src/pages/products/[slug].json.ts', import.meta.url), 'utf8');
 const pairingDetail = await readFile(new URL('../src/pages/pairings/[mood].astro', import.meta.url), 'utf8');
 const pairingJson = await readFile(new URL('../src/pages/pairings/[mood].json.ts', import.meta.url), 'utf8');
+const productsJson = await readFile(new URL('../src/pages/products.json.ts', import.meta.url), 'utf8');
+const productsJsonl = await readFile(new URL('../src/pages/api/products.jsonl.ts', import.meta.url), 'utf8');
+const shopJson = await readFile(new URL('../src/pages/shop.json.ts', import.meta.url), 'utf8');
 const agentsManifest = await readFile(new URL('../src/pages/agents.json.ts', import.meta.url), 'utf8');
 const forAgents = await readFile(new URL('../src/pages/for-agents.astro', import.meta.url), 'utf8');
 const commercePages = await Promise.all([
@@ -66,5 +69,17 @@ test('outbound product checkout links are marked sponsored', () => {
       assert.match(link, /rel="[^"]*\bnoopener\b[^"]*"/, `${path} checkout must isolate the opener`);
       assert.match(link, /rel="[^"]*\bsponsored\b[^"]*"/, `${path} checkout must identify the commercial relationship`);
     }
+  }
+});
+
+test('commerce JSON surfaces expose the shared outbound checkout contract', () => {
+  for (const [path, source] of [
+    ['products.json', productsJson],
+    ['products.jsonl', productsJsonl],
+    ['product detail JSON', productJson],
+    ['shop.json', shopJson],
+    ['pairing JSON', pairingJson],
+  ]) {
+    assert.match(source, /checkout: outboundCheckout\(/, `${path} must expose explicit checkout routing`);
   }
 });
