@@ -22,6 +22,11 @@ export const GET: APIRoute = async () => {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
       'Access-Control-Allow-Origin': '*',
+      Link: [
+        '<https://pointcast.xyz/next-sprint>; rel="canonical"; type="text/html"',
+        '<https://pointcast.xyz/sprint.json>; rel="related"; type="application/json"; title="Live sprint backlog"',
+        '<https://pointcast.xyz/sprints.json>; rel="related"; type="application/json"; title="Shipped sprint log"',
+      ].join(', '),
     },
   });
 };
