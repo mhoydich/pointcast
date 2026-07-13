@@ -23,6 +23,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'pointcast-pet',
+    name: 'PointCast Pet',
+    kicker: 'LOCAL COMPANION · CARE · RECEIPTS',
+    description: 'Your selected site companion, with local care, changing signal state, and a small receipt trail shared with the PointCast dock.',
+    url: 'https://pointcast.xyz/pet',
+    path: '/pet',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.PET',
+    kind: 'pointcast',
+  },
+  {
     slug: 'chart-of-the-day',
     name: 'Chart of the Day',
     kicker: 'DAILY DATA · LEDGER PULSE',

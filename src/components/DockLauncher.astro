@@ -65,6 +65,21 @@ const appItems = [
       </ol>
     </section>
 
+    <aside class="dock-companion" data-dock-companion style="--dock-pet-accent: #2f8f5f" aria-labelledby="dock-companion-name">
+      <a class="dock-companion__main" href="/pet" data-dock-track data-dock-title="PointCast Pet">
+        <img src="https://noun.pics/404.svg" alt="" width="42" height="42" loading="eager" data-dock-pet-image />
+        <span class="dock-companion__copy">
+          <small>YOUR COMPANION · LOCAL</small>
+          <strong id="dock-companion-name" data-dock-pet-name>Signal Pup</strong>
+          <em data-dock-pet-summary>sleepy signal · no care yet</em>
+        </span>
+      </a>
+      <nav class="dock-companion__actions" aria-label="Pet shortcuts">
+        <a href="/pet" data-dock-track data-dock-title="PointCast Pet">Care</a>
+        <a href="/pets" data-dock-track data-dock-title="Pets">Roster</a>
+      </nav>
+    </aside>
+
     <section class="dock-section dock-section--launch" aria-labelledby="dock-launch-title">
       <div class="dock-section__head">
         <div>
@@ -169,6 +184,13 @@ const appItems = [
     recordDockOpen,
     recordDockVisit,
   } from '../lib/dock-state';
+  import {
+    PET_CARE_KEY,
+    PET_SELECTED_KEY,
+    PET_STAMPS_KEY,
+    readPetSnapshot,
+    syncPetCareActivity,
+  } from '../lib/pet-state';
 
   function initDockLauncher() {
     const root = document.querySelector<HTMLElement>('[data-dock-launcher]');
@@ -272,6 +294,22 @@ const appItems = [
       });
     }
 
+    function renderPet() {
+      const companion = root.querySelector<HTMLElement>('[data-dock-companion]');
+      if (!companion) return;
+      const pet = readPetSnapshot();
+      const image = companion.querySelector<HTMLImageElement>('[data-dock-pet-image]');
+      const name = companion.querySelector<HTMLElement>('[data-dock-pet-name]');
+      const summary = companion.querySelector<HTMLElement>('[data-dock-pet-summary]');
+      companion.style.setProperty('--dock-pet-accent', pet.accent);
+      if (image) image.src = `https://noun.pics/${pet.nounId}.svg`;
+      if (name) name.textContent = pet.name;
+      if (summary) {
+        const care = pet.careCount ? `${pet.careCount} care${pet.careCount === 1 ? '' : 's'}` : 'no care yet';
+        summary.textContent = `${pet.state} · ${care}`;
+      }
+    }
+
     const search = root.querySelector<HTMLInputElement>('[data-dock-app-search]');
     const appRows = Array.from(root.querySelectorAll<HTMLElement>('[data-dock-app-item]'));
     const searchEmpty = root.querySelector<HTMLElement>('[data-dock-search-empty]');
@@ -301,6 +339,17 @@ const appItems = [
       renderRecents();
       renderActivity();
     });
+    window.addEventListener('pc:pet-state-change', () => {
+      syncPetCareActivity();
+      renderPet();
+      renderActivity();
+    });
+    window.addEventListener('storage', (event) => {
+      if (![PET_CARE_KEY, PET_SELECTED_KEY, PET_STAMPS_KEY].includes(event.key || '')) return;
+      syncPetCareActivity();
+      renderPet();
+      renderActivity();
+    });
     window.addEventListener('pc:dock-show', (event) => {
       const detail = (event as CustomEvent<{ view?: string }>).detail;
       selectView(detail?.view || 'home');
@@ -319,9 +368,11 @@ const appItems = [
       if (detail) detail.textContent = `${count} linked ${count === 1 ? 'identity' : 'identities'}.`;
     });
 
+    syncPetCareActivity();
     recordDockVisit(`${window.location.pathname}${window.location.search}`, document.title);
     renderRecents();
     renderActivity();
+    renderPet();
     selectView('home');
   }
 
@@ -353,6 +404,8 @@ const appItems = [
   .dock-app-list small,
   .dock-recents small,
   .dock-recents time,
+  .dock-companion small,
+  .dock-companion em,
   .dock-activity time,
   .dock-privacy-note {
     font-family: var(--pc-font-mono, ui-monospace, monospace);
@@ -425,6 +478,30 @@ const appItems = [
   .dock-recents time { color: #b12d3b; font-size: 8px; }
   .dock-empty { grid-column: 1 / -1; padding: 14px; color: #6f7882; font-size: 11px; }
 
+  .dock-companion {
+    min-height: 62px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    margin-top: 12px;
+    border: 1px solid #d9dde2;
+    border-left: 4px solid var(--dock-pet-accent);
+    border-radius: 6px;
+    background: #f8faf9;
+    overflow: hidden;
+  }
+  .dock-companion__main { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: #20242a; text-decoration: none; }
+  .dock-companion__main:hover { background: #f1f7f3; }
+  .dock-companion img { width: 42px; height: 42px; flex: none; border: 1px solid #242424; border-radius: 3px; background: #e5f2e9; image-rendering: pixelated; }
+  .dock-companion__copy { min-width: 0; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 8px; }
+  .dock-companion__copy small { grid-column: 1 / -1; color: var(--dock-pet-accent); font-size: 8px; font-weight: 800; }
+  .dock-companion__copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-companion__copy em { overflow: hidden; color: #6f7a75; font-size: 8px; font-style: normal; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+  .dock-companion__actions { display: grid; grid-template-columns: repeat(2, auto); border-left: 1px solid #d9dde2; }
+  .dock-companion__actions a { min-width: 60px; display: grid; place-items: center; padding: 0 11px; border-right: 1px solid #d9dde2; color: #145aa4; font: 800 8px/1 var(--pc-font-mono, ui-monospace, monospace); text-decoration: none; text-transform: uppercase; }
+  .dock-companion__actions a:last-child { border-right: 0; }
+  .dock-companion__actions a:hover { background: #fff; text-decoration: underline; }
+
   .dock-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .dock-quick {
     min-width: 0;
@@ -474,6 +551,7 @@ const appItems = [
   .dock-activity__marker { width: 6px; height: 6px; border-radius: 50%; background: #7f8b96; }
   .dock-activity__marker[data-type='save'] { background: #d19a20; }
   .dock-activity__marker[data-type='agent'] { background: #b12d3b; }
+  .dock-activity__marker[data-type='pet'] { background: #2f8f5f; }
   .dock-activity a { color: #20242a; text-decoration: none; }
   .dock-activity a:hover { color: #145aa4; text-decoration: underline; }
   .dock-activity time { color: #7b858f; font-size: 8px; }
@@ -511,6 +589,8 @@ const appItems = [
     .dock-recents li:nth-last-child(-n + 2) { border-right: 0; border-bottom: 1px solid #e2e5e8; }
     .dock-recents li:last-child { border-bottom: 0; }
     .dock-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dock-companion { grid-template-columns: 1fr; }
+    .dock-companion__actions { min-height: 34px; border-top: 1px solid #d9dde2; border-left: 0; }
     .dock-section__head--search { align-items: stretch; flex-direction: column; }
     .dock-app-search input { width: 100%; }
     .dock-account__row { align-items: stretch; flex-direction: column; }

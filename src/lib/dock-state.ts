@@ -4,7 +4,7 @@ export interface DockRecentItem {
   visitedAt: number;
 }
 
-export type DockActivityType = 'visit' | 'open' | 'save' | 'remove' | 'agent' | 'account';
+export type DockActivityType = 'visit' | 'open' | 'save' | 'remove' | 'agent' | 'account' | 'pet';
 
 export interface DockActivityItem {
   id: string;

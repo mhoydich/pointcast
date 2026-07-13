@@ -85,6 +85,7 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
       </a>
       <nav class="dashboard-nav" aria-label="Dashboard sections">
         <a href="#today">Today</a>
+        <a href="#pets">Pets</a>
         <a href="#explore">Explore</a>
         <a href="#library">Library</a>
         <a href="#activity">Activity</a>
@@ -132,6 +133,35 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
         </ol>
       </section>
     </div>
+
+    <section class="dashboard-band dashboard-pet" id="pets" aria-labelledby="dashboard-pet-title" data-dashboard-pet style="--dashboard-pet-accent: #2f8f5f">
+      <div class="dashboard-section-head">
+        <div>
+          <p class="dashboard-kicker">YOUR COMPANION · LOCAL</p>
+          <h2 id="dashboard-pet-title">Site Pet</h2>
+        </div>
+        <a href="/pets" data-dashboard-track data-dashboard-title="Pets">View roster →</a>
+      </div>
+      <div class="dashboard-pet-row">
+        <a class="dashboard-pet__identity" href="/pet" data-dashboard-track data-dashboard-title="PointCast Pet">
+          <img src="https://noun.pics/404.svg" alt="" width="58" height="58" loading="eager" data-dashboard-pet-image />
+          <span>
+            <small>ACTIVE COMPANION</small>
+            <strong data-dashboard-pet-name>Signal Pup</strong>
+            <em data-dashboard-pet-kind>route runner</em>
+          </span>
+        </a>
+        <dl class="dashboard-pet__stats">
+          <div><dt>Mood</dt><dd data-dashboard-pet-state>sleepy signal</dd></div>
+          <div><dt>Care</dt><dd data-dashboard-pet-care>0 receipts</dd></div>
+          <div><dt>Last</dt><dd data-dashboard-pet-last>not yet</dd></div>
+        </dl>
+        <nav class="dashboard-pet__actions" aria-label="Pet shortcuts">
+          <a href="/pet" data-dashboard-track data-dashboard-title="PointCast Pet">Care</a>
+          <a href="/zen-cats" data-dashboard-track data-dashboard-title="Zen Cats">Zen Cats</a>
+        </nav>
+      </div>
+    </section>
 
     <section class="dashboard-band dashboard-featured" aria-labelledby="featured-title">
       <div class="dashboard-section-head">
@@ -265,6 +295,13 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
       recordDockOpen,
       toggleDockSaved,
     } from '../lib/dock-state';
+    import {
+      PET_CARE_KEY,
+      PET_SELECTED_KEY,
+      PET_STAMPS_KEY,
+      readPetSnapshot,
+      syncPetCareActivity,
+    } from '../lib/pet-state';
 
     function initDashboard() {
       const root = document.querySelector<HTMLElement>('[data-dashboard]');
@@ -332,6 +369,27 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
           li.append(marker, body, time);
           list.append(li);
         });
+      }
+
+      function renderPet() {
+        const section = root.querySelector<HTMLElement>('[data-dashboard-pet]');
+        if (!section) return;
+        const pet = readPetSnapshot();
+        const image = section.querySelector<HTMLImageElement>('[data-dashboard-pet-image]');
+        const name = section.querySelector<HTMLElement>('[data-dashboard-pet-name]');
+        const kind = section.querySelector<HTMLElement>('[data-dashboard-pet-kind]');
+        const state = section.querySelector<HTMLElement>('[data-dashboard-pet-state]');
+        const care = section.querySelector<HTMLElement>('[data-dashboard-pet-care]');
+        const last = section.querySelector<HTMLElement>('[data-dashboard-pet-last]');
+        section.style.setProperty('--dashboard-pet-accent', pet.accent);
+        if (image) image.src = `https://noun.pics/${pet.nounId}.svg`;
+        if (name) name.textContent = pet.name;
+        if (kind) kind.textContent = pet.kind;
+        if (state) state.textContent = pet.state;
+        if (care) care.textContent = `${pet.careCount} receipt${pet.careCount === 1 ? '' : 's'}`;
+        if (last) last.textContent = pet.lastCareAt && pet.lastAction
+          ? `${pet.lastAction} · ${formatDockAge(pet.lastCareAt)}`
+          : 'not yet';
       }
 
       function renderLibrary() {
@@ -432,10 +490,23 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
         renderActivity();
         renderLibrary();
       });
+      window.addEventListener('pc:pet-state-change', () => {
+        syncPetCareActivity();
+        renderPet();
+        renderActivity();
+      });
+      window.addEventListener('storage', (event) => {
+        if (![PET_CARE_KEY, PET_SELECTED_KEY, PET_STAMPS_KEY].includes(event.key || '')) return;
+        syncPetCareActivity();
+        renderPet();
+        renderActivity();
+      });
 
+      syncPetCareActivity();
       renderRecents();
       renderActivity();
       renderLibrary();
+      renderPet();
       applyFilters();
     }
 
@@ -479,6 +550,10 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .app-card small,
   .app-card__route,
   .featured-card small,
+  .dashboard-pet small,
+  .dashboard-pet em,
+  .dashboard-pet dt,
+  .dashboard-pet dd,
   .continue-list small,
   .continue-list time,
   .activity-list time,
@@ -525,9 +600,36 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .activity-list i { width: 6px; height: 6px; border-radius: 50%; background: #818b95; }
   .activity-list i[data-type='save'] { background: #d19a20; }
   .activity-list i[data-type='agent'] { background: #b12d3b; }
+  .activity-list i[data-type='pet'] { background: #2f8f5f; }
   .activity-list a { color: #2b3035; text-decoration: none; }
   .activity-list a:hover { color: #145aa4; }
   .activity-list time { color: #7b858f; font-size: 8px; }
+
+  .dashboard-pet-row {
+    min-height: 82px;
+    display: grid;
+    grid-template-columns: minmax(230px, 0.9fr) minmax(360px, 1.5fr) auto;
+    align-items: stretch;
+    border-block: 1px solid #cdd2d7;
+    border-left: 4px solid var(--dashboard-pet-accent);
+    background: #fff;
+  }
+  .dashboard-pet__identity { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 11px 16px; color: #181a1d; text-decoration: none; }
+  .dashboard-pet__identity:hover { background: #f5faf7; }
+  .dashboard-pet__identity img { width: 58px; height: 58px; flex: none; border: 1px solid #242424; border-radius: 4px; background: #e5f2e9; image-rendering: pixelated; }
+  .dashboard-pet__identity span { min-width: 0; display: grid; gap: 3px; }
+  .dashboard-pet__identity small { color: var(--dashboard-pet-accent); font-size: 8px; font-weight: 800; }
+  .dashboard-pet__identity strong { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+  .dashboard-pet__identity em { overflow: hidden; color: #707b75; font-size: 8px; font-style: normal; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+  .dashboard-pet__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border-inline: 1px solid #dce1e4; }
+  .dashboard-pet__stats div { min-width: 0; display: grid; align-content: center; gap: 7px; padding: 12px 16px; border-right: 1px solid #dce1e4; }
+  .dashboard-pet__stats div:last-child { border-right: 0; }
+  .dashboard-pet__stats dt { color: #7a848d; font-size: 8px; text-transform: uppercase; }
+  .dashboard-pet__stats dd { overflow: hidden; margin: 0; color: #262b2f; font-size: 9px; font-weight: 800; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; }
+  .dashboard-pet__actions { display: grid; grid-template-columns: repeat(2, minmax(72px, auto)); }
+  .dashboard-pet__actions a { display: grid; place-items: center; padding: 0 15px; border-right: 1px solid #dce1e4; color: #145aa4; font: 800 8px/1 var(--pc-font-mono, ui-monospace, monospace); text-decoration: none; text-transform: uppercase; }
+  .dashboard-pet__actions a:last-child { border-right: 0; }
+  .dashboard-pet__actions a:hover { background: #f7fafc; text-decoration: underline; }
 
   .featured-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   .featured-card { overflow: hidden; border: 1px solid #bdc4ca; border-radius: 6px; background: #fff; }
@@ -595,6 +697,8 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .connection-grid { grid-template-columns: repeat(2, 1fr); }
     .connection-grid article:nth-child(2) { border-right: 0; }
     .connection-grid article:nth-child(-n + 2) { border-bottom: 1px solid #dbe0e4; }
+    .dashboard-pet-row { grid-template-columns: minmax(220px, 0.8fr) 1.4fr; }
+    .dashboard-pet__actions { grid-column: 1 / -1; min-height: 38px; border-top: 1px solid #dce1e4; }
   }
 
   @media (max-width: 760px) {
@@ -608,6 +712,9 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .dashboard-overview { grid-template-columns: 1fr; }
     .dashboard-continue { padding-right: 0; }
     .dashboard-activity { padding-left: 0; border-top: 1px solid #cdd2d7; border-left: 0; }
+    .dashboard-pet-row { grid-template-columns: 1fr; }
+    .dashboard-pet__stats { border-top: 1px solid #dce1e4; border-inline: 0; }
+    .dashboard-pet__actions { grid-column: auto; }
     .featured-grid { grid-template-columns: 1fr; }
     .featured-card a { grid-template-columns: 138px 1fr; }
     .featured-card img { height: 100%; min-height: 166px; }
@@ -636,6 +743,10 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .featured-card__copy { border-top: 4px solid var(--feature-color); border-left: 0; }
     .app-grid { grid-template-columns: 1fr; }
     .app-card > a { min-height: 164px; }
+    .dashboard-pet__stats div,
+    .dashboard-pet__stats div:last-child { min-height: 58px; padding: 10px 8px; border-bottom: 0; }
+    .dashboard-pet__stats div:last-child { border-right: 0; }
+    .dashboard-pet__stats dd { font-size: 8px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
