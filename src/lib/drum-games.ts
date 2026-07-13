@@ -25,7 +25,8 @@ export interface DrumGame {
 }
 
 export const DRUM_RUNNER_VERSIONS = [
-  { id: 'v3', name: 'Pocket', path: '/drum-runner', storageKey: 'pc-drum-runner-v3-best', scoring: 'points' },
+  { id: 'v4', name: 'Road Band', path: '/drum-runner', storageKey: 'pc-drum-runner-v4-best', scoring: 'points' },
+  { id: 'v3', name: 'Pocket', path: '/drum-runner-v3', storageKey: 'pc-drum-runner-v3-best', scoring: 'points' },
   { id: 'v2', name: 'Postcards', path: '/drum-runner-v2', storageKey: 'pc-drum-runner-v2-best', scoring: 'meters' },
   { id: 'v1', name: 'Endless', path: '/drum-runner-v1', storageKey: 'pc-drum-runner-best', scoring: 'meters' },
 ] as const;
@@ -94,13 +95,13 @@ export const DRUM_GAMES: readonly DrumGame[] = [
     shortName: 'Runner',
     path: '/drum-runner',
     number: '04',
-    kicker: 'PERFORM · JUMP · BUILD THE TRACK',
-    description: 'Every tap performs a note, sends a Noun over the next obstacle, and builds an El Segundo phrase the city plays back.',
+    kicker: 'PICK A NOUN · PLAY THE ROAD',
+    description: 'Lead a Noun road band: perform the obstacle cues, collect musical gear, and leave every hit stamped into the moving beat road.',
     skill: 'Pocket',
-    controls: 'Perform + jump · Space',
-    nounId: 214,
+    controls: 'Play, jump + gear · Space',
+    nounId: 137,
     accent: '#7ac8ed',
-    bestKey: 'pc-drum-runner-v3-best',
+    bestKey: 'pc-drum-runner-v4-best',
     bestUnit: ' points',
     bestDirection: 'high',
   },
