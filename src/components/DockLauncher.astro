@@ -1,0 +1,527 @@
+---
+import AuthMenu from './AuthMenu.astro';
+import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import { RETRO_ARCADE_GAMES } from '../lib/retro-arcade';
+
+const quickLinks = [
+  { name: 'Arcade', meta: '4 games', path: '/win95-games', seed: 198 },
+  { name: 'Apps', meta: 'tools + labs', path: '/apps', seed: 409 },
+  { name: 'Rooms', meta: 'go somewhere', path: '/rooms', seed: 77 },
+  { name: 'Agents', meta: 'ask the cast', path: '/for-agents', seed: 621 },
+  { name: 'Collection', meta: 'your shelf', path: '/collection', seed: 888 },
+  { name: 'Now', meta: 'live index', path: '/now', seed: 314 },
+];
+
+const appItems = [
+  ...RETRO_ARCADE_GAMES.map((game) => ({
+    name: game.name,
+    kicker: game.kicker,
+    description: game.description,
+    path: game.path,
+    kind: 'game',
+  })),
+  ...POINTCAST_APPS
+    .filter((app) => !RETRO_ARCADE_GAMES.some((game) => game.path === app.path))
+    .slice(0, 14)
+    .map((app) => ({
+      name: app.name,
+      kicker: app.kicker,
+      description: app.description,
+      path: app.path,
+      kind: app.kind === 'satellite' ? 'site' : 'app',
+    })),
+];
+---
+
+<section class="dock-launcher" data-dock-launcher aria-label="PointCast dock">
+  <header class="dock-launcher__header">
+    <div>
+      <p class="dock-launcher__eyebrow">POINTCAST DOCK · LOCAL-FIRST</p>
+      <h2>Good evening. Where to?</h2>
+    </div>
+    <a class="dock-launcher__dashboard" href="/dashboard" data-dock-track data-dock-title="Dashboard">
+      Dashboard <span aria-hidden="true">↗</span>
+    </a>
+  </header>
+
+  <nav class="dock-tabs" role="tablist" aria-label="Dock views">
+    <button type="button" role="tab" id="dock-tab-home" aria-controls="dock-view-home" aria-selected="true" data-dock-tab="home">Home</button>
+    <button type="button" role="tab" id="dock-tab-apps" aria-controls="dock-view-apps" aria-selected="false" data-dock-tab="apps">Apps</button>
+    <button type="button" role="tab" id="dock-tab-activity" aria-controls="dock-view-activity" aria-selected="false" data-dock-tab="activity">Activity</button>
+    <button type="button" role="tab" id="dock-tab-account" aria-controls="dock-view-account" aria-selected="false" data-dock-tab="account">Account</button>
+  </nav>
+
+  <div class="dock-view" id="dock-view-home" role="tabpanel" aria-labelledby="dock-tab-home" data-dock-view="home">
+    <section class="dock-section" aria-labelledby="dock-continue-title">
+      <div class="dock-section__head">
+        <div>
+          <p class="dock-section__kicker">CONTINUE</p>
+          <h3 id="dock-continue-title">Pick up where you left off.</h3>
+        </div>
+        <button class="dock-section__quiet" type="button" data-dock-tab-jump="activity">History</button>
+      </div>
+      <ol class="dock-recents" data-dock-recents aria-live="polite">
+        <li class="dock-empty">Your recent PointCast places will appear here.</li>
+      </ol>
+    </section>
+
+    <section class="dock-section dock-section--launch" aria-labelledby="dock-launch-title">
+      <div class="dock-section__head">
+        <div>
+          <p class="dock-section__kicker">QUICK LAUNCH</p>
+          <h3 id="dock-launch-title">The useful parts, up front.</h3>
+        </div>
+        <button class="dock-section__quiet" type="button" data-dock-tab-jump="apps">All apps</button>
+      </div>
+      <div class="dock-quick-grid">
+        {quickLinks.map((item) => (
+          <a href={item.path} class="dock-quick" data-dock-track data-dock-title={item.name}>
+            <img src={`https://noun.pics/${item.seed}.svg`} alt="" width="34" height="34" loading="lazy" />
+            <span>
+              <strong>{item.name}</strong>
+              <small>{item.meta}</small>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  </div>
+
+  <div class="dock-view" id="dock-view-apps" role="tabpanel" aria-labelledby="dock-tab-apps" data-dock-view="apps" hidden>
+    <section class="dock-section" aria-labelledby="dock-apps-title">
+      <div class="dock-section__head dock-section__head--search">
+        <div>
+          <p class="dock-section__kicker">APPS + GAMES</p>
+          <h3 id="dock-apps-title">Search the PointCast shelf.</h3>
+        </div>
+        <label class="dock-app-search">
+          <span class="sr-only">Filter apps</span>
+          <input type="search" placeholder="Filter apps…" data-dock-app-search />
+        </label>
+      </div>
+      <ol class="dock-app-list" data-dock-app-list>
+        {appItems.map((app) => (
+          <li data-dock-app-item data-search={`${app.name} ${app.kicker} ${app.description} ${app.kind}`.toLowerCase()}>
+            <a href={app.path} data-dock-track data-dock-title={app.name}>
+              <span class="dock-app-list__type">{app.kind}</span>
+              <span class="dock-app-list__body">
+                <strong>{app.name}</strong>
+                <small>{app.kicker}</small>
+              </span>
+              <span class="dock-app-list__arrow" aria-hidden="true">→</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <p class="dock-search-empty" data-dock-search-empty hidden>No matching PointCast apps.</p>
+      <a class="dock-text-link" href="/apps" data-dock-track data-dock-title="All PointCast apps">Open the full app directory →</a>
+    </section>
+  </div>
+
+  <div class="dock-view" id="dock-view-activity" role="tabpanel" aria-labelledby="dock-tab-activity" data-dock-view="activity" hidden>
+    <section class="dock-section" aria-labelledby="dock-activity-title">
+      <div class="dock-section__head">
+        <div>
+          <p class="dock-section__kicker">LOCAL ACTIVITY</p>
+          <h3 id="dock-activity-title">A legible trail, kept on this device.</h3>
+        </div>
+        <button class="dock-section__quiet" type="button" data-dock-clear-activity>Clear</button>
+      </div>
+      <ol class="dock-activity" data-dock-activity aria-live="polite">
+        <li class="dock-empty">Activity starts as you open apps and save places.</li>
+      </ol>
+      <p class="dock-privacy-note">Nothing in this view is synced yet. Account sync will be opt-in.</p>
+    </section>
+  </div>
+
+  <div class="dock-view" id="dock-view-account" role="tabpanel" aria-labelledby="dock-tab-account" data-dock-view="account" hidden>
+    <section class="dock-section dock-account" aria-labelledby="dock-account-title">
+      <div class="dock-section__head">
+        <div>
+          <p class="dock-section__kicker">IDENTITY + WALLET</p>
+          <h3 id="dock-account-title">One account, linked identities.</h3>
+        </div>
+      </div>
+      <div class="dock-account__row">
+        <div>
+          <strong data-dock-account-name>Visitor mode</strong>
+          <p data-dock-account-detail>Your activity stays on this device until you sign in.</p>
+        </div>
+        <AuthMenu />
+      </div>
+      <div class="dock-account__links">
+        <a href="/profile">Profile</a>
+        <a href="/wallet">Wallet shelf</a>
+        <a href="/collection">Collection</a>
+        <a href="/status">Status</a>
+      </div>
+      <p class="dock-privacy-note">Wallet connection requests signatures through the wallet provider. PointCast never receives wallet keys.</p>
+    </section>
+  </div>
+</section>
+
+<script>
+  import {
+    clearDockActivity,
+    formatDockAge,
+    readDockActivity,
+    readDockRecents,
+    recordDockOpen,
+    recordDockVisit,
+  } from '../lib/dock-state';
+
+  function initDockLauncher() {
+    const root = document.querySelector<HTMLElement>('[data-dock-launcher]');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+
+    const tabButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-dock-tab]'));
+    const views = Array.from(root.querySelectorAll<HTMLElement>('[data-dock-view]'));
+
+    function selectView(viewName: string, focus = false) {
+      tabButtons.forEach((button) => {
+        const active = button.dataset.dockTab === viewName;
+        button.setAttribute('aria-selected', String(active));
+        button.tabIndex = active ? 0 : -1;
+        if (active && focus) button.focus();
+      });
+      views.forEach((view) => {
+        view.hidden = view.dataset.dockView !== viewName;
+      });
+      if (viewName === 'activity') renderActivity();
+      if (viewName === 'home') renderRecents();
+    }
+
+    tabButtons.forEach((button, index) => {
+      button.addEventListener('click', () => selectView(button.dataset.dockTab || 'home'));
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const next = tabButtons[(index + delta + tabButtons.length) % tabButtons.length];
+        selectView(next.dataset.dockTab || 'home', true);
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-dock-tab-jump]').forEach((button) => {
+      button.addEventListener('click', () => selectView(button.dataset.dockTabJump || 'home'));
+    });
+
+    function createRecentRow(path: string, title: string, age: string): HTMLLIElement {
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      const body = document.createElement('span');
+      const strong = document.createElement('strong');
+      const small = document.createElement('small');
+      const time = document.createElement('time');
+      link.href = path;
+      link.dataset.dockTrack = '';
+      link.dataset.dockTitle = title;
+      strong.textContent = title;
+      small.textContent = path;
+      time.textContent = age;
+      body.append(strong, small);
+      link.append(body, time);
+      li.append(link);
+      return li;
+    }
+
+    function renderRecents() {
+      const list = root.querySelector<HTMLOListElement>('[data-dock-recents]');
+      if (!list) return;
+      const recents = readDockRecents()
+        .filter((item) => item.path !== `${window.location.pathname}${window.location.search}`)
+        .slice(0, 4);
+      list.replaceChildren();
+      if (!recents.length) {
+        const fallback = [
+          { path: '/win95-games', title: 'Retro Arcade' },
+          { path: '/app', title: 'PointCast Shell' },
+          { path: '/rooms', title: 'Rooms' },
+        ];
+        fallback.forEach((item) => list.append(createRecentRow(item.path, item.title, 'start')));
+        return;
+      }
+      recents.forEach((item) => list.append(createRecentRow(item.path, item.title, formatDockAge(item.visitedAt))));
+    }
+
+    function renderActivity() {
+      const list = root.querySelector<HTMLOListElement>('[data-dock-activity]');
+      if (!list) return;
+      const activity = readDockActivity().slice(0, 12);
+      list.replaceChildren();
+      if (!activity.length) {
+        const empty = document.createElement('li');
+        empty.className = 'dock-empty';
+        empty.textContent = 'Activity starts as you open apps and save places.';
+        list.append(empty);
+        return;
+      }
+      activity.forEach((item) => {
+        const li = document.createElement('li');
+        const marker = document.createElement('span');
+        const body = document.createElement(item.path ? 'a' : 'span');
+        const time = document.createElement('time');
+        marker.className = 'dock-activity__marker';
+        marker.dataset.type = item.type;
+        body.textContent = item.label;
+        if (item.path && body instanceof HTMLAnchorElement) body.href = item.path;
+        time.textContent = formatDockAge(item.at);
+        li.append(marker, body, time);
+        list.append(li);
+      });
+    }
+
+    const search = root.querySelector<HTMLInputElement>('[data-dock-app-search]');
+    const appRows = Array.from(root.querySelectorAll<HTMLElement>('[data-dock-app-item]'));
+    const searchEmpty = root.querySelector<HTMLElement>('[data-dock-search-empty]');
+    search?.addEventListener('input', () => {
+      const query = search.value.trim().toLowerCase();
+      let visible = 0;
+      appRows.forEach((row) => {
+        const matches = !query || (row.dataset.search || '').includes(query);
+        row.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visible > 0;
+    });
+
+    root.addEventListener('click', (event) => {
+      const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('[data-dock-track]');
+      if (!link) return;
+      recordDockOpen(link.getAttribute('href') || '/', link.dataset.dockTitle || link.textContent || 'PointCast');
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-dock-clear-activity]')?.addEventListener('click', () => {
+      clearDockActivity();
+      renderActivity();
+    });
+
+    window.addEventListener('pc:dock-state-change', () => {
+      renderRecents();
+      renderActivity();
+    });
+    window.addEventListener('pc:dock-show', (event) => {
+      const detail = (event as CustomEvent<{ view?: string }>).detail;
+      selectView(detail?.view || 'home');
+    });
+    window.addEventListener('pc:auth-change', (event) => {
+      const user = (event as CustomEvent<{ user?: { preferredName?: string; identities?: unknown[] } | null }>).detail?.user;
+      const name = root.querySelector<HTMLElement>('[data-dock-account-name]');
+      const detail = root.querySelector<HTMLElement>('[data-dock-account-detail]');
+      if (!user) {
+        if (name) name.textContent = 'Visitor mode';
+        if (detail) detail.textContent = 'Your activity stays on this device until you sign in.';
+        return;
+      }
+      if (name) name.textContent = user.preferredName || 'PointCast account';
+      const count = user.identities?.length || 1;
+      if (detail) detail.textContent = `${count} linked ${count === 1 ? 'identity' : 'identities'}.`;
+    });
+
+    recordDockVisit(`${window.location.pathname}${window.location.search}`, document.title);
+    renderRecents();
+    renderActivity();
+    selectView('home');
+  }
+
+  initDockLauncher();
+  document.addEventListener('astro:page-load', initDockLauncher);
+</script>
+
+<style is:global>
+  .dock-launcher {
+    position: relative;
+    color: #181818;
+    font-family: var(--pc-font-sans, Inter, system-ui, sans-serif);
+  }
+
+  .dock-launcher__header,
+  .dock-section__head,
+  .dock-account__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .dock-launcher__header { padding: 2px 38px 14px 0; }
+  .dock-launcher__eyebrow,
+  .dock-section__kicker,
+  .dock-quick small,
+  .dock-app-list__type,
+  .dock-app-list small,
+  .dock-recents small,
+  .dock-recents time,
+  .dock-activity time,
+  .dock-privacy-note {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .dock-launcher__eyebrow { margin: 0 0 4px; color: #607080; font-size: 9px; }
+  .dock-launcher h2 { margin: 0; font-size: 22px; line-height: 1.12; font-weight: 700; letter-spacing: 0; }
+  .dock-launcher__dashboard,
+  .dock-text-link {
+    color: #145aa4;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .dock-launcher__dashboard:hover,
+  .dock-text-link:hover { text-decoration: underline; }
+
+  .dock-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-block: 1px solid #d9dde2;
+  }
+  .dock-tabs button {
+    min-height: 38px;
+    border: 0;
+    border-right: 1px solid #d9dde2;
+    background: #fff;
+    color: #5c6670;
+    font: 700 10px/1 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .dock-tabs button:last-child { border-right: 0; }
+  .dock-tabs button[aria-selected='true'] { color: #111; background: #f2f5f7; box-shadow: inset 0 -2px #145aa4; }
+  .dock-tabs button:focus-visible { outline: 2px solid #145aa4; outline-offset: -2px; }
+
+  .dock-view { min-height: 280px; }
+  .dock-section { padding: 18px 0; border-bottom: 1px solid #e2e5e8; }
+  .dock-section:last-child { border-bottom: 0; }
+  .dock-section__head { align-items: flex-end; margin-bottom: 12px; }
+  .dock-section__head--search { align-items: center; }
+  .dock-section__kicker { margin: 0 0 3px; color: #b12d3b; font-size: 9px; font-weight: 800; }
+  .dock-section h3 { margin: 0; color: #20242a; font-size: 15px; line-height: 1.2; font-weight: 700; letter-spacing: 0; }
+  .dock-section__quiet {
+    border: 0;
+    padding: 4px 0;
+    background: none;
+    color: #145aa4;
+    font: 700 10px/1 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: 0;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .dock-section__quiet:hover { text-decoration: underline; }
+
+  .dock-recents,
+  .dock-activity,
+  .dock-app-list { list-style: none; margin: 0; padding: 0; }
+  .dock-recents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #d9dde2; border-radius: 6px; overflow: hidden; }
+  .dock-recents li { min-width: 0; border-bottom: 1px solid #e2e5e8; }
+  .dock-recents li:nth-child(odd) { border-right: 1px solid #e2e5e8; }
+  .dock-recents li:nth-last-child(-n + 2) { border-bottom: 0; }
+  .dock-recents a { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; color: #20242a; text-decoration: none; background: #fff; }
+  .dock-recents a:hover { background: #f5f8fa; }
+  .dock-recents a > span { min-width: 0; display: grid; gap: 3px; }
+  .dock-recents strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .dock-recents small { overflow: hidden; color: #7b858f; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-recents time { color: #b12d3b; font-size: 8px; }
+  .dock-empty { grid-column: 1 / -1; padding: 14px; color: #6f7882; font-size: 11px; }
+
+  .dock-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .dock-quick {
+    min-width: 0;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    border: 1px solid #d9dde2;
+    border-radius: 6px;
+    background: #fff;
+    color: #20242a;
+    text-decoration: none;
+  }
+  .dock-quick:hover { border-color: #145aa4; background: #f7fbff; }
+  .dock-quick img { width: 34px; height: 34px; border: 1px solid #242424; border-radius: 3px; background: #dfefff; image-rendering: pixelated; flex: none; }
+  .dock-quick > span { min-width: 0; display: grid; gap: 3px; }
+  .dock-quick strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-quick small { overflow: hidden; color: #737e88; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+
+  .dock-app-search input {
+    width: 190px;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid #bec6ce;
+    border-radius: 4px;
+    background: #fff;
+    color: #111;
+    font: 11px/1.2 var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .dock-app-search input:focus { outline: 2px solid #145aa4; outline-offset: 1px; }
+  .dock-app-list { max-height: 310px; overflow-y: auto; border-block: 1px solid #d9dde2; }
+  .dock-app-list li { border-bottom: 1px solid #e6e9ec; }
+  .dock-app-list li:last-child { border-bottom: 0; }
+  .dock-app-list a { min-height: 47px; display: grid; grid-template-columns: 44px 1fr 20px; align-items: center; gap: 10px; padding: 7px 4px; color: #20242a; text-decoration: none; }
+  .dock-app-list a:hover { background: #f5f8fa; }
+  .dock-app-list__type { color: #b12d3b; font-size: 8px; font-weight: 800; }
+  .dock-app-list__body { min-width: 0; display: grid; gap: 2px; }
+  .dock-app-list strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-app-list small { overflow: hidden; color: #737e88; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+  .dock-app-list__arrow { color: #145aa4; text-align: right; }
+  .dock-search-empty { margin: 16px 0; color: #6f7882; font-size: 12px; }
+  .dock-text-link { display: inline-block; margin-top: 12px; }
+
+  .dock-activity { border-top: 1px solid #d9dde2; }
+  .dock-activity li { min-height: 42px; display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 10px; border-bottom: 1px solid #e6e9ec; font-size: 11px; }
+  .dock-activity__marker { width: 6px; height: 6px; border-radius: 50%; background: #7f8b96; }
+  .dock-activity__marker[data-type='save'] { background: #d19a20; }
+  .dock-activity__marker[data-type='agent'] { background: #b12d3b; }
+  .dock-activity a { color: #20242a; text-decoration: none; }
+  .dock-activity a:hover { color: #145aa4; text-decoration: underline; }
+  .dock-activity time { color: #7b858f; font-size: 8px; }
+  .dock-privacy-note { margin: 12px 0 0; color: #737e88; font-size: 8px; line-height: 1.5; }
+
+  .dock-account__row { align-items: flex-start; padding: 14px; border: 1px solid #d9dde2; border-radius: 6px; background: #f6f8fa; }
+  .dock-account__row strong { font-size: 14px; }
+  .dock-account__row p { max-width: 360px; margin: 4px 0 0; color: #68737e; font-size: 11px; line-height: 1.45; }
+  .dock-account__links { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 12px; border: 1px solid #d9dde2; border-radius: 6px; overflow: hidden; }
+  .dock-account__links a { padding: 11px 8px; border-right: 1px solid #d9dde2; color: #20242a; font: 700 9px/1 var(--pc-font-mono, ui-monospace, monospace); text-align: center; text-decoration: none; text-transform: uppercase; }
+  .dock-account__links a:last-child { border-right: 0; }
+  .dock-account__links a:hover { background: #f5f8fa; color: #145aa4; }
+  .dock-account [data-auth-trigger] { min-height: 34px; border-radius: 4px; background: #181818; color: #fff; }
+  .dock-launcher .dock-account .auth-menu { position: static; }
+  .dock-launcher .dock-account [data-auth-panel] {
+    position: absolute;
+    top: 94px;
+    right: 0;
+    bottom: auto;
+    width: min(420px, 100%);
+    max-height: min(430px, calc(100vh - 150px));
+    z-index: 80;
+  }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+  @media (max-width: 620px) {
+    .dock-launcher__header { align-items: flex-start; }
+    .dock-launcher h2 { font-size: 18px; }
+    .dock-launcher__dashboard { margin-top: 4px; font-size: 10px; }
+    .dock-view { min-height: 330px; }
+    .dock-recents { grid-template-columns: 1fr; }
+    .dock-recents li,
+    .dock-recents li:nth-child(odd),
+    .dock-recents li:nth-last-child(-n + 2) { border-right: 0; border-bottom: 1px solid #e2e5e8; }
+    .dock-recents li:last-child { border-bottom: 0; }
+    .dock-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dock-section__head--search { align-items: stretch; flex-direction: column; }
+    .dock-app-search input { width: 100%; }
+    .dock-account__row { align-items: stretch; flex-direction: column; }
+    .dock-account__links { grid-template-columns: repeat(2, 1fr); }
+    .dock-account__links a:nth-child(2) { border-right: 0; }
+    .dock-account__links a:nth-child(-n + 2) { border-bottom: 1px solid #d9dde2; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dock-tabs button,
+    .dock-quick,
+    .dock-recents a { transition: none; }
+  }
+</style>

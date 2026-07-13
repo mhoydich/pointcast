@@ -49,6 +49,7 @@ import { DOCK_KIT } from '../data/dock-kit';
 import { FEDERATION_PEERS } from '../data/federation-peers';
 import { RESIDENTS } from '../data/residents';
 import { SPELLS } from '../data/spells';
+import DockLauncher from './DockLauncher.astro';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 const MOOD_SPELLS_JSON = JSON.stringify(MOOD_SPELLS);
@@ -71,7 +72,7 @@ const pingable = RESIDENTS.filter(
 );
 ---
 
-<aside class="fb" id="pc-fb" aria-label="PointCast footer bar">
+<aside class="fb" id="pc-fb" aria-label="PointCast dock">
   <div class="fb__bar">
     <button
       type="button"
@@ -172,7 +173,7 @@ const pingable = RESIDENTS.filter(
         aria-haspopup="dialog"
         aria-expanded="false"
         aria-controls="fb-menu"
-        aria-label="Open kit binder"
+        aria-label="Open PointCast dock"
       >
         <span class="fb__menu-glyph" aria-hidden="true">≡</span>
       </button>
@@ -555,12 +556,20 @@ const pingable = RESIDENTS.filter(
     </div>
   </div>
 
-  <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast kit binder" hidden>
+  <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast dock" hidden>
     <div class="fb__menu-scrim" id="fb-menu-scrim" aria-hidden="true"></div>
     <div class="fb__menu-panel" id="fb-menu-panel" tabindex="-1">
-      <button type="button" class="fb__menu-close" id="fb-menu-close" aria-label="Close binder">×</button>
+      <button type="button" class="fb__menu-close" id="fb-menu-close" aria-label="Close PointCast dock">×</button>
 
-      <section class="fb-you-section">
+      <DockLauncher />
+
+      <details class="fb-legacy">
+        <summary>
+          <span>Preferences + utility kit</span>
+          <small>room, agents, federation, mood and routes</small>
+        </summary>
+
+        <section class="fb-you-section">
         <div class="fb-you-card">
           <img
             class="fb-you-card__noun"
@@ -580,9 +589,9 @@ const pingable = RESIDENTS.filter(
           <button type="button" class="fb-btn" id="fb-btn-wallet">Connect wallet (Beacon)</button>
           <a class="fb-btn fb-btn--ghost" href="/profile">View profile</a>
         </div>
-      </section>
+        </section>
 
-      <section class="fb-controls">
+        <section class="fb-controls">
         <label class="fb-ctrl">
           <span class="fb-ctrl__name mono">MOOD</span>
           <select class="fb-ctrl__input mono" id="fb-mood-select">
@@ -600,11 +609,11 @@ const pingable = RESIDENTS.filter(
           <span class="fb-ctrl__name mono">AUTO-CAST ON MOOD</span>
           <span class="fb-ctrl__hint mono" id="fb-auto-cast-hint">marine layer → +rain · quiet → +breath · …</span>
         </label>
-      </section>
+        </section>
 
-      <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
+        <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
 
-      <section class="fb-binder">
+        <section class="fb-binder">
         <p class="fb-binder__label mono">KIT — {DOCK_KIT.length} / {DOCK_KIT.length} collected</p>
         <ul class="fb-binder__grid">
           {DOCK_KIT.map((item) => (
@@ -631,9 +640,9 @@ const pingable = RESIDENTS.filter(
             </li>
           ))}
         </ul>
-      </section>
+        </section>
 
-      <section class="fb-routes">
+        <section class="fb-routes">
         <div class="fb-routes__group">
           <p class="fb-routes__label mono">ROOMS</p>
           <div class="fb-routes__links">
@@ -674,13 +683,14 @@ const pingable = RESIDENTS.filter(
             <a href="/now">now</a>
           </div>
         </div>
-      </section>
+        </section>
 
-      <footer class="fb-live mono">
-        <span class="fb-live__dot" aria-hidden="true"></span>
-        <span id="fb-live-copy">marine layer · el segundo · <span id="fb-live-here">—</span> here</span>
-        <a class="fb-live__link" href="https://github.com/mhoydich/pointcast" target="_blank" rel="noopener">github ↗</a>
-      </footer>
+        <footer class="fb-live mono">
+          <span class="fb-live__dot" aria-hidden="true"></span>
+          <span id="fb-live-copy">marine layer · el segundo · <span id="fb-live-here">—</span> here</span>
+          <a class="fb-live__link" href="https://github.com/mhoydich/pointcast" target="_blank" rel="noopener">github ↗</a>
+        </footer>
+      </details>
     </div>
   </div>
 </aside>
@@ -750,6 +760,8 @@ const pingable = RESIDENTS.filter(
       });
       openPopover = null;
       document.removeEventListener('keydown', onEsc);
+      document.documentElement.classList.remove('pc-dock-open');
+      window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: false } }));
       if (lastFocused && typeof lastFocused.focus === 'function') {
         try { lastFocused.focus(); } catch (e) {}
       }
@@ -770,6 +782,8 @@ const pingable = RESIDENTS.filter(
       setTimeout(function () { try { $panel.focus(); } catch (e) {} }, 10);
       openPopover = 'menu';
       document.addEventListener('keydown', onEsc);
+      document.documentElement.classList.add('pc-dock-open');
+      window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: true } }));
     }
 
     function openTray(id) {
@@ -799,6 +813,8 @@ const pingable = RESIDENTS.filter(
       }, 30);
       openPopover = 'tray:' + id;
       document.addEventListener('keydown', onEsc);
+      document.documentElement.classList.add('pc-dock-open');
+      window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: true } }));
       // Per-tray on-open hooks (defined later in the IIFE; hoisted because
       // they're function declarations).
       try {
@@ -1318,9 +1334,29 @@ const pingable = RESIDENTS.filter(
       var chipBtn = document.querySelector('.wallet-chip__btn');
       if (state === 'connected' && chipBtn) { chipBtn.click(); return; }
       if (chipBtn) { chipBtn.click(); return; }
+      var authTrigger = document.querySelector('[data-auth-trigger]');
+      if (authTrigger) {
+        window.dispatchEvent(new CustomEvent('pc:dock-show', { detail: { view: 'account' } }));
+        authTrigger.click();
+        return;
+      }
       window.location.href = '/profile';
     });
     window.addEventListener('pc:wallet-change', refreshWalletUI);
+    window.addEventListener('pc:auth-change', function (event) {
+      var user = event && event.detail && event.detail.user;
+      if (!user) {
+        refreshWalletUI();
+        return;
+      }
+      var name = String(user.preferredName || 'PointCast account');
+      var identityCount = Array.isArray(user.identities) ? user.identities.length : 1;
+      $menuName.textContent = name;
+      $menuWallet.textContent = identityCount + ' linked identit' + (identityCount === 1 ? 'y' : 'ies');
+      $youLabel.textContent = name.slice(0, 12);
+      $walletBtn.textContent = 'Manage account';
+      $walletBtn.setAttribute('data-state', 'account');
+    });
     refreshWalletUI();
 
     $moodSelect.addEventListener('change', function () {
@@ -2000,14 +2036,14 @@ const pingable = RESIDENTS.filter(
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
-    height: 44px;
-    background: linear-gradient(180deg, rgba(26, 18, 8, 0.96) 0%, rgba(42, 29, 11, 0.96) 100%);
-    border-top: 1px solid rgba(255, 180, 80, 0.25);
-    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(12px) saturate(1.1);
-    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    gap: 8px;
+    padding: 4px 10px;
+    height: 40px;
+    background: rgba(26, 23, 19, 0.97);
+    border-top: 1px solid rgba(255, 200, 120, 0.24);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #fdf2d6;
   }
   .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
@@ -2094,10 +2130,12 @@ const pingable = RESIDENTS.filter(
   }
   @media (max-width: 640px) { .fb__omni-hint { display: none; } }
 
-  .fb__right { pointer-events: auto; display: flex; align-items: center; gap: 8px; }
+  .fb__right { pointer-events: auto; display: flex; align-items: center; gap: 0; }
 
   .fb__kit {
-    display: inline-flex;
+    /* The kit still lives in the binder; it does not need six permanent
+       tiles competing with the search field on every page. */
+    display: none;
     align-items: center;
     gap: 4px;
     padding: 2px 4px;
@@ -2182,7 +2220,7 @@ const pingable = RESIDENTS.filter(
     .fb__stamp[data-tray='fed'] { display: none; }
   }
 
-  .fb__on-air { display: flex; align-items: center; gap: 5px; color: #f9c56c; padding: 0 2px; }
+  .fb__on-air { display: none; align-items: center; gap: 5px; color: #f9c56c; padding: 0 2px; }
   .fb__on-air-dot {
     width: 7px;
     height: 7px;
@@ -2200,11 +2238,11 @@ const pingable = RESIDENTS.filter(
 
   .fb__menu-btn {
     appearance: none;
-    background: rgba(255, 200, 100, 0.1);
-    border: 1px solid rgba(255, 180, 80, 0.3);
+    background: transparent;
+    border: 1px solid rgba(255, 220, 160, 0.24);
     color: #fdf2d6;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 3px;
     font-size: 16px;
     cursor: pointer;
@@ -2213,12 +2251,12 @@ const pingable = RESIDENTS.filter(
     align-items: center;
     justify-content: center;
   }
-  .fb__menu-btn:hover { background: rgba(255, 200, 100, 0.22); border-color: rgba(255, 200, 100, 0.55); }
+  .fb__menu-btn:hover { background: rgba(255, 220, 160, 0.12); border-color: rgba(255, 220, 160, 0.55); }
 
   .fb__tray {
     pointer-events: auto;
     position: fixed;
-    bottom: 56px;
+    bottom: 48px;
     width: min(340px, calc(100vw - 16px));
     max-height: calc(100vh - 90px);
     overflow-y: auto;
@@ -2518,16 +2556,16 @@ const pingable = RESIDENTS.filter(
   .fb__menu-panel {
     position: absolute;
     right: 12px;
-    bottom: 56px;
-    width: min(380px, calc(100vw - 24px));
-    max-height: calc(100vh - 90px);
+    bottom: 48px;
+    width: min(720px, calc(100vw - 24px));
+    max-height: calc(100vh - 72px);
     overflow-y: auto;
-    background: linear-gradient(180deg, #fffdf6 0%, #faf2dc 100%);
-    color: #2d1f08;
-    border: 1px solid #4e3a16;
-    border-radius: 4px;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.32);
-    padding: 20px 22px 16px;
+    background: #fff;
+    color: #181818;
+    border: 1px solid #24282d;
+    border-radius: 6px 6px 0 0;
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.24);
+    padding: 18px 20px 16px;
     outline: none;
     transform: translateY(8px);
     transition: transform 0.22s ease;
@@ -2536,11 +2574,12 @@ const pingable = RESIDENTS.filter(
   @media (max-width: 560px) {
     .fb__menu-panel {
       right: 0;
-      bottom: 0;
+      bottom: 40px;
       left: 0;
       width: auto;
-      max-height: calc(100vh - 44px);
-      border-radius: 4px 4px 0 0;
+      max-height: calc(100vh - 52px);
+      border-radius: 6px 6px 0 0;
+      padding: 16px 14px 14px;
     }
   }
   .fb__menu-close {
@@ -2559,6 +2598,37 @@ const pingable = RESIDENTS.filter(
     padding: 0;
   }
   .fb__menu-close:hover { color: #2d1f08; }
+
+  .fb-legacy {
+    margin-top: 4px;
+    border-top: 1px solid #d9dde2;
+  }
+  .fb-legacy > summary {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    color: #3e4852;
+    cursor: pointer;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0;
+    list-style: none;
+    text-transform: uppercase;
+  }
+  .fb-legacy > summary::-webkit-details-marker { display: none; }
+  .fb-legacy > summary::after { content: '+'; color: #145aa4; font-size: 15px; }
+  .fb-legacy[open] > summary::after { content: '\2212'; }
+  .fb-legacy > summary small {
+    flex: 1;
+    color: #828b94;
+    font: inherit;
+    font-weight: 500;
+    text-align: right;
+  }
+  .fb-legacy[open] > summary { margin-bottom: 14px; border-bottom: 1px solid #e2e5e8; }
 
   .fb-you-section { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px dashed #d4c6a4; }
   .fb-you-card { display: flex; gap: 12px; align-items: center; }
