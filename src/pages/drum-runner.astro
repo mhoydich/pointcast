@@ -1,61 +1,116 @@
 ---
 /**
- * /drum-runner — Beat Runner. A Noun auto-runs a pixel El-Segundo strip
- * while cones and crates roll in from the right, locked to the beat grid.
- * Tap SPACE (or the stage) to JUMP a parabolic arc — clear the obstacle
- * while airborne. Jumping on the beat before it arrives is the cleanest
- * line and banks flow. Clip one and you lose a life; three and you wipe out.
+ * /drum-runner — Beat Runner v2.
  *
- * Distance in meters is the score. Speed and BPM ramp up the further you
- * get, and a synth groove rides the whole run — kick, hats, snare, bass,
- * all clocked off the same world grid the obstacles spawn on. Best in
- * localStorage. Clean clears broadcast on the shared /api/sounds bus.
+ * A four-level El Segundo postcard tour. Each district has an authored
+ * beat map, its own tempo, scenery, obstacles, and a manual interstitial.
+ * One input still does everything: jump on the downbeat, clear the cue,
+ * and carry three hearts through the whole city.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-const title = 'Beat Runner · jump on the beat';
-const description = 'A Noun auto-runs El Segundo. Cones roll in on the grid — jump on the beat to clear them. Three lives, endless meters, a groove that speeds up the further you go.';
-const jsonLd = { '@context': 'https://schema.org', '@type': 'VideoGame', name: 'Beat Runner', url: 'https://pointcast.xyz/drum-runner', description, gamePlatform: 'Web browser', playMode: 'SinglePlayer' };
+
+const title = 'Beat Runner v2 · four levels, one pocket';
+const description = 'Run a Noun through four beat-mapped El Segundo levels. Jump cones, carts, speakers, and refinery barriers as the tempo climbs from 92 to 128 BPM.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: 'Beat Runner v2',
+  url: 'https://pointcast.xyz/drum-runner',
+  description,
+  gamePlatform: 'Web browser',
+  playMode: 'SinglePlayer',
+};
 ---
+
 <BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
-  <div class="drn" id="drn">
-    <header class="drn__hud">
-      <div class="drn__hud-left">
-        <span class="drn__dist" id="drn-dist">0</span>
-        <span class="drn__dist-label">meters</span>
+  <div class="drn" id="drn" data-phase="intro" data-scene="mainstreet">
+    <header class="drn__hud" aria-label="Beat Runner status">
+      <div class="drn__score-block">
+        <span class="drn__score" id="drn-score">0</span>
+        <span class="drn__score-label">run meters</span>
       </div>
-      <div class="drn__hud-mid">
-        <span class="drn__flash" id="drn-flash" role="status" aria-live="polite"></span>
+
+      <div class="drn__level-block">
+        <span class="drn__level-no" id="drn-level-no">LEVEL 01 / 04</span>
+        <strong class="drn__level-name" id="drn-level-name">Marine Layer</strong>
+        <span class="drn__tempo" id="drn-tempo">92 BPM</span>
       </div>
-      <div class="drn__hud-right">
-        <span class="drn__lives" id="drn-lives">
+
+      <div class="drn__run-block">
+        <div class="drn__flow-line">
+          <span>flow</span>
+          <strong id="drn-flow">—</strong>
+        </div>
+        <div class="drn__lives" id="drn-lives" aria-hidden="true">
           <span class="drn__life"></span>
           <span class="drn__life"></span>
           <span class="drn__life"></span>
-        </span>
+        </div>
         <span class="drn__best" id="drn-best-line">best — m</span>
       </div>
     </header>
 
-    <section class="drn__stage" id="drn-stage">
-      <canvas class="drn__canvas" id="drn-canvas" role="img" aria-label="Beat Runner playfield: a Noun runs left to right and jumps beat-timed obstacles.">Beat Runner game canvas.</canvas>
-      <div class="drn__overlay" id="drn-overlay">
-        <h1 class="drn__title" id="drn-title">BEAT RUNNER</h1>
-        <p class="drn__sub" id="drn-sub">jump on the beat · SPACE or tap the strip</p>
-        <p class="drn__best" id="drn-best">best — m</p>
-        <button class="drn__go" id="drn-go" type="button">▶ START THE RUN</button>
+    <section class="drn__stage" id="drn-stage" aria-label="Beat Runner game">
+      <div class="drn__beat-rail" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
       </div>
-      <span class="drn__tap-hint" id="drn-tap-hint">tap / SPACE to jump</span>
+      <div class="drn__progress" aria-hidden="true"><span id="drn-progress"></span></div>
+
+      <canvas
+        class="drn__canvas"
+        id="drn-canvas"
+        role="img"
+        aria-label="Beat Runner v2 playfield: a Noun runs through four El Segundo scenes and jumps beat-timed obstacles."
+      >Beat Runner v2 game canvas.</canvas>
+
+      <div class="drn__overlay" id="drn-overlay">
+        <article class="drn__card" id="drn-card">
+          <div class="drn__postcard" id="drn-postcard" aria-hidden="true"></div>
+          <div class="drn__card-body">
+            <div class="drn__eyebrow">
+              <span id="drn-kicker">BEAT RUNNER V2</span>
+              <span id="drn-card-tempo">4 LEVELS · 92→128 BPM</span>
+            </div>
+            <h1 class="drn__title" id="drn-title">FOUR SCENES.<br />ONE POCKET.</h1>
+            <p class="drn__sub" id="drn-sub">A postcard tour of El Segundo. Every obstacle lands on the grid. Every level keeps your hearts.</p>
+
+            <div class="drn__card-stats" id="drn-card-stats" aria-label="Run details">
+              <span><small id="drn-stat-a-label">route</small><strong id="drn-stat-a">4 levels</strong></span>
+              <span><small id="drn-stat-b-label">tempo</small><strong id="drn-stat-b">92→128</strong></span>
+              <span><small id="drn-stat-c-label">hearts</small><strong id="drn-stat-c">3 total</strong></span>
+            </div>
+
+            <ol class="drn__route" id="drn-route" aria-label="Four-level route">
+              <li data-route-index="0"><span>01</span><b>Marine</b></li>
+              <li data-route-index="1"><span>02</span><b>Pier</b></li>
+              <li data-route-index="2"><span>03</span><b>Ralphs</b></li>
+              <li data-route-index="3"><span>04</span><b>Refinery</b></li>
+            </ol>
+
+            <p class="drn__overlay-best" id="drn-best">best — m</p>
+            <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
+            <p class="drn__input-note">space · ↑ · w · tap</p>
+          </div>
+        </article>
+      </div>
+
+      <span class="drn__judge" id="drn-judge" role="status" aria-live="polite"></span>
+      <span class="drn__tap-hint" id="drn-tap-hint">blue cue → jump on the beat</span>
     </section>
 
     <div class="drn__controls">
-      <button class="drn__jump" id="drn-jump" type="button" aria-label="Jump (Space, Arrow Up, or W)">
-        ↑ JUMP <span>space · ↑ · w</span>
+      <button class="drn__jump" id="drn-jump" type="button" aria-label="Jump (Space, Arrow Up, or W)" disabled>
+        <span class="drn__jump-arrow">↑</span>
+        <span class="drn__jump-copy"><strong>JUMP</strong><small>space · ↑ · w</small></span>
       </button>
     </div>
 
-    <nav class="drn__siblings">
+    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v2 ready. Four levels, three hearts.</p>
+    <p class="sr-only" id="drn-lives-live" role="status" aria-live="polite">3 hearts remaining.</p>
+
+    <nav class="drn__siblings" aria-label="More Drum Arcade games">
       <a href="/drum-games">all five</a>
-      <a href="/drum-says">/drum-says</a>
+      <a href="/drum-says">drum says</a>
       <a href="/drum-quickdraw">quick draw</a>
       <a href="/drum-fill">fill</a>
       <a href="/drum-steady">steady</a>
@@ -64,791 +119,1547 @@ const jsonLd = { '@context': 'https://schema.org', '@type': 'VideoGame', name: '
   </div>
 
   <style is:global>
-    html, body { background: #07050f; margin: 0; }
+    html, body { margin: 0; background: #040713; }
     body:has(.drn) {
-      color: #f4e7c8;
-      font-family: 'Inter', -apple-system, system-ui, sans-serif;
       min-height: 100vh;
       overflow-x: hidden;
+      color: #f8f3e8;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     }
     .drn {
-      max-width: 640px;
+      --accent: #ffd166;
+      --accent-soft: #ff8f70;
+      width: min(100%, 860px);
+      min-height: 95vh;
       margin: 0 auto;
-      padding: 14px 12px 40px;
+      padding: 12px 14px 42px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      min-height: 94vh;
+      gap: 11px;
+      box-sizing: border-box;
+    }
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
     }
 
     /* HUD */
     .drn__hud {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
+      min-height: 58px;
+      display: grid;
+      grid-template-columns: minmax(100px, 1fr) minmax(180px, 1.35fr) minmax(110px, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding: 3px 7px;
       font-family: 'JetBrains Mono', monospace;
-      padding: 2px 6px;
-      min-height: 44px;
-      gap: 10px;
     }
-    .drn__hud-left { display: flex; align-items: baseline; gap: 8px; }
-    .drn__dist {
-      font-family: 'Inter Tight', sans-serif;
-      font-weight: 800;
-      font-size: 34px;
-      color: #f6c15e;
+    .drn__score-block { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 8px; }
+    .drn__score {
+      color: var(--accent);
+      font: 900 clamp(30px, 5vw, 42px)/0.9 'Inter Tight', 'Inter', sans-serif;
       font-variant-numeric: tabular-nums;
-      min-width: 52px;
-      line-height: 1;
+      text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 55%, transparent);
     }
-    .drn__dist-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #8a8a9a; }
-    .drn__hud-mid { flex: 1; text-align: center; }
-    .drn__flash {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0.22em;
+    .drn__score-label,
+    .drn__level-no,
+    .drn__tempo,
+    .drn__flow-line span {
+      color: #8f94aa;
+      font-size: 9px;
+      letter-spacing: .17em;
       text-transform: uppercase;
     }
-    .drn__flash--onbeat { color: #8aeac0; text-shadow: 0 0 12px rgba(138,234,192,0.7); }
-    .drn__flash--clear { color: #7ac8ed; }
-    .drn__flash--hit { color: #ff6b8a; text-shadow: 0 0 12px rgba(255,107,138,0.6); }
-    .drn__hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .drn__level-block { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 10px; text-align: center; }
+    .drn__level-name { width: 100%; color: #f8f3e8; font-size: 15px; letter-spacing: .11em; text-transform: uppercase; }
+    .drn__tempo { color: var(--accent-soft); }
+    .drn__run-block { display: grid; grid-template-columns: 1fr auto; align-items: center; justify-items: end; gap: 3px 10px; }
+    .drn__flow-line { display: flex; align-items: baseline; gap: 6px; }
+    .drn__flow-line strong { min-width: 24px; color: var(--accent-soft); font-size: 16px; font-variant-numeric: tabular-nums; }
     .drn__lives { display: flex; gap: 5px; }
     .drn__life {
-      width: 12px; height: 12px; border-radius: 3px;
-      background: #ff6b8a;
-      box-shadow: 0 0 8px rgba(255,107,138,0.5);
-      transition: background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+      width: 14px;
+      height: 12px;
+      background: #ff5f7e;
+      border-radius: 4px 4px 7px 7px;
+      box-shadow: 0 0 10px rgba(255,95,126,.55), inset 0 1px rgba(255,255,255,.35);
+      clip-path: polygon(50% 100%, 3% 45%, 6% 17%, 25% 0, 50% 18%, 75% 0, 94% 17%, 97% 45%);
+      transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
     }
-    .drn__life--lost { background: rgba(120,120,140,0.28); box-shadow: none; transform: scale(0.82); }
-    .drn__best { font-size: 11px; color: #d4a437; font-variant-numeric: tabular-nums; margin: 0; }
+    .drn__life--lost { opacity: .2; filter: grayscale(1); transform: scale(.78); box-shadow: none; }
+    .drn__best { grid-column: 1 / -1; color: #85899b; font-size: 9px; font-variant-numeric: tabular-nums; }
 
-    /* STAGE */
+    /* PLAYFIELD */
     .drn__stage {
       position: relative;
-      flex: 1;
-      min-height: 400px;
-      border-radius: 16px;
+      width: 100%;
+      height: clamp(430px, 66vh, 620px);
+      min-height: 430px;
       overflow: hidden;
-      border: 1px solid rgba(244,231,200,0.10);
-      background: linear-gradient(180deg, #0b0818 0%, #140a24 78%, #1c0e2e 100%);
+      border: 2px solid color-mix(in srgb, var(--accent) 28%, #191d30);
+      border-radius: 22px;
+      background: #091020;
+      box-shadow: 0 25px 70px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
       cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      isolation: isolate;
     }
-    .drn__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-
-    .drn__overlay {
+    .drn__stage::after {
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: rgba(7,5,15,0.82);
-      backdrop-filter: blur(3px);
-      z-index: 3;
-      text-align: center;
-      padding: 20px;
-    }
-    .drn__overlay--hidden { display: none; }
-    .drn__title {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: clamp(28px, 8vw, 50px);
-      letter-spacing: 0.18em;
-      margin: 0;
-      color: #f6c15e;
-      text-shadow: 0 0 20px rgba(246,193,94,0.5);
-    }
-    .drn__sub {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: #8a8a9a;
-      margin: 0;
-    }
-    .drn__overlay .drn__best { color: #d4a437; font-size: 12px; }
-    .drn__go {
-      margin-top: 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 0.2em;
-      color: #07050f;
-      background: #f6c15e;
-      border: 0;
-      border-radius: 14px;
-      padding: 14px 30px;
-      cursor: pointer;
-      transition: transform 100ms ease, background 160ms ease;
-    }
-    .drn__go:hover { transform: translateY(-1px); background: #ffd98a; }
-
-    .drn__tap-hint {
-      position: absolute;
-      left: 50%; bottom: 10px;
-      transform: translateX(-50%);
       z-index: 2;
       pointer-events: none;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 0.18em;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.22), transparent 12%, transparent 88%, rgba(0,0,0,.24)),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px);
+      mix-blend-mode: screen;
+    }
+    .drn__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .drn__beat-rail {
+      position: absolute;
+      z-index: 4;
+      top: 12px;
+      left: 50%;
+      width: min(220px, 44%);
+      height: 5px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .drn__beat-rail span { border-radius: 999px; background: rgba(255,255,255,.14); transition: background 80ms ease, box-shadow 80ms ease, transform 80ms ease; }
+    .drn__beat-rail span.is-active { background: var(--accent); box-shadow: 0 0 14px var(--accent); transform: scaleY(1.45); }
+    .drn__progress { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.08); pointer-events: none; }
+    .drn__progress span { display: block; width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); box-shadow: 0 0 14px var(--accent); transition: width 90ms linear; }
+
+    .drn__judge {
+      position: absolute;
+      z-index: 5;
+      left: 50%;
+      top: 41px;
+      min-height: 22px;
+      transform: translateX(-50%);
+      color: #fff;
+      font: 900 14px/1 'JetBrains Mono', monospace;
+      letter-spacing: .24em;
       text-transform: uppercase;
-      color: rgba(244,231,200,0.34);
-      transition: opacity 220ms ease;
+      white-space: nowrap;
+      pointer-events: none;
+      text-shadow: 0 2px 16px rgba(0,0,0,.75);
+    }
+    .drn__judge--onbeat { color: #8fffd1; text-shadow: 0 0 18px rgba(143,255,209,.75); }
+    .drn__judge--clear { color: #7ad7ff; }
+    .drn__judge--hit { color: #ff6b86; text-shadow: 0 0 18px rgba(255,107,134,.7); }
+    .drn__judge--level { color: var(--accent); }
+    .drn__tap-hint {
+      position: absolute;
+      z-index: 4;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,.52);
+      font: 700 9px/1 'JetBrains Mono', monospace;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 180ms ease;
     }
     .drn__tap-hint--gone { opacity: 0; }
 
+    /* LEVEL / RESULT INTERSTITIAL */
+    .drn__overlay {
+      position: absolute;
+      z-index: 8;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 12px clamp(12px, 3vw, 28px);
+      background: rgba(3,5,14,.76);
+      backdrop-filter: blur(9px) saturate(.8);
+      -webkit-backdrop-filter: blur(9px) saturate(.8);
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 230ms ease, visibility 230ms ease;
+    }
+    .drn__overlay--hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .drn__card {
+      position: relative;
+      width: min(100%, 650px);
+      max-height: 100%;
+      overflow: auto;
+      display: grid;
+      grid-template-columns: minmax(155px, .36fr) minmax(0, .64fr);
+      border: 2px solid rgba(255,255,255,.82);
+      border-radius: 18px;
+      background: #090b16;
+      box-shadow: 9px 9px 0 color-mix(in srgb, var(--accent) 78%, #000), 0 28px 80px rgba(0,0,0,.6);
+      transform: translateY(0) rotate(-.35deg);
+    }
+    .drn__postcard {
+      min-height: 100%;
+      background-position: center 42%;
+      background-size: cover;
+      border-right: 2px solid rgba(255,255,255,.82);
+      filter: saturate(.94) contrast(1.06);
+    }
+    .drn__postcard::after { content: ''; display: block; width: 100%; height: 100%; background: linear-gradient(180deg, transparent 35%, rgba(7,8,17,.76)); }
+    .drn__card-body { min-width: 0; padding: clamp(14px, 2.3vw, 21px); text-align: center; }
+    .drn__eyebrow { display: flex; justify-content: space-between; gap: 12px; color: var(--accent); font: 800 9px/1.35 'JetBrains Mono', monospace; letter-spacing: .18em; text-transform: uppercase; }
+    .drn__eyebrow span:last-child { color: #9da2b7; text-align: right; }
+    .drn__title {
+      margin: 13px 0 8px;
+      color: #fffaf0;
+      font: 950 clamp(26px, 4vw, 44px)/.91 'Inter Tight', 'Inter', sans-serif;
+      letter-spacing: -.045em;
+      text-transform: uppercase;
+      text-shadow: 0 0 34px color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+    .drn__sub { max-width: 540px; margin: 0 auto; color: #b8b9c7; font-size: clamp(11px, 1.6vw, 14px); line-height: 1.4; }
+    .drn__card-stats { margin: 13px 0 12px; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid rgba(255,255,255,.13); border-radius: 12px; overflow: hidden; }
+    .drn__card-stats > span { min-width: 0; padding: 8px 5px; display: flex; flex-direction: column; gap: 4px; }
+    .drn__card-stats > span + span { border-left: 1px solid rgba(255,255,255,.13); }
+    .drn__card-stats small { color: #777d92; font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: .16em; text-transform: uppercase; }
+    .drn__card-stats strong { overflow: hidden; color: #f8f3e8; font: 800 clamp(11px, 2.3vw, 14px)/1.2 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .drn__route { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); list-style: none; }
+    .drn__route li { position: relative; display: grid; justify-items: center; gap: 4px; color: #656a7e; font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .drn__route li::before { content: ''; position: absolute; top: 10px; right: 50%; width: 100%; height: 2px; background: #262a3a; z-index: -1; }
+    .drn__route li:first-child::before { display: none; }
+    .drn__route li span { display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid #373b4e; border-radius: 50%; background: #090b16; color: #777d92; }
+    .drn__route li.is-complete::before,
+    .drn__route li.is-active::before { background: var(--accent); }
+    .drn__route li.is-complete span { border-color: var(--accent); background: var(--accent); color: #050711; }
+    .drn__route li.is-active span { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 65%, transparent); }
+    .drn__route li.is-active b { color: #f8f3e8; }
+    .drn__overlay-best { margin: 11px 0 0; color: #8f94aa; font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: .1em; }
+    .drn__go {
+      margin-top: 10px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 20px;
+      background: var(--accent);
+      color: #060812;
+      box-shadow: 0 6px 0 color-mix(in srgb, var(--accent) 48%, #000), 0 0 28px color-mix(in srgb, var(--accent) 26%, transparent);
+      cursor: pointer;
+      font: 900 12px/1 'JetBrains Mono', monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      transition: transform 100ms ease, box-shadow 100ms ease, filter 100ms ease;
+    }
+    .drn__go:hover { filter: brightness(1.12); transform: translateY(-1px); }
+    .drn__go:active { transform: translateY(4px); box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 48%, #000); }
+    .drn__go:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+    .drn__input-note { margin: 9px 0 0; color: #676c7f; font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: .17em; text-transform: uppercase; }
+
+    /* PRIMARY CONTROL */
     .drn__controls { display: flex; justify-content: center; }
     .drn__jump {
-      min-width: 190px;
-      min-height: 46px;
+      min-width: 210px;
+      min-height: 55px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      border: 1px solid rgba(246,193,94,0.5);
+      border: 1px solid color-mix(in srgb, var(--accent) 62%, transparent);
       border-radius: 999px;
-      background: rgba(246,193,94,0.1);
-      color: #f6c15e;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 18%, #0a0c18), rgba(9,11,22,.95));
+      color: var(--accent);
+      box-shadow: inset 0 1px rgba(255,255,255,.08), 0 8px 25px rgba(0,0,0,.25);
       cursor: pointer;
-      font: 800 13px/1 'JetBrains Mono', monospace;
-      letter-spacing: 0.14em;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
-    .drn__jump span { color: #8a8a9a; font-size: 9px; font-weight: 500; letter-spacing: 0.08em; }
-    .drn__jump:hover { background: rgba(246,193,94,0.18); }
-    .drn__jump:focus-visible { outline: 3px solid #7ac8ed; outline-offset: 3px; }
+    .drn__jump-arrow { font: 900 25px/1 'Inter', sans-serif; }
+    .drn__jump-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .drn__jump-copy strong { font: 900 13px/1 'JetBrains Mono', monospace; letter-spacing: .18em; }
+    .drn__jump-copy small { color: #81869b; font: 600 8px/1 'JetBrains Mono', monospace; letter-spacing: .08em; }
+    .drn__jump:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 22%, #090b16); }
+    .drn__jump:active:not(:disabled) { transform: translateY(2px); }
+    .drn__jump:focus-visible { outline: 3px solid #7ad7ff; outline-offset: 3px; }
+    .drn__jump:disabled { opacity: .32; cursor: default; }
+    .drn__siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 17px; font: 600 11px/1.4 'JetBrains Mono', monospace; }
+    .drn__siblings a { color: #9a8b65; text-decoration: none; }
+    .drn__siblings a:hover { color: var(--accent); text-decoration: underline; }
 
-    .drn__siblings {
-      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
-      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    @media (max-width: 600px) {
+      .drn { padding: 8px 8px 34px; gap: 8px; }
+      .drn__hud { grid-template-columns: 1fr 1.25fr 1fr; gap: 5px; padding-inline: 4px; }
+      .drn__score-block { grid-template-columns: 1fr; gap: 2px; }
+      .drn__score-label { font-size: 7px; }
+      .drn__level-name { font-size: 11px; }
+      .drn__level-no, .drn__tempo { font-size: 7px; }
+      .drn__flow-line span { display: none; }
+      .drn__stage { height: min(69vh, 570px); min-height: 430px; border-radius: 16px; }
+      .drn__card { display: block; box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent) 78%, #000); }
+      .drn__postcard { height: 72px; min-height: 0; border-right: 0; border-bottom: 2px solid rgba(255,255,255,.82); }
+      .drn__card-body { padding: 14px; }
+      .drn__card-stats { margin-block: 13px; }
+      .drn__route li b { font-size: 7px; }
+      .drn__go { width: 100%; }
     }
-    .drn__siblings a { color: #d4a437; text-decoration: none; }
-    .drn__siblings a:hover { text-decoration: underline; }
+    @media (max-height: 650px) and (orientation: landscape) {
+      .drn { max-width: 980px; min-height: auto; }
+      .drn__hud { min-height: 40px; }
+      .drn__stage { height: 72vh; min-height: 320px; }
+      .drn__postcard { display: none; }
+      .drn__card-body { padding: 13px 18px; }
+      .drn__title { font-size: 28px; margin-block: 8px 5px; }
+      .drn__card-stats { margin-block: 9px; }
+      .drn__overlay-best, .drn__input-note { display: none; }
+      .drn__go { margin-top: 9px; min-height: 42px; }
+    }
     @media (prefers-reduced-motion: reduce) {
-      .drn *, .drn *::before, .drn *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      .drn *, .drn *::before, .drn *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+      .drn__card { transform: none; }
+      .drn__stage::after { background: linear-gradient(90deg, rgba(0,0,0,.18), transparent 15%, transparent 85%, rgba(0,0,0,.18)); }
     }
   </style>
 
   <script>
-    // ---- world & rhythm constants ----
-    const NOUN_POOL = [385, 92, 523, 742, 1042, 287, 612, 928, 1189, 64];
-    const BASS = [55.0, 55.0, 73.42, 49.0];   // A1 A1 D2 G1 — one root per bar
-    const PPM = 42;            // pixels per meter (score = worldX / PPM)
-    const BEAT_PX = 150;       // one beat = this many pixels of world travel
-    const BASE_SPEED = 240;    // px/s at the start line
-    const MAX_SPEED = 430;     // px/s cap after the ramp
-    const SPEED_RAMP = 0.95;   // px/s added per meter travelled
-    const SPAWN_AHEAD = 640;   // schedule obstacles this far ahead of the runner
-    const RUNNER_W = 46;
-    const RUNNER_H = 52;
-    const GRAV = 1900;         // px/s^2
-    const JUMP_V = 604;        // px/s launch — apex ~96px, airtime ~0.64s
-    const INVULN_S = 0.5;      // grace window after a clip
-    const KIND_W = [24, 34, 34, 46];
-    const KIND_H = [30, 42, 58, 40];
+    import levelData from '../lib/drum-runner-levels.json';
+    import marinePostcard from '../../public/images/postcards/0-marine-layer-main-street.svg?url';
+    import pierPostcard from '../../public/images/postcards/1-el-porto-pier.svg?url';
+    import ralphsPostcard from '../../public/images/postcards/3-ralphs-at-3pm.svg?url';
+    import refineryPostcard from '../../public/images/postcards/4-refinery-night.svg?url';
 
-    type Ob = { ox: number; w: number; h: number; kind: number; hit: boolean; cleared: boolean };
-    type Runner = { y: number; vy: number; grounded: boolean; squash: number };
+    type ObstacleKind = 'cone' | 'crate' | 'tall-crate' | 'barrier' | 'speaker' | 'luggage' | 'hydrant';
+    type SceneKind = 'mainstreet' | 'pier' | 'ralphs' | 'refinery';
+    type Phase = 'intro' | 'playing' | 'interstitial' | 'gameover' | 'victory';
+    type Cue = { beat: number; kind: ObstacleKind };
+    type Level = {
+      id: string;
+      number: string;
+      name: string;
+      kicker: string;
+      brief: string;
+      clearLine: string;
+      scene: SceneKind;
+      postcard: string;
+      bpm: number;
+      beats: number;
+      accent: string;
+      accentSoft: string;
+      skyTop: string;
+      skyBottom: string;
+      bass: number[];
+      obstacles: Cue[];
+    };
+    type Obstacle = Cue & { ox: number; w: number; h: number; hit: boolean; cleared: boolean };
+    type Runner = { y: number; vy: number; grounded: boolean; squash: number; cleanTarget: number };
+    type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: string; gravity: number };
 
-    let running = false;
+    const LEVELS = levelData as Level[];
+    const POSTCARD_URLS = [marinePostcard, pierPostcard, ralphsPostcard, refineryPostcard];
+    const NOUN_POOL = [214, 385, 92, 523, 742, 1042, 287, 612, 928, 1189];
+    const KIND_ORDER: ObstacleKind[] = ['cone', 'crate', 'tall-crate', 'barrier', 'speaker', 'luggage', 'hydrant'];
+    const DIMS: Record<ObstacleKind, [number, number]> = {
+      cone: [26, 32],
+      crate: [38, 44],
+      'tall-crate': [40, 62],
+      barrier: [54, 41],
+      speaker: [40, 55],
+      luggage: [48, 35],
+      hydrant: [30, 45],
+    };
+
+    const PPM = 42;
+    const BEAT_PX = 150;
+    const RUNNER_W = 50;
+    const RUNNER_H = 56;
+    // Keep an on-grid jump airborne through the full collision width of the
+    // slowest, widest obstacle. The old v1 arc could punish perfect timing on
+    // the way down before a crate had actually passed the runner.
+    const GRAV = 1450;
+    const JUMP_V = 670;
+    const INVULN_S = 0.58;
+    // V1 was endless, so its scores are not comparable with this finite
+    // campaign. Keep the new leaderboard honest with a versioned key.
+    const BEST_KEY = 'pc-drum-runner-v2-best';
+    const PROGRESS_KEY = 'pc-drum-runner-v2-progress';
+
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reducedMotion = motionQuery.matches;
+    motionQuery.addEventListener?.('change', (event) => { reducedMotion = event.matches; });
+
+    let phase: Phase = 'intro';
+    let currentLevelIndex = 0;
+    let pendingLevelIndex = 0;
     let worldX = 0;
-    let speed = BASE_SPEED;
+    let levelStartX = 0;
+    let levelEndX = LEVELS[0].beats * BEAT_PX;
+    let speed = (BEAT_PX * LEVELS[0].bpm) / 60;
     let lives = 3;
-    let bonus = 0;             // flow bonus meters
-    let flow = 0;              // clean-jump streak
+    let bonus = 0;
+    let flow = 0;
     let bestFlow = 0;
-    let clears = 0;
-    let obstacles: Ob[] = [];
-    let nextBeat = 6;          // beat index of the next obstacle slot
+    let totalClears = 0;
+    let totalPerfect = 0;
+    let levelClears = 0;
+    let levelPerfect = 0;
+    let levelHits = 0;
+    let levelStartScore = 0;
+    let obstacles: Obstacle[] = [];
+    let particles: Particle[] = [];
     let invuln = 0;
-    let seed = 1;
     let downFlash = 0;
     let shakeMag = 0;
+    let scenerySeed = 1;
     let lastTs = 0;
     let rafId = 0;
-    let SESSION_ID = '';
-    const runner: Runner = { y: 0, vy: 0, grounded: true, squash: 0 };
+    let suspended = false;
+    let sessionId = '';
+    let savedBest = 0;
+    const runner: Runner = { y: 0, vy: 0, grounded: true, squash: 0, cleanTarget: -1 };
 
-    // ---- audio ----
+    function level(): Level { return LEVELS[currentLevelIndex]; }
+    function displayScore(): number { return Math.floor(worldX / PPM) + bonus; }
+
+    /* ---------------- audio ---------------- */
     let actx: AudioContext | null = null;
-    function ctx(): AudioContext {
+    const noiseCache = new Map<number, AudioBuffer>();
+    function audioContext(): AudioContext {
       if (!actx) {
         const AC = window.AudioContext || (window as any).webkitAudioContext;
         actx = new AC();
       }
-      if (actx!.state === 'suspended') actx!.resume();
-      return actx!;
+      if (actx.state === 'suspended') actx.resume();
+      return actx;
     }
-    function pKick(t: number) {
-      const a = ctx(); const o = a.createOscillator(); const g = a.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(122, t);
-      o.frequency.exponentialRampToValueAtTime(44, t + 0.15);
-      g.gain.setValueAtTime(0.42, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.25);
+    function noiseBuffer(duration: number): AudioBuffer {
+      const a = audioContext();
+      const key = Math.round(duration * 1000);
+      const cached = noiseCache.get(key);
+      if (cached) return cached;
+      const buffer = a.createBuffer(1, Math.floor(a.sampleRate * duration), a.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      noiseCache.set(key, buffer);
+      return buffer;
     }
-    function pHat(t: number, open = false) {
-      const a = ctx();
-      const dur = open ? 0.14 : 0.045;
-      const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-      const n = a.createBufferSource(); n.buffer = buf;
-      const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7200;
-      const g = a.createGain(); g.gain.value = open ? 0.09 : 0.06;
-      n.connect(hp).connect(g).connect(a.destination); n.start(t);
+    function playKick(time: number) {
+      const a = audioContext();
+      const oscillator = a.createOscillator();
+      const gain = a.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(126, time);
+      oscillator.frequency.exponentialRampToValueAtTime(43, time + .16);
+      gain.gain.setValueAtTime(.38, time);
+      gain.gain.exponentialRampToValueAtTime(.0001, time + .23);
+      oscillator.connect(gain).connect(a.destination);
+      oscillator.start(time);
+      oscillator.stop(time + .25);
     }
-    function pSnare(t: number) {
-      const a = ctx();
-      const buf = a.createBuffer(1, Math.floor(a.sampleRate * 0.2), a.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-      const n = a.createBufferSource(); n.buffer = buf;
-      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1850; bp.Q.value = 0.8;
-      const g = a.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.16, t + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      n.connect(bp).connect(g).connect(a.destination); n.start(t);
+    function playHat(time: number, open = false) {
+      const a = audioContext();
+      const source = a.createBufferSource();
+      const filter = a.createBiquadFilter();
+      const gain = a.createGain();
+      source.buffer = noiseBuffer(open ? .14 : .05);
+      filter.type = 'highpass';
+      filter.frequency.value = 7100;
+      gain.gain.value = open ? .075 : .05;
+      source.connect(filter).connect(gain).connect(a.destination);
+      source.start(time);
     }
-    function pBass(f: number, t: number) {
-      const a = ctx(); const o = a.createOscillator(); const g = a.createGain();
-      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(f, t);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.24, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.46);
-      o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.5);
+    function playSnare(time: number) {
+      const a = audioContext();
+      const source = a.createBufferSource();
+      const filter = a.createBiquadFilter();
+      const gain = a.createGain();
+      source.buffer = noiseBuffer(.2);
+      filter.type = 'bandpass';
+      filter.frequency.value = 1850;
+      filter.Q.value = .8;
+      gain.gain.setValueAtTime(.0001, time);
+      gain.gain.exponentialRampToValueAtTime(.14, time + .004);
+      gain.gain.exponentialRampToValueAtTime(.0001, time + .18);
+      source.connect(filter).connect(gain).connect(a.destination);
+      source.start(time);
     }
-    function pJump() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      const o = a.createOscillator(); const g = a.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(320, t);
-      o.frequency.exponentialRampToValueAtTime(660, t + 0.14);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+    function playBass(frequency: number, time: number) {
+      const a = audioContext();
+      const oscillator = a.createOscillator();
+      const filter = a.createBiquadFilter();
+      const gain = a.createGain();
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(frequency, time);
+      filter.type = 'lowpass';
+      filter.frequency.value = 420;
+      gain.gain.setValueAtTime(.0001, time);
+      gain.gain.exponentialRampToValueAtTime(.2, time + .02);
+      gain.gain.exponentialRampToValueAtTime(.0001, time + .44);
+      oscillator.connect(filter).connect(gain).connect(a.destination);
+      oscillator.start(time);
+      oscillator.stop(time + .48);
     }
-    function pLand() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      const o = a.createOscillator(); const g = a.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(150, t);
-      o.frequency.exponentialRampToValueAtTime(70, t + 0.1);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.13, t + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.16);
+    function playSweep(from: number, to: number, duration: number, amount = .13) {
+      const a = audioContext();
+      const time = a.currentTime + .004;
+      const oscillator = a.createOscillator();
+      const gain = a.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(from, time);
+      oscillator.frequency.exponentialRampToValueAtTime(to, time + duration);
+      gain.gain.setValueAtTime(.0001, time);
+      gain.gain.exponentialRampToValueAtTime(amount, time + .008);
+      gain.gain.exponentialRampToValueAtTime(.0001, time + duration);
+      oscillator.connect(gain).connect(a.destination);
+      oscillator.start(time);
+      oscillator.stop(time + duration + .02);
     }
-    function pClear() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      const o = a.createOscillator(); const g = a.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(720, t);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.1, t + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.16);
+    function playJump() { playSweep(300, 690, .18, .14); }
+    function playLand() { playSweep(155, 68, .15, .11); }
+    function playClear() { playSweep(680, 920, .13, .08); }
+    function playHurt() { playSweep(185, 56, .4, .2); }
+    function playPerfect() {
+      const a = audioContext();
+      const time = a.currentTime + .004;
+      [0, .045].forEach((delay, index) => {
+        const oscillator = a.createOscillator();
+        const gain = a.createGain();
+        oscillator.type = 'triangle';
+        oscillator.frequency.value = index === 0 ? 880 : 1320;
+        gain.gain.setValueAtTime(.0001, time + delay);
+        gain.gain.exponentialRampToValueAtTime(.11, time + delay + .005);
+        gain.gain.exponentialRampToValueAtTime(.0001, time + delay + .23);
+        oscillator.connect(gain).connect(a.destination);
+        oscillator.start(time + delay);
+        oscillator.stop(time + delay + .26);
+      });
     }
-    function pChime() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      for (const [f, d] of [[880, 0.0], [1320, 0.02]] as [number, number][]) {
-        const o = a.createOscillator(); const g = a.createGain();
-        o.type = 'triangle'; o.frequency.setValueAtTime(f, t + d);
-        g.gain.setValueAtTime(0.0001, t + d);
-        g.gain.exponentialRampToValueAtTime(0.12, t + d + 0.005);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.24);
-        o.connect(g).connect(a.destination); o.start(t + d); o.stop(t + d + 0.28);
-      }
+    function playLevelClear() {
+      const a = audioContext();
+      const time = a.currentTime + .02;
+      [440, 554.37, 659.25, 880].forEach((frequency, index) => {
+        const oscillator = a.createOscillator();
+        const gain = a.createGain();
+        oscillator.type = 'triangle';
+        oscillator.frequency.value = frequency;
+        const at = time + index * .09;
+        gain.gain.setValueAtTime(.0001, at);
+        gain.gain.exponentialRampToValueAtTime(.1, at + .01);
+        gain.gain.exponentialRampToValueAtTime(.0001, at + .3);
+        oscillator.connect(gain).connect(a.destination);
+        oscillator.start(at);
+        oscillator.stop(at + .32);
+      });
     }
-    function pHurt() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      const o = a.createOscillator(); const g = a.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(180, t);
-      o.frequency.exponentialRampToValueAtTime(60, t + 0.34);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.42);
-    }
-
-    // Percussion + bass, clocked off world travel so BPM rides the speed ramp.
-    function audioBeats(prev: number, cur: number) {
-      const a = ctx();
-      const now = a.currentTime + 0.02;
-      const bPrev = Math.floor(prev / BEAT_PX);
-      const bCur = Math.floor(cur / BEAT_PX);
-      for (let b = bPrev + 1; b <= bCur; b++) {
-        pKick(now);
-        const pos = ((b % 4) + 4) % 4;
-        if (pos === 2) pSnare(now);
-        if (pos === 0) pBass(BASS[Math.floor(b / 4) % BASS.length], now);
+    function audioBeats(previousX: number, currentX: number) {
+      const cfg = level();
+      const a = audioContext();
+      const now = a.currentTime + .018;
+      const previousBeat = Math.floor((previousX - levelStartX) / BEAT_PX);
+      const currentBeat = Math.floor((currentX - levelStartX) / BEAT_PX);
+      for (let beat = previousBeat + 1; beat <= currentBeat; beat++) {
+        playKick(now);
+        const position = ((beat % 4) + 4) % 4;
+        if (position === 2) playSnare(now);
+        if (position === 0) playBass(cfg.bass[Math.floor(beat / 4) % cfg.bass.length], now);
         downFlash = 1;
       }
       const half = BEAT_PX / 2;
-      const hPrev = Math.floor(prev / half);
-      const hCur = Math.floor(cur / half);
-      for (let h = hPrev + 1; h <= hCur; h++) pHat(now, h % 2 === 0);
+      const previousHalf = Math.floor((previousX - levelStartX) / half);
+      const currentHalf = Math.floor((currentX - levelStartX) / half);
+      for (let halfBeat = previousHalf + 1; halfBeat <= currentHalf; halfBeat++) playHat(now, halfBeat % 2 === 0);
     }
 
-    // ---- shared bus (best effort, throttled) ----
+    /* ---------------- shared sound bus ---------------- */
     let lastBroadcast = 0;
-    function getOrCreateSession() {
+    function getOrCreateSession(): string {
       try {
-        let sid = localStorage.getItem('pc-drum-live-session');
-        if (!sid) {
-          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-          localStorage.setItem('pc-drum-live-session', sid);
+        let id = localStorage.getItem('pc-drum-live-session');
+        if (!id) {
+          id = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', id);
         }
-        return sid;
+        return id;
       } catch {
         return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       }
     }
-    function broadcast(seedVal: number) {
+    function broadcast(kind: ObstacleKind) {
       const now = Date.now();
-      if (now - lastBroadcast < 900) return; // don't flood the bus on dense clears
+      if (now - lastBroadcast < 900) return;
       lastBroadcast = now;
       try {
         fetch('/api/sounds', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'drum', seed: seedVal, sessionId: SESSION_ID }),
+          body: JSON.stringify({ type: 'drum', seed: KIND_ORDER.indexOf(kind), sessionId }),
         }).catch(() => {});
       } catch { /* best effort */ }
     }
 
-    // ---- noun sprite ----
-    const nounImg = new Image();
+    /* ---------------- Noun sprite ---------------- */
+    const nounImage = new Image();
     let nounReady = false;
-    nounImg.onload = () => { nounReady = true; };
+    nounImage.onload = () => { nounReady = true; };
+    nounImage.onerror = () => { nounReady = false; };
     function pickNoun() {
       nounReady = false;
-      nounImg.src = `https://noun.pics/${NOUN_POOL[Math.floor(Math.random() * NOUN_POOL.length)]}.svg`;
+      nounImage.src = `https://noun.pics/${NOUN_POOL[Math.floor(Math.random() * NOUN_POOL.length)]}.svg`;
     }
 
-    // ---- canvas ----
+    /* ---------------- canvas & world ---------------- */
     const canvas = document.getElementById('drn-canvas') as HTMLCanvasElement;
-    const cx = canvas.getContext('2d')!;
-    let W = 0, H = 0, DPR = 1;
+    const context = canvas.getContext('2d')!;
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
     function resize() {
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
-      const r = canvas.getBoundingClientRect();
-      W = r.width; H = r.height;
-      canvas.width = Math.max(1, Math.floor(W * DPR));
-      canvas.height = Math.max(1, Math.floor(H * DPR));
-      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      const bounds = canvas.getBoundingClientRect();
+      width = bounds.width;
+      height = bounds.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor(width * dpr));
+      canvas.height = Math.max(1, Math.floor(height * dpr));
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.imageSmoothingEnabled = false;
+      draw();
     }
     window.addEventListener('resize', resize);
 
-    function groundY() { return H * 0.80; }
-    function runnerScreenX() { return Math.min(W * 0.26, 170); }
-
-    function hashAt(n: number) {
-      const s = Math.sin(n * 127.1 + seed * 3.3) * 43758.5453;
-      return s - Math.floor(s);
+    function groundY(): number { return height * .79; }
+    function runnerScreenX(): number { return Math.min(width * .23, 170); }
+    function sceneScroll(factor: number): number { return reducedMotion ? 0 : worldX * factor; }
+    function hashAt(value: number): number {
+      const raw = Math.sin(value * 127.1 + scenerySeed * 3.3) * 43758.5453;
+      return raw - Math.floor(raw);
+    }
+    function prepareLevel(index: number) {
+      currentLevelIndex = index;
+      const cfg = level();
+      levelStartX = worldX;
+      levelEndX = levelStartX + cfg.beats * BEAT_PX;
+      speed = (BEAT_PX * cfg.bpm) / 60;
+      obstacles = cfg.obstacles.map((cue) => {
+        const [w, h] = DIMS[cue.kind];
+        return { ...cue, ox: levelStartX + cue.beat * BEAT_PX, w, h, hit: false, cleared: false };
+      });
+      runner.y = 0;
+      runner.vy = 0;
+      runner.grounded = true;
+      runner.squash = 0;
+      runner.cleanTarget = -1;
+      invuln = 0;
+      downFlash = 0;
+      shakeMag = 0;
+      levelClears = 0;
+      levelPerfect = 0;
+      levelHits = 0;
+      levelStartScore = displayScore();
+      particles = [];
+      applyTheme(cfg);
+      updateHud();
+      draw();
     }
 
-    // ---- spawns ----
-    function pickKind(m: number): number {
-      const r = Math.random();
-      if (m < 150) return r < 0.6 ? 0 : 1;
-      if (m < 400) return r < 0.4 ? 0 : r < 0.75 ? 1 : 2;
-      return r < 0.3 ? 0 : r < 0.55 ? 1 : r < 0.8 ? 2 : 3;
-    }
-    function scheduleSpawns() {
-      while (nextBeat * BEAT_PX < worldX + SPAWN_AHEAD) {
-        const m = worldX / PPM;
-        let minG = 5, maxG = 8;
-        if (m > 120) { minG = 4; maxG = 6; }
-        if (m > 320) { minG = 3; maxG = 5; }
-        if (m > 650) { minG = 3; maxG = 4; }
-        const kind = pickKind(m);
-        obstacles.push({ ox: nextBeat * BEAT_PX, w: KIND_W[kind], h: KIND_H[kind], kind, hit: false, cleared: false });
-        nextBeat += minG + Math.floor(Math.random() * (maxG - minG + 1));
+    /* ---------------- particles ---------------- */
+    function emitParticles(x: number, y: number, color: string, count: number, force = 1) {
+      if (reducedMotion) return;
+      for (let index = 0; index < count; index++) {
+        const life = .28 + Math.random() * .34;
+        particles.push({
+          x,
+          y,
+          vx: (Math.random() - .5) * 150 * force,
+          vy: (-35 - Math.random() * 130) * force,
+          life,
+          maxLife: life,
+          size: 2 + Math.random() * 4,
+          color,
+          gravity: 220 + Math.random() * 180,
+        });
       }
+      if (particles.length > 90) particles.splice(0, particles.length - 90);
+    }
+    function updateParticles(dt: number) {
+      for (const particle of particles) {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vy += particle.gravity * dt;
+      }
+      particles = particles.filter((particle) => particle.life > 0);
+    }
+    function drawParticles() {
+      for (const particle of particles) {
+        context.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+        context.fillStyle = particle.color;
+        context.fillRect(particle.x, particle.y, particle.size, particle.size);
+      }
+      context.globalAlpha = 1;
     }
 
-    // ---- input / jump ----
+    /* ---------------- gameplay ---------------- */
+    function nearestObstacle(): Obstacle | undefined {
+      return obstacles.find((obstacle) => !obstacle.hit && !obstacle.cleared && obstacle.ox > worldX);
+    }
     function jump() {
-      if (!running) return;
-      if (!runner.grounded) return;
+      if (phase !== 'playing' || !runner.grounded) return;
       runner.vy = JUMP_V;
       runner.grounded = false;
-      pJump();
-      // clean = launched near a beat line (the line before the obstacle)
-      const phase = ((worldX % BEAT_PX) + BEAT_PX) % BEAT_PX;
-      const dist = Math.min(phase, BEAT_PX - phase);
-      if (dist < BEAT_PX * 0.16) {
-        flow++;
-        bestFlow = Math.max(bestFlow, flow);
-        bonus += 2;
-        pChime();
-        flashJudge('onbeat', flow > 1 ? `ON BEAT ×${flow}` : 'ON BEAT');
-        if (flow % 8 === 0 && lives < 3) { lives++; updateLives(); }
+      runner.cleanTarget = -1;
+      playJump();
+      emitParticles(runnerScreenX(), groundY() - 2, level().accent, 7, .65);
+
+      const localX = worldX - levelStartX;
+      const phaseX = ((localX % BEAT_PX) + BEAT_PX) % BEAT_PX;
+      const distanceToBeat = Math.min(phaseX, BEAT_PX - phaseX);
+      const target = nearestObstacle();
+      const beatsOut = target ? (target.ox - worldX) / BEAT_PX : Infinity;
+      const locked = distanceToBeat < BEAT_PX * .18 && beatsOut >= .68 && beatsOut <= 1.32;
+      if (locked && target) {
+        runner.cleanTarget = target.ox;
+        flashJudge('onbeat', 'LOCKED');
       }
+      tapHint.classList.add('drn__tap-hint--gone');
     }
-
-    // ---- update ----
-    function displayScore() { return Math.floor(worldX / PPM) + bonus; }
-
     function update(dt: number) {
-      const m = worldX / PPM;
-      speed = Math.min(MAX_SPEED, BASE_SPEED + m * SPEED_RAMP);
-      const prevX = worldX;
-      worldX += speed * dt;
-      audioBeats(prevX, worldX);
+      const previousX = worldX;
+      worldX = Math.min(levelEndX, worldX + speed * dt);
+      audioBeats(previousX, worldX);
 
-      // runner physics
       if (!runner.grounded) {
         runner.y += runner.vy * dt;
         runner.vy -= GRAV * dt;
         if (runner.y <= 0) {
-          runner.y = 0; runner.vy = 0; runner.grounded = true; runner.squash = 1;
-          pLand();
+          runner.y = 0;
+          runner.vy = 0;
+          runner.grounded = true;
+          runner.squash = 1;
+          runner.cleanTarget = -1;
+          playLand();
+          emitParticles(runnerScreenX(), groundY(), '#e9d7ad', 6, .48);
         }
       }
-      if (runner.squash > 0) runner.squash = Math.max(0, runner.squash - dt * 6);
-      if (invuln > 0) invuln = Math.max(0, invuln - dt);
-      if (downFlash > 0) downFlash = Math.max(0, downFlash - dt * 4);
-      if (shakeMag > 0) shakeMag = Math.max(0, shakeMag - dt * 40);
+      runner.squash = Math.max(0, runner.squash - dt * 6);
+      invuln = Math.max(0, invuln - dt);
+      downFlash = Math.max(0, downFlash - dt * 4.8);
+      shakeMag = Math.max(0, shakeMag - dt * 42);
+      updateParticles(dt);
 
-      scheduleSpawns();
-
-      // collisions & clears
-      for (const o of obstacles) {
-        if (o.hit || o.cleared) continue;
-        const overlapX = Math.abs(worldX - o.ox) < (RUNNER_W / 2 + o.w / 2);
-        if (overlapX && invuln <= 0 && runner.y < o.h - 4) {
-          o.hit = true;
+      for (const obstacle of obstacles) {
+        if (obstacle.hit || obstacle.cleared) continue;
+        const overlap = Math.abs(worldX - obstacle.ox) < (RUNNER_W / 2 + obstacle.w / 2);
+        if (overlap && invuln <= 0 && runner.y < obstacle.h - 5) {
+          obstacle.hit = true;
           lives--;
+          levelHits++;
           invuln = INVULN_S;
           flow = 0;
-          shakeMag = 9;
-          pHurt();
+          runner.cleanTarget = -1;
+          shakeMag = reducedMotion ? 0 : 10;
+          playHurt();
+          emitParticles(runnerScreenX() + 9, groundY() - obstacle.h * .6, '#ff5f7e', 16, 1.15);
           flashJudge('hit', 'CLIPPED');
           updateLives();
           continue;
         }
-        if (o.ox + o.w / 2 < worldX - RUNNER_W / 2) {
-          o.cleared = true;
-          clears++;
-          pClear();
-          broadcast(o.kind);
-        }
-      }
-      // prune obstacles well behind the runner
-      if (obstacles.length > 40) {
-        obstacles = obstacles.filter((o) => o.ox + o.w / 2 > worldX - W);
-      }
 
-      distEl.textContent = String(displayScore());
-    }
-
-    // ---- draw ----
-    function drawBuildings(scroll: number, color: string, step: number, minH: number, maxH: number, seedShift: number) {
-      const gy = groundY();
-      const off = ((scroll % step) + step) % step;
-      cx.fillStyle = color;
-      for (let sx = -off - step; sx < W + step; sx += step) {
-        const idx = Math.floor((sx + scroll) / step) + seedShift;
-        const hh = minH + hashAt(idx) * (maxH - minH);
-        const bw = step * (0.6 + hashAt(idx * 1.7) * 0.3);
-        const bx = Math.round(sx);
-        const by = Math.round(gy - hh);
-        cx.fillRect(bx, by, Math.round(bw), Math.round(hh));
-        // a couple of lit windows
-        if (hashAt(idx * 2.3) > 0.45) {
-          cx.fillStyle = 'rgba(246,193,94,0.5)';
-          cx.fillRect(bx + 4, by + 6, 3, 3);
-          cx.fillRect(bx + Math.round(bw) - 8, by + 12, 3, 3);
-          cx.fillStyle = color;
-        }
-      }
-    }
-
-    function draw() {
-      cx.clearRect(0, 0, W, H);
-      const gy = groundY();
-      const rx = runnerScreenX();
-
-      cx.save();
-      if (shakeMag > 0) {
-        cx.translate((Math.random() - 0.5) * shakeMag, (Math.random() - 0.5) * shakeMag * 0.6);
-      }
-
-      // sky
-      const sky = cx.createLinearGradient(0, 0, 0, gy);
-      sky.addColorStop(0, '#0b0818');
-      sky.addColorStop(1, '#241238');
-      cx.fillStyle = sky;
-      cx.fillRect(-12, 0, W + 24, gy);
-
-      // blue-hour sun low on the horizon
-      const sunG = cx.createRadialGradient(W * 0.72, gy - 30, 4, W * 0.72, gy - 30, 90);
-      sunG.addColorStop(0, 'rgba(246,193,94,0.42)');
-      sunG.addColorStop(1, 'rgba(246,193,94,0)');
-      cx.fillStyle = sunG;
-      cx.fillRect(W * 0.72 - 90, gy - 120, 180, 120);
-
-      // parallax skyline
-      drawBuildings(worldX * 0.14, '#160f2a', 74, 40, 120, 11);
-      drawBuildings(worldX * 0.30, '#241635', 58, 26, 82, 47);
-
-      // ground strip
-      cx.fillStyle = '#0d0a1a';
-      cx.fillRect(-12, gy, W + 24, H - gy + 12);
-      cx.strokeStyle = 'rgba(246,193,94,0.55)';
-      cx.lineWidth = 2;
-      cx.beginPath(); cx.moveTo(-12, gy); cx.lineTo(W + 12, gy); cx.stroke();
-      // scrolling sidewalk cracks
-      cx.strokeStyle = 'rgba(244,231,200,0.08)';
-      cx.lineWidth = 1;
-      const crackStep = 46;
-      const coff = ((worldX % crackStep) + crackStep) % crackStep;
-      for (let x = -coff; x < W; x += crackStep) {
-        cx.beginPath(); cx.moveTo(x, gy + 6); cx.lineTo(x, H); cx.stroke();
-      }
-
-      // beat ticks — the grid obstacles ride on
-      const firstBeat = Math.floor((worldX - rx) / BEAT_PX) - 1;
-      for (let b = firstBeat; ; b++) {
-        const bx = rx + (b * BEAT_PX - worldX);
-        if (bx > W + 20) break;
-        if (bx < -20) continue;
-        const down = ((b % 4) + 4) % 4 === 0;
-        cx.strokeStyle = down
-          ? `rgba(246,193,94,${0.28 + downFlash * 0.4})`
-          : 'rgba(244,231,200,0.10)';
-        cx.lineWidth = down ? 2 : 1;
-        cx.beginPath(); cx.moveTo(bx, gy); cx.lineTo(bx, gy + (down ? 12 : 7)); cx.stroke();
-      }
-
-      // obstacles
-      for (const o of obstacles) {
-        const ox = rx + (o.ox - worldX);
-        if (ox < -40 || ox > W + 40) continue;
-        drawObstacle(o, ox, gy);
-        // telegraph: a marker floats above obstacles a beat or two out
-        const beatsOut = (o.ox - worldX) / BEAT_PX;
-        if (!o.hit && !o.cleared && beatsOut > 0.2 && beatsOut < 2.4) {
-          cx.fillStyle = `rgba(122,200,237,${0.7 - beatsOut * 0.2})`;
-          cx.beginPath();
-          const my = gy - o.h - 16 - Math.sin(worldX * 0.03) * 2;
-          cx.moveTo(ox, my + 7); cx.lineTo(ox - 5, my); cx.lineTo(ox + 5, my);
-          cx.closePath(); cx.fill();
-        }
-      }
-
-      // runner shadow
-      const shH = runner.y;
-      const shScale = Math.max(0.35, 1 - shH / 260);
-      cx.fillStyle = `rgba(0,0,0,${0.32 * shScale})`;
-      cx.beginPath();
-      cx.ellipse(rx, gy + 3, (RUNNER_W / 2) * shScale, 6 * shScale, 0, 0, Math.PI * 2);
-      cx.fill();
-
-      // runner
-      const bob = runner.grounded ? Math.sin(worldX * 0.09) * 2 : 0;
-      const squash = runner.squash;
-      const rw = RUNNER_W * (1 + squash * 0.16);
-      const rh = RUNNER_H * (1 - squash * 0.22);
-      const flicker = invuln > 0 && Math.floor(invuln * 20) % 2 === 0;
-      const rTop = gy - rh - runner.y + bob;
-      if (!flicker) {
-        if (nounReady) {
-          cx.save();
-          if (!runner.grounded) {
-            cx.translate(rx, rTop + rh / 2);
-            cx.rotate(Math.max(-0.35, Math.min(0.35, -runner.vy / 2600)));
-            cx.drawImage(nounImg, -rw / 2, -rh / 2, rw, rh);
-            cx.restore();
+        if (obstacle.ox + obstacle.w / 2 < worldX - RUNNER_W / 2) {
+          obstacle.cleared = true;
+          levelClears++;
+          totalClears++;
+          if (runner.cleanTarget === obstacle.ox) {
+            flow++;
+            bestFlow = Math.max(bestFlow, flow);
+            levelPerfect++;
+            totalPerfect++;
+            bonus += 2 + Math.min(flow, 4);
+            runner.cleanTarget = -1;
+            playPerfect();
+            emitParticles(runnerScreenX() + 23, groundY() - obstacle.h, level().accent, 18, 1.05);
+            flashJudge('onbeat', flow > 1 ? `PERFECT ×${flow}` : 'PERFECT');
           } else {
-            cx.drawImage(nounImg, rx - rw / 2, rTop, rw, rh);
+            flow = 0;
+            playClear();
+            flashJudge('clear', 'CLEAR');
           }
-        } else {
-          cx.fillStyle = '#f6c15e';
-          cx.fillRect(rx - rw / 2, rTop, rw, rh);
-          cx.fillStyle = '#07050f';
-          cx.fillRect(rx - rw / 2 + 8, rTop + 12, 10, 6);
-          cx.fillRect(rx + rw / 2 - 18, rTop + 12, 10, 6);
+          broadcast(obstacle.kind);
         }
       }
 
-      cx.restore();
+      updateHud();
     }
 
-    function drawObstacle(o: Ob, ox: number, gy: number) {
-      const dim = o.hit;
-      if (o.kind === 0) {
-        // traffic cone
-        cx.fillStyle = dim ? 'rgba(120,120,140,0.4)' : '#ff8a3a';
-        cx.beginPath();
-        cx.moveTo(ox, gy - o.h);
-        cx.lineTo(ox - o.w / 2, gy);
-        cx.lineTo(ox + o.w / 2, gy);
-        cx.closePath(); cx.fill();
-        cx.fillStyle = dim ? 'rgba(200,200,210,0.3)' : '#f4e7c8';
-        cx.fillRect(ox - o.w / 2 + 3, gy - o.h * 0.55, o.w - 6, 5);
-      } else if (o.kind === 3) {
-        // striped barrier
-        cx.fillStyle = dim ? 'rgba(120,120,140,0.4)' : '#ff6b8a';
-        cx.fillRect(ox - o.w / 2, gy - o.h, o.w, o.h);
-        cx.fillStyle = dim ? 'rgba(200,200,210,0.3)' : '#f4e7c8';
-        for (let i = 0; i < o.w; i += 12) {
-          cx.beginPath();
-          cx.moveTo(ox - o.w / 2 + i, gy - o.h);
-          cx.lineTo(ox - o.w / 2 + i + 6, gy - o.h);
-          cx.lineTo(ox - o.w / 2 + i - 6, gy);
-          cx.lineTo(ox - o.w / 2 + i - 12, gy);
-          cx.closePath(); cx.fill();
+    /* ---------------- scene drawing ---------------- */
+    function drawSky(cfg: Level, gy: number) {
+      const gradient = context.createLinearGradient(0, 0, 0, gy);
+      gradient.addColorStop(0, cfg.skyTop);
+      gradient.addColorStop(1, cfg.skyBottom);
+      context.fillStyle = gradient;
+      context.fillRect(-14, 0, width + 28, gy + 2);
+
+      if (cfg.scene === 'mainstreet') {
+        const haze = context.createRadialGradient(width * .76, gy * .44, 8, width * .76, gy * .44, 150);
+        haze.addColorStop(0, 'rgba(255,218,156,.72)');
+        haze.addColorStop(1, 'rgba(255,167,123,0)');
+        context.fillStyle = haze;
+        context.fillRect(width * .76 - 160, gy * .08, 320, gy * .7);
+        context.fillStyle = '#ffd89b';
+        context.beginPath();
+        context.arc(width * .76, gy * .44, 24, 0, Math.PI * 2);
+        context.fill();
+      } else if (cfg.scene === 'refinery') {
+        for (let index = 0; index < 36; index++) {
+          const x = hashAt(index + 200) * width;
+          const y = hashAt(index + 800) * gy * .62;
+          const size = hashAt(index + 400) > .8 ? 2 : 1;
+          context.fillStyle = `rgba(220,235,255,${.25 + hashAt(index + 90) * .55})`;
+          context.fillRect(x, y, size, size);
         }
+        const moonGlow = context.createRadialGradient(width * .73, gy * .25, 4, width * .73, gy * .25, 65);
+        moonGlow.addColorStop(0, 'rgba(190,226,255,.75)');
+        moonGlow.addColorStop(1, 'rgba(122,167,255,0)');
+        context.fillStyle = moonGlow;
+        context.fillRect(width * .73 - 70, gy * .25 - 70, 140, 140);
+        context.fillStyle = '#dbe9ff';
+        context.beginPath();
+        context.arc(width * .73, gy * .25, 14, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+    function drawBuildingLayer(scroll: number, color: string, step: number, minHeight: number, maxHeight: number, seedShift: number, windows: string) {
+      const gy = groundY();
+      const offset = ((scroll % step) + step) % step;
+      for (let screenX = -offset - step; screenX < width + step; screenX += step) {
+        const index = Math.floor((screenX + scroll) / step) + seedShift;
+        const buildingHeight = minHeight + hashAt(index) * (maxHeight - minHeight);
+        const buildingWidth = step * (.62 + hashAt(index * 1.7) * .28);
+        const left = Math.round(screenX);
+        const top = Math.round(gy - buildingHeight);
+        context.fillStyle = color;
+        context.fillRect(left, top, Math.round(buildingWidth), Math.round(buildingHeight));
+        if (hashAt(index * 2.3) > .37) {
+          context.fillStyle = windows;
+          for (let row = 0; row < 3; row++) {
+            const wy = top + 9 + row * 13;
+            if (wy > gy - 7) break;
+            context.fillRect(left + 6, wy, 4, 3);
+            if (buildingWidth > 31) context.fillRect(left + buildingWidth - 11, wy, 4, 3);
+          }
+        }
+      }
+    }
+    function drawPalm(x: number, baseY: number, scale: number, color: string) {
+      context.save();
+      context.translate(x, baseY);
+      context.scale(scale, scale);
+      context.strokeStyle = color;
+      context.fillStyle = color;
+      context.lineWidth = 5;
+      context.beginPath();
+      context.moveTo(0, 0);
+      context.quadraticCurveTo(-4, -36, 2, -70);
+      context.stroke();
+      for (let index = 0; index < 7; index++) {
+        const angle = (Math.PI * 2 * index) / 7 - Math.PI / 2;
+        context.save();
+        context.translate(2, -70);
+        context.rotate(angle);
+        context.beginPath();
+        context.moveTo(0, 0);
+        context.quadraticCurveTo(13, -5, 26, 1);
+        context.quadraticCurveTo(13, 2, 0, 0);
+        context.fill();
+        context.restore();
+      }
+      context.restore();
+    }
+    function drawMainStreet(gy: number) {
+      context.fillStyle = 'rgba(37,48,83,.46)';
+      context.beginPath();
+      context.moveTo(0, gy);
+      for (let x = 0; x <= width; x += 52) context.lineTo(x, gy - 58 - hashAt(x * .03) * 60);
+      context.lineTo(width, gy);
+      context.fill();
+      drawBuildingLayer(sceneScroll(.12), '#26304f', 82, 44, 125, 12, 'rgba(255,209,142,.55)');
+      drawBuildingLayer(sceneScroll(.28), '#18233e', 64, 28, 86, 49, 'rgba(255,223,174,.64)');
+      const scroll = sceneScroll(.42);
+      const step = 210;
+      const offset = ((scroll % step) + step) % step;
+      for (let x = -offset; x < width + step; x += step) drawPalm(x + 55, gy, .82, '#11192d');
+    }
+    function drawPier(gy: number) {
+      const horizon = gy * .58;
+      const water = context.createLinearGradient(0, horizon, 0, gy);
+      water.addColorStop(0, 'rgba(68,143,180,.48)');
+      water.addColorStop(1, 'rgba(7,34,67,.82)');
+      context.fillStyle = water;
+      context.fillRect(0, horizon, width, gy - horizon);
+      context.strokeStyle = 'rgba(173,232,255,.22)';
+      context.lineWidth = 1;
+      const waveOffset = sceneScroll(.24) % 46;
+      for (let y = horizon + 12; y < gy - 9; y += 14) {
+        context.beginPath();
+        for (let x = -50; x < width + 50; x += 46) {
+          context.moveTo(x - waveOffset, y);
+          context.quadraticCurveTo(x + 10 - waveOffset, y - 3, x + 22 - waveOffset, y);
+        }
+        context.stroke();
+      }
+      context.fillStyle = '#17273d';
+      context.fillRect(width * .41, horizon - 7, width * .59, 10);
+      for (let x = width * .43; x < width; x += 46) {
+        context.fillRect(x, horizon, 5, gy - horizon);
+        context.fillStyle = `rgba(122,215,255,${.35 + downFlash * .4})`;
+        context.fillRect(x - 1, horizon - 11, 7, 5);
+        context.fillStyle = '#17273d';
+      }
+      const gullScroll = sceneScroll(.07);
+      context.strokeStyle = 'rgba(234,244,255,.7)';
+      context.lineWidth = 1.5;
+      for (let index = 0; index < 4; index++) {
+        const x = ((index * 173 - gullScroll) % (width + 80) + width + 80) % (width + 80) - 30;
+        const y = 55 + index * 27;
+        context.beginPath();
+        context.arc(x - 5, y, 6, Math.PI * 1.1, Math.PI * 1.9);
+        context.arc(x + 5, y, 6, Math.PI * 1.1, Math.PI * 1.9);
+        context.stroke();
+      }
+    }
+    function drawRalphs(gy: number) {
+      drawBuildingLayer(sceneScroll(.1), '#251a4a', 94, 48, 118, 92, 'rgba(255,182,96,.55)');
+      const storeX = width * .38 - (sceneScroll(.2) % (width + 440));
+      for (const shift of [0, width + 440]) {
+        const x = storeX + shift;
+        context.fillStyle = '#332344';
+        context.fillRect(x, gy - 128, 360, 128);
+        context.fillStyle = '#f4b24f';
+        context.fillRect(x + 24, gy - 105, 142, 33);
+        context.fillStyle = '#30152d';
+        context.font = '900 18px JetBrains Mono, monospace';
+        context.fillText('RALPHS', x + 42, gy - 82);
+        context.fillStyle = 'rgba(255,238,191,.75)';
+        for (let windowIndex = 0; windowIndex < 7; windowIndex++) context.fillRect(x + 24 + windowIndex * 44, gy - 59, 31, 43);
+      }
+      const carScroll = sceneScroll(.46);
+      const carStep = 190;
+      const offset = ((carScroll % carStep) + carStep) % carStep;
+      for (let x = -offset - 40; x < width + carStep; x += carStep) {
+        context.fillStyle = '#13172d';
+        context.fillRect(x, gy - 28, 76, 25);
+        context.fillRect(x + 17, gy - 42, 40, 18);
+        context.fillStyle = '#7ad7ff';
+        context.fillRect(x + 21, gy - 38, 14, 11);
+        context.fillStyle = '#080b17';
+        context.beginPath(); context.arc(x + 17, gy - 2, 8, 0, Math.PI * 2); context.fill();
+        context.beginPath(); context.arc(x + 61, gy - 2, 8, 0, Math.PI * 2); context.fill();
+      }
+    }
+    function drawRefinery(gy: number) {
+      const scroll = sceneScroll(.16);
+      const step = 230;
+      const offset = ((scroll % step) + step) % step;
+      for (let x = -offset - step; x < width + step; x += step) {
+        const tankHeight = 62 + hashAt(x * .04 + 30) * 34;
+        context.fillStyle = '#111b31';
+        context.fillRect(x, gy - tankHeight, 118, tankHeight);
+        context.beginPath();
+        context.ellipse(x + 59, gy - tankHeight, 59, 13, 0, Math.PI, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = '#273654';
+        context.strokeRect(x + 9, gy - tankHeight + 20, 100, tankHeight - 25);
+        const stackX = x + 145;
+        context.fillStyle = '#0b1327';
+        context.fillRect(stackX, gy - 172, 22, 172);
+        context.fillStyle = '#303b54';
+        for (let band = 0; band < 4; band++) context.fillRect(stackX, gy - 160 + band * 32, 22, 7);
+        const flare = context.createRadialGradient(stackX + 11, gy - 182, 1, stackX + 11, gy - 182, 35 + downFlash * 12);
+        flare.addColorStop(0, 'rgba(255,242,164,.95)');
+        flare.addColorStop(.28, 'rgba(255,125,80,.65)');
+        flare.addColorStop(1, 'rgba(255,86,100,0)');
+        context.fillStyle = flare;
+        context.fillRect(stackX - 30, gy - 225, 82, 82);
+      }
+      context.strokeStyle = '#263650';
+      context.lineWidth = 6;
+      context.beginPath();
+      context.moveTo(0, gy - 34);
+      context.lineTo(width, gy - 34);
+      context.stroke();
+      context.lineWidth = 2;
+      for (let x = 12; x < width; x += 42) {
+        context.beginPath();
+        context.moveTo(x, gy - 34);
+        context.lineTo(x + 20, gy - 4);
+        context.stroke();
+      }
+    }
+    function drawGround(gy: number) {
+      const cfg = level();
+      const ground = context.createLinearGradient(0, gy, 0, height);
+      ground.addColorStop(0, '#111522');
+      ground.addColorStop(1, '#05070e');
+      context.fillStyle = ground;
+      context.fillRect(-14, gy, width + 28, height - gy + 14);
+
+      context.strokeStyle = cfg.accent;
+      context.globalAlpha = .55 + downFlash * .28;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(-12, gy);
+      context.lineTo(width + 12, gy);
+      context.stroke();
+      context.globalAlpha = 1;
+
+      const runnerX = runnerScreenX();
+      const firstBeat = Math.floor((worldX - runnerX - levelStartX) / BEAT_PX) - 1;
+      for (let beat = firstBeat; ; beat++) {
+        const x = runnerX + (levelStartX + beat * BEAT_PX - worldX);
+        if (x > width + 30) break;
+        if (x < -30) continue;
+        const down = ((beat % 4) + 4) % 4 === 0;
+        context.strokeStyle = down ? cfg.accent : 'rgba(255,255,255,.13)';
+        context.globalAlpha = down ? .3 + downFlash * .42 : .42;
+        context.lineWidth = down ? 2 : 1;
+        context.beginPath();
+        context.moveTo(x, gy);
+        context.lineTo(x, height + 10);
+        context.stroke();
+        if (down) {
+          context.fillStyle = cfg.accent;
+          context.fillRect(x - 3, gy + 8, 6, 3);
+        }
+      }
+      context.globalAlpha = 1;
+
+      const stripeStep = 92;
+      const stripeOffset = ((worldX * 1.2 % stripeStep) + stripeStep) % stripeStep;
+      context.fillStyle = 'rgba(255,255,255,.1)';
+      for (let x = -stripeOffset; x < width; x += stripeStep) context.fillRect(x, gy + (height - gy) * .58, 38, 3);
+
+      if (!reducedMotion && currentLevelIndex >= 2 && phase === 'playing') {
+        context.strokeStyle = `rgba(255,255,255,${.06 + currentLevelIndex * .025})`;
+        context.lineWidth = 1;
+        for (let index = 0; index < 9; index++) {
+          const y = gy + 18 + hashAt(index + Math.floor(worldX / 30)) * (height - gy - 24);
+          const length = 22 + hashAt(index + 44) * 58;
+          context.beginPath();
+          context.moveTo((hashAt(index + 77) * width + worldX * 1.5) % width, y);
+          context.lineTo(((hashAt(index + 77) * width + worldX * 1.5) % width) - length, y);
+          context.stroke();
+        }
+      }
+    }
+    function drawFinishGate(gy: number) {
+      const x = runnerScreenX() + (levelEndX - worldX);
+      if (x < -60 || x > width + 80) return;
+      const cfg = level();
+      context.save();
+      context.shadowColor = cfg.accent;
+      context.shadowBlur = 18;
+      context.fillStyle = cfg.accent;
+      context.fillRect(x - 24, gy - 92, 7, 92);
+      context.fillRect(x + 17, gy - 92, 7, 92);
+      context.fillRect(x - 24, gy - 92, 48, 7);
+      context.shadowBlur = 0;
+      for (let row = 0; row < 5; row++) {
+        for (let column = 0; column < 4; column++) {
+          context.fillStyle = (row + column) % 2 ? '#080b15' : '#fff7df';
+          context.fillRect(x - 20 + column * 10, gy - 85 + row * 8, 10, 8);
+        }
+      }
+      context.restore();
+    }
+    function drawObstacle(obstacle: Obstacle, x: number, gy: number) {
+      const cfg = level();
+      context.save();
+      context.globalAlpha = obstacle.hit ? .34 : 1;
+      context.fillStyle = 'rgba(0,0,0,.34)';
+      context.beginPath();
+      context.ellipse(x, gy + 3, obstacle.w * .58, 6, 0, 0, Math.PI * 2);
+      context.fill();
+
+      if (obstacle.kind === 'cone') {
+        context.fillStyle = '#ff7d45';
+        context.beginPath();
+        context.moveTo(x, gy - obstacle.h);
+        context.lineTo(x - obstacle.w / 2, gy);
+        context.lineTo(x + obstacle.w / 2, gy);
+        context.closePath();
+        context.fill();
+        context.fillStyle = '#fff1d8';
+        context.fillRect(x - obstacle.w / 2 + 4, gy - obstacle.h * .52, obstacle.w - 8, 6);
+        context.fillStyle = '#1b1820';
+        context.fillRect(x - obstacle.w / 2 - 3, gy - 4, obstacle.w + 6, 5);
+      } else if (obstacle.kind === 'crate' || obstacle.kind === 'tall-crate') {
+        context.fillStyle = obstacle.kind === 'tall-crate' ? '#9a6ae8' : '#d49a47';
+        context.fillRect(x - obstacle.w / 2, gy - obstacle.h, obstacle.w, obstacle.h);
+        context.strokeStyle = '#17121d';
+        context.lineWidth = 3;
+        context.strokeRect(x - obstacle.w / 2 + 1, gy - obstacle.h + 1, obstacle.w - 2, obstacle.h - 2);
+        context.beginPath();
+        context.moveTo(x - obstacle.w / 2, gy - obstacle.h);
+        context.lineTo(x + obstacle.w / 2, gy);
+        context.moveTo(x + obstacle.w / 2, gy - obstacle.h);
+        context.lineTo(x - obstacle.w / 2, gy);
+        context.stroke();
+      } else if (obstacle.kind === 'barrier') {
+        context.fillStyle = '#f5eee0';
+        context.fillRect(x - obstacle.w / 2, gy - obstacle.h, obstacle.w, 23);
+        context.save();
+        context.beginPath();
+        context.rect(x - obstacle.w / 2, gy - obstacle.h, obstacle.w, 23);
+        context.clip();
+        context.strokeStyle = '#ff5f7e';
+        context.lineWidth = 8;
+        for (let stripe = -obstacle.w; stripe < obstacle.w * 2; stripe += 18) {
+          context.beginPath();
+          context.moveTo(x - obstacle.w / 2 + stripe, gy - obstacle.h + 25);
+          context.lineTo(x - obstacle.w / 2 + stripe + 18, gy - obstacle.h - 2);
+          context.stroke();
+        }
+        context.restore();
+        context.fillStyle = '#ced4dd';
+        context.fillRect(x - obstacle.w / 2 + 8, gy - obstacle.h + 22, 5, obstacle.h - 22);
+        context.fillRect(x + obstacle.w / 2 - 13, gy - obstacle.h + 22, 5, obstacle.h - 22);
+      } else if (obstacle.kind === 'speaker') {
+        context.fillStyle = '#141624';
+        context.fillRect(x - obstacle.w / 2, gy - obstacle.h, obstacle.w, obstacle.h);
+        context.strokeStyle = cfg.accentSoft;
+        context.lineWidth = 2;
+        context.strokeRect(x - obstacle.w / 2 + 1, gy - obstacle.h + 1, obstacle.w - 2, obstacle.h - 2);
+        for (const [cy, radius] of [[gy - obstacle.h + 16, 8], [gy - 17, 12]] as [number, number][]) {
+          context.fillStyle = '#070910';
+          context.beginPath(); context.arc(x, cy, radius, 0, Math.PI * 2); context.fill();
+          context.strokeStyle = cfg.accent;
+          context.globalAlpha = .45 + downFlash * .45;
+          context.stroke();
+          context.globalAlpha = 1;
+        }
+      } else if (obstacle.kind === 'luggage') {
+        context.fillStyle = '#7ad7ff';
+        context.fillRect(x - obstacle.w / 2, gy - obstacle.h + 8, obstacle.w, obstacle.h - 8);
+        context.strokeStyle = '#101525';
+        context.lineWidth = 3;
+        context.strokeRect(x - obstacle.w / 2 + 1, gy - obstacle.h + 9, obstacle.w - 2, obstacle.h - 10);
+        context.beginPath();
+        context.moveTo(x - 7, gy - obstacle.h + 8);
+        context.lineTo(x - 7, gy - obstacle.h);
+        context.lineTo(x + 7, gy - obstacle.h);
+        context.lineTo(x + 7, gy - obstacle.h + 8);
+        context.stroke();
+        context.fillStyle = '#05070f';
+        context.beginPath(); context.arc(x - 13, gy + 1, 5, 0, Math.PI * 2); context.fill();
+        context.beginPath(); context.arc(x + 13, gy + 1, 5, 0, Math.PI * 2); context.fill();
       } else {
-        // crate (kind 1) / tall crate (kind 2)
-        cx.fillStyle = dim ? 'rgba(120,120,140,0.4)' : '#d4a437';
-        cx.fillRect(ox - o.w / 2, gy - o.h, o.w, o.h);
-        cx.strokeStyle = dim ? 'rgba(200,200,210,0.3)' : '#07050f';
-        cx.lineWidth = 2;
-        cx.strokeRect(ox - o.w / 2 + 1, gy - o.h + 1, o.w - 2, o.h - 2);
-        cx.beginPath();
-        cx.moveTo(ox - o.w / 2, gy - o.h); cx.lineTo(ox + o.w / 2, gy);
-        cx.moveTo(ox + o.w / 2, gy - o.h); cx.lineTo(ox - o.w / 2, gy);
-        cx.stroke();
+        context.fillStyle = '#ff5f7e';
+        context.fillRect(x - 8, gy - obstacle.h + 9, 16, obstacle.h - 9);
+        context.fillRect(x - 14, gy - obstacle.h + 16, 28, 11);
+        context.beginPath();
+        context.arc(x, gy - obstacle.h + 10, 11, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = '#e9edf5';
+        context.fillRect(x - 3, gy - obstacle.h, 6, 8);
+        context.fillRect(x - 17, gy - obstacle.h + 19, 6, 5);
+        context.fillRect(x + 11, gy - obstacle.h + 19, 6, 5);
       }
+      context.restore();
+    }
+    function drawRunner(gy: number) {
+      const x = runnerScreenX();
+      const shadowScale = Math.max(.34, 1 - runner.y / 260);
+      context.fillStyle = `rgba(0,0,0,${.38 * shadowScale})`;
+      context.beginPath();
+      context.ellipse(x, gy + 4, RUNNER_W * .47 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
+      context.fill();
+
+      const bob = runner.grounded && !reducedMotion ? Math.sin(worldX * .1) * 2 : 0;
+      const squash = runner.squash;
+      const runnerWidth = RUNNER_W * (1 + squash * .14);
+      const runnerHeight = RUNNER_H * (1 - squash * .2);
+      const top = gy - runnerHeight - runner.y + bob;
+      const flicker = invuln > 0 && Math.floor(invuln * 22) % 2 === 0;
+      if (flicker) return;
+
+      if (runner.cleanTarget >= 0) {
+        const glow = context.createRadialGradient(x, top + runnerHeight * .55, 3, x, top + runnerHeight * .55, 50);
+        glow.addColorStop(0, `${level().accent}88`);
+        glow.addColorStop(1, `${level().accent}00`);
+        context.fillStyle = glow;
+        context.fillRect(x - 55, top - 20, 110, 110);
+      }
+
+      context.save();
+      context.translate(x, top + runnerHeight / 2);
+      if (!runner.grounded && !reducedMotion) context.rotate(Math.max(-.32, Math.min(.32, -runner.vy / 2700)));
+
+      const legPhase = reducedMotion ? 0 : Math.sin(worldX * .16) * 5;
+      context.fillStyle = level().accent;
+      context.fillRect(-15 + legPhase * .25, runnerHeight / 2 - 9, 9, 13);
+      context.fillRect(6 - legPhase * .25, runnerHeight / 2 - 9, 9, 13);
+
+      if (nounReady) {
+        context.drawImage(nounImage, -runnerWidth / 2, -runnerHeight / 2, runnerWidth, runnerHeight);
+      } else {
+        context.fillStyle = '#f4efe3';
+        context.fillRect(-runnerWidth / 2, -runnerHeight / 2, runnerWidth, runnerHeight);
+        context.fillStyle = '#11131f';
+        context.fillRect(-runnerWidth / 2 + 7, -runnerHeight / 2 + 12, 14, 8);
+        context.fillRect(runnerWidth / 2 - 21, -runnerHeight / 2 + 12, 14, 8);
+        context.fillStyle = level().accent;
+        context.fillRect(-runnerWidth / 2 + 10, -runnerHeight / 2 + 14, 5, 4);
+        context.fillRect(runnerWidth / 2 - 15, -runnerHeight / 2 + 14, 5, 4);
+      }
+      context.restore();
+    }
+    function draw() {
+      if (!width || !height) return;
+      const cfg = level();
+      const gy = groundY();
+      context.clearRect(0, 0, width, height);
+      context.save();
+      if (shakeMag > 0 && !reducedMotion) context.translate((Math.random() - .5) * shakeMag, (Math.random() - .5) * shakeMag * .6);
+
+      drawSky(cfg, gy);
+      if (cfg.scene === 'mainstreet') drawMainStreet(gy);
+      else if (cfg.scene === 'pier') drawPier(gy);
+      else if (cfg.scene === 'ralphs') drawRalphs(gy);
+      else drawRefinery(gy);
+      drawGround(gy);
+      drawFinishGate(gy);
+
+      for (const obstacle of obstacles) {
+        const x = runnerScreenX() + (obstacle.ox - worldX);
+        if (x < -70 || x > width + 70) continue;
+        drawObstacle(obstacle, x, gy);
+        const beatsOut = (obstacle.ox - worldX) / BEAT_PX;
+        if (!obstacle.hit && !obstacle.cleared && beatsOut > .2 && beatsOut < 2.45) {
+          const alpha = Math.max(.18, .86 - beatsOut * .22);
+          const markerY = gy - obstacle.h - 21 - (reducedMotion ? 0 : Math.sin(worldX * .025) * 3);
+          context.fillStyle = `rgba(122,215,255,${alpha})`;
+          context.beginPath();
+          context.moveTo(x, markerY + 9);
+          context.lineTo(x - 7, markerY);
+          context.lineTo(x + 7, markerY);
+          context.closePath();
+          context.fill();
+          context.fillStyle = `rgba(255,255,255,${alpha * .74})`;
+          const pips = Math.max(1, Math.ceil(beatsOut));
+          for (let pip = 0; pip < pips; pip++) context.fillRect(x - (pips * 4) / 2 + pip * 5, markerY - 8, 3, 3);
+        }
+      }
+
+      drawParticles();
+      drawRunner(gy);
+      context.restore();
+
+      const vignette = context.createRadialGradient(width / 2, height * .46, height * .18, width / 2, height * .5, Math.max(width, height) * .75);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,.34)');
+      context.fillStyle = vignette;
+      context.fillRect(0, 0, width, height);
     }
 
-    // ---- dom & hud ----
-    const distEl = document.getElementById('drn-dist')!;
-    const flashEl = document.getElementById('drn-flash')!;
+    /* ---------------- DOM, overlays, persistence ---------------- */
+    const root = document.getElementById('drn')!;
+    const stage = document.getElementById('drn-stage')!;
+    const scoreEl = document.getElementById('drn-score')!;
+    const levelNoEl = document.getElementById('drn-level-no')!;
+    const levelNameEl = document.getElementById('drn-level-name')!;
+    const tempoEl = document.getElementById('drn-tempo')!;
+    const flowEl = document.getElementById('drn-flow')!;
     const bestLine = document.getElementById('drn-best-line')!;
     const overlayBest = document.getElementById('drn-best')!;
+    const progressEl = document.getElementById('drn-progress') as HTMLElement;
     const overlay = document.getElementById('drn-overlay')!;
-    const goBtn = document.getElementById('drn-go') as HTMLButtonElement;
+    const postcard = document.getElementById('drn-postcard') as HTMLElement;
+    const kickerEl = document.getElementById('drn-kicker')!;
+    const cardTempoEl = document.getElementById('drn-card-tempo')!;
     const titleEl = document.getElementById('drn-title')!;
     const subEl = document.getElementById('drn-sub')!;
-    const stage = document.getElementById('drn-stage')!;
+    const goButton = document.getElementById('drn-go') as HTMLButtonElement;
+    const jumpButton = document.getElementById('drn-jump') as HTMLButtonElement;
+    const judgeEl = document.getElementById('drn-judge')!;
     const tapHint = document.getElementById('drn-tap-hint')!;
-    const jumpBtn = document.getElementById('drn-jump') as HTMLButtonElement;
-    const lifeEls = Array.from(document.querySelectorAll('.drn__life')) as HTMLElement[];
+    const stateLive = document.getElementById('drn-state-live')!;
+    const livesLive = document.getElementById('drn-lives-live')!;
+    const routeItems = Array.from(document.querySelectorAll<HTMLElement>('[data-route-index]'));
+    const lifeEls = Array.from(document.querySelectorAll<HTMLElement>('.drn__life'));
+    const beatRail = Array.from(document.querySelectorAll<HTMLElement>('.drn__beat-rail span'));
+    const statALabel = document.getElementById('drn-stat-a-label')!;
+    const statA = document.getElementById('drn-stat-a')!;
+    const statBLabel = document.getElementById('drn-stat-b-label')!;
+    const statB = document.getElementById('drn-stat-b')!;
+    const statCLabel = document.getElementById('drn-stat-c-label')!;
+    const statC = document.getElementById('drn-stat-c')!;
 
-    let flashTimer = 0;
-    function flashJudge(kind: 'onbeat' | 'clear' | 'hit', text: string) {
-      flashEl.textContent = text;
-      flashEl.className = `drn__flash drn__flash--${kind}`;
-      clearTimeout(flashTimer);
-      flashTimer = window.setTimeout(() => { flashEl.textContent = ''; }, 460);
+    let judgeTimer = 0;
+    function flashJudge(kind: 'onbeat' | 'clear' | 'hit' | 'level', text: string) {
+      judgeEl.textContent = text;
+      judgeEl.className = `drn__judge drn__judge--${kind}`;
+      clearTimeout(judgeTimer);
+      judgeTimer = window.setTimeout(() => { judgeEl.textContent = ''; }, kind === 'level' ? 820 : 520);
+    }
+    function applyTheme(cfg: Level) {
+      root.style.setProperty('--accent', cfg.accent);
+      root.style.setProperty('--accent-soft', cfg.accentSoft);
+      root.dataset.scene = cfg.scene;
+      postcard.style.backgroundImage = `linear-gradient(180deg, transparent 35%, rgba(7,8,17,.28)), url("${POSTCARD_URLS[LEVELS.indexOf(cfg)]}")`;
+      levelNoEl.textContent = `LEVEL ${cfg.number} / 0${LEVELS.length}`;
+      levelNameEl.textContent = cfg.name;
+      tempoEl.textContent = `${cfg.bpm} BPM`;
+    }
+    function readBest(): number {
+      try {
+        const value = Number(localStorage.getItem(BEST_KEY) || 0);
+        return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+      } catch { return 0; }
+    }
+    function saveProgress(completedLevel = currentLevelIndex) {
+      const score = displayScore();
+      savedBest = Math.max(savedBest, score);
+      try {
+        localStorage.setItem(BEST_KEY, String(savedBest));
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify({ best: savedBest, completedLevel, perfect: totalPerfect, updatedAt: Date.now() }));
+      } catch { /* storage is optional */ }
+      updateBest();
+    }
+    function updateBest() {
+      const text = savedBest > 0 ? `best ${savedBest} m` : 'best — m';
+      bestLine.textContent = text;
+      overlayBest.textContent = text;
     }
     function updateLives() {
-      lifeEls.forEach((el, i) => el.classList.toggle('drn__life--lost', i >= lives));
+      lifeEls.forEach((element, index) => element.classList.toggle('drn__life--lost', index >= lives));
+      livesLive.textContent = `${lives} ${lives === 1 ? 'heart' : 'hearts'} remaining.`;
+    }
+    function updateRoute(activeIndex: number, allComplete = false) {
+      routeItems.forEach((item, index) => {
+        item.classList.toggle('is-complete', allComplete || index < activeIndex);
+        item.classList.toggle('is-active', !allComplete && index === activeIndex);
+      });
+    }
+    function setStats(aLabel: string, aValue: string, bLabel: string, bValue: string, cLabel: string, cValue: string) {
+      statALabel.textContent = aLabel;
+      statA.textContent = aValue;
+      statBLabel.textContent = bLabel;
+      statB.textContent = bValue;
+      statCLabel.textContent = cLabel;
+      statC.textContent = cValue;
+    }
+    function updateHud() {
+      scoreEl.textContent = String(displayScore());
+      flowEl.textContent = flow > 0 ? `×${flow}` : '—';
+      const progress = Math.max(0, Math.min(1, (worldX - levelStartX) / Math.max(1, levelEndX - levelStartX)));
+      progressEl.style.width = `${progress * 100}%`;
+      const beat = Math.floor((worldX - levelStartX) / BEAT_PX);
+      const position = ((beat % 4) + 4) % 4;
+      beatRail.forEach((cell, index) => cell.classList.toggle('is-active', phase === 'playing' && index === position));
+    }
+    function showOverlay(focusButton = true) {
+      overlay.classList.remove('drn__overlay--hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+      jumpButton.disabled = true;
+      root.dataset.phase = phase;
+      if (focusButton) goButton.focus({ preventScroll: true });
+    }
+    function hideOverlay() {
+      overlay.classList.add('drn__overlay--hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+      jumpButton.disabled = false;
+      root.dataset.phase = phase;
+      jumpButton.focus({ preventScroll: true });
+    }
+    function showIntro() {
+      phase = 'intro';
+      currentLevelIndex = 0;
+      pendingLevelIndex = 0;
+      worldX = 0;
+      bonus = 0;
+      flow = 0;
+      prepareLevel(0);
+      const cfg = level();
+      kickerEl.textContent = 'BEAT RUNNER V2 · POSTCARD TOUR';
+      cardTempoEl.textContent = '4 LEVELS · 92→128 BPM';
+      titleEl.innerHTML = 'FOUR SCENES.<br>ONE POCKET.';
+      subEl.textContent = 'Every obstacle lands on the grid. Carry three hearts from the marine layer to the refinery night shift.';
+      setStats('route', '4 levels', 'tempo', '92→128', 'hearts', '3 total');
+      goButton.textContent = '▶ START LEVEL 01';
+      updateRoute(0);
+      stateLive.textContent = 'Beat Runner v2 ready. Four levels, three hearts. Start Level 1.';
+      showOverlay(false);
     }
 
-    // ---- run loop ----
-    function frame(ts: number) {
-      if (!running) return;
-      const dt = Math.min((ts - lastTs) / 1000, 0.05);
-      lastTs = ts;
+    /* ---------------- phase transitions ---------------- */
+    function startCampaign() {
+      cancelAnimationFrame(rafId);
+      audioContext();
+      resize();
+      pickNoun();
+      worldX = 0;
+      lives = 3;
+      bonus = 0;
+      flow = 0;
+      bestFlow = 0;
+      totalClears = 0;
+      totalPerfect = 0;
+      scenerySeed = Math.random() * 1000;
+      updateLives();
+      startLevel(0);
+    }
+    function startLevel(index: number) {
+      cancelAnimationFrame(rafId);
+      currentLevelIndex = index;
+      pendingLevelIndex = index;
+      prepareLevel(index);
+      phase = 'playing';
+      tapHint.classList.toggle('drn__tap-hint--gone', index > 0);
+      judgeEl.textContent = '';
+      hideOverlay();
+      flashJudge('level', `LEVEL ${level().number}`);
+      stateLive.textContent = `Level ${index + 1} of ${LEVELS.length}, ${level().name}, ${level().bpm} BPM. Jump control focused.`;
+      lastTs = performance.now();
+      suspended = false;
+      rafId = requestAnimationFrame(frame);
+    }
+    function completeLevel() {
+      if (phase !== 'playing') return;
+      cancelAnimationFrame(rafId);
+      const completedIndex = currentLevelIndex;
+      const completed = level();
+      const healed = levelHits === 0 && lives < 3;
+      if (healed) lives++;
+      updateLives();
+      saveProgress(completedIndex);
+      playLevelClear();
+
+      if (completedIndex === LEVELS.length - 1) {
+        phase = 'victory';
+        kickerEl.textContent = 'CITY CLEARED · FOUR POSTCARDS';
+        cardTempoEl.textContent = `${totalClears} CLEARS · ${totalPerfect} PERFECT`;
+        titleEl.textContent = 'POCKET HELD.';
+        subEl.textContent = `${completed.clearLine} You carried the beat from Main Street to the night shift${healed ? ' — flawless finish restored a heart.' : '.'}`;
+        setStats('score', `${displayScore()} m`, 'perfect', `${totalPerfect}/${totalClears}`, 'best flow', bestFlow > 0 ? `×${bestFlow}` : '—');
+        goButton.textContent = '▶ RUN THE CITY AGAIN';
+        updateRoute(LEVELS.length, true);
+        stateLive.textContent = `City cleared. Final score ${displayScore()} meters. ${totalPerfect} perfect clears. Best flow ${bestFlow}.`;
+        showOverlay();
+        return;
+      }
+
+      phase = 'interstitial';
+      pendingLevelIndex = completedIndex + 1;
+      const next = LEVELS[pendingLevelIndex];
+      applyTheme(next);
+      kickerEl.textContent = `LEVEL ${completed.number} CLEAR · ${completed.clearLine}`;
+      cardTempoEl.textContent = `NEXT · ${next.bpm} BPM`;
+      titleEl.textContent = next.name;
+      subEl.textContent = `${next.brief}${healed ? ' Flawless level: one heart restored.' : ''}`;
+      setStats('level score', `+${displayScore() - levelStartScore} m`, 'perfect', `${levelPerfect}/${completed.obstacles.length}`, 'hearts', `${lives}/3`);
+      goButton.textContent = `▶ LEVEL ${next.number} · ${next.bpm} BPM`;
+      updateRoute(pendingLevelIndex);
+      stateLive.textContent = `Level ${completed.number} clear. ${levelPerfect} perfect clears. Next: ${next.name}, ${next.bpm} BPM.`;
+      showOverlay();
+    }
+    function endRun() {
+      if (phase !== 'playing') return;
+      cancelAnimationFrame(rafId);
+      phase = 'gameover';
+      saveProgress(currentLevelIndex - 1);
+      const cfg = level();
+      kickerEl.textContent = `WIPEOUT · LEVEL ${cfg.number} / 0${LEVELS.length}`;
+      cardTempoEl.textContent = `${cfg.name.toUpperCase()} · ${cfg.bpm} BPM`;
+      titleEl.textContent = 'BEAT DROPPED.';
+      subEl.textContent = `The city keeps moving. Your route reached ${cfg.name}; run it back and leave the empty beats alone.`;
+      setStats('score', `${displayScore()} m`, 'clears', String(totalClears), 'best flow', bestFlow > 0 ? `×${bestFlow}` : '—');
+      goButton.textContent = '▶ RUN IT BACK';
+      updateRoute(currentLevelIndex);
+      stateLive.textContent = `Wipeout on Level ${currentLevelIndex + 1}. Score ${displayScore()} meters. Start to run again.`;
+      showOverlay();
+    }
+
+    function frame(timestamp: number) {
+      if (phase !== 'playing' || suspended) return;
+      const dt = Math.min((timestamp - lastTs) / 1000, .05);
+      lastTs = timestamp;
       update(dt);
       draw();
       if (lives <= 0) { endRun(); return; }
+      if (worldX >= levelEndX) { completeLevel(); return; }
       rafId = requestAnimationFrame(frame);
     }
 
-    function endRun() {
-      running = false;
-      cancelAnimationFrame(rafId);
-      const dist = displayScore();
-      titleEl.textContent = 'WIPEOUT';
-      subEl.textContent = `${dist} m · ${clears} cleared · ${bestFlow}× best flow`;
-      goBtn.textContent = '▶ RUN IT BACK';
-      try {
-        const prev = Number(localStorage.getItem('pc-drum-runner-best') || 0);
-        if (dist > prev) localStorage.setItem('pc-drum-runner-best', String(dist));
-        const b = Math.max(dist, prev);
-        bestLine.textContent = `best ${b} m`;
-        overlayBest.textContent = `best ${b} m`;
-      } catch {
-        bestLine.textContent = `best ${dist} m`;
-        overlayBest.textContent = `best ${dist} m`;
+    /* ---------------- input ---------------- */
+    function activatePrimary() {
+      if (phase === 'playing') jump();
+      else if (phase === 'interstitial') startLevel(pendingLevelIndex);
+      else startCampaign();
+    }
+    goButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      activatePrimary();
+    });
+    stage.addEventListener('pointerdown', (event) => {
+      if (phase !== 'playing') return;
+      if (!event.isPrimary) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
+      jump();
+    });
+    jumpButton.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
+      jump();
+    });
+    jumpButton.addEventListener('click', (event) => {
+      if (event.detail === 0) jump();
+    });
+    jumpButton.addEventListener('keydown', (event) => {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
       }
-      overlay.classList.remove('drn__overlay--hidden');
-      goBtn.focus({ preventScroll: true });
-    }
-
-    function startRun() {
-      ctx();
-      resize();
-      pickNoun();
-      running = true;
-      worldX = 0;
-      speed = BASE_SPEED;
-      lives = 3;
-      bonus = 0; flow = 0; bestFlow = 0; clears = 0;
-      obstacles = [];
-      nextBeat = 6;
-      invuln = 0; downFlash = 0; shakeMag = 0;
-      seed = Math.random() * 1000;
-      runner.y = 0; runner.vy = 0; runner.grounded = true; runner.squash = 0;
-      updateLives();
-      distEl.textContent = '0';
-      flashEl.textContent = '';
-      tapHint.classList.remove('drn__tap-hint--gone');
-      overlay.classList.add('drn__overlay--hidden');
-      lastTs = performance.now();
-      rafId = requestAnimationFrame(frame);
-    }
-
-    // ---- input wiring ----
-    function press() {
-      if (running) { jump(); tapHint.classList.add('drn__tap-hint--gone'); }
-      else startRun();
-    }
-    goBtn.addEventListener('click', (e) => { e.stopPropagation(); startRun(); });
-    stage.addEventListener('pointerdown', (e) => {
-      if ((e.target as HTMLElement)?.id === 'drn-go') return;
-      e.preventDefault();
-      press();
-    });
-    jumpBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      press();
-    });
-    jumpBtn.addEventListener('click', (e) => {
-      if (e.detail === 0) press();
-    });
-    jumpBtn.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
-      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-        e.preventDefault();
-        press();
+      if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
+        event.preventDefault();
+        jump();
       }
     });
-    window.addEventListener('keydown', (e) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+    window.addEventListener('keydown', (event) => {
+      const tag = (event.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a') return;
-      if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-        if (e.repeat) { e.preventDefault(); return; }
-        e.preventDefault();
-        press();
+      if (event.code === 'Space' || event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
+        event.preventDefault();
+        if (event.repeat) return;
+        activatePrimary();
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && phase === 'playing') {
+        suspended = true;
+        cancelAnimationFrame(rafId);
+      } else if (!document.hidden && suspended && phase === 'playing') {
+        suspended = false;
+        lastTs = performance.now();
+        rafId = requestAnimationFrame(frame);
       }
     });
 
-    // ---- init ----
-    SESSION_ID = getOrCreateSession();
+    /* ---------------- init ---------------- */
+    sessionId = getOrCreateSession();
+    savedBest = readBest();
+    updateBest();
+    updateLives();
+    pickNoun();
     resize();
-    try {
-      const b = Number(localStorage.getItem('pc-drum-runner-best') || 0);
-      if (b > 0) {
-        bestLine.textContent = `best ${b} m`;
-        overlayBest.textContent = `best ${b} m`;
-      }
-    } catch {}
+    showIntro();
   </script>
 </BlockLayout>
