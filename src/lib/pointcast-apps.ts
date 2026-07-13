@@ -67,6 +67,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'drum-games',
+    name: 'Drum Arcade',
+    kicker: 'FIVE GAMES · MEMORY · POCKET',
+    description: 'Five instant PointCast drum games for memory, restraint, groove completion, beat-running, and silent-tempo control.',
+    url: 'https://pointcast.xyz/drum-games',
+    path: '/drum-games',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',

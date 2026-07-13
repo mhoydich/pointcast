@@ -1,0 +1,704 @@
+---
+/**
+ * /drum-quickdraw — Quick Draw. One pad, ten draws, pure reaction time.
+ *
+ * The pad sits dark. After a random 1.2–3.5s hold it flashes gold and
+ * cracks a rimshot — you slap it (tap / click / SPACE) as fast as your
+ * nerves allow. Each draw is measured in milliseconds. But the pad
+ * cheats: about one round in four it throws a dim feint in a cold colour
+ * with a muted tick BEFORE the real light. Twitch on the feint, or jump
+ * the gun before the flash, and the draw is a FOUL — voided, flagged red,
+ * the hold restarts. Ten clean draws make a run: average ms, best single,
+ * and a grade S/A/B/C/D. Lowest average lives in localStorage.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Quick Draw · reaction time, ten draws';
+const description = 'The pad flashes when you least expect it. Slap it fast — but not too fast: feints and false starts are fouls. Ten draws, one average, one grade.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'VideoGame', name: 'Quick Draw', url: 'https://pointcast.xyz/drum-quickdraw', description, gamePlatform: 'Web browser', playMode: 'SinglePlayer' };
+---
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <div class="dqd" id="dqd">
+    <header class="dqd__hud">
+      <div class="dqd__hud-left">
+        <span class="dqd__count" id="dqd-count">0 / 10</span>
+        <span class="dqd__count-label">draws</span>
+      </div>
+      <div class="dqd__hud-mid">
+        <span class="dqd__last" id="dqd-last" role="status" aria-live="polite"></span>
+      </div>
+      <div class="dqd__hud-right">
+        <span class="dqd__avg" id="dqd-avg">— ms</span>
+        <span class="dqd__avg-label">avg · best <span id="dqd-bestone">—</span></span>
+      </div>
+    </header>
+
+    <section class="dqd__stage">
+      <canvas class="dqd__canvas" id="dqd-canvas"></canvas>
+      <div class="dqd__face" id="dqd-face">
+        <img class="dqd__noun" id="dqd-noun" src="https://noun.pics/385.svg" alt="Your dueling Noun" width="120" height="120" />
+        <div class="dqd__word dqd__word--wait" id="dqd-word"></div>
+      </div>
+      <button class="dqd__hit" id="dqd-hit" type="button" aria-label="Draw pad — slap it when it flashes"></button>
+      <div class="dqd__overlay" id="dqd-overlay">
+        <h1 class="dqd__title">QUICK DRAW</h1>
+        <p class="dqd__sub">reaction time · ten draws · tap or SPACE</p>
+        <p class="dqd__best" id="dqd-best-line">best avg — · grade —</p>
+        <button class="dqd__go" id="dqd-go" type="button">▶ TO THE LINE</button>
+      </div>
+    </section>
+
+    <nav class="dqd__siblings">
+      <a href="/drum-games">all five</a>
+      <a href="/drum-says">/drum-says</a>
+      <a href="/drum-fill">fill</a>
+      <a href="/drum-runner">runner</a>
+      <a href="/drum-steady">steady</a>
+      <a href="/drum">/drum</a>
+    </nav>
+  </div>
+
+  <style is:global>
+    html, body { background: #07050f; margin: 0; }
+    body:has(.dqd) {
+      color: #f4e7c8;
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .dqd {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 14px 12px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 94vh;
+    }
+
+    /* HUD */
+    .dqd__hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 6px;
+      min-height: 44px;
+    }
+    .dqd__hud-left { display: flex; align-items: baseline; gap: 8px; }
+    .dqd__count {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 30px;
+      color: #f6c15e;
+      font-variant-numeric: tabular-nums;
+      min-width: 84px;
+    }
+    .dqd__count-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #8a8a9a; }
+    .dqd__hud-mid { display: flex; align-items: center; }
+    .dqd__last {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 10px currentColor;
+    }
+    .dqd__hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+    .dqd__avg {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dqd__avg-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #8a8a9a; }
+
+    /* STAGE */
+    .dqd__stage {
+      position: relative;
+      flex: 1;
+      min-height: 420px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(244,231,200,0.10);
+      background: linear-gradient(180deg, #0b0818 0%, #140a24 80%, #1c0e2e 100%);
+    }
+    .dqd__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+
+    /* face — Noun + big status word, floats above canvas, never eats taps */
+    .dqd__face {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 3;
+      pointer-events: none;
+      text-align: center;
+      padding: 20px;
+    }
+    .dqd__noun {
+      width: 120px; height: 120px;
+      image-rendering: pixelated;
+      transition: filter 90ms ease, transform 90ms ease;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5)) brightness(0.5) saturate(0.7);
+    }
+    .dqd__noun--lit {
+      filter: drop-shadow(0 6px 18px rgba(246,193,94,0.45)) brightness(1.18) saturate(1.12);
+      transform: scale(1.05);
+    }
+    .dqd__word {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      min-height: 1em;
+      line-height: 1;
+    }
+    .dqd__word--wait { font-size: 14px; letter-spacing: 0.28em; color: #8a8a9a; }
+    .dqd__word--live {
+      font-size: clamp(34px, 10vw, 64px);
+      color: #07050f;
+      text-shadow: 0 0 22px rgba(255,247,230,0.55);
+    }
+    .dqd__word--foul {
+      font-size: clamp(24px, 7.5vw, 46px);
+      color: #ff6b8a;
+      text-shadow: 0 0 16px rgba(255,107,138,0.6);
+    }
+    .dqd__word--result {
+      font-size: clamp(28px, 8.5vw, 54px);
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 18px currentColor;
+    }
+
+    /* full-stage tap target (sits under the face's pass-through, over canvas) */
+    .dqd__hit {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    /* OVERLAY — start / game over. Toggled by CLASS, never [hidden]. */
+    .dqd__overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(7,5,15,0.82);
+      backdrop-filter: blur(3px);
+      z-index: 4;
+      text-align: center;
+      padding: 20px;
+    }
+    .dqd__overlay--hidden { display: none; }
+    .dqd__title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(30px, 8vw, 52px);
+      letter-spacing: 0.2em;
+      margin: 0;
+      color: #f6c15e;
+      text-shadow: 0 0 20px rgba(246,193,94,0.5);
+    }
+    .dqd__sub, .dqd__best {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #8a8a9a;
+      margin: 0;
+      max-width: 360px;
+    }
+    .dqd__best { color: #d4a437; }
+    .dqd__go {
+      margin-top: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      color: #07050f;
+      background: #f6c15e;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 30px;
+      cursor: pointer;
+      transition: transform 100ms ease, background 160ms ease;
+    }
+    .dqd__go:hover { transform: translateY(-1px); background: #ffd98a; }
+
+    .dqd__siblings {
+      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    }
+    .dqd__siblings a { color: #d4a437; text-decoration: none; }
+    .dqd__siblings a:hover { text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      .dqd__stage { min-height: 380px; }
+      .dqd__count { font-size: 26px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dqd *, .dqd *::before, .dqd *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+
+  <script>
+    const NOUN_POOL = [385, 92, 523, 742, 1042, 287, 612, 928, 1189, 64];
+    const TOTAL = 10;
+    const MIN_DELAY = 1200;      // shortest hold before the flash
+    const MAX_DELAY = 3500;      // longest hold
+    const FEINT_CHANCE = 0.25;   // ~1 round in 4 throws a feint
+    const FEINT_MS = 240;        // feint pulse visual length
+    const LAPSE_MS = 2000;       // no reaction inside this = a very slow draw
+    const BETWEEN_MS = 750;      // pause after a clean draw
+    const FOUL_RESTART_MS = 950; // pause after a foul before re-arming
+
+    type Phase = 'idle' | 'waiting' | 'live' | 'between' | 'over';
+    type Ring = { at: number; color: string };
+    type Qual = { grade: string; color: string; freq: number };
+
+    let SESSION_ID = '';
+    let phase: Phase = 'idle';
+    let draws: number[] = [];
+    let fouls = 0;
+    let signalAt = 0;
+
+    // timers
+    let armTimer = 0;
+    let feintTimer = 0;
+    let lapseTimer = 0;
+    let betweenTimer = 0;
+    let foulTimer = 0;
+
+    // visual state (perf.now timestamps)
+    let flashAt = 0;
+    let feintUntil = 0;
+    let feintColor = '#7ac8ed';
+    let foulUntil = 0;
+    let hitUntil = 0;
+    let hitColor = '#8aeac0';
+    let rings: Ring[] = [];
+    let rafId = 0;
+
+    // ---- audio ----
+    let actx: AudioContext | null = null;
+    function ctx(): AudioContext {
+      if (!actx) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        actx = new AC();
+      }
+      if (actx!.state === 'suspended') actx!.resume();
+      return actx!;
+    }
+    // the real signal: a snapping rimshot (noise crack + tonal snap)
+    function pRimshot() {
+      const a = ctx(); const t = a.currentTime + 0.002;
+      const dur = 0.12;
+      const buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const n = a.createBufferSource(); n.buffer = buf;
+      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.8;
+      const ng = a.createGain();
+      ng.gain.setValueAtTime(0.5, t);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      n.connect(bp).connect(ng).connect(a.destination); n.start(t);
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(410, t);
+      o.frequency.exponentialRampToValueAtTime(190, t + 0.06);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.17);
+    }
+    // feint: a muted low tick — the trap
+    function pTick() {
+      const a = ctx(); const t = a.currentTime + 0.002;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(220, t);
+      o.frequency.exponentialRampToValueAtTime(150, t + 0.05);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.1);
+    }
+    // foul: a sour descending buzz
+    function pBuzz() {
+      const a = ctx(); const t = a.currentTime + 0.004;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(48, t + 0.4);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.24, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.55);
+    }
+    // clean draw confirm — pitch rides the reaction quality
+    function pConfirm(freq: number) {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.45);
+      const o2 = a.createOscillator(); const g2 = a.createGain();
+      o2.type = 'sine'; o2.frequency.setValueAtTime(freq * 2, t);
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.25);
+    }
+    // end-of-run flourish
+    function pFanfare(good: boolean) {
+      const a = ctx(); const base = a.currentTime + 0.02;
+      const notes = good ? [523.25, 659.25, 783.99, 1046.5] : [392.0, 329.63, 261.63];
+      notes.forEach((f, i) => {
+        const t = base + i * 0.11;
+        const o = a.createOscillator(); const g = a.createGain();
+        o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.26, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+        o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.34);
+      });
+    }
+
+    // reaction band → grade, colour, confirm note (same thresholds as the run grade)
+    function qualityOf(ms: number): Qual {
+      if (ms < 220) return { grade: 'S', color: '#8aeac0', freq: 659.25 };
+      if (ms < 260) return { grade: 'A', color: '#7ac8ed', freq: 587.33 };
+      if (ms < 320) return { grade: 'B', color: '#f6c15e', freq: 523.25 };
+      if (ms < 400) return { grade: 'C', color: '#f4e7c8', freq: 440.0 };
+      return { grade: 'D', color: '#ff6b8a', freq: 329.63 };
+    }
+
+    // ---- dom ----
+    const canvas = document.getElementById('dqd-canvas') as HTMLCanvasElement;
+    const cx = canvas.getContext('2d')!;
+    const hitBtn = document.getElementById('dqd-hit') as HTMLButtonElement;
+    const goBtn = document.getElementById('dqd-go') as HTMLButtonElement;
+    const overlay = document.getElementById('dqd-overlay')!;
+    const nounImg = document.getElementById('dqd-noun') as HTMLImageElement;
+    const wordEl = document.getElementById('dqd-word')!;
+    const countEl = document.getElementById('dqd-count')!;
+    const lastEl = document.getElementById('dqd-last')!;
+    const avgEl = document.getElementById('dqd-avg')!;
+    const bestOneEl = document.getElementById('dqd-bestone')!;
+    const bestLine = document.getElementById('dqd-best-line')!;
+    const titleEl = overlay.querySelector('.dqd__title') as HTMLElement;
+    const subEl = overlay.querySelector('.dqd__sub') as HTMLElement;
+
+    // ---- canvas (DPR-aware, single persistent rAF) ----
+    let W = 0, H = 0, DPR = 1;
+    function resize() {
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      const r = canvas.getBoundingClientRect();
+      W = r.width; H = r.height;
+      canvas.width = W * DPR; canvas.height = H * DPR;
+      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+
+    type Pad = { x: number; y: number; w: number; h: number; cx: number; cy: number; r: number; rad: number };
+    function padRect(): Pad {
+      const size = Math.min(W, H) * 0.84;
+      const x = (W - size) / 2, y = (H - size) / 2;
+      return { x, y, w: size, h: size, cx: W / 2, cy: H / 2, r: size / 2, rad: Math.min(38, size * 0.12) };
+    }
+    function pathPad(p: Pad) {
+      const { x, y, w, h, rad } = p;
+      cx.beginPath();
+      cx.moveTo(x + rad, y);
+      cx.arcTo(x + w, y, x + w, y + h, rad);
+      cx.arcTo(x + w, y + h, x, y + h, rad);
+      cx.arcTo(x, y + h, x, y, rad);
+      cx.arcTo(x, y, x + w, y, rad);
+      cx.closePath();
+    }
+
+    function render() {
+      const now = performance.now();
+      cx.clearRect(0, 0, W, H);
+      const p = padRect();
+
+      // base pad
+      pathPad(p); cx.fillStyle = '#0d0a1c'; cx.fill();
+
+      // dynamic fill by state
+      if (phase === 'live') {
+        pathPad(p); cx.fillStyle = '#f6c15e'; cx.fill();
+        const pop = Math.max(0, 1 - (now - flashAt) / 170);
+        if (pop > 0) { cx.globalAlpha = pop * 0.85; pathPad(p); cx.fillStyle = '#fff7e6'; cx.fill(); cx.globalAlpha = 1; }
+      } else if (now < feintUntil) {
+        const k = (feintUntil - now) / FEINT_MS;      // dim, cold, fading — the lure
+        cx.globalAlpha = 0.30 * k; pathPad(p); cx.fillStyle = feintColor; cx.fill(); cx.globalAlpha = 1;
+      } else if (now < foulUntil) {
+        const k = (foulUntil - now) / 420;
+        cx.globalAlpha = 0.55 * k; pathPad(p); cx.fillStyle = '#ff6b8a'; cx.fill(); cx.globalAlpha = 1;
+      } else if (now < hitUntil) {
+        const k = (hitUntil - now) / 380;
+        cx.globalAlpha = 0.42 * k; pathPad(p); cx.fillStyle = hitColor; cx.fill(); cx.globalAlpha = 1;
+      } else if (phase === 'waiting') {
+        const breathe = 0.04 + 0.03 * Math.sin(now / 380);
+        cx.globalAlpha = breathe; pathPad(p); cx.fillStyle = '#f6c15e'; cx.fill(); cx.globalAlpha = 1;
+      }
+
+      // pad rim
+      pathPad(p); cx.lineWidth = 2; cx.strokeStyle = 'rgba(244,231,200,0.12)'; cx.stroke();
+
+      // expanding rings (fired on flash, hit, foul)
+      rings = rings.filter((r) => now - r.at < 540);
+      for (const r of rings) {
+        const a = (now - r.at) / 540;
+        cx.globalAlpha = (1 - a) * 0.8;
+        cx.strokeStyle = r.color; cx.lineWidth = 3;
+        cx.beginPath();
+        cx.arc(p.cx, p.cy, p.r * 0.4 + a * p.r * 0.72, 0, Math.PI * 2);
+        cx.stroke();
+        cx.globalAlpha = 1;
+      }
+
+      rafId = requestAnimationFrame(render);
+    }
+
+    // ---- ui helpers ----
+    function setWord(text: string, kind: 'wait' | 'live' | 'foul' | 'result', color?: string) {
+      wordEl.textContent = text;
+      wordEl.className = `dqd__word dqd__word--${kind}`;
+      wordEl.style.color = color || '';
+    }
+    function setLast(rt: number | null, color: string) {
+      if (rt === null) { lastEl.textContent = ''; lastEl.style.color = ''; return; }
+      if (rt < 0) { lastEl.textContent = 'FOUL'; lastEl.style.color = '#ff6b8a'; return; }
+      lastEl.textContent = `${rt} ms`; lastEl.style.color = color;
+    }
+    function updateHud() {
+      countEl.textContent = `${Math.min(draws.length, TOTAL)} / ${TOTAL}`;
+      if (draws.length) {
+        const avg = Math.round(draws.reduce((s, x) => s + x, 0) / draws.length);
+        const bo = Math.round(Math.min(...draws));
+        avgEl.textContent = `${avg} ms`;
+        bestOneEl.textContent = `${bo}`;
+      } else {
+        avgEl.textContent = '— ms';
+        bestOneEl.textContent = '—';
+      }
+    }
+
+    function clearAllTimers() {
+      clearTimeout(armTimer);
+      clearTimeout(feintTimer);
+      clearTimeout(lapseTimer);
+      clearTimeout(betweenTimer);
+      clearTimeout(foulTimer);
+    }
+
+    // ---- round machine ----
+    function armDraw() {
+      phase = 'waiting';
+      setWord('WAIT', 'wait');
+      nounImg.classList.remove('dqd__noun--lit');
+      const delay = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+      if (Math.random() < FEINT_CHANCE) {
+        const feintAt = delay * (0.3 + Math.random() * 0.35); // early-to-mid hold, never near the flash
+        feintTimer = window.setTimeout(() => {
+          if (phase !== 'waiting') return;
+          feintColor = Math.random() < 0.5 ? '#7ac8ed' : '#ff6b8a';
+          feintUntil = performance.now() + FEINT_MS;
+          pTick();
+        }, feintAt);
+      }
+      armTimer = window.setTimeout(goLive, delay);
+      updateHud();
+    }
+
+    function goLive() {
+      clearTimeout(feintTimer);
+      phase = 'live';
+      signalAt = performance.now();
+      flashAt = signalAt;
+      rings.push({ at: signalAt, color: '#f6c15e' });
+      pRimshot();
+      setWord('DRAW!', 'live');
+      nounImg.classList.add('dqd__noun--lit');
+      lapseTimer = window.setTimeout(lapse, LAPSE_MS);
+    }
+
+    function land() {
+      const rt = Math.round(performance.now() - signalAt);
+      clearTimeout(lapseTimer);
+      draws.push(rt);
+      const q = qualityOf(rt);
+      hitColor = q.color;
+      hitUntil = performance.now() + 380;
+      rings.push({ at: performance.now(), color: q.color });
+      pConfirm(q.freq);
+      broadcast(0);
+      setWord(`${rt} ms`, 'result', q.color);
+      setLast(rt, q.color);
+      nounImg.classList.remove('dqd__noun--lit');
+      updateHud();
+      phase = 'between';
+      if (draws.length >= TOTAL) {
+        betweenTimer = window.setTimeout(endRun, 900);
+      } else {
+        betweenTimer = window.setTimeout(armDraw, BETWEEN_MS);
+      }
+    }
+
+    function lapse() {
+      if (phase !== 'live') return;
+      const rt = LAPSE_MS;               // stone-cold slow — counts, and it stings the average
+      clearTimeout(lapseTimer);
+      draws.push(rt);
+      const q = qualityOf(rt);
+      hitColor = q.color;
+      hitUntil = performance.now() + 380;
+      setWord('TOO SLOW', 'foul');
+      setLast(rt, q.color);
+      nounImg.classList.remove('dqd__noun--lit');
+      updateHud();
+      phase = 'between';
+      if (draws.length >= TOTAL) betweenTimer = window.setTimeout(endRun, 900);
+      else betweenTimer = window.setTimeout(armDraw, BETWEEN_MS);
+    }
+
+    function foul() {
+      clearTimeout(armTimer);
+      clearTimeout(feintTimer);
+      clearTimeout(lapseTimer);
+      fouls++;
+      foulUntil = performance.now() + 420;
+      rings.push({ at: performance.now(), color: '#ff6b8a' });
+      pBuzz();
+      setWord('FOUL', 'foul');
+      setLast(-1, '');
+      nounImg.classList.remove('dqd__noun--lit');
+      phase = 'between';                 // taps ignored until we re-arm the same draw
+      foulTimer = window.setTimeout(armDraw, FOUL_RESTART_MS);
+    }
+
+    // any slap routes through here
+    function tap() {
+      if (phase === 'waiting') { foul(); return; }   // feint or jumped gun
+      if (phase === 'live') { land(); return; }       // clean draw
+    }
+
+    function startRun() {
+      ctx();
+      clearAllTimers();
+      draws = [];
+      fouls = 0;
+      rings = [];
+      feintUntil = 0; foulUntil = 0; hitUntil = 0;
+      nounImg.src = `https://noun.pics/${NOUN_POOL[Math.floor(Math.random() * NOUN_POOL.length)]}.svg`;
+      setLast(null, '');
+      setWord('READY', 'wait');
+      updateHud();
+      overlay.classList.add('dqd__overlay--hidden');
+      phase = 'between';
+      betweenTimer = window.setTimeout(armDraw, 650);
+    }
+
+    function endRun() {
+      phase = 'over';
+      clearAllTimers();
+      const avg = Math.round(draws.reduce((s, x) => s + x, 0) / draws.length);
+      const bestOne = Math.round(Math.min(...draws));
+      const q = qualityOf(avg);
+      setWord('', 'wait');
+      nounImg.classList.remove('dqd__noun--lit');
+      titleEl.textContent = `GRADE ${q.grade}`;
+      subEl.textContent = `${avg} ms avg · ${bestOne} ms best draw${fouls ? ` · ${fouls} foul${fouls > 1 ? 's' : ''}` : ''}`;
+      goBtn.textContent = '▶ RUN IT BACK';
+      pFanfare(q.grade === 'S' || q.grade === 'A' || q.grade === 'B');
+      // persist the LOWEST average (lower is better)
+      try {
+        const prev = Number(localStorage.getItem('pc-drum-quickdraw-best') || 0);
+        const better = !prev || avg < prev;
+        if (better) {
+          localStorage.setItem('pc-drum-quickdraw-best', String(avg));
+          localStorage.setItem('pc-drum-quickdraw-grade', q.grade);
+        }
+        const shown = better ? avg : prev;
+        const sg = better ? q.grade : (localStorage.getItem('pc-drum-quickdraw-grade') || q.grade);
+        bestLine.textContent = `best avg ${shown} ms · grade ${sg}`;
+      } catch {
+        bestLine.textContent = `best avg ${avg} ms · grade ${q.grade}`;
+      }
+      overlay.classList.remove('dqd__overlay--hidden');
+      goBtn.focus({ preventScroll: true });
+    }
+
+    // ---- input ----
+    hitBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      tap();
+    });
+    hitBtn.addEventListener('click', (e) => {
+      if (e.detail === 0) tap();
+    });
+    goBtn.addEventListener('click', () => { ctx(); startRun(); });
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a') return;
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        if (phase === 'idle' || phase === 'over') { ctx(); startRun(); }
+        else tap();
+      }
+    });
+
+    // ---- shared drum bus (best effort, throttled) ----
+    let lastBroadcast = 0;
+    function getOrCreateSession() {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+    function broadcast(seed: number) {
+      const now = Date.now();
+      if (now - lastBroadcast < 900) return; // never flood the bus
+      lastBroadcast = now;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed, sessionId: SESSION_ID }),
+        }).catch(() => {});
+      } catch { /* best effort */ }
+    }
+
+    // ---- init ----
+    SESSION_ID = getOrCreateSession();
+    resize();
+    rafId = requestAnimationFrame(render);
+    try {
+      const b = Number(localStorage.getItem('pc-drum-quickdraw-best') || 0);
+      const bg = localStorage.getItem('pc-drum-quickdraw-grade');
+      if (b > 0) bestLine.textContent = `best avg ${b} ms · grade ${bg || '—'}`;
+    } catch {}
+  </script>
+</BlockLayout>
