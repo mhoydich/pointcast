@@ -1,20 +1,21 @@
 ---
 /**
- * /drum-runner — Beat Runner v3.
+ * /drum-runner-v2 — Beat Runner's four-level postcard tour.
  *
- * A one-button musical runner where the player's input performs the track.
- * Hit the cue on beat n, clear the obstacle at the apex on beat n + 1,
- * then land on beat n + 2 while the city echoes the phrase back.
+ * A four-level El Segundo postcard tour. Each district has an authored
+ * beat map, its own tempo, scenery, obstacles, and a manual interstitial.
+ * One input still does everything: jump on the downbeat, clear the cue,
+ * and carry three hearts through the whole city.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 
-const title = 'Beat Runner v3 · play the city';
-const description = 'Perform the beat to run it. Every on-grid tap sounds a note, clears an obstacle one beat later, and builds a four-scene El Segundo track.';
+const title = 'Beat Runner v2 · four levels, one pocket';
+const description = 'Run a Noun through four beat-mapped El Segundo levels. Jump cones, carts, speakers, and refinery barriers as the tempo climbs from 92 to 128 BPM.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'VideoGame',
-  name: 'Beat Runner v3',
-  url: 'https://pointcast.xyz/drum-runner',
+  name: 'Beat Runner v2',
+  url: 'https://pointcast.xyz/drum-runner-v2',
   description,
   gamePlatform: 'Web browser',
   playMode: 'SinglePlayer',
@@ -26,7 +27,7 @@ const jsonLd = {
     <header class="drn__hud" aria-label="Beat Runner status">
       <div class="drn__score-block">
         <span class="drn__score" id="drn-score">0</span>
-        <span class="drn__score-label">pocket pts</span>
+        <span class="drn__score-label">run meters</span>
       </div>
 
       <div class="drn__level-block">
@@ -37,7 +38,7 @@ const jsonLd = {
 
       <div class="drn__run-block">
         <div class="drn__flow-line">
-          <span>pocket</span>
+          <span>flow</span>
           <strong id="drn-flow">—</strong>
         </div>
         <div class="drn__lives" id="drn-lives" aria-hidden="true">
@@ -45,7 +46,7 @@ const jsonLd = {
           <span class="drn__life"></span>
           <span class="drn__life"></span>
         </div>
-        <span class="drn__best" id="drn-best-line">best — pts</span>
+        <span class="drn__best" id="drn-best-line">best — m</span>
       </div>
     </header>
 
@@ -54,30 +55,24 @@ const jsonLd = {
         <span></span><span></span><span></span><span></span>
       </div>
       <div class="drn__progress" aria-hidden="true"><span id="drn-progress"></span></div>
-      <div class="drn__phrase" id="drn-phrase" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-      </div>
 
       <canvas
         class="drn__canvas"
         id="drn-canvas"
         role="img"
-        aria-label="Beat Runner v3 playfield: perform each cue to sound a note, jump, and build the city's rhythm."
-      >Beat Runner v3 game canvas.</canvas>
+        aria-label="Beat Runner v2 playfield: a Noun runs through four El Segundo scenes and jumps beat-timed obstacles."
+      >Beat Runner v2 game canvas.</canvas>
 
       <div class="drn__overlay" id="drn-overlay">
         <article class="drn__card" id="drn-card">
           <div class="drn__postcard" id="drn-postcard" aria-hidden="true"></div>
           <div class="drn__card-body">
             <div class="drn__eyebrow">
-              <span id="drn-kicker">BEAT RUNNER V3</span>
+              <span id="drn-kicker">BEAT RUNNER V2</span>
               <span id="drn-card-tempo">4 LEVELS · 92→128 BPM</span>
             </div>
-            <h1 class="drn__title" id="drn-title">PLAY THE CITY.<br />CLEAR THE STREET.</h1>
-            <p class="drn__sub" id="drn-sub">Your tap is the note. The obstacle arrives one beat later. The landing closes the phrase.</p>
+            <h1 class="drn__title" id="drn-title">FOUR SCENES.<br />ONE POCKET.</h1>
+            <p class="drn__sub" id="drn-sub">A postcard tour of El Segundo. Every obstacle lands on the grid. Every level keeps your hearts.</p>
 
             <div class="drn__card-stats" id="drn-card-stats" aria-label="Run details">
               <span><small id="drn-stat-a-label">route</small><strong id="drn-stat-a">4 levels</strong></span>
@@ -92,33 +87,32 @@ const jsonLd = {
               <li data-route-index="3"><span>04</span><b>Refinery</b></li>
             </ol>
 
-            <p class="drn__overlay-best" id="drn-best">best — pts</p>
+            <p class="drn__overlay-best" id="drn-best">best — m</p>
             <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
             <p class="drn__input-note">space · ↑ · w · tap</p>
           </div>
         </article>
       </div>
 
-      <span class="drn__judge" id="drn-judge" aria-hidden="true"></span>
-      <span class="drn__tap-hint" id="drn-tap-hint">gold cue → perform · apex · land</span>
+      <span class="drn__judge" id="drn-judge" role="status" aria-live="polite"></span>
+      <span class="drn__tap-hint" id="drn-tap-hint">blue cue → jump on the beat</span>
     </section>
 
     <div class="drn__controls">
-      <button class="drn__jump" id="drn-jump" type="button" aria-label="Perform beat and jump (Space, Arrow Up, or W)" disabled>
-        <span class="drn__jump-arrow">♪</span>
-        <span class="drn__jump-copy"><strong>PLAY + JUMP</strong><small>space · ↑ · w</small></span>
+      <button class="drn__jump" id="drn-jump" type="button" aria-label="Jump (Space, Arrow Up, or W)" disabled>
+        <span class="drn__jump-arrow">↑</span>
+        <span class="drn__jump-copy"><strong>JUMP</strong><small>space · ↑ · w</small></span>
       </button>
-      <button class="drn__audio" id="drn-audio" type="button" aria-pressed="false" aria-label="Beat Runner audio muted">sound on</button>
     </div>
 
-    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v3 ready. Perform the cues through four levels with three hearts.</p>
+    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v2 ready. Four levels, three hearts.</p>
     <p class="sr-only" id="drn-lives-live" role="status" aria-live="polite">3 hearts remaining.</p>
 
     <nav class="drn__versions" aria-label="Beat Runner versions">
       <span>edition</span>
       <a href="/drum-runner-v1">v1 endless</a>
-      <a href="/drum-runner-v2">v2 postcards</a>
-      <a href="/drum-runner" aria-current="page">v3 pocket</a>
+      <a href="/drum-runner-v2" aria-current="page">v2 postcards</a>
+      <a href="/drum-runner">v3 pocket</a>
     </nav>
 
     <nav class="drn__siblings" aria-label="More Drum Arcade games">
@@ -253,23 +247,6 @@ const jsonLd = {
     .drn__beat-rail span.is-active { background: var(--accent); box-shadow: 0 0 14px var(--accent); transform: scaleY(1.45); }
     .drn__progress { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.08); pointer-events: none; }
     .drn__progress span { display: block; width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); box-shadow: 0 0 14px var(--accent); transition: width 90ms linear; }
-    .drn__phrase {
-      position: absolute;
-      z-index: 4;
-      top: 25px;
-      left: 50%;
-      width: min(330px, 58%);
-      display: grid;
-      grid-template-columns: repeat(32, 1fr);
-      gap: 2px;
-      transform: translateX(-50%);
-      pointer-events: none;
-    }
-    .drn__phrase span { height: 3px; border-radius: 999px; background: rgba(255,255,255,.1); transition: background 110ms ease, box-shadow 110ms ease, transform 110ms ease; }
-    .drn__phrase span:nth-child(8n + 1) { height: 5px; margin-top: -1px; }
-    .drn__phrase span.is-played { background: var(--accent-soft); box-shadow: 0 0 8px color-mix(in srgb, var(--accent-soft) 72%, transparent); }
-    .drn__phrase span.is-perfect { background: var(--accent); box-shadow: 0 0 11px var(--accent); }
-    .drn__phrase span.is-active { transform: scaleY(1.75); background: #fff; }
 
     .drn__judge {
       position: absolute;
@@ -286,10 +263,7 @@ const jsonLd = {
       pointer-events: none;
       text-shadow: 0 2px 16px rgba(0,0,0,.75);
     }
-    .drn__judge--onbeat,
-    .drn__judge--perfect { color: #8fffd1; text-shadow: 0 0 18px rgba(143,255,209,.75); }
-    .drn__judge--good { color: #ffd166; text-shadow: 0 0 16px rgba(255,209,102,.55); }
-    .drn__judge--offgrid { color: #b7acc9; }
+    .drn__judge--onbeat { color: #8fffd1; text-shadow: 0 0 18px rgba(143,255,209,.75); }
     .drn__judge--clear { color: #7ad7ff; }
     .drn__judge--hit { color: #ff6b86; text-shadow: 0 0 18px rgba(255,107,134,.7); }
     .drn__judge--level { color: var(--accent); }
@@ -395,7 +369,7 @@ const jsonLd = {
     .drn__input-note { margin: 9px 0 0; color: #676c7f; font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: .17em; text-transform: uppercase; }
 
     /* PRIMARY CONTROL */
-    .drn__controls { display: flex; justify-content: center; align-items: center; gap: 9px; }
+    .drn__controls { display: flex; justify-content: center; }
     .drn__jump {
       min-width: 210px;
       min-height: 55px;
@@ -420,28 +394,14 @@ const jsonLd = {
     .drn__jump:active:not(:disabled) { transform: translateY(2px); }
     .drn__jump:focus-visible { outline: 3px solid #7ad7ff; outline-offset: 3px; }
     .drn__jump:disabled { opacity: .32; cursor: default; }
-    .drn__audio {
-      min-height: 42px;
-      padding: 0 12px;
-      border: 1px solid #30364a;
-      border-radius: 999px;
-      background: #090c17;
-      color: #888fa6;
-      cursor: pointer;
-      font: 700 9px/1 'JetBrains Mono', monospace;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-    .drn__audio[aria-pressed="true"] { border-color: #6f667d; color: #d3cadf; }
-    .drn__audio:focus-visible { outline: 3px solid #7ad7ff; outline-offset: 3px; }
+    .drn__siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 17px; font: 600 11px/1.4 'JetBrains Mono', monospace; }
+    .drn__siblings a { color: #9a8b65; text-decoration: none; }
+    .drn__siblings a:hover { color: var(--accent); text-decoration: underline; }
     .drn__versions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; font: 700 9px/1.4 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .09em; }
     .drn__versions span { color: #616679; }
     .drn__versions a { padding: 5px 8px; border: 1px solid #34394d; border-radius: 999px; color: #8b90a4; text-decoration: none; }
     .drn__versions a[aria-current="page"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
     .drn__versions a:hover { border-color: var(--accent); color: var(--accent); }
-    .drn__siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 17px; font: 600 11px/1.4 'JetBrains Mono', monospace; }
-    .drn__siblings a { color: #9a8b65; text-decoration: none; }
-    .drn__siblings a:hover { color: var(--accent); text-decoration: underline; }
 
     @media (max-width: 600px) {
       .drn { padding: 8px 8px 34px; gap: 8px; }
@@ -452,7 +412,6 @@ const jsonLd = {
       .drn__level-no, .drn__tempo { font-size: 7px; }
       .drn__flow-line span { display: none; }
       .drn__stage { height: min(69vh, 570px); min-height: 430px; border-radius: 16px; }
-      .drn__phrase { width: 72%; }
       .drn__card { display: block; box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent) 78%, #000); }
       .drn__postcard { height: 72px; min-height: 0; border-right: 0; border-bottom: 2px solid rgba(255,255,255,.82); }
       .drn__card-body { padding: 14px; }
@@ -469,7 +428,6 @@ const jsonLd = {
       .drn__title { font-size: 28px; margin-block: 8px 5px; }
       .drn__card-stats { margin-block: 9px; }
       .drn__overlay-best, .drn__input-note { display: none; }
-      .drn__audio { padding-inline: 10px; }
       .drn__go { margin-top: 9px; min-height: 42px; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -485,28 +443,16 @@ const jsonLd = {
   </style>
 
   <script>
-    import levelData from '../lib/drum-runner-v3-levels.json';
-    import { GOOD_WINDOW_MS, JUMP_APEX_PX, JUMP_BEATS, accuracyPercent, gradeBeatDelta, jumpHeightAtBeat, phraseStep, type TimingGrade } from '../lib/drum-runner-music';
-    import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp?url';
-    import pierBackdrop from '../assets/drum-runner-v3/el-porto-pier.webp?url';
-    import groceryBackdrop from '../assets/drum-runner-v3/grocery-3pm.webp?url';
-    import refineryBackdrop from '../assets/drum-runner-v3/refinery-night.webp?url';
+    import levelData from '../lib/drum-runner-levels.json';
+    import marinePostcard from '../../public/images/postcards/0-marine-layer-main-street.svg?url';
+    import pierPostcard from '../../public/images/postcards/1-el-porto-pier.svg?url';
+    import ralphsPostcard from '../../public/images/postcards/3-ralphs-at-3pm.svg?url';
+    import refineryPostcard from '../../public/images/postcards/4-refinery-night.svg?url';
 
     type ObstacleKind = 'cone' | 'crate' | 'tall-crate' | 'barrier' | 'speaker' | 'luggage' | 'hydrant';
     type SceneKind = 'mainstreet' | 'pier' | 'ralphs' | 'refinery';
     type Phase = 'intro' | 'playing' | 'interstitial' | 'gameover' | 'victory';
-    type PlayerVoice = 'rim' | 'clap' | 'tom' | 'metal';
-    type Grade = TimingGrade | 'miss';
-    type Cue = { cueBeat: number; beat: number; kind: ObstacleKind; note: number };
-    type MusicConfig = {
-      phraseBeats: number;
-      subdivision: number;
-      swing: number;
-      playerVoice: PlayerVoice;
-      scale: number[];
-      backing: { kick: number[]; snare: number[]; hat: number[] };
-      stemUnlocks: { bass: number; harmony: number; counterline: number };
-    };
+    type Cue = { beat: number; kind: ObstacleKind };
     type Level = {
       id: string;
       number: string;
@@ -515,6 +461,7 @@ const jsonLd = {
       brief: string;
       clearLine: string;
       scene: SceneKind;
+      postcard: string;
       bpm: number;
       beats: number;
       accent: string;
@@ -522,17 +469,14 @@ const jsonLd = {
       skyTop: string;
       skyBottom: string;
       bass: number[];
-      music: MusicConfig;
       obstacles: Cue[];
     };
-    type Obstacle = Cue & { cueX: number; ox: number; w: number; h: number; hit: boolean; cleared: boolean; judged: boolean; grade: Grade | null };
-    type Runner = { y: number; grounded: boolean; squash: number; cleanTarget: number; jumpStartBeat: number; landingPlayed: boolean };
-    type EchoNote = { beat: number; note: number; grade: TimingGrade; played: boolean };
-    type MotifNote = { step: number; note: number; grade: TimingGrade };
+    type Obstacle = Cue & { ox: number; w: number; h: number; hit: boolean; cleared: boolean };
+    type Runner = { y: number; vy: number; grounded: boolean; squash: number; cleanTarget: number };
     type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: string; gravity: number };
 
     const LEVELS = levelData as Level[];
-    const BACKDROP_URLS = [marineBackdrop, pierBackdrop, groceryBackdrop, refineryBackdrop];
+    const POSTCARD_URLS = [marinePostcard, pierPostcard, ralphsPostcard, refineryPostcard];
     const NOUN_POOL = [214, 385, 92, 523, 742, 1042, 287, 612, 928, 1189];
     const KIND_ORDER: ObstacleKind[] = ['cone', 'crate', 'tall-crate', 'barrier', 'speaker', 'luggage', 'hydrant'];
     const DIMS: Record<ObstacleKind, [number, number]> = {
@@ -545,13 +489,20 @@ const jsonLd = {
       hydrant: [30, 45],
     };
 
+    const PPM = 42;
     const BEAT_PX = 150;
     const RUNNER_W = 50;
     const RUNNER_H = 56;
+    // Keep an on-grid jump airborne through the full collision width of the
+    // slowest, widest obstacle. The old v1 arc could punish perfect timing on
+    // the way down before a crate had actually passed the runner.
+    const GRAV = 1450;
+    const JUMP_V = 670;
     const INVULN_S = 0.58;
-    const BEST_KEY = 'pc-drum-runner-v3-best';
-    const PROGRESS_KEY = 'pc-drum-runner-v3-progress';
-    const MUTED_KEY = 'pc-drum-runner-v3-muted';
+    // V1 was endless, so its scores are not comparable with this finite
+    // campaign. Keep the new leaderboard honest with a versioned key.
+    const BEST_KEY = 'pc-drum-runner-v2-best';
+    const PROGRESS_KEY = 'pc-drum-runner-v2-progress';
 
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reducedMotion = motionQuery.matches;
@@ -563,19 +514,15 @@ const jsonLd = {
     let worldX = 0;
     let levelStartX = 0;
     let levelEndX = LEVELS[0].beats * BEAT_PX;
+    let speed = (BEAT_PX * LEVELS[0].bpm) / 60;
     let lives = 3;
     let bonus = 0;
     let flow = 0;
     let bestFlow = 0;
     let totalClears = 0;
     let totalPerfect = 0;
-    let totalGood = 0;
-    let totalMisses = 0;
-    let totalOffgrid = 0;
     let levelClears = 0;
     let levelPerfect = 0;
-    let levelGood = 0;
-    let levelOffgrid = 0;
     let levelHits = 0;
     let levelStartScore = 0;
     let obstacles: Obstacle[] = [];
@@ -589,59 +536,21 @@ const jsonLd = {
     let suspended = false;
     let sessionId = '';
     let savedBest = 0;
-    let muted = false;
-    let arrangement = 0;
-    let duckUntilBeat = 0;
-    let transportStartPerf = 0;
-    let pausedBeat = 0;
-    let nextMusicStep = 0;
-    let schedulerTimer = 0;
-    let lastInputAt = 0;
-    let lastVisualBeat = -1;
-    let echoNotes: EchoNote[] = [];
-    let campaignMotif: MotifNote[] = [];
-    const phraseGrades = new Map<number, TimingGrade>();
-    const runner: Runner = { y: 0, grounded: true, squash: 0, cleanTarget: -1, jumpStartBeat: -99, landingPlayed: true };
+    const runner: Runner = { y: 0, vy: 0, grounded: true, squash: 0, cleanTarget: -1 };
 
     function level(): Level { return LEVELS[currentLevelIndex]; }
-    function displayScore(): number { return bonus; }
-    function currentLevelBeat(): number { return Math.max(0, (worldX - levelStartX) / BEAT_PX); }
+    function displayScore(): number { return Math.floor(worldX / PPM) + bonus; }
 
     /* ---------------- audio ---------------- */
     let actx: AudioContext | null = null;
-    let masterGain: GainNode | null = null;
-    let compressor: DynamicsCompressorNode | null = null;
     const noiseCache = new Map<number, AudioBuffer>();
     function audioContext(): AudioContext {
       if (!actx) {
         const AC = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AC) throw new Error('Web Audio unavailable');
         actx = new AC();
-        masterGain = actx.createGain();
-        compressor = actx.createDynamicsCompressor();
-        compressor.threshold.value = -18;
-        compressor.knee.value = 14;
-        compressor.ratio.value = 5;
-        compressor.attack.value = .004;
-        compressor.release.value = .18;
-        masterGain.gain.value = muted ? 0 : .72;
-        masterGain.connect(compressor).connect(actx.destination);
       }
-      if (actx.state === 'suspended') void actx.resume().catch(() => {});
+      if (actx.state === 'suspended') actx.resume();
       return actx;
-    }
-    function audioOutput(): AudioNode {
-      audioContext();
-      return masterGain!;
-    }
-    function setMasterLevel(value: number, fast = false) {
-      if (!actx || !masterGain) return;
-      const now = actx.currentTime;
-      masterGain.gain.cancelScheduledValues(now);
-      masterGain.gain.setTargetAtTime(muted ? 0 : value, now, fast ? .008 : .035);
-    }
-    function trySound(action: () => void) {
-      try { action(); } catch { /* visual gameplay remains available without Web Audio */ }
     }
     function noiseBuffer(duration: number): AudioBuffer {
       const a = audioContext();
@@ -654,20 +563,20 @@ const jsonLd = {
       noiseCache.set(key, buffer);
       return buffer;
     }
-    function playKick(time: number, amount = .26) {
+    function playKick(time: number) {
       const a = audioContext();
       const oscillator = a.createOscillator();
       const gain = a.createGain();
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(126, time);
       oscillator.frequency.exponentialRampToValueAtTime(43, time + .16);
-      gain.gain.setValueAtTime(amount, time);
+      gain.gain.setValueAtTime(.38, time);
       gain.gain.exponentialRampToValueAtTime(.0001, time + .23);
-      oscillator.connect(gain).connect(audioOutput());
+      oscillator.connect(gain).connect(a.destination);
       oscillator.start(time);
       oscillator.stop(time + .25);
     }
-    function playHat(time: number, open = false, amount = 1) {
+    function playHat(time: number, open = false) {
       const a = audioContext();
       const source = a.createBufferSource();
       const filter = a.createBiquadFilter();
@@ -675,11 +584,11 @@ const jsonLd = {
       source.buffer = noiseBuffer(open ? .14 : .05);
       filter.type = 'highpass';
       filter.frequency.value = 7100;
-      gain.gain.value = (open ? .065 : .042) * amount;
-      source.connect(filter).connect(gain).connect(audioOutput());
+      gain.gain.value = open ? .075 : .05;
+      source.connect(filter).connect(gain).connect(a.destination);
       source.start(time);
     }
-    function playSnare(time: number, amount = .13) {
+    function playSnare(time: number) {
       const a = audioContext();
       const source = a.createBufferSource();
       const filter = a.createBiquadFilter();
@@ -689,12 +598,12 @@ const jsonLd = {
       filter.frequency.value = 1850;
       filter.Q.value = .8;
       gain.gain.setValueAtTime(.0001, time);
-      gain.gain.exponentialRampToValueAtTime(amount, time + .004);
+      gain.gain.exponentialRampToValueAtTime(.14, time + .004);
       gain.gain.exponentialRampToValueAtTime(.0001, time + .18);
-      source.connect(filter).connect(gain).connect(audioOutput());
+      source.connect(filter).connect(gain).connect(a.destination);
       source.start(time);
     }
-    function playBass(frequency: number, time: number, amount = .16) {
+    function playBass(frequency: number, time: number) {
       const a = audioContext();
       const oscillator = a.createOscillator();
       const filter = a.createBiquadFilter();
@@ -704,9 +613,9 @@ const jsonLd = {
       filter.type = 'lowpass';
       filter.frequency.value = 420;
       gain.gain.setValueAtTime(.0001, time);
-      gain.gain.exponentialRampToValueAtTime(amount, time + .02);
+      gain.gain.exponentialRampToValueAtTime(.2, time + .02);
       gain.gain.exponentialRampToValueAtTime(.0001, time + .44);
-      oscillator.connect(filter).connect(gain).connect(audioOutput());
+      oscillator.connect(filter).connect(gain).connect(a.destination);
       oscillator.start(time);
       oscillator.stop(time + .48);
     }
@@ -721,11 +630,12 @@ const jsonLd = {
       gain.gain.setValueAtTime(.0001, time);
       gain.gain.exponentialRampToValueAtTime(amount, time + .008);
       gain.gain.exponentialRampToValueAtTime(.0001, time + duration);
-      oscillator.connect(gain).connect(audioOutput());
+      oscillator.connect(gain).connect(a.destination);
       oscillator.start(time);
       oscillator.stop(time + duration + .02);
     }
-    function playLand() { playSweep(170, 72, .13, .07); }
+    function playJump() { playSweep(300, 690, .18, .14); }
+    function playLand() { playSweep(155, 68, .15, .11); }
     function playClear() { playSweep(680, 920, .13, .08); }
     function playHurt() { playSweep(185, 56, .4, .2); }
     function playPerfect() {
@@ -739,7 +649,7 @@ const jsonLd = {
         gain.gain.setValueAtTime(.0001, time + delay);
         gain.gain.exponentialRampToValueAtTime(.11, time + delay + .005);
         gain.gain.exponentialRampToValueAtTime(.0001, time + delay + .23);
-        oscillator.connect(gain).connect(audioOutput());
+        oscillator.connect(gain).connect(a.destination);
         oscillator.start(time + delay);
         oscillator.stop(time + delay + .26);
       });
@@ -756,129 +666,28 @@ const jsonLd = {
         gain.gain.setValueAtTime(.0001, at);
         gain.gain.exponentialRampToValueAtTime(.1, at + .01);
         gain.gain.exponentialRampToValueAtTime(.0001, at + .3);
-        oscillator.connect(gain).connect(audioOutput());
+        oscillator.connect(gain).connect(a.destination);
         oscillator.start(at);
         oscillator.stop(at + .32);
       });
     }
-    function playChord(root: number, time: number, amount = .045) {
-      const a = audioContext();
-      [1, 1.25, 1.5].forEach((ratio) => {
-        const oscillator = a.createOscillator();
-        const filter = a.createBiquadFilter();
-        const gain = a.createGain();
-        oscillator.type = 'triangle';
-        oscillator.frequency.value = root * 4 * ratio;
-        filter.type = 'lowpass';
-        filter.frequency.value = 1150;
-        gain.gain.setValueAtTime(.0001, time);
-        gain.gain.exponentialRampToValueAtTime(amount, time + .025);
-        gain.gain.exponentialRampToValueAtTime(.0001, time + .72);
-        oscillator.connect(filter).connect(gain).connect(audioOutput());
-        oscillator.start(time);
-        oscillator.stop(time + .75);
-      });
-    }
-    function playPlayerVoice(voice: PlayerVoice, note: number, grade: TimingGrade, time?: number, echo = false) {
-      const a = audioContext();
-      const at = time ?? a.currentTime + .004;
-      const levelScale = level().music.scale;
-      const semitone = levelScale[note % levelScale.length] ?? 0;
-      const intensity = (grade === 'perfect' ? 1 : grade === 'good' ? .72 : .34) * (echo ? .32 : 1);
-      if (voice === 'clap') {
-        playSnare(at, .12 * intensity);
-        playHat(at + .018, false, .55 * intensity);
-        return;
-      }
-      const oscillator = a.createOscillator();
-      const filter = a.createBiquadFilter();
-      const gain = a.createGain();
-      const base = voice === 'rim' ? 410 : voice === 'tom' ? 145 : 620;
-      oscillator.type = voice === 'metal' ? 'square' : voice === 'tom' ? 'sine' : 'triangle';
-      oscillator.frequency.setValueAtTime(base * 2 ** (semitone / 12), at);
-      if (voice === 'tom') oscillator.frequency.exponentialRampToValueAtTime(base * .58, at + .2);
-      filter.type = voice === 'metal' ? 'bandpass' : 'lowpass';
-      filter.frequency.value = voice === 'metal' ? 1850 : voice === 'rim' ? 1700 : 720;
-      filter.Q.value = voice === 'metal' ? 5 : .9;
-      gain.gain.setValueAtTime(.0001, at);
-      gain.gain.exponentialRampToValueAtTime((voice === 'tom' ? .19 : .12) * intensity, at + .004);
-      gain.gain.exponentialRampToValueAtTime(.0001, at + (voice === 'metal' ? .32 : .22));
-      oscillator.connect(filter).connect(gain).connect(audioOutput());
-      oscillator.start(at);
-      oscillator.stop(at + .36);
-      if (voice === 'metal') playHat(at, true, .55 * intensity);
-    }
-    function transportBeat(): number {
-      const seconds = 60 / level().bpm;
-      return Math.max(0, pausedBeat + (performance.now() - transportStartPerf) / 1000 / seconds);
-    }
-    function stopScheduler() {
-      if (schedulerTimer) window.clearInterval(schedulerTimer);
-      schedulerTimer = 0;
-    }
-    function scheduleAhead() {
-      if (!actx || actx.state !== 'running' || phase !== 'playing' || suspended) return;
+    function audioBeats(previousX: number, currentX: number) {
       const cfg = level();
-      const seconds = 60 / cfg.bpm;
-      const subdivision = cfg.music.subdivision;
-      const nowBeat = transportBeat();
-      const horizonBeat = nowBeat + .14 / seconds;
-      while (nextMusicStep / subdivision <= horizonBeat) {
-        const step = nextMusicStep;
-        const eventBeat = step / subdivision;
-        const patternStep = ((step % 16) + 16) % 16;
-        const swingOffset = cfg.music.swing > .5 && step % 2 === 1 ? (cfg.music.swing - .5) * seconds : 0;
-        const countInSeconds = Math.max(0, (transportStartPerf - performance.now()) / 1000);
-        const secondsUntilEvent = countInSeconds + (eventBeat - nowBeat) * seconds + swingOffset;
-        const eventTime = actx.currentTime + Math.max(.005, secondsUntilEvent);
-        const mix = eventBeat < duckUntilBeat ? .34 : 1;
-        if (secondsUntilEvent >= -.03) {
-          if (cfg.music.backing.kick.includes(patternStep)) playKick(eventTime, .24 * mix);
-          if (cfg.music.backing.snare.includes(patternStep)) playSnare(eventTime, .12 * mix);
-          if (cfg.music.backing.hat.includes(patternStep)) playHat(eventTime, patternStep === 14, mix);
-          if (arrangement >= 1 && patternStep % 8 === 0) playBass(cfg.bass[Math.floor(eventBeat / 4) % cfg.bass.length], eventTime, .15 * mix);
-          if (arrangement >= 2 && patternStep === 0) playChord(cfg.bass[Math.floor(eventBeat / 4) % cfg.bass.length], eventTime, .04 * mix);
-          if (arrangement >= 3 && (patternStep === 3 || patternStep === 11)) {
-            const note = patternStep === 3 ? 2 : 4;
-            playPlayerVoice(cfg.music.playerVoice, note, 'good', eventTime, true);
-          }
-          for (const echo of echoNotes) {
-            if (!echo.played && Math.abs(echo.beat - eventBeat) < .001) {
-              playPlayerVoice(cfg.music.playerVoice, echo.note, echo.grade, eventTime, true);
-              echo.played = true;
-            }
-          }
-        }
-        nextMusicStep++;
+      const a = audioContext();
+      const now = a.currentTime + .018;
+      const previousBeat = Math.floor((previousX - levelStartX) / BEAT_PX);
+      const currentBeat = Math.floor((currentX - levelStartX) / BEAT_PX);
+      for (let beat = previousBeat + 1; beat <= currentBeat; beat++) {
+        playKick(now);
+        const position = ((beat % 4) + 4) % 4;
+        if (position === 2) playSnare(now);
+        if (position === 0) playBass(cfg.bass[Math.floor(beat / 4) % cfg.bass.length], now);
+        downFlash = 1;
       }
-    }
-    function startTransport(startBeat = 0) {
-      stopScheduler();
-      pausedBeat = startBeat;
-      transportStartPerf = performance.now() + 80;
-      try {
-        audioContext();
-        setMasterLevel(.72, true);
-      } catch { /* the performance clock keeps visual play moving */ }
-      nextMusicStep = Math.max(0, Math.ceil(startBeat * level().music.subdivision));
-      if (actx) {
-        schedulerTimer = window.setInterval(scheduleAhead, 25);
-        scheduleAhead();
-      }
-    }
-    function pauseTransport() {
-      pausedBeat = Math.min(level().beats, transportBeat());
-      stopScheduler();
-      setMasterLevel(0, true);
-    }
-    function resumeTransport() {
-      transportStartPerf = performance.now();
-      nextMusicStep = Math.ceil(pausedBeat * level().music.subdivision);
-      setMasterLevel(.72, true);
-      if (actx) {
-        schedulerTimer = window.setInterval(scheduleAhead, 25);
-        scheduleAhead();
-      }
+      const half = BEAT_PX / 2;
+      const previousHalf = Math.floor((previousX - levelStartX) / half);
+      const currentHalf = Math.floor((currentX - levelStartX) / half);
+      for (let halfBeat = previousHalf + 1; halfBeat <= currentHalf; halfBeat++) playHat(now, halfBeat % 2 === 0);
     }
 
     /* ---------------- shared sound bus ---------------- */
@@ -918,16 +727,6 @@ const jsonLd = {
       nounImage.src = `https://noun.pics/${NOUN_POOL[Math.floor(Math.random() * NOUN_POOL.length)]}.svg`;
     }
 
-    const backdropImages: Array<HTMLImageElement | null> = BACKDROP_URLS.map(() => null);
-    function ensureBackdrop(index: number) {
-      if (index < 0 || index >= BACKDROP_URLS.length || backdropImages[index]) return;
-      const image = new Image();
-      image.onload = () => draw();
-      image.src = BACKDROP_URLS[index];
-      backdropImages[index] = image;
-      void image.decode?.().catch(() => {});
-    }
-
     /* ---------------- canvas & world ---------------- */
     const canvas = document.getElementById('drn-canvas') as HTMLCanvasElement;
     const context = canvas.getContext('2d')!;
@@ -959,55 +758,24 @@ const jsonLd = {
       const cfg = level();
       levelStartX = worldX;
       levelEndX = levelStartX + cfg.beats * BEAT_PX;
+      speed = (BEAT_PX * cfg.bpm) / 60;
       obstacles = cfg.obstacles.map((cue) => {
         const [w, h] = DIMS[cue.kind];
-        return {
-          ...cue,
-          cueX: levelStartX + cue.cueBeat * BEAT_PX,
-          ox: levelStartX + cue.beat * BEAT_PX,
-          w,
-          h,
-          hit: false,
-          cleared: false,
-          judged: false,
-          grade: null,
-        };
+        return { ...cue, ox: levelStartX + cue.beat * BEAT_PX, w, h, hit: false, cleared: false };
       });
       runner.y = 0;
+      runner.vy = 0;
       runner.grounded = true;
       runner.squash = 0;
       runner.cleanTarget = -1;
-      runner.jumpStartBeat = -99;
-      runner.landingPlayed = true;
       invuln = 0;
       downFlash = 0;
       shakeMag = 0;
-      arrangement = 0;
-      duckUntilBeat = 0;
       levelClears = 0;
       levelPerfect = 0;
-      levelGood = 0;
-      levelOffgrid = 0;
       levelHits = 0;
       levelStartScore = displayScore();
-      phraseGrades.clear();
-      if (index === LEVELS.length - 1) {
-        const motifByStep = new Map<number, MotifNote>();
-        campaignMotif.forEach((note) => motifByStep.set(note.step, note));
-        echoNotes = Array.from(motifByStep.values())
-          .sort((a, b) => a.step - b.step)
-          .map((note) => ({
-            beat: 8 + note.step / cfg.music.subdivision,
-            note: note.note,
-            grade: note.grade,
-            played: false,
-          }));
-      } else {
-        echoNotes = [];
-      }
       particles = [];
-      ensureBackdrop(index);
-      ensureBackdrop(index + 1);
       applyTheme(cfg);
       updateHud();
       draw();
@@ -1051,96 +819,44 @@ const jsonLd = {
     }
 
     /* ---------------- gameplay ---------------- */
-    function nearestCue(beat: number): Obstacle | undefined {
-      return obstacles
-        .filter((obstacle) => !obstacle.judged)
-        .sort((a, b) => Math.abs(a.cueBeat - beat) - Math.abs(b.cueBeat - beat))[0];
-    }
-    function refreshArrangement() {
-      const accepted = levelPerfect + levelGood;
-      const unlocks = level().music.stemUnlocks;
-      arrangement = accepted >= unlocks.counterline ? 3 : accepted >= unlocks.harmony ? 2 : accepted >= unlocks.bass ? 1 : 0;
-      root.dataset.mix = String(arrangement);
+    function nearestObstacle(): Obstacle | undefined {
+      return obstacles.find((obstacle) => !obstacle.hit && !obstacle.cleared && obstacle.ox > worldX);
     }
     function jump() {
-      if (phase !== 'playing') return;
-      const inputNow = performance.now();
-      if (inputNow - lastInputAt < 38) return;
-      lastInputAt = inputNow;
-      const beat = Math.min(level().beats, transportBeat());
-      const target = nearestCue(beat);
-      const delta = target ? beat - target.cueBeat : Infinity;
-      const grade = target ? gradeBeatDelta(delta, level().bpm) : 'offgrid';
-      const accepted = target && grade !== 'offgrid';
-      const playedNote = target?.note ?? 0;
+      if (phase !== 'playing' || !runner.grounded) return;
+      runner.vy = JUMP_V;
+      runner.grounded = false;
+      runner.cleanTarget = -1;
+      playJump();
+      emitParticles(runnerScreenX(), groundY() - 2, level().accent, 7, .65);
 
-      if (accepted && target) {
-        target.judged = true;
-        target.grade = grade;
+      const localX = worldX - levelStartX;
+      const phaseX = ((localX % BEAT_PX) + BEAT_PX) % BEAT_PX;
+      const distanceToBeat = Math.min(phaseX, BEAT_PX - phaseX);
+      const target = nearestObstacle();
+      const beatsOut = target ? (target.ox - worldX) / BEAT_PX : Infinity;
+      const locked = distanceToBeat < BEAT_PX * .18 && beatsOut >= .68 && beatsOut <= 1.32;
+      if (locked && target) {
         runner.cleanTarget = target.ox;
-        flow++;
-        bestFlow = Math.max(bestFlow, flow);
-        if (grade === 'perfect') {
-          levelPerfect++;
-          totalPerfect++;
-          bonus += 100 + Math.min(flow, 8) * 10;
-        } else {
-          levelGood++;
-          totalGood++;
-          bonus += 60;
-        }
-        const step = phraseStep(target.cueBeat, level().music.phraseBeats, level().music.subdivision);
-        phraseGrades.set(step, grade);
-        if (currentLevelIndex < LEVELS.length - 1) {
-          campaignMotif.push({ step, note: target.note, grade });
-          if (campaignMotif.length > 32) campaignMotif.splice(0, campaignMotif.length - 32);
-        }
-        if (target.cueBeat + level().music.phraseBeats < level().beats) {
-          echoNotes.push({ beat: target.cueBeat + level().music.phraseBeats, note: target.note, grade, played: false });
-        }
-        refreshArrangement();
-        if (flow % 4 === 0) {
-          bonus += 250;
-          flashJudge('perfect', `PHRASE ×${flow / 4}`);
-        } else {
-          flashJudge(grade, grade === 'perfect' ? 'PERFECT' : 'GOOD');
-        }
-        emitParticles(runnerScreenX(), groundY() - 26, grade === 'perfect' ? level().accent : level().accentSoft, grade === 'perfect' ? 18 : 10, .9);
-      } else {
-        flow = 0;
-        levelOffgrid++;
-        totalOffgrid++;
-        runner.cleanTarget = -1;
-        flashJudge('offgrid', 'OFF GRID');
-        emitParticles(runnerScreenX(), groundY() - 12, '#b7acc9', 5, .45);
-      }
-
-      trySound(() => playPlayerVoice(level().music.playerVoice, playedNote, accepted ? grade : 'offgrid'));
-      if (accepted || runner.grounded) {
-        runner.grounded = false;
-        runner.jumpStartBeat = beat;
-        runner.landingPlayed = false;
+        flashJudge('onbeat', 'LOCKED');
       }
       tapHint.classList.add('drn__tap-hint--gone');
-      updateHud();
     }
     function update(dt: number) {
-      const beat = Math.min(level().beats, transportBeat());
-      worldX = Math.min(levelEndX, levelStartX + beat * BEAT_PX);
-      const visualBeat = Math.floor(beat);
-      if (visualBeat !== lastVisualBeat) {
-        lastVisualBeat = visualBeat;
-        downFlash = 1;
-      }
+      const previousX = worldX;
+      worldX = Math.min(levelEndX, worldX + speed * dt);
+      audioBeats(previousX, worldX);
+
       if (!runner.grounded) {
-        runner.y = jumpHeightAtBeat(beat, runner.jumpStartBeat, JUMP_APEX_PX);
-        if (beat >= runner.jumpStartBeat + JUMP_BEATS) {
+        runner.y += runner.vy * dt;
+        runner.vy -= GRAV * dt;
+        if (runner.y <= 0) {
           runner.y = 0;
+          runner.vy = 0;
           runner.grounded = true;
           runner.squash = 1;
           runner.cleanTarget = -1;
-          if (!runner.landingPlayed) trySound(playLand);
-          runner.landingPlayed = true;
+          playLand();
           emitParticles(runnerScreenX(), groundY(), '#e9d7ad', 6, .48);
         }
       }
@@ -1151,14 +867,6 @@ const jsonLd = {
       updateParticles(dt);
 
       for (const obstacle of obstacles) {
-        const goodWindowBeats = GOOD_WINDOW_MS * level().bpm / 60_000;
-        if (!obstacle.judged && beat > obstacle.cueBeat + goodWindowBeats) {
-          obstacle.judged = true;
-          obstacle.grade = 'miss';
-          totalMisses++;
-          flow = 0;
-          flashJudge('hit', 'MISS');
-        }
         if (obstacle.hit || obstacle.cleared) continue;
         const overlap = Math.abs(worldX - obstacle.ox) < (RUNNER_W / 2 + obstacle.w / 2);
         if (overlap && invuln <= 0 && runner.y < obstacle.h - 5) {
@@ -1167,10 +875,9 @@ const jsonLd = {
           levelHits++;
           invuln = INVULN_S;
           flow = 0;
-          duckUntilBeat = beat + 4;
           runner.cleanTarget = -1;
           shakeMag = reducedMotion ? 0 : 10;
-          trySound(playHurt);
+          playHurt();
           emitParticles(runnerScreenX() + 9, groundY() - obstacle.h * .6, '#ff5f7e', 16, 1.15);
           flashJudge('hit', 'CLIPPED');
           updateLives();
@@ -1181,11 +888,21 @@ const jsonLd = {
           obstacle.cleared = true;
           levelClears++;
           totalClears++;
-          bonus += 20;
-          if (runner.cleanTarget === obstacle.ox) runner.cleanTarget = -1;
-          trySound(playClear);
-          emitParticles(runnerScreenX() + 23, groundY() - obstacle.h, level().accent, 9, .7);
-          flashJudge('clear', obstacle.grade === 'perfect' ? 'CLEAR · POCKET' : 'CLEAR');
+          if (runner.cleanTarget === obstacle.ox) {
+            flow++;
+            bestFlow = Math.max(bestFlow, flow);
+            levelPerfect++;
+            totalPerfect++;
+            bonus += 2 + Math.min(flow, 4);
+            runner.cleanTarget = -1;
+            playPerfect();
+            emitParticles(runnerScreenX() + 23, groundY() - obstacle.h, level().accent, 18, 1.05);
+            flashJudge('onbeat', flow > 1 ? `PERFECT ×${flow}` : 'PERFECT');
+          } else {
+            flow = 0;
+            playClear();
+            flashJudge('clear', 'CLEAR');
+          }
           broadcast(obstacle.kind);
         }
       }
@@ -1199,50 +916,35 @@ const jsonLd = {
       gradient.addColorStop(0, cfg.skyTop);
       gradient.addColorStop(1, cfg.skyBottom);
       context.fillStyle = gradient;
-      context.fillRect(-14, 0, width + 28, height + 14);
+      context.fillRect(-14, 0, width + 28, gy + 2);
 
-      const backdrop = backdropImages[currentLevelIndex];
-      if (backdrop?.complete && backdrop.naturalWidth > 0) {
-        const scale = Math.max(width / backdrop.naturalWidth, height / backdrop.naturalHeight);
-        const drawWidth = backdrop.naturalWidth * scale;
-        const drawHeight = backdrop.naturalHeight * scale;
-        const focalX = [0.52, 0.54, 0.5, 0.53][currentLevelIndex] ?? .5;
-        const drawX = (width - drawWidth) * focalX;
-        const drawY = (height - drawHeight) * .5;
-        context.imageSmoothingEnabled = true;
-        context.drawImage(backdrop, drawX, drawY, drawWidth, drawHeight);
-        context.imageSmoothingEnabled = false;
-      }
-
-      const orchestration = Math.min(1, arrangement / 3);
-      const isDucked = currentLevelBeat() < duckUntilBeat;
-      context.fillStyle = `rgba(3,7,18,${Math.max(.1, .48 - orchestration * .27 + (isDucked ? .16 : 0))})`;
-      context.fillRect(0, 0, width, height);
-
-      const laneScrim = context.createLinearGradient(0, gy * .67, 0, height);
-      laneScrim.addColorStop(0, 'rgba(3,7,18,0)');
-      laneScrim.addColorStop(.55, 'rgba(3,7,18,.22)');
-      laneScrim.addColorStop(1, 'rgba(3,7,18,.72)');
-      context.fillStyle = laneScrim;
-      context.fillRect(0, gy * .65, width, height - gy * .65);
-
-      const pulse = context.createRadialGradient(width * .5, gy * .48, 4, width * .5, gy * .48, width * .48);
-      pulse.addColorStop(0, cfg.accent);
-      pulse.addColorStop(1, 'rgba(0,0,0,0)');
-      context.globalAlpha = .09 + downFlash * .16;
-      context.fillStyle = pulse;
-      context.fillRect(0, 0, width, gy);
-      context.globalAlpha = 1;
-
-      if (!reducedMotion && arrangement > 0) {
-        context.fillStyle = cfg.accent;
-        context.globalAlpha = .12 + arrangement * .05;
-        for (let index = 0; index < arrangement * 5; index++) {
-          const x = hashAt(index + Math.floor(currentLevelBeat() * 2)) * width;
-          const y = hashAt(index + 81) * gy * .68;
-          context.fillRect(x, y, index % 3 === 0 ? 3 : 2, 2);
+      if (cfg.scene === 'mainstreet') {
+        const haze = context.createRadialGradient(width * .76, gy * .44, 8, width * .76, gy * .44, 150);
+        haze.addColorStop(0, 'rgba(255,218,156,.72)');
+        haze.addColorStop(1, 'rgba(255,167,123,0)');
+        context.fillStyle = haze;
+        context.fillRect(width * .76 - 160, gy * .08, 320, gy * .7);
+        context.fillStyle = '#ffd89b';
+        context.beginPath();
+        context.arc(width * .76, gy * .44, 24, 0, Math.PI * 2);
+        context.fill();
+      } else if (cfg.scene === 'refinery') {
+        for (let index = 0; index < 36; index++) {
+          const x = hashAt(index + 200) * width;
+          const y = hashAt(index + 800) * gy * .62;
+          const size = hashAt(index + 400) > .8 ? 2 : 1;
+          context.fillStyle = `rgba(220,235,255,${.25 + hashAt(index + 90) * .55})`;
+          context.fillRect(x, y, size, size);
         }
-        context.globalAlpha = 1;
+        const moonGlow = context.createRadialGradient(width * .73, gy * .25, 4, width * .73, gy * .25, 65);
+        moonGlow.addColorStop(0, 'rgba(190,226,255,.75)');
+        moonGlow.addColorStop(1, 'rgba(122,167,255,0)');
+        context.fillStyle = moonGlow;
+        context.fillRect(width * .73 - 70, gy * .25 - 70, 140, 140);
+        context.fillStyle = '#dbe9ff';
+        context.beginPath();
+        context.arc(width * .73, gy * .25, 14, 0, Math.PI * 2);
+        context.fill();
       }
     }
     function drawBuildingLayer(scroll: number, color: string, step: number, minHeight: number, maxHeight: number, seedShift: number, windows: string) {
@@ -1609,10 +1311,7 @@ const jsonLd = {
 
       context.save();
       context.translate(x, top + runnerHeight / 2);
-      if (!runner.grounded && !reducedMotion) {
-        const jumpProgress = Math.max(0, Math.min(1, (currentLevelBeat() - runner.jumpStartBeat) / JUMP_BEATS));
-        context.rotate((.5 - jumpProgress) * .42);
-      }
+      if (!runner.grounded && !reducedMotion) context.rotate(Math.max(-.32, Math.min(.32, -runner.vy / 2700)));
 
       const legPhase = reducedMotion ? 0 : Math.sin(worldX * .16) * 5;
       context.fillStyle = level().accent;
@@ -1642,36 +1341,31 @@ const jsonLd = {
       if (shakeMag > 0 && !reducedMotion) context.translate((Math.random() - .5) * shakeMag, (Math.random() - .5) * shakeMag * .6);
 
       drawSky(cfg, gy);
+      if (cfg.scene === 'mainstreet') drawMainStreet(gy);
+      else if (cfg.scene === 'pier') drawPier(gy);
+      else if (cfg.scene === 'ralphs') drawRalphs(gy);
+      else drawRefinery(gy);
       drawGround(gy);
       drawFinishGate(gy);
 
       for (const obstacle of obstacles) {
         const x = runnerScreenX() + (obstacle.ox - worldX);
-        const cueX = runnerScreenX() + (obstacle.cueX - worldX);
-        if (x >= -70 && x <= width + 70) drawObstacle(obstacle, x, gy);
-        if (!obstacle.judged && cueX >= -40 && cueX <= width + 40) {
-          const beatsAway = Math.abs((obstacle.cueX - worldX) / BEAT_PX);
-          const pulse = reducedMotion ? 0 : Math.sin(currentLevelBeat() * Math.PI * 2) * 1.8;
-          const cueY = gy - 94;
-          context.strokeStyle = `rgba(255,255,255,${Math.max(.16, .5 - beatsAway * .12)})`;
-          context.lineWidth = 1;
+        if (x < -70 || x > width + 70) continue;
+        drawObstacle(obstacle, x, gy);
+        const beatsOut = (obstacle.ox - worldX) / BEAT_PX;
+        if (!obstacle.hit && !obstacle.cleared && beatsOut > .2 && beatsOut < 2.45) {
+          const alpha = Math.max(.18, .86 - beatsOut * .22);
+          const markerY = gy - obstacle.h - 21 - (reducedMotion ? 0 : Math.sin(worldX * .025) * 3);
+          context.fillStyle = `rgba(122,215,255,${alpha})`;
           context.beginPath();
-          context.moveTo(cueX, cueY + 14);
-          context.lineTo(x, gy - obstacle.h - 8);
-          context.stroke();
-          context.shadowColor = cfg.accent;
-          context.shadowBlur = 18;
-          context.fillStyle = cfg.accent;
-          context.beginPath();
-          context.arc(cueX, cueY, 9 + pulse, 0, Math.PI * 2);
+          context.moveTo(x, markerY + 9);
+          context.lineTo(x - 7, markerY);
+          context.lineTo(x + 7, markerY);
+          context.closePath();
           context.fill();
-          context.shadowBlur = 0;
-          context.fillStyle = '#07101d';
-          context.beginPath();
-          context.arc(cueX, cueY, 3.5, 0, Math.PI * 2);
-          context.fill();
-          context.fillStyle = 'rgba(255,255,255,.78)';
-          context.fillRect(cueX - 1, cueY + 12, 2, 11);
+          context.fillStyle = `rgba(255,255,255,${alpha * .74})`;
+          const pips = Math.max(1, Math.ceil(beatsOut));
+          for (let pip = 0; pip < pips; pip++) context.fillRect(x - (pips * 4) / 2 + pip * 5, markerY - 8, 3, 3);
         }
       }
 
@@ -1705,7 +1399,6 @@ const jsonLd = {
     const subEl = document.getElementById('drn-sub')!;
     const goButton = document.getElementById('drn-go') as HTMLButtonElement;
     const jumpButton = document.getElementById('drn-jump') as HTMLButtonElement;
-    const audioButton = document.getElementById('drn-audio') as HTMLButtonElement;
     const judgeEl = document.getElementById('drn-judge')!;
     const tapHint = document.getElementById('drn-tap-hint')!;
     const stateLive = document.getElementById('drn-state-live')!;
@@ -1713,7 +1406,6 @@ const jsonLd = {
     const routeItems = Array.from(document.querySelectorAll<HTMLElement>('[data-route-index]'));
     const lifeEls = Array.from(document.querySelectorAll<HTMLElement>('.drn__life'));
     const beatRail = Array.from(document.querySelectorAll<HTMLElement>('.drn__beat-rail span'));
-    const phraseCells = Array.from(document.querySelectorAll<HTMLElement>('.drn__phrase span'));
     const statALabel = document.getElementById('drn-stat-a-label')!;
     const statA = document.getElementById('drn-stat-a')!;
     const statBLabel = document.getElementById('drn-stat-b-label')!;
@@ -1722,7 +1414,7 @@ const jsonLd = {
     const statC = document.getElementById('drn-stat-c')!;
 
     let judgeTimer = 0;
-    function flashJudge(kind: 'onbeat' | 'perfect' | 'good' | 'offgrid' | 'clear' | 'hit' | 'level', text: string) {
+    function flashJudge(kind: 'onbeat' | 'clear' | 'hit' | 'level', text: string) {
       judgeEl.textContent = text;
       judgeEl.className = `drn__judge drn__judge--${kind}`;
       clearTimeout(judgeTimer);
@@ -1732,8 +1424,7 @@ const jsonLd = {
       root.style.setProperty('--accent', cfg.accent);
       root.style.setProperty('--accent-soft', cfg.accentSoft);
       root.dataset.scene = cfg.scene;
-      root.dataset.mix = String(arrangement);
-      postcard.style.backgroundImage = `linear-gradient(180deg, transparent 30%, rgba(7,8,17,.44)), url("${BACKDROP_URLS[LEVELS.indexOf(cfg)]}")`;
+      postcard.style.backgroundImage = `linear-gradient(180deg, transparent 35%, rgba(7,8,17,.28)), url("${POSTCARD_URLS[LEVELS.indexOf(cfg)]}")`;
       levelNoEl.textContent = `LEVEL ${cfg.number} / 0${LEVELS.length}`;
       levelNameEl.textContent = cfg.name;
       tempoEl.textContent = `${cfg.bpm} BPM`;
@@ -1744,35 +1435,17 @@ const jsonLd = {
         return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
       } catch { return 0; }
     }
-    function readCompletedLevel(): number {
-      try {
-        const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}');
-        const completed = Number(saved?.completedLevel);
-        return Number.isInteger(completed) ? Math.max(-1, Math.min(LEVELS.length - 1, completed)) : -1;
-      } catch { return -1; }
-    }
     function saveProgress(completedLevel = currentLevelIndex) {
       const score = displayScore();
       savedBest = Math.max(savedBest, score);
-      const savedCompletedLevel = Math.max(readCompletedLevel(), completedLevel);
-      const judgedTargets = totalPerfect + totalGood + totalMisses;
       try {
         localStorage.setItem(BEST_KEY, String(savedBest));
-        localStorage.setItem(PROGRESS_KEY, JSON.stringify({
-          best: savedBest,
-          completedLevel: savedCompletedLevel,
-          perfect: totalPerfect,
-          good: totalGood,
-          misses: totalMisses,
-          offgrid: totalOffgrid,
-          accuracy: accuracyPercent(totalPerfect, totalGood, judgedTargets),
-          updatedAt: Date.now(),
-        }));
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify({ best: savedBest, completedLevel, perfect: totalPerfect, updatedAt: Date.now() }));
       } catch { /* storage is optional */ }
       updateBest();
     }
     function updateBest() {
-      const text = savedBest > 0 ? `best ${savedBest} pts` : 'best — pts';
+      const text = savedBest > 0 ? `best ${savedBest} m` : 'best — m';
       bestLine.textContent = text;
       overlayBest.textContent = text;
     }
@@ -1802,13 +1475,6 @@ const jsonLd = {
       const beat = Math.floor((worldX - levelStartX) / BEAT_PX);
       const position = ((beat % 4) + 4) % 4;
       beatRail.forEach((cell, index) => cell.classList.toggle('is-active', phase === 'playing' && index === position));
-      const phrasePosition = phraseStep(currentLevelBeat(), level().music.phraseBeats, level().music.subdivision);
-      phraseCells.forEach((cell, index) => {
-        const grade = phraseGrades.get(index);
-        cell.classList.toggle('is-played', grade === 'good');
-        cell.classList.toggle('is-perfect', grade === 'perfect');
-        cell.classList.toggle('is-active', phase === 'playing' && index === phrasePosition);
-      });
     }
     function showOverlay(focusButton = true) {
       overlay.classList.remove('drn__overlay--hidden');
@@ -1833,21 +1499,21 @@ const jsonLd = {
       flow = 0;
       prepareLevel(0);
       const cfg = level();
-      kickerEl.textContent = 'BEAT RUNNER V3 · PLAY THE CITY';
+      kickerEl.textContent = 'BEAT RUNNER V2 · POSTCARD TOUR';
       cardTempoEl.textContent = '4 LEVELS · 92→128 BPM';
-      titleEl.innerHTML = 'YOUR TAP.<br>THE CITY\'S BEAT.';
-      subEl.textContent = 'Perform the cue now, clear the street at the apex one beat later, and hear your phrase return through the mix.';
-      setStats('route', '4 scenes', 'input', '1 button', 'hearts', '3 total');
+      titleEl.innerHTML = 'FOUR SCENES.<br>ONE POCKET.';
+      subEl.textContent = 'Every obstacle lands on the grid. Carry three hearts from the marine layer to the refinery night shift.';
+      setStats('route', '4 levels', 'tempo', '92→128', 'hearts', '3 total');
       goButton.textContent = '▶ START LEVEL 01';
       updateRoute(0);
-      stateLive.textContent = 'Beat Runner v3 ready. Perform each visual cue to sound a note and jump. Four levels, three hearts. Start Level 1.';
+      stateLive.textContent = 'Beat Runner v2 ready. Four levels, three hearts. Start Level 1.';
       showOverlay(false);
     }
 
     /* ---------------- phase transitions ---------------- */
     function startCampaign() {
       cancelAnimationFrame(rafId);
-      trySound(() => { audioContext(); });
+      audioContext();
       resize();
       pickNoun();
       worldX = 0;
@@ -1857,10 +1523,6 @@ const jsonLd = {
       bestFlow = 0;
       totalClears = 0;
       totalPerfect = 0;
-      totalGood = 0;
-      totalMisses = 0;
-      totalOffgrid = 0;
-      campaignMotif = [];
       scenerySeed = Math.random() * 1000;
       updateLives();
       startLevel(0);
@@ -1871,13 +1533,11 @@ const jsonLd = {
       pendingLevelIndex = index;
       prepareLevel(index);
       phase = 'playing';
-      lastVisualBeat = -1;
-      startTransport(0);
       tapHint.classList.toggle('drn__tap-hint--gone', index > 0);
       judgeEl.textContent = '';
       hideOverlay();
       flashJudge('level', `LEVEL ${level().number}`);
-      stateLive.textContent = `Level ${index + 1} of ${LEVELS.length}, ${level().name}, ${level().bpm} BPM. Perform beat and jump control focused.`;
+      stateLive.textContent = `Level ${index + 1} of ${LEVELS.length}, ${level().name}, ${level().bpm} BPM. Jump control focused.`;
       lastTs = performance.now();
       suspended = false;
       rafId = requestAnimationFrame(frame);
@@ -1885,31 +1545,24 @@ const jsonLd = {
     function completeLevel() {
       if (phase !== 'playing') return;
       cancelAnimationFrame(rafId);
-      stopScheduler();
       const completedIndex = currentLevelIndex;
       const completed = level();
       const healed = levelHits === 0 && lives < 3;
       if (healed) lives++;
       updateLives();
       saveProgress(completedIndex);
-      trySound(playLevelClear);
-      trySound(() => {
-        const a = audioContext();
-        const accepted = obstacles.filter((item) => item.grade === 'perfect' || item.grade === 'good').slice(0, 4);
-        accepted.forEach((item, index) => playPlayerVoice(completed.music.playerVoice, item.note, item.grade as TimingGrade, a.currentTime + .18 + index * (60 / completed.bpm)));
-      });
+      playLevelClear();
 
       if (completedIndex === LEVELS.length - 1) {
         phase = 'victory';
-        kickerEl.textContent = 'CITY PERFORMED · FOUR SCENES';
-        cardTempoEl.textContent = `${totalPerfect} PERFECT · ${totalGood} GOOD`;
-        titleEl.textContent = 'THE CITY PLAYS BACK.';
-        subEl.textContent = `${completed.clearLine} You carried a phrase from Main Street to the night shift${healed ? ' — flawless finish restored a heart.' : '.'}`;
-        const allTargets = LEVELS.reduce((sum, item) => sum + item.obstacles.length, 0);
-        setStats('score', `${displayScore()} pts`, 'accuracy', `${accuracyPercent(totalPerfect, totalGood, allTargets)}%`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
+        kickerEl.textContent = 'CITY CLEARED · FOUR POSTCARDS';
+        cardTempoEl.textContent = `${totalClears} CLEARS · ${totalPerfect} PERFECT`;
+        titleEl.textContent = 'POCKET HELD.';
+        subEl.textContent = `${completed.clearLine} You carried the beat from Main Street to the night shift${healed ? ' — flawless finish restored a heart.' : '.'}`;
+        setStats('score', `${displayScore()} m`, 'perfect', `${totalPerfect}/${totalClears}`, 'best flow', bestFlow > 0 ? `×${bestFlow}` : '—');
         goButton.textContent = '▶ RUN THE CITY AGAIN';
         updateRoute(LEVELS.length, true);
-        stateLive.textContent = `City cleared. Final score ${displayScore()} points. ${totalPerfect} perfect and ${totalGood} good performances. Best pocket ${bestFlow}.`;
+        stateLive.textContent = `City cleared. Final score ${displayScore()} meters. ${totalPerfect} perfect clears. Best flow ${bestFlow}.`;
         showOverlay();
         return;
       }
@@ -1922,16 +1575,15 @@ const jsonLd = {
       cardTempoEl.textContent = `NEXT · ${next.bpm} BPM`;
       titleEl.textContent = next.name;
       subEl.textContent = `${next.brief}${healed ? ' Flawless level: one heart restored.' : ''}`;
-      setStats('level score', `+${displayScore() - levelStartScore} pts`, 'accuracy', `${accuracyPercent(levelPerfect, levelGood, completed.obstacles.length)}%`, 'mix', `${arrangement}/3 stems`);
+      setStats('level score', `+${displayScore() - levelStartScore} m`, 'perfect', `${levelPerfect}/${completed.obstacles.length}`, 'hearts', `${lives}/3`);
       goButton.textContent = `▶ LEVEL ${next.number} · ${next.bpm} BPM`;
       updateRoute(pendingLevelIndex);
-      stateLive.textContent = `Level ${completed.number} clear. ${levelPerfect} perfect and ${levelGood} good performances. Next: ${next.name}, ${next.bpm} BPM.`;
+      stateLive.textContent = `Level ${completed.number} clear. ${levelPerfect} perfect clears. Next: ${next.name}, ${next.bpm} BPM.`;
       showOverlay();
     }
     function endRun() {
       if (phase !== 'playing') return;
       cancelAnimationFrame(rafId);
-      stopScheduler();
       phase = 'gameover';
       saveProgress(currentLevelIndex - 1);
       const cfg = level();
@@ -1939,10 +1591,10 @@ const jsonLd = {
       cardTempoEl.textContent = `${cfg.name.toUpperCase()} · ${cfg.bpm} BPM`;
       titleEl.textContent = 'BEAT DROPPED.';
       subEl.textContent = `The city keeps moving. Your route reached ${cfg.name}; run it back and leave the empty beats alone.`;
-      setStats('score', `${displayScore()} pts`, 'accuracy', `${accuracyPercent(totalPerfect, totalGood, totalPerfect + totalGood + totalMisses)}%`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
+      setStats('score', `${displayScore()} m`, 'clears', String(totalClears), 'best flow', bestFlow > 0 ? `×${bestFlow}` : '—');
       goButton.textContent = '▶ RUN IT BACK';
       updateRoute(currentLevelIndex);
-      stateLive.textContent = `Wipeout on Level ${currentLevelIndex + 1}. Score ${displayScore()} points. Start to run again.`;
+      stateLive.textContent = `Wipeout on Level ${currentLevelIndex + 1}. Score ${displayScore()} meters. Start to run again.`;
       showOverlay();
     }
 
@@ -2002,26 +1654,12 @@ const jsonLd = {
         activatePrimary();
       }
     });
-    function updateAudioButton() {
-      audioButton.setAttribute('aria-pressed', String(muted));
-      audioButton.textContent = muted ? 'sound off' : 'sound on';
-      audioButton.setAttribute('aria-label', 'Beat Runner audio muted');
-    }
-    audioButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      muted = !muted;
-      try { localStorage.setItem(MUTED_KEY, muted ? '1' : '0'); } catch { /* optional */ }
-      updateAudioButton();
-      setMasterLevel(.72, true);
-    });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && phase === 'playing') {
         suspended = true;
         cancelAnimationFrame(rafId);
-        pauseTransport();
       } else if (!document.hidden && suspended && phase === 'playing') {
         suspended = false;
-        resumeTransport();
         lastTs = performance.now();
         rafId = requestAnimationFrame(frame);
       }
@@ -2029,9 +1667,7 @@ const jsonLd = {
 
     /* ---------------- init ---------------- */
     sessionId = getOrCreateSession();
-    try { muted = localStorage.getItem(MUTED_KEY) === '1'; } catch { muted = false; }
     savedBest = readBest();
-    updateAudioButton();
     updateBest();
     updateLives();
     pickNoun();

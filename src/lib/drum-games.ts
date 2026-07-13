@@ -24,6 +24,12 @@ export interface DrumGame {
   secondaryUnit?: string;
 }
 
+export const DRUM_RUNNER_VERSIONS = [
+  { id: 'v3', name: 'Pocket', path: '/drum-runner', storageKey: 'pc-drum-runner-v3-best', scoring: 'points' },
+  { id: 'v2', name: 'Postcards', path: '/drum-runner-v2', storageKey: 'pc-drum-runner-v2-best', scoring: 'meters' },
+  { id: 'v1', name: 'Endless', path: '/drum-runner-v1', storageKey: 'pc-drum-runner-best', scoring: 'meters' },
+] as const;
+
 /**
  * The five-game Drum Arcade shelf.
  *
@@ -88,14 +94,14 @@ export const DRUM_GAMES: readonly DrumGame[] = [
     shortName: 'Runner',
     path: '/drum-runner',
     number: '04',
-    kicker: '4 LEVELS · JUMP THE GRID',
-    description: 'A Noun runs four beat-mapped El Segundo postcards. Jump clean, carry three hearts, and hold the pocket as every level gets faster.',
-    skill: 'Anticipation',
-    controls: 'Tap stage · Space',
+    kicker: 'PERFORM · JUMP · BUILD THE TRACK',
+    description: 'Every tap performs a note, sends a Noun over the next obstacle, and builds an El Segundo phrase the city plays back.',
+    skill: 'Pocket',
+    controls: 'Perform + jump · Space',
     nounId: 214,
     accent: '#7ac8ed',
-    bestKey: 'pc-drum-runner-v2-best',
-    bestUnit: ' meters',
+    bestKey: 'pc-drum-runner-v3-best',
+    bestUnit: ' points',
     bestDirection: 'high',
   },
   {

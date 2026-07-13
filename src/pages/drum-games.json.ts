@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { DRUM_GAMES } from '../lib/drum-games';
+import { DRUM_GAMES, DRUM_RUNNER_VERSIONS } from '../lib/drum-games';
 
 export const GET: APIRoute = async () => {
   const payload = {
@@ -20,6 +20,16 @@ export const GET: APIRoute = async () => {
         localStorageKey: game.bestKey,
         unit: game.bestUnit.trim(),
       },
+      ...(game.slug === 'drum-runner' ? {
+        versions: DRUM_RUNNER_VERSIONS.map((version) => ({
+          id: version.id,
+          name: version.name,
+          url: `https://pointcast.xyz${version.path}`,
+          path: version.path,
+          localStorageKey: version.storageKey,
+          scoring: version.scoring,
+        })),
+      } : {}),
     })),
   };
 
