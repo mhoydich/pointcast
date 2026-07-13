@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const LEVELS_FILE = new URL('../src/lib/drum-runner-levels.json', import.meta.url);
-const RUNNER_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const RUNNER_PAGE = new URL('../src/pages/drum-runner-v2.astro', import.meta.url);
 const DRUM_GAMES = new URL('../src/lib/drum-games.ts', import.meta.url);
 
 const levels = JSON.parse(await readFile(LEVELS_FILE, 'utf8'));
@@ -111,9 +111,8 @@ test('Beat Runner v2 uses authored cues and only rewards beat locks tied to the 
   assert.match(runnerSource, /Number\.isFinite\(value\)/);
 });
 
-test('Drum Arcade discovery describes the v2 level campaign', async () => {
+test('Drum Arcade keeps the frozen v2 edition in its versions registry', async () => {
   const source = await readFile(DRUM_GAMES, 'utf8');
-  assert.match(source, /kicker: '4 LEVELS · JUMP THE GRID'/);
-  assert.match(source, /four beat-mapped El Segundo postcards/);
-  assert.match(source, /bestKey: 'pc-drum-runner-v2-best'/);
+  assert.match(source, /name: 'Postcards', path: '\/drum-runner-v2'/);
+  assert.match(source, /storageKey: 'pc-drum-runner-v2-best'/);
 });
