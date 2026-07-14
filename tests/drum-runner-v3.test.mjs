@@ -4,7 +4,8 @@ import { test } from 'node:test';
 
 const V3_LEVELS_FILE = new URL('../src/lib/drum-runner-v3-levels.json', import.meta.url);
 const V3_PAGE = new URL('../src/pages/drum-runner-v3.astro', import.meta.url);
-const V4_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V5_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V4_PAGE = new URL('../src/pages/drum-runner-v4.astro', import.meta.url);
 const V2_PAGE = new URL('../src/pages/drum-runner-v2.astro', import.meta.url);
 const V1_PAGE = new URL('../src/pages/drum-runner-v1.astro', import.meta.url);
 const MUSIC_HELPERS = new URL('../src/lib/drum-runner-music.ts', import.meta.url);
@@ -140,28 +141,33 @@ test('v3 couples performance, transport, arrangement, and accessible controls', 
   assert.match(v3Source, /resumeTransport\(\)/);
 });
 
-test('v1, v2, v3, and v4 remain isolated playable editions', async () => {
-  const [v1, v2, v4] = await Promise.all([readFile(V1_PAGE, 'utf8'), readFile(V2_PAGE, 'utf8'), readFile(V4_PAGE, 'utf8')]);
+test('v1 through v5 remain isolated playable editions', async () => {
+  const [v1, v2, v4, v5] = await Promise.all([V1_PAGE, V2_PAGE, V4_PAGE, V5_PAGE].map((url) => readFile(url, 'utf8')));
   assert.match(v1, /https:\/\/pointcast\.xyz\/drum-runner-v1/);
   assert.match(v2, /https:\/\/pointcast\.xyz\/drum-runner-v2/);
   assert.match(v3Source, /https:\/\/pointcast\.xyz\/drum-runner-v3/);
-  assert.match(v4, /https:\/\/pointcast\.xyz\/drum-runner/);
+  assert.match(v4, /https:\/\/pointcast\.xyz\/drum-runner-v4/);
+  assert.match(v5, /https:\/\/pointcast\.xyz\/drum-runner/);
   assert.match(v1, /pc-drum-runner-best/);
   assert.match(v2, /pc-drum-runner-v2-best/);
   assert.match(v3Source, /pc-drum-runner-v3-best/);
   assert.match(v4, /pc-drum-runner-v4-best/);
-  for (const source of [v1, v2, v3Source, v4]) {
+  assert.match(v5, /pc-drum-runner-v5-best/);
+  for (const source of [v1, v2, v3Source, v4, v5]) {
     assert.match(source, /href="\/drum-runner-v1"/);
     assert.match(source, /href="\/drum-runner-v2"/);
     assert.match(source, /href="\/drum-runner-v3"/);
+    assert.match(source, /href="\/drum-runner-v4"/);
     assert.match(source, /href="\/drum-runner"/);
   }
 });
 
 test('Drum Arcade keeps one game while exposing all Beat Runner editions', async () => {
   const [gamesSource, jsonSource] = await Promise.all([readFile(DRUM_GAMES, 'utf8'), readFile(JSON_ROUTE, 'utf8')]);
-  assert.match(gamesSource, /kicker: 'PICK A NOUN · PLAY THE ROAD'/);
-  assert.match(gamesSource, /bestKey: 'pc-drum-runner-v4-best'/);
+  assert.match(gamesSource, /kicker: 'BRIGHT MILES · BUILD A BEAT PASS'/);
+  assert.match(gamesSource, /bestKey: 'pc-drum-runner-v5-best'/);
+  assert.match(gamesSource, /id: 'v5', name: 'Bright Miles', path: '\/drum-runner'/);
+  assert.match(gamesSource, /id: 'v4', name: 'Road Band', path: '\/drum-runner-v4'/);
   assert.match(gamesSource, /name: 'Pocket', path: '\/drum-runner-v3'/);
   assert.match(gamesSource, /name: 'Postcards', path: '\/drum-runner-v2'/);
   assert.match(gamesSource, /name: 'Endless', path: '\/drum-runner-v1'/);

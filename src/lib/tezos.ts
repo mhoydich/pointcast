@@ -12,6 +12,7 @@
 
 import { TezosToolkit, MichelsonMap } from '@taquito/taquito';
 import { BeaconWallet } from '@taquito/beacon-wallet';
+import { getPkhfromPk, stringToBytes, verifySignature } from '@taquito/utils';
 
 // A public mainnet RPC. ecadinfra is run by the Taquito maintainers.
 const RPC_URL = 'https://mainnet.api.tez.ie';
@@ -20,6 +21,7 @@ let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
 
 const REQUIRED_SCOPES = ['operation_request', 'sign'] as any[];
+const SIGNING_SCOPES = ['sign'] as any[];
 
 function hasRequiredScopes(account: any): boolean {
   const scopes = Array.isArray(account?.scopes) ? account.scopes : [];
@@ -28,6 +30,24 @@ function hasRequiredScopes(account: any): boolean {
 
 function utf8ToHex(value: string): string {
   return Array.from(new TextEncoder().encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export const POINTCAST_SIGNING_DOMAIN = 'pointcast.xyz/beat-runner-v5';
+
+/** Encode a human-readable string as a Micheline string expression. */
+export function michelineStringPayload(value: string): string {
+  const bytes = stringToBytes(value);
+  const byteLength = (bytes.length / 2).toString(16).padStart(8, '0');
+  return `0501${byteLength}${bytes}`;
+}
+
+export function tezosSignedMessage(
+  message: string,
+  issuedAt: string,
+  domain = POINTCAST_SIGNING_DOMAIN,
+): { formattedMessage: string; payload: string } {
+  const formattedMessage = ['Tezos Signed Message:', domain, issuedAt, message].join(' ');
+  return { formattedMessage, payload: michelineStringPayload(formattedMessage) };
 }
 
 function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
@@ -80,6 +100,16 @@ export async function connectKukai(): Promise<string> {
   return perms.address;
 }
 
+/** Connect a Tezos wallet for gasless message signing only. */
+export async function connectKukaiForSigning(): Promise<string> {
+  const { wallet } = getToolkit();
+  const existing = await wallet.client.getActiveAccount();
+  const scopes = Array.isArray(existing?.scopes) ? existing.scopes : [];
+  if (existing && SIGNING_SCOPES.every((scope) => scopes.includes(scope))) return existing.address;
+  const perms = await wallet.client.requestPermissions({ scopes: SIGNING_SCOPES } as any);
+  return perms.address;
+}
+
 export async function disconnectKukai(): Promise<void> {
   const { wallet } = getToolkit();
   try {
@@ -101,6 +131,69 @@ export async function signTezosPayload(message: string): Promise<{
     sourceAddress: address,
   });
   return { address, payload, signature };
+}
+
+/**
+ * Sign a portable PointCast message using Beacon's wallet-compatible
+ * Micheline format. This is gasless and broadcasts no Tezos operation.
+ */
+export async function signTezosMichelineMessage(
+  message: string,
+  issuedAt = new Date().toISOString(),
+  domain = POINTCAST_SIGNING_DOMAIN,
+): Promise<{
+  address: string;
+  publicKey: string;
+  issuedAt: string;
+  domain: string;
+  formattedMessage: string;
+  payload: string;
+  signature: string;
+  verified: true;
+}> {
+  const { wallet } = getToolkit();
+  const address = await connectKukaiForSigning();
+  const account = await wallet.client.getActiveAccount();
+  if (!account || account.address !== address) throw new Error('Beacon active account changed before signing.');
+  if (!account.publicKey) throw new Error('The connected wallet did not provide a public key.');
+  const derivedAddress = getPkhfromPk(account.publicKey);
+  if (derivedAddress !== address) throw new Error('Wallet public key does not match the active address.');
+  const { formattedMessage, payload } = tezosSignedMessage(message, issuedAt, domain);
+  const { signature } = await wallet.client.requestSignPayload({
+    signingType: 'micheline' as any,
+    payload,
+    sourceAddress: address,
+  });
+  if (!verifySignature(payload, account.publicKey, signature)) {
+    throw new Error('Wallet returned a signature that could not be verified locally.');
+  }
+  return {
+    address,
+    publicKey: account.publicKey,
+    issuedAt,
+    domain,
+    formattedMessage,
+    payload,
+    signature,
+    verified: true,
+  };
+}
+
+export function verifyTezosMichelineMessage(input: {
+  message: string;
+  issuedAt: string;
+  domain?: string;
+  address: string;
+  publicKey: string;
+  signature: string;
+}): boolean {
+  try {
+    if (getPkhfromPk(input.publicKey) !== input.address) return false;
+    const { payload } = tezosSignedMessage(input.message, input.issuedAt, input.domain);
+    return verifySignature(payload, input.publicKey, input.signature);
+  } catch {
+    return false;
+  }
 }
 
 /**

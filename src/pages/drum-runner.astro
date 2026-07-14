@@ -1,6 +1,6 @@
 ---
 /**
- * /drum-runner — Beat Runner v4: Road Band.
+ * /drum-runner — Beat Runner v5: Bright Miles.
  *
  * A one-button musical runner where the player's input performs the track.
  * Hit the cue on beat n, clear the obstacle at the apex on beat n + 1,
@@ -8,13 +8,15 @@
  * Optional gear notes rewrite the arrangement without changing the physics.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
 
-const title = 'Beat Runner v4 · Road Band';
-const description = 'Pick a Noun, play the road, and collect musical gear that rewrites a four-scene El Segundo arrangement.';
+const title = 'Beat Runner v5 · Bright Miles';
+const description = 'A bright musical runner with Road XP, collectible stamps, saved performances, and an optional Kukai-signed Beat Pass.';
+const visitNounsContract = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'VideoGame',
-  name: 'Beat Runner v4: Road Band',
+  name: 'Beat Runner v5: Bright Miles',
   url: 'https://pointcast.xyz/drum-runner',
   description,
   gamePlatform: 'Web browser',
@@ -23,11 +25,11 @@ const jsonLd = {
 ---
 
 <BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
-  <div class="drn" id="drn" data-phase="intro" data-scene="mainstreet" data-edition="v4" data-power="none">
+  <div class="drn" id="drn" data-phase="intro" data-scene="mainstreet" data-edition="v5" data-power="none" data-token-contract={visitNounsContract}>
     <header class="drn__hud" aria-label="Beat Runner status">
       <div class="drn__score-block">
         <span class="drn__score" id="drn-score">0</span>
-        <span class="drn__score-label">pocket pts</span>
+        <span class="drn__score-label">run pts</span>
       </div>
 
       <div class="drn__level-block">
@@ -47,6 +49,12 @@ const jsonLd = {
           <span class="drn__life"></span>
         </div>
         <span class="drn__best" id="drn-best-line">best — pts</span>
+      </div>
+      <div class="drn__xp-rail" aria-label="Road Pass experience">
+        <span id="drn-xp-level">LV 1</span>
+        <strong id="drn-xp-title">Street Starter</strong>
+        <span id="drn-xp-copy">0 / 100 XP</span>
+        <i aria-hidden="true"><b id="drn-xp-fill"></b></i>
       </div>
     </header>
 
@@ -71,19 +79,19 @@ const jsonLd = {
         class="drn__canvas"
         id="drn-canvas"
         role="img"
-        aria-label="Beat Runner v4 Road Band playfield: guide a Noun across a playable beat road and collect musical gear."
-      >Beat Runner v4 Road Band game canvas.</canvas>
+        aria-label="Beat Runner v5 Bright Miles playfield: guide a Noun across a playable beat road and collect musical gear."
+      >Beat Runner v5 Bright Miles game canvas.</canvas>
 
       <div class="drn__overlay" id="drn-overlay">
         <article class="drn__card" id="drn-card">
           <div class="drn__postcard" id="drn-postcard" aria-hidden="true"></div>
           <div class="drn__card-body">
             <div class="drn__eyebrow">
-              <span id="drn-kicker">BEAT RUNNER V4 · ROAD BAND</span>
+              <span id="drn-kicker">BEAT RUNNER V5 · BRIGHT MILES</span>
               <span id="drn-card-tempo">4 LEVELS · 92→128 BPM</span>
             </div>
             <h1 class="drn__title" id="drn-title">PICK A NOUN.<br />PLAY THE ROAD.</h1>
-            <p class="drn__sub" id="drn-sub">The road is the sequencer. Perform gold cues, tap optional gear notes, and assemble a Noun road band.</p>
+            <p class="drn__sub" id="drn-sub">Play the road, earn permanent Road XP, collect stamps, and save your best musical miles.</p>
 
             <div class="drn__noun-picker" id="drn-noun-picker" aria-label="Choose your runner Noun">
               <button type="button" data-noun-slot="0"><img alt="" width="42" height="42" /><span>noun</span><small>voice</small></button>
@@ -105,13 +113,20 @@ const jsonLd = {
             </ol>
 
             <p class="drn__overlay-best" id="drn-best">best — pts</p>
-            <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
+            <div class="drn__card-actions">
+              <button class="drn__save-road" id="drn-save-road" type="button" hidden>＋ SAVE THIS ROAD</button>
+              <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
+            </div>
             <p class="drn__input-note">space · ↑ · w · tap</p>
           </div>
         </article>
       </div>
 
       <span class="drn__judge" id="drn-judge" aria-hidden="true"></span>
+      <aside class="drn__stamp-toast" id="drn-stamp-toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span id="drn-stamp-glyph">★</span>
+        <span><small>STAMP EARNED</small><strong id="drn-stamp-name">First Mile</strong></span>
+      </aside>
       <span class="drn__tap-hint" id="drn-tap-hint">gold cue → jump · gear tile → collect</span>
     </section>
 
@@ -123,7 +138,48 @@ const jsonLd = {
       <button class="drn__audio" id="drn-audio" type="button" aria-pressed="false" aria-label="Beat Runner audio muted">sound on</button>
     </div>
 
-    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v4 Road Band ready. Choose a Noun and perform the beat road through four levels.</p>
+    <section class="drn__pass" aria-labelledby="drn-pass-title">
+      <header class="drn__pass-head">
+        <div>
+          <p>POINTCAST ROAD PASS · LOCAL-FIRST</p>
+          <h2 id="drn-pass-title"><span id="drn-pass-level">LV 1</span> <strong id="drn-pass-rank">Street Starter</strong></h2>
+        </div>
+        <p class="drn__pass-total"><strong id="drn-pass-xp">0</strong> ROAD XP</p>
+      </header>
+
+      <div class="drn__pass-grid">
+        <section class="drn__stamps" aria-labelledby="drn-stamps-title">
+          <header><h3 id="drn-stamps-title">Stamps</h3><span id="drn-stamps-count">0 / 10</span></header>
+          <ol id="drn-stamps" aria-label="Road Pass stamps"></ol>
+        </section>
+
+        <section class="drn__roads" aria-labelledby="drn-roads-title">
+          <header><h3 id="drn-roads-title">Saved roads</h3><span id="drn-roads-count">0 / 12</span></header>
+          <div id="drn-roads-list" class="drn__roads-list"><p>Clear a level, then save its performed phrase.</p></div>
+        </section>
+
+        <section class="drn__wallet" aria-labelledby="drn-wallet-title">
+          <header><h3 id="drn-wallet-title">Portable Beat Pass</h3><span id="drn-wallet-badge">THIS DEVICE</span></header>
+          <p id="drn-wallet-status">Play without an account. Connect Kukai only when you want to seal a portable save.</p>
+          <dl>
+            <div><dt>Wallet</dt><dd id="drn-wallet-address">not connected</dd></div>
+            <div><dt>Visit Nouns</dt><dd id="drn-token-count">not checked</dd></div>
+            <div><dt>Proof</dt><dd id="drn-proof-status">unsigned</dd></div>
+          </dl>
+          <div class="drn__wallet-actions">
+            <button type="button" id="drn-connect-wallet">CONNECT KUKAI</button>
+            <button type="button" id="drn-sign-pass">SEAL BEAT PASS</button>
+            <button type="button" id="drn-export-pass">EXPORT</button>
+            <button type="button" id="drn-import-pass">IMPORT</button>
+            <input id="drn-import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <p class="drn__wallet-note">Gasless signature · no mint · no token transfer. Visit Nouns ownership adds a collector glow only.</p>
+          <a class="drn__trophy-link" href="/drum-trophies">See Drum Trophies →</a>
+        </section>
+      </div>
+    </section>
+
+    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v5 Bright Miles ready. Choose a Noun and perform the beat road through four levels.</p>
     <p class="sr-only" id="drn-lives-live" role="status" aria-live="polite">3 hearts remaining.</p>
     <p class="sr-only" id="drn-power-live" role="status" aria-live="polite"></p>
 
@@ -132,7 +188,8 @@ const jsonLd = {
       <a href="/drum-runner-v1">v1 endless</a>
       <a href="/drum-runner-v2">v2 postcards</a>
       <a href="/drum-runner-v3">v3 pocket</a>
-      <a href="/drum-runner" aria-current="page">v4 road band</a>
+      <a href="/drum-runner-v4">v4 road band</a>
+      <a href="/drum-runner" aria-current="page">v5 bright miles</a>
     </nav>
 
     <nav class="drn__siblings" aria-label="More Drum Arcade games">
@@ -508,6 +565,250 @@ const jsonLd = {
     .drn__siblings a { color: #9a8b65; text-decoration: none; }
     .drn__siblings a:hover { color: var(--accent); text-decoration: underline; }
 
+    /* v5 · BRIGHT MILES */
+    html, body { background: #f4e8c8; }
+    body:has(.drn) {
+      color: #151827;
+      background:
+        radial-gradient(circle at 12% 6%, rgba(255,255,255,.92), transparent 30rem),
+        linear-gradient(150deg, #fff6dc 0%, #f2dfac 53%, #ffd6b8 100%);
+    }
+    .drn { width: min(100%, 980px); }
+    .drn__hud {
+      padding: 8px 11px 7px;
+      border: 2px solid #151827;
+      border-radius: 18px;
+      background: rgba(255,250,240,.86);
+      box-shadow: 5px 5px 0 color-mix(in srgb, var(--accent) 72%, #151827);
+    }
+    .drn__score { color: color-mix(in srgb, var(--accent) 62%, #151827); text-shadow: none; }
+    .drn__score-label,
+    .drn__level-no,
+    .drn__flow-line span { color: #626371; }
+    .drn__level-name { color: #151827; }
+    .drn__tempo,
+    .drn__flow-line strong { color: color-mix(in srgb, var(--accent-soft) 62%, #151827); }
+    .drn__best { color: #5c5e69; }
+    .drn__xp-rail {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      align-items: center;
+      gap: 7px 10px;
+      color: #151827;
+      font: 800 8px/1 'JetBrains Mono', monospace;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .drn__xp-rail > span:first-child {
+      padding: 4px 6px;
+      border: 1px solid #151827;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .drn__xp-rail > span:nth-of-type(2) { justify-self: end; color: #626371; }
+    .drn__xp-rail i {
+      grid-column: 1 / -1;
+      height: 5px;
+      overflow: hidden;
+      border: 1px solid #151827;
+      border-radius: 999px;
+      background: #e4d8b7;
+    }
+    .drn__xp-rail b {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+      transition: width 360ms cubic-bezier(.2,.8,.2,1);
+    }
+    .drn__stage {
+      border-color: #151827;
+      background: #142039;
+      box-shadow: 7px 8px 0 #151827, 0 24px 48px rgba(84,53,25,.18), inset 0 0 0 1px rgba(255,255,255,.18);
+    }
+    .drn__overlay { background: rgba(255,238,194,.38); backdrop-filter: blur(8px) saturate(1.12); }
+    .drn__card {
+      border-color: #151827;
+      background: #fffaf0;
+      box-shadow: 9px 9px 0 color-mix(in srgb, var(--accent) 74%, #151827), 0 28px 70px rgba(62,36,10,.32);
+    }
+    .drn__postcard { border-color: #151827; filter: saturate(1.24) brightness(1.12) contrast(1.02); }
+    .drn__postcard::after { background: linear-gradient(180deg, transparent 48%, rgba(255,216,153,.26)); }
+    .drn__eyebrow { color: color-mix(in srgb, var(--accent) 55%, #151827); }
+    .drn__eyebrow span:last-child,
+    .drn__noun-picker small,
+    .drn__card-stats small,
+    .drn__overlay-best,
+    .drn__input-note { color: #626371; }
+    .drn__title { color: #151827; text-shadow: none; }
+    .drn__sub { color: #4f505c; }
+    .drn__noun-picker button {
+      border-color: rgba(21,24,39,.24);
+      background: #fffef8;
+      color: #151827;
+    }
+    .drn__noun-picker button[aria-pressed="true"] {
+      border-color: #151827;
+      background: color-mix(in srgb, var(--accent) 32%, #fffaf0);
+      box-shadow: 3px 3px 0 #151827;
+    }
+    .drn__noun-picker button[data-owned="true"] { background: linear-gradient(135deg, #fffef8, #fff1a8); }
+    .drn__card-stats { border-color: rgba(21,24,39,.26); }
+    .drn__card-stats > span + span { border-color: rgba(21,24,39,.22); }
+    .drn__card-stats strong { color: #151827; }
+    .drn__route li { color: #72727a; }
+    .drn__route li::before { background: #d5c9aa; }
+    .drn__route li span { border-color: #9a917e; background: #fffaf0; color: #5f5e63; }
+    .drn__route li.is-active b { color: #151827; }
+    .drn__card-actions { display: flex; align-items: stretch; justify-content: center; gap: 8px; margin-top: 10px; }
+    .drn__card-actions .drn__go { margin-top: 0; flex: 1; }
+    .drn__save-road {
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 2px solid #151827;
+      border-radius: 12px;
+      background: #fffaf0;
+      color: #151827;
+      cursor: pointer;
+      font: 900 9px/1.15 'JetBrains Mono', monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .drn__save-road:hover { background: color-mix(in srgb, var(--accent-soft) 22%, #fffaf0); }
+    .drn__save-road:focus-visible { outline: 3px solid #151827; outline-offset: 3px; }
+    .drn__jump {
+      border: 2px solid #151827;
+      background: #fffaf0;
+      color: #151827;
+      box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 72%, #151827);
+    }
+    .drn__jump-copy small { color: #63636c; }
+    .drn__jump:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 28%, #fffaf0); }
+    .drn__audio {
+      border: 2px solid #151827;
+      background: #fffaf0;
+      color: #151827;
+    }
+    .drn__audio[aria-pressed="true"] { border-color: #151827; color: #151827; background: #e1d6b8; }
+    .drn__stamp-toast {
+      position: absolute;
+      z-index: 9;
+      top: 73px;
+      right: 14px;
+      max-width: min(250px, calc(100% - 28px));
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border: 2px solid #151827;
+      border-radius: 13px;
+      background: #fff7cf;
+      color: #151827;
+      box-shadow: 5px 5px 0 var(--accent);
+      pointer-events: none;
+      animation: drn-stamp-in 260ms cubic-bezier(.2,.9,.2,1);
+    }
+    .drn__stamp-toast[hidden] { display: none; }
+    .drn__stamp-toast > span:first-child { display: grid; place-items: center; width: 34px; height: 34px; border: 2px solid #151827; border-radius: 50%; background: var(--accent); font-weight: 950; }
+    .drn__stamp-toast > span:last-child { display: grid; gap: 3px; }
+    .drn__stamp-toast small { font: 800 7px/1 'JetBrains Mono', monospace; letter-spacing: .16em; }
+    .drn__stamp-toast strong { font: 900 13px/1.05 'Inter', sans-serif; text-transform: uppercase; }
+    @keyframes drn-stamp-in { from { opacity: 0; transform: translateY(-10px) rotate(2deg); } }
+
+    .drn__pass {
+      border: 2px solid #151827;
+      border-radius: 20px;
+      background: rgba(255,250,240,.92);
+      box-shadow: 7px 7px 0 #151827;
+      overflow: hidden;
+    }
+    .drn__pass-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 15px 17px;
+      border-bottom: 2px solid #151827;
+      background: linear-gradient(105deg, color-mix(in srgb, var(--accent) 60%, #fffaf0), color-mix(in srgb, var(--accent-soft) 44%, #fffaf0));
+    }
+    .drn__pass-head p { margin: 0; font: 800 8px/1.2 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .drn__pass-head h2 { margin: 5px 0 0; font: 900 clamp(18px, 3vw, 28px)/1 'Inter Tight', 'Inter', sans-serif; text-transform: uppercase; }
+    .drn__pass-head h2 span { padding: 3px 6px; border: 2px solid #151827; border-radius: 999px; font: 900 10px/1 'JetBrains Mono', monospace; vertical-align: middle; }
+    .drn__pass-total { white-space: nowrap; text-align: right; }
+    .drn__pass-total strong { display: block; font: 950 clamp(28px, 5vw, 44px)/.8 'Inter Tight', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+    .drn__pass-grid { display: grid; grid-template-columns: 1fr 1fr 1.15fr; }
+    .drn__pass-grid > section { min-width: 0; padding: 14px; }
+    .drn__pass-grid > section + section { border-left: 2px solid #151827; }
+    .drn__pass-grid section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .drn__pass-grid h3 { margin: 0; font: 900 12px/1 'Inter', sans-serif; text-transform: uppercase; }
+    .drn__pass-grid section > header span { color: #626371; font: 800 8px/1 'JetBrains Mono', monospace; }
+    .drn__stamps ol { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; list-style: none; }
+    .drn__stamp {
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border: 1px dashed #8d8675;
+      border-radius: 50%;
+      background: #e9dfc5;
+      color: #8a8170;
+      font: 900 10px/1 'JetBrains Mono', monospace;
+      cursor: help;
+    }
+    .drn__stamp.is-earned { border: 2px solid #151827; background: var(--accent); color: #151827; box-shadow: 2px 2px 0 #151827; }
+    .drn__roads-list { display: grid; gap: 6px; }
+    .drn__roads-list > p { margin: 0; color: #63636c; font-size: 11px; line-height: 1.4; }
+    .drn__road {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto auto;
+      align-items: center;
+      gap: 5px;
+      padding: 6px;
+      border: 1px solid rgba(21,24,39,.27);
+      border-radius: 9px;
+      background: #fffef8;
+    }
+    .drn__road span { min-width: 0; overflow: hidden; font: 800 8px/1.25 'JetBrains Mono', monospace; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+    .drn__road button {
+      width: 27px;
+      height: 27px;
+      border: 1px solid #151827;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #151827;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .drn__road button:last-child { background: #fffaf0; }
+    .drn__wallet { transition: background 220ms ease, box-shadow 220ms ease; }
+    .drn[data-owned-nouns="true"] .drn__wallet { background: linear-gradient(145deg, rgba(255,209,102,.38), rgba(120,240,202,.24)); box-shadow: inset 0 0 0 3px rgba(21,24,39,.06); }
+    .drn__wallet > p { margin: 0 0 10px; color: #4f505c; font-size: 11px; line-height: 1.4; }
+    .drn__wallet dl { margin: 0 0 10px; display: grid; gap: 5px; font: 700 8px/1.3 'JetBrains Mono', monospace; }
+    .drn__wallet dl div { display: flex; justify-content: space-between; gap: 8px; }
+    .drn__wallet dt { color: #73716c; text-transform: uppercase; }
+    .drn__wallet dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .drn__wallet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .drn__wallet-actions button {
+      min-height: 34px;
+      padding: 7px;
+      border: 1px solid #151827;
+      border-radius: 8px;
+      background: #fffaf0;
+      color: #151827;
+      cursor: pointer;
+      font: 900 7px/1.2 'JetBrains Mono', monospace;
+      letter-spacing: .06em;
+    }
+    .drn__wallet-actions button:first-child,
+    .drn__wallet-actions button:nth-child(2) { background: #151827; color: #fffaf0; }
+    .drn__wallet-actions button:disabled { opacity: .5; cursor: wait; }
+    .drn__wallet-note { margin-top: 9px !important; color: #696861 !important; font: 700 7px/1.45 'JetBrains Mono', monospace; text-transform: uppercase; }
+    .drn__trophy-link { color: #151827; font: 800 8px/1 'JetBrains Mono', monospace; text-transform: uppercase; }
+    .drn__versions span { color: #747166; }
+    .drn__versions a { border-color: #777064; color: #45454d; background: rgba(255,250,240,.55); }
+    .drn__versions a[aria-current="page"] { border-color: #151827; color: #151827; background: var(--accent); }
+    .drn__siblings a { color: #675123; }
+
     @media (max-width: 600px) {
       .drn { padding: 8px 8px 34px; gap: 8px; }
       .drn__hud { grid-template-columns: 1fr 1.25fr 1fr; gap: 5px; padding-inline: 4px; }
@@ -528,6 +829,13 @@ const jsonLd = {
       .drn__card-stats { margin-block: 13px; }
       .drn__route li b { font-size: 7px; }
       .drn__go { width: 100%; }
+      .drn__xp-rail { gap: 5px 7px; }
+      .drn__card-actions { flex-direction: column; }
+      .drn__pass-grid { grid-template-columns: 1fr; }
+      .drn__pass-grid > section + section { border-left: 0; border-top: 2px solid #151827; }
+      .drn__pass-head { align-items: center; padding: 12px; }
+      .drn__pass-total strong { font-size: 30px; }
+      .drn__stamp-toast { top: 67px; left: 10px; right: 10px; max-width: none; }
     }
     @media (max-height: 650px) and (orientation: landscape) {
       .drn { max-width: 980px; min-height: auto; }
@@ -571,6 +879,27 @@ const jsonLd = {
       type PowerState,
       type PowerUpKind,
     } from '../lib/drum-runner-v4';
+    import {
+      ACHIEVEMENTS,
+      ROAD_PASS_PROOF_KEY,
+      ROAD_PASS_STORAGE_KEY,
+      applyRoadEvent,
+      beatPassPayload,
+      canonicalJson,
+      defaultRoadPass,
+      mergeRoadPass,
+      normalizeRoadPass,
+      roadLevel,
+      roadLevelCeiling,
+      roadLevelFloor,
+      roadTitle,
+      type AchievementId,
+      type RoadPassProfile,
+      type SavedRoad,
+      ROAD_PASS_GAME,
+      ROAD_PASS_SCHEMA,
+      VISIT_NOUNS_CONTRACT,
+    } from '../lib/drum-runner-v5';
     import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp?url';
     import pierBackdrop from '../assets/drum-runner-v3/el-porto-pier.webp?url';
     import groceryBackdrop from '../assets/drum-runner-v3/grocery-3pm.webp?url';
@@ -618,7 +947,13 @@ const jsonLd = {
     type MotifNote = { step: number; note: number; grade: TimingGrade };
     type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: string; gravity: number };
 
-    const LEVELS = levelData as Level[];
+    const BRIGHT_PALETTES = [
+      { accent: '#ffe56f', accentSoft: '#ff8a5b', skyTop: '#5ec8ff', skyBottom: '#ffd39d' },
+      { accent: '#67e8f9', accentSoft: '#b8f36b', skyTop: '#2b9fe8', skyBottom: '#a8e9df' },
+      { accent: '#ff5db1', accentSoft: '#ff9a4d', skyTop: '#5146a8', skyBottom: '#e9909a' },
+      { accent: '#8cffb4', accentSoft: '#4dc7ff', skyTop: '#123b76', skyBottom: '#5e92c9' },
+    ] as const;
+    const LEVELS = (levelData as Level[]).map((item, index) => ({ ...item, ...BRIGHT_PALETTES[index] }));
     const BACKDROP_URLS = [marineBackdrop, pierBackdrop, groceryBackdrop, refineryBackdrop];
     const BAND_NOUNS = [214, 612, 928];
     const KIND_ORDER: ObstacleKind[] = ['cone', 'crate', 'tall-crate', 'barrier', 'speaker', 'luggage', 'hydrant'];
@@ -636,9 +971,9 @@ const jsonLd = {
     const RUNNER_W = 62;
     const RUNNER_H = 70;
     const INVULN_S = 0.58;
-    const BEST_KEY = 'pc-drum-runner-v4-best';
-    const PROGRESS_KEY = 'pc-drum-runner-v4-progress';
-    const MUTED_KEY = 'pc-drum-runner-v4-muted';
+    const BEST_KEY = 'pc-drum-runner-v5-best';
+    const PROGRESS_KEY = 'pc-drum-runner-v5-progress';
+    const MUTED_KEY = 'pc-drum-runner-v5-muted';
 
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reducedMotion = motionQuery.matches;
@@ -662,6 +997,7 @@ const jsonLd = {
     let levelClears = 0;
     let levelPerfect = 0;
     let levelGood = 0;
+    let levelMisses = 0;
     let levelOffgrid = 0;
     let levelHits = 0;
     let levelStartScore = 0;
@@ -692,6 +1028,27 @@ const jsonLd = {
     let selectedNounId = 137;
     let selectedNounVoice: NounVoice = nounVoiceFor(selectedNounId);
     let runNounChoices: [number, number, number] = nounChoices(selectedNounId);
+    let roadPass: RoadPassProfile = defaultRoadPass();
+    let lastCompletedRoad: SavedRoad | null = null;
+    let currentWalletAddress = '';
+    let visitNounsBalance = 0;
+    let ownedNounIds = new Set<number>();
+    let stampQueue: AchievementId[] = [];
+    let stampTimer = 0;
+    type SignedBeatPass = {
+      format: 'pointcast.beat-pass.signed.v1';
+      pass: Record<string, unknown>;
+      canonicalPass: string;
+      proof: {
+        address: string;
+        publicKey: string;
+        issuedAt: string;
+        domain: string;
+        signature: string;
+        payload: string;
+      };
+    };
+    let signedBeatPass: SignedBeatPass | null = null;
     const roadGrades = new Map<number, Grade | 'power'>();
     const phraseGrades = new Map<number, TimingGrade>();
     const runner: Runner = { y: 0, grounded: true, squash: 0, cleanTarget: -1, jumpStartBeat: -99, landingPlayed: true };
@@ -1065,15 +1422,17 @@ const jsonLd = {
       document.querySelectorAll<HTMLButtonElement>('[data-noun-slot]').forEach((button, slot) => {
         const id = runNounChoices[slot] ?? selectedNounId;
         const voice = nounVoiceFor(id);
+        const owned = ownedNounIds.has(id);
         button.dataset.nounId = String(id);
-        button.setAttribute('aria-label', `Select Noun ${id}, ${voice} voice`);
+        button.dataset.owned = String(owned);
+        button.setAttribute('aria-label', `Select Noun ${id}, ${voice} voice${owned ? ', owned Visit Noun' : ''}`);
         button.setAttribute('aria-pressed', String(id === selectedNounId));
         const image = button.querySelector('img');
         const label = button.querySelector('span');
         const meta = button.querySelector('small');
         if (image) image.src = `https://noun.pics/${id}.svg`;
         if (label) label.textContent = `Noun #${id}`;
-        if (meta) meta.textContent = `${voice} voice`;
+        if (meta) meta.textContent = `${voice} voice${owned ? ' · owned' : ''}`;
       });
     }
     function selectNoun(id: number, persist = true) {
@@ -1083,6 +1442,7 @@ const jsonLd = {
       nounImage.src = `https://noun.pics/${selectedNounId}.svg`;
       if (persist) {
         try { localStorage.setItem('pc:nounId', String(selectedNounId)); } catch { /* identity still lasts for this run */ }
+        recordRoadEvent({ type: 'select-noun', nounId: selectedNounId });
       }
       updateNounPicker();
     }
@@ -1162,6 +1522,7 @@ const jsonLd = {
       levelClears = 0;
       levelPerfect = 0;
       levelGood = 0;
+      levelMisses = 0;
       levelOffgrid = 0;
       levelHits = 0;
       levelStartScore = displayScore();
@@ -1243,6 +1604,7 @@ const jsonLd = {
       if (grade === 'offgrid') return false;
       powerUp.collected = true;
       powerState = collectPowerUp(powerState, powerUp.kind, beat);
+      recordRoadEvent({ type: 'gear', kind: powerUp.kind });
       roadGrades.set(Math.round(powerUp.beat * 2), 'power');
       runner.squash = 1;
       const spec = POWER_UP_SPECS[powerUp.kind];
@@ -1276,6 +1638,7 @@ const jsonLd = {
       const accepted = target && grade !== 'offgrid';
       const playedNote = target?.note ?? 0;
       let harmonyDouble = false;
+      let cueXp = 0;
 
       if (accepted && target) {
         target.judged = true;
@@ -1292,6 +1655,8 @@ const jsonLd = {
           totalGood++;
           bonus += 60;
         }
+        cueXp = recordRoadEvent({ type: 'cue', grade }).baseXp;
+        recordRoadEvent({ type: 'flow', value: flow });
         const step = phraseStep(target.cueBeat, level().music.phraseBeats, level().music.subdivision);
         phraseGrades.set(step, grade);
         roadGrades.set(Math.round(target.cueBeat * 2), grade);
@@ -1317,13 +1682,14 @@ const jsonLd = {
           bonus += 250;
           flashJudge('perfect', `PHRASE ×${flow / 4}`);
         } else {
-          flashJudge(grade, grade === 'perfect' ? 'PERFECT' : 'GOOD');
+          flashJudge(grade, `${grade === 'perfect' ? 'PERFECT' : 'GOOD'} · +${cueXp} XP`);
         }
         emitParticles(runnerScreenX(), groundY() - 26, grade === 'perfect' ? level().accent : level().accentSoft, grade === 'perfect' ? 18 : 10, .9);
       } else {
         flow = 0;
         levelOffgrid++;
         totalOffgrid++;
+        recordRoadEvent({ type: 'offgrid' });
         runner.cleanTarget = -1;
         roadGrades.set(Math.round(beat * 2), 'offgrid');
         flashJudge('offgrid', 'OFF GRID');
@@ -1385,6 +1751,8 @@ const jsonLd = {
           obstacle.grade = 'miss';
           roadGrades.set(Math.round(obstacle.cueBeat * 2), 'miss');
           totalMisses++;
+          levelMisses++;
+          recordRoadEvent({ type: 'miss' });
           flow = 0;
           flashJudge('hit', 'MISS');
         }
@@ -1395,6 +1763,7 @@ const jsonLd = {
           const ghost = consumeGhostCharge(powerState);
           powerState = ghost.state;
           if (!ghost.protected) lives--;
+          if (ghost.protected) recordRoadEvent({ type: 'ghost-save' });
           levelHits++;
           invuln = INVULN_S;
           flow = 0;
@@ -1442,19 +1811,22 @@ const jsonLd = {
         const drawX = (width - drawWidth) * focalX;
         const drawY = (height - drawHeight) * .5;
         context.imageSmoothingEnabled = true;
+        context.save();
+        context.filter = 'brightness(1.18) saturate(1.24)';
         context.drawImage(backdrop, drawX, drawY, drawWidth, drawHeight);
+        context.restore();
         context.imageSmoothingEnabled = false;
       }
 
       const orchestration = Math.min(1, arrangement / 3);
       const isDucked = currentLevelBeat() < duckUntilBeat;
-      context.fillStyle = `rgba(3,7,18,${Math.max(.1, .48 - orchestration * .27 + (isDucked ? .16 : 0))})`;
+      context.fillStyle = `rgba(3,7,18,${Math.max(.06, .26 - orchestration * .14 + (isDucked ? .12 : 0))})`;
       context.fillRect(0, 0, width, height);
 
       const laneScrim = context.createLinearGradient(0, gy * .67, 0, height);
       laneScrim.addColorStop(0, 'rgba(3,7,18,0)');
-      laneScrim.addColorStop(.55, 'rgba(3,7,18,.22)');
-      laneScrim.addColorStop(1, 'rgba(3,7,18,.72)');
+      laneScrim.addColorStop(.55, 'rgba(3,7,18,.14)');
+      laneScrim.addColorStop(1, 'rgba(3,7,18,.48)');
       context.fillStyle = laneScrim;
       context.fillRect(0, gy * .65, width, height - gy * .65);
 
@@ -2069,7 +2441,7 @@ const jsonLd = {
 
       const vignette = context.createRadialGradient(width / 2, height * .46, height * .18, width / 2, height * .5, Math.max(width, height) * .75);
       vignette.addColorStop(0, 'rgba(0,0,0,0)');
-      vignette.addColorStop(1, 'rgba(0,0,0,.34)');
+      vignette.addColorStop(1, 'rgba(0,0,0,.18)');
       context.fillStyle = vignette;
       context.fillRect(0, 0, width, height);
     }
@@ -2092,6 +2464,7 @@ const jsonLd = {
     const titleEl = document.getElementById('drn-title')!;
     const subEl = document.getElementById('drn-sub')!;
     const goButton = document.getElementById('drn-go') as HTMLButtonElement;
+    const saveRoadButton = document.getElementById('drn-save-road') as HTMLButtonElement;
     const jumpButton = document.getElementById('drn-jump') as HTMLButtonElement;
     const audioButton = document.getElementById('drn-audio') as HTMLButtonElement;
     const judgeEl = document.getElementById('drn-judge')!;
@@ -2100,6 +2473,30 @@ const jsonLd = {
     const livesLive = document.getElementById('drn-lives-live')!;
     const powerLive = document.getElementById('drn-power-live')!;
     const powerStatus = document.getElementById('drn-power-status')!;
+    const xpLevelEl = document.getElementById('drn-xp-level')!;
+    const xpTitleEl = document.getElementById('drn-xp-title')!;
+    const xpCopyEl = document.getElementById('drn-xp-copy')!;
+    const xpFillEl = document.getElementById('drn-xp-fill') as HTMLElement;
+    const passLevelEl = document.getElementById('drn-pass-level')!;
+    const passRankEl = document.getElementById('drn-pass-rank')!;
+    const passXpEl = document.getElementById('drn-pass-xp')!;
+    const stampsEl = document.getElementById('drn-stamps')!;
+    const stampsCountEl = document.getElementById('drn-stamps-count')!;
+    const roadsListEl = document.getElementById('drn-roads-list')!;
+    const roadsCountEl = document.getElementById('drn-roads-count')!;
+    const stampToast = document.getElementById('drn-stamp-toast') as HTMLElement;
+    const stampGlyphEl = document.getElementById('drn-stamp-glyph')!;
+    const stampNameEl = document.getElementById('drn-stamp-name')!;
+    const walletBadgeEl = document.getElementById('drn-wallet-badge')!;
+    const walletStatusEl = document.getElementById('drn-wallet-status')!;
+    const walletAddressEl = document.getElementById('drn-wallet-address')!;
+    const tokenCountEl = document.getElementById('drn-token-count')!;
+    const proofStatusEl = document.getElementById('drn-proof-status')!;
+    const connectWalletButton = document.getElementById('drn-connect-wallet') as HTMLButtonElement;
+    const signPassButton = document.getElementById('drn-sign-pass') as HTMLButtonElement;
+    const exportPassButton = document.getElementById('drn-export-pass') as HTMLButtonElement;
+    const importPassButton = document.getElementById('drn-import-pass') as HTMLButtonElement;
+    const importFileInput = document.getElementById('drn-import-file') as HTMLInputElement;
     const nounPickerButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-noun-slot]'));
     const routeItems = Array.from(document.querySelectorAll<HTMLElement>('[data-route-index]'));
     const lifeEls = Array.from(document.querySelectorAll<HTMLElement>('.drn__life'));
@@ -2128,6 +2525,144 @@ const jsonLd = {
       levelNoEl.textContent = `LEVEL ${cfg.number} / 0${LEVELS.length}`;
       levelNameEl.textContent = cfg.name;
       tempoEl.textContent = `${cfg.bpm} BPM`;
+    }
+    function readRoadPass(): RoadPassProfile {
+      try {
+        const raw = localStorage.getItem(ROAD_PASS_STORAGE_KEY);
+        return raw ? normalizeRoadPass(JSON.parse(raw)) : defaultRoadPass();
+      } catch {
+        return defaultRoadPass();
+      }
+    }
+    function readSignedBeatPass(): SignedBeatPass | null {
+      try {
+        const raw = localStorage.getItem(ROAD_PASS_PROOF_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as SignedBeatPass;
+        return parsed?.format === 'pointcast.beat-pass.signed.v1' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    function shortAddress(address: string): string {
+      return address.length > 13 ? `${address.slice(0, 7)}…${address.slice(-5)}` : address;
+    }
+    function signedPassIsCurrent(): boolean {
+      if (!signedBeatPass) return false;
+      const pass = signedBeatPass.pass as any;
+      const expected = beatPassPayload(roadPass, {
+        walletAddress: signedBeatPass.proof.address,
+        issuedAt: signedBeatPass.proof.issuedAt,
+        tokenBalance: Number(pass?.visitNouns?.balance) || 0,
+      });
+      return canonicalJson(expected) === signedBeatPass.canonicalPass
+        && canonicalJson(signedBeatPass.pass) === signedBeatPass.canonicalPass;
+    }
+    function updateRoadPassUi() {
+      const levelNumber = roadLevel(roadPass.xp);
+      const floor = roadLevelFloor(levelNumber);
+      const ceiling = roadLevelCeiling(levelNumber);
+      const denominator = Math.max(1, ceiling - floor);
+      const percent = levelNumber >= 20 ? 100 : Math.max(0, Math.min(100, ((roadPass.xp - floor) / denominator) * 100));
+      const title = roadTitle(levelNumber);
+      xpLevelEl.textContent = `LV ${levelNumber}`;
+      xpTitleEl.textContent = title;
+      xpCopyEl.textContent = levelNumber >= 20 ? `${roadPass.xp.toLocaleString()} XP · MAX` : `${roadPass.xp.toLocaleString()} / ${ceiling.toLocaleString()} XP`;
+      xpFillEl.style.width = `${percent}%`;
+      passLevelEl.textContent = `LV ${levelNumber}`;
+      passRankEl.textContent = title;
+      passXpEl.textContent = roadPass.xp.toLocaleString();
+
+      const earned = ACHIEVEMENTS.filter((achievement) => roadPass.achievements[achievement.id]);
+      stampsCountEl.textContent = `${earned.length} / ${ACHIEVEMENTS.length}`;
+      const stampNodes = ACHIEVEMENTS.map((achievement) => {
+        const item = document.createElement('li');
+        item.className = `drn__stamp${roadPass.achievements[achievement.id] ? ' is-earned' : ''}`;
+        item.textContent = achievement.glyph;
+        item.title = `${achievement.name} · ${achievement.hint} · +${achievement.xp} XP`;
+        item.setAttribute('aria-label', `${achievement.name}. ${roadPass.achievements[achievement.id] ? 'Earned' : achievement.hint}.`);
+        return item;
+      });
+      stampsEl.replaceChildren(...stampNodes);
+
+      roadsCountEl.textContent = `${roadPass.savedRoads.length} / 12`;
+      if (!roadPass.savedRoads.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'Clear a level, then save its performed phrase.';
+        roadsListEl.replaceChildren(empty);
+      } else {
+        const roadNodes = roadPass.savedRoads.map((road) => {
+          const row = document.createElement('div');
+          row.className = 'drn__road';
+          const copy = document.createElement('span');
+          copy.textContent = `${road.levelName} · ${road.accuracy}% · ${road.phrase.length} notes`;
+          copy.title = copy.textContent;
+          const play = document.createElement('button');
+          play.type = 'button';
+          play.dataset.playRoad = road.id;
+          play.textContent = '▶';
+          play.setAttribute('aria-label', `Listen to saved ${road.levelName} road`);
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.dataset.deleteRoad = road.id;
+          remove.textContent = '×';
+          remove.setAttribute('aria-label', `Delete saved ${road.levelName} road`);
+          row.append(copy, play, remove);
+          return row;
+        });
+        roadsListEl.replaceChildren(...roadNodes);
+      }
+
+      walletAddressEl.textContent = currentWalletAddress ? shortAddress(currentWalletAddress) : 'not connected';
+      tokenCountEl.textContent = currentWalletAddress
+        ? `${visitNounsBalance} owned${ownedNounIds.has(selectedNounId) ? ` · #${selectedNounId} selected` : ''}`
+        : 'not checked';
+      root.dataset.ownedNouns = String(visitNounsBalance > 0);
+      const proofCurrent = signedPassIsCurrent();
+      if (proofCurrent) {
+        walletBadgeEl.textContent = 'KUKAI-SEALED';
+        proofStatusEl.textContent = 'verified snapshot';
+        walletStatusEl.textContent = `Portable save sealed by ${shortAddress(signedBeatPass!.proof.address)}. No transaction was broadcast.`;
+      } else if (signedBeatPass) {
+        walletBadgeEl.textContent = 'SAVE CHANGED';
+        proofStatusEl.textContent = 'seal again';
+        walletStatusEl.textContent = 'Your local Road Pass moved ahead of its last signed snapshot.';
+      } else {
+        walletBadgeEl.textContent = currentWalletAddress ? 'WALLET READY' : 'THIS DEVICE';
+        proofStatusEl.textContent = 'unsigned';
+        walletStatusEl.textContent = currentWalletAddress
+          ? 'Wallet connected. Seal only when you want a portable, tamper-evident snapshot.'
+          : 'Play without an account. Connect Kukai only when you want to seal a portable save.';
+      }
+    }
+    function persistRoadPass() {
+      try {
+        localStorage.setItem(ROAD_PASS_STORAGE_KEY, JSON.stringify(roadPass));
+        localStorage.setItem(BEST_KEY, String(Math.max(savedBest, roadPass.bestScore)));
+      } catch { /* local play still works without persistent storage */ }
+      updateRoadPassUi();
+    }
+    function showNextStamp() {
+      if (phase === 'playing' || !stampQueue.length || !stampToast.hidden) return;
+      const id = stampQueue.shift()!;
+      const achievement = ACHIEVEMENTS.find((item) => item.id === id);
+      if (!achievement) return;
+      stampGlyphEl.textContent = achievement.glyph;
+      stampNameEl.textContent = `${achievement.name} · +${achievement.xp} XP`;
+      stampToast.hidden = false;
+      clearTimeout(stampTimer);
+      stampTimer = window.setTimeout(() => {
+        stampToast.hidden = true;
+        showNextStamp();
+      }, 2400);
+    }
+    function recordRoadEvent(event: Parameters<typeof applyRoadEvent>[1]) {
+      const result = applyRoadEvent(roadPass, event);
+      roadPass = result.profile;
+      if (result.unlocked.length) stampQueue.push(...result.unlocked);
+      persistRoadPass();
+      if (phase !== 'playing') showNextStamp();
+      return result;
     }
     function readBest(): number {
       try {
@@ -2218,6 +2753,7 @@ const jsonLd = {
       overlay.setAttribute('aria-hidden', 'false');
       jumpButton.disabled = true;
       root.dataset.phase = phase;
+      showNextStamp();
       if (focusButton) goButton.focus({ preventScroll: true });
     }
     function hideOverlay() {
@@ -2237,14 +2773,16 @@ const jsonLd = {
       prepareLevel(0);
       const cfg = level();
       nounPickerButtons.forEach((button) => { button.disabled = false; });
-      kickerEl.textContent = 'BEAT RUNNER V4 · ROAD BAND';
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
+      kickerEl.textContent = 'BEAT RUNNER V5 · BRIGHT MILES';
       cardTempoEl.textContent = '4 LEVELS · 92→128 BPM';
       titleEl.innerHTML = 'PICK A NOUN.<br>PLAY THE ROAD.';
-      subEl.textContent = 'Gold cues jump. Optional gear tiles change the arrangement. The road remembers every note you perform.';
+      subEl.textContent = 'Gold cues jump. Gear rewrites the arrangement. Every clean note builds permanent Road XP and a musical pass you can take with you.';
       setStats('runner', `noun #${selectedNounId}`, 'voice', selectedNounVoice, 'hearts', '3 total');
       goButton.textContent = '▶ START LEVEL 01';
       updateRoute(0);
-      stateLive.textContent = `Beat Runner v4 Road Band ready. Noun ${selectedNounId}, ${selectedNounVoice} voice. Four levels, three hearts. Start Level 1.`;
+      stateLive.textContent = `Beat Runner v5 Bright Miles ready. Noun ${selectedNounId}, ${selectedNounVoice} voice. Four levels, three hearts. Start Level 1.`;
       showOverlay(false);
     }
 
@@ -2254,6 +2792,8 @@ const jsonLd = {
       trySound(() => { audioContext(); });
       resize();
       nounPickerButtons.forEach((button) => { button.disabled = true; });
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
       worldX = 0;
       lives = 3;
       bonus = 0;
@@ -2273,6 +2813,8 @@ const jsonLd = {
       cancelAnimationFrame(rafId);
       currentLevelIndex = index;
       pendingLevelIndex = index;
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
       prepareLevel(index);
       phase = 'playing';
       lastVisualBeat = -1;
@@ -2294,9 +2836,37 @@ const jsonLd = {
       updateHud();
       const completedIndex = currentLevelIndex;
       const completed = level();
+      const clean = levelHits === 0 && levelMisses === 0 && levelOffgrid === 0;
       const healed = levelHits === 0 && lives < 3;
       if (healed) lives++;
       updateLives();
+      const levelProgress = recordRoadEvent({
+        type: 'level-clear',
+        levelId: completed.id,
+        voice: selectedNounVoice,
+        clean,
+        fullBand: arrangement >= 3,
+        levelIndex: completedIndex,
+        score: displayScore(),
+      });
+      const roadCreatedAt = Date.now();
+      const roadAccuracy = accuracyPercent(levelPerfect, levelGood, completed.obstacles.length);
+      lastCompletedRoad = {
+        id: `${completed.id}-${roadCreatedAt}-${displayScore()}`,
+        levelId: completed.id,
+        levelName: completed.name,
+        nounId: selectedNounId,
+        voice: selectedNounVoice,
+        bpm: completed.bpm,
+        phrase: obstacles.flatMap((item) => item.grade === 'perfect' || item.grade === 'good'
+          ? [{ step: phraseStep(item.cueBeat, completed.music.phraseBeats, completed.music.subdivision), note: item.note, grade: item.grade }]
+          : []),
+        score: displayScore() - levelStartScore,
+        accuracy: roadAccuracy,
+        createdAt: roadCreatedAt,
+      };
+      saveRoadButton.hidden = false;
+      saveRoadButton.textContent = '＋ SAVE THIS ROAD';
       saveProgress(completedIndex);
       trySound(playLevelClear);
       trySound(() => {
@@ -2307,12 +2877,15 @@ const jsonLd = {
 
       if (completedIndex === LEVELS.length - 1) {
         phase = 'victory';
-        kickerEl.textContent = `NOUN #${selectedNounId} · ROAD BAND COMPLETE`;
+        const campaignProgress = recordRoadEvent({ type: 'campaign-clear' });
+        const levelXp = levelProgress.baseXp + levelProgress.stampXp;
+        const campaignXp = campaignProgress.baseXp + campaignProgress.stampXp;
+        kickerEl.textContent = `NOUN #${selectedNounId} · BRIGHT MILES COMPLETE`;
         cardTempoEl.textContent = `${totalPerfect} PERFECT · ${totalGood} GOOD`;
         titleEl.textContent = 'THE ROAD PLAYS BACK.';
-        subEl.textContent = `${completed.clearLine} Your ${selectedNounVoice} Noun led the whole band from Main Street to the night shift${healed ? ' — flawless finish restored a heart.' : '.'}`;
+        subEl.textContent = `${completed.clearLine} Your ${selectedNounVoice} Noun led the whole band from Main Street to the night shift and banked +${levelXp + campaignXp} Road XP${clean ? ' on a clean final mile.' : '.'}`;
         const allTargets = LEVELS.reduce((sum, item) => sum + item.obstacles.length, 0);
-        setStats('score', `${displayScore()} pts`, 'accuracy', `${accuracyPercent(totalPerfect, totalGood, allTargets)}%`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
+        setStats('score', `${displayScore()} pts`, 'road xp', `${roadPass.xp} total`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
         goButton.textContent = '▶ RUN THE CITY AGAIN';
         updateRoute(LEVELS.length, true);
         stateLive.textContent = `City cleared. Final score ${displayScore()} points. ${totalPerfect} perfect and ${totalGood} good performances. Best pocket ${bestFlow}.`;
@@ -2327,8 +2900,9 @@ const jsonLd = {
       kickerEl.textContent = `LEVEL ${completed.number} CLEAR · ${completed.clearLine}`;
       cardTempoEl.textContent = `NEXT · ${next.bpm} BPM`;
       titleEl.textContent = next.name;
-      subEl.textContent = `${next.brief}${healed ? ' Flawless level: one heart restored.' : ''}`;
-      setStats('level score', `+${displayScore() - levelStartScore} pts`, 'accuracy', `${accuracyPercent(levelPerfect, levelGood, completed.obstacles.length)}%`, 'mix', `${arrangement}/3 stems`);
+      const earnedXp = levelProgress.baseXp + levelProgress.stampXp;
+      subEl.textContent = `${next.brief} This mile banked +${earnedXp} Road XP${clean ? ' with a Clean Street bonus.' : ''}${healed ? ' One heart restored.' : ''}`;
+      setStats('level score', `+${displayScore() - levelStartScore} pts`, 'road xp', `+${earnedXp}`, 'mix', `${arrangement}/3 stems`);
       goButton.textContent = `▶ LEVEL ${next.number} · ${next.bpm} BPM`;
       updateRoute(pendingLevelIndex);
       stateLive.textContent = `Level ${completed.number} clear. ${levelPerfect} perfect and ${levelGood} good performances. Next: ${next.name}, ${next.bpm} BPM.`;
@@ -2341,6 +2915,9 @@ const jsonLd = {
       powerState = emptyPowerState();
       updateHud();
       phase = 'gameover';
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
+      recordRoadEvent({ type: 'score', value: displayScore() });
       saveProgress(currentLevelIndex - 1);
       const cfg = level();
       kickerEl.textContent = `WIPEOUT · LEVEL ${cfg.number} / 0${LEVELS.length}`;
@@ -2413,7 +2990,7 @@ const jsonLd = {
     function updateAudioButton() {
       audioButton.setAttribute('aria-pressed', String(muted));
       audioButton.textContent = muted ? 'sound off' : 'sound on';
-      audioButton.setAttribute('aria-label', 'Beat Runner audio muted');
+      audioButton.setAttribute('aria-label', `Beat Runner audio ${muted ? 'muted' : 'on'}`);
     }
     audioButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -2430,6 +3007,221 @@ const jsonLd = {
         showIntro();
       });
     });
+    saveRoadButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!lastCompletedRoad) return;
+      const saved = lastCompletedRoad;
+      recordRoadEvent({ type: 'road-save', road: saved });
+      saveRoadButton.textContent = '✓ SAVED ON THIS DEVICE';
+      stateLive.textContent = `${saved.levelName} saved to My Roads with ${saved.phrase.length} performed notes.`;
+    });
+    roadsListEl.addEventListener('click', (event) => {
+      const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+      if (!target) return;
+      const playId = target.dataset.playRoad;
+      const deleteId = target.dataset.deleteRoad;
+      if (playId) {
+        const road = roadPass.savedRoads.find((item) => item.id === playId);
+        if (!road) return;
+        trySound(() => { audioContext(); });
+        const secondsPerStep = 60 / road.bpm / 2;
+        road.phrase.slice(0, 32).forEach((note, index) => {
+          window.setTimeout(() => trySound(() => playNounSignature(road.voice, note.note, note.grade)), index * secondsPerStep * 1000);
+        });
+        walletStatusEl.textContent = `Playing ${road.levelName}: ${road.phrase.length} saved notes at ${road.bpm} BPM.`;
+      } else if (deleteId) {
+        roadPass = normalizeRoadPass({
+          ...roadPass,
+          savedRoads: roadPass.savedRoads.filter((item) => item.id !== deleteId),
+          revision: roadPass.revision + 1,
+          updatedAt: Date.now(),
+        });
+        persistRoadPass();
+      }
+    });
+
+    function syncWalletStorage(address: string) {
+      try {
+        const raw = localStorage.getItem('pc:wallets');
+        const existing = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(existing) ? existing.filter((wallet: any) => wallet?.address !== address) : [];
+        const wallet = { chain: 'tezos', address, provider: 'beacon', addedAt: Date.now() };
+        list.push(wallet);
+        localStorage.setItem('pc:wallets', JSON.stringify(list));
+        localStorage.setItem('pc:wallet-active', address);
+        localStorage.setItem('pc:wallet', JSON.stringify(wallet));
+        window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+      } catch { /* the Beacon account remains authoritative */ }
+    }
+    async function fetchOwnedVisitNouns(address: string) {
+      const contract = root.dataset.tokenContract || 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh';
+      tokenCountEl.textContent = 'checking TzKT…';
+      try {
+        const response = await fetch(`https://api.tzkt.io/v1/tokens/balances?account=${encodeURIComponent(address)}&token.contract=${encodeURIComponent(contract)}&balance.gt=0&limit=200`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`TzKT ${response.status}`);
+        const balances = await response.json();
+        ownedNounIds = new Set(Array.isArray(balances)
+          ? balances.map((balance: any) => Number(balance?.token?.tokenId)).filter((id: number) => Number.isFinite(id))
+          : []);
+        visitNounsBalance = ownedNounIds.size;
+      } catch {
+        ownedNounIds = new Set();
+        visitNounsBalance = 0;
+        tokenCountEl.textContent = 'TzKT unavailable';
+      }
+      updateNounPicker();
+      updateRoadPassUi();
+    }
+    async function connectWalletExplicitly(): Promise<string> {
+      const { connectKukaiForSigning, getActiveAddress } = await import('../lib/tezos');
+      const address = await connectKukaiForSigning();
+      const actual = await getActiveAddress();
+      if (!actual || actual !== address) throw new Error('Beacon active account did not match the connected account.');
+      currentWalletAddress = actual;
+      syncWalletStorage(actual);
+      await fetchOwnedVisitNouns(actual);
+      return actual;
+    }
+    connectWalletButton.addEventListener('click', async () => {
+      const original = connectWalletButton.textContent || 'CONNECT KUKAI';
+      connectWalletButton.disabled = true;
+      connectWalletButton.textContent = 'OPENING BEACON…';
+      walletStatusEl.textContent = 'Opening the Beacon wallet picker. Choose Kukai or another compatible Tezos wallet.';
+      try {
+        const address = await connectWalletExplicitly();
+        connectWalletButton.textContent = '✓ WALLET READY';
+        stateLive.textContent = `Tezos wallet ${shortAddress(address)} connected. ${visitNounsBalance} Visit Nouns found.`;
+      } catch (error: any) {
+        connectWalletButton.textContent = 'RETRY CONNECT';
+        walletStatusEl.textContent = /reject|cancel|abort/i.test(String(error?.message))
+          ? 'Wallet connection cancelled. Local progress is safe.'
+          : `Wallet connection failed: ${error?.message || error}`;
+      } finally {
+        connectWalletButton.disabled = false;
+        window.setTimeout(() => { if (connectWalletButton.textContent !== '✓ WALLET READY') connectWalletButton.textContent = original; }, 2600);
+      }
+    });
+
+    function portablePassMessage(canonicalPass: string): string {
+      return [
+        'PointCast Beat Runner v5 portable Beat Pass',
+        'Road XP, stamps, saved roads, and a read-only Visit Nouns ownership snapshot follow.',
+        canonicalPass,
+      ].join('\n');
+    }
+    signPassButton.addEventListener('click', async () => {
+      signPassButton.disabled = true;
+      signPassButton.textContent = 'PREPARING…';
+      try {
+        const address = await connectWalletExplicitly();
+        const issuedAt = new Date().toISOString();
+        const pass = beatPassPayload(roadPass, { walletAddress: address, issuedAt, tokenBalance: visitNounsBalance });
+        const canonicalPass = canonicalJson(pass);
+        walletStatusEl.textContent = 'Review the human-readable Beat Pass request in your wallet. This is not a transaction.';
+        signPassButton.textContent = 'CHECK WALLET…';
+        const { signTezosMichelineMessage } = await import('../lib/tezos');
+        const proof = await signTezosMichelineMessage(portablePassMessage(canonicalPass), issuedAt);
+        if (proof.address !== address) throw new Error('Wallet account changed while sealing the pass.');
+        signedBeatPass = {
+          format: 'pointcast.beat-pass.signed.v1',
+          pass,
+          canonicalPass,
+          proof: {
+            address: proof.address,
+            publicKey: proof.publicKey,
+            issuedAt: proof.issuedAt,
+            domain: proof.domain,
+            signature: proof.signature,
+            payload: proof.payload,
+          },
+        };
+        localStorage.setItem(ROAD_PASS_PROOF_KEY, JSON.stringify(signedBeatPass));
+        signPassButton.textContent = '✓ PASS SEALED';
+        updateRoadPassUi();
+        stateLive.textContent = `Beat Pass sealed and verified locally for ${shortAddress(address)}. No transaction broadcast.`;
+      } catch (error: any) {
+        signPassButton.textContent = 'SEAL BEAT PASS';
+        walletStatusEl.textContent = /reject|cancel|abort/i.test(String(error?.message))
+          ? 'Signature cancelled. Local progress is safe.'
+          : `Could not seal pass: ${error?.message || error}`;
+      } finally {
+        signPassButton.disabled = false;
+      }
+    });
+    exportPassButton.addEventListener('click', () => {
+      const issuedAt = new Date().toISOString();
+      const unsignedPass = beatPassPayload(roadPass, {
+        walletAddress: currentWalletAddress,
+        issuedAt,
+        tokenBalance: visitNounsBalance,
+      });
+      const payload = signedPassIsCurrent()
+        ? signedBeatPass
+        : { format: 'pointcast.beat-pass.unsigned.v1', pass: unsignedPass, note: 'Unsigned local export. Seal with a Tezos wallet for tamper evidence.' };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `pointcast-beat-pass-v5-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      walletStatusEl.textContent = signedPassIsCurrent() ? 'Exported the current Kukai-sealed Beat Pass.' : 'Exported an unsigned local Beat Pass.';
+    });
+    importPassButton.addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', async () => {
+      const file = importFileInput.files?.[0];
+      if (!file) return;
+      importPassButton.disabled = true;
+      try {
+        const parsed = JSON.parse(await file.text()) as any;
+        const pass = parsed?.pass ?? parsed;
+        if (!pass?.profile) throw new Error('This file does not contain a Beat Runner v5 profile.');
+        if (pass.format !== 'pointcast.beat-pass.v1'
+          || pass.origin !== 'https://pointcast.xyz'
+          || pass.chainId !== 'NetXdQprcVkpaWU'
+          || pass.game !== ROAD_PASS_GAME
+          || pass.profile?.schema !== ROAD_PASS_SCHEMA
+          || pass.profile?.game !== ROAD_PASS_GAME
+          || pass.visitNouns?.contract !== VISIT_NOUNS_CONTRACT) {
+          throw new Error('This file is not a PointCast Beat Runner v5 mainnet pass.');
+        }
+        if (parsed?.format === 'pointcast.beat-pass.signed.v1') {
+          const canonicalPass = canonicalJson(pass);
+          if (canonicalPass !== parsed.canonicalPass) throw new Error('Signed pass content was changed after sealing.');
+          if (pass.walletAddress !== parsed.proof?.address) throw new Error('Pass wallet does not match the signer.');
+          if (pass.issuedAt !== parsed.proof?.issuedAt) throw new Error('Pass timestamp does not match the signed proof.');
+          const { POINTCAST_SIGNING_DOMAIN, verifyTezosMichelineMessage } = await import('../lib/tezos');
+          if (parsed.proof?.domain !== POINTCAST_SIGNING_DOMAIN) throw new Error('Pass signing domain is not recognized.');
+          const valid = verifyTezosMichelineMessage({
+            message: portablePassMessage(canonicalPass),
+            issuedAt: parsed.proof.issuedAt,
+            domain: parsed.proof.domain,
+            address: parsed.proof.address,
+            publicKey: parsed.proof.publicKey,
+            signature: parsed.proof.signature,
+          });
+          if (!valid) throw new Error('Tezos signature could not be verified.');
+          signedBeatPass = parsed as SignedBeatPass;
+          localStorage.setItem(ROAD_PASS_PROOF_KEY, JSON.stringify(signedBeatPass));
+          currentWalletAddress = parsed.proof.address;
+          walletStatusEl.textContent = `Verified and imported a Beat Pass sealed by ${shortAddress(currentWalletAddress)}.`;
+        } else {
+          walletStatusEl.textContent = 'Imported an unsigned local Beat Pass. Seal it to add tamper evidence.';
+        }
+        roadPass = mergeRoadPass(roadPass, pass.profile);
+        selectedNounId = roadPass.selectedNounId;
+        selectedNounVoice = nounVoiceFor(selectedNounId);
+        runNounChoices = nounChoices(selectedNounId);
+        selectNoun(selectedNounId, false);
+        persistRoadPass();
+        updateBest();
+        stateLive.textContent = `Beat Pass imported. Road XP is now ${roadPass.xp}.`;
+      } catch (error: any) {
+        walletStatusEl.textContent = `Import rejected: ${error?.message || error}`;
+      } finally {
+        importPassButton.disabled = false;
+        importFileInput.value = '';
+      }
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && phase === 'playing') {
         suspended = true;
@@ -2442,18 +3234,30 @@ const jsonLd = {
         rafId = requestAnimationFrame(frame);
       }
     });
+    window.addEventListener('storage', (event) => {
+      if (event.key === ROAD_PASS_STORAGE_KEY) {
+        roadPass = readRoadPass();
+        updateRoadPassUi();
+      } else if (event.key === ROAD_PASS_PROOF_KEY) {
+        signedBeatPass = readSignedBeatPass();
+        updateRoadPassUi();
+      }
+    });
 
     /* ---------------- init ---------------- */
     sessionId = getOrCreateSession();
     try { muted = localStorage.getItem(MUTED_KEY) === '1'; } catch { muted = false; }
-    savedBest = readBest();
+    roadPass = readRoadPass();
+    signedBeatPass = readSignedBeatPass();
+    savedBest = Math.max(readBest(), roadPass.bestScore);
     updateAudioButton();
     updateBest();
     updateLives();
-    selectedNounId = readSavedNoun();
+    selectedNounId = roadPass.revision > 0 ? roadPass.selectedNounId : readSavedNoun();
     selectedNounVoice = nounVoiceFor(selectedNounId);
     runNounChoices = nounChoices(selectedNounId);
     selectNoun(selectedNounId, false);
+    updateRoadPassUi();
     resize();
     showIntro();
   </script>
