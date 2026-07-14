@@ -1,7 +1,7 @@
-export const PLAY_LAYER_VERSION = '0.2.1';
+export const PLAY_LAYER_VERSION = '0.3.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: passport stamps, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -9,7 +9,7 @@ export const PLAY_SURFACES = [
     code: 'PASS',
     title: 'PointCast Passport',
     route: '/passport',
-    summary: 'A browser-local stamp book for visits, votes, games, routes, and agent-native rituals.',
+    summary: 'A dual-ledger booklet for private local rituals, public Tezos collection visas, and optional wallet-signed journey seals.',
   },
   {
     id: 'quests',
@@ -708,6 +708,11 @@ export function buildPlayLayerManifest() {
     surfaces: PLAY_SURFACES,
     passport: {
       storage: 'localStorage: pc:passport:stamps',
+      sealStorage: 'localStorage: pc:tezos-passport:seals',
+      human: 'https://pointcast.xyz/passport',
+      machine: 'https://pointcast.xyz/passport.json',
+      publicView: 'https://pointcast.xyz/passport?address={tezos-address}',
+      proof: 'Beacon raw-payload signature; no transaction or mint is submitted.',
       stamps: PASSPORT_STAMPS,
     },
     dailyWalk: {

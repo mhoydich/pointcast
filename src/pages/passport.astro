@@ -1,5 +1,1240 @@
 ---
-import PlayLayerSurface from '../components/PlayLayerSurface.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+import { PASSPORT_STAMPS } from '../lib/play-layer';
+import {
+  TEZOS_PASSPORT_NETWORK,
+  TEZOS_PASSPORT_PORTS,
+  TEZOS_PASSPORT_SCHEMA,
+  TEZOS_PASSPORT_SEAL_SCHEMA,
+  TEZOS_PASSPORT_STORAGE,
+  TEZOS_PASSPORT_VERSION,
+  TEZOS_PASSPORT_VISAS,
+} from '../lib/tezos-passport';
+
+const SAMPLE_ADDRESS = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+const liveVisas = TEZOS_PASSPORT_VISAS.filter((visa) => visa.status === 'live');
+const totalPoints = PASSPORT_STAMPS.reduce((sum, stamp) => sum + stamp.points, 0);
+const appData = {
+  version: TEZOS_PASSPORT_VERSION,
+  network: TEZOS_PASSPORT_NETWORK,
+  schema: TEZOS_PASSPORT_SCHEMA,
+  sealSchema: TEZOS_PASSPORT_SEAL_SCHEMA,
+  storage: TEZOS_PASSPORT_STORAGE,
+  sampleAddress: SAMPLE_ADDRESS,
+  ports: TEZOS_PASSPORT_PORTS,
+  stamps: PASSPORT_STAMPS,
+  visas: TEZOS_PASSPORT_VISAS,
+};
+
+const description =
+  'A dual-ledger PointCast passport: private local ritual stamps on one page, public Tezos collection visas on the other, with optional wallet-signed journey seals.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/passport#tezos-passport',
+  name: 'PointCast Tezos Passport',
+  description,
+  url: 'https://pointcast.xyz/passport',
+  applicationCategory: 'LifestyleApplication',
+  operatingSystem: 'Any',
+  featureList: [
+    'Browser-local PointCast ritual stamps',
+    'Public Tezos holdings from TzKT',
+    'Shareable wallet-address passport views',
+    'Optional Beacon wallet-signed journey seals',
+  ],
+};
 ---
 
-<PlayLayerSurface focus="passport" />
+<BaseLayout title="Tezos Passport" description={description}>
+  <main class="passport-office" data-passport-office>
+    <header class="office-bar">
+      <a class="office-brand" href="/" aria-label="PointCast home">
+        <span aria-hidden="true">PC</span>
+        <strong>PointCast</strong>
+        <em>Passport Office</em>
+      </a>
+      <nav aria-label="Passport routes">
+        <a href="/play">Play</a>
+        <a href="/wallet">Wallet</a>
+        <a href="/minted">Minted</a>
+        <a href="/passport.json">JSON</a>
+      </nav>
+      <WalletConnect />
+    </header>
+
+    <section class="office-intro" aria-labelledby="passport-title">
+      <div class="office-intro__copy">
+        <p class="eyebrow">TEZOS MAINNET · LOCAL-FIRST · v{TEZOS_PASSPORT_VERSION}</p>
+        <h1 id="passport-title">A passport with two kinds of truth.</h1>
+        <p class="office-intro__dek">
+          PointCast rituals stay private on this device. Public Tezos artifacts become visas.
+          Connect only when you want to prove the journey belongs to your wallet.
+        </p>
+      </div>
+      <div class="office-intro__actions">
+        <button class="command command--ink" type="button" data-open-wallet>Connect Tezos</button>
+        <button class="command" type="button" data-load-sample>View sample</button>
+        <span class="office-status" data-office-status aria-live="polite">Visitor edition ready.</span>
+      </div>
+      <form class="address-desk" data-address-form>
+        <label for="passport-address">Inspect a public Tezos passport</label>
+        <div>
+          <input
+            id="passport-address"
+            name="address"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="tz1… / tz2… / tz3… / tz4…"
+            data-address-input
+          />
+          <button type="submit">Open address</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="passport-book" aria-label="PointCast Tezos passport booklet">
+      <article class="passport-page identity-page">
+        <div class="page-running-head">
+          <span>POINTCAST</span>
+          <strong>TEZOS PASSPORT</strong>
+          <span data-passport-mode>VISITOR</span>
+        </div>
+
+        <div class="identity-grid">
+          <div class="portrait-frame">
+            <img data-passport-portrait src="https://noun.pics/137.svg" alt="Generated PointCast passport portrait" width="180" height="180" loading="eager" />
+            <span data-network-badge>XTZ · MAINNET</span>
+          </div>
+          <dl class="identity-facts">
+            <div>
+              <dt>Passport no.</dt>
+              <dd data-passport-id>PC-LOCAL</dd>
+            </div>
+            <div>
+              <dt>Holder</dt>
+              <dd data-holder-name>Visitor edition</dd>
+            </div>
+            <div>
+              <dt>Port of entry</dt>
+              <dd data-port>El Segundo Terminal</dd>
+            </div>
+            <div>
+              <dt>First seen</dt>
+              <dd data-first-seen>Local today</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="wallet-line">
+          <span>Tezos address</span>
+          <code data-wallet-address>not connected</code>
+        </div>
+
+        <div class="ledger-totals" aria-label="Passport totals">
+          <div>
+            <span>Local stamps</span>
+            <strong><span data-local-count>0</span> / {PASSPORT_STAMPS.length}</strong>
+            <small><span data-local-points>0</span> / {totalPoints} points</small>
+          </div>
+          <div>
+            <span>Tezos visas</span>
+            <strong><span data-visa-count>0</span> / {liveVisas.length}</strong>
+            <small><span data-token-count>0</span> artifacts held</small>
+          </div>
+          <div>
+            <span>Chain trail</span>
+            <strong data-chain-age>—</strong>
+            <small><span data-chain-actions>0</span> transactions</small>
+          </div>
+        </div>
+
+        <div class="privacy-mark">
+          <span aria-hidden="true">LOCAL</span>
+          <p><strong>This page:</strong> your PointCast stamp book. It is not attached to a wallet until you choose to seal it.</p>
+        </div>
+      </article>
+
+      <article class="passport-page visa-page">
+        <div class="page-running-head">
+          <span>PUBLIC LEDGER</span>
+          <strong>COLLECTION VISAS</strong>
+          <span>{liveVisas.length} LIVE</span>
+        </div>
+        <div class="visa-grid" data-visa-grid>
+          {TEZOS_PASSPORT_VISAS.map((visa) => (
+            <article
+              class:list={['visa-stamp', visa.status === 'future' && 'is-future']}
+              data-visa-id={visa.id}
+              data-visa-contract={visa.contract}
+              data-image-kind={visa.imageKind}
+              style={`--visa-accent:${visa.accent}`}
+            >
+              <div class="visa-stamp__head">
+                <span>{visa.stampCode}</span>
+                <strong data-visa-state>{visa.status === 'live' ? 'CHECKING' : 'FUTURE'}</strong>
+              </div>
+              <div class="visa-stamp__body">
+                <div class="visa-stamp__mark" aria-hidden="true">{visa.stampCode.slice(0, 2)}</div>
+                <div>
+                  <p>{visa.checkpoint}</p>
+                  <h2>{visa.title}</h2>
+                  <span>{visa.collection} · {visa.symbol}</span>
+                </div>
+              </div>
+              <p class="visa-stamp__note">{visa.note}</p>
+              <div class="visa-stamp__tokens" data-visa-tokens>
+                <span>{visa.status === 'live' ? 'Connect or inspect an address.' : 'Awaiting contract origination.'}</span>
+              </div>
+              <footer>
+                <a href={visa.route}>Open route</a>
+                {visa.contract.startsWith('KT1') ? (
+                  <a href={`https://tzkt.io/${visa.contract}`} target="_blank" rel="noopener">TzKT</a>
+                ) : (
+                  <span>Not live yet</span>
+                )}
+              </footer>
+            </article>
+          ))}
+        </div>
+      </article>
+    </section>
+
+    <section class="seal-desk" aria-labelledby="seal-title">
+      <div>
+        <p class="eyebrow">THE SEAL DESK · OPTIONAL</p>
+        <h2 id="seal-title">Sign the journey, not every footstep.</h2>
+        <p>
+          One Beacon signature binds the current local stamp IDs and public collection visas to your
+          Tezos address. No transaction is submitted. No gas is spent. The proof stays on this device
+          until you copy it.
+        </p>
+      </div>
+      <div class="seal-controls">
+        <button class="command command--seal" type="button" data-seal-journey>Seal current edition</button>
+        <button class="command" type="button" data-share-public disabled>Copy public passport</button>
+        <button class="command" type="button" data-copy-proof disabled>Copy signed proof</button>
+        <output data-seal-status aria-live="polite">No signed edition on this device.</output>
+      </div>
+      <div class="seal-impression" data-seal-impression aria-hidden="true">
+        <span>PC</span>
+        <strong>UNSEALED</strong>
+        <small>TEZOS</small>
+      </div>
+    </section>
+
+    <section class="local-ledger" aria-labelledby="local-ledger-title">
+      <header class="section-head">
+        <div>
+          <p class="eyebrow">LOCAL LEDGER · THIS BROWSER ONLY</p>
+          <h2 id="local-ledger-title">The places you actually went.</h2>
+        </div>
+        <p>Stamp manually, or let PointCast rituals write the same local key as you move through the site.</p>
+      </header>
+      <div class="local-stamp-grid">
+        {PASSPORT_STAMPS.map((stamp) => (
+          <article class="local-stamp" data-local-stamp={stamp.id}>
+            <div>
+              <span>{stamp.category}</span>
+              <strong>{stamp.points}</strong>
+            </div>
+            <h3>{stamp.label}</h3>
+            <p>{stamp.description}</p>
+            <footer>
+              <a href={stamp.route}>{stamp.action}</a>
+              <button type="button" data-stamp-button data-stamp-id={stamp.id}>Stamp</button>
+            </footer>
+            <small data-stamp-state>open</small>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="passport-footnotes" aria-label="Passport notes">
+      <div>
+        <strong>Public view</strong>
+        <p><code>/passport?address=tz…</code> shows only public TzKT data. It cannot read another visitor's local stamps.</p>
+      </div>
+      <div>
+        <strong>Signed edition</strong>
+        <p>The copied proof includes the message, payload, signature, public key, and address needed for independent verification.</p>
+      </div>
+      <div>
+        <strong>Agent entry</strong>
+        <p><a href="/passport.json">/passport.json</a> describes every visa, contract, storage key, and privacy boundary.</p>
+      </div>
+    </section>
+
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)}></script>
+    <script type="application/json" id="tezos-passport-data" is:inline set:html={JSON.stringify(appData)}></script>
+  </main>
+</BaseLayout>
+
+<script>
+  (function () {
+    var root = document.querySelector('[data-passport-office]');
+    var dataEl = document.getElementById('tezos-passport-data');
+    if (!root || !dataEl) return;
+
+    var DATA = JSON.parse(dataEl.textContent || '{}');
+    var ADDRESS_RE = /^(tz1|tz2|tz3|tz4)[1-9A-HJ-NP-Za-km-z]{33}$/;
+    var state = {
+      address: '',
+      mode: 'visitor',
+      account: null,
+      balances: [],
+      latestProof: null,
+    };
+
+    function readJson(key, fallback) {
+      try {
+        var raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function writeJson(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) {}
+    }
+
+    function shortAddress(address) {
+      return address ? address.slice(0, 7) + '…' + address.slice(-5) : 'not connected';
+    }
+
+    function hashText(value) {
+      var hash = 2166136261;
+      for (var index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
+    }
+
+    function passportId() {
+      var key = DATA.storage.localPassportId;
+      try {
+        var existing = localStorage.getItem(key);
+        if (existing) return existing;
+        var bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        var id = 'PC-' + Array.from(bytes, function (byte) { return byte.toString(16).padStart(2, '0'); }).join('').toUpperCase();
+        localStorage.setItem(key, id);
+        return id;
+      } catch (error) {
+        return 'PC-LOCAL';
+      }
+    }
+
+    function localStamps() {
+      var value = readJson(DATA.storage.localStamps, {});
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function localStampSummary() {
+      var current = localStamps();
+      var completed = DATA.stamps.filter(function (stamp) { return Boolean(current[stamp.id]); });
+      return {
+        ids: completed.map(function (stamp) { return stamp.id; }).sort(),
+        count: completed.length,
+        points: completed.reduce(function (sum, stamp) { return sum + Number(stamp.points || 0); }, 0),
+      };
+    }
+
+    function setText(selector, value) {
+      var el = root.querySelector(selector);
+      if (el) el.textContent = String(value);
+    }
+
+    function setStatus(message, kind) {
+      var status = root.querySelector('[data-office-status]');
+      if (!status) return;
+      status.textContent = message;
+      status.setAttribute('data-kind', kind || 'quiet');
+    }
+
+    function portFor(value) {
+      return DATA.ports[hashText(value) % DATA.ports.length];
+    }
+
+    function portraitFor(value) {
+      return 1 + (hashText(value) % 1199);
+    }
+
+    function chainAge(firstSeen) {
+      if (!firstSeen) return '—';
+      var started = Date.parse(firstSeen);
+      if (!Number.isFinite(started)) return '—';
+      var days = Math.max(0, Math.floor((Date.now() - started) / 86400000));
+      if (days < 365) return days + 'd';
+      var years = Math.floor(days / 365);
+      return years + 'y ' + (days % 365) + 'd';
+    }
+
+    function readConnectedWallet() {
+      var stored = readJson(DATA.storage.wallet, null);
+      if (stored && stored.chain === 'tezos' && ADDRESS_RE.test(stored.address || '')) return stored.address;
+      try {
+        var legacy = localStorage.getItem('pc:wallet-active') || '';
+        return ADDRESS_RE.test(legacy) ? legacy : '';
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function tokenParts(row) {
+      return {
+        contract: row['token.contract.address'] || (row.token && row.token.contract && row.token.contract.address) || '',
+        tokenId: String(row['token.tokenId'] !== undefined ? row['token.tokenId'] : (row.token && row.token.tokenId) || ''),
+        balance: Number(row.balance || 0),
+      };
+    }
+
+    function imageFor(visa, tokenId) {
+      var id = Number(tokenId);
+      if (visa.imageKind === 'noun') return 'https://noun.pics/' + id + '.svg';
+      if (visa.imageKind === 'coffee') {
+        var slugs = ['ceramic', 'espresso', 'latte', 'paper', 'bistro'];
+        return slugs[id] ? '/images/coffee-mugs/' + slugs[id] + '.svg' : '';
+      }
+      if (visa.imageKind === 'morning-ocean') {
+        return '/images/morning-ocean/tokens/' + String(id).padStart(2, '0') + '.png';
+      }
+      return '';
+    }
+
+    function paintLocal() {
+      var current = localStamps();
+      var summary = localStampSummary();
+      setText('[data-local-count]', summary.count);
+      setText('[data-local-points]', summary.points);
+
+      root.querySelectorAll('[data-local-stamp]').forEach(function (card) {
+        var id = card.getAttribute('data-local-stamp');
+        var collected = Boolean(current[id]);
+        card.classList.toggle('is-stamped', collected);
+        var button = card.querySelector('[data-stamp-button]');
+        var stampState = card.querySelector('[data-stamp-state]');
+        if (button) {
+          button.disabled = collected;
+          button.textContent = collected ? 'Stamped' : 'Stamp';
+        }
+        if (stampState) {
+          var at = collected && current[id] && current[id].at;
+          stampState.textContent = at ? 'stamped · ' + new Date(at).toLocaleDateString() : 'open';
+        }
+      });
+    }
+
+    function paintIdentity() {
+      var id = passportId();
+      var seed = state.address || id;
+      var port = portFor(seed);
+      var portrait = root.querySelector('[data-passport-portrait]');
+      if (portrait) portrait.setAttribute('src', 'https://noun.pics/' + portraitFor(seed) + '.svg');
+      setText('[data-passport-id]', state.address ? 'PC-' + hashText(state.address).toString(16).toUpperCase().padStart(8, '0') : id);
+      setText('[data-passport-mode]', state.mode === 'connected' ? 'HOLDER' : state.mode === 'public' ? 'PUBLIC' : state.mode === 'sample' ? 'SAMPLE' : 'VISITOR');
+      setText('[data-holder-name]', state.address ? shortAddress(state.address) : 'Visitor edition');
+      setText('[data-port]', port);
+      setText('[data-wallet-address]', state.address || 'not connected');
+      setText('[data-first-seen]', state.account && state.account.firstActivityTime
+        ? new Date(state.account.firstActivityTime).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+        : 'Local today');
+      setText('[data-chain-age]', chainAge(state.account && state.account.firstActivityTime));
+      setText('[data-chain-actions]', state.account && state.account.numTransactions ? Number(state.account.numTransactions).toLocaleString() : '0');
+    }
+
+    function clearTokenPreview(container, message) {
+      if (!container) return;
+      container.replaceChildren();
+      var empty = document.createElement('span');
+      empty.textContent = message;
+      container.appendChild(empty);
+    }
+
+    function paintVisas() {
+      var unlocked = 0;
+      var totalTokens = 0;
+
+      DATA.visas.forEach(function (visa) {
+        var card = root.querySelector('[data-visa-id="' + visa.id + '"]');
+        if (!card) return;
+        var visaState = card.querySelector('[data-visa-state]');
+        var tokensEl = card.querySelector('[data-visa-tokens]');
+        if (visa.status !== 'live') {
+          if (visaState) visaState.textContent = 'FUTURE';
+          clearTokenPreview(tokensEl, 'Awaiting contract origination.');
+          return;
+        }
+
+        var held = state.balances.map(tokenParts).filter(function (row) {
+          return row.contract === visa.contract && row.balance > 0;
+        });
+        var heldCount = held.reduce(function (sum, row) { return sum + row.balance; }, 0);
+        totalTokens += heldCount;
+        if (held.length > 0) unlocked += 1;
+        card.classList.toggle('is-unlocked', held.length > 0);
+        if (visaState) visaState.textContent = held.length > 0 ? heldCount + ' HELD' : state.address ? 'OPEN' : 'CHECKING';
+
+        if (!state.address) {
+          clearTokenPreview(tokensEl, 'Connect or inspect an address.');
+          return;
+        }
+        if (held.length === 0) {
+          clearTokenPreview(tokensEl, 'No ' + visa.symbol + ' carried by this address.');
+          return;
+        }
+
+        tokensEl.replaceChildren();
+        held.slice(0, 6).forEach(function (token) {
+          var link = document.createElement('a');
+          link.href = 'https://objkt.com/tokens/' + visa.contract + '/' + token.tokenId;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.title = visa.collection + ' #' + token.tokenId + ' · balance ' + token.balance;
+          var source = imageFor(visa, token.tokenId);
+          if (source) {
+            var image = document.createElement('img');
+            image.src = source;
+            image.alt = '';
+            image.width = 42;
+            image.height = 42;
+            image.loading = 'lazy';
+            link.appendChild(image);
+          }
+          var label = document.createElement('span');
+          label.textContent = '#' + token.tokenId + (token.balance > 1 ? ' ×' + token.balance : '');
+          link.appendChild(label);
+          tokensEl.appendChild(link);
+        });
+      });
+
+      setText('[data-visa-count]', unlocked);
+      setText('[data-token-count]', totalTokens);
+    }
+
+    function latestProof() {
+      var seals = readJson(DATA.storage.signedSeals, []);
+      return Array.isArray(seals) && seals.length ? seals[0] : null;
+    }
+
+    function paintSeal() {
+      state.latestProof = latestProof();
+      var proof = state.latestProof;
+      var status = root.querySelector('[data-seal-status]');
+      var impression = root.querySelector('[data-seal-impression]');
+      var copy = root.querySelector('[data-copy-proof]');
+      var share = root.querySelector('[data-share-public]');
+      if (share) share.disabled = !state.address;
+      if (copy) copy.disabled = !proof;
+      if (status) {
+        status.textContent = proof
+          ? 'Latest seal · ' + new Date(proof.issuedAt).toLocaleString() + ' · ' + shortAddress(proof.address)
+          : 'No signed edition on this device.';
+      }
+      if (impression) {
+        impression.classList.toggle('is-sealed', Boolean(proof));
+        var strong = impression.querySelector('strong');
+        if (strong) strong.textContent = proof ? 'SEALED' : 'UNSEALED';
+      }
+    }
+
+    function paint() {
+      paintLocal();
+      paintIdentity();
+      paintVisas();
+      paintSeal();
+    }
+
+    async function loadAddress(address, mode) {
+      if (!ADDRESS_RE.test(address || '')) {
+        setStatus('That does not look like a Tezos implicit address.', 'error');
+        return;
+      }
+      state.address = address;
+      state.mode = mode || 'public';
+      state.account = null;
+      state.balances = [];
+      paint();
+      setStatus('Reading public mainnet data from TzKT…', 'loading');
+
+      var liveContracts = DATA.visas
+        .filter(function (visa) { return visa.status === 'live'; })
+        .map(function (visa) { return visa.contract; })
+        .join(',');
+      var balanceUrl = 'https://api.tzkt.io/v1/tokens/balances' +
+        '?account=' + encodeURIComponent(address) +
+        '&token.contract.in=' + encodeURIComponent(liveContracts) +
+        '&balance.gt=0' +
+        '&select=token.contract.address,token.tokenId,balance' +
+        '&limit=200';
+
+      try {
+        var results = await Promise.all([
+          fetch('https://api.tzkt.io/v1/accounts/' + encodeURIComponent(address), { cache: 'no-store' }),
+          fetch(balanceUrl, { cache: 'no-store' }),
+        ]);
+        if (!results[0].ok || !results[1].ok) throw new Error('tzkt-response');
+        state.account = await results[0].json();
+        var rows = await results[1].json();
+        state.balances = Array.isArray(rows) ? rows : [];
+        setStatus((mode === 'connected' ? 'Connected passport' : mode === 'sample' ? 'Sample passport' : 'Public passport') + ' · live from TzKT.', 'ready');
+      } catch (error) {
+        state.account = null;
+        state.balances = [];
+        setStatus('TzKT did not answer. Your local stamps are still available.', 'error');
+      }
+      paint();
+    }
+
+    function publicUrl(address) {
+      var url = new URL('/passport', window.location.origin);
+      url.searchParams.set('address', address);
+      return url.toString();
+    }
+
+    async function copyText(value, success) {
+      try {
+        await navigator.clipboard.writeText(value);
+        setStatus(success, 'ready');
+      } catch (error) {
+        setStatus('Clipboard unavailable. Use the address bar instead.', 'error');
+      }
+    }
+
+    async function sealJourney() {
+      var button = root.querySelector('[data-seal-journey]');
+      if (button) button.disabled = true;
+      setStatus('Opening a Tezos wallet for one signature…', 'loading');
+      try {
+        var tezos = await import('../lib/tezos');
+        var address = await tezos.connectKukai();
+        if (!ADDRESS_RE.test(address)) throw new Error('wallet-address');
+        writeJson(DATA.storage.wallet, { chain: 'tezos', address: address, provider: 'kukai' });
+        window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: { chain: 'tezos', address: address, provider: 'kukai' } }));
+        if (state.address !== address) await loadAddress(address, 'connected');
+
+        var local = localStampSummary();
+        var visaIds = DATA.visas.filter(function (visa) {
+          return state.balances.map(tokenParts).some(function (token) {
+            return token.contract === visa.contract && token.balance > 0;
+          });
+        }).map(function (visa) { return visa.id; }).sort();
+        var tokenCount = state.balances.map(tokenParts).reduce(function (sum, token) { return sum + token.balance; }, 0);
+        var issuedAt = new Date().toISOString();
+        var edition = {
+          schema: DATA.sealSchema,
+          version: DATA.version,
+          issuedAt: issuedAt,
+          address: address,
+          passportId: 'PC-' + hashText(address).toString(16).toUpperCase().padStart(8, '0'),
+          port: portFor(address),
+          local: local,
+          tezos: {
+            network: DATA.network,
+            visaIds: visaIds,
+            tokenCount: tokenCount,
+            firstActivityTime: state.account && state.account.firstActivityTime || null,
+          },
+        };
+        var message = 'PointCast Tezos Passport\n' + JSON.stringify(edition);
+        var signed = await tezos.signTezosPayload(message);
+        var proof = Object.assign({}, edition, {
+          message: message,
+          payload: signed.payload,
+          signature: signed.signature,
+          publicKey: signed.publicKey || null,
+        });
+        var seals = readJson(DATA.storage.signedSeals, []);
+        if (!Array.isArray(seals)) seals = [];
+        seals.unshift(proof);
+        writeJson(DATA.storage.signedSeals, seals.slice(0, 8));
+        setStatus('Journey sealed. No transaction was submitted.', 'ready');
+        paintSeal();
+      } catch (error) {
+        var cancelled = String(error && error.message || error).toLowerCase().includes('cancel');
+        setStatus(cancelled ? 'Signature cancelled. Nothing changed.' : 'The passport could not be sealed. Try the wallet again.', 'error');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    root.querySelectorAll('[data-stamp-button]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var id = button.getAttribute('data-stamp-id');
+        if (!id) return;
+        var current = localStamps();
+        if (!current[id]) current[id] = { id: id, at: new Date().toISOString(), via: 'tezos-passport-office' };
+        writeJson(DATA.storage.localStamps, current);
+        paintLocal();
+        setStatus('Local stamp added. It has not left this browser.', 'ready');
+      });
+    });
+
+    root.querySelector('[data-open-wallet]')?.addEventListener('click', function () {
+      window.dispatchEvent(new CustomEvent('pc:open-wallet-menu'));
+    });
+    root.querySelector('[data-load-sample]')?.addEventListener('click', function () {
+      history.replaceState(null, '', publicUrl(DATA.sampleAddress));
+      var input = root.querySelector('[data-address-input]');
+      if (input) input.value = DATA.sampleAddress;
+      loadAddress(DATA.sampleAddress, 'sample');
+    });
+    root.querySelector('[data-address-form]')?.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var input = root.querySelector('[data-address-input]');
+      var address = input ? input.value.trim() : '';
+      if (ADDRESS_RE.test(address)) history.replaceState(null, '', publicUrl(address));
+      loadAddress(address, 'public');
+    });
+    root.querySelector('[data-seal-journey]')?.addEventListener('click', sealJourney);
+    root.querySelector('[data-share-public]')?.addEventListener('click', function () {
+      if (state.address) copyText(publicUrl(state.address), 'Public wallet passport copied. Local stamps were not included.');
+    });
+    root.querySelector('[data-copy-proof]')?.addEventListener('click', function () {
+      if (state.latestProof) copyText(JSON.stringify(state.latestProof, null, 2), 'Signed proof copied.');
+    });
+
+    window.addEventListener('pc:wallet-change', function (event) {
+      var wallet = event.detail;
+      if (wallet && wallet.chain === 'tezos' && ADDRESS_RE.test(wallet.address || '')) {
+        loadAddress(wallet.address, 'connected');
+      }
+    });
+    window.addEventListener('storage', function (event) {
+      if (event.key === DATA.storage.localStamps || event.key === DATA.storage.signedSeals) paint();
+    });
+
+    paint();
+    var queryAddress = new URLSearchParams(window.location.search).get('address') || '';
+    var connectedAddress = readConnectedWallet();
+    if (ADDRESS_RE.test(queryAddress)) {
+      var queryInput = root.querySelector('[data-address-input]');
+      if (queryInput) queryInput.value = queryAddress;
+      loadAddress(queryAddress, connectedAddress === queryAddress ? 'connected' : 'public');
+    } else if (connectedAddress) {
+      loadAddress(connectedAddress, 'connected');
+    }
+  })();
+</script>
+
+<style is:global>
+  .passport-office {
+    --passport-ink: #17212b;
+    --passport-paper: #f6f1e5;
+    --passport-paper-bright: #fffdf6;
+    --passport-rule: rgba(23, 33, 43, 0.2);
+    --passport-blue: #1e5b99;
+    --passport-red: #b44537;
+    --passport-green: #176d5b;
+    --passport-yellow: #d8a62d;
+    min-height: 100vh;
+    padding: 12px 18px 110px;
+    color: var(--passport-ink);
+    background:
+      linear-gradient(90deg, rgba(23, 33, 43, 0.035) 1px, transparent 1px) 0 0 / 34px 34px,
+      linear-gradient(#f7f5ee, #e8eef0 72%, #dce6e8);
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  }
+
+  .passport-office button,
+  .passport-office input { font: inherit; }
+
+  .office-bar,
+  .office-intro,
+  .passport-book,
+  .seal-desk,
+  .local-ledger,
+  .passport-footnotes {
+    width: min(1220px, 100%);
+    margin-inline: auto;
+  }
+
+  .office-bar {
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-block: 1px solid var(--passport-ink);
+    background: rgba(255, 253, 246, 0.88);
+    padding: 8px 12px;
+  }
+
+  .office-brand {
+    color: inherit;
+    display: grid;
+    grid-template-columns: 30px auto;
+    column-gap: 8px;
+    text-decoration: none;
+    line-height: 1;
+  }
+
+  .office-brand > span {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    min-width: 30px;
+    aspect-ratio: 1;
+    background: var(--passport-ink);
+    color: white;
+    font: 800 10px/1 'JetBrains Mono', monospace;
+  }
+
+  .office-brand strong { font-size: 14px; letter-spacing: 0; }
+  .office-brand em { color: #66727a; font: 600 9px/1.2 'JetBrains Mono', monospace; font-style: normal; text-transform: uppercase; }
+
+  .office-bar nav {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font: 700 9px/1 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+
+  .office-bar nav a { color: #385466; text-decoration: none; }
+  .office-bar nav a:hover { color: var(--passport-red); }
+
+  .office-intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+    gap: 18px 36px;
+    align-items: end;
+    padding: 42px 0 26px;
+  }
+
+  .eyebrow {
+    margin: 0 0 10px;
+    color: var(--passport-red);
+    font: 700 10px/1.2 'JetBrains Mono', monospace;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .office-intro h1 {
+    max-width: 820px;
+    margin: 0;
+    font: 700 clamp(42px, 6.6vw, 82px)/0.93 'Syne', 'Inter Variable', sans-serif;
+    letter-spacing: 0;
+  }
+
+  .office-intro__dek {
+    max-width: 760px;
+    margin: 18px 0 0;
+    color: #394957;
+    font-size: clamp(16px, 2vw, 20px);
+    line-height: 1.45;
+  }
+
+  .office-intro__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .command {
+    min-height: 42px;
+    border: 1px solid var(--passport-ink);
+    border-radius: 4px;
+    background: var(--passport-paper-bright);
+    color: var(--passport-ink);
+    padding: 0 12px;
+    cursor: pointer;
+    font: 700 10px/1 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+
+  .command:hover:not(:disabled) { background: #e7edf0; }
+  .command:disabled { cursor: not-allowed; opacity: 0.45; }
+  .command--ink { background: var(--passport-ink); color: white; }
+  .command--ink:hover:not(:disabled) { background: #324452; }
+  .command--seal { border-color: var(--passport-red); background: var(--passport-red); color: white; }
+  .command--seal:hover:not(:disabled) { background: #94362b; }
+
+  .office-status {
+    grid-column: 1 / -1;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    border-left: 3px solid #77858d;
+    background: rgba(255,255,255,0.6);
+    padding: 5px 9px;
+    color: #56636c;
+    font: 600 10px/1.35 'JetBrains Mono', monospace;
+  }
+
+  .office-status[data-kind="ready"] { border-color: var(--passport-green); color: var(--passport-green); }
+  .office-status[data-kind="error"] { border-color: var(--passport-red); color: var(--passport-red); }
+  .office-status[data-kind="loading"] { border-color: var(--passport-yellow); color: #75570d; }
+
+  .address-desk {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    border-top: 1px solid var(--passport-rule);
+    padding-top: 14px;
+  }
+
+  .address-desk label {
+    font: 700 10px/1.2 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+
+  .address-desk > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .address-desk input {
+    min-width: 0;
+    min-height: 42px;
+    border: 1px solid var(--passport-ink);
+    border-right: 0;
+    border-radius: 4px 0 0 4px;
+    background: white;
+    color: var(--passport-ink);
+    padding: 0 12px;
+    font: 650 13px/1.2 'JetBrains Mono', monospace;
+  }
+  .address-desk button {
+    min-height: 42px;
+    border: 1px solid var(--passport-ink);
+    border-radius: 0 4px 4px 0;
+    background: var(--passport-blue);
+    color: white;
+    padding: 0 16px;
+    cursor: pointer;
+    font: 700 10px/1 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+
+  .passport-book {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 2px solid var(--passport-ink);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--passport-paper);
+    box-shadow: 0 22px 60px rgba(26, 44, 55, 0.18);
+  }
+
+  .passport-page {
+    min-width: 0;
+    min-height: 680px;
+    padding: 22px;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(23, 33, 43, 0.065) 1px, transparent 0) 0 0 / 17px 17px,
+      var(--passport-paper);
+  }
+
+  .identity-page { border-right: 1px solid var(--passport-ink); }
+  .visa-page { box-shadow: inset 9px 0 18px rgba(23, 33, 43, 0.08); }
+
+  .page-running-head {
+    min-height: 28px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    border-block: 1px solid var(--passport-rule);
+    color: #4a5963;
+    font: 700 8px/1 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+  .page-running-head strong { color: var(--passport-ink); font-size: 10px; text-align: center; }
+  .page-running-head span:last-child { text-align: right; }
+
+  .identity-grid {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.72fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: center;
+    padding: 28px 0 20px;
+  }
+
+  .portrait-frame {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    border: 1px solid var(--passport-ink);
+    background: #dce9e4;
+    overflow: hidden;
+  }
+  .portrait-frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 55%, rgba(23,33,43,0.18));
+    pointer-events: none;
+  }
+  .portrait-frame img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+  .portrait-frame span {
+    position: absolute;
+    z-index: 1;
+    left: 7px;
+    bottom: 7px;
+    background: var(--passport-ink);
+    color: white;
+    padding: 5px 6px;
+    font: 700 8px/1 'JetBrains Mono', monospace;
+  }
+
+  .identity-facts { margin: 0; display: grid; gap: 14px; }
+  .identity-facts div { border-bottom: 1px solid var(--passport-rule); padding-bottom: 8px; }
+  .identity-facts dt,
+  .wallet-line span,
+  .ledger-totals span {
+    color: #68747d;
+    font: 700 8px/1.2 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+  .identity-facts dd { margin: 4px 0 0; font: 700 17px/1.15 'Lora', Georgia, serif; overflow-wrap: anywhere; }
+
+  .wallet-line {
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--passport-rule);
+    background: rgba(255,255,255,0.45);
+    padding: 10px;
+  }
+  .wallet-line code { color: var(--passport-blue); font: 650 10px/1.35 'JetBrains Mono', monospace; overflow-wrap: anywhere; }
+
+  .ledger-totals {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-block: 1px solid var(--passport-ink);
+    margin-top: 20px;
+  }
+  .ledger-totals > div { min-width: 0; padding: 14px 10px; border-right: 1px solid var(--passport-rule); }
+  .ledger-totals > div:last-child { border-right: 0; }
+  .ledger-totals strong { display: block; margin-top: 7px; font: 750 24px/1 'Inter Variable', sans-serif; }
+  .ledger-totals small { display: block; margin-top: 5px; color: #6d777e; font: 600 8px/1.25 'JetBrains Mono', monospace; }
+
+  .privacy-mark {
+    display: grid;
+    grid-template-columns: 66px 1fr;
+    gap: 12px;
+    align-items: center;
+    margin-top: 20px;
+  }
+  .privacy-mark > span {
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 3px double var(--passport-green);
+    border-radius: 50%;
+    color: var(--passport-green);
+    transform: rotate(-8deg);
+    font: 800 9px/1 'JetBrains Mono', monospace;
+  }
+  .privacy-mark p { margin: 0; color: #52616a; font-size: 12px; line-height: 1.45; }
+
+  .visa-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    padding-top: 18px;
+  }
+
+  .visa-stamp {
+    min-width: 0;
+    min-height: 276px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    border: 1px solid color-mix(in srgb, var(--visa-accent) 70%, var(--passport-ink));
+    background: color-mix(in srgb, var(--visa-accent) 7%, white);
+    padding: 12px;
+    transform: rotate(-0.6deg);
+  }
+  .visa-stamp:nth-child(even) { transform: rotate(0.7deg); }
+  .visa-stamp.is-future { filter: grayscale(0.65); opacity: 0.68; border-style: dashed; }
+  .visa-stamp.is-unlocked { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--visa-accent) 22%, transparent); }
+
+  .visa-stamp__head,
+  .visa-stamp footer { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .visa-stamp__head {
+    border-bottom: 1px solid color-mix(in srgb, var(--visa-accent) 35%, transparent);
+    padding-bottom: 7px;
+    color: var(--visa-accent);
+    font: 800 8px/1 'JetBrains Mono', monospace;
+  }
+  .visa-stamp__body { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: center; padding-top: 12px; }
+  .visa-stamp__mark {
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--visa-accent);
+    border-radius: 50%;
+    color: var(--visa-accent);
+    font: 800 12px/1 'JetBrains Mono', monospace;
+  }
+  .visa-stamp__body p { margin: 0 0 3px; color: var(--visa-accent); font: 700 7px/1.2 'JetBrains Mono', monospace; text-transform: uppercase; }
+  .visa-stamp h2 { margin: 0; font: 700 18px/1 'Lora', Georgia, serif; letter-spacing: 0; }
+  .visa-stamp__body span { display: block; margin-top: 4px; color: #68747d; font: 650 7px/1.2 'JetBrains Mono', monospace; }
+  .visa-stamp__note { margin: 10px 0; color: #4e5b63; font-size: 10px; line-height: 1.38; }
+
+  .visa-stamp__tokens {
+    min-height: 50px;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    overflow: hidden;
+  }
+  .visa-stamp__tokens > span { color: #6c777e; font: 600 8px/1.35 'JetBrains Mono', monospace; }
+  .visa-stamp__tokens a {
+    min-width: 40px;
+    display: grid;
+    justify-items: center;
+    color: var(--passport-ink);
+    text-decoration: none;
+    font: 700 7px/1 'JetBrains Mono', monospace;
+  }
+  .visa-stamp__tokens img { width: 38px; height: 38px; object-fit: cover; border: 1px solid var(--passport-rule); background: white; }
+  .visa-stamp footer { border-top: 1px solid color-mix(in srgb, var(--visa-accent) 28%, transparent); padding-top: 7px; font: 700 8px/1 'JetBrains Mono', monospace; }
+  .visa-stamp footer a { color: var(--visa-accent); text-decoration: none; }
+  .visa-stamp footer span { color: #747d82; }
+
+  .seal-desk {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 0.68fr) 118px;
+    gap: 28px;
+    align-items: center;
+    border-block: 2px solid var(--passport-ink);
+    margin-top: 42px;
+    padding: 28px 0;
+  }
+  .seal-desk h2,
+  .section-head h2 { margin: 0; font: 700 clamp(28px, 4vw, 48px)/1 'Syne', sans-serif; letter-spacing: 0; }
+  .seal-desk p:not(.eyebrow) { max-width: 660px; margin: 12px 0 0; color: #4b5a64; line-height: 1.52; }
+  .seal-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .seal-controls .command--seal { grid-column: 1 / -1; }
+  .seal-controls output {
+    grid-column: 1 / -1;
+    min-height: 36px;
+    border-left: 3px solid var(--passport-yellow);
+    background: rgba(255,255,255,0.62);
+    padding: 8px 10px;
+    color: #5d6870;
+    font: 600 9px/1.35 'JetBrains Mono', monospace;
+  }
+  .seal-impression {
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    border: 6px double #7c858a;
+    border-radius: 50%;
+    color: #7c858a;
+    transform: rotate(-8deg);
+  }
+  .seal-impression.is-sealed { border-color: var(--passport-red); color: var(--passport-red); }
+  .seal-impression span,
+  .seal-impression small { font: 800 9px/1.2 'JetBrains Mono', monospace; }
+  .seal-impression strong { margin: 4px 0; font: 800 14px/1 'JetBrains Mono', monospace; }
+
+  .local-ledger { padding-top: 54px; }
+  .section-head { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 22px; }
+  .section-head > p { max-width: 420px; margin: 0; color: #5a6871; line-height: 1.45; }
+  .local-stamp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .local-stamp {
+    min-height: 220px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    border: 1px solid var(--passport-ink);
+    border-radius: 4px;
+    background: rgba(255,253,246,0.9);
+    padding: 14px;
+  }
+  .local-stamp.is-stamped { border-color: var(--passport-green); box-shadow: inset 0 0 0 3px rgba(23,109,91,0.13); }
+  .local-stamp > div,
+  .local-stamp footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .local-stamp > div { color: var(--passport-red); font: 750 8px/1 'JetBrains Mono', monospace; text-transform: uppercase; }
+  .local-stamp h3 { margin: 18px 0 6px; font-size: 20px; line-height: 1.1; letter-spacing: 0; }
+  .local-stamp p { margin: 0 0 16px; color: #58656e; font-size: 12px; line-height: 1.42; }
+  .local-stamp footer a,
+  .local-stamp footer button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--passport-ink);
+    border-radius: 3px;
+    background: white;
+    color: var(--passport-ink);
+    padding: 0 10px;
+    text-decoration: none;
+    cursor: pointer;
+    font: 700 8px/1 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+  .local-stamp footer button:disabled { border-color: var(--passport-green); color: var(--passport-green); cursor: default; }
+  .local-stamp > small { margin-top: 10px; color: #6b747a; font: 600 8px/1.3 'JetBrains Mono', monospace; }
+
+  .passport-footnotes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    border-top: 1px solid var(--passport-ink);
+    margin-top: 44px;
+    padding-top: 18px;
+  }
+  .passport-footnotes strong { font: 750 10px/1.2 'JetBrains Mono', monospace; text-transform: uppercase; }
+  .passport-footnotes p { margin: 8px 0 0; color: #58656e; font-size: 12px; line-height: 1.45; }
+  .passport-footnotes a { color: var(--passport-blue); }
+  .passport-footnotes code { overflow-wrap: anywhere; }
+
+  @media (max-width: 940px) {
+    .office-intro { grid-template-columns: 1fr; }
+    .office-intro__actions { grid-template-columns: auto auto 1fr; align-items: center; }
+    .office-status { grid-column: auto; }
+    .passport-book { grid-template-columns: 1fr; }
+    .identity-page { border-right: 0; border-bottom: 1px solid var(--passport-ink); }
+    .visa-page { box-shadow: inset 0 9px 18px rgba(23, 33, 43, 0.08); }
+    .passport-page { min-height: auto; }
+    .seal-desk { grid-template-columns: 1fr minmax(300px, 0.8fr); }
+    .seal-impression { display: none; }
+    .local-stamp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 700px) {
+    .passport-office { padding: 8px 10px 120px; }
+    .office-bar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+    .office-bar nav { order: 3; width: 100%; margin: 0; justify-content: space-between; border-top: 1px solid var(--passport-rule); padding-top: 9px; }
+    .office-bar #wallet-connect { margin-left: auto; }
+    .office-intro { padding-top: 30px; }
+    .office-intro h1 { font-size: clamp(40px, 14vw, 62px); }
+    .office-intro__actions { grid-template-columns: 1fr 1fr; }
+    .office-status { grid-column: 1 / -1; }
+    .address-desk { grid-template-columns: 1fr; }
+    .address-desk > div { grid-template-columns: 1fr; gap: 7px; }
+    .address-desk input { border-right: 1px solid var(--passport-ink); border-radius: 4px; }
+    .address-desk button { border-radius: 4px; }
+    .passport-page { padding: 14px; }
+    .identity-grid { grid-template-columns: 112px minmax(0, 1fr); gap: 12px; }
+    .identity-facts dd { font-size: 14px; }
+    .ledger-totals { grid-template-columns: 1fr; }
+    .ledger-totals > div { border-right: 0; border-bottom: 1px solid var(--passport-rule); }
+    .ledger-totals > div:last-child { border-bottom: 0; }
+    .visa-grid { grid-template-columns: 1fr; }
+    .visa-stamp { transform: none !important; }
+    .seal-desk { grid-template-columns: 1fr; gap: 20px; margin-top: 30px; }
+    .section-head { display: block; }
+    .section-head > p { margin-top: 12px; }
+    .local-stamp-grid { grid-template-columns: 1fr; }
+    .passport-footnotes { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 420px) {
+    .identity-grid { grid-template-columns: 1fr; }
+    .portrait-frame { width: 136px; }
+    .privacy-mark { grid-template-columns: 54px 1fr; }
+    .seal-controls { grid-template-columns: 1fr; }
+    .seal-controls .command--seal,
+    .seal-controls output { grid-column: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .visa-stamp { transform: none; }
+  }
+</style>

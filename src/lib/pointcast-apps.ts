@@ -34,6 +34,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'pointcast-passport',
+    name: 'PointCast Tezos Passport',
+    kicker: 'LOCAL STAMPS · TEZOS VISAS · SIGNED SEALS',
+    description: 'A dual-ledger passport that keeps PointCast rituals private, reads public collection holdings from TzKT, and can seal a journey with one optional wallet signature.',
+    url: 'https://pointcast.xyz/passport',
+    path: '/passport',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.PASS',
+    kind: 'pointcast',
+  },
+  {
     slug: 'chart-of-the-day',
     name: 'Chart of the Day',
     kicker: 'DAILY DATA · LEDGER PULSE',

@@ -9,6 +9,7 @@ export const GET: APIRoute = async () => {
     entrypoints: {
       play: 'https://pointcast.xyz/play',
       passport: 'https://pointcast.xyz/passport',
+      passportJson: 'https://pointcast.xyz/passport.json',
       quests: 'https://pointcast.xyz/quests',
       walk: 'https://pointcast.xyz/walk',
       roomWeather: 'https://pointcast.xyz/room-weather',
@@ -25,7 +26,7 @@ export const GET: APIRoute = async () => {
     derbySeason: DERBY_SEASON,
     agentProtocol: {
       questReceipts: 'Use the quest.receiptShape fields. Cite source URLs, include generatedAt, and avoid claiming state not present in public JSON.',
-      passport: 'Passport state is browser-local. Agents should describe stamp ids and route intent, not infer a visitor has collected them.',
+      passport: 'Ritual stamps are browser-local; Tezos visas are public TzKT holdings; an optional journey seal is wallet-signed but not an on-chain transaction. Never collapse those three claims.',
       roomWeather: 'Room weather is an editorial routing layer, not meteorology. Use /api/weather for station weather.',
     },
   };

@@ -121,6 +121,7 @@ export async function signTezosPayload(message: string): Promise<{
   address: string;
   payload: string;
   signature: string;
+  publicKey?: string;
 }> {
   const { wallet } = getToolkit();
   const address = await connectKukai();
@@ -130,7 +131,8 @@ export async function signTezosPayload(message: string): Promise<{
     payload,
     sourceAddress: address,
   });
-  return { address, payload, signature };
+  const account = await wallet.client.getActiveAccount();
+  return { address, payload, signature, publicKey: account?.publicKey };
 }
 
 /**
