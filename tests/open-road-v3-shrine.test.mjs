@@ -73,5 +73,5 @@ test('the first three Open Road editions remain discoverable', () => {
   assert.match(launchStripSource, /href: '\/open-road'/);
   assert.match(launchStripSource, /href: '\/open-road-v2'/);
   assert.match(launchStripSource, /href: '\/open-road-v3'/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 10\)/);
+  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });

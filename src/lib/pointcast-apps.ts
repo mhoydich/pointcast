@@ -133,6 +133,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v5',
+    name: 'Open Road V',
+    kicker: 'TEN FRAGMENTS · FIVE PETALS · MAKE A WINDOW',
+    description: 'Ten older works become fragments for a five-petal window you can compose, revise, complete, and share.',
+    url: 'https://pointcast.xyz/open-road-v5',
+    path: '/open-road-v5',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',

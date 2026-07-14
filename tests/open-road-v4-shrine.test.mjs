@@ -79,5 +79,5 @@ test('all four Open Road editions are discoverable', async () => {
     assert.match(launchStripSource, new RegExp("href: '" + path + "'"));
   }
   assert.match(appsSource, /path: '\/open-road-v4'/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 10\)/);
+  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });
