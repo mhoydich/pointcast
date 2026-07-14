@@ -122,6 +122,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v4',
+    name: 'Open Road IV',
+    kicker: 'FIVE CALL · FIVE ANSWER · GENTLE BELLS',
+    description: 'Ten older works form five visual call-and-response pairs, with drifting motion and optional bells sounding the space between them.',
+    url: 'https://pointcast.xyz/open-road-v4',
+    path: '/open-road-v4',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',

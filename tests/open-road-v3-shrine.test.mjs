@@ -65,7 +65,7 @@ test('Open Road III keeps the wider-world shrine accessible, local, and calm', (
   assert.match(shrineSource, /href="\/open-road-v2"/);
 });
 
-test('all three Open Road editions remain discoverable', () => {
+test('the first three Open Road editions remain discoverable', () => {
   assert.match(appsSource, /slug: 'open-road-shrine'/);
   assert.match(appsSource, /slug: 'open-road-v2'/);
   assert.match(appsSource, /slug: 'open-road-v3'/);
@@ -73,5 +73,5 @@ test('all three Open Road editions remain discoverable', () => {
   assert.match(launchStripSource, /href: '\/open-road'/);
   assert.match(launchStripSource, /href: '\/open-road-v2'/);
   assert.match(launchStripSource, /href: '\/open-road-v3'/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 9\)/);
+  assert.match(homeSource, /discoveryAppItems\.slice\(0, 10\)/);
 });
