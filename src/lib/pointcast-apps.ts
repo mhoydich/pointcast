@@ -111,6 +111,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v3',
+    name: 'Open Road III',
+    kicker: 'BEYOND THE WINDSHIELD · TWO PASSAGES · BREATH',
+    description: 'Ten landscapes, figures, scores, and atmospheric collages form two five-station passages beyond the car and into the wider world.',
+    url: 'https://pointcast.xyz/open-road-v3',
+    path: '/open-road-v3',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
