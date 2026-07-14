@@ -100,6 +100,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v2',
+    name: 'Open Road II',
+    kicker: 'TWO PASSAGES · TEN PAINTINGS · BREATH',
+    description: 'Ten 1955 Chevrolet paintings become two five-station passages, with each complete breath revealing the next image.',
+    url: 'https://pointcast.xyz/open-road-v2',
+    path: '/open-road-v2',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
