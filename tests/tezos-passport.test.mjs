@@ -63,6 +63,8 @@ test('passport UI exposes stable responsive controls and visual assets', () => {
   assert.match(page, /data-seal-journey/);
   assert.match(page, /data-share-public/);
   assert.match(page, /https:\/\/noun\.pics\/137\.svg/);
+  assert.match(page, /\/images\/coffee-mugs\/espresso\.svg/);
+  assert.match(page, /image\.addEventListener\('error', function \(\) \{ image\.remove\(\); \}\)/);
   assert.match(page, /@media \(max-width: 700px\)/);
   assert.match(page, /prefers-reduced-motion/);
 });
