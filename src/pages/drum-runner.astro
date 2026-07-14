@@ -1,22 +1,15 @@
 ---
-/**
- * /drum-runner — Beat Runner v6: Pulse Arena.
- *
- * Four directions converge on one Noun. The AudioContext clock drives the
- * backing pulse, target approach, input judgment, misses, and round endings.
- * The player's press is the audible drum action—there is no delayed jump or
- * separate collision moment between the beat and its consequence.
- */
+/** /drum-runner — Beat Runner v7: Loop Siege. */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp';
-import { ARENA_ROUNDS, LANE_META, LANE_ORDER } from '../lib/drum-runner-v6';
+import { SIEGE_LANE_META, SIEGE_LANE_ORDER, SIEGE_WAVES } from '../lib/drum-runner-v7';
 
-const title = 'Beat Runner v6 · Pulse Arena';
-const description = 'A fast four-direction rhythm arena where every action makes the beat, powered by one latency-aware audio clock.';
+const title = 'Beat Runner v7 · Loop Siege';
+const description = 'A fast four-gate rhythm defense game where every drum hit attacks now and returns one loop later as a ghost attack.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'VideoGame',
-  name: 'Beat Runner v6: Pulse Arena',
+  name: 'Beat Runner v7: Loop Siege',
   url: 'https://pointcast.xyz/drum-runner',
   description,
   gamePlatform: 'Web browser',
@@ -25,502 +18,132 @@ const jsonLd = {
 ---
 
 <BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
-  <div class="arena" id="arena" data-phase="intro" data-round="0" data-rush="false">
-    <header class="arena__hud" aria-label="Pulse Arena status">
-      <div class="arena__score-block">
-        <span>score</span>
-        <strong id="arena-score">0</strong>
-      </div>
-      <div class="arena__round-block">
-        <span id="arena-round-no">ROUND 01 / 04</span>
-        <strong id="arena-round-name">Four Corners</strong>
-        <span id="arena-tempo">126 BPM</span>
-      </div>
-      <div class="arena__combo-block">
-        <span>combo</span>
-        <strong id="arena-combo">—</strong>
-        <span id="arena-accuracy">100%</span>
-      </div>
-      <div class="arena__shield" aria-label="Four of four shields remaining" id="arena-shields">
-        <span></span><span></span><span></span><span></span>
-      </div>
-      <div class="arena__rush" aria-label="Rush meter">
-        <span>RUSH</span>
-        <i><b id="arena-rush-fill"></b></i>
-        <strong id="arena-rush-copy">0</strong>
-      </div>
+  <div class="siege" id="siege" data-phase="intro" data-wave="0" data-ghost="false" data-drop="false">
+    <header class="siege__hud" aria-label="Loop Siege status">
+      <div><span>score</span><strong id="siege-score">0</strong></div>
+      <div class="siege__wave-block"><span id="siege-wave-no">WAVE 01 / 04</span><strong id="siege-wave-name">First Ring</strong><span id="siege-tempo">132 BPM</span></div>
+      <div><span>chain</span><strong id="siege-combo">—</strong><span id="siege-kills">0 clears</span></div>
+      <div class="siege__shields" id="siege-shields" aria-label="4 of 4 core shields remaining"><span></span><span></span><span></span><span></span></div>
+      <div class="siege__power" id="siege-power" aria-label="Next earned power at six clears"><span>POWER</span><strong id="siege-power-copy">0 / 6</strong><i><b id="siege-power-fill"></b></i></div>
     </header>
 
-    <section class="arena__stage" id="arena-stage" aria-label="Pulse Arena playfield">
+    <section class="siege__stage" id="siege-stage" aria-label="Loop Siege playfield">
       <canvas
-        id="arena-canvas"
+        id="siege-canvas"
         role="img"
-        aria-label="Four colored rhythm lanes converge from west, north, south, and east on a central Noun. Strike the matching drum as each pulse reaches the center."
-      >Pulse Arena rhythm game canvas.</canvas>
+        aria-label="Four colored gates surround a center Noun. Strike any drum on the eighth-note grid to attack that gate and write a sixteen-step loop. The previous loop returns as ghost attacks."
+      >Loop Siege rhythm defense canvas.</canvas>
 
-      <div class="arena__core" id="arena-core" aria-hidden="true">
-        <span></span>
-        <img id="arena-noun" src="https://noun.pics/137.svg" alt="" width="92" height="92" />
+      <button class="siege__core" id="siege-drop" type="button" aria-label="Center Noun. DROP is not charged." disabled>
+        <span aria-hidden="true"></span>
+        <img id="siege-noun" src="https://noun.pics/137.svg" alt="" width="88" height="88" />
+        <small id="siege-drop-copy">CORE</small>
+      </button>
+
+      <span class="siege__gate siege__gate--west" aria-hidden="true">← KICK</span>
+      <span class="siege__gate siege__gate--north" aria-hidden="true">↑ CLAP</span>
+      <span class="siege__gate siege__gate--south" aria-hidden="true">↓ TOM</span>
+      <span class="siege__gate siege__gate--east" aria-hidden="true">BELL →</span>
+      <div class="siege__judge" id="siege-judge" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="siege__flash" id="siege-flash" aria-hidden="true" hidden></div>
+
+      <div class="siege__loop" id="siege-loop" role="img" aria-label="Sixteen-step loop. Empty and ready to record.">
+        <div class="siege__loop-head"><span id="siege-loop-mode">WRITE LOOP 01</span><strong id="siege-loop-clock">01 / 16</strong></div>
+        <div class="siege__loop-cells" aria-hidden="true">
+          {Array.from({ length: 16 }, (_, step) => <span data-loop-step={step}><i></i><b></b></span>)}
+        </div>
       </div>
 
-      <span class="arena__lane-label arena__lane-label--west" aria-hidden="true">← KICK</span>
-      <span class="arena__lane-label arena__lane-label--north" aria-hidden="true">↑ CLAP</span>
-      <span class="arena__lane-label arena__lane-label--south" aria-hidden="true">↓ TOM</span>
-      <span class="arena__lane-label arena__lane-label--east" aria-hidden="true">BELL →</span>
-
-      <div class="arena__judge" id="arena-judge" role="status" aria-live="polite" aria-atomic="true"></div>
-      <div class="arena__round-flash" id="arena-round-flash" aria-hidden="true" hidden></div>
-
-      <div class="arena__overlay" id="arena-overlay">
-        <article class="arena__card">
-          <div class="arena__card-art" style={`background-image:linear-gradient(180deg,rgba(5,8,17,.04),rgba(5,8,17,.82)),url(${marineBackdrop.src})`} aria-hidden="true">
-            <span>ONE CLOCK</span>
-            <strong>FOUR DRUMS</strong>
+      <div class="siege__overlay" id="siege-overlay">
+        <article class="siege__card">
+          <div class="siege__card-art" style={`background-image:linear-gradient(180deg,rgba(4,7,17,.02),rgba(4,7,17,.84)),url(${marineBackdrop.src})`} aria-hidden="true">
+            <span>PLAY NOW</span><strong>FIGHT LATER</strong><small>YOUR LOOP HAS YOUR BACK</small>
           </div>
-          <div class="arena__card-body">
-            <div class="arena__eyebrow">
-              <span id="arena-card-kicker">BEAT RUNNER V6 · PULSE ARENA</span>
-              <span id="arena-card-tempo">126→168 BPM · ~50 SEC</span>
-            </div>
-            <h1 id="arena-card-title">THE BEAT IS<br />THE ACTION.</h1>
-            <p id="arena-card-sub">Pulses rush in from four directions. Strike the matching drum at the center. Every press makes the groove—no jump delay, no separate collision.</p>
+          <div class="siege__card-body">
+            <div class="siege__eyebrow"><span id="siege-card-kicker">BEAT RUNNER V7 · LOOP SIEGE</span><span id="siege-card-tempo">132→180 BPM · ~55 SEC</span></div>
+            <h1 id="siege-card-title">WRITE THE BEAT.<br />DEFEND THE NOUN.</h1>
+            <p id="siege-card-sub">Choose the threatened gate. Every hit fires now and enters a 16-step loop. One loop later, your ghost drummer fires the same pattern again.</p>
 
-            <div class="arena__noun-picker" id="arena-noun-picker" aria-label="Choose your arena Noun">
-              <button type="button" data-noun="137" aria-pressed="true"><img src="https://noun.pics/137.svg" alt="" width="44" height="44" /><span>Noun 137</span></button>
-              <button type="button" data-noun="418" aria-pressed="false"><img src="https://noun.pics/418.svg" alt="" width="44" height="44" /><span>Noun 418</span></button>
-              <button type="button" data-noun="855" aria-pressed="false"><img src="https://noun.pics/855.svg" alt="" width="44" height="44" /><span>Noun 855</span></button>
+            <div class="siege__noun-picker" id="siege-noun-picker" aria-label="Choose your center Noun">
+              <button type="button" data-noun="137" aria-pressed="true"><img src="https://noun.pics/137.svg" alt="" width="42" height="42" /><span>Noun 137</span></button>
+              <button type="button" data-noun="418" aria-pressed="false"><img src="https://noun.pics/418.svg" alt="" width="42" height="42" /><span>Noun 418</span></button>
+              <button type="button" data-noun="855" aria-pressed="false"><img src="https://noun.pics/855.svg" alt="" width="42" height="42" /><span>Noun 855</span></button>
             </div>
 
-            <div class="arena__card-stats" aria-label="Pulse Arena details">
-              <span><small id="arena-stat-a-label">actions</small><strong id="arena-stat-a">D F J K</strong></span>
-              <span><small id="arena-stat-b-label">timing</small><strong id="arena-stat-b">one clock</strong></span>
-              <span><small id="arena-stat-c-label">rounds</small><strong id="arena-stat-c">4 fast</strong></span>
+            <div class="siege__card-stats" aria-label="Loop Siege details">
+              <span><small id="siege-stat-a-label">choice</small><strong id="siege-stat-a">any gate</strong></span>
+              <span><small id="siege-stat-b-label">memory</small><strong id="siege-stat-b">16 steps</strong></span>
+              <span><small id="siege-stat-c-label">reward</small><strong id="siege-stat-c">ghost fire</strong></span>
             </div>
 
-            <ol class="arena__route" id="arena-route" aria-label="Four Pulse Arena rounds">
-              {ARENA_ROUNDS.map((round, index) => (
-                <li data-route-index={index}><span>{round.number}</span><b>{round.name}</b><small>{round.bpm}</small></li>
-              ))}
+            <ol class="siege__route" id="siege-route" aria-label="Four Loop Siege waves">
+              {SIEGE_WAVES.map((wave, index) => <li data-route-index={index}><span>{wave.number}</span><b>{wave.name}</b><small>{wave.bpm} · {wave.noteBudget} hits</small></li>)}
             </ol>
-
-            <p class="arena__best" id="arena-best">best — pts</p>
-            <button class="arena__go" id="arena-go" type="button">▶ ENTER PULSE ARENA</button>
-            <p class="arena__input-note">D F J K · ARROWS · 8 CLEAN HITS REPAIR A SHIELD</p>
+            <p class="siege__best" id="siege-best">best — pts</p>
+            <button class="siege__go" id="siege-go" type="button">▶ START THE SIEGE</button>
+            <p class="siege__input-note">D F J K · ARROWS · TAP · SPACE QUEUES DROP</p>
           </div>
         </article>
       </div>
     </section>
 
-    <div class="arena__pads" role="group" aria-label="Pulse Arena drums">
-      {LANE_ORDER.map((lane) => (
+    <div class="siege__pads" role="group" aria-label="Loop Siege attack drums">
+      {SIEGE_LANE_ORDER.map((lane) => (
         <button
-          class={`arena__pad arena__pad--${lane}`}
+          class={`siege__pad siege__pad--${lane}`}
           type="button"
           data-lane={lane}
-          aria-label={`Strike ${lane} ${LANE_META[lane].label} lane. ${LANE_META[lane].key} key or ${LANE_META[lane].arrow} arrow.`}
-          aria-keyshortcuts={`${LANE_META[lane].key} ${LANE_META[lane].arrowKey}`}
-          style={`--lane:${LANE_META[lane].color}`}
+          aria-label={`Attack ${lane} ${SIEGE_LANE_META[lane].label}. ${SIEGE_LANE_META[lane].key} key or ${SIEGE_LANE_META[lane].arrow} arrow.`}
+          aria-keyshortcuts={`${SIEGE_LANE_META[lane].key} ${SIEGE_LANE_META[lane].arrowKey}`}
+          style={`--lane:${SIEGE_LANE_META[lane].color}`}
           disabled
-        >
-          <span class="arena__pad-arrow">{LANE_META[lane].arrow}</span>
-          <span><strong>{LANE_META[lane].label}</strong><small>{LANE_META[lane].key}</small></span>
-        </button>
+        ><span>{SIEGE_LANE_META[lane].arrow}</span><strong>{SIEGE_LANE_META[lane].label}</strong><small>{SIEGE_LANE_META[lane].key}</small></button>
       ))}
     </div>
 
-    <div class="arena__utility">
-      <button id="arena-sound" type="button" aria-pressed="true">SOUND ON</button>
-      <div class="arena__sync" aria-label="Timing sync adjustment">
-        <button id="arena-sync-minus" type="button" aria-label="Move targets 15 milliseconds earlier">−</button>
-        <span id="arena-sync-copy">SYNC 0MS</span>
-        <button id="arena-sync-plus" type="button" aria-label="Move targets 15 milliseconds later">＋</button>
-      </div>
-      <span id="arena-latency">latency auto</span>
+    <div class="siege__utility">
+      <button id="siege-sound" type="button" aria-pressed="true">SOUND ON</button>
+      <div class="siege__sync" aria-label="Timing sync adjustment"><button id="siege-sync-minus" type="button" aria-label="Move the grid 15 milliseconds earlier">−</button><span id="siege-sync-copy">SYNC 0MS</span><button id="siege-sync-plus" type="button" aria-label="Move the grid 15 milliseconds later">＋</button></div>
+      <span id="siege-latency">latency auto</span>
     </div>
 
-    <section class="arena__manifesto" aria-labelledby="arena-manifesto-title">
-      <div>
-        <p>PULSE ARENA DESIGN NOTE</p>
-        <h2 id="arena-manifesto-title">The sound, target, and judgment share one clock.</h2>
-      </div>
+    <section class="siege__manifesto" aria-labelledby="siege-manifesto-title">
+      <div><p>LOOP SIEGE DESIGN NOTE</p><h2 id="siege-manifesto-title">The rhythm is a plan—not a prompt.</h2></div>
       <ol>
-        <li><span>01</span><strong>See it</strong><p>Every pulse is positioned from Web Audio time—not the animation clock.</p></li>
-        <li><span>02</span><strong>Hit it</strong><p>Your press produces its drum immediately, even when the timing is off.</p></li>
-        <li><span>03</span><strong>Feel it speed up</strong><p>Three beats of warning shrink from 1.43s to 1.07s as the tempo climbs.</p></li>
+        <li><span>01</span><strong>Choose</strong><p>Attack the gate whose deadline matters. There is no prescribed chart.</p></li>
+        <li><span>02</span><strong>Write</strong><p>Your accepted hits become a 16-step phrase with chords and rests.</p></li>
+        <li><span>03</span><strong>Trust the ghost</strong><p>The prior phrase returns once, then gets replaced by the loop you are writing now.</p></li>
       </ol>
     </section>
 
-    <p class="sr-only" id="arena-live" role="status" aria-live="polite" aria-atomic="true">Pulse Arena ready. Four drums, four rounds, 126 to 168 BPM.</p>
+    <p class="sr-only" id="siege-live" role="status" aria-live="polite" aria-atomic="true">Loop Siege ready. Four attack drums, sixteen loop steps, four waves from 132 to 180 BPM.</p>
 
-    <nav class="arena__versions" aria-label="Beat Runner versions">
+    <nav class="siege__versions" aria-label="Beat Runner versions">
       <span>edition</span>
-      <a href="/drum-runner-v1">v1 endless</a>
-      <a href="/drum-runner-v2">v2 postcards</a>
-      <a href="/drum-runner-v3">v3 pocket</a>
-      <a href="/drum-runner-v4">v4 road band</a>
-      <a href="/drum-runner-v5">v5 bright miles</a>
-      <a href="/drum-runner" aria-current="page">v6 pulse arena</a>
+      <a href="/drum-runner-v1">v1 endless</a><a href="/drum-runner-v2">v2 postcards</a><a href="/drum-runner-v3">v3 pocket</a><a href="/drum-runner-v4">v4 road band</a><a href="/drum-runner-v5">v5 bright miles</a><a href="/drum-runner-v6">v6 pulse arena</a><a href="/drum-runner" aria-current="page">v7 loop siege</a>
     </nav>
-
-    <nav class="arena__siblings" aria-label="More Drum Arcade games">
-      <a href="/drum-games">all five</a>
-      <a href="/drum-says">drum says</a>
-      <a href="/drum-quickdraw">quick draw</a>
-      <a href="/drum-fill">fill</a>
-      <a href="/drum-steady">steady</a>
-      <a href="/drum">/drum</a>
-    </nav>
+    <nav class="siege__siblings" aria-label="More Drum Arcade games"><a href="/drum-games">all five</a><a href="/drum-says">drum says</a><a href="/drum-quickdraw">quick draw</a><a href="/drum-fill">fill</a><a href="/drum-steady">steady</a><a href="/drum">/drum</a></nav>
   </div>
 
   <style is:global>
-    html, body { margin: 0; background: #fff6df; }
-    body:has(.arena) {
-      min-height: 100vh;
-      overflow-x: hidden;
-      color: #111522;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      background:
-        radial-gradient(circle at 8% 16%, rgba(255,209,102,.42), transparent 30%),
-        radial-gradient(circle at 92% 38%, rgba(122,215,255,.38), transparent 28%),
-        linear-gradient(145deg, #fff8e8 0%, #ffe8c6 54%, #ffd5dd 100%);
-    }
-    .sr-only {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      padding: 0 !important;
-      margin: -1px !important;
-      overflow: hidden !important;
-      clip: rect(0, 0, 0, 0) !important;
-      white-space: nowrap !important;
-      border: 0 !important;
-    }
-    .arena {
-      --accent: #ffd166;
-      --accent-soft: #ff9d74;
-      width: min(100%, 900px);
-      min-height: 100vh;
-      margin: 0 auto;
-      padding: 12px 14px 108px;
-      display: flex;
-      flex-direction: column;
-      gap: 11px;
-      box-sizing: border-box;
-    }
-    .arena button, .arena a { -webkit-tap-highlight-color: transparent; }
-    .arena button { font: inherit; }
-    .arena button:focus-visible, .arena a:focus-visible {
-      outline: 3px solid #151927;
-      outline-offset: 3px;
-    }
-
-    .arena__hud {
-      min-height: 66px;
-      display: grid;
-      grid-template-columns: 1.05fr 1.8fr .8fr .72fr 1.1fr;
-      border: 2px solid #151927;
-      border-radius: 19px;
-      background: rgba(255,252,240,.9);
-      box-shadow: 0 7px 0 rgba(21,25,39,.12);
-      overflow: hidden;
-      backdrop-filter: blur(12px);
-    }
-    .arena__hud > div {
-      min-width: 0;
-      padding: 8px 11px;
-      border-right: 1px solid rgba(21,25,39,.16);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-    .arena__hud > div:last-child { border-right: 0; }
-    .arena__hud span {
-      font: 700 8px/1.2 'IBM Plex Mono', monospace;
-      letter-spacing: .13em;
-      text-transform: uppercase;
-    }
-    .arena__score-block strong { font: 900 28px/.95 'IBM Plex Mono', monospace; }
-    .arena__round-block { text-align: center; align-items: center; }
-    .arena__round-block strong { max-width: 100%; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .arena__combo-block { text-align: center; align-items: center; }
-    .arena__combo-block strong { font: 900 23px/1 'IBM Plex Mono', monospace; color: #e24684; }
-    .arena__shield { flex-direction: row !important; align-items: center; gap: 4px; }
-    .arena__shield span { width: 12px; height: 12px; border: 2px solid #151927; border-radius: 50%; background: #78f0ca; transition: .15s ease; }
-    .arena__shield span.is-empty { background: transparent; opacity: .28; }
-    .arena__rush { gap: 4px; }
-    .arena__rush i { display: block; height: 7px; border: 1px solid #151927; border-radius: 99px; background: #fff; overflow: hidden; }
-    .arena__rush b { display: block; width: 0%; height: 100%; background: linear-gradient(90deg,#ff78c7,#ffd166,#78f0ca); transition: width .16s linear; }
-    .arena[data-rush="true"] .arena__rush { background: #151927; color: #fff; }
-    .arena[data-rush="true"] .arena__rush b { width: 100% !important; animation: rushBar .32s steps(2,end) infinite; }
-    @keyframes rushBar { 50% { filter: brightness(1.5); transform: translateX(2px); } }
-
-    .arena__stage {
-      position: relative;
-      min-height: 590px;
-      border: 3px solid #151927;
-      border-radius: 25px;
-      overflow: hidden;
-      background: #13182a;
-      box-shadow: 0 13px 0 rgba(21,25,39,.16);
-      isolation: isolate;
-    }
-    #arena-canvas { display: block; width: 100%; height: 590px; touch-action: none; }
-    .arena__core {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 112px;
-      height: 112px;
-      transform: translate(-50%,-50%);
-      display: grid;
-      place-items: center;
-      pointer-events: none;
-      z-index: 4;
-      transition: transform .08s ease;
-    }
-    .arena__core span {
-      position: absolute;
-      inset: 0;
-      border: 4px solid rgba(255,255,255,.92);
-      border-radius: 50%;
-      box-shadow: 0 0 0 8px rgba(21,25,39,.78), 0 0 28px var(--accent);
-      background: rgba(255,249,230,.9);
-    }
-    .arena__core img { position: relative; width: 80px; height: 80px; image-rendering: pixelated; z-index: 1; }
-    .arena__core.is-hit { transform: translate(-50%,-50%) scale(1.13) rotate(-2deg); }
-    .arena[data-rush="true"] .arena__core span { animation: coreRush .4s ease-in-out infinite alternate; }
-    @keyframes coreRush { to { box-shadow: 0 0 0 12px rgba(255,255,255,.24), 0 0 52px #ffd166; transform: scale(1.07); } }
-
-    .arena__lane-label {
-      position: absolute;
-      z-index: 3;
-      padding: 5px 7px;
-      border: 1px solid rgba(255,255,255,.4);
-      border-radius: 5px;
-      color: rgba(255,255,255,.82);
-      background: rgba(7,9,18,.6);
-      font: 700 8px/1 'IBM Plex Mono', monospace;
-      letter-spacing: .12em;
-      pointer-events: none;
-    }
-    .arena__lane-label--west { left: 12px; top: 50%; transform: translateY(-50%); }
-    .arena__lane-label--east { right: 12px; top: 50%; transform: translateY(-50%); }
-    .arena__lane-label--north { top: 12px; left: 50%; transform: translateX(-50%); }
-    .arena__lane-label--south { bottom: 12px; left: 50%; transform: translateX(-50%); }
-    .arena__judge {
-      position: absolute;
-      left: 50%;
-      top: calc(50% + 76px);
-      z-index: 8;
-      min-width: 120px;
-      transform: translate(-50%,8px) scale(.8);
-      text-align: center;
-      color: #fff;
-      font: 900 22px/1 'IBM Plex Mono', monospace;
-      text-shadow: 0 3px 0 #151927, 0 0 18px currentColor;
-      opacity: 0;
-      pointer-events: none;
-    }
-    .arena__judge.is-showing { animation: judgePop .46s cubic-bezier(.2,.9,.2,1); }
-    @keyframes judgePop { 0%{opacity:0;transform:translate(-50%,12px) scale(.65)} 20%,70%{opacity:1;transform:translate(-50%,0) scale(1)} 100%{opacity:0;transform:translate(-50%,-16px) scale(.92)} }
-    .arena__round-flash {
-      position: absolute;
-      inset: 0;
-      z-index: 7;
-      display: grid;
-      place-items: center;
-      color: #fff;
-      font: 900 clamp(58px,12vw,112px)/1 'IBM Plex Mono', monospace;
-      text-shadow: 0 7px 0 #151927, 0 0 44px var(--accent);
-      pointer-events: none;
-    }
-
-    .arena__overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 12;
-      display: grid;
-      place-items: center;
-      padding: 19px;
-      background: rgba(7,9,18,.42);
-      backdrop-filter: blur(3px);
-      box-sizing: border-box;
-      transition: opacity .2s ease;
-    }
-    .arena__overlay[hidden] { display: none; }
-    .arena__card {
-      width: min(100%, 720px);
-      max-height: 100%;
-      display: grid;
-      grid-template-columns: .78fr 1.45fr;
-      border: 3px solid #151927;
-      border-radius: 22px;
-      overflow: auto;
-      background: #fffaf0;
-      box-shadow: 0 12px 0 rgba(9,11,22,.38);
-    }
-    .arena__card-art {
-      min-height: 460px;
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      color: #fff;
-      background-position: center;
-      background-size: cover;
-      box-sizing: border-box;
-    }
-    .arena__card-art span { font: 700 10px/1 'IBM Plex Mono', monospace; letter-spacing: .18em; }
-    .arena__card-art strong { margin-top: 8px; font: 900 27px/.92 'IBM Plex Mono', monospace; }
-    .arena__card-body { padding: 20px; display: flex; flex-direction: column; box-sizing: border-box; }
-    .arena__eyebrow { display: flex; justify-content: space-between; gap: 14px; color: #6d5660; font: 700 8px/1.4 'IBM Plex Mono', monospace; letter-spacing: .14em; }
-    .arena__card h1 { margin: 15px 0 8px; font: 950 clamp(30px,5vw,50px)/.9 'Inter',sans-serif; letter-spacing: -.055em; }
-    .arena__card-body > p { margin: 0; color: #4c4650; font-size: 13px; line-height: 1.45; }
-    .arena__noun-picker { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; margin: 14px 0 9px; }
-    .arena__noun-picker[hidden] { display: none; }
-    .arena__noun-picker button { min-width: 0; padding: 7px 4px; display: flex; align-items: center; gap: 5px; border: 2px solid #151927; border-radius: 11px; background: #fff; cursor: pointer; }
-    .arena__noun-picker button[aria-pressed="true"] { background: #ffdf76; box-shadow: 0 4px 0 #151927; transform: translateY(-2px); }
-    .arena__noun-picker img { width: 34px; height: 34px; image-rendering: pixelated; flex: 0 0 auto; }
-    .arena__noun-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 8px/1 'IBM Plex Mono', monospace; }
-    .arena__card-stats { margin: 3px 0 10px; display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid rgba(21,25,39,.25); border-radius: 9px; overflow: hidden; }
-    .arena__card-stats span { min-width: 0; padding: 7px; display: flex; flex-direction: column; border-right: 1px solid rgba(21,25,39,.18); }
-    .arena__card-stats span:last-child { border-right: 0; }
-    .arena__card-stats small { color: #8b6d76; font: 700 7px/1 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
-    .arena__card-stats strong { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 11px/1.1 'IBM Plex Mono', monospace; }
-    .arena__route { margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; list-style: none; }
-    .arena__route li { min-width: 0; padding: 6px 4px; display: grid; grid-template-columns: auto 1fr; gap: 1px 4px; border: 1px solid rgba(21,25,39,.22); border-radius: 7px; }
-    .arena__route li.is-current { background: #151927; color: #fff; }
-    .arena__route span { grid-row: span 2; font: 900 13px/1 'IBM Plex Mono', monospace; }
-    .arena__route b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; }
-    .arena__route small { font: 700 7px/1 'IBM Plex Mono', monospace; }
-    .arena__best { text-align: center; font: 700 9px/1 'IBM Plex Mono', monospace; }
-    .arena__go { width: 100%; min-height: 54px; margin-top: 10px; border: 2px solid #151927; border-radius: 13px; background: #ffdf76; color: #151927; box-shadow: 0 6px 0 #151927; font: 900 12px/1 'IBM Plex Mono', monospace; letter-spacing: .1em; cursor: pointer; }
-    .arena__go:hover { background: #fff1a9; transform: translateY(-1px); box-shadow: 0 7px 0 #151927; }
-    .arena__input-note { margin-top: 10px !important; text-align: center; font: 700 7px/1 'IBM Plex Mono', monospace !important; letter-spacing: .15em; }
-
-    .arena__pads {
-      display: grid;
-      grid-template-columns: repeat(4,1fr);
-      gap: 8px;
-      touch-action: none;
-      user-select: none;
-    }
-    .arena:is([data-phase="countin"],[data-phase="playing"],[data-phase="interstitial"]) .arena__pads {
-      position: fixed;
-      left: 50%;
-      bottom: 52px;
-      z-index: 35;
-      width: min(calc(100% - 28px), 872px);
-      padding: 8px;
-      border: 2px solid rgba(21,25,39,.28);
-      border-radius: 22px;
-      background: rgba(255,246,223,.88);
-      box-shadow: 0 10px 28px rgba(21,25,39,.18);
-      backdrop-filter: blur(13px);
-      box-sizing: border-box;
-      transform: translateX(-50%);
-    }
-    .arena__pad {
-      min-width: 0;
-      min-height: 88px;
-      padding: 9px 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      border: 3px solid #151927;
-      border-radius: 17px;
-      color: #151927;
-      background: var(--lane);
-      box-shadow: 0 7px 0 #151927;
-      cursor: pointer;
-      touch-action: none;
-      transition: transform .06s ease, box-shadow .06s ease, filter .1s ease;
-    }
-    .arena__pad:active, .arena__pad.is-hit { transform: translateY(5px) scale(.98); box-shadow: 0 2px 0 #151927; filter: brightness(1.12); }
-    .arena__pad:disabled { cursor: default; filter: saturate(.35); opacity: .62; }
-    .arena__pad-arrow { font: 950 31px/1 'IBM Plex Mono', monospace; }
-    .arena__pad > span:last-child { display: flex; flex-direction: column; text-align: left; }
-    .arena__pad strong { font-size: 13px; text-transform: uppercase; }
-    .arena__pad small { font: 900 13px/1 'IBM Plex Mono', monospace; }
-    .arena[data-rush="true"] .arena__pad { animation: padRush .45s steps(2,end) infinite alternate; }
-    @keyframes padRush { to { filter: brightness(1.15) saturate(1.35); } }
-
-    .arena__utility { display: flex; align-items: center; justify-content: center; gap: 10px; }
-    .arena__utility button, .arena__utility span { min-height: 34px; box-sizing: border-box; }
-    .arena__utility > button, .arena__sync { border: 2px solid #151927; border-radius: 10px; background: rgba(255,252,240,.86); }
-    .arena__utility > button { padding: 0 14px; font: 800 9px/1 'IBM Plex Mono', monospace; cursor: pointer; }
-    .arena__sync { display: flex; align-items: center; overflow: hidden; }
-    .arena__sync button { width: 36px; border: 0; background: transparent; font-weight: 900; cursor: pointer; }
-    .arena__sync span { padding: 0 9px; display: grid; place-items: center; border-inline: 1px solid rgba(21,25,39,.2); font: 700 8px/1 'IBM Plex Mono', monospace; }
-    #arena-latency { display: grid; place-items: center; color: #6d5660; font: 700 8px/1 'IBM Plex Mono', monospace; }
-
-    .arena__manifesto { padding: 20px; border: 2px solid #151927; border-radius: 18px; background: rgba(255,252,240,.78); }
-    .arena__manifesto > div p { margin: 0; color: #dd4d86; font: 800 8px/1 'IBM Plex Mono', monospace; letter-spacing: .14em; }
-    .arena__manifesto h2 { margin: 6px 0 17px; font-size: 22px; letter-spacing: -.035em; }
-    .arena__manifesto ol { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; list-style: none; }
-    .arena__manifesto li { padding: 12px; border: 1px solid rgba(21,25,39,.22); border-radius: 11px; }
-    .arena__manifesto li span { color: #dd4d86; font: 800 10px/1 'IBM Plex Mono', monospace; }
-    .arena__manifesto li strong { display: block; margin: 5px 0 3px; font-size: 13px; }
-    .arena__manifesto li p { margin: 0; color: #5d5660; font-size: 11px; line-height: 1.4; }
-
-    .arena__versions, .arena__siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-    .arena__versions span, .arena__versions a, .arena__siblings a { padding: 5px 8px; border: 1px solid rgba(21,25,39,.25); border-radius: 999px; color: #3d3540; background: rgba(255,252,240,.68); font: 700 8px/1 'IBM Plex Mono', monospace; text-decoration: none; }
-    .arena__versions a[aria-current="page"] { color: #fff; background: #151927; border-color: #151927; }
-    .arena__siblings a { border: 0; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
-
-    @media (max-width: 700px) {
-      .arena { padding: 8px 8px 100px; gap: 8px; }
-      .arena__hud { grid-template-columns: .8fr 1.5fr .65fr; min-height: 60px; border-radius: 14px; }
-      .arena__hud > div { padding: 7px; }
-      .arena__shield { grid-column: 1 / 2; border-top: 1px solid rgba(21,25,39,.15); }
-      .arena__rush { grid-column: 2 / 4; border-top: 1px solid rgba(21,25,39,.15); border-right: 0 !important; }
-      .arena__score-block strong { font-size: 21px; }
-      .arena__round-block strong { font-size: 12px; }
-      .arena__combo-block strong { font-size: 18px; }
-      .arena__stage { min-height: 500px; border-radius: 18px; }
-      #arena-canvas { height: 500px; }
-      .arena__core { width: 92px; height: 92px; }
-      .arena__core img { width: 64px; height: 64px; }
-      .arena__card { grid-template-columns: 1fr; }
-      .arena__card-art { min-height: 92px; padding: 11px; border-bottom: 2px solid #151927; background-position: center 55%; }
-      .arena__card-art strong { font-size: 18px; }
-      .arena__card-body { padding: 14px; }
-      .arena__card h1 { font-size: 35px; }
-      .arena__card-body > p { font-size: 11px; }
-      .arena__route { gap: 3px; }
-      .arena__route li { padding: 5px 3px; display: flex; flex-direction: column; align-items: center; }
-      .arena__route b { max-width: 100%; }
-      .arena__route small { display: none; }
-      .arena__pads { grid-template-columns: repeat(2,1fr); gap: 7px; }
-      .arena__pad { min-height: 70px; border-radius: 13px; box-shadow: 0 5px 0 #151927; }
-      .arena__pad-arrow { font-size: 26px; }
-      .arena__utility { flex-wrap: wrap; }
-      .arena__manifesto { padding: 14px; }
-      .arena__manifesto h2 { font-size: 18px; }
-      .arena__manifesto ol { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 410px) {
-      .arena__stage { min-height: 470px; }
-      #arena-canvas { height: 470px; }
-      .arena__overlay { padding: 10px; }
-      .arena__card { overflow: hidden; }
-      .arena__card-art { display: none; }
-      .arena__card-body { padding: 12px; }
-      .arena__card h1 { margin-top: 8px; font-size: 28px; }
-      .arena__card-body > p { line-height: 1.3; }
-      .arena__noun-picker { margin-top: 10px; }
-      .arena__noun-picker button { flex-direction: column; }
-      .arena__noun-picker span { font-size: 6px; }
-      .arena__card-stats strong { font-size: 9px; }
-      .arena__go { min-height: 48px; }
-      .arena__lane-label { font-size: 6px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .arena * { scroll-behavior: auto !important; }
-      .arena__judge.is-showing, .arena[data-rush="true"] .arena__core span, .arena[data-rush="true"] .arena__pad, .arena[data-rush="true"] .arena__rush b { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
-    }
+    html, body { margin: 0; background: #fff4d8; }
+    body:has(.siege) { min-height: 100vh; overflow-x: hidden; color: #111522; font-family: Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif; background: radial-gradient(circle at 8% 12%,rgba(255,207,74,.52),transparent 28%),radial-gradient(circle at 94% 34%,rgba(99,207,255,.42),transparent 26%),linear-gradient(145deg,#fff9e9 0%,#ffe1bd 48%,#ffd1e3 100%); }
+    .sr-only { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important; }
+    .siege { --accent:#ffcf4a;--accent-soft:#ff8d6e;width:min(100%,960px);min-height:100vh;margin:0 auto;padding:12px 14px 108px;display:flex;flex-direction:column;gap:11px;box-sizing:border-box; }
+    .siege button,.siege a{-webkit-tap-highlight-color:transparent}.siege button{font:inherit}.siege button:focus-visible,.siege a:focus-visible{outline:3px solid #111522;outline-offset:3px}
+    .siege__hud{min-height:68px;display:grid;grid-template-columns:1fr 1.8fr .9fr .72fr 1.12fr;border:2px solid #111522;border-radius:20px;background:rgba(255,252,241,.93);box-shadow:0 7px 0 rgba(17,21,34,.13);overflow:hidden;backdrop-filter:blur(12px)}
+    .siege__hud>div{min-width:0;padding:8px 11px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid rgba(17,21,34,.16)}.siege__hud>div:last-child{border:0}.siege__hud span{font:700 8px/1.2 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em}.siege__hud strong{font:900 20px/.96 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.siege__wave-block strong{font-size:16px}.siege__shields{display:grid!important;grid-template-columns:repeat(2,12px);place-content:center;gap:5px}.siege__shields span{width:12px;height:12px;border:2px solid #111522;border-radius:4px;background:var(--accent)}.siege__shields span.is-empty{background:transparent;opacity:.25}.siege__power{gap:4px}.siege__power i{height:7px;border:1px solid #111522;border-radius:99px;background:#fff;overflow:hidden}.siege__power b{display:block;width:0;height:100%;background:linear-gradient(90deg,#ff6faa,#ffcf4a,#56dfb1);transition:width .15s}.siege[data-drop="true"] .siege__power{background:#111522;color:#fff}.siege[data-drop="true"] .siege__power b{width:100%!important}
+    .siege__stage{position:relative;height:550px;border:2px solid #111522;border-radius:28px;overflow:hidden;background:#0b1020;box-shadow:0 10px 0 rgba(17,21,34,.15)}#siege-canvas{display:block;width:100%;height:100%}.siege__core{position:absolute;z-index:7;left:50%;top:48%;width:116px;height:116px;transform:translate(-50%,-50%);border:0;border-radius:50%;background:transparent;display:grid;place-items:center;cursor:default}.siege__core span{position:absolute;inset:7px;border:5px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 9px rgba(17,21,34,.68),0 0 32px var(--accent)}.siege__core img{position:relative;width:82px;height:82px;image-rendering:pixelated;filter:drop-shadow(0 4px 0 rgba(0,0,0,.3))}.siege__core small{position:absolute;bottom:-8px;padding:4px 8px;border:2px solid #111522;border-radius:99px;background:#fff;color:#111522;font:900 8px/1 'IBM Plex Mono',monospace}.siege__core:not(:disabled){cursor:pointer}.siege__core:not(:disabled) span{animation:dropReady .45s steps(2,end) infinite;background:rgba(255,207,74,.3)}@keyframes dropReady{50%{transform:scale(1.08);border-color:#ffcf4a}}
+    .siege__gate{position:absolute;z-index:4;padding:4px 7px;border-radius:6px;background:rgba(9,12,25,.72);color:#fff;font:900 9px/1 'IBM Plex Mono',monospace;letter-spacing:.06em}.siege__gate--west{left:10px;top:44%}.siege__gate--east{right:10px;top:44%}.siege__gate--north{top:10px;left:50%;transform:translateX(-50%)}.siege__gate--south{bottom:78px;left:50%;transform:translateX(-50%)}
+    .siege__judge{position:absolute;z-index:12;left:50%;top:27%;transform:translate(-50%,-50%) scale(.8);padding:6px 10px;border:2px solid #111522;border-radius:8px;background:#fff;color:#111522;opacity:0;font:1000 15px/1 'IBM Plex Mono',monospace;pointer-events:none}.siege__judge.is-showing{animation:judgePop .48s ease-out}@keyframes judgePop{0%{opacity:0;transform:translate(-50%,-20%) scale(.7)}20%,72%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-72%) scale(.9)}}.siege__flash{position:absolute;z-index:11;inset:0;display:grid;place-items:center;color:#fff;text-shadow:0 5px 0 #111522;font:1000 clamp(46px,10vw,92px)/.8 Inter,sans-serif;letter-spacing:-.07em;pointer-events:none}
+    .siege__loop{position:absolute;z-index:8;left:12px;right:12px;bottom:10px;padding:7px 8px 8px;border:2px solid #111522;border-radius:14px;background:rgba(255,252,241,.94);box-shadow:0 4px 0 rgba(17,21,34,.24)}.siege__loop-head{display:flex;justify-content:space-between;margin-bottom:5px;font:900 8px/1 'IBM Plex Mono',monospace}.siege__loop-cells{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}.siege__loop-cells>span{position:relative;height:22px;border:1px solid #111522;border-radius:4px;background:#fff;overflow:hidden}.siege__loop-cells>span:nth-child(4n+1){border-left-width:3px}.siege__loop-cells>span.is-now{box-shadow:inset 0 -5px 0 var(--accent)}.siege__loop-cells i,.siege__loop-cells b{position:absolute;left:2px;right:2px;height:6px;border-radius:5px}.siege__loop-cells i{top:3px}.siege__loop-cells b{bottom:3px;opacity:.55}.siege__loop-cells i.has-west,.siege__loop-cells b.has-west{background:#ffcf4a}.siege__loop-cells i.has-north,.siege__loop-cells b.has-north{background:#ff6faa}.siege__loop-cells i.has-south,.siege__loop-cells b.has-south{background:#56dfb1}.siege__loop-cells i.has-east,.siege__loop-cells b.has-east{background:#63cfff}.siege__loop-cells i.is-chord,.siege__loop-cells b.is-chord{background:linear-gradient(90deg,#ffcf4a,#ff6faa,#56dfb1,#63cfff)}
+    .siege__overlay{position:absolute;z-index:20;inset:0;display:grid;place-items:center;padding:20px;background:rgba(7,9,18,.3);backdrop-filter:blur(5px)}.siege__overlay[hidden]{display:none}.siege__card{width:min(100%,790px);max-height:100%;display:grid;grid-template-columns:.78fr 1.22fr;border:2px solid #111522;border-radius:24px;overflow:hidden;background:#fffaf0;box-shadow:0 12px 0 rgba(17,21,34,.38)}.siege__card-art{min-height:420px;padding:17px;display:flex;flex-direction:column;justify-content:flex-end;background-position:center;background-size:cover;color:#fff}.siege__card-art span,.siege__card-art small{font:800 9px/1.2 'IBM Plex Mono',monospace;letter-spacing:.08em}.siege__card-art strong{font:1000 35px/.82 Inter,sans-serif;letter-spacing:-.08em}.siege__card-body{padding:18px 20px 16px;overflow:auto}.siege__eyebrow{display:flex;justify-content:space-between;gap:10px;font:800 8px/1.2 'IBM Plex Mono',monospace}.siege__card h1{margin:12px 0 8px;font:1000 clamp(31px,5vw,48px)/.83 Inter,sans-serif;letter-spacing:-.075em}.siege__card p{margin:0 0 10px;font:600 12px/1.38 Inter,sans-serif}.siege__noun-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.siege__noun-picker[hidden]{display:none}.siege__noun-picker button{min-width:0;padding:5px;border:2px solid transparent;border-radius:11px;background:#f1e8d5;display:flex;align-items:center;gap:5px;font:800 8px/1 'IBM Plex Mono',monospace}.siege__noun-picker button[aria-pressed="true"]{border-color:#111522;background:#ffcf4a}.siege__noun-picker img{width:34px;height:34px;image-rendering:pixelated}.siege__card-stats{display:grid;grid-template-columns:repeat(3,1fr);margin:9px 0;border:1px solid rgba(17,21,34,.24);border-radius:10px;overflow:hidden}.siege__card-stats span{padding:6px;border-right:1px solid rgba(17,21,34,.18)}.siege__card-stats span:last-child{border:0}.siege__card-stats small{display:block;font:700 7px/1 'IBM Plex Mono',monospace;text-transform:uppercase}.siege__card-stats strong{font:900 10px/1 Inter,sans-serif}.siege__route{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:9px 0;padding:0;list-style:none}.siege__route[hidden]{display:none}.siege__route li{padding:6px;border:1px solid rgba(17,21,34,.24);border-radius:7px;display:grid;gap:2px}.siege__route li.is-current{background:var(--accent);border-color:#111522}.siege__route span,.siege__route small{font:700 7px/1 'IBM Plex Mono',monospace}.siege__route b{font:900 8px/1 Inter,sans-serif}.siege__best{font:800 8px/1 'IBM Plex Mono',monospace!important}.siege__go{width:100%;min-height:45px;border:2px solid #111522;border-radius:11px;background:#111522;color:#fff;font:1000 12px/1 'IBM Plex Mono',monospace;box-shadow:0 5px 0 var(--accent);cursor:pointer}.siege__input-note{text-align:center;margin-top:9px!important;font:800 7px/1 'IBM Plex Mono',monospace!important}
+    .siege__pads { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;touch-action: none }.siege__pad { min-height: 78px;padding:8px 12px;border:2px solid #111522;border-radius:17px;background:var(--lane);color:#111522;box-shadow:0 6px 0 rgba(17,21,34,.24);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;text-align:left;touch-action: none;user-select:none;cursor:pointer }.siege__pad:disabled{opacity:.48;cursor:default}.siege__pad>span{font:1000 27px/1 Inter,sans-serif}.siege__pad>strong{font:1000 11px/1 Inter,sans-serif}.siege__pad>small{font:900 12px/1 'IBM Plex Mono',monospace}.siege__pad.is-hit{transform:translateY(4px);box-shadow:0 2px 0 rgba(17,21,34,.24);filter:brightness(1.12)}
+    .siege__utility{display:flex;align-items:center;justify-content:center;gap:8px}.siege__utility button,.siege__utility span{min-height:28px;padding:0 9px;border:1px solid rgba(17,21,34,.3);border-radius:99px;background:rgba(255,252,241,.72);font:800 8px/28px 'IBM Plex Mono',monospace}.siege__sync{display:flex}.siege__sync>*{border-radius:0!important}.siege__sync>*:first-child{border-radius:99px 0 0 99px!important}.siege__sync>*:last-child{border-radius:0 99px 99px 0!important}.siege__manifesto{padding:20px;border:2px solid #111522;border-radius:22px;background:rgba(255,252,241,.7);display:grid;grid-template-columns:.9fr 1.5fr;gap:20px}.siege__manifesto>div>p{margin:0;font:800 8px/1 'IBM Plex Mono',monospace}.siege__manifesto h2{margin:5px 0 0;font:1000 29px/.9 Inter,sans-serif;letter-spacing:-.055em}.siege__manifesto ol{margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;list-style:none}.siege__manifesto li{padding:10px;border:1px solid rgba(17,21,34,.22);border-radius:11px}.siege__manifesto li span{font:800 8px/1 'IBM Plex Mono',monospace}.siege__manifesto li strong{display:block;margin-top:4px;font:1000 12px/1 Inter,sans-serif}.siege__manifesto li p{margin:5px 0 0;font:600 10px/1.3 Inter,sans-serif}.siege__versions,.siege__siblings{display:flex;flex-wrap:wrap;justify-content:center;gap:5px}.siege__versions span,.siege__versions a,.siege__siblings a{padding:5px 8px;border:1px solid rgba(17,21,34,.25);border-radius:99px;background:rgba(255,252,241,.68);color:#3d3540;font:700 8px/1 'IBM Plex Mono',monospace;text-decoration:none}.siege__versions a[aria-current="page"]{background:#111522;color:#fff;border-color:#111522}
+    @media (max-width: 700px){.siege{padding:8px 8px 240px}.siege__hud{grid-template-columns:1fr 1.5fr 1fr}.siege__hud>div{padding:7px}.siege__shields{border-right:0!important;border-top:1px solid rgba(17,21,34,.15)}.siege__power{grid-column:2/4;border-top:1px solid rgba(17,21,34,.15);border-right:0!important}.siege__stage{height:clamp(300px,calc(100dvh - 328px),500px);border-radius:20px}.siege__overlay{padding:12px}.siege__card{grid-template-columns:1fr;width:min(100%,430px)}.siege__card-art{min-height:92px;padding:10px}.siege__card-art strong{font-size:24px}.siege__card-body{padding:12px}.siege__card h1{font-size:35px}.siege__loop{left:6px;right:6px}.siege__loop-cells{gap:2px}.siege__loop-cells>span{height:19px}.siege__pads { position:fixed;z-index:35;left:8px;right:8px;bottom:50px;grid-template-columns: repeat(2, 1fr);gap:7px;padding:8px;border:2px solid #111522;border-radius:19px;background:rgba(255,248,229,.96);box-shadow:0 -7px 24px rgba(17,21,34,.18);touch-action:none }.siege__pad{min-height:72px}.siege__manifesto{grid-template-columns:1fr}.siege__manifesto ol{grid-template-columns:1fr 1fr 1fr}}
+    @media(max-width:410px){.siege__card-art{display:none}.siege__card h1{font-size:31px}.siege__card-sub{font-size:11px}.siege__noun-picker{margin:6px 0}.siege__route{margin:6px 0}.siege__core{width:96px;height:96px}.siege__core img{width:68px;height:68px}.siege__gate--south{bottom:73px}}
+    @media (max-width: 700px) and (max-height: 620px){.siege{padding-bottom:150px}.siege__stage{height:clamp(250px,calc(100dvh - 260px),330px)}.siege__pads{grid-template-columns:repeat(4,1fr);bottom:44px}.siege__pad{min-height:60px;padding:6px;grid-template-columns:1fr auto;text-align:center}.siege__pad>strong{display:none}.siege__pad>span{font-size:22px}}
+    @media(prefers-reduced-motion:reduce){.siege__judge.is-showing,.siege__core:not(:disabled) span{animation-duration:.01ms!important;animation-iteration-count:1!important}}
   </style>
 
   <script>
@@ -529,810 +152,138 @@ const jsonLd = {
     import groceryBackdrop from '../assets/drum-runner-v3/grocery-3pm.webp?url';
     import refineryBackdrop from '../assets/drum-runner-v3/refinery-night.webp?url';
     import {
-      ARENA_BEST_KEY,
-      ARENA_MUTED_KEY,
-      ARENA_ROUNDS,
-      ARENA_SYNC_KEY,
-      CHORD_WINDOW_MS,
-      HIT_WINDOWS_MS,
-      LANE_META,
-      LANE_ORDER,
-      advanceShieldRepair,
-      approachProgress,
-      approachSecondsForRound,
-      arenaTravelProgress,
-      arenaGrade,
-      audioTimeForPerformanceTimestamp,
-      chordSpanMs,
-      comboMultiplier,
-      compensatedAudioTime,
-      countInDisplay,
-      findHittableCue,
-      gradeHit,
-      hitScore,
-      laneForKey,
-      roundDurationSeconds,
-      runtimeCues,
-      secondsPerBeat,
-      worstGrade,
-      type ArenaLane,
-      type HitGrade,
-      type RuntimeArenaCue,
-    } from '../lib/drum-runner-v6';
+      SIEGE_BEST_KEY,SIEGE_HIT_WINDOWS_MS,SIEGE_LANE_META,SIEGE_LANE_ORDER,SIEGE_LOOP_STEPS,SIEGE_MUTED_KEY,SIEGE_SHIELDS,SIEGE_SYNC_KEY,SIEGE_WAVES,
+      absoluteStepAtTime,applyAttack,audioTimeForPerformanceTimestamp,buildWaveEnemies,compensatedAudioTime,echoEventsForBar,enemyApproachProgress,gradeLoopHit,laneForKey,loopOrdinalAtTime,loopSeconds,loopStepAtTime,powerupForKills,recordLoopHit,resolveEnemyDeadlines,secondsPerBeat,stepSeconds,waveEndBeat,
+      type EchoEvent,type LoopHit,type SiegeEnemy,type SiegeGrade,type SiegeLane,
+    } from '../lib/drum-runner-v7';
 
-    type ArenaPhase = 'intro' | 'countin' | 'playing' | 'interstitial' | 'failed' | 'complete';
-    type Burst = { lane: ArenaLane; at: number; grade: HitGrade };
-    type Snapshot = {
-      score: number;
-      combo: number;
-      maxCombo: number;
-      hitTargets: number;
-      missTargets: number;
-      rushMeter: number;
-      gradeCounts: Record<'perfect' | 'great' | 'good', number>;
-    };
+    type SiegePhase='intro'|'countin'|'playing'|'interstitial'|'failed'|'complete';
+    type AttackBurst={lane:SiegeLane;at:number;source:'live'|'ghost'|'drop'};
+    type RunSnapshot={score:number;kills:number;maxCombo:number;acceptedHits:number;dropReady:boolean;gradeCounts:Record<SiegeGrade,number>};
+    const BACKDROPS=[marineBackdrop,pierBackdrop,groceryBackdrop,refineryBackdrop];
+    const siege=document.getElementById('siege') as HTMLElement;
+    const canvas=document.getElementById('siege-canvas') as HTMLCanvasElement;
+    const context=canvas.getContext('2d',{alpha:false})!;
+    const overlay=document.getElementById('siege-overlay') as HTMLElement;
+    const goButton=document.getElementById('siege-go') as HTMLButtonElement;
+    const scoreEl=document.getElementById('siege-score')!;
+    const waveNoEl=document.getElementById('siege-wave-no')!;
+    const waveNameEl=document.getElementById('siege-wave-name')!;
+    const tempoEl=document.getElementById('siege-tempo')!;
+    const comboEl=document.getElementById('siege-combo')!;
+    const killsEl=document.getElementById('siege-kills')!;
+    const shieldEl=document.getElementById('siege-shields')!;
+    const powerCopyEl=document.getElementById('siege-power-copy')!;
+    const powerFillEl=document.getElementById('siege-power-fill') as HTMLElement;
+    const judgeEl=document.getElementById('siege-judge') as HTMLElement;
+    const flashEl=document.getElementById('siege-flash') as HTMLElement;
+    const loopEl=document.getElementById('siege-loop')!;
+    const loopModeEl=document.getElementById('siege-loop-mode')!;
+    const loopClockEl=document.getElementById('siege-loop-clock')!;
+    const loopCells=Array.from(document.querySelectorAll<HTMLElement>('[data-loop-step]'));
+    const dropButton=document.getElementById('siege-drop') as HTMLButtonElement;
+    const dropCopyEl=document.getElementById('siege-drop-copy')!;
+    const nounEl=document.getElementById('siege-noun') as HTMLImageElement;
+    const nounPicker=document.getElementById('siege-noun-picker') as HTMLElement;
+    const routeEl=document.getElementById('siege-route')!;
+    const routeItems=Array.from(routeEl.querySelectorAll<HTMLElement>('[data-route-index]'));
+    const bestEl=document.getElementById('siege-best')!;
+    const liveEl=document.getElementById('siege-live')!;
+    const cardKickerEl=document.getElementById('siege-card-kicker')!;
+    const cardTempoEl=document.getElementById('siege-card-tempo')!;
+    const cardTitleEl=document.getElementById('siege-card-title')!;
+    const cardSubEl=document.getElementById('siege-card-sub')!;
+    const statALabel=document.getElementById('siege-stat-a-label')!;const statA=document.getElementById('siege-stat-a')!;
+    const statBLabel=document.getElementById('siege-stat-b-label')!;const statB=document.getElementById('siege-stat-b')!;
+    const statCLabel=document.getElementById('siege-stat-c-label')!;const statC=document.getElementById('siege-stat-c')!;
+    const soundButton=document.getElementById('siege-sound') as HTMLButtonElement;
+    const syncMinus=document.getElementById('siege-sync-minus') as HTMLButtonElement;const syncPlus=document.getElementById('siege-sync-plus') as HTMLButtonElement;const syncCopy=document.getElementById('siege-sync-copy')!;const latencyEl=document.getElementById('siege-latency')!;
+    const padButtons=Array.from(document.querySelectorAll<HTMLButtonElement>('.siege__pad[data-lane]'));
+    const backdropImages=BACKDROPS.map((src)=>{const image=new Image();image.src=src;void image.decode?.().then(()=>drawSiege(siegeAudioNow())).catch(()=>{});return image});
 
-    const BACKDROPS = [marineBackdrop, pierBackdrop, groceryBackdrop, refineryBackdrop];
-    const arena = document.getElementById('arena') as HTMLElement;
-    const stage = document.getElementById('arena-stage') as HTMLElement;
-    const canvas = document.getElementById('arena-canvas') as HTMLCanvasElement;
-    const context = canvas.getContext('2d', { alpha: false })!;
-    const overlay = document.getElementById('arena-overlay') as HTMLElement;
-    const goButton = document.getElementById('arena-go') as HTMLButtonElement;
-    const scoreEl = document.getElementById('arena-score')!;
-    const roundNoEl = document.getElementById('arena-round-no')!;
-    const roundNameEl = document.getElementById('arena-round-name')!;
-    const tempoEl = document.getElementById('arena-tempo')!;
-    const comboEl = document.getElementById('arena-combo')!;
-    const accuracyEl = document.getElementById('arena-accuracy')!;
-    const shieldEl = document.getElementById('arena-shields')!;
-    const rushFillEl = document.getElementById('arena-rush-fill') as HTMLElement;
-    const rushCopyEl = document.getElementById('arena-rush-copy')!;
-    const judgeEl = document.getElementById('arena-judge') as HTMLElement;
-    const flashEl = document.getElementById('arena-round-flash') as HTMLElement;
-    const coreEl = document.getElementById('arena-core') as HTMLElement;
-    const nounEl = document.getElementById('arena-noun') as HTMLImageElement;
-    const nounPicker = document.getElementById('arena-noun-picker') as HTMLElement;
-    const routeEl = document.getElementById('arena-route')!;
-    const routeItems = Array.from(routeEl.querySelectorAll<HTMLElement>('[data-route-index]'));
-    const bestEl = document.getElementById('arena-best')!;
-    const liveEl = document.getElementById('arena-live')!;
-    const cardKickerEl = document.getElementById('arena-card-kicker')!;
-    const cardTempoEl = document.getElementById('arena-card-tempo')!;
-    const cardTitleEl = document.getElementById('arena-card-title')!;
-    const cardSubEl = document.getElementById('arena-card-sub')!;
-    const statALabel = document.getElementById('arena-stat-a-label')!;
-    const statA = document.getElementById('arena-stat-a')!;
-    const statBLabel = document.getElementById('arena-stat-b-label')!;
-    const statB = document.getElementById('arena-stat-b')!;
-    const statCLabel = document.getElementById('arena-stat-c-label')!;
-    const statC = document.getElementById('arena-stat-c')!;
-    const soundButton = document.getElementById('arena-sound') as HTMLButtonElement;
-    const syncMinus = document.getElementById('arena-sync-minus') as HTMLButtonElement;
-    const syncPlus = document.getElementById('arena-sync-plus') as HTMLButtonElement;
-    const syncCopy = document.getElementById('arena-sync-copy')!;
-    const latencyEl = document.getElementById('arena-latency')!;
-    const padButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-lane]'));
-    const backdropImages = BACKDROPS.map((src) => {
-      const image = new Image();
-      image.src = src;
-      void image.decode?.().then(() => drawArena(arenaAudioNow())).catch(() => {});
-      return image;
-    });
+    let phase:SiegePhase='intro';let waveIndex=0;let enemies:SiegeEnemy[]=[];let waveStart=0;let waveClosing=false;let shields=SIEGE_SHIELDS;let score=0;let combo=0;let maxCombo=0;let kills=0;let waveKills=0;let acceptedHits=0;let gradeCounts:Record<SiegeGrade,number>={perfect:0,great:0,good:0,late:0};
+    let recordPattern:LoopHit[]=[];let pendingPattern:LoopHit[]=[];let echoPattern:LoopHit[]=[];let echoEvents:EchoEvent[]=[];let echoFired=new Set<string>();let activeLoopOrdinal=-1;let activeAbsoluteStep=-1;let dropReady=false;let dropQueued=false;let bursts:AttackBurst[]=[];let snapshot:RunSnapshot|null=null;
+    let syncMs=clampNumber(readNumber(SIEGE_SYNC_KEY,0),-150,150);let muted=readStorage(SIEGE_MUTED_KEY)==='1';let best=Math.max(0,readNumber(SIEGE_BEST_KEY,0));let selectedNoun=clampNumber(readNumber('pc:nounId',137),0,1199);
+    let actx:AudioContext|null=null;let masterGain:GainNode|null=null;let noiseBuffer:AudioBuffer|null=null;let scheduledSources:AudioScheduledSourceNode[]=[];let animationFrame=0;let transitionTimer=0;let deferredTransition:'next'|'complete'|null=null;let judgeSerial=0;
 
-    let phase: ArenaPhase = 'intro';
-    let roundIndex = 0;
-    let cues: RuntimeArenaCue[] = [];
-    let resolvedGroups = new Set<string>();
-    let roundStart = 0;
-    let roundEnd = 0;
-    let roundClosing = false;
-    let shields = 4;
-    let shieldRepair = 0;
-    let score = 0;
-    let combo = 0;
-    let maxCombo = 0;
-    let hitTargets = 0;
-    let missTargets = 0;
-    let gradeCounts = { perfect: 0, great: 0, good: 0 };
-    let rushMeter = 0;
-    let rushUntil = 0;
-    let syncMs = clampNumber(readNumber(ARENA_SYNC_KEY, 0), -150, 150);
-    let muted = readStorage(ARENA_MUTED_KEY) === '1';
-    let best = Math.max(0, readNumber(ARENA_BEST_KEY, 0));
-    let selectedNoun = clampNumber(readNumber('pc:nounId', 137), 0, 1199);
-    let snapshot: Snapshot | null = null;
-    let bursts: Burst[] = [];
-    let animationFrame = 0;
-    let transitionTimer = 0;
-    let deferredTransition: 'next' | 'complete' | null = null;
-    let actx: AudioContext | null = null;
-    let masterGain: GainNode | null = null;
-    let noiseBuffer: AudioBuffer | null = null;
-    let scheduledSources: AudioScheduledSourceNode[] = [];
-    let judgeSerial = 0;
+    function readStorage(key:string):string|null{try{return localStorage.getItem(key)}catch{return null}}
+    function writeStorage(key:string,value:string){try{localStorage.setItem(key, value)}catch{}}
+    function readNumber(key:string,fallback:number){const stored=readStorage(key);if(stored===null)return fallback;const value=Number(stored);return Number.isFinite(value)?value:fallback}
+    function clampNumber(value:number,min:number,max:number){return Math.max(min,Math.min(max,value))}
+    function currentWave(){return SIEGE_WAVES[waveIndex]}
+    function currentBeat(now=siegeAudioNow()){return waveStart>0?(now-waveStart)/secondsPerBeat(currentWave().bpm):0}
+    function setPhase(next:SiegePhase){phase=next;siege.dataset.phase=next;padButtons.forEach((button)=>{button.disabled=next!=='countin'&&next!=='playing'})}
+    function snapshotRun():RunSnapshot{return{score,kills,maxCombo,acceptedHits,dropReady,gradeCounts:{...gradeCounts}}}
+    function restoreSnapshot(value:RunSnapshot){score=value.score;kills=value.kills;maxCombo=value.maxCombo;acceptedHits=value.acceptedHits;dropReady=value.dropReady;dropQueued=false;gradeCounts={...value.gradeCounts};combo=0;updateHud()}
 
-    function readStorage(key: string): string | null {
-      try { return localStorage.getItem(key); } catch { return null; }
-    }
-    function writeStorage(key: string, value: string) {
-      try { localStorage.setItem(key, value); } catch {}
-    }
-    function readNumber(key: string, fallback: number): number {
-      const stored = readStorage(key);
-      if (stored === null) return fallback;
-      const value = Number(stored);
-      return Number.isFinite(value) ? value : fallback;
-    }
-    function clampNumber(value: number, min: number, max: number): number {
-      return Math.max(min, Math.min(max, value));
-    }
-    function accuracy(): number {
-      const total = hitTargets + missTargets;
-      return total ? Math.round(hitTargets / total * 1000) / 10 : 100;
-    }
-    function currentRound() { return ARENA_ROUNDS[roundIndex]; }
-    function currentApproach() { return approachSecondsForRound(currentRound()); }
-    function currentBeatSeconds() { return secondsPerBeat(currentRound().bpm); }
-    function rushActive(now = arenaAudioNow()) { return now > 0 && now < rushUntil; }
-    function setPhase(next: ArenaPhase) {
-      phase = next;
-      arena.dataset.phase = next;
-      padButtons.forEach((button) => { button.disabled = next !== 'countin' && next !== 'playing'; });
-    }
+    function showAudioUnavailable(){goButton.disabled=true;goButton.textContent='WEB AUDIO REQUIRED';cardSubEl.textContent='Loop Siege needs Web Audio so the drums, loop, ghost attacks, enemies, and scoring can share one clock.';liveEl.textContent='Loop Siege needs browser Web Audio support.'}
+    function ensureAudio():AudioContext|null{if(actx)return actx;const AudioContextClass=window.AudioContext??(window as Window&typeof globalThis&{webkitAudioContext?:typeof AudioContext}).webkitAudioContext;if(!AudioContextClass){showAudioUnavailable();return null}try{actx=new AudioContextClass({latencyHint:'interactive'})}catch{showAudioUnavailable();return null}masterGain=actx.createGain();masterGain.gain.value=muted?.0001:.72;masterGain.connect(actx.destination);const frames=Math.max(1,Math.floor(actx.sampleRate*.14));noiseBuffer=actx.createBuffer(1,frames,actx.sampleRate);const data=noiseBuffer.getChannelData(0);let seed=0x51e93;for(let index=0;index<frames;index++){seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;data[index]=((seed>>>0)/4294967295)*2-1}updateLatencyCopy();return actx}
+    function outputLatency(){return actx?clampNumber(Number((actx as any).outputLatency??actx.baseLatency??0),0,.25):0}
+    function siegeAudioNow(){if(!actx)return 0;const stamp=actx.getOutputTimestamp?.();const stamped=stamp&&Number.isFinite(stamp.contextTime)&&stamp.contextTime>0?stamp.contextTime:null;return stamped===null?compensatedAudioTime(actx.currentTime,outputLatency(),syncMs):compensatedAudioTime(stamped,0,syncMs)}
+    function siegeInputTime(eventTime?:number){if(!actx||!Number.isFinite(eventTime))return siegeAudioNow();const stamp=actx.getOutputTimestamp?.();if(!stamp||!Number.isFinite(stamp.contextTime)||!Number.isFinite(stamp.performanceTime))return siegeAudioNow();if(Math.abs((eventTime as number)-stamp.performanceTime)>60_000)return siegeAudioNow();const mapped=audioTimeForPerformanceTimestamp(stamp.contextTime,stamp.performanceTime,eventTime as number,syncMs);return Number.isFinite(mapped)?mapped:siegeAudioNow()}
+    function updateLatencyCopy(){latencyEl.textContent=actx?`auto ${Math.round(outputLatency()*1000)}ms`:'latency auto'}
+    function connectSource(source:AudioScheduledSourceNode){scheduledSources.push(source);source.addEventListener('ended',()=>{const index=scheduledSources.indexOf(source);if(index>=0)scheduledSources.splice(index,1)},{once:true})}
+    function stopScheduled(){scheduledSources.splice(0).forEach((source)=>{try{source.stop()}catch{}})}
+    function tone(at:number,frequency:number,duration:number,volume:number,type:OscillatorType='sine'){if(!actx||!masterGain)return;const oscillator=actx.createOscillator();const gain=actx.createGain();oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,at);gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(Math.max(.0002,volume),at+.004);gain.gain.exponentialRampToValueAtTime(.0001,at+duration);oscillator.connect(gain).connect(masterGain);oscillator.start(at);oscillator.stop(at+duration+.02);connectSource(oscillator)}
+    function kick(at:number,volume=.16){if(!actx||!masterGain)return;const oscillator=actx.createOscillator();const gain=actx.createGain();oscillator.frequency.setValueAtTime(136,at);oscillator.frequency.exponentialRampToValueAtTime(48,at+.1);gain.gain.setValueAtTime(volume,at);gain.gain.exponentialRampToValueAtTime(.0001,at+.15);oscillator.connect(gain).connect(masterGain);oscillator.start(at);oscillator.stop(at+.17);connectSource(oscillator)}
+    function noise(at:number,duration:number,volume:number,highpass=1000){if(!actx||!masterGain||!noiseBuffer)return;const source=actx.createBufferSource();const filter=actx.createBiquadFilter();const gain=actx.createGain();source.buffer=noiseBuffer;filter.type='highpass';filter.frequency.value=highpass;gain.gain.setValueAtTime(volume,at);gain.gain.exponentialRampToValueAtTime(.0001,at+duration);source.connect(filter).connect(gain).connect(masterGain);source.start(at);source.stop(at+duration+.01);connectSource(source)}
+    function playLane(lane:SiegeLane,at:number,strength=1,ghost=false){const nounPitch=2**(((selectedNoun%9)-4)/72);const soft=ghost?.58:1;if(lane==='west'){kick(at,.3*strength*soft);tone(at,62*nounPitch,.14,.1*strength*soft)}else if(lane==='north'){noise(at,.09,.19*strength*soft,1300);tone(at,224*nounPitch,.05,.05*strength*soft,'square')}else if(lane==='south'){tone(at,132*nounPitch,.2,.22*strength*soft);tone(at,198*nounPitch,.12,.06*strength*soft,'triangle')}else{tone(at,535*nounPitch,.23,.15*strength*soft,'triangle');tone(at,1070*nounPitch,.15,.045*strength*soft)}}
+    function scheduleBacking(start:number){if(!actx)return;const beat=secondsPerBeat(currentWave().bpm);const total=waveEndBeat(currentWave());for(let count=3;count>=1;count--){const at=start-count*beat;tone(at,count===1?880:660,.05,.07,'square')}for(let value=0;value<=total;value+=.5){const at=start+value*beat;if(value%4===0)kick(at,.075);if(value%4===2)noise(at,.045,.035,1600);if(value%1===.5)noise(at,.022,.012,4500)}}
 
-    function showAudioUnavailable() {
-      goButton.disabled = true;
-      goButton.textContent = 'WEB AUDIO REQUIRED';
-      cardSubEl.textContent = 'Pulse Arena needs Web Audio to keep the drums, targets, and scoring on one clock. Open this edition in a current browser with audio enabled.';
-      liveEl.textContent = 'Pulse Arena needs browser Web Audio support.';
-    }
+    function updateWaveUi(){const wave=currentWave();waveNoEl.textContent=`WAVE ${wave.number} / 04`;waveNameEl.textContent=wave.name;tempoEl.textContent=`${wave.bpm} BPM`;routeItems.forEach((item,index)=>item.classList.toggle('is-current',index===waveIndex));siege.style.setProperty('--accent',wave.accent);siege.style.setProperty('--accent-soft',wave.accentSoft)}
+    function updateHud(){scoreEl.textContent=score.toLocaleString();comboEl.textContent=combo?`×${combo}`:'—';killsEl.textContent=`${kills} clear${kills===1?'':'s'}`;Array.from(shieldEl.children).forEach((pip,index)=>pip.classList.toggle('is-empty',index>=shields));shieldEl.setAttribute('aria-label',`${shields} of ${SIEGE_SHIELDS} core shields remaining`);const remainder=kills%6;powerCopyEl.textContent=dropReady?(dropQueued?'DROP QUEUED':'DROP READY'):`${remainder} / 6`;powerFillEl.style.width=`${dropReady?100:remainder/6*100}%`;siege.dataset.drop=String(dropReady);dropButton.disabled=!dropReady||phase!=='playing';dropCopyEl.textContent=dropReady?(dropQueued?'QUEUED':'DROP'):'CORE';dropButton.setAttribute('aria-label',dropReady?(dropQueued?'DROP queued for the next downbeat.':'DROP charged. Activate to queue it for the next downbeat.'):'Center Noun. DROP is not charged.')}
+    function updateLoopRail(step=0){loopClockEl.textContent=`${String(step+1).padStart(2,'0')} / 16`;const budget=`${recordPattern.length}/${currentWave().noteBudget}`;loopModeEl.textContent=echoPattern.length?`GHOST ${String(activeLoopOrdinal).padStart(2,'0')} · WRITE ${budget}`:`WRITE LOOP ${String(activeLoopOrdinal+1).padStart(2,'0')} · ${budget}`;loopCells.forEach((cell,index)=>{cell.classList.toggle('is-now',index===step);const live=cell.querySelector('i')!;const ghost=cell.querySelector('b')!;live.className='';ghost.className='';const liveLanes=recordPattern.filter((hit)=>hit.step===index).map((hit)=>hit.lane);const ghostLanes=echoPattern.filter((hit)=>hit.step===index).map((hit)=>hit.lane);if(liveLanes.length>1)live.classList.add('is-chord');else if(liveLanes[0])live.classList.add(`has-${liveLanes[0]}`);if(ghostLanes.length>1)ghost.classList.add('is-chord');else if(ghostLanes[0])ghost.classList.add(`has-${ghostLanes[0]}`)});loopEl.setAttribute('aria-label',`Sixteen-step loop. Step ${step+1}. ${recordPattern.length} of ${currentWave().noteBudget} live attacks recorded; ${echoPattern.length} ghost attacks replaying.`)}
+    function showJudge(copy:string,kind:SiegeGrade|'ghost'|'miss'|'power'){judgeSerial++;const serial=judgeSerial;judgeEl.textContent=copy;judgeEl.style.color=kind==='perfect'?'#ffcf4a':kind==='great'?'#56dfb1':kind==='good'?'#63cfff':kind==='ghost'?'#c69cff':kind==='power'?'#ff6faa':'#ff6f87';judgeEl.classList.remove('is-showing');void judgeEl.offsetWidth;judgeEl.classList.add('is-showing');window.setTimeout(()=>{if(judgeSerial===serial)judgeEl.classList.remove('is-showing')},480)}
+    function pulsePad(lane:SiegeLane){const button=padButtons.find((pad)=>pad.dataset.lane===lane);button?.classList.add('is-hit');window.setTimeout(()=>button?.classList.remove('is-hit'),90)}
 
-    function ensureAudio(): AudioContext | null {
-      if (actx) return actx;
-      const AudioContextClass = window.AudioContext
-        ?? (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextClass) {
-        showAudioUnavailable();
-        return null;
-      }
-      try {
-        actx = new AudioContextClass({ latencyHint: 'interactive' });
-      } catch {
-        showAudioUnavailable();
-        return null;
-      }
-      masterGain = actx.createGain();
-      masterGain.gain.value = muted ? 0.0001 : 0.72;
-      masterGain.connect(actx.destination);
-      const frames = Math.max(1, Math.floor(actx.sampleRate * .14));
-      noiseBuffer = actx.createBuffer(1, frames, actx.sampleRate);
-      const data = noiseBuffer.getChannelData(0);
-      for (let index = 0; index < frames; index++) data[index] = Math.random() * 2 - 1;
-      updateLatencyCopy();
-      return actx;
-    }
+    function frontEnemy(lane:SiegeLane,beat:number){return enemies.filter((enemy)=>enemy.lane===lane&&!enemy.dead&&!enemy.breached&&enemy.spawnBeat<=beat).sort((a,b)=>a.deadlineBeat-b.deadlineBeat)[0]??null}
+    function earnPower(){const power=powerupForKills(kills);if(power==='repair'){const before=shields;shields=Math.min(SIEGE_SHIELDS,shields+1);if(before===shields)score+=200;showJudge(before===shields?'SHIELDS FULL +200':'SHIELD REPAIRED','power')}else if(power==='drop'){dropReady=true;dropQueued=false;showJudge('DROP CHARGED','power')}updateHud()}
+    function resolveAttack(lane:SiegeLane,damage:number,source:'live'|'ghost'|'drop',now:number){const beat=currentBeat(now);const target=frontEnemy(lane,beat);bursts.push({lane,at:now,source});if(!target)return false;const index=enemies.findIndex((enemy)=>enemy.id===target.id);const next=applyAttack(target,lane,damage);enemies[index]=next;score+=source==='ghost'?22:source==='drop'?35:30;if(next.dead&&!target.dead){kills++;waveKills++;combo++;maxCombo=Math.max(maxCombo,combo);score+=100+Math.min(300,combo*12)+(source==='ghost'?45:0);earnPower();if(source==='ghost')showJudge('GHOST CLEAR','ghost')}return Boolean(next.dead&&!target.dead)}
+    function queueDrop(){if(!dropReady||dropQueued||phase!=='playing')return;dropQueued=true;dropCopyEl.textContent='QUEUED';updateHud();showJudge('DROP ON DOWNBEAT','power');liveEl.textContent='DROP queued for the next downbeat.'}
+    function fireDrop(now:number){if(!dropQueued||!actx)return;dropQueued=false;dropReady=false;const at=actx.currentTime+.004;[0,.08,.16,.24].forEach((offset,index)=>{noise(at+offset,.05,.12-index*.018,1100+index*500);tone(at+offset,180+index*90,.08,.08,'square')});SIEGE_LANE_ORDER.forEach((lane)=>resolveAttack(lane,2,'drop',now));showJudge('FULL DROP','power');updateHud();liveEl.textContent='DROP fired on all four gates.'}
+    function scheduleEchoes(now:number){if(!actx)return;const loopStart=waveStart+activeLoopOrdinal*loopSeconds(currentWave().bpm);echoEvents=echoEventsForBar(echoPattern,loopStart,currentWave().bpm);echoFired=new Set();echoEvents.forEach((event)=>{const delay=Math.max(.003,event.hitTime-now);playLane(event.lane,actx!.currentTime+delay,.9,true)})}
+    function advanceLoop(now:number){const ordinal=loopOrdinalAtTime(now,waveStart,currentWave().bpm);if(ordinal===activeLoopOrdinal)return;if(activeLoopOrdinal>=0){echoPattern=recordPattern;recordPattern=pendingPattern;pendingPattern=[]}activeLoopOrdinal=ordinal;scheduleEchoes(now);updateLoopRail(loopStepAtTime(now,waveStart,currentWave().bpm))}
+    function processEchoes(now:number){echoEvents.forEach((event)=>{const key=`${activeLoopOrdinal}-${event.step}-${event.lane}`;if(echoFired.has(key)||now<event.hitTime)return;echoFired.add(key);resolveAttack(event.lane,1,'ghost',event.hitTime)});siege.dataset.ghost=String(echoPattern.length>0)}
 
-    function outputLatency(): number {
-      if (!actx) return 0;
-      return clampNumber(Number((actx as any).outputLatency ?? actx.baseLatency ?? 0), 0, .25);
-    }
+    function performLane(lane:SiegeLane,eventTime?:number){if(!actx||(phase!=='countin'&&phase!=='playing'))return;const now=siegeInputTime(eventTime);playLane(lane,actx.currentTime+.003,phase==='playing'?1:.45);pulsePad(lane);if(phase==='countin'){showJudge('COUNT IT','good');return}const timing=gradeLoopHit(now,waveStart,currentWave().bpm);const step=timing.step;const quantizedLoop=Math.floor(timing.absoluteStep/SIEGE_LOOP_STEPS);const writesNext=quantizedLoop>activeLoopOrdinal;const targetPattern=writesNext?pendingPattern:recordPattern;if(targetPattern.length>=currentWave().noteBudget){showJudge('LOOP FULL','miss');liveEl.textContent=`Loop full. ${currentWave().noteBudget} authored hits; listen for the ghost and choose the next phrase.`;return}const nextPattern=recordLoopHit(targetPattern,lane,step);if(nextPattern.length===targetPattern.length){showJudge('ALREADY LOOPED','miss');return}if(writesNext)pendingPattern=nextPattern;else recordPattern=nextPattern;acceptedHits++;gradeCounts[timing.grade]++;resolveAttack(lane,1,'live',now);showJudge(timing.grade==='late'?'LOOSE':timing.grade.toUpperCase(),timing.grade);updateLoopRail(loopStepAtTime(now,waveStart,currentWave().bpm));updateHud()}
 
-    function arenaAudioNow(): number {
-      if (!actx) return 0;
-      const stamp = actx.getOutputTimestamp?.();
-      const stampedTime = stamp && Number.isFinite(stamp.contextTime) && stamp.contextTime > 0
-        ? stamp.contextTime
-        : null;
-      return stampedTime === null
-        ? compensatedAudioTime(actx.currentTime, outputLatency(), syncMs)
-        : compensatedAudioTime(stampedTime, 0, syncMs);
-    }
+    function startWave(index:number){if(!actx)return;window.clearTimeout(transitionTimer);stopScheduled();waveIndex=index;waveClosing=false;deferredTransition=null;snapshot=snapshotRun();enemies=buildWaveEnemies(currentWave());shields=SIEGE_SHIELDS;combo=0;waveKills=0;recordPattern=[];pendingPattern=[];echoPattern=[];echoEvents=[];echoFired=new Set();activeLoopOrdinal=-1;activeAbsoluteStep=-1;dropQueued=false;bursts=[];const beat=secondsPerBeat(currentWave().bpm);waveStart=siegeAudioNow()+beat*3+.12;scheduleBacking(waveStart);siege.dataset.wave=String(index);setPhase('countin');overlay.hidden=true;flashEl.hidden=false;updateWaveUi();updateHud();updateLoopRail(0);liveEl.textContent=`Wave ${index+1} of 4, ${currentWave().name}, ${currentWave().bpm} BPM. Four shields and ${currentWave().noteBudget} authored hits per loop. Choose the threatened gate.`;padButtons[0]?.focus({preventScroll:true});cancelAnimationFrame(animationFrame);animationFrame=requestAnimationFrame(runFrame)}
+    function failWave(){if(waveClosing||!snapshot)return;waveClosing=true;stopScheduled();setPhase('failed');cancelAnimationFrame(animationFrame);restoreSnapshot(snapshot);overlay.hidden=false;nounPicker.hidden=true;routeEl.hidden=true;goButton.hidden=false;cardKickerEl.textContent=`WAVE ${currentWave().number} BREACHED · ${currentWave().bpm} BPM`;cardTempoEl.textContent='SCORE RESTORED · LOOP CLEARED';cardTitleEl.innerHTML='REWRITE<br />THE DEFENSE.';cardSubEl.textContent='Four unresolved deadlines reached the Noun. Retry restores the wave entry score and starts with an empty loop.';statALabel.textContent='wave';statA.textContent=currentWave().name;statBLabel.textContent='ghost';statB.textContent='reset';statCLabel.textContent='shield';statC.textContent='4 fresh';bestEl.textContent=`run ${score.toLocaleString()} pts`;goButton.textContent=`↻ RETRY WAVE ${currentWave().number}`;liveEl.textContent=`${currentWave().name} breached. Score restored. Activate retry when ready.`;goButton.focus({preventScroll:true})}
+    function finishWave(){if(waveClosing)return;waveClosing=true;stopScheduled();setPhase('interstitial');flashEl.hidden=true;overlay.hidden=false;overlay.tabIndex=-1;overlay.focus({preventScroll:true});nounPicker.hidden=true;routeEl.hidden=false;const isFinal=waveIndex===SIEGE_WAVES.length-1;cardKickerEl.textContent=`WAVE ${currentWave().number} CLEAR · ${waveKills} RAIDERS`;cardTempoEl.textContent=isFinal?'LOOP SIEGE COMPLETE':`NEXT · ${SIEGE_WAVES[waveIndex+1].bpm} BPM`;cardTitleEl.innerHTML=isFinal?'THE GHOST<br />HELD THE LINE.':`${currentWave().name.toUpperCase()}<br />HELD.`;cardSubEl.textContent=isFinal?'Four gates, four tempos, one loop that kept becoming a better plan.':`Your final phrase is retired here. ${SIEGE_WAVES[waveIndex+1].name} starts clean so the next defense is yours to write.`;statALabel.textContent='clears';statA.textContent=String(waveKills);statBLabel.textContent='score';statB.textContent=score.toLocaleString();statCLabel.textContent='next';statC.textContent=isFinal?'grade':`${SIEGE_WAVES[waveIndex+1].bpm} bpm`;bestEl.textContent=`run ${score.toLocaleString()} pts`;goButton.hidden=true;const transition=isFinal?'complete':'next';transitionTimer=window.setTimeout(()=>runWaveTransition(transition),1550)}
+    function runWaveTransition(transition:'next'|'complete'){if(document.hidden){deferredTransition=transition;return}deferredTransition=null;if(transition==='complete')finishRun();else{goButton.hidden=false;startWave(waveIndex+1)}}
+    function finishRun(){stopScheduled();setPhase('complete');cancelAnimationFrame(animationFrame);const totalGrades=gradeCounts.perfect+gradeCounts.great+gradeCounts.good+gradeCounts.late;const precision=totalGrades?Math.round((gradeCounts.perfect+gradeCounts.great*.7+gradeCounts.good*.4)/totalGrades*100):0;const grade=precision>=90?'S':precision>=80?'A':precision>=68?'B':precision>=55?'C':'D';if(score>best){best=score;writeStorage(SIEGE_BEST_KEY, String(best))}overlay.hidden=false;nounPicker.hidden=true;routeEl.hidden=false;cardKickerEl.textContent='LOOP SIEGE COMPLETE · FOUR GATES';cardTempoEl.textContent=`MAX CHAIN ${maxCombo} · BEST ${best.toLocaleString()}`;cardTitleEl.innerHTML=`GRADE ${grade}<br />${score.toLocaleString()} PTS`;cardSubEl.textContent=`You cleared ${kills} raiders with ${acceptedHits} authored drum attacks. Each loop fought once, then made room for the next idea.`;statALabel.textContent='perfect';statA.textContent=String(gradeCounts.perfect);statBLabel.textContent='great';statB.textContent=String(gradeCounts.great);statCLabel.textContent='loose';statC.textContent=String(gradeCounts.late);bestEl.textContent=`best ${best.toLocaleString()} pts`;goButton.hidden=false;goButton.textContent='▶ PLAY AGAIN';liveEl.textContent=`Loop Siege complete. Grade ${grade}, ${score} points, ${kills} raiders cleared.`;drawSiege(waveStart+waveEndBeat(currentWave())*secondsPerBeat(currentWave().bpm));goButton.focus({preventScroll:true})}
 
-    function arenaInputTime(eventTime?: number): number {
-      if (!actx || !Number.isFinite(eventTime)) return arenaAudioNow();
-      const stamp = actx.getOutputTimestamp?.();
-      if (!stamp || !Number.isFinite(stamp.contextTime) || !Number.isFinite(stamp.performanceTime)) return arenaAudioNow();
-      const eventAge = Math.abs((eventTime as number) - stamp.performanceTime);
-      if (eventAge > 60_000) return arenaAudioNow();
-      const mapped = audioTimeForPerformanceTimestamp(
-        stamp.contextTime,
-        stamp.performanceTime,
-        eventTime as number,
-        syncMs,
-      );
-      return Number.isFinite(mapped) ? mapped : arenaAudioNow();
-    }
+    function runFrame(){if(phase!=='countin'&&phase!=='playing')return;const now = siegeAudioNow();if(phase==='countin'){flashEl.hidden=false;const remaining=Math.ceil((waveStart-now)/secondsPerBeat(currentWave().bpm));flashEl.textContent=remaining>0?String(Math.min(3,remaining)):'GO';if(now>=waveStart){setPhase('playing');advanceLoop(now)}}else if(now>waveStart+.35){flashEl.hidden=true}if(phase==='playing'){advanceLoop(now);const absolute=absoluteStepAtTime(now,waveStart,currentWave().bpm);if(absolute!==activeAbsoluteStep){activeAbsoluteStep=absolute;const step=absolute%SIEGE_LOOP_STEPS;updateLoopRail(step);if(dropQueued&&absolute>0&&absolute%8===0)fireDrop(now)}processEchoes(now);const deadline=resolveEnemyDeadlines(enemies,currentBeat(now),shields);enemies=deadline.enemies;shields=deadline.shields;if(deadline.breaches){combo=0;showJudge(deadline.breaches>1?'GATES BREACHED':'GATE BREACHED','miss');tone(actx!.currentTime+.003,78,.32,.16,'sawtooth');updateHud();liveEl.textContent=`${deadline.breaches} gate ${deadline.breaches===1?'breach':'breaches'}. ${shields} shields remain.`;if(shields===0)failWave()}if(!waveClosing&&currentBeat(now)>=waveEndBeat(currentWave()))finishWave()}drawSiege(now);if(phase==='countin'||phase==='playing')animationFrame=requestAnimationFrame(runFrame)}
 
-    function updateLatencyCopy() {
-      latencyEl.textContent = actx ? `auto ${Math.round(outputLatency() * 1000)}ms` : 'latency auto';
-    }
+    function resizeCanvas(){const rect=canvas.getBoundingClientRect();const ratio=Math.min(2,window.devicePixelRatio||1);const width=Math.max(1,Math.round(rect.width*ratio));const height=Math.max(1,Math.round(rect.height*ratio));if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}context.setTransform(ratio,0,0,ratio,0,0);return{width:rect.width,height:rect.height}}
+    function drawCover(image:HTMLImageElement,width:number,height:number){if(!image.complete||!image.naturalWidth)return;const scale=Math.max(width/image.naturalWidth,height/image.naturalHeight);const sourceWidth=width/scale;const sourceHeight=height/scale;context.drawImage(image,(image.naturalWidth-sourceWidth)/2,(image.naturalHeight-sourceHeight)/2,sourceWidth,sourceHeight,0,0,width,height)}
+    function gatePoint(lane:SiegeLane,width:number,height:number){if(lane==='west')return{x:20,y:height*.46};if(lane==='east')return{x:width-20,y:height*.46};if(lane==='north')return{x:width/2,y:18};return{x:width/2,y:height-90}}
+    function drawSiege(now:number){const{width,height}=resizeCanvas();const wave=SIEGE_WAVES[Math.min(waveIndex,SIEGE_WAVES.length-1)];context.save();context.fillStyle='#0b1020';context.fillRect(0,0,width,height);drawCover(backdropImages[Math.min(waveIndex,backdropImages.length-1)],width,height);const wash=context.createLinearGradient(0,0,0,height);wash.addColorStop(0,'rgba(8,12,26,.32)');wash.addColorStop(.55,'rgba(7,10,22,.62)');wash.addColorStop(1,'rgba(5,8,18,.88)');context.fillStyle=wash;context.fillRect(0,0,width,height);const center={x:width/2,y:height*.48};const beat=secondsPerBeat(wave.bpm);const beatFloat=waveStart>0?(now-waveStart)/beat:0;const pulse=1-(((beatFloat%1)+1)%1);SIEGE_LANE_ORDER.forEach((lane)=>{const gate=gatePoint(lane,width,height);context.beginPath();context.moveTo(gate.x,gate.y);context.lineTo(center.x,center.y);context.lineWidth=12;context.strokeStyle=`${SIEGE_LANE_META[lane].color}55`;context.stroke();context.setLineDash([6,11]);context.lineDashOffset=-beatFloat*24;context.lineWidth=2;context.strokeStyle='rgba(255,255,255,.58)';context.stroke();context.setLineDash([])});context.beginPath();context.arc(center.x,center.y,67+pulse*7,0,Math.PI*2);context.strokeStyle=dropReady?'#ffcf4a':'rgba(255,255,255,.7)';context.lineWidth=dropReady?7:3;context.stroke();if(phase==='countin'||phase==='playing'){const beatNow=currentBeat(now);enemies.forEach((enemy)=>{if(enemy.dead||enemy.breached||beatNow<enemy.spawnBeat)return;const gate=gatePoint(enemy.lane,width,height);const progress=enemyApproachProgress(enemy,beatNow);const stop=76;const vx=center.x-gate.x;const vy=center.y-gate.y;const length=Math.hypot(vx,vy)||1;const target={x:center.x-vx/length*stop,y:center.y-vy/length*stop};const eased=progress**1.12;const x=gate.x+(target.x-gate.x)*eased;const y=gate.y+(target.y-gate.y)*eased;const color=SIEGE_LANE_META[enemy.lane].color;context.save();context.shadowColor=color;context.shadowBlur=13;context.fillStyle=enemy.tier===3?'#111522':color;context.strokeStyle=progress>.78?'#ff6f87':'#fff';context.lineWidth=progress>.78?5:3;context.beginPath();if(enemy.tier===1)context.arc(x,y,15,0,Math.PI*2);else context.roundRect(x-18,y-16,36,32,enemy.tier===3?5:11);context.fill();context.stroke();context.shadowBlur=0;context.fillStyle=enemy.tier===3?color:'#111522';context.font='900 11px IBM Plex Mono, monospace';context.textAlign='center';context.textBaseline='middle';context.fillText(String(enemy.hp),x,y);context.restore()})}bursts=bursts.filter((burst)=>now-burst.at<.38);bursts.forEach((burst)=>{const age=Math.max(0,now-burst.at);const progress=age/.38;const gate=gatePoint(burst.lane,width,height);const startX=center.x+(gate.x-center.x)*.12;const startY=center.y+(gate.y-center.y)*.12;const x=startX+(gate.x-startX)*progress;const y=startY+(gate.y-startY)*progress;context.beginPath();context.arc(x,y,burst.source==='drop'?16:burst.source==='ghost'?10:12,0,Math.PI*2);context.fillStyle=burst.source==='ghost'?'rgba(218,184,255,.72)':burst.source==='drop'?'#fff':'#ffcf4a';context.fill();context.strokeStyle=SIEGE_LANE_META[burst.lane].color;context.lineWidth=4;context.stroke()});context.restore()}
 
-    function connectSource(source: AudioScheduledSourceNode) {
-      scheduledSources.push(source);
-      source.addEventListener('ended', () => {
-        const index = scheduledSources.indexOf(source);
-        if (index >= 0) scheduledSources.splice(index, 1);
-      }, { once: true });
-    }
-
-    function stopScheduled() {
-      scheduledSources.splice(0).forEach((source) => {
-        try { source.stop(); } catch {}
-      });
-    }
-
-    function tone(at: number, frequency: number, duration: number, volume: number, type: OscillatorType = 'sine', destination = masterGain) {
-      if (!actx || !destination) return;
-      const oscillator = actx.createOscillator();
-      const gain = actx.createGain();
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(frequency, at);
-      gain.gain.setValueAtTime(.0001, at);
-      gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), at + .005);
-      gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
-      oscillator.connect(gain).connect(destination);
-      oscillator.start(at);
-      oscillator.stop(at + duration + .02);
-      connectSource(oscillator);
-    }
-
-    function kick(at: number, volume = .16) {
-      if (!actx || !masterGain) return;
-      const oscillator = actx.createOscillator();
-      const gain = actx.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(132, at);
-      oscillator.frequency.exponentialRampToValueAtTime(48, at + .11);
-      gain.gain.setValueAtTime(volume, at);
-      gain.gain.exponentialRampToValueAtTime(.0001, at + .16);
-      oscillator.connect(gain).connect(masterGain);
-      oscillator.start(at);
-      oscillator.stop(at + .18);
-      connectSource(oscillator);
-    }
-
-    function noise(at: number, duration: number, volume: number, highpass = 900) {
-      if (!actx || !masterGain || !noiseBuffer) return;
-      const source = actx.createBufferSource();
-      const filter = actx.createBiquadFilter();
-      const gain = actx.createGain();
-      source.buffer = noiseBuffer;
-      filter.type = 'highpass';
-      filter.frequency.value = highpass;
-      gain.gain.setValueAtTime(volume, at);
-      gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
-      source.connect(filter).connect(gain).connect(masterGain);
-      source.start(at);
-      source.stop(at + duration + .01);
-      connectSource(source);
-    }
-
-    function playLane(lane: ArenaLane, at: number, strength = 1) {
-      const nounPitch = 2 ** (((selectedNoun % 9) - 4) / 72);
-      if (lane === 'west') {
-        kick(at, .31 * strength);
-        tone(at, 62 * nounPitch, .16, .11 * strength, 'sine');
-      } else if (lane === 'north') {
-        noise(at, .1, .2 * strength, 1250);
-        tone(at, 225 * nounPitch, .055, .055 * strength, 'square');
-      } else if (lane === 'south') {
-        tone(at, 132 * nounPitch, .23, .23 * strength, 'sine');
-        tone(at, 198 * nounPitch, .13, .07 * strength, 'triangle');
-      } else {
-        tone(at, 535 * nounPitch, .26, .16 * strength, 'triangle');
-        tone(at, 1070 * nounPitch, .18, .055 * strength, 'sine');
-      }
-    }
-
-    function scheduleBacking(roundStartTime: number) {
-      if (!actx) return;
-      const round = currentRound();
-      const step = secondsPerBeat(round.bpm);
-      const totalBeats = round.bars.length * 4;
-      for (let count = 3; count >= 1; count--) {
-        const at = roundStartTime - count * step;
-        tone(at, count === 1 ? 880 : 660, .055, .065, 'square');
-      }
-      for (let beat = 0; beat <= totalBeats; beat += .5) {
-        const at = roundStartTime + beat * step;
-        if (beat % 2 === 0) kick(at, .09);
-        if (beat % 4 === 1 || beat % 4 === 3) noise(at, .045, .026, 1600);
-        if (beat % 1 === .5) noise(at, .025, .012, 4300);
-      }
-    }
-
-    function snapshotRun(): Snapshot {
-      return { score, combo, maxCombo, hitTargets, missTargets, rushMeter, gradeCounts: { ...gradeCounts } };
-    }
-    function restoreSnapshot(value: Snapshot) {
-      score = value.score;
-      combo = value.combo;
-      maxCombo = value.maxCombo;
-      hitTargets = value.hitTargets;
-      missTargets = value.missTargets;
-      rushMeter = value.rushMeter;
-      gradeCounts = { ...value.gradeCounts };
-      rushUntil = 0;
-      updateHud();
-    }
-
-    function startRound(index: number) {
-      if (!actx) return;
-      window.clearTimeout(transitionTimer);
-      stopScheduled();
-      roundIndex = index;
-      deferredTransition = null;
-      snapshot = snapshotRun();
-      resolvedGroups = new Set();
-      roundClosing = false;
-      shields = 4;
-      shieldRepair = 0;
-      bursts = [];
-      combo = 0;
-      rushUntil = 0;
-      const round = currentRound();
-      const approach = approachSecondsForRound(round);
-      roundStart = arenaAudioNow() + approach + .12;
-      cues = runtimeCues(round, roundStart);
-      roundEnd = roundStart + roundDurationSeconds(round);
-      arena.dataset.round = String(index);
-      arena.style.setProperty('--accent', round.accent);
-      arena.style.setProperty('--accent-soft', round.accentSoft);
-      scheduleBacking(roundStart);
-      setPhase('countin');
-      overlay.hidden = true;
-      flashEl.hidden = false;
-      updateRoundUi();
-      updateHud();
-      liveEl.textContent = `Round ${index + 1} of 4, ${round.name}, ${round.bpm} BPM. Four shields. D F J K, arrows, or touch.`;
-      cancelAnimationFrame(animationFrame);
-      animationFrame = requestAnimationFrame(runFrame);
-    }
-
-    function updateRoundUi() {
-      const round = currentRound();
-      roundNoEl.textContent = `ROUND ${round.number} / 04`;
-      roundNameEl.textContent = round.name;
-      tempoEl.textContent = `${round.bpm} BPM`;
-      routeItems.forEach((item, index) => item.classList.toggle('is-current', index === roundIndex));
-    }
-
-    function updateHud(now = arenaAudioNow()) {
-      scoreEl.textContent = score.toLocaleString();
-      comboEl.textContent = combo > 0 ? `×${combo}` : '—';
-      accuracyEl.textContent = `${Math.round(accuracy())}%`;
-      Array.from(shieldEl.children).forEach((pip, index) => pip.classList.toggle('is-empty', index >= shields));
-      shieldEl.setAttribute('aria-label', `${shields} of 4 shields remaining. Eight clean hits repair one shield.`);
-      const active = rushActive(now);
-      arena.dataset.rush = String(active);
-      rushFillEl.style.width = `${active ? 100 : rushMeter}%`;
-      rushCopyEl.textContent = active ? `×${comboMultiplier(combo, true)}` : String(Math.floor(rushMeter));
-    }
-
-    function groups(): Map<string, RuntimeArenaCue[]> {
-      const map = new Map<string, RuntimeArenaCue[]>();
-      cues.forEach((cue) => map.set(cue.groupId, [...(map.get(cue.groupId) ?? []), cue]));
-      return map;
-    }
-
-    function showJudge(copy: string, grade: HitGrade | 'stray' | 'chord') {
-      judgeSerial++;
-      const serial = judgeSerial;
-      judgeEl.textContent = copy;
-      judgeEl.style.color = grade === 'perfect' ? '#ffd166' : grade === 'great' ? '#78f0ca' : grade === 'good' ? '#7ad7ff' : grade === 'chord' ? '#ff9ad5' : '#ff7895';
-      judgeEl.classList.remove('is-showing');
-      void judgeEl.offsetWidth;
-      judgeEl.classList.add('is-showing');
-      window.setTimeout(() => { if (judgeSerial === serial) judgeEl.classList.remove('is-showing'); }, 480);
-    }
-
-    function pulsePad(lane: ArenaLane) {
-      const button = padButtons.find((pad) => pad.dataset.lane === lane);
-      button?.classList.add('is-hit');
-      window.setTimeout(() => button?.classList.remove('is-hit'), 90);
-      coreEl.classList.add('is-hit');
-      window.setTimeout(() => coreEl.classList.remove('is-hit'), 90);
-    }
-
-    function resolveSuccess(group: RuntimeArenaCue[], grade: HitGrade, now: number) {
-      resolvedGroups.add(group[0].groupId);
-      combo += group.length;
-      maxCombo = Math.max(maxCombo, combo);
-      const activeRush = rushActive(now);
-      score += hitScore(grade, combo, activeRush) * group.length;
-      hitTargets += group.length;
-      if (grade !== 'miss') gradeCounts[grade] += group.length;
-      const rushGain = grade === 'perfect' ? 10 : grade === 'great' ? 6 : 3;
-      rushMeter = Math.min(100, rushMeter + rushGain * group.length);
-      const repair = advanceShieldRepair(shields, shieldRepair, group.length);
-      shields = repair.shields;
-      shieldRepair = repair.repairProgress;
-      if (!activeRush && rushMeter >= 100) {
-        rushMeter = 0;
-        rushUntil = now + currentBeatSeconds() * 8;
-        showJudge(repair.repaired ? 'RUSH ×4 · SHIELD' : 'RUSH ×4', 'perfect');
-      } else {
-        const copy = group.length > 1 ? `${grade.toUpperCase()} CHORD` : grade.toUpperCase();
-        showJudge(repair.repaired ? `${copy} · SHIELD` : copy, grade);
-      }
-      group.forEach((cue) => bursts.push({ lane: cue.lane, at: now, grade }));
-      updateHud(now);
-    }
-
-    function resolveMiss(group: RuntimeArenaCue[], now: number) {
-      if (resolvedGroups.has(group[0].groupId)) return;
-      resolvedGroups.add(group[0].groupId);
-      group.forEach((cue) => { cue.judged = true; });
-      missTargets += group.length;
-      combo = 0;
-      shieldRepair = 0;
-      shields = Math.max(0, shields - 1);
-      score = Math.max(0, score - 50);
-      showJudge(group.length > 1 ? 'CHORD MISS' : 'MISS', 'miss');
-      updateHud(now);
-      if (shields === 0) failRound();
-    }
-
-    function performLane(lane: ArenaLane, eventTime?: number) {
-      if (!actx || (phase !== 'countin' && phase !== 'playing')) return;
-      const now = arenaInputTime(eventTime);
-      const match = findHittableCue(cues, lane, now);
-      playLane(lane, actx.currentTime + .003, match ? 1 : .42);
-      pulsePad(lane);
-      if (!match) {
-        combo = 0;
-        shieldRepair = 0;
-        score = Math.max(0, score - 12);
-        showJudge('EMPTY', 'stray');
-        updateHud(now);
-        return;
-      }
-      const { cue, deltaMs } = match;
-      cue.judged = true;
-      cue.pressedAt = now;
-      cue.grade = gradeHit(deltaMs);
-      const group = cues.filter((item) => item.groupId === cue.groupId);
-      if (group.length === 1) {
-        resolveSuccess(group, cue.grade, now);
-        return;
-      }
-      if (!group.every((item) => item.judged)) {
-        showJudge('CHORD…', 'chord');
-        return;
-      }
-      const span = chordSpanMs(group);
-      const groupGrade = span <= CHORD_WINDOW_MS
-        ? worstGrade(group.map((item) => item.grade ?? 'miss'))
-        : 'miss';
-      if (groupGrade === 'miss') resolveMiss(group, now);
-      else resolveSuccess(group, groupGrade, now);
-    }
-
-    function expireMisses(now: number) {
-      if (roundClosing || phase !== 'playing') return;
-      for (const group of groups().values()) {
-        if (resolvedGroups.has(group[0].groupId)) continue;
-        if (now > group[0].hitTime + HIT_WINDOWS_MS.good / 1000) resolveMiss(group, now);
-        if (phase === 'failed') break;
-      }
-    }
-
-    function failRound() {
-      if (roundClosing || !snapshot) return;
-      roundClosing = true;
-      stopScheduled();
-      setPhase('failed');
-      cancelAnimationFrame(animationFrame);
-      restoreSnapshot(snapshot);
-      overlay.hidden = false;
-      nounPicker.hidden = true;
-      routeEl.hidden = true;
-      cardKickerEl.textContent = `ROUND ${currentRound().number} DROPPED · ${currentRound().bpm} BPM`;
-      cardTempoEl.textContent = 'SCORE RESTORED · TRY AGAIN';
-      cardTitleEl.innerHTML = 'GET BACK<br />IN THE POCKET.';
-      cardSubEl.textContent = 'Four unrepaired misses emptied the round shield. Your score snapshot is safe—retry starts with a fresh three-beat count-in. Eight clean hits repair one shield.';
-      statALabel.textContent = 'round'; statA.textContent = currentRound().name;
-      statBLabel.textContent = 'shield'; statB.textContent = '4 fresh';
-      statCLabel.textContent = 'sync'; statC.textContent = `${syncMs}ms`;
-      bestEl.textContent = `run ${score.toLocaleString()} pts`;
-      goButton.textContent = `↻ RETRY ROUND ${currentRound().number}`;
-      liveEl.textContent = `${currentRound().name} dropped. Score restored. Activate retry when ready.`;
-    }
-
-    function finishRound() {
-      if (roundClosing) return;
-      roundClosing = true;
-      setPhase('interstitial');
-      flashEl.hidden = false;
-      flashEl.textContent = roundIndex === ARENA_ROUNDS.length - 1 ? 'FULL SEND' : 'ROUND CLEAR';
-      liveEl.textContent = `${currentRound().name} clear. ${Math.round(accuracy())}% run accuracy.`;
-      const transition = roundIndex === ARENA_ROUNDS.length - 1 ? 'complete' : 'next';
-      transitionTimer = window.setTimeout(() => runRoundTransition(transition), 950);
-    }
-
-    function runRoundTransition(transition: 'next' | 'complete') {
-      if (document.hidden) {
-        deferredTransition = transition;
-        return;
-      }
-      deferredTransition = null;
-      if (transition === 'complete') finishRun();
-      else startRound(roundIndex + 1);
-    }
-
-    function finishRun() {
-      stopScheduled();
-      setPhase('complete');
-      cancelAnimationFrame(animationFrame);
-      const runAccuracy = accuracy();
-      const grade = arenaGrade(runAccuracy);
-      if (score > best) {
-        best = score;
-        writeStorage(ARENA_BEST_KEY, String(best));
-      }
-      overlay.hidden = false;
-      nounPicker.hidden = true;
-      routeEl.hidden = false;
-      cardKickerEl.textContent = 'PULSE ARENA COMPLETE · FOUR VOICES';
-      cardTempoEl.textContent = `MAX COMBO ${maxCombo} · BEST ${best.toLocaleString()}`;
-      cardTitleEl.innerHTML = `GRADE ${grade}<br />${score.toLocaleString()} PTS`;
-      cardSubEl.textContent = `You played ${hitTargets} drum actions at ${runAccuracy}% accuracy. The sound, targets, and judgment stayed on one AudioContext timeline.`;
-      statALabel.textContent = 'perfect'; statA.textContent = String(gradeCounts.perfect);
-      statBLabel.textContent = 'great'; statB.textContent = String(gradeCounts.great);
-      statCLabel.textContent = 'good'; statC.textContent = String(gradeCounts.good);
-      bestEl.textContent = `best ${best.toLocaleString()} pts`;
-      goButton.textContent = '▶ PLAY AGAIN';
-      liveEl.textContent = `Pulse Arena complete. Grade ${grade}, ${score} points, ${runAccuracy}% accuracy, max combo ${maxCombo}.`;
-      drawArena(roundEnd);
-    }
-
-    function runFrame() {
-      if (phase !== 'countin' && phase !== 'playing') return;
-      const now = arenaAudioNow();
-      if (phase === 'countin') {
-        flashEl.hidden = false;
-        flashEl.textContent = countInDisplay(roundStart, now, currentBeatSeconds());
-        if (now >= roundStart) setPhase('playing');
-      } else if (now > roundStart + .38) {
-        flashEl.hidden = true;
-      }
-      expireMisses(now);
-      updateHud(now);
-      drawArena(now);
-      if (!roundClosing && now >= roundEnd + HIT_WINDOWS_MS.good / 1000) finishRound();
-      if (phase === 'countin' || phase === 'playing') animationFrame = requestAnimationFrame(runFrame);
-    }
-
-    function resizeCanvas() {
-      const rect = canvas.getBoundingClientRect();
-      const ratio = Math.min(2, window.devicePixelRatio || 1);
-      const width = Math.max(1, Math.round(rect.width * ratio));
-      const height = Math.max(1, Math.round(rect.height * ratio));
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      return { width: rect.width, height: rect.height };
-    }
-
-    function drawCover(image: HTMLImageElement, width: number, height: number) {
-      if (!image.complete || !image.naturalWidth) return;
-      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
-      const sourceWidth = width / scale;
-      const sourceHeight = height / scale;
-      const sx = (image.naturalWidth - sourceWidth) / 2;
-      const sy = (image.naturalHeight - sourceHeight) / 2;
-      context.drawImage(image, sx, sy, sourceWidth, sourceHeight, 0, 0, width, height);
-    }
-
-    function laneStart(lane: ArenaLane, width: number, height: number) {
-      if (lane === 'west') return { x: 22, y: height / 2 };
-      if (lane === 'east') return { x: width - 22, y: height / 2 };
-      if (lane === 'north') return { x: width / 2, y: 22 };
-      return { x: width / 2, y: height - 22 };
-    }
-
-    function drawArena(now: number) {
-      const { width, height } = resizeCanvas();
-      const round = ARENA_ROUNDS[Math.min(roundIndex, ARENA_ROUNDS.length - 1)];
-      const activeRush = rushActive(now);
-      context.save();
-      context.fillStyle = '#111526';
-      context.fillRect(0, 0, width, height);
-      drawCover(backdropImages[Math.min(roundIndex, backdropImages.length - 1)], width, height);
-      const wash = context.createLinearGradient(0, 0, 0, height);
-      wash.addColorStop(0, activeRush ? 'rgba(34,8,45,.42)' : 'rgba(11,15,31,.34)');
-      wash.addColorStop(.55, 'rgba(8,11,23,.64)');
-      wash.addColorStop(1, 'rgba(7,9,18,.84)');
-      context.fillStyle = wash;
-      context.fillRect(0, 0, width, height);
-
-      const center = { x: width / 2, y: height / 2 };
-      const beatSeconds = secondsPerBeat(round.bpm);
-      const beatFloat = now > 0 && roundStart > 0 ? (now - roundStart) / beatSeconds : 0;
-      const beatPulse = 1 - ((beatFloat % 1) + 1) % 1;
-      LANE_ORDER.forEach((lane) => {
-        const start = laneStart(lane, width, height);
-        const meta = LANE_META[lane];
-        context.beginPath();
-        context.moveTo(start.x, start.y);
-        context.lineTo(center.x, center.y);
-        context.lineWidth = activeRush ? 14 : 10;
-        context.strokeStyle = `${meta.color}${activeRush ? '70' : '42'}`;
-        context.stroke();
-        context.beginPath();
-        context.moveTo(start.x, start.y);
-        context.lineTo(center.x, center.y);
-        context.lineWidth = 2;
-        context.setLineDash([7, 10]);
-        context.lineDashOffset = -beatFloat * 24;
-        context.strokeStyle = 'rgba(255,255,255,.52)';
-        context.stroke();
-        context.setLineDash([]);
-      });
-
-      context.beginPath();
-      context.arc(center.x, center.y, 72 + beatPulse * 8, 0, Math.PI * 2);
-      context.strokeStyle = activeRush ? '#ffd166' : 'rgba(255,255,255,.55)';
-      context.lineWidth = activeRush ? 6 : 3;
-      context.stroke();
-
-      if (phase === 'countin' || phase === 'playing') {
-        for (const cue of cues) {
-          if (cue.judged) continue;
-          const approach = approachSecondsForRound(round);
-          const until = cue.hitTime - now;
-          if (until > approach || until < -HIT_WINDOWS_MS.good / 1000) continue;
-          const progress = approachProgress(cue.hitTime, now, approach);
-          const start = laneStart(cue.lane, width, height);
-          const stopDistance = 68;
-          const vectorX = center.x - start.x;
-          const vectorY = center.y - start.y;
-          const length = Math.hypot(vectorX, vectorY) || 1;
-          const targetX = center.x - vectorX / length * stopDistance;
-          const targetY = center.y - vectorY / length * stopDistance;
-          const eased = arenaTravelProgress(progress);
-          const x = start.x + (targetX - start.x) * eased;
-          const y = start.y + (targetY - start.y) * eased;
-          const meta = LANE_META[cue.lane];
-          const radius = cue.kind === 'chord' ? 19 : cue.kind === 'roll' ? 15 : 17;
-          context.save();
-          context.shadowColor = meta.color;
-          context.shadowBlur = 18 + progress * 12;
-          context.fillStyle = meta.color;
-          context.strokeStyle = '#151927';
-          context.lineWidth = 4;
-          context.beginPath();
-          if (cue.kind === 'roll') {
-            context.roundRect(x - radius, y - radius * .72, radius * 2, radius * 1.44, 6);
-          } else {
-            context.arc(x, y, radius, 0, Math.PI * 2);
-          }
-          context.fill();
-          context.stroke();
-          if (cue.kind === 'chord') {
-            context.beginPath();
-            context.arc(x, y, radius + 6, 0, Math.PI * 2);
-            context.strokeStyle = '#fff';
-            context.lineWidth = 3;
-            context.stroke();
-          }
-          context.fillStyle = '#151927';
-          context.font = '900 14px IBM Plex Mono, monospace';
-          context.textAlign = 'center';
-          context.textBaseline = 'middle';
-          context.fillText(meta.key, x, y + .5);
-          context.restore();
-        }
-      }
-
-      bursts = bursts.filter((burst) => now - burst.at < .42);
-      bursts.forEach((burst) => {
-        const age = Math.max(0, now - burst.at);
-        const progress = age / .42;
-        const radius = 78 + progress * 86;
-        context.beginPath();
-        context.arc(center.x, center.y, radius, 0, Math.PI * 2);
-        context.strokeStyle = `${LANE_META[burst.lane].color}${Math.round((1 - progress) * 210).toString(16).padStart(2, '0')}`;
-        context.lineWidth = 7 * (1 - progress);
-        context.stroke();
-      });
-      context.restore();
-    }
-
-    async function startOrRetry() {
-      const audio = ensureAudio();
-      if (!audio) return;
-      await audio.resume();
-      if (phase === 'failed' && snapshot) restoreSnapshot(snapshot);
-      if (phase === 'intro' || phase === 'complete') {
-        score = 0; combo = 0; maxCombo = 0; hitTargets = 0; missTargets = 0;
-        gradeCounts = { perfect: 0, great: 0, good: 0 };
-        rushMeter = 0; rushUntil = 0; roundIndex = 0;
-      }
-      nounPicker.hidden = false;
-      routeEl.hidden = false;
-      startRound(roundIndex);
-    }
-
-    goButton.addEventListener('click', () => { void startOrRetry(); });
-
-    nounPicker.addEventListener('click', (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-noun]');
-      if (!button) return;
-      selectedNoun = clampNumber(Number(button.dataset.noun), 0, 1199);
-      writeStorage('pc:nounId', String(selectedNoun));
-      nounEl.src = `https://noun.pics/${selectedNoun}.svg`;
-      nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((choice) => choice.setAttribute('aria-pressed', String(choice === button)));
-    });
-
-    padButtons.forEach((button) => {
-      button.addEventListener('pointerdown', (event) => {
+    async function startOrRetry(){const audio=ensureAudio();if(!audio)return;await audio.resume();if(phase==='failed'&&snapshot)restoreSnapshot(snapshot);if(phase==='intro'||phase==='complete'){score=0;kills=0;combo=0;maxCombo=0;acceptedHits=0;dropReady=false;dropQueued=false;gradeCounts={perfect:0,great:0,good:0,late:0};waveIndex=0}nounPicker.hidden=false;routeEl.hidden=false;goButton.hidden=false;startWave(waveIndex)}
+    goButton.addEventListener('click',()=>{void startOrRetry()});
+    nounPicker.addEventListener('click',(event)=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-noun]');if(!button)return;selectedNoun=clampNumber(Number(button.dataset.noun),0,1199);writeStorage('pc:nounId',String(selectedNoun));nounEl.src=`https://noun.pics/${selectedNoun}.svg`;nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((choice)=>choice.setAttribute('aria-pressed',String(choice===button)))});
+    padButtons.forEach((button)=>{
+      button.addEventListener('pointerdown',(event)=>{
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
-        performLane(button.dataset.lane as ArenaLane, event.timeStamp);
+        performLane(button.dataset.lane as SiegeLane, event.timeStamp);
       });
-      button.addEventListener('click', (event) => {
-        // Pointer input already fired on pointerdown; detail 0 preserves keyboard activation.
-        if (event.detail > 0) return;
-        performLane(button.dataset.lane as ArenaLane, event.timeStamp);
-      });
+      button.addEventListener('click',(event)=>{if(event.detail>0)return;performLane(button.dataset.lane as SiegeLane,event.timeStamp)});
     });
-
-    document.addEventListener('keydown', (event) => {
+    document.addEventListener('keydown',(event)=>{
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if ((event.target as HTMLElement)?.matches('input, textarea, select')) return;
+      if((event.target as HTMLElement)?.matches('input, textarea, select'))return;
+      if(event.key===' '||event.key==='Enter'&&(event.target===dropButton)){if(dropReady){event.preventDefault();queueDrop()}return}
       const lane = laneForKey(event.key);
-      if (!lane) return;
+      if(!lane)return;
       event.preventDefault();
-      performLane(lane, event.timeStamp);
+      performLane(lane,event.timeStamp);
     });
-
-    soundButton.addEventListener('click', async () => {
-      const audio = ensureAudio();
-      if (!audio) return;
-      await audio.resume();
-      muted = !muted;
-      writeStorage(ARENA_MUTED_KEY, muted ? '1' : '0');
-      masterGain?.gain.setTargetAtTime(muted ? .0001 : .72, audio.currentTime, .015);
-      soundButton.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
-      soundButton.setAttribute('aria-pressed', String(!muted));
-    });
-
-    function adjustSync(delta: number) {
-      syncMs = clampNumber(syncMs + delta, -150, 150);
-      writeStorage(ARENA_SYNC_KEY, String(syncMs));
-      syncCopy.textContent = `SYNC ${syncMs > 0 ? '+' : ''}${syncMs}MS`;
-      liveEl.textContent = `Timing sync ${syncMs > 0 ? 'plus ' : ''}${syncMs} milliseconds.`;
-    }
-    syncMinus.addEventListener('click', () => adjustSync(-15));
-    syncPlus.addEventListener('click', () => adjustSync(15));
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && (phase === 'countin' || phase === 'playing')) failRound();
-      if (!document.hidden && deferredTransition) {
-        const transition = deferredTransition;
-        deferredTransition = null;
-        transitionTimer = window.setTimeout(() => runRoundTransition(transition), 250);
-      }
-    });
-    window.addEventListener('resize', () => drawArena(arenaAudioNow()), { passive: true });
-
-    function initialize() {
-      const pickerChoices = [137, 418, 855];
-      if (!pickerChoices.includes(selectedNoun)) selectedNoun = 137;
-      nounEl.src = `https://noun.pics/${selectedNoun}.svg`;
-      nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.noun) === selectedNoun)));
-      bestEl.textContent = best > 0 ? `best ${best.toLocaleString()} pts` : 'best — pts';
-      soundButton.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
-      soundButton.setAttribute('aria-pressed', String(!muted));
-      syncCopy.textContent = `SYNC ${syncMs > 0 ? '+' : ''}${syncMs}MS`;
-      updateRoundUi();
-      updateHud(0);
-      drawArena(0);
-    }
-    initialize();
+    dropButton.addEventListener('click',queueDrop);
+    soundButton.addEventListener('click',async()=>{const audio=ensureAudio();if(!audio)return;await audio.resume();muted=!muted;writeStorage(SIEGE_MUTED_KEY,muted?'1':'0');masterGain?.gain.setTargetAtTime(muted?.0001:.72,audio.currentTime,.015);soundButton.textContent=muted?'SOUND OFF':'SOUND ON';soundButton.setAttribute('aria-pressed',String(!muted))});
+    function adjustSync(delta:number){syncMs=clampNumber(syncMs+delta,-150,150);writeStorage(SIEGE_SYNC_KEY,String(syncMs));syncCopy.textContent=`SYNC ${syncMs>0?'+':''}${syncMs}MS`;liveEl.textContent=`Timing sync ${syncMs} milliseconds.`}syncMinus.addEventListener('click',()=>adjustSync(-15));syncPlus.addEventListener('click',()=>adjustSync(15));
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&(phase==='countin'||phase==='playing'))failWave();if(!document.hidden&&deferredTransition){const transition=deferredTransition;deferredTransition=null;transitionTimer=window.setTimeout(()=>runWaveTransition(transition),250)}});window.addEventListener('resize',()=>drawSiege(siegeAudioNow()),{passive:true});
+    function initialize(){const choices=[137,418,855];if(!choices.includes(selectedNoun))selectedNoun=137;nounEl.src=`https://noun.pics/${selectedNoun}.svg`;nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((button)=>button.setAttribute('aria-pressed',String(Number(button.dataset.noun)===selectedNoun)));bestEl.textContent=best?`best ${best.toLocaleString()} pts`:'best — pts';soundButton.textContent=muted?'SOUND OFF':'SOUND ON';soundButton.setAttribute('aria-pressed',String(!muted));syncCopy.textContent=`SYNC ${syncMs>0?'+':''}${syncMs}MS`;updateWaveUi();updateHud();updateLoopRail(0);drawSiege(0)}initialize();
   </script>
 </BlockLayout>

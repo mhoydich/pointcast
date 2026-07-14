@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const LEVELS_FILE = new URL('../src/lib/drum-runner-v4-levels.json', import.meta.url);
-const V6_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V7_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V6_PAGE = new URL('../src/pages/drum-runner-v6.astro', import.meta.url);
 const V5_PAGE = new URL('../src/pages/drum-runner-v5.astro', import.meta.url);
 const V4_PAGE = new URL('../src/pages/drum-runner-v4.astro', import.meta.url);
 const V3_PAGE = new URL('../src/pages/drum-runner-v3.astro', import.meta.url);
@@ -110,16 +111,16 @@ test('the bottom road is the sequencer and Noun bandmates expose the mix', () =>
   assert.match(v4Source, /overflow-x: hidden/);
 });
 
-test('all six Beat Runner editions link each other with one current marker', async () => {
-  const sources = await Promise.all([V1_PAGE, V2_PAGE, V3_PAGE, V4_PAGE, V5_PAGE, V6_PAGE].map((url) => readFile(url, 'utf8')));
+test('all seven Beat Runner editions link each other with one current marker', async () => {
+  const sources = await Promise.all([V1_PAGE, V2_PAGE, V3_PAGE, V4_PAGE, V5_PAGE, V6_PAGE, V7_PAGE].map((url) => readFile(url, 'utf8')));
   for (const source of sources) {
-    const versionNav = source.match(/<nav class="(?:drn|arena)__versions"[\s\S]*?<\/nav>/)?.[0] || '';
-    for (const path of ['/drum-runner-v1', '/drum-runner-v2', '/drum-runner-v3', '/drum-runner-v4', '/drum-runner-v5', '/drum-runner']) {
+    const versionNav = source.match(/<nav class="(?:drn|arena|siege)__versions"[\s\S]*?<\/nav>/)?.[0] || '';
+    for (const path of ['/drum-runner-v1', '/drum-runner-v2', '/drum-runner-v3', '/drum-runner-v4', '/drum-runner-v5', '/drum-runner-v6', '/drum-runner']) {
       assert.match(versionNav, new RegExp(`href="${path.replaceAll('/', '\\/')}"`));
     }
     assert.equal((versionNav.match(/aria-current="page"/g) || []).length, 1);
   }
-  assert.deepEqual(DRUM_RUNNER_VERSIONS.map((version) => version.id), ['v6', 'v5', 'v4', 'v3', 'v2', 'v1']);
-  assert.deepEqual(DRUM_RUNNER_VERSIONS.map((version) => version.path), ['/drum-runner', '/drum-runner-v5', '/drum-runner-v4', '/drum-runner-v3', '/drum-runner-v2', '/drum-runner-v1']);
-  assert.equal(new Set(DRUM_RUNNER_VERSIONS.map((version) => version.storageKey)).size, 6);
+  assert.deepEqual(DRUM_RUNNER_VERSIONS.map((version) => version.id), ['v7', 'v6', 'v5', 'v4', 'v3', 'v2', 'v1']);
+  assert.deepEqual(DRUM_RUNNER_VERSIONS.map((version) => version.path), ['/drum-runner', '/drum-runner-v6', '/drum-runner-v5', '/drum-runner-v4', '/drum-runner-v3', '/drum-runner-v2', '/drum-runner-v1']);
+  assert.equal(new Set(DRUM_RUNNER_VERSIONS.map((version) => version.storageKey)).size, 7);
 });

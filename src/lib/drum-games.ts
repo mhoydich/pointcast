@@ -25,7 +25,8 @@ export interface DrumGame {
 }
 
 export const DRUM_RUNNER_VERSIONS = [
-  { id: 'v6', name: 'Pulse Arena', path: '/drum-runner', storageKey: 'pc-drum-runner-v6-best', scoring: 'points' },
+  { id: 'v7', name: 'Loop Siege', path: '/drum-runner', storageKey: 'pc-drum-runner-v7-best', scoring: 'points' },
+  { id: 'v6', name: 'Pulse Arena', path: '/drum-runner-v6', storageKey: 'pc-drum-runner-v6-best', scoring: 'points' },
   { id: 'v5', name: 'Bright Miles', path: '/drum-runner-v5', storageKey: 'pc-drum-runner-v5-best', scoring: 'points' },
   { id: 'v4', name: 'Road Band', path: '/drum-runner-v4', storageKey: 'pc-drum-runner-v4-best', scoring: 'points' },
   { id: 'v3', name: 'Pocket', path: '/drum-runner-v3', storageKey: 'pc-drum-runner-v3-best', scoring: 'points' },
@@ -97,13 +98,13 @@ export const DRUM_GAMES: readonly DrumGame[] = [
     shortName: 'Runner',
     path: '/drum-runner',
     number: '04',
-    kicker: 'PULSE ARENA · MOVE ON THE BEAT',
-    description: 'Read the next pulse, choose an action, and turn a fast arena rush into a beat you can hear yourself build.',
-    skill: 'Rhythm reflexes',
-    controls: 'Four drums · D F J K, arrows, or tap',
+    kicker: 'LOOP SIEGE · BUILD · DEFEND',
+    description: 'Build a 16-step drum loop under fire. Your next loop echoes as ghost attacks while you defend the center.',
+    skill: 'Rhythm strategy',
+    controls: 'Four attack drums · D F J K, arrows, or tap',
     nounId: 137,
     accent: '#7ac8ed',
-    bestKey: 'pc-drum-runner-v6-best',
+    bestKey: 'pc-drum-runner-v7-best',
     bestUnit: ' points',
     bestDirection: 'high',
   },
