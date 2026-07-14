@@ -1,0 +1,1339 @@
+---
+/**
+ * /drum-runner-v6 — frozen Beat Runner v6: Pulse Arena archive.
+ *
+ * Four directions converge on one Noun. The AudioContext clock drives the
+ * backing pulse, target approach, input judgment, misses, and round endings.
+ * The player's press is the audible drum action—there is no delayed jump or
+ * separate collision moment between the beat and its consequence.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp';
+import { ARENA_ROUNDS, LANE_META, LANE_ORDER } from '../lib/drum-runner-v6';
+
+const title = 'Beat Runner v6 · Pulse Arena';
+const description = 'A fast four-direction rhythm arena where every action makes the beat, powered by one latency-aware audio clock.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: 'Beat Runner v6: Pulse Arena',
+  url: 'https://pointcast.xyz/drum-runner-v6',
+  description,
+  gamePlatform: 'Web browser',
+  playMode: 'SinglePlayer',
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
+  <div class="arena" id="arena" data-phase="intro" data-round="0" data-rush="false">
+    <header class="arena__hud" aria-label="Pulse Arena status">
+      <div class="arena__score-block">
+        <span>score</span>
+        <strong id="arena-score">0</strong>
+      </div>
+      <div class="arena__round-block">
+        <span id="arena-round-no">ROUND 01 / 04</span>
+        <strong id="arena-round-name">Four Corners</strong>
+        <span id="arena-tempo">126 BPM</span>
+      </div>
+      <div class="arena__combo-block">
+        <span>combo</span>
+        <strong id="arena-combo">—</strong>
+        <span id="arena-accuracy">100%</span>
+      </div>
+      <div class="arena__shield" aria-label="Four of four shields remaining" id="arena-shields">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="arena__rush" aria-label="Rush meter">
+        <span>RUSH</span>
+        <i><b id="arena-rush-fill"></b></i>
+        <strong id="arena-rush-copy">0</strong>
+      </div>
+    </header>
+
+    <section class="arena__stage" id="arena-stage" aria-label="Pulse Arena playfield">
+      <canvas
+        id="arena-canvas"
+        role="img"
+        aria-label="Four colored rhythm lanes converge from west, north, south, and east on a central Noun. Strike the matching drum as each pulse reaches the center."
+      >Pulse Arena rhythm game canvas.</canvas>
+
+      <div class="arena__core" id="arena-core" aria-hidden="true">
+        <span></span>
+        <img id="arena-noun" src="https://noun.pics/137.svg" alt="" width="92" height="92" />
+      </div>
+
+      <span class="arena__lane-label arena__lane-label--west" aria-hidden="true">← KICK</span>
+      <span class="arena__lane-label arena__lane-label--north" aria-hidden="true">↑ CLAP</span>
+      <span class="arena__lane-label arena__lane-label--south" aria-hidden="true">↓ TOM</span>
+      <span class="arena__lane-label arena__lane-label--east" aria-hidden="true">BELL →</span>
+
+      <div class="arena__judge" id="arena-judge" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="arena__round-flash" id="arena-round-flash" aria-hidden="true" hidden></div>
+
+      <div class="arena__overlay" id="arena-overlay">
+        <article class="arena__card">
+          <div class="arena__card-art" style={`background-image:linear-gradient(180deg,rgba(5,8,17,.04),rgba(5,8,17,.82)),url(${marineBackdrop.src})`} aria-hidden="true">
+            <span>ONE CLOCK</span>
+            <strong>FOUR DRUMS</strong>
+          </div>
+          <div class="arena__card-body">
+            <div class="arena__eyebrow">
+              <span id="arena-card-kicker">BEAT RUNNER V6 · PULSE ARENA</span>
+              <span id="arena-card-tempo">126→168 BPM · ~50 SEC</span>
+            </div>
+            <h1 id="arena-card-title">THE BEAT IS<br />THE ACTION.</h1>
+            <p id="arena-card-sub">Pulses rush in from four directions. Strike the matching drum at the center. Every press makes the groove—no jump delay, no separate collision.</p>
+
+            <div class="arena__noun-picker" id="arena-noun-picker" aria-label="Choose your arena Noun">
+              <button type="button" data-noun="137" aria-pressed="true"><img src="https://noun.pics/137.svg" alt="" width="44" height="44" /><span>Noun 137</span></button>
+              <button type="button" data-noun="418" aria-pressed="false"><img src="https://noun.pics/418.svg" alt="" width="44" height="44" /><span>Noun 418</span></button>
+              <button type="button" data-noun="855" aria-pressed="false"><img src="https://noun.pics/855.svg" alt="" width="44" height="44" /><span>Noun 855</span></button>
+            </div>
+
+            <div class="arena__card-stats" aria-label="Pulse Arena details">
+              <span><small id="arena-stat-a-label">actions</small><strong id="arena-stat-a">D F J K</strong></span>
+              <span><small id="arena-stat-b-label">timing</small><strong id="arena-stat-b">one clock</strong></span>
+              <span><small id="arena-stat-c-label">rounds</small><strong id="arena-stat-c">4 fast</strong></span>
+            </div>
+
+            <ol class="arena__route" id="arena-route" aria-label="Four Pulse Arena rounds">
+              {ARENA_ROUNDS.map((round, index) => (
+                <li data-route-index={index}><span>{round.number}</span><b>{round.name}</b><small>{round.bpm}</small></li>
+              ))}
+            </ol>
+
+            <p class="arena__best" id="arena-best">best — pts</p>
+            <button class="arena__go" id="arena-go" type="button">▶ ENTER PULSE ARENA</button>
+            <p class="arena__input-note">D F J K · ARROWS · 8 CLEAN HITS REPAIR A SHIELD</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="arena__pads" role="group" aria-label="Pulse Arena drums">
+      {LANE_ORDER.map((lane) => (
+        <button
+          class={`arena__pad arena__pad--${lane}`}
+          type="button"
+          data-lane={lane}
+          aria-label={`Strike ${lane} ${LANE_META[lane].label} lane. ${LANE_META[lane].key} key or ${LANE_META[lane].arrow} arrow.`}
+          aria-keyshortcuts={`${LANE_META[lane].key} ${LANE_META[lane].arrowKey}`}
+          style={`--lane:${LANE_META[lane].color}`}
+          disabled
+        >
+          <span class="arena__pad-arrow">{LANE_META[lane].arrow}</span>
+          <span><strong>{LANE_META[lane].label}</strong><small>{LANE_META[lane].key}</small></span>
+        </button>
+      ))}
+    </div>
+
+    <div class="arena__utility">
+      <button id="arena-sound" type="button" aria-pressed="true">SOUND ON</button>
+      <div class="arena__sync" aria-label="Timing sync adjustment">
+        <button id="arena-sync-minus" type="button" aria-label="Move targets 15 milliseconds earlier">−</button>
+        <span id="arena-sync-copy">SYNC 0MS</span>
+        <button id="arena-sync-plus" type="button" aria-label="Move targets 15 milliseconds later">＋</button>
+      </div>
+      <span id="arena-latency">latency auto</span>
+    </div>
+
+    <section class="arena__manifesto" aria-labelledby="arena-manifesto-title">
+      <div>
+        <p>PULSE ARENA DESIGN NOTE</p>
+        <h2 id="arena-manifesto-title">The sound, target, and judgment share one clock.</h2>
+      </div>
+      <ol>
+        <li><span>01</span><strong>See it</strong><p>Every pulse is positioned from Web Audio time—not the animation clock.</p></li>
+        <li><span>02</span><strong>Hit it</strong><p>Your press produces its drum immediately, even when the timing is off.</p></li>
+        <li><span>03</span><strong>Feel it speed up</strong><p>Three beats of warning shrink from 1.43s to 1.07s as the tempo climbs.</p></li>
+      </ol>
+    </section>
+
+    <p class="sr-only" id="arena-live" role="status" aria-live="polite" aria-atomic="true">Pulse Arena ready. Four drums, four rounds, 126 to 168 BPM.</p>
+
+    <nav class="arena__versions" aria-label="Beat Runner versions">
+      <span>edition</span>
+      <a href="/drum-runner-v1">v1 endless</a>
+      <a href="/drum-runner-v2">v2 postcards</a>
+      <a href="/drum-runner-v3">v3 pocket</a>
+      <a href="/drum-runner-v4">v4 road band</a>
+      <a href="/drum-runner-v5">v5 bright miles</a>
+      <a href="/drum-runner-v6" aria-current="page">v6 pulse arena</a>
+      <a href="/drum-runner">v7 loop siege</a>
+    </nav>
+
+    <nav class="arena__siblings" aria-label="More Drum Arcade games">
+      <a href="/drum-games">all five</a>
+      <a href="/drum-says">drum says</a>
+      <a href="/drum-quickdraw">quick draw</a>
+      <a href="/drum-fill">fill</a>
+      <a href="/drum-steady">steady</a>
+      <a href="/drum">/drum</a>
+    </nav>
+  </div>
+
+  <style is:global>
+    html, body { margin: 0; background: #fff6df; }
+    body:has(.arena) {
+      min-height: 100vh;
+      overflow-x: hidden;
+      color: #111522;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 8% 16%, rgba(255,209,102,.42), transparent 30%),
+        radial-gradient(circle at 92% 38%, rgba(122,215,255,.38), transparent 28%),
+        linear-gradient(145deg, #fff8e8 0%, #ffe8c6 54%, #ffd5dd 100%);
+    }
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+    .arena {
+      --accent: #ffd166;
+      --accent-soft: #ff9d74;
+      width: min(100%, 900px);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 12px 14px 108px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      box-sizing: border-box;
+    }
+    .arena button, .arena a { -webkit-tap-highlight-color: transparent; }
+    .arena button { font: inherit; }
+    .arena button:focus-visible, .arena a:focus-visible {
+      outline: 3px solid #151927;
+      outline-offset: 3px;
+    }
+
+    .arena__hud {
+      min-height: 66px;
+      display: grid;
+      grid-template-columns: 1.05fr 1.8fr .8fr .72fr 1.1fr;
+      border: 2px solid #151927;
+      border-radius: 19px;
+      background: rgba(255,252,240,.9);
+      box-shadow: 0 7px 0 rgba(21,25,39,.12);
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }
+    .arena__hud > div {
+      min-width: 0;
+      padding: 8px 11px;
+      border-right: 1px solid rgba(21,25,39,.16);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+    .arena__hud > div:last-child { border-right: 0; }
+    .arena__hud span {
+      font: 700 8px/1.2 'IBM Plex Mono', monospace;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .arena__score-block strong { font: 900 28px/.95 'IBM Plex Mono', monospace; }
+    .arena__round-block { text-align: center; align-items: center; }
+    .arena__round-block strong { max-width: 100%; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .arena__combo-block { text-align: center; align-items: center; }
+    .arena__combo-block strong { font: 900 23px/1 'IBM Plex Mono', monospace; color: #e24684; }
+    .arena__shield { flex-direction: row !important; align-items: center; gap: 4px; }
+    .arena__shield span { width: 12px; height: 12px; border: 2px solid #151927; border-radius: 50%; background: #78f0ca; transition: .15s ease; }
+    .arena__shield span.is-empty { background: transparent; opacity: .28; }
+    .arena__rush { gap: 4px; }
+    .arena__rush i { display: block; height: 7px; border: 1px solid #151927; border-radius: 99px; background: #fff; overflow: hidden; }
+    .arena__rush b { display: block; width: 0%; height: 100%; background: linear-gradient(90deg,#ff78c7,#ffd166,#78f0ca); transition: width .16s linear; }
+    .arena[data-rush="true"] .arena__rush { background: #151927; color: #fff; }
+    .arena[data-rush="true"] .arena__rush b { width: 100% !important; animation: rushBar .32s steps(2,end) infinite; }
+    @keyframes rushBar { 50% { filter: brightness(1.5); transform: translateX(2px); } }
+
+    .arena__stage {
+      position: relative;
+      min-height: 590px;
+      border: 3px solid #151927;
+      border-radius: 25px;
+      overflow: hidden;
+      background: #13182a;
+      box-shadow: 0 13px 0 rgba(21,25,39,.16);
+      isolation: isolate;
+    }
+    #arena-canvas { display: block; width: 100%; height: 590px; touch-action: none; }
+    .arena__core {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 112px;
+      height: 112px;
+      transform: translate(-50%,-50%);
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      z-index: 4;
+      transition: transform .08s ease;
+    }
+    .arena__core span {
+      position: absolute;
+      inset: 0;
+      border: 4px solid rgba(255,255,255,.92);
+      border-radius: 50%;
+      box-shadow: 0 0 0 8px rgba(21,25,39,.78), 0 0 28px var(--accent);
+      background: rgba(255,249,230,.9);
+    }
+    .arena__core img { position: relative; width: 80px; height: 80px; image-rendering: pixelated; z-index: 1; }
+    .arena__core.is-hit { transform: translate(-50%,-50%) scale(1.13) rotate(-2deg); }
+    .arena[data-rush="true"] .arena__core span { animation: coreRush .4s ease-in-out infinite alternate; }
+    @keyframes coreRush { to { box-shadow: 0 0 0 12px rgba(255,255,255,.24), 0 0 52px #ffd166; transform: scale(1.07); } }
+
+    .arena__lane-label {
+      position: absolute;
+      z-index: 3;
+      padding: 5px 7px;
+      border: 1px solid rgba(255,255,255,.4);
+      border-radius: 5px;
+      color: rgba(255,255,255,.82);
+      background: rgba(7,9,18,.6);
+      font: 700 8px/1 'IBM Plex Mono', monospace;
+      letter-spacing: .12em;
+      pointer-events: none;
+    }
+    .arena__lane-label--west { left: 12px; top: 50%; transform: translateY(-50%); }
+    .arena__lane-label--east { right: 12px; top: 50%; transform: translateY(-50%); }
+    .arena__lane-label--north { top: 12px; left: 50%; transform: translateX(-50%); }
+    .arena__lane-label--south { bottom: 12px; left: 50%; transform: translateX(-50%); }
+    .arena__judge {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 76px);
+      z-index: 8;
+      min-width: 120px;
+      transform: translate(-50%,8px) scale(.8);
+      text-align: center;
+      color: #fff;
+      font: 900 22px/1 'IBM Plex Mono', monospace;
+      text-shadow: 0 3px 0 #151927, 0 0 18px currentColor;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .arena__judge.is-showing { animation: judgePop .46s cubic-bezier(.2,.9,.2,1); }
+    @keyframes judgePop { 0%{opacity:0;transform:translate(-50%,12px) scale(.65)} 20%,70%{opacity:1;transform:translate(-50%,0) scale(1)} 100%{opacity:0;transform:translate(-50%,-16px) scale(.92)} }
+    .arena__round-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font: 900 clamp(58px,12vw,112px)/1 'IBM Plex Mono', monospace;
+      text-shadow: 0 7px 0 #151927, 0 0 44px var(--accent);
+      pointer-events: none;
+    }
+
+    .arena__overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      display: grid;
+      place-items: center;
+      padding: 19px;
+      background: rgba(7,9,18,.42);
+      backdrop-filter: blur(3px);
+      box-sizing: border-box;
+      transition: opacity .2s ease;
+    }
+    .arena__overlay[hidden] { display: none; }
+    .arena__card {
+      width: min(100%, 720px);
+      max-height: 100%;
+      display: grid;
+      grid-template-columns: .78fr 1.45fr;
+      border: 3px solid #151927;
+      border-radius: 22px;
+      overflow: auto;
+      background: #fffaf0;
+      box-shadow: 0 12px 0 rgba(9,11,22,.38);
+    }
+    .arena__card-art {
+      min-height: 460px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      color: #fff;
+      background-position: center;
+      background-size: cover;
+      box-sizing: border-box;
+    }
+    .arena__card-art span { font: 700 10px/1 'IBM Plex Mono', monospace; letter-spacing: .18em; }
+    .arena__card-art strong { margin-top: 8px; font: 900 27px/.92 'IBM Plex Mono', monospace; }
+    .arena__card-body { padding: 20px; display: flex; flex-direction: column; box-sizing: border-box; }
+    .arena__eyebrow { display: flex; justify-content: space-between; gap: 14px; color: #6d5660; font: 700 8px/1.4 'IBM Plex Mono', monospace; letter-spacing: .14em; }
+    .arena__card h1 { margin: 15px 0 8px; font: 950 clamp(30px,5vw,50px)/.9 'Inter',sans-serif; letter-spacing: -.055em; }
+    .arena__card-body > p { margin: 0; color: #4c4650; font-size: 13px; line-height: 1.45; }
+    .arena__noun-picker { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; margin: 14px 0 9px; }
+    .arena__noun-picker[hidden] { display: none; }
+    .arena__noun-picker button { min-width: 0; padding: 7px 4px; display: flex; align-items: center; gap: 5px; border: 2px solid #151927; border-radius: 11px; background: #fff; cursor: pointer; }
+    .arena__noun-picker button[aria-pressed="true"] { background: #ffdf76; box-shadow: 0 4px 0 #151927; transform: translateY(-2px); }
+    .arena__noun-picker img { width: 34px; height: 34px; image-rendering: pixelated; flex: 0 0 auto; }
+    .arena__noun-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 8px/1 'IBM Plex Mono', monospace; }
+    .arena__card-stats { margin: 3px 0 10px; display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid rgba(21,25,39,.25); border-radius: 9px; overflow: hidden; }
+    .arena__card-stats span { min-width: 0; padding: 7px; display: flex; flex-direction: column; border-right: 1px solid rgba(21,25,39,.18); }
+    .arena__card-stats span:last-child { border-right: 0; }
+    .arena__card-stats small { color: #8b6d76; font: 700 7px/1 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .arena__card-stats strong { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 11px/1.1 'IBM Plex Mono', monospace; }
+    .arena__route { margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; list-style: none; }
+    .arena__route li { min-width: 0; padding: 6px 4px; display: grid; grid-template-columns: auto 1fr; gap: 1px 4px; border: 1px solid rgba(21,25,39,.22); border-radius: 7px; }
+    .arena__route li.is-current { background: #151927; color: #fff; }
+    .arena__route span { grid-row: span 2; font: 900 13px/1 'IBM Plex Mono', monospace; }
+    .arena__route b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; }
+    .arena__route small { font: 700 7px/1 'IBM Plex Mono', monospace; }
+    .arena__best { text-align: center; font: 700 9px/1 'IBM Plex Mono', monospace; }
+    .arena__go { width: 100%; min-height: 54px; margin-top: 10px; border: 2px solid #151927; border-radius: 13px; background: #ffdf76; color: #151927; box-shadow: 0 6px 0 #151927; font: 900 12px/1 'IBM Plex Mono', monospace; letter-spacing: .1em; cursor: pointer; }
+    .arena__go:hover { background: #fff1a9; transform: translateY(-1px); box-shadow: 0 7px 0 #151927; }
+    .arena__input-note { margin-top: 10px !important; text-align: center; font: 700 7px/1 'IBM Plex Mono', monospace !important; letter-spacing: .15em; }
+
+    .arena__pads {
+      display: grid;
+      grid-template-columns: repeat(4,1fr);
+      gap: 8px;
+      touch-action: none;
+      user-select: none;
+    }
+    .arena:is([data-phase="countin"],[data-phase="playing"],[data-phase="interstitial"]) .arena__pads {
+      position: fixed;
+      left: 50%;
+      bottom: 52px;
+      z-index: 35;
+      width: min(calc(100% - 28px), 872px);
+      padding: 8px;
+      border: 2px solid rgba(21,25,39,.28);
+      border-radius: 22px;
+      background: rgba(255,246,223,.88);
+      box-shadow: 0 10px 28px rgba(21,25,39,.18);
+      backdrop-filter: blur(13px);
+      box-sizing: border-box;
+      transform: translateX(-50%);
+    }
+    .arena__pad {
+      min-width: 0;
+      min-height: 88px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 3px solid #151927;
+      border-radius: 17px;
+      color: #151927;
+      background: var(--lane);
+      box-shadow: 0 7px 0 #151927;
+      cursor: pointer;
+      touch-action: none;
+      transition: transform .06s ease, box-shadow .06s ease, filter .1s ease;
+    }
+    .arena__pad:active, .arena__pad.is-hit { transform: translateY(5px) scale(.98); box-shadow: 0 2px 0 #151927; filter: brightness(1.12); }
+    .arena__pad:disabled { cursor: default; filter: saturate(.35); opacity: .62; }
+    .arena__pad-arrow { font: 950 31px/1 'IBM Plex Mono', monospace; }
+    .arena__pad > span:last-child { display: flex; flex-direction: column; text-align: left; }
+    .arena__pad strong { font-size: 13px; text-transform: uppercase; }
+    .arena__pad small { font: 900 13px/1 'IBM Plex Mono', monospace; }
+    .arena[data-rush="true"] .arena__pad { animation: padRush .45s steps(2,end) infinite alternate; }
+    @keyframes padRush { to { filter: brightness(1.15) saturate(1.35); } }
+
+    .arena__utility { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .arena__utility button, .arena__utility span { min-height: 34px; box-sizing: border-box; }
+    .arena__utility > button, .arena__sync { border: 2px solid #151927; border-radius: 10px; background: rgba(255,252,240,.86); }
+    .arena__utility > button { padding: 0 14px; font: 800 9px/1 'IBM Plex Mono', monospace; cursor: pointer; }
+    .arena__sync { display: flex; align-items: center; overflow: hidden; }
+    .arena__sync button { width: 36px; border: 0; background: transparent; font-weight: 900; cursor: pointer; }
+    .arena__sync span { padding: 0 9px; display: grid; place-items: center; border-inline: 1px solid rgba(21,25,39,.2); font: 700 8px/1 'IBM Plex Mono', monospace; }
+    #arena-latency { display: grid; place-items: center; color: #6d5660; font: 700 8px/1 'IBM Plex Mono', monospace; }
+
+    .arena__manifesto { padding: 20px; border: 2px solid #151927; border-radius: 18px; background: rgba(255,252,240,.78); }
+    .arena__manifesto > div p { margin: 0; color: #dd4d86; font: 800 8px/1 'IBM Plex Mono', monospace; letter-spacing: .14em; }
+    .arena__manifesto h2 { margin: 6px 0 17px; font-size: 22px; letter-spacing: -.035em; }
+    .arena__manifesto ol { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; list-style: none; }
+    .arena__manifesto li { padding: 12px; border: 1px solid rgba(21,25,39,.22); border-radius: 11px; }
+    .arena__manifesto li span { color: #dd4d86; font: 800 10px/1 'IBM Plex Mono', monospace; }
+    .arena__manifesto li strong { display: block; margin: 5px 0 3px; font-size: 13px; }
+    .arena__manifesto li p { margin: 0; color: #5d5660; font-size: 11px; line-height: 1.4; }
+
+    .arena__versions, .arena__siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+    .arena__versions span, .arena__versions a, .arena__siblings a { padding: 5px 8px; border: 1px solid rgba(21,25,39,.25); border-radius: 999px; color: #3d3540; background: rgba(255,252,240,.68); font: 700 8px/1 'IBM Plex Mono', monospace; text-decoration: none; }
+    .arena__versions a[aria-current="page"] { color: #fff; background: #151927; border-color: #151927; }
+    .arena__siblings a { border: 0; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+
+    @media (max-width: 700px) {
+      .arena { padding: 8px 8px 100px; gap: 8px; }
+      .arena__hud { grid-template-columns: .8fr 1.5fr .65fr; min-height: 60px; border-radius: 14px; }
+      .arena__hud > div { padding: 7px; }
+      .arena__shield { grid-column: 1 / 2; border-top: 1px solid rgba(21,25,39,.15); }
+      .arena__rush { grid-column: 2 / 4; border-top: 1px solid rgba(21,25,39,.15); border-right: 0 !important; }
+      .arena__score-block strong { font-size: 21px; }
+      .arena__round-block strong { font-size: 12px; }
+      .arena__combo-block strong { font-size: 18px; }
+      .arena__stage { min-height: 500px; border-radius: 18px; }
+      #arena-canvas { height: 500px; }
+      .arena__core { width: 92px; height: 92px; }
+      .arena__core img { width: 64px; height: 64px; }
+      .arena__card { grid-template-columns: 1fr; }
+      .arena__card-art { min-height: 92px; padding: 11px; border-bottom: 2px solid #151927; background-position: center 55%; }
+      .arena__card-art strong { font-size: 18px; }
+      .arena__card-body { padding: 14px; }
+      .arena__card h1 { font-size: 35px; }
+      .arena__card-body > p { font-size: 11px; }
+      .arena__route { gap: 3px; }
+      .arena__route li { padding: 5px 3px; display: flex; flex-direction: column; align-items: center; }
+      .arena__route b { max-width: 100%; }
+      .arena__route small { display: none; }
+      .arena__pads { grid-template-columns: repeat(2,1fr); gap: 7px; }
+      .arena__pad { min-height: 70px; border-radius: 13px; box-shadow: 0 5px 0 #151927; }
+      .arena__pad-arrow { font-size: 26px; }
+      .arena__utility { flex-wrap: wrap; }
+      .arena__manifesto { padding: 14px; }
+      .arena__manifesto h2 { font-size: 18px; }
+      .arena__manifesto ol { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 410px) {
+      .arena__stage { min-height: 470px; }
+      #arena-canvas { height: 470px; }
+      .arena__overlay { padding: 10px; }
+      .arena__card { overflow: hidden; }
+      .arena__card-art { display: none; }
+      .arena__card-body { padding: 12px; }
+      .arena__card h1 { margin-top: 8px; font-size: 28px; }
+      .arena__card-body > p { line-height: 1.3; }
+      .arena__noun-picker { margin-top: 10px; }
+      .arena__noun-picker button { flex-direction: column; }
+      .arena__noun-picker span { font-size: 6px; }
+      .arena__card-stats strong { font-size: 9px; }
+      .arena__go { min-height: 48px; }
+      .arena__lane-label { font-size: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .arena * { scroll-behavior: auto !important; }
+      .arena__judge.is-showing, .arena[data-rush="true"] .arena__core span, .arena[data-rush="true"] .arena__pad, .arena[data-rush="true"] .arena__rush b { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+
+  <script>
+    import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp?url';
+    import pierBackdrop from '../assets/drum-runner-v3/el-porto-pier.webp?url';
+    import groceryBackdrop from '../assets/drum-runner-v3/grocery-3pm.webp?url';
+    import refineryBackdrop from '../assets/drum-runner-v3/refinery-night.webp?url';
+    import {
+      ARENA_BEST_KEY,
+      ARENA_MUTED_KEY,
+      ARENA_ROUNDS,
+      ARENA_SYNC_KEY,
+      CHORD_WINDOW_MS,
+      HIT_WINDOWS_MS,
+      LANE_META,
+      LANE_ORDER,
+      advanceShieldRepair,
+      approachProgress,
+      approachSecondsForRound,
+      arenaTravelProgress,
+      arenaGrade,
+      audioTimeForPerformanceTimestamp,
+      chordSpanMs,
+      comboMultiplier,
+      compensatedAudioTime,
+      countInDisplay,
+      findHittableCue,
+      gradeHit,
+      hitScore,
+      laneForKey,
+      roundDurationSeconds,
+      runtimeCues,
+      secondsPerBeat,
+      worstGrade,
+      type ArenaLane,
+      type HitGrade,
+      type RuntimeArenaCue,
+    } from '../lib/drum-runner-v6';
+
+    type ArenaPhase = 'intro' | 'countin' | 'playing' | 'interstitial' | 'failed' | 'complete';
+    type Burst = { lane: ArenaLane; at: number; grade: HitGrade };
+    type Snapshot = {
+      score: number;
+      combo: number;
+      maxCombo: number;
+      hitTargets: number;
+      missTargets: number;
+      rushMeter: number;
+      gradeCounts: Record<'perfect' | 'great' | 'good', number>;
+    };
+
+    const BACKDROPS = [marineBackdrop, pierBackdrop, groceryBackdrop, refineryBackdrop];
+    const arena = document.getElementById('arena') as HTMLElement;
+    const stage = document.getElementById('arena-stage') as HTMLElement;
+    const canvas = document.getElementById('arena-canvas') as HTMLCanvasElement;
+    const context = canvas.getContext('2d', { alpha: false })!;
+    const overlay = document.getElementById('arena-overlay') as HTMLElement;
+    const goButton = document.getElementById('arena-go') as HTMLButtonElement;
+    const scoreEl = document.getElementById('arena-score')!;
+    const roundNoEl = document.getElementById('arena-round-no')!;
+    const roundNameEl = document.getElementById('arena-round-name')!;
+    const tempoEl = document.getElementById('arena-tempo')!;
+    const comboEl = document.getElementById('arena-combo')!;
+    const accuracyEl = document.getElementById('arena-accuracy')!;
+    const shieldEl = document.getElementById('arena-shields')!;
+    const rushFillEl = document.getElementById('arena-rush-fill') as HTMLElement;
+    const rushCopyEl = document.getElementById('arena-rush-copy')!;
+    const judgeEl = document.getElementById('arena-judge') as HTMLElement;
+    const flashEl = document.getElementById('arena-round-flash') as HTMLElement;
+    const coreEl = document.getElementById('arena-core') as HTMLElement;
+    const nounEl = document.getElementById('arena-noun') as HTMLImageElement;
+    const nounPicker = document.getElementById('arena-noun-picker') as HTMLElement;
+    const routeEl = document.getElementById('arena-route')!;
+    const routeItems = Array.from(routeEl.querySelectorAll<HTMLElement>('[data-route-index]'));
+    const bestEl = document.getElementById('arena-best')!;
+    const liveEl = document.getElementById('arena-live')!;
+    const cardKickerEl = document.getElementById('arena-card-kicker')!;
+    const cardTempoEl = document.getElementById('arena-card-tempo')!;
+    const cardTitleEl = document.getElementById('arena-card-title')!;
+    const cardSubEl = document.getElementById('arena-card-sub')!;
+    const statALabel = document.getElementById('arena-stat-a-label')!;
+    const statA = document.getElementById('arena-stat-a')!;
+    const statBLabel = document.getElementById('arena-stat-b-label')!;
+    const statB = document.getElementById('arena-stat-b')!;
+    const statCLabel = document.getElementById('arena-stat-c-label')!;
+    const statC = document.getElementById('arena-stat-c')!;
+    const soundButton = document.getElementById('arena-sound') as HTMLButtonElement;
+    const syncMinus = document.getElementById('arena-sync-minus') as HTMLButtonElement;
+    const syncPlus = document.getElementById('arena-sync-plus') as HTMLButtonElement;
+    const syncCopy = document.getElementById('arena-sync-copy')!;
+    const latencyEl = document.getElementById('arena-latency')!;
+    const padButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-lane]'));
+    const backdropImages = BACKDROPS.map((src) => {
+      const image = new Image();
+      image.src = src;
+      void image.decode?.().then(() => drawArena(arenaAudioNow())).catch(() => {});
+      return image;
+    });
+
+    let phase: ArenaPhase = 'intro';
+    let roundIndex = 0;
+    let cues: RuntimeArenaCue[] = [];
+    let resolvedGroups = new Set<string>();
+    let roundStart = 0;
+    let roundEnd = 0;
+    let roundClosing = false;
+    let shields = 4;
+    let shieldRepair = 0;
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let hitTargets = 0;
+    let missTargets = 0;
+    let gradeCounts = { perfect: 0, great: 0, good: 0 };
+    let rushMeter = 0;
+    let rushUntil = 0;
+    let syncMs = clampNumber(readNumber(ARENA_SYNC_KEY, 0), -150, 150);
+    let muted = readStorage(ARENA_MUTED_KEY) === '1';
+    let best = Math.max(0, readNumber(ARENA_BEST_KEY, 0));
+    let selectedNoun = clampNumber(readNumber('pc:nounId', 137), 0, 1199);
+    let snapshot: Snapshot | null = null;
+    let bursts: Burst[] = [];
+    let animationFrame = 0;
+    let transitionTimer = 0;
+    let deferredTransition: 'next' | 'complete' | null = null;
+    let actx: AudioContext | null = null;
+    let masterGain: GainNode | null = null;
+    let noiseBuffer: AudioBuffer | null = null;
+    let scheduledSources: AudioScheduledSourceNode[] = [];
+    let judgeSerial = 0;
+
+    function readStorage(key: string): string | null {
+      try { return localStorage.getItem(key); } catch { return null; }
+    }
+    function writeStorage(key: string, value: string) {
+      try { localStorage.setItem(key, value); } catch {}
+    }
+    function readNumber(key: string, fallback: number): number {
+      const stored = readStorage(key);
+      if (stored === null) return fallback;
+      const value = Number(stored);
+      return Number.isFinite(value) ? value : fallback;
+    }
+    function clampNumber(value: number, min: number, max: number): number {
+      return Math.max(min, Math.min(max, value));
+    }
+    function accuracy(): number {
+      const total = hitTargets + missTargets;
+      return total ? Math.round(hitTargets / total * 1000) / 10 : 100;
+    }
+    function currentRound() { return ARENA_ROUNDS[roundIndex]; }
+    function currentApproach() { return approachSecondsForRound(currentRound()); }
+    function currentBeatSeconds() { return secondsPerBeat(currentRound().bpm); }
+    function rushActive(now = arenaAudioNow()) { return now > 0 && now < rushUntil; }
+    function setPhase(next: ArenaPhase) {
+      phase = next;
+      arena.dataset.phase = next;
+      padButtons.forEach((button) => { button.disabled = next !== 'countin' && next !== 'playing'; });
+    }
+
+    function showAudioUnavailable() {
+      goButton.disabled = true;
+      goButton.textContent = 'WEB AUDIO REQUIRED';
+      cardSubEl.textContent = 'Pulse Arena needs Web Audio to keep the drums, targets, and scoring on one clock. Open this edition in a current browser with audio enabled.';
+      liveEl.textContent = 'Pulse Arena needs browser Web Audio support.';
+    }
+
+    function ensureAudio(): AudioContext | null {
+      if (actx) return actx;
+      const AudioContextClass = window.AudioContext
+        ?? (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        showAudioUnavailable();
+        return null;
+      }
+      try {
+        actx = new AudioContextClass({ latencyHint: 'interactive' });
+      } catch {
+        showAudioUnavailable();
+        return null;
+      }
+      masterGain = actx.createGain();
+      masterGain.gain.value = muted ? 0.0001 : 0.72;
+      masterGain.connect(actx.destination);
+      const frames = Math.max(1, Math.floor(actx.sampleRate * .14));
+      noiseBuffer = actx.createBuffer(1, frames, actx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let index = 0; index < frames; index++) data[index] = Math.random() * 2 - 1;
+      updateLatencyCopy();
+      return actx;
+    }
+
+    function outputLatency(): number {
+      if (!actx) return 0;
+      return clampNumber(Number((actx as any).outputLatency ?? actx.baseLatency ?? 0), 0, .25);
+    }
+
+    function arenaAudioNow(): number {
+      if (!actx) return 0;
+      const stamp = actx.getOutputTimestamp?.();
+      const stampedTime = stamp && Number.isFinite(stamp.contextTime) && stamp.contextTime > 0
+        ? stamp.contextTime
+        : null;
+      return stampedTime === null
+        ? compensatedAudioTime(actx.currentTime, outputLatency(), syncMs)
+        : compensatedAudioTime(stampedTime, 0, syncMs);
+    }
+
+    function arenaInputTime(eventTime?: number): number {
+      if (!actx || !Number.isFinite(eventTime)) return arenaAudioNow();
+      const stamp = actx.getOutputTimestamp?.();
+      if (!stamp || !Number.isFinite(stamp.contextTime) || !Number.isFinite(stamp.performanceTime)) return arenaAudioNow();
+      const eventAge = Math.abs((eventTime as number) - stamp.performanceTime);
+      if (eventAge > 60_000) return arenaAudioNow();
+      const mapped = audioTimeForPerformanceTimestamp(
+        stamp.contextTime,
+        stamp.performanceTime,
+        eventTime as number,
+        syncMs,
+      );
+      return Number.isFinite(mapped) ? mapped : arenaAudioNow();
+    }
+
+    function updateLatencyCopy() {
+      latencyEl.textContent = actx ? `auto ${Math.round(outputLatency() * 1000)}ms` : 'latency auto';
+    }
+
+    function connectSource(source: AudioScheduledSourceNode) {
+      scheduledSources.push(source);
+      source.addEventListener('ended', () => {
+        const index = scheduledSources.indexOf(source);
+        if (index >= 0) scheduledSources.splice(index, 1);
+      }, { once: true });
+    }
+
+    function stopScheduled() {
+      scheduledSources.splice(0).forEach((source) => {
+        try { source.stop(); } catch {}
+      });
+    }
+
+    function tone(at: number, frequency: number, duration: number, volume: number, type: OscillatorType = 'sine', destination = masterGain) {
+      if (!actx || !destination) return;
+      const oscillator = actx.createOscillator();
+      const gain = actx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, at);
+      gain.gain.setValueAtTime(.0001, at);
+      gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), at + .005);
+      gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
+      oscillator.connect(gain).connect(destination);
+      oscillator.start(at);
+      oscillator.stop(at + duration + .02);
+      connectSource(oscillator);
+    }
+
+    function kick(at: number, volume = .16) {
+      if (!actx || !masterGain) return;
+      const oscillator = actx.createOscillator();
+      const gain = actx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(132, at);
+      oscillator.frequency.exponentialRampToValueAtTime(48, at + .11);
+      gain.gain.setValueAtTime(volume, at);
+      gain.gain.exponentialRampToValueAtTime(.0001, at + .16);
+      oscillator.connect(gain).connect(masterGain);
+      oscillator.start(at);
+      oscillator.stop(at + .18);
+      connectSource(oscillator);
+    }
+
+    function noise(at: number, duration: number, volume: number, highpass = 900) {
+      if (!actx || !masterGain || !noiseBuffer) return;
+      const source = actx.createBufferSource();
+      const filter = actx.createBiquadFilter();
+      const gain = actx.createGain();
+      source.buffer = noiseBuffer;
+      filter.type = 'highpass';
+      filter.frequency.value = highpass;
+      gain.gain.setValueAtTime(volume, at);
+      gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
+      source.connect(filter).connect(gain).connect(masterGain);
+      source.start(at);
+      source.stop(at + duration + .01);
+      connectSource(source);
+    }
+
+    function playLane(lane: ArenaLane, at: number, strength = 1) {
+      const nounPitch = 2 ** (((selectedNoun % 9) - 4) / 72);
+      if (lane === 'west') {
+        kick(at, .31 * strength);
+        tone(at, 62 * nounPitch, .16, .11 * strength, 'sine');
+      } else if (lane === 'north') {
+        noise(at, .1, .2 * strength, 1250);
+        tone(at, 225 * nounPitch, .055, .055 * strength, 'square');
+      } else if (lane === 'south') {
+        tone(at, 132 * nounPitch, .23, .23 * strength, 'sine');
+        tone(at, 198 * nounPitch, .13, .07 * strength, 'triangle');
+      } else {
+        tone(at, 535 * nounPitch, .26, .16 * strength, 'triangle');
+        tone(at, 1070 * nounPitch, .18, .055 * strength, 'sine');
+      }
+    }
+
+    function scheduleBacking(roundStartTime: number) {
+      if (!actx) return;
+      const round = currentRound();
+      const step = secondsPerBeat(round.bpm);
+      const totalBeats = round.bars.length * 4;
+      for (let count = 3; count >= 1; count--) {
+        const at = roundStartTime - count * step;
+        tone(at, count === 1 ? 880 : 660, .055, .065, 'square');
+      }
+      for (let beat = 0; beat <= totalBeats; beat += .5) {
+        const at = roundStartTime + beat * step;
+        if (beat % 2 === 0) kick(at, .09);
+        if (beat % 4 === 1 || beat % 4 === 3) noise(at, .045, .026, 1600);
+        if (beat % 1 === .5) noise(at, .025, .012, 4300);
+      }
+    }
+
+    function snapshotRun(): Snapshot {
+      return { score, combo, maxCombo, hitTargets, missTargets, rushMeter, gradeCounts: { ...gradeCounts } };
+    }
+    function restoreSnapshot(value: Snapshot) {
+      score = value.score;
+      combo = value.combo;
+      maxCombo = value.maxCombo;
+      hitTargets = value.hitTargets;
+      missTargets = value.missTargets;
+      rushMeter = value.rushMeter;
+      gradeCounts = { ...value.gradeCounts };
+      rushUntil = 0;
+      updateHud();
+    }
+
+    function startRound(index: number) {
+      if (!actx) return;
+      window.clearTimeout(transitionTimer);
+      stopScheduled();
+      roundIndex = index;
+      deferredTransition = null;
+      snapshot = snapshotRun();
+      resolvedGroups = new Set();
+      roundClosing = false;
+      shields = 4;
+      shieldRepair = 0;
+      bursts = [];
+      combo = 0;
+      rushUntil = 0;
+      const round = currentRound();
+      const approach = approachSecondsForRound(round);
+      roundStart = arenaAudioNow() + approach + .12;
+      cues = runtimeCues(round, roundStart);
+      roundEnd = roundStart + roundDurationSeconds(round);
+      arena.dataset.round = String(index);
+      arena.style.setProperty('--accent', round.accent);
+      arena.style.setProperty('--accent-soft', round.accentSoft);
+      scheduleBacking(roundStart);
+      setPhase('countin');
+      overlay.hidden = true;
+      flashEl.hidden = false;
+      updateRoundUi();
+      updateHud();
+      liveEl.textContent = `Round ${index + 1} of 4, ${round.name}, ${round.bpm} BPM. Four shields. D F J K, arrows, or touch.`;
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(runFrame);
+    }
+
+    function updateRoundUi() {
+      const round = currentRound();
+      roundNoEl.textContent = `ROUND ${round.number} / 04`;
+      roundNameEl.textContent = round.name;
+      tempoEl.textContent = `${round.bpm} BPM`;
+      routeItems.forEach((item, index) => item.classList.toggle('is-current', index === roundIndex));
+    }
+
+    function updateHud(now = arenaAudioNow()) {
+      scoreEl.textContent = score.toLocaleString();
+      comboEl.textContent = combo > 0 ? `×${combo}` : '—';
+      accuracyEl.textContent = `${Math.round(accuracy())}%`;
+      Array.from(shieldEl.children).forEach((pip, index) => pip.classList.toggle('is-empty', index >= shields));
+      shieldEl.setAttribute('aria-label', `${shields} of 4 shields remaining. Eight clean hits repair one shield.`);
+      const active = rushActive(now);
+      arena.dataset.rush = String(active);
+      rushFillEl.style.width = `${active ? 100 : rushMeter}%`;
+      rushCopyEl.textContent = active ? `×${comboMultiplier(combo, true)}` : String(Math.floor(rushMeter));
+    }
+
+    function groups(): Map<string, RuntimeArenaCue[]> {
+      const map = new Map<string, RuntimeArenaCue[]>();
+      cues.forEach((cue) => map.set(cue.groupId, [...(map.get(cue.groupId) ?? []), cue]));
+      return map;
+    }
+
+    function showJudge(copy: string, grade: HitGrade | 'stray' | 'chord') {
+      judgeSerial++;
+      const serial = judgeSerial;
+      judgeEl.textContent = copy;
+      judgeEl.style.color = grade === 'perfect' ? '#ffd166' : grade === 'great' ? '#78f0ca' : grade === 'good' ? '#7ad7ff' : grade === 'chord' ? '#ff9ad5' : '#ff7895';
+      judgeEl.classList.remove('is-showing');
+      void judgeEl.offsetWidth;
+      judgeEl.classList.add('is-showing');
+      window.setTimeout(() => { if (judgeSerial === serial) judgeEl.classList.remove('is-showing'); }, 480);
+    }
+
+    function pulsePad(lane: ArenaLane) {
+      const button = padButtons.find((pad) => pad.dataset.lane === lane);
+      button?.classList.add('is-hit');
+      window.setTimeout(() => button?.classList.remove('is-hit'), 90);
+      coreEl.classList.add('is-hit');
+      window.setTimeout(() => coreEl.classList.remove('is-hit'), 90);
+    }
+
+    function resolveSuccess(group: RuntimeArenaCue[], grade: HitGrade, now: number) {
+      resolvedGroups.add(group[0].groupId);
+      combo += group.length;
+      maxCombo = Math.max(maxCombo, combo);
+      const activeRush = rushActive(now);
+      score += hitScore(grade, combo, activeRush) * group.length;
+      hitTargets += group.length;
+      if (grade !== 'miss') gradeCounts[grade] += group.length;
+      const rushGain = grade === 'perfect' ? 10 : grade === 'great' ? 6 : 3;
+      rushMeter = Math.min(100, rushMeter + rushGain * group.length);
+      const repair = advanceShieldRepair(shields, shieldRepair, group.length);
+      shields = repair.shields;
+      shieldRepair = repair.repairProgress;
+      if (!activeRush && rushMeter >= 100) {
+        rushMeter = 0;
+        rushUntil = now + currentBeatSeconds() * 8;
+        showJudge(repair.repaired ? 'RUSH ×4 · SHIELD' : 'RUSH ×4', 'perfect');
+      } else {
+        const copy = group.length > 1 ? `${grade.toUpperCase()} CHORD` : grade.toUpperCase();
+        showJudge(repair.repaired ? `${copy} · SHIELD` : copy, grade);
+      }
+      group.forEach((cue) => bursts.push({ lane: cue.lane, at: now, grade }));
+      updateHud(now);
+    }
+
+    function resolveMiss(group: RuntimeArenaCue[], now: number) {
+      if (resolvedGroups.has(group[0].groupId)) return;
+      resolvedGroups.add(group[0].groupId);
+      group.forEach((cue) => { cue.judged = true; });
+      missTargets += group.length;
+      combo = 0;
+      shieldRepair = 0;
+      shields = Math.max(0, shields - 1);
+      score = Math.max(0, score - 50);
+      showJudge(group.length > 1 ? 'CHORD MISS' : 'MISS', 'miss');
+      updateHud(now);
+      if (shields === 0) failRound();
+    }
+
+    function performLane(lane: ArenaLane, eventTime?: number) {
+      if (!actx || (phase !== 'countin' && phase !== 'playing')) return;
+      const now = arenaInputTime(eventTime);
+      const match = findHittableCue(cues, lane, now);
+      playLane(lane, actx.currentTime + .003, match ? 1 : .42);
+      pulsePad(lane);
+      if (!match) {
+        combo = 0;
+        shieldRepair = 0;
+        score = Math.max(0, score - 12);
+        showJudge('EMPTY', 'stray');
+        updateHud(now);
+        return;
+      }
+      const { cue, deltaMs } = match;
+      cue.judged = true;
+      cue.pressedAt = now;
+      cue.grade = gradeHit(deltaMs);
+      const group = cues.filter((item) => item.groupId === cue.groupId);
+      if (group.length === 1) {
+        resolveSuccess(group, cue.grade, now);
+        return;
+      }
+      if (!group.every((item) => item.judged)) {
+        showJudge('CHORD…', 'chord');
+        return;
+      }
+      const span = chordSpanMs(group);
+      const groupGrade = span <= CHORD_WINDOW_MS
+        ? worstGrade(group.map((item) => item.grade ?? 'miss'))
+        : 'miss';
+      if (groupGrade === 'miss') resolveMiss(group, now);
+      else resolveSuccess(group, groupGrade, now);
+    }
+
+    function expireMisses(now: number) {
+      if (roundClosing || phase !== 'playing') return;
+      for (const group of groups().values()) {
+        if (resolvedGroups.has(group[0].groupId)) continue;
+        if (now > group[0].hitTime + HIT_WINDOWS_MS.good / 1000) resolveMiss(group, now);
+        if (phase === 'failed') break;
+      }
+    }
+
+    function failRound() {
+      if (roundClosing || !snapshot) return;
+      roundClosing = true;
+      stopScheduled();
+      setPhase('failed');
+      cancelAnimationFrame(animationFrame);
+      restoreSnapshot(snapshot);
+      overlay.hidden = false;
+      nounPicker.hidden = true;
+      routeEl.hidden = true;
+      cardKickerEl.textContent = `ROUND ${currentRound().number} DROPPED · ${currentRound().bpm} BPM`;
+      cardTempoEl.textContent = 'SCORE RESTORED · TRY AGAIN';
+      cardTitleEl.innerHTML = 'GET BACK<br />IN THE POCKET.';
+      cardSubEl.textContent = 'Four unrepaired misses emptied the round shield. Your score snapshot is safe—retry starts with a fresh three-beat count-in. Eight clean hits repair one shield.';
+      statALabel.textContent = 'round'; statA.textContent = currentRound().name;
+      statBLabel.textContent = 'shield'; statB.textContent = '4 fresh';
+      statCLabel.textContent = 'sync'; statC.textContent = `${syncMs}ms`;
+      bestEl.textContent = `run ${score.toLocaleString()} pts`;
+      goButton.textContent = `↻ RETRY ROUND ${currentRound().number}`;
+      liveEl.textContent = `${currentRound().name} dropped. Score restored. Activate retry when ready.`;
+    }
+
+    function finishRound() {
+      if (roundClosing) return;
+      roundClosing = true;
+      setPhase('interstitial');
+      flashEl.hidden = false;
+      flashEl.textContent = roundIndex === ARENA_ROUNDS.length - 1 ? 'FULL SEND' : 'ROUND CLEAR';
+      liveEl.textContent = `${currentRound().name} clear. ${Math.round(accuracy())}% run accuracy.`;
+      const transition = roundIndex === ARENA_ROUNDS.length - 1 ? 'complete' : 'next';
+      transitionTimer = window.setTimeout(() => runRoundTransition(transition), 950);
+    }
+
+    function runRoundTransition(transition: 'next' | 'complete') {
+      if (document.hidden) {
+        deferredTransition = transition;
+        return;
+      }
+      deferredTransition = null;
+      if (transition === 'complete') finishRun();
+      else startRound(roundIndex + 1);
+    }
+
+    function finishRun() {
+      stopScheduled();
+      setPhase('complete');
+      cancelAnimationFrame(animationFrame);
+      const runAccuracy = accuracy();
+      const grade = arenaGrade(runAccuracy);
+      if (score > best) {
+        best = score;
+        writeStorage(ARENA_BEST_KEY, String(best));
+      }
+      overlay.hidden = false;
+      nounPicker.hidden = true;
+      routeEl.hidden = false;
+      cardKickerEl.textContent = 'PULSE ARENA COMPLETE · FOUR VOICES';
+      cardTempoEl.textContent = `MAX COMBO ${maxCombo} · BEST ${best.toLocaleString()}`;
+      cardTitleEl.innerHTML = `GRADE ${grade}<br />${score.toLocaleString()} PTS`;
+      cardSubEl.textContent = `You played ${hitTargets} drum actions at ${runAccuracy}% accuracy. The sound, targets, and judgment stayed on one AudioContext timeline.`;
+      statALabel.textContent = 'perfect'; statA.textContent = String(gradeCounts.perfect);
+      statBLabel.textContent = 'great'; statB.textContent = String(gradeCounts.great);
+      statCLabel.textContent = 'good'; statC.textContent = String(gradeCounts.good);
+      bestEl.textContent = `best ${best.toLocaleString()} pts`;
+      goButton.textContent = '▶ PLAY AGAIN';
+      liveEl.textContent = `Pulse Arena complete. Grade ${grade}, ${score} points, ${runAccuracy}% accuracy, max combo ${maxCombo}.`;
+      drawArena(roundEnd);
+    }
+
+    function runFrame() {
+      if (phase !== 'countin' && phase !== 'playing') return;
+      const now = arenaAudioNow();
+      if (phase === 'countin') {
+        flashEl.hidden = false;
+        flashEl.textContent = countInDisplay(roundStart, now, currentBeatSeconds());
+        if (now >= roundStart) setPhase('playing');
+      } else if (now > roundStart + .38) {
+        flashEl.hidden = true;
+      }
+      expireMisses(now);
+      updateHud(now);
+      drawArena(now);
+      if (!roundClosing && now >= roundEnd + HIT_WINDOWS_MS.good / 1000) finishRound();
+      if (phase === 'countin' || phase === 'playing') animationFrame = requestAnimationFrame(runFrame);
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      const width = Math.max(1, Math.round(rect.width * ratio));
+      const height = Math.max(1, Math.round(rect.height * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      return { width: rect.width, height: rect.height };
+    }
+
+    function drawCover(image: HTMLImageElement, width: number, height: number) {
+      if (!image.complete || !image.naturalWidth) return;
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+      const sourceWidth = width / scale;
+      const sourceHeight = height / scale;
+      const sx = (image.naturalWidth - sourceWidth) / 2;
+      const sy = (image.naturalHeight - sourceHeight) / 2;
+      context.drawImage(image, sx, sy, sourceWidth, sourceHeight, 0, 0, width, height);
+    }
+
+    function laneStart(lane: ArenaLane, width: number, height: number) {
+      if (lane === 'west') return { x: 22, y: height / 2 };
+      if (lane === 'east') return { x: width - 22, y: height / 2 };
+      if (lane === 'north') return { x: width / 2, y: 22 };
+      return { x: width / 2, y: height - 22 };
+    }
+
+    function drawArena(now: number) {
+      const { width, height } = resizeCanvas();
+      const round = ARENA_ROUNDS[Math.min(roundIndex, ARENA_ROUNDS.length - 1)];
+      const activeRush = rushActive(now);
+      context.save();
+      context.fillStyle = '#111526';
+      context.fillRect(0, 0, width, height);
+      drawCover(backdropImages[Math.min(roundIndex, backdropImages.length - 1)], width, height);
+      const wash = context.createLinearGradient(0, 0, 0, height);
+      wash.addColorStop(0, activeRush ? 'rgba(34,8,45,.42)' : 'rgba(11,15,31,.34)');
+      wash.addColorStop(.55, 'rgba(8,11,23,.64)');
+      wash.addColorStop(1, 'rgba(7,9,18,.84)');
+      context.fillStyle = wash;
+      context.fillRect(0, 0, width, height);
+
+      const center = { x: width / 2, y: height / 2 };
+      const beatSeconds = secondsPerBeat(round.bpm);
+      const beatFloat = now > 0 && roundStart > 0 ? (now - roundStart) / beatSeconds : 0;
+      const beatPulse = 1 - ((beatFloat % 1) + 1) % 1;
+      LANE_ORDER.forEach((lane) => {
+        const start = laneStart(lane, width, height);
+        const meta = LANE_META[lane];
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(center.x, center.y);
+        context.lineWidth = activeRush ? 14 : 10;
+        context.strokeStyle = `${meta.color}${activeRush ? '70' : '42'}`;
+        context.stroke();
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(center.x, center.y);
+        context.lineWidth = 2;
+        context.setLineDash([7, 10]);
+        context.lineDashOffset = -beatFloat * 24;
+        context.strokeStyle = 'rgba(255,255,255,.52)';
+        context.stroke();
+        context.setLineDash([]);
+      });
+
+      context.beginPath();
+      context.arc(center.x, center.y, 72 + beatPulse * 8, 0, Math.PI * 2);
+      context.strokeStyle = activeRush ? '#ffd166' : 'rgba(255,255,255,.55)';
+      context.lineWidth = activeRush ? 6 : 3;
+      context.stroke();
+
+      if (phase === 'countin' || phase === 'playing') {
+        for (const cue of cues) {
+          if (cue.judged) continue;
+          const approach = approachSecondsForRound(round);
+          const until = cue.hitTime - now;
+          if (until > approach || until < -HIT_WINDOWS_MS.good / 1000) continue;
+          const progress = approachProgress(cue.hitTime, now, approach);
+          const start = laneStart(cue.lane, width, height);
+          const stopDistance = 68;
+          const vectorX = center.x - start.x;
+          const vectorY = center.y - start.y;
+          const length = Math.hypot(vectorX, vectorY) || 1;
+          const targetX = center.x - vectorX / length * stopDistance;
+          const targetY = center.y - vectorY / length * stopDistance;
+          const eased = arenaTravelProgress(progress);
+          const x = start.x + (targetX - start.x) * eased;
+          const y = start.y + (targetY - start.y) * eased;
+          const meta = LANE_META[cue.lane];
+          const radius = cue.kind === 'chord' ? 19 : cue.kind === 'roll' ? 15 : 17;
+          context.save();
+          context.shadowColor = meta.color;
+          context.shadowBlur = 18 + progress * 12;
+          context.fillStyle = meta.color;
+          context.strokeStyle = '#151927';
+          context.lineWidth = 4;
+          context.beginPath();
+          if (cue.kind === 'roll') {
+            context.roundRect(x - radius, y - radius * .72, radius * 2, radius * 1.44, 6);
+          } else {
+            context.arc(x, y, radius, 0, Math.PI * 2);
+          }
+          context.fill();
+          context.stroke();
+          if (cue.kind === 'chord') {
+            context.beginPath();
+            context.arc(x, y, radius + 6, 0, Math.PI * 2);
+            context.strokeStyle = '#fff';
+            context.lineWidth = 3;
+            context.stroke();
+          }
+          context.fillStyle = '#151927';
+          context.font = '900 14px IBM Plex Mono, monospace';
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.fillText(meta.key, x, y + .5);
+          context.restore();
+        }
+      }
+
+      bursts = bursts.filter((burst) => now - burst.at < .42);
+      bursts.forEach((burst) => {
+        const age = Math.max(0, now - burst.at);
+        const progress = age / .42;
+        const radius = 78 + progress * 86;
+        context.beginPath();
+        context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        context.strokeStyle = `${LANE_META[burst.lane].color}${Math.round((1 - progress) * 210).toString(16).padStart(2, '0')}`;
+        context.lineWidth = 7 * (1 - progress);
+        context.stroke();
+      });
+      context.restore();
+    }
+
+    async function startOrRetry() {
+      const audio = ensureAudio();
+      if (!audio) return;
+      await audio.resume();
+      if (phase === 'failed' && snapshot) restoreSnapshot(snapshot);
+      if (phase === 'intro' || phase === 'complete') {
+        score = 0; combo = 0; maxCombo = 0; hitTargets = 0; missTargets = 0;
+        gradeCounts = { perfect: 0, great: 0, good: 0 };
+        rushMeter = 0; rushUntil = 0; roundIndex = 0;
+      }
+      nounPicker.hidden = false;
+      routeEl.hidden = false;
+      startRound(roundIndex);
+    }
+
+    goButton.addEventListener('click', () => { void startOrRetry(); });
+
+    nounPicker.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-noun]');
+      if (!button) return;
+      selectedNoun = clampNumber(Number(button.dataset.noun), 0, 1199);
+      writeStorage('pc:nounId', String(selectedNoun));
+      nounEl.src = `https://noun.pics/${selectedNoun}.svg`;
+      nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((choice) => choice.setAttribute('aria-pressed', String(choice === button)));
+    });
+
+    padButtons.forEach((button) => {
+      button.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        performLane(button.dataset.lane as ArenaLane, event.timeStamp);
+      });
+      button.addEventListener('click', (event) => {
+        // Pointer input already fired on pointerdown; detail 0 preserves keyboard activation.
+        if (event.detail > 0) return;
+        performLane(button.dataset.lane as ArenaLane, event.timeStamp);
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if ((event.target as HTMLElement)?.matches('input, textarea, select')) return;
+      const lane = laneForKey(event.key);
+      if (!lane) return;
+      event.preventDefault();
+      performLane(lane, event.timeStamp);
+    });
+
+    soundButton.addEventListener('click', async () => {
+      const audio = ensureAudio();
+      if (!audio) return;
+      await audio.resume();
+      muted = !muted;
+      writeStorage(ARENA_MUTED_KEY, muted ? '1' : '0');
+      masterGain?.gain.setTargetAtTime(muted ? .0001 : .72, audio.currentTime, .015);
+      soundButton.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+      soundButton.setAttribute('aria-pressed', String(!muted));
+    });
+
+    function adjustSync(delta: number) {
+      syncMs = clampNumber(syncMs + delta, -150, 150);
+      writeStorage(ARENA_SYNC_KEY, String(syncMs));
+      syncCopy.textContent = `SYNC ${syncMs > 0 ? '+' : ''}${syncMs}MS`;
+      liveEl.textContent = `Timing sync ${syncMs > 0 ? 'plus ' : ''}${syncMs} milliseconds.`;
+    }
+    syncMinus.addEventListener('click', () => adjustSync(-15));
+    syncPlus.addEventListener('click', () => adjustSync(15));
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && (phase === 'countin' || phase === 'playing')) failRound();
+      if (!document.hidden && deferredTransition) {
+        const transition = deferredTransition;
+        deferredTransition = null;
+        transitionTimer = window.setTimeout(() => runRoundTransition(transition), 250);
+      }
+    });
+    window.addEventListener('resize', () => drawArena(arenaAudioNow()), { passive: true });
+
+    function initialize() {
+      const pickerChoices = [137, 418, 855];
+      if (!pickerChoices.includes(selectedNoun)) selectedNoun = 137;
+      nounEl.src = `https://noun.pics/${selectedNoun}.svg`;
+      nounPicker.querySelectorAll<HTMLButtonElement>('[data-noun]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.noun) === selectedNoun)));
+      bestEl.textContent = best > 0 ? `best ${best.toLocaleString()} pts` : 'best — pts';
+      soundButton.textContent = muted ? 'SOUND OFF' : 'SOUND ON';
+      soundButton.setAttribute('aria-pressed', String(!muted));
+      syncCopy.textContent = `SYNC ${syncMs > 0 ? '+' : ''}${syncMs}MS`;
+      updateRoundUi();
+      updateHud(0);
+      drawArena(0);
+    }
+    initialize();
+  </script>
+</BlockLayout>

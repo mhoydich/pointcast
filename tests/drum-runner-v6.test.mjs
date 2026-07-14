@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const V6_HELPERS = new URL('../src/lib/drum-runner-v6.ts', import.meta.url);
-const V6_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V6_PAGE = new URL('../src/pages/drum-runner-v6.astro', import.meta.url);
 const DRUM_GAMES = new URL('../src/lib/drum-games.ts', import.meta.url);
 const DRUM_GAMES_PAGE = new URL('../src/pages/drum-games.astro', import.meta.url);
 const DRUM_PRESS_PAGE = new URL('../src/pages/drum-press.astro', import.meta.url);
@@ -314,11 +314,11 @@ test('four native pads expose complete keyboard, pointer, touch, and mobile sema
   assert.match(v6Source, /overflow-x: hidden/);
 });
 
-test('discovery consistently describes the four-lane v6 game', () => {
-  assert.match(gamesSource, /id: 'v6', name: 'Pulse Arena', path: '\/drum-runner'/);
-  assert.match(gamesSource, /bestKey: 'pc-drum-runner-v6-best'/);
-  assert.match(gamesSource, /controls: 'Four drums · D F J K, arrows, or tap'/);
-  assert.match(gamesPageSource, /fast four-lane arena/);
-  assert.match(pressSource, /pulse arena · four-lane beat rush/g);
+test('v6 stays archived while discovery advances to Loop Siege v7', () => {
+  assert.match(gamesSource, /id: 'v7', name: 'Loop Siege', path: '\/drum-runner'/);
+  assert.match(gamesSource, /id: 'v6', name: 'Pulse Arena', path: '\/drum-runner-v6'/);
+  assert.match(gamesSource, /bestKey: 'pc-drum-runner-v7-best'/);
+  assert.match(gamesPageSource, /Loop Siege/);
+  assert.match(pressSource, /runner v7/);
   for (const source of [gamesSource, gamesPageSource, pressSource]) assert.doesNotMatch(source, /three-action/i);
 });
