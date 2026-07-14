@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const V5_HELPERS = new URL('../src/lib/drum-runner-v5.ts', import.meta.url);
-const V5_PAGE = new URL('../src/pages/drum-runner.astro', import.meta.url);
+const V5_PAGE = new URL('../src/pages/drum-runner-v5.astro', import.meta.url);
 
 const {
   ACHIEVEMENTS,

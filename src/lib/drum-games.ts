@@ -25,7 +25,8 @@ export interface DrumGame {
 }
 
 export const DRUM_RUNNER_VERSIONS = [
-  { id: 'v5', name: 'Bright Miles', path: '/drum-runner', storageKey: 'pc-drum-runner-v5-best', scoring: 'points' },
+  { id: 'v6', name: 'Pulse Arena', path: '/drum-runner', storageKey: 'pc-drum-runner-v6-best', scoring: 'points' },
+  { id: 'v5', name: 'Bright Miles', path: '/drum-runner-v5', storageKey: 'pc-drum-runner-v5-best', scoring: 'points' },
   { id: 'v4', name: 'Road Band', path: '/drum-runner-v4', storageKey: 'pc-drum-runner-v4-best', scoring: 'points' },
   { id: 'v3', name: 'Pocket', path: '/drum-runner-v3', storageKey: 'pc-drum-runner-v3-best', scoring: 'points' },
   { id: 'v2', name: 'Postcards', path: '/drum-runner-v2', storageKey: 'pc-drum-runner-v2-best', scoring: 'meters' },
@@ -96,13 +97,13 @@ export const DRUM_GAMES: readonly DrumGame[] = [
     shortName: 'Runner',
     path: '/drum-runner',
     number: '04',
-    kicker: 'BRIGHT MILES · BUILD A BEAT PASS',
-    description: 'Run a brighter beat road, earn Road XP and stamps, save favorite phrases, and optionally carry your Beat Pass with Kukai.',
-    skill: 'Pocket',
-    controls: 'Play, jump + save · Space',
+    kicker: 'PULSE ARENA · MOVE ON THE BEAT',
+    description: 'Read the next pulse, choose an action, and turn a fast arena rush into a beat you can hear yourself build.',
+    skill: 'Rhythm reflexes',
+    controls: 'Four drums · D F J K, arrows, or tap',
     nounId: 137,
     accent: '#7ac8ed',
-    bestKey: 'pc-drum-runner-v5-best',
+    bestKey: 'pc-drum-runner-v6-best',
     bestUnit: ' points',
     bestDirection: 'high',
   },

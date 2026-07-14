@@ -1,20 +1,23 @@
 ---
 /**
- * /drum-runner-v3 — frozen Beat Runner v3 archive.
+ * /drum-runner-v5 — frozen Beat Runner v5: Bright Miles archive.
  *
  * A one-button musical runner where the player's input performs the track.
  * Hit the cue on beat n, clear the obstacle at the apex on beat n + 1,
- * then land on beat n + 2 while the city echoes the phrase back.
+ * then land on beat n + 2 while the road remembers the performance.
+ * Optional gear notes rewrite the arrangement without changing the physics.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
 
-const title = 'Beat Runner v3 · play the city';
-const description = 'Perform the beat to run it. Every on-grid tap sounds a note, clears an obstacle one beat later, and builds a four-scene El Segundo track.';
+const title = 'Beat Runner v5 · Bright Miles';
+const description = 'A bright musical runner with Road XP, collectible stamps, saved performances, and an optional Kukai-signed Beat Pass.';
+const visitNounsContract = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'VideoGame',
-  name: 'Beat Runner v3',
-  url: 'https://pointcast.xyz/drum-runner-v3',
+  name: 'Beat Runner v5: Bright Miles',
+  url: 'https://pointcast.xyz/drum-runner-v5',
   description,
   gamePlatform: 'Web browser',
   playMode: 'SinglePlayer',
@@ -22,11 +25,11 @@ const jsonLd = {
 ---
 
 <BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
-  <div class="drn" id="drn" data-phase="intro" data-scene="mainstreet">
+  <div class="drn" id="drn" data-phase="intro" data-scene="mainstreet" data-edition="v5" data-power="none" data-token-contract={visitNounsContract}>
     <header class="drn__hud" aria-label="Beat Runner status">
       <div class="drn__score-block">
         <span class="drn__score" id="drn-score">0</span>
-        <span class="drn__score-label">pocket pts</span>
+        <span class="drn__score-label">run pts</span>
       </div>
 
       <div class="drn__level-block">
@@ -47,6 +50,12 @@ const jsonLd = {
         </div>
         <span class="drn__best" id="drn-best-line">best — pts</span>
       </div>
+      <div class="drn__xp-rail" aria-label="Road Pass experience">
+        <span id="drn-xp-level">LV 1</span>
+        <strong id="drn-xp-title">Street Starter</strong>
+        <span id="drn-xp-copy">0 / 100 XP</span>
+        <i aria-hidden="true"><b id="drn-xp-fill"></b></i>
+      </div>
     </header>
 
     <section class="drn__stage" id="drn-stage" aria-label="Beat Runner game">
@@ -61,27 +70,38 @@ const jsonLd = {
         <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
       </div>
 
+      <div class="drn__power" id="drn-power" aria-hidden="true">
+        <span class="drn__power-dot"></span>
+        <span id="drn-power-status">road clear</span>
+      </div>
+
       <canvas
         class="drn__canvas"
         id="drn-canvas"
         role="img"
-        aria-label="Beat Runner v3 playfield: perform each cue to sound a note, jump, and build the city's rhythm."
-      >Beat Runner v3 game canvas.</canvas>
+        aria-label="Beat Runner v5 Bright Miles playfield: guide a Noun across a playable beat road and collect musical gear."
+      >Beat Runner v5 Bright Miles game canvas.</canvas>
 
       <div class="drn__overlay" id="drn-overlay">
         <article class="drn__card" id="drn-card">
           <div class="drn__postcard" id="drn-postcard" aria-hidden="true"></div>
           <div class="drn__card-body">
             <div class="drn__eyebrow">
-              <span id="drn-kicker">BEAT RUNNER V3</span>
+              <span id="drn-kicker">BEAT RUNNER V5 · BRIGHT MILES</span>
               <span id="drn-card-tempo">4 LEVELS · 92→128 BPM</span>
             </div>
-            <h1 class="drn__title" id="drn-title">PLAY THE CITY.<br />CLEAR THE STREET.</h1>
-            <p class="drn__sub" id="drn-sub">Your tap is the note. The obstacle arrives one beat later. The landing closes the phrase.</p>
+            <h1 class="drn__title" id="drn-title">PICK A NOUN.<br />PLAY THE ROAD.</h1>
+            <p class="drn__sub" id="drn-sub">Play the road, earn permanent Road XP, collect stamps, and save your best musical miles.</p>
+
+            <div class="drn__noun-picker" id="drn-noun-picker" aria-label="Choose your runner Noun">
+              <button type="button" data-noun-slot="0"><img alt="" width="42" height="42" /><span>noun</span><small>voice</small></button>
+              <button type="button" data-noun-slot="1"><img alt="" width="42" height="42" /><span>noun</span><small>voice</small></button>
+              <button type="button" data-noun-slot="2"><img alt="" width="42" height="42" /><span>noun</span><small>voice</small></button>
+            </div>
 
             <div class="drn__card-stats" id="drn-card-stats" aria-label="Run details">
-              <span><small id="drn-stat-a-label">route</small><strong id="drn-stat-a">4 levels</strong></span>
-              <span><small id="drn-stat-b-label">tempo</small><strong id="drn-stat-b">92→128</strong></span>
+              <span><small id="drn-stat-a-label">road</small><strong id="drn-stat-a">4 scenes</strong></span>
+              <span><small id="drn-stat-b-label">gear</small><strong id="drn-stat-b">4 powers</strong></span>
               <span><small id="drn-stat-c-label">hearts</small><strong id="drn-stat-c">3 total</strong></span>
             </div>
 
@@ -93,14 +113,21 @@ const jsonLd = {
             </ol>
 
             <p class="drn__overlay-best" id="drn-best">best — pts</p>
-            <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
+            <div class="drn__card-actions">
+              <button class="drn__save-road" id="drn-save-road" type="button" hidden>＋ SAVE THIS ROAD</button>
+              <button class="drn__go" id="drn-go" type="button">▶ START LEVEL 01</button>
+            </div>
             <p class="drn__input-note">space · ↑ · w · tap</p>
           </div>
         </article>
       </div>
 
       <span class="drn__judge" id="drn-judge" aria-hidden="true"></span>
-      <span class="drn__tap-hint" id="drn-tap-hint">gold cue → perform · apex · land</span>
+      <aside class="drn__stamp-toast" id="drn-stamp-toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span id="drn-stamp-glyph">★</span>
+        <span><small>STAMP EARNED</small><strong id="drn-stamp-name">First Mile</strong></span>
+      </aside>
+      <span class="drn__tap-hint" id="drn-tap-hint">gold cue → jump · gear tile → collect</span>
     </section>
 
     <div class="drn__controls">
@@ -111,16 +138,58 @@ const jsonLd = {
       <button class="drn__audio" id="drn-audio" type="button" aria-pressed="false" aria-label="Beat Runner audio muted">sound on</button>
     </div>
 
-    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v3 ready. Perform the cues through four levels with three hearts.</p>
+    <section class="drn__pass" aria-labelledby="drn-pass-title">
+      <header class="drn__pass-head">
+        <div>
+          <p>POINTCAST ROAD PASS · LOCAL-FIRST</p>
+          <h2 id="drn-pass-title"><span id="drn-pass-level">LV 1</span> <strong id="drn-pass-rank">Street Starter</strong></h2>
+        </div>
+        <p class="drn__pass-total"><strong id="drn-pass-xp">0</strong> ROAD XP</p>
+      </header>
+
+      <div class="drn__pass-grid">
+        <section class="drn__stamps" aria-labelledby="drn-stamps-title">
+          <header><h3 id="drn-stamps-title">Stamps</h3><span id="drn-stamps-count">0 / 10</span></header>
+          <ol id="drn-stamps" aria-label="Road Pass stamps"></ol>
+        </section>
+
+        <section class="drn__roads" aria-labelledby="drn-roads-title">
+          <header><h3 id="drn-roads-title">Saved roads</h3><span id="drn-roads-count">0 / 12</span></header>
+          <div id="drn-roads-list" class="drn__roads-list"><p>Clear a level, then save its performed phrase.</p></div>
+        </section>
+
+        <section class="drn__wallet" aria-labelledby="drn-wallet-title">
+          <header><h3 id="drn-wallet-title">Portable Beat Pass</h3><span id="drn-wallet-badge">THIS DEVICE</span></header>
+          <p id="drn-wallet-status">Play without an account. Connect Kukai only when you want to seal a portable save.</p>
+          <dl>
+            <div><dt>Wallet</dt><dd id="drn-wallet-address">not connected</dd></div>
+            <div><dt>Visit Nouns</dt><dd id="drn-token-count">not checked</dd></div>
+            <div><dt>Proof</dt><dd id="drn-proof-status">unsigned</dd></div>
+          </dl>
+          <div class="drn__wallet-actions">
+            <button type="button" id="drn-connect-wallet">CONNECT KUKAI</button>
+            <button type="button" id="drn-sign-pass">SEAL BEAT PASS</button>
+            <button type="button" id="drn-export-pass">EXPORT</button>
+            <button type="button" id="drn-import-pass">IMPORT</button>
+            <input id="drn-import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <p class="drn__wallet-note">Gasless signature · no mint · no token transfer. Visit Nouns ownership adds a collector glow only.</p>
+          <a class="drn__trophy-link" href="/drum-trophies">See Drum Trophies →</a>
+        </section>
+      </div>
+    </section>
+
+    <p class="sr-only" id="drn-state-live" role="status" aria-live="polite" aria-atomic="true">Beat Runner v5 Bright Miles ready. Choose a Noun and perform the beat road through four levels.</p>
     <p class="sr-only" id="drn-lives-live" role="status" aria-live="polite">3 hearts remaining.</p>
+    <p class="sr-only" id="drn-power-live" role="status" aria-live="polite"></p>
 
     <nav class="drn__versions" aria-label="Beat Runner versions">
       <span>edition</span>
       <a href="/drum-runner-v1">v1 endless</a>
       <a href="/drum-runner-v2">v2 postcards</a>
-      <a href="/drum-runner-v3" aria-current="page">v3 pocket</a>
+      <a href="/drum-runner-v3">v3 pocket</a>
       <a href="/drum-runner-v4">v4 road band</a>
-      <a href="/drum-runner-v5">v5 bright miles</a>
+      <a href="/drum-runner-v5" aria-current="page">v5 bright miles</a>
       <a href="/drum-runner">v6 pulse arena</a>
     </nav>
 
@@ -262,7 +331,7 @@ const jsonLd = {
       top: 25px;
       left: 50%;
       width: min(330px, 58%);
-      display: grid;
+      display: none;
       grid-template-columns: repeat(32, 1fr);
       gap: 2px;
       transform: translateX(-50%);
@@ -273,6 +342,31 @@ const jsonLd = {
     .drn__phrase span.is-played { background: var(--accent-soft); box-shadow: 0 0 8px color-mix(in srgb, var(--accent-soft) 72%, transparent); }
     .drn__phrase span.is-perfect { background: var(--accent); box-shadow: 0 0 11px var(--accent); }
     .drn__phrase span.is-active { transform: scaleY(1.75); background: #fff; }
+
+    .drn__power {
+      position: absolute;
+      z-index: 5;
+      top: 11px;
+      right: 12px;
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 9px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 999px;
+      background: rgba(5,8,18,.72);
+      color: #a0a5b8;
+      font: 800 8px/1 'JetBrains Mono', monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+    }
+    .drn__power-dot { width: 7px; height: 7px; border-radius: 2px; background: #596077; box-shadow: 0 0 0 transparent; }
+    .drn[data-power="noggles"] .drn__power-dot { background: #ffd166; box-shadow: 0 0 10px #ffd166; }
+    .drn[data-power="tape"] .drn__power-dot { background: #ff78c7; box-shadow: 0 0 10px #ff78c7; }
+    .drn[data-power="bass"] .drn__power-dot { background: #78f0ca; box-shadow: 0 0 10px #78f0ca; }
+    .drn[data-ghost="true"] .drn__power { border-color: #9db8ff; }
 
     .drn__judge {
       position: absolute;
@@ -361,6 +455,32 @@ const jsonLd = {
       text-shadow: 0 0 34px color-mix(in srgb, var(--accent) 28%, transparent);
     }
     .drn__sub { max-width: 540px; margin: 0 auto; color: #b8b9c7; font-size: clamp(11px, 1.6vw, 14px); line-height: 1.4; }
+    .drn__noun-picker {
+      margin: 11px auto 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .drn__noun-picker button {
+      min-width: 0;
+      padding: 6px 7px;
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      grid-template-rows: auto auto;
+      align-items: center;
+      column-gap: 7px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      background: rgba(255,255,255,.035);
+      color: #eef0f7;
+      cursor: pointer;
+      text-align: left;
+    }
+    .drn__noun-picker button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, #0a0c18); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent); }
+    .drn__noun-picker button:focus-visible { outline: 3px solid #7ad7ff; outline-offset: 2px; }
+    .drn__noun-picker img { grid-row: 1 / 3; width: 42px; height: 42px; image-rendering: pixelated; }
+    .drn__noun-picker span { overflow: hidden; font: 800 9px/1.1 'JetBrains Mono', monospace; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+    .drn__noun-picker small { color: #888ea2; font: 700 7px/1.1 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
     .drn__card-stats { margin: 13px 0 12px; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid rgba(255,255,255,.13); border-radius: 12px; overflow: hidden; }
     .drn__card-stats > span { min-width: 0; padding: 8px 5px; display: flex; flex-direction: column; gap: 4px; }
     .drn__card-stats > span + span { border-left: 1px solid rgba(255,255,255,.13); }
@@ -446,6 +566,250 @@ const jsonLd = {
     .drn__siblings a { color: #9a8b65; text-decoration: none; }
     .drn__siblings a:hover { color: var(--accent); text-decoration: underline; }
 
+    /* v5 · BRIGHT MILES */
+    html, body { background: #f4e8c8; }
+    body:has(.drn) {
+      color: #151827;
+      background:
+        radial-gradient(circle at 12% 6%, rgba(255,255,255,.92), transparent 30rem),
+        linear-gradient(150deg, #fff6dc 0%, #f2dfac 53%, #ffd6b8 100%);
+    }
+    .drn { width: min(100%, 980px); }
+    .drn__hud {
+      padding: 8px 11px 7px;
+      border: 2px solid #151827;
+      border-radius: 18px;
+      background: rgba(255,250,240,.86);
+      box-shadow: 5px 5px 0 color-mix(in srgb, var(--accent) 72%, #151827);
+    }
+    .drn__score { color: color-mix(in srgb, var(--accent) 62%, #151827); text-shadow: none; }
+    .drn__score-label,
+    .drn__level-no,
+    .drn__flow-line span { color: #626371; }
+    .drn__level-name { color: #151827; }
+    .drn__tempo,
+    .drn__flow-line strong { color: color-mix(in srgb, var(--accent-soft) 62%, #151827); }
+    .drn__best { color: #5c5e69; }
+    .drn__xp-rail {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      align-items: center;
+      gap: 7px 10px;
+      color: #151827;
+      font: 800 8px/1 'JetBrains Mono', monospace;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .drn__xp-rail > span:first-child {
+      padding: 4px 6px;
+      border: 1px solid #151827;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .drn__xp-rail > span:nth-of-type(2) { justify-self: end; color: #626371; }
+    .drn__xp-rail i {
+      grid-column: 1 / -1;
+      height: 5px;
+      overflow: hidden;
+      border: 1px solid #151827;
+      border-radius: 999px;
+      background: #e4d8b7;
+    }
+    .drn__xp-rail b {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+      transition: width 360ms cubic-bezier(.2,.8,.2,1);
+    }
+    .drn__stage {
+      border-color: #151827;
+      background: #142039;
+      box-shadow: 7px 8px 0 #151827, 0 24px 48px rgba(84,53,25,.18), inset 0 0 0 1px rgba(255,255,255,.18);
+    }
+    .drn__overlay { background: rgba(255,238,194,.38); backdrop-filter: blur(8px) saturate(1.12); }
+    .drn__card {
+      border-color: #151827;
+      background: #fffaf0;
+      box-shadow: 9px 9px 0 color-mix(in srgb, var(--accent) 74%, #151827), 0 28px 70px rgba(62,36,10,.32);
+    }
+    .drn__postcard { border-color: #151827; filter: saturate(1.24) brightness(1.12) contrast(1.02); }
+    .drn__postcard::after { background: linear-gradient(180deg, transparent 48%, rgba(255,216,153,.26)); }
+    .drn__eyebrow { color: color-mix(in srgb, var(--accent) 55%, #151827); }
+    .drn__eyebrow span:last-child,
+    .drn__noun-picker small,
+    .drn__card-stats small,
+    .drn__overlay-best,
+    .drn__input-note { color: #626371; }
+    .drn__title { color: #151827; text-shadow: none; }
+    .drn__sub { color: #4f505c; }
+    .drn__noun-picker button {
+      border-color: rgba(21,24,39,.24);
+      background: #fffef8;
+      color: #151827;
+    }
+    .drn__noun-picker button[aria-pressed="true"] {
+      border-color: #151827;
+      background: color-mix(in srgb, var(--accent) 32%, #fffaf0);
+      box-shadow: 3px 3px 0 #151827;
+    }
+    .drn__noun-picker button[data-owned="true"] { background: linear-gradient(135deg, #fffef8, #fff1a8); }
+    .drn__card-stats { border-color: rgba(21,24,39,.26); }
+    .drn__card-stats > span + span { border-color: rgba(21,24,39,.22); }
+    .drn__card-stats strong { color: #151827; }
+    .drn__route li { color: #72727a; }
+    .drn__route li::before { background: #d5c9aa; }
+    .drn__route li span { border-color: #9a917e; background: #fffaf0; color: #5f5e63; }
+    .drn__route li.is-active b { color: #151827; }
+    .drn__card-actions { display: flex; align-items: stretch; justify-content: center; gap: 8px; margin-top: 10px; }
+    .drn__card-actions .drn__go { margin-top: 0; flex: 1; }
+    .drn__save-road {
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 2px solid #151827;
+      border-radius: 12px;
+      background: #fffaf0;
+      color: #151827;
+      cursor: pointer;
+      font: 900 9px/1.15 'JetBrains Mono', monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .drn__save-road:hover { background: color-mix(in srgb, var(--accent-soft) 22%, #fffaf0); }
+    .drn__save-road:focus-visible { outline: 3px solid #151827; outline-offset: 3px; }
+    .drn__jump {
+      border: 2px solid #151827;
+      background: #fffaf0;
+      color: #151827;
+      box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 72%, #151827);
+    }
+    .drn__jump-copy small { color: #63636c; }
+    .drn__jump:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 28%, #fffaf0); }
+    .drn__audio {
+      border: 2px solid #151827;
+      background: #fffaf0;
+      color: #151827;
+    }
+    .drn__audio[aria-pressed="true"] { border-color: #151827; color: #151827; background: #e1d6b8; }
+    .drn__stamp-toast {
+      position: absolute;
+      z-index: 9;
+      top: 73px;
+      right: 14px;
+      max-width: min(250px, calc(100% - 28px));
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border: 2px solid #151827;
+      border-radius: 13px;
+      background: #fff7cf;
+      color: #151827;
+      box-shadow: 5px 5px 0 var(--accent);
+      pointer-events: none;
+      animation: drn-stamp-in 260ms cubic-bezier(.2,.9,.2,1);
+    }
+    .drn__stamp-toast[hidden] { display: none; }
+    .drn__stamp-toast > span:first-child { display: grid; place-items: center; width: 34px; height: 34px; border: 2px solid #151827; border-radius: 50%; background: var(--accent); font-weight: 950; }
+    .drn__stamp-toast > span:last-child { display: grid; gap: 3px; }
+    .drn__stamp-toast small { font: 800 7px/1 'JetBrains Mono', monospace; letter-spacing: .16em; }
+    .drn__stamp-toast strong { font: 900 13px/1.05 'Inter', sans-serif; text-transform: uppercase; }
+    @keyframes drn-stamp-in { from { opacity: 0; transform: translateY(-10px) rotate(2deg); } }
+
+    .drn__pass {
+      border: 2px solid #151827;
+      border-radius: 20px;
+      background: rgba(255,250,240,.92);
+      box-shadow: 7px 7px 0 #151827;
+      overflow: hidden;
+    }
+    .drn__pass-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 15px 17px;
+      border-bottom: 2px solid #151827;
+      background: linear-gradient(105deg, color-mix(in srgb, var(--accent) 60%, #fffaf0), color-mix(in srgb, var(--accent-soft) 44%, #fffaf0));
+    }
+    .drn__pass-head p { margin: 0; font: 800 8px/1.2 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .drn__pass-head h2 { margin: 5px 0 0; font: 900 clamp(18px, 3vw, 28px)/1 'Inter Tight', 'Inter', sans-serif; text-transform: uppercase; }
+    .drn__pass-head h2 span { padding: 3px 6px; border: 2px solid #151827; border-radius: 999px; font: 900 10px/1 'JetBrains Mono', monospace; vertical-align: middle; }
+    .drn__pass-total { white-space: nowrap; text-align: right; }
+    .drn__pass-total strong { display: block; font: 950 clamp(28px, 5vw, 44px)/.8 'Inter Tight', 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
+    .drn__pass-grid { display: grid; grid-template-columns: 1fr 1fr 1.15fr; }
+    .drn__pass-grid > section { min-width: 0; padding: 14px; }
+    .drn__pass-grid > section + section { border-left: 2px solid #151827; }
+    .drn__pass-grid section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .drn__pass-grid h3 { margin: 0; font: 900 12px/1 'Inter', sans-serif; text-transform: uppercase; }
+    .drn__pass-grid section > header span { color: #626371; font: 800 8px/1 'JetBrains Mono', monospace; }
+    .drn__stamps ol { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; list-style: none; }
+    .drn__stamp {
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border: 1px dashed #8d8675;
+      border-radius: 50%;
+      background: #e9dfc5;
+      color: #8a8170;
+      font: 900 10px/1 'JetBrains Mono', monospace;
+      cursor: help;
+    }
+    .drn__stamp.is-earned { border: 2px solid #151827; background: var(--accent); color: #151827; box-shadow: 2px 2px 0 #151827; }
+    .drn__roads-list { display: grid; gap: 6px; }
+    .drn__roads-list > p { margin: 0; color: #63636c; font-size: 11px; line-height: 1.4; }
+    .drn__road {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto auto;
+      align-items: center;
+      gap: 5px;
+      padding: 6px;
+      border: 1px solid rgba(21,24,39,.27);
+      border-radius: 9px;
+      background: #fffef8;
+    }
+    .drn__road span { min-width: 0; overflow: hidden; font: 800 8px/1.25 'JetBrains Mono', monospace; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+    .drn__road button {
+      width: 27px;
+      height: 27px;
+      border: 1px solid #151827;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #151827;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .drn__road button:last-child { background: #fffaf0; }
+    .drn__wallet { transition: background 220ms ease, box-shadow 220ms ease; }
+    .drn[data-owned-nouns="true"] .drn__wallet { background: linear-gradient(145deg, rgba(255,209,102,.38), rgba(120,240,202,.24)); box-shadow: inset 0 0 0 3px rgba(21,24,39,.06); }
+    .drn__wallet > p { margin: 0 0 10px; color: #4f505c; font-size: 11px; line-height: 1.4; }
+    .drn__wallet dl { margin: 0 0 10px; display: grid; gap: 5px; font: 700 8px/1.3 'JetBrains Mono', monospace; }
+    .drn__wallet dl div { display: flex; justify-content: space-between; gap: 8px; }
+    .drn__wallet dt { color: #73716c; text-transform: uppercase; }
+    .drn__wallet dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .drn__wallet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .drn__wallet-actions button {
+      min-height: 34px;
+      padding: 7px;
+      border: 1px solid #151827;
+      border-radius: 8px;
+      background: #fffaf0;
+      color: #151827;
+      cursor: pointer;
+      font: 900 7px/1.2 'JetBrains Mono', monospace;
+      letter-spacing: .06em;
+    }
+    .drn__wallet-actions button:first-child,
+    .drn__wallet-actions button:nth-child(2) { background: #151827; color: #fffaf0; }
+    .drn__wallet-actions button:disabled { opacity: .5; cursor: wait; }
+    .drn__wallet-note { margin-top: 9px !important; color: #696861 !important; font: 700 7px/1.45 'JetBrains Mono', monospace; text-transform: uppercase; }
+    .drn__trophy-link { color: #151827; font: 800 8px/1 'JetBrains Mono', monospace; text-transform: uppercase; }
+    .drn__versions span { color: #747166; }
+    .drn__versions a { border-color: #777064; color: #45454d; background: rgba(255,250,240,.55); }
+    .drn__versions a[aria-current="page"] { border-color: #151827; color: #151827; background: var(--accent); }
+    .drn__siblings a { color: #675123; }
+
     @media (max-width: 600px) {
       .drn { padding: 8px 8px 34px; gap: 8px; }
       .drn__hud { grid-template-columns: 1fr 1.25fr 1fr; gap: 5px; padding-inline: 4px; }
@@ -456,12 +820,23 @@ const jsonLd = {
       .drn__flow-line span { display: none; }
       .drn__stage { height: min(69vh, 570px); min-height: 430px; border-radius: 16px; }
       .drn__phrase { width: 72%; }
+      .drn__power { top: 9px; right: 8px; max-width: 43%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .drn__card { display: block; box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent) 78%, #000); }
       .drn__postcard { height: 72px; min-height: 0; border-right: 0; border-bottom: 2px solid rgba(255,255,255,.82); }
       .drn__card-body { padding: 14px; }
+      .drn__noun-picker button { grid-template-columns: 32px 1fr; padding: 5px; column-gap: 5px; }
+      .drn__noun-picker img { width: 32px; height: 32px; }
+      .drn__noun-picker span { font-size: 7px; }
       .drn__card-stats { margin-block: 13px; }
       .drn__route li b { font-size: 7px; }
       .drn__go { width: 100%; }
+      .drn__xp-rail { gap: 5px 7px; }
+      .drn__card-actions { flex-direction: column; }
+      .drn__pass-grid { grid-template-columns: 1fr; }
+      .drn__pass-grid > section + section { border-left: 0; border-top: 2px solid #151827; }
+      .drn__pass-head { align-items: center; padding: 12px; }
+      .drn__pass-total strong { font-size: 30px; }
+      .drn__stamp-toast { top: 67px; left: 10px; right: 10px; max-width: none; }
     }
     @media (max-height: 650px) and (orientation: landscape) {
       .drn { max-width: 980px; min-height: auto; }
@@ -488,8 +863,44 @@ const jsonLd = {
   </style>
 
   <script>
-    import levelData from '../lib/drum-runner-v3-levels.json';
+    import levelData from '../lib/drum-runner-v4-levels.json';
     import { GOOD_WINDOW_MS, JUMP_APEX_PX, JUMP_BEATS, accuracyPercent, gradeBeatDelta, jumpHeightAtBeat, phraseStep, type TimingGrade } from '../lib/drum-runner-music';
+    import {
+      POWER_UP_SPECS,
+      collectPowerUp,
+      consumeAcceptedPower,
+      consumeGhostCharge,
+      emptyPowerState,
+      normalizeNounId,
+      nounChoices,
+      nounVoiceFor,
+      powerUpDisplayX,
+      powerStateAtBeat,
+      type NounVoice,
+      type PowerState,
+      type PowerUpKind,
+    } from '../lib/drum-runner-v4';
+    import {
+      ACHIEVEMENTS,
+      ROAD_PASS_PROOF_KEY,
+      ROAD_PASS_STORAGE_KEY,
+      applyRoadEvent,
+      beatPassPayload,
+      canonicalJson,
+      defaultRoadPass,
+      mergeRoadPass,
+      normalizeRoadPass,
+      roadLevel,
+      roadLevelCeiling,
+      roadLevelFloor,
+      roadTitle,
+      type AchievementId,
+      type RoadPassProfile,
+      type SavedRoad,
+      ROAD_PASS_GAME,
+      ROAD_PASS_SCHEMA,
+      VISIT_NOUNS_CONTRACT,
+    } from '../lib/drum-runner-v5';
     import marineBackdrop from '../assets/drum-runner-v3/marine-layer.webp?url';
     import pierBackdrop from '../assets/drum-runner-v3/el-porto-pier.webp?url';
     import groceryBackdrop from '../assets/drum-runner-v3/grocery-3pm.webp?url';
@@ -501,6 +912,7 @@ const jsonLd = {
     type PlayerVoice = 'rim' | 'clap' | 'tom' | 'metal';
     type Grade = TimingGrade | 'miss';
     type Cue = { cueBeat: number; beat: number; kind: ObstacleKind; note: number };
+    type PowerUpCue = { beat: number; kind: PowerUpKind };
     type MusicConfig = {
       phraseBeats: number;
       subdivision: number;
@@ -527,16 +939,24 @@ const jsonLd = {
       bass: number[];
       music: MusicConfig;
       obstacles: Cue[];
+      powerUps: PowerUpCue[];
     };
     type Obstacle = Cue & { cueX: number; ox: number; w: number; h: number; hit: boolean; cleared: boolean; judged: boolean; grade: Grade | null };
     type Runner = { y: number; grounded: boolean; squash: number; cleanTarget: number; jumpStartBeat: number; landingPlayed: boolean };
     type EchoNote = { beat: number; note: number; grade: TimingGrade; played: boolean };
+    type PowerUp = PowerUpCue & { x: number; collected: boolean; expired: boolean };
     type MotifNote = { step: number; note: number; grade: TimingGrade };
     type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: string; gravity: number };
 
-    const LEVELS = levelData as Level[];
+    const BRIGHT_PALETTES = [
+      { accent: '#ffe56f', accentSoft: '#ff8a5b', skyTop: '#5ec8ff', skyBottom: '#ffd39d' },
+      { accent: '#67e8f9', accentSoft: '#b8f36b', skyTop: '#2b9fe8', skyBottom: '#a8e9df' },
+      { accent: '#ff5db1', accentSoft: '#ff9a4d', skyTop: '#5146a8', skyBottom: '#e9909a' },
+      { accent: '#8cffb4', accentSoft: '#4dc7ff', skyTop: '#123b76', skyBottom: '#5e92c9' },
+    ] as const;
+    const LEVELS = (levelData as Level[]).map((item, index) => ({ ...item, ...BRIGHT_PALETTES[index] }));
     const BACKDROP_URLS = [marineBackdrop, pierBackdrop, groceryBackdrop, refineryBackdrop];
-    const NOUN_POOL = [214, 385, 92, 523, 742, 1042, 287, 612, 928, 1189];
+    const BAND_NOUNS = [214, 612, 928];
     const KIND_ORDER: ObstacleKind[] = ['cone', 'crate', 'tall-crate', 'barrier', 'speaker', 'luggage', 'hydrant'];
     const DIMS: Record<ObstacleKind, [number, number]> = {
       cone: [26, 32],
@@ -549,12 +969,12 @@ const jsonLd = {
     };
 
     const BEAT_PX = 150;
-    const RUNNER_W = 50;
-    const RUNNER_H = 56;
+    const RUNNER_W = 62;
+    const RUNNER_H = 70;
     const INVULN_S = 0.58;
-    const BEST_KEY = 'pc-drum-runner-v3-best';
-    const PROGRESS_KEY = 'pc-drum-runner-v3-progress';
-    const MUTED_KEY = 'pc-drum-runner-v3-muted';
+    const BEST_KEY = 'pc-drum-runner-v5-best';
+    const PROGRESS_KEY = 'pc-drum-runner-v5-progress';
+    const MUTED_KEY = 'pc-drum-runner-v5-muted';
 
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reducedMotion = motionQuery.matches;
@@ -578,10 +998,12 @@ const jsonLd = {
     let levelClears = 0;
     let levelPerfect = 0;
     let levelGood = 0;
+    let levelMisses = 0;
     let levelOffgrid = 0;
     let levelHits = 0;
     let levelStartScore = 0;
     let obstacles: Obstacle[] = [];
+    let powerUps: PowerUp[] = [];
     let particles: Particle[] = [];
     let invuln = 0;
     let downFlash = 0;
@@ -603,6 +1025,32 @@ const jsonLd = {
     let lastVisualBeat = -1;
     let echoNotes: EchoNote[] = [];
     let campaignMotif: MotifNote[] = [];
+    let powerState: PowerState = emptyPowerState();
+    let selectedNounId = 137;
+    let selectedNounVoice: NounVoice = nounVoiceFor(selectedNounId);
+    let runNounChoices: [number, number, number] = nounChoices(selectedNounId);
+    let roadPass: RoadPassProfile = defaultRoadPass();
+    let lastCompletedRoad: SavedRoad | null = null;
+    let currentWalletAddress = '';
+    let visitNounsBalance = 0;
+    let ownedNounIds = new Set<number>();
+    let stampQueue: AchievementId[] = [];
+    let stampTimer = 0;
+    type SignedBeatPass = {
+      format: 'pointcast.beat-pass.signed.v1';
+      pass: Record<string, unknown>;
+      canonicalPass: string;
+      proof: {
+        address: string;
+        publicKey: string;
+        issuedAt: string;
+        domain: string;
+        signature: string;
+        payload: string;
+      };
+    };
+    let signedBeatPass: SignedBeatPass | null = null;
+    const roadGrades = new Map<number, Grade | 'power'>();
     const phraseGrades = new Map<number, TimingGrade>();
     const runner: Runner = { y: 0, grounded: true, squash: 0, cleanTarget: -1, jumpStartBeat: -99, landingPlayed: true };
 
@@ -764,6 +1212,46 @@ const jsonLd = {
         oscillator.stop(at + .32);
       });
     }
+    function playPowerCollect(kind: PowerUpKind) {
+      const a = audioContext();
+      const time = a.currentTime + .004;
+      if (kind === 'bass') {
+        playKick(time, .34);
+        playBass(55, time, .23);
+      } else if (kind === 'tape') {
+        [0, .075, .15].forEach((delay, index) => playHat(time + delay, index === 2, 1.15));
+        playSweep(410, 820, .24, .08);
+      } else if (kind === 'ghost') {
+        playSweep(920, 460, .32, .09);
+      } else {
+        playChord(220, time, .07);
+        playSweep(780, 1240, .2, .07);
+      }
+    }
+    function playNounSignature(voice: NounVoice, note: number, grade: TimingGrade, harmony = false) {
+      const a = audioContext();
+      const at = a.currentTime + (harmony ? .028 : .004);
+      const semitone = level().music.scale[note % level().music.scale.length] ?? 0;
+      const intensity = grade === 'perfect' ? 1 : grade === 'good' ? .7 : .3;
+      if (voice === 'clap') {
+        playSnare(at, .055 * intensity);
+        return;
+      }
+      const oscillator = a.createOscillator();
+      const gain = a.createGain();
+      const filter = a.createBiquadFilter();
+      const base = voice === 'clave' ? 520 : voice === 'pluck' ? 220 : 660;
+      oscillator.type = voice === 'pluck' ? 'sawtooth' : voice === 'bell' ? 'sine' : 'triangle';
+      oscillator.frequency.value = base * 2 ** ((semitone + (harmony ? 12 : 0)) / 12);
+      filter.type = 'lowpass';
+      filter.frequency.value = voice === 'pluck' ? 980 : 2100;
+      gain.gain.setValueAtTime(.0001, at);
+      gain.gain.exponentialRampToValueAtTime((voice === 'bell' ? .065 : .075) * intensity, at + .004);
+      gain.gain.exponentialRampToValueAtTime(.0001, at + (voice === 'bell' ? .4 : .18));
+      oscillator.connect(filter).connect(gain).connect(audioOutput());
+      oscillator.start(at);
+      oscillator.stop(at + .44);
+    }
     function playChord(root: number, time: number, amount = .045) {
       const a = audioContext();
       [1, 1.25, 1.5].forEach((ratio) => {
@@ -835,11 +1323,16 @@ const jsonLd = {
         const secondsUntilEvent = countInSeconds + (eventBeat - nowBeat) * seconds + swingOffset;
         const eventTime = actx.currentTime + Math.max(.005, secondsUntilEvent);
         const mix = eventBeat < duckUntilBeat ? .34 : 1;
+        const bassPower = powerState.musical === 'bass' && eventBeat < powerState.expiresAtBeat;
         if (secondsUntilEvent >= -.03) {
-          if (cfg.music.backing.kick.includes(patternStep)) playKick(eventTime, .24 * mix);
+          if (cfg.music.backing.kick.includes(patternStep)) playKick(eventTime, (bassPower ? .34 : .24) * mix);
           if (cfg.music.backing.snare.includes(patternStep)) playSnare(eventTime, .12 * mix);
           if (cfg.music.backing.hat.includes(patternStep)) playHat(eventTime, patternStep === 14, mix);
-          if (arrangement >= 1 && patternStep % 8 === 0) playBass(cfg.bass[Math.floor(eventBeat / 4) % cfg.bass.length], eventTime, .15 * mix);
+          if ((arrangement >= 1 || bassPower) && patternStep % 8 === 0) {
+            const bassNote = cfg.bass[Math.floor(eventBeat / 4) % cfg.bass.length];
+            playBass(bassNote, eventTime, (bassPower ? .23 : .15) * mix);
+            if (bassPower && arrangement >= 3) playBass(bassNote / 2, eventTime, .1 * mix);
+          }
           if (arrangement >= 2 && patternStep === 0) playChord(cfg.bass[Math.floor(eventBeat / 4) % cfg.bass.length], eventTime, .04 * mix);
           if (arrangement >= 3 && (patternStep === 3 || patternStep === 11)) {
             const note = patternStep === 3 ? 2 : 4;
@@ -914,11 +1407,45 @@ const jsonLd = {
     /* ---------------- Noun sprite ---------------- */
     const nounImage = new Image();
     let nounReady = false;
-    nounImage.onload = () => { nounReady = true; };
+    nounImage.onload = () => { nounReady = true; draw(); };
     nounImage.onerror = () => { nounReady = false; };
-    function pickNoun() {
+    const bandImages = BAND_NOUNS.map((id) => {
+      const image = new Image();
+      image.src = `https://noun.pics/${id}.svg`;
+      image.onload = () => draw();
+      return image;
+    });
+    function readSavedNoun(): number {
+      try { return normalizeNounId(localStorage.getItem('pc:nounId'), 137); }
+      catch { return 137; }
+    }
+    function updateNounPicker() {
+      document.querySelectorAll<HTMLButtonElement>('[data-noun-slot]').forEach((button, slot) => {
+        const id = runNounChoices[slot] ?? selectedNounId;
+        const voice = nounVoiceFor(id);
+        const owned = ownedNounIds.has(id);
+        button.dataset.nounId = String(id);
+        button.dataset.owned = String(owned);
+        button.setAttribute('aria-label', `Select Noun ${id}, ${voice} voice${owned ? ', owned Visit Noun' : ''}`);
+        button.setAttribute('aria-pressed', String(id === selectedNounId));
+        const image = button.querySelector('img');
+        const label = button.querySelector('span');
+        const meta = button.querySelector('small');
+        if (image) image.src = `https://noun.pics/${id}.svg`;
+        if (label) label.textContent = `Noun #${id}`;
+        if (meta) meta.textContent = `${voice} voice${owned ? ' · owned' : ''}`;
+      });
+    }
+    function selectNoun(id: number, persist = true) {
+      selectedNounId = normalizeNounId(id, 137);
+      selectedNounVoice = nounVoiceFor(selectedNounId);
       nounReady = false;
-      nounImage.src = `https://noun.pics/${NOUN_POOL[Math.floor(Math.random() * NOUN_POOL.length)]}.svg`;
+      nounImage.src = `https://noun.pics/${selectedNounId}.svg`;
+      if (persist) {
+        try { localStorage.setItem('pc:nounId', String(selectedNounId)); } catch { /* identity still lasts for this run */ }
+        recordRoadEvent({ type: 'select-noun', nounId: selectedNounId });
+      }
+      updateNounPicker();
     }
 
     const backdropImages: Array<HTMLImageElement | null> = BACKDROP_URLS.map(() => null);
@@ -950,7 +1477,7 @@ const jsonLd = {
     }
     window.addEventListener('resize', resize);
 
-    function groundY(): number { return height * .79; }
+    function groundY(): number { return height * .71; }
     function runnerScreenX(): number { return Math.min(width * .23, 170); }
     function sceneScroll(factor: number): number { return reducedMotion ? 0 : worldX * factor; }
     function hashAt(value: number): number {
@@ -976,6 +1503,12 @@ const jsonLd = {
           grade: null,
         };
       });
+      powerUps = cfg.powerUps.map((powerUp) => ({
+        ...powerUp,
+        x: levelStartX + powerUp.beat * BEAT_PX,
+        collected: false,
+        expired: false,
+      }));
       runner.y = 0;
       runner.grounded = true;
       runner.squash = 0;
@@ -990,9 +1523,12 @@ const jsonLd = {
       levelClears = 0;
       levelPerfect = 0;
       levelGood = 0;
+      levelMisses = 0;
       levelOffgrid = 0;
       levelHits = 0;
       levelStartScore = displayScore();
+      powerState = emptyPowerState();
+      roadGrades.clear();
       phraseGrades.clear();
       if (index === LEVELS.length - 1) {
         const motifByStep = new Map<number, MotifNote>();
@@ -1059,6 +1595,30 @@ const jsonLd = {
         .filter((obstacle) => !obstacle.judged)
         .sort((a, b) => Math.abs(a.cueBeat - beat) - Math.abs(b.cueBeat - beat))[0];
     }
+    function nearestPowerUp(beat: number): PowerUp | undefined {
+      return powerUps
+        .filter((powerUp) => !powerUp.collected && !powerUp.expired)
+        .sort((a, b) => Math.abs(a.beat - beat) - Math.abs(b.beat - beat))[0];
+    }
+    function collectGear(powerUp: PowerUp, beat: number): boolean {
+      const grade = gradeBeatDelta(beat - powerUp.beat, level().bpm);
+      if (grade === 'offgrid') return false;
+      powerUp.collected = true;
+      powerState = collectPowerUp(powerState, powerUp.kind, beat);
+      recordRoadEvent({ type: 'gear', kind: powerUp.kind });
+      roadGrades.set(Math.round(powerUp.beat * 2), 'power');
+      runner.squash = 1;
+      const spec = POWER_UP_SPECS[powerUp.kind];
+      root.dataset.power = powerState.musical ?? 'none';
+      root.dataset.ghost = String(powerState.ghostCharges > 0);
+      powerLive.textContent = `${spec.label} collected. ${powerUp.kind === 'ghost' ? 'One collision save stored.' : `${spec.shortLabel} is changing the arrangement.`}`;
+      flashJudge('level', `${spec.shortLabel} · ON`);
+      emitParticles(runnerScreenX(), groundY() + 24, spec.color, 22, 1.05);
+      trySound(() => playPowerCollect(powerUp.kind));
+      tapHint.classList.add('drn__tap-hint--gone');
+      updateHud();
+      return true;
+    }
     function refreshArrangement() {
       const accepted = levelPerfect + levelGood;
       const unlocks = level().music.stemUnlocks;
@@ -1071,11 +1631,15 @@ const jsonLd = {
       if (inputNow - lastInputAt < 38) return;
       lastInputAt = inputNow;
       const beat = Math.min(level().beats, transportBeat());
+      const gear = nearestPowerUp(beat);
+      if (gear && collectGear(gear, beat)) return;
       const target = nearestCue(beat);
       const delta = target ? beat - target.cueBeat : Infinity;
       const grade = target ? gradeBeatDelta(delta, level().bpm) : 'offgrid';
       const accepted = target && grade !== 'offgrid';
       const playedNote = target?.note ?? 0;
+      let harmonyDouble = false;
+      let cueXp = 0;
 
       if (accepted && target) {
         target.judged = true;
@@ -1092,8 +1656,11 @@ const jsonLd = {
           totalGood++;
           bonus += 60;
         }
+        cueXp = recordRoadEvent({ type: 'cue', grade }).baseXp;
+        recordRoadEvent({ type: 'flow', value: flow });
         const step = phraseStep(target.cueBeat, level().music.phraseBeats, level().music.subdivision);
         phraseGrades.set(step, grade);
+        roadGrades.set(Math.round(target.cueBeat * 2), grade);
         if (currentLevelIndex < LEVELS.length - 1) {
           campaignMotif.push({ step, note: target.note, grade });
           if (campaignMotif.length > 32) campaignMotif.splice(0, campaignMotif.length - 32);
@@ -1101,24 +1668,42 @@ const jsonLd = {
         if (target.cueBeat + level().music.phraseBeats < level().beats) {
           echoNotes.push({ beat: target.cueBeat + level().music.phraseBeats, note: target.note, grade, played: false });
         }
+        const previousPower = powerState.musical;
+        const powered = consumeAcceptedPower(powerState, beat);
+        powerState = powered.state;
+        harmonyDouble = powered.harmonyDouble;
+        if (previousPower && !powerState.musical) {
+          powerLive.textContent = `${POWER_UP_SPECS[previousPower].label} finished.`;
+        }
+        if (powered.tapeRecord && target.cueBeat + 8 < level().beats) {
+          echoNotes.push({ beat: target.cueBeat + 8, note: target.note, grade, played: false });
+        }
         refreshArrangement();
         if (flow % 4 === 0) {
           bonus += 250;
           flashJudge('perfect', `PHRASE ×${flow / 4}`);
         } else {
-          flashJudge(grade, grade === 'perfect' ? 'PERFECT' : 'GOOD');
+          flashJudge(grade, `${grade === 'perfect' ? 'PERFECT' : 'GOOD'} · +${cueXp} XP`);
         }
         emitParticles(runnerScreenX(), groundY() - 26, grade === 'perfect' ? level().accent : level().accentSoft, grade === 'perfect' ? 18 : 10, .9);
       } else {
         flow = 0;
         levelOffgrid++;
         totalOffgrid++;
+        recordRoadEvent({ type: 'offgrid' });
         runner.cleanTarget = -1;
+        roadGrades.set(Math.round(beat * 2), 'offgrid');
         flashJudge('offgrid', 'OFF GRID');
         emitParticles(runnerScreenX(), groundY() - 12, '#b7acc9', 5, .45);
       }
 
-      trySound(() => playPlayerVoice(level().music.playerVoice, playedNote, accepted ? grade : 'offgrid'));
+      trySound(() => {
+        playPlayerVoice(level().music.playerVoice, playedNote, accepted ? grade : 'offgrid');
+        if (accepted) {
+          playNounSignature(selectedNounVoice, playedNote, grade);
+          if (harmonyDouble) playNounSignature(selectedNounVoice, playedNote + 2, grade, true);
+        }
+      });
       if (accepted || runner.grounded) {
         runner.grounded = false;
         runner.jumpStartBeat = beat;
@@ -1130,6 +1715,13 @@ const jsonLd = {
     function update(dt: number) {
       const beat = Math.min(level().beats, transportBeat());
       worldX = Math.min(levelEndX, levelStartX + beat * BEAT_PX);
+      const previousPower = powerState.musical;
+      powerState = powerStateAtBeat(powerState, beat);
+      if (previousPower && !powerState.musical) powerLive.textContent = `${POWER_UP_SPECS[previousPower].label} finished.`;
+      const gearWindowBeats = GOOD_WINDOW_MS * level().bpm / 60_000;
+      for (const powerUp of powerUps) {
+        if (!powerUp.collected && !powerUp.expired && beat > powerUp.beat + gearWindowBeats) powerUp.expired = true;
+      }
       const visualBeat = Math.floor(beat);
       if (visualBeat !== lastVisualBeat) {
         lastVisualBeat = visualBeat;
@@ -1158,7 +1750,10 @@ const jsonLd = {
         if (!obstacle.judged && beat > obstacle.cueBeat + goodWindowBeats) {
           obstacle.judged = true;
           obstacle.grade = 'miss';
+          roadGrades.set(Math.round(obstacle.cueBeat * 2), 'miss');
           totalMisses++;
+          levelMisses++;
+          recordRoadEvent({ type: 'miss' });
           flow = 0;
           flashJudge('hit', 'MISS');
         }
@@ -1166,16 +1761,20 @@ const jsonLd = {
         const overlap = Math.abs(worldX - obstacle.ox) < (RUNNER_W / 2 + obstacle.w / 2);
         if (overlap && invuln <= 0 && runner.y < obstacle.h - 5) {
           obstacle.hit = true;
-          lives--;
+          const ghost = consumeGhostCharge(powerState);
+          powerState = ghost.state;
+          if (!ghost.protected) lives--;
+          if (ghost.protected) recordRoadEvent({ type: 'ghost-save' });
           levelHits++;
           invuln = INVULN_S;
           flow = 0;
           duckUntilBeat = beat + 4;
           runner.cleanTarget = -1;
           shakeMag = reducedMotion ? 0 : 10;
-          trySound(playHurt);
-          emitParticles(runnerScreenX() + 9, groundY() - obstacle.h * .6, '#ff5f7e', 16, 1.15);
-          flashJudge('hit', 'CLIPPED');
+          trySound(ghost.protected ? () => playPowerCollect('ghost') : playHurt);
+          emitParticles(runnerScreenX() + 9, groundY() - obstacle.h * .6, ghost.protected ? POWER_UP_SPECS.ghost.color : '#ff5f7e', 16, 1.15);
+          flashJudge(ghost.protected ? 'level' : 'hit', ghost.protected ? 'GHOST SAVE' : 'CLIPPED');
+          if (ghost.protected) powerLive.textContent = 'Ghost Soles absorbed the collision. Flow reset; heart saved.';
           updateLives();
           continue;
         }
@@ -1213,19 +1812,22 @@ const jsonLd = {
         const drawX = (width - drawWidth) * focalX;
         const drawY = (height - drawHeight) * .5;
         context.imageSmoothingEnabled = true;
+        context.save();
+        context.filter = 'brightness(1.18) saturate(1.24)';
         context.drawImage(backdrop, drawX, drawY, drawWidth, drawHeight);
+        context.restore();
         context.imageSmoothingEnabled = false;
       }
 
       const orchestration = Math.min(1, arrangement / 3);
       const isDucked = currentLevelBeat() < duckUntilBeat;
-      context.fillStyle = `rgba(3,7,18,${Math.max(.1, .48 - orchestration * .27 + (isDucked ? .16 : 0))})`;
+      context.fillStyle = `rgba(3,7,18,${Math.max(.06, .26 - orchestration * .14 + (isDucked ? .12 : 0))})`;
       context.fillRect(0, 0, width, height);
 
       const laneScrim = context.createLinearGradient(0, gy * .67, 0, height);
       laneScrim.addColorStop(0, 'rgba(3,7,18,0)');
-      laneScrim.addColorStop(.55, 'rgba(3,7,18,.22)');
-      laneScrim.addColorStop(1, 'rgba(3,7,18,.72)');
+      laneScrim.addColorStop(.55, 'rgba(3,7,18,.14)');
+      laneScrim.addColorStop(1, 'rgba(3,7,18,.48)');
       context.fillStyle = laneScrim;
       context.fillRect(0, gy * .65, width, height - gy * .65);
 
@@ -1417,59 +2019,130 @@ const jsonLd = {
     }
     function drawGround(gy: number) {
       const cfg = level();
+      const roadHeight = height - gy;
       const ground = context.createLinearGradient(0, gy, 0, height);
-      ground.addColorStop(0, '#111522');
-      ground.addColorStop(1, '#05070e');
+      ground.addColorStop(0, '#171c2c');
+      ground.addColorStop(.18, '#0c101c');
+      ground.addColorStop(1, '#03050b');
       context.fillStyle = ground;
       context.fillRect(-14, gy, width + 28, height - gy + 14);
 
+      const runnerX = runnerScreenX();
+      const subdivision = level().music.subdivision;
+      const cellWidth = BEAT_PX / subdivision;
+      const currentStep = Math.floor(currentLevelBeat() * subdivision);
+      const firstStep = Math.floor((worldX - runnerX - levelStartX) / cellWidth) - 1;
+      for (let step = firstStep; ; step++) {
+        const x = runnerX + (levelStartX + step * cellWidth - worldX);
+        if (x > width + cellWidth) break;
+        if (x + cellWidth < -20) continue;
+        const quarter = ((step % subdivision) + subdivision) % subdivision === 0;
+        const down = ((step % (subdivision * 4)) + subdivision * 4) % (subdivision * 4) === 0;
+        const grade = roadGrades.get(step);
+        let cellFill = down ? 'rgba(255,255,255,.055)' : quarter ? 'rgba(255,255,255,.026)' : 'rgba(255,255,255,.012)';
+        if (grade === 'perfect') cellFill = `${cfg.accent}7a`;
+        else if (grade === 'good') cellFill = `${cfg.accentSoft}52`;
+        else if (grade === 'miss') cellFill = 'rgba(255,95,126,.22)';
+        else if (grade === 'offgrid') cellFill = 'rgba(183,172,201,.13)';
+        else if (grade === 'power') cellFill = 'rgba(255,255,255,.24)';
+        if (step === currentStep && phase === 'playing') cellFill = `${cfg.accent}${downFlash > .4 ? '32' : '22'}`;
+        context.fillStyle = cellFill;
+        context.fillRect(x + 1, gy + 9, Math.max(1, cellWidth - 2), roadHeight - 10);
+
+        context.strokeStyle = down ? `${cfg.accent}88` : quarter ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.08)';
+        context.lineWidth = down ? 2 : 1;
+        context.beginPath();
+        context.moveTo(x, gy + 7);
+        context.lineTo(x, gy + (down ? roadHeight : quarter ? roadHeight * .72 : roadHeight * .42));
+        context.stroke();
+
+        if (down) {
+          context.fillStyle = cfg.accent;
+          context.fillRect(x - 3, gy + 10, 6, 4);
+          context.fillStyle = 'rgba(255,255,255,.48)';
+          context.font = "700 8px 'JetBrains Mono', monospace";
+          context.fillText(String(Math.max(1, Math.floor(step / subdivision) + 1)), x + 6, height - 10);
+        }
+
+        if (grade === 'miss') {
+          context.strokeStyle = 'rgba(255,95,126,.64)';
+          context.beginPath();
+          context.moveTo(x + cellWidth * .28, gy + roadHeight * .42);
+          context.lineTo(x + cellWidth * .48, gy + roadHeight * .56);
+          context.lineTo(x + cellWidth * .38, gy + roadHeight * .7);
+          context.lineTo(x + cellWidth * .68, gy + roadHeight * .82);
+          context.stroke();
+        }
+      }
+
+      context.fillStyle = 'rgba(0,0,0,.28)';
+      context.fillRect(0, gy, width, 8);
       context.strokeStyle = cfg.accent;
-      context.globalAlpha = .55 + downFlash * .28;
-      context.lineWidth = 2;
+      context.globalAlpha = .72 + downFlash * .2;
+      context.lineWidth = 3;
       context.beginPath();
       context.moveTo(-12, gy);
       context.lineTo(width + 12, gy);
       context.stroke();
       context.globalAlpha = 1;
 
-      const runnerX = runnerScreenX();
-      const firstBeat = Math.floor((worldX - runnerX - levelStartX) / BEAT_PX) - 1;
-      for (let beat = firstBeat; ; beat++) {
-        const x = runnerX + (levelStartX + beat * BEAT_PX - worldX);
-        if (x > width + 30) break;
-        if (x < -30) continue;
-        const down = ((beat % 4) + 4) % 4 === 0;
-        context.strokeStyle = down ? cfg.accent : 'rgba(255,255,255,.13)';
-        context.globalAlpha = down ? .3 + downFlash * .42 : .42;
-        context.lineWidth = down ? 2 : 1;
-        context.beginPath();
-        context.moveTo(x, gy);
-        context.lineTo(x, height + 10);
-        context.stroke();
-        if (down) {
-          context.fillStyle = cfg.accent;
-          context.fillRect(x - 3, gy + 8, 6, 3);
+      if (cfg.scene === 'pier') {
+        context.strokeStyle = 'rgba(122,215,255,.08)';
+        for (let y = gy + 25; y < height; y += 18) {
+          context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
         }
+      } else if (cfg.scene === 'ralphs') {
+        context.strokeStyle = 'rgba(255,255,255,.08)';
+        for (let x = -80; x < width + 80; x += 150) {
+          context.beginPath(); context.moveTo(x, height); context.lineTo(x + 52, gy + 18); context.stroke();
+        }
+      } else if (cfg.scene === 'refinery') {
+        context.fillStyle = 'rgba(143,255,209,.18)';
+        for (let x = 35; x < width; x += 84) context.fillRect(x, height - 18, 12, 3);
+      } else {
+        const stripeOffset = ((worldX * 1.2 % 104) + 104) % 104;
+        context.fillStyle = 'rgba(255,255,255,.09)';
+        for (let x = -stripeOffset; x < width; x += 104) context.fillRect(x, gy + roadHeight * .68, 42, 3);
       }
-      context.globalAlpha = 1;
 
-      const stripeStep = 92;
-      const stripeOffset = ((worldX * 1.2 % stripeStep) + stripeStep) % stripeStep;
-      context.fillStyle = 'rgba(255,255,255,.1)';
-      for (let x = -stripeOffset; x < width; x += stripeStep) context.fillRect(x, gy + (height - gy) * .58, 38, 3);
-
-      if (!reducedMotion && currentLevelIndex >= 2 && phase === 'playing') {
-        context.strokeStyle = `rgba(255,255,255,${.06 + currentLevelIndex * .025})`;
-        context.lineWidth = 1;
-        for (let index = 0; index < 9; index++) {
-          const y = gy + 18 + hashAt(index + Math.floor(worldX / 30)) * (height - gy - 24);
-          const length = 22 + hashAt(index + 44) * 58;
+      if (powerState.musical === 'noggles') {
+        ['#ffd166', '#ff78c7', '#78f0ca'].forEach((color, index) => {
+          context.strokeStyle = `${color}66`;
           context.beginPath();
-          context.moveTo((hashAt(index + 77) * width + worldX * 1.5) % width, y);
-          context.lineTo(((hashAt(index + 77) * width + worldX * 1.5) % width) - length, y);
+          context.moveTo(0, gy + roadHeight * (.36 + index * .12));
+          context.lineTo(width, gy + roadHeight * (.36 + index * .12));
           context.stroke();
+        });
+      } else if (powerState.musical === 'tape') {
+        context.strokeStyle = 'rgba(255,120,199,.48)';
+        context.beginPath();
+        for (let x = 0; x <= width; x += 12) {
+          const y = gy + roadHeight * .6 + Math.sin((x + worldX) * .035) * 8;
+          if (x === 0) context.moveTo(x, y); else context.lineTo(x, y);
         }
+        context.stroke();
+      } else if (powerState.musical === 'bass') {
+        context.fillStyle = `rgba(120,240,202,${.03 + downFlash * .08})`;
+        context.fillRect(0, gy, width, roadHeight);
       }
+
+      context.save();
+      context.shadowColor = cfg.accent;
+      context.shadowBlur = 14;
+      context.strokeStyle = '#fff';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(runnerX, gy + 7);
+      context.lineTo(runnerX, height);
+      context.stroke();
+      context.fillStyle = cfg.accent;
+      context.beginPath();
+      context.moveTo(runnerX - 7, gy + 14);
+      context.lineTo(runnerX + 7, gy + 14);
+      context.lineTo(runnerX, gy + 24);
+      context.closePath();
+      context.fill();
+      context.restore();
     }
     function drawFinishGate(gy: number) {
       const x = runnerScreenX() + (levelEndX - worldX);
@@ -1586,6 +2259,68 @@ const jsonLd = {
       }
       context.restore();
     }
+    function drawPowerUp(powerUp: PowerUp, x: number, gy: number, pinned = false) {
+      if (powerUp.collected || powerUp.expired) return;
+      const beatsAway = powerUp.beat - currentLevelBeat();
+      if (beatsAway > 4.1 || beatsAway < -.6) return;
+      const spec = POWER_UP_SPECS[powerUp.kind];
+      const pulse = reducedMotion ? 0 : Math.sin(currentLevelBeat() * Math.PI * 2) * 2;
+      const y = gy + 48;
+      const alpha = Math.max(.32, Math.min(1, 1 - Math.max(0, beatsAway - 1) * .16));
+      context.save();
+      context.globalAlpha = alpha;
+      context.shadowColor = spec.color;
+      context.shadowBlur = 14 + pulse;
+      context.fillStyle = 'rgba(5,8,18,.9)';
+      context.strokeStyle = spec.color;
+      context.lineWidth = 2;
+      context.fillRect(x - 22, y - 18, 44, 36);
+      context.strokeRect(x - 22, y - 18, 44, 36);
+      context.shadowBlur = 0;
+      context.fillStyle = spec.color;
+      if (powerUp.kind === 'noggles') {
+        context.fillRect(x - 15, y - 7, 12, 10);
+        context.fillRect(x + 3, y - 7, 12, 10);
+        context.fillRect(x - 3, y - 4, 6, 3);
+      } else if (powerUp.kind === 'tape') {
+        context.strokeRect(x - 14, y - 10, 28, 20);
+        context.beginPath(); context.arc(x - 7, y, 4, 0, Math.PI * 2); context.fill();
+        context.beginPath(); context.arc(x + 7, y, 4, 0, Math.PI * 2); context.fill();
+      } else if (powerUp.kind === 'bass') {
+        context.fillRect(x - 12, y - 10, 24, 20);
+        context.fillRect(x + 12, y - 4, 4, 8);
+        context.fillStyle = '#07101d';
+        context.fillRect(x - 3, y - 7, 6, 14);
+        context.fillRect(x - 7, y - 3, 14, 6);
+      } else {
+        context.beginPath(); context.ellipse(x - 7, y - 2, 5, 11, -.35, 0, Math.PI * 2); context.fill();
+        context.beginPath(); context.ellipse(x + 8, y + 2, 5, 11, -.35, 0, Math.PI * 2); context.fill();
+      }
+      context.fillStyle = '#fff';
+      context.font = "800 7px 'JetBrains Mono', monospace";
+      context.textAlign = 'center';
+      if (pinned) context.fillText(`${Math.ceil(beatsAway)} BEATS`, x, y - 24);
+      context.fillText(spec.shortLabel, x, y + 29);
+      context.textAlign = 'start';
+      context.restore();
+    }
+    function drawBandmates(gy: number) {
+      for (let index = 0; index < arrangement; index++) {
+        const image = bandImages[index];
+        const x = runnerScreenX() - 48 - index * 34;
+        const y = gy + 28 + index * 22;
+        context.save();
+        context.globalAlpha = .52 + index * .12;
+        context.fillStyle = `${level().accent}33`;
+        context.fillRect(x - 16, y - 16, 32, 32);
+        if (image?.complete && image.naturalWidth > 0) context.drawImage(image, x - 16, y - 16, 32, 32);
+        else {
+          context.fillStyle = level().accent;
+          context.fillRect(x - 11, y - 11, 22, 22);
+        }
+        context.restore();
+      }
+    }
     function drawRunner(gy: number) {
       const x = runnerScreenX();
       const shadowScale = Math.max(.34, 1 - runner.y / 260);
@@ -1608,6 +2343,11 @@ const jsonLd = {
         glow.addColorStop(1, `${level().accent}00`);
         context.fillStyle = glow;
         context.fillRect(x - 55, top - 20, 110, 110);
+      }
+      if (powerState.musical === 'noggles') {
+        context.strokeStyle = POWER_UP_SPECS.noggles.color;
+        context.lineWidth = 3;
+        context.strokeRect(x - runnerWidth * .58, top - 5, runnerWidth * 1.16, runnerHeight + 10);
       }
 
       context.save();
@@ -1635,6 +2375,13 @@ const jsonLd = {
         context.fillRect(runnerWidth / 2 - 15, -runnerHeight / 2 + 14, 5, 4);
       }
       context.restore();
+      context.fillStyle = 'rgba(4,7,16,.78)';
+      context.fillRect(x - 30, top - 15, 60, 12);
+      context.fillStyle = '#fff';
+      context.font = "800 7px 'JetBrains Mono', monospace";
+      context.textAlign = 'center';
+      context.fillText(`NOUN #${selectedNounId}`, x, top - 6);
+      context.textAlign = 'start';
     }
     function draw() {
       if (!width || !height) return;
@@ -1647,6 +2394,12 @@ const jsonLd = {
       drawSky(cfg, gy);
       drawGround(gy);
       drawFinishGate(gy);
+
+      for (const powerUp of powerUps) {
+        const rawX = runnerScreenX() + (powerUp.x - worldX);
+        const x = powerUpDisplayX(powerUp.beat, currentLevelBeat(), runnerScreenX(), width, BEAT_PX);
+        if (x >= -70) drawPowerUp(powerUp, x, gy, rawX > x + 1);
+      }
 
       for (const obstacle of obstacles) {
         const x = runnerScreenX() + (obstacle.ox - worldX);
@@ -1675,16 +2428,21 @@ const jsonLd = {
           context.fill();
           context.fillStyle = 'rgba(255,255,255,.78)';
           context.fillRect(cueX - 1, cueY + 12, 2, 11);
+          context.fillStyle = `${cfg.accent}38`;
+          context.fillRect(cueX - 18, gy + 10, 36, Math.max(18, height - gy - 20));
+          context.strokeStyle = cfg.accent;
+          context.strokeRect(cueX - 18, gy + 10, 36, Math.max(18, height - gy - 20));
         }
       }
 
       drawParticles();
+      drawBandmates(gy);
       drawRunner(gy);
       context.restore();
 
       const vignette = context.createRadialGradient(width / 2, height * .46, height * .18, width / 2, height * .5, Math.max(width, height) * .75);
       vignette.addColorStop(0, 'rgba(0,0,0,0)');
-      vignette.addColorStop(1, 'rgba(0,0,0,.34)');
+      vignette.addColorStop(1, 'rgba(0,0,0,.18)');
       context.fillStyle = vignette;
       context.fillRect(0, 0, width, height);
     }
@@ -1707,12 +2465,40 @@ const jsonLd = {
     const titleEl = document.getElementById('drn-title')!;
     const subEl = document.getElementById('drn-sub')!;
     const goButton = document.getElementById('drn-go') as HTMLButtonElement;
+    const saveRoadButton = document.getElementById('drn-save-road') as HTMLButtonElement;
     const jumpButton = document.getElementById('drn-jump') as HTMLButtonElement;
     const audioButton = document.getElementById('drn-audio') as HTMLButtonElement;
     const judgeEl = document.getElementById('drn-judge')!;
     const tapHint = document.getElementById('drn-tap-hint')!;
     const stateLive = document.getElementById('drn-state-live')!;
     const livesLive = document.getElementById('drn-lives-live')!;
+    const powerLive = document.getElementById('drn-power-live')!;
+    const powerStatus = document.getElementById('drn-power-status')!;
+    const xpLevelEl = document.getElementById('drn-xp-level')!;
+    const xpTitleEl = document.getElementById('drn-xp-title')!;
+    const xpCopyEl = document.getElementById('drn-xp-copy')!;
+    const xpFillEl = document.getElementById('drn-xp-fill') as HTMLElement;
+    const passLevelEl = document.getElementById('drn-pass-level')!;
+    const passRankEl = document.getElementById('drn-pass-rank')!;
+    const passXpEl = document.getElementById('drn-pass-xp')!;
+    const stampsEl = document.getElementById('drn-stamps')!;
+    const stampsCountEl = document.getElementById('drn-stamps-count')!;
+    const roadsListEl = document.getElementById('drn-roads-list')!;
+    const roadsCountEl = document.getElementById('drn-roads-count')!;
+    const stampToast = document.getElementById('drn-stamp-toast') as HTMLElement;
+    const stampGlyphEl = document.getElementById('drn-stamp-glyph')!;
+    const stampNameEl = document.getElementById('drn-stamp-name')!;
+    const walletBadgeEl = document.getElementById('drn-wallet-badge')!;
+    const walletStatusEl = document.getElementById('drn-wallet-status')!;
+    const walletAddressEl = document.getElementById('drn-wallet-address')!;
+    const tokenCountEl = document.getElementById('drn-token-count')!;
+    const proofStatusEl = document.getElementById('drn-proof-status')!;
+    const connectWalletButton = document.getElementById('drn-connect-wallet') as HTMLButtonElement;
+    const signPassButton = document.getElementById('drn-sign-pass') as HTMLButtonElement;
+    const exportPassButton = document.getElementById('drn-export-pass') as HTMLButtonElement;
+    const importPassButton = document.getElementById('drn-import-pass') as HTMLButtonElement;
+    const importFileInput = document.getElementById('drn-import-file') as HTMLInputElement;
+    const nounPickerButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-noun-slot]'));
     const routeItems = Array.from(document.querySelectorAll<HTMLElement>('[data-route-index]'));
     const lifeEls = Array.from(document.querySelectorAll<HTMLElement>('.drn__life'));
     const beatRail = Array.from(document.querySelectorAll<HTMLElement>('.drn__beat-rail span'));
@@ -1740,6 +2526,144 @@ const jsonLd = {
       levelNoEl.textContent = `LEVEL ${cfg.number} / 0${LEVELS.length}`;
       levelNameEl.textContent = cfg.name;
       tempoEl.textContent = `${cfg.bpm} BPM`;
+    }
+    function readRoadPass(): RoadPassProfile {
+      try {
+        const raw = localStorage.getItem(ROAD_PASS_STORAGE_KEY);
+        return raw ? normalizeRoadPass(JSON.parse(raw)) : defaultRoadPass();
+      } catch {
+        return defaultRoadPass();
+      }
+    }
+    function readSignedBeatPass(): SignedBeatPass | null {
+      try {
+        const raw = localStorage.getItem(ROAD_PASS_PROOF_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as SignedBeatPass;
+        return parsed?.format === 'pointcast.beat-pass.signed.v1' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    function shortAddress(address: string): string {
+      return address.length > 13 ? `${address.slice(0, 7)}…${address.slice(-5)}` : address;
+    }
+    function signedPassIsCurrent(): boolean {
+      if (!signedBeatPass) return false;
+      const pass = signedBeatPass.pass as any;
+      const expected = beatPassPayload(roadPass, {
+        walletAddress: signedBeatPass.proof.address,
+        issuedAt: signedBeatPass.proof.issuedAt,
+        tokenBalance: Number(pass?.visitNouns?.balance) || 0,
+      });
+      return canonicalJson(expected) === signedBeatPass.canonicalPass
+        && canonicalJson(signedBeatPass.pass) === signedBeatPass.canonicalPass;
+    }
+    function updateRoadPassUi() {
+      const levelNumber = roadLevel(roadPass.xp);
+      const floor = roadLevelFloor(levelNumber);
+      const ceiling = roadLevelCeiling(levelNumber);
+      const denominator = Math.max(1, ceiling - floor);
+      const percent = levelNumber >= 20 ? 100 : Math.max(0, Math.min(100, ((roadPass.xp - floor) / denominator) * 100));
+      const title = roadTitle(levelNumber);
+      xpLevelEl.textContent = `LV ${levelNumber}`;
+      xpTitleEl.textContent = title;
+      xpCopyEl.textContent = levelNumber >= 20 ? `${roadPass.xp.toLocaleString()} XP · MAX` : `${roadPass.xp.toLocaleString()} / ${ceiling.toLocaleString()} XP`;
+      xpFillEl.style.width = `${percent}%`;
+      passLevelEl.textContent = `LV ${levelNumber}`;
+      passRankEl.textContent = title;
+      passXpEl.textContent = roadPass.xp.toLocaleString();
+
+      const earned = ACHIEVEMENTS.filter((achievement) => roadPass.achievements[achievement.id]);
+      stampsCountEl.textContent = `${earned.length} / ${ACHIEVEMENTS.length}`;
+      const stampNodes = ACHIEVEMENTS.map((achievement) => {
+        const item = document.createElement('li');
+        item.className = `drn__stamp${roadPass.achievements[achievement.id] ? ' is-earned' : ''}`;
+        item.textContent = achievement.glyph;
+        item.title = `${achievement.name} · ${achievement.hint} · +${achievement.xp} XP`;
+        item.setAttribute('aria-label', `${achievement.name}. ${roadPass.achievements[achievement.id] ? 'Earned' : achievement.hint}.`);
+        return item;
+      });
+      stampsEl.replaceChildren(...stampNodes);
+
+      roadsCountEl.textContent = `${roadPass.savedRoads.length} / 12`;
+      if (!roadPass.savedRoads.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'Clear a level, then save its performed phrase.';
+        roadsListEl.replaceChildren(empty);
+      } else {
+        const roadNodes = roadPass.savedRoads.map((road) => {
+          const row = document.createElement('div');
+          row.className = 'drn__road';
+          const copy = document.createElement('span');
+          copy.textContent = `${road.levelName} · ${road.accuracy}% · ${road.phrase.length} notes`;
+          copy.title = copy.textContent;
+          const play = document.createElement('button');
+          play.type = 'button';
+          play.dataset.playRoad = road.id;
+          play.textContent = '▶';
+          play.setAttribute('aria-label', `Listen to saved ${road.levelName} road`);
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.dataset.deleteRoad = road.id;
+          remove.textContent = '×';
+          remove.setAttribute('aria-label', `Delete saved ${road.levelName} road`);
+          row.append(copy, play, remove);
+          return row;
+        });
+        roadsListEl.replaceChildren(...roadNodes);
+      }
+
+      walletAddressEl.textContent = currentWalletAddress ? shortAddress(currentWalletAddress) : 'not connected';
+      tokenCountEl.textContent = currentWalletAddress
+        ? `${visitNounsBalance} owned${ownedNounIds.has(selectedNounId) ? ` · #${selectedNounId} selected` : ''}`
+        : 'not checked';
+      root.dataset.ownedNouns = String(visitNounsBalance > 0);
+      const proofCurrent = signedPassIsCurrent();
+      if (proofCurrent) {
+        walletBadgeEl.textContent = 'KUKAI-SEALED';
+        proofStatusEl.textContent = 'verified snapshot';
+        walletStatusEl.textContent = `Portable save sealed by ${shortAddress(signedBeatPass!.proof.address)}. No transaction was broadcast.`;
+      } else if (signedBeatPass) {
+        walletBadgeEl.textContent = 'SAVE CHANGED';
+        proofStatusEl.textContent = 'seal again';
+        walletStatusEl.textContent = 'Your local Road Pass moved ahead of its last signed snapshot.';
+      } else {
+        walletBadgeEl.textContent = currentWalletAddress ? 'WALLET READY' : 'THIS DEVICE';
+        proofStatusEl.textContent = 'unsigned';
+        walletStatusEl.textContent = currentWalletAddress
+          ? 'Wallet connected. Seal only when you want a portable, tamper-evident snapshot.'
+          : 'Play without an account. Connect Kukai only when you want to seal a portable save.';
+      }
+    }
+    function persistRoadPass() {
+      try {
+        localStorage.setItem(ROAD_PASS_STORAGE_KEY, JSON.stringify(roadPass));
+        localStorage.setItem(BEST_KEY, String(Math.max(savedBest, roadPass.bestScore)));
+      } catch { /* local play still works without persistent storage */ }
+      updateRoadPassUi();
+    }
+    function showNextStamp() {
+      if (phase === 'playing' || !stampQueue.length || !stampToast.hidden) return;
+      const id = stampQueue.shift()!;
+      const achievement = ACHIEVEMENTS.find((item) => item.id === id);
+      if (!achievement) return;
+      stampGlyphEl.textContent = achievement.glyph;
+      stampNameEl.textContent = `${achievement.name} · +${achievement.xp} XP`;
+      stampToast.hidden = false;
+      clearTimeout(stampTimer);
+      stampTimer = window.setTimeout(() => {
+        stampToast.hidden = true;
+        showNextStamp();
+      }, 2400);
+    }
+    function recordRoadEvent(event: Parameters<typeof applyRoadEvent>[1]) {
+      const result = applyRoadEvent(roadPass, event);
+      roadPass = result.profile;
+      if (result.unlocked.length) stampQueue.push(...result.unlocked);
+      persistRoadPass();
+      if (phase !== 'playing') showNextStamp();
+      return result;
     }
     function readBest(): number {
       try {
@@ -1812,12 +2736,25 @@ const jsonLd = {
         cell.classList.toggle('is-perfect', grade === 'perfect');
         cell.classList.toggle('is-active', phase === 'playing' && index === phrasePosition);
       });
+      root.dataset.power = powerState.musical ?? 'none';
+      root.dataset.ghost = String(powerState.ghostCharges > 0);
+      const gear: string[] = [];
+      if (powerState.musical) {
+        const spec = POWER_UP_SPECS[powerState.musical];
+        const remaining = powerState.musical === 'bass'
+          ? `${Math.max(0, Math.ceil(powerState.expiresAtBeat - currentLevelBeat()))} beats`
+          : `${powerState.charges} notes`;
+        gear.push(`${spec.shortLabel} ${remaining}`);
+      }
+      if (powerState.ghostCharges > 0) gear.push('GHOST READY');
+      powerStatus.textContent = gear.join(' + ') || 'road clear';
     }
     function showOverlay(focusButton = true) {
       overlay.classList.remove('drn__overlay--hidden');
       overlay.setAttribute('aria-hidden', 'false');
       jumpButton.disabled = true;
       root.dataset.phase = phase;
+      showNextStamp();
       if (focusButton) goButton.focus({ preventScroll: true });
     }
     function hideOverlay() {
@@ -1836,14 +2773,17 @@ const jsonLd = {
       flow = 0;
       prepareLevel(0);
       const cfg = level();
-      kickerEl.textContent = 'BEAT RUNNER V3 · PLAY THE CITY';
+      nounPickerButtons.forEach((button) => { button.disabled = false; });
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
+      kickerEl.textContent = 'BEAT RUNNER V5 · BRIGHT MILES';
       cardTempoEl.textContent = '4 LEVELS · 92→128 BPM';
-      titleEl.innerHTML = 'YOUR TAP.<br>THE CITY\'S BEAT.';
-      subEl.textContent = 'Perform the cue now, clear the street at the apex one beat later, and hear your phrase return through the mix.';
-      setStats('route', '4 scenes', 'input', '1 button', 'hearts', '3 total');
+      titleEl.innerHTML = 'PICK A NOUN.<br>PLAY THE ROAD.';
+      subEl.textContent = 'Gold cues jump. Gear rewrites the arrangement. Every clean note builds permanent Road XP and a musical pass you can take with you.';
+      setStats('runner', `noun #${selectedNounId}`, 'voice', selectedNounVoice, 'hearts', '3 total');
       goButton.textContent = '▶ START LEVEL 01';
       updateRoute(0);
-      stateLive.textContent = 'Beat Runner v3 ready. Perform each visual cue to sound a note and jump. Four levels, three hearts. Start Level 1.';
+      stateLive.textContent = `Beat Runner v5 Bright Miles ready. Noun ${selectedNounId}, ${selectedNounVoice} voice. Four levels, three hearts. Start Level 1.`;
       showOverlay(false);
     }
 
@@ -1852,7 +2792,9 @@ const jsonLd = {
       cancelAnimationFrame(rafId);
       trySound(() => { audioContext(); });
       resize();
-      pickNoun();
+      nounPickerButtons.forEach((button) => { button.disabled = true; });
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
       worldX = 0;
       lives = 3;
       bonus = 0;
@@ -1872,6 +2814,8 @@ const jsonLd = {
       cancelAnimationFrame(rafId);
       currentLevelIndex = index;
       pendingLevelIndex = index;
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
       prepareLevel(index);
       phase = 'playing';
       lastVisualBeat = -1;
@@ -1889,11 +2833,41 @@ const jsonLd = {
       if (phase !== 'playing') return;
       cancelAnimationFrame(rafId);
       stopScheduler();
+      powerState = emptyPowerState();
+      updateHud();
       const completedIndex = currentLevelIndex;
       const completed = level();
+      const clean = levelHits === 0 && levelMisses === 0 && levelOffgrid === 0;
       const healed = levelHits === 0 && lives < 3;
       if (healed) lives++;
       updateLives();
+      const levelProgress = recordRoadEvent({
+        type: 'level-clear',
+        levelId: completed.id,
+        voice: selectedNounVoice,
+        clean,
+        fullBand: arrangement >= 3,
+        levelIndex: completedIndex,
+        score: displayScore(),
+      });
+      const roadCreatedAt = Date.now();
+      const roadAccuracy = accuracyPercent(levelPerfect, levelGood, completed.obstacles.length);
+      lastCompletedRoad = {
+        id: `${completed.id}-${roadCreatedAt}-${displayScore()}`,
+        levelId: completed.id,
+        levelName: completed.name,
+        nounId: selectedNounId,
+        voice: selectedNounVoice,
+        bpm: completed.bpm,
+        phrase: obstacles.flatMap((item) => item.grade === 'perfect' || item.grade === 'good'
+          ? [{ step: phraseStep(item.cueBeat, completed.music.phraseBeats, completed.music.subdivision), note: item.note, grade: item.grade }]
+          : []),
+        score: displayScore() - levelStartScore,
+        accuracy: roadAccuracy,
+        createdAt: roadCreatedAt,
+      };
+      saveRoadButton.hidden = false;
+      saveRoadButton.textContent = '＋ SAVE THIS ROAD';
       saveProgress(completedIndex);
       trySound(playLevelClear);
       trySound(() => {
@@ -1904,12 +2878,15 @@ const jsonLd = {
 
       if (completedIndex === LEVELS.length - 1) {
         phase = 'victory';
-        kickerEl.textContent = 'CITY PERFORMED · FOUR SCENES';
+        const campaignProgress = recordRoadEvent({ type: 'campaign-clear' });
+        const levelXp = levelProgress.baseXp + levelProgress.stampXp;
+        const campaignXp = campaignProgress.baseXp + campaignProgress.stampXp;
+        kickerEl.textContent = `NOUN #${selectedNounId} · BRIGHT MILES COMPLETE`;
         cardTempoEl.textContent = `${totalPerfect} PERFECT · ${totalGood} GOOD`;
-        titleEl.textContent = 'THE CITY PLAYS BACK.';
-        subEl.textContent = `${completed.clearLine} You carried a phrase from Main Street to the night shift${healed ? ' — flawless finish restored a heart.' : '.'}`;
+        titleEl.textContent = 'THE ROAD PLAYS BACK.';
+        subEl.textContent = `${completed.clearLine} Your ${selectedNounVoice} Noun led the whole band from Main Street to the night shift and banked +${levelXp + campaignXp} Road XP${clean ? ' on a clean final mile.' : '.'}`;
         const allTargets = LEVELS.reduce((sum, item) => sum + item.obstacles.length, 0);
-        setStats('score', `${displayScore()} pts`, 'accuracy', `${accuracyPercent(totalPerfect, totalGood, allTargets)}%`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
+        setStats('score', `${displayScore()} pts`, 'road xp', `${roadPass.xp} total`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
         goButton.textContent = '▶ RUN THE CITY AGAIN';
         updateRoute(LEVELS.length, true);
         stateLive.textContent = `City cleared. Final score ${displayScore()} points. ${totalPerfect} perfect and ${totalGood} good performances. Best pocket ${bestFlow}.`;
@@ -1924,8 +2901,9 @@ const jsonLd = {
       kickerEl.textContent = `LEVEL ${completed.number} CLEAR · ${completed.clearLine}`;
       cardTempoEl.textContent = `NEXT · ${next.bpm} BPM`;
       titleEl.textContent = next.name;
-      subEl.textContent = `${next.brief}${healed ? ' Flawless level: one heart restored.' : ''}`;
-      setStats('level score', `+${displayScore() - levelStartScore} pts`, 'accuracy', `${accuracyPercent(levelPerfect, levelGood, completed.obstacles.length)}%`, 'mix', `${arrangement}/3 stems`);
+      const earnedXp = levelProgress.baseXp + levelProgress.stampXp;
+      subEl.textContent = `${next.brief} This mile banked +${earnedXp} Road XP${clean ? ' with a Clean Street bonus.' : ''}${healed ? ' One heart restored.' : ''}`;
+      setStats('level score', `+${displayScore() - levelStartScore} pts`, 'road xp', `+${earnedXp}`, 'mix', `${arrangement}/3 stems`);
       goButton.textContent = `▶ LEVEL ${next.number} · ${next.bpm} BPM`;
       updateRoute(pendingLevelIndex);
       stateLive.textContent = `Level ${completed.number} clear. ${levelPerfect} perfect and ${levelGood} good performances. Next: ${next.name}, ${next.bpm} BPM.`;
@@ -1935,13 +2913,18 @@ const jsonLd = {
       if (phase !== 'playing') return;
       cancelAnimationFrame(rafId);
       stopScheduler();
+      powerState = emptyPowerState();
+      updateHud();
       phase = 'gameover';
+      saveRoadButton.hidden = true;
+      lastCompletedRoad = null;
+      recordRoadEvent({ type: 'score', value: displayScore() });
       saveProgress(currentLevelIndex - 1);
       const cfg = level();
       kickerEl.textContent = `WIPEOUT · LEVEL ${cfg.number} / 0${LEVELS.length}`;
       cardTempoEl.textContent = `${cfg.name.toUpperCase()} · ${cfg.bpm} BPM`;
       titleEl.textContent = 'BEAT DROPPED.';
-      subEl.textContent = `The city keeps moving. Your route reached ${cfg.name}; run it back and leave the empty beats alone.`;
+      subEl.textContent = `The road keeps moving. Noun #${selectedNounId} reached ${cfg.name}; run it back and leave the empty cells alone.`;
       setStats('score', `${displayScore()} pts`, 'accuracy', `${accuracyPercent(totalPerfect, totalGood, totalPerfect + totalGood + totalMisses)}%`, 'best pocket', bestFlow > 0 ? `×${bestFlow}` : '—');
       goButton.textContent = '▶ RUN IT BACK';
       updateRoute(currentLevelIndex);
@@ -2008,7 +2991,7 @@ const jsonLd = {
     function updateAudioButton() {
       audioButton.setAttribute('aria-pressed', String(muted));
       audioButton.textContent = muted ? 'sound off' : 'sound on';
-      audioButton.setAttribute('aria-label', 'Beat Runner audio muted');
+      audioButton.setAttribute('aria-label', `Beat Runner audio ${muted ? 'muted' : 'on'}`);
     }
     audioButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -2016,6 +2999,229 @@ const jsonLd = {
       try { localStorage.setItem(MUTED_KEY, muted ? '1' : '0'); } catch { /* optional */ }
       updateAudioButton();
       setMasterLevel(.72, true);
+    });
+    nounPickerButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (phase !== 'intro') return;
+        selectNoun(Number(button.dataset.nounId));
+        showIntro();
+      });
+    });
+    saveRoadButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!lastCompletedRoad) return;
+      const saved = lastCompletedRoad;
+      recordRoadEvent({ type: 'road-save', road: saved });
+      saveRoadButton.textContent = '✓ SAVED ON THIS DEVICE';
+      stateLive.textContent = `${saved.levelName} saved to My Roads with ${saved.phrase.length} performed notes.`;
+    });
+    roadsListEl.addEventListener('click', (event) => {
+      const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+      if (!target) return;
+      const playId = target.dataset.playRoad;
+      const deleteId = target.dataset.deleteRoad;
+      if (playId) {
+        const road = roadPass.savedRoads.find((item) => item.id === playId);
+        if (!road) return;
+        trySound(() => { audioContext(); });
+        const secondsPerStep = 60 / road.bpm / 2;
+        road.phrase.slice(0, 32).forEach((note) => {
+          window.setTimeout(() => trySound(() => playNounSignature(road.voice, note.note, note.grade)), note.step * secondsPerStep * 1000);
+        });
+        walletStatusEl.textContent = `Playing ${road.levelName}: ${road.phrase.length} saved notes at ${road.bpm} BPM.`;
+      } else if (deleteId) {
+        roadPass = normalizeRoadPass({
+          ...roadPass,
+          savedRoads: roadPass.savedRoads.filter((item) => item.id !== deleteId),
+          revision: roadPass.revision + 1,
+          updatedAt: Date.now(),
+        });
+        persistRoadPass();
+      }
+    });
+
+    function syncWalletStorage(address: string) {
+      try {
+        const raw = localStorage.getItem('pc:wallets');
+        const existing = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(existing) ? existing.filter((wallet: any) => wallet?.address !== address) : [];
+        const wallet = { chain: 'tezos', address, provider: 'beacon', addedAt: Date.now() };
+        list.push(wallet);
+        localStorage.setItem('pc:wallets', JSON.stringify(list));
+        localStorage.setItem('pc:wallet-active', address);
+        localStorage.setItem('pc:wallet', JSON.stringify(wallet));
+        window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+      } catch { /* the Beacon account remains authoritative */ }
+    }
+    async function fetchOwnedVisitNouns(address: string) {
+      const contract = root.dataset.tokenContract || 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh';
+      tokenCountEl.textContent = 'checking TzKT…';
+      try {
+        const response = await fetch(`https://api.tzkt.io/v1/tokens/balances?account=${encodeURIComponent(address)}&token.contract=${encodeURIComponent(contract)}&balance.gt=0&limit=200`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`TzKT ${response.status}`);
+        const balances = await response.json();
+        ownedNounIds = new Set(Array.isArray(balances)
+          ? balances.map((balance: any) => Number(balance?.token?.tokenId)).filter((id: number) => Number.isFinite(id))
+          : []);
+        visitNounsBalance = ownedNounIds.size;
+      } catch {
+        ownedNounIds = new Set();
+        visitNounsBalance = 0;
+        tokenCountEl.textContent = 'TzKT unavailable';
+      }
+      updateNounPicker();
+      updateRoadPassUi();
+    }
+    async function connectWalletExplicitly(): Promise<string> {
+      const { connectKukaiForSigning, getActiveAddress } = await import('../lib/tezos');
+      const address = await connectKukaiForSigning();
+      const actual = await getActiveAddress();
+      if (!actual || actual !== address) throw new Error('Beacon active account did not match the connected account.');
+      currentWalletAddress = actual;
+      syncWalletStorage(actual);
+      await fetchOwnedVisitNouns(actual);
+      return actual;
+    }
+    connectWalletButton.addEventListener('click', async () => {
+      const original = connectWalletButton.textContent || 'CONNECT KUKAI';
+      connectWalletButton.disabled = true;
+      connectWalletButton.textContent = 'OPENING BEACON…';
+      walletStatusEl.textContent = 'Opening the Beacon wallet picker. Choose Kukai or another compatible Tezos wallet.';
+      try {
+        const address = await connectWalletExplicitly();
+        connectWalletButton.textContent = '✓ WALLET READY';
+        stateLive.textContent = `Tezos wallet ${shortAddress(address)} connected. ${visitNounsBalance} Visit Nouns found.`;
+      } catch (error: any) {
+        connectWalletButton.textContent = 'RETRY CONNECT';
+        walletStatusEl.textContent = /reject|cancel|abort/i.test(String(error?.message))
+          ? 'Wallet connection cancelled. Local progress is safe.'
+          : `Wallet connection failed: ${error?.message || error}`;
+      } finally {
+        connectWalletButton.disabled = false;
+        window.setTimeout(() => { if (connectWalletButton.textContent !== '✓ WALLET READY') connectWalletButton.textContent = original; }, 2600);
+      }
+    });
+
+    function portablePassMessage(canonicalPass: string): string {
+      return [
+        'PointCast Beat Runner v5 portable Beat Pass',
+        'Road XP, stamps, saved roads, and a read-only Visit Nouns ownership snapshot follow.',
+        canonicalPass,
+      ].join('\n');
+    }
+    signPassButton.addEventListener('click', async () => {
+      signPassButton.disabled = true;
+      signPassButton.textContent = 'PREPARING…';
+      try {
+        const address = await connectWalletExplicitly();
+        const issuedAt = new Date().toISOString();
+        const pass = beatPassPayload(roadPass, { walletAddress: address, issuedAt, tokenBalance: visitNounsBalance });
+        const canonicalPass = canonicalJson(pass);
+        walletStatusEl.textContent = 'Review the human-readable Beat Pass request in your wallet. This is not a transaction.';
+        signPassButton.textContent = 'CHECK WALLET…';
+        const { signTezosMichelineMessage } = await import('../lib/tezos');
+        const proof = await signTezosMichelineMessage(portablePassMessage(canonicalPass), issuedAt);
+        if (proof.address !== address) throw new Error('Wallet account changed while sealing the pass.');
+        signedBeatPass = {
+          format: 'pointcast.beat-pass.signed.v1',
+          pass,
+          canonicalPass,
+          proof: {
+            address: proof.address,
+            publicKey: proof.publicKey,
+            issuedAt: proof.issuedAt,
+            domain: proof.domain,
+            signature: proof.signature,
+            payload: proof.payload,
+          },
+        };
+        localStorage.setItem(ROAD_PASS_PROOF_KEY, JSON.stringify(signedBeatPass));
+        signPassButton.textContent = '✓ PASS SEALED';
+        updateRoadPassUi();
+        stateLive.textContent = `Beat Pass sealed and verified locally for ${shortAddress(address)}. No transaction broadcast.`;
+      } catch (error: any) {
+        signPassButton.textContent = 'SEAL BEAT PASS';
+        walletStatusEl.textContent = /reject|cancel|abort/i.test(String(error?.message))
+          ? 'Signature cancelled. Local progress is safe.'
+          : `Could not seal pass: ${error?.message || error}`;
+      } finally {
+        signPassButton.disabled = false;
+      }
+    });
+    exportPassButton.addEventListener('click', () => {
+      const issuedAt = new Date().toISOString();
+      const unsignedPass = beatPassPayload(roadPass, {
+        walletAddress: currentWalletAddress,
+        issuedAt,
+        tokenBalance: visitNounsBalance,
+      });
+      const payload = signedPassIsCurrent()
+        ? signedBeatPass
+        : { format: 'pointcast.beat-pass.unsigned.v1', pass: unsignedPass, note: 'Unsigned local export. Seal with a Tezos wallet for tamper evidence.' };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `pointcast-beat-pass-v5-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      walletStatusEl.textContent = signedPassIsCurrent() ? 'Exported the current Kukai-sealed Beat Pass.' : 'Exported an unsigned local Beat Pass.';
+    });
+    importPassButton.addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', async () => {
+      const file = importFileInput.files?.[0];
+      if (!file) return;
+      importPassButton.disabled = true;
+      try {
+        const parsed = JSON.parse(await file.text()) as any;
+        const pass = parsed?.pass ?? parsed;
+        if (!pass?.profile) throw new Error('This file does not contain a Beat Runner v5 profile.');
+        if (pass.format !== 'pointcast.beat-pass.v1'
+          || pass.origin !== 'https://pointcast.xyz'
+          || pass.chainId !== 'NetXdQprcVkpaWU'
+          || pass.game !== ROAD_PASS_GAME
+          || pass.profile?.schema !== ROAD_PASS_SCHEMA
+          || pass.profile?.game !== ROAD_PASS_GAME
+          || pass.visitNouns?.contract !== VISIT_NOUNS_CONTRACT) {
+          throw new Error('This file is not a PointCast Beat Runner v5 mainnet pass.');
+        }
+        if (parsed?.format === 'pointcast.beat-pass.signed.v1') {
+          const canonicalPass = canonicalJson(pass);
+          if (canonicalPass !== parsed.canonicalPass) throw new Error('Signed pass content was changed after sealing.');
+          if (pass.walletAddress !== parsed.proof?.address) throw new Error('Pass wallet does not match the signer.');
+          if (pass.issuedAt !== parsed.proof?.issuedAt) throw new Error('Pass timestamp does not match the signed proof.');
+          const { POINTCAST_SIGNING_DOMAIN, verifyTezosMichelineMessage } = await import('../lib/tezos');
+          if (parsed.proof?.domain !== POINTCAST_SIGNING_DOMAIN) throw new Error('Pass signing domain is not recognized.');
+          const valid = verifyTezosMichelineMessage({
+            message: portablePassMessage(canonicalPass),
+            issuedAt: parsed.proof.issuedAt,
+            domain: parsed.proof.domain,
+            address: parsed.proof.address,
+            publicKey: parsed.proof.publicKey,
+            signature: parsed.proof.signature,
+          });
+          if (!valid) throw new Error('Tezos signature could not be verified.');
+          signedBeatPass = parsed as SignedBeatPass;
+          localStorage.setItem(ROAD_PASS_PROOF_KEY, JSON.stringify(signedBeatPass));
+          currentWalletAddress = parsed.proof.address;
+          walletStatusEl.textContent = `Verified and imported a Beat Pass sealed by ${shortAddress(currentWalletAddress)}.`;
+        } else {
+          walletStatusEl.textContent = 'Imported an unsigned local Beat Pass. Seal it to add tamper evidence.';
+        }
+        roadPass = mergeRoadPass(roadPass, pass.profile);
+        selectedNounId = roadPass.selectedNounId;
+        selectedNounVoice = nounVoiceFor(selectedNounId);
+        runNounChoices = nounChoices(selectedNounId);
+        selectNoun(selectedNounId, false);
+        persistRoadPass();
+        updateBest();
+        stateLive.textContent = `Beat Pass imported. Road XP is now ${roadPass.xp}.`;
+      } catch (error: any) {
+        walletStatusEl.textContent = `Import rejected: ${error?.message || error}`;
+      } finally {
+        importPassButton.disabled = false;
+        importFileInput.value = '';
+      }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && phase === 'playing') {
@@ -2029,15 +3235,30 @@ const jsonLd = {
         rafId = requestAnimationFrame(frame);
       }
     });
+    window.addEventListener('storage', (event) => {
+      if (event.key === ROAD_PASS_STORAGE_KEY) {
+        roadPass = readRoadPass();
+        updateRoadPassUi();
+      } else if (event.key === ROAD_PASS_PROOF_KEY) {
+        signedBeatPass = readSignedBeatPass();
+        updateRoadPassUi();
+      }
+    });
 
     /* ---------------- init ---------------- */
     sessionId = getOrCreateSession();
     try { muted = localStorage.getItem(MUTED_KEY) === '1'; } catch { muted = false; }
-    savedBest = readBest();
+    roadPass = readRoadPass();
+    signedBeatPass = readSignedBeatPass();
+    savedBest = Math.max(readBest(), roadPass.bestScore);
     updateAudioButton();
     updateBest();
     updateLives();
-    pickNoun();
+    selectedNounId = roadPass.revision > 0 ? roadPass.selectedNounId : readSavedNoun();
+    selectedNounVoice = nounVoiceFor(selectedNounId);
+    runNounChoices = nounChoices(selectedNounId);
+    selectNoun(selectedNounId, false);
+    updateRoadPassUi();
     resize();
     showIntro();
   </script>
