@@ -214,5 +214,7 @@ test('v5 uses local saves and gasless signatures without a transaction path', ()
   assert.match(v5Source, /signTezosMichelineMessage/);
   assert.match(v5Source, /verifyTezosMichelineMessage/);
   assert.match(v5Source, /Gasless signature · no mint · no token transfer/);
+  assert.match(v5Source, /note\.step \* secondsPerStep \* 1000/, 'saved-road replay should preserve the road rests');
+  assert.doesNotMatch(v5Source, /index \* secondsPerStep \* 1000/, 'saved-road replay must not compress rests');
   assert.doesNotMatch(v5Source, /\.(?:send|transfer|originate)\s*\(/);
 });
