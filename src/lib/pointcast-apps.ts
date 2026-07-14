@@ -78,6 +78,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-shrine',
+    name: 'Open Road Shrine',
+    kicker: 'ONE MINUTE · BREATH · VOTIVE',
+    description: 'A quiet shrine built around a 1955 Chevrolet painting: enter one minute of stillness, breathe slowly, and offer a light.',
+    url: 'https://pointcast.xyz/open-road',
+    path: '/open-road',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
