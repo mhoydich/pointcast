@@ -5,7 +5,7 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 
 test('Afterimage Relay accepts bounded Passport room slugs and exposes share, remix, and guarded mint routes', async () => {
-  const [page, apps, detail, detailJson, catalog, examplesText, sitemap, llms] = await Promise.all([
+  const [page, apps, detail, detailJson, catalog, examplesText, sitemap, llms, llmsRoute] = await Promise.all([
     readFile(new URL('src/pages/afterimage.astro', root), 'utf8'),
     readFile(new URL('src/lib/pointcast-apps.ts', root), 'utf8'),
     readFile(new URL('src/pages/afterimage/[slug].astro', root), 'utf8'),
@@ -14,6 +14,7 @@ test('Afterimage Relay accepts bounded Passport room slugs and exposes share, re
     readFile(new URL('src/data/afterimage-examples.json', root), 'utf8'),
     readFile(new URL('src/pages/sitemap-discovery.xml.ts', root), 'utf8'),
     readFile(new URL('public/llms.txt', root), 'utf8'),
+    readFile(new URL('src/pages/llms.txt.ts', root), 'utf8'),
   ]);
   const examples = JSON.parse(examplesText);
 
@@ -38,4 +39,5 @@ test('Afterimage Relay accepts bounded Passport room slugs and exposes share, re
   assert.match(catalog, /requestUrl/);
   assert.match(sitemap, /afterimageExamples\.flatMap/);
   assert.match(llms, /machine-readable catalog of ten public image-to-music/);
+  assert.match(llmsRoute, /text\/plain; charset=utf-8/);
 });
