@@ -233,6 +233,7 @@ export const GET: APIRoute = async () => {
         taproom: 'https://pointcast.xyz/taproom',
         play: 'https://pointcast.xyz/play',
         passport: 'https://pointcast.xyz/passport',
+        halation: 'https://pointcast.xyz/halation',
         quests: 'https://pointcast.xyz/quests',
         walk: 'https://pointcast.xyz/walk',
         roomWeather: 'https://pointcast.xyz/room-weather',
@@ -316,6 +317,7 @@ export const GET: APIRoute = async () => {
         zenCats: 'https://pointcast.xyz/zen-cats.json',
       },
       api: {
+        halation: 'https://pointcast.xyz/api/halation',
         ping: 'https://pointcast.xyz/api/ping',
         publish: 'https://pointcast.xyz/api/publish',
         pcpRelay: 'https://pointcast.xyz/api/pcp/relay',

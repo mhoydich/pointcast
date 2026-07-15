@@ -86,6 +86,16 @@ export const COLLABORATORS: Collaborator[] = [
     intro: 'Collaborator from Mallorca. Role + projects TBD — Mike filling in the real one-line soon.',
     since: '2026-04-20',
   },
+  {
+    slug: 'halation-image-diary',
+    name: 'Halation',
+    role: 'federated',
+    location: 'El Segundo / Tezos',
+    url: 'https://halation-diary.mhoydich.chatgpt.site',
+    feed: 'https://halation-diary.mhoydich.chatgpt.site/feed.json',
+    intro: 'A public image diary federated into PointCast as pages first, optional one-of-one receipts second.',
+    since: '2026-07-15',
+  },
 ];
 
 /** Lookup by slug. Returns null if not found. */
