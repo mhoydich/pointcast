@@ -1,0 +1,292 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('afterimage')!;
+const title = app.name;
+const description = app.description;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/afterimage',
+  name: title,
+  description,
+  url: app.url,
+  applicationCategory: 'MusicApplication',
+  operatingSystem: 'Web',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  frame={{
+    buttons: [
+      { label: 'Open relay', action: 'link', target: 'https://pointcast.xyz/afterimage' },
+      { label: 'Make music', action: 'link', target: 'https://passportz.xyz/afterimage' },
+    ],
+  }}
+>
+  <MicroAppShell
+    app={app}
+    headline="Put an image song on the air."
+    dek="Afterimage Relay receives a public Passport cut or Mood Room and turns it into a PointCast broadcast. The audio and art stay at their original public source; this page adds a compact receiver, a relay URL, and clean routes back to remix or mint."
+    stats={[
+      { label: 'Input', value: 'room URL' },
+      { label: 'Audio', value: 'source' },
+      { label: 'Relay', value: 'shareable' },
+      { label: 'Mint', value: 'Passport' },
+    ]}
+    links={[
+      { href: 'https://passportz.xyz/afterimage', label: 'Make in Passport' },
+      { href: '/listening-room', label: 'Listening Room' },
+    ]}
+  >
+    <section class="app-section relay" data-afterimage-relay>
+      <div class="relay-grid">
+        <section class="receiver" aria-labelledby="receiver-title">
+          <div class="receiver__topline">
+            <span>POINTCAST · CH.AF</span>
+            <span data-receiver-state>WAITING FOR SIGNAL</span>
+          </div>
+
+          <div class="receiver__art" data-receiver-art>
+            <div class="receiver__empty">
+              <span>◌</span>
+              <p>Paste an Afterimage room URL to tune in.</p>
+            </div>
+            <img data-room-image alt="Artwork for the relayed Afterimage room" hidden />
+            <div class="receiver__scan" aria-hidden="true"></div>
+          </div>
+
+          <div class="receiver__display">
+            <div>
+              <p class="mono-note">Public image signal</p>
+              <h2 id="receiver-title" data-room-title>NO ROOM TUNED</h2>
+              <p data-room-subtitle>Passport → PointCast</p>
+            </div>
+            <div class="meter" aria-hidden="true">
+              {Array.from({ length: 24 }, (_, index) => <i style={`--meter-index:${index}`}></i>)}
+            </div>
+          </div>
+
+          <audio data-room-audio preload="metadata" loop></audio>
+          <div class="transport">
+            <button type="button" data-play disabled aria-label="Play relayed room"><span data-play-icon>▶</span> <span data-play-label>PLAY SIGNAL</span></button>
+            <label><input type="checkbox" data-loop checked /> LOOP</label>
+            <a data-download hidden download="afterimage-relay.mp3">DOWNLOAD</a>
+          </div>
+        </section>
+
+        <aside class="patchbay">
+          <p class="mono-note">Relay patchbay</p>
+          <h2>Bring a room across.</h2>
+          <p>Use any public URL shaped like <code>passportz.xyz/afterimage/room/…</code>. No generation happens here, so tuning and sharing do not spend Lyria credits.</p>
+
+          <form data-tune-form>
+            <label for="room-url">Passport room URL or slug</label>
+            <div class="input-row">
+              <input id="room-url" data-room-input type="text" autocomplete="off" placeholder="https://passportz.xyz/afterimage/room/…" />
+              <button type="submit">TUNE</button>
+            </div>
+            <p class="form-note" data-form-note>Awaiting a public cut or Mood Room.</p>
+          </form>
+
+          <div class="relay-address" data-relay-address hidden>
+            <label for="relay-url">PointCast relay URL</label>
+            <div class="input-row">
+              <input id="relay-url" data-relay-url readonly />
+              <button type="button" data-copy>COPY</button>
+            </div>
+          </div>
+
+          <div class="routes" data-routes hidden>
+            <a data-open-source target="_blank" rel="noopener">OPEN PASSPORT ROOM</a>
+            <a data-remix>REMIX IMAGE</a>
+            <a data-mint>MINT WITH KUKAI</a>
+            <button type="button" data-share>SHARE RELAY</button>
+          </div>
+
+          <div class="boundary">
+            <strong>THE HANDOFF</strong>
+            <p>PointCast relays the public art and audio. Passport owns remix lineage and the Tezos Mainnet wallet review. Nothing is minted automatically.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </MicroAppShell>
+
+  <script is:inline>
+    (function () {
+      const root = document.querySelector('[data-afterimage-relay]');
+      if (!root) return;
+
+      const els = {
+        form: root.querySelector('[data-tune-form]'),
+        input: root.querySelector('[data-room-input]'),
+        note: root.querySelector('[data-form-note]'),
+        state: root.querySelector('[data-receiver-state]'),
+        title: root.querySelector('[data-room-title]'),
+        subtitle: root.querySelector('[data-room-subtitle]'),
+        image: root.querySelector('[data-room-image]'),
+        empty: root.querySelector('.receiver__empty'),
+        audio: root.querySelector('[data-room-audio]'),
+        play: root.querySelector('[data-play]'),
+        playIcon: root.querySelector('[data-play-icon]'),
+        playLabel: root.querySelector('[data-play-label]'),
+        loop: root.querySelector('[data-loop]'),
+        download: root.querySelector('[data-download]'),
+        address: root.querySelector('[data-relay-address]'),
+        relayUrl: root.querySelector('[data-relay-url]'),
+        copy: root.querySelector('[data-copy]'),
+        routes: root.querySelector('[data-routes]'),
+        source: root.querySelector('[data-open-source]'),
+        remix: root.querySelector('[data-remix]'),
+        mint: root.querySelector('[data-mint]'),
+        share: root.querySelector('[data-share]'),
+      };
+
+      const roomSlug = function (value) {
+        const raw = String(value || '').trim().toLowerCase();
+        const direct = raw.match(/^[a-z0-9]{8,16}$/);
+        if (direct) return direct[0];
+        try {
+          const url = new URL(raw);
+          if (url.hostname !== 'passportz.xyz' && url.hostname !== 'www.passportz.xyz') return '';
+          const match = url.pathname.match(/^\/afterimage\/room\/([a-z0-9]{8,16})\/?$/);
+          return match ? match[1] : '';
+        } catch (_) {
+          return '';
+        }
+      };
+
+      const tune = function (value, replaceHistory) {
+        const slug = roomSlug(value);
+        if (!slug) {
+          els.note.textContent = 'Use a public Passport Afterimage room URL or its 8–16 character slug.';
+          return;
+        }
+
+        const source = `https://passportz.xyz/afterimage/room/${slug}`;
+        const relay = `${location.origin}/afterimage?room=${encodeURIComponent(slug)}`;
+        els.input.value = source;
+        els.image.src = `https://passportz.xyz/api/afterimage/room/${slug}/image`;
+        els.image.hidden = false;
+        els.empty.hidden = true;
+        els.audio.src = `https://passportz.xyz/api/afterimage/room/${slug}/audio`;
+        els.audio.loop = els.loop.checked;
+        els.play.disabled = false;
+        els.download.href = els.audio.src;
+        els.download.hidden = false;
+        els.state.textContent = 'SIGNAL LOCKED';
+        els.title.textContent = slug.toUpperCase();
+        els.subtitle.textContent = 'PUBLIC AFTERIMAGE RELAY';
+        els.note.textContent = 'Signal locked. Play it here or share this PointCast receiver.';
+        els.relayUrl.value = relay;
+        els.address.hidden = false;
+        els.routes.hidden = false;
+        els.source.href = source;
+        els.remix.href = `https://passportz.xyz/afterimage?remix=${encodeURIComponent(slug)}`;
+        els.mint.href = `https://passportz.xyz/mint?music=${encodeURIComponent(source)}&art=signal`;
+        root.dataset.tuned = 'true';
+        if (replaceHistory) history.replaceState({}, '', `/afterimage?room=${encodeURIComponent(slug)}`);
+      };
+
+      els.form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        tune(els.input.value, true);
+      });
+      els.play.addEventListener('click', function () {
+        if (els.audio.paused) els.audio.play().catch(function () { els.note.textContent = 'The browser blocked audio. Tap play once more.'; });
+        else els.audio.pause();
+      });
+      els.audio.addEventListener('play', function () {
+        els.playIcon.textContent = 'Ⅱ';
+        els.playLabel.textContent = 'PAUSE SIGNAL';
+        root.dataset.playing = 'true';
+      });
+      els.audio.addEventListener('pause', function () {
+        els.playIcon.textContent = '▶';
+        els.playLabel.textContent = 'PLAY SIGNAL';
+        delete root.dataset.playing;
+      });
+      els.loop.addEventListener('change', function () { els.audio.loop = els.loop.checked; });
+      els.copy.addEventListener('click', function () {
+        navigator.clipboard.writeText(els.relayUrl.value).then(function () { els.copy.textContent = 'COPIED'; });
+      });
+      els.share.addEventListener('click', function () {
+        const payload = { title: `Afterimage ${els.title.textContent} on PointCast`, url: els.relayUrl.value };
+        if (navigator.share) navigator.share(payload).catch(function () {});
+        else navigator.clipboard.writeText(payload.url).then(function () { els.share.textContent = 'COPIED RELAY URL'; });
+      });
+
+      const initial = new URLSearchParams(location.search).get('room');
+      if (initial) tune(initial, false);
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .relay { --relay-accent: #c9ff45; }
+  .relay-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 14px; }
+  .receiver { min-width: 0; background: #0d1015; color: #f5f1e7; border: 1px solid #0d1015; padding: 14px; }
+  .receiver__topline, .mono-note, .transport, .patchbay label, .routes a, .routes button, .boundary strong {
+    font-family: var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase;
+  }
+  .receiver__topline { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; color: #b4bcc8; margin-bottom: 12px; }
+  .receiver__topline span:last-child { color: var(--relay-accent); }
+  .receiver__art { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: radial-gradient(circle at 50% 45%, #303847, #11141a 62%); border: 1px solid #3b414b; }
+  .receiver__art img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.9) contrast(1.06); }
+  .receiver__empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: #aab0ba; }
+  .receiver__empty[hidden] { display: none; }
+  .receiver__empty span { font-size: 72px; line-height: .8; color: var(--relay-accent); animation: listening 2.8s ease-in-out infinite; }
+  .receiver__empty p { max-width: 240px; line-height: 1.5; }
+  .receiver__scan { position: absolute; inset: 0; pointer-events: none; opacity: .32; background: repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0 1px, transparent 1px 4px); }
+  .receiver__display { display: grid; grid-template-columns: minmax(0, .75fr) minmax(240px, 1.25fr); gap: 18px; align-items: end; padding: 18px 0 14px; }
+  .mono-note { margin: 0 0 7px; font-size: 9px; color: #8b95a3; }
+  .receiver h2 { margin: 0; font: 500 clamp(24px, 4vw, 50px)/.95 var(--pc-font-sans); overflow-wrap: anywhere; }
+  .receiver__display p:last-child { margin: 8px 0 0; color: #8b95a3; font: 10px/1.4 var(--pc-font-mono); letter-spacing: .1em; }
+  .meter { min-height: 70px; display: flex; align-items: center; gap: 4px; }
+  .meter i { flex: 1; min-width: 2px; height: calc(12px + (var(--meter-index) % 7) * 7px); background: var(--relay-accent); opacity: .45; transform-origin: center; }
+  [data-afterimage-relay][data-playing] .meter i { animation: meter .5s ease-in-out infinite alternate; animation-delay: calc(var(--meter-index) * -31ms); }
+  .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid #3b414b; padding-top: 13px; font-size: 10px; }
+  .transport button, .transport a, .transport label { min-height: 38px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid #555d69; background: transparent; color: #f5f1e7; padding: 9px 11px; font: inherit; letter-spacing: inherit; text-decoration: none; cursor: pointer; }
+  .transport button:not(:disabled) { border-color: var(--relay-accent); color: var(--relay-accent); }
+  .transport button:disabled { opacity: .45; cursor: default; }
+  .transport input { accent-color: var(--relay-accent); }
+  .patchbay { border: 1px solid var(--pc-rule-soft); background: #fffaf0; padding: 16px; }
+  .patchbay > h2 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 52px); line-height: .95; font-weight: 500; }
+  .patchbay > p:not(.mono-note) { color: var(--pc-ink-soft); line-height: 1.5; }
+  .patchbay code { font: 11px/1.4 var(--pc-font-mono); }
+  .patchbay form, .relay-address { margin-top: 22px; }
+  .patchbay label { display: block; margin-bottom: 7px; color: var(--pc-ink-muted); font-size: 9px; }
+  .input-row { display: flex; min-width: 0; }
+  .input-row input { width: 100%; min-width: 0; border: 1px solid var(--pc-ink); border-right: 0; border-radius: 0; background: #fff; padding: 11px; color: var(--pc-ink); font: 11px/1.2 var(--pc-font-mono); }
+  .input-row button { flex: 0 0 auto; border: 1px solid var(--pc-ink); border-radius: 0; background: var(--pc-ink); color: #fff; padding: 10px 12px; font: 10px var(--pc-font-mono); letter-spacing: .08em; cursor: pointer; }
+  .form-note { min-height: 38px; margin: 8px 0 0; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.45; }
+  .routes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 16px; }
+  .routes a, .routes button { display: grid; place-items: center; min-height: 43px; border: 1px solid var(--pc-ink); background: #fff; color: var(--pc-ink); padding: 8px; text-align: center; font-size: 9px; cursor: pointer; text-decoration: none; }
+  .routes a:nth-child(3) { background: #c9ff45; }
+  .boundary { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(18,17,14,.18); }
+  .boundary strong { font-size: 9px; }
+  .boundary p { margin-bottom: 0; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.5; }
+  [hidden] { display: none !important; }
+  @keyframes meter { from { transform: scaleY(.45); opacity: .5; } to { transform: scaleY(1.2); opacity: 1; } }
+  @keyframes listening { 50% { opacity: .4; transform: scale(.88); } }
+  @media (max-width: 800px) {
+    .relay-grid { grid-template-columns: 1fr; }
+    .receiver__display { grid-template-columns: 1fr; }
+    .meter { min-height: 52px; }
+  }
+  @media (max-width: 480px) {
+    .receiver, .patchbay { padding: 11px; }
+    .routes { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .receiver__empty span, [data-afterimage-relay][data-playing] .meter i { animation: none; }
+  }
+</style>

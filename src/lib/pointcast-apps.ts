@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'afterimage',
+    name: 'Afterimage Relay',
+    kicker: 'IMAGE SIGNAL · MUSIC ROOM · TEZOS HANDOFF',
+    description: 'A PointCast receiver for public Afterimage cuts and Mood Rooms: paste a Passport room URL, play it as a broadcast, share the relay, or return to Passport to remix and mint.',
+    url: 'https://pointcast.xyz/afterimage',
+    path: '/afterimage',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.AF',
+    kind: 'pointcast',
+  },
+  {
     slug: 'pointcast-native-shell',
     name: 'PointCast Native Shell',
     kicker: 'PWA · NOW · ROOMS',
