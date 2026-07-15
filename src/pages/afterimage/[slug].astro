@@ -1,0 +1,98 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import examples from '../../data/afterimage-examples.json';
+
+export function getStaticPaths() {
+  return examples.map((example) => ({ params: { slug: example.slug }, props: { example } }));
+}
+
+const { example } = Astro.props as { example: (typeof examples)[number] };
+const pointcastUrl = `https://pointcast.xyz/afterimage/${example.slug}`;
+const passportUrl = `https://passportz.xyz/afterimage/room/${example.slug}`;
+const imageUrl = `https://passportz.xyz/api/afterimage/room/${example.slug}/image`;
+const audioUrl = `https://passportz.xyz/api/afterimage/room/${example.slug}/audio`;
+const title = `${example.title} · Afterimage Relay`;
+const description = `${example.note} A public 30-second ${example.direction} image-to-music transmission at ${example.score.bpm} BPM.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'MusicRecording',
+  '@id': pointcastUrl,
+  name: example.title,
+  description,
+  url: pointcastUrl,
+  image: imageUrl,
+  duration: 'PT30S',
+  genre: `Afterimage ${example.direction}`,
+  keywords: [example.direction, example.score.mood, example.score.motion, example.score.texture, 'image to music', 'Lyria 3'],
+  byArtist: { '@type': 'Organization', name: 'Tezos Passport', url: 'https://passportz.xyz' },
+  associatedMedia: { '@type': 'AudioObject', contentUrl: audioUrl, encodingFormat: 'audio/mpeg', duration: 'PT30S' },
+  subjectOf: { '@type': 'WebPage', name: `${example.title} on PointCast`, url: pointcastUrl },
+  isPartOf: { '@type': 'ItemList', name: 'Afterimage Relay transmissions', url: 'https://pointcast.xyz/afterimage' },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={imageUrl}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: `/afterimage/${example.slug}.json`, title: `${example.title} data` }]}
+  frame={{ image: imageUrl, aspectRatio: '1:1', buttons: [
+    { label: 'Play on PointCast', action: 'link', target: pointcastUrl },
+    { label: 'Open source room', action: 'link', target: passportUrl },
+  ] }}
+>
+  <article class="transmission" style={`--signal:${example.score.palette[0]}`}>
+    <nav aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><a href="/afterimage">Afterimage</a><span>/</span><span>{example.slug}</span></nav>
+    <header>
+      <div class="copy">
+        <p class="kicker">TRANSMISSION {example.slug} · {example.direction} · {example.score.bpm} BPM</p>
+        <h1>{example.title}</h1>
+        <p class="note">{example.note}</p>
+        <div class="tags" aria-label="Image score">
+          {[example.score.mood, example.score.motion, example.score.texture, example.score.space, example.score.temperature].map((value) => <span>{value}</span>)}
+        </div>
+      </div>
+      <figure>
+        <img src={imageUrl} alt={`Source artwork translated into ${example.title}`} width="900" height="900" />
+        <figcaption>Public source image · translated through Afterimage FM</figcaption>
+      </figure>
+    </header>
+    <section class="player" aria-labelledby="listen-title">
+      <div><p>30-SECOND PUBLIC CUT</p><h2 id="listen-title">Listen to the image.</h2></div>
+      <audio controls preload="metadata" src={audioUrl}>Your browser can download the <a href={audioUrl}>MP3 audio</a>.</audio>
+    </section>
+    <section class="routes" aria-label="Transmission routes">
+      <a class="primary" href={`/afterimage?room=${example.slug}`}>OPEN IN RELAY</a>
+      <a href={passportUrl}>SOURCE ROOM ↗</a>
+      <a href={`https://passportz.xyz/afterimage?remix=${example.slug}`}>REMIX IMAGE ↗</a>
+      <a href={`https://passportz.xyz/mint?music=${encodeURIComponent(passportUrl)}&art=signal`}>MINT WITH KUKAI ↗</a>
+      <a href="https://passportz.xyz/afterimage?from=pointcast">REQUEST / CREATE A LINK ↗</a>
+    </section>
+    <p class="boundary">PointCast relays public artwork and audio from Passport. Nothing is minted automatically; minting remains an optional Tezos Mainnet wallet review.</p>
+  </article>
+</BlockLayout>
+
+<style>
+  .transmission { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; color: var(--pc-ink-muted); font: 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, .82fr); border-top: 2px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); }
+  .copy { display: flex; flex-direction: column; justify-content: center; padding: 30px 28px 30px 0; }
+  .kicker, .player p { margin: 0 0 12px; color: var(--signal); font: 10px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  h1 { margin: 0; max-width: 720px; font-size: clamp(48px, 8vw, 108px); line-height: .88; font-weight: 500; letter-spacing: -.045em; }
+  .note { max-width: 680px; margin: 22px 0; color: var(--pc-ink-soft); font-size: clamp(17px, 2vw, 22px); line-height: 1.48; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { border: 1px solid var(--pc-ink); padding: 7px 8px; font: 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  figure { position: relative; min-height: 520px; margin: 0; overflow: hidden; background: var(--signal); }
+  figure img { width: 100%; height: 100%; object-fit: cover; }
+  figcaption { position: absolute; left: 10px; right: 10px; bottom: 10px; background: rgba(13,16,21,.84); color: #fff; padding: 8px; font: 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .player { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(0, 1.3fr); gap: 22px; align-items: center; padding: 28px 0; border-bottom: 1px solid var(--pc-ink); }
+  .player h2 { margin: 0; font-size: clamp(32px, 5vw, 66px); line-height: .95; font-weight: 500; }
+  audio { width: 100%; accent-color: var(--signal); }
+  .routes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 18px; border-top: 1px solid var(--pc-ink); border-left: 1px solid var(--pc-ink); }
+  .routes a { display: grid; place-items: center; min-height: 68px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); color: var(--pc-ink); padding: 10px; text-align: center; font: 9px var(--pc-font-mono); letter-spacing: .08em; text-decoration: none; }
+  .routes a:hover, .routes .primary { background: var(--pc-ink); color: #fff; }
+  .boundary { max-width: 760px; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.55; }
+  @media (max-width: 800px) { header, .player { grid-template-columns: 1fr; } .copy { padding-right: 0; } figure { min-height: 420px; } .routes { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 480px) { .routes { grid-template-columns: 1fr; } figure { min-height: 340px; } }
+</style>

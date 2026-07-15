@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
+import afterimageExamples from '../data/afterimage-examples.json';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
 
@@ -23,6 +24,12 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/nouns-nation/roadmap.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/for-agents', 'weekly', '0.9'],
   ['https://pointcast.xyz/agents.json', 'daily', '0.9'],
+  ['https://pointcast.xyz/afterimage', 'weekly', '0.9'],
+  ['https://pointcast.xyz/afterimage.json', 'weekly', '0.85'],
+  ...afterimageExamples.flatMap((example) => [
+    [`https://pointcast.xyz/afterimage/${example.slug}`, 'weekly', '0.82'] as SitemapEntry,
+    [`https://pointcast.xyz/afterimage/${example.slug}.json`, 'weekly', '0.78'] as SitemapEntry,
+  ]),
   ['https://pointcast.xyz/shop', 'daily', '0.85'],
   ['https://pointcast.xyz/shop.json', 'daily', '0.85'],
   ['https://pointcast.xyz/products', 'daily', '0.85'],

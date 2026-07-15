@@ -2,6 +2,7 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import MicroAppShell from '../components/MicroAppShell.astro';
 import { getPointcastApp } from '../lib/pointcast-apps';
+import examples from '../data/afterimage-examples.json';
 
 const app = getPointcastApp('afterimage')!;
 const title = app.name;
@@ -9,14 +10,29 @@ const description = app.description;
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'WebApplication',
-  '@id': 'https://pointcast.xyz/afterimage',
-  name: title,
-  description,
-  url: app.url,
-  applicationCategory: 'MusicApplication',
-  operatingSystem: 'Web',
-  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  '@graph': [
+    {
+      '@type': 'WebApplication',
+      '@id': 'https://pointcast.xyz/afterimage',
+      name: title,
+      description,
+      url: app.url,
+      applicationCategory: 'MusicApplication',
+      operatingSystem: 'Web',
+      isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+    },
+    {
+      '@type': 'ItemList',
+      name: 'Ten Afterimage Relay transmissions',
+      numberOfItems: examples.length,
+      itemListElement: examples.map((example, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: `https://pointcast.xyz/afterimage/${example.slug}`,
+        name: example.title,
+      })),
+    },
+  ],
 };
 ---
 
@@ -24,6 +40,7 @@ const jsonLd = {
   title={title}
   description={description}
   jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/afterimage.json', title: 'Afterimage example catalog' }]}
   frame={{
     buttons: [
       { label: 'Open relay', action: 'link', target: 'https://pointcast.xyz/afterimage' },
@@ -38,9 +55,13 @@ const jsonLd = {
     stats={[
       { label: 'Input', value: 'room URL' },
       { label: 'Audio', value: 'source' },
-      { label: 'Relay', value: 'shareable' },
+      { label: 'Examples', value: examples.length },
       { label: 'Mint', value: 'Passport' },
     ]}
+    images={examples.slice(0, 6).map((example) => ({
+      src: `https://passportz.xyz/api/afterimage/room/${example.slug}/image`,
+      alt: `Source artwork for ${example.title}`,
+    }))}
     links={[
       { href: 'https://passportz.xyz/afterimage', label: 'Make in Passport' },
       { href: '/listening-room', label: 'Listening Room' },
@@ -87,6 +108,9 @@ const jsonLd = {
           <h2>Bring a room across.</h2>
           <p>Use any public URL shaped like <code>passportz.xyz/afterimage/room/…</code>. No generation happens here, so tuning and sharing do not spend Lyria credits.</p>
 
+          <a class="request-link" href="https://passportz.xyz/afterimage?from=pointcast">REQUEST / CREATE A LINK <span aria-hidden="true">↗</span></a>
+          <p class="request-note">Open Passport, make or publish an image song, then bring its public room URL back here. Human direction is optional and expandable there.</p>
+
           <form data-tune-form>
             <label for="room-url">Passport room URL or slug</label>
             <div class="input-row">
@@ -118,12 +142,49 @@ const jsonLd = {
         </aside>
       </div>
     </section>
+
+    <section class="app-section examples" aria-labelledby="examples-title">
+      <header class="examples__header">
+        <div>
+          <p class="mono-note">Ten transmissions · public and playable</p>
+          <h2 id="examples-title">Start with a strange signal.</h2>
+        </div>
+        <p>Each example has its own permanent page, source artwork, MP3, prompt, structured metadata, and direct relay route. Nothing here is minted.</p>
+      </header>
+      <div class="example-grid">
+        {examples.map((example, index) => (
+          <article class="example-card" style={`--example-accent:${example.score.palette[0]}`}>
+            <a class="example-card__image" href={`/afterimage/${example.slug}`} aria-label={`Open ${example.title}`}>
+              <img
+                src={`https://passportz.xyz/api/afterimage/room/${example.slug}/image`}
+                alt={`Source artwork translated into ${example.title}`}
+                width="640"
+                height="640"
+                loading={index < 2 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+              <span>{String(index + 1).padStart(2, '0')} · {example.score.bpm} BPM</span>
+            </a>
+            <div class="example-card__copy">
+              <p>{example.direction} · {example.score.mood}</p>
+              <h3><a href={`/afterimage/${example.slug}`}>{example.title}</a></h3>
+              <p>{example.note}</p>
+              <div>
+                <button type="button" data-example-slug={example.slug} data-example-title={example.title}>TUNE HERE</button>
+                <a href={`/afterimage/${example.slug}`}>OPEN PAGE</a>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   </MicroAppShell>
 
   <script is:inline>
     (function () {
       const root = document.querySelector('[data-afterimage-relay]');
       if (!root) return;
+      const page = root.closest('.micro-app') || document;
 
       const els = {
         form: root.querySelector('[data-tune-form]'),
@@ -164,7 +225,7 @@ const jsonLd = {
         }
       };
 
-      const tune = function (value, replaceHistory) {
+      const tune = function (value, replaceHistory, suppliedTitle) {
         const slug = roomSlug(value);
         if (!slug) {
           els.note.textContent = 'Use a public Passport Afterimage room URL or its 8–16 character slug.';
@@ -183,7 +244,8 @@ const jsonLd = {
         els.download.href = els.audio.src;
         els.download.hidden = false;
         els.state.textContent = 'SIGNAL LOCKED';
-        els.title.textContent = slug.toUpperCase();
+        const exampleButton = page.querySelector(`[data-example-slug="${slug}"]`);
+        els.title.textContent = suppliedTitle || exampleButton?.dataset.exampleTitle || slug.toUpperCase();
         els.subtitle.textContent = 'PUBLIC AFTERIMAGE RELAY';
         els.note.textContent = 'Signal locked. Play it here or share this PointCast receiver.';
         els.relayUrl.value = relay;
@@ -222,6 +284,12 @@ const jsonLd = {
         const payload = { title: `Afterimage ${els.title.textContent} on PointCast`, url: els.relayUrl.value };
         if (navigator.share) navigator.share(payload).catch(function () {});
         else navigator.clipboard.writeText(payload.url).then(function () { els.share.textContent = 'COPIED RELAY URL'; });
+      });
+      page.querySelectorAll('[data-example-slug]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          tune(button.dataset.exampleSlug, true, button.dataset.exampleTitle);
+          root.querySelector('.receiver')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       });
 
       const initial = new URLSearchParams(location.search).get('room');
@@ -262,6 +330,9 @@ const jsonLd = {
   .patchbay > h2 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 52px); line-height: .95; font-weight: 500; }
   .patchbay > p:not(.mono-note) { color: var(--pc-ink-soft); line-height: 1.5; }
   .patchbay code { font: 11px/1.4 var(--pc-font-mono); }
+  .request-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; border: 1px solid var(--pc-ink); background: #c9ff45; color: var(--pc-ink); padding: 14px; font: 500 11px var(--pc-font-mono); letter-spacing: .1em; text-decoration: none; }
+  .request-link:hover { background: var(--pc-ink); color: #c9ff45; text-decoration: none; }
+  .request-note { margin: 8px 0 0; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.45; }
   .patchbay form, .relay-address { margin-top: 22px; }
   .patchbay label { display: block; margin-bottom: 7px; color: var(--pc-ink-muted); font-size: 9px; }
   .input-row { display: flex; min-width: 0; }
@@ -274,6 +345,24 @@ const jsonLd = {
   .boundary { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(18,17,14,.18); }
   .boundary strong { font-size: 9px; }
   .boundary p { margin-bottom: 0; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.5; }
+  .examples { margin-top: 42px; }
+  .examples__header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr); gap: 24px; align-items: end; margin-bottom: 16px; }
+  .examples__header h2 { max-width: 720px; font-size: clamp(38px, 7vw, 76px); }
+  .examples__header > p { margin: 0; color: var(--pc-ink-soft); line-height: 1.55; }
+  .example-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--pc-ink); border-left: 1px solid var(--pc-ink); }
+  .example-card { min-width: 0; display: grid; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); background: #fff; }
+  .example-card__image { position: relative; min-height: 240px; overflow: hidden; background: var(--example-accent); color: #fff; }
+  .example-card__image img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }
+  .example-card:hover .example-card__image img { transform: scale(1.035); }
+  .example-card__image span { position: absolute; left: 8px; bottom: 8px; background: rgba(13,16,21,.82); padding: 6px 7px; font: 9px var(--pc-font-mono); letter-spacing: .09em; }
+  .example-card__copy { min-width: 0; display: flex; flex-direction: column; padding: 15px; }
+  .example-card__copy > p:first-child { margin: 0 0 10px; color: var(--example-accent); font: 9px var(--pc-font-mono); letter-spacing: .11em; text-transform: uppercase; }
+  .example-card h3 { margin: 0; font-size: clamp(23px, 3vw, 36px); line-height: .98; font-weight: 500; }
+  .example-card h3 a { color: var(--pc-ink); }
+  .example-card__copy > p:not(:first-child) { margin: 13px 0 18px; color: var(--pc-ink-soft); font-size: 13px; line-height: 1.48; }
+  .example-card__copy > div { display: flex; flex-wrap: wrap; gap: 7px; margin-top: auto; }
+  .example-card button, .example-card__copy > div a { border: 1px solid var(--pc-ink); background: var(--pc-ink); color: #fff; padding: 9px 10px; font: 9px var(--pc-font-mono); letter-spacing: .08em; cursor: pointer; text-decoration: none; }
+  .example-card__copy > div a { background: #fff; color: var(--pc-ink); }
   [hidden] { display: none !important; }
   @keyframes meter { from { transform: scaleY(.45); opacity: .5; } to { transform: scaleY(1.2); opacity: 1; } }
   @keyframes listening { 50% { opacity: .4; transform: scale(.88); } }
@@ -281,10 +370,13 @@ const jsonLd = {
     .relay-grid { grid-template-columns: 1fr; }
     .receiver__display { grid-template-columns: 1fr; }
     .meter { min-height: 52px; }
+    .examples__header, .example-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 480px) {
     .receiver, .patchbay { padding: 11px; }
     .routes { grid-template-columns: 1fr; }
+    .example-card { grid-template-columns: 1fr; }
+    .example-card__image { min-height: 260px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .receiver__empty span, [data-afterimage-relay][data-playing] .meter i { animation: none; }
