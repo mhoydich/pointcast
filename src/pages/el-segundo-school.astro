@@ -62,7 +62,14 @@ const jsonLd = {
             <button type="button" data-filter="all" aria-pressed="true">All {gallery.count}</button>
             {categories.map((category) => <button type="button" data-filter={category}>{category}</button>)}
           </div>
-          <p>Drag to tilt · scroll to travel · select any wall to enter the maker.</p>
+          <div class="gallery__views" role="group" aria-label="Choose gallery view">
+            <span>View</span>
+            <button type="button" data-view="salon" aria-pressed="true">3D salon</button>
+            <button type="button" data-view="sets">Sets of four</button>
+            <button type="button" data-view="index">Contact sheet</button>
+            <button type="button" id="gallery-random">Random work ↗</button>
+          </div>
+          <p id="gallery-instruction">Drag to tilt · scroll to travel · select any wall to enter the maker.</p>
         </div>
       </div>
       <div class="gallery__viewport" id="gallery-viewport">
@@ -181,6 +188,7 @@ const jsonLd = {
   let selected = works[0];
   let selectedKind: 'postcard' | 'stamp' = 'postcard';
   let selectedFilter = 'all';
+  let selectedView: 'salon' | 'sets' | 'index' = 'salon';
   let walletAddress = '';
   let previewImage = new Image();
   let tezosModule: Promise<typeof import('../lib/el-segundo-school-mint')> | null = null;
@@ -215,6 +223,7 @@ const jsonLd = {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'art-wall';
+      button.style.setProperty('--art-ratio', `${work.width} / ${work.height}`);
       button.style.setProperty('--z', `${(index % 7) * 8}px`);
       button.style.setProperty('--lean', `${index % 2 ? 1.4 : -1.4}deg`);
       button.innerHTML = `<img src="${work.thumb}" alt="" loading="lazy" width="${work.width}" height="${work.height}"/><span><b>${work.number}</b>${work.title}<i>SET ${String(work.set).padStart(3, '0')} · V${work.variant}</i></span>`;
@@ -224,6 +233,21 @@ const jsonLd = {
     });
     world.append(fragment);
     visibleCount.textContent = String(list.length);
+  }
+
+  function setGalleryView(view: 'salon' | 'sets' | 'index') {
+    selectedView = view;
+    world.dataset.view = view;
+    document.querySelectorAll<HTMLButtonElement>('button[data-view]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.view === view));
+    });
+    const instruction = document.getElementById('gallery-instruction');
+    if (instruction) instruction.textContent = view === 'salon'
+      ? 'Drag to tilt · scroll to travel · select any wall to enter the maker.'
+      : view === 'sets'
+        ? 'Every four consecutive works preserve the original Midjourney set.'
+        : 'A compact, uncropped index of all 652 works.';
+    try { localStorage.setItem('el-segundo-school-view', view); } catch { /* private mode */ }
   }
 
   function drawWrappedText(text: string, x: number, y: number, width: number, lineHeight: number, maxLines: number) {
@@ -366,6 +390,16 @@ const jsonLd = {
       renderGallery();
     });
   });
+  document.querySelectorAll<HTMLButtonElement>('button[data-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.view;
+      if (view === 'salon' || view === 'sets' || view === 'index') setGalleryView(view);
+    });
+  });
+  document.getElementById('gallery-random')?.addEventListener('click', () => {
+    const list = filteredWorks();
+    if (list.length) openMaker(list[Math.floor(Math.random() * list.length)]);
+  });
   document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedKind = button.dataset.kind === 'stamp' ? 'stamp' : 'postcard';
@@ -454,7 +488,7 @@ const jsonLd = {
   viewport.addEventListener('pointerdown', () => { drag = true; });
   window.addEventListener('pointerup', () => { drag = false; world.style.removeProperty('--tilt-x'); world.style.removeProperty('--tilt-y'); });
   viewport.addEventListener('pointermove', (event) => {
-    if (!drag) return;
+    if (!drag || selectedView !== 'salon') return;
     const box = viewport.getBoundingClientRect();
     world.style.setProperty('--tilt-y', `${((event.clientX - box.left) / box.width - .5) * 12}deg`);
     world.style.setProperty('--tilt-x', `${((event.clientY - box.top) / box.height - .5) * -7}deg`);
@@ -467,9 +501,22 @@ const jsonLd = {
       if (element && Number.isFinite(weather?.current?.temperature_2m)) element.innerHTML = `<b>${Math.round(weather.current.temperature_2m)}°F</b> EL SEGUNDO AIR`;
     }).catch(() => undefined);
 
+  const requestedMaker = new URLSearchParams(window.location.search).get('make');
+  if (requestedMaker === 'stamp') {
+    selectedKind = 'stamp';
+    titleInput.value = 'Stampz / El Segundo';
+    document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.kind === 'stamp'));
+    });
+  }
+  try {
+    const savedView = localStorage.getItem('el-segundo-school-view');
+    if (savedView === 'sets' || savedView === 'index') setGalleryView(savedView);
+    else setGalleryView('salon');
+  } catch { setGalleryView('salon'); }
   renderGallery();
   openMaker(works[0]);
-  dialog.close();
+  if (requestedMaker !== 'postcard' && requestedMaker !== 'stamp') dialog.close();
 </script>
 
 <style>
@@ -501,20 +548,31 @@ const jsonLd = {
   .gallery__tools label { display:grid; grid-template-columns:90px 1fr; gap:12px; align-items:center; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .gallery__tools input { width:100%; padding:12px; border:1px solid #5b5c57; background:#181914; color:var(--paper); }
   .filters { display:flex; flex-wrap:wrap; gap:6px; }
-  .filters button,.kind-switch button { padding:8px 10px; border:1px solid #5b5c57; background:transparent; color:inherit; font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
-  .filters button[aria-pressed="true"],.kind-switch button[aria-pressed="true"] { background:var(--acid); color:var(--ink); border-color:var(--acid); }
+  .filters button,.kind-switch button,.gallery__views button { padding:8px 10px; border:1px solid #5b5c57; background:transparent; color:inherit; font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .filters button[aria-pressed="true"],.kind-switch button[aria-pressed="true"],.gallery__views button[aria-pressed="true"] { background:var(--acid); color:var(--ink); border-color:var(--acid); }
+  .gallery__views { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .gallery__views > span { width:84px; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .gallery__views #gallery-random { margin-left:auto; border-color:var(--paper); }
   .gallery__tools > p { margin:0; color:#9a9b93; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .gallery__viewport { margin-top:56px; padding:50px 4vw 100px; overflow:auto; perspective:1400px; background:radial-gradient(circle at 50% -10%,#34362d,#11120f 62%); border:1px solid #393a34; cursor:grab; }
   .gallery__viewport:active { cursor:grabbing; }
-  .gallery__world { --tilt-x:0deg; --tilt-y:0deg; display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:34px 18px; transform-style:preserve-3d; transform:rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition:transform .15s ease-out; }
-  .art-wall { min-width:0; padding:8px; border:1px solid #55584d; background:#22231e; color:var(--paper); text-align:left; box-shadow:0 20px 38px #0009; transform:translateZ(var(--z)) rotateY(var(--lean)); transform-style:preserve-3d; transition:transform .2s, border-color .2s; }
-  .art-wall:nth-child(3n) { margin-top:44px; }
-  .art-wall:nth-child(5n) { margin-top:-18px; }
-  .art-wall:hover,.art-wall:focus-visible { transform:translateZ(70px) rotateY(0); border-color:var(--acid); z-index:2; outline:none; }
-  .art-wall img { display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#333; }
-  .art-wall span { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; padding:9px 2px 2px; font:8px/1.35 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
-  .art-wall b { color:var(--acid); }
-  .art-wall i { grid-column:2; color:#8d8e86; font-style:normal; }
+  .gallery__world { --tilt-x:0deg; --tilt-y:0deg; display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); align-items:start; gap:34px 18px; transform-style:preserve-3d; transform:rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition:transform .15s ease-out; }
+  :global(.art-wall) { min-width:0; align-self:start; padding:8px; border:1px solid #55584d; background:#22231e; color:var(--paper); text-align:left; box-shadow:0 20px 38px #0009; transform:translateZ(var(--z)) rotateY(var(--lean)); transform-style:preserve-3d; transition:transform .2s, border-color .2s; }
+  :global(.art-wall:nth-child(3n)) { margin-top:44px; }
+  :global(.art-wall:nth-child(5n)) { margin-top:-18px; }
+  :global(.art-wall:hover),:global(.art-wall:focus-visible) { transform:translateZ(70px) rotateY(0); border-color:var(--acid); z-index:2; outline:none; }
+  :global(.art-wall img) { display:block; width:100%; height:auto; aspect-ratio:var(--art-ratio); object-fit:contain; background:#333; }
+  :global(.art-wall span) { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; padding:9px 2px 2px; font:8px/1.35 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  :global(.art-wall b) { color:var(--acid); }
+  :global(.art-wall i) { grid-column:2; color:#8d8e86; font-style:normal; }
+  .gallery__world[data-view="sets"] { grid-template-columns:repeat(4,minmax(150px,1fr)); gap:10px; transform:none; }
+  .gallery__world[data-view="sets"] :global(.art-wall) { margin-top:0; transform:none; box-shadow:0 12px 24px #0007; }
+  .gallery__world[data-view="sets"] :global(.art-wall:nth-child(4n+1)) { border-left:3px solid var(--acid); }
+  .gallery__world[data-view="index"] { grid-template-columns:repeat(10,minmax(72px,1fr)); gap:8px; transform:none; }
+  .gallery__world[data-view="index"] :global(.art-wall) { margin-top:0; padding:3px; transform:none; box-shadow:none; }
+  .gallery__world[data-view="index"] :global(.art-wall span) { grid-template-columns:1fr; padding:5px 1px 1px; font-size:0; }
+  .gallery__world[data-view="index"] :global(.art-wall i) { display:none; }
+  .gallery__world[data-view="index"] :global(.art-wall b) { font-size:7px; }
   .gallery__count { padding:16px 0; color:var(--acid); font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; text-align:right; }
   .makers { padding:110px 16px; background:var(--red); color:var(--ink); border-bottom:1px solid var(--ink); }
   .makers h2 { color:var(--ink); }
@@ -548,7 +606,7 @@ const jsonLd = {
   .consent { grid-template-columns:18px 1fr!important; line-height:1.4!important; }
   .maker__status { padding:10px; background:#161a32; font:9px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .maker__operation { display:inline-block; color:var(--acid); border-bottom:1px solid; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
-  @media(max-width:1000px){ .gallery__world{grid-template-columns:repeat(4,minmax(100px,1fr));}.maker[open]{grid-template-columns:1fr 420px;} }
-  @media(max-width:720px){ .ess__head nav a:nth-child(n+4){display:none}.hero__facts{grid-template-columns:1fr 1fr}.hero__facts p:nth-child(2){border-right:0}.gallery__head,.makers{grid-template-columns:1fr}.gallery__world{grid-template-columns:repeat(2,minmax(110px,1fr));gap:20px 9px}.gallery__viewport{padding-inline:12px}.vendor-grid{grid-template-columns:1fr}.maker[open]{display:block;height:96vh}.maker__preview{height:40vh}.maker__preview canvas{max-height:36vh}.maker__panel{padding-top:24px}footer{grid-template-columns:1fr;gap:12px}.hero h1 span{white-space:normal}.hero__note{text-align:left}.hero__facts b{font-size:30px} }
-  @media(prefers-reduced-motion:reduce){ .gallery__world,.art-wall{transform:none!important;transition:none} }
+  @media(max-width:1000px){ .gallery__world{grid-template-columns:repeat(4,minmax(100px,1fr));}.gallery__world[data-view="index"]{grid-template-columns:repeat(7,minmax(64px,1fr))}.maker[open]{grid-template-columns:1fr 420px;} }
+  @media(max-width:720px){ .ess__head nav a:nth-child(n+4){display:none}.hero__facts{grid-template-columns:1fr 1fr}.hero__facts p:nth-child(2){border-right:0}.gallery__head,.makers{grid-template-columns:1fr}.gallery__world,.gallery__world[data-view="sets"]{grid-template-columns:repeat(2,minmax(110px,1fr));gap:20px 9px}.gallery__world[data-view="index"]{grid-template-columns:repeat(4,minmax(64px,1fr));gap:6px}.gallery__viewport{padding-inline:12px}.gallery__views > span{width:100%}.gallery__views #gallery-random{margin-left:0}.vendor-grid{grid-template-columns:1fr}.maker[open]{display:block;height:96vh}.maker__preview{height:40vh}.maker__preview canvas{max-height:36vh}.maker__panel{padding-top:24px}footer{grid-template-columns:1fr;gap:12px}.hero h1 span{white-space:normal}.hero__note{text-align:left}.hero__facts b{font-size:30px} }
+  @media(prefers-reduced-motion:reduce){ .gallery__world,:global(.art-wall){transform:none!important;transition:none} }
 </style>
