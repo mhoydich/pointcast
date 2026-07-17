@@ -23,13 +23,15 @@ const jsonLd = {
 ---
 
 <BlockLayout title={title} description={description} jsonLd={jsonLd}>
-  <main class="ess">
+  <div class="ess">
     <header class="ess__head">
       <nav aria-label="El Segundo School sections">
+        <a href="/">PointCast</a>
         <a href="#gallery">Gallery</a>
-        <a href="#makers">Passport</a>
-        <a href="#makers">Stampz</a>
+        <a href="?make=postcard">Passport</a>
+        <a href="?make=stamp">Stampz</a>
         <a href="#physical">Physical</a>
+        <a href="/university-of-el-segundo">Fund UES</a>
         <a href="https://el-segundo-school-daily.mhoydich.chatgpt.site/">Daily Wall 001 ↗</a>
       </nav>
       <div class="wallet-desk">
@@ -70,6 +72,7 @@ const jsonLd = {
             <button type="button" id="gallery-random">Random work ↗</button>
           </div>
           <p id="gallery-instruction">Drag to tilt · scroll to travel · select any wall to enter the maker.</p>
+          <button class="gallery__mobile-all" id="gallery-mobile-all" type="button" hidden>Load all 652 works on this device</button>
         </div>
       </div>
       <div class="gallery__viewport" id="gallery-viewport">
@@ -105,10 +108,14 @@ const jsonLd = {
       <span>652 PNG ORIGINALS · NO AI UPSCALE REQUIRED</span>
       <a href="/postcards">POINTCAST /POSTCARDS →</a>
     </footer>
-  </main>
+  </div>
 
   <dialog class="maker" id="maker-dialog">
-    <button class="maker__close" id="maker-close" type="button" aria-label="Close maker">Close ×</button>
+    <div class="maker__bar">
+      <button class="maker__close" id="maker-close" type="button" aria-label="Close maker and return to the gallery">← Back to gallery</button>
+      <span>Passport + Stampz maker · Tezos Mainnet</span>
+      <a href="/university-of-el-segundo">Fund the University →</a>
+    </div>
     <div class="maker__preview"><canvas id="maker-canvas" width="1800" height="1200"></canvas></div>
     <form class="maker__panel" method="dialog" onsubmit="return false">
       <p class="eyebrow" id="maker-work-label">WORK —</p>
@@ -189,6 +196,7 @@ const jsonLd = {
   let selectedKind: 'postcard' | 'stamp' = 'postcard';
   let selectedFilter = 'all';
   let selectedView: 'salon' | 'sets' | 'index' = 'salon';
+  let mobileExpanded = false;
   let walletAddress = '';
   let previewImage = new Image();
   let tezosModule: Promise<typeof import('../lib/el-segundo-school-mint')> | null = null;
@@ -217,9 +225,17 @@ const jsonLd = {
 
   function renderGallery() {
     const list = filteredWorks();
+    const compact = window.matchMedia('(max-width: 720px)').matches;
+    const isUnfiltered = selectedFilter === 'all' && !search.value.trim();
+    const rendered = compact && isUnfiltered && !mobileExpanded ? list.slice(0, 48) : list;
+    const mobileAll = document.getElementById('gallery-mobile-all') as HTMLButtonElement | null;
+    if (mobileAll) {
+      mobileAll.hidden = !compact || !isUnfiltered || mobileExpanded;
+      mobileAll.textContent = `Load all ${list.length} works on this device`;
+    }
     world.replaceChildren();
     const fragment = document.createDocumentFragment();
-    list.forEach((work, index) => {
+    rendered.forEach((work, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'art-wall';
@@ -232,7 +248,7 @@ const jsonLd = {
       fragment.append(button);
     });
     world.append(fragment);
-    visibleCount.textContent = String(list.length);
+    visibleCount.textContent = rendered.length === list.length ? String(list.length) : `${rendered.length} of ${list.length}`;
   }
 
   function setGalleryView(view: 'salon' | 'sets' | 'index') {
@@ -331,7 +347,7 @@ const jsonLd = {
     previewImage.src = work.src;
     status.textContent = 'Choose a format, tune the type, then download or mint.';
     operationLink.hidden = true;
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   async function connect() {
@@ -380,8 +396,25 @@ const jsonLd = {
   }
 
   connectButton.addEventListener('click', () => void connect().catch(() => undefined));
-  document.getElementById('maker-close')?.addEventListener('click', () => dialog.close());
+  function closeMaker() {
+    dialog.close();
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('make')) {
+      url.searchParams.delete('make');
+      history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
+
+  document.getElementById('maker-close')?.addEventListener('click', closeMaker);
+  dialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeMaker();
+  });
   document.getElementById('maker-random')?.addEventListener('click', () => openMaker(works[Math.floor(Math.random() * works.length)]));
+  document.getElementById('gallery-mobile-all')?.addEventListener('click', () => {
+    mobileExpanded = true;
+    renderGallery();
+  });
   search.addEventListener('input', renderGallery);
   document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -405,6 +438,9 @@ const jsonLd = {
       selectedKind = button.dataset.kind === 'stamp' ? 'stamp' : 'postcard';
       document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
       titleInput.value = selectedKind === 'stamp' ? 'Stampz / El Segundo' : 'Greetings from El Segundo';
+      const url = new URL(window.location.href);
+      url.searchParams.set('make', selectedKind);
+      history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
       drawMaker();
     });
   });
@@ -512,18 +548,19 @@ const jsonLd = {
   try {
     const savedView = localStorage.getItem('el-segundo-school-view');
     if (savedView === 'sets' || savedView === 'index') setGalleryView(savedView);
-    else setGalleryView('salon');
+    else setGalleryView(window.matchMedia('(max-width: 720px)').matches ? 'index' : 'salon');
   } catch { setGalleryView('salon'); }
   renderGallery();
-  openMaker(works[0]);
-  if (requestedMaker !== 'postcard' && requestedMaker !== 'stamp') dialog.close();
+  if (requestedMaker === 'postcard' || requestedMaker === 'stamp') openMaker(works[0]);
 </script>
 
 <style>
   :global(body) { background:#11120f; }
-  .ess { --blue:#0826d6; --acid:#caff24; --paper:#f1efe5; --ink:#11120f; --red:#fa4428; color:var(--paper); background:var(--blue); font-family:'Inter Variable',Arial,sans-serif; }
+  .ess,.maker { --blue:#0826d6; --acid:#caff24; --paper:#f1efe5; --ink:#11120f; --red:#fa4428; }
+  .ess { color:var(--paper); background:var(--blue); font-family:'Inter Variable',Arial,sans-serif; }
   .ess__head { position:sticky; top:0; z-index:20; min-height:58px; display:flex; justify-content:space-between; align-items:center; gap:20px; padding:10px 16px; background:var(--paper); color:var(--ink); border-bottom:1px solid var(--ink); }
   .ess__head nav { display:flex; flex-wrap:wrap; gap:22px; font:10px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .ess__head a { color:var(--ink); }
   .ess__head a:hover { text-decoration:underline; text-underline-offset:4px; }
   .wallet-desk { display:grid; justify-items:end; gap:3px; }
   .wallet-desk span { max-width:360px; min-height:10px; text-align:right; font:8px/1.3 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
@@ -543,6 +580,7 @@ const jsonLd = {
   .hero__facts b { display:block; color:var(--acid); font:42px/1 'Inter Variable',sans-serif; letter-spacing:-.06em; }
   .hero__note { max-width:760px; margin:20px 0 0 auto; text-align:right; font:10px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .gallery { padding:80px 16px; background:var(--ink); }
+  .gallery,.makers,.physical { scroll-margin-top:58px; }
   .gallery__head,.makers { display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.4fr); gap:60px; align-items:end; }
   .gallery h2,.makers h2,.physical h2 { margin:8px 0 0; color:var(--acid); font-size:clamp(58px,8vw,128px); line-height:.82; letter-spacing:-.07em; }
   .gallery__tools { display:grid; gap:14px; }
@@ -555,6 +593,7 @@ const jsonLd = {
   .gallery__views > span { width:84px; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .gallery__views #gallery-random { margin-left:auto; border-color:var(--paper); }
   .gallery__tools > p { margin:0; color:#9a9b93; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .gallery__mobile-all { width:fit-content; padding:10px 12px; border:1px solid var(--acid); background:transparent; color:var(--acid); font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .gallery__viewport { margin-top:56px; padding:50px 4vw 100px; overflow:auto; perspective:1400px; background:radial-gradient(circle at 50% -10%,#34362d,#11120f 62%); border:1px solid #393a34; cursor:grab; }
   .gallery__viewport:active { cursor:grabbing; }
   .gallery__world { --tilt-x:0deg; --tilt-y:0deg; display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); align-items:start; gap:34px 18px; transform-style:preserve-3d; transform:rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition:transform .15s ease-out; }
@@ -588,10 +627,14 @@ const jsonLd = {
   .vendor-grid b { font-size:28px; }
   .vendor-grid span { font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   footer { min-height:220px; display:grid; grid-template-columns:1fr 1fr auto; align-items:end; padding:24px 16px; font:9px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
-  .maker { width:min(1500px,96vw); height:min(920px,94vh); max-width:none; max-height:none; padding:0; border:1px solid var(--paper); background:#090b18; color:var(--paper); }
+  .maker { width:min(1500px,96vw); height:min(920px,94vh); max-width:none; max-height:none; padding:38px 0 0; border:1px solid #f1efe5; background:#090b18; color:#f1efe5; }
   .maker::backdrop { background:#050612eF; }
   .maker[open] { display:grid; grid-template-columns:minmax(420px,1.2fr) minmax(330px,560px); }
-  .maker__close { position:absolute; top:12px; right:16px; z-index:2; padding:8px; border:0; background:var(--acid); color:var(--ink); font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__bar { position:absolute; inset:0 0 auto; z-index:3; min-height:38px; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px; padding:0 8px; border-bottom:1px solid #f1efe5; background:#caff24; color:#11120f; font:9px 'JetBrains Mono Variable',monospace; letter-spacing:.05em; text-transform:uppercase; }
+  .maker__bar span { text-align:center; }
+  .maker__bar a { color:#11120f; text-decoration:underline; text-underline-offset:3px; }
+  .maker__close { min-height:28px; padding:5px 9px; border:1px solid #11120f; background:#11120f; color:#f1efe5; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__close:focus-visible { outline:3px solid #0826d6; outline-offset:2px; }
   .maker__preview { display:grid; place-items:center; padding:30px; overflow:hidden; background:#111; }
   .maker__preview canvas { display:block; max-width:100%; max-height:84vh; width:auto; height:auto; box-shadow:0 24px 80px #000; }
   .maker__panel { padding:48px 26px 30px; overflow:auto; }
@@ -608,6 +651,6 @@ const jsonLd = {
   .maker__status { padding:10px; background:#161a32; font:9px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   .maker__operation { display:inline-block; color:var(--acid); border-bottom:1px solid; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
   @media(max-width:1000px){ .gallery__world{grid-template-columns:repeat(4,minmax(100px,1fr));}.gallery__world[data-view="index"]{grid-template-columns:repeat(7,minmax(64px,1fr))}.maker[open]{grid-template-columns:1fr 420px;} }
-  @media(max-width:720px){ .ess__head nav a:nth-child(n+4){display:none}.hero__facts{grid-template-columns:1fr 1fr}.hero__facts p:nth-child(2){border-right:0}.gallery__head,.makers{grid-template-columns:1fr}.gallery__world,.gallery__world[data-view="sets"]{grid-template-columns:repeat(2,minmax(110px,1fr));gap:20px 9px}.gallery__world[data-view="index"]{grid-template-columns:repeat(4,minmax(64px,1fr));gap:6px}.gallery__viewport{padding-inline:12px}.gallery__views > span{width:100%}.gallery__views #gallery-random{margin-left:0}.vendor-grid{grid-template-columns:1fr}.maker[open]{display:block;height:96vh}.maker__preview{height:40vh}.maker__preview canvas{max-height:36vh}.maker__panel{padding-top:24px}footer{grid-template-columns:1fr;gap:12px}.hero h1 span{white-space:normal}.hero__note{text-align:left}.hero__facts b{font-size:30px} }
+  @media(max-width:720px){ .ess__head{align-items:stretch;gap:8px;padding:8px}.ess__head nav{flex:1 1 auto;flex-wrap:nowrap;gap:6px;overflow-x:auto;scrollbar-width:none}.ess__head nav::-webkit-scrollbar{display:none}.ess__head nav a{flex:0 0 auto;display:grid;place-items:center;min-height:34px;padding:0 9px;border:1px solid #a4a39c}.wallet-desk{flex:0 0 auto}.wallet-desk span{display:none}.hero__facts{grid-template-columns:1fr 1fr}.hero__facts p:nth-child(2){border-right:0}.gallery__head,.makers{grid-template-columns:1fr}.gallery__world,.gallery__world[data-view="sets"]{grid-template-columns:repeat(2,minmax(110px,1fr));gap:20px 9px}.gallery__world[data-view="index"]{grid-template-columns:repeat(4,minmax(64px,1fr));gap:6px}.gallery__viewport{padding-inline:12px}.gallery__views > span{width:100%}.gallery__views #gallery-random{margin-left:0}.vendor-grid{grid-template-columns:1fr}.maker{width:100vw;height:100dvh;padding-top:74px;border:0}.maker[open]{display:block}.maker__bar{min-height:74px;grid-template-columns:1fr auto;gap:6px;padding:7px 8px}.maker__bar span{display:none}.maker__bar a{font-size:8px}.maker__preview{height:38vh;padding:14px}.maker__preview canvas{max-height:34vh}.maker__panel{padding:22px 18px 30px}.maker__panel h2{font-size:30px}.maker__actions{grid-template-columns:1fr}.maker__actions button:last-child{grid-column:auto}footer{grid-template-columns:1fr;gap:12px}.hero h1 span{white-space:normal}.hero__note{text-align:left}.hero__facts b{font-size:30px} }
   @media(prefers-reduced-motion:reduce){ .gallery__world,:global(.art-wall){transform:none!important;transition:none} }
 </style>
