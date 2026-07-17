@@ -1,0 +1,554 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import gallery from '../data/el-segundo-school-gallery.json';
+
+const categories = Array.from(new Set(gallery.works.map((work) => work.category)));
+const assetOrigin = 'https://el-segundo-school-archive.pages.dev';
+const title = '/el-segundo-school — 652 works · gallery + makers';
+const description = 'A three-dimensional archive of 652 works by Michael Hoydich, with one-tez Passport postcard and Stampz custom-stamp makers on Tezos Mainnet.';
+const data = JSON.stringify(gallery.works.map((work) => ({
+  ...work,
+  src: `${assetOrigin}${work.src.replace('/images/el-segundo-school', '')}`,
+  thumb: `${assetOrigin}${work.thumb.replace('/images/el-segundo-school', '')}`,
+}))).replace(/</g, '\\u003c');
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'The El Segundo School — 652 Works',
+  description,
+  url: 'https://pointcast.xyz/el-segundo-school',
+  creator: { '@type': 'Person', name: 'Michael Hoydich' },
+  numberOfItems: gallery.count,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ess">
+    <header class="ess__head">
+      <nav aria-label="El Segundo School sections">
+        <a href="#gallery">Gallery</a>
+        <a href="#makers">Passport</a>
+        <a href="#makers">Stampz</a>
+        <a href="#physical">Physical</a>
+        <a href="https://el-segundo-school-daily.mhoydich.chatgpt.site/">Daily Wall 001 ↗</a>
+      </nav>
+      <div class="wallet-desk">
+        <button class="wallet" id="wallet-connect" type="button">Connect Tezos wallet</button>
+        <span id="wallet-status" role="status" aria-live="polite"></span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">POINTCAST FIELD BUILDING 07 · EL SEGUNDO, CALIFORNIA · 2026-07-17</p>
+      <h1><span>THE EL SEGUNDO</span><span>SCHOOL</span></h1>
+      <div class="hero__facts">
+        <p><b>{gallery.count}</b> ORIGINAL WORKS</p>
+        <p><b>{gallery.sets}</b> SETS OF FOUR</p>
+        <p><b>1 ꜩ</b> MAKER EDITIONS</p>
+        <p id="conditions"><b>—</b> EL SEGUNDO AIR</p>
+      </div>
+      <p class="hero__note">Michael Hoydich with Midjourney · directed in El Segundo · archived by original and display SHA-256 · PointCast + Passport + Stampz · Tezos Mainnet.</p>
+    </section>
+
+    <section class="gallery" id="gallery">
+      <div class="gallery__head">
+        <div>
+          <p class="eyebrow">THE THREE-DIMENSIONAL INDEX</p>
+          <h2>Walk the<br/>whole day.</h2>
+        </div>
+        <div class="gallery__tools">
+          <label>Search <input id="gallery-search" type="search" placeholder="flower, alumni, genetics…" /></label>
+          <div class="filters" role="group" aria-label="Filter the archive">
+            <button type="button" data-filter="all" aria-pressed="true">All {gallery.count}</button>
+            {categories.map((category) => <button type="button" data-filter={category}>{category}</button>)}
+          </div>
+          <p>Drag to tilt · scroll to travel · select any wall to enter the maker.</p>
+        </div>
+      </div>
+      <div class="gallery__viewport" id="gallery-viewport">
+        <div class="gallery__world" id="gallery-world" aria-live="polite"></div>
+      </div>
+      <div class="gallery__count"><span id="visible-count">0</span> works in this wing</div>
+    </section>
+
+    <section class="makers" id="makers">
+      <div>
+        <p class="eyebrow">PASSPORT MAKER · STAMPZ MAKER</p>
+        <h2>Take one<br/>with you.</h2>
+      </div>
+      <div class="maker-intro">
+        <p>Select any work upstairs. Turn it into a 6 × 4 Passport postcard or a custom Stampz object. The print file is yours; the collector edition is an atomic Mainnet action: exactly 1 ꜩ to Michael Hoydich and the mint in one wallet approval.</p>
+        <button id="maker-random" type="button">Choose a work for me →</button>
+      </div>
+    </section>
+
+    <section class="physical" id="physical">
+      <p class="eyebrow">OBJECT DESK · AFTER THE TOKEN</p>
+      <h2>Sticker, magnet,<br/>or both.</h2>
+      <p>Every maker exports a high-resolution PNG plus a production brief. The handoff stays explicit: download the art, choose a printer, review their proof, then approve and pay the printer on their site.</p>
+      <div class="vendor-grid">
+        <a href="https://www.stickermule.com/products/rectangle-stickers" target="_blank" rel="noreferrer"><b>Sticker Mule</b><span>rectangle stickers · proof workflow ↗</span></a>
+        <a href="https://www.stickermule.com/products/custom-magnets" target="_blank" rel="noreferrer"><b>Sticker Mule</b><span>custom magnets · 2–5 in + custom ↗</span></a>
+        <a href="https://stickerapp.com/custom-stickers" target="_blank" rel="noreferrer"><b>StickerApp</b><span>die cut, square, circle, rounded ↗</span></a>
+      </div>
+    </section>
+
+    <footer>
+      <span>THE EL SEGUNDO SCHOOL · MICHAEL HOYDICH</span>
+      <span>652 PNG ORIGINALS · NO AI UPSCALE REQUIRED</span>
+      <a href="/postcards">POINTCAST /POSTCARDS →</a>
+    </footer>
+  </main>
+
+  <dialog class="maker" id="maker-dialog">
+    <button class="maker__close" id="maker-close" type="button" aria-label="Close maker">Close ×</button>
+    <div class="maker__preview"><canvas id="maker-canvas" width="1800" height="1200"></canvas></div>
+    <form class="maker__panel" method="dialog" onsubmit="return false">
+      <p class="eyebrow" id="maker-work-label">WORK —</p>
+      <h2 id="maker-work-title">Select a work</h2>
+      <div class="kind-switch" role="group" aria-label="Maker type">
+        <button type="button" data-kind="postcard" aria-pressed="true">Passport postcard</button>
+        <button type="button" data-kind="stamp">Stampz stamp</button>
+      </div>
+      <label>Title <input id="maker-title" maxlength="72" value="Greetings from El Segundo" /></label>
+      <label>Message <textarea id="maker-message" maxlength="180" rows="4">Field notes from a school without walls.</textarea></label>
+      <label>Credit <input id="maker-credit" maxlength="72" value="Michael Hoydich · The El Segundo School" /></label>
+      <label>Crop <input id="maker-crop" type="range" min="0" max="100" value="50" /></label>
+      <fieldset>
+        <legend>Ink field</legend>
+        <label><input type="radio" name="accent" value="acid" checked /> Acid</label>
+        <label><input type="radio" name="accent" value="blue" /> Blue</label>
+        <label><input type="radio" name="accent" value="red" /> Red</label>
+        <label><input type="radio" name="accent" value="paper" /> Paper</label>
+        <label><input type="radio" name="accent" value="black" /> Black</label>
+      </fieldset>
+      <label>Object shape
+        <select id="maker-shape"><option value="rectangle">Rectangle</option><option value="rounded">Rounded</option><option value="circle">Circle</option></select>
+      </label>
+      <div class="maker__actions">
+        <button id="download-print" type="button">Download print PNG</button>
+        <button id="download-brief" type="button">Sticker / magnet brief</button>
+        <button id="mint-composition" type="button">Mint · 1 ꜩ + gas</button>
+      </div>
+      <label class="consent"><input id="mint-consent" type="checkbox" /> I understand Kukai or Temple will show the exact Mainnet operation before anything is signed.</label>
+      <p class="maker__status" id="maker-status" role="status">Choose a format, tune the type, then download or mint.</p>
+      <a class="maker__operation" id="maker-operation" target="_blank" rel="noreferrer" hidden>View operation on TzKT ↗</a>
+    </form>
+  </dialog>
+
+  <script id="ess-gallery-data" type="application/json" set:html={data}></script>
+</BlockLayout>
+
+<script>
+  type GalleryWork = {
+    id: string;
+    number: string;
+    title: string;
+    category: string;
+    src: string;
+    thumb: string;
+    width: number;
+    height: number;
+    displaySha256: string;
+    originalSha256: string;
+    set: number;
+    variant: number;
+    session: number;
+    prompt: string;
+    sourceWidth: number;
+    sourceHeight: number;
+  };
+
+  const works = JSON.parse(document.getElementById('ess-gallery-data')?.textContent || '[]') as GalleryWork[];
+  const world = document.getElementById('gallery-world')!;
+  const viewport = document.getElementById('gallery-viewport')!;
+  const visibleCount = document.getElementById('visible-count')!;
+  const search = document.getElementById('gallery-search') as HTMLInputElement;
+  const dialog = document.getElementById('maker-dialog') as HTMLDialogElement;
+  const canvas = document.getElementById('maker-canvas') as HTMLCanvasElement;
+  const context = canvas.getContext('2d')!;
+  const workLabel = document.getElementById('maker-work-label')!;
+  const workTitle = document.getElementById('maker-work-title')!;
+  const titleInput = document.getElementById('maker-title') as HTMLInputElement;
+  const messageInput = document.getElementById('maker-message') as HTMLTextAreaElement;
+  const creditInput = document.getElementById('maker-credit') as HTMLInputElement;
+  const cropInput = document.getElementById('maker-crop') as HTMLInputElement;
+  const shapeInput = document.getElementById('maker-shape') as HTMLSelectElement;
+  const status = document.getElementById('maker-status')!;
+  const operationLink = document.getElementById('maker-operation') as HTMLAnchorElement;
+  const connectButton = document.getElementById('wallet-connect') as HTMLButtonElement;
+  const walletStatus = document.getElementById('wallet-status')!;
+  let selected = works[0];
+  let selectedKind: 'postcard' | 'stamp' = 'postcard';
+  let selectedFilter = 'all';
+  let walletAddress = '';
+  let previewImage = new Image();
+  let tezosModule: Promise<typeof import('../lib/el-segundo-school-mint')> | null = null;
+  previewImage.decoding = 'async';
+  previewImage.crossOrigin = 'anonymous';
+
+  const palettes: Record<string, { ink: string; paper: string; accent: string }> = {
+    acid: { ink: '#11120f', paper: '#f1efe5', accent: '#caff24' },
+    blue: { ink: '#f1efe5', paper: '#0826d6', accent: '#caff24' },
+    red: { ink: '#11120f', paper: '#fa4428', accent: '#f1efe5' },
+    paper: { ink: '#11120f', paper: '#f1efe5', accent: '#0826d6' },
+    black: { ink: '#f1efe5', paper: '#11120f', accent: '#fa4428' },
+  };
+
+  function currentAccent() {
+    return (document.querySelector('input[name="accent"]:checked') as HTMLInputElement)?.value || 'acid';
+  }
+
+  function filteredWorks() {
+    const query = search.value.trim().toLowerCase();
+    return works.filter((work) =>
+      (selectedFilter === 'all' || work.category === selectedFilter) &&
+      (!query || `${work.title} ${work.prompt} ${work.category} ${work.number}`.toLowerCase().includes(query))
+    );
+  }
+
+  function renderGallery() {
+    const list = filteredWorks();
+    world.replaceChildren();
+    const fragment = document.createDocumentFragment();
+    list.forEach((work, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'art-wall';
+      button.style.setProperty('--z', `${(index % 7) * 8}px`);
+      button.style.setProperty('--lean', `${index % 2 ? 1.4 : -1.4}deg`);
+      button.innerHTML = `<img src="${work.thumb}" alt="" loading="lazy" width="${work.width}" height="${work.height}"/><span><b>${work.number}</b>${work.title}<i>SET ${String(work.set).padStart(3, '0')} · V${work.variant}</i></span>`;
+      button.setAttribute('aria-label', `Open maker with work ${work.number}: ${work.title}`);
+      button.addEventListener('click', () => openMaker(work));
+      fragment.append(button);
+    });
+    world.append(fragment);
+    visibleCount.textContent = String(list.length);
+  }
+
+  function drawWrappedText(text: string, x: number, y: number, width: number, lineHeight: number, maxLines: number) {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (context.measureText(next).width > width && line) {
+        lines.push(line); line = word;
+      } else line = next;
+      if (lines.length === maxLines - 1) break;
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    lines.forEach((value, index) => context.fillText(value, x, y + index * lineHeight));
+  }
+
+  function drawCover(image: HTMLImageElement, x: number, y: number, width: number, height: number, crop: number) {
+    const imageRatio = image.naturalWidth / image.naturalHeight;
+    const boxRatio = width / height;
+    let sourceWidth = image.naturalWidth;
+    let sourceHeight = image.naturalHeight;
+    if (imageRatio > boxRatio) sourceWidth = image.naturalHeight * boxRatio;
+    else sourceHeight = image.naturalWidth / boxRatio;
+    const sourceX = (image.naturalWidth - sourceWidth) * crop / 100;
+    const sourceY = (image.naturalHeight - sourceHeight) * crop / 100;
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+  }
+
+  function drawMaker() {
+    if (!previewImage.complete || !previewImage.naturalWidth) return;
+    const stamp = selectedKind === 'stamp';
+    canvas.width = stamp ? 1200 : 1800;
+    canvas.height = 1200;
+    const palette = palettes[currentAccent()] || palettes.acid;
+    context.fillStyle = palette.paper;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const crop = Number(cropInput.value);
+
+    if (stamp) {
+      drawCover(previewImage, 70, 70, 1060, 820, crop);
+      context.fillStyle = palette.paper;
+      context.fillRect(70, 920, 1060, 210);
+      context.fillStyle = palette.ink;
+      context.font = '700 42px Arial';
+      context.fillText(titleInput.value.toUpperCase(), 100, 988, 1000);
+      context.font = '28px Georgia';
+      drawWrappedText(messageInput.value, 100, 1040, 980, 34, 2);
+      context.strokeStyle = palette.accent;
+      context.lineWidth = 16;
+      context.setLineDash([12, 18]);
+      context.strokeRect(28, 28, 1144, 1144);
+      context.setLineDash([]);
+    } else {
+      context.fillStyle = palette.accent;
+      context.fillRect(82, 82, 580, 1036);
+      drawCover(previewImage, 720, 82, 998, 1036, crop);
+      context.fillStyle = palette.ink;
+      context.font = '700 34px Arial';
+      context.fillText(titleInput.value.toUpperCase(), 112, 160, 520);
+      context.font = '58px Georgia';
+      drawWrappedText(messageInput.value, 112, 250, 510, 66, 9);
+      context.font = '20px monospace';
+      context.fillText(creditInput.value.toUpperCase(), 112, 1060, 510);
+    }
+    context.font = '18px monospace';
+    context.fillStyle = palette.ink;
+    context.textAlign = 'right';
+    context.fillText(`POINTCAST · WORK ${selected.number} · ${selected.originalSha256.slice(0, 12)}`, canvas.width - 52, canvas.height - 44);
+    context.textAlign = 'left';
+  }
+
+  function openMaker(work: GalleryWork) {
+    selected = work;
+    workLabel.textContent = `WORK ${work.number} · SET ${String(work.set).padStart(3, '0')} · ${work.category}`;
+    workTitle.textContent = work.title;
+    previewImage = new Image();
+    previewImage.decoding = 'async';
+    previewImage.crossOrigin = 'anonymous';
+    previewImage.onload = drawMaker;
+    previewImage.src = work.src;
+    status.textContent = 'Choose a format, tune the type, then download or mint.';
+    operationLink.hidden = true;
+    dialog.showModal();
+  }
+
+  async function connect() {
+    connectButton.disabled = true;
+    connectButton.textContent = 'Opening wallet…';
+    try {
+      walletStatus.textContent = 'Mainnet · choose Kukai, Temple, or another Beacon wallet.';
+      tezosModule ??= import('../lib/el-segundo-school-mint');
+      const { connectSchoolWallet } = await tezosModule;
+      walletAddress = await connectSchoolWallet();
+      connectButton.textContent = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
+      walletStatus.textContent = 'Connected · no operation has been signed.';
+      return walletAddress;
+    } catch (error) {
+      connectButton.textContent = 'Connect Tezos wallet';
+      const message = error instanceof Error ? error.message : String(error);
+      walletStatus.textContent = /abort|cancel|reject|closed/i.test(message)
+        ? 'Wallet window closed · nothing signed.'
+        : `Wallet unavailable · ${message.slice(0, 84)}`;
+      console.error('[El Segundo School wallet]', error);
+      throw error;
+    } finally {
+      connectButton.disabled = false;
+    }
+  }
+
+  function makerPayload(owner: string) {
+    return {
+      kind: selectedKind,
+      workId: selected.id,
+      owner,
+      title: titleInput.value,
+      message: messageInput.value,
+      credit: creditInput.value,
+      accent: currentAccent(),
+      crop: Number(cropInput.value),
+      shape: shapeInput.value,
+    };
+  }
+
+  function download(name: string, blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = name; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  connectButton.addEventListener('click', () => void connect().catch(() => undefined));
+  document.getElementById('maker-close')?.addEventListener('click', () => dialog.close());
+  document.getElementById('maker-random')?.addEventListener('click', () => openMaker(works[Math.floor(Math.random() * works.length)]));
+  search.addEventListener('input', renderGallery);
+  document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedFilter = button.dataset.filter || 'all';
+      document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      renderGallery();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedKind = button.dataset.kind === 'stamp' ? 'stamp' : 'postcard';
+      document.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      titleInput.value = selectedKind === 'stamp' ? 'Stampz / El Segundo' : 'Greetings from El Segundo';
+      drawMaker();
+    });
+  });
+  [titleInput, messageInput, creditInput, cropInput, shapeInput].forEach((input) => input.addEventListener('input', drawMaker));
+  document.querySelectorAll<HTMLInputElement>('input[name="accent"]').forEach((input) => input.addEventListener('change', drawMaker));
+
+  document.getElementById('download-print')?.addEventListener('click', () => {
+    drawMaker();
+    canvas.toBlob((blob) => { if (blob) download(`el-segundo-${selectedKind}-${selected.number}.png`, blob); }, 'image/png');
+  });
+  document.getElementById('download-brief')?.addEventListener('click', () => {
+    const brief = {
+      schema: 'pointcast.physical-object-request.v1',
+      createdAt: new Date().toISOString(),
+      requestedObjects: ['sticker', 'magnet'],
+      artFile: `el-segundo-${selectedKind}-${selected.number}.png`,
+      work: { id: selected.id, number: selected.number, title: selected.title, originalSha256: selected.originalSha256 },
+      maker: makerPayload(walletAddress || 'connect-wallet-before-mint'),
+      production: selectedKind === 'postcard'
+        ? { sizeInches: '6 x 4', pixels: '1800 x 1200', targetDpi: 300, finish: 'matte', proofRequired: true }
+        : { sizeInches: '3 x 3', pixels: '1200 x 1200', targetDpi: 300, finish: 'matte or holographic', proofRequired: true },
+      vendors: [
+        'https://www.stickermule.com/products/rectangle-stickers',
+        'https://www.stickermule.com/products/custom-magnets',
+        'https://stickerapp.com/custom-stickers',
+      ],
+      note: 'Draft request only. Review the vendor proof and price before placing an order.',
+    };
+    download(`el-segundo-${selectedKind}-${selected.number}-physical-request.json`, new Blob([JSON.stringify(brief, null, 2)], { type: 'application/json' }));
+  });
+
+  document.getElementById('mint-composition')?.addEventListener('click', async () => {
+    const consent = document.getElementById('mint-consent') as HTMLInputElement;
+    if (!consent.checked) { status.textContent = 'Check the Mainnet acknowledgement before opening the wallet.'; return; }
+    const mintButton = document.getElementById('mint-composition') as HTMLButtonElement;
+    mintButton.disabled = true;
+    operationLink.hidden = true;
+    try {
+      status.textContent = 'Connecting Tezos Mainnet…';
+      const owner = walletAddress || await connect();
+      tezosModule ??= import('../lib/el-segundo-school-mint');
+      const { createSchoolCollector, findSchoolCollector, mintSchoolComposition } = await tezosModule;
+      status.textContent = 'Looking for your PointCast maker collection…';
+      let contract = await findSchoolCollector(owner);
+      if (!contract) {
+        status.textContent = 'First visit: review collection creation in your wallet. This is gas only.';
+        const created = await createSchoolCollector(owner);
+        contract = created.contract;
+      }
+      status.textContent = 'Registering the composition recipe…';
+      const response = await fetch('/api/el-segundo-school/compositions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(makerPayload(owner)),
+      });
+      if (!response.ok) throw new Error('COMPOSITION_STORAGE_UNAVAILABLE');
+      const composition = await response.json() as { id: string; artifactUri: string; metadataUri: string };
+      status.textContent = 'Review the atomic 1 ꜩ payment + mint in your wallet…';
+      const operation = await mintSchoolComposition({
+        owner,
+        contract,
+        work: selected,
+        composition: { ...composition, kind: selectedKind, title: titleInput.value, message: messageInput.value },
+      });
+      operationLink.href = `https://tzkt.io/${operation.opHash}`;
+      operationLink.hidden = false;
+      status.textContent = 'Broadcast. Waiting for one Mainnet confirmation…';
+      await operation.confirmation;
+      status.textContent = 'Minted on Tezos Mainnet. Your print file and physical request remain available here.';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      status.textContent = /abort|cancel|reject/i.test(message)
+        ? 'Wallet request closed. Nothing was minted and no tez moved.'
+        : `Mint did not finish: ${message.slice(0, 120)}`;
+    } finally {
+      mintButton.disabled = false;
+    }
+  });
+
+  let drag = false;
+  viewport.addEventListener('pointerdown', () => { drag = true; });
+  window.addEventListener('pointerup', () => { drag = false; world.style.removeProperty('--tilt-x'); world.style.removeProperty('--tilt-y'); });
+  viewport.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+    const box = viewport.getBoundingClientRect();
+    world.style.setProperty('--tilt-y', `${((event.clientX - box.left) / box.width - .5) * 12}deg`);
+    world.style.setProperty('--tilt-x', `${((event.clientY - box.top) / box.height - .5) * -7}deg`);
+  });
+
+  void fetch('https://api.open-meteo.com/v1/forecast?latitude=33.9192&longitude=-118.4165&current=temperature_2m,weather_code&temperature_unit=fahrenheit')
+    .then((response) => response.json())
+    .then((weather) => {
+      const element = document.getElementById('conditions');
+      if (element && Number.isFinite(weather?.current?.temperature_2m)) element.innerHTML = `<b>${Math.round(weather.current.temperature_2m)}°F</b> EL SEGUNDO AIR`;
+    }).catch(() => undefined);
+
+  renderGallery();
+  openMaker(works[0]);
+  dialog.close();
+</script>
+
+<style>
+  :global(body) { background:#11120f; }
+  .ess { --blue:#0826d6; --acid:#caff24; --paper:#f1efe5; --ink:#11120f; --red:#fa4428; color:var(--paper); background:var(--blue); font-family:'Inter Variable',Arial,sans-serif; }
+  .ess__head { position:sticky; top:0; z-index:20; min-height:58px; display:flex; justify-content:space-between; align-items:center; gap:20px; padding:10px 16px; background:var(--paper); color:var(--ink); border-bottom:1px solid var(--ink); }
+  .ess__head nav { display:flex; flex-wrap:wrap; gap:22px; font:10px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .ess__head a:hover { text-decoration:underline; text-underline-offset:4px; }
+  .wallet-desk { display:grid; justify-items:end; gap:3px; }
+  .wallet-desk span { max-width:360px; min-height:10px; text-align:right; font:8px/1.3 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  button,input,textarea,select { font:inherit; }
+  button { cursor:pointer; }
+  .wallet { padding:8px 10px; border:1px solid var(--ink); background:transparent; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .wallet:hover { background:var(--ink); color:var(--paper); }
+  .eyebrow { font:10px/1.4 'JetBrains Mono Variable',monospace; letter-spacing:.1em; text-transform:uppercase; }
+  .hero { min-height:calc(100vh - 58px); padding:22px 16px; display:grid; grid-template-rows:auto 1fr auto auto; border-bottom:1px solid var(--paper); }
+  .hero h1 { align-self:center; margin:0; font-size:clamp(68px,14vw,220px); line-height:.72; letter-spacing:-.085em; text-transform:uppercase; }
+  .hero h1 span { display:block; white-space:nowrap; }
+  .hero h1 span:last-child { color:var(--acid); }
+  .hero__facts { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--paper); border-bottom:1px solid var(--paper); }
+  .hero__facts p { margin:0; padding:18px 8px; border-right:1px solid var(--paper); font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .hero__facts p:last-child { border-right:0; }
+  .hero__facts b { display:block; color:var(--acid); font:42px/1 'Inter Variable',sans-serif; letter-spacing:-.06em; }
+  .hero__note { max-width:760px; margin:20px 0 0 auto; text-align:right; font:10px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .gallery { padding:80px 16px; background:var(--ink); }
+  .gallery__head,.makers { display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.4fr); gap:60px; align-items:end; }
+  .gallery h2,.makers h2,.physical h2 { margin:8px 0 0; color:var(--acid); font-size:clamp(58px,8vw,128px); line-height:.82; letter-spacing:-.07em; }
+  .gallery__tools { display:grid; gap:14px; }
+  .gallery__tools label { display:grid; grid-template-columns:90px 1fr; gap:12px; align-items:center; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .gallery__tools input { width:100%; padding:12px; border:1px solid #5b5c57; background:#181914; color:var(--paper); }
+  .filters { display:flex; flex-wrap:wrap; gap:6px; }
+  .filters button,.kind-switch button { padding:8px 10px; border:1px solid #5b5c57; background:transparent; color:inherit; font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .filters button[aria-pressed="true"],.kind-switch button[aria-pressed="true"] { background:var(--acid); color:var(--ink); border-color:var(--acid); }
+  .gallery__tools > p { margin:0; color:#9a9b93; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .gallery__viewport { margin-top:56px; padding:50px 4vw 100px; overflow:auto; perspective:1400px; background:radial-gradient(circle at 50% -10%,#34362d,#11120f 62%); border:1px solid #393a34; cursor:grab; }
+  .gallery__viewport:active { cursor:grabbing; }
+  .gallery__world { --tilt-x:0deg; --tilt-y:0deg; display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:34px 18px; transform-style:preserve-3d; transform:rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); transition:transform .15s ease-out; }
+  .art-wall { min-width:0; padding:8px; border:1px solid #55584d; background:#22231e; color:var(--paper); text-align:left; box-shadow:0 20px 38px #0009; transform:translateZ(var(--z)) rotateY(var(--lean)); transform-style:preserve-3d; transition:transform .2s, border-color .2s; }
+  .art-wall:nth-child(3n) { margin-top:44px; }
+  .art-wall:nth-child(5n) { margin-top:-18px; }
+  .art-wall:hover,.art-wall:focus-visible { transform:translateZ(70px) rotateY(0); border-color:var(--acid); z-index:2; outline:none; }
+  .art-wall img { display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#333; }
+  .art-wall span { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; padding:9px 2px 2px; font:8px/1.35 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .art-wall b { color:var(--acid); }
+  .art-wall i { grid-column:2; color:#8d8e86; font-style:normal; }
+  .gallery__count { padding:16px 0; color:var(--acid); font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; text-align:right; }
+  .makers { padding:110px 16px; background:var(--red); color:var(--ink); border-bottom:1px solid var(--ink); }
+  .makers h2 { color:var(--ink); }
+  .maker-intro { max-width:760px; font:24px/1.35 Georgia,serif; }
+  .maker-intro button { padding:15px 18px; border:1px solid var(--ink); background:var(--ink); color:var(--paper); font:10px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .physical { padding:110px 16px; background:var(--paper); color:var(--ink); }
+  .physical h2 { color:var(--blue); }
+  .physical > p:not(.eyebrow) { max-width:760px; font:22px/1.4 Georgia,serif; }
+  .vendor-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:50px; }
+  .vendor-grid a { min-height:150px; display:flex; flex-direction:column; justify-content:space-between; padding:18px; border:1px solid var(--ink); }
+  .vendor-grid a:hover { background:var(--acid); }
+  .vendor-grid b { font-size:28px; }
+  .vendor-grid span { font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  footer { min-height:220px; display:grid; grid-template-columns:1fr 1fr auto; align-items:end; padding:24px 16px; font:9px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker { width:min(1500px,96vw); height:min(920px,94vh); max-width:none; max-height:none; padding:0; border:1px solid var(--paper); background:#090b18; color:var(--paper); }
+  .maker::backdrop { background:#050612eF; }
+  .maker[open] { display:grid; grid-template-columns:minmax(420px,1.2fr) minmax(330px,560px); }
+  .maker__close { position:absolute; top:12px; right:16px; z-index:2; padding:8px; border:0; background:var(--acid); color:var(--ink); font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__preview { display:grid; place-items:center; padding:30px; overflow:hidden; background:#111; }
+  .maker__preview canvas { display:block; max-width:100%; max-height:84vh; width:auto; height:auto; box-shadow:0 24px 80px #000; }
+  .maker__panel { padding:48px 26px 30px; overflow:auto; }
+  .maker__panel h2 { margin:8px 0 20px; color:var(--acid); font-size:38px; line-height:.95; letter-spacing:-.04em; }
+  .maker__panel > label { display:grid; gap:6px; margin:13px 0; font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__panel input:not([type="radio"]):not([type="checkbox"]),.maker__panel textarea,.maker__panel select { width:100%; padding:10px; border:1px solid #626989; background:#11162a; color:var(--paper); }
+  .kind-switch { display:grid; grid-template-columns:1fr 1fr; }
+  fieldset { display:flex; flex-wrap:wrap; gap:10px; padding:10px; border:1px solid #626989; font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:18px; }
+  .maker__actions button { padding:12px 8px; border:1px solid var(--acid); background:transparent; color:var(--acid); font:8px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__actions button:last-child { grid-column:1/-1; background:var(--acid); color:var(--ink); }
+  .maker__actions button:disabled { opacity:.5; cursor:wait; }
+  .consent { grid-template-columns:18px 1fr!important; line-height:1.4!important; }
+  .maker__status { padding:10px; background:#161a32; font:9px/1.5 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  .maker__operation { display:inline-block; color:var(--acid); border-bottom:1px solid; font:9px 'JetBrains Mono Variable',monospace; text-transform:uppercase; }
+  @media(max-width:1000px){ .gallery__world{grid-template-columns:repeat(4,minmax(100px,1fr));}.maker[open]{grid-template-columns:1fr 420px;} }
+  @media(max-width:720px){ .ess__head nav a:nth-child(n+4){display:none}.hero__facts{grid-template-columns:1fr 1fr}.hero__facts p:nth-child(2){border-right:0}.gallery__head,.makers{grid-template-columns:1fr}.gallery__world{grid-template-columns:repeat(2,minmax(110px,1fr));gap:20px 9px}.gallery__viewport{padding-inline:12px}.vendor-grid{grid-template-columns:1fr}.maker[open]{display:block;height:96vh}.maker__preview{height:40vh}.maker__preview canvas{max-height:36vh}.maker__panel{padding-top:24px}footer{grid-template-columns:1fr;gap:12px}.hero h1 span{white-space:normal}.hero__note{text-align:left}.hero__facts b{font-size:30px} }
+  @media(prefers-reduced-motion:reduce){ .gallery__world,.art-wall{transform:none!important;transition:none} }
+</style>
