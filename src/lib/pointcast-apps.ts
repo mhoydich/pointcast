@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'arcade-60',
+    name: 'Arcade 60',
+    kicker: '50 MINI GAMES · 10 NOUN PRESSES',
+    description: 'A PointCast cabinet for fifty one-minute games and ten CC0 Noun mint drafts, with the wallet approval boundary preserved in Nounfound.',
+    url: 'https://pointcast.xyz/arcade-60',
+    path: '/arcade-60',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.PLAY',
+    kind: 'pointcast',
+  },
+  {
     slug: 'afterimage',
     name: 'Afterimage Relay',
     kicker: 'IMAGE SIGNAL · MUSIC ROOM · TEZOS HANDOFF',
