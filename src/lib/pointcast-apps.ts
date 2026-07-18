@@ -89,6 +89,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'halation-signal-station',
+    name: 'Halation Signal Station',
+    kicker: 'IMAGE DIARY · LIVE FEED · TEZOS RECEIPTS',
+    description: 'A federated contact sheet that pulls Halation image pages into PointCast while keeping source context, wallet authorship, and optional Tezos receipts on separate visible rails.',
+    url: 'https://pointcast.xyz/halation',
+    path: '/halation',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'chart-of-the-day',
     name: 'Chart of the Day',
     kicker: 'DAILY DATA · LEDGER PULSE',

@@ -1,0 +1,504 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import PresenceBar from '../components/PresenceBar.astro';
+import WalletChip from '../components/WalletChip.astro';
+import {
+  HALATION_FEED_URL,
+  HALATION_ORIGIN,
+  fetchHalationSignal,
+  type HalationPost,
+} from '../lib/halation';
+
+const signal = await fetchHalationSignal();
+const latest = signal.posts[0];
+const description = 'Halation inside PointCast: a live, federated contact sheet of public image pages with source context and optional Tezos receipts kept visibly separate.';
+
+function formattedDate(value: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    timeZone: 'America/Los_Angeles', timeZoneName: 'short',
+  }).format(new Date(value));
+}
+
+function sourceLabel(url: string | null): string {
+  if (!url) return 'original frame';
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (host.includes('tumblr.com')) return 'Tumblr archive';
+    if (host.includes('spotify.com')) return 'Spotify context';
+    return host;
+  } catch {
+    return 'source';
+  }
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/halation',
+  name: 'Halation Signal Station',
+  description,
+  url: 'https://pointcast.xyz/halation',
+  isPartOf: { '@id': 'https://pointcast.xyz/#home' },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: signal.total,
+    itemListElement: signal.posts.map((post, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: post.url,
+      item: {
+        '@type': 'ImageObject',
+        name: post.title,
+        caption: post.caption,
+        contentUrl: post.image,
+        datePublished: post.publishedAt,
+        width: post.width ?? undefined,
+        height: post.height ?? undefined,
+        sameAs: post.receiptUrl ? [post.url, post.receiptUrl] : [post.url],
+      },
+    })),
+  },
+};
+---
+
+<BlockLayout
+  title="Halation Signal Station"
+  description={description}
+  image={latest?.image}
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/api/halation', title: 'PointCast normalized Halation signal' },
+    { type: 'application/feed+json', href: HALATION_FEED_URL, title: 'Halation JSON Feed' },
+    { type: 'application/rss+xml', href: `${HALATION_ORIGIN}/rss.xml`, title: 'Halation RSS' },
+  ]}
+  frame={{
+    image: latest?.image,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Open latest frame', action: 'link', target: latest?.url ?? HALATION_ORIGIN },
+      { label: 'Read live JSON', action: 'link', target: 'https://pointcast.xyz/api/halation' },
+      { label: 'Make a frame', action: 'link', target: HALATION_ORIGIN },
+    ],
+  }}
+>
+  <div class="halation-station" data-halation-station>
+    <header class="station-bar">
+      <a href="/" class="station-wordmark">POINTCAST</a>
+      <span class="station-sep">×</span>
+      <strong>HALATION</strong>
+      <span class="station-code">STATION 01 · EL SEGUNDO</span>
+      <span class="station-spacer"></span>
+      <PresenceBar />
+      <WalletChip />
+    </header>
+
+    <section class="station-hero" aria-labelledby="station-title">
+      <div class="station-hero__copy">
+        <p class="station-kicker">A CONTACT SHEET LEFT IN THE SUN</p>
+        <h1 id="station-title">Images with an <em>afterimage.</em></h1>
+        <p class="station-dek">
+          Halation publishes the frame first. PointCast catches the light around it:
+          archive source, weather-sized context, wallet author, and—only when chosen—the Tezos receipt.
+        </p>
+        <nav class="station-actions" aria-label="Halation actions">
+          <a href={HALATION_ORIGIN} target="_blank" rel="noopener">Publish a frame <span>↗</span></a>
+          <a href="/api/halation">Read the signal <span>↗</span></a>
+          <a href="/b/0461">PointCast Block 0461 <span>→</span></a>
+        </nav>
+      </div>
+
+      <div class="station-hero__scope" aria-label="Halation federation status">
+        <div><span>LIVE FRAMES</span><b data-signal-total>{signal.total}</b></div>
+        <div><span>PAGE ONLY</span><b data-signal-page-only>{signal.publishedOnly}</b></div>
+        <div><span>MINTED 1/1</span><b data-signal-minted>{signal.minted}</b></div>
+        <div class="station-hero__pulse"><span>FEED</span><b><i></i> LIVE</b></div>
+      </div>
+    </section>
+
+    <section class="exposure-console" aria-labelledby="exposure-title">
+      <div>
+        <p class="station-kicker">VIEWING INSTRUMENT</p>
+        <h2 id="exposure-title">Choose how much light leaks in.</h2>
+      </div>
+      <label class="exposure-dial">
+        <span>clean scan</span>
+        <input type="range" min="0" max="100" value="54" aria-label="Adjust contact sheet exposure" data-exposure-dial />
+        <span>sunstruck</span>
+      </label>
+      <output data-exposure-output>honest warmth · 54</output>
+    </section>
+
+    <div class="station-ticker" aria-hidden="true">
+      <div>
+        <span>IMAGE FIRST</span><i>✦</i><span>CONTEXT OPTIONAL</span><i>✦</i><span>PERMALINK ALWAYS</span><i>✦</i><span>MINT ONLY IF YOU WANT</span><i>✦</i>
+        <span>IMAGE FIRST</span><i>✦</i><span>CONTEXT OPTIONAL</span><i>✦</i><span>PERMALINK ALWAYS</span><i>✦</i><span>MINT ONLY IF YOU WANT</span><i>✦</i>
+      </div>
+    </div>
+
+    <section class="contact-sheet" aria-labelledby="contact-sheet-title">
+      <header class="contact-sheet__head">
+        <div>
+          <p class="station-kicker">LIVE FEDERATED CONTACT SHEET</p>
+          <h2 id="contact-sheet-title">Newest exposure first.</h2>
+        </div>
+        <p>
+          PointCast refreshes this desk from Halation’s public JSON Feed.
+          No private wallet material crosses the bridge.
+        </p>
+      </header>
+
+      <div class="contact-sheet__grid" data-contact-grid>
+        {signal.posts.map((post, index) => (
+          <article class:list={['exposure', index === 0 && 'exposure--lead']} data-post-id={post.id}>
+            <a class="exposure__image" href={post.url} target="_blank" rel="noopener">
+              <span class="exposure__number">{String(index + 1).padStart(2, '0')}</span>
+              <img src={post.image} alt={post.imageAlt} width={post.width ?? 1024} height={post.height ?? 1024} loading={index < 2 ? 'eager' : 'lazy'} />
+              <span class="exposure__wash" aria-hidden="true"></span>
+            </a>
+            <div class="exposure__copy">
+              <div class="exposure__meta">
+                <span>{formattedDate(post.publishedAt)}</span>
+                <span class:list={['exposure__state', /^minted\b/i.test(post.mintState) && 'exposure__state--minted']}>{post.mintState}</span>
+              </div>
+              <h3>{post.title}</h3>
+              {post.caption && <p>{post.caption}</p>}
+              <div class="exposure__tags">
+                <span>{sourceLabel(post.sourceUrl)}</span>
+                {post.tags.map((tag) => <span>#{tag}</span>)}
+              </div>
+              <nav class="exposure__rails" aria-label={`${post.title} provenance rails`}>
+                <a href={post.url} target="_blank" rel="noopener"><b>01</b> page</a>
+                {post.sourceUrl ? <a href={post.sourceUrl} target="_blank" rel="noopener"><b>02</b> source</a> : <span><b>02</b> source kept here</span>}
+                {post.receiptUrl ? <a href={post.receiptUrl} target="_blank" rel="noopener"><b>03</b> receipt</a> : <span><b>03</b> no mint</span>}
+              </nav>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <template id="halation-exposure-template">
+      <article class="exposure">
+        <a class="exposure__image" target="_blank" rel="noopener" data-frame-link>
+          <span class="exposure__number" data-frame-number></span>
+          <img loading="lazy" data-frame-image />
+          <span class="exposure__wash" aria-hidden="true"></span>
+        </a>
+        <div class="exposure__copy">
+          <div class="exposure__meta"><span data-frame-date></span><span class="exposure__state" data-frame-state></span></div>
+          <h3 data-frame-title></h3>
+          <p data-frame-caption></p>
+          <div class="exposure__tags" data-frame-tags></div>
+          <nav class="exposure__rails" data-frame-rails></nav>
+        </div>
+      </article>
+    </template>
+
+    <section class="two-rails" aria-labelledby="two-rails-title">
+      <div class="two-rails__intro">
+        <p class="station-kicker">THE POINTCAST INTERPRETATION</p>
+        <h2 id="two-rails-title">One image. Two legitimate endings.</h2>
+      </div>
+      <article>
+        <span class="two-rails__number">01</span>
+        <h3>The page is enough.</h3>
+        <p>It holds the image, caption, source trail, public context, and wallet-authored identity. It remains the canonical thing people share.</p>
+      </article>
+      <article class="two-rails__mint">
+        <span class="two-rails__number">02</span>
+        <h3>The receipt is optional.</h3>
+        <p>If minted, PointCast shows contract and operation proof without pretending the chain created the image—or that wallet control proves authorship.</p>
+      </article>
+    </section>
+
+    <footer class="station-footer">
+      <div>
+        <strong>HALATION SIGNAL STATION</strong>
+        <span data-signal-updated>Static snapshot ready · live edge refresh on arrival</span>
+      </div>
+      <nav>
+        <a href={HALATION_FEED_URL}>Halation JSON Feed ↗</a>
+        <a href={`${HALATION_ORIGIN}/rss.xml`}>RSS ↗</a>
+        <a href="/api/halation">PointCast normalization ↗</a>
+        <a href="/">Back to PointCast →</a>
+      </nav>
+    </footer>
+  </div>
+
+  <script is:inline>
+    (() => {
+      const station = document.querySelector('[data-halation-station]');
+      if (!station) return;
+      const dial = station.querySelector('[data-exposure-dial]');
+      const output = station.querySelector('[data-exposure-output]');
+      const grid = station.querySelector('[data-contact-grid]');
+      const template = document.getElementById('halation-exposure-template');
+
+      const sourceLabel = (url) => {
+        if (!url) return 'original frame';
+        try {
+          const host = new URL(url).hostname.replace(/^www\./, '');
+          if (host.includes('tumblr.com')) return 'Tumblr archive';
+          if (host.includes('spotify.com')) return 'Spotify context';
+          return host;
+        } catch { return 'source'; }
+      };
+
+      const setExposure = (raw) => {
+        const value = Number(raw);
+        station.style.setProperty('--exposure', String(value / 100));
+        station.style.setProperty('--exposure-sat', String(0.78 + value / 220));
+        const register = value < 28 ? 'cool scan' : value < 70 ? 'honest warmth' : 'sunstruck';
+        if (output) output.textContent = `${register} · ${value}`;
+      };
+      if (dial instanceof HTMLInputElement) {
+        setExposure(dial.value);
+        dial.addEventListener('input', () => setExposure(dial.value));
+      }
+
+      const addRail = (nav, index, label, url) => {
+        const node = url ? document.createElement('a') : document.createElement('span');
+        if (url) {
+          node.href = url;
+          node.target = '_blank';
+          node.rel = 'noopener';
+        }
+        const number = document.createElement('b');
+        number.textContent = String(index).padStart(2, '0');
+        node.append(number, document.createTextNode(` ${label}`));
+        nav.appendChild(node);
+      };
+
+      const renderPosts = (posts) => {
+        if (!(grid instanceof HTMLElement) || !(template instanceof HTMLTemplateElement)) return;
+        const fragment = document.createDocumentFragment();
+        posts.forEach((post, index) => {
+          const clone = template.content.cloneNode(true);
+          const article = clone.querySelector('.exposure');
+          if (article && index === 0) article.classList.add('exposure--lead');
+          const link = clone.querySelector('[data-frame-link]');
+          const image = clone.querySelector('[data-frame-image]');
+          const state = clone.querySelector('[data-frame-state]');
+          if (link instanceof HTMLAnchorElement) link.href = post.url;
+          if (image instanceof HTMLImageElement) {
+            image.src = post.image;
+            image.alt = post.imageAlt || post.title || 'Halation image diary frame';
+            if (post.width) image.width = post.width;
+            if (post.height) image.height = post.height;
+          }
+          const values = [
+            ['[data-frame-number]', String(index + 1).padStart(2, '0')],
+            ['[data-frame-date]', new Date(post.publishedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })],
+            ['[data-frame-state]', post.mintState],
+            ['[data-frame-title]', post.title],
+            ['[data-frame-caption]', post.caption],
+          ];
+          values.forEach(([selector, value]) => {
+            const node = clone.querySelector(selector);
+            if (node) node.textContent = value || '';
+          });
+          if (state && /^minted\b/i.test(post.mintState || '')) state.classList.add('exposure__state--minted');
+
+          const tags = clone.querySelector('[data-frame-tags]');
+          if (tags) {
+            [sourceLabel(post.sourceUrl), ...(Array.isArray(post.tags) ? post.tags.map((tag) => `#${tag}`) : [])].forEach((label) => {
+              const span = document.createElement('span');
+              span.textContent = label;
+              tags.appendChild(span);
+            });
+          }
+          const rails = clone.querySelector('[data-frame-rails]');
+          if (rails) {
+            rails.setAttribute('aria-label', `${post.title || 'Halation frame'} provenance rails`);
+            addRail(rails, 1, 'page', post.url);
+            addRail(rails, 2, post.sourceUrl ? 'source' : 'source kept here', post.sourceUrl);
+            addRail(rails, 3, post.receiptUrl ? 'receipt' : 'no mint', post.receiptUrl);
+          }
+          fragment.appendChild(clone);
+        });
+        grid.replaceChildren(fragment);
+      };
+
+      fetch('/api/halation', { headers: { Accept: 'application/json' } })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.posts) || !payload.posts.length) return;
+          renderPosts(payload.posts);
+          const setText = (selector, value) => {
+            const node = station.querySelector(selector);
+            if (node) node.textContent = String(value);
+          };
+          setText('[data-signal-total]', payload.total);
+          setText('[data-signal-page-only]', payload.publishedOnly);
+          setText('[data-signal-minted]', payload.minted);
+          setText('[data-signal-updated]', `Live edge refresh · ${new Date(payload.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`);
+        })
+        .catch(() => { /* The server-rendered snapshot is the fallback. */ });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .halation-station {
+    --h-ink: #19150f;
+    --h-paper: #f0ead8;
+    --h-paper-bright: #fbf7ea;
+    --h-amber: #e99038;
+    --h-red: #a64031;
+    --h-blue: #285d73;
+    --exposure: .54;
+    --exposure-sat: 1.02;
+    min-height: 100vh;
+    color: var(--h-ink);
+    background:
+      radial-gradient(circle at 84% 4%, rgba(255, 183, 91, calc(var(--exposure) * .24)), transparent 25%),
+      repeating-linear-gradient(0deg, rgba(25,21,15,.025) 0 1px, transparent 1px 4px),
+      var(--h-paper);
+  }
+
+  .station-bar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 7px clamp(12px, 3vw, 36px);
+    border-bottom: 1px solid var(--h-ink);
+    background: rgba(240, 234, 216, .94);
+    backdrop-filter: blur(12px);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+  }
+  .station-wordmark { color: var(--h-ink); font-size: 13px; font-weight: 500; }
+  .station-wordmark:hover { text-decoration: none; color: var(--h-red); }
+  .station-sep { color: var(--h-red); }
+  .station-code { color: rgba(25,21,15,.55); }
+  .station-spacer { flex: 1; }
+
+  .station-kicker {
+    margin: 0 0 10px;
+    color: var(--h-red);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+  }
+
+  .station-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(270px, .55fr);
+    min-height: 500px;
+    border-bottom: 1px solid var(--h-ink);
+  }
+  .station-hero__copy { display: flex; flex-direction: column; justify-content: end; padding: clamp(28px, 6vw, 86px) clamp(18px, 5vw, 70px); }
+  .station-hero h1 { margin: 0; max-width: 1000px; font-size: clamp(54px, 10.5vw, 154px); font-weight: 500; line-height: .75; letter-spacing: -.075em; }
+  .station-hero h1 em { display: block; color: var(--h-red); font-family: Georgia, 'Times New Roman', serif; font-weight: 400; }
+  .station-dek { max-width: 760px; margin: 36px 0 25px; font-size: clamp(16px, 2vw, 25px); line-height: 1.22; letter-spacing: -.025em; }
+  .station-actions { display: flex; flex-wrap: wrap; gap: 1px; }
+  .station-actions a { display: flex; justify-content: space-between; gap: 22px; min-width: 190px; padding: 12px 14px; color: var(--h-ink); border: 1px solid var(--h-ink); background: rgba(255,255,255,.25); font-family: var(--pc-font-mono); font-size: 9px; }
+  .station-actions a:hover { color: #fff; background: var(--h-red); text-decoration: none; }
+
+  .station-hero__scope { display: grid; grid-template-columns: 1fr 1fr; border-left: 1px solid var(--h-ink); }
+  .station-hero__scope > div { display: flex; flex-direction: column; justify-content: space-between; min-height: 190px; padding: 18px; border-right: 1px solid rgba(25,21,15,.42); border-bottom: 1px solid rgba(25,21,15,.42); }
+  .station-hero__scope > div:nth-child(2n) { border-right: 0; }
+  .station-hero__scope > div:nth-child(n+3) { border-bottom: 0; }
+  .station-hero__scope span { font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .13em; }
+  .station-hero__scope b { font-size: clamp(45px, 6vw, 90px); font-weight: 400; line-height: .8; letter-spacing: -.06em; }
+  .station-hero__pulse b { display: flex; align-items: center; gap: 10px; color: #256146; font-family: var(--pc-font-mono); font-size: 17px; letter-spacing: .08em; }
+  .station-hero__pulse i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 7px rgba(37,97,70,.12); }
+
+  .exposure-console { display: grid; grid-template-columns: 1fr minmax(280px, .8fr) 180px; align-items: center; gap: 24px; padding: 18px clamp(15px, 3vw, 36px); border-bottom: 1px solid var(--h-ink); background: var(--h-paper-bright); }
+  .exposure-console h2 { margin: 0; font-size: clamp(18px, 2.6vw, 34px); font-weight: 500; letter-spacing: -.035em; }
+  .exposure-dial { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+  .exposure-dial input { width: 100%; accent-color: var(--h-red); }
+  .exposure-console output { justify-self: end; padding: 7px 9px; border: 1px solid var(--h-ink); font-family: var(--pc-font-mono); font-size: 8px; text-transform: uppercase; }
+
+  .station-ticker { overflow: hidden; padding: 8px 0; color: var(--h-paper); background: var(--h-ink); font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .14em; white-space: nowrap; }
+  .station-ticker > div { width: max-content; animation: halationTicker 26s linear infinite; }
+  .station-ticker span, .station-ticker i { margin-right: 24px; }
+  .station-ticker i { color: var(--h-amber); font-style: normal; }
+  @keyframes halationTicker { to { transform: translateX(-50%); } }
+
+  .contact-sheet { padding: clamp(30px, 5vw, 72px) clamp(12px, 3vw, 36px); }
+  .contact-sheet__head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 26px; }
+  .contact-sheet__head h2 { margin: 0; font-size: clamp(34px, 5vw, 74px); font-weight: 500; line-height: .9; letter-spacing: -.06em; }
+  .contact-sheet__head > p { max-width: 420px; margin: 0; font-size: 13px; line-height: 1.45; }
+  .contact-sheet__grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: start; }
+  .exposure { grid-column: span 4; border: 1px solid var(--h-ink); background: rgba(251,247,234,.76); box-shadow: 4px 5px 0 rgba(25,21,15,.1); }
+  .exposure--lead { grid-column: span 8; grid-row: span 2; }
+  .exposure__image { position: relative; display: block; overflow: hidden; aspect-ratio: 4 / 3; border-bottom: 1px solid var(--h-ink); background: #16130e; }
+  .exposure--lead .exposure__image { aspect-ratio: 16 / 10; }
+  .exposure__image img { width: 100%; height: 100%; object-fit: cover; filter: saturate(var(--exposure-sat)) sepia(calc(var(--exposure) * .1)) contrast(1.02); transition: transform 700ms cubic-bezier(.2,.75,.2,1), filter 250ms ease; }
+  .exposure__image:hover img { transform: scale(1.018); filter: saturate(1.12) sepia(0) contrast(1.02); }
+  .exposure__wash { position: absolute; inset: 0; opacity: calc(var(--exposure) * .44); background: linear-gradient(120deg, rgba(255,173,78,.35), transparent 42%, rgba(166,64,49,.18)); pointer-events: none; mix-blend-mode: screen; }
+  .exposure__number { position: absolute; z-index: 2; top: 11px; left: 11px; padding: 4px 6px; color: #fff; background: rgba(20,16,10,.78); font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .1em; }
+  .exposure__copy { padding: 14px; }
+  .exposure__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .07em; text-transform: uppercase; }
+  .exposure__state { padding: 4px 5px; border: 1px solid var(--h-ink); }
+  .exposure__state--minted { color: #1f6544; border-color: currentColor; background: rgba(31,101,68,.07); }
+  .exposure h3 { margin: 20px 0 4px; font-size: clamp(24px, 3vw, 48px); font-weight: 500; line-height: .92; letter-spacing: -.05em; }
+  .exposure:not(.exposure--lead) h3 { font-size: clamp(20px, 2.25vw, 34px); }
+  .exposure__copy > p { min-height: 1.3em; margin: 0 0 16px; font-size: 13px; }
+  .exposure__tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 13px; }
+  .exposure__tags span { padding: 4px 6px; background: rgba(166,64,49,.1); font-family: var(--pc-font-mono); font-size: 7px; letter-spacing: .06em; }
+  .exposure__rails { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--h-ink); }
+  .exposure__rails a, .exposure__rails span { min-width: 0; padding: 8px 7px; overflow: hidden; color: var(--h-ink); border-right: 1px solid rgba(25,21,15,.42); font-family: var(--pc-font-mono); font-size: 7px; white-space: nowrap; text-overflow: ellipsis; }
+  .exposure__rails :last-child { border-right: 0; }
+  .exposure__rails a:hover { color: #fff; background: var(--h-red); text-decoration: none; }
+  .exposure__rails span { color: rgba(25,21,15,.5); }
+  .exposure__rails b { margin-right: 2px; color: var(--h-red); }
+
+  .two-rails { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--h-ink); border-bottom: 1px solid var(--h-ink); background: var(--h-paper-bright); }
+  .two-rails > * { min-height: 300px; padding: clamp(22px, 4vw, 54px); border-right: 1px solid var(--h-ink); }
+  .two-rails > *:last-child { border-right: 0; }
+  .two-rails h2 { margin: 0; font-size: clamp(40px, 5vw, 74px); font-weight: 500; line-height: .88; letter-spacing: -.06em; }
+  .two-rails article { display: flex; flex-direction: column; justify-content: space-between; }
+  .two-rails h3 { margin: 20px 0 8px; font-size: clamp(27px, 3vw, 42px); font-weight: 500; line-height: .95; letter-spacing: -.05em; }
+  .two-rails article p { max-width: 450px; margin: 0; font-size: 14px; line-height: 1.45; }
+  .two-rails__number { font-family: var(--pc-font-mono); font-size: 10px; color: var(--h-red); }
+  .two-rails__mint { color: var(--h-paper); background: var(--h-red); }
+  .two-rails__mint .two-rails__number { color: var(--h-amber); }
+
+  .station-footer { display: flex; justify-content: space-between; gap: 30px; padding: 26px clamp(15px, 3vw, 36px) 90px; background: var(--h-ink); color: var(--h-paper); font-family: var(--pc-font-mono); font-size: 9px; }
+  .station-footer > div { display: grid; gap: 6px; }
+  .station-footer nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px; }
+  .station-footer a { color: var(--h-paper); }
+
+  @media (max-width: 860px) {
+    .station-code, .station-bar :global(.presence-bar) { display: none; }
+    .station-hero { grid-template-columns: 1fr; }
+    .station-hero__scope { border-top: 1px solid var(--h-ink); border-left: 0; }
+    .station-hero__scope > div { min-height: 135px; }
+    .exposure-console { grid-template-columns: 1fr; }
+    .exposure-console output { justify-self: start; }
+    .contact-sheet__head { align-items: start; flex-direction: column; }
+    .exposure, .exposure--lead { grid-column: span 6; }
+    .two-rails { grid-template-columns: 1fr; }
+    .two-rails > * { min-height: auto; border-right: 0; border-bottom: 1px solid var(--h-ink); }
+    .two-rails > *:last-child { border-bottom: 0; }
+  }
+
+  @media (max-width: 580px) {
+    .station-bar { gap: 7px; }
+    .station-bar :global(.wallet-chip) { display: none; }
+    .station-hero h1 { font-size: clamp(54px, 22vw, 92px); }
+    .station-actions { display: grid; }
+    .station-actions a { min-width: 0; }
+    .station-hero__scope > div { min-height: 112px; padding: 13px; }
+    .station-hero__scope b { font-size: 48px; }
+    .exposure-dial { grid-template-columns: 1fr; }
+    .exposure, .exposure--lead { grid-column: 1 / -1; }
+    .exposure__image, .exposure--lead .exposure__image { aspect-ratio: 4 / 3; }
+    .station-footer { flex-direction: column; }
+    .station-footer nav { justify-content: flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .station-ticker > div { animation: none; }
+    .exposure__image img { transition: none; }
+  }
+</style>

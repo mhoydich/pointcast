@@ -1,0 +1,253 @@
+---
+import type { HalationSignal } from '../lib/halation';
+
+interface Props {
+  signal: HalationSignal;
+}
+
+const { signal } = Astro.props;
+const latest = signal.posts[0];
+const strip = signal.posts.slice(1, 4);
+
+function shortDate(value: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+  }).format(new Date(value));
+}
+---
+
+{latest && (
+  <section id="halation-signal" class="light-leak" aria-labelledby="light-leak-title" data-halation-light-leak>
+    <div class="light-leak__flare" aria-hidden="true"></div>
+    <header class="light-leak__head">
+      <div>
+        <p class="light-leak__kicker">FEDERATED IMAGE SIGNAL · LIVE JSON FEED</p>
+        <h2 id="light-leak-title">Halation is bleeding into PointCast.</h2>
+      </div>
+      <div class="light-leak__meter" aria-label="Halation diary status">
+        <span><b data-halation-total>{signal.total}</b> frames</span>
+        <span><b data-halation-minted>{signal.minted}</b> minted</span>
+        <span class="light-leak__live"><i aria-hidden="true"></i> live</span>
+      </div>
+    </header>
+
+    <div class="light-leak__grid">
+      <a class="light-leak__hero" href={latest.url} target="_blank" rel="noopener" data-halation-latest-link>
+        <img
+          src={latest.image}
+          alt={latest.imageAlt}
+          width={latest.width ?? 1024}
+          height={latest.height ?? 1024}
+          loading="lazy"
+          data-halation-latest-image
+        />
+        <span class="light-leak__burn" aria-hidden="true"></span>
+        <span class="light-leak__hero-copy">
+          <span class="light-leak__status" data-halation-latest-state>{latest.mintState}</span>
+          <strong data-halation-latest-title>{latest.title}</strong>
+          <span data-halation-latest-caption>{latest.caption}</span>
+        </span>
+      </a>
+
+      <div class="light-leak__desk">
+        <div class="light-leak__idea">
+          <span class="light-leak__index">PC × HLTN / 001</span>
+          <p>
+            A page is the broadcast. A mint is its optional receipt.
+            PointCast reads both rails without collapsing one into the other.
+          </p>
+        </div>
+
+        <div class="light-leak__film" aria-label="Recent Halation frames">
+          {strip.map((post, index) => (
+            <a href={post.url} target="_blank" rel="noopener" class="light-leak__frame">
+              <span class="light-leak__frame-no">0{index + 2}</span>
+              <img src={post.image} alt={post.imageAlt} width={post.width ?? 400} height={post.height ?? 400} loading="lazy" />
+              <span>{post.title}</span>
+            </a>
+          ))}
+        </div>
+
+        <div class="light-leak__rail">
+          <div>
+            <span>PAGE RAIL</span>
+            <strong data-halation-latest-date>{shortDate(latest.publishedAt)}</strong>
+            <small>Public, permanent, editable context.</small>
+          </div>
+          <div>
+            <span>RECEIPT RAIL</span>
+            {latest.receiptUrl ? (
+              <a href={latest.receiptUrl} target="_blank" rel="noopener" data-halation-receipt>Tezos proof ↗</a>
+            ) : (
+              <strong data-halation-receipt>not minted</strong>
+            )}
+            <small>Optional, on-chain, visibly separate.</small>
+          </div>
+        </div>
+
+        <nav class="light-leak__actions" aria-label="Halation links">
+          <a href="/halation">Enter the PointCast station <span>→</span></a>
+          <a href="/api/halation">Read the live signal <span>↗</span></a>
+          <a href="https://halation-diary.mhoydich.chatgpt.site" target="_blank" rel="noopener">Make a frame <span>↗</span></a>
+        </nav>
+      </div>
+    </div>
+  </section>
+)}
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-halation-light-leak]');
+    if (!root) return;
+
+    const text = (selector, value) => {
+      const node = root.querySelector(selector);
+      if (node && value !== undefined && value !== null) node.textContent = String(value);
+    };
+
+    fetch('/api/halation', { headers: { Accept: 'application/json' } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        const latest = payload && Array.isArray(payload.posts) ? payload.posts[0] : null;
+        if (!latest) return;
+        text('[data-halation-total]', payload.total);
+        text('[data-halation-minted]', payload.minted);
+        text('[data-halation-latest-title]', latest.title);
+        text('[data-halation-latest-caption]', latest.caption);
+        text('[data-halation-latest-state]', latest.mintState);
+        text('[data-halation-latest-date]', new Date(latest.publishedAt).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
+        }));
+
+        const link = root.querySelector('[data-halation-latest-link]');
+        const image = root.querySelector('[data-halation-latest-image]');
+        const receipt = root.querySelector('[data-halation-receipt]');
+        if (link instanceof HTMLAnchorElement) link.href = latest.url;
+        if (image instanceof HTMLImageElement) {
+          image.src = latest.image;
+          image.alt = latest.imageAlt || latest.title || 'Halation image diary frame';
+          if (latest.width) image.width = latest.width;
+          if (latest.height) image.height = latest.height;
+        }
+        if (receipt instanceof HTMLAnchorElement && latest.receiptUrl) receipt.href = latest.receiptUrl;
+      })
+      .catch(() => { /* Static snapshot remains complete. */ });
+  })();
+</script>
+
+<style>
+  .light-leak {
+    --hltn-ink: #17140f;
+    --hltn-paper: #f2eddd;
+    --hltn-amber: #e89336;
+    --hltn-red: #a93e2d;
+    position: relative;
+    overflow: hidden;
+    margin: 12px 0 18px;
+    border: 1px solid var(--hltn-ink);
+    background: var(--hltn-paper);
+    color: var(--hltn-ink);
+    box-shadow: 8px 8px 0 rgba(23, 20, 15, 0.08);
+  }
+
+  .light-leak__flare {
+    position: absolute;
+    z-index: 0;
+    width: 320px;
+    height: 320px;
+    right: -120px;
+    top: -190px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 249, 204, 0.92) 0 12%, rgba(239, 142, 54, 0.42) 34%, rgba(169, 62, 45, 0) 70%);
+    filter: blur(9px);
+    pointer-events: none;
+  }
+
+  .light-leak__head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px;
+    border-bottom: 1px solid var(--hltn-ink);
+  }
+
+  .light-leak__kicker,
+  .light-leak__index,
+  .light-leak__meter,
+  .light-leak__status,
+  .light-leak__frame-no,
+  .light-leak__rail span {
+    font-family: var(--pc-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .light-leak__kicker { margin: 0 0 7px; font-size: 9px; }
+  .light-leak h2 { margin: 0; max-width: 760px; font-size: clamp(22px, 3.5vw, 46px); font-weight: 500; line-height: 0.95; letter-spacing: -0.045em; }
+
+  .light-leak__meter { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px 12px; font-size: 9px; }
+  .light-leak__meter b { font-size: 14px; }
+  .light-leak__live { color: #216744; }
+  .light-leak__live i { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(33, 103, 68, 0.12); }
+
+  .light-leak__grid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.65fr); }
+  .light-leak__hero { position: relative; min-height: 460px; overflow: hidden; border-right: 1px solid var(--hltn-ink); color: #fff; background: #1a1712; }
+  .light-leak__hero:hover { text-decoration: none; }
+  .light-leak__hero img { width: 100%; height: 100%; min-height: 460px; object-fit: cover; filter: saturate(0.86) contrast(1.04); transition: transform 800ms cubic-bezier(.2,.7,.2,1), filter 500ms ease; }
+  .light-leak__hero:hover img { transform: scale(1.025); filter: saturate(1.08) contrast(1.02); }
+  .light-leak__burn { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14, 11, 8, 0.02) 35%, rgba(14, 11, 8, 0.86) 100%), linear-gradient(110deg, rgba(255, 167, 72, 0.22), transparent 42%); }
+  .light-leak__hero-copy { position: absolute; inset: auto 18px 18px; display: grid; gap: 5px; text-shadow: 0 1px 12px rgba(0,0,0,.52); }
+  .light-leak__status { justify-self: start; padding: 5px 7px; border: 1px solid rgba(255,255,255,.72); background: rgba(18,15,10,.5); font-size: 8px; }
+  .light-leak__hero-copy strong { font-size: clamp(25px, 3.4vw, 48px); line-height: .95; letter-spacing: -.04em; }
+  .light-leak__hero-copy > span:last-child { font-size: 13px; }
+
+  .light-leak__desk { display: grid; grid-template-rows: auto 1fr auto auto; min-width: 0; }
+  .light-leak__idea { display: grid; grid-template-columns: 120px 1fr; gap: 16px; padding: 17px; border-bottom: 1px solid var(--hltn-ink); }
+  .light-leak__index { font-size: 9px; color: var(--hltn-red); }
+  .light-leak__idea p { margin: 0; max-width: 590px; font-size: clamp(15px, 2vw, 23px); line-height: 1.12; letter-spacing: -.02em; }
+
+  .light-leak__film { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-height: 210px; border-bottom: 1px solid var(--hltn-ink); }
+  .light-leak__frame { position: relative; display: grid; grid-template-rows: 1fr auto; min-width: 0; padding: 9px; color: var(--hltn-ink); border-right: 1px solid rgba(23,20,15,.45); background: rgba(255,255,255,.18); }
+  .light-leak__frame:last-child { border-right: 0; }
+  .light-leak__frame:hover { text-decoration: none; background: rgba(232,147,54,.15); }
+  .light-leak__frame img { width: 100%; height: 154px; object-fit: cover; filter: saturate(.82); }
+  .light-leak__frame:hover img { filter: saturate(1); }
+  .light-leak__frame > span:last-child { overflow: hidden; margin-top: 7px; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+  .light-leak__frame-no { position: absolute; z-index: 1; top: 14px; left: 14px; padding: 3px 4px; color: #fff; background: rgba(20,17,11,.72); font-size: 7px; }
+
+  .light-leak__rail { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--hltn-ink); }
+  .light-leak__rail > div { display: grid; gap: 4px; padding: 12px 16px; }
+  .light-leak__rail > div:first-child { border-right: 1px solid rgba(23,20,15,.45); }
+  .light-leak__rail span { font-size: 8px; color: var(--hltn-red); }
+  .light-leak__rail strong, .light-leak__rail a { color: var(--hltn-ink); font-size: 12px; font-weight: 500; }
+  .light-leak__rail small { font-size: 10px; color: rgba(23,20,15,.68); }
+
+  .light-leak__actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; }
+  .light-leak__actions a { display: flex; justify-content: space-between; gap: 10px; padding: 12px 15px; color: var(--hltn-ink); border-right: 1px solid rgba(23,20,15,.45); font-family: var(--pc-font-mono); font-size: 9px; letter-spacing: .04em; }
+  .light-leak__actions a:last-child { border-right: 0; }
+  .light-leak__actions a:hover { color: #fff; background: var(--hltn-red); text-decoration: none; }
+
+  @media (max-width: 760px) {
+    .light-leak__head { align-items: start; flex-direction: column; }
+    .light-leak__meter { justify-content: flex-start; }
+    .light-leak__grid { grid-template-columns: 1fr; }
+    .light-leak__hero { min-height: 68svh; border-right: 0; border-bottom: 1px solid var(--hltn-ink); }
+    .light-leak__hero img { min-height: 68svh; }
+    .light-leak__idea { grid-template-columns: 1fr; }
+    .light-leak__frame img { height: 110px; }
+    .light-leak__actions { grid-template-columns: 1fr; }
+    .light-leak__actions a { border-right: 0; border-bottom: 1px solid rgba(23,20,15,.45); }
+    .light-leak__actions a:last-child { border-bottom: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .light-leak__hero img { transition: none; }
+  }
+</style>
