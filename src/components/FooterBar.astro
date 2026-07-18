@@ -649,6 +649,44 @@ const pingable = RESIDENTS.filter(
     </div>
   </div>
 
+  <div class="fb__tray fb__tray--seismo" id="fb-tray-seismo" role="dialog" aria-modal="false" aria-label="Seismo — the town seismograph" hidden>
+    <div class="fb__tray-arrow" aria-hidden="true"></div>
+    <header class="fb__tray-head">
+      <span class="fb__tray-num mono">08</span>
+      <h3 class="fb__tray-title">Seismo</h3>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
+    <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Seismo actions">
+        {KIT_BY_ID.seismo.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="seismo"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div class="fb-sg" id="fb-sg">
+        <header class="fb-sg__head">
+          <span class="fb-sg__title mono">TOWN SEISMOGRAPH · EL SEGUNDO</span>
+          <span class="fb-sg__mag mono" id="fb-sg-mag">M —·—</span>
+        </header>
+        <canvas class="fb-sg__strip" id="fb-sg-strip" aria-label="Rolling strip chart of town activity — commits, blocks, and your own hand"></canvas>
+        <p class="fb-sg__read mono" id="fb-sg-read">reading the wire…</p>
+        <footer class="fb-sg__foot mono">
+          <span>wiggle your pointer on the strip — it feels you</span>
+          <span id="fb-sg-felt">—</span>
+        </footer>
+      </div>
+    </div>
+  </div>
+
   <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast dock" hidden>
     <div class="fb__menu-scrim" id="fb-menu-scrim" aria-hidden="true"></div>
     <div class="fb__menu-panel" id="fb-menu-panel" tabindex="-1">
@@ -918,6 +956,8 @@ const pingable = RESIDENTS.filter(
           refreshAgentActivity();
         } else if (id === 'passport') {
           renderPassport();
+        } else if (id === 'seismo') {
+          seismoOpen();
         }
       } catch (e) {}
     }
@@ -2072,6 +2112,233 @@ const pingable = RESIDENTS.filter(
         }
         return;
       }
+      if (tray === 'seismo') {
+        if (action === 'felt') {
+          seismoFelt();
+        } else if (action === 'thump') {
+          seismoThump();
+        } else if (action === 'wire') {
+          window.location.href = '/wire';
+        }
+        return;
+      }
+    }
+
+    // ─── № 08 SEISMO — the town seismograph ────────────────────────
+    // A rolling strip chart on canvas. The needle's energy comes from
+    // three honest places: the wire (/wire.json — last-24h commits +
+    // blocks set the ambient floor; anything under 20 minutes old
+    // still rings), your own pointer on the strip (microseism), and
+    // the drum ('thump'). A quiet wire draws a quiet line. Felt
+    // reports persist in pc:seismo:marks; the strip itself is live
+    // only — paper doesn't rewind.
+    var SG_MARKS_KEY = 'pc:seismo:marks';
+    var sgCanvas = document.getElementById('fb-sg-strip');
+    var sgCtx = sgCanvas ? sgCanvas.getContext('2d') : null;
+    var $sgMag  = document.getElementById('fb-sg-mag');
+    var $sgRead = document.getElementById('fb-sg-read');
+    var $sgFelt = document.getElementById('fb-sg-felt');
+    var sgBuf = null;        // one amplitude per paper column, newest last
+    var sgMarks = [];        // in-session felt marks riding the paper: {x, t}
+    var sgEnergy = 0;        // decaying excitement, 0..~3
+    var sgFloor = 0.06;      // ambient floor from wire density
+    var sgPrev = 0;
+    var sgPhase = 0;
+    var sgAcc = 0;
+    var sgGridOff = 0;
+    var sgMagTxt = '';
+    var sgRunning = false;
+    var sgWire = null;       // cached /wire.json summary
+    var sgReduced = false;
+    try { sgReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+    function sgLoadMarks() {
+      try {
+        var raw = localStorage.getItem(SG_MARKS_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) { return []; }
+    }
+
+    function sgPaintFelt() {
+      if (!$sgFelt) return;
+      var n = sgLoadMarks().length;
+      $sgFelt.textContent = n ? 'felt ' + n + '× at this desk' : 'never felt — press it when the town moves you';
+    }
+
+    function sgSetupCanvas() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var cssW = Math.max(120, sgCanvas.clientWidth || 300);
+      var cssH = Math.max(80, sgCanvas.clientHeight || 148);
+      sgCanvas.width = Math.round(cssW * dpr);
+      sgCanvas.height = Math.round(cssH * dpr);
+      sgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!sgBuf || sgBuf.length !== cssW) {
+        sgBuf = new Array(cssW);
+        for (var i = 0; i < cssW; i++) sgBuf[i] = 0;
+      }
+    }
+
+    async function sgReadWire() {
+      if (sgWire) return sgWire;
+      try {
+        var r = await fetch('/wire.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('wire ' + r.status);
+        var data = await r.json();
+        var evs = (data && data.events) || [];
+        var now = Date.now();
+        var commits = 0, blocks = 0, lastTs = 0, recent = 0;
+        for (var i = 0; i < evs.length; i++) {
+          var t = Date.parse(evs[i].at || '') || 0;
+          if (evs[i].kind === 'commit') commits++;
+          else if (evs[i].kind === 'block') blocks++;
+          if (t > lastTs) lastTs = t;
+          if (now - t < 20 * 60 * 1000) recent++;
+        }
+        sgWire = { ok: true, commits: commits, blocks: blocks, lastTs: lastTs, recent: recent, count: evs.length };
+      } catch (e) {
+        sgWire = { ok: false };
+      }
+      return sgWire;
+    }
+
+    function seismoOpen() {
+      if (!sgCanvas || !sgCtx) return;
+      sgSetupCanvas();
+      sgMarks = [];
+      sgPaintFelt();
+      sgReadWire().then(function (w) {
+        if (!w.ok) {
+          sgFloor = 0.05;
+          if ($sgRead) $sgRead.textContent = 'wire unreachable — the needle runs on nerves alone';
+          return;
+        }
+        sgFloor = Math.min(0.3, 0.04 + w.count * 0.006);
+        if (w.recent) sgEnergy = Math.max(sgEnergy, 0.9);
+        if ($sgRead) {
+          $sgRead.textContent = 'WIRE 24H · ' + w.commits + ' commits · ' + w.blocks + ' blocks · last ' + (w.lastTs ? shortTime(w.lastTs) : '——');
+        }
+        var dot = document.getElementById('fb-stamp-dot-seismo');
+        if (dot && w.lastTs && (Date.now() - w.lastTs) < 45 * 60 * 1000) dot.setAttribute('data-state', 'on');
+      });
+      if (!sgRunning) { sgRunning = true; sgFrame(); }
+    }
+
+    function sgFrame() {
+      if (!sgRunning) return;
+      var tray = getTrayEl('seismo');
+      if (!tray || tray.getAttribute('data-open') !== 'true') { sgRunning = false; return; }
+      sgStep();
+      sgDraw();
+      if (sgReduced) setTimeout(function () { requestAnimationFrame(sgFrame); }, 90);
+      else requestAnimationFrame(sgFrame);
+    }
+
+    function sgStep() {
+      sgEnergy = Math.max(0, sgEnergy * 0.965 - 0.0004);
+      sgAcc += sgReduced ? 1 : 0.45;
+      while (sgAcc >= 1) {
+        sgAcc -= 1;
+        sgGridOff = (sgGridOff + 23) % 24;
+        sgPhase += 0.55 + Math.random() * 0.3;
+        var e = sgFloor + sgEnergy;
+        var jag = Math.random() * 2 - 1;
+        var v = jag * 0.12 * (0.4 + e) + Math.sin(sgPhase) * e * 0.7 + jag * e * 0.5;
+        v = Math.max(-1, Math.min(1, sgPrev * 0.45 + v * 0.55));
+        sgPrev = v;
+        sgBuf.push(v);
+        sgBuf.shift();
+        for (var i = 0; i < sgMarks.length; i++) sgMarks[i].x -= 1;
+      }
+      sgMarks = sgMarks.filter(function (m) { return m.x > -30; });
+    }
+
+    function sgDraw() {
+      var w = sgBuf.length;
+      var h = sgCanvas.clientHeight || 148;
+      var mid = h * 0.52;
+      var amp = h * 0.36;
+      var ctx = sgCtx;
+      ctx.clearRect(0, 0, w, h);
+      // Drum-chart paper: verticals scroll with the strip, horizontals sit still.
+      ctx.strokeStyle = 'rgba(141, 120, 84, 0.16)';
+      ctx.lineWidth = 1;
+      var gx;
+      for (gx = sgGridOff; gx < w; gx += 24) {
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, h); ctx.stroke();
+      }
+      for (var gy = mid % 18; gy < h; gy += 18) {
+        ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(w, gy + 0.5); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(141, 120, 84, 0.4)';
+      ctx.beginPath(); ctx.moveTo(0, mid + 0.5); ctx.lineTo(w, mid + 0.5); ctx.stroke();
+      // Felt marks — a pin above the paper with the moment it was pressed.
+      ctx.font = '9px ui-monospace, Menlo, monospace';
+      ctx.fillStyle = '#8a2432';
+      for (var mi = 0; mi < sgMarks.length; mi++) {
+        var m = sgMarks[mi];
+        ctx.beginPath();
+        ctx.moveTo(m.x, 12); ctx.lineTo(m.x - 4, 4); ctx.lineTo(m.x + 4, 4);
+        ctx.closePath(); ctx.fill();
+        ctx.fillText('felt · ' + shortTime(m.t), m.x + 7, 11);
+      }
+      // The ink line, then the pen head at the newest column.
+      ctx.strokeStyle = '#c73e2e';
+      ctx.lineWidth = 1.4;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (var i = 0; i < w; i++) {
+        var y = mid - sgBuf[i] * amp;
+        if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#c73e2e';
+      ctx.beginPath();
+      ctx.arc(w - 1.5, mid - sgBuf[w - 1] * amp, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      if ($sgMag) {
+        var mag = 0.8 + (sgFloor + sgEnergy) * 3.4;
+        var word = mag < 1.5 ? 'still' : mag < 2.2 ? 'calm' : mag < 3 ? 'stirring' : mag < 3.8 ? 'busy' : 'the whole town is up';
+        var magTxt = 'M ' + mag.toFixed(1) + ' · ' + word;
+        if (magTxt !== sgMagTxt) { sgMagTxt = magTxt; $sgMag.textContent = magTxt; }
+      }
+    }
+
+    function seismoFelt() {
+      sgEnergy = Math.min(3, sgEnergy + 0.8);
+      if (sgBuf) sgMarks.push({ x: sgBuf.length - 4, t: Date.now() });
+      try {
+        var arr = sgLoadMarks();
+        arr.push(Date.now());
+        localStorage.setItem(SG_MARKS_KEY, JSON.stringify(arr.slice(-24)));
+      } catch (e) {}
+      sgPaintFelt();
+    }
+
+    function seismoThump() {
+      sgEnergy = Math.min(3.2, sgEnergy + 2.1);
+      var tray = getTrayEl('seismo');
+      if (tray && !sgReduced) {
+        tray.setAttribute('data-shake', 'true');
+        setTimeout(function () { tray.removeAttribute('data-shake'); }, 460);
+      }
+    }
+
+    // Microseism — your hand on the strip. Pointer speed adds energy.
+    if (sgCanvas) {
+      var sgLastX = null, sgLastY = null;
+      sgCanvas.addEventListener('pointermove', function (e) {
+        if (!sgRunning) return;
+        if (sgLastX !== null) {
+          var d = Math.abs(e.clientX - sgLastX) + Math.abs(e.clientY - sgLastY);
+          sgEnergy = Math.min(3, sgEnergy + Math.min(0.05, d * 0.0015));
+        }
+        sgLastX = e.clientX; sgLastY = e.clientY;
+      });
+      sgCanvas.addEventListener('pointerleave', function () { sgLastX = null; sgLastY = null; });
+      sgCanvas.addEventListener('pointerdown', function () {
+        if (sgRunning) sgEnergy = Math.min(3, sgEnergy + 0.35);
+      });
     }
 
     // Federation discovery — probe each peer's /agents.json.
@@ -3547,6 +3814,59 @@ const pingable = RESIDENTS.filter(
 
   /* ── 07 PASSPORT tray — stamps, entries, holos ─────────────────── */
   .fb__tray--passport { width: min(400px, calc(100vw - 16px)); }
+
+  /* ── № 08 SEISMO ─────────────────────────────────────────────── */
+  .fb__tray--seismo { width: min(400px, calc(100vw - 16px)); }
+  .fb__tray--seismo[data-shake='true'] { animation: fb-sg-shake 0.45s linear; }
+  @keyframes fb-sg-shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 1px); }
+    40% { transform: translate(3px, -2px); }
+    60% { transform: translate(-2px, 2px); }
+    80% { transform: translate(2px, -1px); }
+  }
+  .fb-sg {
+    border: 2px solid #2d1f08;
+    border-radius: 4px;
+    background: #fffcf3;
+    overflow: hidden;
+  }
+  .fb-sg__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px dashed #d8c9a4;
+  }
+  .fb-sg__title { font-size: 9.5px; letter-spacing: 0.08em; color: #6b5a3a; }
+  .fb-sg__mag { font-size: 10px; font-weight: 700; color: #c73e2e; white-space: nowrap; }
+  .fb-sg__strip {
+    display: block;
+    width: 100%;
+    height: 148px;
+    background: #fffcf3;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  .fb-sg__read {
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: #2f8f5f;
+    border-top: 1px dashed #d8c9a4;
+  }
+  .fb-sg__foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 8px 7px;
+    font-size: 9px;
+    color: #8a7854;
+    border-top: 1px solid #ece4d3;
+  }
+  .fb-sg__foot span:last-child { color: #8a2432; white-space: nowrap; }
 
   .fb-pp {
     border: 2px solid #2d1f08;

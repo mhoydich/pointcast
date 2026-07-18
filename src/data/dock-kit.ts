@@ -20,7 +20,7 @@
  * rule). Numbers also double as ⌘1–⌘9 shortcuts.
  */
 
-export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport';
+export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport' | 'seismo';
 
 /**
  * A quick-action button shown at the top of a tray. Buttons emit a
@@ -51,7 +51,7 @@ export interface DockTrayAction {
 }
 
 export interface DockKitItem {
-  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport';
+  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport' | 'seismo';
   number: string;
   name: string;
   blurb: string;
@@ -182,6 +182,26 @@ export const DOCK_KIT: DockKitItem[] = [
     actions: [
       { id: 'stamp', label: 'stamp today', glyph: '🛂', hint: 'Press today\'s dated ENTRY stamp' },
       { id: 'desk',  label: 'full desk',   glyph: '📖', hint: 'Open /passport — the Tezos passport desk', style: 'ghost' },
+    ],
+  },
+  {
+    // Mike 2026-07-18 — "make a really interesting footer". The town
+    // gets an instrument: a rolling strip chart of the wire. Commits
+    // and blocks set the needle's ambient floor, your pointer on the
+    // strip is microseism, and the drum gets one honest thump. A
+    // quiet wire draws a quiet line — nothing is faked.
+    id: 'seismo',
+    number: '08',
+    name: 'Seismo',
+    blurb: 'The town seismograph. The wire drives the needle; you can shake it.',
+    glyph: '∿',
+    nounSeed: 108,
+    tray: 'seismo',
+    accent: '#c73e2e',
+    actions: [
+      { id: 'felt',  label: 'felt it', glyph: '📍', hint: 'Press a felt-report mark onto the strip — the desk remembers' },
+      { id: 'thump', label: 'thump',   glyph: '🥁', hint: 'One honest thump on the drum — watch the needle jump' },
+      { id: 'wire',  label: 'wire',    glyph: '📈', hint: 'Open /wire — the raw feed behind the needle', style: 'ghost' },
     ],
   },
 ];
