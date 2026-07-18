@@ -20,7 +20,7 @@
  * rule). Numbers also double as ⌘1–⌘9 shortcuts.
  */
 
-export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast';
+export type DockTrayKind = 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport';
 
 /**
  * A quick-action button shown at the top of a tray. Buttons emit a
@@ -51,7 +51,7 @@ export interface DockTrayAction {
 }
 
 export interface DockKitItem {
-  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast';
+  id: 'room' | 'ask' | 'agent' | 'fed' | 'broadcast' | 'cast' | 'passport';
   number: string;
   name: string;
   blurb: string;
@@ -164,6 +164,24 @@ export const DOCK_KIT: DockKitItem[] = [
       { id: 'breath',   label: 'breath',   glyph: '🫧', hint: '4-7-8 breathing circle. Tap to dismiss.' },
       { id: 'rain',     label: 'rain',     glyph: '🌧', hint: 'Gentle pixel rain across the page.' },
       { id: 'clear',    label: 'clear',    glyph: '🌪', hint: 'Snuff out everything currently cast.', style: 'ghost' },
+    ],
+  },
+  {
+    // Mike 2026-07-18 — "make footer include interactive stamps,
+    // passport, holos". Your passport lives on the dock: the play-layer
+    // quest stamps (pc:passport:stamps) inked in place, a hand-pressed
+    // daily ENTRY stamp, and a holo-foil shelf for the rare stuff.
+    id: 'passport',
+    number: '07',
+    name: 'Passport',
+    blurb: 'Your stamps, your entry marks, your holos. Press today\'s stamp.',
+    glyph: '🛂',
+    nounSeed: 464,
+    tray: 'passport',
+    accent: '#185fa5',
+    actions: [
+      { id: 'stamp', label: 'stamp today', glyph: '🛂', hint: 'Press today\'s dated ENTRY stamp' },
+      { id: 'desk',  label: 'full desk',   glyph: '📖', hint: 'Open /passport — the Tezos passport desk', style: 'ghost' },
     ],
   },
 ];
