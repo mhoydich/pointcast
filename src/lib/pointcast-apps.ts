@@ -34,6 +34,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'el-segundo-school',
+    name: 'The El Segundo School',
+    kicker: '652 WORKS · PASSPORT · STAMPZ · TEZOS',
+    description: 'Michael Hoydich’s full Midjourney field archive as a three-dimensional gallery, with high-resolution Passport postcards, custom Stampz objects, physical-production briefs, and 1 tez Mainnet collector editions.',
+    url: 'https://pointcast.xyz/el-segundo-school',
+    path: '/el-segundo-school',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.ESS',
+    kind: 'pointcast',
+  },
+  {
     slug: 'afterimage',
     name: 'Afterimage Relay',
     kicker: 'IMAGE SIGNAL · MUSIC ROOM · TEZOS HANDOFF',
