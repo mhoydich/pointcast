@@ -217,6 +217,7 @@ const jsonLd = {
         <button class="command command--seal" type="button" data-seal-journey>Seal current edition</button>
         <button class="command" type="button" data-share-public disabled>Copy public passport</button>
         <button class="command" type="button" data-copy-proof disabled>Copy signed proof</button>
+        <button class="command" type="button" data-publish-seal disabled>Publish to /townsfolk</button>
         <output data-seal-status aria-live="polite">No signed edition on this device.</output>
       </div>
       <div class="seal-impression" data-seal-impression aria-hidden="true">
@@ -533,8 +534,10 @@ const jsonLd = {
       var impression = root.querySelector('[data-seal-impression]');
       var copy = root.querySelector('[data-copy-proof]');
       var share = root.querySelector('[data-share-public]');
+      var publish = root.querySelector('[data-publish-seal]');
       if (share) share.disabled = !state.address;
       if (copy) copy.disabled = !proof;
+      if (publish) publish.disabled = !proof;
       if (status) {
         status.textContent = proof
           ? 'Latest seal · ' + new Date(proof.issuedAt).toLocaleString() + ' · ' + shortAddress(proof.address)
@@ -701,6 +704,34 @@ const jsonLd = {
     });
     root.querySelector('[data-copy-proof]')?.addEventListener('click', function () {
       if (state.latestProof) copyText(JSON.stringify(state.latestProof, null, 2), 'Signed proof copied.');
+    });
+    // Publish the latest seal to the town registry (PRD: 2026-07-18
+    // seal-registry, Phase A). Explicit and opt-in — sealing never
+    // auto-publishes. /townsfolk verifies the signature reader-side.
+    root.querySelector('[data-publish-seal]')?.addEventListener('click', async function () {
+      var proof = state.latestProof;
+      if (!proof) return;
+      var button = root.querySelector('[data-publish-seal]');
+      if (button) button.disabled = true;
+      setStatus('Publishing your seal to the registry…', 'loading');
+      try {
+        var res = await fetch('/api/seals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(proof),
+        });
+        var data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || 'publish-failed');
+        if (data.reason === 'kv-unbound') {
+          setStatus('The registry shelf is not wired up in this environment. Your seal stays local.', 'error');
+        } else {
+          setStatus('Published. You are townsfolk — see /townsfolk.', 'ready');
+        }
+      } catch (error) {
+        setStatus('The registry did not accept the seal. Try again in a minute.', 'error');
+      } finally {
+        if (button) button.disabled = false;
+      }
     });
 
     window.addEventListener('pc:wallet-change', function (event) {
