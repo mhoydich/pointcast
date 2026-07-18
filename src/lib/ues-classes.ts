@@ -98,14 +98,14 @@ export const ONLINE_SEASON_ONE = {
   line: 'Eight studios turn local observation into a shared public commons.',
   status: 'forming' as const,
   durationWeeks: 6,
-  learnerCapacity: 60,
+  learnerCapacity: 96,
   courseCount: 8,
   classSize: {
     minimum: 12,
     maximum: 18,
   },
   enrollmentModel:
-    'Each learner chooses one home studio and may audit one elective, subject to the 18-person live-room cap.',
+    'The planning base is 96 unique learners: one home studio each, with every room opening at 12 and capped at 18. A learner may audit one elective when space allows.',
   weeklyRhythm: {
     monday: 'A faculty prompt and compact source shelf open the week.',
     midweek: 'Learners complete one 60–90 minute local field task or an equivalent remote path.',

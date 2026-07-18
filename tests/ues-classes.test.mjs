@@ -23,6 +23,8 @@ test('The Local Transmission defines eight complete six-week course rooms', asyn
   assert.match(source, /totalUsd: 39_650/);
   assert.match(source, /coursePoolUsd: 27_550/);
   assert.match(source, /sharedPoolUsd: 12_100/);
+  assert.match(source, /learnerCapacity: 96/);
+  assert.match(source, /minimum: 12/);
   assert.doesNotMatch(source, /status: 'open'/);
 });
 
@@ -37,11 +39,14 @@ test('UES publishes one shared catalog, public syllabus routes, and machine-read
 
   assert.match(catalog, /UES_SEASON_ONE_COURSES/);
   assert.match(catalog, /href="\/ues\/track-05"/);
+  assert.doesNotMatch(catalog, /<main(?:\s|>)/);
   assert.match(room, /getStaticPaths/);
   assert.match(room, /href="\/ues" aria-current="page"/);
   assert.match(room, /href="\/el-segundo-school#gallery"/);
   assert.match(room, /href="\/university-of-el-segundo#fund"/);
   assert.match(room, /wallet, public identity, and public artifact are never required/);
+  assert.match(room, /courseWorkload: `\$\{course\.weeklyCommitment\.total\}/);
+  assert.doesNotMatch(room, /instructor: \{ '@type': 'Person'/);
   assert.doesNotMatch(room, /import\([^)]*ues-fund/);
   assert.match(roomJson, /transactionPolicy/);
   assert.match(catalogJson, /current:/);
@@ -61,4 +66,6 @@ test('School discovery surfaces link the art archive, classes, and funding progr
   assert.match(funding, /id="next-term"/);
   assert.match(funding, /href="\/ues">Class catalog/);
   assert.match(funding, /Open all six weeks/);
+  assert.match(funding, /SEASON 0 EXPANSION TOTAL/);
+  assert.match(funding, /not included in this Season 0 expansion calculator/);
 });
