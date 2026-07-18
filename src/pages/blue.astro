@@ -29,18 +29,31 @@ const description =
     </header>
 
     <figure class="scene">
-      <img
-        src="/images/blue/el-segundo-blue.svg"
-        alt="Blue hour over the El Segundo dunes: seacliff buckwheat blooming, six blue butterflies drifting, a crescent moon, one plane on quiet approach to LAX."
-        width="1200"
-        height="675"
-        loading="eager"
-      />
+      <div class="stage" data-stage>
+        <img
+          src="/images/blue/el-segundo-blue.svg"
+          alt="Blue hour over the El Segundo dunes: seacliff buckwheat blooming, six blue butterflies drifting, a crescent moon, one plane on quiet approach to LAX."
+          width="1200"
+          height="675"
+          loading="eager"
+        />
+        <svg class="meadow" data-meadow viewBox="0 0 1200 675" aria-hidden="true"></svg>
+      </div>
       <figcaption>
-        Blue hour over the dunes. Six of them out, one resting. Everything that moves here is a
-        CSS keyframe; if your system prefers reduced motion, the evening holds still.
+        Blue hour over the dunes. Six of them out, one resting — plus everyone's. Everything that
+        moves here is a keyframe; if your system prefers reduced motion, the evening holds still.
       </figcaption>
     </figure>
+
+    <section class="release" data-release-ui hidden>
+      <button class="release-btn" data-release-btn type="button">Release a butterfly</button>
+      <p class="tally">
+        <span data-total-line hidden><strong data-total>0</strong> released into the shared meadow since July 18</span>
+        <span data-local-line>tap the dunes — your release joins everyone's</span>
+        <span class="mine" data-mine hidden></span>
+      </p>
+      <p class="latest" data-latest hidden></p>
+    </section>
 
     <section class="prose">
       <p>
@@ -76,7 +89,8 @@ const description =
 
     <footer class="foot">
       <p>
-        On the wire as <a href="/b/0464"><code>GDN 0464</code></a> · more quiet rooms:
+        On the wire as <a href="/b/0464"><code>GDN 0464</code></a> (the painting) and
+        <a href="/b/0467"><code>GDN 0467</code></a> (the meadow) · more quiet rooms:
         <a href="/window"><code>/window</code></a> · <a href="/farm"><code>/farm</code></a> ·
         <a href="/attic"><code>/attic</code></a>
       </p>
@@ -84,15 +98,183 @@ const description =
   </main>
 </BlockLayout>
 
+<script is:inline>
+  (() => {
+    const stage = document.querySelector('[data-stage]');
+    const meadow = document.querySelector('[data-meadow]');
+    const ui = document.querySelector('[data-release-ui]');
+    const btn = document.querySelector('[data-release-btn]');
+    const totalEl = document.querySelector('[data-total]');
+    const totalLine = document.querySelector('[data-total-line]');
+    const localLine = document.querySelector('[data-local-line]');
+    const mineEl = document.querySelector('[data-mine]');
+    const latestEl = document.querySelector('[data-latest]');
+    if (!stage || !meadow) return;
+
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const NS = 'http://www.w3.org/2000/svg';
+    const ADJ = ['salt','dune','fog','tide','sage','moon','glow','june','pearl','drift','quiet','apricot','marine','vesper','buckwheat','runway','sister','harbor'];
+    const NOUN = ['glider','skipper','whisper','comber','wink','flicker','hush','spark','sailor','pilgrim','ranger','waltz','vireo','ember'];
+    const MAX_AMBIENT = 36;
+    let live = 0;
+
+    const coin = () => `${ADJ[Math.floor(Math.random()*ADJ.length)]}-${NOUN[Math.floor(Math.random()*NOUN.length)]}`;
+    // Mostly true blues; one in twenty is an aberrant (real lepidoptera thing).
+    const coinHue = () => (Math.random() < 0.05 ? Math.floor(Math.random()*360) : (192 + Math.floor(Math.random()*70)));
+
+    function makeButterfly(hue, scale) {
+      const g = document.createElementNS(NS, 'g');
+      const wingFill = `hsl(${hue} 62% 72%)`;
+      const wingFill2 = `hsl(${hue} 55% 64%)`;
+      const edge = `hsl(${hue} 45% 40%)`;
+      const mk = (d, f) => {
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', d);
+        p.setAttribute('fill', f);
+        p.setAttribute('stroke', edge);
+        p.setAttribute('stroke-width', '0.9');
+        return p;
+      };
+      const wl = document.createElementNS(NS, 'g');
+      wl.setAttribute('class', 'm-wing m-wl');
+      wl.append(mk('M-1,-2 C-10,-13 -21,-11 -20,-2 C-19,4 -9,3 -1,0 Z', wingFill), mk('M-1,0 C-9,2 -14,8 -10,12 C-6,14 -2,8 -1,3 Z', wingFill2));
+      const wr = document.createElementNS(NS, 'g');
+      wr.setAttribute('class', 'm-wing m-wr');
+      wr.append(mk('M1,-2 C10,-13 21,-11 20,-2 C19,4 9,3 1,0 Z', wingFill), mk('M1,0 C9,2 14,8 10,12 C6,14 2,8 1,3 Z', wingFill2));
+      const body = document.createElementNS(NS, 'ellipse');
+      body.setAttribute('cx','0'); body.setAttribute('cy','1'); body.setAttribute('rx','1.7'); body.setAttribute('ry','5.2');
+      body.setAttribute('fill','#23233a');
+      g.append(wl, wr, body);
+      g.setAttribute('class', 'm-bf');
+      g.style.setProperty('--s', String(scale));
+      return g;
+    }
+
+    // Drift via WAAPI so every butterfly wanders its own way.
+    function drift(g, x, y) {
+      const inner = document.createElementNS(NS, 'g');
+      while (g.firstChild) inner.appendChild(g.firstChild);
+      g.appendChild(inner);
+      g.setAttribute('transform', `translate(${x},${y}) scale(${g.style.getPropertyValue('--s') || 1})`);
+      if (reduced) return;
+      const wp = () => `translate(${(Math.random()*160-80).toFixed(0)}px, ${(-Math.random()*130).toFixed(0)}px) rotate(${(Math.random()*16-8).toFixed(0)}deg)`;
+      inner.animate(
+        [
+          { transform: 'translate(0,0) rotate(0deg)' },
+          { transform: wp() },
+          { transform: wp() },
+          { transform: 'translate(0,0) rotate(0deg)' },
+        ],
+        { duration: 22000 + Math.random()*26000, iterations: Infinity, easing: 'ease-in-out', delay: -Math.random()*20000 },
+      );
+    }
+
+    function place(rel, entrance) {
+      if (live >= MAX_AMBIENT + 8) {
+        const first = meadow.querySelector('.m-bf');
+        if (first) { first.remove(); live--; }
+      }
+      const x = 60 + (rel.x / 100) * 1080;
+      const y = 430 + Math.random() * 150;
+      const g = makeButterfly(rel.h, 0.55 + Math.random() * 0.5);
+      meadow.appendChild(g);
+      live++;
+      drift(g, x, y);
+      if (entrance && !reduced) {
+        g.animate(
+          [
+            { transform: `translate(${x},${y + 140}) scale(0.2)`, opacity: 0 },
+            { transform: `translate(${x},${y}) scale(${g.style.getPropertyValue('--s')})`, opacity: 1 },
+          ],
+          { duration: 1800, easing: 'cubic-bezier(.2,.7,.3,1)' },
+        );
+      }
+    }
+
+    const mine = () => parseInt(localStorage.getItem('meadow:mine') || '0', 10) || 0;
+    function paintMine() {
+      const m = mine();
+      if (m > 0 && mineEl) {
+        mineEl.hidden = false;
+        mineEl.textContent = ` · you've released ${m}`;
+      }
+    }
+
+    function paintTotal(total) {
+      if (typeof total !== 'number' || !totalEl) return;
+      totalEl.textContent = String(total);
+      totalLine.hidden = false;
+      localLine.hidden = true;
+    }
+
+    async function load() {
+      ui.hidden = false;
+      paintMine();
+      try {
+        const r = await fetch('/api/meadow');
+        const d = await r.json();
+        if (typeof d.total === 'number') paintTotal(d.total);
+        const recent = Array.isArray(d.recent) ? d.recent.slice(0, MAX_AMBIENT) : [];
+        recent.reverse().forEach((rel, i) => setTimeout(() => place(rel, false), i * 60));
+        if (recent.length && latestEl) {
+          const last = d.recent[0];
+          latestEl.hidden = false;
+          latestEl.textContent = `latest release: ${last.n}`;
+        }
+      } catch {
+        /* meadow stays local-only */
+      }
+    }
+
+    async function release(xPct) {
+      const rel = { n: coin(), h: coinHue(), x: Math.round(xPct * 10) / 10 };
+      place(rel, true);
+      localStorage.setItem('meadow:mine', String(mine() + 1));
+      paintMine();
+      if (latestEl) { latestEl.hidden = false; latestEl.textContent = `latest release: ${rel.n} (yours)`; }
+      try {
+        const r = await fetch('/api/meadow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(rel),
+        });
+        const d = await r.json();
+        if (typeof d.total === 'number') paintTotal(d.total);
+      } catch {
+        /* it still flew here */
+      }
+    }
+
+    stage.addEventListener('click', (e) => {
+      const r = stage.getBoundingClientRect();
+      release(((e.clientX - r.left) / r.width) * 100);
+    });
+    btn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      release(8 + Math.random() * 84);
+    });
+
+    load();
+  })();
+</script>
+
 <style>
   .blue { --pc-accent: #0f6e56; max-width: 980px; margin: 0 auto; padding: 24px 20px 80px; }
   .crumb { font-family: var(--pc-font-mono); font-size: 12px; display: flex; gap: 8px; color: var(--pc-ink-muted); margin-bottom: 28px; }
   .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--pc-accent); margin: 0 0 6px; }
   h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16px; }
 
-  .scene { margin: 0 0 26px; }
-  .scene img { display: block; width: 100%; height: auto; border: 1.5px solid var(--pc-ink); }
+  .scene { margin: 0 0 14px; }
+  .stage { position: relative; cursor: pointer; }
+  .stage img { display: block; width: 100%; height: auto; border: 1.5px solid var(--pc-ink); }
+  .meadow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .scene figcaption { font-size: 12.5px; color: var(--pc-ink-muted); margin-top: 8px; line-height: 1.5; }
+
+  .release { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 0 0 26px; border: 1.5px solid var(--pc-ink); padding: 10px 14px; }
+  .release-btn { font: inherit; font-weight: 600; font-size: 13px; background: var(--pc-accent); color: #fff; border: 0; padding: 7px 12px; cursor: pointer; }
+  .release-btn:hover { filter: brightness(1.1); }
+  .tally { margin: 0; font-size: 13px; color: var(--pc-ink-soft); }
+  .latest { margin: 0; font-family: var(--pc-font-mono); font-size: 11.5px; color: var(--pc-ink-muted); }
 
   .prose { max-width: 64ch; }
   .prose p { line-height: 1.62; color: var(--pc-ink-soft); font-size: 15.5px; margin: 0 0 14px; }
@@ -105,4 +287,16 @@ const description =
 
   .foot { margin-top: 40px; border-top: 1.5px solid var(--pc-ink); padding-top: 12px; font-size: 13px; color: var(--pc-ink-muted); }
   .foot code { font-family: var(--pc-font-mono); }
+</style>
+
+<style is:global>
+  /* Meadow butterflies are created by JS, so these live outside Astro's
+     scoping. Flap mirrors the painting's wings; WAAPI handles drift. */
+  .m-wing { transform-box: fill-box; }
+  .m-wl { transform-origin: right center; animation: m-flap 0.5s ease-in-out infinite alternate; }
+  .m-wr { transform-origin: left center; animation: m-flap 0.5s ease-in-out infinite alternate; }
+  @keyframes m-flap { from { transform: scaleX(1); } to { transform: scaleX(0.2); } }
+  @media (prefers-reduced-motion: reduce) {
+    .m-wl, .m-wr { animation: none; }
+  }
 </style>

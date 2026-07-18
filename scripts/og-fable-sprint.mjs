@@ -15,6 +15,9 @@ const CARDS = [
   ['public/images/blue/el-segundo-blue.svg', 'public/images/og/b/0464.png'],
   ['public/images/fable/every-door.svg', 'public/images/og/b/0465.png'],
   ['public/images/fable/first-pass.svg', 'public/images/og/b/0466.png'],
+  ['public/images/fable/meadow.svg', 'public/images/og/b/0467.png'],
+  ['public/images/fable/door-of-the-day.svg', 'public/images/og/b/0468.png'],
+  ['public/images/fable/v1-wing.svg', 'public/images/og/b/0469.png'],
 ];
 
 for (const [src, out] of CARDS) {
