@@ -1,0 +1,214 @@
+---
+/**
+ * /townsfolk — the public shelf of sealed passports.
+ *
+ * PRD: docs/plans/2026-07-18-prd-seal-registry.md (Phase A). The Seal
+ * Desk on /passport signs a journey; publishing it puts a passport
+ * cover on this shelf. Verification happens HERE, in your browser —
+ * @taquito/utils checks the signature against the public key and the
+ * public key against the claimed address. The server never vouches;
+ * the reader always can.
+ *
+ * Covers use real nouns (seed = fnv1a(address) % 1200 — same derivation
+ * the passport page uses for ports), per the no-procedural-lookalikes
+ * rule.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Townsfolk';
+const description =
+  'The sealed passports of PointCast: wallet-signed journeys, published on purpose, verified in your browser. A town roster, not a ranking.';
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="tf">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>townsfolk</span></nav>
+
+    <header class="top">
+      <p class="kicker">THE SEAL REGISTRY · VERIFIED WHERE IT MATTERS — IN YOUR BROWSER</p>
+      <h1>Townsfolk</h1>
+      <p class="dek">
+        Everyone here signed their journey with their own wallet and chose to publish it. One
+        Beacon signature binds their local stamps and on-chain visas into a proof anyone can
+        check — and this page checks, live, with <code>@taquito/utils</code>. A town roster,
+        not a ranking.
+      </p>
+      <p class="cta">
+        Not on the shelf yet? Seal your journey at <a href="/passport"><code>/passport</code></a>
+        and press publish.
+      </p>
+    </header>
+
+    <section class="shelf">
+      <p class="status mono" data-status>reading the registry…</p>
+      <ul class="covers" data-covers></ul>
+    </section>
+
+    <section class="proof" data-proof hidden>
+      <header class="proof-head">
+        <h2 data-proof-title>—</h2>
+        <button type="button" class="proof-close" data-proof-close aria-label="Close">×</button>
+      </header>
+      <p class="verdict mono" data-verdict>verifying…</p>
+      <dl class="facts" data-facts></dl>
+      <details class="raw">
+        <summary class="mono">raw proof</summary>
+        <pre class="mono" data-raw></pre>
+      </details>
+    </section>
+
+    <footer class="foot">
+      <p>
+        Machine roster at <a href="/api/seals"><code>/api/seals</code></a> · one proof:
+        <code>/api/seals?address=tz…</code> · the desk: <a href="/passport"><code>/passport</code></a> ·
+        PRD: <code>docs/plans/2026-07-18-prd-seal-registry.md</code>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  import { verifySignature, getPkhfromPk } from '@taquito/utils';
+
+  const $status = document.querySelector('[data-status]') as HTMLElement;
+  const $covers = document.querySelector('[data-covers]') as HTMLElement;
+  const $proof = document.querySelector('[data-proof]') as HTMLElement;
+  const $verdict = document.querySelector('[data-verdict]') as HTMLElement;
+  const $facts = document.querySelector('[data-facts]') as HTMLElement;
+  const $raw = document.querySelector('[data-raw]') as HTMLElement;
+  const $proofTitle = document.querySelector('[data-proof-title]') as HTMLElement;
+
+  function fnv1a(s: string): number {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+  const nounFor = (address: string) => 1 + (fnv1a(address) % 1199);
+  const short = (a: string) => a.slice(0, 6) + '…' + a.slice(-4);
+  const esc = (s: string) => String(s || '').replace(/[<>&"]/g, (c) =>
+    c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : '&quot;');
+
+  async function verifyProof(proof: any): Promise<{ ok: boolean; why: string }> {
+    try {
+      if (!proof.publicKey) return { ok: false, why: 'no public key in proof' };
+      const derived = getPkhfromPk(proof.publicKey);
+      if (derived !== proof.address) return { ok: false, why: 'public key does not match address' };
+      const good = verifySignature(proof.payload, proof.publicKey, proof.signature);
+      return good
+        ? { ok: true, why: 'signature verifies against the address' }
+        : { ok: false, why: 'signature does not verify' };
+    } catch (e) {
+      return { ok: false, why: 'verification errored: ' + ((e as Error)?.message || 'unknown') };
+    }
+  }
+
+  async function openProof(address: string) {
+    $proof.hidden = false;
+    $proofTitle.textContent = short(address);
+    $verdict.textContent = 'verifying…';
+    $verdict.setAttribute('data-state', 'pending');
+    $facts.innerHTML = '';
+    $raw.textContent = '';
+    try {
+      const r = await fetch('/api/seals?address=' + encodeURIComponent(address));
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'not-found');
+      const p = d.proof;
+      const v = await verifyProof(p);
+      $verdict.textContent = v.ok ? '◉ SEAL VERIFIED — ' + v.why : '○ UNVERIFIED — ' + v.why;
+      $verdict.setAttribute('data-state', v.ok ? 'ok' : 'bad');
+      $facts.innerHTML =
+        '<div><dt>passport</dt><dd>' + esc(p.passportId) + '</dd></div>' +
+        '<div><dt>port of entry</dt><dd>' + esc(p.port) + '</dd></div>' +
+        '<div><dt>sealed</dt><dd>' + esc(String(p.issuedAt).slice(0, 19).replace('T', ' ')) + ' UTC</dd></div>' +
+        '<div><dt>stamps</dt><dd>' + (Array.isArray(p.local?.ids) ? p.local.ids.length : 0) + ' local · ' + (p.local?.points || 0) + ' pts</dd></div>' +
+        '<div><dt>visas</dt><dd>' + (Array.isArray(p.tezos?.visaIds) && p.tezos.visaIds.length ? esc(p.tezos.visaIds.join(', ')) : 'none yet') + '</dd></div>' +
+        '<div><dt>address</dt><dd class="mono">' + esc(p.address) + '</dd></div>';
+      $raw.textContent = JSON.stringify(p, null, 2);
+      $proof.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {
+      $verdict.textContent = 'could not load this proof: ' + ((e as Error)?.message || 'unknown');
+      $verdict.setAttribute('data-state', 'bad');
+    }
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/seals');
+      const d = await r.json();
+      const roster = Array.isArray(d.roster) ? d.roster : [];
+      if (!roster.length) {
+        $status.textContent = d.reason === 'kv-unbound'
+          ? 'the registry shelf is not wired up in this environment.'
+          : 'no townsfolk yet. the shelf is waiting for the first sealed passport.';
+        return;
+      }
+      $status.textContent = roster.length + ' sealed ' + (roster.length === 1 ? 'passport' : 'passports') + ' · click a cover to verify';
+      $covers.innerHTML = roster.map((e: any) => (
+        '<li class="cover" data-address="' + esc(e.address) + '">' +
+          '<button type="button" class="cover-btn">' +
+            '<img src="https://noun.pics/' + nounFor(e.address) + '.svg" alt="" width="44" height="44" loading="lazy" />' +
+            '<span class="cover-id mono">' + esc(e.passportId || short(e.address)) + '</span>' +
+            '<span class="cover-addr mono">' + short(e.address) + '</span>' +
+            '<span class="cover-port">' + esc(e.port || '—') + '</span>' +
+            '<span class="cover-meta mono">' + (e.stampCount || 0) + ' stamps · ' + (e.visaCount || 0) + ' visas</span>' +
+            '<span class="cover-date mono">' + esc(String(e.issuedAt).slice(0, 10)) + '</span>' +
+          '</button>' +
+        '</li>'
+      )).join('');
+      $covers.addEventListener('click', (ev) => {
+        const li = (ev.target as Element).closest('[data-address]');
+        if (li) openProof(li.getAttribute('data-address')!);
+      });
+    } catch {
+      $status.textContent = 'the registry did not answer. try again in a moment.';
+    }
+  }
+
+  document.querySelector('[data-proof-close]')?.addEventListener('click', () => { $proof.hidden = true; });
+  load();
+</script>
+
+<style is:global>
+.tf { max-width: 940px; margin: 0 auto; padding: 24px 20px 80px; }
+.tf .crumb { font-family: var(--pc-font-mono); font-size: 12px; display: flex; gap: 8px; color: var(--pc-ink-muted); margin-bottom: 28px; }
+.tf .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--pc-accent); margin: 0 0 6px; }
+.tf h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
+.tf .dek { max-width: 64ch; color: var(--pc-ink-soft); line-height: 1.55; margin: 0 0 8px; }
+.tf .dek code, .tf .cta code, .tf .foot code { font-family: var(--pc-font-mono); font-size: 0.92em; }
+.tf .cta { font-size: 14px; color: var(--pc-ink-soft); margin: 0; }
+
+.tf .shelf { margin-top: 30px; border-top: 1.5px solid var(--pc-ink); padding-top: 14px; }
+.tf .status { font-size: 12px; color: var(--pc-ink-muted); letter-spacing: 0.06em; margin: 0 0 14px; }
+
+.tf .covers { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.tf .cover-btn {
+    width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    background: #1b3560; color: #f2ead8; border: 2px solid var(--pc-ink);
+    padding: 14px 14px 12px; cursor: pointer; font: inherit; text-align: left;
+  }
+.tf .cover-btn:hover { background: #234175; transform: translateY(-2px); }
+.tf .cover-btn img { image-rendering: pixelated; border: 1.5px solid #f2ead8; background: #fff; margin-bottom: 6px; }
+.tf .cover-id { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; }
+.tf .cover-addr { font-size: 10px; opacity: 0.75; }
+.tf .cover-port { font-size: 12px; font-style: italic; opacity: 0.9; }
+.tf .cover-meta { font-size: 9.5px; letter-spacing: 0.06em; opacity: 0.75; }
+.tf .cover-date { font-size: 9.5px; letter-spacing: 0.06em; opacity: 0.6; }
+
+.tf .proof { margin-top: 30px; border: 2px solid var(--pc-ink); padding: 16px 18px; }
+.tf .proof-head { display: flex; align-items: center; justify-content: space-between; }
+.tf .proof-head h2 { font-family: var(--pc-font-mono); font-size: 16px; margin: 0; }
+.tf .proof-close { font: inherit; font-size: 18px; background: none; border: 0; cursor: pointer; color: var(--pc-ink-muted); }
+.tf .verdict { font-size: 13px; letter-spacing: 0.06em; margin: 10px 0 14px; }
+.tf .verdict[data-state='ok'] { color: #0f6e56; font-weight: 700; }
+.tf .verdict[data-state='bad'] { color: #8a2432; font-weight: 700; }
+.tf .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 18px; margin: 0; }
+.tf .facts div { display: flex; flex-direction: column; gap: 1px; }
+.tf .facts dt { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pc-ink-muted); }
+.tf .facts dd { margin: 0; font-size: 13.5px; color: var(--pc-ink-soft); overflow-wrap: anywhere; }
+.tf .raw { margin-top: 14px; }
+.tf .raw summary { font-size: 11px; color: var(--pc-ink-muted); cursor: pointer; }
+.tf .raw pre { font-size: 10.5px; line-height: 1.45; background: #f4f2ec; border: 1px solid var(--pc-rule-soft); padding: 10px; overflow-x: auto; max-height: 300px; }
+
+.tf .foot { margin-top: 44px; border-top: 1.5px solid var(--pc-ink); padding-top: 12px; font-size: 13px; color: var(--pc-ink-muted); }
+</style>
