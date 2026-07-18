@@ -184,6 +184,15 @@ export const PASSPORT_STAMPS = [
     description: 'Catch a broadcast bulletin.',
   },
   {
+    id: 'imagefm-pressing',
+    label: 'ImageFM Pressing',
+    category: 'broadcast',
+    route: 'https://imagefm.mhoydich.chatgpt.site/?m=8&t=0&edition=20260718-1100&at=2026-07-18T18%3A00%3A00.000Z&temp=71&wind=8&sky=coastal%20air&moon=waxing%20crescent&noun=1&x=50&y=50',
+    action: 'Tune',
+    points: 3,
+    description: 'Hold The City Tunes Its Blue as a frozen El Segundo mood.',
+  },
+  {
     id: 'quest-claim',
     label: 'Quest Claim',
     category: 'agent',
@@ -403,6 +412,13 @@ export const ROOM_WEATHER = [
 ] as const;
 
 export const RADIO_BULLETINS = [
+  {
+    id: 'imagefm-violet-crossing',
+    band: 'IMAGEFM 006',
+    title: 'Small Boat, Large Color is on the water',
+    href: 'https://imagefm.mhoydich.chatgpt.site/?m=11&t=0&edition=20260718-1100&at=2026-07-18T18%3A00%3A00.000Z&temp=71&wind=8&sky=coastal%20air&moon=waxing%20crescent&noun=1&x=50&y=50',
+    copy: 'Mike image, violet water, live generative score, real Noun, and a share card pressed from one El Segundo moment.',
+  },
   {
     id: 'station-id',
     band: 'PC-AM 90245',
