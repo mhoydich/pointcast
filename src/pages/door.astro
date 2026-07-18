@@ -1,0 +1,129 @@
+---
+/**
+ * /door — Door of the Day. The daily dusting.
+ *
+ * One quiet door per day, picked deterministically from the stalest pages
+ * in town (src/lib/door-of-the-day.ts). No cron: the formula is the
+ * schedule. The pool is embedded at build time and client JS re-runs the
+ * same pick, so the door turns over at midnight PT even if nobody
+ * deploys for a week. Opening it counts as dusting.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { doorPool, pickForDate, ptDate, POOL_DAYS } from '../lib/door-of-the-day';
+
+const title = 'Door of the Day';
+const description =
+  "One of the town's quietest doors, featured daily by deterministic formula. Opening it counts as dusting.";
+
+const pool = doorPool();
+const today = ptDate();
+const pick = pickForDate(pool, today);
+const shelf = pool.slice(0, 12);
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="door">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>door</span></nav>
+
+    <header class="top">
+      <p class="kicker">THE DAILY DUSTING · TURNS AT MIDNIGHT PT</p>
+      <h1>Door of the Day</h1>
+      <p class="dek">
+        A town this size forgets a room now and then. Every day the formula walks to one of the
+        {pool.length} quietest doors — anything untouched for {POOL_DAYS}+ days — and puts its
+        porch light on. Opening it counts as dusting.
+      </p>
+    </header>
+
+    {pick && (
+      <section class="today" data-today>
+        <p class="date" data-date>{today}</p>
+        <h2 class="route"><a data-pick-link href={pick.slug}><code data-pick-route>{pick.slug}</code></a></h2>
+        <p class="t" data-pick-title>{pick.title}</p>
+        {pick.description && <p class="d" data-pick-desc>{pick.description}</p>}
+        <p class="quiet" data-pick-quiet>{pick.daysQuiet} days quiet</p>
+        <a class="open" data-pick-open href={pick.slug}>Open it →</a>
+      </section>
+    )}
+
+    <section class="shelf">
+      <h2>The dusting pool</h2>
+      <p class="note">The twelve quietest right now. The formula picks from the full {pool.length}.</p>
+      <ul>
+        {shelf.map((f) => (
+          <li>
+            <a href={f.slug}><code>{f.slug}</code></a>
+            <span class="st">{f.title}</span>
+            <span class="sq">{f.daysQuiet}d quiet</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="foot">
+      <p>
+        Machine twin at <a href="/door.json"><code>/door.json</code></a> · the whole past lives in
+        <a href="/attic"><code>/attic</code></a> · every door: <a href="/everything"><code>/everything</code></a>
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ pool }}>
+  // Re-run the build-time formula with the browser's current PT date so the
+  // door turns over daily even between deploys. Must mirror door-of-the-day.ts.
+  const fnv1a = (s) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+  };
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  if (pool.length) {
+    const pick = pool[fnv1a(today) % pool.length];
+    const q = (s) => document.querySelector(s);
+    if (q('[data-date]') && q('[data-date]').textContent !== today) {
+      q('[data-date]').textContent = today;
+      q('[data-pick-link]').href = pick.slug;
+      q('[data-pick-route]').textContent = pick.slug;
+      q('[data-pick-title]').textContent = pick.title;
+      const d = q('[data-pick-desc]');
+      if (d) d.textContent = pick.description || '';
+      q('[data-pick-quiet]').textContent = `${pick.daysQuiet}+ days quiet`;
+      q('[data-pick-open]').href = pick.slug;
+    }
+  }
+</script>
+
+<style>
+  .door { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 12px; display: flex; gap: 8px; color: var(--pc-ink-muted); margin-bottom: 28px; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--pc-accent); margin: 0 0 6px; }
+  h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .dek { max-width: 60ch; color: var(--pc-ink-soft); line-height: 1.55; margin: 0; }
+
+  .today { margin-top: 30px; border: 2px solid var(--pc-ink); padding: 22px 24px; }
+  .date { font-family: var(--pc-font-mono); font-size: 12px; color: var(--pc-ink-muted); margin: 0 0 10px; }
+  .route { margin: 0 0 6px; font-size: clamp(24px, 4vw, 36px); }
+  .route code { font-family: var(--pc-font-mono); }
+  .t { font-weight: 700; font-size: 16px; margin: 0 0 4px; }
+  .d { color: var(--pc-ink-soft); font-size: 14px; margin: 0 0 8px; max-width: 62ch; }
+  .quiet { font-family: var(--pc-font-mono); font-size: 12px; color: var(--pc-accent); margin: 0 0 16px; }
+  .open { display: inline-block; background: var(--pc-ink); color: #fff; font-weight: 600; font-size: 14px; padding: 9px 16px; }
+  .open:hover { background: var(--pc-accent); color: #fff; }
+
+  .shelf { margin-top: 36px; border-top: 1.5px solid var(--pc-ink); padding-top: 14px; }
+  .shelf h2 { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+  .note { color: var(--pc-ink-muted); font-size: 13px; margin: 0 0 12px; }
+  .shelf ul { list-style: none; margin: 0; padding: 0; }
+  .shelf li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 4px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .shelf code { font-family: var(--pc-font-mono); font-size: 13px; }
+  .st { font-size: 13px; color: var(--pc-ink-soft); font-weight: 600; }
+  .sq { font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-ink-muted); margin-left: auto; white-space: nowrap; }
+
+  .foot { margin-top: 44px; border-top: 1.5px solid var(--pc-ink); padding-top: 12px; font-size: 13px; color: var(--pc-ink-muted); }
+</style>

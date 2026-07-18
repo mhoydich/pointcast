@@ -1,0 +1,65 @@
+---
+/**
+ * DoorOfTheDayStrip — one-line homepage chip for /door, the daily dusting.
+ *
+ * Shows today's quietest-door pick (deterministic, see
+ * src/lib/door-of-the-day.ts) with a days-quiet count. SSR renders the
+ * build-time pick; the inline script re-runs the same formula with the
+ * browser's PT date so the strip stays truthful between deploys.
+ */
+import { doorPool, pickForDate, ptDate } from '../lib/door-of-the-day';
+
+const pool = doorPool();
+const pick = pickForDate(pool, ptDate());
+const strip = pool.map((p) => ({ slug: p.slug, daysQuiet: p.daysQuiet }));
+---
+
+{pick && (
+  <aside class="dotd" aria-label="Door of the Day">
+    <span class="lamp" aria-hidden="true"></span>
+    <span class="label">DOOR OF THE DAY</span>
+    <a class="pick" data-dotd-pick href={pick.slug}><code>{pick.slug}</code></a>
+    <span class="quiet" data-dotd-quiet>{pick.daysQuiet} days quiet</span>
+    <a class="more" href="/door">why →</a>
+  </aside>
+)}
+
+<script is:inline define:vars={{ strip }}>
+  // Mirror of src/lib/door-of-the-day.ts pick formula.
+  const fnv1a = (s) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  };
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  if (strip.length) {
+    const p = strip[fnv1a(today) % strip.length];
+    const a = document.querySelector('[data-dotd-pick]');
+    if (a && a.getAttribute('href') !== p.slug) {
+      a.href = p.slug;
+      a.querySelector('code').textContent = p.slug;
+      const q = document.querySelector('[data-dotd-quiet]');
+      if (q) q.textContent = `${p.daysQuiet}+ days quiet`;
+    }
+  }
+</script>
+
+<style>
+  .dotd {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px;
+    border: 1.5px solid var(--pc-ink, #12110e);
+    padding: 8px 14px; margin: 10px 0;
+    font-size: 13px;
+  }
+  .lamp {
+    width: 8px; height: 8px; align-self: center;
+    background: #ffd400; border: 1.5px solid var(--pc-ink, #12110e);
+    box-shadow: 0 0 6px 1px rgba(255, 212, 0, 0.65);
+  }
+  .label { font-family: var(--pc-font-mono, monospace); font-size: 10.5px; letter-spacing: 0.13em; color: var(--pc-ink-muted, #5f5e5a); }
+  .pick code { font-family: var(--pc-font-mono, monospace); font-weight: 700; }
+  .quiet { font-family: var(--pc-font-mono, monospace); font-size: 11px; color: var(--pc-ink-muted, #5f5e5a); }
+  .more { margin-left: auto; font-size: 12px; }
+</style>
