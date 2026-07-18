@@ -1,0 +1,132 @@
+---
+/**
+ * /attic — the kept past.
+ *
+ * Per Mike 2026-07-18: "keep some past, don't have to redo everything."
+ * The attic is where a town stores what it isn't using but won't throw
+ * out. Three shelves:
+ *
+ *   · The first blocks — the earliest ten in the archive, as they were.
+ *   · Quiet doors — pages whose last commit is oldest (via explore's
+ *     staleFeatures). Not broken. Just resting.
+ *   · The v1 box — a note about the markdown-doc era, retired at commit
+ *     7fea01c and preserved in git, because git is the database.
+ *
+ * Nothing in the attic is gone. It's just upstairs.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { getCollection } from 'astro:content';
+import { CHANNELS } from '../lib/channels';
+import { staleFeatures } from '../lib/explore';
+
+const title = 'The Attic';
+const description =
+  'The kept past of PointCast: the first ten blocks, the quietest doors in town, and the v1 box. Nothing here is gone — it is just upstairs.';
+
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => a.data.id.localeCompare(b.data.id));
+const firstBlocks = blocks.slice(0, 10);
+const total = blocks.length;
+
+const quietDoors = staleFeatures(120, 24);
+const now = Math.floor(Date.now() / 1000);
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="attic">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>attic</span></nav>
+
+    <header class="top">
+      <p class="kicker">THE KEPT PAST</p>
+      <h1>Nothing is gone. It's just upstairs.</h1>
+      <p class="dek">
+        A town this size accumulates. {total} blocks, hundreds of doors, two eras of the site itself.
+        The attic is where the early and the quiet things sit in good light — kept, not redone.
+      </p>
+    </header>
+
+    <section class="shelf">
+      <h2>The first blocks</h2>
+      <p class="note">Where the archive starts. Every one still answers at its old address.</p>
+      <ul class="firsts">
+        {firstBlocks.map((b) => {
+          const ch = CHANNELS[b.data.channel];
+          return (
+            <li>
+              <a href={`/b/${b.data.id}`}>
+                <span class="bid" style={`border-color:${ch.color600};color:${ch.color800}`}>
+                  {b.data.channel} {b.data.id}
+                </span>
+                <span class="bt">{b.data.title}</span>
+              </a>
+              <time>{new Date(b.data.timestamp).toISOString().slice(0, 10)}</time>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="shelf">
+      <h2>Quiet doors</h2>
+      <p class="note">
+        The rooms nobody has touched in the longest time. Not broken — resting. Opening one counts
+        as dusting.
+      </p>
+      <ul class="quiet">
+        {quietDoors.map((f) => (
+          <li>
+            <a href={f.slug}><code>{f.slug}</code></a>
+            <span class="qt">{f.title}</span>
+            <span class="qd">{Math.floor((now - f.mtime) / 86400)} days quiet</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="shelf">
+      <h2>The v1 box</h2>
+      <p class="prose">
+        Before blocks, PointCast was a markdown-doc site — dispatches, the original drum room, the
+        Noun Bells instrument, the /collect inventory. That era was retired in April 2026 at commit
+        <code>7fea01c</code> and preserved whole, because git is the database. The content came
+        forward; the layout stayed in the box. If you want to see the old wallpaper, the commit is
+        the door.
+      </p>
+      <p class="prose">
+        The full record since then: <a href="/archive"><code>/archive</code></a> holds every block,
+        <a href="/timeline"><code>/timeline</code></a> holds the order,
+        <a href="/changelog"><code>/changelog</code></a> holds the work, and
+        <a href="/everything"><code>/everything</code></a> holds every door that ships today.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .attic { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 12px; display: flex; gap: 8px; color: var(--pc-ink-muted); margin-bottom: 28px; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--pc-accent); margin: 0 0 6px; }
+  h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .dek { max-width: 60ch; color: var(--pc-ink-soft); line-height: 1.55; margin: 0; }
+
+  .shelf { margin-top: 36px; border-top: 1.5px solid var(--pc-ink); padding-top: 14px; }
+  .shelf h2 { font-size: 17px; font-weight: 700; margin: 0 0 6px; }
+  .note { color: var(--pc-ink-muted); font-size: 13px; margin: 0 0 12px; }
+
+  .firsts { list-style: none; margin: 0; padding: 0; }
+  .firsts li { display: flex; align-items: baseline; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .firsts a { display: flex; align-items: baseline; gap: 10px; color: inherit; flex: 1; min-width: 0; }
+  .bid { font-family: var(--pc-font-mono); font-size: 11px; border: 1.5px solid; padding: 1px 6px; white-space: nowrap; }
+  .bt { font-weight: 600; font-size: 14px; }
+  .firsts time { font-family: var(--pc-font-mono); font-size: 11.5px; color: var(--pc-ink-muted); white-space: nowrap; }
+  .firsts a:hover .bt { color: var(--pc-accent); }
+
+  .quiet { list-style: none; margin: 0; padding: 0; }
+  .quiet li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 4px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .quiet code { font-family: var(--pc-font-mono); font-size: 13px; }
+  .qt { font-size: 13px; color: var(--pc-ink-soft); font-weight: 600; }
+  .qd { font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-ink-muted); margin-left: auto; white-space: nowrap; }
+
+  .prose { max-width: 62ch; line-height: 1.6; color: var(--pc-ink-soft); font-size: 14.5px; margin: 0 0 12px; }
+  .prose code { font-family: var(--pc-font-mono); font-size: 13px; }
+</style>
