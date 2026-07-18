@@ -1,3 +1,5 @@
+import { ONLINE_SEASON_ONE, UES_SEASON_ONE_BUDGET, UES_SEASON_ONE_COURSES } from './ues-classes';
+
 export type UesCourse = {
   code: string;
   slug: string;
@@ -76,7 +78,7 @@ export const UES_LAUNCH_COURSES: UesCourse[] = [
     delivery: 'Six live studios, neighborhood observations, and one repair proposal.',
     publicOutcome: 'A small, costed proposal for one local repair.',
     audience: 'Residents, designers, builders, organizers, and civic beginners.',
-    path: '/ues/track-05',
+    path: '/ues#launch-studios',
   },
   {
     code: 'UES-102',
@@ -309,8 +311,11 @@ export const UES_PROGRAM_PAYLOAD = {
   identity: UES_PROGRAM,
   operatingModel: ONLINE_SEASON_ZERO,
   courses: UES_COURSES,
+  nextOnlineTerm: ONLINE_SEASON_ONE,
+  nextCourses: UES_SEASON_ONE_COURSES,
   budgets: {
     online: UES_ONLINE_BUDGET,
+    nextOnlineTerm: UES_SEASON_ONE_BUDGET,
     fieldLayer: UES_FIELD_BUDGET,
     satelliteSeed: UES_SATELLITE_MODEL.seedBudget,
   },

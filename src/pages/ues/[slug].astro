@@ -1,0 +1,269 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import gallery from '../../data/el-segundo-school-gallery.json';
+import { UES_SEASON_ONE_COURSES, type UesSeasonOneCourse } from '../../lib/ues-classes';
+import { UES_PROGRAM } from '../../lib/ues-program';
+
+export function getStaticPaths() {
+  return UES_SEASON_ONE_COURSES.map((course) => ({ params: { slug: course.slug }, props: { course } }));
+}
+
+const { course } = Astro.props as { course: UesSeasonOneCourse };
+const courseIndex = UES_SEASON_ONE_COURSES.findIndex((item) => item.code === course.code);
+const previousCourse = courseIndex > 0 ? UES_SEASON_ONE_COURSES.at(courseIndex - 1) : undefined;
+const nextCourse = UES_SEASON_ONE_COURSES.at(courseIndex + 1);
+const artwork = gallery.works.find((work) => work.number === course.archiveWorkNumber);
+const assetOrigin = 'https://el-segundo-school-archive.pages.dev';
+const artUrl = (path: string) => `${assetOrigin}${path.replace('/images/el-segundo-school', '')}`;
+const joinHref = `mailto:${UES_PROGRAM.contact}?subject=${encodeURIComponent(`${course.code} — ${course.title} interest`)}`;
+const title = `${course.code} · ${course.title}`;
+const description = `${course.frame} A public six-week course room from University of El Segundo.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Course',
+  '@id': `https://pointcast.xyz${course.path}`,
+  name: course.title,
+  courseCode: course.code,
+  description: course.frame,
+  url: `https://pointcast.xyz${course.path}`,
+  numberOfCredits: 0,
+  provider: { '@type': 'EducationalOrganization', name: UES_PROGRAM.name, url: UES_PROGRAM.home },
+  hasCourseInstance: {
+    '@type': 'CourseInstance',
+    courseMode: ['online', 'synchronous', 'asynchronous'],
+    courseWorkload: course.weeklyCommitment,
+    instructor: { '@type': 'Person', name: 'Faculty lead — forming' },
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={artwork ? artUrl(artwork.src) : undefined}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: course.jsonPath, title: `${course.code} course data` }]}
+>
+  <article class="room">
+    <header class="masthead">
+      <a class="masthead__mark" href="/">POINTCAST</a>
+      <nav aria-label="University of El Segundo">
+        <a href="/university-of-el-segundo">University</a>
+        <a href="/ues" aria-current="page">Classes</a>
+        <a href="/el-segundo-school">Art archive</a>
+        <a href="/university-of-el-segundo#fund">Contribute</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="course-title">
+      <div class="hero__copy">
+        <p class="eyebrow">THE LOCAL TRANSMISSION · ONLINE SEASON 1 · {course.code}</p>
+        <div class="status"><span>{course.status}</span><span>6 weeks</span><span>tuition-free pilot</span></div>
+        <h1 id="course-title">{course.title}</h1>
+        <p class="subtitle">{course.archiveCategory}</p>
+        <p class="frame">{course.frame}</p>
+        {course.boundary && <p class="boundary"><strong>Course boundary</strong>{course.boundary}</p>}
+        <div class="hero__actions">
+          <a class="button button--primary" href={joinHref}>Ask for a seat</a>
+          <a class="button" href="#weeks">Read all six weeks</a>
+        </div>
+      </div>
+      {artwork && (
+        <figure class="hero__art">
+          <img src={artUrl(artwork.src)} alt={`${artwork.title}, work ${artwork.number} by Michael Hoydich`} width={artwork.width} height={artwork.height} />
+          <figcaption>
+            <span>COURSE COVER · WORK {artwork.number}</span>
+            <b>{artwork.title}</b>
+            <a href="/el-segundo-school#gallery">Visit the art archive →</a>
+          </figcaption>
+        </figure>
+      )}
+    </section>
+
+    <dl class="facts" aria-label="Course facts">
+      <div><dt>Weekly time</dt><dd>{course.weeklyCommitment.total}</dd></div>
+      <div><dt>Room</dt><dd>12–18 learners</dd></div>
+      <div><dt>Audience</dt><dd>Residents, artists, educators, organizers, and curious local learners.</dd></div>
+      <div><dt>Materials</dt><dd>{course.materials.join(' · ')}</dd></div>
+    </dl>
+
+    <section class="purpose split-section" aria-labelledby="purpose-title">
+      <div>
+        <p class="eyebrow">WHY THIS CLASS EXISTS</p>
+        <h2 id="purpose-title">Make observation useful to somebody else.</h2>
+      </div>
+      <div class="prose">
+        <p>{course.frame}</p>
+        <div class="outcome"><span>PUBLIC OUTCOME</span><strong>{course.outcome}</strong></div>
+        <p class="lineage"><b>Builds from Season 0:</b> {course.connectsFrom.join(', ')}.</p>
+      </div>
+    </section>
+
+    <section class="operation split-section" aria-labelledby="operation-title">
+      <div>
+        <p class="eyebrow">HOW THE ROOM RUNS</p>
+        <h2 id="operation-title">Prompt. Fieldwork. Studio. Receipt.</h2>
+      </div>
+      <ol class="rhythm">
+        <li><span>01</span><div><b>Monday prompt</b><p>A compact source shelf and one central question open the week.</p></div></li>
+        <li><span>02</span><div><b>Field task</b><p>One 60–90 minute act of looking, making, recording, or hosting.</p></div></li>
+        <li><span>03</span><div><b>Live studio</b><p>A 75-minute online demonstration, working session, or critique.</p></div></li>
+        <li><span>04</span><div><b>Sunday receipt</b><p>A useful, accessible trace shared with the room and, when chosen, the public.</p></div></li>
+      </ol>
+    </section>
+
+    <section class="weeks" id="weeks" aria-labelledby="weeks-title">
+      <header>
+        <p class="eyebrow">THE SIX-WEEK ROOM</p>
+        <h2 id="weeks-title">A complete first syllabus.</h2>
+      </header>
+      <ol class="week-list">
+        {course.weeks.map((week, index) => (
+          <li id={`week-${index + 1}`} class="week">
+            <div class="week__number"><span>WEEK</span><strong>{String(index + 1).padStart(2, '0')}</strong></div>
+            <div class="week__body">
+              <p class="week__question">{week.question}</p>
+              <h3>{week.title}</h3>
+              <div class="week__grid">
+                <div><h4>Source shelf</h4><ul>{week.sourceShelf.map((source) => <li>{source}</li>)}</ul></div>
+                <div><h4>Live studio</h4><p>{week.studio}</p></div>
+                <div><h4>Field task</h4><p>{week.fieldTask}</p></div>
+                <div class="receipt"><h4>Public receipt</h4><p>{week.publicReceipt}</p></div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="assignments split-section" aria-labelledby="assignments-title">
+      <div><p class="eyebrow">WHAT COMPLETION MEANS</p><h2 id="assignments-title">No grades. Real work.</h2></div>
+      <div>
+        <ol>{course.assignments.map((assignment, index) => <li><span>{String(index + 1).padStart(2, '0')}</span><p><b>{assignment.title} · due week {assignment.dueWeek}</b><br />{assignment.brief}</p></li>)}</ol>
+        <p class="completion">Complete four of six field tasks, offer constructive peer response, and finish the public outcome. A private or pseudonymous access path is always available.</p>
+      </div>
+    </section>
+
+    <section class="access split-section" aria-labelledby="access-title">
+      <div><p class="eyebrow">ACCESS IS PART OF THE SYLLABUS</p><h2 id="access-title">More than one way through the room.</h2></div>
+      <div>
+        <ul>{course.access.map((item) => <li>{item}</li>)}</ul>
+        <dl>
+          <div><dt>Faculty profile</dt><dd>{course.instructorProfile}</dd></div>
+          <div><dt>Faculty</dt><dd>Forming — a name and schedule are required before enrollment opens.</dd></div>
+          <div><dt>Steward</dt><dd>Forming — handles access, attendance, documentation, and follow-up.</dd></div>
+          <div><dt>Planning cost</dt><dd>${course.budgetUsd.toLocaleString('en-US')} for this six-week room.</dd></div>
+        </dl>
+        <p class="rights">Learners retain copyright. Public licensing and Tezos minting are optional. A wallet, public identity, and public artifact are never required for course access.</p>
+      </div>
+    </section>
+
+    <section class="cta" aria-labelledby="cta-title">
+      <p class="eyebrow">THE ROOM IS FORMING</p>
+      <h2 id="cta-title">Bring one place. Leave one useful trace.</h2>
+      <p>Dates, faculty, steward, and accommodation contact will be published before enrollment opens. Interest now helps the university form the right room.</p>
+      <div><a class="button button--primary" href={joinHref}>Ask for a seat in {course.code}</a><a class="button" href="/university-of-el-segundo#fund">Support the shared pool</a></div>
+      <small>Support does not buy admission, curriculum control, governance rights, or faculty appointments.</small>
+    </section>
+
+    <nav class="course-nav" aria-label="More University of El Segundo classes">
+      {previousCourse ? <a href={previousCourse.path}><span>Previous</span><b>{previousCourse.code} · {previousCourse.title}</b></a> : <a href="/ues"><span>Catalog</span><b>All online classes</b></a>}
+      {nextCourse ? <a href={nextCourse.path}><span>Next</span><b>{nextCourse.code} · {nextCourse.title}</b></a> : <a href="/ues/track-05"><span>Previous curriculum</span><b>UES-05 · The Rebuildable Town</b></a>}
+    </nav>
+  </article>
+</BlockLayout>
+
+<style>
+  .room { --ink:#10120f; --paper:#f1eee3; --acid:#caff24; --blue:#1537e8; --lavender:#ddd1ff; --red:#ff5c43; min-width:0; background:var(--paper); color:var(--ink); }
+  .room a:focus-visible { outline:3px solid var(--acid); outline-offset:3px; }
+  .masthead { position:sticky; top:0; z-index:30; min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:8px 14px; border-bottom:1px solid var(--ink); background:rgba(241,238,227,.96); backdrop-filter:blur(10px); }
+  .masthead__mark { color:var(--ink); font:700 11px var(--pc-font-mono); letter-spacing:.14em; }
+  .masthead nav { display:flex; gap:5px; }
+  .masthead nav a { min-height:42px; display:grid; place-items:center; padding:7px 11px; border:1px solid #a5a398; color:var(--ink); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .masthead nav a:hover,.masthead nav a[aria-current="page"] { background:var(--ink); color:var(--paper); text-decoration:none; }
+  .hero { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr); min-height:calc(100vh - 58px); border-bottom:1px solid var(--ink); }
+  .hero__copy { display:flex; flex-direction:column; padding:clamp(34px,5vw,76px); border-right:1px solid var(--ink); }
+  .eyebrow { margin:0; color:var(--blue); font:700 10px/1.5 var(--pc-font-mono); letter-spacing:.12em; text-transform:uppercase; }
+  .status { display:flex; flex-wrap:wrap; gap:6px; margin:22px 0 0; }
+  .status span { padding:7px 9px; border:1px solid var(--ink); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .status span:first-child { background:var(--acid); }
+  h1 { max-width:12ch; margin:clamp(40px,8vh,90px) 0 18px; font-size:clamp(58px,8vw,132px); line-height:.79; letter-spacing:-.075em; }
+  .subtitle { margin:0 0 22px; color:var(--blue); font:700 clamp(19px,2vw,27px)/1.15 var(--pc-font-mono); }
+  .frame { max-width:760px; margin:0; font:22px/1.42 Georgia,serif; }
+  .boundary { max-width:760px; display:grid; gap:7px; margin:24px 0 0; padding:14px; border:2px solid var(--red); background:#fff; font-size:16px; line-height:1.5; }
+  .boundary strong { color:#b22d1d; font:700 11px var(--pc-font-mono); text-transform:uppercase; }
+  .hero__actions,.cta>div { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:38px; }
+  .button { min-height:48px; display:grid; place-items:center; padding:11px 15px; border:1px solid var(--ink); color:var(--ink); font:700 10px var(--pc-font-mono); text-align:center; text-transform:uppercase; }
+  .button:hover { background:var(--ink); color:var(--paper); text-decoration:none; }
+  .button--primary { background:var(--acid); }
+  .hero__art { min-width:0; display:flex; flex-direction:column; margin:0; padding:clamp(18px,3vw,44px); background:var(--blue); }
+  .hero__art img { width:100%; min-height:0; flex:1; object-fit:cover; border:1px solid #99a8ff; box-shadow:14px 14px 0 var(--acid); }
+  .hero__art figcaption { display:grid; gap:7px; padding:28px 0 0; color:#fff; }
+  .hero__art figcaption span,.hero__art figcaption a { color:var(--acid); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .hero__art figcaption b { font:18px/1.3 Georgia,serif; }
+  .facts { display:grid; grid-template-columns:repeat(4,1fr); margin:0; border-bottom:1px solid var(--ink); }
+  .facts div { min-height:150px; padding:18px; border-right:1px solid var(--ink); }
+  .facts div:last-child { border-right:0; }
+  .facts dt { color:var(--blue); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .facts dd { margin:30px 0 0; font:16px/1.45 var(--pc-font-mono); }
+  .split-section { display:grid; grid-template-columns:minmax(280px,.75fr) minmax(0,1.25fr); gap:clamp(38px,8vw,140px); padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); border-bottom:1px solid var(--ink); }
+  .split-section h2,.weeks h2,.cta h2 { max-width:12ch; margin:14px 0 0; font-size:clamp(48px,7vw,104px); line-height:.84; letter-spacing:-.065em; }
+  .prose>p { max-width:720px; margin:0; font:22px/1.48 Georgia,serif; }
+  .outcome { display:grid; gap:14px; margin:48px 0; padding:24px; border:1px solid var(--ink); background:var(--acid); }
+  .outcome span { font:9px var(--pc-font-mono); }
+  .outcome strong { font-size:clamp(26px,3vw,44px); line-height:1.05; }
+  .lineage { font-size:16px!important; }
+  .operation { background:var(--lavender); }
+  .rhythm { list-style:none; margin:0; padding:0; border-top:1px solid var(--ink); }
+  .rhythm li { display:grid; grid-template-columns:48px 1fr; gap:20px; padding:20px 0; border-bottom:1px solid var(--ink); }
+  .rhythm li>span { color:var(--blue); font:10px var(--pc-font-mono); }
+  .rhythm b { font-size:22px; }
+  .rhythm p { margin:7px 0 0; font-size:16px; line-height:1.5; }
+  .weeks { scroll-margin-top:58px; padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); background:var(--ink); color:var(--paper); }
+  .weeks .eyebrow { color:var(--acid); }
+  .weeks>header { margin-bottom:70px; }
+  .week-list { list-style:none; margin:0; padding:0; border-top:1px solid #6c6d68; }
+  .week { scroll-margin-top:70px; display:grid; grid-template-columns:120px 1fr; gap:30px; padding:42px 0 58px; border-bottom:1px solid #6c6d68; }
+  .week__number { display:grid; align-content:start; gap:5px; color:var(--acid); font-family:var(--pc-font-mono); }
+  .week__number span { font-size:9px; }
+  .week__number strong { font-size:54px; line-height:1; }
+  .week__question { margin:0 0 12px; color:var(--acid); font:11px/1.5 var(--pc-font-mono); text-transform:uppercase; }
+  .week h3 { max-width:14ch; margin:0 0 36px; font-size:clamp(36px,5vw,70px); line-height:.9; letter-spacing:-.05em; }
+  .week__grid { display:grid; grid-template-columns:1fr 1fr; border:1px solid #6c6d68; }
+  .week__grid>div { min-height:200px; padding:20px; border-right:1px solid #6c6d68; border-bottom:1px solid #6c6d68; }
+  .week__grid>div:nth-child(2n) { border-right:0; }
+  .week__grid>div:nth-last-child(-n+2) { border-bottom:0; }
+  .week__grid h4 { margin:0 0 24px; color:#aeb6ff; font:10px var(--pc-font-mono); text-transform:uppercase; }
+  .week__grid p,.week__grid li { font-size:16px; line-height:1.5; }
+  .week__grid ul { margin:0; padding-left:20px; }
+  .week__grid .receipt { background:var(--acid); color:var(--ink); }
+  .week__grid .receipt h4 { color:var(--blue); }
+  .assignments { background:#f4a7bd; }
+  .assignments ol { list-style:none; margin:0; padding:0; border-top:1px solid var(--ink); }
+  .assignments li { display:grid; grid-template-columns:42px 1fr; gap:14px; border-bottom:1px solid var(--ink); }
+  .assignments li span { padding-top:19px; color:var(--blue); font:10px var(--pc-font-mono); }
+  .assignments li p { margin:0; padding:16px 0; font-size:18px; line-height:1.5; }
+  .completion { margin:30px 0 0; padding:18px; border:1px solid var(--ink); background:var(--paper); font-size:16px; line-height:1.55; }
+  .access { background:#fffdf4; }
+  .access ul { margin:0; padding:0; list-style:none; border-top:1px solid var(--ink); }
+  .access li { padding:16px 0; border-bottom:1px solid var(--ink); font-size:17px; line-height:1.5; }
+  .access dl { margin:42px 0 0; }
+  .access dl div { display:grid; grid-template-columns:150px 1fr; gap:20px; padding:14px 0; border-top:1px solid #aaa89f; }
+  .access dt { color:var(--blue); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .access dd { margin:0; font-size:16px; line-height:1.5; }
+  .rights { margin:32px 0 0; padding:18px; border:1px solid var(--ink); background:var(--acid); font-size:16px; line-height:1.55; }
+  .cta { min-height:80vh; display:flex; flex-direction:column; justify-content:center; padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); background:var(--red); }
+  .cta>p:not(.eyebrow) { max-width:720px; font:21px/1.45 Georgia,serif; }
+  .cta>div { margin-top:30px; padding:0; }
+  .cta small { max-width:720px; margin-top:20px; font:11px/1.5 var(--pc-font-mono); text-transform:uppercase; }
+  .course-nav { display:grid; grid-template-columns:1fr 1fr; }
+  .course-nav a { min-height:150px; display:flex; flex-direction:column; justify-content:space-between; gap:20px; padding:24px; border-top:1px solid var(--ink); border-right:1px solid var(--ink); color:var(--ink); }
+  .course-nav a:last-child { border-right:0; text-align:right; }
+  .course-nav a:hover { background:var(--blue); color:#fff; text-decoration:none; }
+  .course-nav span { font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .course-nav b { font-size:22px; }
+  @media(max-width:920px){ .hero{grid-template-columns:1fr}.hero__copy{min-height:720px;border-right:0;border-bottom:1px solid var(--ink)}.hero__art{min-height:700px}.facts{grid-template-columns:1fr 1fr}.facts div:nth-child(2){border-right:0}.facts div:nth-child(-n+2){border-bottom:1px solid var(--ink)}.split-section{grid-template-columns:1fr;gap:46px} }
+  @media(max-width:680px){ .masthead{align-items:center;padding:7px 8px}.masthead__mark{display:none}.masthead nav{min-width:0;overflow-x:auto}.masthead nav a{flex:0 0 auto}.hero__copy{min-height:690px;padding:34px 18px}.hero__art{min-height:570px;padding:22px 18px 36px}.facts{grid-template-columns:1fr}.facts div{min-height:0;border-right:0;border-bottom:1px solid var(--ink)}.facts div:last-child{border-bottom:0}.facts dd{margin-top:14px}.week{grid-template-columns:1fr;gap:16px}.week__number{display:flex;align-items:baseline;gap:8px}.week__number strong{font-size:34px}.week__grid{grid-template-columns:1fr}.week__grid>div{min-height:0;border-right:0!important;border-bottom:1px solid #6c6d68!important}.week__grid>div:last-child{border-bottom:0!important}.access dl div{grid-template-columns:1fr;gap:7px}.course-nav{grid-template-columns:1fr}.course-nav a{border-right:0;border-bottom:1px solid var(--ink);text-align:left!important} }
+  @media(max-width:360px){ h1{font-size:53px}.masthead nav a{padding-inline:8px}.hero__actions .button,.cta .button{width:100%} }
+  @media(prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important} }
+</style>

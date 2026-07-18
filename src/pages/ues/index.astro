@@ -1,327 +1,303 @@
 ---
-/**
- * /ues — University of El Segundo · the hub.
- *
- * The landing page for UES. Lists every Track. Each Track is a 4-6
- * week field study with a thesis, a reading list, and field trips
- * to real surfaces on PointCast.
- *
- * UES is not accredited. UES does not award degrees in the conventional
- * sense (see Track 05's coda: "There is no final. There is a Block.")
- * UES is a posture — that the town itself is a curriculum, that
- * software-as-place can be studied the way architecture is studied,
- * that maintenance is a creative posture not a janitorial chore.
- *
- * Aesthetic: geocities + sim city, monospace catalog, brass-and-velvet
- * track cards. Companion to /ues/track-05.
- */
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import gallery from '../../data/el-segundo-school-gallery.json';
+import { UNIVERSITY_TRACKS } from '../../lib/localAreas';
+import { ONLINE_SEASON_ONE, UES_SEASON_ONE_BUDGET, UES_SEASON_ONE_COURSES } from '../../lib/ues-classes';
+import { ONLINE_SEASON_ZERO, UES_COURSES, UES_PROGRAM } from '../../lib/ues-program';
 
-const title = 'University of El Segundo';
-const description =
-  'UES — a small, unaccredited, place-based curriculum at pointcast.xyz. Each Track is a field study in some aspect of the town. The classroom is the town itself.';
-
-interface Track {
-  code: string;
-  slug: string;
-  title: string;
-  subtitle: string;
-  weeks: number;
-  status: 'live' | 'forthcoming' | 'archive';
-  blurb: string;
-  fieldTrips: { week: number; theme: string; href?: string }[];
-}
-
-const tracks: Track[] = [
+const title = 'Classes · University of El Segundo';
+const description = 'The public online catalog for University of El Segundo: The Local Transmission, eight six-week art-forward studios that turn local observation into a shared commons.';
+const assetOrigin = 'https://el-segundo-school-archive.pages.dev';
+const artUrl = (path: string) => `${assetOrigin}${path.replace('/images/el-segundo-school', '')}`;
+const worksByNumber = new Map(gallery.works.map((work) => [work.number, work]));
+const joinHref = `mailto:${UES_PROGRAM.contact}?subject=${encodeURIComponent('University of El Segundo — The Local Transmission interest')}`;
+const formatUsd = (value: number) => `$${value.toLocaleString('en-US')}`;
+const termBudgetLines = [
   {
-    code: 'UES-05',
-    slug: '/ues/track-05',
-    title: 'The Rebuildable Town',
-    subtitle: 'A field study in inhabitable software',
-    weeks: 6,
-    status: 'live',
-    blurb:
-      'Six lessons drawn from one Sunday of building. Block IDs as commitments. Spells, not buttons. The visiting handbook. The hourly cron. Garbage collection as care. Geocities + sim city. The classroom is the town itself.',
-    fieldTrips: [
-      { week: 1, theme: 'Block IDs are Monotonic', href: '/blocks.json' },
-      { week: 2, theme: 'Spells, not Buttons', href: '/spells' },
-      { week: 3, theme: 'The Visiting Handbook', href: '/handshakes' },
-      { week: 4, theme: 'The Hourly Cron' },
-      { week: 5, theme: 'Garbage Collection as Care' },
-      { week: 6, theme: 'Geocities + SimCity', href: '/rooms' },
-    ],
+    label: 'Eight complete course rooms',
+    amountUsd: UES_SEASON_ONE_BUDGET.coursePoolUsd,
+    purpose: 'Faculty, course stewards, captions and transcripts, materials, microgrants, and course-specific production.',
   },
+  ...UES_SEASON_ONE_BUDGET.sharedLines,
 ];
-
-// Earlier tracks referenced in conversation but not yet pages here.
-// Listed as "forthcoming" so the catalog is honest about what's
-// actually shipped vs. what's been mentioned.
-const forthcoming: { code: string; title: string; note: string }[] = [
-  { code: 'UES-04', title: 'Civic Layer', note: 'Lives at /civic-layer pending re-shelving under /ues' },
-  { code: 'UES-01', title: 'Inaugural — TBD', note: 'Track 01-03 reserved for back-fill if useful' },
-];
-
-const facultyNotes = [
-  'No tuition. No accreditation. No degree.',
-  'Tracks are open enrollment — read the page, do the field trip, write the Block.',
-  'The library is /blocks.json. The transcript is /handshakes.',
-  'If a Track grows, it splits. If a Track decays, it gets archived but its address (UES-NN) stays monotonic.',
-];
-
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'EducationalOrganization',
+  '@type': 'CollectionPage',
   '@id': 'https://pointcast.xyz/ues',
-  name: 'University of El Segundo',
+  name: 'University of El Segundo Online Classes',
   description,
-  address: { '@type': 'PostalAddress', addressLocality: 'El Segundo', addressRegion: 'CA' },
-  hasOfferCatalog: {
-    '@type': 'OfferCatalog',
-    name: 'UES Tracks',
-    itemListElement: tracks.map((t, i) => ({
+  url: 'https://pointcast.xyz/ues',
+  mainEntity: {
+    '@type': 'ItemList',
+    name: ONLINE_SEASON_ONE.name,
+    numberOfItems: UES_SEASON_ONE_COURSES.length,
+    itemListElement: UES_SEASON_ONE_COURSES.map((course, index) => ({
       '@type': 'Course',
-      position: i + 1,
-      courseCode: t.code,
-      name: t.title,
-      description: t.blurb,
-      url: `https://pointcast.xyz${t.slug}`,
+      position: index + 1,
+      courseCode: course.code,
+      name: course.title,
+      description: course.frame,
+      url: `https://pointcast.xyz${course.path}`,
+      provider: { '@type': 'EducationalOrganization', name: UES_PROGRAM.name },
     })),
   },
 };
 ---
 
-<BlockLayout title={title} description={description}>
-  <script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-
-  <article class="ues-hub">
-    <header class="banner">
-      <div class="banner-meta">
-        <span>UES</span>
-        <span class="dot">·</span>
-        <span>EST. 2026 · EL SEGUNDO, CA</span>
-        <span class="dot">·</span>
-        <span>UNACCREDITED</span>
-      </div>
-      <h1>University of El Segundo</h1>
-      <p class="dek">
-        A small, place-based curriculum at pointcast.xyz. Each Track is a field study in some aspect
-        of the town. The classroom is the town itself. The library is <a href="/blocks.json">/blocks.json</a>.
-        The transcript is <a href="/handshakes">/handshakes</a>. There is no tuition.
-      </p>
+<BlockLayout
+  title={title}
+  description={description}
+  image={worksByNumber.get('017') ? artUrl(worksByNumber.get('017')!.src) : undefined}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/ues/classes.json', title: 'UES class catalog data' }]}
+>
+  <div class="catalog">
+    <header class="masthead">
+      <a class="masthead__mark" href="/">POINTCAST</a>
+      <nav aria-label="University of El Segundo">
+        <a href="/university-of-el-segundo">University</a>
+        <a href="/ues" aria-current="page">Classes</a>
+        <a href="/el-segundo-school">Art archive</a>
+        <a href="/university-of-el-segundo#fund">Contribute</a>
+      </nav>
     </header>
 
-    <section class="tracks">
-      <h2>tracks · live</h2>
-      <ol class="track-list">
-        {tracks.map((t) => (
-          <li class="track">
-            <div class="track-meta">
-              <span class="track-code">{t.code}</span>
-              <span class="track-weeks">{t.weeks} weeks</span>
-              <span class="track-status track-status--live">{t.status}</span>
-            </div>
-            <h3 class="track-title"><a href={t.slug}>{t.title}</a></h3>
-            <p class="track-subtitle">{t.subtitle}</p>
-            <p class="track-blurb">{t.blurb}</p>
-            <details class="track-trips">
-              <summary>field trips ({t.fieldTrips.length})</summary>
-              <ul>
-                {t.fieldTrips.map((ft) => (
-                  <li>
-                    <span class="trip-week">week {ft.week}</span>
-                    <span class="trip-theme">{ft.theme}</span>
-                    {ft.href && <span class="trip-link">→ <a href={ft.href}>{ft.href}</a></span>}
-                  </li>
-                ))}
-              </ul>
-            </details>
-            <p class="track-cta"><a href={t.slug}>open {t.code} →</a></p>
-          </li>
-        ))}
-      </ol>
+    <section class="hero" aria-labelledby="catalog-title">
+      <div class="hero__copy">
+        <p class="eyebrow">UNIVERSITY OF EL SEGUNDO · ONLINE SEASON 1 · FORMING</p>
+        <h1 id="catalog-title">The Local<br /><i>Transmission.</i></h1>
+        <p class="hero__dek">Eight six-week studios turn local observation into a shared public commons. Weather, maps, images, voices, agents, tables, plants, and a broadcast made together.</p>
+        <div class="hero__actions">
+          <a class="button button--acid" href="#current-term">Read the classes</a>
+          <a class="button" href={joinHref}>Join the interest list</a>
+          <a class="button" href="/university-of-el-segundo">How the school is funded</a>
+        </div>
+        <dl>
+          <div><dt>Studios</dt><dd>8</dd></div>
+          <div><dt>Weeks</dt><dd>6</dd></div>
+          <div><dt>Learners</dt><dd>60</dd></div>
+          <div><dt>Tuition</dt><dd>$0</dd></div>
+        </dl>
+      </div>
+      <div class="hero__wall" aria-label="Course cover works by Michael Hoydich">
+        {UES_SEASON_ONE_COURSES.slice(0, 4).map((course) => {
+          const work = worksByNumber.get(course.archiveWorkNumber);
+          return work && (
+            <a href={course.path} aria-label={`Open ${course.code}, ${course.title}`}>
+              <img src={artUrl(work.thumb)} alt="" width={work.width} height={work.height} />
+              <span>{course.code} · WORK {work.number}</span>
+            </a>
+          );
+        })}
+      </div>
     </section>
 
-    <section class="tracks">
-      <h2>tracks · forthcoming</h2>
-      <ul class="forthcoming">
-        {forthcoming.map((t) => (
-          <li>
-            <span class="track-code">{t.code}</span>
-            <span class="forth-title">{t.title}</span>
-            <span class="forth-note">{t.note}</span>
-          </li>
-        ))}
-      </ul>
+    <section class="promise" aria-label="Term operating promise">
+      <p>MONDAY PROMPT</p><p>FIELDWORK</p><p>LIVE STUDIO</p><p>SUNDAY RECEIPT</p>
+      <strong>One home studio. One elective to audit. No grades. Human review. Public only by choice.</strong>
     </section>
 
-    <section class="faculty">
-      <h2>faculty notes</h2>
-      <ul class="faculty-list">
-        {facultyNotes.map((n) => <li>{n}</li>)}
-      </ul>
-    </section>
+    <main>
+      <section class="current-term section" id="current-term" aria-labelledby="current-title">
+        <header class="section__head">
+          <div><p class="eyebrow">01 · CURRENT ONLINE TERM</p><h2 id="current-title">Choose a room.</h2></div>
+          <p>Every room below is a complete first syllabus: six questions, six live studios, six field tasks, access notes, a planning cost, and one public outcome. Status remains <b>forming</b> until faculty, steward, dates, and accommodation contact are named.</p>
+        </header>
+        <ol class="course-grid">
+          {UES_SEASON_ONE_COURSES.map((course, index) => {
+            const work = worksByNumber.get(course.archiveWorkNumber);
+            return (
+              <li class="course">
+                {work && <a class="course__art" href={course.path}><img src={artUrl(work.thumb)} alt={`${work.title}, course cover for ${course.code}`} width={work.width} height={work.height} loading={index < 4 ? 'eager' : 'lazy'} /></a>}
+                <div class="course__body">
+                  <div class="course__meta"><span>{course.code}</span><span>{course.status}</span><span>6 weeks</span></div>
+                  <h3><a href={course.path}>{course.title}</a></h3>
+                  <p class="course__subtitle">{course.archiveCategory}</p>
+                  <p>{course.frame}</p>
+                  <div class="course__outcome"><b>LEAVES BEHIND</b><span>{course.outcome}</span></div>
+                  {course.boundary && <p class="course__boundary">BOUNDARY · {course.boundary}</p>}
+                  <a class="course__open" href={course.path}>Enter the course room →</a>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
-    <footer class="signoff">
-      <p>— ues, anchored in el segundo, 2026</p>
-      <nav class="footnav">
-        <a href="/ues/track-05">UES-05 · The Rebuildable Town</a>
-        <a href="/explore">/explore — directory</a>
-        <a href="/rooms">/rooms — town hub</a>
-        <a href="/handshakes">/handshakes — receipts</a>
-      </nav>
+      <section class="rhythm section" aria-labelledby="rhythm-title">
+        <header class="section__head">
+          <div><p class="eyebrow">02 · THE SHARED CONTRACT</p><h2 id="rhythm-title">How we will run it.</h2></div>
+          <p>{ONLINE_SEASON_ONE.enrollmentModel} {ONLINE_SEASON_ONE.completion}</p>
+        </header>
+        <div class="rhythm__grid">
+          <article><span>01</span><h3>One home studio</h3><p>Each learner joins one room of 12–18 people and may audit one elective.</p></article>
+          <article><span>02</span><h3>One faculty + one steward</h3><p>Teaching and access remain separate responsibilities, with both roles paid.</p></article>
+          <article><span>03</span><h3>Four of six</h3><p>Completion means four field tasks, useful peer response, and a finished artifact.</p></article>
+          <article><span>04</span><h3>Access by design</h3><p>Captions, transcripts, low-bandwidth materials, alt text, and an asynchronous equivalent.</p></article>
+          <article><span>05</span><h3>Learner rights</h3><p>Learners retain copyright. Public licenses and Tezos minting are optional.</p></article>
+          <article><span>06</span><h3>No wallet gate</h3><p>Learning never requires a wallet, public identity, contribution, or public artifact.</p></article>
+        </div>
+      </section>
+
+      <section class="costs section" aria-labelledby="costs-title">
+        <header class="section__head">
+          <div><p class="eyebrow">03 · OPEN-BOOK COST</p><h2 id="costs-title">Pay for preparation, not just airtime.</h2></div>
+          <p>The next term’s planning target is {formatUsd(UES_SEASON_ONE_BUDGET.totalUsd)}, about {formatUsd(Math.round(UES_SEASON_ONE_BUDGET.totalUsd / ONLINE_SEASON_ONE.learnerCapacity))} per unique learner at a full 60-person cohort. Learners pay no tuition in the pilot.</p>
+        </header>
+        <div class="costs__total"><span>THE LOCAL TRANSMISSION</span><strong>{formatUsd(UES_SEASON_ONE_BUDGET.totalUsd)}</strong><p>Eight courses · six weeks · 60 learners</p></div>
+        <ol class="cost-list">
+          {termBudgetLines.map((line) => <li><div><b>{line.label}</b><span>{line.purpose}</span></div><strong>{formatUsd(line.amountUsd)}</strong></li>)}
+        </ol>
+        <div class="course-costs">
+          {UES_SEASON_ONE_COURSES.map((course) => <div><span>{course.code}</span><b>{formatUsd(course.budgetUsd)}</b><p>{course.addedProductionNeed}</p></div>)}
+        </div>
+        <a class="wide-link" href="/university-of-el-segundo#budget">Read the full university budget and funding ladder →</a>
+      </section>
+
+      <section class="foundations section" id="launch-studios" aria-labelledby="foundations-title">
+        <header class="section__head">
+          <div><p class="eyebrow">04 · SEASON 0 FOUNDATIONS</p><h2 id="foundations-title">The first eight questions.</h2></div>
+          <p>Season 0 established the school’s original online foundations. The Local Transmission makes the next term more runnable: full weekly rooms, explicit access, visible staffing gates, and course-level costs.</p>
+        </header>
+        <ol class="foundation-list">
+          {UES_COURSES.map((course) => <li><span>{course.code}</span><div><h3>{course.title}</h3><p>{course.frame}</p></div><b>{ONLINE_SEASON_ZERO.durationWeeks} weeks</b></li>)}
+        </ol>
+      </section>
+
+      <section class="field section" aria-labelledby="field-title">
+        <header class="section__head">
+          <div><p class="eyebrow">05 · AFTER ONLINE</p><h2 id="field-title">Six field departments waiting for a local room.</h2></div>
+          <p>These previously outlined tracks remain the 25-mile field layer—not a competing online catalog. They open only after a steward, partner site, access path, budget, and real El Segundo-area schedule exist.</p>
+        </header>
+        <div class="field-grid">
+          {UNIVERSITY_TRACKS.map((track, index) => <article><span>{String(index + 1).padStart(2, '0')}</span><h3>{track.title}</h3><p>{track.frame}</p><b>FIRST SESSION</b><p>{track.firstSession}</p></article>)}
+        </div>
+      </section>
+
+      <section class="history section" aria-labelledby="history-title">
+        <div><p class="eyebrow">PREVIOUS CURRICULUM · ADDRESS PRESERVED</p><h2 id="history-title">UES-05 remains where it was built.</h2></div>
+        <div><p>The historical Rebuildable Town is a six-lesson field study in inhabitable software. It is not UES-101, and its monotonic address stays intact.</p><a class="button button--acid" href="/ues/track-05">Open historical UES-05 →</a></div>
+      </section>
+    </main>
+
+    <footer class="catalog-footer">
+      <p>UNIVERSITY OF EL SEGUNDO · ONLINE FIRST · LOCAL LOCAL LOCAL</p>
+      <h2>A school is what people keep making possible.</h2>
+      <nav><a href={joinHref}>Join the interest list</a><a href="/el-segundo-school">Visit the art archive</a><a href="/university-of-el-segundo#fund">Contribute on Tezos</a><a href="/ues/classes.json">Read the class data</a></nav>
     </footer>
-  </article>
+  </div>
 </BlockLayout>
 
 <style>
-  .ues-hub {
-    max-width: 760px;
-    margin: 2rem auto 6rem;
-    padding: 0 1.25rem;
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    color: #1a1a1a;
-    line-height: 1.6;
-  }
-  .banner {
-    border: 3px double #534ab7;
-    background: linear-gradient(180deg, #f6f1e7 0%, #efe4cc 100%);
-    padding: 1.5rem 1.5rem 1.25rem;
-    margin-bottom: 2rem;
-    box-shadow: 4px 4px 0 #1a1a1a;
-  }
-  .banner-meta {
-    font-size: 0.74rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #534ab7;
-    margin-bottom: 0.5rem;
-  }
-  .banner-meta .dot { margin: 0 0.4rem; opacity: 0.5; }
-  .banner h1 {
-    font-family: 'Inter Variable', system-ui, sans-serif;
-    font-weight: 700;
-    font-size: clamp(1.8rem, 5vw, 2.6rem);
-    line-height: 1.1;
-    margin: 0 0 0.6rem;
-    letter-spacing: -0.02em;
-  }
-  .banner .dek { margin: 0; font-style: italic; color: #444; }
-  .banner a { color: #534ab7; }
-
-  .tracks h2, .faculty h2 {
-    font-family: 'Inter Variable', system-ui, sans-serif;
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #534ab7;
-    border-bottom: 2px solid #534ab7;
-    padding-bottom: 0.25rem;
-    margin: 2.25rem 0 1rem;
-  }
-
-  .track-list { list-style: none; padding: 0; margin: 0; }
-  .track {
-    border: 2px solid #1a1a1a;
-    background: #fff;
-    padding: 1rem 1.15rem 1.15rem;
-    margin: 0 0 1.25rem;
-    box-shadow: 3px 3px 0 #534ab7;
-  }
-  .track-meta {
-    display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
-    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem;
-  }
-  .track-code {
-    background: #534ab7; color: #fff; padding: 0.2rem 0.55rem; font-weight: 700;
-  }
-  .track-weeks { color: #777; }
-  .track-status--live {
-    background: #2a1f5c; color: #ffd870; padding: 0.18rem 0.5rem; font-weight: 600;
-  }
-  .track-title {
-    font-family: 'Inter Variable', system-ui, sans-serif;
-    font-weight: 700;
-    font-size: 1.5rem;
-    margin: 0 0 0.25rem;
-    letter-spacing: -0.01em;
-  }
-  .track-title a { color: #1a1a1a; text-decoration: none; }
-  .track-title a:hover { color: #534ab7; }
-  .track-subtitle { font-style: italic; color: #534ab7; margin: 0 0 0.6rem; font-size: 0.92rem; }
-  .track-blurb { margin: 0 0 0.85rem; }
-  .track-trips {
-    border-top: 1px dashed #534ab7;
-    padding-top: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-  .track-trips summary {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #534ab7;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .track-trips ul { list-style: none; padding: 0.5rem 0 0; margin: 0; }
-  .track-trips li {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 0.5rem 0.75rem;
-    padding: 0.25rem 0;
-    font-size: 0.85rem;
-    border-bottom: 1px dotted #ddd;
-    align-items: baseline;
-  }
-  .trip-week { font-weight: 700; color: #534ab7; font-size: 0.72rem; text-transform: uppercase; }
-  .trip-link a { color: #534ab7; font-size: 0.78rem; }
-  .track-cta {
-    margin: 0;
-    text-align: right;
-    font-size: 0.85rem;
-  }
-  .track-cta a {
-    color: #534ab7;
-    font-weight: 700;
-    text-decoration: none;
-    border-bottom: 2px solid #534ab7;
-  }
-
-  .forthcoming { list-style: none; padding: 0; margin: 0; }
-  .forthcoming li {
-    display: grid;
-    grid-template-columns: auto 1fr 1fr;
-    gap: 1rem;
-    padding: 0.5rem 0.75rem;
-    background: #f5f1e7;
-    border-left: 3px dashed #b89545;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-    align-items: baseline;
-  }
-  .forth-title { font-weight: 600; }
-  .forth-note { color: #777; font-size: 0.78rem; font-style: italic; }
-
-  .faculty-list { list-style: none; padding: 0; margin: 0; }
-  .faculty-list li {
-    padding: 0.5rem 0 0.5rem 1rem;
-    border-left: 3px solid #534ab7;
-    margin-bottom: 0.5rem;
-    font-size: 0.92rem;
-    background: #fcfaf3;
-    padding: 0.5rem 0.75rem;
-  }
-
-  .signoff {
-    margin-top: 3rem;
-    padding-top: 1rem;
-    border-top: 1px solid #1a1a1a;
-    font-size: 0.85rem;
-  }
-  .signoff p { margin: 0 0 0.75rem; opacity: 0.7; }
-  .footnav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
-  .footnav a {
-    color: #534ab7;
-    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
-    font-size: 0.82rem;
-  }
+  .catalog { --ink:#10120f;--paper:#f1eee3;--acid:#caff24;--blue:#1537e8;--lavender:#ddd1ff;--pink:#f4a7bd; min-width:0; background:var(--paper); color:var(--ink); }
+  .catalog a:focus-visible { outline:3px solid var(--acid); outline-offset:3px; }
+  .masthead { position:sticky; top:0; z-index:30; min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:8px 14px; border-bottom:1px solid var(--ink); background:rgba(241,238,227,.96); backdrop-filter:blur(10px); }
+  .masthead__mark { color:var(--ink); font:700 11px var(--pc-font-mono); letter-spacing:.14em; }
+  .masthead nav { display:flex; gap:5px; }
+  .masthead nav a { min-height:42px; display:grid; place-items:center; padding:7px 11px; border:1px solid #a5a398; color:var(--ink); font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .masthead nav a:hover,.masthead nav a[aria-current="page"] { background:var(--ink); color:var(--paper); text-decoration:none; }
+  .hero { display:grid; grid-template-columns:minmax(0,1.02fr) minmax(380px,.98fr); min-height:calc(100vh - 58px); border-bottom:1px solid var(--ink); }
+  .hero__copy { display:flex; flex-direction:column; padding:clamp(34px,5vw,76px); border-right:1px solid var(--ink); }
+  .eyebrow { margin:0; color:var(--blue); font:700 10px/1.5 var(--pc-font-mono); letter-spacing:.12em; text-transform:uppercase; }
+  h1 { margin:clamp(50px,8vh,100px) 0 26px; max-width:100%; font-size:clamp(44px,10vw,104px); line-height:.78; letter-spacing:-.075em; text-transform:uppercase; }
+  h1 i { color:var(--blue); font-style:normal; }
+  .hero__dek { max-width:760px; margin:0; font:23px/1.4 Georgia,serif; }
+  .hero__actions { display:flex; flex-wrap:wrap; gap:8px; margin:36px 0; }
+  .button { min-height:48px; display:grid; place-items:center; padding:11px 15px; border:1px solid var(--ink); color:var(--ink); font:700 10px var(--pc-font-mono); text-align:center; text-transform:uppercase; }
+  .button:hover { background:var(--ink); color:var(--paper); text-decoration:none; }
+  .button--acid { background:var(--acid); }
+  .hero__copy dl { display:grid; grid-template-columns:repeat(4,1fr); margin:auto 0 0; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); }
+  .hero__copy dl div { padding:14px 8px; border-right:1px solid var(--ink); }
+  .hero__copy dl div:last-child { border-right:0; }
+  .hero__copy dt { font:8px var(--pc-font-mono); text-transform:uppercase; }
+  .hero__copy dd { margin:7px 0 0; color:var(--blue); font-size:36px; font-weight:700; letter-spacing:-.05em; }
+  .hero__wall { display:grid; grid-template-columns:1fr 1fr; gap:clamp(10px,1.5vw,22px); align-items:center; padding:clamp(18px,3vw,48px); background:var(--ink); perspective:1100px; }
+  .hero__wall a { min-width:0; padding:6px; border:1px solid #63655f; background:#242621; color:var(--acid); box-shadow:0 20px 36px #000a; }
+  .hero__wall a:nth-child(2n) { transform:translateY(30px) rotateY(-1deg); }
+  .hero__wall a:nth-child(3n) { transform:translateY(-22px) rotateY(1deg); }
+  .hero__wall img { width:100%; height:auto; }
+  .hero__wall span { display:block; padding:7px 2px 2px; font:8px var(--pc-font-mono); }
+  .promise { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--ink); background:var(--acid); }
+  .promise p { margin:0; padding:16px; border-right:1px solid var(--ink); font:9px var(--pc-font-mono); text-align:center; }
+  .promise strong { grid-column:1/-1; padding:24px; border-top:1px solid var(--ink); font-size:clamp(22px,3vw,40px); text-align:center; }
+  .section { scroll-margin-top:58px; padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); border-bottom:1px solid var(--ink); }
+  .section__head { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); gap:60px; align-items:end; margin-bottom:64px; }
+  .section__head h2,.history h2,.catalog-footer h2 { max-width:12ch; margin:14px 0 0; font-size:clamp(55px,7.5vw,118px); line-height:.8; letter-spacing:-.07em; }
+  .section__head>p { margin:0; font:21px/1.45 Georgia,serif; }
+  .current-term { background:var(--blue); color:#f4f1e7; }
+  .current-term .eyebrow,.current-term a { color:var(--acid); }
+  .current-term .section__head>p { color:#e1e4f6; }
+  .course-grid { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0; padding:0; }
+  .course { min-width:0; display:grid; grid-template-columns:minmax(150px,.45fr) minmax(0,1fr); border:1px solid #92a0ff; background:#0e1a6b; }
+  .course__art { min-height:100%; overflow:hidden; border-right:1px solid #92a0ff; }
+  .course__art img { width:100%; height:100%; object-fit:cover; }
+  .course__body { display:flex; flex-direction:column; min-width:0; padding:20px; }
+  .course__meta { display:flex; flex-wrap:wrap; gap:5px; }
+  .course__meta span { padding:5px 7px; border:1px solid #92a0ff; color:var(--acid); font:8px var(--pc-font-mono); text-transform:uppercase; }
+  .course h3 { margin:34px 0 8px; font-size:clamp(28px,3vw,48px); line-height:.92; letter-spacing:-.05em; }
+  .course h3 a { color:#fff; }
+  .course__subtitle { color:var(--acid)!important; font:12px/1.4 var(--pc-font-mono)!important; }
+  .course__body>p { color:#dfe4ff; font:17px/1.45 Georgia,serif; }
+  .course__outcome { display:grid; gap:7px; margin:28px 0 16px; padding-top:16px; border-top:1px solid #7787ed; }
+  .course__outcome b { color:#aeb9ff; font:8px var(--pc-font-mono); }
+  .course__outcome span { font-size:16px; line-height:1.4; }
+  .course__boundary { padding:10px; border:1px solid var(--acid); color:var(--acid)!important; font:10px/1.5 var(--pc-font-mono)!important; }
+  .course__open { margin-top:auto; padding-top:18px; font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .rhythm { background:var(--lavender); }
+  .rhythm__grid { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--ink); }
+  .rhythm__grid article { min-height:260px; display:flex; flex-direction:column; padding:20px; border-right:1px solid var(--ink); border-bottom:1px solid var(--ink); }
+  .rhythm__grid article:nth-child(3n) { border-right:0; }
+  .rhythm__grid article:nth-last-child(-n+3) { border-bottom:0; }
+  .rhythm__grid span { color:var(--blue); font:10px var(--pc-font-mono); }
+  .rhythm__grid h3 { margin:44px 0 14px; font-size:28px; line-height:1; }
+  .rhythm__grid p { margin:auto 0 0; font-size:16px; line-height:1.5; }
+  .costs { background:#fffdf4; }
+  .costs__total { display:grid; grid-template-columns:1fr auto; align-items:end; gap:10px 30px; padding:28px; border:1px solid var(--ink); background:var(--acid); }
+  .costs__total span,.costs__total p { font:9px var(--pc-font-mono); text-transform:uppercase; }
+  .costs__total strong { grid-row:1/3; grid-column:2; font-size:clamp(50px,8vw,110px); line-height:.8; letter-spacing:-.07em; }
+  .costs__total p { margin:0; }
+  .cost-list { list-style:none; margin:14px 0 0; padding:0; border:1px solid var(--ink); }
+  .cost-list li { display:grid; grid-template-columns:1fr auto; gap:24px; padding:16px; border-bottom:1px solid var(--ink); }
+  .cost-list li:last-child { border-bottom:0; }
+  .cost-list li div { display:grid; gap:6px; }
+  .cost-list b,.cost-list strong { font:700 11px var(--pc-font-mono); }
+  .cost-list span { color:#55564f; font-size:14px; }
+  .course-costs { display:grid; grid-template-columns:repeat(4,1fr); margin-top:14px; border:1px solid var(--ink); }
+  .course-costs div { min-height:150px; display:flex; flex-direction:column; padding:15px; border-right:1px solid var(--ink); border-bottom:1px solid var(--ink); }
+  .course-costs div:nth-child(4n) { border-right:0; }
+  .course-costs div:nth-last-child(-n+4) { border-bottom:0; }
+  .course-costs span { color:var(--blue); font:9px var(--pc-font-mono); }
+  .course-costs b { margin:16px 0; font-size:28px; }
+  .course-costs p { margin:auto 0 0; font-size:12px; line-height:1.4; }
+  .wide-link { min-height:58px; display:grid; place-items:center; margin-top:14px; padding:12px; border:1px solid var(--ink); background:var(--ink); color:#fff; font:10px var(--pc-font-mono); text-align:center; text-transform:uppercase; }
+  .foundations { background:var(--pink); }
+  .foundation-list { list-style:none; margin:0; padding:0; border-top:1px solid var(--ink); }
+  .foundation-list li { display:grid; grid-template-columns:100px 1fr auto; gap:28px; align-items:start; padding:25px 0; border-bottom:1px solid var(--ink); }
+  .foundation-list>li>span { color:var(--blue); font:10px var(--pc-font-mono); }
+  .foundation-list h3 { margin:0; font-size:26px; }
+  .foundation-list p { max-width:760px; margin:8px 0 0; font-size:16px; line-height:1.45; }
+  .foundation-list>li>b { font:10px var(--pc-font-mono); text-transform:uppercase; }
+  .field { background:var(--acid); }
+  .field-grid { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--ink); }
+  .field-grid article { min-height:360px; display:flex; flex-direction:column; padding:20px; border-right:1px solid var(--ink); border-bottom:1px solid var(--ink); }
+  .field-grid article:nth-child(3n) { border-right:0; }
+  .field-grid article:nth-last-child(-n+3) { border-bottom:0; }
+  .field-grid span,.field-grid b { color:var(--blue); font:9px var(--pc-font-mono); }
+  .field-grid h3 { margin:42px 0 12px; font-size:32px; line-height:.95; }
+  .field-grid p { font-size:16px; line-height:1.45; }
+  .field-grid b { margin-top:auto; }
+  .history { display:grid; grid-template-columns:1fr 1fr; gap:70px; align-items:end; background:var(--ink); color:#fff; }
+  .history .eyebrow { color:var(--acid); }
+  .history>div:last-child>p { font:21px/1.45 Georgia,serif; }
+  .history .button { width:fit-content; color:var(--ink); }
+  .catalog-footer { min-height:82vh; display:flex; flex-direction:column; justify-content:center; padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); background:#ff5c43; }
+  .catalog-footer>p { font:10px var(--pc-font-mono); }
+  .catalog-footer nav { display:flex; flex-wrap:wrap; gap:7px; margin-top:50px; }
+  .catalog-footer nav a { min-height:48px; display:grid; place-items:center; padding:11px 14px; border:1px solid var(--ink); color:var(--ink); font:9px var(--pc-font-mono); text-align:center; text-transform:uppercase; }
+  .catalog-footer nav a:hover { background:var(--ink); color:#fff; text-decoration:none; }
+  @media(max-width:1050px){ .hero{grid-template-columns:1fr}.hero__copy{min-height:760px;border-right:0;border-bottom:1px solid var(--ink)}.hero__wall{min-height:750px}.course-grid{grid-template-columns:1fr}.rhythm__grid,.field-grid{grid-template-columns:1fr 1fr}.rhythm__grid article:nth-child(3n),.field-grid article:nth-child(3n){border-right:1px solid var(--ink)}.rhythm__grid article:nth-child(2n),.field-grid article:nth-child(2n){border-right:0}.rhythm__grid article:nth-last-child(-n+3),.field-grid article:nth-last-child(-n+3){border-bottom:1px solid var(--ink)}.rhythm__grid article:nth-last-child(-n+2),.field-grid article:nth-last-child(-n+2){border-bottom:0}.course-costs{grid-template-columns:1fr 1fr}.course-costs div:nth-child(4n){border-right:1px solid var(--ink)}.course-costs div:nth-child(2n){border-right:0}.course-costs div:nth-last-child(-n+4){border-bottom:1px solid var(--ink)}.course-costs div:nth-last-child(-n+2){border-bottom:0} }
+  @media(max-width:760px){ .masthead{padding:7px 8px}.masthead__mark{display:none}.masthead nav{min-width:0;overflow-x:auto}.masthead nav a{flex:0 0 auto}.hero__copy{min-height:720px;padding:34px 18px}.hero__copy dl{grid-template-columns:1fr 1fr}.hero__copy dl div:nth-child(2){border-right:0}.hero__copy dl div:nth-child(-n+2){border-bottom:1px solid var(--ink)}.hero__wall{min-height:620px;padding:22px 18px 42px}.promise{grid-template-columns:1fr 1fr}.promise p:nth-child(2n){border-right:0}.promise p:nth-child(-n+2){border-bottom:1px solid var(--ink)}.section__head{grid-template-columns:1fr;gap:24px}.course{grid-template-columns:1fr}.course__art{max-height:520px;border-right:0;border-bottom:1px solid #92a0ff}.rhythm__grid,.field-grid{grid-template-columns:1fr}.rhythm__grid article,.field-grid article{min-height:240px;border-right:0!important;border-bottom:1px solid var(--ink)!important}.rhythm__grid article:last-child,.field-grid article:last-child{border-bottom:0!important}.costs__total{grid-template-columns:1fr}.costs__total strong{grid-row:auto;grid-column:auto;font-size:62px}.foundation-list li{grid-template-columns:72px 1fr}.foundation-list>li>b{grid-column:2}.history{grid-template-columns:1fr;gap:40px} }
+  @media(max-width:480px){ .hero__actions .button{width:100%}.hero__wall{min-height:520px}.course-costs{grid-template-columns:1fr}.course-costs div{border-right:0!important;border-bottom:1px solid var(--ink)!important}.course-costs div:last-child{border-bottom:0!important}.foundation-list li{grid-template-columns:1fr;gap:10px}.foundation-list>li>b{grid-column:auto}.catalog-footer nav a{width:100%} }
+  @media(max-width:360px){ .masthead nav a{padding-inline:8px}.hero__wall{grid-template-columns:1fr 1fr;gap:7px} }
+  @media(prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important} }
 </style>
