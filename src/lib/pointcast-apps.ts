@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'noun-battler-pacific-48',
+    name: 'Noun Battler — Pacific 48',
+    kicker: '48 BATTLERS · LOCAL STAMPS · PASSPORT CARD',
+    description: 'A five-round CC0 Noun stat battle with a local stamp book, printable Passport card, and an optional Tezos Passport signature handoff.',
+    url: 'https://pointcast.xyz/noun-battler',
+    path: '/noun-battler',
+    repo: 'https://github.com/mhoydich/noun-battler',
+    channel: 'CH.BTL',
+    kind: 'satellite',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',
