@@ -46,6 +46,7 @@
 import { MOOD_SOUNDTRACKS } from '../lib/moods-soundtracks';
 import { MOOD_SPELLS, AUTO_CAST_KEY } from '../data/mood-spells';
 import { DOCK_KIT } from '../data/dock-kit';
+import { PASSPORT_STAMPS } from '../lib/play-layer';
 import { FEDERATION_PEERS } from '../data/federation-peers';
 import { RESIDENTS } from '../data/residents';
 import { SPELLS } from '../data/spells';
@@ -556,6 +557,98 @@ const pingable = RESIDENTS.filter(
     </div>
   </div>
 
+  <!-- 07 PASSPORT tray — Mike 2026-07-18: "make footer include interactive
+       stamps, passport, holos". Reads the play-layer stamp shelf
+       (pc:passport:stamps — same storage /passport uses), adds a
+       hand-pressed daily ENTRY stamp (pc:passport:entries) and a
+       holo-foil shelf (pc:passport:holos) with pointer-reactive shine. -->
+  <div class="fb__tray fb__tray--passport" id="fb-tray-passport" role="dialog" aria-modal="false" aria-label="Passport — stamps, entries, holos" hidden>
+    <div class="fb__tray-arrow" aria-hidden="true"></div>
+    <header class="fb__tray-head">
+      <span class="fb__tray-num mono">07</span>
+      <h3 class="fb__tray-title">Passport</h3>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
+    <div class="fb__tray-body">
+      <div class="fb__actions" role="toolbar" aria-label="Passport actions">
+        {KIT_BY_ID.passport.actions?.map((a) => (
+          <button
+            type="button"
+            class={`fb__action${a.style === 'ghost' ? ' fb__action--ghost' : ''}`}
+            data-tray="passport"
+            data-action={a.id}
+            title={a.hint}
+          >
+            <span class="fb__action-glyph" aria-hidden="true">{a.glyph}</span>
+            <span class="fb__action-label mono">{a.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div class="fb-pp" id="fb-pp">
+        <header class="fb-pp__head">
+          <img class="fb-pp__noun" id="fb-pp-noun" src={`https://noun.pics/${defaultNounId}.svg`} alt="" width="34" height="34" loading="lazy" />
+          <span class="fb-pp__head-body">
+            <span class="fb-pp__title mono">POINTCAST · PASSPORT</span>
+            <span class="fb-pp__sub mono">EL SEGUNDO, CA · <span id="fb-pp-no">№ ——</span></span>
+          </span>
+          <span class="fb-pp__points mono" id="fb-pp-points">0 pts</span>
+        </header>
+
+        <div class="fb-pp__entries" id="fb-pp-entries" aria-label="Entry stamps">
+          <span class="fb-pp__entries-hint mono" id="fb-pp-entries-hint">no entry stamps yet — press one ↑</span>
+        </div>
+
+        <p class="fb-pp__label mono">STAMPS · <span id="fb-pp-stamp-count">0 / {PASSPORT_STAMPS.length}</span> · earned on their surfaces</p>
+        <ul class="fb-pp__stamps" id="fb-pp-stamps">
+          {PASSPORT_STAMPS.map((s) => (
+            <li class="fb-pp-stamp" data-stamp-slot={s.id} data-category={s.category}>
+              <a class="fb-pp-stamp__hit" href={s.route} title={`${s.label} — ${s.description} (${s.points} pts)`}>
+                <span class="fb-pp-stamp__label">{s.label}</span>
+                <span class="fb-pp-stamp__date mono" data-stamp-date>—</span>
+                <span class="fb-pp-stamp__pts mono">{s.points}pt</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        <p class="fb-pp__label mono">HOLOS · rare foil · tilt with your pointer</p>
+        <ul class="fb-pp__holos" id="fb-pp-holos">
+          <li class="fb-holo" data-holo="blue" data-earned="false">
+            <span class="fb-holo__foil" aria-hidden="true"></span>
+            <span class="fb-holo__glyph" aria-hidden="true">🦋</span>
+            <span class="fb-holo__name mono">THE BLUE</span>
+            <span class="fb-holo__how">release a butterfly at /blue</span>
+          </li>
+          <li class="fb-holo" data-holo="census" data-earned="false">
+            <span class="fb-holo__foil" aria-hidden="true"></span>
+            <span class="fb-holo__glyph" aria-hidden="true">▤</span>
+            <span class="fb-holo__name mono">CENSUS TAKER</span>
+            <span class="fb-holo__how">walk every door at /everything</span>
+          </li>
+          <li class="fb-holo" data-holo="night" data-earned="false">
+            <span class="fb-holo__foil" aria-hidden="true"></span>
+            <span class="fb-holo__glyph" aria-hidden="true">☾</span>
+            <span class="fb-holo__name mono">NIGHT SHIFT</span>
+            <span class="fb-holo__how">visit between 10pm and 5am</span>
+          </li>
+          <li class="fb-holo" data-holo="duster" data-earned="false">
+            <span class="fb-holo__foil" aria-hidden="true"></span>
+            <span class="fb-holo__glyph" aria-hidden="true">🚪</span>
+            <span class="fb-holo__name mono">DUSTER</span>
+            <span class="fb-holo__how">open the door of the day at /door</span>
+          </li>
+        </ul>
+
+        <footer class="fb-pp__foot mono">
+          <a href="/passport">/passport</a>
+          <a href="https://stampz.xyz" target="_blank" rel="noopener">stampz.xyz ↗</a>
+          <a href="https://passportz.xyz" target="_blank" rel="noopener">passportz.xyz ↗</a>
+        </footer>
+      </div>
+    </div>
+  </div>
+
   <div class="fb__menu" id="fb-menu" role="dialog" aria-modal="false" aria-label="PointCast dock" hidden>
     <div class="fb__menu-scrim" id="fb-menu-scrim" aria-hidden="true"></div>
     <div class="fb__menu-panel" id="fb-menu-panel" tabindex="-1">
@@ -823,6 +916,8 @@ const pingable = RESIDENTS.filter(
           reconcileEchoes();
         } else if (id === 'agent') {
           refreshAgentActivity();
+        } else if (id === 'passport') {
+          renderPassport();
         }
       } catch (e) {}
     }
@@ -1969,6 +2064,14 @@ const pingable = RESIDENTS.filter(
         }
         return;
       }
+      if (tray === 'passport') {
+        if (action === 'stamp') {
+          pressEntryStamp();
+        } else if (action === 'desk') {
+          window.location.href = '/passport';
+        }
+        return;
+      }
     }
 
     // Federation discovery — probe each peer's /agents.json.
@@ -2018,6 +2121,197 @@ const pingable = RESIDENTS.filter(
         scheduleNounRefresh();
       }, Math.min(ms, 2_000_000_000));
     })();
+
+    // ─── 07 PASSPORT — stamps, entries, holos (Mike 2026-07-18) ───
+    // Reads the play-layer stamp shelf (pc:passport:stamps — the same
+    // storage /passport and the quest surfaces write) and adds two
+    // footer-owned shelves: dated ENTRY stamps (pc:passport:entries)
+    // and holo-foil stickers (pc:passport:holos). Everything is
+    // localStorage; nothing here fetches.
+    var PP_STAMP_KEY = 'pc:passport:stamps';
+    var PP_ENTRY_KEY = 'pc:passport:entries';
+    var PP_HOLO_KEY = 'pc:passport:holos';
+    var PP_NO_KEY = 'pc:passport:no';
+    var PP_ENTRY_MAX = 6;
+
+    function ppRead(key) {
+      try {
+        var raw = localStorage.getItem(key);
+        var parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (e) { return {}; }
+    }
+    function ppWrite(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+    function ppToday() {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date());
+    }
+    function ppNo() {
+      try {
+        var no = localStorage.getItem(PP_NO_KEY);
+        if (!no) {
+          no = 'PC-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+          localStorage.setItem(PP_NO_KEY, no);
+        }
+        return no;
+      } catch (e) { return 'PC-VISITOR'; }
+    }
+    function ppHash(s) {
+      var h = 0x811c9dc5;
+      for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+      return h >>> 0;
+    }
+
+    // Holo earn checks. Each returns true if earned RIGHT NOW; once
+    // earned they persist in PP_HOLO_KEY forever (foil doesn't peel).
+    function ppEarnHolos() {
+      var holos = ppRead(PP_HOLO_KEY);
+      var changed = false;
+      function earn(id) {
+        if (!holos[id]) { holos[id] = new Date().toISOString(); changed = true; }
+      }
+      try {
+        if ((parseInt(localStorage.getItem('meadow:mine') || '0', 10) || 0) > 0) earn('blue');
+      } catch (e) {}
+      var path = location.pathname.replace(/\/+$/, '') || '/';
+      if (path === '/everything') earn('census');
+      if (path === '/door') earn('duster');
+      var hour = new Date().getHours();
+      if (hour >= 22 || hour < 5) earn('night');
+      if (changed) ppWrite(PP_HOLO_KEY, holos);
+      return holos;
+    }
+
+    function renderPassport() {
+      var $no = document.getElementById('fb-pp-no');
+      if ($no) $no.textContent = '№ ' + ppNo();
+      var $ppNoun = document.getElementById('fb-pp-noun');
+      if ($ppNoun && $noun) $ppNoun.src = $noun.src;
+
+      // Stamps — ink the earned ones, keep the rest as ghosts.
+      var earned = ppRead(PP_STAMP_KEY);
+      var count = 0, points = 0;
+      document.querySelectorAll('[data-stamp-slot]').forEach(function (li) {
+        var id = li.getAttribute('data-stamp-slot');
+        var rec = earned[id];
+        var rot = ((ppHash(id) % 9) - 4);
+        li.style.setProperty('--pp-rot', rot + 'deg');
+        if (rec && rec.at) {
+          li.setAttribute('data-earned', 'true');
+          count++;
+          var ptsEl = li.querySelector('.fb-pp-stamp__pts');
+          if (ptsEl) points += parseInt(ptsEl.textContent, 10) || 0;
+          var dateEl = li.querySelector('[data-stamp-date]');
+          if (dateEl) dateEl.textContent = String(rec.at).slice(0, 10);
+        } else {
+          li.setAttribute('data-earned', 'false');
+        }
+      });
+      var $count = document.getElementById('fb-pp-stamp-count');
+      if ($count) $count.textContent = count + ' / ' + document.querySelectorAll('[data-stamp-slot]').length;
+      var $pts = document.getElementById('fb-pp-points');
+      if ($pts) $pts.textContent = points + ' pts';
+
+      renderEntries(null);
+
+      // Holos — flip earned foils on.
+      var holos = ppEarnHolos();
+      document.querySelectorAll('.fb-holo').forEach(function (el) {
+        var id = el.getAttribute('data-holo');
+        el.setAttribute('data-earned', holos[id] ? 'true' : 'false');
+        if (holos[id]) el.setAttribute('title', 'earned ' + String(holos[id]).slice(0, 10));
+      });
+      ppBindShine();
+      ppPaintDot();
+    }
+
+    function renderEntries(thunkDate) {
+      var $wrap = document.getElementById('fb-pp-entries');
+      var $hint = document.getElementById('fb-pp-entries-hint');
+      if (!$wrap) return;
+      // Astro scopes this component's CSS with a data-astro-cid-* attr;
+      // JS-created nodes need it copied on or the entry stamps render bare.
+      var cid = '';
+      for (var ai = 0; ai < $wrap.attributes.length; ai++) {
+        if ($wrap.attributes[ai].name.indexOf('data-astro-cid-') === 0) { cid = $wrap.attributes[ai].name; break; }
+      }
+      var entries = ppRead(PP_ENTRY_KEY);
+      var dates = Object.keys(entries).sort().slice(-PP_ENTRY_MAX);
+      $wrap.querySelectorAll('.fb-pp-entry').forEach(function (n) { n.remove(); });
+      if ($hint) $hint.hidden = dates.length > 0;
+      dates.forEach(function (d) {
+        var el = document.createElement('span');
+        el.className = 'fb-pp-entry mono';
+        el.style.setProperty('--pp-rot', (((ppHash(d) % 11) - 5)) + 'deg');
+        el.innerHTML = '<span class="fb-pp-entry__top">POINTCAST · ENTRY</span><span class="fb-pp-entry__date">' + d + '</span>';
+        if (cid) {
+          el.setAttribute(cid, '');
+          el.querySelectorAll('*').forEach(function (n) { n.setAttribute(cid, ''); });
+        }
+        $wrap.appendChild(el);
+        if (d === thunkDate) {
+          el.setAttribute('data-thunk', 'true');
+          setTimeout(function () { el.removeAttribute('data-thunk'); }, 900);
+        }
+      });
+    }
+
+    function pressEntryStamp() {
+      var today = ppToday();
+      var entries = ppRead(PP_ENTRY_KEY);
+      entries[today] = entries[today] || new Date().toISOString();
+      ppWrite(PP_ENTRY_KEY, entries);
+      if (openPopover !== 'tray:passport') openTray('passport');
+      // Re-render with the thunk targeted at today's stamp — replays
+      // even if today was already pressed, because pressing is the fun.
+      setTimeout(function () { renderEntries(today); }, 40);
+    }
+
+    // Foil shine — pointer position drives a gradient angle + a small
+    // 3D tilt on earned holos. Bound once per session, cheap mousemove.
+    var ppShineBound = false;
+    function ppBindShine() {
+      if (ppShineBound) return;
+      var tray = document.getElementById('fb-tray-passport');
+      if (!tray) return;
+      ppShineBound = true;
+      tray.addEventListener('mousemove', function (e) {
+        tray.querySelectorAll('.fb-holo[data-earned="true"]').forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          var dx = (e.clientX - (r.left + r.width / 2)) / r.width;
+          var dy = (e.clientY - (r.top + r.height / 2)) / r.height;
+          el.style.setProperty('--shx', (50 + dx * 60).toFixed(1) + '%');
+          el.style.setProperty('--shy', (50 + dy * 60).toFixed(1) + '%');
+          el.style.setProperty('--tiltx', (dy * -6).toFixed(2) + 'deg');
+          el.style.setProperty('--tilty', (dx * 6).toFixed(2) + 'deg');
+        });
+      });
+      tray.addEventListener('mouseleave', function () {
+        tray.querySelectorAll('.fb-holo').forEach(function (el) {
+          el.style.removeProperty('--tiltx');
+          el.style.removeProperty('--tilty');
+        });
+      });
+    }
+
+    // Dot on the 07 stamp: lit when there's something new to look at —
+    // an unpressed entry stamp today, or a holo earned this visit.
+    function ppPaintDot() {
+      var dot = document.getElementById('fb-stamp-dot-passport');
+      if (!dot) return;
+      var entries = ppRead(PP_ENTRY_KEY);
+      dot.setAttribute('data-state', entries[ppToday()] ? 'off' : 'on');
+    }
+    // Boot: earn any page-visit holos silently (being ON /everything
+    // earns CENSUS TAKER whether or not the tray ever opens), then
+    // light the 07 dot if today's entry stamp is still unpressed.
+    setTimeout(function () {
+      try { ppEarnHolos(); } catch (e) {}
+      ppPaintDot();
+    }, 0);
   })();
 </script>
 
@@ -3251,11 +3545,104 @@ const pingable = RESIDENTS.filter(
     .fb__bubble { left: 12px; bottom: 48px; max-width: min(260px, calc(100vw - 20px)); font-size: 12.5px; }
   }
 
+  /* ── 07 PASSPORT tray — stamps, entries, holos ─────────────────── */
+  .fb__tray--passport { width: min(400px, calc(100vw - 16px)); }
+
+  .fb-pp {
+    border: 2px solid #2d1f08;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 22px, rgba(45, 31, 8, 0.035) 22px 23px),
+      #f7f3ea;
+    padding: 12px;
+  }
+  .fb-pp__head { display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #2d1f08; padding-bottom: 10px; }
+  .fb-pp__noun { image-rendering: pixelated; border: 1.5px solid #2d1f08; background: #fff; }
+  .fb-pp__head-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fb-pp__title { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: #2d1f08; }
+  .fb-pp__sub { font-size: 9px; letter-spacing: 0.12em; color: #8b7a55; }
+  .fb-pp__points { margin-left: auto; font-size: 10px; font-weight: 700; color: #185fa5; border: 1.5px solid #185fa5; padding: 2px 6px; white-space: nowrap; }
+
+  .fb-pp__entries { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 44px; padding: 10px 0 4px; }
+  .fb-pp__entries-hint { font-size: 9.5px; color: #a4906a; letter-spacing: 0.08em; }
+  .fb-pp-entry {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+    border: 2px double #1b4d8f; border-radius: 50% / 42%;
+    color: #1b4d8f; padding: 5px 12px;
+    transform: rotate(var(--pp-rot, 0deg));
+    background: rgba(27, 77, 143, 0.04);
+  }
+  .fb-pp-entry__top { font-size: 7.5px; letter-spacing: 0.14em; }
+  .fb-pp-entry__date { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
+  .fb-pp-entry[data-thunk='true'] { animation: pp-thunk 0.5s cubic-bezier(0.2, 1.4, 0.4, 1); }
+  @keyframes pp-thunk {
+    0% { transform: rotate(var(--pp-rot, 0deg)) scale(2.1); opacity: 0; filter: blur(1.5px); }
+    60% { transform: rotate(var(--pp-rot, 0deg)) scale(0.94); opacity: 1; filter: blur(0); }
+    100% { transform: rotate(var(--pp-rot, 0deg)) scale(1); }
+  }
+
+  .fb-pp__label { font-size: 9px; letter-spacing: 0.14em; color: #8b7a55; margin: 10px 0 6px; }
+  .fb-pp__stamps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .fb-pp-stamp { transform: rotate(var(--pp-rot, 0deg)); }
+  .fb-pp-stamp__hit {
+    display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+    border: 1.5px dashed #b9ac90; color: #a4906a;
+    padding: 5px 7px; text-decoration: none; min-height: 46px;
+  }
+  .fb-pp-stamp__label { font-size: 10px; font-weight: 600; line-height: 1.15; }
+  .fb-pp-stamp__date { font-size: 8px; letter-spacing: 0.06em; }
+  .fb-pp-stamp__pts { font-size: 8px; letter-spacing: 0.08em; opacity: 0.8; }
+  .fb-pp-stamp[data-earned='false'] .fb-pp-stamp__hit:hover { border-color: #2d1f08; color: #2d1f08; }
+  .fb-pp-stamp[data-earned='true'] .fb-pp-stamp__hit {
+    border: 2px solid #8a2432; border-radius: 3px; color: #8a2432;
+    background: rgba(138, 36, 50, 0.05);
+  }
+  .fb-pp-stamp[data-earned='true'] .fb-pp-stamp__hit:hover { transform: translateY(-1px); }
+
+  .fb-pp__holos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .fb-holo {
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    aspect-ratio: 1; border-radius: 10px; padding: 4px; text-align: center;
+    border: 1.5px dashed #b9ac90; color: #a4906a;
+    transform: perspective(300px) rotateX(var(--tiltx, 0deg)) rotateY(var(--tilty, 0deg));
+    transition: transform 0.12s ease-out;
+  }
+  .fb-holo__foil {
+    position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at var(--shx, 50%) var(--shy, 50%), rgba(255, 255, 255, 0.75) 0%, transparent 42%),
+      conic-gradient(from 0deg at var(--shx, 50%) var(--shy, 50%),
+        #ffd9e8, #d9e8ff, #d9fff2, #fff7c9, #ffd9e8, #e5d9ff, #d9f4ff, #ffd9e8);
+  }
+  .fb-holo__glyph { position: relative; font-size: 20px; line-height: 1; filter: grayscale(1); opacity: 0.55; }
+  .fb-holo__name { position: relative; font-size: 7px; font-weight: 700; letter-spacing: 0.1em; }
+  .fb-holo__how { position: relative; font-size: 7.5px; line-height: 1.25; }
+  .fb-holo[data-earned='true'] {
+    border: 1.5px solid #2d1f08; color: #2d1f08;
+    box-shadow: 0 1px 6px rgba(45, 31, 8, 0.2);
+  }
+  .fb-holo[data-earned='true'] .fb-holo__foil { opacity: 0.85; animation: pp-sheen 14s linear infinite; }
+  .fb-holo[data-earned='true'] .fb-holo__glyph { filter: none; opacity: 1; }
+  .fb-holo[data-earned='true'] .fb-holo__how { display: none; }
+  @keyframes pp-sheen { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
+
+  .fb-pp__foot { display: flex; gap: 12px; margin-top: 10px; border-top: 1.5px solid #e5dcc8; padding-top: 8px; font-size: 9.5px; letter-spacing: 0.08em; }
+  .fb-pp__foot a { color: #6b5a3a; text-decoration: none; }
+  .fb-pp__foot a:hover { color: #185fa5; }
+
+  @media (max-width: 480px) {
+    .fb-pp__stamps { grid-template-columns: repeat(2, 1fr); }
+    .fb-pp__holos { grid-template-columns: repeat(2, 1fr); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .fb__on-air-dot,
     .fb__stamp-dot[data-state='busy'] { animation: none; }
     .fb__menu, .fb__menu-panel, .fb__tray { transition: none; }
     .fb__action[data-flash='true'] { animation: none; }
     .fb__bubble { transition: opacity 0.1s ease; transform: none; }
+    .fb-pp-entry[data-thunk='true'],
+    .fb-holo[data-earned='true'] .fb-holo__foil { animation: none; }
+    .fb-holo { transition: none; }
   }
 </style>
