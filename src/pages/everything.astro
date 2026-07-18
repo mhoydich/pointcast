@@ -1,0 +1,184 @@
+---
+/**
+ * /everything — the census. Every door in town on one page.
+ *
+ * Per Mike 2026-07-18: "try to make everything available." /explore curates
+ * top-level pages into categories; this page is the exhaustive complement —
+ * deep-globbed from src/pages at build time (see src/lib/everything.ts) so
+ * it can never go stale. Rooms, district doors, dynamic doors, machine
+ * doors, all of it, searchable, in BLOCKS.md terminal grammar.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  ROOMS,
+  DYNAMIC_DOORS,
+  MACHINE_DOORS,
+  DISTRICT_DOORS,
+  BLOCK_COUNT,
+  districts,
+} from '../lib/everything';
+
+const title = 'Everything';
+const description =
+  'The PointCast census: every room, district door, dynamic route, and machine feed on one searchable page. Built from the filesystem, so it cannot go stale.';
+
+const DISTRICTS = districts();
+const total = ROOMS.length + DISTRICT_DOORS.length + DYNAMIC_DOORS.length + MACHINE_DOORS.length;
+
+const WAYS_TO_WALK = [
+  { href: '/explore', label: '/explore', note: 'curated categories' },
+  { href: '/town', label: '/town', note: 'the iso pixel map' },
+  { href: '/rooms', label: '/rooms', note: 'rooms with presence' },
+  { href: '/atlas', label: '/atlas', note: 'block gravity scatter' },
+  { href: '/archive', label: '/archive', note: 'the block archive' },
+  { href: '/timeline', label: '/timeline', note: 'time, in order' },
+  { href: '/attic', label: '/attic', note: 'the kept past' },
+  { href: '/random', label: '/random', note: 'one door, dealt' },
+];
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="census">
+    <nav class="crumb"><a href="/">Home</a><span>/</span><span>everything</span></nav>
+
+    <header class="top">
+      <p class="kicker">THE CENSUS · REBUILT ON EVERY DEPLOY</p>
+      <h1>Every door in town.</h1>
+      <p class="dek">
+        {total} doors as of this build — {ROOMS.length} rooms, {DISTRICT_DOORS.length} district doors,
+        {DYNAMIC_DOORS.length} dynamic doors, {MACHINE_DOORS.length} machine feeds, and {BLOCK_COUNT} blocks
+        behind /b. Nothing here is typed by hand; the index is read off the filesystem, so if it shipped,
+        it's listed.
+      </p>
+      <label class="search">
+        <span>FILTER</span>
+        <input type="search" placeholder="coffee, drum, race, .json…" data-filter autocomplete="off" />
+        <span class="hits" data-hits></span>
+      </label>
+    </header>
+
+    <section class="walk">
+      <h2>Other ways to walk</h2>
+      <ul>
+        {WAYS_TO_WALK.map((w) => (
+          <li><a href={w.href}><code>{w.label}</code></a><span>{w.note}</span></li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="group" data-group>
+      <h2>Rooms <span class="count">{ROOMS.length}</span></h2>
+      <ul class="doors">
+        {ROOMS.map((d) => (
+          <li data-door data-haystack={`${d.route} ${d.title} ${d.description}`.toLowerCase()}>
+            <a href={d.route}><code>{d.route}</code></a>
+            <span class="t">{d.title}</span>
+            {d.description && <span class="d">{d.description}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="group" data-group>
+      <h2>Districts <span class="count">{DISTRICT_DOORS.length + DYNAMIC_DOORS.length}</span></h2>
+      {[...DISTRICTS.entries()].map(([name, doors]) => (
+        <div class="district">
+          <h3><code>/{name}</code></h3>
+          <ul class="doors">
+            {doors.map((d) => (
+              <li data-door data-haystack={`${d.route} ${d.title} ${d.description}`.toLowerCase()}>
+                <a href={d.count !== undefined || d.route.includes('{') ? d.route.replace(/\/\{.*$/, '') : d.route}>
+                  <code>{d.route}</code>
+                </a>
+                <span class="t">{d.title}</span>
+                {d.count !== undefined && <span class="n">{d.count} inside</span>}
+                {d.description && <span class="d">{d.description}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+
+    <section class="group" data-group>
+      <h2>Machine doors <span class="count">{MACHINE_DOORS.length}</span></h2>
+      <p class="note">Feeds and endpoints — the doors agents use. Human-openable too.</p>
+      <ul class="doors">
+        {MACHINE_DOORS.map((d) => (
+          <li data-door data-haystack={`${d.route} ${d.description}`.toLowerCase()}>
+            <a href={d.route.includes('{') ? '#' : d.route}><code>{d.route}</code></a>
+            {d.description && <span class="d">{d.description}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="foot">
+      <p>
+        Machine twin at <a href="/everything.json"><code>/everything.json</code></a> ·
+        census law: if it shipped, it's listed.
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  const input = document.querySelector('[data-filter]');
+  const hits = document.querySelector('[data-hits]');
+  const doors = [...document.querySelectorAll('[data-door]')];
+  const groups = [...document.querySelectorAll('[data-group]')];
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    let shown = 0;
+    for (const li of doors) {
+      const hit = !q || li.dataset.haystack.includes(q);
+      li.hidden = !hit;
+      if (hit) shown++;
+    }
+    for (const g of groups) {
+      const any = [...g.querySelectorAll('[data-door]')].some((li) => !li.hidden);
+      g.hidden = !any;
+    }
+    for (const d of document.querySelectorAll('.district')) {
+      const any = [...d.querySelectorAll('[data-door]')].some((li) => !li.hidden);
+      d.hidden = !any;
+    }
+    hits.textContent = q ? `${shown} of ${doors.length}` : '';
+  });
+</script>
+
+<style>
+  .census { max-width: 980px; margin: 0 auto; padding: 24px 20px 80px; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 12px; display: flex; gap: 8px; color: var(--pc-ink-muted); margin-bottom: 28px; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--pc-accent); margin: 0 0 6px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .dek { max-width: 62ch; color: var(--pc-ink-soft); line-height: 1.55; margin: 0 0 18px; }
+
+  .search { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--pc-ink); padding: 8px 12px; max-width: 520px; }
+  .search span { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.12em; color: var(--pc-ink-muted); }
+  .search input { flex: 1; border: 0; outline: none; font: inherit; background: transparent; color: var(--pc-ink); }
+  .hits { min-width: 70px; text-align: right; }
+
+  .walk { margin: 34px 0 8px; border-top: 1.5px solid var(--pc-ink); padding-top: 14px; }
+  .walk h2 { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 10px; }
+  .walk ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .walk li { display: flex; gap: 8px; align-items: baseline; }
+  .walk span { color: var(--pc-ink-muted); font-size: 13px; }
+
+  .group { margin-top: 34px; border-top: 1.5px solid var(--pc-ink); padding-top: 14px; }
+  .group h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  .count { font-family: var(--pc-font-mono); font-size: 12px; color: var(--pc-ink-muted); font-weight: 400; }
+  .note { color: var(--pc-ink-muted); font-size: 13px; margin: -6px 0 12px; }
+
+  .district { margin: 14px 0 4px; }
+  .district h3 { font-family: var(--pc-font-mono); font-size: 13px; font-weight: 700; margin: 0 0 6px; color: var(--pc-ink-soft); }
+
+  .doors { list-style: none; margin: 0; padding: 0; }
+  .doors li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 3px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .doors code { font-family: var(--pc-font-mono); font-size: 13px; }
+  .doors .t { font-size: 13px; color: var(--pc-ink-soft); font-weight: 600; }
+  .doors .n { font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-accent); }
+  .doors .d { font-size: 12.5px; color: var(--pc-ink-muted); flex: 1 1 260px; min-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .foot { margin-top: 44px; border-top: 1.5px solid var(--pc-ink); padding-top: 12px; font-size: 13px; color: var(--pc-ink-muted); }
+</style>
