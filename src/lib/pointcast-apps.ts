@@ -199,6 +199,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v6',
+    name: 'Open Road VI',
+    kicker: 'ONE QUIET MINUTE · TEN IMAGES · FOR PETE',
+    description: 'A one-minute vigil for Pete moves through ten archive images, with quiet controls, optional bells, and a final light held still.',
+    url: 'https://pointcast.xyz/open-road-v6',
+    path: '/open-road-v6',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',

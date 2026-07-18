@@ -39,7 +39,7 @@ export interface Feature {
 function readMtimes(): Record<string, number> {
   try {
     const out = execSync(
-      'git log --name-only --pretty=format:__COMMIT__%ct -- src/pages/*.astro',
+      'git log --name-only --pretty=format:__COMMIT__%ct -- ":(glob)src/pages/*.astro"',
       { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
     );
     const map: Record<string, number> = {};
