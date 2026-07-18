@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'corner-engineering',
+    name: 'Corner Engineering Pulse',
+    kicker: 'WORKCELLS · HANDOFFS · DIGITAL THREAD',
+    description: 'A location-aware engineering network for traceable handoffs, tests, configuration changes, controlled risks, and live workcell context.',
+    url: 'https://pointcast.xyz/corner',
+    path: '/corner',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DATA',
+    kind: 'pointcast',
+  },
+  {
     slug: 'noun-battler-pacific-48',
     name: 'Noun Battler — Pacific 48',
     kicker: '48 BATTLERS · LOCAL STAMPS · PASSPORT CARD',
