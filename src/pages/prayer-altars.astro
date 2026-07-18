@@ -1,0 +1,981 @@
+---
+/**
+ * /prayer-altars — The Morning Hours.
+ *
+ * Per Mike 2026-07-18:
+ *   "create 5 new alters for praying multimedia use midjourney images,
+ *    30 as part, enjoy, peace be with you"
+ *
+ * Five prayer stations named for the canonical morning hours —
+ * MATINS, LAUDS, PRIME, TERCE, SEXT — tracing a Southern California
+ * morning: the dark door before dawn, first light, the marine layer,
+ * the rising swell, the full-block noon.
+ *
+ * Each station holds six pieces from Mike's Midjourney session of
+ * 2026-07-18 ("morning ocean, southern california summer, block
+ * glitch") — 30 images total — cycling on a slow crossfade. Each has
+ * its own synthesized tone. Tap PRAY to offer a prayer: the tone
+ * sounds, the candle flares, the image turns, the count rises for
+ * everyone watching. State lives at /api/prayer (KV-backed,
+ * perpetual — the hours are the hours).
+ *
+ * Sibling of /drum-altars (the tribute chamber). Same shrine
+ * grammar — geocities-cathedral, not Sketchfab-cathedral — moved
+ * from velvet purple to pre-dawn indigo.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+import RoomPresenceChip from '../components/RoomPresenceChip.astro';
+
+const title = 'Prayer Altars · The Morning Hours · PointCast';
+const description =
+  'Five prayer stations for a Southern California morning — matins, lauds, prime, terce, sext. Thirty Midjourney pieces on slow rotation. Tap PRAY, leave a prayer.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Prayer Altars — The Morning Hours',
+  url: 'https://pointcast.xyz/prayer-altars',
+  description,
+  applicationCategory: 'MultimediaApplication',
+};
+
+interface Station {
+  key: string;
+  hour: string;
+  glyph: string;
+  time: string;
+  devotion: string;
+  line: string;
+  tone: string;
+  accent: string;
+  alts: string[];
+}
+
+const STATIONS: Station[] = [
+  {
+    key: 'matins',
+    hour: 'MATINS',
+    glyph: '☾',
+    time: 'before first light',
+    devotion: 'the doorway',
+    line: 'for what waits beyond the door',
+    tone: 'vigil drone',
+    accent: '#9b7bff',
+    alts: [
+      'Psychedelic shrine doors standing against a concrete sea wall',
+      'Blue temple stair under a beam of dawn light',
+      'Rainbow arch over a glitching green wireframe tide',
+      'Purple monolith shore in the last dark before morning',
+      'Iridescent doorway opening in wet coastal rock',
+      'Magenta prism rocks in a pre-dawn dream sea',
+    ],
+  },
+  {
+    key: 'lauds',
+    hour: 'LAUDS',
+    glyph: '☀',
+    time: 'at first light',
+    devotion: 'the praise',
+    line: 'for the sun that returns',
+    tone: 'rising bloom',
+    accent: '#f6c15e',
+    alts: [
+      'Red blazing wave breaking under a risograph sunrise',
+      'Striped monolith mirrored in a sunset-glass sea',
+      'Dusty orange sun over quiet sea-stack cliffs',
+      'Orange sun and stacked clouds over breaking surf, riso print',
+      'Yellow-green morning field running down to the ocean',
+      'Neon arch sunrise between palm silhouettes',
+    ],
+  },
+  {
+    key: 'prime',
+    hour: 'PRIME',
+    glyph: '☁',
+    time: 'the marine layer',
+    devotion: 'the steadiness',
+    line: 'for the day begun quietly',
+    tone: 'breath wash',
+    accent: '#9db8a1',
+    alts: [
+      'Green etched sun and clouds over engraved surf',
+      'Green etched moon in a hazy engraved morning sky',
+      'Sepia block resting on a soft etched sea',
+      'Minimal pink and white color study of a rocky point',
+      'Pale mint rocks in a bleached morning haze',
+      'Pencil-sketch sea rocks, unfinished morning',
+    ],
+  },
+  {
+    key: 'terce',
+    hour: 'TERCE',
+    glyph: '≈',
+    time: 'the swell rises',
+    devotion: 'the courage',
+    line: 'for strength when the set rolls in',
+    tone: 'tide surge',
+    accent: '#e0603a',
+    alts: [
+      'Wave spire breaking against glitched cliff blocks',
+      'Sunset swell folding over dark shoreline rocks',
+      'Towering dark sea stacks over white water',
+      'Red and blue geometry crashing with a breaking wave',
+      'Rainbow burst cliff over churning surf',
+      'Blazing red cliffside falling to the sea',
+    ],
+  },
+  {
+    key: 'sext',
+    hour: 'SEXT',
+    glyph: '▦',
+    time: 'midday, full block',
+    devotion: 'the clarity',
+    line: 'for order in the bright noon',
+    tone: 'noon triad',
+    accent: '#3a7bd5',
+    alts: [
+      'Coral and teal color-block grid over a noon sea',
+      'Purple grid panels interleaved with ocean photograph',
+      'White panel grid with sea rocks set in the lattice',
+      'Pixel-icon grid map of a block-built coastline',
+      'Green disk and stripe grid over midday water',
+      'Pink and green geometric cove at full noon',
+    ],
+  },
+];
+
+const IMAGES_PER_STATION = 6;
+const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
+---
+
+<BlockLayout title={title} description={description} image="/images/og-prayer-altars.png" jsonLd={jsonLd}>
+  <main class="pa" id="pa-main">
+    <RoomPresenceChip surface="prayer" />
+
+    <header class="pa__header">
+      <div class="pa__chrome">
+        <span class="pa__chrome-label">THE MORNING HOURS</span>
+        <span class="pa__sep">·</span>
+        <span class="pa__chrome-label">PRAYERS</span>
+        <span class="pa__total" id="pa-total">—</span>
+      </div>
+      <h1 class="pa__title">PRAYER ALTARS</h1>
+      <p class="pa__tagline">
+        five stations for a southern california morning · thirty pieces on slow
+        rotation · tap pray, leave a prayer
+      </p>
+    </header>
+
+    <section class="pa__altars" id="pa-altars">
+      {STATIONS.map((s, i) => (
+        <article class="pa__altar" data-station={s.key} data-idx={i} style={`--pa-accent:${s.accent}`}>
+          <div class="pa__pediment" aria-hidden="true">{s.glyph}</div>
+          <div class="pa__frame">
+            <div class="pa__frame-inner" data-slideshow>
+              {Array.from({ length: IMAGES_PER_STATION }, (_, n) => (
+                <img
+                  class:list={['pa__slide', { 'pa__slide--on': n === 0 }]}
+                  src={IMG(s.key, n + 1)}
+                  alt={s.alts[n]}
+                  loading={i < 2 && n === 0 ? 'eager' : 'lazy'}
+                  data-slide={n}
+                />
+              ))}
+            </div>
+          </div>
+          <div class="pa__nameplate">
+            <span class="pa__hour">{s.hour}</span>
+            <span class="pa__time">{s.time}</span>
+          </div>
+          <div class="pa__devotion">
+            <span class="pa__devotion-name">{s.devotion}</span>
+            <span class="pa__devotion-line">{s.line}</span>
+          </div>
+          <div class="pa__count" data-count="0">
+            <span class="pa__count-num" data-count-text>—</span>
+            <span class="pa__count-label">prayers offered</span>
+          </div>
+          <button class="pa__pray" type="button" data-pray aria-label={`Pray at ${s.hour}`}>PRAY</button>
+          <div class="pa__tone-tag">{s.tone}</div>
+          <div class="pa__candle" aria-hidden="true">
+            <div class="pa__flame"></div>
+            <div class="pa__wax"></div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="pa__feed">
+      <header class="pa__feed-header">
+        <span class="pa__feed-title">RECENT PRAYERS</span>
+        <span class="pa__feed-sub">live · last 8</span>
+      </header>
+      <ol class="pa__feed-list" id="pa-feed">
+        <li class="pa__feed-empty">— waiting for the first prayer —</li>
+      </ol>
+    </section>
+
+    <section class="pa__how">
+      <h2>HOW THIS WORKS</h2>
+      <ol class="pa__how-list">
+        <li>
+          Five stations follow the canonical morning hours — <em>matins</em> in
+          the dark, <em>lauds</em> at first light, <em>prime</em> under the
+          marine layer, <em>terce</em> as the swell rises, <em>sext</em> at
+          full-block noon.
+        </li>
+        <li>
+          Each station holds six pieces from Mike's Midjourney session of July
+          18, 2026 — <em>morning ocean, southern california summer, block
+          glitch</em> — thirty images total, turning on a slow crossfade.
+        </li>
+        <li>
+          Tap <span class="pa__kbd">PRAY</span> to offer a prayer. The
+          station's tone sounds, the candle flares, the image turns, the count
+          rises for everyone watching. One prayer per station per 5 seconds.
+        </li>
+        <li>
+          Counts are perpetual — the hours are the hours. Sibling chamber:
+          <a href="/drum-altars">/drum-altars</a>, the Noun tribute shrine.
+          More of the session lives at <a href="/gallery">/gallery</a>.
+        </li>
+      </ol>
+      <p class="pa__blessing">peace be with you</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  /* Pre-dawn indigo shrine — sibling palette to /drum-altars' velvet. */
+  body:has(#pa-main) {
+    background: #0e1026;
+  }
+
+  .pa {
+    --pa-indigo: #0e1026;
+    --pa-indigo-deep: #070812;
+    --pa-indigo-mid: #1a1d42;
+    --pa-brass: #d4a437;
+    --pa-brass-soft: #b8862c;
+    --pa-brass-deep: #6b4d12;
+    --pa-flame: #f6c15e;
+    --pa-flame-tip: #ff6b3a;
+    --pa-ink-light: #ece7d3;
+    --pa-ink-mid: #b7b092;
+    --pa-ink-dim: #767258;
+    --pa-rule-soft: rgba(212, 164, 55, 0.18);
+    --pa-glow: rgba(155, 123, 255, 0.07);
+
+    position: relative;
+    isolation: isolate;
+    margin: 0 -32px;
+    padding: 0 32px 80px;
+    color: var(--pa-ink-light);
+    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(155, 123, 255, 0.10), transparent 55%),
+      radial-gradient(ellipse at 50% 100%, rgba(246, 193, 94, 0.07), transparent 70%),
+      linear-gradient(180deg, var(--pa-indigo) 0%, var(--pa-indigo-deep) 100%);
+  }
+
+  /* Star-field overlay — tiny points, very low opacity */
+  .pa::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 18px 26px, var(--pa-glow) 1px, transparent 1.5px),
+      radial-gradient(circle at 64px 58px, var(--pa-glow) 1px, transparent 1.5px);
+    background-size: 84px 84px;
+    opacity: 0.6;
+    z-index: -1;
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  .pa__header {
+    text-align: center;
+    padding: 36px 16px 28px;
+    border-bottom: 1px solid var(--pa-rule-soft);
+    margin-bottom: 36px;
+  }
+
+  .pa__chrome {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border: 1.5px solid var(--pa-brass-deep);
+    border-radius: 999px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--pa-ink-mid);
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .pa__chrome-label { color: var(--pa-ink-dim); }
+  .pa__total { color: var(--pa-brass); font-weight: 700; }
+  .pa__sep { color: var(--pa-brass-deep); }
+
+  .pa__title {
+    margin: 14px 0 8px;
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: clamp(38px, 6vw, 72px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: var(--pa-brass);
+    text-shadow:
+      0 0 24px rgba(212, 164, 55, 0.35),
+      0 2px 0 var(--pa-indigo-deep);
+  }
+
+  .pa__tagline {
+    margin: 0 auto;
+    max-width: 680px;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(15px, 1.6vw, 19px);
+    color: var(--pa-ink-mid);
+  }
+
+  /* ── Altars row ───────────────────────────────────────── */
+  .pa__altars {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(180px, 1fr));
+    gap: 16px;
+    padding: 0 8px;
+  }
+  @media (max-width: 980px) {
+    .pa__altars { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .pa__altars { grid-template-columns: 1fr; max-width: 340px; margin-inline: auto; }
+  }
+
+  .pa__altar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 20px;
+    background: linear-gradient(180deg, rgba(26, 29, 66, 0.65), rgba(7, 8, 18, 0.85));
+    border: 1.5px solid var(--pa-brass-deep);
+    border-radius: 4px;
+    box-shadow:
+      inset 0 1px 0 rgba(212, 164, 55, 0.25),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+      0 6px 20px rgba(0, 0, 0, 0.55);
+    position: relative;
+  }
+
+  .pa__pediment {
+    font-size: 22px;
+    color: var(--pa-accent, var(--pa-brass));
+    line-height: 1;
+    margin-bottom: 8px;
+    text-shadow: 0 0 12px var(--pa-accent, var(--pa-brass));
+  }
+
+  /* Brass frame around the slideshow */
+  .pa__frame {
+    width: 100%;
+    max-width: 176px;
+    aspect-ratio: 1;
+    padding: 6px;
+    background:
+      linear-gradient(135deg, var(--pa-brass) 0%, var(--pa-brass-soft) 50%, var(--pa-brass-deep) 100%);
+    box-shadow:
+      0 0 0 2px var(--pa-indigo-deep),
+      0 0 0 4px var(--pa-brass-deep),
+      0 4px 12px rgba(0, 0, 0, 0.6);
+    margin-bottom: 12px;
+  }
+  .pa__frame-inner {
+    width: 100%;
+    height: 100%;
+    background: var(--pa-indigo-deep);
+    overflow: hidden;
+    position: relative;
+  }
+  .pa__slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 1600ms ease-in-out;
+  }
+  .pa__slide--on { opacity: 1; }
+
+  .pa__nameplate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .pa__hour {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: 20px;
+    letter-spacing: 0.14em;
+    color: var(--pa-ink-light);
+  }
+  .pa__time {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--pa-ink-dim);
+    margin-top: 2px;
+  }
+
+  .pa__devotion {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .pa__devotion-name {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--pa-accent, var(--pa-flame));
+  }
+  .pa__devotion-line {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--pa-ink-dim);
+  }
+
+  .pa__count {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .pa__count-num {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--pa-flame);
+    letter-spacing: 0.06em;
+    line-height: 1.05;
+    text-shadow: 0 0 8px rgba(246, 193, 94, 0.35);
+  }
+  .pa__count-label {
+    display: block;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--pa-ink-dim);
+    margin-top: 2px;
+  }
+
+  /* Chunky pray button — same grammar as drum-altars' RING */
+  .pa__pray {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    padding: 12px 26px;
+    margin-bottom: 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: var(--pa-indigo-deep);
+    background: linear-gradient(180deg, var(--pa-brass) 0%, var(--pa-brass-soft) 100%);
+    border-radius: 0;
+    box-shadow:
+      0 0 0 2px var(--pa-indigo-deep),
+      0 4px 0 0 var(--pa-brass-deep),
+      0 4px 12px rgba(212, 164, 55, 0.25);
+    transition: transform 80ms, box-shadow 80ms, background 120ms;
+  }
+  .pa__pray:hover {
+    background: linear-gradient(180deg, #efbb46 0%, var(--pa-brass) 100%);
+  }
+  .pa__pray:active,
+  .pa__pray.pa__pray--praying {
+    transform: translateY(3px);
+    box-shadow:
+      0 0 0 2px var(--pa-indigo-deep),
+      0 1px 0 0 var(--pa-brass-deep),
+      0 0 16px rgba(246, 193, 94, 0.6);
+  }
+  .pa__pray:disabled {
+    cursor: wait;
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+
+  .pa__tone-tag {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--pa-ink-dim);
+    margin-bottom: 10px;
+  }
+
+  /* Candle */
+  .pa__candle {
+    width: 14px;
+    height: 36px;
+    position: relative;
+    margin-top: 2px;
+  }
+  .pa__wax {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 24px;
+    background: linear-gradient(180deg, #ece7d3 0%, #b7b092 100%);
+    box-shadow:
+      inset -1px 0 0 rgba(0,0,0,0.25),
+      inset 1px 0 0 rgba(255,255,255,0.4);
+  }
+  .pa__wax::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 4px;
+    background: #2a1a08;
+  }
+  .pa__flame {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 14px;
+    background: radial-gradient(ellipse 4px 8px at 50% 70%, var(--pa-flame-tip) 0%, var(--pa-flame) 50%, transparent 75%);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    filter: blur(0.4px);
+    animation: pa-flicker 1.6s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+  .pa__altar.pa__altar--lit .pa__flame {
+    animation: pa-flare 0.9s ease-out;
+  }
+  @keyframes pa-flicker {
+    0%,100% { transform: translateX(-50%) scale(1, 1) rotate(0deg); opacity: 0.85; }
+    25%     { transform: translateX(-50%) scale(0.96, 1.06) rotate(-2deg); opacity: 1; }
+    50%     { transform: translateX(-50%) scale(1.04, 0.94) rotate(1deg); opacity: 0.9; }
+    75%     { transform: translateX(-50%) scale(0.98, 1.02) rotate(-1deg); opacity: 1; }
+  }
+  @keyframes pa-flare {
+    0%   { transform: translateX(-50%) scale(1, 1); filter: blur(0.4px) brightness(1); }
+    20%  { transform: translateX(-50%) scale(1.5, 1.8); filter: blur(0.8px) brightness(1.6); }
+    100% { transform: translateX(-50%) scale(1, 1); filter: blur(0.4px) brightness(1); }
+  }
+
+  /* Halo on prayer */
+  .pa__altar::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 8px;
+    background: radial-gradient(ellipse at center, rgba(246, 193, 94, 0.20), transparent 60%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease-out;
+  }
+  .pa__altar.pa__altar--lit::after { opacity: 1; }
+
+  /* ── Recent feed ──────────────────────────────────────── */
+  .pa__feed {
+    margin-top: 48px;
+    padding: 24px 16px;
+    border-top: 1px solid var(--pa-rule-soft);
+    border-bottom: 1px solid var(--pa-rule-soft);
+  }
+  .pa__feed-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .pa__feed-title {
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.30em;
+    color: var(--pa-brass);
+    text-transform: uppercase;
+  }
+  .pa__feed-sub {
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--pa-ink-dim);
+  }
+  .pa__feed-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pa__feed-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 12px;
+    color: var(--pa-ink-mid);
+    border-left: 2px solid transparent;
+    transition: border-color 200ms, background 200ms;
+  }
+  .pa__feed-list li.pa__feed-fresh {
+    border-left-color: var(--pa-flame);
+    background: rgba(246, 193, 94, 0.05);
+  }
+  .pa__feed-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .pa__feed-empty {
+    color: var(--pa-ink-dim) !important;
+    font-style: italic;
+    font-family: 'Lora', Georgia, serif !important;
+    border-left: 0 !important;
+  }
+
+  /* ── How ──────────────────────────────────────────────── */
+  .pa__how {
+    margin-top: 48px;
+    padding: 24px 16px;
+    max-width: 820px;
+    margin-inline: auto;
+  }
+  .pa__how h2 {
+    font-family: 'Gloock', 'Lora', Georgia, serif;
+    font-size: 24px;
+    color: var(--pa-brass);
+    letter-spacing: 0.04em;
+    margin-bottom: 16px;
+  }
+  .pa__how-list {
+    list-style: decimal;
+    padding-left: 22px;
+    margin: 0;
+  }
+  .pa__how-list li {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--pa-ink-mid);
+    margin-bottom: 10px;
+  }
+  .pa__how-list em {
+    color: var(--pa-flame);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .pa__how-list a {
+    color: var(--pa-brass);
+  }
+  .pa__kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--pa-indigo-deep);
+    background: var(--pa-brass);
+    border-radius: 2px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .pa__blessing {
+    margin-top: 28px;
+    text-align: center;
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--pa-ink-dim);
+    letter-spacing: 0.08em;
+  }
+</style>
+
+<script>
+  // ── Identity ─────────────────────────────────────────────
+  const SID_KEY = 'pc:sid';
+  function ensureSid() {
+    try {
+      let sid = localStorage.getItem(SID_KEY);
+      if (!sid) {
+        sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(SID_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return 'sid-anon-' + Date.now();
+    }
+  }
+  const SID = ensureSid();
+
+  const STATION_ACCENTS: Record<string, string> = {
+    matins: '#9b7bff',
+    lauds: '#f6c15e',
+    prime: '#9db8a1',
+    terce: '#e0603a',
+    sext: '#3a7bd5',
+  };
+  const STATION_ORDER = ['matins', 'lauds', 'prime', 'terce', 'sext'];
+
+  // ── Audio — five morning tones ───────────────────────────
+  let actx: AudioContext | null = null;
+  function ctx(): AudioContext {
+    if (!actx) {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      actx = new AC();
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+
+  function noiseBuffer(a: AudioContext, seconds: number): AudioBuffer {
+    const buf = a.createBuffer(1, a.sampleRate * seconds, a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
+  // MATINS — vigil drone: low fifth, slow attack, dark lowpass
+  function playMatins() {
+    const a = ctx(); const t = a.currentTime;
+    const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 110;
+    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 165;
+    const o3 = a.createOscillator(); o3.type = 'triangle'; o3.frequency.value = 220;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 900;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.28, t + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    o1.connect(filt); o2.connect(filt); o3.connect(filt); filt.connect(g).connect(a.destination);
+    o1.start(t); o2.start(t); o3.start(t);
+    o1.stop(t + 3.3); o2.stop(t + 3.3); o3.stop(t + 3.3);
+  }
+  // LAUDS — rising bloom: upward major arpeggio, bright bell partials
+  function playLauds() {
+    const a = ctx(); const base = a.currentTime;
+    const notes = [261.63, 329.63, 392.0, 523.25]; // C4 E4 G4 C5
+    notes.forEach((f, i) => {
+      const t = base + i * 0.11;
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
+      const g = a.createGain(); const g2 = a.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+      g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.05, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+      o.start(t); o.stop(t + 1.6); o2.start(t); o2.stop(t + 1.0);
+    });
+  }
+  // PRIME — breath wash: bandpassed noise swell + soft sine under
+  function playPrime() {
+    const a = ctx(); const t = a.currentTime;
+    const src = a.createBufferSource(); src.buffer = noiseBuffer(a, 3);
+    const filt = a.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 760; filt.Q.value = 0.8;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.14, t + 1.1);
+    g.gain.linearRampToValueAtTime(0.0001, t + 2.8);
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 330;
+    const og = a.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.linearRampToValueAtTime(0.06, t + 1.0);
+    og.gain.linearRampToValueAtTime(0.0001, t + 2.6);
+    src.connect(filt).connect(g).connect(a.destination);
+    o.connect(og).connect(a.destination);
+    src.start(t); o.start(t); o.stop(t + 2.7);
+  }
+  // TERCE — tide surge: lowpass-swept noise + low gong strike
+  function playTerce() {
+    const a = ctx(); const t = a.currentTime;
+    const src = a.createBufferSource(); src.buffer = noiseBuffer(a, 3);
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(220, t);
+    filt.frequency.exponentialRampToValueAtTime(1400, t + 0.9);
+    filt.frequency.exponentialRampToValueAtTime(260, t + 2.6);
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.20, t + 0.8);
+    g.gain.linearRampToValueAtTime(0.0001, t + 2.8);
+    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 82.41; // E2
+    const og = a.createGain();
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.30, t + 0.03); og.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+    src.connect(filt).connect(g).connect(a.destination);
+    o.connect(og).connect(a.destination);
+    src.start(t); o.start(t); o.stop(t + 2.5);
+  }
+  // SEXT — noon triad: clear simultaneous bell chord
+  function playSext() {
+    const a = ctx(); const t = a.currentTime;
+    [523.25, 659.25, 783.99].forEach((f) => { // C5 E5 G5
+      const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.4;
+      const g = a.createGain(); const g2 = a.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+      g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.04, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+      o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
+      o.start(t); o.stop(t + 1.8); o2.start(t); o2.stop(t + 1.1);
+    });
+  }
+
+  const TONES: Record<string, () => void> = {
+    matins: playMatins,
+    lauds: playLauds,
+    prime: playPrime,
+    terce: playTerce,
+    sext: playSext,
+  };
+
+  // ── Slideshows — slow crossfade, staggered starts ────────
+  const SLIDE_MS = 7000;
+  const slideState = new Map<Element, number>();
+
+  function advanceSlide(altarEl: Element) {
+    const slides = altarEl.querySelectorAll('.pa__slide');
+    if (!slides.length) return;
+    const cur = slideState.get(altarEl) ?? 0;
+    const next = (cur + 1) % slides.length;
+    slides[cur]?.classList.remove('pa__slide--on');
+    slides[next]?.classList.add('pa__slide--on');
+    slideState.set(altarEl, next);
+  }
+
+  document.querySelectorAll('.pa__altar').forEach((altarEl, i) => {
+    slideState.set(altarEl, 0);
+    setTimeout(() => {
+      advanceSlide(altarEl);
+      setInterval(() => advanceSlide(altarEl), SLIDE_MS);
+    }, SLIDE_MS + i * 1400);
+    // Tap the image to turn it by hand
+    altarEl.querySelector('[data-slideshow]')?.addEventListener('click', () => advanceSlide(altarEl));
+  });
+
+  // ── State ─────────────────────────────────────────────────
+  function fmtCount(n: number) { return n > 9999 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+  function paintAltars(state: any) {
+    document.querySelectorAll('.pa__altar').forEach((el) => {
+      const station = (el as HTMLElement).dataset.station ?? '';
+      const count = state.counts?.[station] ?? 0;
+      const num = el.querySelector('[data-count-text]');
+      if (num) num.textContent = fmtCount(count);
+      (el as HTMLElement).dataset.count = String(count);
+    });
+  }
+
+  function paintFeed(state: any) {
+    const list = document.getElementById('pa-feed');
+    if (!list) return;
+    const recent = state.recent ?? [];
+    if (!recent.length) {
+      list.innerHTML = '<li class="pa__feed-empty">— waiting for the first prayer —</li>';
+      return;
+    }
+    list.innerHTML = '';
+    const now = Date.now();
+    recent.forEach((r: any, idx: number) => {
+      const li = document.createElement('li');
+      const isFresh = (now - r.t) < 8000 && idx === 0;
+      if (isFresh) li.classList.add('pa__feed-fresh');
+      const ago = Math.max(0, Math.floor((now - r.t) / 1000));
+      const agoStr = ago < 5 ? 'just now' : ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`;
+      const dot = document.createElement('span');
+      dot.className = 'pa__feed-dot';
+      dot.style.background = STATION_ACCENTS[r.station] ?? '#d4a437';
+      dot.style.color = STATION_ACCENTS[r.station] ?? '#d4a437';
+      const txt = document.createElement('span');
+      txt.textContent = `${String(r.station).toUpperCase()} · ${r.pid.slice(0, 6)}… · ${agoStr}`;
+      li.appendChild(dot); li.appendChild(txt);
+      list.appendChild(li);
+    });
+  }
+
+  function paintHeader(state: any) {
+    const totEl = document.getElementById('pa-total');
+    if (totEl) totEl.textContent = fmtCount(state.total ?? 0);
+  }
+
+  // ── Network ───────────────────────────────────────────────
+  async function fetchState() {
+    try {
+      const r = await fetch('/api/prayer', { cache: 'no-store' });
+      const j = await r.json();
+      if (j && j.ok) {
+        paintHeader(j); paintAltars(j); paintFeed(j);
+      }
+    } catch {
+      /* offline — keep current state */
+    }
+  }
+
+  async function postPrayer(station: string) {
+    try {
+      const r = await fetch('/api/prayer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SID, station }),
+      });
+      return await r.json();
+    } catch {
+      return { ok: false, reason: 'network' };
+    }
+  }
+
+  // ── Wire up prayers ───────────────────────────────────────
+  function lightAltar(altarEl: Element) {
+    altarEl.classList.add('pa__altar--lit');
+    setTimeout(() => altarEl.classList.remove('pa__altar--lit'), 900);
+  }
+
+  document.querySelectorAll('.pa__altar').forEach((altarEl) => {
+    const btn = altarEl.querySelector('[data-pray]') as HTMLButtonElement | null;
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const station = (altarEl as HTMLElement).dataset.station ?? STATION_ORDER[0];
+      // Optimistic — tone + flare + image turn immediately, then POST
+      try { TONES[station]?.(); } catch {}
+      lightAltar(altarEl);
+      advanceSlide(altarEl);
+      btn.classList.add('pa__pray--praying');
+      btn.disabled = true;
+      const j = await postPrayer(station);
+      btn.disabled = false;
+      btn.classList.remove('pa__pray--praying');
+      if (j?.ok) {
+        const num = altarEl.querySelector('[data-count-text]');
+        if (num) num.textContent = fmtCount(j.count);
+        (altarEl as HTMLElement).dataset.count = String(j.count);
+        const totEl = document.getElementById('pa-total');
+        if (totEl) totEl.textContent = fmtCount(j.total);
+      } else if (j?.reason === 'rate-limited') {
+        btn.disabled = true;
+        setTimeout(() => { btn.disabled = false; }, (j.retryAfterSec ?? 5) * 1000);
+      }
+    });
+  });
+
+  // ── Polling ───────────────────────────────────────────────
+  fetchState();
+  setInterval(fetchState, 2200);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchState();
+  });
+</script>
