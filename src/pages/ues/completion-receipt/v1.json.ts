@@ -6,7 +6,7 @@ export const GET: APIRoute = async () => new Response(
   {
     status: 200,
     headers: {
-      'Content-Type': 'application/schema+json; charset=utf-8',
+      'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=86400, immutable',
       'Access-Control-Allow-Origin': '*',
     },

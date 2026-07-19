@@ -39,11 +39,11 @@ test('completion receipts identify the public immutable v1 JSON Schema', () => {
   );
 });
 
-test('the schema has an exact extensionless public endpoint with schema media headers', async () => {
-  const route = await read('../src/pages/ues/completion-receipt/v1.ts');
+test('the schema has an exact public JSON endpoint with durable media headers', async () => {
+  const route = await read('../src/pages/ues/completion-receipt/v1.json.ts');
 
   assert.match(route, /UES_COMPLETION_RECEIPT_SCHEMA/);
-  assert.match(route, /application\/schema\+json; charset=utf-8/);
+  assert.match(route, /application\/json; charset=utf-8/);
   assert.match(route, /Cache-Control': 'public, max-age=86400, immutable'/);
   assert.match(route, /Access-Control-Allow-Origin': '\*'/);
 });
