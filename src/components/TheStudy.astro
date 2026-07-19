@@ -1,0 +1,399 @@
+---
+/**
+ * TheStudy — a mid-century study band. An organized area of thinking,
+ * with mess.
+ *
+ * Mike 2026-07-18: *"try a modern midcentury modern using mike
+ * midjourney images, an organized area of thinking with mess"*.
+ *
+ * Real assets only: every image is one of the 652 Midjourney works in
+ * src/data/el-segundo-school-gallery.json, served from the archive
+ * origin (same pattern as ElSegundoSchoolHome). The note cards quote
+ * Mike's actual prompt log — labeled as such, never paraphrased.
+ *
+ * Two zones, one argument:
+ *   SORTED         a strict walnut shelf — six works from one
+ *                  category, straight, matted, labeled. The organized
+ *                  area.
+ *   STILL THINKING a pinboard — works overlapping slightly askew,
+ *                  taped prompt cards, one starburst clock. The mess.
+ *                  The mess is load-bearing.
+ *
+ * Picks are seeded by the build day, so the wall rearranges itself
+ * roughly daily (the site deploys at least that often). Fully static:
+ * no client JS, no fetches, nothing to hydrate.
+ *
+ * Author: cc. Source: Mike 2026-07-18 chat.
+ */
+import gallery from '../data/el-segundo-school-gallery.json';
+
+const ARCHIVE = 'https://el-segundo-school-archive.pages.dev';
+const works = gallery.works;
+
+// Deterministic PRNG — same wall all day, new wall tomorrow.
+const daySeed = Math.floor(Date.now() / 86400000);
+function mulberry(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry(daySeed * 2654435761);
+
+function pick<T>(arr: T[], n: number): T[] {
+  const pool = arr.slice();
+  const out: T[] = [];
+  while (out.length < n && pool.length) {
+    out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+const CATEGORIES = [...new Set(works.map((w) => w.category))];
+const shelfCategory = CATEGORIES[daySeed % CATEGORIES.length];
+const shelfWorks = pick(works.filter((w) => w.category === shelfCategory), 6);
+const shelfIds = new Set(shelfWorks.map((w) => w.id));
+const boardPool = works.filter((w) => !shelfIds.has(w.id));
+const boardWorks = pick(boardPool, 5);
+const cardWorks = pick(boardPool.filter((w) => !boardWorks.includes(w) && w.prompt && w.prompt.length > 30), 3);
+
+const thumbUrl = (w: (typeof works)[number]) => `${ARCHIVE}${w.thumb.replace('/images/el-segundo-school', '')}`;
+
+// Mats cycle through the study palette — mustard, teal, cream, burnt.
+const MATS = ['#D9A441', '#2E6E63', '#EFE6D2', '#C4562E', '#2E6E63', '#D9A441'];
+
+// The mess, arranged on purpose: hand-tuned positions, not random —
+// an organized area of thinking.
+const PINS = [
+  { top: 4,  left: 2,  rot: -4.5, w: 30 },
+  { top: 10, left: 30, rot: 2.5,  w: 26 },
+  { top: 2,  left: 56, rot: -2,   w: 24 },
+  { top: 40, left: 12, rot: 3.5,  w: 26 },
+  { top: 36, left: 66, rot: -3,   w: 28 },
+];
+const CARDS = [
+  { top: 52, left: 40, rot: -2 },
+  { top: 12, left: 76, rot: 3 },
+  { top: 66, left: 68, rot: -1.5 },
+];
+---
+
+<section class="study" aria-labelledby="study-title">
+  <header class="study__head">
+    <div>
+      <p class="study__kicker mono">THE STUDY · RESHUFFLES DAILY</p>
+      <h2 id="study-title">An organized area of thinking. Some mess is load-bearing.</h2>
+    </div>
+    <a class="study__link mono" href="/el-segundo-school">the field building →</a>
+  </header>
+
+  <div class="study__rail" aria-hidden="true">
+    <span class="study__peg study__peg--mustard"></span>
+    <span class="study__peg study__peg--teal"></span>
+    <span class="study__peg study__peg--burnt"></span>
+  </div>
+
+  <div class="study__zones">
+    <div class="study__shelf">
+      <p class="study__label mono">SORTED · {shelfCategory.toUpperCase()}</p>
+      <div class="study__grid">
+        {shelfWorks.map((w, i) => (
+          <a class="study-work" href="/el-segundo-school" style={`--mat:${MATS[i % MATS.length]}`}>
+            <img src={thumbUrl(w)} alt={w.title} width={w.width} height={w.height} loading="lazy" decoding="async" />
+            <span class="study-work__tag mono">{w.number} · SET {String(w.set).padStart(3, '0')}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <div class="study__board">
+      <p class="study__label mono">STILL THINKING</p>
+      <div class="study__wall">
+        {boardWorks.map((w, i) => (
+          <a
+            class="study-pin"
+            href="/el-segundo-school"
+            style={`--top:${PINS[i].top}%;--left:${PINS[i].left}%;--rot:${PINS[i].rot}deg;--w:${PINS[i].w}%`}
+          >
+            <span class="study-pin__dot" aria-hidden="true"></span>
+            <img src={thumbUrl(w)} alt={w.title} width={w.width} height={w.height} loading="lazy" decoding="async" />
+          </a>
+        ))}
+        {cardWorks.map((w, i) => (
+          <figure
+            class="study-card"
+            style={`--top:${CARDS[i].top}%;--left:${CARDS[i].left}%;--rot:${CARDS[i].rot}deg`}
+          >
+            <span class="study-card__tape" aria-hidden="true"></span>
+            <blockquote>“{w.prompt.length > 92 ? w.prompt.slice(0, 92) + '…' : w.prompt}”</blockquote>
+            <figcaption class="mono">prompt log · № {w.number} · set {String(w.set).padStart(3, '0')}</figcaption>
+          </figure>
+        ))}
+        <span class="study-clock" aria-hidden="true">
+          <span class="study-clock__spoke"></span>
+          <span class="study-clock__spoke"></span>
+          <span class="study-clock__spoke"></span>
+          <span class="study-clock__spoke"></span>
+          <span class="study-clock__face"></span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <p class="study__caption mono">
+    652 works by mike, midjourney, in the archive · the shelf is today's sort · the board is what refuses to file itself
+  </p>
+</section>
+
+<style>
+  .study {
+    margin: 30px 0 22px;
+    padding: 18px 18px 14px;
+    background: #f7f2e8;
+    border: 1px solid #16130f;
+    border-radius: 3px;
+  }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+  .study__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .study__kicker {
+    margin: 0 0 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: #5b4636;
+  }
+  .study__head h2 {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: #16130f;
+    max-width: 30ch;
+  }
+  .study__link {
+    font-size: 11px;
+    color: #8a2432;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(138, 36, 50, 0.35);
+    white-space: nowrap;
+  }
+  .study__link:hover { color: #2e6e63; border-bottom-color: #2e6e63; }
+
+  .study__rail {
+    position: relative;
+    height: 6px;
+    margin: 14px 0 16px;
+    background: #5b4636;
+    border-radius: 3px;
+  }
+  .study__peg {
+    position: absolute;
+    top: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #16130f;
+  }
+  .study__peg--mustard { left: 8%;  background: #d9a441; }
+  .study__peg--teal    { left: 14%; background: #2e6e63; }
+  .study__peg--burnt   { left: 91%; background: #c4562e; }
+
+  .study__zones {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 20px;
+  }
+  .study__label {
+    margin: 0 0 8px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: #16130f;
+  }
+  .study__label::after {
+    content: '';
+    display: inline-block;
+    width: 34px;
+    height: 3px;
+    margin-left: 8px;
+    vertical-align: 2px;
+    background: #d9a441;
+  }
+  .study__board .study__label::after { background: #c4562e; }
+
+  /* SORTED — the organized area. Straight, matted, labeled. */
+  .study__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .study-work {
+    display: block;
+    background: var(--mat, #efe6d2);
+    border: 1px solid #16130f;
+    border-radius: 2px;
+    padding: 7px 7px 4px;
+    text-decoration: none;
+    transition: transform 120ms ease;
+  }
+  .study-work:hover { transform: translateY(-2px); }
+  .study-work img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid rgba(22, 19, 15, 0.55);
+  }
+  .study-work__tag {
+    display: block;
+    padding: 3px 1px 1px;
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+    color: #16130f;
+  }
+
+  /* STILL THINKING — the mess. Arranged on purpose. */
+  .study__wall {
+    position: relative;
+    min-height: 380px;
+    background:
+      radial-gradient(rgba(22, 19, 15, 0.05) 1px, transparent 1px) 0 0 / 18px 18px,
+      #efe6d2;
+    border: 1px solid #16130f;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .study-pin {
+    position: absolute;
+    top: var(--top);
+    left: var(--left);
+    width: var(--w);
+    transform: rotate(var(--rot));
+    background: #fffdf6;
+    padding: 5px 5px 7px;
+    border: 1px solid rgba(22, 19, 15, 0.6);
+    box-shadow: 0 3px 8px rgba(22, 19, 15, 0.22);
+    transition: transform 140ms ease;
+  }
+  .study-pin:hover { transform: rotate(0deg) scale(1.03); z-index: 4; }
+  .study-pin img { display: block; width: 100%; height: auto; }
+  .study-pin__dot {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 11px;
+    height: 11px;
+    margin-left: -5px;
+    border-radius: 50%;
+    background: #c4562e;
+    border: 2px solid #16130f;
+    z-index: 2;
+  }
+  .study-pin:nth-of-type(2n) .study-pin__dot { background: #2e6e63; }
+  .study-pin:nth-of-type(3n) .study-pin__dot { background: #d9a441; }
+
+  .study-card {
+    position: absolute;
+    top: var(--top);
+    left: var(--left);
+    width: min(220px, 42%);
+    margin: 0;
+    padding: 10px 12px 8px;
+    background: #fffdf6;
+    border: 1px solid #16130f;
+    transform: rotate(var(--rot));
+    box-shadow: 0 3px 8px rgba(22, 19, 15, 0.18);
+    z-index: 3;
+  }
+  .study-card__tape {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    width: 44px;
+    height: 14px;
+    margin-left: -22px;
+    background: rgba(217, 164, 65, 0.5);
+    border-left: 1px dashed rgba(22, 19, 15, 0.25);
+    border-right: 1px dashed rgba(22, 19, 15, 0.25);
+    transform: rotate(-2deg);
+  }
+  .study-card blockquote {
+    margin: 0 0 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #2c2418;
+    font-style: italic;
+  }
+  .study-card figcaption {
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+    color: #5b4636;
+  }
+
+  /* One starburst clock, because it is a study. */
+  .study-clock {
+    position: absolute;
+    right: 6%;
+    bottom: 8%;
+    width: 44px;
+    height: 44px;
+  }
+  .study-clock__spoke {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 2px;
+    margin: -1px 0 0 -22px;
+    background: #16130f;
+  }
+  .study-clock__spoke:nth-of-type(2) { transform: rotate(45deg); }
+  .study-clock__spoke:nth-of-type(3) { transform: rotate(90deg); }
+  .study-clock__spoke:nth-of-type(4) { transform: rotate(135deg); }
+  .study-clock__face {
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    background: #d9a441;
+    border: 2px solid #16130f;
+  }
+
+  .study__caption {
+    margin: 14px 2px 0;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: #6b5a3a;
+  }
+
+  @media (max-width: 860px) {
+    .study__zones { grid-template-columns: minmax(0, 1fr); }
+    .study__wall { min-height: 340px; }
+  }
+  @media (max-width: 560px) {
+    /* The mess files itself politely on small screens. */
+    .study__wall { min-height: 0; padding: 12px; }
+    .study-pin, .study-card {
+      position: static;
+      width: auto;
+      display: inline-block;
+      vertical-align: top;
+      margin: 0 8px 12px 0;
+    }
+    .study-pin { width: 44%; }
+    .study-card { width: 86%; }
+    .study-clock { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .study-work, .study-pin { transition: none; }
+  }
+</style>
