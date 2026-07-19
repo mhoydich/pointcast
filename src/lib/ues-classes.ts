@@ -90,6 +90,7 @@ const STANDARD_WEEKLY_COMMITMENT: UesWeeklyCommitment = {
 
 const SHARED_ACCESS = [
   'Every instruction is readable on the public course page; audio or video references require a transcript or equivalent text path.',
+  'Every required prompt, scenario, rubric, and checklist is written on this course page; named sources are optional references, not missing course materials.',
   'Low-bandwidth, print-friendly syllabus with no paid platform or subscription required.',
   'No live attendance, camera, account, wallet, or public posting is required.',
   'Progress stays in this browser unless the learner chooses to download a private completion receipt.',
@@ -160,7 +161,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     instructorProfile:
       'A photographer, visual artist, or field naturalist with atmospheric or coastal literacy, source discipline, and an accessible critique practice.',
     soloPath:
-      'Use one repeatable viewpoint and compare your own observations across time. Any critique prompt becomes a timed self-edit using the course checklist.',
+      'Use one repeatable viewpoint and compare your own observations across time. For every self-edit, check five things on the page: place and time are clear, observation is separate from inference, sources are traceable, the work has a text equivalent, and uncertainty remains visible.',
     assignments: [
       {
         title: 'Seven-day sky log',
@@ -188,12 +189,12 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What becomes visible when we stay with one patch of air before deciding what it means?',
         sourceShelf: [
-          'UES Marine Layer field-note practice',
+          'On-page field note: record place, date, local time, direction faced, visible conditions, sound, temperature if known, and one uncertainty',
           'National Weather Service observation vocabulary',
           'Artist weather diaries and serial landscape studies',
         ],
         studio:
-          'Build a personal working vocabulary of haze, cloud edge, glare, wind, temperature, distance, and uncertainty; optionally compare it with the course vocabulary.',
+          'Build a personal working vocabulary of haze, cloud edge, glare, wind, temperature, distance, and uncertainty, defining each word from direct observation.',
         fieldTask:
           'Choose one repeatable viewpoint and make three observations at different times of day.',
         publicReceipt:
@@ -207,7 +208,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'NOAA and National Weather Service observation products',
           'Tide, wind, visibility, and air-quality public-data conventions',
-          'Source-note and uncertainty examples from PointCast',
+          'On-page source note: title or agency, observation time, access date, what it supports, and what it cannot establish',
         ],
         studio:
           'Read a forecast discussion, compare it with the sky log, and distinguish observation from inference.',
@@ -224,7 +225,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Color notation and environmental sound-score examples',
           'Accessible color-contrast and audio-description practices',
-          'The El Segundo School archive: weather, horizon, and botanical works',
+          'Any freely viewable weather diary or serial landscape; the exercise does not depend on a particular archive',
         ],
         studio:
           'Test three translations of one condition through palette, mark, typography, sequence, or sound.',
@@ -239,12 +240,12 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Who experiences the same weather differently, and how does the built environment change it?',
         sourceShelf: [
-          'Heat, shade, wind, and shelter observation prompts',
+          'On-page place check: note shade, glare, wind, shelter, seating or waiting, surface, noise, and an alternate access path',
           'Public-space accessibility field-audit examples',
           'Local accounts of marine layer, airport edge, beach, and street conditions',
         ],
         studio:
-          'Self-check the weather card for legibility, source clarity, access, and lived specificity using the supplied rubric; optional outside critique can supplement the same check.',
+          'Self-check the weather card with four questions: can it be read at arm’s length, can every data claim be traced, does the text equivalent carry the meaning, and does it describe this place rather than generic weather? Revise one failure; optional outside critique may supplement the same check.',
         fieldTask:
           'Compare two nearby public places for shade, glare, wind, shelter, and ease of waiting.',
         publicReceipt:
@@ -257,7 +258,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'How can many distinct observations belong together without becoming identical?',
         sourceShelf: [
           'Grid, sequence, legend, and small-multiple design references',
-          'Collective authorship and crediting patterns',
+          'On-page six-panel check: one consistent order, readable labels, a legend for every code, individual dates, and credits for anything not made by the learner',
           'Open image, text, and audio licensing choices',
         ],
         studio:
@@ -273,9 +274,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What should the next observer be able to notice, reuse, or question?',
         sourceShelf: [
-          'Public exhibition checklist',
-          'Portable archive and metadata checklist',
-          'Optional Tezos publication boundary from UES-107',
+          'On-page final check: title, six ordered panels, context sentence, source note, credits, text equivalents, limitations, and a correction contact or note',
+          'On-page archive fields: filename, creator, date, place at a privacy-safe precision, format, rights choice, source list, and revision date',
+          'Publication, licensing, wallet use, and minting are separate optional decisions; keeping one local file completes the class',
         ],
         studio:
           'Sequence the personal atlas and conduct a final source-and-access self-review. A collective sequence or public showing is optional, and a private review counts equally.',
@@ -329,7 +330,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         title: 'Three verified field records',
         dueWeek: 4,
         brief:
-          'Make three useful, sourced, access-aware records in a private working atlas using the course field protocol; contributing them to a shared atlas is optional.',
+          'Make three private atlas records. Each includes date, privacy-safe place, observation, source or direct-observation label, confidence, access note, and correction note; contributing them to a shared atlas is optional.',
       },
       {
         title: 'One repair route',
@@ -345,7 +346,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'When does a radius describe belonging, and when does it conceal difference?',
         sourceShelf: [
-          'UES 25-mile participation rule',
+          'On-page boundary comparison: draw one 25-mile circle, one daily-travel boundary, one relationship boundary, and one ecological boundary; label who each includes and excludes',
           'Participatory mapping and counter-mapping examples',
           'Local transit, neighborhood, and watershed boundary references',
         ],
@@ -410,7 +411,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         title: 'Power, Access, Gaps',
         question: 'Which missing connection would matter most, and to whom?',
         sourceShelf: [
-          'UES-102 local systems-map method',
+          'On-page systems map: connect the documented gap to people affected, existing assets, decision maker, public evidence, first action, and one uncertainty',
           'Public meeting, service-request, and department-route examples',
           'Small civic repair and tactical-improvement case studies',
         ],
@@ -427,8 +428,8 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'How will this map stay useful, correctable, and locally accountable?',
         sourceShelf: [
           'Public map moderation and correction policies',
-          'Portable data and export checklist',
-          'UES season-receipt and local stewardship rules',
+          'On-page export check: title, legend, source dates, privacy-safe precision, alt text or text list, credits, file format, and backup copy',
+          'On-page stewardship note: name what may be corrected, how to submit a correction, who decides, the next review date, and what should be removed',
         ],
         studio:
           'Self-review evidence, access, privacy, moderation, and maintenance before saving the atlas; opening it to others is optional.',
@@ -459,7 +460,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     weeklyCommitment: STANDARD_WEEKLY_COMMITMENT,
     access: [
       ...SHARED_ACCESS,
-      'Template-based and analog collage paths for learners without professional design software.',
+      'Paper-grid and analog collage paths for learners without professional design software.',
     ],
     materials: [
       'Phone camera or sketchbook',
@@ -470,7 +471,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     instructorProfile:
       'A graphic designer or art director fluent in typography, print, web production, accessibility, and generous collaborative critique.',
     soloPath:
-      'Choose one real or self-defined invitation, make every format yourself, and replace interviews or group critique with the supplied audience simulation, legibility, access, and cold-read checks. Private files count equally.',
+      'Choose one real or self-defined invitation, make every format yourself, and use the four audience scenarios, access pass, and cold-read steps printed in the solo toolkit. Private files count equally.',
     assignments: [
       {
         title: 'Ten-sign field audit',
@@ -498,7 +499,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What are local signs asking people to do, and who can actually understand or act?',
         sourceShelf: [
-          'UES-105 public-sign walk method',
+          'On-page sign audit fields: exact words, intended action, likely audience, distance, placement, hierarchy, material, access, and unintended message',
           'Municipal, handmade, commercial, protest, and wayfinding sign examples',
           'Plain-language and visual-access prompts',
         ],
@@ -515,14 +516,14 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What must a person know, feel, and do in the five seconds after seeing this?',
         sourceShelf: [
-          'Audience-and-action brief template',
-          'Plain-language editing checklist',
+          'On-page brief fields: audience, single action, reason to care, place, date or timing, cost, access promise, privacy, contact, and production constraints',
+          'On-page language check: lead with one verb, define unfamiliar terms, remove filler, put essential details first, and read every sentence aloud',
           'Examples of welcoming and coercive public language',
         ],
         studio:
-          'Turn a real or self-defined local need into a one-page campaign brief and test the verb at its center with the supplied audience-simulation checklist.',
+          'Turn a real or self-defined local need into a one-page campaign brief and test its central verb with all four audience scenarios in the solo toolkit.',
         fieldTask:
-          'Run the intended-participant simulation and revise the invitation from the checklist. An optional interview or message exchange may add evidence, but the simulation counts equally.',
+          'Read the invitation as a first-time visitor with no context and as a person using only a small grayscale print. Revise anything that leaves action, timing, cost, access, privacy, or contact unclear. An optional interview may add evidence, but the simulation counts equally.',
         publicReceipt:
           'A private-by-default brief containing audience, action, context, constraints, and access promise.',
       },
@@ -532,7 +533,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'How can found, made, archival, and generated material acquire a distinct public voice?',
         sourceShelf: [
-          'The El Segundo School type and collage archive',
+          'Any freely viewable local poster, photocopy, noticeboard, or public-domain image may serve as a visual reference',
           'Image provenance and crediting patterns',
           'Analog and digital composition demonstrations',
         ],
@@ -573,7 +574,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         studio:
           'Run distance, scale, contrast, grayscale, alt-text, reading-order, and office-printer tests.',
         fieldTask:
-          'Run two distinct simulated-use tests with the supplied distance, device, and access profiles and document one change from each. Tests with other people are optional and count the same.',
+          'Test once from six feet away or at arm’s length and once on a small grayscale screen or print with images hidden. Document one change from each; tests with other people are optional and count the same.',
         publicReceipt:
           'An access-and-production test sheet showing failures, revisions, and remaining limits.',
       },
@@ -583,9 +584,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Can another local person deploy, adapt, credit, and maintain this work?',
         sourceShelf: [
-          'Public campaign release checklist',
+          'On-page release check: all formats open, action and contact match, text equivalents work, fonts have substitutions, images have rights and credits, source files are named, and limitations are visible',
           'Open licensing and editable-source guidance',
-          'UES public receipt and handoff format',
+          'Use the handoff-package fields printed in the solo toolkit',
         ],
         studio:
           'Run the final self-critique against the brief and rehearse a five-minute simulated handoff. Outside critique, release, and a real handoff are optional.',
@@ -657,7 +658,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Oral History Association ethics and consent principles',
           'Community archive consent and withdrawal examples',
-          'UES-107 public-memory boundary',
+          'On-page consent map: decide separately whether to listen, record, quote, edit, identify, preserve, publish, and remove later',
         ],
         studio:
           'Separate permission to listen, record, edit, preserve, publish, identify, and mint.',
@@ -690,7 +691,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Basic audio recording and room-tone guidance',
           'Library scanning and descriptive metadata basics',
-          'Secure file naming, storage, and backup checklist',
+          'On-page file check: neutral filename, no unnecessary personal data, original plus working copy, two storage locations when possible, access restriction, and deletion date',
         ],
         studio:
           'Run simple phone recording, scanning, photography, transcription, and description demonstrations.',
@@ -722,7 +723,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Dublin Core-inspired descriptive fields in plain language',
           'Copyright, license, traditional-knowledge, and privacy distinctions',
-          'Portable archive and checksum checklist',
+          'On-page record fields: title, creator, contributor if consented, date, privacy-safe place, description, rights, access, format, source, version, and backup location',
         ],
         studio:
           'Build a compact record with title, creator, contributor, date, place, description, rights, access, format, and source.',
@@ -739,7 +740,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Small listening-room and community exhibition formats',
           'Content note, transcript, image-description, and quiet-access examples',
-          'Archive stewardship and correction policy templates',
+          'On-page stewardship fields: access level, withdrawal path, correction contact or note, review date, preservation copy, deletion request path, and responsible keeper',
         ],
         studio:
           'Conduct a final rights, context, access, and preservation self-review. Participant review applies only to an optional interview, and a listening room is optional.',
@@ -771,12 +772,12 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     weeklyCommitment: STANDARD_WEEKLY_COMMITMENT,
     access: [
       ...SHARED_ACCESS,
-      'Shared class tool access or a no-paid-model path so personal AI subscriptions are not required.',
+      'No AI system is required. A complete no-model route uses search, index cards, manual variations, and the same source and editorial checks.',
     ],
     materials: [
       'Browser and text editor',
-      'Shared source notebook template',
-      'Access to at least one class-provided language or image model',
+      'Notebook with separate columns for claim, source, tool or method, candidate output, human edit, uncertainty, and decision',
+      'Optional AI system the learner already chooses to use; paper-based role cards fully replace it',
       'No coding experience required',
     ],
     instructorProfile:
@@ -810,9 +811,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Which work can a tool propose, and which decisions must a named person own?',
         sourceShelf: [
-          'UES-106 authorship and disclosure principles',
-          'Examples of editor, researcher, generator, critic, verifier, and approver roles',
-          'PointCast human-AI collaboration ledger patterns',
+          'On-page role rule: researcher gathers, generator proposes, critic challenges, verifier checks evidence, editor decides, and approver signs off; one learner may perform every pass',
+          'On-page ledger fields: time, role, input, tool or manual method, output, source, human change, uncertainty, decision, and reason',
+          'No-model role cards: apply three constraints by hand, create three candidates, then switch roles before judging them',
         ],
         studio:
           'Decompose a small project into proposing, retrieving, checking, deciding, making, editing, and approving.',
@@ -827,14 +828,14 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Can every important public claim travel back to evidence a person can inspect?',
         sourceShelf: [
-          'Primary-source hierarchy and lateral-reading prompts',
+          'On-page source test: prefer firsthand records, identify the creator and date, open the cited evidence, compare an independent source, and label conflicts',
           'Citation, quotation, paraphrase, and uncertainty examples',
           'Model hallucination and retrieval-failure cases',
         ],
         studio:
           'Trace claims through search, retrieval, model summaries, and human verification without treating fluency as evidence.',
         fieldTask:
-          'Build a five-source shelf around the research question and independently verify one model-generated claim from primary evidence.',
+          'Build a five-source shelf around the research question and independently verify one tool-, search-, or manually generated candidate claim from primary evidence. No AI use is required.',
         publicReceipt:
           'A source notebook excerpt showing one confirmed, one corrected, and one unresolved claim.',
       },
@@ -844,14 +845,14 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'How can prompting widen a search without quietly deciding the answer?',
         sourceShelf: [
-          'Prompt variation and comparative-output exercises',
+          'On-page variation exercise: make one factual, one counterfactual, and one constraint-heavy approach; without AI, write the three candidate outlines yourself before editing',
           'Creative constraint and editorial brief examples',
           'Image, text, and code provenance prompts',
         ],
         studio:
           'Run divergent prompts, compare outputs, annotate assumptions, and write an editorial brief before selecting material.',
         fieldTask:
-          'Generate three meaningfully different approaches and document why the learner’s editorial pass rejects at least one.',
+          'Generate or manually draft three meaningfully different approaches and document why the learner’s editorial pass rejects at least one.',
         publicReceipt:
           'A prompt triptych with output differences, editorial notes, and material model disclosure.',
       },
@@ -861,7 +862,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Where does information get lost when a project moves between people and agents?',
         sourceShelf: [
-          'Editorial checklist and stage-gate examples',
+          'On-page gate for every pass: define the input, expected output, evidence check, access check, stop condition, saved version, and who or which role decides',
           'Structured brief, schema, and handoff patterns',
           'Version, source, and approval ledger examples',
         ],
@@ -883,7 +884,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'Adversarial fact-check and counterexample methods',
         ],
         studio:
-          'Run the supplied adversarial self-review: try to disprove major claims, test rights and privacy, and identify missing affected perspectives. An exchanged dossier is optional.',
+          'Run the safety-and-rights pass in the solo toolkit, then try to disprove every major claim, find one counterexample, identify a missing affected perspective, and mark what would make the work unsafe to release. An exchanged dossier is optional.',
         fieldTask:
           'Resolve or explicitly label every high-risk issue in the self-generated red-team report. Optional peer findings use the same standard.',
         publicReceipt:
@@ -897,7 +898,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Public process-ledger examples',
           'Model and dataset disclosure fields',
-          'UES portable archive and correction-path checklist',
+          'Use the source-trail and handoff-package fields printed in the solo toolkit',
         ],
         studio:
           'Complete editorial review, source audit, authorship statement, limitation note, and correction route.',
@@ -912,7 +913,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     connectsFrom: ['UES-106', 'UES-107', 'UES-108'],
     budgetUsd: 3_300,
     addedProductionNeed:
-      'Shared model and API credits so participation does not depend on personal subscriptions.',
+      'Optional faculty demonstrations, accessible process-ledger examples, and independent curriculum maintenance; the class does not depend on model or API credits.',
     boundary:
       'No sensitive personal data, deceptive synthetic media, unlicensed imitation, or unsupported factual publication.',
   },
@@ -934,7 +935,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     ],
     materials: [
       'Tabletop, phone timer, video room, phone bridge, or accessible gathering space',
-      'Shared run-of-show and budget templates',
+      'Paper or text file with run-of-show fields: minute, action, purpose, access path, materials, host role, and contingency; budget fields: item, quantity, unit cost, source, total, and $0 alternative',
       'Optional food, flower, image, object, or music prompt',
       'Four optional project microgrants of $100 are included in the course budget',
     ],
@@ -947,7 +948,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         title: 'Invitation test',
         dueWeek: 2,
         brief:
-          'Write and revise an invitation with the supplied participant-scenario self-check. Sending it to a real person is optional and the simulation counts equally.',
+          'Write an invitation, test it as a first-time participant with no context and as a person using the remote or text-only access path, then revise it. Sending it to a real person is optional.',
       },
       {
         title: 'Accessibility walkthrough',
@@ -969,14 +970,14 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What can happen together that should not be another feed, meeting, or performance?',
         sourceShelf: [
-          'UES-108 gathering-purpose and public-receipt practice',
+          'On-page purpose test: name what participants can do together, what the room will not ask of them, who benefits, who may be affected, and what trace remains',
           'Examples of salons, teach-ins, kitchen tables, listening rooms, and online circles',
           'Participation, extraction, and host-accountability prompts',
         ],
         studio:
           'Distinguish audience, participants, guests, collaborators, hosts, and people affected but absent.',
         fieldTask:
-          'Use two supplied participant scenarios to compare a gathering someone might join with one they might avoid. An optional interview may replace or supplement the simulation.',
+          'Compare two on-page scenarios: a first-time guest with no local connections and a guest who cannot travel, appear on camera, or share personal data. Write why each might join, hesitate, or decline. An optional interview may supplement the simulation.',
         publicReceipt:
           'A one-paragraph purpose, non-purpose, and promise to participants.',
       },
@@ -993,7 +994,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         studio:
           'Write invitations that name purpose, timing, cost, format, access, privacy, recording, and a real contact.',
         fieldTask:
-          'Run the invitation through the supplied question-and-access self-check and revise it. Sending it to an intended participant is optional and counts the same.',
+          'Check whether the invitation states purpose, date and duration, cost, format, access path, privacy, recording, food or sensory notes, what to bring, and contact; revise every missing answer. Sending it is optional.',
         publicReceipt: 'The tested invitation and a short revision log.',
       },
       {
@@ -1008,7 +1009,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         studio:
           'Build a minute-by-minute gathering score with a purpose for every transition.',
         fieldTask:
-          'Time a fifteen-minute tabletop fragment using the supplied participation scenarios and record where energy, clarity, or access drops. Rehearsing with peers is optional.',
+          'Time a fifteen-minute tabletop fragment three ways: an expected arrival, a late silent arrival, and a remote or text-only participant. Record where energy, clarity, or access drops. Rehearsing with peers is optional.',
         publicReceipt:
           'Run-of-show version one with host roles and contingency branches.',
       },
@@ -1025,9 +1026,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         studio:
           'Role-play arrival, uneven participation, technical failure, dominant voices, silence, and a late guest.',
         fieldTask:
-          'Complete the accessibility walkthrough from invitation through follow-up using the supplied barrier scenarios. An optional outside tester may supplement the same check.',
+          'Walk from invitation through follow-up as someone who cannot use stairs, hear audio, read small type, speak on demand, pay, travel, or identify publicly. Add an equivalent path for every barrier; an optional outside tester may supplement the same check.',
         publicReceipt:
-          'An access-and-hosting checklist naming the person responsible for each promise.',
+          'An access-and-hosting list naming the path, contingency, and host role responsible for each promise.',
       },
       {
         week: 5,
@@ -1037,7 +1038,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Scope, community agreement, and escalation examples',
           'De-escalation, repair, removal, and referral prompts',
-          'Aftercare, follow-up, and data-deletion checklist',
+          'On-page aftercare check: close clearly, state follow-up timing, offer correction, store the minimum data, delete practice data, document incidents privately, and refer needs beyond host scope',
         ],
         studio:
           'Practice boundary statements, interruptions, repair invitations, endings, and post-event care without pretending hosts are clinicians.',
@@ -1051,7 +1052,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What should a future participant, funder, or host be able to understand afterward?',
         sourceShelf: [
-          'UES transparent micro-budget template',
+          'On-page micro-budget fields: item, purpose, quantity, unit cost, total, payer, reimbursement status, donated value, and $0 alternative',
           'Participant feedback and privacy-minimal evaluation prompts',
           'Reusable host-kit and season-receipt examples',
         ],
@@ -1084,7 +1085,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     weeklyCommitment: STANDARD_WEEKLY_COMMITMENT,
     access: [
       ...SHARED_ACCESS,
-      'Online-herbarium, grocery, houseplant, and instructor-provided image paths when outdoor plant access is unavailable.',
+      'A houseplant, grocery specimen, learner-owned image, or freely viewable public-herbarium record replaces outdoor access; no separate course asset is required.',
     ],
     materials: [
       'Sketchbook, phone camera, or accessible descriptive-notes method',
@@ -1123,7 +1124,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What can we honestly say about a plant before attaching a confident name?',
         sourceShelf: [
-          'UES-103 Flower Commons observation practice',
+          'On-page observation fields: silhouette, scale, node, vein, edge, surface, branching, color, seasonal state, change, proposed name, and confidence',
           'Botanical illustration and herbarium-sheet examples',
           'Citizen-science identification and uncertainty labels',
         ],
@@ -1158,7 +1159,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Introductory inheritance, variation, and reproduction concepts',
           'Cultivar, variety, hybrid, clone, landrace, and strain terminology',
-          'UES-104 sourced cannabis glossary boundary',
+          'On-page claim labels: observed feature, taxonomic relationship, documented breeding, commercial name, cultural name, and unresolved lineage claim',
         ],
         studio:
           'Distinguish taxonomic relationship, documented breeding, commercial naming, cultural lineage, and uncertainty.',
@@ -1175,7 +1176,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Ethnobotanical and cultural-history source prompts',
           'Trade, naming, appropriation, prohibition, and stewardship case studies',
-          'Local-law and age-boundary source checklist',
+          'On-page boundary check: verify current local law through an official public source, state date and jurisdiction, avoid medical claims, protect sensitive knowledge, and mark what the portrait intentionally omits',
         ],
         studio:
           'Place the plant inside human systems without making cultural or medical claims the sources cannot support.',
@@ -1190,13 +1191,13 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question: 'What visual form honors both beauty and evidence?',
         sourceShelf: [
           'Botanical plate, field-guide, poster, seed-catalog, and protest-image examples',
-          'UES-105 type-system and source-credit practice',
+          'On-page credit line: creator, title or description, date, source location, rights or permission, crop or edit, and access description',
           'Image provenance and meaningful alt-text guidance',
         ],
         studio:
           'Combine observation, diagram, archive, text, color, and type into a coherent four-page portrait.',
         fieldTask:
-          'Make the complete portrait draft and run the supplied botany, culture, source, and access self-check. An optional exchanged critique may supplement it and counts the same.',
+          'Make the complete portrait draft, then answer four checks: are observed features separate from names, are cultural claims attributed, can every claim be traced, and does text carry the image’s meaning? Correct one failure in each dimension. Optional critique may supplement it.',
         publicReceipt:
           'A review ledger showing one self-checked correction in each of the four dimensions.',
       },
@@ -1208,7 +1209,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Collective botanical exhibition formats',
           'Correction, update, and seasonal-revisit patterns',
-          'UES portable archive and optional minting boundary',
+          'Use the handoff-package fields in the solo toolkit; publication, wallet use, and minting remain separate optional decisions',
         ],
         studio:
           'Sequence the personal lineage panel and portrait, then run the final source-and-boundary self-audit. Joining a shared wall or public reading is optional.',
@@ -1246,7 +1247,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     materials: [
       'Browser and text editor',
       'Phone camera, audio recorder, sketchbook, or text-only reporting path',
-      'Course publishing templates and personal or shared file space',
+      'One paper folder or local computer folder containing six numbered items, a sources file, credits, corrections note, and reusable blank copy',
       'No coding, domain purchase, or personal hosting account required',
     ],
     instructorProfile:
@@ -1270,7 +1271,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         title: 'Local issue and publishing kit',
         dueWeek: 6,
         brief:
-          'Complete the six-item issue through defined one-person production passes and leave a reusable workflow, template, feed mockup, correction path, and simulated handoff. Publication is optional.',
+          'Complete the six-item issue through defined one-person production passes and leave a reusable blank workflow, feed mockup, correction path, and simulated handoff. Publication is optional.',
       },
     ],
     weeks: [
@@ -1280,14 +1281,14 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What does this publication owe the place and people it names?',
         sourceShelf: [
-          'PointCast local publishing and public-receipt patterns',
+          'On-page editorial promise fields: place, intended reader, six beats, exclusions, evidence rule, voice, conflicts, correction path, and conditions for not publishing',
           'Independent neighborhood publication examples',
-          'Editorial mission, scope, corrections, and conflicts templates',
+          'On-page corrections rule: preserve the original date, describe the material change, name the evidence, add a correction date, and never expose a protected source',
         ],
         studio:
           'Define place, audience, beats, exclusions, evidence, voice, corrections, and the conditions under which the learner would not publish. A private issue remains fully complete.',
         fieldTask:
-          'Run the supplied intended-reader scenario and note what feels useful, missing, extractive, or repetitive. An optional reader interview may supplement the simulation.',
+          'Read the promise as a resident with no prior context and as a person named by the reporting but absent from it. Note what feels useful, missing, extractive, or repetitive; optional reader feedback may supplement the simulation.',
         publicReceipt: 'A one-page editorial promise and corrections contact.',
       },
       {
@@ -1314,7 +1315,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'Which medium lets this local subject become more legible rather than merely more decorative?',
         sourceShelf: [
           'Photo essay, audio postcard, illustrated note, and data-card examples',
-          'The El Segundo School public-image archive',
+          'Any learner-made or public-domain local image, sound, drawing, or data card may be the reference; no particular archive is required',
           'Consent, credit, caption, transcript, and alt-text practices',
         ],
         studio:
@@ -1331,7 +1332,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'How can one issue remain useful on a phone, in print, in a feed, and after the platform changes?',
         sourceShelf: [
           'Semantic web page, RSS, JSON Feed, and printable digest basics',
-          'Metadata, stable URL, credit, and archive checklist',
+          'On-page item fields: title, creator, publication date, update date, privacy-safe place, summary, format, rights, source links, credits, text alternative, and local filename',
           'Low-bandwidth and assistive-technology reading order',
         ],
         studio:
@@ -1353,7 +1354,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         studio:
           'Run distinct fact, source, sensitivity, copy, art, and access self-edit passes and log material changes. Optional editors may supplement these passes without becoming a completion requirement.',
         fieldTask:
-          'Complete the one-person production passes and respond to the full self-edit ledger. An optional community edit uses the same checklist and counts equally.',
+          'Run six named passes—fact, source, sensitivity, copy, art, and access—and log checked, changed, withheld, disclosed, and unresolved items. An optional community edit uses the same fields and counts equally.',
         publicReceipt:
           'A redacted edit ledger showing checked, changed, disclosed, withheld, and unresolved items.',
       },
@@ -1363,9 +1364,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Can the issue travel, be corrected, and be reproduced by another local team?',
         sourceShelf: [
-          'PointCast page, feed, social-card, email, and print distribution patterns',
-          'Portable archive, backup, and source-package checklist',
-          'UES satellite 70/20/10 curriculum rule and local stewardship model',
+          'On-page route test: review the issue as one long page, six separate cards, a plain-text email, and a black-and-white print outline; files alone are enough and nothing must go live',
+          'Use the handoff-package fields in the solo toolkit and keep an original plus one backup when possible',
+          'On-page stewardship split: keep 70 percent of the proven workflow, adapt 20 percent to local conditions, invent 10 percent, and name who can correct each part',
         ],
         studio:
           'Test the issue locally in every route and format and rehearse a simulated handoff. Publication, distribution, and a real future-city handoff are optional.',
@@ -1442,9 +1443,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What can an ordinary object tell us before we decide it is broken?',
         sourceShelf: [
-          'Repair Café observation and repairability checklists',
+          'On-page wear audit: record dirt, wear, looseness, damage, missing parts or information, normal aging, current function, prior changes, and one unknown',
           'Manufacturer care labels and maintenance schedules',
-          'UES-101 systems-and-repair field prompts',
+          'On-page system sketch: object, user, energy or input, moving or joined parts, environment, maintenance history, failure effect, and responsible keeper',
         ],
         studio:
           'Follow a guided visual audit that distinguishes dirt, wear, looseness, damage, missing information, and normal aging.',
@@ -1461,7 +1462,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Product safety labels, warranties, and service manuals',
           'Right-to-repair and local disposal guidance',
-          'Stop-work, escalation, and hazard-identification checklists',
+          'On-page stop rule: do not proceed with electricity, gas, structure, medical or vehicle safety, pressure, heat, hazardous material, weapons, law uncertainty, missing instructions, or any task beyond the learner’s competence',
         ],
         studio:
           'Use a risk matrix to classify a task as observe, maintain, attempt, seek qualified help, or retire responsibly.',
@@ -1510,12 +1511,12 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'Where does an instruction fail when its author is no longer there to explain it?',
         sourceShelf: [
-          'Cold-read testing and usability checklists',
+          'Use the cold-read steps in the solo toolkit and test prerequisites, order, verbs, diagrams, safety stops, recovery from error, cost, and qualified-help route',
           'Version notes and correction logs',
           'Maintenance intervals and spare-parts records',
         ],
         studio:
-          'Set the draft aside, then conduct a supplied cold-read test; another tester is welcome but never required.',
+          'Set the draft aside, then conduct the cold-read printed in the solo toolkit and revise at least three failures; another tester is welcome but never required.',
         fieldTask:
           'Run every safe step or simulate it on paper, mark ambiguity and missing prerequisites, and revise at least three points.',
         publicReceipt:
@@ -1528,7 +1529,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
           'What would help the next keeper maintain this object or condition instead of beginning again?',
         sourceShelf: [
           'Open repair-manual and portable archive patterns',
-          'Attribution, licensing, and source-note checklist',
+          'On-page source note: author or maker, title or label, model if relevant, date, page or section, where found, access date, rights, and which step it supports',
           'Local library, tool-lending, and repair-café directory examples',
         ],
         studio:
@@ -1544,9 +1545,9 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     connectsFrom: ['UES-101', 'UES-102', 'UES-105', 'UES-108'],
     budgetUsd: 3_450,
     addedProductionNeed:
-      'Safety review, accessible diagram templates, and optional low-risk repair micro-kits.',
+      'Optional professional safety review, accessible diagram examples, and low-risk repair micro-kits; none is required for independent completion.',
     boundary:
-      'Low-risk observation and care only. No electrical, gas, structural, medical, vehicle-safety, hazardous-material, weapon, or unlawful work; stop and seek qualified help whenever a source, label, or checklist requires it.',
+      'Low-risk observation and care only. No electrical, gas, structural, medical, vehicle-safety, hazardous-material, weapon, or unlawful work; stop for every condition named in the on-page stop rule or whenever a source or product label requires qualified help.',
   },
   {
     code: 'UES-210',
@@ -1644,10 +1645,10 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         sourceShelf: [
           'Consent and incidental-conversation recording guidance',
           'Wildlife-safe observation and sensitive-location practices',
-          'Transcript, caption, and audio-description conventions',
+          'On-page six cases: intelligible private conversation, distant public crowd, consenting speaker, nesting wildlife, safety alarm, and a place whose exact location could cause harm',
         ],
         studio:
-          'Apply a record, relocate, wait, describe-only, or do-not-document decision to six field scenarios.',
+          'For each of the six cases above, choose record, ask consent, relocate, wait, describe only, or do not document; write one sentence explaining the least intrusive safe choice.',
         fieldTask:
           'Write a recording boundary, avoid intelligible private conversation, and make one consented, public, environmental, archival, or notation-only study.',
         publicReceipt:
@@ -1693,7 +1694,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
         question:
           'What can a future listener revisit, correct, or hear differently?',
         sourceShelf: [
-          'Accessible web-audio and downloadable archive checklist',
+          'On-page listening-post check: audio is optional; include a text score or transcript, map or stationary grid, route alternative, volume warning if relevant, privacy decision, credits, rights, and a downloadable local package',
           'Portable metadata and stable-file naming practices',
           'Community listening and optional Tezos publication boundary',
         ],
@@ -1710,7 +1711,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
     connectsFrom: ['UES-103', 'UES-105', 'UES-107', 'UES-108'],
     budgetUsd: 3_500,
     addedProductionNeed:
-      'Guided listening assets, accessible audio hosting, transcript templates, and downloadable non-audio scores.',
+      'Optional faculty listening lab, accessibility review, and public hosting support; the page and a local text or audio file are sufficient for independent completion.',
     boundary:
       'No intelligible private conversations, covert recording, trespass, unsafe routes, or disturbance of wildlife or sensitive sites. A stationary, archival, memory-based, or notation-only path always counts equally.',
   },
