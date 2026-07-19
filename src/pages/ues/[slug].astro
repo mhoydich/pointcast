@@ -15,9 +15,9 @@ const nextCourse = UES_SEASON_ONE_COURSES.at(courseIndex + 1);
 const artwork = gallery.works.find((work) => work.number === course.archiveWorkNumber);
 const assetOrigin = 'https://el-segundo-school-archive.pages.dev';
 const artUrl = (path: string) => `${assetOrigin}${path.replace('/images/el-segundo-school', '')}`;
-const joinHref = `mailto:${UES_PROGRAM.contact}?subject=${encodeURIComponent(`${course.code} — ${course.title} interest`)}`;
+const helpHref = `mailto:${UES_PROGRAM.contact}?subject=${encodeURIComponent(`${course.code} — ${course.title} question`)}`;
 const title = `${course.code} · ${course.title}`;
-const description = `${course.frame} A public six-week course room from University of El Segundo.`;
+const description = `${course.frame} A public six-module, self-paced course room from University of El Segundo.`;
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Course',
@@ -27,11 +27,14 @@ const jsonLd = {
   description: course.frame,
   url: `https://pointcast.xyz${course.path}`,
   numberOfCredits: 0,
+  isAccessibleForFree: true,
+  inLanguage: 'en',
+  coursePrerequisites: 'None. No application, account, live attendance, or wallet is required.',
   provider: { '@type': 'EducationalOrganization', name: UES_PROGRAM.name, url: UES_PROGRAM.home },
   hasCourseInstance: {
     '@type': 'CourseInstance',
-    courseMode: ['online', 'synchronous', 'asynchronous'],
-    courseWorkload: `${course.weeklyCommitment.total}; ${course.weeklyCommitment.liveStudioMinutes} live-studio minutes, ${course.weeklyCommitment.asynchronousFieldworkMinutes.minimum}–${course.weeklyCommitment.asynchronousFieldworkMinutes.maximum} fieldwork minutes, and ${course.weeklyCommitment.peerResponseMinutes} peer-response minutes each week.`,
+    courseMode: ['online', 'self-paced', 'asynchronous'],
+    courseWorkload: `${course.weeklyCommitment.total}; ${course.weeklyCommitment.selfGuidedStudioMinutes} self-guided studio minutes, ${course.weeklyCommitment.fieldworkMinutes.minimum}–${course.weeklyCommitment.fieldworkMinutes.maximum} fieldwork minutes, and ${course.weeklyCommitment.reflectionMinutes} reflection minutes per module.`,
   },
 };
 ---
@@ -57,14 +60,14 @@ const jsonLd = {
     <section class="hero" aria-labelledby="course-title">
       <div class="hero__copy">
         <p class="eyebrow">THE LOCAL TRANSMISSION · ONLINE SEASON 1 · {course.code}</p>
-        <div class="status"><span>{course.status}</span><span>6 weeks</span><span>tuition-free pilot</span></div>
+        <div class="status"><span>{course.status}</span><span>start anytime</span><span>self-paced</span><span>$0 tuition</span></div>
         <h1 id="course-title">{course.title}</h1>
         <p class="subtitle">{course.archiveCategory}</p>
         <p class="frame">{course.frame}</p>
         {course.boundary && <p class="boundary"><strong>Course boundary</strong>{course.boundary}</p>}
         <div class="hero__actions">
-          <a class="button button--primary" href={joinHref}>Ask for a seat</a>
-          <a class="button" href="#weeks">Read all six weeks</a>
+          <a class="button button--primary" href="#week-1" data-course-start>Start this class</a>
+          <a class="button" href="#weeks">Read all six modules</a>
         </div>
       </div>
       {artwork && (
@@ -80,9 +83,9 @@ const jsonLd = {
     </section>
 
     <dl class="facts" aria-label="Course facts">
-      <div><dt>Weekly time</dt><dd>{course.weeklyCommitment.total}</dd></div>
-      <div><dt>Room</dt><dd>12–18 learners</dd></div>
-      <div><dt>Audience</dt><dd>Residents, artists, educators, organizers, and curious local learners.</dd></div>
+      <div><dt>Module time</dt><dd>{course.weeklyCommitment.total}</dd></div>
+      <div><dt>Pace</dt><dd>Start anytime · no deadlines · pause and return.</dd></div>
+      <div><dt>Completion</dt><dd>Any four modules plus the final course outcome.</dd></div>
       <div><dt>Materials</dt><dd>{course.materials.join(' · ')}</dd></div>
     </dl>
 
@@ -93,7 +96,7 @@ const jsonLd = {
       </div>
       <div class="prose">
         <p>{course.frame}</p>
-        <div class="outcome"><span>PUBLIC OUTCOME</span><strong>{course.outcome}</strong></div>
+        <div class="outcome"><span>COURSE OUTCOME · PRIVATE OR PUBLIC</span><strong>{course.outcome}</strong></div>
         <p class="lineage"><b>Builds from Season 0:</b> {course.connectsFrom.join(', ')}.</p>
       </div>
     </section>
@@ -104,31 +107,79 @@ const jsonLd = {
         <h2 id="operation-title">Prompt. Fieldwork. Studio. Receipt.</h2>
       </div>
       <ol class="rhythm">
-        <li><span>01</span><div><b>Monday prompt</b><p>A compact source shelf and one central question open the week.</p></div></li>
-        <li><span>02</span><div><b>Field task</b><p>One 60–90 minute act of looking, making, recording, or hosting.</p></div></li>
-        <li><span>03</span><div><b>Live studio</b><p>A 75-minute online demonstration, working session, or critique.</p></div></li>
-        <li><span>04</span><div><b>Sunday receipt</b><p>A useful, accessible trace shared with the room and, when chosen, the public.</p></div></li>
+        <li><span>01</span><div><b>Module prompt</b><p>One central question opens each module. The source shelf is optional; the page itself contains the full path.</p></div></li>
+        <li><span>02</span><div><b>Field task</b><p>One {course.weeklyCommitment.fieldworkMinutes.minimum}–{course.weeklyCommitment.fieldworkMinutes.maximum} minute act of looking, making, recording, or hosting.</p></div></li>
+        <li><span>03</span><div><b>Self-guided studio</b><p>A {course.weeklyCommitment.selfGuidedStudioMinutes}-minute making, editing, or reflection session you can complete alone.</p></div></li>
+        <li><span>04</span><div><b>Module receipt</b><p>A {course.weeklyCommitment.reflectionMinutes}-minute useful trace kept privately or shared only when you choose.</p></div></li>
       </ol>
+      <aside class="solo-path"><b>Your solo path counts equally.</b><p>{course.soloPath}</p></aside>
+    </section>
+
+    <section
+      class="course-desk"
+      id="course-desk"
+      aria-labelledby="course-desk-title"
+      data-course-desk
+      data-course-code={course.code}
+      data-course-title={course.title}
+      data-course-path={course.path}
+    >
+      <div class="course-desk__intro">
+        <p class="eyebrow">YOUR PRIVATE COURSE DESK</p>
+        <h2 id="course-desk-title">Start here. No account required.</h2>
+        <p>Check off modules as you work. Progress stays in this browser; the university never receives your name, work, location, email, or wallet.</p>
+      </div>
+      <div class="course-desk__controls">
+        <div class="progress-wrap">
+          <progress data-course-progress max="5" value="0" aria-label={`${course.code} course completion`} aria-describedby="course-progress-text">0 of 5 completion steps</progress>
+          <p id="course-progress-text" data-course-progress-text aria-live="polite">0 of 5 completion steps · finish any four modules plus the final outcome.</p>
+        </div>
+        <div class="desk-actions">
+          <a class="button button--primary" href="#week-1" data-course-continue>Start with module 1</a>
+          <button class="button" type="button" data-course-print>Print syllabus</button>
+          <a class="button" href="#course-desk" data-course-receipt aria-disabled="true">Download private receipt</a>
+          <button class="button button--quiet" type="button" data-course-reset>Reset local progress</button>
+        </div>
+        <p class="storage-note" data-course-storage aria-live="polite">Local progress is ready. You can also use the class without saving anything.</p>
+        <noscript><p class="storage-note">JavaScript is off. The complete class remains available below; print this page or keep your own checklist.</p></noscript>
+      </div>
     </section>
 
     <section class="weeks" id="weeks" aria-labelledby="weeks-title">
       <header>
-        <p class="eyebrow">THE SIX-WEEK ROOM</p>
+        <p class="eyebrow">THE SIX-MODULE ROOM</p>
         <h2 id="weeks-title">A complete first syllabus.</h2>
+        <p class="weeks__intro">Everything required is printed here. References named inside modules are optional; use this on-page toolkit whenever a module asks for a check, scenario, ledger, or handoff.</p>
       </header>
+      <aside class="self-check-toolkit" aria-labelledby="toolkit-title">
+        <p class="eyebrow">KEEP THIS BESIDE THE WORK</p>
+        <h3 id="toolkit-title">The complete solo toolkit.</h3>
+        <ol>
+          <li><b>Source trail.</b> For every claim, record the evidence, creator or agency, title or description, date, where you found it, what it supports, confidence, and one uncertainty. Direct observation is a source when labeled with place and time.</li>
+          <li><b>Audience scenarios.</b> Test as four people: a first-time visitor with no context; a person on a small screen or grayscale print; a person who cannot travel, hear audio, see an image, or identify publicly; and a future keeper opening only the saved package six months later.</li>
+          <li><b>Cold read.</b> Set the work aside, then follow it using only what is written. Circle every ambiguous verb, missing prerequisite, unexplained label, unsafe step, dead end, and claim without evidence. Revise at least three failures.</li>
+          <li><b>Access pass.</b> Check plain language, hierarchy, contrast, text alternatives, transcript or description, reading order, keyboard or paper path, privacy choice, cost, and an equivalent stationary or remote route.</li>
+          <li><b>Safety and rights pass.</b> Confirm permission, lawful and low-risk materials, no sensitive personal data, attribution and rights, a clear stop condition, and qualified-help or do-not-document paths.</li>
+          <li><b>Handoff package.</b> Include the finished artifact, editable or text source, credits, source trail, limitations, access notes, rights choice, filenames, revision date, correction path, and next maintenance action.</li>
+        </ol>
+      </aside>
       <ol class="week-list">
         {course.weeks.map((week, index) => (
           <li id={`week-${index + 1}`} class="week">
-            <div class="week__number"><span>WEEK</span><strong>{String(index + 1).padStart(2, '0')}</strong></div>
+            <div class="week__number"><span>MODULE</span><strong>{String(index + 1).padStart(2, '0')}</strong></div>
             <div class="week__body">
               <p class="week__question">{week.question}</p>
               <h3>{week.title}</h3>
               <div class="week__grid">
-                <div><h4>Source shelf</h4><ul>{week.sourceShelf.map((source) => <li>{source}</li>)}</ul></div>
-                <div><h4>Live studio</h4><p>{week.studio}</p></div>
+                <div><h4>On-page prompts + optional references</h4><ul>{week.sourceShelf.map((source) => <li>{source}</li>)}</ul></div>
+                <div><h4>Self-guided studio</h4><p>{week.studio}</p></div>
                 <div><h4>Field task</h4><p>{week.fieldTask}</p></div>
-                <div class="receipt"><h4>Public receipt</h4><p>{week.publicReceipt}</p></div>
+                <div class="receipt"><h4>Module receipt · private by default</h4><p>{week.publicReceipt}</p></div>
               </div>
+              <label class="week__complete">
+                <input type="checkbox" data-course-week={index + 1} />
+                <span>Mark module {index + 1} complete</span>
+              </label>
             </div>
           </li>
         ))}
@@ -138,8 +189,12 @@ const jsonLd = {
     <section class="assignments split-section" aria-labelledby="assignments-title">
       <div><p class="eyebrow">WHAT COMPLETION MEANS</p><h2 id="assignments-title">No grades. Real work.</h2></div>
       <div>
-        <ol>{course.assignments.map((assignment, index) => <li><span>{String(index + 1).padStart(2, '0')}</span><p><b>{assignment.title} · due week {assignment.dueWeek}</b><br />{assignment.brief}</p></li>)}</ol>
-        <p class="completion">Complete four of six field tasks, offer constructive peer response, and finish the public outcome. A private or pseudonymous access path is always available.</p>
+        <ol>{course.assignments.map((assignment, index) => <li><span>{String(index + 1).padStart(2, '0')}</span><p><b>{assignment.title} · suggested after module {assignment.dueWeek}</b><br />{assignment.brief}</p></li>)}</ol>
+        <p class="completion">Complete any four of the six module receipts and finish the course outcome or a private equivalent. There are no grades, deadlines, peer requirements, or public-posting requirements.</p>
+        <label class="final-complete">
+          <input type="checkbox" data-course-final />
+          <span>I finished the course outcome or a private equivalent.</span>
+        </label>
       </div>
     </section>
 
@@ -148,20 +203,20 @@ const jsonLd = {
       <div>
         <ul>{course.access.map((item) => <li>{item}</li>)}</ul>
         <dl>
-          <div><dt>Faculty profile</dt><dd>{course.instructorProfile}</dd></div>
-          <div><dt>Faculty</dt><dd>Forming — a name and schedule are required before enrollment opens.</dd></div>
-          <div><dt>Steward</dt><dd>Forming — handles access, attendance, documentation, and follow-up.</dd></div>
-          <div><dt>Planning cost</dt><dd>${course.budgetUsd.toLocaleString('en-US')} for this six-week room.</dd></div>
+          <div><dt>Independent route</dt><dd>Active now. The complete sequence, studio prompts, access paths, and private checklist are on this page.</dd></div>
+          <div><dt>Optional faculty profile</dt><dd>{course.instructorProfile}</dd></div>
+          <div><dt>Supported cohort</dt><dd>Optional and funding-dependent. Human review or scheduled sessions never gate access or completion.</dd></div>
+          <div><dt>Planning cost</dt><dd>${course.budgetUsd.toLocaleString('en-US')} for maintenance, access, materials, and an optional supported cohort—not tuition or admission.</dd></div>
         </dl>
-        <p class="rights">Learners retain copyright. Public licensing and Tezos minting are optional. A wallet, public identity, and public artifact are never required for course access.</p>
+        <p class="rights">Learners retain copyright. Public licensing and Tezos minting are optional and separate. A wallet, public identity, public artifact, or blockchain transaction is never required for this class.</p>
       </div>
     </section>
 
     <section class="cta" aria-labelledby="cta-title">
-      <p class="eyebrow">THE ROOM IS FORMING</p>
+      <p class="eyebrow">THE ROOM IS OPEN</p>
       <h2 id="cta-title">Bring one place. Leave one useful trace.</h2>
-      <p>Dates, faculty, steward, and accommodation contact will be published before enrollment opens. Interest now helps the university form the right room.</p>
-      <div><a class="button button--primary" href={joinHref}>Ask for a seat in {course.code}</a><a class="button" href="/university-of-el-segundo#fund">Support the shared pool</a></div>
+      <p>Start now, move at your own pace, and keep the work private if that is the right path. Human help and supported cohorts can be added without changing anyone’s right to learn independently.</p>
+      <div><a class="button button--primary" href="#week-1" data-course-start>Start {course.code}</a><a class="button" href={helpHref}>Ask for help</a><a class="button" href="/university-of-el-segundo#fund">Support the shared pool</a></div>
       <small>Support does not buy admission, curriculum control, governance rights, or faculty appointments.</small>
     </section>
 
@@ -172,9 +227,176 @@ const jsonLd = {
   </article>
 </BlockLayout>
 
+<script>
+  import {
+    createCompletionReceipt,
+    createProgress,
+    parseProgress,
+    progressSummary,
+    serializeProgress,
+    setFinalOutcome,
+    setWeekComplete,
+    startProgress,
+  } from '../../lib/ues-progress.mjs';
+
+  const desk = document.querySelector<HTMLElement>('[data-course-desk]');
+
+  if (desk) {
+    const courseCode = desk.dataset.courseCode ?? '';
+    const courseTitle = desk.dataset.courseTitle ?? courseCode;
+    const coursePath = desk.dataset.coursePath ?? window.location.pathname;
+    const storageKey = `pc:ues:progress:v1:${courseCode}`;
+    const weekInputs = [...document.querySelectorAll<HTMLInputElement>('[data-course-week]')];
+    const finalInput = document.querySelector<HTMLInputElement>('[data-course-final]');
+    const progressBar = desk.querySelector<HTMLProgressElement>('[data-course-progress]');
+    const progressText = desk.querySelector<HTMLElement>('[data-course-progress-text]');
+    const storageText = desk.querySelector<HTMLElement>('[data-course-storage]');
+    const continueLink = desk.querySelector<HTMLAnchorElement>('[data-course-continue]');
+    const startLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-course-start]')];
+    const receiptLink = desk.querySelector<HTMLAnchorElement>('[data-course-receipt]');
+    const resetButton = desk.querySelector<HTMLButtonElement>('[data-course-reset]');
+    const printButton = desk.querySelector<HTMLButtonElement>('[data-course-print]');
+    let progress = createProgress(courseCode);
+    let storageAvailable = true;
+
+    try {
+      progress = parseProgress(window.localStorage.getItem(storageKey), courseCode);
+    } catch {
+      storageAvailable = false;
+    }
+
+    const save = () => {
+      if (!storageAvailable) return;
+      try {
+        window.localStorage.setItem(storageKey, serializeProgress(progress));
+      } catch {
+        storageAvailable = false;
+      }
+    };
+
+    const receiptDocument = () => {
+      const baseReceipt = createCompletionReceipt(progress);
+      return baseReceipt ? {
+        ...baseReceipt,
+        courseTitle,
+        courseUrl: new URL(coursePath, window.location.origin).toString(),
+      } : null;
+    };
+
+    const render = () => {
+      const summary = progressSummary(progress);
+      weekInputs.forEach((input) => {
+        const week = Number(input.dataset.courseWeek);
+        input.checked = progress.completedWeeks.includes(week);
+      });
+      if (finalInput) finalInput.checked = progress.finalOutcome;
+
+      if (progressBar) {
+        progressBar.max = summary.max;
+        progressBar.value = summary.value;
+      }
+
+      if (progressText) {
+        const checked = `${progress.completedWeeks.length} of 6 modules checked`;
+        progressText.textContent = summary.complete
+          ? `${summary.max} of ${summary.max} completion steps · ${checked}. Course complete by self-attestation.`
+          : `${summary.value} of ${summary.max} completion steps · ${checked}. Finish any four modules plus the final outcome.`;
+      }
+
+      let nextHref = '#week-1';
+      let nextLabel = 'Start with module 1';
+      if (summary.complete) {
+        nextHref = '#assignments-title';
+        nextLabel = 'Review your completed course';
+      } else if (progress.completedWeeks.length >= 4 && !progress.finalOutcome) {
+        nextHref = '#assignments-title';
+        nextLabel = 'Finish the final outcome';
+      } else if (summary.nextModule) {
+        nextHref = `#week-${summary.nextModule}`;
+        nextLabel = progress.startedAt ? `Continue with module ${summary.nextModule}` : `Start with module ${summary.nextModule}`;
+      }
+
+      if (continueLink) {
+        continueLink.href = nextHref;
+        continueLink.textContent = nextLabel;
+      }
+      startLinks.forEach((link) => {
+        link.href = nextHref;
+        link.textContent = progress.startedAt ? nextLabel : link.textContent;
+      });
+      if (receiptLink) {
+        const receipt = receiptDocument();
+        if (receipt) {
+          receiptLink.href = `data:application/json;charset=utf-8,${encodeURIComponent(`${JSON.stringify(receipt, null, 2)}\n`)}`;
+          receiptLink.download = `${courseCode.toLowerCase()}-self-attested-receipt.json`;
+          receiptLink.setAttribute('aria-disabled', 'false');
+        } else {
+          receiptLink.href = '#course-desk';
+          receiptLink.removeAttribute('download');
+          receiptLink.setAttribute('aria-disabled', 'true');
+        }
+      }
+      if (storageText) {
+        storageText.textContent = storageAvailable
+          ? 'Progress is saved only in this browser. Reset it here or download a private receipt when complete.'
+          : 'Private saving is unavailable in this browser. The checklist still works until this page closes; print the syllabus to keep a separate record.';
+      }
+    };
+
+    startLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        progress = startProgress(progress);
+        save();
+        render();
+      });
+    });
+    continueLink?.addEventListener('click', () => {
+      progress = startProgress(progress);
+      save();
+      render();
+    });
+
+    weekInputs.forEach((input) => {
+      input.addEventListener('change', () => {
+        progress = setWeekComplete(progress, Number(input.dataset.courseWeek), input.checked);
+        save();
+        render();
+      });
+    });
+
+    finalInput?.addEventListener('change', () => {
+      progress = setFinalOutcome(progress, finalInput.checked);
+      save();
+      render();
+    });
+
+    printButton?.addEventListener('click', () => window.print());
+
+    resetButton?.addEventListener('click', () => {
+      if (!window.confirm(`Reset private progress for ${courseCode}?`)) return;
+      progress = createProgress(courseCode);
+      if (storageAvailable) {
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch {
+          storageAvailable = false;
+        }
+      }
+      render();
+      continueLink?.focus();
+    });
+
+    receiptLink?.addEventListener('click', (event) => {
+      if (receiptLink.getAttribute('aria-disabled') === 'true') event.preventDefault();
+    });
+
+    render();
+  }
+</script>
+
 <style>
   .room { --ink:#10120f; --paper:#f1eee3; --acid:#caff24; --blue:#1537e8; --lavender:#ddd1ff; --red:#ff5c43; min-width:0; background:var(--paper); color:var(--ink); }
-  .room a:focus-visible { outline:3px solid var(--acid); outline-offset:3px; }
+  .room :is(a,button,input):focus-visible { outline:3px solid var(--acid); outline-offset:3px; }
   .masthead { position:sticky; top:0; z-index:30; min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:8px 14px; border-bottom:1px solid var(--ink); background:rgba(241,238,227,.96); backdrop-filter:blur(10px); }
   .masthead__mark { color:var(--ink); font:700 11px var(--pc-font-mono); letter-spacing:.14em; }
   .masthead nav { display:flex; gap:5px; }
@@ -192,9 +414,12 @@ const jsonLd = {
   .boundary { max-width:760px; display:grid; gap:7px; margin:24px 0 0; padding:14px; border:2px solid var(--red); background:#fff; font-size:16px; line-height:1.5; }
   .boundary strong { color:#b22d1d; font:700 11px var(--pc-font-mono); text-transform:uppercase; }
   .hero__actions,.cta>div { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:38px; }
-  .button { min-height:48px; display:grid; place-items:center; padding:11px 15px; border:1px solid var(--ink); color:var(--ink); font:700 10px var(--pc-font-mono); text-align:center; text-transform:uppercase; }
+  .button { min-height:48px; display:grid; place-items:center; padding:11px 15px; border:1px solid var(--ink); background:transparent; color:var(--ink); font:700 10px var(--pc-font-mono); text-align:center; text-transform:uppercase; cursor:pointer; }
   .button:hover { background:var(--ink); color:var(--paper); text-decoration:none; }
   .button--primary { background:var(--acid); }
+  .button:disabled,.button[aria-disabled="true"] { cursor:not-allowed; opacity:.48; }
+  .button:disabled:hover,.button[aria-disabled="true"]:hover { background:transparent; color:inherit; }
+  .button--quiet { border-style:dashed; }
   .hero__art { min-width:0; display:flex; flex-direction:column; margin:0; padding:clamp(18px,3vw,44px); background:var(--blue); }
   .hero__art img { width:100%; min-height:0; flex:1; object-fit:cover; border:1px solid #99a8ff; box-shadow:14px 14px 0 var(--acid); }
   .hero__art figcaption { display:grid; gap:7px; padding:28px 0 0; color:#fff; }
@@ -218,9 +443,36 @@ const jsonLd = {
   .rhythm li>span { color:var(--blue); font:10px var(--pc-font-mono); }
   .rhythm b { font-size:22px; }
   .rhythm p { margin:7px 0 0; font-size:16px; line-height:1.5; }
+  .solo-path { grid-column:2; margin:6px 0 0; padding:22px; border:1px solid var(--ink); background:var(--paper); }
+  .solo-path b { font:700 11px var(--pc-font-mono); text-transform:uppercase; }
+  .solo-path p { margin:10px 0 0; font:18px/1.5 Georgia,serif; }
+  .course-desk { scroll-margin-top:58px; display:grid; grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr); gap:clamp(38px,8vw,140px); padding:clamp(70px,9vw,130px) clamp(18px,5vw,76px); border-bottom:1px solid var(--ink); background:var(--blue); color:#fff; }
+  .course-desk .eyebrow { color:var(--acid); }
+  .course-desk h2 { max-width:11ch; margin:14px 0 28px; font-size:clamp(48px,7vw,96px); line-height:.84; letter-spacing:-.065em; }
+  .course-desk__intro>p:last-child { max-width:650px; margin:0; font:20px/1.5 Georgia,serif; }
+  .course-desk__controls { align-self:end; }
+  .progress-wrap { padding:22px; border:1px solid #8fa0ff; background:#0b238f; }
+  .progress-wrap progress { width:100%; height:22px; accent-color:var(--acid); }
+  .progress-wrap progress::-webkit-progress-bar { background:#071a73; border:1px solid #8fa0ff; }
+  .progress-wrap progress::-webkit-progress-value { background:var(--acid); }
+  .progress-wrap progress::-moz-progress-bar { background:var(--acid); }
+  .progress-wrap p { margin:14px 0 0; color:#fff; font:12px/1.6 var(--pc-font-mono); }
+  .desk-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
+  .course-desk .button { border-color:#fff; color:#fff; }
+  .course-desk .button:hover { background:#fff; color:var(--blue); }
+  .course-desk .button--primary { border-color:var(--ink); background:var(--acid); color:var(--ink); }
+  .course-desk .button:disabled:hover,.course-desk .button[aria-disabled="true"]:hover { background:transparent; color:#fff; }
+  .storage-note { margin:18px 0 0; color:#d9deff; font:11px/1.6 var(--pc-font-mono); }
   .weeks { scroll-margin-top:58px; padding:clamp(70px,9vw,140px) clamp(18px,5vw,76px); background:var(--ink); color:var(--paper); }
   .weeks .eyebrow { color:var(--acid); }
-  .weeks>header { margin-bottom:70px; }
+  .weeks>header { margin-bottom:40px; }
+  .weeks__intro { max-width:760px; margin:24px 0 0; color:#d8d8d0; font:18px/1.55 Georgia,serif; }
+  .self-check-toolkit { margin:0 0 70px; padding:clamp(22px,4vw,42px); border:1px solid #6c6d68; background:#1f211d; }
+  .self-check-toolkit h3 { max-width:12ch; margin:10px 0 30px; color:var(--paper); font-size:clamp(34px,5vw,66px); line-height:.9; letter-spacing:-.04em; }
+  .self-check-toolkit ol { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin:0; padding:0; list-style:none; border-top:1px solid #6c6d68; }
+  .self-check-toolkit li { padding:18px 18px 18px 0; border-bottom:1px solid #6c6d68; font-size:15px; line-height:1.55; }
+  .self-check-toolkit li:nth-child(odd) { padding-right:24px; border-right:1px solid #6c6d68; }
+  .self-check-toolkit li:nth-child(even) { padding-left:24px; }
   .week-list { list-style:none; margin:0; padding:0; border-top:1px solid #6c6d68; }
   .week { scroll-margin-top:70px; display:grid; grid-template-columns:120px 1fr; gap:30px; padding:42px 0 58px; border-bottom:1px solid #6c6d68; }
   .week__number { display:grid; align-content:start; gap:5px; color:var(--acid); font-family:var(--pc-font-mono); }
@@ -237,12 +489,19 @@ const jsonLd = {
   .week__grid ul { margin:0; padding-left:20px; }
   .week__grid .receipt { background:var(--acid); color:var(--ink); }
   .week__grid .receipt h4 { color:var(--blue); }
+  .week__complete,.final-complete { min-height:56px; display:flex; align-items:center; gap:14px; padding:14px 18px; cursor:pointer; font:700 12px/1.4 var(--pc-font-mono); text-transform:uppercase; }
+  .week__complete { margin-top:12px; border:1px solid #74766f; background:#252822; color:#fff; }
+  .week__complete:hover { border-color:var(--acid); }
+  .week__complete:has(input:checked) { border-color:var(--acid); background:#37451f; }
+  .week__complete input,.final-complete input { width:24px; height:24px; flex:0 0 auto; margin:0; accent-color:var(--acid); }
   .assignments { background:#f4a7bd; }
   .assignments ol { list-style:none; margin:0; padding:0; border-top:1px solid var(--ink); }
   .assignments li { display:grid; grid-template-columns:42px 1fr; gap:14px; border-bottom:1px solid var(--ink); }
   .assignments li span { padding-top:19px; color:var(--blue); font:10px var(--pc-font-mono); }
   .assignments li p { margin:0; padding:16px 0; font-size:18px; line-height:1.5; }
   .completion { margin:30px 0 0; padding:18px; border:1px solid var(--ink); background:var(--paper); font-size:16px; line-height:1.55; }
+  .final-complete { margin-top:12px; border:2px solid var(--ink); background:var(--acid); }
+  .final-complete:has(input:checked) { background:#fff; }
   .access { background:#fffdf4; }
   .access ul { margin:0; padding:0; list-style:none; border-top:1px solid var(--ink); }
   .access li { padding:16px 0; border-bottom:1px solid var(--ink); font-size:17px; line-height:1.5; }
@@ -261,8 +520,9 @@ const jsonLd = {
   .course-nav a:hover { background:var(--blue); color:#fff; text-decoration:none; }
   .course-nav span { font:9px var(--pc-font-mono); text-transform:uppercase; }
   .course-nav b { font-size:22px; }
-  @media(max-width:920px){ .hero{grid-template-columns:1fr}.hero__copy{min-height:720px;border-right:0;border-bottom:1px solid var(--ink)}.hero__art{min-height:700px}.facts{grid-template-columns:1fr 1fr}.facts div:nth-child(2){border-right:0}.facts div:nth-child(-n+2){border-bottom:1px solid var(--ink)}.split-section{grid-template-columns:1fr;gap:46px} }
-  @media(max-width:680px){ .masthead{align-items:center;padding:7px 8px}.masthead__mark{display:none}.masthead nav{min-width:0;overflow-x:auto}.masthead nav a{flex:0 0 auto}.hero__copy{min-height:690px;padding:34px 18px}.hero__art{min-height:570px;padding:22px 18px 36px}.facts{grid-template-columns:1fr}.facts div{min-height:0;border-right:0;border-bottom:1px solid var(--ink)}.facts div:last-child{border-bottom:0}.facts dd{margin-top:14px}.week{grid-template-columns:1fr;gap:16px}.week__number{display:flex;align-items:baseline;gap:8px}.week__number strong{font-size:34px}.week__grid{grid-template-columns:1fr}.week__grid>div{min-height:0;border-right:0!important;border-bottom:1px solid #6c6d68!important}.week__grid>div:last-child{border-bottom:0!important}.access dl div{grid-template-columns:1fr;gap:7px}.course-nav{grid-template-columns:1fr}.course-nav a{border-right:0;border-bottom:1px solid var(--ink);text-align:left!important} }
+  @media(max-width:920px){ .hero{grid-template-columns:1fr}.hero__copy{min-height:720px;border-right:0;border-bottom:1px solid var(--ink)}.hero__art{min-height:700px}.facts{grid-template-columns:1fr 1fr}.facts div:nth-child(2){border-right:0}.facts div:nth-child(-n+2){border-bottom:1px solid var(--ink)}.split-section,.course-desk{grid-template-columns:1fr;gap:46px}.solo-path{grid-column:1} }
+  @media(max-width:680px){ .masthead{align-items:center;padding:7px 8px}.masthead__mark{display:none}.masthead nav{min-width:0;overflow-x:auto}.masthead nav a{flex:0 0 auto}.hero__copy{min-height:690px;padding:34px 18px}.hero__art{min-height:570px;padding:22px 18px 36px}.facts{grid-template-columns:1fr}.facts div{min-height:0;border-right:0;border-bottom:1px solid var(--ink)}.facts div:last-child{border-bottom:0}.facts dd{margin-top:14px}.desk-actions{grid-template-columns:1fr}.self-check-toolkit ol{grid-template-columns:1fr}.self-check-toolkit li{padding:16px 0!important;border-right:0!important}.week{grid-template-columns:1fr;gap:16px}.week__number{display:flex;align-items:baseline;gap:8px}.week__number strong{font-size:34px}.week__grid{grid-template-columns:1fr}.week__grid>div{min-height:0;border-right:0!important;border-bottom:1px solid #6c6d68!important}.week__grid>div:last-child{border-bottom:0!important}.access dl div{grid-template-columns:1fr;gap:7px}.course-nav{grid-template-columns:1fr}.course-nav a{border-right:0;border-bottom:1px solid var(--ink);text-align:left!important} }
   @media(max-width:360px){ h1{font-size:53px}.masthead nav a{padding-inline:8px}.hero__actions .button,.cta .button{width:100%} }
   @media(prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important} }
+  @media print { .masthead,.hero__art,.hero__actions,.desk-actions,.cta,.course-nav { display:none!important; } .hero,.split-section,.course-desk,.week { display:block; min-height:0; padding:24px 0; border:0; color:#000; background:#fff; } .hero__copy { min-height:0; padding:0; border:0; } .facts { display:block; } .facts div { min-height:0; padding:8px 0; border:0; } .course-desk { color:#000; } .progress-wrap,.week__grid,.week__grid>div,.week__complete { border-color:#777; background:#fff; color:#000; } .weeks { padding:24px 0; background:#fff; color:#000; } .week-list { border-color:#777; } .week { break-inside:avoid; } .week__question,.week__number,.weeks .eyebrow { color:#000; } }
 </style>

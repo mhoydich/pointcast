@@ -10,8 +10,11 @@ test('University of El Segundo publishes eight launch courses and balanced plann
   assert.match(source, /totalUsd: 30_500/);
   assert.match(source, /totalUsd: 29_000/);
   assert.match(source, /totalUsd: 37_500/);
-  assert.match(source, /totalUsd: 317_000/);
-  assert.match(source, /totalUsd: 1_207_000/);
+  assert.match(source, /amountUsd: 46_600, name: 'Full active term'/);
+  assert.match(source, /amountUsd: 363_600, name: 'Five-city fellowship'/);
+  assert.match(source, /UES_ACTIVE_ONLINE_BASE_USD = UES_SEASON_ONE_BUDGET\.totalUsd/);
+  assert.match(source, /UES_ACTIVE_LOCAL_BASE_USD = UES_ACTIVE_ONLINE_BASE_USD/);
+  assert.match(source, /totalUsd: UES_ACTIVE_LOCAL_BASE_USD \+ \(25 \* SATELLITE_SEED_BUDGET\.totalUsd\) \+ 210_000/);
 });
 
 test('UES contribution flow stays explicit, lazy, and Mainnet-acknowledged', async () => {
