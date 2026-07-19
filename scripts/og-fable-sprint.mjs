@@ -20,6 +20,7 @@ const CARDS = [
   ['public/images/fable/v1-wing.svg', 'public/images/og/b/0469.png'],
   ['public/images/fable/passport-desk.svg', 'public/images/og/b/0470.png'],
   ['public/images/fable/townsfolk.svg', 'public/images/og/b/0472.png'],
+  ['public/images/fable/soulbound-seal.svg', 'public/images/og/b/0474.png'],
 ];
 
 for (const [src, out] of CARDS) {
