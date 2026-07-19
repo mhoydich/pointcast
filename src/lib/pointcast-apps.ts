@@ -221,6 +221,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v7',
+    name: 'Open Road VII',
+    kicker: 'SIXTEEN WITNESSES · FOUR WATCHES · KEEP ONE LIGHT',
+    description: 'A time-aware book of hours moves through sixteen quiet witnesses across dawn, day, dusk, and night, with one private light to keep.',
+    url: 'https://pointcast.xyz/open-road-v7',
+    path: '/open-road-v7',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
