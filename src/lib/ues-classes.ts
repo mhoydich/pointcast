@@ -85,7 +85,7 @@ const STANDARD_WEEKLY_COMMITMENT: UesWeeklyCommitment = {
     maximum: 90,
   },
   reflectionMinutes: 20,
-  total: 'About 2.5–3 hours each week',
+  total: 'About 2.5–3 hours per module',
 };
 
 const SHARED_ACCESS = [
@@ -1398,7 +1398,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
       selfGuidedStudioMinutes: 45,
       fieldworkMinutes: { minimum: 90, maximum: 120 },
       reflectionMinutes: 15,
-      total: 'About 2.5–3 self-paced hours each week',
+      total: 'About 2.5–3 self-paced hours per module',
     },
     access: [
       ...SHARED_ACCESS,
@@ -1564,7 +1564,7 @@ export const UES_SEASON_ONE_COURSES: readonly UesSeasonOneCourse[] = [
       selfGuidedStudioMinutes: 45,
       fieldworkMinutes: { minimum: 90, maximum: 120 },
       reflectionMinutes: 15,
-      total: 'About 2.5–3 self-paced hours each week',
+      total: 'About 2.5–3 self-paced hours per module',
     },
     access: [
       ...SHARED_ACCESS,
