@@ -1,0 +1,338 @@
+---
+/**
+ * StationBoard — THE BOARD. A Solari split-flap departures board for
+ * the station lobby, mid-home.
+ *
+ * Mike 2026-07-18: *"make a really interesting footer ... or mid site"*.
+ * The footer got № 08 SEISMO (the instrument); the middle of the site
+ * gets the lobby board. Blocks depart, commits land, and the last row
+ * is always TOMORROW'S BLOCK · ON TIME — because it is.
+ *
+ * Honest data only: rows hydrate from /wire.json (the same last-24h
+ * feed behind /wire). No fake trains. If the wire is unreachable the
+ * board stays mostly blank and says so quietly.
+ *
+ * Every flap cell is server-rendered (fixed 8×47 grid) and JS only
+ * ever touches textContent + row hrefs — no JS-created nodes, so the
+ * Astro scoped-CSS gotcha has no surface here. The flap animation is
+ * one shared interval cycling cells through a charset with per-column
+ * stagger; prefers-reduced-motion sets characters instantly. A quiet
+ * maintenance tick re-flaps one random row every ~40s while visible.
+ *
+ * Author: cc. Source: Mike 2026-07-18 chat.
+ */
+import { CHANNELS } from '../lib/channels';
+
+// Gate chips carry the channel's 600-stop behind cream text, like a
+// route line indicator. Commits get per-agent colors instead.
+const GATE_COLORS = JSON.stringify({
+  ...Object.fromEntries(Object.values(CHANNELS).map((c) => [c.code, c.color600])),
+  CC: '#6D4FC2', // claude — violet on deep purple, per wire.json legend
+  CX: '#0E7490', // codex — cyan on dark slate
+  MN: '#B4590A', // manus — amber on wine
+  MH: '#3F6B3F', // mike — moss on dark green
+});
+
+// Row geometry — TIME(5) GATE(3) TITLE(24) LINE(6) STATUS(9).
+const SEGS = [
+  { key: 'time', n: 5 },
+  { key: 'gate', n: 3 },
+  { key: 'title', n: 24 },
+  { key: 'line', n: 6 },
+  { key: 'status', n: 9 },
+];
+const ROWS = 8;
+---
+
+<section class="sb" id="pc-station-board" aria-labelledby="sb-title">
+  <header class="sb__head">
+    <p class="sb__kicker mono" id="sb-title">THE BOARD · DEPARTURES + ARRIVALS</p>
+    <p class="sb__place mono">POINTCAST STATION · EL SEGUNDO, CA</p>
+  </header>
+
+  <div class="sb__scroll">
+    <div class="sb__board" role="list">
+      <div class="sb__cols mono" aria-hidden="true">
+        <span class="sb-seg sb-seg--time">TIME</span>
+        <span class="sb-seg sb-seg--gate">LN</span>
+        <span class="sb-seg sb-seg--title">SERVICE</span>
+        <span class="sb-seg sb-seg--line">VIA</span>
+        <span class="sb-seg sb-seg--status">STATUS</span>
+      </div>
+      {Array.from({ length: ROWS }).map((_, r) => (
+        <a class="sb-row" data-row={r} href="/wire" role="listitem">
+          {SEGS.map((seg) => (
+            <span class={`sb-seg sb-seg--${seg.key}`} aria-hidden="true">
+              {Array.from({ length: seg.n }).map(() => <span class="sb-c mono"> </span>)}
+            </span>
+          ))}
+          <span class="sb-row__sr sr-only" data-sr></span>
+        </a>
+      ))}
+    </div>
+  </div>
+
+  <p class="sb__caption mono">
+    the lobby board. blocks depart, commits land, and tomorrow's block is always on time.
+    <a href="/wire">/wire →</a>
+  </p>
+  <noscript><p class="sb__caption mono">the board needs a hand to flip — the same trains are listed at <a href="/wire">/wire</a>.</p></noscript>
+</section>
+
+<script is:inline define:vars={{ gateColors: GATE_COLORS }}>
+  (function () {
+    var root = document.getElementById('pc-station-board');
+    if (!root || root.getAttribute('data-booted') === 'true') return;
+    root.setAttribute('data-booted', 'true');
+
+    var GATE = JSON.parse(gateColors);
+    var CHARSET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789·—:/+?\'&.,-№';
+    var reduced = false;
+    try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+    var rows = [].slice.call(root.querySelectorAll('.sb-row'));
+    var flapQueue = [];   // { el, target, steps }
+    var flapTimer = null;
+
+    function clean(str, n) {
+      var up = String(str || '').toUpperCase();
+      var out = '';
+      for (var i = 0; i < up.length && out.length < n; i++) {
+        out += CHARSET.indexOf(up[i]) >= 0 ? up[i] : ' ';
+      }
+      while (out.length < n) out += ' ';
+      return out;
+    }
+
+    function pad(str, n) { return clean(str, n); }
+
+    function hhmm(iso) {
+      var t = Date.parse(iso || '');
+      if (!t) return '——:——'.slice(0, 5);
+      var d = new Date(t);
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+
+    // Queue a row's five segments for flapping. Column-staggered so the
+    // wave rolls left to right like a real Solari cycle.
+    function setRow(rowEl, data) {
+      var text = { time: pad(data.time, 5), gate: pad(data.gate, 3), title: pad(data.title, 24), line: pad(data.line, 6), status: pad(data.status, 9) };
+      var col = 0;
+      ['time', 'gate', 'title', 'line', 'status'].forEach(function (key) {
+        var cells = rowEl.querySelectorAll('.sb-seg--' + key + ' .sb-c');
+        for (var i = 0; i < cells.length; i++) {
+          var target = text[key][i] || ' ';
+          if (reduced) { cells[i].textContent = target; }
+          else flapQueue.push({ el: cells[i], target: target, steps: 2 + Math.floor(col * 0.35) + Math.floor(Math.random() * 5) });
+          col++;
+        }
+      });
+      rowEl.href = data.href || '/wire';
+      rowEl.setAttribute('data-status', data.statusKind || '');
+      rowEl.style.setProperty('--sb-gate', GATE[data.gate] || '#5a5245');
+      var sr = rowEl.querySelector('[data-sr]');
+      if (sr) sr.textContent = (data.time + ' ' + data.title + ' via ' + data.line + ' — ' + data.status).replace(/\s+/g, ' ').trim();
+      if (!reduced && !flapTimer) flapTimer = setInterval(flapTick, 46);
+    }
+
+    function flapTick() {
+      var alive = 0;
+      for (var i = 0; i < flapQueue.length; i++) {
+        var f = flapQueue[i];
+        if (!f) continue;
+        if (f.steps > 0) {
+          f.el.textContent = CHARSET[Math.floor(Math.random() * CHARSET.length)];
+          f.steps--;
+          alive++;
+        } else {
+          f.el.textContent = f.target;
+          flapQueue[i] = null;
+        }
+      }
+      if (!alive) {
+        flapQueue = [];
+        clearInterval(flapTimer);
+        flapTimer = null;
+      }
+    }
+
+    var boardRows = []; // resolved row data, kept for the maintenance tick
+
+    // The last row never changes: the next departure is tomorrow's
+    // block, and it is on time.
+    var NEXT_ROW = { time: '——:——', gate: '№', title: "TOMORROW'S BLOCK", line: 'CAST', status: 'ON TIME', statusKind: 'ontime', href: '/now' };
+
+    function eventToRow(ev, isNewestBlock) {
+      if (ev.kind === 'block') {
+        return {
+          time: hhmm(ev.at),
+          gate: ev.channel || '№',
+          title: ev.subject,
+          line: 'BLOCK',
+          status: isNewestBlock ? 'BOARDING' : 'DEPARTED',
+          statusKind: isNewestBlock ? 'boarding' : 'departed',
+          href: ev.href || '/wire',
+        };
+      }
+      var agent = String(ev.agent || '').toLowerCase();
+      var gate = agent === 'claude' ? 'CC' : agent === 'codex' ? 'CX' : agent === 'manus' ? 'MN' : 'MH';
+      return {
+        time: hhmm(ev.at),
+        gate: gate,
+        title: ev.subject,
+        line: agent.toUpperCase() || 'CAST',
+        status: 'LANDED',
+        statusKind: 'landed',
+        href: ev.href || '/wire',
+      };
+    }
+
+    fetch('/wire.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var evs = (j && j.events) || [];
+        var seenBlock = false;
+        boardRows = evs.slice(0, rows.length - 1).map(function (ev) {
+          var isNewest = ev.kind === 'block' && !seenBlock;
+          if (ev.kind === 'block') seenBlock = true;
+          return eventToRow(ev, isNewest);
+        });
+        if (!boardRows.length) {
+          boardRows = [{ time: '——:——', gate: '№', title: 'THE WIRE IS QUIET', line: 'CAST', status: 'ON TIME', statusKind: 'ontime', href: '/wire' }];
+        }
+        boardRows = boardRows.concat([NEXT_ROW]).slice(0, rows.length);
+        boardRows.forEach(function (data, i) { setRow(rows[i], data); });
+      })
+      .catch(function () {
+        boardRows = [{ time: '——:——', gate: '№', title: 'THE WIRE IS QUIET', line: 'CAST', status: 'ON TIME', statusKind: 'ontime', href: '/wire' }, NEXT_ROW];
+        boardRows.forEach(function (data, i) { setRow(rows[i], data); });
+      });
+
+    // Maintenance tick — a real board never sits perfectly still.
+    if (!reduced) {
+      setInterval(function () {
+        if (document.visibilityState !== 'visible' || !boardRows.length || flapQueue.length) return;
+        var i = Math.floor(Math.random() * boardRows.length);
+        setRow(rows[i], boardRows[i]);
+      }, 40000);
+    }
+  })();
+</script>
+
+<style>
+  .sb { margin: 26px 0 18px; }
+  .mono {
+    font-family: var(--pc-font-mono, 'JetBrains Mono Variable', 'Monaco', 'Menlo', ui-monospace, monospace);
+  }
+  .sb__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 8px;
+  }
+  .sb__kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: #16130f;
+  }
+  .sb__place { margin: 0; font-size: 10px; letter-spacing: 0.1em; color: #6b5a3a; }
+
+  .sb__scroll { overflow-x: auto; }
+  .sb__board {
+    min-width: 560px;
+    background: #16130f;
+    border: 1px solid #16130f;
+    border-radius: 3px;
+    padding: 10px 12px 12px;
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55);
+  }
+  .sb__cols {
+    display: flex;
+    gap: 14px;
+    padding: 0 2px 6px;
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    color: #6f6553;
+    border-bottom: 1px solid #2a251d;
+    margin-bottom: 8px;
+  }
+  .sb-row {
+    display: flex;
+    gap: 14px;
+    padding: 3px 2px;
+    text-decoration: none;
+    border-radius: 2px;
+  }
+  .sb-row:hover { background: #201b15; }
+  .sb-seg { display: inline-flex; gap: 2px; }
+  .sb-seg--time   { width: calc(5 * 15px + 4 * 2px); }
+  .sb-seg--gate   { width: calc(3 * 15px + 2 * 2px); }
+  .sb-seg--title  { width: calc(24 * 15px + 23 * 2px); }
+  .sb-seg--line   { width: calc(6 * 15px + 5 * 2px); }
+  .sb-seg--status { width: calc(9 * 15px + 8 * 2px); }
+  .sb-c {
+    position: relative;
+    display: inline-block;
+    width: 15px;
+    height: 21px;
+    line-height: 21px;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #efe6d2;
+    background: linear-gradient(180deg, #26211a 0%, #1d1913 48%, #14110c 52%, #1b1712 100%);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .sb-c::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.65);
+  }
+  .sb-seg--time .sb-c { color: #d8c9a4; }
+  .sb-seg--gate .sb-c { background: var(--sb-gate, #26211a); color: #fdf9ef; }
+  .sb-seg--line .sb-c { color: #b3a687; font-size: 11px; }
+  .sb-seg--status .sb-c { color: #9a8f76; font-size: 11px; }
+  .sb-row[data-status='boarding'] .sb-seg--status .sb-c { color: #f4b64a; }
+  .sb-row[data-status='ontime']   .sb-seg--status .sb-c { color: #5fbf7f; }
+  .sb-row[data-status='landed']   .sb-seg--status .sb-c { color: #cfc3a6; }
+  .sb-row[data-status='boarding'] .sb-seg--status .sb-c {
+    animation: sb-board-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes sb-board-pulse {
+    0%, 100% { color: #f4b64a; }
+    50% { color: #b3822f; }
+  }
+  .sb__caption {
+    margin: 8px 2px 0;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: #6b5a3a;
+  }
+  .sb__caption a { color: #8a2432; text-decoration: none; border-bottom: 1px dotted rgba(138, 36, 50, 0.3); }
+  .sb__caption a:hover { color: #185fa5; border-bottom-color: #185fa5; }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  @media (max-width: 720px) {
+    .sb__board { padding: 8px 8px 10px; }
+    .sb__cols, .sb-row { gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sb-row[data-status='boarding'] .sb-seg--status .sb-c { animation: none; }
+  }
+</style>
