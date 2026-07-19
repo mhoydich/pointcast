@@ -4,10 +4,13 @@
  * Per Mike 2026-07-18: "create 5 new alters for praying multimedia
  * use midjourney images, 30 as part, enjoy, peace be with you"
  *
- * Five fixed stations named for the canonical morning hours —
- * matins, lauds, prime, terce, sext. Unlike /api/altar there is no
- * weekly rotation: the hours are the hours. Counts accumulate
- * forever; the recent feed shows the last 8 prayers.
+ * Ten fixed stations named for the canonical hours — the morning
+ * five (matins, lauds, prime, terce, sext → /prayer-altars) and the
+ * evening five (none, vespers, lucernarium, compline, vigil →
+ * /prayer-altars-evening, added 2026-07-18 per "yah 5 more prayer
+ * alters same aprroach"). Unlike /api/altar there is no weekly
+ * rotation: the hours are the hours. Counts accumulate forever; the
+ * recent feed shows the last 8 prayers across both chambers.
  *
  * Storage:
  *   prayer:state → JSON { counts:Record<station, n>, recent:{station,t,pid}[8] }
@@ -26,7 +29,12 @@ const JSON_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export const STATIONS = ['matins', 'lauds', 'prime', 'terce', 'sext'] as const;
+export const STATIONS = [
+  // the morning hours — /prayer-altars
+  'matins', 'lauds', 'prime', 'terce', 'sext',
+  // the evening hours — /prayer-altars-evening
+  'none', 'vespers', 'lucernarium', 'compline', 'vigil',
+] as const;
 type Station = (typeof STATIONS)[number];
 
 // 5s between prayers at the same station from the same pid. KV needs
