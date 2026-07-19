@@ -30,6 +30,16 @@ export const UES_COMPLETION_RECEIPT_SCHEMA = Object.freeze({
       pattern: '^[A-Z][A-Z0-9]{1,7}-[A-Z0-9]{1,8}$',
       description: 'A public catalog code, never a learner identifier.',
     },
+    courseTitle: {
+      type: 'string',
+      minLength: 1,
+      description: 'The public catalog title added by the course room when the receipt is downloaded.',
+    },
+    courseUrl: {
+      type: 'string',
+      format: 'uri',
+      description: 'The public course-room URL added by the course room when the receipt is downloaded.',
+    },
     completedModules: {
       type: 'array',
       minItems: 4,

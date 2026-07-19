@@ -27,6 +27,12 @@ test('completion receipts identify the public immutable v1 JSON Schema', () => {
   assert.equal(UES_COMPLETION_RECEIPT_SCHEMA.$id, receipt.schema);
   assert.equal(UES_COMPLETION_RECEIPT_SCHEMA.$schema, 'https://json-schema.org/draft/2020-12/schema');
   assert.equal(UES_COMPLETION_RECEIPT_SCHEMA.additionalProperties, false);
+  assert.deepEqual(UES_COMPLETION_RECEIPT_SCHEMA.properties.courseTitle, {
+    type: 'string',
+    minLength: 1,
+    description: 'The public catalog title added by the course room when the receipt is downloaded.',
+  });
+  assert.equal(UES_COMPLETION_RECEIPT_SCHEMA.properties.courseUrl.format, 'uri');
   assert.deepEqual(
     Object.keys(receipt).sort(),
     [...UES_COMPLETION_RECEIPT_SCHEMA.required].sort(),
