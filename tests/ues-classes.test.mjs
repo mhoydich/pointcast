@@ -42,7 +42,7 @@ test('The Local Transmission defines ten active, independently completable six-m
   assert.match(source, /Start any class immediately, without an application or account/);
   assert.match(source, /No live attendance, camera, account, wallet, or public posting is required/);
   assert.match(source, /Progress stays in this browser unless the learner chooses to download a private completion receipt/);
-  assert.match(source, /Every required prompt, scenario, rubric, and checklist is written inside the module/);
+  assert.match(source, /Every required prompt, scenario, rubric, and checklist is written on this course page/);
   assert.match(source, /No AI system is required/);
   assert.doesNotMatch(source, /\b(?:supplied|class-provided|instructor-provided)\b/i);
   assert.doesNotMatch(source, /status: 'forming'/);
