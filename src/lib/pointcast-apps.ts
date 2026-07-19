@@ -23,6 +23,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'radius-90245',
+    name: 'RADIUS / 90245',
+    kicker: 'RF FIELD BENCH · 25-MILE LAYER · SIGNAL AUDIO',
+    description: 'A shareable free-space RF link bench centered on El Segundo, with path loss, received power, noise, SNR, Fresnel clearance, light-time, ideal capacity, and optional sonification.',
+    url: 'https://pointcast.xyz/ues/radius',
+    path: '/ues/radius',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DATA',
+    kind: 'pointcast',
+  },
+  {
     slug: 'noun-battler-pacific-48',
     name: 'Noun Battler — Pacific 48',
     kicker: '48 BATTLERS · LOCAL STAMPS · PASSPORT CARD',

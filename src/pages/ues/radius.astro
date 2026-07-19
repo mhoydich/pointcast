@@ -1,0 +1,960 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import gallery from '../../data/el-segundo-school-gallery.json';
+import {
+  RADIUS_CENTER,
+  RADIUS_PACKET,
+  RADIUS_PRESETS,
+  RADIUS_SOURCES,
+  calculateRadiusLink,
+} from '../../lib/radius-90245';
+
+const title = 'RADIUS / 90245';
+const description = 'A live RF field bench for El Segundo: tune a free-space link across the University of El Segundo 25-mile layer, inspect the math, hear the margin, and share the experiment.';
+const defaultLink = calculateRadiusLink(RADIUS_PRESETS[1]);
+const archiveOrigin = 'https://el-segundo-school-archive.pages.dev';
+const ogWork = gallery.works.find((work) => work.number === '253') ?? gallery.works[0];
+const ogImage = ogWork ? `${archiveOrigin}${ogWork.src.replace('/images/el-segundo-school', '')}` : undefined;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  '@id': RADIUS_PACKET.canonical,
+  name: RADIUS_PACKET.name,
+  description,
+  url: RADIUS_PACKET.canonical,
+  applicationCategory: 'EducationalApplication',
+  operatingSystem: 'Any modern browser',
+  isPartOf: {
+    '@type': 'EducationalOrganization',
+    name: 'University of El Segundo',
+    url: 'https://pointcast.xyz/university-of-el-segundo',
+  },
+  spatialCoverage: {
+    '@type': 'Place',
+    name: RADIUS_CENTER.name,
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: RADIUS_CENTER.latitude,
+      longitude: RADIUS_CENTER.longitude,
+    },
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={ogImage}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/ues/radius.json', title: 'RADIUS / 90245 machine packet' }]}
+>
+  <main class="radius" id="radius-90245">
+    <header class="topbar">
+      <a class="mark" href="/university-of-el-segundo">UNIVERSITY OF EL SEGUNDO</a>
+      <nav aria-label="Radius navigation">
+        <a href="#bench">Bench</a>
+        <a href="#formulas">Method</a>
+        <a href="/ues/radius.json">JSON</a>
+        <a href="/">PointCast</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="radius-title">
+      <div class="hero-copy">
+        <p class="eyebrow">FIELD INSTRUMENT 01 · 33.9192° N · 118.4165° W</p>
+        <h1 id="radius-title"><span>RADIUS</span><b>/ 90245</b></h1>
+        <p class="dek">
+          A free-space radio bench centered on El Segundo. Move a receiver through the 25-mile
+          field layer. Change the carrier, power, gain, bandwidth, and losses. Watch the geometry
+          become a link budget—and listen when the margin disappears.
+        </p>
+        <div class="hero-actions">
+          <a class="primary" href="#bench">Open the field bench</a>
+          <button type="button" id="sound-toggle" aria-pressed="false">Hear the signal</button>
+          <button type="button" id="share-link">Copy experiment</button>
+        </div>
+        <p class="share-status" id="share-status" aria-live="polite"></p>
+      </div>
+
+      <div class="scope-card">
+        <div class="scope-card__head">
+          <span>LOCAL REASON</span>
+          <i>01</i>
+        </div>
+        <p>
+          Space Systems Command is headquartered in El Segundo. The local engineering culture
+          works in links, interfaces, mission threads, networks, and data flows. This is a small
+          public instrument in that language—not a recruiting brochure.
+        </p>
+        <a href={RADIUS_SOURCES[2].url} target="_blank" rel="noreferrer">Primary source · SSC Command Plan ↗</a>
+      </div>
+    </section>
+
+    <section class="weather-strip" aria-label="Live El Segundo context">
+      <div><span>EL SEGUNDO AIR</span><strong id="live-temperature">FETCHING</strong></div>
+      <div><span>WIND</span><strong id="live-wind">—</strong></div>
+      <div><span>CLOUD</span><strong id="live-cloud">—</strong></div>
+      <div><span>MODEL USE</span><strong>CONTEXT ONLY</strong></div>
+      <p>Live weather is shown but is not inserted into the free-space equations.</p>
+    </section>
+
+    <section class="bench" id="bench" aria-labelledby="bench-title">
+      <div class="bench-heading">
+        <div>
+          <p class="eyebrow">THE 25-MILE LAYER</p>
+          <h2 id="bench-title">Move one hypothetical link through the field.</h2>
+        </div>
+        <p>
+          The calculator is deterministic and client-side. Nothing is transmitted. No location,
+          settings, or audio leaves this browser.
+        </p>
+      </div>
+
+      <div class="instrument">
+        <div class="radar-column">
+          <div class="radar" id="radar" data-state={defaultLink.linkState}>
+            <div class="radar-grid" aria-hidden="true"></div>
+            <div class="radar-ring radar-ring--25"><span>25 MI</span></div>
+            <div class="radar-ring radar-ring--15"><span>15</span></div>
+            <div class="radar-ring radar-ring--5"><span>5</span></div>
+            <div class="radar-beam" id="radar-beam" aria-hidden="true"></div>
+            <div class="radar-path" id="radar-path" aria-hidden="true"></div>
+            <div class="radar-target" id="radar-target" aria-hidden="true"><span></span></div>
+            <div class="radar-origin"><b>ES</b><span>90245</span></div>
+            <span class="direction direction--n">LAX / N</span>
+            <span class="direction direction--e">INLAND / E</span>
+            <span class="direction direction--s">SOUTH BAY / S</span>
+            <span class="direction direction--w">PACIFIC / W</span>
+            <canvas id="signal-canvas" width="720" height="720" aria-hidden="true"></canvas>
+          </div>
+
+          <label class="bearing-control">
+            <span><b>BEARING</b><output id="bearing-value">238°</output></span>
+            <input id="bearing" type="range" min="0" max="359" value="238" step="1" aria-label="Receiver bearing in degrees" />
+          </label>
+          <p class="radar-readout" id="radar-readout" aria-live="polite">
+            Receiver 4.50 miles from El Segundo at bearing 238°.
+          </p>
+        </div>
+
+        <form class="controls" id="radius-controls" onsubmit="return false">
+          <fieldset class="presets">
+            <legend>STARTING CONDITIONS</legend>
+            {RADIUS_PRESETS.map((preset, index) => (
+              <button
+                type="button"
+                data-radius-preset={preset.id}
+                aria-pressed={index === 1 ? 'true' : 'false'}
+              >
+                <b>{preset.label}</b>
+                <span>{preset.kicker}</span>
+              </button>
+            ))}
+          </fieldset>
+
+          <div class="control-grid">
+            <label>
+              <span>DISTANCE <output id="distance-value">4.50 mi</output></span>
+              <input id="distance" type="range" min="0.1" max="25" value="4.5" step="0.1" />
+            </label>
+            <label>
+              <span>FREQUENCY <output id="frequency-value">5.800 GHz</output></span>
+              <input id="frequency" type="range" min="0.1" max="40" value="5.8" step="0.05" />
+            </label>
+            <label>
+              <span>TRANSMIT POWER <output id="power-value">26.0 dBm</output></span>
+              <input id="power" type="range" min="-20" max="60" value="26" step="0.5" />
+            </label>
+            <label>
+              <span>COMBINED GAIN <output id="gain-value">28.0 dBi</output></span>
+              <input id="gain" type="range" min="-10" max="80" value="28" step="0.5" />
+            </label>
+            <label>
+              <span>BANDWIDTH <output id="bandwidth-value">20.00 MHz</output></span>
+              <input id="bandwidth" type="range" min="0.01" max="200" value="20" step="0.01" />
+            </label>
+            <label>
+              <span>NOISE FIGURE <output id="noise-value">6.0 dB</output></span>
+              <input id="noise" type="range" min="0" max="30" value="6" step="0.5" />
+            </label>
+            <label class="control-grid__wide">
+              <span>OTHER LOSSES <output id="loss-value">12.0 dB</output></span>
+              <input id="loss" type="range" min="0" max="80" value="12" step="0.5" />
+            </label>
+          </div>
+          <p class="preset-note" id="preset-note">{RADIUS_PRESETS[1].note}</p>
+        </form>
+      </div>
+    </section>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="results-head">
+        <p class="eyebrow">CALCULATED NOW</p>
+        <h2 id="results-title">The answer, with the assumptions still attached.</h2>
+        <div class="link-state" id="link-state" data-state={defaultLink.linkState}>
+          <span>LINK STATE</span><strong>{defaultLink.linkState.toUpperCase()}</strong>
+        </div>
+      </div>
+
+      <div class="result-grid">
+        <article class="result-card result-card--hero">
+          <span>FREE-SPACE PATH LOSS</span>
+          <strong id="result-fspl">{defaultLink.freeSpacePathLossDb.toFixed(2)}</strong>
+          <b>dB</b>
+          <p>Geometric spreading only. The core reference number.</p>
+        </article>
+        <article class="result-card">
+          <span>RECEIVED POWER</span>
+          <strong id="result-rx">{defaultLink.receivedPowerDbm.toFixed(2)}</strong>
+          <b>dBm</b>
+          <p>After combined antenna gain and the entered extra losses.</p>
+        </article>
+        <article class="result-card">
+          <span>THERMAL NOISE FLOOR</span>
+          <strong id="result-noise">{defaultLink.noiseFloorDbm.toFixed(2)}</strong>
+          <b>dBm</b>
+          <p>At the selected bandwidth and receiver noise figure.</p>
+        </article>
+        <article class="result-card">
+          <span>SNR</span>
+          <strong id="result-snr">{defaultLink.snrDb.toFixed(2)}</strong>
+          <b>dB</b>
+          <p>A reference margin above the modeled noise floor.</p>
+        </article>
+        <article class="result-card">
+          <span>SHANNON CEILING</span>
+          <strong id="result-capacity">{defaultLink.shannonCapacityMbps.toFixed(2)}</strong>
+          <b>Mb/s</b>
+          <p>An ideal upper bound—not a modulation or protocol promise.</p>
+        </article>
+        <article class="result-card">
+          <span>ONE-WAY LIGHT TIME</span>
+          <strong id="result-delay">{defaultLink.propagationDelayMicroseconds.toFixed(2)}</strong>
+          <b>μs</b>
+          <p>Vacuum propagation only, before any system latency.</p>
+        </article>
+        <article class="result-card">
+          <span>MIDPOINT FRESNEL RADIUS</span>
+          <strong id="result-fresnel">{defaultLink.firstFresnelRadiusMeters.toFixed(2)}</strong>
+          <b>m</b>
+          <p>First-zone radius at the path midpoint.</p>
+        </article>
+        <article class="result-card">
+          <span>WAVELENGTH</span>
+          <strong id="result-wavelength">{(defaultLink.wavelengthMeters * 100).toFixed(2)}</strong>
+          <b>cm</b>
+          <p>The physical scale behind the carrier frequency.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="trace" aria-labelledby="trace-title">
+      <div>
+        <p class="eyebrow">SIGNAL TRACE</p>
+        <h2 id="trace-title">A tone is not proof.</h2>
+        <p>
+          “Hear the signal” maps modeled SNR to a restrained tone plus noise. It is a sonification,
+          not captured RF, a modem, or a prediction of real packet performance.
+        </p>
+      </div>
+      <div class="trace-screen" aria-hidden="true">
+        <div id="trace-bars"></div>
+        <span>MODELED SNR → SOUND</span>
+      </div>
+    </section>
+
+    <section class="method" id="formulas" aria-labelledby="method-title">
+      <div class="method-copy">
+        <p class="eyebrow">METHOD / LIMITS</p>
+        <h2 id="method-title">Useful precisely because it refuses to pretend.</h2>
+        <p>
+          This bench models free-space geometry, thermal noise, and an ideal information ceiling.
+          It does not model terrain, structures, foliage, multipath, polarization mismatch,
+          antenna pattern, hardware linearity, interference, atmospheric absorption, rain fade,
+          Earth curvature, regulation, exposure limits, or installation safety.
+        </p>
+        <p class="boundary">EDUCATIONAL REFERENCE ONLY · NOT A SITE SURVEY · NOT SPECTRUM AUTHORIZATION · NOT DEPLOYMENT ADVICE</p>
+      </div>
+      <ol class="formula-list">
+        <li><span>01</span><div><b>Free-space path loss</b><code>92.45 + 20 log₁₀(d km) + 20 log₁₀(f GHz)</code></div></li>
+        <li><span>02</span><div><b>Received power</b><code>Ptx + antenna gain − other loss − FSPL</code></div></li>
+        <li><span>03</span><div><b>Noise floor</b><code>−174 + 10 log₁₀(B Hz) + NF</code></div></li>
+        <li><span>04</span><div><b>Shannon ceiling</b><code>B × log₂(1 + SNRlinear)</code></div></li>
+        <li><span>05</span><div><b>First Fresnel midpoint</b><code>√(λ × distance / 4)</code></div></li>
+        <li><span>06</span><div><b>Light time</b><code>distance / 299,792,458 m/s</code></div></li>
+      </ol>
+    </section>
+
+    <section class="sources" aria-labelledby="sources-title">
+      <div>
+        <p class="eyebrow">PRIMARY SOURCES</p>
+        <h2 id="sources-title">Open the references. Challenge the instrument.</h2>
+      </div>
+      <div class="source-list">
+        {RADIUS_SOURCES.map((source) => (
+          <a href={source.url} target="_blank" rel="noreferrer">
+            <span>{source.id}</span><b>{source.title}</b><p>{source.use}</p><i>↗</i>
+          </a>
+        ))}
+        <a href="/ues/radius.json">
+          <span>machine</span><b>RADIUS / 90245 JSON packet</b><p>Presets, equations, center, source links, and boundary.</p><i>→</i>
+        </a>
+      </div>
+    </section>
+
+    <footer class="radius-footer">
+      <p>RADIUS / 90245 · UNIVERSITY OF EL SEGUNDO · POINTCAST · 2026</p>
+      <nav aria-label="Radius footer">
+        <a href="/university-of-el-segundo">University program</a>
+        <a href="/ues">Course rooms</a>
+        <a href="/el-segundo-school">Art archive</a>
+        <a href="/">PointCast</a>
+      </nav>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  import {
+    RADIUS_PRESETS,
+    calculateRadiusLink,
+    normalizeRadiusInput,
+    radiusInputFromSearch,
+    serializeRadiusInput,
+  } from '../../lib/radius-90245';
+
+  const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+  const controls = {
+    distanceMiles: byId<HTMLInputElement>('distance'),
+    frequencyGHz: byId<HTMLInputElement>('frequency'),
+    transmitPowerDbm: byId<HTMLInputElement>('power'),
+    combinedGainDbi: byId<HTMLInputElement>('gain'),
+    bandwidthMHz: byId<HTMLInputElement>('bandwidth'),
+    noiseFigureDb: byId<HTMLInputElement>('noise'),
+    extraLossDb: byId<HTMLInputElement>('loss'),
+  };
+  const outputs = {
+    distanceMiles: byId<HTMLOutputElement>('distance-value'),
+    frequencyGHz: byId<HTMLOutputElement>('frequency-value'),
+    transmitPowerDbm: byId<HTMLOutputElement>('power-value'),
+    combinedGainDbi: byId<HTMLOutputElement>('gain-value'),
+    bandwidthMHz: byId<HTMLOutputElement>('bandwidth-value'),
+    noiseFigureDb: byId<HTMLOutputElement>('noise-value'),
+    extraLossDb: byId<HTMLOutputElement>('loss-value'),
+  };
+  const bearing = byId<HTMLInputElement>('bearing');
+  const radar = byId<HTMLElement>('radar');
+  const target = byId<HTMLElement>('radar-target');
+  const beam = byId<HTMLElement>('radar-beam');
+  const canvas = byId<HTMLCanvasElement>('signal-canvas');
+  const ctx = canvas?.getContext('2d') ?? null;
+  const soundToggle = byId<HTMLButtonElement>('sound-toggle');
+  const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-radius-preset]'));
+  let audioContext: AudioContext | null = null;
+  let tone: OscillatorNode | null = null;
+  let toneGain: GainNode | null = null;
+  let noiseSource: AudioBufferSourceNode | null = null;
+  let noiseGain: GainNode | null = null;
+  let soundEnabled = false;
+  let lastResult = calculateRadiusLink(RADIUS_PRESETS[1]);
+  let animationFrame = 0;
+  let phase = 0;
+
+  const readInput = () => normalizeRadiusInput({
+    distanceMiles: Number(controls.distanceMiles?.value),
+    frequencyGHz: Number(controls.frequencyGHz?.value),
+    transmitPowerDbm: Number(controls.transmitPowerDbm?.value),
+    combinedGainDbi: Number(controls.combinedGainDbi?.value),
+    bandwidthMHz: Number(controls.bandwidthMHz?.value),
+    noiseFigureDb: Number(controls.noiseFigureDb?.value),
+    extraLossDb: Number(controls.extraLossDb?.value),
+  });
+
+  function setText(id: string, value: string) {
+    const element = byId(id);
+    if (element) element.textContent = value;
+  }
+
+  function applyInput(input: ReturnType<typeof normalizeRadiusInput>) {
+    for (const [key, control] of Object.entries(controls)) {
+      if (control) control.value = String(input[key as keyof typeof input]);
+    }
+    update();
+  }
+
+  function updateRadar(result: typeof lastResult) {
+    const angle = Number(bearing?.value ?? 238);
+    const radial = Math.max(0.04, result.distanceMiles / 25) * 42;
+    const radians = (angle - 90) * Math.PI / 180;
+    const x = 50 + Math.cos(radians) * radial;
+    const y = 50 + Math.sin(radians) * radial;
+    if (target) {
+      target.style.left = `${x}%`;
+      target.style.top = `${y}%`;
+    }
+    if (beam) beam.style.transform = `rotate(${angle}deg)`;
+    if (radar) radar.dataset.state = result.linkState;
+    setText('bearing-value', `${Math.round(angle)}°`);
+    setText('radar-readout', `Receiver ${result.distanceMiles.toFixed(2)} miles from El Segundo at bearing ${Math.round(angle)}°.`);
+  }
+
+  function updateSound(result: typeof lastResult) {
+    if (!soundEnabled || !audioContext || !tone || !toneGain || !noiseGain) return;
+    const normalizedSnr = Math.max(0, Math.min(1, (result.snrDb + 10) / 50));
+    const now = audioContext.currentTime;
+    tone.frequency.setTargetAtTime(110 + normalizedSnr * 550 + result.frequencyGHz * 2, now, 0.06);
+    toneGain.gain.setTargetAtTime(0.012 + normalizedSnr * 0.045, now, 0.08);
+    noiseGain.gain.setTargetAtTime(0.04 * (1 - normalizedSnr), now, 0.08);
+  }
+
+  function updateTrace(result: typeof lastResult) {
+    const holder = byId('trace-bars');
+    if (!holder) return;
+    const count = 48;
+    const normalizedSnr = Math.max(0, Math.min(1, (result.snrDb + 10) / 50));
+    holder.replaceChildren(...Array.from({ length: count }, (_, index) => {
+      const bar = document.createElement('i');
+      const wave = Math.sin(index * 0.62 + result.frequencyGHz) * 0.5 + 0.5;
+      const noise = Math.sin(index * 3.71 + result.distanceMiles) * (1 - normalizedSnr);
+      bar.style.height = `${12 + Math.max(0, wave * normalizedSnr + noise * 0.45) * 78}%`;
+      return bar;
+    }));
+  }
+
+  function update() {
+    lastResult = calculateRadiusLink(readInput());
+    if (outputs.distanceMiles) outputs.distanceMiles.textContent = `${lastResult.distanceMiles.toFixed(2)} mi`;
+    if (outputs.frequencyGHz) outputs.frequencyGHz.textContent = `${lastResult.frequencyGHz.toFixed(3)} GHz`;
+    if (outputs.transmitPowerDbm) outputs.transmitPowerDbm.textContent = `${lastResult.transmitPowerDbm.toFixed(1)} dBm`;
+    if (outputs.combinedGainDbi) outputs.combinedGainDbi.textContent = `${lastResult.combinedGainDbi.toFixed(1)} dBi`;
+    if (outputs.bandwidthMHz) outputs.bandwidthMHz.textContent = `${lastResult.bandwidthMHz.toFixed(2)} MHz`;
+    if (outputs.noiseFigureDb) outputs.noiseFigureDb.textContent = `${lastResult.noiseFigureDb.toFixed(1)} dB`;
+    if (outputs.extraLossDb) outputs.extraLossDb.textContent = `${lastResult.extraLossDb.toFixed(1)} dB`;
+    setText('result-fspl', lastResult.freeSpacePathLossDb.toFixed(2));
+    setText('result-rx', lastResult.receivedPowerDbm.toFixed(2));
+    setText('result-noise', lastResult.noiseFloorDbm.toFixed(2));
+    setText('result-snr', lastResult.snrDb.toFixed(2));
+    setText('result-capacity', lastResult.shannonCapacityMbps >= 1000
+      ? `${(lastResult.shannonCapacityMbps / 1000).toFixed(2)}k`
+      : lastResult.shannonCapacityMbps.toFixed(2));
+    setText('result-delay', lastResult.propagationDelayMicroseconds.toFixed(2));
+    setText('result-fresnel', lastResult.firstFresnelRadiusMeters.toFixed(2));
+    setText('result-wavelength', (lastResult.wavelengthMeters * 100).toFixed(2));
+    const state = byId('link-state');
+    if (state) {
+      state.dataset.state = lastResult.linkState;
+      const label = state.querySelector('strong');
+      if (label) label.textContent = lastResult.linkState.replace('-', ' ').toUpperCase();
+    }
+    updateRadar(lastResult);
+    updateTrace(lastResult);
+    updateSound(lastResult);
+  }
+
+  for (const control of Object.values(controls)) control?.addEventListener('input', () => {
+    presetButtons.forEach((button) => button.setAttribute('aria-pressed', 'false'));
+    setText('preset-note', 'Custom field condition. Copy the experiment to preserve these values.');
+    update();
+  });
+  bearing?.addEventListener('input', () => updateRadar(lastResult));
+
+  presetButtons.forEach((button) => button.addEventListener('click', () => {
+    const preset = RADIUS_PRESETS.find((item) => item.id === button.dataset.radiusPreset);
+    if (!preset) return;
+    presetButtons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+    setText('preset-note', preset.note);
+    applyInput(preset);
+  }));
+
+  byId<HTMLButtonElement>('share-link')?.addEventListener('click', async () => {
+    const url = new URL(window.location.href);
+    url.search = serializeRadiusInput(readInput()).toString();
+    url.searchParams.set('a', String(Math.round(Number(bearing?.value ?? 238))));
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setText('share-status', 'Experiment URL copied.');
+    } catch {
+      window.prompt('Copy this experiment URL', url.toString());
+      setText('share-status', 'Experiment URL ready to copy.');
+    }
+  });
+
+  async function startSound() {
+    audioContext = new AudioContext();
+    tone = audioContext.createOscillator();
+    tone.type = 'sine';
+    toneGain = audioContext.createGain();
+    toneGain.gain.value = 0;
+    tone.connect(toneGain).connect(audioContext.destination);
+    tone.start();
+
+    const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 2, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+    noiseSource = audioContext.createBufferSource();
+    noiseSource.buffer = buffer;
+    noiseSource.loop = true;
+    noiseGain = audioContext.createGain();
+    noiseGain.gain.value = 0;
+    noiseSource.connect(noiseGain).connect(audioContext.destination);
+    noiseSource.start();
+    soundEnabled = true;
+    if (soundToggle) {
+      soundToggle.setAttribute('aria-pressed', 'true');
+      soundToggle.textContent = 'Mute the signal';
+    }
+    updateSound(lastResult);
+  }
+
+  function stopSound() {
+    soundEnabled = false;
+    if (toneGain && audioContext) toneGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.05);
+    if (noiseGain && audioContext) noiseGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.05);
+    if (soundToggle) {
+      soundToggle.setAttribute('aria-pressed', 'false');
+      soundToggle.textContent = 'Hear the signal';
+    }
+  }
+
+  soundToggle?.addEventListener('click', async () => {
+    if (!audioContext) await startSound();
+    else if (soundEnabled) stopSound();
+    else {
+      await audioContext.resume();
+      soundEnabled = true;
+      soundToggle.setAttribute('aria-pressed', 'true');
+      soundToggle.textContent = 'Mute the signal';
+      updateSound(lastResult);
+    }
+  });
+
+  function draw() {
+    if (!canvas || !ctx) return;
+    const size = canvas.width;
+    ctx.clearRect(0, 0, size, size);
+    phase += 0.018;
+    const stateColor = lastResult.linkState === 'strong'
+      ? '83, 255, 170'
+      : lastResult.linkState === 'workable'
+        ? '220, 255, 63'
+        : lastResult.linkState === 'edge'
+          ? '255, 177, 46'
+          : '255, 77, 77';
+    const angle = (Number(bearing?.value ?? 238) - 90) * Math.PI / 180;
+    const distanceRatio = lastResult.distanceMiles / 25;
+    const radius = size * 0.42 * distanceRatio;
+    const startX = size / 2;
+    const startY = size / 2;
+    const endX = startX + Math.cos(angle) * radius;
+    const endY = startY + Math.sin(angle) * radius;
+    ctx.strokeStyle = `rgba(${stateColor}, .22)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    for (let i = 0; i < 8; i += 1) {
+      const progress = (phase + i / 8) % 1;
+      const x = startX + (endX - startX) * progress;
+      const y = startY + (endY - startY) * progress;
+      ctx.fillStyle = `rgba(${stateColor}, ${0.15 + progress * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2 + progress * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    animationFrame = requestAnimationFrame(draw);
+  }
+
+  async function fetchWeather() {
+    const endpoint = 'https://api.open-meteo.com/v1/forecast?latitude=33.9192&longitude=-118.4165&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles';
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error('weather unavailable');
+      const payload = await response.json();
+      const current = payload?.current;
+      if (!current) throw new Error('weather unavailable');
+      setText('live-temperature', `${Math.round(current.temperature_2m)}°F`);
+      setText('live-wind', `${Math.round(current.wind_speed_10m)} MPH · ${Math.round(current.wind_direction_10m)}°`);
+      setText('live-cloud', `${Math.round(current.cloud_cover)}%`);
+    } catch {
+      setText('live-temperature', 'OFFLINE');
+      setText('live-wind', 'OFFLINE');
+      setText('live-cloud', 'OFFLINE');
+    }
+  }
+
+  const initialSearch = new URLSearchParams(window.location.search);
+  if (initialSearch.has('d')) applyInput(radiusInputFromSearch(initialSearch));
+  else update();
+  const initialBearingValue = initialSearch.get('a');
+  const initialBearing = initialBearingValue === null ? Number.NaN : Number(initialBearingValue);
+  if (bearing && Number.isFinite(initialBearing)) bearing.value = String(Math.max(0, Math.min(359, initialBearing)));
+  updateRadar(lastResult);
+  void fetchWeather();
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) draw();
+  window.addEventListener('pagehide', () => {
+    cancelAnimationFrame(animationFrame);
+    void audioContext?.close();
+  }, { once: true });
+</script>
+
+<style>
+  :global(body:has(#radius-90245)) {
+    background: #080d14;
+  }
+
+  .radius {
+    --void: #080d14;
+    --panel: #0e1620;
+    --panel-2: #131f2b;
+    --ink: #f4f5ec;
+    --muted: #a1adba;
+    --rule: #2b3b49;
+    --acid: #dcff3f;
+    --signal: #53ffaa;
+    --amber: #ffb12e;
+    --danger: #ff4d4d;
+    min-height: 100vh;
+    background:
+      linear-gradient(rgba(83, 255, 170, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(83, 255, 170, 0.025) 1px, transparent 1px),
+      var(--void);
+    background-size: 48px 48px;
+    color: var(--ink);
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    min-height: 58px;
+    padding: 0 28px;
+    border-bottom: 1px solid var(--rule);
+    background: rgba(8, 13, 20, 0.92);
+    backdrop-filter: blur(14px);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+
+  .topbar a { color: var(--ink); text-decoration: none; }
+  .topbar .mark { color: var(--acid); font-weight: 700; }
+  .topbar nav { display: flex; gap: 24px; }
+  .topbar nav a:hover { color: var(--signal); }
+
+  .hero,
+  .bench,
+  .results,
+  .trace,
+  .method,
+  .sources,
+  .radius-footer {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding-inline: clamp(20px, 4vw, 64px);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.65fr);
+    gap: clamp(32px, 7vw, 120px);
+    align-items: end;
+    min-height: 690px;
+    padding-top: clamp(70px, 11vh, 140px);
+    padding-bottom: 72px;
+  }
+
+  .eyebrow {
+    margin: 0 0 18px;
+    color: var(--signal);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    line-height: 1.4;
+  }
+
+  .hero h1 {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font-size: clamp(76px, 13vw, 190px);
+    font-weight: 500;
+    letter-spacing: -0.085em;
+    line-height: 0.76;
+  }
+
+  .hero h1 b {
+    margin-left: 0.29em;
+    color: transparent;
+    font-size: 0.36em;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    -webkit-text-stroke: 1px var(--acid);
+  }
+
+  .dek {
+    max-width: 800px;
+    margin: 48px 0 0;
+    color: #cdd5dc;
+    font-size: clamp(18px, 2vw, 29px);
+    line-height: 1.35;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 34px;
+  }
+
+  .hero-actions a,
+  .hero-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 17px;
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font: 700 11px/1 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .hero-actions .primary { border-color: var(--acid); background: var(--acid); color: #0b100b; }
+  .hero-actions button:hover,
+  .hero-actions button[aria-pressed='true'] { border-color: var(--signal); color: var(--signal); }
+  .share-status { min-height: 22px; margin: 10px 0 0; color: var(--signal); font: 11px/1.4 'JetBrains Mono Variable', monospace; }
+
+  .scope-card {
+    border: 1px solid var(--rule);
+    border-top: 4px solid var(--amber);
+    background: rgba(14, 22, 32, 0.86);
+    padding: 24px;
+  }
+
+  .scope-card__head { display: flex; justify-content: space-between; color: var(--amber); font: 11px/1 'JetBrains Mono Variable', monospace; letter-spacing: 0.13em; }
+  .scope-card__head i { font-style: normal; }
+  .scope-card p { margin: 38px 0; color: #c7d0d8; font-size: 16px; line-height: 1.6; }
+  .scope-card a { color: var(--ink); font: 11px/1.4 'JetBrains Mono Variable', monospace; text-decoration: underline; text-underline-offset: 5px; }
+
+  .weather-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-block: 1px solid var(--rule);
+    background: var(--panel);
+  }
+
+  .weather-strip > div { min-height: 94px; padding: 21px 28px; border-right: 1px solid var(--rule); }
+  .weather-strip span,
+  .weather-strip strong { display: block; font-family: 'JetBrains Mono Variable', monospace; }
+  .weather-strip span { color: var(--muted); font-size: 10px; letter-spacing: 0.14em; }
+  .weather-strip strong { margin-top: 12px; color: var(--acid); font-size: 18px; }
+  .weather-strip p { grid-column: 1 / -1; margin: 0; padding: 9px 28px; background: #0a1017; color: var(--muted); font: 10px/1.4 'JetBrains Mono Variable', monospace; letter-spacing: 0.06em; }
+
+  .bench,
+  .results,
+  .trace,
+  .method,
+  .sources { padding-top: 110px; padding-bottom: 110px; border-bottom: 1px solid var(--rule); }
+
+  .bench-heading,
+  .results-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.6fr);
+    gap: 36px;
+    align-items: end;
+    margin-bottom: 55px;
+  }
+
+  .bench h2,
+  .results h2,
+  .trace h2,
+  .method h2,
+  .sources h2 {
+    max-width: 850px;
+    margin: 0;
+    font-size: clamp(38px, 5.8vw, 84px);
+    font-weight: 500;
+    letter-spacing: -0.055em;
+    line-height: 0.98;
+  }
+
+  .bench-heading > p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
+  .instrument { display: grid; grid-template-columns: minmax(360px, 1.15fr) minmax(360px, 0.85fr); gap: 48px; align-items: start; }
+
+  .radar-column { position: sticky; top: 88px; }
+  .radar {
+    position: relative;
+    width: min(100%, 720px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 1px solid #3a5864;
+    border-radius: 50%;
+    background: radial-gradient(circle, #10212a 0 2%, #091218 2.2% 100%);
+    box-shadow: inset 0 0 90px rgba(83, 255, 170, 0.07), 0 0 0 8px #0b1219;
+  }
+
+  .radar-grid { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.8%, #28404a 50%, transparent 50.2%), linear-gradient(transparent 49.8%, #28404a 50%, transparent 50.2%); opacity: 0.9; }
+  .radar-ring { position: absolute; left: 50%; top: 50%; border: 1px solid #28404a; border-radius: 50%; transform: translate(-50%, -50%); }
+  .radar-ring span { position: absolute; top: -8px; left: 50%; padding: 0 5px; background: #091218; color: #5f7b83; font: 9px/1 'JetBrains Mono Variable', monospace; transform: translateX(-50%); }
+  .radar-ring--25 { width: 84%; height: 84%; }
+  .radar-ring--15 { width: 50.4%; height: 50.4%; }
+  .radar-ring--5 { width: 16.8%; height: 16.8%; }
+  .radar-beam { position: absolute; left: 50%; top: 50%; width: 50%; height: 50%; transform-origin: 0 0; background: conic-gradient(from 255deg at 0 0, rgba(83,255,170,.16), transparent 28deg); pointer-events: none; }
+  .radar-origin { position: absolute; left: 50%; top: 50%; z-index: 3; display: grid; place-items: center; width: 58px; height: 58px; border: 2px solid var(--acid); border-radius: 50%; background: #080d14; transform: translate(-50%, -50%); }
+  .radar-origin b { color: var(--acid); font: 14px/1 'JetBrains Mono Variable', monospace; }
+  .radar-origin span { color: var(--muted); font: 8px/1 'JetBrains Mono Variable', monospace; }
+  .radar-target { position: absolute; z-index: 5; width: 26px; height: 26px; transform: translate(-50%, -50%); transition: left .12s linear, top .12s linear; }
+  .radar-target::before,
+  .radar-target::after { content: ''; position: absolute; background: var(--signal); }
+  .radar-target::before { left: 12px; top: 0; width: 2px; height: 26px; }
+  .radar-target::after { left: 0; top: 12px; width: 26px; height: 2px; }
+  .radar-target span { position: absolute; inset: 7px; border: 2px solid var(--signal); border-radius: 50%; box-shadow: 0 0 20px var(--signal); }
+  .radar[data-state='edge'] .radar-target::before,
+  .radar[data-state='edge'] .radar-target::after { background: var(--amber); }
+  .radar[data-state='below-noise'] .radar-target::before,
+  .radar[data-state='below-noise'] .radar-target::after { background: var(--danger); }
+  .direction { position: absolute; z-index: 4; color: #78909a; font: 9px/1 'JetBrains Mono Variable', monospace; letter-spacing: .08em; }
+  .direction--n { top: 4%; left: 50%; transform: translateX(-50%); }
+  .direction--e { right: 3%; top: 50%; transform: rotate(90deg) translateY(-50%); }
+  .direction--s { bottom: 4%; left: 50%; transform: translateX(-50%); }
+  .direction--w { left: 2%; top: 50%; transform: rotate(-90deg) translateY(-50%); }
+  #signal-canvas { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; }
+
+  .bearing-control { display: block; margin: 30px auto 0; max-width: 720px; }
+  .bearing-control span { display: flex; justify-content: space-between; margin-bottom: 10px; font: 11px/1 'JetBrains Mono Variable', monospace; letter-spacing: .1em; }
+  .bearing-control output { color: var(--acid); }
+  input[type='range'] { width: 100%; accent-color: var(--acid); }
+  .radar-readout { margin: 12px auto 0; max-width: 720px; color: var(--muted); font: 11px/1.5 'JetBrains Mono Variable', monospace; }
+
+  .controls { border: 1px solid var(--rule); background: var(--panel); }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--rule); }
+  .presets legend { width: 100%; padding: 16px 18px; border-bottom: 1px solid var(--rule); color: var(--muted); font: 10px/1 'JetBrains Mono Variable', monospace; letter-spacing: .13em; }
+  .presets button { min-height: 106px; padding: 16px; border: 0; border-right: 1px solid var(--rule); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .presets button:last-child { border-right: 0; }
+  .presets button[aria-pressed='true'] { background: var(--acid); color: #0a0f0a; }
+  .presets b,
+  .presets span { display: block; }
+  .presets b { font-size: 13px; }
+  .presets span { margin-top: 10px; font: 9px/1.35 'JetBrains Mono Variable', monospace; }
+  .control-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .control-grid label { min-height: 116px; padding: 22px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .control-grid label:nth-child(even) { border-right: 0; }
+  .control-grid__wide { grid-column: 1 / -1; border-right: 0 !important; }
+  .control-grid span { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 25px; color: var(--muted); font: 9px/1.4 'JetBrains Mono Variable', monospace; letter-spacing: .09em; }
+  .control-grid output { color: var(--acid); text-align: right; }
+  .preset-note { margin: 0; padding: 18px 22px; color: #bbc5cd; font: 11px/1.55 'JetBrains Mono Variable', monospace; }
+
+  .results-head { grid-template-columns: 1fr auto; }
+  .link-state { min-width: 190px; padding: 17px; border: 1px solid var(--signal); text-align: right; }
+  .link-state span,
+  .link-state strong { display: block; font-family: 'JetBrains Mono Variable', monospace; }
+  .link-state span { color: var(--muted); font-size: 9px; letter-spacing: .12em; }
+  .link-state strong { margin-top: 10px; color: var(--signal); font-size: 17px; }
+  .link-state[data-state='edge'] { border-color: var(--amber); }
+  .link-state[data-state='edge'] strong { color: var(--amber); }
+  .link-state[data-state='below-noise'] { border-color: var(--danger); }
+  .link-state[data-state='below-noise'] strong { color: var(--danger); }
+  .result-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+  .result-card { position: relative; min-height: 250px; padding: 24px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: rgba(14,22,32,.7); }
+  .result-card > span { display: block; min-height: 31px; color: var(--muted); font: 9px/1.4 'JetBrains Mono Variable', monospace; letter-spacing: .11em; }
+  .result-card strong { display: inline-block; margin-top: 30px; color: var(--acid); font: 500 clamp(36px, 4vw, 65px)/.9 'Inter Variable', sans-serif; letter-spacing: -.06em; }
+  .result-card > b { margin-left: 7px; color: var(--signal); font: 11px/1 'JetBrains Mono Variable', monospace; }
+  .result-card p { position: absolute; right: 24px; bottom: 22px; left: 24px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .result-card--hero { background: var(--acid); color: #081008; }
+  .result-card--hero > span,
+  .result-card--hero strong,
+  .result-card--hero > b,
+  .result-card--hero p { color: #081008; }
+
+  .trace { display: grid; grid-template-columns: minmax(0, .7fr) minmax(360px, 1.3fr); gap: 70px; align-items: center; }
+  .trace p:not(.eyebrow) { max-width: 650px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+  .trace-screen { height: 310px; padding: 30px; border: 1px solid var(--rule); background: #060b10; }
+  #trace-bars { display: flex; align-items: center; gap: 3px; height: 220px; }
+  #trace-bars i { flex: 1; min-width: 2px; background: linear-gradient(var(--signal), var(--acid)); transition: height .15s ease; }
+  .trace-screen > span { display: block; margin-top: 22px; color: var(--muted); font: 9px/1 'JetBrains Mono Variable', monospace; letter-spacing: .15em; }
+
+  .method { display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; }
+  .method-copy > p:not(.eyebrow) { color: var(--muted); font-size: 16px; line-height: 1.65; }
+  .method-copy .boundary { margin-top: 34px; padding: 16px; border: 1px solid var(--amber); color: var(--amber) !important; font: 10px/1.55 'JetBrains Mono Variable', monospace !important; }
+  .formula-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+  .formula-list li { display: grid; grid-template-columns: 48px 1fr; gap: 18px; padding: 22px 0; border-bottom: 1px solid var(--rule); }
+  .formula-list li > span { color: var(--signal); font: 11px/1.3 'JetBrains Mono Variable', monospace; }
+  .formula-list b,
+  .formula-list code { display: block; }
+  .formula-list b { margin-bottom: 8px; font-size: 16px; }
+  .formula-list code { color: var(--acid); font: 11px/1.5 'JetBrains Mono Variable', monospace; white-space: normal; }
+
+  .sources { display: grid; grid-template-columns: .7fr 1.3fr; gap: 70px; }
+  .source-list { border-top: 1px solid var(--rule); }
+  .source-list a { display: grid; grid-template-columns: 100px 1fr auto; gap: 8px 20px; padding: 21px 0; border-bottom: 1px solid var(--rule); color: var(--ink); text-decoration: none; }
+  .source-list span { grid-row: 1 / 3; color: var(--signal); font: 9px/1.4 'JetBrains Mono Variable', monospace; text-transform: uppercase; }
+  .source-list b { font-size: 15px; }
+  .source-list p { margin: 0; color: var(--muted); font-size: 12px; }
+  .source-list i { grid-column: 3; grid-row: 1 / 3; color: var(--acid); font-style: normal; }
+
+  .radius-footer { display: flex; justify-content: space-between; gap: 32px; padding-top: 32px; padding-bottom: 90px; color: var(--muted); font: 10px/1.5 'JetBrains Mono Variable', monospace; letter-spacing: .08em; }
+  .radius-footer nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 20px; }
+  .radius-footer a { color: var(--ink); }
+
+  @media (max-width: 980px) {
+    .hero,
+    .instrument,
+    .trace,
+    .method,
+    .sources { grid-template-columns: 1fr; }
+    .hero { min-height: 0; }
+    .scope-card { max-width: 600px; }
+    .radar-column { position: static; }
+    .result-grid { grid-template-columns: repeat(2, 1fr); }
+    .weather-strip { grid-template-columns: repeat(2, 1fr); }
+    .sources,
+    .method { gap: 42px; }
+  }
+
+  @media (max-width: 680px) {
+    .topbar { padding: 0 16px; }
+    .topbar nav a:nth-child(-n+2) { display: none; }
+    .hero { padding-top: 76px; }
+    .hero h1 { font-size: clamp(65px, 25vw, 110px); }
+    .dek { margin-top: 38px; }
+    .bench,
+    .results,
+    .trace,
+    .method,
+    .sources { padding-top: 76px; padding-bottom: 76px; }
+    .bench-heading,
+    .results-head { grid-template-columns: 1fr; }
+    .instrument { grid-template-columns: minmax(0, 1fr); }
+    .presets { grid-template-columns: 1fr; }
+    .presets button { min-height: 76px; border-right: 0; border-bottom: 1px solid var(--rule); }
+    .control-grid { grid-template-columns: 1fr; }
+    .control-grid label,
+    .control-grid label:nth-child(even) { border-right: 0; }
+    .control-grid__wide { grid-column: auto; }
+    .result-grid { grid-template-columns: 1fr; }
+    .result-card { min-height: 220px; }
+    .weather-strip { grid-template-columns: 1fr 1fr; }
+    .weather-strip > div { padding: 17px; }
+    .trace-screen { height: 250px; padding: 18px; }
+    #trace-bars { height: 175px; gap: 2px; }
+    .source-list a { grid-template-columns: 70px 1fr auto; }
+    .radius-footer { flex-direction: column; }
+    .radius-footer nav { justify-content: flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  }
+</style>
