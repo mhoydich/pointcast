@@ -166,6 +166,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'elemental-shrine',
+    name: 'Elemental Shrine',
+    kicker: 'STONE · LIGHT · FIRE · WATER',
+    description: 'A quiet interactive altar of four elemental presences, with an original opt-in soundscape created in ElevenLabs.',
+    url: 'https://pointcast.xyz/elemental-shrine',
+    path: '/elemental-shrine',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'open-road-shrine',
     name: 'Open Road Shrine',
     kicker: 'ONE MINUTE · BREATH · VOTIVE',
