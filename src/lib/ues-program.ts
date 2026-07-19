@@ -211,17 +211,24 @@ export const SATELLITE_SEED_BUDGET: ProgramBudget = {
 export const UES_FUNDING_MILESTONES = [
   { amountUsd: 6_000, name: 'Access foundation', unlocks: 'Core platform, captions, and the first learner access grants.' },
   { amountUsd: 15_000, name: 'First four tracks', unlocks: 'Faculty and stewardship for the first half of the launch catalog.' },
-  { amountUsd: 30_500, name: 'Full Online Season 0', unlocks: 'All eight six-week courses for a 60-learner launch cohort.' },
-  { amountUsd: 59_500, name: 'Local field layer', unlocks: 'Online Season 0 plus El Segundo and the 25-mile in-person layer.' },
-  { amountUsd: 317_000, name: 'Five-city fellowship', unlocks: 'The local program, five six-month satellite seeds, and a $70,000 network commons.' },
+  { amountUsd: 46_600, name: 'Full active term', unlocks: 'All ten maintained self-paced course rooms plus the shared access and production pool.' },
+  { amountUsd: 77_100, name: 'Online first', unlocks: 'The active self-paced term plus the Online Season 0 teaching foundation.' },
+  { amountUsd: 106_100, name: 'Local field layer', unlocks: 'The full online base plus El Segundo and the 25-mile in-person layer.' },
+  { amountUsd: 363_600, name: 'Five-city fellowship', unlocks: 'The current local program, five six-month satellite seeds, and a $70,000 network commons.' },
 ] as const;
 
+export const UES_ACTIVE_ONLINE_BASE_USD = UES_SEASON_ONE_BUDGET.totalUsd
+  + ONLINE_SEASON_ZERO_BUDGET.totalUsd;
+
+export const UES_ACTIVE_LOCAL_BASE_USD = UES_ACTIVE_ONLINE_BASE_USD
+  + TWENTY_FIVE_MILE_FIELD_BUDGET.totalUsd;
+
 export const UES_SCALE_SCENARIOS = [
-  { id: 'online', label: 'Online first', citySeeds: 0, networkCommonsUsd: 0, totalUsd: 30_500 },
-  { id: 'local', label: 'Online + 25-mile field layer', citySeeds: 0, networkCommonsUsd: 0, totalUsd: 59_500 },
-  { id: 'five-city', label: 'Five-city fellowship', citySeeds: 5, networkCommonsUsd: 70_000, totalUsd: 317_000 },
-  { id: 'twelve-city', label: 'Twelve-city network', citySeeds: 12, networkCommonsUsd: 120_000, totalUsd: 629_500 },
-  { id: 'twenty-five-city', label: 'Twenty-five-city network', citySeeds: 25, networkCommonsUsd: 210_000, totalUsd: 1_207_000 },
+  { id: 'online', label: 'Active + online foundation', citySeeds: 0, networkCommonsUsd: 0, totalUsd: UES_ACTIVE_ONLINE_BASE_USD },
+  { id: 'local', label: 'Online + 25-mile field layer', citySeeds: 0, networkCommonsUsd: 0, totalUsd: UES_ACTIVE_LOCAL_BASE_USD },
+  { id: 'five-city', label: 'Five-city fellowship', citySeeds: 5, networkCommonsUsd: 70_000, totalUsd: UES_ACTIVE_LOCAL_BASE_USD + (5 * SATELLITE_SEED_BUDGET.totalUsd) + 70_000 },
+  { id: 'twelve-city', label: 'Twelve-city network', citySeeds: 12, networkCommonsUsd: 120_000, totalUsd: UES_ACTIVE_LOCAL_BASE_USD + (12 * SATELLITE_SEED_BUDGET.totalUsd) + 120_000 },
+  { id: 'twenty-five-city', label: 'Twenty-five-city network', citySeeds: 25, networkCommonsUsd: 210_000, totalUsd: UES_ACTIVE_LOCAL_BASE_USD + (25 * SATELLITE_SEED_BUDGET.totalUsd) + 210_000 },
 ] as const;
 
 export const UES_SATELLITE_RULES = [
