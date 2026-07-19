@@ -62,6 +62,8 @@ test('UES publishes one shared catalog, ten JSON routes, and privacy-safe self-p
   assert.match(catalog, /Ten active, self-paced University of El Segundo classes/);
   assert.match(catalog, /Start a class/);
   assert.match(catalog, /No account\. No application\. No deadline\. No wallet/);
+  assert.match(catalog, /\.hero__copy \{ min-width:0;/);
+  assert.match(catalog, /@media\(max-width:360px\).*h1\{font-size:39px\}/);
   assert.match(catalog, /href="\/ues\/track-05"/);
   assert.doesNotMatch(catalog, /<main(?:\s|>)/);
 
