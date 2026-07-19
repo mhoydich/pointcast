@@ -1,4 +1,4 @@
-export const UES_COMPLETION_RECEIPT_SCHEMA_URL = 'https://pointcast.xyz/ues/completion-receipt/v1';
+export const UES_COMPLETION_RECEIPT_SCHEMA_URL = 'https://pointcast.xyz/ues/completion-receipt/v1.json';
 
 export const UES_COMPLETION_RECEIPT_SCHEMA = Object.freeze({
   $schema: 'https://json-schema.org/draft/2020-12/schema',

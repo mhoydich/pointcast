@@ -175,7 +175,7 @@ export const createCompletionReceipt = (progress, at = new Date()) => {
   if (!completionReached(normalized)) return null;
 
   return {
-    schema: 'https://pointcast.xyz/ues/completion-receipt/v1',
+    schema: 'https://pointcast.xyz/ues/completion-receipt/v1.json',
     kind: 'self-attested-course-completion',
     program: 'University of El Segundo',
     courseCode: normalized.courseCode,
