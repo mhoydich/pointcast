@@ -85,6 +85,28 @@ const description =
   }
   const nounFor = (address: string) => 1 + (fnv1a(address) % 1199);
   const short = (a: string) => a.slice(0, 6) + '…' + a.slice(-4);
+
+  // .tez reverse lookup via TzKT — Phase B of the seal-registry PRD.
+  // Cached per session; failures fall back silently to the short address.
+  async function tezName(address: string): Promise<string | null> {
+    const key = 'pc:tez-name:' + address;
+    try {
+      const hit = sessionStorage.getItem(key);
+      if (hit !== null) return hit || null;
+    } catch {}
+    try {
+      const r = await fetch(
+        'https://api.tzkt.io/v1/domains?owner=' + encodeURIComponent(address) + '&reverse=true&select=name&limit=1',
+        { cache: 'no-store' },
+      );
+      const rows = r.ok ? await r.json() : [];
+      const name = Array.isArray(rows) && typeof rows[0] === 'string' ? rows[0] : '';
+      try { sessionStorage.setItem(key, name); } catch {}
+      return name || null;
+    } catch {
+      return null;
+    }
+  }
   const esc = (s: string) => String(s || '').replace(/[<>&"]/g, (c) =>
     c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : '&quot;');
 
@@ -160,6 +182,15 @@ const description =
         const li = (ev.target as Element).closest('[data-address]');
         if (li) openProof(li.getAttribute('data-address')!);
       });
+      // Upgrade short addresses to .tez names where one exists.
+      for (const li of [...$covers.querySelectorAll('[data-address]')]) {
+        const addr = li.getAttribute('data-address')!;
+        tezName(addr).then((name) => {
+          if (!name) return;
+          const el = li.querySelector('.cover-addr');
+          if (el) el.textContent = name;
+        });
+      }
     } catch {
       $status.textContent = 'the registry did not answer. try again in a moment.';
     }
