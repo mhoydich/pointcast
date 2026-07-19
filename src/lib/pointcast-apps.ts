@@ -14,8 +14,8 @@ export const POINTCAST_APPS: PointcastApp[] = [
   {
     slug: 'corner-engineering',
     name: 'Corner Engineering Pulse',
-    kicker: 'WORKCELLS · HANDOFFS · DIGITAL THREAD',
-    description: 'A location-aware engineering network for traceable handoffs, tests, configuration changes, controlled risks, and live workcell context.',
+    kicker: 'CREW MISSIONS · WORKCELLS · DIGITAL THREAD',
+    description: 'A playful mission layer for traceable engineering signals, crew quests, workcell check-ins, controlled risks, and digital-thread momentum.',
     url: 'https://pointcast.xyz/corner',
     path: '/corner',
     repo: 'https://github.com/mhoydich/pointcast',
