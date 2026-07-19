@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'common-hours',
+    name: 'Common Hours',
+    kicker: 'BELLS · ALTARS · SHRINES · DAILY RITUALS',
+    description: 'A PointCast door into a wider living index of ordinary ceremony: Daily Chimes, prayer bells, morning and evening altars, drum shrines, Stampz, Passportz weather, and small gatherings.',
+    url: 'https://common-hours.mhoydich.chatgpt.site',
+    path: '/common-hours',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'corner-engineering',
     name: 'Corner Engineering Pulse',
     kicker: 'CREW MISSIONS · WORKCELLS · DIGITAL THREAD',
