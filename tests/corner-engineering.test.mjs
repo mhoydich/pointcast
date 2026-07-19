@@ -34,3 +34,13 @@ test('built route contains machine-share metadata and core controls', async () =
   assert.match(html, /Mobile engineering navigation/);
   assert.match(html, /Crew missions/);
 });
+
+test('V3 social card is emitted by a static route', async () => {
+  const route = await readFile(
+    new URL('src/pages/images/og/corner-engineering-v3.png.ts', root),
+    'utf8',
+  );
+  assert.match(route, /corner-engineering-v3\.png/);
+  assert.match(route, /Content-Type': 'image\/png'/);
+  assert.match(route, /prerender = true/);
+});
