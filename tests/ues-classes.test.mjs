@@ -42,6 +42,9 @@ test('The Local Transmission defines ten active, independently completable six-m
   assert.match(source, /Start any class immediately, without an application or account/);
   assert.match(source, /No live attendance, camera, account, wallet, or public posting is required/);
   assert.match(source, /Progress stays in this browser unless the learner chooses to download a private completion receipt/);
+  assert.match(source, /Every required prompt, scenario, rubric, and checklist is written inside the module/);
+  assert.match(source, /No AI system is required/);
+  assert.doesNotMatch(source, /\b(?:supplied|class-provided|instructor-provided)\b/i);
   assert.doesNotMatch(source, /status: 'forming'/);
   assert.doesNotMatch(source, /learnerCapacity: 96/);
 });
@@ -80,6 +83,13 @@ test('UES publishes one shared catalog, ten JSON routes, and privacy-safe self-p
   assert.match(room, /window\.localStorage\.setItem\(storageKey, serializeProgress\(progress\)\)/);
   assert.match(room, /Download private receipt/);
   assert.match(room, /createCompletionReceipt\(progress\)/);
+  assert.match(room, /The complete solo toolkit/);
+  assert.match(room, /Source trail/);
+  assert.match(room, /Audience scenarios/);
+  assert.match(room, /Cold read/);
+  assert.match(room, /Safety and rights pass/);
+  assert.match(room, /suggested after module \{assignment\.dueWeek\}/);
+  assert.doesNotMatch(room, /due week/);
   assert.doesNotMatch(room, /instructor: \{ '@type': 'Person'/);
   assert.doesNotMatch(room, /import\([^)]*ues-fund/);
 
