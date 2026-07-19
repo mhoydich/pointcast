@@ -34,6 +34,8 @@ export const STATIONS = [
   'matins', 'lauds', 'prime', 'terce', 'sext',
   // the evening hours — /prayer-altars-evening
   'none', 'vespers', 'lucernarium', 'compline', 'vigil',
+  // the bell that rings them — /prayer-bells
+  'angelus',
 ] as const;
 type Station = (typeof STATIONS)[number];
 
