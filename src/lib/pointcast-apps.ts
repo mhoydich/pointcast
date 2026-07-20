@@ -495,6 +495,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     channel: 'CH.SATS',
     kind: 'pointcast',
   },
+  {
+    slug: 'agent-observatory',
+    name: 'Agent-Web Observatory',
+    kicker: 'DAILY CENSUS · AGENT-READABLE WEB · RUNS ON ITS OWN',
+    description: 'A fully autonomous daily census of the agent-readable web: which sites publish llms.txt, agents.json, ai.json, agent-payments discovery, AI robots stanzas, and feeds — scored 0–100, diffed daily, published as JSON + RSS.',
+    url: 'https://pointcast.xyz/agent-observatory',
+    path: '/agent-observatory',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DATA',
+    kind: 'pointcast',
+  },
 ];
 
 export function getPointcastApp(slug: string) {

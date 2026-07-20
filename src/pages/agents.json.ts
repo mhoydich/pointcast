@@ -250,6 +250,7 @@ export const GET: APIRoute = async () => {
         pets: 'https://pointcast.xyz/pets',
         sitePetNamePoll: 'https://pointcast.xyz/poll/site-pet-name',
         zenCats: 'https://pointcast.xyz/zen-cats',
+        agentObservatory: 'https://pointcast.xyz/agent-observatory',
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -322,6 +323,9 @@ export const GET: APIRoute = async () => {
         play: 'https://pointcast.xyz/play.json',
         pets: 'https://pointcast.xyz/pets.json',
         zenCats: 'https://pointcast.xyz/zen-cats.json',
+        agentObservatoryCensus: 'https://pointcast.xyz/api/observatory',
+        agentObservatoryChanges: 'https://pointcast.xyz/api/observatory/changes',
+        agentObservatoryWeekly: 'https://pointcast.xyz/api/observatory/weekly',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
@@ -392,7 +396,7 @@ export const GET: APIRoute = async () => {
         transport: 'http',
         protocol: 'json-rpc-2.0',
         protocolVersion: '2025-06-18',
-        server: { name: 'pointcast-v2', version: '2.7.0' },
+        server: { name: 'pointcast-v2', version: '2.8.0' },
         install: {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
@@ -420,6 +424,8 @@ export const GET: APIRoute = async () => {
           // Nouns Nation Battler claim + production desk (v0.10.0 / v2.6.0)
           'nouns_battler_asset_factory', 'nouns_battler_sponsorship_desk', 'nouns_battler_production_desk',
           'nouns_battler_claim_board',
+          // Agent-Web Observatory census + change feed (v0.13.0 / v2.8.0)
+          'observatory_census', 'observatory_changes',
         ],
         resources: [
           'drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema',
@@ -436,6 +442,7 @@ export const GET: APIRoute = async () => {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',
         explore: 'https://pointcast.xyz/explore.rss',
+        agentObservatoryChanges: 'https://pointcast.xyz/api/observatory/rss',
       },
       indexnow: 'https://pointcast.xyz/api/indexnow',
       perBlock: {

@@ -10,7 +10,7 @@ alongside human visitors.
 - Original endpoint: `https://pointcast.xyz/api/mcp`
 - Transport: stateless POST, JSON-RPC 2.0
 - Protocol version: `2025-06-18`
-- Server name: `pointcast-v2` v2.7.0 on `/api/mcp-v2`; `pointcast` v0.11.0 on `/api/mcp`
+- Server name: `pointcast-v2` v2.8.0 on `/api/mcp-v2`; `pointcast` v0.13.0 on `/api/mcp`
 - Auth: none. CORS open. Bring an MCP client.
 
 **v0.1.0** (2026-04-27) — drum hub only, 9 tools.
@@ -24,6 +24,8 @@ alongside human visitors.
 **v0.9.0** (2026-04-29) — Nouns Nation Battler Production Desk. Adds accepted-work ledgers, broadcast queue briefs, rooting cards, Nouns Bowl hype packaging, `nouns_battler_production_desk`, and `nouns-battler://production-desk`.
 **v0.10.0** (2026-04-29) — Nouns Nation Battler Claim Board. Adds public claim cards, proof checklists, production handoffs, participant-credit routing, `nouns_battler_claim_board`, and `nouns-battler://claim-board`.
 **v0.11.0** (2026-05-01) — Nouns Nation Battler Wiki MCP. Adds topic briefs, watch links, contribution paths, guardrails, `nouns_battler_wiki`, and `nouns-battler://wiki`.
+**v0.12.0** — Battler Results Desk wrappers: `battler_bowl_state`, `battler_moon_tournament`, `battler_seeds`, `battler_trilogy`.
+**v0.13.0** (2026-07-20) — Agent-Web Observatory. Adds `observatory_census` and `observatory_changes` over the autonomous daily census of the agent-readable web (`/api/observatory`).
 **v2.0.0** (2026-04-28) — fresh install URL at `/api/mcp-v2` with a distinct server identity for clients that cached the original connector shape.
 **v2.1.0** (2026-04-29) — v2 server identity plus Battler agent tools.
 **v2.2.0** (2026-04-29) — v2 server identity plus Battler Results Desk tools.
@@ -32,6 +34,7 @@ alongside human visitors.
 **v2.5.0** (2026-04-29) — v2 server identity plus Battler Production Desk.
 **v2.6.0** (2026-04-29) — v2 server identity plus Battler Claim Board.
 **v2.7.0** (2026-05-01) — v2 server identity plus Battler Wiki MCP.
+**v2.8.0** (2026-07-20) — v2 server identity plus Agent-Web Observatory census + change feed.
 
 The Battler Agent Bench payload is versioned separately. v1.9.0 adds the Watch This Next routing kit for live desk, mobile, TV, wiki, Desk Wall, and Claim Board handoffs on top of v1.8.0 Wiki MCP.
 

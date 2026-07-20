@@ -30,6 +30,11 @@
  *           full-moon knockout, championship-history seed ordering, and
  *           the Sports Desk Thu→Sat→Mon cadence without re-implementing
  *           any of it.
+ * v0.13.0 — Agent-Web Observatory census + change feed. Adds
+ *           observatory_census and observatory_changes wrapping the
+ *           autonomous daily scan of the agent-readable web
+ *           (/api/observatory) — leaderboard, per-domain records, and
+ *           the adoption/regression event stream.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -137,9 +142,9 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.12.0';
+const SERVER_VERSION = '0.13.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.7.0';
+const V2_SERVER_VERSION = '2.8.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -722,6 +727,42 @@ const TOOL_DEFINITIONS = [
           type: 'string',
           enum: ['0411', '0422', '0434', 'all'],
           description: 'Specific beat to fetch in detail, or "all" for the trilogy. Default all.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'observatory_census',
+    description:
+      'Return the Agent-Web Observatory census — the fully autonomous daily scan of the agent-readable web. Without arguments: every roster domain leaderboard-ordered with its 0-100 agent-readiness score and earned surfaces (llms.txt, agents.json, ai.json, agent-payments, robots-ai, feeds). With a domain: that domain\'s full scan record including per-probe detail and score history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: {
+          type: 'string',
+          description: 'Optional domain to fetch in detail, e.g. "anthropic.com". Omit for the full census.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'observatory_changes',
+    description:
+      'Return the Agent-Web Observatory change feed: adoption events ("nytimes.com added /llms.txt"), removals, score moves, robots-directive flips, and new census rows, newest first. Diffs are computed automatically on every daily scan.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Max events to return, 1-500. Default 100 (same as the /api/observatory/changes endpoint).',
+          minimum: 1,
+          maximum: 500,
+        },
+        domain: {
+          type: 'string',
+          description: 'Optional domain filter, e.g. "openai.com".',
         },
       },
       additionalProperties: false,
@@ -1908,6 +1949,76 @@ async function dispatchTool(
       };
     }
 
+    case 'observatory_census': {
+      const domain = typeof args.domain === 'string' ? args.domain.trim().toLowerCase() : '';
+      const url = domain
+        ? `${base}/api/observatory?domain=${encodeURIComponent(domain)}`
+        : `${base}/api/observatory`;
+      let data: any;
+      try {
+        data = await callJson(url);
+      } catch (err) {
+        // The endpoint 404s for unknown/pending domains and 400s for
+        // malformed ones — degrade to readable text like every other
+        // read tool instead of surfacing a JSON-RPC internal error.
+        if (domain && /upstream 40\d/.test(String(err))) {
+          return { content: [{ type: 'text', text: `no census record for ${domain} — not in the roster, or awaiting its first scan.` }] };
+        }
+        throw err;
+      }
+      if (data?.reason === 'kv-unbound') {
+        return { content: [{ type: 'text', text: 'Observatory census not provisioned yet — the OBSERVATORY KV namespace is unbound.' }] };
+      }
+      if (domain) {
+        const record: any = data?.domain ?? data;
+        const summary = record?.score !== undefined
+          ? `${record.domain} · score ${record.score}/100 · last scanned ${record.lastScanDay ?? 'never'}${record.optedOut ? ' · OPTED OUT via robots.txt' : ''}`
+          : `no census record for ${domain}`;
+        return {
+          content: [
+            { type: 'text', text: summary },
+            { type: 'text', text: JSON.stringify(data, null, 2) },
+          ],
+        };
+      }
+      const rows = Array.isArray(data?.domains) ? data.domains : [];
+      const summary = [
+        `Agent-Web Observatory census — ${rows.length} domains, leaderboard order:`,
+        ...rows.slice(0, 15).map((r: any, i: number) => `  ${i + 1}. ${r.domain} · ${r.lastScanDay ? `${r.score}/100` : 'pending'} · ${r.category ?? r.source}`),
+        rows.length > 15 ? `  … ${rows.length - 15} more in the JSON payload` : '',
+      ].filter(Boolean).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'observatory_changes': {
+      const limit = Math.min(500, Math.max(1, Number(args.limit) || 100));
+      const domain = typeof args.domain === 'string' ? args.domain.trim().toLowerCase() : '';
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (domain) query.set('domain', domain);
+      const data = await callJson(`${base}/api/observatory/changes?${query}`);
+      if (data?.reason === 'kv-unbound') {
+        return { content: [{ type: 'text', text: 'Observatory change feed not provisioned yet — the OBSERVATORY KV namespace is unbound.' }] };
+      }
+      const events = Array.isArray(data?.events) ? data.events : [];
+      const summary = events.length === 0
+        ? 'No observatory change events recorded yet.'
+        : events
+            .slice(0, 20)
+            // diffScans writes the human string into e.detail for every kind.
+            .map((e: any) => `  ${e.day ?? '?'} · ${e.domain} · ${e.detail ?? e.kind}`)
+            .join('\n');
+      return {
+        content: [
+          { type: 'text', text: `Observatory changes (${events.length}):\n${summary}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -2312,7 +2423,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Call observatory_census for the Agent-Web Observatory\'s autonomous daily census of the agent-readable web (llms.txt / agents.json / ai.json adoption scores) and observatory_changes for its adoption event feed. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

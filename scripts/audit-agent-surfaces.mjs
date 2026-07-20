@@ -137,8 +137,8 @@ const jsonDupes = duplicates(jsonKeys);
 failed = !item(!humanDupes.length, 'human endpoint keys are unique', humanDupes.join(', ')) || failed;
 failed = !item(!jsonDupes.length, 'json endpoint keys are unique', jsonDupes.join(', ')) || failed;
 
-const requiredHuman = ['forAgents', 'aiStack', 'editions', 'local', 'areas', 'now'];
-const requiredJson = ['agents', 'aiStack', 'editions', 'feed', 'local', 'areas'];
+const requiredHuman = ['forAgents', 'aiStack', 'editions', 'local', 'areas', 'now', 'agentObservatory'];
+const requiredJson = ['agents', 'aiStack', 'editions', 'feed', 'local', 'areas', 'agentObservatoryCensus', 'agentObservatoryChanges', 'agentObservatoryWeekly'];
 
 for (const key of requiredHuman) {
   failed = !item(humanKeys.includes(key), `human endpoint exposes ${key}`) || failed;
@@ -156,6 +156,7 @@ const agentMentions = [
   '/feed.xml',
   '/feed.json',
   '/areas.json',
+  '/api/observatory',
 ];
 
 for (const mention of agentMentions) {
