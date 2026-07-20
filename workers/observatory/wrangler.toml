@@ -1,0 +1,48 @@
+# workers/observatory — the Agent-Web Observatory scanner.
+#
+# A fully autonomous census of the agent-readable web: hourly cron batches
+# probe each roster domain's fixed discovery surfaces (llms.txt, agents.json,
+# .well-known/ai.json, agent-payments.json, robots.txt AI stanzas, feeds),
+# score them, diff against yesterday, and write results to OBSERVATORY KV.
+# The Pages Functions at functions/api/observatory/* serve the same
+# namespace read-only. Runbook: docs/setup/agent-observatory.md.
+#
+# Deploy: `cd workers/observatory && npx wrangler deploy`
+# This file is NOT deployed automatically by the main Pages build —
+# scanner-logic changes need a manual redeploy. The evolving parts
+# (rubric, validators, seeds) live in src/lib/observatory-*.mjs and are
+# bundled in at deploy time.
+
+name = "pointcast-observatory"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+# Hourly scan batches (OBS_BATCH_SIZE domains/run → every roster domain at
+# most once per UTC day, free-plan subrequest-safe) + Monday 16:00 UTC
+# weekly rollup (an hour before the Pages weekly-recap convention).
+crons = ["0 * * * *", "0 16 * * 1"]
+
+# Created via `npx wrangler kv namespace create OBSERVATORY` — paste the id
+# here AND into the commented block in the root wrangler.toml so the Pages
+# read endpoints bind the same namespace.
+[[kv_namespaces]]
+binding = "OBSERVATORY"
+id = "REPLACE_ME_WITH_KV_ID"
+
+# Read-only use: the Pages middleware logs AI-crawler visits here; the
+# scanner maps visit types → operator domains for roster discovery.
+# Same id as the VISITS binding in the root wrangler.toml.
+[[kv_namespaces]]
+binding = "VISITS"
+id = "b456e586082a42c3b77cea450c79e7f7"
+
+[vars]
+# Domains scanned per hourly run. 5 × 9 probes = 45 subrequests, under the
+# free-plan 50/invocation ceiling. Raise on a paid plan without a code change.
+OBS_BATCH_SIZE = "5"
+
+# Optional secret (not a var): `npx wrangler secret put OBS_OPS_TOKEN`
+# gates POST /ops/scan + /ops/rollup for on-demand runs during verification.
+# When unset, the ops routes return 503 ops-not-configured.

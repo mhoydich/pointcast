@@ -1,0 +1,346 @@
+---
+/**
+ * /agent-observatory — the Agent-Web Observatory.
+ *
+ * A fully autonomous census of the agent-readable web. A standalone
+ * Worker (workers/observatory/) scans a ~80-domain roster daily for the
+ * nine conventional discovery surfaces, scores each domain 0-100, diffs
+ * against yesterday, and publishes everything to KV. This page is the
+ * human window: static shell + client fetch of the live /api/observatory
+ * surfaces. Agents should skip straight to the JSON/RSS twins below.
+ *
+ * Not to be confused with /observatory, the star-chart micro-app.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SCORE_GROUPS, PROBES } from '../lib/observatory-score.mjs';
+import { OBSERVATORY_SEEDS, OBSERVATORY_UA } from '../lib/observatory-seeds.mjs';
+
+const title = 'Agent-Web Observatory';
+const description =
+  'A fully autonomous daily census of the agent-readable web: which sites publish llms.txt, agents.json, ai.json, agent-payments discovery, AI robots stanzas, and machine feeds — scored, diffed, and fed back out as JSON and RSS.';
+
+const alternates = [
+  { type: 'application/json', href: '/api/observatory', title: 'Observatory census JSON' },
+  { type: 'application/json', href: '/api/observatory/changes', title: 'Observatory change feed JSON' },
+  { type: 'application/rss+xml', href: '/api/observatory/rss', title: 'Observatory changes RSS' },
+  { type: 'application/json', href: '/api/observatory/weekly', title: 'Observatory weekly rollup JSON' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: 'Agent-Web Observatory census',
+  description,
+  url: 'https://pointcast.xyz/agent-observatory',
+  creator: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  isAccessibleForFree: true,
+  distribution: [
+    { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/api/observatory' },
+    { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/api/observatory/changes' },
+    { '@type': 'DataDownload', encodingFormat: 'application/rss+xml', contentUrl: 'https://pointcast.xyz/api/observatory/rss' },
+    { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/api/observatory/weekly' },
+  ],
+  measurementTechnique:
+    'Nine fixed discovery-path probes per domain per day (llms.txt, llms-full.txt, agents.json, .well-known/agents.json, .well-known/ai.json, .well-known/agent-payments.json, robots.txt AI stanzas, feed.json, feed.xml), validated by body shape and weighted to a 0-100 agent-readiness score.',
+};
+
+const probeRows = PROBES.map((p) => ({
+  path: p.path,
+  group: p.group,
+  weight: SCORE_GROUPS[p.group],
+}));
+const seedCount = OBSERVATORY_SEEDS.length;
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} alternates={alternates}>
+  <main class="obs">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/apps">apps</a>
+      <span aria-hidden="true">/</span>
+      <span>agent-observatory</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">Agent-Web Observatory / Daily census · runs on its own</p>
+      <h1>Who on the web has opened a front door for agents?</h1>
+      <p>
+        Every day, an autonomous scanner probes {seedCount}+ domains — AI labs, publishers, dev
+        platforms, agent-native indies — for the nine conventional discovery surfaces of the
+        agentic web, scores each one 0–100, and publishes what changed. No human runs it. The
+        dataset compounds daily and everything below is CC0.
+      </p>
+      <nav class="actions" aria-label="Observatory data surfaces">
+        <a class="primary" href="/api/observatory">Census JSON</a>
+        <a href="/api/observatory/changes">Changes JSON</a>
+        <a href="/api/observatory/rss">Changes RSS</a>
+        <a href="/api/observatory/weekly">Weekly JSON</a>
+      </nav>
+    </header>
+
+    <section class="panel" aria-labelledby="board-h">
+      <h2 id="board-h">Leaderboard</h2>
+      <p class="note" id="board-note">
+        Live data loads from <a href="/api/observatory">/api/observatory</a>. If this table stays
+        empty, the census KV is not provisioned yet — the JSON endpoints state the reason.
+      </p>
+      <div class="tablewrap">
+        <table id="board">
+          <thead>
+            <tr><th>#</th><th>Domain</th><th>Category</th><th>Surfaces</th><th>Score</th></tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" class="empty">Loading census…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="changes-h">
+      <h2 id="changes-h">Recent changes</h2>
+      <ol id="changes" class="changes">
+        <li class="empty">Loading change feed…</li>
+      </ol>
+    </section>
+
+    <section class="panel" aria-labelledby="weekly-h">
+      <h2 id="weekly-h">This week</h2>
+      <div id="weekly" class="weekly">
+        <p class="empty">Loading weekly rollup…</p>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="rubric-h">
+      <h2 id="rubric-h">The rubric</h2>
+      <p>
+        A surface only counts when the response validates as the real thing — HTTP 200 alone never
+        scores, because most sites SPA-fallback HTML for unknown paths. agents.json is one surface
+        with two accepted locations; either earns the full weight.
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Probe path</th><th>Surface</th><th>Weight</th></tr>
+          </thead>
+          <tbody>
+            {probeRows.map((row) => (
+              <tr>
+                <td><code>{row.path}</code></td>
+                <td>{row.group}</td>
+                <td>{row.weight}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="ethics-h">
+      <h2 id="ethics-h">How it scans (ethics, enforced in code)</h2>
+      <ul>
+        <li>Only the nine conventional discovery paths above are ever fetched — no page content, no crawling.</li>
+        <li><code>robots.txt</code> is fetched first. A blanket <code>Disallow: /</code> or an explicit <code>pointcast-observatory</code> block ends the scan for that domain.</li>
+        <li>Identifying User-Agent: <code>{OBSERVATORY_UA}</code></li>
+        <li>Each domain is scanned at most once per UTC day; response bodies are capped at 128&nbsp;KB and never stored — only a content-hash prefix and a ≤280-character sample.</li>
+        <li>Roster: curated seeds, operators of AI crawlers observed visiting pointcast.xyz, and strict one-hop links from valid <code>agents.json</code> files. pointcast.xyz rides along as the control row.</li>
+      </ul>
+      <p class="note">
+        Want your domain added or removed? <a href="/ping">Ping the inbox</a> — or publish a
+        <code>pointcast-observatory</code> disallow stanza and the next scan honors it automatically.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const surfaceLabel = {
+      llms: 'llms.txt',
+      llmsFull: 'llms-full',
+      agents: 'agents.json',
+      aiJson: 'ai.json',
+      agentPayments: 'payments',
+      robotsAi: 'robots-ai',
+      feedJson: 'feed.json',
+      feedXml: 'feed.xml',
+    };
+
+    async function loadJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`${url} → ${res.status}`);
+      return res.json();
+    }
+
+    async function hydrateBoard() {
+      const tbody = document.querySelector('#board tbody');
+      try {
+        const data = await loadJson('/api/observatory');
+        if (!data.domains || data.domains.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="empty">${
+            data.reason === 'kv-unbound' ? 'Census not provisioned yet — first scan pending.' : 'No domains scanned yet.'
+          }</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = data.domains
+          .map((row, i) => {
+            const badges = (row.groups ?? [])
+              .map((g) => `<span class="badge">${surfaceLabel[g] ?? g}</span>`)
+              .join(' ');
+            return `<tr${row.domain === 'pointcast.xyz' ? ' class="control"' : ''}>
+              <td>${i + 1}</td>
+              <td><code>${row.domain}</code>${row.optedOut ? ' <span class="badge out">opted out</span>' : ''}</td>
+              <td>${row.category ?? row.source}</td>
+              <td>${badges || '<span class="dim">—</span>'}</td>
+              <td class="score">${row.lastScanDay ? row.score : '<span class="dim">pending</span>'}</td>
+            </tr>`;
+          })
+          .join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">Census unavailable right now.</td></tr>';
+      }
+    }
+
+    async function hydrateChanges() {
+      const list = document.getElementById('changes');
+      try {
+        const data = await loadJson('/api/observatory/changes?limit=20');
+        if (!data.events || data.events.length === 0) {
+          list.innerHTML = '<li class="empty">No changes recorded yet — diffs start on the second scan of each domain.</li>';
+          return;
+        }
+        list.innerHTML = data.events
+          .map(
+            (e) => `<li><span class="day">${e.day ?? ''}</span> <code>${e.domain}</code> — ${
+              e.kind === 'score-changed' ? `score ${e.prevScore} → ${e.newScore}` : (e.detail ?? e.kind)
+            }</li>`,
+          )
+          .join('');
+      } catch {
+        list.innerHTML = '<li class="empty">Change feed unavailable right now.</li>';
+      }
+    }
+
+    async function hydrateWeekly() {
+      const panel = document.getElementById('weekly');
+      try {
+        const data = await loadJson('/api/observatory/weekly');
+        const r = data.rollup;
+        if (!r) {
+          panel.innerHTML = '<p class="empty">No weekly rollup yet — the first Monday report is pending.</p>';
+          return;
+        }
+        const adoption = Object.entries(r.totals.surfaceAdoption ?? {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([g, n]) => `<span class="badge">${surfaceLabel[g] ?? g} · ${n}</span>`)
+          .join(' ');
+        panel.innerHTML = `
+          <p><strong>${r.week}</strong> — ${r.totals.scanned}/${r.totals.domains} domains scanned ·
+          average score ${r.totals.avgScore} · median ${r.totals.medianScore} ·
+          ${r.newDomains.length} new domains · ${r.eventCount} changes.</p>
+          <p>${adoption || '<span class="dim">No surface adoption recorded yet.</span>'}</p>`;
+      } catch {
+        panel.innerHTML = '<p class="empty">Weekly rollup unavailable right now.</p>';
+      }
+    }
+
+    hydrateBoard();
+    hydrateChanges();
+    hydrateWeekly();
+  </script>
+
+  <style>
+    .obs {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+      font-family: 'Inter Variable', system-ui, sans-serif;
+    }
+    .crumb {
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono Variable', monospace;
+      color: #666;
+      margin-bottom: 28px;
+    }
+    .crumb a { color: #666; }
+    .kicker {
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #888;
+      margin: 0 0 10px;
+    }
+    .hero h1 {
+      font-size: clamp(26px, 4.5vw, 38px);
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: -0.02em;
+    }
+    .hero > p { max-width: 62ch; color: #333; line-height: 1.55; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 12px;
+    }
+    .actions a {
+      border: 1px solid #ddd;
+      padding: 6px 12px;
+      text-decoration: none;
+      color: #111;
+    }
+    .actions a.primary { background: #111; color: #fff; border-color: #111; }
+    .panel { margin-top: 44px; }
+    .panel h2 {
+      font-size: 15px;
+      font-family: 'JetBrains Mono Variable', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    .panel p, .panel li { line-height: 1.55; color: #333; }
+    .note { font-size: 13px; color: #777; }
+    .tablewrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th {
+      text-align: left;
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid #eee;
+    }
+    td { padding: 7px 10px; border-bottom: 1px solid #f2f2f2; vertical-align: top; }
+    td.score { font-family: 'JetBrains Mono Variable', monospace; font-weight: 600; }
+    tr.control td { background: #fafafa; }
+    .badge {
+      display: inline-block;
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 10.5px;
+      border: 1px solid #e2e2e2;
+      padding: 1px 6px;
+      margin: 1px 0;
+      color: #444;
+      white-space: nowrap;
+    }
+    .badge.out { border-color: #e0b400; color: #8a6d00; }
+    .dim { color: #aaa; }
+    .empty { color: #999; font-size: 13.5px; }
+    .changes { padding-left: 18px; }
+    .changes li { margin: 6px 0; font-size: 13.5px; }
+    .changes .day {
+      font-family: 'JetBrains Mono Variable', monospace;
+      font-size: 11px;
+      color: #999;
+      margin-right: 4px;
+    }
+    code { font-family: 'JetBrains Mono Variable', monospace; font-size: 0.92em; }
+  </style>
+</BlockLayout>
