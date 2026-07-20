@@ -18,9 +18,13 @@
  * If the control row drops, the scanner is broken, not the site.
  */
 
-/** UA the scanner identifies itself with on every probe. */
+import { OBSERVATORY_UA_TOKEN } from './observatory-score.mjs';
+
+/** UA the scanner identifies itself with on every probe. Built from the
+ *  same token the robots opt-out parser matches, so the string operators
+ *  see in their logs is always the string that opts them out. */
 export const OBSERVATORY_UA =
-  'ai:pointcast-observatory (+https://pointcast.xyz/agent-observatory)';
+  `ai:${OBSERVATORY_UA_TOKEN} (+https://pointcast.xyz/agent-observatory)`;
 
 /** Roster ceilings — the census stays small enough to scan daily. */
 export const MAX_DOMAINS = 300;

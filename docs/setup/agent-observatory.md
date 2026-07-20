@@ -32,9 +32,7 @@ Worker by wrangler's esbuild. The Worker itself is a thin orchestrator.
 |---|---|
 | `obs:index` | `[{ domain, source, category?, score, groups[], lastScanDay, optedOut }]` — one small key; the census endpoint is a single read |
 | `obs:domain:{domain}` | full scan record: probes (status/servedValid/hash/sample), robots directives, score, breakdown, history (≤60 days) |
-| `obs:events` | change events newest-first, cap 500 |
-| `obs:cursor` | `{ position, cycleDay }` — batch cursor; resets each UTC day |
-| `obs:discovered` | one-hop discoveries, cap 100 |
+| `obs:events` | change events newest-first, cap 500 (hop discoveries appear here as `domain-added` on their first scan; roster rows with `source: 'hop'` mark them in the index) |
 | `obs:weekly:{YYYY-wWW}` + `obs:weekly:latest` + `obs:weekly:index` | Monday rollups (the recap KV idiom) |
 
 ## Scan behavior + ethics (enforced in code)
@@ -44,10 +42,19 @@ Worker by wrangler's esbuild. The Worker itself is a thin orchestrator.
   stanza short-circuits the scan (recorded as `optedOut`).
 - UA: `ai:pointcast-observatory (+https://pointcast.xyz/agent-observatory)`
 - ≤1 scan per domain per UTC day (`lastScanDay` guard, double-fire safe).
+  Batch selection is oldest-first, so a roster larger than one day's
+  capacity (24 crons × OBS_BATCH_SIZE) round-robins fairly instead of
+  starving the tail.
 - Bodies capped at 128 KB, stored as 16-hex hash prefix + ≤280-char sample.
-- Subrequest budget: 5 domains × 9 probes = 45/run, under the free-plan 50.
+- Subrequest budget at batch 4: 36 probe fetches + ~12 KV ops ≈ 48/run
+  (Cloudflare counts KV operations toward the limit), under the free-plan
+  50. Raise `OBS_BATCH_SIZE` on a paid plan (1,000/invocation).
 
 ## One-time provisioning (the only human touch)
+
+Handoff: tracked in TASKS.md; ops brief for Manus at
+`docs/briefs/2026-07-20-manus-observatory-provisioning.md`. Mike can also
+run the three steps directly — they need Cloudflare account access.
 
 1. `npx wrangler kv namespace create OBSERVATORY`
    → paste the id into `workers/observatory/wrangler.toml` AND the

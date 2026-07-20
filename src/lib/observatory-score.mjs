@@ -15,6 +15,11 @@
  * full 20. PointCast itself serves both; most sites that adopt pick one.
  */
 
+/** The robots.txt opt-out token. Single source of truth: the scanner UA
+ *  (observatory-seeds.mjs) is built from this, and the opt-out parser
+ *  matches on it — rebranding one without the other is impossible. */
+export const OBSERVATORY_UA_TOKEN = 'pointcast-observatory';
+
 /** Weighted surface groups. Weights sum to 100. */
 export const SCORE_GROUPS = {
   llms: 20,
@@ -113,7 +118,7 @@ export function scoreProbes(probeResults) {
  * blocksAll/blocksObservatory are the ethical opt-out gate: when either is
  * true the scanner records the robots result and probes nothing else.
  */
-export function parseRobotsAiDirectives(text, uaToken = 'pointcast-observatory') {
+export function parseRobotsAiDirectives(text, uaToken = OBSERVATORY_UA_TOKEN) {
   const out = { hasAiStanzas: AI_BOT_AGENTS.test(text || ''), blocksAll: false, blocksObservatory: false };
   if (!text) return out;
   let currentAgents = [];
@@ -133,7 +138,8 @@ export function parseRobotsAiDirectives(text, uaToken = 'pointcast-observatory')
       continue;
     }
     lastWasAgent = false;
-    if (field === 'disallow' && value === '/') {
+    // '/' and its wildcard form '/*' are both blanket disallows (RFC 9309).
+    if (field === 'disallow' && (value === '/' || value === '/*')) {
       if (currentAgents.includes('*')) out.blocksAll = true;
       if (currentAgents.some((a) => a.includes(uaToken.toLowerCase()))) out.blocksObservatory = true;
     }
@@ -213,7 +219,13 @@ export function diffScans(prev, next, now) {
   const base = { t: now, day, domain: next.domain };
   const events = [];
 
-  for (const probe of PROBES) {
+  // When either scan is opted out, the non-robots probes were never fetched —
+  // absent probes mean "declined to scan", not "stopped serving". Surface
+  // diffs would publish false removals (or false adoptions on un-opt-out),
+  // so only robots-changed and score-changed speak for opt-out transitions.
+  const optedOutInvolved = !!prev.optedOut || !!next.optedOut;
+
+  if (!optedOutInvolved) for (const probe of PROBES) {
     const before = prev.probes?.[probe.id];
     const after = next.probes?.[probe.id];
     const wasValid = !!before?.servedValid;

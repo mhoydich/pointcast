@@ -756,7 +756,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         limit: {
           type: 'number',
-          description: 'Max events to return, 1-500. Default 50.',
+          description: 'Max events to return, 1-500. Default 100 (same as the /api/observatory/changes endpoint).',
           minimum: 1,
           maximum: 500,
         },
@@ -1954,7 +1954,18 @@ async function dispatchTool(
       const url = domain
         ? `${base}/api/observatory?domain=${encodeURIComponent(domain)}`
         : `${base}/api/observatory`;
-      const data = await callJson(url);
+      let data: any;
+      try {
+        data = await callJson(url);
+      } catch (err) {
+        // The endpoint 404s for unknown/pending domains and 400s for
+        // malformed ones — degrade to readable text like every other
+        // read tool instead of surfacing a JSON-RPC internal error.
+        if (domain && /upstream 40\d/.test(String(err))) {
+          return { content: [{ type: 'text', text: `no census record for ${domain} — not in the roster, or awaiting its first scan.` }] };
+        }
+        throw err;
+      }
       if (data?.reason === 'kv-unbound') {
         return { content: [{ type: 'text', text: 'Observatory census not provisioned yet — the OBSERVATORY KV namespace is unbound.' }] };
       }
@@ -1984,7 +1995,7 @@ async function dispatchTool(
       };
     }
     case 'observatory_changes': {
-      const limit = Math.min(500, Math.max(1, Number(args.limit) || 50));
+      const limit = Math.min(500, Math.max(1, Number(args.limit) || 100));
       const domain = typeof args.domain === 'string' ? args.domain.trim().toLowerCase() : '';
       const query = new URLSearchParams({ limit: String(limit) });
       if (domain) query.set('domain', domain);
@@ -1997,7 +2008,8 @@ async function dispatchTool(
         ? 'No observatory change events recorded yet.'
         : events
             .slice(0, 20)
-            .map((e: any) => `  ${e.day ?? '?'} · ${e.domain} · ${e.kind === 'score-changed' ? `score ${e.prevScore} → ${e.newScore}` : e.detail ?? e.kind}`)
+            // diffScans writes the human string into e.detail for every kind.
+            .map((e: any) => `  ${e.day ?? '?'} · ${e.domain} · ${e.detail ?? e.kind}`)
             .join('\n');
       return {
         content: [

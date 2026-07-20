@@ -2,18 +2,21 @@
  * pointcast-observatory cron worker — the Agent-Web Observatory scanner.
  *
  * Runtime shape (happy path):
- *   hourly cron → load roster + cursor from OBSERVATORY KV →
+ *   hourly cron → load roster from OBSERVATORY KV →
  *   (first run of the UTC day: merge seeds + VISITS-log operator domains) →
- *   scan the next OBS_BATCH_SIZE unscanned domains (9 fixed probes each,
- *   robots.txt first with an opt-out short-circuit) → score, diff, write.
- *   Monday 16:00 UTC cron → weekly rollup from the index + event log.
+ *   scan the OBS_BATCH_SIZE least-recently-scanned domains (9 fixed probes
+ *   each, robots.txt first with an opt-out short-circuit) → score, diff,
+ *   write. Batch selection is oldest-first, so a roster larger than one
+ *   day's capacity degrades to a slower round-robin instead of starving
+ *   the tail. Monday 16:00 UTC cron → weekly rollup from index + events.
  *
  * Ethics, enforced in code:
  *   · Only the 9 conventional discovery paths are ever fetched — no page
  *     content, no crawling beyond the fixed probe set.
- *   · robots.txt is fetched FIRST; a blanket Disallow or an explicit
- *     pointcast-observatory block ends the scan for that domain.
- *   · Identifying UA with a link to the methodology page.
+ *   · robots.txt is fetched FIRST; a blanket Disallow ('/' or '/*') or an
+ *     explicit pointcast-observatory block ends the scan for that domain.
+ *   · Identifying UA with a link to the methodology page; the UA token and
+ *     the opt-out matcher share one constant (OBSERVATORY_UA_TOKEN).
  *   · Each domain is scanned at most once per UTC day.
  *   · Bodies are read capped at 128 KB; records keep a 16-hex content-hash
  *     prefix and a ≤280-char sample, never full bodies.
@@ -39,6 +42,7 @@ import {
   MAX_DISCOVERED,
   MAX_HOPS_PER_SCAN,
 } from '../../../src/lib/observatory-seeds.mjs';
+import { getISOWeekId } from '../../../src/lib/iso-week.mjs';
 
 export interface Env {
   OBSERVATORY: KVNamespace;
@@ -50,9 +54,7 @@ export interface Env {
 // ─── KV keys ─────────────────────────────────────────────────────────────────
 
 const KEY_INDEX = 'obs:index';
-const KEY_CURSOR = 'obs:cursor';
 const KEY_EVENTS = 'obs:events';
-const KEY_DISCOVERED = 'obs:discovered';
 const domainKey = (domain: string) => `obs:domain:${domain}`;
 const weeklyKey = (week: string) => `obs:weekly:${week}`;
 
@@ -72,23 +74,9 @@ interface IndexRow {
   optedOut: boolean;
 }
 
-interface Cursor {
-  position: number;
-  cycleDay: string | null;
-}
-
 // ─── Small helpers ───────────────────────────────────────────────────────────
 
 const todayUTC = (now: number) => new Date(now).toISOString().slice(0, 10);
-
-/** ISO week id "YYYY-wWW" — same convention as functions/cron/weekly-recap.ts. */
-function getISOWeekId(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-w${String(weekNo).padStart(2, '0')}`;
-}
 
 async function sha256Prefix(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -98,32 +86,25 @@ async function sha256Prefix(text: string): Promise<string> {
     .slice(0, 16);
 }
 
-/** Read a response body, hard-capped — never buffers more than `cap` bytes. */
+/** Read a response body into one preallocated buffer, hard-capped. */
 async function readCapped(res: Response, cap: number): Promise<string> {
   const reader = res.body?.getReader();
   if (!reader) return '';
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (received < cap) {
+  const buf = new Uint8Array(cap);
+  let offset = 0;
+  while (offset < cap) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
-    received += value.length;
+    const take = Math.min(value.length, cap - offset);
+    buf.set(value.subarray(0, take), offset);
+    offset += take;
   }
   try {
     await reader.cancel();
   } catch {
     /* stream may already be closed */
   }
-  const buf = new Uint8Array(Math.min(received, cap));
-  let offset = 0;
-  for (const chunk of chunks) {
-    const take = Math.min(chunk.length, cap - offset);
-    buf.set(chunk.subarray(0, take), offset);
-    offset += take;
-    if (offset >= cap) break;
-  }
-  return new TextDecoder().decode(buf);
+  return new TextDecoder().decode(buf.subarray(0, offset));
 }
 
 interface ProbeFetch {
@@ -156,16 +137,40 @@ async function probeUrl(url: string): Promise<ProbeFetch> {
   }
 }
 
+/** The one probe-record shape, used for robots.txt and the other 8 alike. */
+async function probeRecord(result: ProbeFetch, expect: string) {
+  const servedValid = validateProbeBody(expect, result.body, result.contentType, result.ok);
+  return {
+    status: result.status,
+    ok: result.ok,
+    servedValid,
+    contentType: result.contentType,
+    bytes: result.bytes,
+    hash: servedValid && result.body ? await sha256Prefix(result.body) : null,
+    sample: servedValid && result.body ? result.body.slice(0, SAMPLE_CAP) : undefined,
+  };
+}
+
 // ─── Scan batch ──────────────────────────────────────────────────────────────
 
-async function discoverDomains(env: Env, index: IndexRow[]): Promise<void> {
-  const known = new Set(index.map((row) => row.domain));
+/** Merge seeds + AI-crawler operators into the roster. Existing seed rows
+ *  get their category refreshed so the seeds file stays the source of truth.
+ *  Returns true when the roster changed. */
+async function discoverDomains(env: Env, index: IndexRow[]): Promise<boolean> {
+  let changed = false;
+  const byDomain = new Map(index.map((row) => [row.domain, row]));
 
   for (const seed of OBSERVATORY_SEEDS) {
+    const existing = byDomain.get(seed.domain);
+    if (existing) {
+      if (existing.category !== seed.category) {
+        existing.category = seed.category;
+        changed = true;
+      }
+      continue;
+    }
     if (index.length >= MAX_DOMAINS) break;
-    if (known.has(seed.domain)) continue;
-    known.add(seed.domain);
-    index.push({
+    const row: IndexRow = {
       domain: seed.domain,
       source: 'seed',
       category: seed.category,
@@ -173,22 +178,28 @@ async function discoverDomains(env: Env, index: IndexRow[]): Promise<void> {
       groups: [],
       lastScanDay: null,
       optedOut: false,
-    });
+    };
+    byDomain.set(seed.domain, row);
+    index.push(row);
+    changed = true;
   }
 
-  if (!env.VISITS) return;
+  if (!env.VISITS) return changed;
   try {
     const log = (await env.VISITS.get('log', 'json')) as Array<{ type?: string }> | null;
     for (const entry of log ?? []) {
       if (index.length >= MAX_DOMAINS) break;
       const operator = entry.type ? (CRAWLER_OPERATOR_DOMAINS as Record<string, string>)[entry.type] : undefined;
-      if (!operator || known.has(operator)) continue;
-      known.add(operator);
-      index.push({ domain: operator, source: 'visit', score: 0, groups: [], lastScanDay: null, optedOut: false });
+      if (!operator || byDomain.has(operator)) continue;
+      const row: IndexRow = { domain: operator, source: 'visit', score: 0, groups: [], lastScanDay: null, optedOut: false };
+      byDomain.set(operator, row);
+      index.push(row);
+      changed = true;
     }
   } catch {
     // Discovery is best-effort; the seed roster alone keeps the census alive.
   }
+  return changed;
 }
 
 interface ScanOutcome {
@@ -204,33 +215,17 @@ async function scanDomain(row: IndexRow, prev: any, now: number, knownDomains: S
   let agentsBody: string | null = null;
 
   const robotsFetch = await probeUrl(`${base}/robots.txt`);
-  const robots = parseRobotsAiDirectives(robotsFetch.body, 'pointcast-observatory');
+  const robots = parseRobotsAiDirectives(robotsFetch.body);
   const optedOut = robots.blocksAll || robots.blocksObservatory;
-
-  probes.robotsAi = {
-    status: robotsFetch.status,
-    ok: robotsFetch.ok,
-    servedValid: validateProbeBody('robots-ai', robotsFetch.body, robotsFetch.contentType, robotsFetch.ok),
-    contentType: robotsFetch.contentType,
-    bytes: robotsFetch.bytes,
-    hash: robotsFetch.body ? await sha256Prefix(robotsFetch.body) : null,
-  };
+  probes.robotsAi = await probeRecord(robotsFetch, 'robots-ai');
 
   if (!optedOut) {
     for (const probe of PROBES) {
       if (probe.id === 'robotsAi') continue;
       const result = await probeUrl(base + probe.path);
-      const servedValid = validateProbeBody(probe.expect, result.body, result.contentType, result.ok);
-      probes[probe.id] = {
-        status: result.status,
-        ok: result.ok,
-        servedValid,
-        contentType: result.contentType,
-        bytes: result.bytes,
-        hash: servedValid && result.body ? await sha256Prefix(result.body) : null,
-        sample: servedValid && result.body ? result.body.slice(0, SAMPLE_CAP) : undefined,
-      };
-      if (servedValid && (probe.id === 'agentsJson' || probe.id === 'wellKnownAgents') && !agentsBody) {
+      const record = await probeRecord(result, probe.expect);
+      probes[probe.id] = record;
+      if (record.servedValid && (probe.id === 'agentsJson' || probe.id === 'wellKnownAgents') && !agentsBody) {
         agentsBody = result.body;
       }
     }
@@ -258,6 +253,9 @@ async function scanDomain(row: IndexRow, prev: any, now: number, knownDomains: S
     history,
   };
 
+  // 'domain-added' is emitted exactly once per domain: on its first scan.
+  // (Hop discoveries are NOT announced at roster-push time — that would
+  // double-count them here and in the weekly newDomains list.)
   const events: Array<Record<string, unknown>> = prev
     ? diffScans(prev, record, now)
     : [{ t: now, day, domain: row.domain, kind: 'domain-added', detail: `joined the census via ${row.source}` }];
@@ -273,23 +271,25 @@ async function scanDomain(row: IndexRow, prev: any, now: number, knownDomains: S
 
 export async function runScanBatch(env: Env, now = Date.now()): Promise<{ scanned: string[]; day: string }> {
   const day = todayUTC(now);
-  const batchSize = Math.max(1, parseInt(env.OBS_BATCH_SIZE ?? '5', 10) || 5);
+  const batchSize = Math.max(1, parseInt(env.OBS_BATCH_SIZE ?? '4', 10) || 4);
 
   const index = ((await env.OBSERVATORY.get(KEY_INDEX, 'json')) as IndexRow[] | null) ?? [];
-  const cursor = ((await env.OBSERVATORY.get(KEY_CURSOR, 'json')) as Cursor | null) ?? { position: 0, cycleDay: null };
 
   // First run of a new UTC day: refresh the roster from seeds + visit log.
-  if (cursor.cycleDay !== day) {
-    await discoverDomains(env, index);
-    cursor.position = 0;
-    cursor.cycleDay = day;
-  }
+  const firstRunOfDay = index.length === 0 || !index.some((row) => row.lastScanDay === day);
+  const rosterChanged = firstRunOfDay ? await discoverDomains(env, index) : false;
 
-  const batch: IndexRow[] = [];
-  let position = Math.min(cursor.position, index.length);
-  while (position < index.length && batch.length < batchSize) {
-    if (index[position].lastScanDay !== day) batch.push(index[position]);
-    position++;
+  // Oldest-first, never twice in one UTC day. A roster bigger than the
+  // day's capacity (24 crons × batch) round-robins fairly instead of
+  // starving whatever sits past the daily cutoff.
+  const batch = index
+    .filter((row) => row.lastScanDay !== day)
+    .sort((a, b) => (a.lastScanDay ?? '').localeCompare(b.lastScanDay ?? '') || a.domain.localeCompare(b.domain))
+    .slice(0, batchSize);
+
+  if (batch.length === 0 && !rosterChanged) {
+    // Quiet hour after the roster is fully covered — no KV writes at all.
+    return { scanned: [], day };
   }
 
   const knownDomains = new Set(index.map((row) => row.domain));
@@ -298,9 +298,12 @@ export async function runScanBatch(env: Env, now = Date.now()): Promise<{ scanne
   const hopCount = index.filter((row) => row.source === 'hop').length;
   let hopBudget = Math.max(0, Math.min(MAX_DISCOVERED - hopCount, MAX_DOMAINS - index.length));
 
-  for (const row of batch) {
-    const prev = await env.OBSERVATORY.get(domainKey(row.domain), 'json');
-    const { record, events, hops } = await scanDomain(row, prev, now, knownDomains);
+  // Prev records are independent — fetch them together, probe politely after.
+  const prevs = await Promise.all(batch.map((row) => env.OBSERVATORY.get(domainKey(row.domain), 'json')));
+
+  for (let i = 0; i < batch.length; i++) {
+    const row = batch[i];
+    const { record, events, hops } = await scanDomain(row, prevs[i], now, knownDomains);
 
     await env.OBSERVATORY.put(domainKey(row.domain), JSON.stringify(record));
     row.score = record.score as number;
@@ -317,29 +320,19 @@ export async function runScanBatch(env: Env, now = Date.now()): Promise<{ scanne
       hopBudget--;
       knownDomains.add(hop);
       index.push({ domain: hop, source: 'hop', score: 0, groups: [], lastScanDay: null, optedOut: false });
-      allEvents.push({ t: now, day, domain: hop, kind: 'domain-added', detail: `discovered via ${row.domain} agents.json` });
+      // No event here — the hop's own first scan announces it (see scanDomain).
     }
   }
-
-  cursor.position = position >= index.length ? index.length : position;
 
   if (allEvents.length > 0) {
     const existing = ((await env.OBSERVATORY.get(KEY_EVENTS, 'json')) as Array<Record<string, unknown>> | null) ?? [];
     const merged = [...allEvents.reverse(), ...existing].slice(0, MAX_EVENTS);
     await env.OBSERVATORY.put(KEY_EVENTS, JSON.stringify(merged));
-
-    const newHops = allEvents.filter((e) => e.kind === 'domain-added' && index.find((r) => r.domain === e.domain)?.source === 'hop');
-    if (newHops.length > 0) {
-      const discovered = ((await env.OBSERVATORY.get(KEY_DISCOVERED, 'json')) as Array<Record<string, unknown>> | null) ?? [];
-      for (const hop of newHops) discovered.unshift({ domain: hop.domain, foundVia: hop.detail, firstSeen: new Date(now).toISOString() });
-      await env.OBSERVATORY.put(KEY_DISCOVERED, JSON.stringify(discovered.slice(0, MAX_DISCOVERED)));
-    }
   }
 
   await env.OBSERVATORY.put(KEY_INDEX, JSON.stringify(index));
-  await env.OBSERVATORY.put(KEY_CURSOR, JSON.stringify(cursor));
 
-  console.log(`[observatory] scanned ${scanned.length} domains (${scanned.join(', ') || 'none'}) — roster ${index.length}, cursor ${cursor.position}`);
+  console.log(`[observatory] scanned ${scanned.length} domains (${scanned.join(', ') || 'none'}) — roster ${index.length}`);
   return { scanned, day };
 }
 

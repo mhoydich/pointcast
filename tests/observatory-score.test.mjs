@@ -140,6 +140,13 @@ test('parseRobotsAiDirectives detects an observatory-specific opt-out', () => {
   assert.equal(r.blocksAll, false);
 });
 
+test('parseRobotsAiDirectives: wildcard Disallow: /* is a blanket block', () => {
+  const r = parseRobotsAiDirectives('User-agent: *\nDisallow: /*');
+  assert.equal(r.blocksAll, true);
+  const o = parseRobotsAiDirectives('User-agent: pointcast-observatory\nDisallow: /*');
+  assert.equal(o.blocksObservatory, true);
+});
+
 test('parseRobotsAiDirectives: partial disallows are not a block', () => {
   const r = parseRobotsAiDirectives('User-agent: *\nDisallow: /admin\nAllow: /');
   assert.equal(r.blocksAll, false);
@@ -229,6 +236,36 @@ test('diffScans emits robots-changed when directives flip', () => {
   const events = diffScans(prev, next, NOW);
   assert.equal(events.length, 1);
   assert.equal(events[0].kind, 'robots-changed');
+});
+
+test('diffScans: opt-out transition suppresses surface events (absent probes are "declined to scan", not "removed")', () => {
+  const prev = {
+    domain: 'a.com',
+    optedOut: false,
+    probes: { llms: { servedValid: true, hash: 'x' }, feedXml: { servedValid: true, hash: 'y' } },
+    score: 30,
+    robots: { hasAiStanzas: false, blocksAll: false, blocksObservatory: false },
+  };
+  const next = {
+    domain: 'a.com',
+    optedOut: true,
+    probes: { robotsAi: { servedValid: false } },
+    score: 0,
+    robots: { hasAiStanzas: false, blocksAll: true, blocksObservatory: false },
+  };
+  const kinds = diffScans(prev, next, NOW).map((e) => e.kind).sort();
+  assert.deepEqual(kinds, ['robots-changed', 'score-changed'], 'no surface-removed events on opt-out');
+
+  // Un-opt-out is symmetric: no false surface-added flood.
+  const backKinds = diffScans(next, { ...prev, score: 30 }, NOW).map((e) => e.kind).sort();
+  assert.ok(!backKinds.includes('surface-added'), 'no surface-added events on un-opt-out');
+});
+
+test('score-changed events carry the human string in detail (single source for all renderers)', () => {
+  const prev = { domain: 'a.com', probes: {}, score: 10, robots: {} };
+  const next = { domain: 'a.com', probes: {}, score: 40, robots: {} };
+  const e = diffScans(prev, next, NOW).find((x) => x.kind === 'score-changed');
+  assert.equal(e.detail, 'score 10 → 40');
 });
 
 // ─── Seeds sanity ────────────────────────────────────────────────────────────

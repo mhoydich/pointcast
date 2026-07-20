@@ -15,6 +15,7 @@
  */
 
 import type { WeeklyRecap, RecapNounBreakdown, RecapHeroMoment, RecapDrop } from '../../src/types/recap';
+import { getISOWeekId } from '../../src/lib/iso-week.mjs';
 
 // ─── Environment Bindings ────────────────────────────────────────────────────
 
@@ -27,19 +28,6 @@ export interface Env {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Returns the ISO week string "YYYY-wWW" for a given Date.
- * Uses the ISO 8601 definition: week starts Monday, week 1 contains Jan 4.
- */
-function getISOWeekId(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  // ISO week: Thursday of the week determines the year
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-w${String(weekNo).padStart(2, '0')}`;
-}
 
 /**
  * Returns the Monday 00:00:00 UTC and Sunday 23:59:59 UTC

@@ -16,8 +16,8 @@ function xmlEscape(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// diffScans writes the human string into e.detail for every event kind.
 function itemTitle(e: Record<string, any>): string {
-  if (e.kind === 'score-changed') return `${e.domain} score ${e.prevScore} → ${e.newScore}`;
   return `${e.domain} — ${e.detail ?? e.kind}`;
 }
 
@@ -32,7 +32,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
     <item>
       <title>${xmlEscape(itemTitle(e))}</title>
       <link>https://pointcast.xyz/api/observatory?domain=${encodeURIComponent(e.domain)}</link>
-      <guid isPermaLink="false">observatory-${xmlEscape(String(e.domain))}-${xmlEscape(String(e.kind))}-${e.t}</guid>
+      <guid isPermaLink="false">observatory-${xmlEscape(String(e.domain))}-${xmlEscape(String(e.kind))}${e.probeId ? `-${xmlEscape(String(e.probeId))}` : ''}-${e.t}</guid>
       <pubDate>${new Date(e.t).toUTCString()}</pubDate>
       <description>${xmlEscape(String(e.detail ?? e.kind))}</description>
       <category>${xmlEscape(String(e.kind))}</category>
