@@ -1,0 +1,844 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'A fast PointCast playground game for six runners: pass the tag, use your dash, survive the shrinking yard, and do not be it when the clock hits zero.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: 'Last Tag',
+  description,
+  url: 'https://pointcast.xyz/last-tag',
+  gamePlatform: 'Web browser',
+  genre: ['Tag', 'Arcade', 'Action'],
+  playMode: 'SinglePlayer',
+  numberOfPlayers: 1,
+};
+---
+
+<BlockLayout
+  title="Last Tag"
+  description={description}
+  image="/images/og/b/0389.png"
+  themeColor="#f6cf3d"
+  immersive={true}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/last-tag.json', title: 'Last Tag game manifest' }]}
+>
+  <div class="last-tag" id="last-tag" data-state="idle" data-phase="open">
+    <header class="game-head">
+      <a class="brand" href="/">POINT<span>•</span>CAST</a>
+      <div class="title-lockup">
+        <p>CH.PLAY / PLAYGROUND 001</p>
+        <h1>LAST TAG</h1>
+      </div>
+      <nav aria-label="Game navigation">
+        <a href="/tag-signal">Tag Signal</a>
+        <a href="/apps">All apps</a>
+      </nav>
+    </header>
+
+    <main class="game-shell">
+      <section class="scorebar" aria-label="Round status">
+        <div class="clock-block">
+          <span>TIME LEFT</span>
+          <strong id="clock">60.0</strong>
+        </div>
+        <div class="status-block" id="status-block" data-it="false">
+          <span>YOU ARE</span>
+          <strong id="player-status">SAFE</strong>
+        </div>
+        <div>
+          <span>TAGS</span>
+          <strong id="tag-count">0</strong>
+        </div>
+        <div>
+          <span>SCORE</span>
+          <strong id="score">0</strong>
+        </div>
+        <div>
+          <span>BEST</span>
+          <strong id="best">—</strong>
+        </div>
+      </section>
+
+      <section class="arena-wrap" aria-label="Last Tag playground">
+        <canvas
+          id="arena"
+          width="960"
+          height="600"
+          role="img"
+          aria-label="Six runners play tag in a shrinking playground. You are the runner labeled YOU. Move with arrow keys, WASD, or touch."
+        >Last Tag requires a browser with canvas support.</canvas>
+
+        <div class="countdown" id="countdown" aria-hidden="true"></div>
+        <div class="tag-flash" id="tag-flash" aria-hidden="true"></div>
+
+        <div class="start-card" id="start-card">
+          <div class="start-card__top">
+            <span>PLAYGROUND RULE 01</span>
+            <span>SOLO / SIX RUNNERS</span>
+          </div>
+          <p class="start-card__kicker">THE TAG KEEPS MOVING</p>
+          <h2 id="start-title">Don’t be it<br />at zero.</h2>
+          <p id="start-copy">
+            Move with arrows, WASD, or touch. If you’re tagged, catch anyone
+            else. The yard closes in. Space or the gold button gives you a dash.
+          </p>
+
+          <div class="time-pick" id="time-pick" aria-label="Choose round length">
+            <button type="button" data-duration="30" aria-pressed="false"><strong>30</strong><span>QUICK</span></button>
+            <button type="button" data-duration="60" aria-pressed="true"><strong>60</strong><span>CLASSIC</span></button>
+            <button type="button" data-duration="90" aria-pressed="false"><strong>90</strong><span>ENDURANCE</span></button>
+          </div>
+
+          <button class="start-button" id="start-button" type="button">START THE CLOCK <span>→</span></button>
+          <p class="start-card__note">NO ACCOUNT · LOCAL BEST · SOUND STARTS ON FIRST TAP</p>
+        </div>
+      </section>
+
+      <section class="control-bar" aria-label="Game controls">
+        <div class="instructions">
+          <span>MOVE</span>
+          <strong>WASD · ARROWS · TOUCH</strong>
+        </div>
+        <button class="dash-button" id="dash-button" type="button" disabled>
+          <span>DASH</span>
+          <strong id="dash-status">READY</strong>
+          <i><b id="dash-meter"></b></i>
+        </button>
+        <button class="sound-button" id="sound-button" type="button" aria-pressed="true">SOUND ON</button>
+      </section>
+
+      <p class="live-status" id="live-status" role="status" aria-live="polite">
+        Last Tag ready. Choose a round length and start.
+      </p>
+    </main>
+
+    <aside class="rule-strip" aria-label="Last Tag rules">
+      <article><span>01</span><strong>PASS IT</strong><p>Touch another runner while you’re it. The red ring transfers instantly.</p></article>
+      <article><span>02</span><strong>USE THE DASH</strong><p>Space or tap DASH for one quick burst. It recharges every four seconds.</p></article>
+      <article><span>03</span><strong>WATCH THE YARD</strong><p>The boundary tightens late. The last ten seconds are sudden death.</p></article>
+      <article><span>04</span><strong>BE SAFE AT ZERO</strong><p>The final tag decides the round. Safe wins. It runs it back.</p></article>
+    </aside>
+
+    <footer class="game-foot">
+      <span>LAST TAG / V1</span>
+      <a href="/last-tag.json">GAME MANIFEST ↗</a>
+      <span>MADE IN EL SEGUNDO</span>
+    </footer>
+  </div>
+
+  <script>
+    type GamePhase = 'idle' | 'countdown' | 'running' | 'over';
+    type Runner = {
+      id: number;
+      noun: number;
+      name: string;
+      color: string;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      radius: number;
+      phase: number;
+      img: HTMLImageElement;
+    };
+
+    const W = 960;
+    const H = 600;
+    const BEST_KEY = 'pc:last-tag:best-v1';
+    const root = document.getElementById('last-tag') as HTMLElement;
+    const canvas = document.getElementById('arena') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+    const clockEl = document.getElementById('clock')!;
+    const playerStatusEl = document.getElementById('player-status')!;
+    const statusBlock = document.getElementById('status-block') as HTMLElement;
+    const tagCountEl = document.getElementById('tag-count')!;
+    const scoreEl = document.getElementById('score')!;
+    const bestEl = document.getElementById('best')!;
+    const startCard = document.getElementById('start-card') as HTMLElement;
+    const startTitle = document.getElementById('start-title')!;
+    const startCopy = document.getElementById('start-copy')!;
+    const startButton = document.getElementById('start-button') as HTMLButtonElement;
+    const timePick = document.getElementById('time-pick') as HTMLElement;
+    const countdownEl = document.getElementById('countdown') as HTMLElement;
+    const tagFlash = document.getElementById('tag-flash') as HTMLElement;
+    const dashButton = document.getElementById('dash-button') as HTMLButtonElement;
+    const dashStatus = document.getElementById('dash-status')!;
+    const dashMeter = document.getElementById('dash-meter') as HTMLElement;
+    const soundButton = document.getElementById('sound-button') as HTMLButtonElement;
+    const liveStatus = document.getElementById('live-status')!;
+
+    const keys = new Set<string>();
+    const pointer = { active: false, x: W * .25, y: H * .5 };
+    const state: {
+      phase: GamePhase;
+      duration: number;
+      remaining: number;
+      score: number;
+      safeTime: number;
+      tagCount: number;
+      it: number;
+      tagCooldown: number;
+      dashCooldown: number;
+      dashActive: number;
+      lastTime: number;
+      animation: number;
+      sound: boolean;
+      countdown: number;
+      countdownMark: number;
+      trail: { x: number; y: number; age: number }[];
+      trailClock: number;
+      best: number;
+      audio: AudioContext | null;
+    } = {
+      phase: 'idle', duration: 60, remaining: 60, score: 0, safeTime: 0,
+      tagCount: 0, it: 3, tagCooldown: 0, dashCooldown: 0, dashActive: 0,
+      lastTime: 0, animation: 0, sound: true, countdown: 0, countdownMark: 4,
+      trail: [], trailClock: 0, best: Number(localStorage.getItem(BEST_KEY) || 0), audio: null,
+    };
+
+    const runnerSeed = [
+      { noun: 137, name: 'YOU', color: '#62d7ff', x: 190, y: 300 },
+      { noun: 418, name: 'MINT', color: '#68e09d', x: 720, y: 150 },
+      { noun: 723, name: 'GOLD', color: '#f6cf3d', x: 720, y: 450 },
+      { noun: 855, name: 'BERRY', color: '#ff6f91', x: 470, y: 120 },
+      { noun: 56, name: 'INK', color: '#a58aff', x: 470, y: 480 },
+      { noun: 385, name: 'TIDE', color: '#ff9257', x: 820, y: 300 },
+    ];
+
+    const runners: Runner[] = runnerSeed.map((seed, id) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = `https://noun.pics/${seed.noun}.svg`;
+      return { ...seed, id, vx: 0, vy: 0, radius: id === 0 ? 31 : 27, phase: id * 1.73, img };
+    });
+
+    bestEl.textContent = state.best ? String(state.best) : '—';
+
+    function clamp(value: number, min: number, max: number) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function normalize(x: number, y: number) {
+      const length = Math.hypot(x, y) || 1;
+      return { x: x / length, y: y / length };
+    }
+
+    function distance(a: Runner, b: Runner) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function audioContext() {
+      if (!state.sound) return null;
+      if (!state.audio) state.audio = new AudioContext();
+      if (state.audio.state === 'suspended') state.audio.resume();
+      return state.audio;
+    }
+
+    function tone(frequency: number, duration = .09, type: OscillatorType = 'sine', gain = .08) {
+      const audio = audioContext();
+      if (!audio) return;
+      const osc = audio.createOscillator();
+      const volume = audio.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, audio.currentTime);
+      volume.gain.setValueAtTime(gain, audio.currentTime);
+      volume.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + duration);
+      osc.connect(volume).connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + duration);
+    }
+
+    function tagSound(playerTagged: boolean) {
+      tone(playerTagged ? 174 : 330, .14, 'square', .09);
+      setTimeout(() => tone(playerTagged ? 130 : 495, .14, 'square', .07), 75);
+    }
+
+    function resetRunners() {
+      const positions = [
+        [190, 300], [740, 135], [740, 465], [470, 125], [470, 475], [820, 300],
+      ];
+      runners.forEach((runner, index) => {
+        runner.x = positions[index][0];
+        runner.y = positions[index][1];
+        runner.vx = 0;
+        runner.vy = 0;
+        runner.phase = index * 1.73 + Math.random();
+      });
+      pointer.x = runners[0].x;
+      pointer.y = runners[0].y;
+      pointer.active = false;
+    }
+
+    function startRound() {
+      audioContext();
+      resetRunners();
+      state.phase = 'countdown';
+      state.remaining = state.duration;
+      state.score = 0;
+      state.safeTime = 0;
+      state.tagCount = 0;
+      state.it = 1 + Math.floor(Math.random() * (runners.length - 1));
+      state.tagCooldown = 1.2;
+      state.dashCooldown = 0;
+      state.dashActive = 0;
+      state.countdown = 3.25;
+      state.countdownMark = 4;
+      state.trail = [];
+      state.trailClock = 0;
+      state.lastTime = performance.now();
+      root.dataset.state = 'countdown';
+      root.dataset.phase = 'open';
+      startCard.hidden = true;
+      dashButton.disabled = false;
+      liveStatus.textContent = `${state.duration} second round. Three, two, one.`;
+      cancelAnimationFrame(state.animation);
+      state.animation = requestAnimationFrame(tick);
+    }
+
+    function tick(time: number) {
+      const delta = Math.min(.033, Math.max(0, (time - state.lastTime) / 1000));
+      state.lastTime = time;
+
+      if (state.phase === 'countdown') {
+        state.countdown -= delta;
+        const mark = Math.ceil(state.countdown);
+        countdownEl.textContent = mark > 0 ? String(mark) : 'GO!';
+        countdownEl.classList.add('is-visible');
+        if (mark !== state.countdownMark && mark > 0) {
+          state.countdownMark = mark;
+          tone(260 + (3 - mark) * 80, .08, 'square');
+        }
+        if (state.countdown <= 0) {
+          state.phase = 'running';
+          root.dataset.state = 'running';
+          countdownEl.textContent = 'GO!';
+          tone(620, .16, 'square', .1);
+          setTimeout(() => countdownEl.classList.remove('is-visible'), 420);
+        }
+      } else if (state.phase === 'running') {
+        state.remaining = Math.max(0, state.remaining - delta);
+        update(delta, time / 1000);
+        if (state.remaining <= 0) finishRound();
+      }
+
+      draw(time / 1000);
+      renderHud();
+      if (state.phase !== 'over' && state.phase !== 'idle') state.animation = requestAnimationFrame(tick);
+    }
+
+    function yardMargin() {
+      const progress = 1 - state.remaining / state.duration;
+      if (progress < .58) return 30;
+      const closing = (progress - .58) / .42;
+      return 30 + Math.pow(closing, 1.35) * 92;
+    }
+
+    function update(delta: number, seconds: number) {
+      const progress = 1 - state.remaining / state.duration;
+      const sudden = state.remaining <= 10;
+      const intensity = 1 + progress * .48 + (sudden ? .22 : 0);
+      const margin = yardMargin();
+      state.tagCooldown = Math.max(0, state.tagCooldown - delta);
+      state.dashCooldown = Math.max(0, state.dashCooldown - delta);
+      state.dashActive = Math.max(0, state.dashActive - delta);
+      root.dataset.phase = sudden ? 'sudden' : progress > .58 ? 'closing' : 'open';
+
+      const player = runners[0];
+      let moveX = 0;
+      let moveY = 0;
+      if (keys.has('arrowleft') || keys.has('a')) moveX -= 1;
+      if (keys.has('arrowright') || keys.has('d')) moveX += 1;
+      if (keys.has('arrowup') || keys.has('w')) moveY -= 1;
+      if (keys.has('arrowdown') || keys.has('s')) moveY += 1;
+      if (!moveX && !moveY && pointer.active) {
+        const toPointer = normalize(pointer.x - player.x, pointer.y - player.y);
+        const pointerDistance = Math.hypot(pointer.x - player.x, pointer.y - player.y);
+        if (pointerDistance > 8) {
+          moveX = toPointer.x;
+          moveY = toPointer.y;
+        }
+      }
+      const playerMove = normalize(moveX, moveY);
+      const hasPlayerMove = Math.abs(moveX) + Math.abs(moveY) > 0;
+      const dashBoost = state.dashActive > 0 ? 2.15 : 1;
+      const playerSpeed = 270 * dashBoost;
+      player.vx += ((hasPlayerMove ? playerMove.x * playerSpeed : 0) - player.vx) * Math.min(1, delta * 13);
+      player.vy += ((hasPlayerMove ? playerMove.y * playerSpeed : 0) - player.vy) * Math.min(1, delta * 13);
+
+      const itRunner = runners[state.it];
+      runners.slice(1).forEach((runner) => {
+        let desiredX = 0;
+        let desiredY = 0;
+        if (runner.id === state.it) {
+          const targets = runners.filter((candidate) => candidate.id !== state.it);
+          const target = targets.reduce((nearest, candidate) => distance(runner, candidate) < distance(runner, nearest) ? candidate : nearest, targets[0]);
+          const chase = normalize(target.x + target.vx * .12 - runner.x, target.y + target.vy * .12 - runner.y);
+          desiredX = chase.x * 245 * intensity;
+          desiredY = chase.y * 245 * intensity;
+        } else {
+          const away = normalize(runner.x - itRunner.x, runner.y - itRunner.y);
+          const threat = distance(runner, itRunner);
+          const flee = clamp((310 - threat) / 210, 0, 1);
+          const orbitX = Math.cos(seconds * (.72 + runner.id * .035) + runner.phase);
+          const orbitY = Math.sin(seconds * (.83 + runner.id * .04) + runner.phase);
+          desiredX = (away.x * flee * 270 + orbitX * (1 - flee) * 145) * intensity;
+          desiredY = (away.y * flee * 270 + orbitY * (1 - flee) * 145) * intensity;
+
+          runners.forEach((other) => {
+            if (other.id === runner.id) return;
+            const gap = distance(runner, other);
+            if (gap > 0 && gap < 72) {
+              desiredX += (runner.x - other.x) / gap * (72 - gap) * 3;
+              desiredY += (runner.y - other.y) / gap * (72 - gap) * 3;
+            }
+          });
+        }
+        runner.vx += (desiredX - runner.vx) * Math.min(1, delta * 5.6);
+        runner.vy += (desiredY - runner.vy) * Math.min(1, delta * 5.6);
+      });
+
+      runners.forEach((runner) => {
+        runner.x += runner.vx * delta;
+        runner.y += runner.vy * delta;
+        const minX = margin + runner.radius;
+        const maxX = W - margin - runner.radius;
+        const minY = margin + runner.radius;
+        const maxY = H - margin - runner.radius;
+        if (runner.x < minX || runner.x > maxX) runner.vx *= -.62;
+        if (runner.y < minY || runner.y > maxY) runner.vy *= -.62;
+        runner.x = clamp(runner.x, minX, maxX);
+        runner.y = clamp(runner.y, minY, maxY);
+      });
+
+      if (state.it !== 0) {
+        state.safeTime += delta;
+        state.score += delta * (sudden ? 28 : 12);
+      }
+
+      state.trailClock -= delta;
+      if (state.trailClock <= 0) {
+        state.trailClock = .055;
+        state.trail.unshift({ x: runners[state.it].x, y: runners[state.it].y, age: 0 });
+        state.trail = state.trail.slice(0, 18);
+      }
+      state.trail.forEach((point) => { point.age += delta; });
+
+      if (state.tagCooldown <= 0) {
+        const currentIt = runners[state.it];
+        const tagged = runners.find((runner) => runner.id !== state.it && distance(currentIt, runner) <= currentIt.radius + runner.radius + 3);
+        if (tagged) transferTag(tagged.id);
+      }
+    }
+
+    function transferTag(nextIt: number) {
+      const previousIt = state.it;
+      state.it = nextIt;
+      state.tagCount += 1;
+      state.tagCooldown = .9;
+      state.trail = [];
+      if (previousIt === 0) state.score += 250;
+      if (nextIt === 0) state.score = Math.max(0, state.score - 120);
+      if (previousIt !== 0 && nextIt !== 0) state.score += 18;
+      tagFlash.textContent = nextIt === 0 ? 'YOU’RE IT!' : previousIt === 0 ? 'TAG PASSED!' : `${runners[nextIt].name} IS IT`;
+      tagFlash.classList.remove('is-showing');
+      void tagFlash.offsetWidth;
+      tagFlash.classList.add('is-showing');
+      tagSound(nextIt === 0);
+      if (navigator.vibrate) navigator.vibrate(nextIt === 0 ? [45, 25, 45] : 35);
+      liveStatus.textContent = nextIt === 0 ? `You were tagged. ${Math.ceil(state.remaining)} seconds left—catch someone.` : previousIt === 0 ? `Tag passed to ${runners[nextIt].name}. You are safe.` : `${runners[nextIt].name} is it.`;
+    }
+
+    function useDash() {
+      if (state.phase !== 'running' || state.dashCooldown > 0) return;
+      state.dashActive = .34;
+      state.dashCooldown = 4;
+      tone(520, .08, 'sawtooth', .045);
+      dashButton.classList.add('is-fired');
+      setTimeout(() => dashButton.classList.remove('is-fired'), 220);
+    }
+
+    function finishRound() {
+      state.phase = 'over';
+      root.dataset.state = 'over';
+      dashButton.disabled = true;
+      const won = state.it !== 0;
+      if (won) state.score += 1000 + state.safeTime * 4;
+      const finalScore = Math.round(state.score);
+      if (finalScore > state.best) {
+        state.best = finalScore;
+        localStorage.setItem(BEST_KEY, String(finalScore));
+      }
+      bestEl.textContent = state.best ? String(state.best) : '—';
+      startTitle.innerHTML = won ? 'You escaped<br />last tag.' : 'You’re it.<br />Run it back.';
+      startCopy.textContent = won
+        ? `Safe at the horn. ${state.tagCount} tags crossed the yard and you stayed clear for ${Math.round(state.safeTime)} seconds.`
+        : `The horn caught you holding the tag. ${state.tagCount} transfers this round. One more dash might change it.`;
+      startButton.innerHTML = `RUN IT BACK <span>→</span>`;
+      startCard.hidden = false;
+      tone(won ? 740 : 160, .22, won ? 'sine' : 'square', .1);
+      setTimeout(() => tone(won ? 920 : 120, .28, won ? 'sine' : 'square', .07), 140);
+      liveStatus.textContent = won ? `You win with ${finalScore} points.` : `Round over. You were it with ${finalScore} points.`;
+      renderHud();
+    }
+
+    function renderHud() {
+      clockEl.textContent = state.remaining.toFixed(1);
+      const playerIt = state.it === 0;
+      playerStatusEl.textContent = playerIt ? 'IT!' : 'SAFE';
+      statusBlock.dataset.it = String(playerIt);
+      tagCountEl.textContent = String(state.tagCount);
+      scoreEl.textContent = String(Math.round(state.score));
+      const dashProgress = state.dashCooldown <= 0 ? 1 : 1 - state.dashCooldown / 4;
+      dashMeter.style.width = `${dashProgress * 100}%`;
+      dashStatus.textContent = state.dashCooldown <= 0 ? 'READY' : `${state.dashCooldown.toFixed(1)}S`;
+      dashButton.disabled = state.phase !== 'running';
+      dashButton.dataset.ready = String(state.phase === 'running' && state.dashCooldown <= 0);
+    }
+
+    function draw(seconds: number) {
+      const margin = yardMargin();
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#f7ecd5';
+      ctx.fillRect(0, 0, W, H);
+      drawYard(margin, seconds);
+      drawTrail();
+      runners.forEach((runner) => drawRunner(runner, seconds));
+    }
+
+    function drawYard(margin: number, seconds: number) {
+      const sudden = state.remaining <= 10 && state.phase === 'running';
+      ctx.save();
+      ctx.fillStyle = sudden ? '#ef5b4d' : '#df644f';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#f7ecd5';
+      ctx.fillRect(margin, margin, W - margin * 2, H - margin * 2);
+
+      ctx.strokeStyle = '#14213d';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(margin, margin, W - margin * 2, H - margin * 2);
+      ctx.globalAlpha = .16;
+      ctx.lineWidth = 1;
+      for (let x = margin + 40; x < W - margin; x += 80) {
+        ctx.beginPath(); ctx.moveTo(x, margin); ctx.lineTo(x, H - margin); ctx.stroke();
+      }
+      for (let y = margin + 40; y < H - margin; y += 80) {
+        ctx.beginPath(); ctx.moveTo(margin, y); ctx.lineTo(W - margin, y); ctx.stroke();
+      }
+      ctx.globalAlpha = .28;
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(W / 2, margin); ctx.lineTo(W / 2, H - margin); ctx.stroke();
+      ctx.beginPath(); ctx.arc(W / 2, H / 2, 86, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      if (sudden) {
+        ctx.strokeStyle = `rgba(255,255,255,${.5 + Math.sin(seconds * 8) * .3})`;
+        ctx.lineWidth = 8;
+        ctx.strokeRect(margin + 6, margin + 6, W - margin * 2 - 12, H - margin * 2 - 12);
+      }
+      ctx.restore();
+    }
+
+    function drawTrail() {
+      ctx.save();
+      state.trail.slice().reverse().forEach((point, index) => {
+        const alpha = (index + 1) / state.trail.length * .24;
+        ctx.fillStyle = `rgba(220,49,44,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 6 + index * .45, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    function drawRunner(runner: Runner, seconds: number) {
+      const isIt = runner.id === state.it;
+      const isPlayer = runner.id === 0;
+      const pulse = Math.sin(seconds * 8) * 3;
+      ctx.save();
+      ctx.translate(runner.x, runner.y);
+
+      if (isIt) {
+        ctx.fillStyle = 'rgba(221,49,44,.18)';
+        ctx.beginPath(); ctx.arc(0, 0, runner.radius + 18 + pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#dc312c';
+        ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(0, 0, runner.radius + 8, 0, Math.PI * 2); ctx.stroke();
+      }
+      if (isPlayer) {
+        ctx.strokeStyle = '#14213d';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, runner.radius + 4, 0, Math.PI * 2); ctx.stroke();
+      }
+
+      ctx.fillStyle = runner.color;
+      ctx.beginPath(); ctx.arc(0, 0, runner.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, runner.radius - 3, 0, Math.PI * 2); ctx.clip();
+      if (runner.img.complete && runner.img.naturalWidth > 0) {
+        ctx.drawImage(runner.img, -runner.radius, -runner.radius, runner.radius * 2, runner.radius * 2);
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.font = '900 18px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(runner.noun), 0, 0);
+      }
+      ctx.restore();
+
+      const label = isIt ? 'IT!' : runner.name;
+      ctx.font = `900 ${isIt ? 15 : 11}px JetBrains Mono, monospace`;
+      const labelWidth = ctx.measureText(label).width + 14;
+      ctx.fillStyle = isIt ? '#dc312c' : isPlayer ? '#14213d' : 'rgba(20,33,61,.78)';
+      ctx.fillRect(-labelWidth / 2, runner.radius + 9, labelWidth, 22);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, 0, runner.radius + 20);
+      ctx.restore();
+    }
+
+    function setPointer(event: PointerEvent) {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = (event.clientX - rect.left) * (W / rect.width);
+      pointer.y = (event.clientY - rect.top) * (H / rect.height);
+      pointer.active = true;
+      event.preventDefault();
+    }
+
+    timePick.querySelectorAll<HTMLButtonElement>('[data-duration]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.duration = Number(button.dataset.duration || 60);
+        state.remaining = state.duration;
+        timePick.querySelectorAll<HTMLButtonElement>('[data-duration]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        renderHud();
+      });
+    });
+    startButton.addEventListener('click', startRound);
+    dashButton.addEventListener('click', useDash);
+    soundButton.addEventListener('click', () => {
+      state.sound = !state.sound;
+      soundButton.setAttribute('aria-pressed', String(state.sound));
+      soundButton.textContent = state.sound ? 'SOUND ON' : 'SOUND OFF';
+      if (state.sound) tone(440, .08);
+    });
+    canvas.addEventListener('pointerdown', (event) => { canvas.setPointerCapture(event.pointerId); setPointer(event); });
+    canvas.addEventListener('pointermove', (event) => { if (event.buttons || event.pointerType === 'touch') setPointer(event); });
+    canvas.addEventListener('pointerup', (event) => { setPointer(event); });
+    canvas.addEventListener('pointercancel', () => { pointer.active = false; });
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(key)) {
+        keys.add(key);
+        pointer.active = false;
+        event.preventDefault();
+      }
+      if (event.code === 'Space') {
+        useDash();
+        event.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
+    window.addEventListener('blur', () => keys.clear());
+    document.addEventListener('visibilitychange', () => { state.lastTime = performance.now(); });
+
+    resetRunners();
+    draw(0);
+    renderHud();
+  </script>
+</BlockLayout>
+
+<style is:global>
+  body:has(.last-tag) { padding: 0; background: #f6cf3d; overflow-x: hidden; }
+  body:has(.last-tag) .skip-link { z-index: 1000; }
+</style>
+
+<style>
+  .last-tag {
+    --ink: #14213d;
+    --paper: #f7ecd5;
+    --gold: #f6cf3d;
+    --red: #dc312c;
+    min-height: 100vh;
+    color: var(--ink);
+    background: var(--gold);
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  }
+  .last-tag * { box-sizing: border-box; }
+  .last-tag a { color: inherit; }
+
+  .game-head {
+    min-height: 104px;
+    padding: 16px clamp(16px, 3vw, 42px);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 3px solid var(--ink);
+    background: var(--gold);
+  }
+  .brand { text-decoration: none; font: 900 15px/1 'JetBrains Mono Variable', monospace; letter-spacing: -.06em; }
+  .brand span { color: var(--red); }
+  .title-lockup { text-align: center; }
+  .title-lockup p { margin: 0 0 4px; font: 800 8px/1 'JetBrains Mono Variable', monospace; letter-spacing: .15em; }
+  .title-lockup h1 { margin: 0; font-size: clamp(36px, 5vw, 72px); line-height: .76; letter-spacing: -.08em; }
+  .game-head nav { justify-self: end; display: flex; gap: 14px; font: 800 9px/1 'JetBrains Mono Variable', monospace; text-transform: uppercase; }
+
+  .game-shell { width: min(100%, 1180px); margin: 0 auto; padding: 18px 18px 0; }
+  .scorebar {
+    min-height: 88px;
+    display: grid;
+    grid-template-columns: 1.45fr 1.2fr repeat(3, 1fr);
+    border: 3px solid var(--ink);
+    border-bottom: 0;
+    background: #fffaf0;
+  }
+  .scorebar > div { min-width: 0; padding: 11px 16px; border-right: 2px solid var(--ink); display: flex; flex-direction: column; justify-content: center; }
+  .scorebar > div:last-child { border-right: 0; }
+  .scorebar span { font: 850 8px/1 'JetBrains Mono Variable', monospace; letter-spacing: .12em; }
+  .scorebar strong { margin-top: 5px; font-size: clamp(23px, 4vw, 43px); line-height: .8; letter-spacing: -.06em; }
+  .clock-block { background: var(--ink); color: #fff; }
+  .status-block { background: #68e09d; }
+  .status-block[data-it='true'] { background: var(--red); color: #fff; animation: status-pulse .6s steps(2,end) infinite; }
+  @keyframes status-pulse { 50% { background: #ff6f61; } }
+
+  .arena-wrap {
+    position: relative;
+    aspect-ratio: 8 / 5;
+    min-height: 360px;
+    overflow: hidden;
+    border: 3px solid var(--ink);
+    background: var(--paper);
+  }
+  #arena { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  .last-tag[data-phase='sudden'] .arena-wrap { box-shadow: 0 0 0 8px var(--red), 0 0 0 11px var(--ink); }
+
+  .start-card {
+    position: absolute;
+    z-index: 10;
+    inset: 50% auto auto 50%;
+    width: min(560px, calc(100% - 32px));
+    transform: translate(-50%, -50%);
+    padding: clamp(18px, 3vw, 32px);
+    border: 3px solid var(--ink);
+    background: rgba(255, 250, 240, .96);
+    box-shadow: 10px 10px 0 var(--ink);
+  }
+  .start-card[hidden] { display: none; }
+  .start-card__top { display: flex; justify-content: space-between; gap: 15px; font: 800 8px/1 'JetBrains Mono Variable', monospace; letter-spacing: .08em; }
+  .start-card__kicker { margin: 24px 0 6px; color: var(--red); font: 900 10px/1 'JetBrains Mono Variable', monospace; letter-spacing: .12em; }
+  .start-card h2 { margin: 0; font-size: clamp(48px, 8vw, 88px); line-height: .78; letter-spacing: -.085em; text-transform: uppercase; }
+  .start-card > p:not(.start-card__kicker):not(.start-card__note) { max-width: 490px; margin: 18px 0; font-size: 15px; line-height: 1.4; font-weight: 650; }
+  .time-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 15px 0 10px; }
+  .time-pick button { min-height: 62px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; }
+  .time-pick button[aria-pressed='true'] { background: var(--gold); box-shadow: inset 0 -6px 0 rgba(20,33,61,.16); }
+  .time-pick strong, .time-pick span { display: block; }
+  .time-pick strong { font: 900 25px/.9 'Inter Variable', sans-serif; }
+  .time-pick span { margin-top: 5px; font: 800 7px/1 'JetBrains Mono Variable', monospace; letter-spacing: .1em; }
+  .start-button { width: 100%; min-height: 54px; padding: 0 17px; border: 3px solid var(--ink); display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: #fff; cursor: pointer; font: 900 12px/1 'JetBrains Mono Variable', monospace; letter-spacing: .08em; }
+  .start-button:hover { background: var(--red); }
+  .start-button span { font-size: 24px; }
+  .start-card__note { margin: 12px 0 0; text-align: center; font: 700 7px/1.3 'JetBrains Mono Variable', monospace; letter-spacing: .08em; }
+
+  .countdown, .tag-flash {
+    position: absolute;
+    z-index: 8;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(.7);
+    opacity: 0;
+    pointer-events: none;
+    color: #fff;
+    text-shadow: 5px 5px 0 var(--ink);
+    font: 950 clamp(76px, 14vw, 190px)/.8 'Inter Variable', sans-serif;
+    letter-spacing: -.08em;
+  }
+  .countdown.is-visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .tag-flash { padding: 12px 18px; background: var(--red); border: 4px solid var(--ink); font-size: clamp(32px, 7vw, 88px); white-space: nowrap; }
+  .tag-flash.is-showing { animation: tag-pop .62s ease-out; }
+  @keyframes tag-pop { 0% { opacity: 0; transform: translate(-50%,-30%) scale(.65) rotate(-3deg); } 18%,65% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(0); } 100% { opacity: 0; transform: translate(-50%,-75%) scale(.9); } }
+
+  .control-bar {
+    min-height: 78px;
+    display: grid;
+    grid-template-columns: 1fr minmax(220px, .7fr) auto;
+    border: 3px solid var(--ink);
+    border-top: 0;
+    background: #fffaf0;
+  }
+  .instructions { padding: 14px 16px; display: flex; flex-direction: column; justify-content: center; }
+  .instructions span, .instructions strong, .sound-button, .dash-button { font-family: 'JetBrains Mono Variable', monospace; }
+  .instructions span { font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+  .instructions strong { margin-top: 5px; font-size: 10px; }
+  .dash-button { position: relative; min-height: 75px; padding: 10px 16px; overflow: hidden; border: 0; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); background: #ddd5c5; color: var(--ink); cursor: pointer; text-align: left; }
+  .dash-button[data-ready='true'] { background: var(--gold); }
+  .dash-button.is-fired { transform: translateY(3px); }
+  .dash-button span { display: block; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
+  .dash-button strong { display: block; margin: 4px 0 8px; font-size: 18px; }
+  .dash-button i { display: block; height: 7px; border: 1px solid var(--ink); background: #fff; }
+  .dash-button b { display: block; height: 100%; width: 100%; background: var(--ink); }
+  .sound-button { min-width: 110px; border: 0; background: var(--ink); color: #fff; cursor: pointer; font-size: 8px; font-weight: 900; }
+  .live-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .rule-strip {
+    width: min(100%, 1180px);
+    margin: 22px auto 0;
+    padding: 0 18px 38px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .rule-strip article { min-height: 165px; padding: 20px; border: 2px solid var(--ink); border-right: 0; background: var(--paper); }
+  .rule-strip article:last-child { border-right: 2px solid var(--ink); }
+  .rule-strip span { font: 900 9px/1 'JetBrains Mono Variable', monospace; }
+  .rule-strip strong { display: block; margin-top: 22px; font-size: 18px; }
+  .rule-strip p { margin: 8px 0 0; font-size: 12px; line-height: 1.4; }
+  .game-foot { min-height: 70px; padding: 0 clamp(18px, 4vw, 60px); border-top: 3px solid var(--ink); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; background: var(--ink); color: #fff; font: 800 9px/1 'JetBrains Mono Variable', monospace; letter-spacing: .09em; }
+  .game-foot a { color: #fff; text-align: center; }
+  .game-foot span:last-child { text-align: right; }
+
+  @media (max-width: 760px) {
+    .game-head { min-height: 78px; grid-template-columns: 1fr auto; }
+    .title-lockup { grid-column: 1 / -1; grid-row: 2; padding-top: 10px; }
+    .title-lockup h1 { font-size: 50px; }
+    .game-head nav { font-size: 8px; }
+    .scorebar { grid-template-columns: 1.3fr 1.1fr repeat(3, .75fr); }
+    .scorebar > div { padding: 8px; }
+    .scorebar strong { font-size: 23px; }
+    .arena-wrap { min-height: 0; aspect-ratio: auto; overflow: visible; }
+    #arena { width: 100%; height: auto; aspect-ratio: 8 / 5; }
+    .start-card { position: relative; inset: auto; width: 100%; transform: none; padding: 17px; border: 0; border-top: 3px solid var(--ink); box-shadow: none; }
+    .start-card__top span:last-child { display: none; }
+    .start-card__kicker { margin-top: 16px; }
+    .start-card h2 { font-size: clamp(44px, 16vw, 72px); }
+    .start-card > p:not(.start-card__kicker):not(.start-card__note) { margin: 12px 0; font-size: 13px; }
+    .time-pick button { min-height: 54px; }
+    .control-bar { grid-template-columns: 1fr 1.15fr; }
+    .sound-button { grid-column: 1 / -1; min-height: 34px; border-top: 2px solid var(--ink); }
+    .rule-strip { grid-template-columns: 1fr 1fr; }
+    .rule-strip article:nth-child(2) { border-right: 2px solid var(--ink); }
+    .rule-strip article:nth-child(n+3) { border-top: 0; }
+    .game-foot { grid-template-columns: 1fr auto; }
+    .game-foot span:last-child { display: none; }
+  }
+
+  @media (max-width: 430px) {
+    .game-shell { padding-inline: 8px; }
+    .scorebar span { font-size: 6px; }
+    .scorebar strong { font-size: 18px; }
+    .scorebar > div:nth-child(5) { display: none; }
+    .scorebar { grid-template-columns: 1.35fr 1.1fr .7fr .85fr; }
+    .start-card h2 { font-size: 48px; }
+    .start-card__note { display: none; }
+    .time-pick strong { font-size: 20px; }
+    .control-bar { grid-template-columns: .9fr 1.1fr; }
+    .instructions strong { font-size: 8px; }
+    .rule-strip { padding-inline: 8px; }
+    .rule-strip article { min-height: 150px; padding: 14px; }
+    .rule-strip strong { font-size: 14px; }
+    .rule-strip p { font-size: 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-block[data-it='true'], .tag-flash.is-showing { animation-duration: .01ms; animation-iteration-count: 1; }
+  }
+</style>

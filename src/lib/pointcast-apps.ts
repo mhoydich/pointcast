@@ -67,6 +67,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'last-tag',
+    name: 'Last Tag',
+    kicker: 'SIX RUNNERS · 30/60/90 SECONDS · LAST ONE IT LOSES',
+    description: 'A fast playground chase with automatic tag transfer, a shrinking late-game yard, a rechargeable dash, and one rule: do not be it when the clock reaches zero.',
+    url: 'https://pointcast.xyz/last-tag',
+    path: '/last-tag',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.PLAY',
+    kind: 'pointcast',
+  },
+  {
     slug: 'el-segundo-school',
     name: 'The El Segundo School',
     kicker: '652 WORKS · PASSPORT · STAMPZ · TEZOS',
