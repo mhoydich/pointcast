@@ -1,0 +1,373 @@
+---
+import {
+  AD_SLOTS,
+  destinationWithAttribution,
+  getAdCampaign,
+  selectAdCampaign,
+  type AdSlotId,
+} from '../lib/ad-network';
+
+interface Props {
+  format: AdSlotId;
+  placement: string;
+  fallbackCampaignId?: string;
+  stackOnMobile?: boolean;
+  class?: string;
+}
+
+const {
+  format,
+  placement,
+  fallbackCampaignId,
+  stackOnMobile = false,
+  class: className = '',
+} = Astro.props;
+const spec = AD_SLOTS[format];
+const fallback = getAdCampaign(fallbackCampaignId ?? null)
+  ?? selectAdCampaign(format, `${placement}:fallback`);
+
+if (!fallback) throw new Error(`No PointCast ad is eligible for ${format}`);
+
+const fallbackDestination = destinationWithAttribution(fallback, placement);
+const themeStyle = [
+  `--pc-ad-bg:${fallback.theme.background}`,
+  `--pc-ad-fg:${fallback.theme.foreground}`,
+  `--pc-ad-accent:${fallback.theme.accent}`,
+  `--pc-ad-muted:${fallback.theme.muted}`,
+].join(';');
+---
+
+<article
+  class:list={['pc-ad-slot', `pc-ad-slot--${format}`, { 'pc-ad-slot--stack-mobile': stackOnMobile }, className]}
+  data-pc-ad-slot
+  data-format={format}
+  data-placement={placement}
+  data-campaign={fallback.id}
+  data-creative={fallback.creativeId}
+  data-state="fallback"
+  style={themeStyle}
+  aria-label={`${spec.label} advertisement`}
+>
+  <a
+    class="pc-ad"
+    data-ad-link
+    href={fallbackDestination}
+    target={fallback.destinationSurface === 'external' ? '_blank' : undefined}
+    rel={fallback.destinationSurface === 'external' ? 'sponsored noopener noreferrer' : 'sponsored'}
+  >
+    <span class="pc-ad__topline">
+      <span class="pc-ad__disclosure">ADVERTISEMENT · HOUSE</span>
+      <span class="pc-ad__sponsor" data-ad-sponsor>{fallback.sponsor}</span>
+    </span>
+    <span class="pc-ad__mark" data-ad-mark aria-hidden="true">{fallback.mark}</span>
+    <span class="pc-ad__copy">
+      <span class="pc-ad__kicker" data-ad-kicker>{fallback.kicker}</span>
+      <strong class="pc-ad__headline" data-ad-headline>{fallback.headline}</strong>
+      <span class="pc-ad__body" data-ad-body>{fallback.body}</span>
+      <span class="pc-ad__boundary" data-ad-boundary hidden={!fallback.boundary}>{fallback.boundary}</span>
+    </span>
+    <span class="pc-ad__cta" data-ad-cta>{fallback.cta} <span aria-hidden="true">→</span></span>
+  </a>
+</article>
+
+<script>
+  type ServedAd = {
+    ok: boolean;
+    requestId: string;
+    campaign: { id: string; creativeId: string; sponsor: string };
+    creative: {
+      mark: string;
+      kicker: string;
+      headline: string;
+      body: string;
+      cta: string;
+      boundary: string | null;
+      theme: { background: string; foreground: string; accent: string; muted: string };
+      destinationSurface: 'pointcast' | 'external';
+    };
+    clickUrl: string;
+    viewUrl: string;
+  };
+
+  type RecentAd = { campaign: string; viewedAt: number };
+
+  const RECENT_KEY = 'pc:ads:recent:v1';
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  type AdRuntime = { served: Set<string>; queue: Promise<void> };
+  const sharedWindow = window as Window & { __pcAdRuntime?: AdRuntime };
+  const adRuntime = sharedWindow.__pcAdRuntime ??= { served: new Set<string>(), queue: Promise.resolve() };
+
+  function recentAds(): RecentAd[] {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+      if (!Array.isArray(parsed)) return [];
+      const cutoff = Date.now() - ONE_DAY;
+      return parsed
+        .filter((item): item is RecentAd => Boolean(
+          item && typeof item.campaign === 'string' && typeof item.viewedAt === 'number' && item.viewedAt > cutoff,
+        ))
+        .slice(-12);
+    } catch {
+      return [];
+    }
+  }
+
+  function rememberView(campaign: string): void {
+    try {
+      const next = [...recentAds().filter((item) => item.campaign !== campaign), { campaign, viewedAt: Date.now() }];
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next.slice(-12)));
+    } catch {
+      // Storage may be disabled. Rotation still works without a frequency hint.
+    }
+  }
+
+  function setText(root: HTMLElement, selector: string, value: string): void {
+    const element = root.querySelector<HTMLElement>(selector);
+    if (element) element.textContent = value;
+  }
+
+  function observeView(root: HTMLElement, ad: ServedAd): void {
+    if (!('IntersectionObserver' in window)) return;
+    let timer: number | undefined;
+    let recorded = false;
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5);
+      if (!visible && timer) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      if (!visible || recorded || timer) return;
+      timer = window.setTimeout(() => {
+        recorded = true;
+        observer.disconnect();
+        rememberView(ad.campaign.id);
+        const body = JSON.stringify({
+          campaign: ad.campaign.id,
+          creative: ad.campaign.creativeId,
+          slot: root.dataset.format,
+          placement: root.dataset.placement,
+          request: ad.requestId,
+        });
+        const sent = navigator.sendBeacon?.(ad.viewUrl, new Blob([body], { type: 'application/json' }));
+        if (!sent) void fetch(ad.viewUrl, { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true });
+      }, 1000);
+    }, { threshold: [0, 0.5, 1] });
+    observer.observe(root);
+  }
+
+  async function hydrateAd(root: HTMLElement): Promise<void> {
+    if (root.dataset.pcAdReady) return;
+    root.dataset.pcAdReady = 'true';
+    const format = root.dataset.format;
+    const placement = root.dataset.placement;
+    if (!format || !placement) return;
+
+    const excluded = [
+      ...recentAds().map((item) => item.campaign),
+      ...adRuntime.served,
+    ].join(',');
+    const query = new URLSearchParams({ slot: format, placement });
+    if (excluded) query.set('exclude', excluded);
+
+    try {
+      const response = await fetch(`/api/ads/serve?${query}`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`ad server ${response.status}`);
+      const ad = await response.json() as ServedAd;
+      if (!ad.ok) throw new Error('no ad returned');
+      adRuntime.served.add(ad.campaign.id);
+
+      root.dataset.state = 'served';
+      root.dataset.campaign = ad.campaign.id;
+      root.dataset.creative = ad.campaign.creativeId;
+      root.style.setProperty('--pc-ad-bg', ad.creative.theme.background);
+      root.style.setProperty('--pc-ad-fg', ad.creative.theme.foreground);
+      root.style.setProperty('--pc-ad-accent', ad.creative.theme.accent);
+      root.style.setProperty('--pc-ad-muted', ad.creative.theme.muted);
+      setText(root, '[data-ad-sponsor]', ad.campaign.sponsor);
+      setText(root, '[data-ad-mark]', ad.creative.mark);
+      setText(root, '[data-ad-kicker]', ad.creative.kicker);
+      setText(root, '[data-ad-headline]', ad.creative.headline);
+      setText(root, '[data-ad-body]', ad.creative.body);
+      setText(root, '[data-ad-cta]', `${ad.creative.cta} →`);
+      const boundary = root.querySelector<HTMLElement>('[data-ad-boundary]');
+      if (boundary) {
+        boundary.hidden = !ad.creative.boundary;
+        boundary.textContent = ad.creative.boundary ?? '';
+      }
+      const link = root.querySelector<HTMLAnchorElement>('[data-ad-link]');
+      if (link) {
+        link.href = ad.clickUrl;
+        link.target = ad.creative.destinationSurface === 'external' ? '_blank' : '';
+        link.rel = ad.creative.destinationSurface === 'external'
+          ? 'sponsored noopener noreferrer'
+          : 'sponsored';
+      }
+      observeView(root, ad);
+    } catch {
+      root.dataset.state = 'fallback';
+    }
+  }
+
+  const slots = Array.from(document.querySelectorAll<HTMLElement>('[data-pc-ad-slot]:not([data-pc-ad-ready]):not([data-pc-ad-queued])'));
+  for (const slot of slots) {
+    slot.dataset.pcAdQueued = 'true';
+    adRuntime.queue = adRuntime.queue.then(() => hydrateAd(slot));
+  }
+  await adRuntime.queue;
+</script>
+
+<style>
+  .pc-ad-slot {
+    --pc-ad-bg: #f2ead9;
+    --pc-ad-fg: #182b32;
+    --pc-ad-accent: #d85d26;
+    --pc-ad-muted: #60777a;
+    width: 100%;
+    color: var(--pc-ad-fg);
+    background: var(--pc-ad-bg);
+    border: 1.5px solid currentColor;
+    box-shadow: 4px 4px 0 color-mix(in srgb, var(--pc-ad-accent) 45%, transparent);
+    container-type: inline-size;
+    overflow: hidden;
+  }
+  .pc-ad-slot--medium-rectangle { max-width: 300px; aspect-ratio: 300 / 250; }
+  .pc-ad-slot--leaderboard { max-width: 728px; aspect-ratio: 728 / 90; }
+  .pc-ad-slot--mobile-banner { max-width: 320px; aspect-ratio: 320 / 50; }
+  .pc-ad-slot--half-page { max-width: 300px; aspect-ratio: 300 / 600; }
+  .pc-ad {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr auto;
+    gap: 10px 14px;
+    width: 100%;
+    height: 100%;
+    padding: 14px;
+    color: inherit;
+    text-decoration: none;
+    box-sizing: border-box;
+  }
+  .pc-ad:hover { text-decoration: none; }
+  .pc-ad:focus-visible { outline: 3px solid var(--pc-ad-accent); outline-offset: -4px; }
+  .pc-ad__topline {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font: 700 7px/1.2 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--pc-ad-muted);
+  }
+  .pc-ad__mark {
+    display: grid;
+    place-items: center;
+    align-self: start;
+    width: 44px;
+    height: 44px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    color: var(--pc-ad-accent);
+    font: 700 18px/1 var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .pc-ad__copy { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+  .pc-ad__kicker {
+    color: var(--pc-ad-muted);
+    font: 700 8px/1.2 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  .pc-ad__headline {
+    max-width: 15ch;
+    font: 700 clamp(22px, 10cqi, 30px)/.94 Georgia, 'Times New Roman', serif;
+    letter-spacing: -.04em;
+  }
+  .pc-ad__body { font: 11.5px/1.36 Georgia, 'Times New Roman', serif; opacity: .82; }
+  .pc-ad__boundary {
+    color: var(--pc-ad-accent);
+    font: 700 7px/1.3 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .08em;
+  }
+  .pc-ad__cta {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-self: start;
+    padding-top: 7px;
+    border-top: 1px solid color-mix(in srgb, var(--pc-ad-fg) 35%, transparent);
+    color: var(--pc-ad-accent);
+    font: 700 9px/1.2 var(--pc-font-mono, ui-monospace, monospace);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .pc-ad:hover .pc-ad__cta { text-decoration: underline; text-underline-offset: 3px; }
+
+  @container (min-width: 500px) {
+    .pc-ad { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-rows: auto 1fr; padding: 10px 14px; }
+    .pc-ad__topline { grid-column: 1 / -1; }
+    .pc-ad__mark { width: 42px; height: 42px; }
+    .pc-ad__copy { flex-direction: row; align-items: baseline; gap: 12px; }
+    .pc-ad__kicker { display: none; }
+    .pc-ad__headline { max-width: 16ch; font-size: clamp(18px, 4cqi, 27px); }
+    .pc-ad__body { max-width: 38ch; }
+    .pc-ad__boundary { display: none; }
+    .pc-ad__cta { grid-column: 3; border: 0; white-space: nowrap; align-self: center; }
+  }
+
+  @container (max-width: 499px) {
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-rows: 1fr;
+      gap: 8px;
+      padding: 4px 8px;
+      align-items: center;
+    }
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__topline,
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__kicker,
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__body,
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__boundary { display: none; }
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__mark {
+      width: 28px;
+      height: 28px;
+      font-size: 11px;
+    }
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__headline {
+      max-width: none;
+      font-size: clamp(14px, 5cqi, 18px);
+      line-height: .95;
+    }
+    .pc-ad-slot--leaderboard:not(.pc-ad-slot--stack-mobile) .pc-ad__cta {
+      grid-column: 3;
+      border: 0;
+      padding: 0;
+      font-size: 7px;
+      white-space: nowrap;
+    }
+  }
+
+  .pc-ad-slot--mobile-banner .pc-ad { grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; gap: 8px; padding: 5px 8px; align-items: center; }
+  .pc-ad-slot--mobile-banner .pc-ad__topline,
+  .pc-ad-slot--mobile-banner .pc-ad__kicker,
+  .pc-ad-slot--mobile-banner .pc-ad__body,
+  .pc-ad-slot--mobile-banner .pc-ad__boundary { display: none; }
+  .pc-ad-slot--mobile-banner .pc-ad__mark { width: 30px; height: 30px; font-size: 11px; }
+  .pc-ad-slot--mobile-banner .pc-ad__headline { font-size: clamp(14px, 5.5cqi, 18px); line-height: .95; }
+  .pc-ad-slot--mobile-banner .pc-ad__cta { grid-column: 3; border: 0; padding: 0; font-size: 7px; white-space: nowrap; }
+
+  .pc-ad-slot--half-page .pc-ad { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; padding: 18px; }
+  .pc-ad-slot--half-page .pc-ad__topline,
+  .pc-ad-slot--half-page .pc-ad__mark,
+  .pc-ad-slot--half-page .pc-ad__copy,
+  .pc-ad-slot--half-page .pc-ad__cta { grid-column: 1; }
+  .pc-ad-slot--half-page .pc-ad__mark { width: 72px; height: 72px; margin-top: 24px; font-size: 28px; }
+  .pc-ad-slot--half-page .pc-ad__copy { justify-content: center; }
+  .pc-ad-slot--half-page .pc-ad__headline { font-size: 40px; }
+  .pc-ad-slot--half-page .pc-ad__body { font-size: 15px; }
+  .pc-ad-slot--half-page .pc-ad__cta { padding: 12px 0 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pc-ad-slot { transition: box-shadow 140ms ease, transform 140ms ease; }
+    .pc-ad-slot:hover { transform: translateY(-2px); box-shadow: 7px 7px 0 color-mix(in srgb, var(--pc-ad-accent) 52%, transparent); }
+  }
+  @media (max-width: 680px) {
+    .pc-ad-slot--stack-mobile { aspect-ratio: 300 / 250; }
+  }
+</style>

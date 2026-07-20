@@ -93,6 +93,8 @@ export const GET: APIRoute = async () => {
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         agentValue: 'https://pointcast.xyz/agent-value',
         agentValueJson: 'https://pointcast.xyz/agent-value.json',
+        adNetwork: 'https://pointcast.xyz/ad-network',
+        adNetworkJson: 'https://pointcast.xyz/ad-network.json',
         protocol: 'https://pointcast.xyz/protocol',
         protocolJson: 'https://pointcast.xyz/protocol.json',
         llms: 'https://pointcast.xyz/llms.txt',
@@ -109,6 +111,7 @@ export const GET: APIRoute = async () => {
       },
       human: {
         home: 'https://pointcast.xyz/',
+        adNetwork: 'https://pointcast.xyz/ad-network',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         agentValue: 'https://pointcast.xyz/agent-value',
         investmentThesis: 'https://pointcast.xyz/investment-thesis',
