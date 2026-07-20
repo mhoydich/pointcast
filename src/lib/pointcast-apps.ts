@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'adventure-networks',
+    name: 'Adventure Networks',
+    kicker: 'FIELD GUIDE · ROUTE COMPOSER · DISPATCH',
+    description: 'A Qwen-built field manual for composing small expeditions, checking the pack, logging signals, and returning with a useful dispatch.',
+    url: 'https://adventure-networks-field-guide.mhoydich.chatgpt.site',
+    path: '/adventure-networks',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'satellite',
+  },
+  {
     slug: 'sound-garden',
     name: 'Sound Garden 001',
     kicker: 'GENERATIVE AUDIO · FOUR DIMENSIONS · LOCAL CAPTURE',
