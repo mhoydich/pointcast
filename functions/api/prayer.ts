@@ -36,6 +36,8 @@ export const STATIONS = [
   'none', 'vespers', 'lucernarium', 'compline', 'vigil',
   // the bell that rings them — /prayer-bells
   'angelus',
+  // the walk — /prayer-labyrinth
+  'labyrinth',
 ] as const;
 type Station = (typeof STATIONS)[number];
 
