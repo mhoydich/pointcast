@@ -26,6 +26,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/agents.json', 'daily', '0.9'],
   ['https://pointcast.xyz/afterimage', 'weekly', '0.9'],
   ['https://pointcast.xyz/afterimage.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/sound-garden', 'weekly', '0.9'],
+  ['https://pointcast.xyz/sound-garden.json', 'weekly', '0.85'],
   ...afterimageExamples.flatMap((example) => [
     [`https://pointcast.xyz/afterimage/${example.slug}`, 'weekly', '0.82'] as SitemapEntry,
     [`https://pointcast.xyz/afterimage/${example.slug}.json`, 'weekly', '0.78'] as SitemapEntry,

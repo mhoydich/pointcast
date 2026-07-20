@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'sound-garden',
+    name: 'Sound Garden 001',
+    kicker: 'GENERATIVE AUDIO · FOUR DIMENSIONS · LOCAL CAPTURE',
+    description: 'A playable browser instrument for growing gentle sounds into strange ones through warmth, roughness, motion, surprise, and controlled mutation.',
+    url: 'https://sound-garden-001.mhoydich.chatgpt.site',
+    path: '/sound-garden',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'satellite',
+  },
+  {
     slug: 'common-hours',
     name: 'Common Hours',
     kicker: 'BELLS · ALTARS · SHRINES · DAILY RITUALS',
