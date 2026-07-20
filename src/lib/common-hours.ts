@@ -9,4 +9,5 @@ export const COMMON_HOURS_RITUALS = [
   { name: 'Drum Shrine', kind: 'daily noun', mark: '●', path: '/drum-shrine', note: 'One daily Noun, one ring, one small act of attention.' },
   { name: 'Drum Vespers', kind: 'evening rhythm', mark: '◒', path: '/drum-vespers', note: 'A rhythm room for the day’s gentler edge.' },
   { name: 'Nouns Stamps', kind: 'attendance marks', mark: '✣', path: '/nouns-stamps', note: 'Small proofs that you showed up.' },
+  { name: 'Bell & Signal', kind: 'sound foundry', mark: '◍', path: '/bell-and-signal', note: 'Eleven castings in code — bells, breaths, and polite signals, no samples.' },
 ] as const;
