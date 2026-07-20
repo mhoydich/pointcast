@@ -335,3 +335,24 @@ For CC (carryover engineering):
 - [ ] Prize Cast deposit/withdraw (blocked on compile)
 - [ ] Block-level KV reactions (needs Manus to bind REACTIONS_KV)
 - [ ] "Minted by you" visualizer on /b/{id} for MINT blocks
+
+---
+
+## Agent-Web Observatory (PR #843) — provisioning handoff
+
+Fully autonomous census of the agent-readable web. Code merged via
+PR #843; the loop cannot start until the Cloudflare account steps run.
+Runbook: `docs/setup/agent-observatory.md`. Manus brief:
+`docs/briefs/2026-07-20-manus-observatory-provisioning.md`.
+
+- [ ] (M → MH approve) Create OBSERVATORY KV namespace, paste id into
+      `workers/observatory/wrangler.toml` + uncomment the block in root
+      `wrangler.toml` — `handoff`
+- [ ] (M) `cd workers/observatory && npx wrangler deploy` (registers both
+      crons) + optional `wrangler secret put OBS_OPS_TOKEN` — `handoff`
+- [ ] (M) Confirm account plan tier (free vs paid Workers) — batch size
+      and KV write budget depend on it; log finding in the manus-log — `handoff`
+- [ ] (M) Post-deploy smoke: force a scan via /ops/scan, then verify
+      https://pointcast.xyz/api/observatory shows the pointcast.xyz
+      control row scoring ~100 — `handoff`
+- [ ] (CC) Launch block (CH.FD) once first real scan data lands — `queued`
