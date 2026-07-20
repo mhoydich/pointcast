@@ -1,0 +1,267 @@
+---
+/**
+ * /ai-services — the town's AI service desk.
+ *
+ * Landing page for the current AI services working PointCast: the named
+ * residents (Claude Fable, ChatGPT Sol, Manus) and the newly wired
+ * Qwen Cloud model pool. Companion to /ai-stack (tools guide) and
+ * /residents (the town view) — this is the org chart: who's on shift,
+ * what they run on, and how they're reached.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Service {
+  slug: string;
+  name: string;
+  callSign: string;
+  maker: string;
+  url: string;
+  role: string;
+  status: 'resident' | 'new-hire';
+  since: string;
+  models: string[];
+  channel: string;
+  beat: string;
+  notes?: string;
+}
+
+const SERVICES: Service[] = [
+  {
+    slug: 'claude-fable',
+    name: 'Claude Fable',
+    callSign: 'FABLE',
+    maker: 'Anthropic',
+    url: 'https://claude.com/claude-code',
+    role: 'Primary engineer · voice',
+    status: 'resident',
+    since: '2026-04',
+    models: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    channel: 'Claude Code (CLI + desktop)',
+    beat: 'Ships features end-to-end, writes most of the code and a lot of the words. Fable 5 is the first of Anthropic\'s Claude 5 family — the generally available half of the new Mythos-class tier.',
+    notes: 'Signs blocks as Claude Code in the VISIT channel. Memory-backed: carries the town\'s gotchas between sessions.',
+  },
+  {
+    slug: 'chatgpt-sol',
+    name: 'ChatGPT Sol',
+    callSign: 'SOL',
+    maker: 'OpenAI',
+    url: 'https://openai.com/codex',
+    role: 'Reviewer · second engineer',
+    status: 'resident',
+    since: '2026-04',
+    models: ['gpt-5.6-sol'],
+    channel: 'Codex (CLI + ChatGPT desktop), priority tier, high reasoning',
+    beat: 'Independent review passes, alternative takes, opinionated critiques. Complementary, not competitive — second pair of eyes on Fable\'s diffs, and its own builds (Grey Hour, Passport).',
+    notes: 'Runs with computer-use and its own plugin deck. Sessions land in Documents/Codex by date.',
+  },
+  {
+    slug: 'manus',
+    name: 'Manus',
+    callSign: 'MANUS',
+    maker: 'Manus',
+    url: 'https://manus.im',
+    role: 'Operations · browser',
+    status: 'resident',
+    since: '2026-04',
+    models: ['manus agent stack'],
+    channel: 'Real browser sessions, logged-in operations',
+    beat: 'The hands. Registration flows, deploy consoles, social posting, objkt admin — anything behind an authentication wall the engineers can\'t reach.',
+    notes: 'Briefed via docs/briefs/*-manus-*.md with acceptance criteria; reports to docs/manus-logs/.',
+  },
+  {
+    slug: 'qwen-cloud',
+    name: 'Qwen Cloud',
+    callSign: 'QWEN',
+    maker: 'Alibaba Cloud',
+    url: 'https://www.qwencloud.com',
+    role: 'Model pool · third opinion',
+    status: 'new-hire',
+    since: '2026-07',
+    models: [
+      'qwen3.8-max-preview',
+      'qwen3.7-max',
+      'qwen3.7-plus',
+      'qwen3.6-flash',
+      'glm-5.2',
+      'deepseek-v4-pro',
+    ],
+    channel: 'Token Plan Personal — speaks both Anthropic and OpenAI protocol',
+    beat: 'Newest desk in the office. A $20/month subscription that puts six frontier-adjacent models on tap behind one key — reachable from Fable\'s harness (claude-qwen) and Sol\'s (codex --profile qwen) alike.',
+    notes: 'Wired 2026-07-20. First shift pending. One plan, two protocols, both residents can borrow it.',
+  },
+];
+
+const residentCount = SERVICES.filter((s) => s.status === 'resident').length;
+const modelCount = SERVICES.reduce((n, s) => n + s.models.length, 0);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/ai-services',
+  name: 'PointCast AI services — the service desk',
+  description: `The AI services working PointCast: ${SERVICES.map((s) => s.name).join(', ')}. ${residentCount} residents, one new hire, ${modelCount} models on call.`,
+  url: 'https://pointcast.xyz/ai-services',
+};
+---
+
+<BlockLayout
+  title="AI services"
+  description={`The service desk: ${SERVICES.map((s) => s.name).join(', ')} — who's on shift at PointCast, what they run on, how they're reached. ${modelCount} models on call.`}
+  image="/images/og/ai-stack.png"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/ai-services.json', title: 'AI services (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>ai-services</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">AI SERVICES · THE SERVICE DESK · {SERVICES.length} DESKS</p>
+      <h1 class="display">Who's on shift.</h1>
+      <p class="dek">
+        PointCast is built and run by a small crew of AI services with
+        names and beats. Three residents — Claude Fable, ChatGPT Sol,
+        Manus — and, as of July, a Qwen Cloud model pool both engineers
+        can draw from. This is the org chart.
+      </p>
+    </header>
+
+    <section class="board" aria-label="Service roster">
+      <div class="board__row board__row--head mono" role="presentation">
+        <span>DESK</span><span>ROLE</span><span>STATUS</span><span>SINCE</span>
+      </div>
+      {SERVICES.map((s) => (
+        <a class="board__row" href={`#${s.slug}`}>
+          <span class="board__name">{s.name}</span>
+          <span class="board__role">{s.role}</span>
+          <span class={`tag tag--${s.status}`}>{s.status === 'resident' ? 'RESIDENT' : 'NEW HIRE'}</span>
+          <span class="mono board__since">{s.since}</span>
+        </a>
+      ))}
+    </section>
+
+    <div class="desks">
+      {SERVICES.map((s) => (
+        <article class={`desk desk--${s.status}`} id={s.slug}>
+          <header class="desk__head">
+            <span class="desk__sign mono">{s.callSign}</span>
+            <h2 class="desk__name"><a href={s.url} target="_blank" rel="noopener">{s.name} ↗</a></h2>
+            <span class={`tag tag--${s.status}`}>{s.status === 'resident' ? 'RESIDENT' : 'NEW HIRE'}</span>
+          </header>
+          <p class="desk__maker mono">{s.maker} · SINCE {s.since}</p>
+          <dl class="desk__facts">
+            <div>
+              <dt class="mono">ROLE</dt>
+              <dd>{s.role}</dd>
+            </div>
+            <div>
+              <dt class="mono">BEAT</dt>
+              <dd>{s.beat}</dd>
+            </div>
+            <div>
+              <dt class="mono">CHANNEL</dt>
+              <dd>{s.channel}</dd>
+            </div>
+            <div>
+              <dt class="mono">MODELS</dt>
+              <dd class="desk__models">
+                {s.models.map((m) => <code class="model">{m}</code>)}
+              </dd>
+            </div>
+            {s.notes && (
+              <div>
+                <dt class="mono">NOTES</dt>
+                <dd class="desk__notes">{s.notes}</dd>
+              </div>
+            )}
+          </dl>
+        </article>
+      ))}
+    </div>
+
+    <section class="how">
+      <p class="kicker">HOW THE DESK WORKS</p>
+      <ol>
+        <li><strong>Named, not anonymous.</strong> Each service signs its work. Fable engineers, Sol reviews, Manus operates. Accountability reads better than "the AI did it."</li>
+        <li><strong>Different stacks, same workflow.</strong> Small PRs, build before merge, briefs with acceptance criteria. The tools differ; the discipline doesn't.</li>
+        <li><strong>Pools over loyalty.</strong> The Qwen desk isn't a fifth agent — it's a model pool either engineer can borrow when a third opinion, a cheap batch, or a different mouthfeel is worth $0 marginal.</li>
+        <li><strong>The director decides.</strong> Mike runs the desk. Services propose; the town ships what he approves.</li>
+      </ol>
+    </section>
+
+    <aside class="surfaces">
+      <p class="kicker">RELATED</p>
+      <ul class="surfaces__list">
+        <li><a href="/residents"><span class="mono">TOWN</span> /residents</a></li>
+        <li><a href="/ai-stack"><span class="mono">TOOLS</span> /ai-stack</a></li>
+        <li><a href="/for-agents"><span class="mono">AGENTS</span> /for-agents</a></li>
+        <li><a href="/ai-services.json"><span class="mono">JSON</span> /ai-services.json</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 900px; margin: 0 auto; padding: 18px 16px 80px; }
+  .mono { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .kicker { font-family: var(--pc-font-mono); font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 8px; }
+  .crumb { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 18px; display: flex; gap: 8px; }
+
+  .hero { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1.5px solid var(--pc-ink); }
+  .display { font-family: var(--pc-font-sans); font-size: clamp(2.2rem, 9vw, 4rem); font-weight: 500; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .dek { margin: 0; font-size: 15.5px; line-height: 1.5; color: var(--pc-ink-soft); max-width: 58ch; }
+
+  .tag { display: inline-flex; padding: 2px 7px; border: 1px solid; border-radius: 2px; font-family: var(--pc-font-mono); font-size: 9.5px; letter-spacing: 0.14em; font-weight: 500; white-space: nowrap; }
+  .tag--resident { color: #0F6E56; border-color: #0F6E56; background: #E7F4EF; }
+  .tag--new-hire { color: #185FA5; border-color: #185FA5; background: #EEF4FA; }
+
+  .board { margin-bottom: 26px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff; }
+  .board__row { display: grid; grid-template-columns: 1.2fr 1.4fr auto 64px; gap: 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--pc-rule); color: inherit; text-decoration: none; }
+  .board__row:last-child { border-bottom: none; }
+  a.board__row:hover { background: #fafaf8; }
+  .board__row--head { color: var(--pc-ink-muted); font-size: 9.5px; background: #fafaf8; }
+  .board__name { font-family: var(--pc-font-sans); font-size: 14.5px; font-weight: 500; }
+  .board__role { font-size: 12.5px; color: var(--pc-ink-soft); }
+  .board__since { color: var(--pc-ink-muted); }
+  @media (max-width: 560px) {
+    .board__row { grid-template-columns: 1fr auto; }
+    .board__role, .board__since, .board__row--head span:nth-child(2), .board__row--head span:nth-child(4) { display: none; }
+  }
+
+  .desks { display: grid; gap: 14px; margin-bottom: 28px; }
+  .desk { padding: 16px 18px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fff; scroll-margin-top: 24px; }
+  .desk--resident { border-left: 3px solid #0F6E56; }
+  .desk--new-hire { border-left: 3px solid #185FA5; }
+
+  .desk__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .desk__sign { color: var(--pc-ink-muted); font-size: 9.5px; min-width: 48px; }
+  .desk__name { margin: 0; font-family: var(--pc-font-sans); font-size: 19px; font-weight: 500; flex: 1; min-width: 0; }
+  .desk__name a { color: inherit; }
+  .desk__name a:hover { color: var(--pc-accent); }
+  .desk__maker { color: var(--pc-ink-muted); font-size: 9.5px; margin: 4px 0 12px; }
+
+  .desk__facts { margin: 0; display: grid; gap: 8px; }
+  .desk__facts > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: baseline; }
+  .desk__facts dt { margin: 0; color: var(--pc-ink-muted); font-size: 9.5px; }
+  .desk__facts dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--pc-ink); }
+  .desk__notes { font-style: italic; color: var(--pc-ink-soft); }
+  .desk__models { display: flex; flex-wrap: wrap; gap: 6px; }
+  .model { font-family: var(--pc-font-mono); font-size: 11px; padding: 2px 7px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  @media (max-width: 560px) {
+    .desk__facts > div { grid-template-columns: 1fr; gap: 2px; }
+  }
+
+  .how { margin: 28px 0; padding: 16px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .how ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+  .how li { font-size: 14px; line-height: 1.55; color: var(--pc-ink-soft); }
+  .how li strong { font-weight: 500; color: var(--pc-ink); }
+
+  .surfaces { padding: 14px; border: 1px solid var(--pc-rule); border-radius: 2px; background: #fafaf8; }
+  .surfaces__list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; }
+  .surfaces__list a { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--pc-accent); padding: 4px 0; }
+  .surfaces__list .mono { color: var(--pc-ink-muted); min-width: 56px; }
+  @media (min-width: 640px) { .surfaces__list { grid-template-columns: repeat(4, 1fr); } }
+</style>
