@@ -235,6 +235,7 @@ export const GET: APIRoute = async () => {
         forNodes: 'https://pointcast.xyz/for-nodes',
         farm: 'https://pointcast.xyz/farm',
         wire: 'https://pointcast.xyz/wire',
+        press: 'https://pointcast.xyz/press',
         scoreboard: 'https://pointcast.xyz/scoreboard',
         taproom: 'https://pointcast.xyz/taproom',
         play: 'https://pointcast.xyz/play',
@@ -317,6 +318,7 @@ export const GET: APIRoute = async () => {
         tvAssets: 'https://pointcast.xyz/tv/assets.json',
         natureYield: 'https://pointcast.xyz/nature-yield.json',
         wire: 'https://pointcast.xyz/wire.json',
+        press: 'https://pointcast.xyz/press.json',
         scoreboard: 'https://pointcast.xyz/scoreboard.json',
         taproom: 'https://pointcast.xyz/taproom.json',
         play: 'https://pointcast.xyz/play.json',
@@ -436,6 +438,7 @@ export const GET: APIRoute = async () => {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',
         explore: 'https://pointcast.xyz/explore.rss',
+        press: 'https://pointcast.xyz/press.xml',
       },
       indexnow: 'https://pointcast.xyz/api/indexnow',
       perBlock: {

@@ -1,0 +1,147 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  PRESS_KIND_LABELS,
+  PRESS_RELEASES,
+  formatPressDate,
+  getPressRelease,
+  pressReleaseJsonUrl,
+  pressReleaseUrl,
+} from '../../lib/press-wire';
+
+export function getStaticPaths() {
+  return PRESS_RELEASES.map((release) => ({
+    params: { slug: release.slug },
+    props: { release },
+  }));
+}
+
+const { release } = Astro.props;
+const releaseIndex = PRESS_RELEASES.findIndex((candidate) => candidate.slug === release.slug);
+const nextRelease = PRESS_RELEASES[releaseIndex + 1] || PRESS_RELEASES[0];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'NewsArticle',
+  headline: release.headline,
+  description: release.summary,
+  datePublished: release.publishedAt,
+  dateModified: release.publishedAt,
+  mainEntityOfPage: pressReleaseUrl(release),
+  author: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  about: { '@type': 'SoftwareApplication', name: release.product, url: release.productUrl },
+};
+---
+
+<BaseLayout title={release.headline} description={release.summary}>
+  <article
+    class="release"
+    style={`--release-paper:${release.palette.paper};--release-ink:${release.palette.ink};--release-accent:${release.palette.accent};`}
+  >
+    <header class="release-head">
+      <nav class="release-head__nav mono" aria-label="Press Wire navigation">
+        <a href="/press">POINTCAST PRESS WIRE</a>
+        <a href="/">HOME</a>
+        <a href={pressReleaseJsonUrl(release)}>JSON</a>
+        <a href="/press.xml">RSS</a>
+      </nav>
+      <div class="release-head__meta mono">
+        <span>{PRESS_KIND_LABELS[release.kind]}</span>
+        <span>{release.id}</span>
+        <span>{release.status}</span>
+      </div>
+      <p class="release-head__kicker mono">{release.kicker}</p>
+      <h1>{release.headline}</h1>
+      <p class="release-head__subhead">{release.subhead}</p>
+    </header>
+
+    <div class="release-grid">
+      <aside class="release-side">
+        <div class="release-side__fact mono">
+          <span>FILED</span>
+          <time datetime={release.publishedAt}>{formatPressDate(release.publishedAt)}</time>
+        </div>
+        <div class="release-side__fact mono"><span>ISSUER</span><strong>{release.issuer}</strong></div>
+        <div class="release-side__fact mono"><span>DATELINE</span><strong>{release.dateline}</strong></div>
+        <div class="release-side__fact mono"><span>CONTACT</span><a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a></div>
+        <a class="release-side__product mono" href={release.productUrl}>{release.productLabel} ↗</a>
+      </aside>
+
+      <div class="release-body">
+        <p class="release-body__disclosure mono">{release.disclosure}</p>
+        <p class="release-body__lead"><strong>{release.dateline}</strong> — {release.summary}</p>
+        {release.body.map((paragraph) => <p>{paragraph}</p>)}
+
+        <section class="release-proofs" aria-labelledby="proofs-title">
+          <p class="release-proofs__kicker mono">PRIMARY SOURCES</p>
+          <h2 id="proofs-title">Open the evidence.</h2>
+          <ul>
+            {release.proofs.map((proof) => (
+              <li><a href={proof.url}>{proof.label}<span aria-hidden="true">↗</span></a></li>
+            ))}
+          </ul>
+        </section>
+
+        <section class="release-about" aria-labelledby="about-title">
+          <p class="mono">ABOUT POINTCAST</p>
+          <h2 id="about-title">A living broadcast from El Segundo.</h2>
+          <p>
+            PointCast combines numbered editorial Blocks, playable rooms, creative tools,
+            public feeds, and machine-readable paths for people and software agents.
+          </p>
+          <p><a href="https://pointcast.xyz">pointcast.xyz</a> · <a href="/for-agents">/for-agents</a> · <a href="/wire">/wire</a></p>
+        </section>
+      </div>
+    </div>
+
+    <footer class="release-foot">
+      <div>
+        <p class="mono">NEXT ON THE WIRE</p>
+        <a href={`/press/${nextRelease.slug}`}>{nextRelease.headline} →</a>
+      </div>
+      <a class="release-foot__index mono" href="/press">ALL FILINGS</a>
+    </footer>
+  </article>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+</BaseLayout>
+
+<style>
+  .release { color: var(--release-ink); background: var(--release-paper); font-family: 'Lora', Georgia, serif; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .release a { color: inherit; text-underline-offset: 0.16em; }
+  .release-head { min-height: 74vh; display: flex; flex-direction: column; justify-content: flex-end; padding: clamp(22px, 5vw, 74px); border-bottom: 1px solid var(--release-ink); }
+  .release-head__nav { position: absolute; inset: 24px clamp(22px, 5vw, 74px) auto; display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: 9px; letter-spacing: 0.12em; }
+  .release-head__meta { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-bottom: auto; padding-top: 58px; color: var(--release-accent); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .release-head__kicker { margin: 0 0 18px; color: var(--release-accent); font-size: 11px; letter-spacing: 0.14em; }
+  .release h1 { max-width: 1180px; margin: 0; font-size: clamp(52px, 8.5vw, 126px); font-weight: 400; line-height: 0.86; letter-spacing: -0.065em; }
+  .release-head__subhead { max-width: 62ch; margin: 30px 0 0 auto; font-size: clamp(20px, 2.3vw, 31px); line-height: 1.35; }
+  .release-grid { display: grid; grid-template-columns: minmax(220px, 0.34fr) minmax(0, 1fr); }
+  .release-side { padding: clamp(28px, 4vw, 58px); border-right: 1px solid var(--release-ink); }
+  .release-side__fact { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid color-mix(in srgb, var(--release-ink) 38%, transparent); font-size: 9px; letter-spacing: 0.1em; overflow-wrap: anywhere; }
+  .release-side__fact > span { color: var(--release-accent); }
+  .release-side__product { display: block; margin-top: 30px; padding: 12px; color: var(--release-paper); background: var(--release-accent); text-decoration: none; font-size: 9px; letter-spacing: 0.1em; text-align: center; }
+  .release-body { padding: clamp(38px, 7vw, 100px); }
+  .release-body > p { max-width: 760px; margin: 0 auto 24px; font-size: clamp(18px, 1.8vw, 23px); line-height: 1.65; }
+  .release-body__disclosure { padding: 12px 14px; border: 1px solid var(--release-accent); color: var(--release-accent); font-size: 9px !important; letter-spacing: 0.1em; text-transform: uppercase; }
+  .release-body__lead { font-size: clamp(25px, 3vw, 39px) !important; line-height: 1.35 !important; }
+  .release-proofs,
+  .release-about { max-width: 760px; margin: clamp(70px, 10vw, 130px) auto 0; padding-top: 24px; border-top: 4px solid var(--release-accent); }
+  .release-proofs__kicker,
+  .release-about > .mono { margin: 0; color: var(--release-accent); font-size: 9px; letter-spacing: 0.12em; }
+  .release-proofs h2,
+  .release-about h2 { margin: 12px 0 24px; font-size: clamp(34px, 5vw, 62px); font-weight: 400; line-height: 0.95; }
+  .release-proofs ul { margin: 0; padding: 0; list-style: none; }
+  .release-proofs li { border-top: 1px solid var(--release-ink); }
+  .release-proofs a { display: flex; justify-content: space-between; gap: 20px; padding: 14px 0; text-decoration: none; }
+  .release-proofs a:hover { color: var(--release-accent); }
+  .release-about p { line-height: 1.6; }
+  .release-foot { display: flex; align-items: end; justify-content: space-between; gap: 30px; padding: clamp(30px, 5vw, 70px); color: var(--release-paper); background: var(--release-ink); }
+  .release-foot p { margin: 0 0 10px; color: var(--release-accent); font-size: 9px; letter-spacing: 0.12em; }
+  .release-foot > div > a { max-width: 42ch; display: block; font-size: clamp(22px, 3vw, 38px); text-decoration: none; }
+  .release-foot__index { padding: 10px 12px; border: 1px solid currentColor; text-decoration: none; font-size: 9px; white-space: nowrap; }
+  @media (max-width: 720px) {
+    .release-grid { grid-template-columns: 1fr; }
+    .release-side { border-right: 0; border-bottom: 1px solid var(--release-ink); }
+    .release-foot { align-items: flex-start; flex-direction: column; }
+  }
+</style>

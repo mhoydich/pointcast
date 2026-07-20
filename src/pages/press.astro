@@ -1,0 +1,327 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  PRESS_KIND_LABELS,
+  PRESS_RELEASES,
+  formatPressDate,
+  pressReleaseUrl,
+} from '../lib/press-wire';
+
+const latest = PRESS_RELEASES[0];
+const kinds = [...new Set(PRESS_RELEASES.map((release) => release.kind))];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast Press Wire',
+  url: 'https://pointcast.xyz/press',
+  description: 'Owned PointCast product filings with named issuers, primary sources, machine-readable twins, and visible disclosure.',
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: PRESS_RELEASES.length,
+    itemListElement: PRESS_RELEASES.map((release, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: pressReleaseUrl(release),
+      name: release.headline,
+    })),
+  },
+};
+---
+
+<BaseLayout
+  title="Press Wire"
+  description="PointCast product filings with named issuers, primary sources, JSON twins, RSS, and visible disclosure."
+>
+  <main class="press">
+    <header class="press-hero">
+      <div class="press-hero__top mono">
+        <a href="/">POINTCAST</a>
+        <span>SIGNAL OFFICE · EL SEGUNDO</span>
+        <span>{PRESS_RELEASES.length} FILINGS · LIVE</span>
+      </div>
+
+      <div class="press-hero__title-row">
+        <div>
+          <p class="press-hero__kicker mono">POINTCAST PRESS WIRE · OWNED SOURCE DESK</p>
+          <h1>The work,<br /><em>made findable.</em></h1>
+        </div>
+        <p class="press-hero__dek">
+          Product filings with names, primary sources, JSON twins, RSS, and visible disclosure.
+          These are official PointCast announcements—not independent reporting.
+        </p>
+      </div>
+
+      <nav class="press-hero__routes mono" aria-label="Press Wire formats">
+        <a href="/press.json">JSON INDEX</a>
+        <a href="/press.xml">RSS FEED</a>
+        <a href="mailto:hello@pointcast.xyz?subject=PointCast%20Press%20Wire">PRESS CONTACT</a>
+        <a href="/wire">BUILD WIRE</a>
+      </nav>
+    </header>
+
+    <section class="flow" aria-labelledby="flow-title">
+      <div class="flow__head">
+        <div>
+          <p class="flow__kicker mono">FLOWING NOW · FIVE DIFFERENT DOORS</p>
+          <h2 id="flow-title">Products, tools, games, data, and archives.</h2>
+        </div>
+        <p>Filed separately from the new house-ad shelf and the publishing studio.</p>
+      </div>
+
+      <div class="flow__track" aria-label="Latest Press Wire headlines">
+        <div class="flow__rail">
+          {PRESS_RELEASES.map((release) => (
+            <a href={`/press/${release.slug}`} class="flow-chip">
+              <span class="flow-chip__kind mono">{PRESS_KIND_LABELS[release.kind]}</span>
+              <strong>{release.product}</strong>
+              <span aria-hidden="true">→</span>
+            </a>
+          ))}
+          <div class="flow__clone" aria-hidden="true">
+            {PRESS_RELEASES.map((release) => (
+              <span class="flow-chip">
+                <span class="flow-chip__kind mono">{PRESS_KIND_LABELS[release.kind]}</span>
+                <strong>{release.product}</strong>
+                <span>→</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {latest && (
+      <section
+        class="lead-filing"
+        style={`--release-paper:${latest.palette.paper};--release-ink:${latest.palette.ink};--release-accent:${latest.palette.accent};`}
+        aria-labelledby="lead-filing-title"
+      >
+        <div class="lead-filing__meta mono">
+          <span>LATEST FILING</span>
+          <span>{latest.id}</span>
+          <time datetime={latest.publishedAt}>{formatPressDate(latest.publishedAt)}</time>
+        </div>
+        <div class="lead-filing__copy">
+          <p class="lead-filing__kicker mono">{latest.kicker}</p>
+          <h2 id="lead-filing-title">{latest.headline}</h2>
+          <p>{latest.subhead}</p>
+        </div>
+        <div class="lead-filing__actions mono">
+          <a class="lead-filing__primary" href={`/press/${latest.slug}`}>READ FILING →</a>
+          <a href={latest.productUrl}>OPEN PRODUCT ↗</a>
+          <a href={`/press/${latest.slug}.json`}>JSON</a>
+        </div>
+      </section>
+    )}
+
+    <section class="filings" aria-labelledby="filings-title">
+      <div class="filings__head">
+        <div>
+          <p class="mono">THE DESK · ALL FILINGS</p>
+          <h2 id="filings-title">Five forms of PointCast.</h2>
+        </div>
+        <div class="filters mono" role="group" aria-label="Filter press filings by type">
+          <button type="button" data-press-filter="all" aria-pressed="true">ALL</button>
+          {kinds.map((kind) => (
+            <button type="button" data-press-filter={kind} aria-pressed="false">{PRESS_KIND_LABELS[kind]}</button>
+          ))}
+        </div>
+      </div>
+
+      <ol class="filings__list">
+        {PRESS_RELEASES.map((release, index) => (
+          <li
+            data-press-filing
+            data-kind={release.kind}
+            style={`--release-paper:${release.palette.paper};--release-ink:${release.palette.ink};--release-accent:${release.palette.accent};`}
+          >
+            <article class="filing-card">
+              <div class="filing-card__number mono">{String(index + 1).padStart(2, '0')}</div>
+              <div class="filing-card__main">
+                <div class="filing-card__meta mono">
+                  <span>{PRESS_KIND_LABELS[release.kind]}</span>
+                  <span>{release.id}</span>
+                  <time datetime={release.publishedAt}>{formatPressDate(release.publishedAt)}</time>
+                </div>
+                <p class="filing-card__product mono">{release.product} · {release.kicker}</p>
+                <h3><a href={`/press/${release.slug}`}>{release.headline}</a></h3>
+                <p>{release.summary}</p>
+              </div>
+              <div class="filing-card__links mono">
+                <a href={`/press/${release.slug}`}>FILING →</a>
+                <a href={release.productUrl}>PRODUCT ↗</a>
+                <a href={`/press/${release.slug}.json`}>JSON</a>
+              </div>
+            </article>
+          </li>
+        ))}
+      </ol>
+      <p class="filings__empty mono" data-press-empty hidden>No filings in this lane yet.</p>
+    </section>
+
+    <section class="policy" aria-labelledby="policy-title">
+      <p class="policy__kicker mono">SOURCE DESK POLICY · VERSION 1</p>
+      <div>
+        <h2 id="policy-title">Owned, sourced, and correctable.</h2>
+        <p>
+          Every current filing is issued by PointCast. Publication is not independent endorsement,
+          earned media, or a promise of coverage. Product links are primary sources. If a material
+          fact changes, the canonical filing and JSON twin will retain a visible correction.
+        </p>
+      </div>
+      <dl class="policy__facts mono">
+        <div><dt>ISSUER</dt><dd>POINTCAST</dd></div>
+        <div><dt>CONTACT</dt><dd><a href="mailto:hello@pointcast.xyz">HELLO@POINTCAST.XYZ</a></dd></div>
+        <div><dt>HUMAN</dt><dd>/PRESS/{'{SLUG}'}</dd></div>
+        <div><dt>MACHINE</dt><dd>/PRESS/{'{SLUG}'}.JSON</dd></div>
+      </dl>
+    </section>
+  </main>
+
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const buttons = Array.from(document.querySelectorAll('[data-press-filter]'));
+    const filings = Array.from(document.querySelectorAll('[data-press-filing]'));
+    const empty = document.querySelector('[data-press-empty]');
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const filter = button.getAttribute('data-press-filter') || 'all';
+        let visible = 0;
+        buttons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+        filings.forEach((filing) => {
+          const show = filter === 'all' || filing.getAttribute('data-kind') === filter;
+          filing.toggleAttribute('hidden', !show);
+          if (show) visible += 1;
+        });
+        if (empty) empty.toggleAttribute('hidden', visible > 0);
+      });
+    });
+  })();
+</script>
+
+<style>
+  .press {
+    --black: #15130f;
+    --paper: #f3eee3;
+    color: var(--black);
+    background: var(--paper);
+    font-family: 'Lora', Georgia, serif;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .press a { color: inherit; text-underline-offset: 0.16em; }
+  .press-hero {
+    min-height: 76vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: clamp(22px, 4vw, 58px);
+    color: #f7f0df;
+    background:
+      radial-gradient(circle at 76% 20%, rgba(255, 105, 64, 0.42), transparent 31%),
+      linear-gradient(145deg, #111724 0%, #1d344a 54%, #803921 100%);
+    border-bottom: 6px solid #15130f;
+  }
+  .press-hero__top,
+  .press-hero__routes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 24px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .press-hero__top a { text-decoration: none; font-weight: 700; }
+  .press-hero__title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.7fr);
+    align-items: end;
+    gap: clamp(28px, 6vw, 100px);
+    margin: clamp(70px, 14vh, 150px) 0 56px;
+  }
+  .press-hero__kicker { margin: 0 0 18px; color: #ffb07a; font-size: 11px; letter-spacing: 0.16em; }
+  .press-hero h1 {
+    margin: 0;
+    font-size: clamp(60px, 10vw, 150px);
+    font-weight: 400;
+    letter-spacing: -0.075em;
+    line-height: 0.76;
+  }
+  .press-hero h1 em { color: #ffb07a; font-weight: 400; }
+  .press-hero__dek { max-width: 40ch; margin: 0; font-size: clamp(18px, 2vw, 27px); line-height: 1.35; }
+  .press-hero__routes { justify-content: flex-start; }
+  .press-hero__routes a { padding: 8px 12px; border: 1px solid rgba(247, 240, 223, 0.62); text-decoration: none; }
+  .press-hero__routes a:hover { background: #f7f0df; color: #111724; }
+
+  .flow { padding: 38px clamp(22px, 4vw, 58px) 44px; border-bottom: 1px solid #15130f; overflow: hidden; }
+  .flow__head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 24px; }
+  .flow__head h2 { max-width: 16ch; margin: 5px 0 0; font-size: clamp(34px, 5vw, 66px); font-weight: 400; line-height: 0.98; letter-spacing: -0.04em; }
+  .flow__head > p { max-width: 38ch; margin: 0; }
+  .flow__kicker { margin: 0; font-size: 10px; letter-spacing: 0.16em; color: #8f3d28; }
+  .flow__track { border-block: 1px solid #15130f; overflow: hidden; }
+  .flow__rail { display: flex; width: max-content; animation: press-flow 34s linear infinite; }
+  .flow__clone { display: flex; }
+  .flow-chip { display: flex; align-items: center; gap: 12px; min-width: max-content; padding: 15px 28px; border-right: 1px solid #15130f; text-decoration: none; }
+  .flow-chip:hover { background: #15130f; color: #f3eee3; }
+  .flow-chip__kind { font-size: 9px; letter-spacing: 0.14em; color: #a33f26; text-transform: uppercase; }
+  .flow-chip:hover .flow-chip__kind { color: #ffb07a; }
+  @keyframes press-flow { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .flow__rail { animation: none; } }
+
+  .lead-filing { padding: clamp(26px, 5vw, 68px); color: var(--release-ink); background: var(--release-paper); border-bottom: 1px solid var(--release-ink); }
+  .lead-filing__meta { display: grid; grid-template-columns: 1fr auto auto; gap: 24px; padding-bottom: 14px; border-bottom: 1px solid currentColor; font-size: 10px; letter-spacing: 0.12em; }
+  .lead-filing__copy { max-width: 1050px; padding: clamp(45px, 9vw, 110px) 0; }
+  .lead-filing__kicker { margin: 0 0 18px; color: var(--release-accent); font-size: 11px; letter-spacing: 0.14em; }
+  .lead-filing h2 { margin: 0; font-size: clamp(48px, 8vw, 118px); font-weight: 400; letter-spacing: -0.065em; line-height: 0.87; }
+  .lead-filing__copy > p:last-child { max-width: 58ch; margin: 28px 0 0 auto; font-size: clamp(18px, 2vw, 27px); }
+  .lead-filing__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 10px; letter-spacing: 0.12em; }
+  .lead-filing__actions a { padding: 10px 13px; border: 1px solid currentColor; text-decoration: none; }
+  .lead-filing__actions .lead-filing__primary { color: var(--release-paper); background: var(--release-accent); border-color: var(--release-accent); }
+
+  .filings { padding: clamp(42px, 7vw, 94px) clamp(22px, 4vw, 58px); background: #f7f3e9; }
+  .filings__head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 30px; }
+  .filings__head p { margin: 0; font-size: 10px; letter-spacing: 0.14em; }
+  .filings__head h2 { margin: 5px 0 0; font-size: clamp(42px, 6vw, 82px); font-weight: 400; line-height: 0.95; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .filters button { padding: 8px 10px; border: 1px solid #15130f; background: transparent; color: #15130f; font: inherit; font-size: 9px; text-transform: uppercase; cursor: pointer; }
+  .filters button[aria-pressed="true"] { color: #f7f3e9; background: #15130f; }
+  .filings__list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .filings__list > li[hidden] { display: none; }
+  .filing-card { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: clamp(16px, 3vw, 42px); padding: clamp(20px, 3vw, 36px); color: var(--release-ink); background: var(--release-paper); border: 1px solid var(--release-ink); }
+  .filing-card__number { font-size: 11px; color: var(--release-accent); }
+  .filing-card__meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .filing-card__product { margin: 24px 0 9px; color: var(--release-accent); font-size: 9px; letter-spacing: 0.12em; }
+  .filing-card h3 { max-width: 850px; margin: 0; font-size: clamp(27px, 4vw, 53px); font-weight: 400; line-height: 1; letter-spacing: -0.04em; }
+  .filing-card h3 a { text-decoration: none; }
+  .filing-card h3 a:hover { text-decoration: underline; }
+  .filing-card__main > p:last-child { max-width: 68ch; margin-bottom: 0; line-height: 1.5; }
+  .filing-card__links { display: flex; flex-direction: column; align-items: stretch; gap: 7px; font-size: 9px; letter-spacing: 0.12em; }
+  .filing-card__links a { padding: 8px 10px; border: 1px solid currentColor; text-decoration: none; white-space: nowrap; }
+  .filing-card__links a:first-child { color: var(--release-paper); background: var(--release-accent); border-color: var(--release-accent); }
+  .filings__empty { margin: 28px 0 0; }
+
+  .policy { display: grid; grid-template-columns: 0.35fr 1fr 0.7fr; gap: clamp(28px, 5vw, 80px); padding: clamp(50px, 8vw, 110px) clamp(22px, 4vw, 58px); color: #f7f0df; background: #15130f; }
+  .policy__kicker { margin: 0; color: #ffb07a; font-size: 10px; letter-spacing: 0.14em; }
+  .policy h2 { margin: 0; font-size: clamp(40px, 6vw, 76px); font-weight: 400; line-height: 0.95; }
+  .policy p { max-width: 58ch; font-size: 18px; line-height: 1.55; }
+  .policy__facts { margin: 0; font-size: 9px; letter-spacing: 0.12em; }
+  .policy__facts div { padding: 10px 0; border-top: 1px solid rgba(247, 240, 223, 0.32); }
+  .policy__facts dt { color: #ffb07a; }
+  .policy__facts dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+  @media (max-width: 780px) {
+    .press-hero { min-height: 70vh; }
+    .press-hero__title-row,
+    .policy { grid-template-columns: 1fr; }
+    .press-hero__title-row { align-items: start; }
+    .flow__head,
+    .filings__head { align-items: flex-start; flex-direction: column; }
+    .filters { justify-content: flex-start; }
+    .lead-filing__meta { grid-template-columns: 1fr; gap: 7px; }
+    .filing-card { grid-template-columns: 30px minmax(0, 1fr); }
+    .filing-card__links { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
+  }
+</style>

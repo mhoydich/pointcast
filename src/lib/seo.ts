@@ -45,6 +45,8 @@ export const DISCOVERY_LINKS: DiscoveryLink[] = [
   { rel: 'alternate', type: 'text/plain', href: '/llms-full.txt', title: 'PointCast long-form LLM context' },
   { rel: 'alternate', type: 'application/feed+json', href: '/feed.json', title: 'PointCast JSON Feed' },
   { rel: 'alternate', type: 'application/rss+xml', href: '/feed.xml', title: 'PointCast RSS feed' },
+  { rel: 'alternate', type: 'application/json', href: '/press.json', title: 'PointCast Press Wire index' },
+  { rel: 'alternate', type: 'application/rss+xml', href: '/press.xml', title: 'PointCast Press Wire RSS' },
 ];
 
 export function buildIdentityJsonLd() {
