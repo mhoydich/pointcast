@@ -1,0 +1,112 @@
+---
+import { OPEN_AD_PLACEMENT, adDestination, selectAdsForPath } from '../lib/open-ad-network';
+
+interface Props {
+  count?: number;
+}
+
+const { count = 2 } = Astro.props;
+const pathname = Astro.url.pathname;
+const isPrivateSurface = pathname.startsWith('/admin');
+const ads = isPrivateSurface ? [] : selectAdsForPath(pathname, count);
+---
+
+{ads.length > 0 && (
+  <aside class="open-ad-rail" aria-labelledby="open-ad-rail-title" data-open-ad-placement={OPEN_AD_PLACEMENT.id}>
+    <div class="open-ad-rail__head">
+      <p id="open-ad-rail-title">ADVERTISEMENT · OPEN AD NETWORK · {OPEN_AD_PLACEMENT.id}</p>
+      <div>
+        <a href="/ads">HOW IT WORKS</a>
+        <a href="/ads.json">PUBLIC RECEIPT</a>
+      </div>
+    </div>
+
+    <div class="open-ad-rail__grid">
+      {ads.map((ad) => (
+        <a
+          class={`open-ad open-ad--${ad.tone}`}
+          href={adDestination(ad, pathname)}
+          data-ad-record={ad.id}
+          data-ad-context={pathname}
+        >
+          <span class="open-ad__meta">HOUSE AD · {ad.id}</span>
+          <strong>{ad.headline}</strong>
+          <span class="open-ad__copy">{ad.copy}</span>
+          <span class="open-ad__foot"><b>{ad.advertiser}</b><i>{ad.cta} →</i></span>
+        </a>
+      ))}
+    </div>
+
+    <p class="open-ad-rail__boundary">
+      CONTEXT, NOT TRACKING · NO BEHAVIORAL PROFILE · TEZ RESERVATION + WALLET SETTLEMENT ARE NOT LIVE YET
+    </p>
+  </aside>
+)}
+
+<style>
+  .open-ad-rail {
+    --ad-ink: #17140f;
+    --ad-paper: #f4efe3;
+    width: min(1440px, calc(100% - 32px));
+    margin: 28px auto 18px;
+    padding: 12px;
+    color: var(--ad-ink);
+    background: var(--ad-paper);
+    border: 1px solid var(--ad-ink);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  }
+  .open-ad-rail__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 24px;
+    padding: 0 2px 9px;
+    border-bottom: 1px solid var(--ad-ink);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+  .open-ad-rail__head p { margin: 0; }
+  .open-ad-rail__head div { display: flex; flex-wrap: wrap; gap: 12px; }
+  .open-ad-rail a { color: inherit; text-decoration: none; }
+  .open-ad-rail__head a { border-bottom: 1px solid currentColor; }
+  .open-ad-rail__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 8px; }
+  .open-ad {
+    --tone: #174e7a;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 20px;
+    padding: 15px;
+    border: 1px solid var(--ad-ink);
+    background: #fffaf0;
+    box-shadow: inset 0 4px 0 var(--tone);
+  }
+  .open-ad:hover { background: #fff; transform: translateY(-1px); }
+  .open-ad:focus-visible { outline: 3px solid var(--tone); outline-offset: 2px; }
+  .open-ad__meta { grid-column: 1 / -1; color: var(--tone); font-size: 7px; letter-spacing: 0.14em; }
+  .open-ad strong {
+    grid-column: 1 / -1;
+    font-family: 'Iowan Old Style', 'Palatino', Georgia, serif;
+    font-size: clamp(21px, 2.5vw, 34px);
+    font-weight: 500;
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+  }
+  .open-ad__copy { max-width: 66ch; font-family: var(--pc-font-sans, system-ui, sans-serif); font-size: 11px; line-height: 1.45; }
+  .open-ad__foot { display: flex; align-items: end; flex-direction: column; gap: 3px; font-size: 8px; text-align: right; }
+  .open-ad__foot b { color: var(--tone); font-weight: 700; }
+  .open-ad__foot i { font-style: normal; border-bottom: 1px solid currentColor; }
+  .open-ad--garden { --tone: #26734f; }
+  .open-ad--play { --tone: #bd3d20; }
+  .open-ad--ritual { --tone: #79568d; }
+  .open-ad--network { --tone: #1647cf; }
+  .open-ad--field { --tone: #b17616; }
+  .open-ad-rail__boundary { margin: 9px 2px 0; color: #70675c; font-size: 7px; letter-spacing: 0.1em; line-height: 1.45; }
+  @media (max-width: 720px) {
+    .open-ad-rail { width: min(100% - 20px, 1440px); }
+    .open-ad-rail__head { align-items: flex-start; flex-direction: column; }
+    .open-ad-rail__grid { grid-template-columns: 1fr; }
+    .open-ad { grid-template-columns: 1fr; }
+    .open-ad__foot { align-items: flex-start; text-align: left; }
+  }
+</style>

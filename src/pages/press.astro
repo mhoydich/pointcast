@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
 import {
   PRESS_KIND_LABELS,
   PRESS_RELEASES,
@@ -9,6 +10,14 @@ import {
 
 const latest = PRESS_RELEASES[0];
 const kinds = [...new Set(PRESS_RELEASES.map((release) => release.kind))];
+const wireLatest = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime())
+  .slice(0, 9)
+  .map((block) => ({
+    id: block.data.id,
+    channel: block.data.channel,
+    title: block.data.title,
+  }));
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -36,9 +45,35 @@ const jsonLd = {
     <header class="press-hero">
       <div class="press-hero__top mono">
         <a href="/">POINTCAST</a>
-        <span>SIGNAL OFFICE · EL SEGUNDO</span>
+        <span>POST OFFICE · SIGNAL DESK · EL SEGUNDO</span>
         <span>{PRESS_RELEASES.length} FILINGS · LIVE</span>
       </div>
+
+      <section class="post-office-wire" aria-labelledby="post-office-wire-title">
+        <a class="post-office-wire__label mono" id="post-office-wire-title" href="/wire">
+          <span aria-hidden="true"></span>LATEST ACROSS THE WIRE
+        </a>
+        <div class="post-office-wire__viewport">
+          <div class="post-office-wire__rail mono">
+            {wireLatest.map((item) => (
+              <a href={`/b/${item.id}`}>
+                <span>{item.channel}</span>
+                <strong>{item.title}</strong>
+                <i>№ {item.id} →</i>
+              </a>
+            ))}
+            <div aria-hidden="true">
+              {wireLatest.map((item) => (
+                <span>
+                  <span>{item.channel}</span>
+                  <strong>{item.title}</strong>
+                  <i>№ {item.id} →</i>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div class="press-hero__title-row">
         <div>
@@ -235,6 +270,50 @@ const jsonLd = {
     letter-spacing: 0.12em;
   }
   .press-hero__top a { text-decoration: none; font-weight: 700; }
+  .post-office-wire {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    margin-top: 18px;
+    border: 1px solid rgba(247, 240, 223, 0.72);
+    background: rgba(8, 14, 23, 0.48);
+    overflow: hidden;
+  }
+  .post-office-wire__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 13px;
+    color: #111724 !important;
+    background: #ffb07a;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .post-office-wire__label span { width: 7px; height: 7px; border-radius: 50%; background: #bd301f; box-shadow: 0 0 0 4px rgba(189, 48, 31, 0.18); }
+  .post-office-wire__viewport { min-width: 0; overflow: hidden; }
+  .post-office-wire__rail, .post-office-wire__rail > div { display: flex; width: max-content; }
+  .post-office-wire__rail { animation: post-office-wire-flow 54s linear infinite; }
+  .post-office-wire__rail a, .post-office-wire__rail > div > span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: max-content;
+    padding: 10px 18px;
+    border-right: 1px solid rgba(247, 240, 223, 0.32);
+    color: #f7f0df;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+  .post-office-wire__rail a:hover { color: #111724; background: #f7f0df; }
+  .post-office-wire__rail span span, .post-office-wire__rail a > span { color: #ffb07a; text-transform: uppercase; }
+  .post-office-wire__rail strong { max-width: 52ch; overflow: hidden; text-overflow: ellipsis; font: inherit; white-space: nowrap; }
+  .post-office-wire__rail i { color: #b9c9d7; font-style: normal; }
+  @keyframes post-office-wire-flow { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .post-office-wire__rail { animation: none; } }
   .press-hero__title-row {
     display: grid;
     grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.7fr);
@@ -317,6 +396,8 @@ const jsonLd = {
     .press-hero__title-row,
     .policy { grid-template-columns: 1fr; }
     .press-hero__title-row { align-items: start; }
+    .post-office-wire { grid-template-columns: 1fr; }
+    .post-office-wire__label { border-bottom: 1px solid rgba(247, 240, 223, 0.72); }
     .flow__head,
     .filings__head { align-items: flex-start; flex-direction: column; }
     .filters { justify-content: flex-start; }
