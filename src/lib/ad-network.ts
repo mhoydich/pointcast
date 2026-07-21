@@ -1,4 +1,4 @@
-export const AD_NETWORK_VERSION = '0.1.0';
+export const AD_NETWORK_VERSION = '0.2.0';
 
 export const AD_SLOTS = {
   'medium-rectangle': {
@@ -180,6 +180,26 @@ export const AD_CAMPAIGNS: readonly AdCampaign[] = [
     cta: 'Enter Nine Lives',
     boundary: 'VIEW ONLY · NO WALLET · NO FUNDS MOVE',
     theme: { background: '#1647cf', foreground: '#f4eedf', accent: '#bfd500', muted: '#ff9472' },
+  },
+  {
+    id: 'el-segundo-2026-001',
+    creativeId: 'el-segundo-2026-life-first-a',
+    name: 'El Segundo 2026 civic atlas house campaign',
+    sponsor: 'Michael Hoydich',
+    kind: 'house',
+    status: 'active',
+    startsAt: '2026-07-20',
+    weight: 3,
+    destination: 'https://el-segundo-2026-atlas.mhoydich.chatgpt.site',
+    destinationSurface: 'external',
+    slots: ['medium-rectangle', 'leaderboard', 'mobile-banner', 'half-page'],
+    mark: '100',
+    kicker: 'A FIRST-PRINCIPLES CIVIC ATLAS',
+    headline: 'Design the town for being alive.',
+    body: 'One hundred propositions for water, leisure, knowledge, care, nature, and every human state.',
+    cta: 'Open El Segundo 2026',
+    boundary: 'PUBLIC CIVIC SPECULATION · NO OFFICIAL STATUS',
+    theme: { background: '#0b456f', foreground: '#f1f0e8', accent: '#ff8a52', muted: '#99c9df' },
   },
 ] as const;
 

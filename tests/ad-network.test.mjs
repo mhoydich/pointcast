@@ -13,12 +13,12 @@ import {
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('the first flight has four standard slots and six active creatives', () => {
+test('the first flight has four standard slots and seven active creatives', () => {
   assert.deepEqual(
     Object.values(AD_SLOTS).map(({ width, height }) => `${width}x${height}`),
     ['300x250', '728x90', '320x50', '300x600'],
   );
-  assert.equal(AD_CAMPAIGNS.length, 6);
+  assert.equal(AD_CAMPAIGNS.length, 7);
   assert.ok(AD_CAMPAIGNS.every((campaign) => campaign.status === 'active'));
   assert.ok(AD_CAMPAIGNS.every((campaign) => campaign.slots.length === 4));
 });
