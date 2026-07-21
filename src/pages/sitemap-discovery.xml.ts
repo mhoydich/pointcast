@@ -57,6 +57,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/press.xml', 'daily', '0.82'],
   ['https://pointcast.xyz/gallery/today', 'daily', '0.88'],
   ['https://pointcast.xyz/gallery/today.json', 'daily', '0.84'],
+  ['https://pointcast.xyz/gallery/editions', 'daily', '0.84'],
+  ['https://pointcast.xyz/gallery/editions.json', 'daily', '0.82'],
   ['https://pointcast.xyz/ads', 'weekly', '0.72'],
   ['https://pointcast.xyz/ads.json', 'weekly', '0.7'],
   ['https://pointcast.xyz/archive', 'daily', '0.8'],

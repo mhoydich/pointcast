@@ -44,3 +44,16 @@ test('gallery and ad receipts are in priority discovery', async () => {
   assert.match(llms, /Today's Art edit/);
   assert.match(llms, /open-ad desk/);
 });
+
+test('v2 starts with a permanent human and JSON edition spine', async () => {
+  const [page, json, plan] = await Promise.all([
+    readFile(new URL('src/pages/gallery/editions.astro', root), 'utf8'),
+    readFile(new URL('src/pages/gallery/editions.json.ts', root), 'utf8'),
+    readFile(new URL('docs/plans/2026-07-20-todays-art-v2.md', root), 'utf8'),
+  ]);
+  assert.match(page, /Today,<br \/><i>kept\.<\/i>/);
+  assert.match(json, /pointcast\.gallery\.editions\.v1/);
+  assert.match(json, /workCount: 28/);
+  assert.match(plan, /Slice B — data-driven renderer/);
+  assert.match(plan, /No private wallet material/);
+});
