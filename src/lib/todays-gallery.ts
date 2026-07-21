@@ -32,7 +32,7 @@ export const IMAGEAPP_CUTS = [
   ['color-field-02', 'Pacific Bands II', 'ImageApp user bucket'],
 ] as const;
 
-export const todaysGalleryManifest = {
+export const july20GalleryManifest = {
   schema: 'pointcast.gallery.edit.v1',
   date: TODAY_GALLERY_DATE,
   title: "Today's Art: Money, Flowers, Signal",
@@ -61,3 +61,69 @@ export const todaysGalleryManifest = {
     },
   },
 };
+
+export const POSITIVE_INDEX_MIDJOURNEY = [
+  ['b4780342-9fda-45ff-b973-77451790ec69', 0, 'Bicycle Repair Shrine'],
+  ['805963fd-ca00-49a4-b796-55614f5123a0', 0, 'The Long Table'],
+  ['805963fd-ca00-49a4-b796-55614f5123a0', 3, 'Blue Canopy Supper'],
+  ['d7b95d81-5b75-40ff-9a7f-a13fb3c5f306', 1, 'Garden Kiosk'],
+  ['d7b95d81-5b75-40ff-9a7f-a13fb3c5f306', 0, 'Bus Shelter Conservatory'],
+  ['8487ec7a-ad8d-4f1a-9069-7d4008468d22', 1, 'Neighborhood Star Map'],
+] as const;
+
+export const POSITIVE_INDEX_IDEOGRAM = [
+  ['8Ix6T408QkCRK6Pb-sBV7w', 'Abundance Flows I'],
+  ['7P8oOUsyQqCrUDfaL2-IzA', 'Abundance Flows II'],
+  ['Nc5vstX-SGOgu3_Axgw4-g', 'Abundance Flows III'],
+  ['AmnaTBGZS_OkLW6Pfqc0Fw', 'Abundance Flows IV'],
+] as const;
+
+export const POSITIVE_INDEX_IMAGEAPP = [
+  ['money-ocean', 'Money Ocean'],
+  ['so-tired', 'So Tired'],
+  ['color-field-01', 'Pacific Bands I'],
+  ['color-field-02', 'Pacific Bands II'],
+] as const;
+
+export const POSITIVE_INDEX_REVE_ADS = [
+  ['PC-HOUSE-007', 'The Positive Index', revePositive.src],
+  ['PC-HOUSE-008', 'A Small Public Miracle', revePublicMiracle.src],
+  ['PC-HOUSE-009', 'Abundance Flows', reveAbundance.src],
+] as const;
+
+export const todaysGalleryManifest = {
+  schema: 'pointcast.gallery.edit.v1',
+  date: '2026-07-21',
+  title: "Today's Art: The Positive Index",
+  artist: 'Michael Hoydich',
+  editor: 'PointCast',
+  workCount: 14,
+  thesis: 'Ordinary public things pictured as evidence that a generous California future is already trying to arrive.',
+  sources: {
+    midjourney: POSITIVE_INDEX_MIDJOURNEY.map(([jobId, index, title]) => ({
+      jobId,
+      index,
+      title,
+      source: `https://www.midjourney.com/jobs/${jobId}?index=${index}`,
+    })),
+    ideogram: POSITIVE_INDEX_IDEOGRAM.map(([id, title]) => ({
+      id,
+      title,
+      profile: 'mhoydich',
+      source: `https://ideogram.ai/assets/image/balanced/response/${id}@2k`,
+    })),
+    imageapp: {
+      profile: 'mikeimageapp',
+      availabilityNote: 'A live review was attempted on July 21, 2026. imageapp.xyz still showed Site Maintenance, so this room revisits preserved local profile exports.',
+      works: POSITIVE_INDEX_IMAGEAPP.map(([id, title]) => ({ id, title, provenance: 'preserved local ImageApp profile export' })),
+    },
+    reve: {
+      purpose: 'House-ad campaign created for this edition; not counted in the 14 artwork total.',
+      creatives: POSITIVE_INDEX_REVE_ADS.map(([id, title, image]) => ({ id, title, image })),
+    },
+  },
+  mintStatus: 'not represented as minted',
+};
+import reveAbundance from '../assets/todays-art/2026-07-21/reve/abundance-flows.webp';
+import revePositive from '../assets/todays-art/2026-07-21/reve/the-positive-index.webp';
+import revePublicMiracle from '../assets/todays-art/2026-07-21/reve/small-public-miracle.webp';

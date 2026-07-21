@@ -25,7 +25,9 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
   ]);
 
-  assert.equal((registry.match(/id: 'PC-HOUSE-/g) || []).length, 6);
+  assert.equal((registry.match(/id: 'PC-HOUSE-/g) || []).length, 9);
+  assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
+  assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /tracking: 'none'/);
   assert.match(registry, /settlement: 'prototype'/);
   assert.match(component, /NO BEHAVIORAL PROFILE/);

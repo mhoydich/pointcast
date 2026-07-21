@@ -9,6 +9,8 @@ export interface PointCastAd {
   cta: string;
   tone: PointCastAdTone;
   contexts: string[];
+  image?: string;
+  sourceTool?: string;
   status: 'house';
 }
 
@@ -90,6 +92,45 @@ export const POINTCAST_ADS: PointCastAd[] = [
     contexts: ['prayer', 'walk', 'meditate', 'quiet', 'ritual'],
     status: 'house',
   },
+  {
+    id: 'PC-HOUSE-007',
+    advertiser: "PointCast Today's Art",
+    headline: 'The Positive Index.',
+    copy: 'Fourteen works treat small public things as evidence that a generous future is already trying to arrive.',
+    href: '/gallery/today',
+    cta: 'Enter edit 002',
+    tone: 'garden',
+    contexts: ['gallery', 'today', 'art', 'garden'],
+    image: revePositive.src,
+    sourceTool: 'Reve',
+    status: 'house',
+  },
+  {
+    id: 'PC-HOUSE-008',
+    advertiser: "PointCast Today's Art",
+    headline: 'A small public miracle.',
+    copy: 'A bus shelter becomes a garden. Fresh Midjourney work meets a deeper Ideogram archive and preserved ImageApp exports.',
+    href: '/gallery/2026-07-21',
+    cta: 'See the whole hanging',
+    tone: 'field',
+    contexts: ['gallery', 'today', 'art', 'field'],
+    image: revePublicMiracle.src,
+    sourceTool: 'Reve',
+    status: 'house',
+  },
+  {
+    id: 'PC-HOUSE-009',
+    advertiser: "PointCast Today's Art",
+    headline: 'Abundance flows.',
+    copy: 'Four Ideogram posters surfaced below the familiar profile hits. The earnestness is part of the wager.',
+    href: '/gallery/2026-07-21#abundance-title',
+    cta: 'Open the deep cut',
+    tone: 'signal',
+    contexts: ['gallery', 'today', 'art', 'signal'],
+    image: reveAbundance.src,
+    sourceTool: 'Reve',
+    status: 'house',
+  },
 ];
 
 function pathWords(pathname: string): string[] {
@@ -120,3 +161,6 @@ export function adDestination(ad: PointCastAd, pathname: string): string {
   const joiner = ad.href.includes('?') ? '&' : '?';
   return `${ad.href}${joiner}utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=${ad.id.toLowerCase()}&utm_content=${encodeURIComponent(pathname || '/')}`;
 }
+import reveAbundance from '../assets/todays-art/2026-07-21/reve/abundance-flows.webp';
+import revePositive from '../assets/todays-art/2026-07-21/reve/the-positive-index.webp';
+import revePublicMiracle from '../assets/todays-art/2026-07-21/reve/small-public-miracle.webp';
