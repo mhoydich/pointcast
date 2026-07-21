@@ -1,3 +1,8 @@
+import reveAbundance from '../assets/todays-art/2026-07-21/reve/abundance-flows.webp';
+import revePositive from '../assets/todays-art/2026-07-21/reve/the-positive-index.webp';
+import revePublicMiracle from '../assets/todays-art/2026-07-21/reve/small-public-miracle.webp';
+import drumNounUniversePoster from '../assets/campaigns/pointcast-drum-noun-universe/115-rooms-one-shared-pulse.webp';
+
 export type PointCastAdTone = 'signal' | 'garden' | 'play' | 'ritual' | 'network' | 'field';
 
 export interface PointCastAd {
@@ -11,6 +16,9 @@ export interface PointCastAd {
   contexts: string[];
   image?: string;
   sourceTool?: string;
+  campaign?: string;
+  seriesLabel?: string;
+  seriesIndex?: number;
   status: 'house';
 }
 
@@ -25,7 +33,44 @@ export const OPEN_AD_PLACEMENT = {
   note: 'One clearly labeled contextual placement across public PointCast pages. No behavioral profiles.',
 } as const;
 
+export const DRUM_COMPENDIUM_CAMPAIGN = {
+  id: 'PC-DRUM-COMPENDIUM-2026',
+  label: 'Drum Compendium',
+  advertiser: 'PointCast',
+  creativeCount: 6,
+  placement: 'One contextual creative on every public /drum surface',
+  tracking: 'none',
+  status: 'house',
+  note: 'A six-part PointCast house campaign distributed by URL context, never visitor behavior.',
+} as const;
+
+export const DRUM_NOUN_UNIVERSE_CAMPAIGN = {
+  id: 'PC-DRUM-NOUN-UNIVERSE-2026',
+  label: 'Drum Noun Universe',
+  advertiser: 'PointCast',
+  creativeCount: 1,
+  placement: 'Featured homepage unit and contextual placement across public non-Drum pages',
+  tracking: 'none',
+  status: 'house',
+  note: 'A first-party PointCast house campaign distributed sitewide without visitor profiles, impression pixels, or paid media.',
+} as const;
+
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-DRUM-UNIVERSE-001',
+    advertiser: 'PointCast',
+    headline: '115 rooms. One shared pulse.',
+    copy: 'Drum machines, games, radio, rituals, tiny theaters, and agent paths form one playable Noun universe. No signup, wallet, purchase, or token required.',
+    href: '/drum-press',
+    cta: 'Enter the universe',
+    tone: 'signal',
+    contexts: ['home', 'pointcast', 'town', 'room', 'play', 'game', 'sound', 'agent', 'press', 'art'],
+    image: drumNounUniversePoster.src,
+    sourceTool: 'OpenAI image generation',
+    campaign: DRUM_NOUN_UNIVERSE_CAMPAIGN.id,
+    seriesLabel: DRUM_NOUN_UNIVERSE_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-HOUSE-001',
     advertiser: 'Bell & Signal',
@@ -131,6 +176,90 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'Reve',
     status: 'house',
   },
+  {
+    id: 'PC-DRUM-001',
+    advertiser: 'PointCast',
+    headline: 'The town has a tempo.',
+    copy: 'Art, games, field notes, agents, and public experiments—one small internet town, still being built in the open.',
+    href: '/town',
+    cta: 'Walk into town',
+    tone: 'signal',
+    contexts: ['drum', 'room', 'now', 'lobby', 'meet', 'threshold', 'v2', 'v4', 'v6', 'v8', 'v10', 'v12', 'v14', 'v18'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 1,
+    status: 'house',
+  },
+  {
+    id: 'PC-DRUM-002',
+    advertiser: 'PointCast',
+    headline: 'Look between the beats.',
+    copy: "Today's Art hangs a new edit from PointCast's image archive: public miracles, useful futures, and a little visual weather.",
+    href: '/gallery/today',
+    cta: "See today's hanging",
+    tone: 'garden',
+    contexts: ['drum', 'portrait', 'postcard', 'stickers', 'tape', 'warhol', 'aurora', 'v3', 'v7', 'v9', 'v13', 'v15', 'v17'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 2,
+    status: 'house',
+  },
+  {
+    id: 'PC-DRUM-003',
+    advertiser: 'PointCast',
+    headline: 'The signal keeps moving.',
+    copy: 'New rooms, releases, and odd little utilities arrive on the Press Wire with a public JSON and RSS trail behind them.',
+    href: '/press',
+    cta: 'Read the wire',
+    tone: 'field',
+    contexts: ['drum', 'press', 'radio', 'tv', 'marquee', 'bulletin', 'shout', 'letters', 'reception', 'viz'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 3,
+    status: 'house',
+  },
+  {
+    id: 'PC-DRUM-004',
+    advertiser: 'PointCast',
+    headline: 'Agents can keep time.',
+    copy: 'Add PointCast as a connector, read the town map, inspect public state, and let a machine join the same room as everyone else.',
+    href: '/connectors',
+    cta: 'Connect an agent',
+    tone: 'network',
+    contexts: ['drum', 'agent', 'agents', 'quintet', 'conductor', 'scorebook', 'mcp', 'altar'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 4,
+    status: 'house',
+  },
+  {
+    id: 'PC-DRUM-005',
+    advertiser: 'PointCast',
+    headline: 'Five ways to miss the beat.',
+    copy: 'Memory, reaction, groove completion, loop defense, and silent tempo control. No signup. Start in one tap.',
+    href: '/drum-games',
+    cta: 'Enter the arcade',
+    tone: 'play',
+    contexts: ['drum', 'games', 'says', 'runner', 'quickdraw', 'fill', 'steady', 'solo', 'duel', 'league', 'relay', 'potato', 'v16'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 5,
+    status: 'house',
+  },
+  {
+    id: 'PC-DRUM-006',
+    advertiser: 'PointCast',
+    headline: 'Keep the strange little rooms.',
+    copy: 'The compendium is bigger than the front door: bells, shrines, broadcasts, keepsakes, ceremonies, and tiny instruments all remain playable.',
+    href: '/drum-press',
+    cta: 'Open the compendium',
+    tone: 'ritual',
+    contexts: ['drum', 'bell', 'shrine', 'rosary', 'koan', 'prayer', 'mantra', 'lantern', 'bath', 'meditate', 'zen', 'vespers', 'saint', 'offering'],
+    campaign: DRUM_COMPENDIUM_CAMPAIGN.id,
+    seriesLabel: DRUM_COMPENDIUM_CAMPAIGN.label,
+    seriesIndex: 6,
+    status: 'house',
+  },
 ];
 
 function pathWords(pathname: string): string[] {
@@ -146,21 +275,41 @@ function stablePathSeed(pathname: string): number {
 export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const words = new Set(pathWords(pathname));
   const seed = stablePathSeed(pathname || '/');
-  return POINTCAST_ADS
+  const cappedCount = Math.max(1, Math.min(count, POINTCAST_ADS.length));
+  const ranked = POINTCAST_ADS
     .map((ad, index) => ({
       ad,
       score: ad.contexts.reduce((total, context) => total + (words.has(context) ? 10 : 0), 0)
         + ((seed + index * 17) % 7),
     }))
     .sort((a, b) => b.score - a.score || a.ad.id.localeCompare(b.ad.id))
-    .slice(0, Math.max(1, Math.min(count, POINTCAST_ADS.length)))
     .map(({ ad }) => ad);
+
+  const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
+  if (!isDrumSurface) {
+    const universeCreative = ranked.find((ad) => ad.campaign === DRUM_NOUN_UNIVERSE_CAMPAIGN.id);
+    if (!universeCreative) return ranked.slice(0, cappedCount);
+
+    const companionAds = ranked.filter((ad) => (
+      ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
+      && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
+    ));
+    return [universeCreative, ...companionAds].slice(0, cappedCount);
+  }
+
+  const drumCreative = ranked.find((ad) => ad.campaign === DRUM_COMPENDIUM_CAMPAIGN.id);
+  if (!drumCreative) return ranked.slice(0, cappedCount);
+
+  const companionAds = ranked.filter((ad) => (
+    ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
+    && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
+  ));
+  return [drumCreative, ...companionAds].slice(0, cappedCount);
 }
 
 export function adDestination(ad: PointCastAd, pathname: string): string {
   const joiner = ad.href.includes('?') ? '&' : '?';
-  return `${ad.href}${joiner}utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=${ad.id.toLowerCase()}&utm_content=${encodeURIComponent(pathname || '/')}`;
+  const campaign = (ad.campaign || ad.id).toLowerCase();
+  const content = `${pathname || '/'}:${ad.id.toLowerCase()}`;
+  return `${ad.href}${joiner}utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=${campaign}&utm_content=${encodeURIComponent(content)}`;
 }
-import reveAbundance from '../assets/todays-art/2026-07-21/reve/abundance-flows.webp';
-import revePositive from '../assets/todays-art/2026-07-21/reve/the-positive-index.webp';
-import revePublicMiracle from '../assets/todays-art/2026-07-21/reve/small-public-miracle.webp';

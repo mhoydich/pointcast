@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { OPEN_AD_PLACEMENT, POINTCAST_ADS } from '../lib/open-ad-network';
+import { DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, OPEN_AD_PLACEMENT, POINTCAST_ADS } from '../lib/open-ad-network';
 
 export const GET: APIRoute = () => {
   const payload = {
@@ -13,6 +13,7 @@ export const GET: APIRoute = () => {
       note: 'The current release serves static contextual house ads. Reservation and tez settlement remain prototype-only.',
     },
     placement: OPEN_AD_PLACEMENT,
+    houseSeries: [DRUM_NOUN_UNIVERSE_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN],
     campaigns: POINTCAST_ADS,
   };
 

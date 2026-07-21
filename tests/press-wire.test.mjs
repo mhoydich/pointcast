@@ -5,11 +5,14 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds five distinct non-ad product filings', () => {
-  assert.equal(releases.length, 5);
+test('press wire seeds six product filings across every public kind', () => {
+  assert.equal(releases.length, 6);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
-  assert.equal(new Set(releases.map((release) => release.kind)).size, 5);
+  assert.deepEqual(
+    new Set(releases.map((release) => release.kind)),
+    new Set(['product', 'data', 'archive', 'game', 'engineering']),
+  );
 
   const excludedAdRoutes = new Set([
     'https://pointcast.xyz/bell-and-signal',

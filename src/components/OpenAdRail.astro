@@ -1,5 +1,6 @@
 ---
-import { OPEN_AD_PLACEMENT, adDestination, selectAdsForPath } from '../lib/open-ad-network';
+import { DRUM_NOUN_UNIVERSE_CAMPAIGN, OPEN_AD_PLACEMENT, adDestination, selectAdsForPath } from '../lib/open-ad-network';
+import DrumCompendiumAdArt from './DrumCompendiumAdArt.astro';
 
 interface Props {
   count?: number;
@@ -8,13 +9,19 @@ interface Props {
 const { count = 2 } = Astro.props;
 const pathname = Astro.url.pathname;
 const isPrivateSurface = pathname.startsWith('/admin');
-const ads = isPrivateSurface ? [] : selectAdsForPath(pathname, count);
+const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
+const selectedAds = isPrivateSurface ? [] : selectAdsForPath(pathname, pathname === '/' ? count + 1 : count);
+const ads = pathname === '/'
+  ? selectedAds.filter((ad) => ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id).slice(0, count)
+  : selectedAds;
 ---
 
 {ads.length > 0 && (
-  <aside class="open-ad-rail" aria-labelledby="open-ad-rail-title" data-open-ad-placement={OPEN_AD_PLACEMENT.id}>
+  <aside class:list={['open-ad-rail', { 'open-ad-rail--drum': isDrumSurface }]} aria-labelledby="open-ad-rail-title" data-open-ad-placement={OPEN_AD_PLACEMENT.id}>
     <div class="open-ad-rail__head">
-      <p id="open-ad-rail-title">ADVERTISEMENT · OPEN AD NETWORK · {OPEN_AD_PLACEMENT.id}</p>
+      <p id="open-ad-rail-title">
+        ADVERTISEMENT · {isDrumSurface ? 'POINTCAST HOUSE SERIES · DRUM COMPENDIUM' : `OPEN AD NETWORK · ${OPEN_AD_PLACEMENT.id}`}
+      </p>
       <div>
         <a href="/ads">HOW IT WORKS</a>
         <a href="/ads.json">PUBLIC RECEIPT</a>
@@ -24,13 +31,17 @@ const ads = isPrivateSurface ? [] : selectAdsForPath(pathname, count);
     <div class="open-ad-rail__grid">
       {ads.map((ad) => (
         <a
-          class={`open-ad open-ad--${ad.tone}`}
+          class:list={['open-ad', `open-ad--${ad.tone}`, { 'open-ad--series': ad.seriesLabel }]}
           href={adDestination(ad, pathname)}
           data-ad-record={ad.id}
           data-ad-context={pathname}
+          data-ad-series={ad.campaign}
         >
           {ad.image && <img class="open-ad__image" src={ad.image} alt="" width="1200" height="1457" loading="lazy" />}
-          <span class="open-ad__meta">HOUSE AD · {ad.id}</span>
+          {ad.seriesIndex && <DrumCompendiumAdArt sequence={ad.seriesIndex} label={ad.headline} />}
+          <span class="open-ad__meta">
+            HOUSE AD · {ad.id}{ad.seriesLabel && ` · ${ad.seriesLabel.toUpperCase()}`}{ad.seriesIndex && ` ${String(ad.seriesIndex).padStart(2, '0')}/06`}
+          </span>
           <strong>{ad.headline}</strong>
           <span class="open-ad__copy">{ad.copy}</span>
           <span class="open-ad__foot"><b>{ad.advertiser}</b><i>{ad.cta} →</i></span>
@@ -56,6 +67,7 @@ const ads = isPrivateSurface ? [] : selectAdsForPath(pathname, count);
     border: 1px solid var(--ad-ink);
     font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
   }
+  .open-ad-rail--drum { box-shadow: 5px 5px 0 color-mix(in srgb, var(--ad-ink) 14%, transparent); }
   .open-ad-rail__head {
     display: flex;
     align-items: center;
@@ -86,6 +98,8 @@ const ads = isPrivateSurface ? [] : selectAdsForPath(pathname, count);
   .open-ad:focus-visible { outline: 3px solid var(--tone); outline-offset: 2px; }
   .open-ad__meta { grid-column: 1 / -1; color: var(--tone); font-size: 7px; letter-spacing: 0.14em; }
   .open-ad__image { grid-column: 1 / -1; width: 100%; max-height: 240px; object-fit: cover; object-position: center 28%; border: 1px solid var(--ad-ink); }
+  .open-ad--series { background: color-mix(in srgb, var(--tone) 4%, #fffaf0); }
+  .open-ad--series > :global(.drum-ad-art) { grid-column: 1 / -1; }
   .open-ad strong {
     grid-column: 1 / -1;
     font-family: 'Iowan Old Style', 'Palatino', Georgia, serif;
