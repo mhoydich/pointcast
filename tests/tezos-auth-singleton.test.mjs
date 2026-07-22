@@ -20,6 +20,8 @@ test('PointCast routes mainnet wallet work through one subscribed Beacon client'
   assert.match(tezos, /subscribeToEvent\([\s\S]*ACTIVE_ACCOUNT_SET/);
   assert.match(tezos, /export async function pointCastWallet/);
   assert.match(auth, /signTezosPayload/);
+  assert.match(tezos, /signingType: 'micheline'/);
+  assert.doesNotMatch(tezos, /signingType: 'raw'/);
   assert.doesNotMatch(auth, /new BeaconWallet/);
   assert.doesNotMatch(walletConnect, /new beacon\.DAppClient|walletbeacon\.min\.js/);
   for (const source of mainnetSurfaces) {
@@ -33,4 +35,5 @@ test('Tezos login challenge is short-lived and single-use', async () => {
   assert.match(route, /auth-nonce:tezos:/);
   assert.match(route, /replayed-message/);
   assert.match(route, /expirationTtl/);
+  assert.match(route, /michelineStringPayload\(message\)/);
 });

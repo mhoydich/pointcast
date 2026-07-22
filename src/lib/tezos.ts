@@ -29,10 +29,6 @@ function hasRequiredScopes(account: any): boolean {
   return REQUIRED_SCOPES.every((scope) => scopes.includes(scope));
 }
 
-function utf8ToHex(value: string): string {
-  return Array.from(new TextEncoder().encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export const POINTCAST_SIGNING_DOMAIN = 'pointcast.xyz/beat-runner-v5';
 
 /** Encode a human-readable string as a Micheline string expression. */
@@ -159,10 +155,10 @@ export async function signTezosPayload(message: string): Promise<{
   publicKey: string;
 }> {
   const { wallet } = getToolkit();
-  const address = await connectKukai();
-  const payload = utf8ToHex(message);
+  const address = await connectKukaiForSigning();
+  const payload = michelineStringPayload(message);
   const { signature } = await wallet.client.requestSignPayload({
-    signingType: 'raw' as any,
+    signingType: 'micheline' as any,
     payload,
     sourceAddress: address,
   });
@@ -170,6 +166,9 @@ export async function signTezosPayload(message: string): Promise<{
   if (!account?.publicKey) throw new Error('The connected wallet did not provide a public key.');
   if (getPkhfromPk(account.publicKey) !== address) {
     throw new Error('Wallet public key does not match the active address.');
+  }
+  if (!verifySignature(payload, account.publicKey, signature)) {
+    throw new Error('Wallet returned a signature that could not be verified locally.');
   }
   return { address, payload, signature, publicKey: account.publicKey };
 }

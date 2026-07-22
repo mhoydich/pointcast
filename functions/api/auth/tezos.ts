@@ -31,6 +31,14 @@ const LOGIN_PREFIX = 'PointCast Tezos Login';
 const MESSAGE_TTL_MS = 5 * 60 * 1000;
 const NONCE_PREFIX = 'auth-nonce:tezos:';
 
+function michelineStringPayload(value: string): string {
+  const bytes = Array.from(new TextEncoder().encode(value))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  const byteLength = (bytes.length / 2).toString(16).padStart(8, '0');
+  return `0501${byteLength}${bytes}`;
+}
+
 function parseSignedMessage(message: string): Record<string, string> | null {
   const lines = message.split('\n');
   if (lines[0]?.trim() !== LOGIN_PREFIX) return null;
@@ -109,9 +117,7 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
   }
 
   const isValidSignature = verifySignature(
-    Array.from(new TextEncoder().encode(message))
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join(''),
+    michelineStringPayload(message),
     publicKey,
     signature,
   );
