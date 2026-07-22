@@ -96,10 +96,11 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
 });
 
 test('portable network extends The Holders Cut campaign to the Rally footer', async () => {
-  const [registry, receipt, widget, endpoint] = await Promise.all([
+  const [registry, receipt, widget, route, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
     readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+    readFile(new URL('src/pages/open-ad-network.js.ts', root), 'utf8'),
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
@@ -112,6 +113,9 @@ test('portable network extends The Holders Cut campaign to the Rally footer', as
   assert.match(widget, /publisher\.id === 'rally'/);
   assert.match(widget, /IntersectionObserver/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);
+  assert.match(route, /open-ad-network\.js\?raw/);
+  assert.match(route, /text\/javascript/);
+  assert.match(route, /Access-Control-Allow-Origin/);
   assert.match(endpoint, /TRUSTED_PUBLISHER_ORIGINS/);
   assert.match(endpoint, /Publisher is the public property mounting the unit/);
 });
