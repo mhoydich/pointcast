@@ -139,7 +139,7 @@ test('Industry Next has a direct PointCast house ad in addition to its project s
   assert.match(receipt, /INDUSTRY_NEXT_CAMPAIGN/);
 });
 
-test('portable network extends The Holders Cut campaign to the Rally footer', async () => {
+test('portable network transparently pins the first-100 campaign across owned publishers', async () => {
   const [registry, receipt, widget, route, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
@@ -148,8 +148,11 @@ test('portable network extends The Holders Cut campaign to the Rally footer', as
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
+  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
+  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
   assert.match(registry, /id: 'rally'/);
-  assert.match(registry, /campaigns: \['PC-HOLDERS-CUT-2026'\]/);
+  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
+  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);
