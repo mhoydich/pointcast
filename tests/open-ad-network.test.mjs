@@ -60,6 +60,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   ]);
 
   assert.equal((registry.match(/id: 'PC-HOUSE-/g) || []).length, 9);
+  assert.equal((registry.match(/id: 'PC-INDUSTRY-NEXT-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-DRUM-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-DRUM-UNIVERSE-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
@@ -93,6 +94,49 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(report, /These are browser events, not unique people/);
   assert.match(endpoint, /No IP, user agent, cookie, wallet, or visitor identifier/);
   assert.match(endpoint, /expirationTtl: RETENTION_DAYS/);
+  assert.match(endpoint, /TRUSTED_PUBLISHER_ORIGINS/);
+  assert.match(endpoint, /publisher is the public property mounting the unit/i);
+});
+
+test('portable network unit is reciprocal, contextual, and privacy bounded', async () => {
+  const [registry, receipt, widget, report] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+    readFile(new URL('src/pages/ads/report.astro', root), 'utf8'),
+  ]);
+
+  for (const publisher of ['pointcast', 'industrynext', 'allworthy', 'passportz', 'common-hours']) {
+    assert.match(registry, new RegExp(`id: '${publisher}'`));
+  }
+  assert.match(registry, /PC-OPEN-NETWORK-2026/);
+  assert.match(registry, /No cookies, fingerprinting, wallet data, cross-site visitor identifiers, or behavioral profiles/);
+  assert.match(receipt, /open-ad-network\.js/);
+  assert.match(receipt, /data-pointcast-network/);
+  assert.match(widget, /data-pointcast-network/);
+  assert.match(widget, /credentials: 'omit'/);
+  assert.match(widget, /navigator\.doNotTrack/);
+  assert.match(widget, /IntersectionObserver/);
+  assert.match(widget, /intersectionRatio >= 0\.5/);
+  assert.match(widget, /advertiserAliases/);
+  assert.match(widget, /utm_medium', 'open-ad-network'/);
+  assert.match(report, /RECIPROCAL PUBLISHERS/);
+  assert.match(report, /data-publisher-id/);
+});
+
+test('Industry Next has a direct PointCast house ad in addition to its project series', async () => {
+  const [registry, desk, receipt] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-INDUSTRY-NEXT-2026/);
+  assert.match(registry, /PC-INDUSTRY-NEXT-001/);
+  assert.match(registry, /Culture is a building material\./);
+  assert.match(registry, /href: 'https:\/\/www\.industrynext\.xyz\/'/);
+  assert.match(desk, /DIRECT HOUSE AD · \{INDUSTRY_NEXT_CAMPAIGN\.id\}/);
+  assert.match(receipt, /INDUSTRY_NEXT_CAMPAIGN/);
 });
 
 test('portable network extends The Holders Cut campaign to the Rally footer', async () => {

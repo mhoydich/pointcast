@@ -25,6 +25,12 @@ const PLACEMENT_PATTERN = /^[a-z0-9-]{2,48}$/;
 const TRUSTED_PUBLISHER_ORIGINS = new Set([
   'https://pointcast.xyz',
   'https://www.pointcast.xyz',
+  'https://www.industrynext.xyz',
+  'https://industrynext.xyz',
+  'https://allworthy.xyz',
+  'https://www.allworthy.xyz',
+  'https://passportz.xyz',
+  'https://www.passportz.xyz',
   'https://common-hours.mhoydich.chatgpt.site',
 ]);
 
@@ -42,7 +48,8 @@ function json(payload: unknown, status = 200, cacheControl = 'no-store', extraHe
 
 function publisherCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('Origin');
-  if (!origin || !TRUSTED_PUBLISHER_ORIGINS.has(origin)) return {};
+  const requestOrigin = new URL(request.url).origin;
+  if (!origin || (origin !== requestOrigin && !TRUSTED_PUBLISHER_ORIGINS.has(origin))) return {};
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -54,7 +61,9 @@ function publisherCorsHeaders(request: Request): Record<string, string> {
 
 function isTrustedPublisherRequest(request: Request): boolean {
   const origin = request.headers.get('Origin');
-  if (origin) return TRUSTED_PUBLISHER_ORIGINS.has(origin);
+  if (origin) {
+    return origin === new URL(request.url).origin || TRUSTED_PUBLISHER_ORIGINS.has(origin);
+  }
   return request.headers.get('Sec-Fetch-Site') !== 'cross-site';
 }
 
@@ -80,7 +89,9 @@ function withCtr(counter: Counter): Counter & { ctr: number } {
 }
 
 export const onRequestOptions: PagesFunction<Env> = async ({ request }) => {
-  if (!isTrustedPublisherRequest(request)) return json({ ok: false, reason: 'origin' }, 403);
+  if (!isTrustedPublisherRequest(request)) {
+    return json({ ok: false, reason: 'origin' }, 403);
+  }
   return new Response(null, { status: 204, headers: publisherCorsHeaders(request) });
 };
 

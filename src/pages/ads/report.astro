@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { POINTCAST_ADS } from '../../lib/open-ad-network';
+import { OPEN_AD_PUBLISHERS, POINTCAST_ADS } from '../../lib/open-ad-network';
 
 const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
 ---
@@ -34,6 +34,22 @@ const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
         <div><dt>CLICKS</dt><dd data-total-clicks>—</dd></div>
         <div><dt>CLICK RATE</dt><dd data-total-ctr>—</dd></div>
       </dl>
+    </section>
+
+    <section class="report__publishers" aria-labelledby="publisher-title">
+      <header>
+        <p>RECIPROCAL PUBLISHERS</p>
+        <h2 id="publisher-title">One inventory.<br /><em>Many doors.</em></h2>
+      </header>
+      <ol data-publisher-list>
+        {OPEN_AD_PUBLISHERS.map((publisher) => (
+          <li data-publisher-id={publisher.id}>
+            <a href={publisher.url}><strong>{publisher.name}</strong><span>{publisher.hostname}</span></a>
+            <p>{publisher.surface}</p>
+            <dl><div><dt>IMP</dt><dd data-impressions>0</dd></div><div><dt>CLICK</dt><dd data-clicks>0</dd></div></dl>
+          </li>
+        ))}
+      </ol>
     </section>
 
     <section class="report__inventory" aria-labelledby="inventory-title">
@@ -98,6 +114,7 @@ const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
     truncated: boolean;
     totals: Omit<MetricCounter, 'adId'>;
     ads: MetricCounter[];
+    publishers: Array<Omit<MetricCounter, 'adId'> & { publisher: string }>;
     daily: Array<Omit<MetricCounter, 'adId'> & { date: string }>;
   }
 
@@ -144,6 +161,12 @@ const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
     put('[data-total-ctr]', percent.format(report.totals.ctr));
 
     const metrics = new Map(report.ads.map((ad) => [ad.adId, ad]));
+    const publisherMetrics = new Map((report.publishers || []).map((publisher) => [publisher.publisher, publisher]));
+    document.querySelectorAll<HTMLElement>('[data-publisher-id]').forEach((publisher) => {
+      const metric = publisherMetrics.get(publisher.dataset.publisherId || '');
+      publisher.querySelector<HTMLElement>('[data-impressions]')!.textContent = count.format(metric?.impressions || 0);
+      publisher.querySelector<HTMLElement>('[data-clicks]')!.textContent = count.format(metric?.clicks || 0);
+    });
     const rows = [...document.querySelectorAll<HTMLTableRowElement>('[data-ad-id]')];
     for (const row of rows) {
       const metric = metrics.get(row.dataset.adId || '');
@@ -201,9 +224,18 @@ const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
   .report__totals dl div:last-child { border-right: 1px solid var(--ink); }
   .report__totals dt { font-size: 8px; letter-spacing: .1em; }
   .report__totals dd { margin: 0; color: var(--red); font-family: 'Lora', Georgia, serif; font-size: clamp(35px, 5vw, 72px); line-height: 1; }
-  .report__inventory, .report__daily { padding: clamp(34px, 6vw, 88px); border-bottom: 1px solid var(--ink); }
-  .report__inventory > header, .report__daily > header { margin-bottom: 28px; }
-  .report__inventory > header p, .report__daily > header p { color: var(--red); }
+  .report__publishers, .report__inventory, .report__daily { padding: clamp(34px, 6vw, 88px); border-bottom: 1px solid var(--ink); }
+  .report__publishers > header, .report__inventory > header, .report__daily > header { margin-bottom: 28px; }
+  .report__publishers > header p, .report__inventory > header p, .report__daily > header p { color: var(--red); }
+  .report__publishers ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .report__publishers li { min-width: 0; padding: 14px; border: 1px solid var(--ink); background: #fffaf0; }
+  .report__publishers a { display: flex; flex-direction: column; gap: 4px; text-decoration: none; }
+  .report__publishers a strong { font-family: 'Lora', Georgia, serif; font-size: 21px; font-weight: 400; }
+  .report__publishers a span, .report__publishers p { color: #6e6354; font-size: 7px; line-height: 1.45; overflow-wrap: anywhere; }
+  .report__publishers dl { display: flex; gap: 18px; margin: 18px 0 0; }
+  .report__publishers dl div { display: grid; gap: 4px; }
+  .report__publishers dt { color: var(--red); font-size: 7px; }
+  .report__publishers dd { margin: 0; font-size: 18px; font-weight: 700; }
   .report__table-wrap { overflow-x: auto; border: 1px solid var(--ink); }
   table { width: 100%; min-width: 860px; border-collapse: collapse; background: #fffaf0; }
   th, td { padding: 14px; border-bottom: 1px solid var(--ink); text-align: left; vertical-align: top; }
@@ -232,5 +264,6 @@ const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
     .report__totals dl div:last-child { border-bottom: 1px solid var(--ink); }
     .report__daily li { grid-template-columns: 1fr auto; }
     .report__daily li span { grid-column: 1 / -1; }
+    .report__publishers ol { grid-template-columns: 1fr; }
   }
 </style>

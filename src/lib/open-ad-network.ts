@@ -74,6 +74,33 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     status: 'active',
   },
   {
+    id: 'industrynext',
+    name: 'Industry Next',
+    url: 'https://www.industrynext.xyz/',
+    hostname: 'www.industrynext.xyz',
+    surface: 'Art-forward Nouns studio, Permission Lab, and Made stream',
+    advertiserAliases: ['Industry Next'],
+    status: 'active',
+  },
+  {
+    id: 'allworthy',
+    name: 'Allworthy',
+    url: 'https://allworthy.xyz/',
+    hostname: 'allworthy.xyz',
+    surface: 'Public-interest Tezos funding records and experiments',
+    advertiserAliases: ['Allworthy'],
+    status: 'active',
+  },
+  {
+    id: 'passportz',
+    name: 'Passportz',
+    url: 'https://passportz.xyz/',
+    hostname: 'passportz.xyz',
+    surface: 'Public Tezos identity, art, activity, and listening passports',
+    advertiserAliases: ['Passportz', 'Tezos Passport'],
+    status: 'active',
+  },
+  {
     id: 'rally',
     name: 'Rally / Common Hours',
     url: 'https://common-hours.mhoydich.chatgpt.site/rally',
@@ -86,7 +113,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
   {
     id: 'common-hours',
     name: 'Common Hours / Stampz',
-    url: 'https://common-hours.mhoydich.chatgpt.site/',
+    url: 'https://common-hours.mhoydich.chatgpt.site/stampz',
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'Shared rituals, daily bells, Passportz, Stampz, and Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
@@ -103,6 +130,17 @@ export const HOLDERS_CUT_CAMPAIGN = {
   tracking: 'aggregate impressions + clicks',
   status: 'house',
   note: 'A first-party public-preview campaign. The proposed 50% holder pool and 10-tez unlimited edition are visible, while Mainnet minting remains inactive pending contract and offering review.',
+} as const;
+
+export const INDUSTRY_NEXT_CAMPAIGN = {
+  id: 'PC-INDUSTRY-NEXT-2026',
+  label: 'Industry Next — Culture Is a Building Material',
+  advertiser: 'Industry Next',
+  creativeCount: 1,
+  placement: 'PointCast contextual rotation and reciprocal Open Ad Network inventory',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'One direct Industry Next house creative joining its Nouns field note and Permission Lab series already running on PointCast.',
 } as const;
 
 export const NOUNS_ABOUT_CAMPAIGN = {
@@ -196,6 +234,19 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'OpenAI image generation + Michael Hoydich archive',
     campaign: HOLDERS_CUT_CAMPAIGN.id,
     seriesLabel: HOLDERS_CUT_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-INDUSTRY-NEXT-001',
+    advertiser: 'Industry Next',
+    headline: 'Culture is a building material.',
+    copy: 'An art-forward studio for Nouns, open tools, public experiments, and the useful things people make when permission comes first.',
+    href: 'https://www.industrynext.xyz/',
+    cta: 'Enter Industry Next',
+    tone: 'signal',
+    contexts: ['industry', 'next', 'nouns', 'cc0', 'art', 'culture', 'make', 'studio', 'tool', 'public', 'agent'],
+    campaign: INDUSTRY_NEXT_CAMPAIGN.id,
+    seriesLabel: INDUSTRY_NEXT_CAMPAIGN.label,
     status: 'house',
   },
   {
