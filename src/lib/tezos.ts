@@ -21,12 +21,12 @@ let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
 let _activeAccountSubscription: Promise<void> | null = null;
 
-const REQUIRED_SCOPES = ['operation_request', 'sign'] as any[];
+const OPERATION_SCOPES = ['operation_request'] as any[];
 const SIGNING_SCOPES = ['sign'] as any[];
 
-function hasRequiredScopes(account: any): boolean {
+function hasOperationScopes(account: any): boolean {
   const scopes = Array.isArray(account?.scopes) ? account.scopes : [];
-  return REQUIRED_SCOPES.every((scope) => scopes.includes(scope));
+  return OPERATION_SCOPES.every((scope) => scopes.includes(scope));
 }
 
 export const POINTCAST_SIGNING_DOMAIN = 'pointcast.xyz/beat-runner-v5';
@@ -124,10 +124,10 @@ export async function getActiveAddress(): Promise<string | null> {
 export async function connectKukai(): Promise<string> {
   const wallet = await walletReady();
   const existing = await wallet.client.getActiveAccount();
-  if (existing && hasRequiredScopes(existing)) return existing.address;
+  if (existing && hasOperationScopes(existing)) return existing.address;
   // `network` used to live here; the current Beacon SDK requires it
   // to be set at DAppClient construction and throws if passed here.
-  const perms = await wallet.client.requestPermissions({ scopes: REQUIRED_SCOPES } as any);
+  const perms = await wallet.client.requestPermissions({ scopes: OPERATION_SCOPES } as any);
   return perms.address;
 }
 

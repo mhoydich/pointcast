@@ -19,7 +19,11 @@ test('PointCast routes mainnet wallet work through one subscribed Beacon client'
   const [tezos, auth, walletConnect, ...mainnetSurfaces] = files;
   assert.match(tezos, /subscribeToEvent\([\s\S]*ACTIVE_ACCOUNT_SET/);
   assert.match(tezos, /export async function pointCastWallet/);
+  assert.match(tezos, /const OPERATION_SCOPES = \['operation_request'\]/);
+  assert.match(tezos, /const SIGNING_SCOPES = \['sign'\]/);
   assert.match(auth, /signTezosPayload/);
+  assert.match(auth, /connectKukaiForSigning/);
+  assert.doesNotMatch(auth, /const address = await connectKukai\(\)/);
   assert.match(tezos, /signingType: 'micheline'/);
   assert.doesNotMatch(tezos, /signingType: 'raw'/);
   assert.doesNotMatch(auth, /new BeaconWallet/);
@@ -46,4 +50,13 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(route, /USERS\.delete\(key\)/);
   assert.match(page, /pc:auth-change/);
   assert.match(page, /One wallet/);
+});
+
+test('embedded Network El Segundo receives a fresh PointCast project ticket', async () => {
+  const page = await readFile(new URL('src/pages/network-el-segundo.astro', root), 'utf8');
+  assert.match(page, /fetch\('\/api\/auth\/project-ticket'/);
+  assert.match(page, /credentials: 'include'/);
+  assert.match(page, /target: 'network-el-segundo'/);
+  assert.match(page, /frame\.src = result\.destination/);
+  assert.doesNotMatch(page, /connectKukai|new BeaconWallet/);
 });

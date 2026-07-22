@@ -5,11 +5,13 @@ import test from 'node:test';
 const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
 
-test('PointCast publishes the Network El Segundo release with a direct fallback', async () => {
+test('PointCast publishes Network El Segundo with a direct fallback and shared auth bridge', async () => {
   const source = await readFile(page, 'utf8');
 
   assert.match(source, /https:\/\/network-el-segundo\.mhoydich\.chatgpt\.site/);
-  assert.match(source, /Free signature → verified roster → proposed 50% post-sale rule/);
+  assert.match(source, /Checking shared Kukai session/);
+  assert.match(source, /authenticate once for every project/);
+  assert.match(source, /\/api\/auth\/project-ticket/);
   assert.match(source, /Open the release/);
   assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo/);
 });

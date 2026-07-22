@@ -3,6 +3,7 @@ const releaseUrl = 'https://network-el-segundo.mhoydich.chatgpt.site';
 const title = 'Network El Segundo — PointCast';
 const description =
   'Join the first 100 verified Tezos wallets. A participatory art-network prototype with a proposed 50% post-sale distribution rule and no live payout contract.';
+const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(`${releaseUrl}/`)}`;
 ---
 
 <!doctype html>
@@ -45,6 +46,9 @@ const description =
       .pointcast-rail a { color: inherit; font-weight: 900; text-decoration-thickness: 2px; text-underline-offset: 3px; }
       .pointcast-rail__signal { display: flex; align-items: center; gap: .55rem; white-space: nowrap; }
       .pointcast-rail__dot { width: .65rem; height: .65rem; border-radius: 50%; background: #ff4f9f; box-shadow: 0 0 0 2px #070707; }
+      .pointcast-rail__auth { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+      .pointcast-rail__status { overflow: hidden; max-width: 28rem; text-overflow: ellipsis; white-space: nowrap; }
+      .pointcast-rail__auth-link { flex: none; padding: .28rem .45rem; border: 1px solid currentColor; text-decoration: none; }
       .network-stage { position: relative; min-height: calc(100vh - 2.4rem); }
       .network-stage iframe { display: block; width: 100%; height: calc(100vh - 2.4rem); border: 0; background: #f7f2e8; }
       .network-stage__fallback {
@@ -58,7 +62,8 @@ const description =
       }
       @media (max-width: 46rem) {
         .pointcast-rail { align-items: flex-start; font-size: .58rem; }
-        .pointcast-rail__copy { max-width: 15rem; text-align: right; }
+        .pointcast-rail__auth { align-items: flex-end; flex-direction: column; text-align: right; }
+        .pointcast-rail__status { max-width: 12rem; }
       }
     </style>
   </head>
@@ -66,10 +71,14 @@ const description =
     <main class="pointcast-frame">
       <nav class="pointcast-rail" aria-label="PointCast release navigation">
         <span class="pointcast-rail__signal"><span class="pointcast-rail__dot" aria-hidden="true"></span><a href="/">PointCast</a> / Network El Segundo</span>
-        <span class="pointcast-rail__copy">Free signature → verified roster → proposed 50% post-sale rule</span>
+        <span class="pointcast-rail__auth">
+          <span class="pointcast-rail__status" data-project-auth-status>Checking shared Kukai session…</span>
+          <a class="pointcast-rail__auth-link" data-project-auth-link href={projectAuthUrl}>Authenticate once ↗</a>
+        </span>
       </nav>
       <section class="network-stage" aria-label="Network El Segundo release">
         <iframe
+          id="network-el-segundo-project"
           src={releaseUrl}
           title="Network El Segundo — buy the art and join the wallet roster"
           allow="clipboard-write"
@@ -78,5 +87,34 @@ const description =
         <a class="network-stage__fallback" href={releaseUrl} target="_blank" rel="noopener">Open the release ↗</a>
       </section>
     </main>
+    <script define:vars={{ releaseUrl }}>
+      const frame = document.getElementById('network-el-segundo-project');
+      const status = document.querySelector('[data-project-auth-status]');
+      const authLink = document.querySelector('[data-project-auth-link]');
+
+      async function passPointCastSession() {
+        try {
+          const response = await fetch('/api/auth/project-ticket', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ target: 'network-el-segundo', returnTo: `${releaseUrl}/` }),
+          });
+          const result = await response.json();
+          if (response.status === 401) {
+            if (status) status.textContent = 'Public view · authenticate once for every project';
+            return;
+          }
+          if (!response.ok || !result.destination) throw new Error(result.reason || 'project-ticket-failed');
+          if (frame instanceof HTMLIFrameElement) frame.src = result.destination;
+          if (status) status.textContent = 'Shared Kukai identity passed to this project';
+          authLink?.setAttribute('hidden', '');
+        } catch {
+          if (status) status.textContent = 'Public view · project auth bridge unavailable';
+        }
+      }
+
+      void passPointCastSession();
+    </script>
   </body>
 </html>

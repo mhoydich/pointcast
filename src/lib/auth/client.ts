@@ -142,8 +142,13 @@ function getPhantomProvider(): PhantomProvider | null {
 
 export async function loginWithKukai(): Promise<PointCastUser | null> {
   if (!isBrowser()) return null;
-  const { connectKukai, signTezosPayload } = await import('../tezos');
-  const address = await connectKukai();
+  const { connectKukaiForSigning, signTezosPayload } = await import('../tezos');
+  // Authentication is a gasless message signature. Asking Kukai for the
+  // operation_request scope here can open a second permission flow (and, in
+  // embedded/project handoffs, time out before the actual login signature).
+  // Establish the smallest possible signing-only account first; the shared
+  // Beacon client will reuse it when signTezosPayload runs below.
+  const address = await connectKukaiForSigning();
   const message = buildSignedMessage('Tezos', {
     Address: address,
     Origin: window.location.origin,
