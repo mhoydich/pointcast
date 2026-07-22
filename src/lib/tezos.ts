@@ -21,12 +21,17 @@ let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
 let _activeAccountSubscription: Promise<void> | null = null;
 
-const OPERATION_SCOPES = ['operation_request'] as any[];
-const SIGNING_SCOPES = ['sign'] as any[];
+// Every PointCast Tezos surface shares this one permission contract. Asking
+// for operation and signing independently created a split-brain session:
+// legacy collect/mint buttons could report a connected wallet while the
+// PointCast login flow was unable to request a message signature from the
+// same active account. Permission does not submit an operation; every future
+// signature or transaction still requires an explicit wallet approval.
+const POINTCAST_SCOPES = ['operation_request', 'sign'] as any[];
 
-function hasOperationScopes(account: any): boolean {
+function hasPointCastScopes(account: any): boolean {
   const scopes = Array.isArray(account?.scopes) ? account.scopes : [];
-  return OPERATION_SCOPES.every((scope) => scopes.includes(scope));
+  return POINTCAST_SCOPES.every((scope) => scopes.includes(scope));
 }
 
 export const POINTCAST_SIGNING_DOMAIN = 'pointcast.xyz/beat-runner-v5';
@@ -74,19 +79,27 @@ function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
     'ACTIVE_ACCOUNT_SET' as any,
     (account: any) => {
       if (typeof window === 'undefined') return;
-      const wallet = account?.address
-        ? { chain: 'tezos', address: account.address, provider: 'kukai' }
+      const activeWallet = account?.address
+        ? { chain: 'tezos', address: account.address, provider: 'kukai', addedAt: Date.now() }
         : null;
       try {
-        if (wallet) {
-          window.localStorage.setItem('pc:wallet', JSON.stringify(wallet));
-          window.localStorage.setItem('pc:wallet-active', wallet.address);
+        if (activeWallet) {
+          let remembered: any[] = [];
+          try {
+            const parsed = JSON.parse(window.localStorage.getItem('pc:wallets') || '[]');
+            if (Array.isArray(parsed)) remembered = parsed;
+          } catch { /* replace malformed wallet memory */ }
+          remembered = remembered.filter((item) => item?.address !== activeWallet.address);
+          remembered.push(activeWallet);
+          window.localStorage.setItem('pc:wallets', JSON.stringify(remembered));
+          window.localStorage.setItem('pc:wallet', JSON.stringify(activeWallet));
+          window.localStorage.setItem('pc:wallet-active', activeWallet.address);
         } else {
           window.localStorage.removeItem('pc:wallet');
           window.localStorage.removeItem('pc:wallet-active');
         }
       } catch { /* storage can be unavailable in privacy modes */ }
-      window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+      window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: activeWallet }));
     },
   );
   _tezos.setWalletProvider(_wallet);
@@ -97,6 +110,18 @@ async function walletReady(): Promise<BeaconWallet> {
   const { wallet } = getToolkit();
   await _activeAccountSubscription;
   return wallet;
+}
+
+async function ensurePointCastPermissions(wallet: BeaconWallet): Promise<string> {
+  const existing = await wallet.client.getActiveAccount();
+  if (existing && hasPointCastScopes(existing)) return existing.address;
+  // Beacon cannot reliably upgrade an already-active partial permission set
+  // in place (the old PointCast clients created operation-only and sign-only
+  // accounts). Clear only the active selection, keep the pairing, and request
+  // the canonical contract once.
+  if (existing) await wallet.clearActiveAccount();
+  const permissions = await wallet.client.requestPermissions({ scopes: POINTCAST_SCOPES } as any);
+  return permissions.address;
 }
 
 /** The single PointCast Beacon wallet. Do not construct page-local clients. */
@@ -123,22 +148,21 @@ export async function getActiveAddress(): Promise<string | null> {
 /** Prompt the user to connect Kukai (or any Beacon-compatible wallet). */
 export async function connectKukai(): Promise<string> {
   const wallet = await walletReady();
-  const existing = await wallet.client.getActiveAccount();
-  if (existing && hasOperationScopes(existing)) return existing.address;
-  // `network` used to live here; the current Beacon SDK requires it
-  // to be set at DAppClient construction and throws if passed here.
-  const perms = await wallet.client.requestPermissions({ scopes: OPERATION_SCOPES } as any);
-  return perms.address;
+  const address = await ensurePointCastPermissions(wallet);
+  // A connect action is also the single PointCast sign-in action. Existing
+  // 30-day sessions return without another wallet prompt; first-time or newly
+  // switched accounts approve one free message signature before this resolves.
+  if (typeof window !== 'undefined') {
+    const { ensurePointCastTezosLogin } = await import('./auth/client');
+    await ensurePointCastTezosLogin(address);
+  }
+  return address;
 }
 
 /** Connect a Tezos wallet for gasless message signing only. */
 export async function connectKukaiForSigning(): Promise<string> {
   const wallet = await walletReady();
-  const existing = await wallet.client.getActiveAccount();
-  const scopes = Array.isArray(existing?.scopes) ? existing.scopes : [];
-  if (existing && SIGNING_SCOPES.every((scope) => scopes.includes(scope))) return existing.address;
-  const perms = await wallet.client.requestPermissions({ scopes: SIGNING_SCOPES } as any);
-  return perms.address;
+  return ensurePointCastPermissions(wallet);
 }
 
 export async function disconnectKukai(): Promise<void> {
@@ -146,6 +170,11 @@ export async function disconnectKukai(): Promise<void> {
   try {
     await wallet.clearActiveAccount();
   } catch { /* ignore */ }
+  if (typeof window !== 'undefined') {
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE', credentials: 'include' });
+    } catch { /* the local Beacon disconnect still succeeds offline */ }
+  }
 }
 
 export async function signTezosPayload(message: string): Promise<{

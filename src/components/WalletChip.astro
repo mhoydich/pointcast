@@ -120,8 +120,8 @@
       const found = list.find((w) => w.address === a);
       if (found) return found;
     }
-    // Fallback: most recently added wallet
-    return list.length > 0 ? list[list.length - 1] : null;
+    // Remembered wallets are an address book, not proof of an active session.
+    return null;
   }
 
   function saveWallets(list: Wallet[], newActiveAddr: string | null) {
@@ -280,13 +280,17 @@
       // Beacon only maintains one active session; calling requestPermissions
       // again prompts for a fresh pair. We clear first so the picker actually
       // shows (vs. silently returning the existing session).
-      const { connectKukai, disconnectKukai } = await import('../lib/tezos');
+      const { disconnectKukai } = await import('../lib/tezos');
+      const { loginWithKukai } = await import('../lib/auth/client');
       const existing = activeWallet();
       if (existing) {
         try { await disconnectKukai(); } catch { /* best-effort */ }
       }
-      const addr = await connectKukai();
-      addOrUpdate({ chain: 'tezos', address: addr, provider: 'beacon', addedAt: Date.now() });
+      button.textContent = 'Approve free sign-in…';
+      const user = await loginWithKukai();
+      const identity = user?.identities.find((item) => item.provider === 'kukai');
+      if (!identity?.id) throw new Error('PointCast did not receive a Tezos identity.');
+      addOrUpdate({ chain: 'tezos', address: identity.id, provider: 'kukai', addedAt: Date.now() });
       render();
       closeMenu();
     } catch (err: any) {

@@ -26,6 +26,8 @@ type PhantomProvider = {
 
 const SESSION_ENDPOINT = '/api/auth/session';
 const WALLET_STORAGE_KEY = 'pc:wallet';
+const WALLETS_STORAGE_KEY = 'pc:wallets';
+const ACTIVE_WALLET_STORAGE_KEY = 'pc:wallet-active';
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -53,13 +55,27 @@ function createNonce(): string {
   return `pc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function persistWallet(wallet: StoredWallet | null): void {
+export function persistWallet(wallet: StoredWallet | null): void {
   if (!isBrowser()) return;
   try {
     if (wallet) {
       window.localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(wallet));
+      if (wallet.chain === 'tezos') {
+        let remembered: Array<StoredWallet & { addedAt?: number }> = [];
+        try {
+          const parsed = JSON.parse(window.localStorage.getItem(WALLETS_STORAGE_KEY) || '[]');
+          if (Array.isArray(parsed)) remembered = parsed;
+        } catch {
+          // Replace malformed wallet memory with the verified session identity.
+        }
+        remembered = remembered.filter((entry) => entry?.address !== wallet.address);
+        remembered.push({ ...wallet, addedAt: Date.now() });
+        window.localStorage.setItem(WALLETS_STORAGE_KEY, JSON.stringify(remembered));
+        window.localStorage.setItem(ACTIVE_WALLET_STORAGE_KEY, wallet.address);
+      }
     } else {
       window.localStorage.removeItem(WALLET_STORAGE_KEY);
+      window.localStorage.removeItem(ACTIVE_WALLET_STORAGE_KEY);
     }
   } catch {
     // Ignore storage failures on locked-down browsers.
@@ -166,8 +182,35 @@ export async function loginWithKukai(): Promise<PointCastUser | null> {
     message,
   });
 
-  persistWallet({ chain: 'tezos', address, provider: 'kukai' });
+  persistWallet({ chain: 'tezos', address: proof.address, provider: 'kukai' });
   return payload.user;
+}
+
+/** Return the current signed user when this exact Tezos account is linked,
+ * otherwise complete the free PointCast message-signature login. */
+export async function ensurePointCastTezosLogin(address: string): Promise<PointCastUser | null> {
+  const current = await getSession().catch(() => null);
+  if (current?.identities.some((item) => item.provider === 'kukai' && item.id === address)) {
+    persistWallet({ chain: 'tezos', address, provider: 'kukai' });
+    return current;
+  }
+  return loginWithKukai();
+}
+
+/**
+ * Rehydrate the browser wallet mirror from the signed PointCast session.
+ * The HttpOnly cookie remains the source of truth; this only keeps legacy
+ * mint/collect/profile surfaces in agreement with it.
+ */
+export async function restorePointCastTezosSession(): Promise<{
+  user: PointCastUser | null;
+  address: string | null;
+}> {
+  const user = await getSession();
+  const identity = user?.identities.filter((item) => item.provider === 'kukai').at(-1) ?? null;
+  if (!identity) return { user, address: null };
+  persistWallet({ chain: 'tezos', address: identity.id, provider: 'kukai' });
+  return { user, address: identity.id };
 }
 
 export async function loginWithGoogle(): Promise<PointCastUser | null> {

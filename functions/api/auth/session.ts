@@ -19,6 +19,7 @@ const USER_PREFIX = 'user:';
 const IDENTITY_PREFIX = 'identity:';
 const SESSION_PREFIX = 'session:';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const SESSION_REFRESH_WINDOW_SECONDS = 60 * 60 * 24 * 7;
 
 export class IdentityConflictError extends Error {
   constructor(message = 'identity-already-linked') {
@@ -224,11 +225,24 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
     return authJson({ ok: false, reason: 'unauthorized' }, { status: 401 });
   }
 
-  return authJson({
+  const body = {
     ok: true,
     session: current.session,
     user: current.user,
-  });
+  };
+
+  // Keep active PointCast members signed in without weakening the 30-day
+  // inactivity boundary. A site visit during the final seven days rotates the
+  // opaque cookie and KV record; a long-absent browser must sign again.
+  const remainingSeconds = Math.floor((Date.parse(current.session.expiresAt) - Date.now()) / 1000);
+  if (remainingSeconds > SESSION_REFRESH_WINDOW_SECONDS) return authJson(body);
+
+  const renewed = await issueSession(env, current.user.userId);
+  await env.USERS.delete(sessionKey(current.session.sessionToken));
+  return withSessionCookie(
+    authJson({ ...body, session: renewed, renewed: true }),
+    renewed,
+  );
 };
 
 export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {

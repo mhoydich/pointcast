@@ -209,15 +209,16 @@
   // ---------------------------------------------------------------------------
   async function connectKukai(): Promise<void> {
     try {
-      const wallet = await import('../lib/tezos');
-      const address = await wallet.connectKukai();
-      if (!address) throw new Error('No address returned');
-      saveWallet({ chain: 'tezos', address, provider: 'kukai' });
+      const { loginWithKukai } = await import('../lib/auth/client');
+      const user = await loginWithKukai();
+      const identity = user?.identities.filter((item) => item.provider === 'kukai').at(-1);
+      if (!identity?.id) throw new Error('PointCast did not receive a Tezos identity.');
+      saveWallet({ chain: 'tezos', address: identity.id, provider: 'kukai' });
       renderState();
       closeMenu();
     } catch (err) {
       console.warn('Kukai connect failed:', err);
-      alert('Kukai connection cancelled or failed.');
+      alert('Kukai sign-in was cancelled or failed. Please retry the free wallet signature.');
     }
   }
 

@@ -1,0 +1,64 @@
+---
+/**
+ * Reconciles PointCast's signed server session with legacy wallet surfaces.
+ * It never requests a signature or transaction on page load. After one
+ * explicit Kukai sign-in, the HttpOnly session is restored across every
+ * PointCast layout and the verified address is mirrored to the historic
+ * localStorage keys used by mint, collect, profile, and project handoffs.
+ */
+---
+
+<script>
+  import { restorePointCastTezosSession } from '../lib/auth/client';
+
+  type BridgeWindow = Window & {
+    __pointCastTezosBridgeInstalled?: boolean;
+  };
+
+  const bridgeWindow = window as BridgeWindow;
+  let reconciliation: Promise<void> | null = null;
+
+  async function runReconciliation() {
+    try {
+      const { user, address } = await restorePointCastTezosSession();
+      if (address && user) {
+        document.documentElement.dataset.pcTezosAuth = 'authenticated';
+        window.dispatchEvent(new CustomEvent('pc:auth-change', {
+          detail: { user, source: 'tezos-session-bridge' },
+        }));
+        window.dispatchEvent(new CustomEvent('pc:tezos-session', {
+          detail: { state: 'authenticated', address, user },
+        }));
+        return;
+      }
+    } catch {
+      // A missing/expired server session is a normal anonymous state.
+    }
+
+    let address = '';
+    try { address = localStorage.getItem('pc:wallet-active') || ''; } catch { /* ignore */ }
+    const state = address ? 'wallet-only' : 'anonymous';
+    document.documentElement.dataset.pcTezosAuth = state;
+    window.dispatchEvent(new CustomEvent('pc:tezos-session', {
+      detail: { state, address: address || null, user: null },
+    }));
+  }
+
+  function reconcilePointCastTezosSession() {
+    if (reconciliation) return reconciliation;
+    reconciliation = runReconciliation().finally(() => { reconciliation = null; });
+    return reconciliation;
+  }
+
+  if (!bridgeWindow.__pointCastTezosBridgeInstalled) {
+    bridgeWindow.__pointCastTezosBridgeInstalled = true;
+    document.addEventListener('astro:page-load', () => void reconcilePointCastTezosSession());
+    window.addEventListener('pc:auth-change', (event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.user && detail?.source !== 'tezos-session-bridge') {
+        void reconcilePointCastTezosSession();
+      }
+    });
+    void reconcilePointCastTezosSession();
+  }
+</script>
