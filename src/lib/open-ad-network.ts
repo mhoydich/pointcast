@@ -2,6 +2,9 @@ import reveAbundance from '../assets/todays-art/2026-07-21/reve/abundance-flows.
 import revePositive from '../assets/todays-art/2026-07-21/reve/the-positive-index.webp';
 import revePublicMiracle from '../assets/todays-art/2026-07-21/reve/small-public-miracle.webp';
 import drumNounUniversePoster from '../assets/campaigns/pointcast-drum-noun-universe/115-rooms-one-shared-pulse.webp';
+import artKittyPositiveEnergy from '../assets/campaigns/art-kitty-2026/positive-energy.webp';
+import artKittySpookyVibes from '../assets/campaigns/art-kitty-2026/spooky-vibes.webp';
+import artKittyVase from '../assets/campaigns/art-kitty-2026/vase-green-pink.webp';
 
 export type PointCastAdTone = 'signal' | 'garden' | 'play' | 'ritual' | 'network' | 'field';
 
@@ -66,7 +69,63 @@ export const DRUM_NOUN_UNIVERSE_CAMPAIGN = {
   note: 'A first-party PointCast house campaign distributed sitewide with aggregate event counts, no visitor profiles, and no paid media.',
 } as const;
 
+export const ART_KITTY_CAMPAIGN = {
+  id: 'PC-ART-KITTY-2026',
+  label: 'HOME / Art Kitty — Make One, Fund the Next One',
+  advertiser: 'HOME / Art Kitty',
+  creativeCount: 3,
+  placement: 'Contextual rotation across public PointCast art, gallery, press, Tezos, and El Segundo pages',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'Three first-party house creatives for 31 public one-tez collector editions with an equal artist and Art Kitty split.',
+} as const;
+
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-ART-KITTY-001',
+    advertiser: 'HOME / Art Kitty',
+    headline: 'Half for the art. Half for what comes next.',
+    copy: 'Thirty-one works across two permanent series. Collect one per wallet for 1 tez: 0.5 artist, 0.5 Art Kitty.',
+    href: 'https://art-kitty-editions.mhoydich.chatgpt.site/series/02',
+    cta: 'Enter Series 02',
+    tone: 'signal',
+    contexts: ['art', 'gallery', 'today', 'tezos', 'mint', 'collect', 'press', 'el', 'segundo'],
+    image: artKittyPositiveEnergy.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: ART_KITTY_CAMPAIGN.id,
+    seriesLabel: ART_KITTY_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-ART-KITTY-002',
+    advertiser: 'HOME / Art Kitty',
+    headline: 'Bright signals. Same generous circuit.',
+    copy: 'Sixteen new works move through El Segundo, screen culture, sport, commerce, flowers, ghosts, and positive energy.',
+    href: 'https://art-kitty-editions.mhoydich.chatgpt.site/series/02',
+    cta: 'See all 16 works',
+    tone: 'garden',
+    contexts: ['art', 'gallery', 'today', 'garden', 'flower', 'el', 'segundo', 'culture', 'commerce'],
+    image: artKittyVase.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: ART_KITTY_CAMPAIGN.id,
+    seriesLabel: ART_KITTY_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-ART-KITTY-003',
+    advertiser: 'HOME / Art Kitty',
+    headline: 'Make one. Fund the next one.',
+    copy: 'Every collect keeps the split visible: two equal 0.5-tez tranches and one wallet-owned edition bound to the exact image.',
+    href: 'https://art-kitty-editions.mhoydich.chatgpt.site/',
+    cta: 'Open the full archive',
+    tone: 'play',
+    contexts: ['art', 'tezos', 'wallet', 'collect', 'mint', 'play', 'ghost', 'archive', 'press'],
+    image: artKittySpookyVibes.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: ART_KITTY_CAMPAIGN.id,
+    seriesLabel: ART_KITTY_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-NOUNS-ABOUT-001',
     advertiser: 'Industry Next',

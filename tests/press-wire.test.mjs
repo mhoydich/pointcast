@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds six product filings across every public kind', () => {
-  assert.equal(releases.length, 6);
+test('press wire seeds seven product filings across every public kind', () => {
+  assert.equal(releases.length, 7);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,18 @@ test('press wire seeds six product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Art Kitty filing discloses the equal split, earmarked ledger, and approval boundary', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0007');
+  assert.ok(release);
+  assert.equal(release.slug, 'home-art-kitty-opens-31-one-tez-collector-editions');
+  assert.match(release.headline, /31 one-tez collector editions/i);
+  assert.match(release.body.join(' '), /0\.5 tez to the artist/i);
+  assert.match(release.body.join(' '), /0\.5 tez earmarked for the Art Kitty/i);
+  assert.match(release.body.join(' '), /same PointCast treasury address/i);
+  assert.match(release.body.join(' '), /does not sign or submit a Tezos transaction/i);
+  assert.equal(release.productUrl, 'https://art-kitty-editions.mhoydich.chatgpt.site/series/02');
 });
 
 test('every filing has disclosure, primary evidence, and complete body copy', () => {
@@ -51,8 +63,10 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
+  assert.match(home, /Seven sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);
   assert.match(llms, /PointCast Press Wire/);
+  assert.match(llms, /HOME \/ Art Kitty/);
 });

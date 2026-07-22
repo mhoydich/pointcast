@@ -31,6 +31,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-DRUM-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-DRUM-UNIVERSE-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
+  assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /tracking: 'aggregate impressions \+ clicks'/);
@@ -50,6 +51,24 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(report, /These are browser events, not unique people/);
   assert.match(endpoint, /No IP, user agent, cookie, wallet, or visitor identifier/);
   assert.match(endpoint, /expirationTtl: RETENTION_DAYS/);
+});
+
+test('Art Kitty runs as a three-creative contextual house campaign with public proof', async () => {
+  const [registry, desk, receipt] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-ART-KITTY-2026/);
+  assert.equal((registry.match(/href: 'https:\/\/art-kitty-editions\.mhoydich\.chatgpt\.site/g) || []).length, 3);
+  assert.equal((registry.match(/image: artKitty[A-Z][A-Za-z]+\.src/g) || []).length, 3);
+  assert.match(registry, /Half for the art\. Half for what comes next\./);
+  assert.match(registry, /Bright signals\. Same generous circuit\./);
+  assert.match(registry, /Make one\. Fund the next one\./);
+  assert.match(desk, /NEW HOUSE CAMPAIGN · \{ART_KITTY_CAMPAIGN\.id\}/);
+  assert.match(desk, /home-art-kitty-opens-31-one-tez-collector-editions/);
+  assert.match(receipt, /ART_KITTY_CAMPAIGN/);
 });
 
 test('Nouns About runs as a three-creative house campaign to the canonical field note', async () => {
