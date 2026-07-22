@@ -166,6 +166,19 @@ test('portable network extends The Holders Cut campaign to the Rally footer', as
   assert.match(endpoint, /Publisher is the public property mounting the unit/);
 });
 
+test('portable publishers can transparently pin a single house campaign', async () => {
+  const [receipt, widget] = await Promise.all([
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+  ]);
+
+  assert.match(receipt, /'data-campaign'/);
+  assert.match(widget, /mount\.dataset\.campaign/);
+  assert.match(widget, /\[ad\.campaign, ad\.id\]/);
+  assert.match(widget, /networkCampaign/);
+  assert.match(widget, /campaign-unavailable/);
+});
+
 test('Network El Segundo runs sitewide as a three-creative first-100 wallet campaign', async () => {
   const [registry, desk, receipt] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),

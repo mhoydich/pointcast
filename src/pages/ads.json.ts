@@ -22,7 +22,7 @@ export const GET: APIRoute = () => {
       embed: {
         mount: '<div data-pointcast-network data-publisher="YOUR-PUBLISHER-ID" data-placement="site-footer"></div>',
         script: '<script async src="https://pointcast.xyz/open-ad-network.js"></script>',
-        attributes: ['data-publisher', 'data-placement', 'data-context', 'data-theme'],
+        attributes: ['data-publisher', 'data-placement', 'data-context', 'data-theme', 'data-campaign'],
       },
     },
     placement: OPEN_AD_PLACEMENT,

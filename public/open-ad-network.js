@@ -63,8 +63,13 @@
     var aliases = new Set((publisher && publisher.advertiserAliases || []).map(function (entry) {
       return entry.toLowerCase();
     }));
+    var requestedCampaign = String(mount.dataset.campaign || '').trim().toLowerCase();
     var candidates = (Array.isArray(feed.campaigns) ? feed.campaigns : []).filter(function (ad) {
-      return ad && ad.status === 'house' && !aliases.has(String(ad.advertiser || '').toLowerCase());
+      if (!ad || ad.status !== 'house' || aliases.has(String(ad.advertiser || '').toLowerCase())) return false;
+      if (!requestedCampaign) return true;
+      return [ad.campaign, ad.id].some(function (value) {
+        return String(value || '').toLowerCase() === requestedCampaign;
+      });
     });
     var preferredCampaigns = new Set(Array.isArray(publisher && publisher.campaigns)
       ? publisher.campaigns.map(String)
@@ -218,6 +223,7 @@
     root.replaceChildren(style, unit);
     mount.dataset.networkReady = 'true';
     mount.dataset.networkPublisher = publisher;
+    mount.dataset.networkCampaign = String(ad.campaign || ad.id);
     observeImpression(creative, ad, publisher, placement);
   }
 
@@ -227,6 +233,7 @@
       var publisher = publisherForMount(feed, mount);
       var ad = selectCreative(feed, mount, publisher);
       if (ad) render(mount, feed, ad, publisher);
+      else mount.dataset.networkReady = mount.dataset.campaign ? 'campaign-unavailable' : 'unavailable';
     }).catch(function () { mount.dataset.networkReady = 'unavailable'; });
   }
 
