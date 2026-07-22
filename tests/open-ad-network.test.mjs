@@ -18,6 +18,32 @@ test('all public layout families render the shared open-ad rail', async () => {
   }
 });
 
+test('all public layout families carry the live first-100 Tezos signal above the fold', async () => {
+  const [layouts, strip] = await Promise.all([
+    Promise.all([
+      'BaseLayout.astro',
+      'BlockLayout.astro',
+      'DrumLayout.astro',
+      'SparrowLayout.astro',
+    ].map((name) => readFile(new URL(`src/layouts/${name}`, root), 'utf8'))),
+    readFile(new URL('src/components/NetworkFirst100Strip.astro', root), 'utf8'),
+  ]);
+
+  for (const layout of layouts) {
+    assert.match(layout, /import NetworkFirst100Strip/);
+    assert.match(layout, /<NetworkFirst100Strip\s*\/>/);
+  }
+
+  assert.match(strip, /data-network-first100/);
+  assert.match(strip, /\/api\/network-el-segundo\/participants/);
+  assert.match(strip, /pc:wallet-active/);
+  assert.match(strip, /pc:wallet-change/);
+  assert.match(strip, /WALLET READY · JOIN/);
+  assert.match(strip, /No purchase or transaction/);
+  assert.match(strip, /pathname\.startsWith\('\/admin'\)/);
+  assert.match(strip, /pathname\.startsWith\('\/network-el-segundo'\)/);
+});
+
 test('ad inventory is contextual, transparent, and does not claim live settlement', async () => {
   const [registry, component, receipt, report, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),

@@ -1,0 +1,157 @@
+---
+const pathname = Astro.url.pathname;
+const hidden = pathname.startsWith('/admin') || pathname.startsWith('/network-el-segundo');
+const destination = '/network-el-segundo?utm_source=pointcast&utm_medium=first-100-strip&utm_campaign=pc-network-el-segundo-2026';
+---
+
+{!hidden && (
+  <aside class="first100-strip" data-network-first100 aria-label="Network El Segundo first 100 wallet invitation">
+    <a href={destination} class="first100-strip__link">
+      <span class="first100-strip__signal" aria-hidden="true"></span>
+      <span class="first100-strip__label">TEZOS SIGNAL</span>
+      <strong data-first100-count aria-live="polite">— / 100</strong>
+      <span class="first100-strip__message" data-first100-message>
+        One free Kukai signature. No purchase or transaction.
+      </span>
+      <span class="first100-strip__cta" data-first100-cta>JOIN THE FIRST 100 →</span>
+    </a>
+  </aside>
+)}
+
+{!hidden && (
+  <script>
+    const PARTICIPANT_ENDPOINT = '/api/network-el-segundo/participants';
+
+    function hasSharedWallet(): boolean {
+      try {
+        return Boolean(localStorage.getItem('pc:wallet-active') || localStorage.getItem('pc:wallet'));
+      } catch {
+        return false;
+      }
+    }
+
+    function renderWalletState(): void {
+      const ready = hasSharedWallet();
+      document.querySelectorAll<HTMLElement>('[data-first100-message]').forEach((element) => {
+        element.textContent = ready
+          ? 'Your PointCast wallet is ready. Join with one free signature.'
+          : 'One free Kukai signature. No purchase or transaction.';
+      });
+      document.querySelectorAll<HTMLElement>('[data-first100-cta]').forEach((element) => {
+        element.textContent = ready ? 'WALLET READY · JOIN →' : 'JOIN THE FIRST 100 →';
+      });
+    }
+
+    async function refreshFirst100Count(): Promise<void> {
+      try {
+        const response = await fetch(PARTICIPANT_ENDPOINT, {
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+        const payload = await response.json() as { count?: number; target?: number };
+        if (!Number.isInteger(payload.count) || !Number.isInteger(payload.target)) return;
+        document.querySelectorAll<HTMLElement>('[data-first100-count]').forEach((element) => {
+          element.textContent = `${payload.count} / ${payload.target}`;
+        });
+      } catch {
+        // The invitation remains useful if the public counter is temporarily unavailable.
+      }
+    }
+
+    function initializeFirst100Strip(): void {
+      renderWalletState();
+      void refreshFirst100Count();
+    }
+
+    window.addEventListener('pc:wallet-change', renderWalletState);
+    document.addEventListener('astro:page-load', initializeFirst100Strip);
+    initializeFirst100Strip();
+  </script>
+)}
+
+<style>
+  .first100-strip {
+    --signal-yellow: #efff55;
+    --signal-ink: #121212;
+    position: relative;
+    z-index: 40;
+    margin: 0;
+    color: var(--signal-ink);
+    background: var(--signal-yellow);
+    border-bottom: 1px solid var(--signal-ink);
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  }
+
+  .first100-strip__link {
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: auto auto auto minmax(18ch, 1fr) auto;
+    align-items: center;
+    gap: 9px 16px;
+    width: min(100% - 24px, 1440px);
+    margin: 0 auto;
+    padding: 7px 0;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .first100-strip__link:hover .first100-strip__cta,
+  .first100-strip__link:focus-visible .first100-strip__cta {
+    background: var(--signal-ink);
+    color: var(--signal-yellow);
+  }
+
+  .first100-strip__link:focus-visible {
+    outline: 2px solid var(--signal-ink);
+    outline-offset: -3px;
+  }
+
+  .first100-strip__signal {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--signal-ink);
+    border-radius: 50%;
+    background: #ff69b4;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #ff69b4 28%, transparent);
+  }
+
+  .first100-strip__label,
+  .first100-strip__message,
+  .first100-strip__cta,
+  .first100-strip strong {
+    font-size: 9px;
+    line-height: 1.25;
+    letter-spacing: 0.08em;
+  }
+
+  .first100-strip__label { font-weight: 700; }
+  .first100-strip strong { white-space: nowrap; font-size: 11px; }
+  .first100-strip__message { letter-spacing: 0.02em; }
+  .first100-strip__cta {
+    white-space: nowrap;
+    padding: 4px 7px;
+    border: 1px solid var(--signal-ink);
+    font-weight: 700;
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  @media (max-width: 760px) {
+    .first100-strip__link {
+      grid-template-columns: auto auto 1fr auto;
+      gap: 7px 10px;
+      width: min(100% - 18px, 1440px);
+    }
+    .first100-strip__label { display: none; }
+    .first100-strip__message {
+      grid-column: 2 / -1;
+      grid-row: 2;
+      font-size: 8px;
+    }
+    .first100-strip__cta { grid-column: 4; grid-row: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .first100-strip__cta { transition: none; }
+  }
+</style>
