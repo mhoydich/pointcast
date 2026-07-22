@@ -25,6 +25,31 @@ export const GET: APIRoute = () => {
       tokenLive: false,
       returnPromised: false,
     },
+    relayKit: {
+      rule: 'One verified participant invites one Tezos artist, collector, builder, or curious friend.',
+      oneToOne: 'Join Network El Segundo\'s first 100 verified Tezos wallets with one free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/network-el-segundo',
+      social: 'Network El Segundo is forming a public first 100: one free Kukai wallet signature, no purchase or transaction. Join, move the transparent counter, then invite one Tezos person: https://pointcast.xyz/network-el-segundo #Tezos #TezosArt',
+      image: 'https://network-el-segundo.mhoydich.chatgpt.site/og.png',
+      tags: ['Tezos', 'TezosArt', 'Kukai', 'cryptoart', 'participatory art'],
+      ecosystemRooms: [
+        {
+          name: 'Tezos community directory',
+          url: 'https://tezos.com/community',
+          why: 'Official directory for Tezos X, Telegram, Discord, Reddit, YouTube, and community support.',
+        },
+        {
+          name: 'objkt collector network',
+          url: 'https://docs.objkt.com/product/getting-started/readme/collector-starter-guide',
+          why: 'Official collector guide identifies objkt social discovery and @objktcom as active art-community paths.',
+        },
+        {
+          name: 'Teia Community',
+          url: 'https://blog.teia.art/about',
+          why: 'Open-source Tezos art community with public social and community links.',
+        },
+      ],
+      etiquette: 'Participate in context and ask for one free signature; do not mass-tag, promise returns, or describe the prototype payout rule as live.',
+    },
     pressRelease: 'https://pointcast.xyz/press/network-el-segundo-opens-first-100-tezos-wallet-roster',
     campaignReceipt: 'https://pointcast.xyz/ads.json',
     disclosure: 'The verified-wallet roster and public counter are live. Sale settlement, automated participant distribution, and any yield mechanism are prototypes and must not be represented as live.',
