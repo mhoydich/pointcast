@@ -12,9 +12,9 @@ const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
       <span class="first100-strip__label">TEZOS SIGNAL</span>
       <strong data-first100-count aria-live="polite">— / 100</strong>
       <span class="first100-strip__message" data-first100-message>
-        One free Kukai signature. No purchase or transaction.
+        Seat 2 is open · one free signature · zero tez.
       </span>
-      <span class="first100-strip__cta" data-first100-cta>JOIN THE FIRST 100 →</span>
+      <span class="first100-strip__cta" data-first100-cta>TAKE THE NEXT SEAT →</span>
     </a>
   </aside>
 )}
@@ -33,15 +33,26 @@ const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
       }
     }
 
+    let liveCount = 1;
+    let liveTarget = 100;
+
     function renderWalletState(): void {
       const ready = hasSharedWallet();
+      const nextSeat = Math.min(liveTarget, liveCount + 1);
+      const complete = liveCount >= liveTarget;
       document.querySelectorAll<HTMLElement>('[data-first100-message]').forEach((element) => {
-        element.textContent = ready
-          ? 'Your PointCast wallet is ready. Join with one free signature.'
-          : 'One free Kukai signature. No purchase or transaction.';
+        element.textContent = complete
+          ? 'The founding 100 is complete. Open the public roster.'
+          : ready
+            ? `Wallet ready · take founding seat ${nextSeat} with one free signature.`
+            : `Seat ${nextSeat} is open · one free signature · zero tez.`;
       });
       document.querySelectorAll<HTMLElement>('[data-first100-cta]').forEach((element) => {
-        element.textContent = ready ? 'WALLET READY · JOIN →' : 'JOIN THE FIRST 100 →';
+        element.textContent = complete
+          ? 'VIEW THE FOUNDING 100 →'
+          : ready
+            ? `TAKE SEAT ${nextSeat} →`
+            : 'JOIN FREE →';
       });
     }
 
@@ -54,9 +65,12 @@ const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
         if (!response.ok) return;
         const payload = await response.json() as { count?: number; target?: number };
         if (!Number.isInteger(payload.count) || !Number.isInteger(payload.target)) return;
+        liveCount = payload.count;
+        liveTarget = payload.target;
         document.querySelectorAll<HTMLElement>('[data-first100-count]').forEach((element) => {
           element.textContent = `${payload.count} / ${payload.target}`;
         });
+        renderWalletState();
       } catch {
         // The invitation remains useful if the public counter is temporarily unavailable.
       }

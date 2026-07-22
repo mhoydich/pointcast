@@ -27,6 +27,7 @@ export const GET: APIRoute = () => {
       returnPromised: false,
     },
     relayKit: {
+      human: 'https://pointcast.xyz/network-el-segundo/share',
       rule: 'One verified participant invites one Tezos artist, collector, builder, or curious friend.',
       oneToOne: 'Join Network El Segundo\'s first 100 verified Tezos wallets with one free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/network-el-segundo',
       social: 'Network El Segundo is forming a public first 100: one free Kukai wallet signature, no purchase or transaction. Join, move the transparent counter, then invite one Tezos person: https://pointcast.xyz/network-el-segundo #Tezos #TezosArt',
