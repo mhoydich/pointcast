@@ -94,6 +94,17 @@ export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
   note: 'A zero-capital first-party campaign inviting 100 verified Tezos wallets through a free Kukai-compatible message signature. No sale, token, payout contract, or yield system is live.',
 } as const;
 
+export const NETWORK_FIRST_100_SIGNAL = {
+  id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
+  label: 'Network El Segundo — First 100 Signal Strip',
+  advertiser: 'Network El Segundo',
+  destination: 'https://pointcast.xyz/network-el-segundo',
+  placement: 'Above-the-fold strip across every public PointCast layout except the canonical campaign page',
+  tracking: 'aggregate impressions + clicks',
+  privacy: 'No IP, user agent, cookie, wallet, or visitor identifier is stored with an event.',
+  status: 'house',
+} as const;
+
 export const POINTCAST_ADS: PointCastAd[] = [
   {
     id: 'PC-NETWORK-EL-SEGUNDO-001',

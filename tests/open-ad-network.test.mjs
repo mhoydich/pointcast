@@ -35,6 +35,11 @@ test('all public layout families carry the live first-100 Tezos signal above the
   }
 
   assert.match(strip, /data-network-first100/);
+  assert.match(strip, /PC-NETWORK-EL-SEGUNDO-SIGNAL/);
+  assert.match(strip, /data-first100-metric/);
+  assert.match(strip, /intersectionRatio >= 0\.5/);
+  assert.match(strip, /pc:first100-impression/);
+  assert.match(strip, /navigator\.doNotTrack/);
   assert.match(strip, /\/api\/network-el-segundo\/participants/);
   assert.match(strip, /pc:wallet-active/);
   assert.match(strip, /pc:wallet-change/);
@@ -72,6 +77,8 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /DRUM_COMPENDIUM_CAMPAIGN/);
   assert.match(receipt, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);
   assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
+  assert.match(receipt, /NETWORK_FIRST_100_SIGNAL/);
+  assert.match(receipt, /ownedSignals/);
   assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
   assert.match(receipt, /aggregateEventTelemetry: true/);
   assert.match(receipt, /visitorIdentifiers: false/);

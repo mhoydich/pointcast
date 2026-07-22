@@ -2,10 +2,11 @@
 const pathname = Astro.url.pathname;
 const hidden = pathname.startsWith('/admin') || pathname.startsWith('/network-el-segundo');
 const destination = '/network-el-segundo?utm_source=pointcast&utm_medium=first-100-strip&utm_campaign=pc-network-el-segundo-2026';
+const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
 ---
 
 {!hidden && (
-  <aside class="first100-strip" data-network-first100 aria-label="Network El Segundo first 100 wallet invitation">
+  <aside class="first100-strip" data-network-first100 data-first100-metric={signalMetricId} aria-label="Network El Segundo first 100 wallet invitation">
     <a href={destination} class="first100-strip__link">
       <span class="first100-strip__signal" aria-hidden="true"></span>
       <span class="first100-strip__label">TEZOS SIGNAL</span>
@@ -21,6 +22,8 @@ const destination = '/network-el-segundo?utm_source=pointcast&utm_medium=first-1
 {!hidden && (
   <script>
     const PARTICIPANT_ENDPOINT = '/api/network-el-segundo/participants';
+    const SIGNAL_METRIC_ID = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
+    const METRIC_ENDPOINT = '/api/ad-metrics';
 
     function hasSharedWallet(): boolean {
       try {
@@ -59,9 +62,67 @@ const destination = '/network-el-segundo?utm_source=pointcast&utm_medium=first-1
       }
     }
 
+    function first100MetricsDisabled(): boolean {
+      try {
+        return navigator.doNotTrack === '1' || localStorage.getItem('pc:no-track') === '1';
+      } catch {
+        return navigator.doNotTrack === '1';
+      }
+    }
+
+    function sendFirst100Metric(event: 'impression' | 'click'): void {
+      if (first100MetricsDisabled()) return;
+      const payload = JSON.stringify({ event, adId: SIGNAL_METRIC_ID });
+      if (navigator.sendBeacon) {
+        const queued = navigator.sendBeacon(METRIC_ENDPOINT, new Blob([payload], { type: 'application/json' }));
+        if (queued) return;
+      }
+      void fetch(METRIC_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      });
+    }
+
+    function initializeFirst100Metrics(): void {
+      const strip = document.querySelector<HTMLElement>('[data-first100-metric]');
+      if (!strip || strip.dataset.first100MetricReady === '1' || first100MetricsDisabled()) return;
+      strip.dataset.first100MetricReady = '1';
+
+      strip.querySelector('a')?.addEventListener('click', () => sendFirst100Metric('click'), { once: true });
+
+      const impressionKey = `pc:first100-impression:${location.pathname}`;
+      try {
+        if (sessionStorage.getItem(impressionKey) === '1') return;
+      } catch {
+        // Storage can be unavailable; the aggregate event can still be sent.
+      }
+
+      let timer: number | undefined;
+      const observer = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (timer) return;
+          timer = window.setTimeout(() => {
+            try { sessionStorage.setItem(impressionKey, '1'); } catch { /* no-op */ }
+            sendFirst100Metric('impression');
+            observer.disconnect();
+            timer = undefined;
+          }, 1000);
+        } else if (timer) {
+          window.clearTimeout(timer);
+          timer = undefined;
+        }
+      }, { threshold: [0.5] });
+      observer.observe(strip);
+    }
+
     function initializeFirst100Strip(): void {
       renderWalletState();
       void refreshFirst100Count();
+      initializeFirst100Metrics();
     }
 
     window.addEventListener('pc:wallet-change', renderWalletState);
