@@ -287,6 +287,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'open-road-v8',
+    name: 'Open Road VIII',
+    kicker: 'EIGHT MILES · CHANGING LIGHT · THE LONG WAY HOME',
+    description: 'An eight-mile passage through changing light, with self-paced walking, optional road sound, and a private place on the road that stays in this browser.',
+    url: 'https://pointcast.xyz/open-road-v8',
+    path: '/open-road-v8',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'win95-games',
     name: 'Windows 95 Games',
     kicker: 'NOUNS · CARDS · DESKTOP',
