@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
+const participantApi = new URL('../functions/api/network-el-segundo/participants.ts', import.meta.url);
 
 test('PointCast publishes Network El Segundo with a direct fallback and shared auth bridge', async () => {
   const source = await readFile(page, 'utf8');
@@ -14,6 +15,10 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /\/api\/auth\/project-ticket/);
   assert.match(source, /Open the release/);
   assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo/);
+  assert.match(source, /Signal relay \/ zero capital/);
+  assert.match(source, /data-share-signal/);
+  assert.match(source, /\/api\/network-el-segundo\/participants/);
+  assert.match(source, /no purchase or transaction/);
 });
 
 test('Network El Segundo publishes a machine-readable roster and prototype boundary', async () => {
@@ -24,4 +29,14 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /transactionRequired: false/);
   assert.match(source, /livePayoutContract: false/);
   assert.match(source, /returnPromised: false/);
+  assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
+});
+
+test('PointCast proxies the public participant count without caching or collecting identity data', async () => {
+  const source = await readFile(participantApi, 'utf8');
+
+  assert.match(source, /cache-control': 'no-store/);
+  assert.match(source, /remaining: target - count/);
+  assert.match(source, /observedAt/);
+  assert.doesNotMatch(source, /email|userAgent|ipAddress/i);
 });

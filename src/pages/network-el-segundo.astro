@@ -4,6 +4,8 @@ const title = 'Network El Segundo — PointCast';
 const description =
   'Join the first 100 verified Tezos wallets. A participatory art-network prototype with a proposed 50% post-sale distribution rule and no live payout contract.';
 const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(`${releaseUrl}/`)}`;
+const campaignUrl = 'https://pointcast.xyz/network-el-segundo';
+const shareCopy = `Network El Segundo is forming a public first 100: one free Tezos wallet signature, no purchase or transaction. Join and make the counter move: ${campaignUrl}`;
 ---
 
 <!doctype html>
@@ -60,10 +62,45 @@ const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${enco
         border: 1px solid white;
         font-size: .7rem;
       }
+      .signal-relay {
+        position: absolute;
+        z-index: 3;
+        inset: auto auto 1rem 1rem;
+        width: min(23rem, calc(100vw - 2rem));
+        padding: .7rem;
+        color: #f7f2e8;
+        background: rgba(7, 7, 7, .94);
+        border: 1px solid #f7f2e8;
+        box-shadow: .35rem .35rem 0 #ff4f9f;
+      }
+      .signal-relay__head { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
+      .signal-relay__label { color: #f2ff47; font-size: .62rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+      .signal-relay__count { font-size: 1.05rem; font-weight: 900; }
+      .signal-relay p { margin: .4rem 0 .6rem; font-size: .68rem; line-height: 1.45; }
+      .signal-relay__actions { display: flex; flex-wrap: wrap; gap: .38rem; }
+      .signal-relay__actions a,
+      .signal-relay__actions button {
+        appearance: none;
+        padding: .38rem .52rem;
+        color: #070707;
+        background: #f7f2e8;
+        border: 0;
+        border-radius: 0;
+        font: inherit;
+        font-size: .62rem;
+        font-weight: 900;
+        text-decoration: none;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .signal-relay__actions [data-relay-primary] { background: #f2ff47; }
+      .signal-relay__status { min-height: 1em; color: #b9f6ff; font-size: .58rem; }
       @media (max-width: 46rem) {
         .pointcast-rail { align-items: flex-start; font-size: .58rem; }
         .pointcast-rail__auth { align-items: flex-end; flex-direction: column; text-align: right; }
         .pointcast-rail__status { max-width: 12rem; }
+        .signal-relay { inset: auto .75rem .75rem .75rem; width: auto; }
+        .network-stage__fallback { display: none; }
       }
     </style>
   </head>
@@ -84,13 +121,61 @@ const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${enco
           allow="clipboard-write"
           loading="eager"
         ></iframe>
+        <aside class="signal-relay" aria-label="Network El Segundo signal relay">
+          <div class="signal-relay__head">
+            <span class="signal-relay__label">Signal relay / zero capital</span>
+            <strong class="signal-relay__count" data-participant-count>— / 100</strong>
+          </div>
+          <p>One verified wallet makes the artwork easier to find. Invite one Tezos person; the public counter is the receipt.</p>
+          <div class="signal-relay__actions">
+            <button type="button" data-relay-primary data-share-signal>Relay signal</button>
+            <button type="button" data-copy-signal>Copy invite</button>
+            <a href={`mailto:?subject=${encodeURIComponent('Join the first 100 Tezos wallets')}&body=${encodeURIComponent(shareCopy)}`}>Email</a>
+            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareCopy)}`} target="_blank" rel="noopener">X</a>
+          </div>
+          <p class="signal-relay__status" data-relay-status aria-live="polite"></p>
+        </aside>
         <a class="network-stage__fallback" href={releaseUrl} target="_blank" rel="noopener">Open the release ↗</a>
       </section>
     </main>
-    <script define:vars={{ releaseUrl }}>
+    <script define:vars={{ releaseUrl, campaignUrl, shareCopy }}>
       const frame = document.getElementById('network-el-segundo-project');
       const status = document.querySelector('[data-project-auth-status]');
       const authLink = document.querySelector('[data-project-auth-link]');
+      const count = document.querySelector('[data-participant-count]');
+      const relayStatus = document.querySelector('[data-relay-status]');
+
+      async function copyInvite() {
+        await navigator.clipboard.writeText(shareCopy);
+        if (relayStatus) relayStatus.textContent = 'Invitation copied. Send it to one Tezos person.';
+      }
+
+      document.querySelector('[data-copy-signal]')?.addEventListener('click', () => {
+        void copyInvite().catch(() => {
+          if (relayStatus) relayStatus.textContent = campaignUrl;
+        });
+      });
+
+      document.querySelector('[data-share-signal]')?.addEventListener('click', () => {
+        if (typeof navigator.share === 'function') {
+          void navigator.share({ title: 'Network El Segundo — First 100', text: shareCopy, url: campaignUrl }).catch(() => {});
+          return;
+        }
+        void copyInvite().catch(() => {
+          if (relayStatus) relayStatus.textContent = campaignUrl;
+        });
+      });
+
+      async function refreshParticipantCount() {
+        try {
+          const response = await fetch('/api/network-el-segundo/participants', { cache: 'no-store' });
+          const result = await response.json();
+          if (!response.ok || result.ok !== true) throw new Error('counter-unavailable');
+          if (count) count.textContent = `${result.count} / ${result.target}`;
+        } catch {
+          if (count) count.textContent = 'Counter live ↗';
+        }
+      }
 
       async function passPointCastSession() {
         try {
@@ -115,6 +200,8 @@ const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${enco
       }
 
       void passPointCastSession();
+      void refreshParticipantCount();
+      window.setInterval(refreshParticipantCount, 60_000);
     </script>
   </body>
 </html>

@@ -6,7 +6,8 @@ export const GET: APIRoute = () => {
     status: 'participant-roster-live',
     canonicalUrl: 'https://pointcast.xyz/network-el-segundo',
     releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/',
-    participantCounter: 'https://network-el-segundo.mhoydich.chatgpt.site/api/participants',
+    participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
+    participantCounterSource: 'https://network-el-segundo.mhoydich.chatgpt.site/api/participants',
     targetVerifiedWallets: 100,
     authentication: {
       network: 'Tezos Mainnet',
