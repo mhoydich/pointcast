@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 
 import {
   DRUM_RUSH_DURATION_MS,
@@ -24,4 +25,19 @@ test('Noun Rush normalizes unsafe scores and builds a challenge line', () => {
   assert.equal(drumRushRank(Number.NaN).label, 'the drum is waiting');
   assert.match(drumRushShareText(41.8), /scored 41/);
   assert.match(drumRushShareText(41.8), /thunder noun/);
+});
+
+test('Noun Rush is wired into Drum Room v3 as a local, shareable tap surface', async () => {
+  const source = await readFile(new URL('../src/pages/drum-v3.astro', import.meta.url), 'utf8');
+
+  assert.match(source, /id=['"]v3-rush['"]/);
+  assert.match(source, /id=['"]v3-rush-board['"][\s\S]{0,220}role=['"]button['"]/);
+  assert.match(source, /aria-label=['"]Tap the Noun Rush drum['"]/);
+  assert.match(source, /rushBoardEl\?\.addEventListener\(['"]pointerdown['"]/);
+  assert.match(source, /rushBoardEl\?\.addEventListener\(['"]keydown['"]/);
+  assert.match(source, /scoreRushTap\(mult\)/);
+  assert.match(source, /pc:drum-v3:rush-best/);
+  assert.match(source, /navigator\.share/);
+  assert.match(source, /navigator\.clipboard\.writeText/);
+  assert.match(source, /aria-live=['"]polite['"]/);
 });

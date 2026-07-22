@@ -161,7 +161,14 @@ import DrumNav from '../components/DrumNav.astro';
       </div>
     </div>
     <p class="v3-rush-dek">build the wildest combo you can before the fuse runs out.</p>
-    <div class="v3-rush-board" id="v3-rush-board">
+    <div
+      class="v3-rush-board"
+      id="v3-rush-board"
+      role="button"
+      tabindex="0"
+      aria-disabled="true"
+      aria-label="Tap the Noun Rush drum"
+    >
       <div class="v3-rush-score-wrap">
         <span class="v3-rush-score" id="v3-rush-score">0</span>
         <span class="v3-rush-score-label">rush score</span>
@@ -723,6 +730,16 @@ import DrumNav from '../components/DrumNav.astro';
     padding: 10px 12px;
     border: 1.5px solid var(--pc-rule);
     background: #fafaf9;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .v3-rush-board[aria-disabled='true'] {
+    cursor: default;
+  }
+  .v3-rush-board:focus-visible {
+    outline: 3px solid var(--rush-accent);
+    outline-offset: 3px;
   }
   .v3-rush-score-wrap { display: flex; align-items: baseline; gap: 9px; }
   .v3-rush-score {
@@ -1106,6 +1123,7 @@ import DrumNav from '../components/DrumNav.astro';
     rushPhase = 'finished';
     cancelAnimationFrame(rushFrame);
     paintRushClock(0);
+    rushBoardEl?.setAttribute('aria-disabled', 'true');
     const rank = drumRushRank(rushScore);
     const isNewBest = rushScore > rushBest;
     if (isNewBest) {
@@ -1166,6 +1184,7 @@ import DrumNav from '../components/DrumNav.astro';
     rushCountdownTimers.push(window.setTimeout(() => {
       rushPhase = 'live';
       rushStartedAt = performance.now();
+      rushBoardEl?.setAttribute('aria-disabled', 'false');
       rushEl?.classList.remove('is-counting');
       rushEl?.classList.add('is-live');
       if (rushStartBtn) rushStartBtn.textContent = 'rush live';
@@ -1179,6 +1198,24 @@ import DrumNav from '../components/DrumNav.astro';
     if (rushScoreEl) rushScoreEl.textContent = String(rushScore);
     setRushStatus(multiplier >= 5 ? 'CHORD BURST · +5' : multiplier >= 3 ? 'COMBO · +3' : `keep going · +${multiplier}`);
   }
+
+  function performRushBoardTap(clientX?: number, clientY?: number) {
+    if (rushPhase !== 'live' || !rushBoardEl) return;
+    const rect = rushBoardEl.getBoundingClientRect();
+    performTap(clientX || rect.left + rect.width / 2, clientY || rect.top + rect.height / 2);
+  }
+
+  rushBoardEl?.addEventListener('pointerdown', (event) => {
+    if (rushPhase !== 'live') return;
+    event.preventDefault();
+    performRushBoardTap(event.clientX, event.clientY);
+  });
+  rushBoardEl?.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' && event.code !== 'Enter') return;
+    event.preventDefault();
+    event.stopPropagation();
+    performRushBoardTap();
+  });
 
   rushStartBtn?.addEventListener('click', beginRush);
   rushShareBtn?.addEventListener('click', async () => {
