@@ -62,6 +62,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-DRUM-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-DRUM-UNIVERSE-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
+  assert.equal((registry.match(/id: 'PC-PERMISSION-LAB-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
@@ -80,6 +81,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /NETWORK_FIRST_100_SIGNAL/);
   assert.match(receipt, /ownedSignals/);
   assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
+  assert.match(receipt, /PERMISSION_LAB_CAMPAIGN/);
   assert.match(receipt, /aggregateEventTelemetry: true/);
   assert.match(receipt, /visitorIdentifiers: false/);
   assert.match(report, /LIVE PUBLISHING REPORT/);
@@ -136,6 +138,26 @@ test('Nouns About runs as a three-creative house campaign to the canonical field
   assert.match(registry, /A Noun is a beginning, not a boundary\./);
   assert.match(desk, /NEW HOUSE CAMPAIGN/);
   assert.match(desk, /SEE CAMPAIGN COUNTS/);
+});
+
+test('Permission Lab runs as a measured three-creative make and Made campaign', async () => {
+  const [registry, rail, desk, receipt] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/components/OpenAdRail.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-PERMISSION-LAB-2026/);
+  assert.equal((registry.match(/href: 'https:\/\/www\.industrynext\.xyz\/make\/'/g) || []).length, 2);
+  assert.equal((registry.match(/href: 'https:\/\/www\.industrynext\.xyz\/made\/'/g) || []).length, 1);
+  assert.match(registry, /Make first\. Ask never\./);
+  assert.match(registry, /One Noun\. Six possible beginnings\./);
+  assert.match(registry, /Made by whoever arrived\./);
+  assert.match(rail, /const \{ count = 3 \}/);
+  assert.match(desk, /NEW HOUSE CAMPAIGN · \{PERMISSION_LAB_CAMPAIGN\.id\}/);
+  assert.match(desk, /SEE CAMPAIGN COUNTS/);
+  assert.match(receipt, /PERMISSION_LAB_CAMPAIGN/);
 });
 
 test('Drum Noun Universe is featured on home and guaranteed across other public pages', async () => {

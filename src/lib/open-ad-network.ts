@@ -50,6 +50,17 @@ export const NOUNS_ABOUT_CAMPAIGN = {
   note: 'Three first-party house creatives for a concise field note on why Nouns and CC0 remain unusually interesting.',
 } as const;
 
+export const PERMISSION_LAB_CAMPAIGN = {
+  id: 'PC-PERMISSION-LAB-2026',
+  label: 'Industry Next Permission Lab',
+  advertiser: 'Industry Next',
+  creativeCount: 3,
+  placement: 'Contextual rotation across public PointCast pages',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'Three first-party house creatives inviting people to remix an authentic CC0 Noun, export a poster, and deliberately publish to the public Made stream.',
+} as const;
+
 export const DRUM_COMPENDIUM_CAMPAIGN = {
   id: 'PC-DRUM-COMPENDIUM-2026',
   label: 'Drum Compendium',
@@ -233,6 +244,45 @@ export const POINTCAST_ADS: PointCastAd[] = [
     contexts: ['noun', 'nouns', 'drum', 'play', 'game', 'agent', 'town', 'network', 'story', 'tool'],
     campaign: NOUNS_ABOUT_CAMPAIGN.id,
     seriesLabel: NOUNS_ABOUT_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-PERMISSION-LAB-001',
+    advertiser: 'Industry Next',
+    headline: 'Make first. Ask never.',
+    copy: 'Turn an authentic CC0 Noun into a sign, club, tool, character, ritual, or tiny institution. Export is private; publishing is deliberate.',
+    href: 'https://www.industrynext.xyz/make/',
+    cta: 'Enter Permission Lab',
+    tone: 'signal',
+    contexts: ['nouns', 'noun', 'cc0', 'remix', 'make', 'studio', 'art', 'gallery', 'today', 'creative'],
+    campaign: PERMISSION_LAB_CAMPAIGN.id,
+    seriesLabel: PERMISSION_LAB_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-PERMISSION-LAB-002',
+    advertiser: 'Industry Next',
+    headline: 'One Noun. Six possible beginnings.',
+    copy: 'No account and no wallet before the creative act. Remix the parts, choose the form, and download a 1200-pixel public signal.',
+    href: 'https://www.industrynext.xyz/make/',
+    cta: 'Make a public signal',
+    tone: 'play',
+    contexts: ['play', 'game', 'tool', 'character', 'poster', 'design', 'arcade', 'drum', 'town', 'agent'],
+    campaign: PERMISSION_LAB_CAMPAIGN.id,
+    seriesLabel: PERMISSION_LAB_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-PERMISSION-LAB-003',
+    advertiser: 'Industry Next',
+    headline: 'Made by whoever arrived.',
+    copy: 'The Made stream is not a leaderboard or a mint floor. It is a living worktable for people treating permission as creative material.',
+    href: 'https://www.industrynext.xyz/made/',
+    cta: 'See what people made',
+    tone: 'garden',
+    contexts: ['public', 'community', 'culture', 'commons', 'garden', 'press', 'wire', 'archive', 'people', 'made'],
+    campaign: PERMISSION_LAB_CAMPAIGN.id,
+    seriesLabel: PERMISSION_LAB_CAMPAIGN.label,
     status: 'house',
   },
   {
