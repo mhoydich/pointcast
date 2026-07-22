@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { ART_KITTY_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, OPEN_AD_PLACEMENT, POINTCAST_ADS } from '../lib/open-ad-network';
+import { ART_KITTY_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, NETWORK_EL_SEGUNDO_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, OPEN_AD_PLACEMENT, POINTCAST_ADS } from '../lib/open-ad-network';
 
 export const GET: APIRoute = () => {
   const payload = {
@@ -16,7 +16,7 @@ export const GET: APIRoute = () => {
       note: 'The current release publishes aggregate, first-party impression and click counts. No IP, user agent, cookie, wallet, or visitor identifier is stored with an ad event. Reservation and tez settlement remain prototype-only.',
     },
     placement: OPEN_AD_PLACEMENT,
-    houseSeries: [ART_KITTY_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN],
+    houseSeries: [NETWORK_EL_SEGUNDO_CAMPAIGN, ART_KITTY_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN],
     campaigns: POINTCAST_ADS,
   };
 

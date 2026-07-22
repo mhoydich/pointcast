@@ -5,6 +5,9 @@ import drumNounUniversePoster from '../assets/campaigns/pointcast-drum-noun-univ
 import artKittyPositiveEnergy from '../assets/campaigns/art-kitty-2026/positive-energy.webp';
 import artKittySpookyVibes from '../assets/campaigns/art-kitty-2026/spooky-vibes.webp';
 import artKittyVase from '../assets/campaigns/art-kitty-2026/vase-green-pink.webp';
+import networkDesk from '../assets/campaigns/network-el-segundo-2026/network-desk.jpg';
+import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-vibes-pickleball.jpg';
+import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
 
 export type PointCastAdTone = 'signal' | 'garden' | 'play' | 'ritual' | 'network' | 'field';
 
@@ -80,7 +83,63 @@ export const ART_KITTY_CAMPAIGN = {
   note: 'Three first-party house creatives for 31 public one-tez collector editions with an equal artist and Art Kitty split.',
 } as const;
 
+export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
+  id: 'PC-NETWORK-EL-SEGUNDO-2026',
+  label: 'Network El Segundo — First 100 Wallets',
+  advertiser: 'Network El Segundo',
+  creativeCount: 3,
+  placement: 'Sitewide PointCast house campaign with a contextual creative on every public page',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A zero-capital first-party campaign inviting 100 verified Tezos wallets through a free Kukai-compatible message signature. No sale, token, payout contract, or yield system is live.',
+} as const;
+
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-001',
+    advertiser: 'Network El Segundo',
+    headline: 'The first 100 wallets make the network.',
+    copy: 'Join with a free Tezos message signature. No purchase, mint, funding, or transaction required. The public counter keeps the milestone honest.',
+    href: '/network-el-segundo',
+    cta: 'Join the first 100',
+    tone: 'network',
+    contexts: ['network', 'tezos', 'wallet', 'kukai', 'passport', 'agent', 'town', 'home', 'pointcast'],
+    image: networkDesk.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-002',
+    advertiser: 'Network El Segundo',
+    headline: 'Buy art. Join the list. Share the future sale.',
+    copy: 'The proposed rule reserves 50% of each future recorded sale for eligible participant wallets. Prototype only: no sale or payout contract is live.',
+    href: '/network-el-segundo',
+    cta: 'Read the participation rule',
+    tone: 'garden',
+    contexts: ['art', 'gallery', 'today', 'collect', 'mint', 'commerce', 'press', 'garden', 'flower'],
+    image: networkFlowers.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-003',
+    advertiser: 'Network El Segundo',
+    headline: 'Good vibes need receipts.',
+    copy: 'A public wallet counter, first-party campaign receipt, and non-custodial Kukai login turn participation into something anyone can verify.',
+    href: '/network-el-segundo',
+    cta: 'Enter the network',
+    tone: 'play',
+    contexts: ['play', 'sport', 'community', 'el', 'segundo', 'local', 'proof', 'wire', 'press'],
+    image: networkGoodVibes.src,
+    sourceTool: 'Michael Hoydich archive',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-ART-KITTY-001',
     advertiser: 'HOME / Art Kitty',
@@ -395,25 +454,32 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     .map(({ ad }) => ad);
 
   const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
+  const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   if (!isDrumSurface) {
     const universeCreative = ranked.find((ad) => ad.campaign === DRUM_NOUN_UNIVERSE_CAMPAIGN.id);
-    if (!universeCreative) return ranked.slice(0, cappedCount);
+    if (!universeCreative && !networkCreative) return ranked.slice(0, cappedCount);
 
     const companionAds = ranked.filter((ad) => (
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
+      && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
     ));
-    return [universeCreative, ...companionAds].slice(0, cappedCount);
+    return [universeCreative, networkCreative, ...companionAds]
+      .filter((ad): ad is PointCastAd => Boolean(ad))
+      .slice(0, cappedCount);
   }
 
   const drumCreative = ranked.find((ad) => ad.campaign === DRUM_COMPENDIUM_CAMPAIGN.id);
-  if (!drumCreative) return ranked.slice(0, cappedCount);
+  if (!drumCreative && !networkCreative) return ranked.slice(0, cappedCount);
 
   const companionAds = ranked.filter((ad) => (
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
+    && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
   ));
-  return [drumCreative, ...companionAds].slice(0, cappedCount);
+  return [drumCreative, networkCreative, ...companionAds]
+    .filter((ad): ad is PointCastAd => Boolean(ad))
+    .slice(0, cappedCount);
 }
 
 export function adDestination(ad: PointCastAd, pathname: string): string {

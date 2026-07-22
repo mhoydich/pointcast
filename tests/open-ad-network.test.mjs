@@ -32,6 +32,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-DRUM-UNIVERSE-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
+  assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /tracking: 'aggregate impressions \+ clicks'/);
@@ -44,6 +45,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /OPEN_AD_PLACEMENT/);
   assert.match(receipt, /DRUM_COMPENDIUM_CAMPAIGN/);
   assert.match(receipt, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);
+  assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
   assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
   assert.match(receipt, /aggregateEventTelemetry: true/);
   assert.match(receipt, /visitorIdentifiers: false/);
@@ -51,6 +53,23 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(report, /These are browser events, not unique people/);
   assert.match(endpoint, /No IP, user agent, cookie, wallet, or visitor identifier/);
   assert.match(endpoint, /expirationTtl: RETENTION_DAYS/);
+});
+
+test('Network El Segundo runs sitewide as a three-creative first-100 wallet campaign', async () => {
+  const [registry, desk, receipt] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-NETWORK-EL-SEGUNDO-2026/);
+  assert.equal((registry.match(/href: '\/network-el-segundo'/g) || []).length, 3);
+  assert.equal((registry.match(/image: network[A-Z][A-Za-z]+\.src/g) || []).length, 3);
+  assert.match(registry, /No sale, token, payout contract, or yield system is live/);
+  assert.match(registry, /networkCreative/);
+  assert.match(desk, /SITEWIDE HOUSE CAMPAIGN/);
+  assert.match(desk, /JOIN THE FIRST 100/);
+  assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
 });
 
 test('Art Kitty runs as a three-creative contextual house campaign with public proof', async () => {
@@ -96,7 +115,7 @@ test('Drum Noun Universe is featured on home and guaranteed across other public 
 
   assert.match(registry, /PC-DRUM-NOUN-UNIVERSE-2026/);
   assert.match(registry, /Featured homepage unit and contextual placement across public non-Drum pages/);
-  assert.match(registry, /return \[universeCreative, \.\.\.companionAds\]\.slice/);
+  assert.match(registry, /return \[universeCreative, networkCreative, \.\.\.companionAds\]/);
   assert.match(home, /<DrumNounUniverseAd\s*\/>/);
   assert.match(homeAd, /data-ad-record=\{ad\.id\}/);
   assert.match(homeAd, /NO VISITOR PROFILE · NO PAID MEDIA/);

@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds seven product filings across every public kind', () => {
-  assert.equal(releases.length, 7);
+test('press wire seeds eight product filings across every public kind', () => {
+  assert.equal(releases.length, 8);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,17 @@ test('press wire seeds seven product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Network El Segundo filing separates the live roster from prototype sale and payout rules', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0008');
+  assert.ok(release);
+  assert.equal(release.slug, 'network-el-segundo-opens-first-100-tezos-wallet-roster');
+  assert.match(release.body.join(' '), /free message signature/i);
+  assert.match(release.body.join(' '), /50 percent of proceeds/i);
+  assert.match(release.body.join(' '), /does not deploy a sale contract, payout contract, token, or automated yield system/i);
+  assert.match(release.body.join(' '), /does not promise profit or a return/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo');
 });
 
 test('Art Kitty filing discloses the equal split, earmarked ledger, and approval boundary', () => {
@@ -63,10 +74,11 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Seven sourced product filings/);
+  assert.match(home, /Eight sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);
   assert.match(llms, /PointCast Press Wire/);
   assert.match(llms, /HOME \/ Art Kitty/);
+  assert.match(llms, /Network El Segundo/);
 });
