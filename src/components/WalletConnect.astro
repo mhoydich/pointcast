@@ -121,15 +121,6 @@
   };
 
   const STORAGE_KEY = 'pc:wallet';
-  // Pinned Beacon SDK — exact version + SRI integrity. Defends against
-  // a supply-chain attack where a future malicious version of the package
-  // would silently ship to every visitor's browser. Bump both the version
-  // and the SRI hash together when rolling forward (script:
-  //   VERSION=<next>; curl -sL "https://cdn.jsdelivr.net/npm/@airgap/beacon-sdk@${VERSION}/dist/walletbeacon.min.js" | openssl dgst -sha384 -binary | openssl base64 -A
-  // ).
-  const BEACON_VERSION = '4.8.1';
-  const BEACON_CDN = `https://cdn.jsdelivr.net/npm/@airgap/beacon-sdk@${BEACON_VERSION}/dist/walletbeacon.min.js`;
-  const BEACON_SRI = 'sha384-BRG93bqbyUWvDu3ImCSrlsOmHKakx1XM9AZiihMekRYBJinl0IKE5XZxTU14EG1K';
 
   function loadWallet(): Wallet | null {
     try {
@@ -216,32 +207,10 @@
   // ---------------------------------------------------------------------------
   // Connect flows
   // ---------------------------------------------------------------------------
-  async function loadBeacon(): Promise<any> {
-    if ((window as any).beacon) return (window as any).beacon;
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = BEACON_CDN;
-      // Subresource Integrity — the browser refuses to execute the script
-      // if the delivered bytes don't match this hash. If jsDelivr's copy
-      // is tampered with, the whole wallet flow fails closed instead of
-      // silently running malicious code.
-      s.integrity = BEACON_SRI;
-      s.crossOrigin = 'anonymous';
-      s.onload = () => resolve((window as any).beacon);
-      s.onerror = () => reject(new Error('Failed to load Beacon SDK (integrity check or network)'));
-      document.head.appendChild(s);
-    });
-  }
-
   async function connectKukai(): Promise<void> {
     try {
-      const beacon = await loadBeacon();
-      const client = new beacon.DAppClient({
-        name: 'PointCast',
-        preferredNetwork: 'mainnet',
-      });
-      const perms = await client.requestPermissions();
-      const address: string = perms.address;
+      const wallet = await import('../lib/tezos');
+      const address = await wallet.connectKukai();
       if (!address) throw new Error('No address returned');
       saveWallet({ chain: 'tezos', address, provider: 'kukai' });
       renderState();
@@ -300,14 +269,7 @@
   document.getElementById('wallet-disconnect')?.addEventListener('click', async () => {
     const w = loadWallet();
     if (w?.provider === 'kukai') {
-      // Best-effort: Beacon sessions get cleared on the dApp side via `clearActiveAccount`
-      try {
-        const beacon = (window as any).beacon;
-        if (beacon) {
-          const client = new beacon.DAppClient({ name: 'PointCast' });
-          await client.clearActiveAccount();
-        }
-      } catch { /* ignore */ }
+      try { await (await import('../lib/tezos')).disconnectKukai(); } catch { /* ignore */ }
     } else if (w?.provider === 'phantom') {
       try { await (window as any).solana?.disconnect?.(); } catch { /* ignore */ }
     }

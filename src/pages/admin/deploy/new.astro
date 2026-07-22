@@ -823,19 +823,28 @@ const slugs = Object.keys(contracts).filter((k) => !k.startsWith('_'));
       setStatus('initializing ' + network + ' · ' + rpcUrl);
 
       try {
-        const { TezosToolkit } = await import('@taquito/taquito');
-        const { BeaconWallet } = await import('@taquito/beacon-wallet');
-
-        const tezos = new TezosToolkit(rpcUrl);
-        const wallet = new BeaconWallet({
-          name: 'PointCast Publisher',
-          network: {
-            type: network,
-            name: network === 'shadownet' ? 'Shadownet' : undefined,
-            rpcUrl,
-          },
-        });
-        tezos.setWalletProvider(wallet);
+        let tezos;
+        let wallet;
+        if (network === 'mainnet') {
+          const shared = await import('../../../lib/tezos');
+          tezos = await shared.tezosClient();
+          wallet = await shared.pointCastWallet();
+          await shared.connectKukai();
+        } else {
+          const { TezosToolkit } = await import('@taquito/taquito');
+          const { BeaconWallet } = await import('@taquito/beacon-wallet');
+          tezos = new TezosToolkit(rpcUrl);
+          wallet = new BeaconWallet({
+            name: 'PointCast Publisher Shadownet',
+            network: {
+              type: network,
+              name: 'Shadownet',
+              rpcUrl,
+            },
+          });
+          await wallet.client.subscribeToEvent('ACTIVE_ACCOUNT_SET', () => undefined);
+          tezos.setWalletProvider(wallet);
+        }
 
         if (deployLabel) deployLabel.textContent = 'Waiting for Kukai…';
         setStatus('confirm permissions in kukai…');

@@ -37,12 +37,6 @@ function isMobileSafari(): boolean {
   return /iP(ad|hone|od)/.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
 }
 
-function utf8ToHex(value: string): string {
-  return Array.from(new TextEncoder().encode(value))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   bytes.forEach((byte) => {
@@ -148,40 +142,22 @@ function getPhantomProvider(): PhantomProvider | null {
 
 export async function loginWithKukai(): Promise<PointCastUser | null> {
   if (!isBrowser()) return null;
-
-  const [{ connectKukai }, { BeaconWallet }] = await Promise.all([
-    import('../tezos'),
-    import('@taquito/beacon-wallet'),
-  ]);
-
-  const wallet = new BeaconWallet({
-    name: 'PointCast',
-    preferredNetwork: 'mainnet' as any,
-  });
-
-  let activeAccount = await wallet.client.getActiveAccount();
-  if (!activeAccount) {
-    await connectKukai();
-    activeAccount = await wallet.client.getActiveAccount();
-  }
-  if (!activeAccount) {
-    await wallet.requestPermissions({ network: { type: 'mainnet' as any } });
-    activeAccount = await wallet.client.getActiveAccount();
-  }
-
-  const address = activeAccount?.address ?? await wallet.getPKH();
-  const publicKey = activeAccount?.publicKey ?? await wallet.getPK();
+  const { connectKukai, signTezosPayload } = await import('../tezos');
+  const address = await connectKukai();
   const message = buildSignedMessage('Tezos', {
     Address: address,
     Origin: window.location.origin,
     'Issued At': new Date().toISOString(),
     Nonce: createNonce(),
   });
-  const signature = await wallet.sign(utf8ToHex(message));
+  // The signed address must be part of the exact message. Connect/restore the
+  // shared wallet first, then build and sign the final login challenge through
+  // that same Beacon client.
+  const proof = await signTezosPayload(message);
   const payload = await postJson<{ ok: true; user: PointCastUser }>('/api/auth/tezos', {
-    address,
-    publicKey,
-    signature,
+    address: proof.address,
+    publicKey: proof.publicKey,
+    signature: proof.signature,
     message,
   });
 

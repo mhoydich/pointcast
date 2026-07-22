@@ -1997,20 +1997,9 @@ const DRUM_NOUN_ID = DRUMS[1].id;
     if (drumClaimStatus) drumClaimStatus.textContent = 'sign claim() in kukai…';
 
     try {
-      const taquito = await import('@taquito/taquito');
-      const beacon = await import('@taquito/beacon-wallet');
-      const tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
-      const beaconWallet = new beacon.BeaconWallet({
-        name: 'PointCast Drum',
-        network: { type: 'mainnet' },
-      });
-      tezos.setWalletProvider(beaconWallet);
-
-      const active = await beaconWallet.client.getActiveAccount();
-      if (!active || (active.network && active.network.type !== 'mainnet')) {
-        try { await beaconWallet.clearActiveAccount(); } catch (e) {}
-        await beaconWallet.client.requestPermissions();
-      }
+      const walletClient = await import('../lib/tezos');
+      const tezos = await walletClient.tezosClient();
+      await walletClient.connectKukai();
 
       const contract = await tezos.wallet.at(voucher.claim.contract);
       const op = await contract.methodsObject.claim({

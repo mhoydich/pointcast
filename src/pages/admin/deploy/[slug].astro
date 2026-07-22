@@ -1863,10 +1863,9 @@ const shadownetNotes = entry._shadownet_notes ?? null;
       setBusy(true, 'Loading Taquito…');
       setStatus('loading taquito…');
 
-      let TezosToolkit, BeaconWallet, MichelsonMap;
+      let MichelsonMap;
       try {
-        ({ TezosToolkit, MichelsonMap } = await import('@taquito/taquito'));
-        ({ BeaconWallet } = await import('@taquito/beacon-wallet'));
+        ({ MichelsonMap } = await import('@taquito/taquito'));
       } catch (err) {
         setStatus('failed to load taquito: ' + (err && err.message ? err.message : 'unknown'));
         setBusy(false, 'Sign + send');
@@ -1888,21 +1887,14 @@ const shadownetNotes = entry._shadownet_notes ?? null;
 
       try {
 
-        const tezos = new TezosToolkit(RPC_MAINNET);
-        const wallet = new BeaconWallet({
-          name: 'PointCast Admin',
-          network: { type: 'mainnet', rpcUrl: RPC_MAINNET },
-        });
-        tezos.setWalletProvider(wallet);
+        const shared = await import('../../../lib/tezos');
+        const tezos = await shared.tezosClient();
+        const wallet = await shared.pointCastWallet();
 
         setBusy(true, 'Connecting…');
         setStatus('connect kukai…');
 
-        const existing = await wallet.client.getActiveAccount();
-        if (!existing || (existing.network && existing.network.type !== 'mainnet')) {
-          try { await wallet.clearActiveAccount(); } catch { /* ignore */ }
-          await wallet.client.requestPermissions();
-        }
+        await shared.connectKukai();
 
         setBusy(true, 'Confirm in Kukai…');
         setStatus('confirm in kukai · ' + call.summary);
@@ -1947,4 +1939,3 @@ const shadownetNotes = entry._shadownet_notes ?? null;
     });
   });
 </script>
-

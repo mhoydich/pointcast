@@ -19,6 +19,7 @@ const RPC_URL = 'https://mainnet.api.tez.ie';
 
 let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
+let _activeAccountSubscription: Promise<void> | null = null;
 
 const REQUIRED_SCOPES = ['operation_request', 'sign'] as any[];
 const SIGNING_SCOPES = ['sign'] as any[];
@@ -69,8 +70,42 @@ function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
   // object store in some browsers. No-op it so connect/sign flows do not fail
   // before the wallet UI opens.
   (_wallet.client as any).sendMetrics = () => {};
+  // PointCast has one Beacon client for the whole origin. Subscribe as soon as
+  // it is constructed (before getActiveAccount/requestPermissions) so restored
+  // Kukai accounts are accepted by modern Beacon and mirrored to every legacy
+  // PointCast wallet surface.
+  _activeAccountSubscription = _wallet.client.subscribeToEvent(
+    'ACTIVE_ACCOUNT_SET' as any,
+    (account: any) => {
+      if (typeof window === 'undefined') return;
+      const wallet = account?.address
+        ? { chain: 'tezos', address: account.address, provider: 'kukai' }
+        : null;
+      try {
+        if (wallet) {
+          window.localStorage.setItem('pc:wallet', JSON.stringify(wallet));
+          window.localStorage.setItem('pc:wallet-active', wallet.address);
+        } else {
+          window.localStorage.removeItem('pc:wallet');
+          window.localStorage.removeItem('pc:wallet-active');
+        }
+      } catch { /* storage can be unavailable in privacy modes */ }
+      window.dispatchEvent(new CustomEvent('pc:wallet-change', { detail: wallet }));
+    },
+  );
   _tezos.setWalletProvider(_wallet);
   return { tezos: _tezos, wallet: _wallet };
+}
+
+async function walletReady(): Promise<BeaconWallet> {
+  const { wallet } = getToolkit();
+  await _activeAccountSubscription;
+  return wallet;
+}
+
+/** The single PointCast Beacon wallet. Do not construct page-local clients. */
+export async function pointCastWallet(): Promise<BeaconWallet> {
+  return walletReady();
 }
 
 /**
@@ -84,14 +119,14 @@ export async function tezosClient(): Promise<TezosToolkit> {
 
 /** Returns the currently-connected Tezos address, or null if disconnected. */
 export async function getActiveAddress(): Promise<string | null> {
-  const { wallet } = getToolkit();
+  const wallet = await walletReady();
   const account = await wallet.client.getActiveAccount();
   return account?.address ?? null;
 }
 
 /** Prompt the user to connect Kukai (or any Beacon-compatible wallet). */
 export async function connectKukai(): Promise<string> {
-  const { wallet } = getToolkit();
+  const wallet = await walletReady();
   const existing = await wallet.client.getActiveAccount();
   if (existing && hasRequiredScopes(existing)) return existing.address;
   // `network` used to live here; the current Beacon SDK requires it
@@ -102,7 +137,7 @@ export async function connectKukai(): Promise<string> {
 
 /** Connect a Tezos wallet for gasless message signing only. */
 export async function connectKukaiForSigning(): Promise<string> {
-  const { wallet } = getToolkit();
+  const wallet = await walletReady();
   const existing = await wallet.client.getActiveAccount();
   const scopes = Array.isArray(existing?.scopes) ? existing.scopes : [];
   if (existing && SIGNING_SCOPES.every((scope) => scopes.includes(scope))) return existing.address;
@@ -111,7 +146,7 @@ export async function connectKukaiForSigning(): Promise<string> {
 }
 
 export async function disconnectKukai(): Promise<void> {
-  const { wallet } = getToolkit();
+  const wallet = await walletReady();
   try {
     await wallet.clearActiveAccount();
   } catch { /* ignore */ }
@@ -121,7 +156,7 @@ export async function signTezosPayload(message: string): Promise<{
   address: string;
   payload: string;
   signature: string;
-  publicKey?: string;
+  publicKey: string;
 }> {
   const { wallet } = getToolkit();
   const address = await connectKukai();
@@ -132,7 +167,11 @@ export async function signTezosPayload(message: string): Promise<{
     sourceAddress: address,
   });
   const account = await wallet.client.getActiveAccount();
-  return { address, payload, signature, publicKey: account?.publicKey };
+  if (!account?.publicKey) throw new Error('The connected wallet did not provide a public key.');
+  if (getPkhfromPk(account.publicKey) !== address) {
+    throw new Error('Wallet public key does not match the active address.');
+  }
+  return { address, payload, signature, publicKey: account.publicKey };
 }
 
 /**

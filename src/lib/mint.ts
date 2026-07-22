@@ -75,6 +75,36 @@ export interface MintResult {
   tzktUrl?: string;
 }
 
+async function mintToolkit(network: Network) {
+  if (network === 'mainnet') {
+    const shared = await import('./tezos');
+    const tezos = await shared.tezosClient();
+    await shared.connectKukai();
+    return tezos;
+  }
+
+  // Testnet work intentionally uses a separate client because Beacon persists
+  // one active network per dapp client. It still subscribes before account
+  // restoration so modern Beacon does not race the active-account lifecycle.
+  const { TezosToolkit } = await import('@taquito/taquito');
+  const { BeaconWallet } = await import('@taquito/beacon-wallet');
+  const tezos = new TezosToolkit('https://ghostnet.tezos.ecadinfra.com');
+  const wallet = new BeaconWallet({
+    name: 'PointCast Ghostnet',
+    network: { type: 'ghostnet' as any },
+    preferredNetwork: 'ghostnet' as any,
+    enableMetrics: false,
+  } as any);
+  await wallet.client.subscribeToEvent('ACTIVE_ACCOUNT_SET' as any, () => undefined);
+  tezos.setWalletProvider(wallet);
+  const existing = await wallet.client.getActiveAccount();
+  if (!existing || (existing as any).network?.type !== 'ghostnet') {
+    try { await wallet.clearActiveAccount(); } catch { /* best effort */ }
+    await wallet.client.requestPermissions({ scopes: ['operation_request'] as any } as any);
+  }
+  return tezos;
+}
+
 /**
  * Call mint_noun(nounId) on the Visit Nouns FA2 contract.
  *
@@ -95,27 +125,7 @@ export async function mintVisitNoun(
     return { ok: false, reason: 'invalid-noun-id' };
   }
 
-  // Lazy-load Taquito + BeaconWallet — same split-bundle pattern as /collect.
-  const { TezosToolkit } = await import('@taquito/taquito');
-  const { BeaconWallet } = await import('@taquito/beacon-wallet');
-
-  const rpcUrl = network === 'mainnet'
-    ? 'https://mainnet.api.tez.ie'
-    : 'https://ghostnet.tezos.ecadinfra.com';
-
-  const tezos = new TezosToolkit(rpcUrl);
-  const wallet = new BeaconWallet({
-    name: 'PointCast',
-    preferredNetwork: network as any,
-  });
-  tezos.setWalletProvider(wallet);
-
-  // Ensure a session on the right network.
-  const existing = await wallet.client.getActiveAccount();
-  if (!existing || (existing as any).network?.type !== network) {
-    try { await wallet.clearActiveAccount(); } catch {}
-    await wallet.client.requestPermissions({ network: { type: network as any } });
-  }
+  const tezos = await mintToolkit(network);
 
   const priceMutez = visitNounsMintPriceMutez();
   const contract = await tezos.wallet.at(address);
@@ -167,25 +177,7 @@ export async function mintZenCat(
     return { ok: false, reason: 'invalid-zen-cat-token-id' };
   }
 
-  const { TezosToolkit } = await import('@taquito/taquito');
-  const { BeaconWallet } = await import('@taquito/beacon-wallet');
-
-  const rpcUrl = network === 'mainnet'
-    ? 'https://mainnet.api.tez.ie'
-    : 'https://ghostnet.tezos.ecadinfra.com';
-
-  const tezos = new TezosToolkit(rpcUrl);
-  const wallet = new BeaconWallet({
-    name: 'PointCast',
-    preferredNetwork: network as any,
-  });
-  tezos.setWalletProvider(wallet);
-
-  const existing = await wallet.client.getActiveAccount();
-  if (!existing || (existing as any).network?.type !== network) {
-    try { await wallet.clearActiveAccount(); } catch {}
-    await wallet.client.requestPermissions({ network: { type: network as any } });
-  }
+  const tezos = await mintToolkit(network);
 
   const priceMutez = zenCatsMintPriceMutez();
   const contract = await tezos.wallet.at(address);
@@ -250,25 +242,7 @@ export async function mintMorningOcean(
     return { ok: false, reason: 'invalid-morning-ocean-token-id' };
   }
 
-  const { TezosToolkit } = await import('@taquito/taquito');
-  const { BeaconWallet } = await import('@taquito/beacon-wallet');
-
-  const rpcUrl = network === 'mainnet'
-    ? 'https://mainnet.api.tez.ie'
-    : 'https://ghostnet.tezos.ecadinfra.com';
-
-  const tezos = new TezosToolkit(rpcUrl);
-  const wallet = new BeaconWallet({
-    name: 'PointCast',
-    preferredNetwork: network as any,
-  });
-  tezos.setWalletProvider(wallet);
-
-  const existing = await wallet.client.getActiveAccount();
-  if (!existing || (existing as any).network?.type !== network) {
-    try { await wallet.clearActiveAccount(); } catch {}
-    await wallet.client.requestPermissions({ network: { type: network as any } });
-  }
+  const tezos = await mintToolkit(network);
 
   const priceMutez = morningOceanMintPriceMutez();
   const contract = await tezos.wallet.at(address);

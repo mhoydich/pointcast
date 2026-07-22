@@ -33,8 +33,8 @@ test('passport supports public addresses, TzKT holdings, and Beacon seals', () =
   assert.match(page, /await import\('\.\.\/lib\/tezos'\)/);
   assert.match(page, /signTezosPayload\(message\)/);
   assert.match(page, /pc:wallet-change/);
-  assert.match(tezos, /publicKey\?: string/);
-  assert.match(tezos, /publicKey: account\?\.publicKey/);
+  assert.match(tezos, /publicKey: string/);
+  assert.match(tezos, /publicKey: account\.publicKey/);
 });
 
 test('visa registry includes live and future PointCast lanes', () => {

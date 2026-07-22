@@ -29,6 +29,7 @@ interface TezosAuthBody {
 
 const LOGIN_PREFIX = 'PointCast Tezos Login';
 const MESSAGE_TTL_MS = 5 * 60 * 1000;
+const NONCE_PREFIX = 'auth-nonce:tezos:';
 
 function parseSignedMessage(message: string): Record<string, string> | null {
   const lines = message.split('\n');
@@ -87,6 +88,15 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
     return authJson({ ok: false, reason: 'stale-message' }, { status: 400 });
   }
 
+  const nonce = parsedMessage.Nonce ?? '';
+  if (!/^[a-zA-Z0-9-]{16,128}$/.test(nonce)) {
+    return authJson({ ok: false, reason: 'bad-nonce' }, { status: 400 });
+  }
+  const nonceKey = `${NONCE_PREFIX}${nonce}`;
+  if (await env.USERS.get(nonceKey)) {
+    return authJson({ ok: false, reason: 'replayed-message' }, { status: 409 });
+  }
+
   let derivedAddress = '';
   try {
     derivedAddress = getPkhfromPk(publicKey);
@@ -108,6 +118,7 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
   if (!isValidSignature) {
     return authJson({ ok: false, reason: 'invalid-signature' }, { status: 401 });
   }
+  await env.USERS.put(nonceKey, address, { expirationTtl: Math.ceil(MESSAGE_TTL_MS / 1000) });
 
   const current = await readSessionFromRequest(request, env);
   const identity: AuthIdentity = {
