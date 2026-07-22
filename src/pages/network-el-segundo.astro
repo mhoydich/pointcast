@@ -28,9 +28,9 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
     <style is:global>
       :root { color-scheme: light; }
       * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; background: #070707; }
+      html, body { margin: 0; min-height: 100%; width: 100%; overflow-x: hidden; background: #070707; }
       body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      .pointcast-frame { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+      .pointcast-frame { min-width: 0; min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr; }
       .pointcast-rail {
         position: relative;
         z-index: 2;
@@ -52,8 +52,8 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       .pointcast-rail__auth { display: flex; align-items: center; gap: .55rem; min-width: 0; }
       .pointcast-rail__status { overflow: hidden; max-width: 28rem; text-overflow: ellipsis; white-space: nowrap; }
       .pointcast-rail__auth-link { flex: none; padding: .28rem .45rem; border: 1px solid currentColor; text-decoration: none; }
-      .network-stage { position: relative; min-height: calc(100vh - 2.4rem); }
-      .network-stage iframe { display: block; width: 100%; height: calc(100vh - 2.4rem); border: 0; background: #f7f2e8; }
+      .network-stage { position: relative; min-width: 0; min-height: calc(100vh - 7.4rem); }
+      .network-stage iframe { display: block; min-width: 0; width: 100%; height: calc(100vh - 7.4rem); min-height: 620px; border: 0; background: #f7f2e8; }
       .network-stage__fallback {
         position: absolute;
         inset: auto 1rem 1rem auto;
@@ -64,20 +64,23 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         font-size: .7rem;
       }
       .signal-relay {
-        position: absolute;
-        z-index: 3;
-        inset: auto auto 1rem 1rem;
-        width: min(23rem, calc(100vw - 2rem));
-        padding: .7rem;
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: auto minmax(16rem, 1fr) auto;
+        align-items: center;
+        gap: .45rem 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: .55rem .75rem;
         color: #f7f2e8;
-        background: rgba(7, 7, 7, .94);
-        border: 1px solid #f7f2e8;
-        box-shadow: .35rem .35rem 0 #ff4f9f;
+        background: #070707;
+        border-bottom: 2px solid #ff4f9f;
       }
       .signal-relay__head { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
       .signal-relay__label { color: #f2ff47; font-size: .62rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
       .signal-relay__count { font-size: 1.05rem; font-weight: 900; }
-      .signal-relay p { margin: .4rem 0 .6rem; font-size: .68rem; line-height: 1.45; }
+      .signal-relay__copy { margin: 0; font-size: .68rem; line-height: 1.4; }
       .signal-relay__actions { display: flex; flex-wrap: wrap; gap: .38rem; }
       .signal-relay__actions a,
       .signal-relay__actions button {
@@ -95,12 +98,19 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         cursor: pointer;
       }
       .signal-relay__actions [data-relay-primary] { background: #f2ff47; }
-      .signal-relay__status { min-height: 1em; color: #b9f6ff; font-size: .58rem; }
+      .signal-relay__status { grid-column: 2; min-height: 0; margin: 0; color: #b9f6ff; font-size: .58rem; }
       @media (max-width: 46rem) {
-        .pointcast-rail { align-items: flex-start; font-size: .58rem; }
+        .pointcast-rail { align-items: center; min-width: 0; font-size: .58rem; }
+        .pointcast-rail__signal { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .pointcast-rail__auth { align-items: flex-end; flex-direction: column; text-align: right; }
-        .pointcast-rail__status { max-width: 12rem; }
-        .signal-relay { inset: auto .75rem .75rem .75rem; width: auto; }
+        .pointcast-rail__status { display: none; }
+        .signal-relay { grid-template-columns: 1fr; gap: .5rem; padding: .6rem .75rem .7rem; }
+        .signal-relay__head { width: 100%; }
+        .signal-relay__copy { font-size: .62rem; }
+        .signal-relay__actions { gap: .32rem; }
+        .signal-relay__status { grid-column: 1; }
+        .network-stage { min-height: calc(100vh - 11.6rem); }
+        .network-stage iframe { height: calc(100vh - 11.6rem); min-height: 640px; }
         .network-stage__fallback { display: none; }
       }
     </style>
@@ -111,32 +121,34 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         <span class="pointcast-rail__signal"><span class="pointcast-rail__dot" aria-hidden="true"></span><a href="/">PointCast</a> / Network El Segundo</span>
         <span class="pointcast-rail__auth">
           <span class="pointcast-rail__status" data-project-auth-status>Checking shared Kukai session…</span>
-          <a class="pointcast-rail__auth-link" data-project-auth-link href={projectAuthUrl}>Authenticate once ↗</a>
+          <a class="pointcast-rail__auth-link" data-project-auth-link data-funnel-action="join" href={projectAuthUrl}>Connect Kukai ↗</a>
         </span>
       </nav>
+      <aside class="signal-relay" aria-label="Network El Segundo founding-wallet desk">
+        <div class="signal-relay__head">
+          <span class="signal-relay__label">First 100 / zero capital</span>
+          <strong class="signal-relay__count" data-participant-count>— / 100</strong>
+        </div>
+        <p class="signal-relay__copy">Join with one free Kukai signature. No purchase or transaction. If you are verified, invite one Tezos person.</p>
+        <div class="signal-relay__actions">
+          <a href={projectAuthUrl} data-relay-primary data-join-signal data-funnel-action="join">Join free with Kukai</a>
+          <button type="button" data-share-signal data-funnel-action="relay">Relay signal</button>
+          <button type="button" data-copy-signal data-funnel-action="copy">Copy invite</button>
+          <a data-funnel-action="email" href={`mailto:?subject=${encodeURIComponent('Join the first 100 Tezos wallets')}&body=${encodeURIComponent(shareCopy)}`}>Email</a>
+          <a data-funnel-action="x" href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareCopy)}`} target="_blank" rel="noopener">X</a>
+          <a data-funnel-action="tezos_rooms" href="https://tezos.com/community" target="_blank" rel="noopener">Tezos rooms</a>
+          <a href="/api/network-el-segundo/funnel?days=7" target="_blank" rel="noopener">Funnel</a>
+        </div>
+        <p class="signal-relay__status" data-relay-status aria-live="polite"></p>
+      </aside>
       <section class="network-stage" aria-label="Network El Segundo release">
         <iframe
           id="network-el-segundo-project"
           src={releaseUrl}
           title="Network El Segundo — buy the art and join the wallet roster"
-          allow="clipboard-write"
+          allow="clipboard-write; web-share"
           loading="eager"
         ></iframe>
-        <aside class="signal-relay" aria-label="Network El Segundo signal relay">
-          <div class="signal-relay__head">
-            <span class="signal-relay__label">Signal relay / zero capital</span>
-            <strong class="signal-relay__count" data-participant-count>— / 100</strong>
-          </div>
-          <p>One verified wallet makes the artwork easier to find. Invite one Tezos person; the public counter is the receipt.</p>
-          <div class="signal-relay__actions">
-            <button type="button" data-relay-primary data-share-signal>Relay signal</button>
-            <button type="button" data-copy-signal>Copy invite</button>
-            <a href={`mailto:?subject=${encodeURIComponent('Join the first 100 Tezos wallets')}&body=${encodeURIComponent(shareCopy)}`}>Email</a>
-            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareCopy)}`} target="_blank" rel="noopener">X</a>
-            <a href="https://tezos.com/community" target="_blank" rel="noopener">Tezos rooms</a>
-          </div>
-          <p class="signal-relay__status" data-relay-status aria-live="polite"></p>
-        </aside>
         <a class="network-stage__fallback" href={releaseUrl} target="_blank" rel="noopener">Open the release ↗</a>
       </section>
     </main>
@@ -145,8 +157,61 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       const frame = document.getElementById('network-el-segundo-project');
       const status = document.querySelector('[data-project-auth-status]');
       const authLink = document.querySelector('[data-project-auth-link]');
+      const joinLink = document.querySelector('[data-join-signal]');
       const count = document.querySelector('[data-participant-count]');
       const relayStatus = document.querySelector('[data-relay-status]');
+      const funnelEndpoint = '/api/network-el-segundo/funnel';
+
+      function funnelMetricsDisabled() {
+        try {
+          return navigator.doNotTrack === '1' || localStorage.getItem('pc:no-track') === '1';
+        } catch {
+          return navigator.doNotTrack === '1';
+        }
+      }
+
+      function sendFunnelEvent(event) {
+        if (funnelMetricsDisabled()) return;
+        const payload = JSON.stringify({ event });
+        if (navigator.sendBeacon) {
+          const queued = navigator.sendBeacon(funnelEndpoint, new Blob([payload], { type: 'application/json' }));
+          if (queued) return;
+        }
+        void fetch(funnelEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        });
+      }
+
+      function initializeFunnelMetrics() {
+        if (funnelMetricsDisabled()) return;
+        document.querySelectorAll('[data-funnel-action]').forEach((element) => {
+          if (!(element instanceof HTMLElement) || element.dataset.funnelReady === '1') return;
+          element.dataset.funnelReady = '1';
+          element.addEventListener('click', () => sendFunnelEvent(element.dataset.funnelAction));
+        });
+
+        const landingKey = 'pc:network-el-segundo:landing';
+        try {
+          if (sessionStorage.getItem(landingKey) === '1') return;
+        } catch {
+          // Storage can be unavailable; a privacy-safe aggregate event can still be sent.
+        }
+
+        const recordLanding = () => {
+          if (document.visibilityState !== 'visible') return;
+          window.setTimeout(() => {
+            if (document.visibilityState !== 'visible') return;
+            try { sessionStorage.setItem(landingKey, '1'); } catch { /* no-op */ }
+            sendFunnelEvent('landing');
+          }, 1000);
+        };
+
+        if (document.visibilityState === 'visible') recordLanding();
+        else document.addEventListener('visibilitychange', recordLanding, { once: true });
+      }
 
       async function copyInvite() {
         await navigator.clipboard.writeText(shareCopy);
@@ -190,20 +255,22 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
           });
           const result = await response.json();
           if (response.status === 401) {
-            if (status) status.textContent = 'Public view · authenticate once for every project';
+            if (status) status.textContent = 'Kukai not connected';
             return;
           }
           if (!response.ok || !result.destination) throw new Error(result.reason || 'project-ticket-failed');
           if (frame instanceof HTMLIFrameElement) frame.src = result.destination;
-          if (status) status.textContent = 'Shared Kukai identity passed to this project';
+          if (status) status.textContent = 'Kukai ready';
+          if (joinLink) joinLink.textContent = 'Kukai ready · open join desk →';
           authLink?.setAttribute('hidden', '');
         } catch {
-          if (status) status.textContent = 'Public view · project auth bridge unavailable';
+          if (status) status.textContent = 'Public view · wallet bridge unavailable';
         }
       }
 
       void passPointCastSession();
       void refreshParticipantCount();
+      initializeFunnelMetrics();
       window.setInterval(refreshParticipantCount, 60_000);
     </script>
   </body>

@@ -8,6 +8,7 @@ export const GET: APIRoute = () => {
     releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/',
     participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
     participantCounterSource: 'https://network-el-segundo.mhoydich.chatgpt.site/api/participants',
+    publicFunnel: 'https://pointcast.xyz/api/network-el-segundo/funnel?days=7',
     targetVerifiedWallets: 100,
     authentication: {
       network: 'Tezos Mainnet',
@@ -49,6 +50,11 @@ export const GET: APIRoute = () => {
         },
       ],
       etiquette: 'Participate in context and ask for one free signature; do not mass-tag, promise returns, or describe the prototype payout rule as live.',
+    },
+    funnelMethodology: {
+      events: ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_rooms'],
+      identifiersStored: false,
+      caveat: 'Browser events are not unique people; verified participation is proven only by the deduplicated signed-wallet counter.',
     },
     pressRelease: 'https://pointcast.xyz/press/network-el-segundo-opens-first-100-tezos-wallet-roster',
     campaignReceipt: 'https://pointcast.xyz/ads.json',

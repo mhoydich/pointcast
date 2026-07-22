@@ -5,6 +5,7 @@ import test from 'node:test';
 const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
 const participantApi = new URL('../functions/api/network-el-segundo/participants.ts', import.meta.url);
+const funnelApi = new URL('../functions/api/network-el-segundo/funnel.ts', import.meta.url);
 const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
@@ -15,12 +16,21 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
 
   assert.match(source, /https:\/\/network-el-segundo\.mhoydich\.chatgpt\.site/);
   assert.match(source, /Checking shared Kukai session/);
-  assert.match(source, /authenticate once for every project/);
+  assert.match(source, /Kukai not connected/);
   assert.match(source, /\/api\/auth\/project-ticket/);
   assert.match(source, /Open the release/);
   assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo/);
-  assert.match(source, /Signal relay \/ zero capital/);
+  assert.match(source, /First 100 \/ zero capital/);
   assert.match(source, /data-share-signal/);
+  assert.match(source, /data-join-signal/);
+  assert.match(source, /data-funnel-action="join"/);
+  assert.match(source, /data-funnel-action="tezos_rooms"/);
+  assert.match(source, /initializeFunnelMetrics/);
+  assert.match(source, /pc:network-el-segundo:landing/);
+  assert.match(source, /Join free with Kukai/);
+  assert.match(source, /allow="clipboard-write; web-share"/);
+  assert.match(source, /overflow-x: hidden/);
+  assert.doesNotMatch(source, /inset: auto auto 1rem 1rem/);
   assert.match(source, /#Tezos #TezosArt/);
   assert.match(source, /https:\/\/tezos\.com\/community/);
   assert.match(source, /\/api\/network-el-segundo\/participants/);
@@ -41,7 +51,23 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /https:\/\/docs\.objkt\.com/);
   assert.match(source, /https:\/\/blog\.teia\.art\/about/);
   assert.match(source, /do not mass-tag/);
+  assert.match(source, /publicFunnel/);
+  assert.match(source, /identifiersStored: false/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
+});
+
+test('the first-100 funnel is public, bounded, and stores no visitor identity', async () => {
+  const source = await readFile(funnelApi, 'utf8');
+
+  assert.match(source, /PC_ANALYTICS_KV: KVNamespace/);
+  assert.match(source, /networkfunnel:/);
+  assert.match(source, /MAX_BODY_BYTES = 512/);
+  assert.match(source, /context\.waitUntil/);
+  assert.match(source, /crypto\.randomUUID/);
+  assert.match(source, /expirationTtl: RETENTION_DAYS/);
+  assert.match(source, /No IP, user agent, cookie, wallet, referrer, or visitor identifier/);
+  assert.match(source, /Counts are browser events, not unique people/);
+  assert.doesNotMatch(source, /CF-Connecting-IP|User-Agent|Referer|document\.cookie/i);
 });
 
 test('PointCast proxies the public participant count without caching or collecting identity data', async () => {
