@@ -105,12 +105,14 @@ test('portable network extends The Holders Cut campaign to the Rally footer', as
   ]);
 
   assert.match(registry, /id: 'rally'/);
+  assert.match(registry, /campaigns: \['PC-HOLDERS-CUT-2026'\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);
   assert.match(receipt, /open-ad-network\.js/);
   assert.match(widget, /configured === 'common-hours'/);
   assert.match(widget, /publisher\.id === 'rally'/);
+  assert.match(widget, /preferredCampaigns/);
   assert.match(widget, /IntersectionObserver/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);
   assert.match(route, /open-ad-network\.js\?raw/);

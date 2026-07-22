@@ -36,6 +36,7 @@ export interface OpenAdPublisher {
   hostname: string;
   surface: string;
   advertiserAliases: string[];
+  campaigns?: string[];
   status: 'active';
 }
 
@@ -79,6 +80,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A clearly labeled contextual house ad in the Rally footer',
     advertiserAliases: ['Common Hours', 'Rally'],
+    campaigns: ['PC-HOLDERS-CUT-2026'],
     status: 'active',
   },
   {

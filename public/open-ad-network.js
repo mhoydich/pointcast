@@ -66,6 +66,13 @@
     var candidates = (Array.isArray(feed.campaigns) ? feed.campaigns : []).filter(function (ad) {
       return ad && ad.status === 'house' && !aliases.has(String(ad.advertiser || '').toLowerCase());
     });
+    var preferredCampaigns = new Set(Array.isArray(publisher && publisher.campaigns)
+      ? publisher.campaigns.map(String)
+      : []);
+    if (preferredCampaigns.size) {
+      var preferred = candidates.filter(function (ad) { return preferredCampaigns.has(String(ad.campaign || '')); });
+      if (preferred.length) candidates = preferred;
+    }
     if (!candidates.length) return null;
 
     var context = new Set(words([
