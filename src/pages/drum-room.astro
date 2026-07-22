@@ -1,327 +1,632 @@
 ---
 /**
- * /drum-room — shared live chamber.
+ * /drum-room — mobile-first 3D multiplayer drum chamber.
  *
- * Sprint 1, surface 1 of the Presence Bus. Each visitor present
- * appears as a brass light at a deterministic position (hash of pid →
- * x, y on a velvet field). Click anywhere → ring. Rings broadcast to
- * EVERY visitor in real time (2s poll) — your ring lights up your
- * brass light + plays a bell on every connected page.
- *
- * Backed by /api/chamber kind=lobby.
+ * One URL room code maps to one hibernating Durable Object. The browser
+ * renders locally synthesized audio and small Three.js gestures; the wire
+ * only carries bounded hits, reactions, and anonymous Noun-style presence.
  */
-
 import BlockLayout from '../layouts/BlockLayout.astro';
-import DrumNav from '../components/DrumNav.astro';
-import RoomPresenceChip from '../components/RoomPresenceChip.astro';
 
-const title = 'Room · Shared Live Chamber · PointCast';
+const title = 'The 3D Drum Room';
 const description =
-  'Each visitor is a brass light. Tap to ring; everyone in the room hears it. Polled live presence.';
-
+  'Enter a shared 3D PointCast drum circle. Up to 100 visitors can play a pleasant browser-native kit together over WebSockets.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebApplication',
-  name: 'Drum Room (live)',
+  name: 'PointCast 3D Drum Room',
   url: 'https://pointcast.xyz/drum-room',
   description,
-  applicationCategory: 'MultimediaApplication',
+  applicationCategory: 'GameApplication',
+  applicationSubCategory: 'Collaborative music room',
+  operatingSystem: 'Any modern web browser',
+  isAccessibleForFree: true,
+  browserRequirements: 'JavaScript, WebSocket, Web Audio; WebGL optional',
+  featureList: [
+    '100 visitor live room target',
+    'Mobile-first 3D drum circle',
+    'Six pleasant synthesized drum voices',
+    'Anonymous Noun-style presence',
+    'Native invite sharing and downloadable invite card',
+    'Reduced-motion and quiet-entry modes',
+  ],
 };
 ---
 
-<BlockLayout title={title} description={description} image="/images/og-drum-altars.png" jsonLd={jsonLd}>
-  <main class="dr" id="dr-main">
-    <DrumNav current="room" />
-    <RoomPresenceChip surface="drum-room" />
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og-drum.svg"
+  themeColor="#080a12"
+  immersive
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/drum-room.json', title: '3D Drum Room protocol and discovery JSON' }]}
+>
+  <main class="d3" id="d3-app" data-room="lobby">
+    <canvas id="d3-canvas" class="d3__canvas" aria-hidden="true"></canvas>
+    <div class="d3__fallback" id="d3-fallback" aria-hidden="true">
+      <div class="d3__fallback-stage" id="d3-fallback-stage"></div>
+      <div class="d3__fallback-ring"></div>
+    </div>
+    <div class="d3__wash" aria-hidden="true"></div>
 
-    <header class="dr__header">
-      <div class="dr__chrome">
-        <span>ROOM</span>
-        <span class="dr__chrome-sep">·</span>
-        <span><span id="dr-count">0</span> HERE</span>
-        <span class="dr__chrome-sep">·</span>
-        <span><span id="dr-rings">0</span> RINGS</span>
+    <header class="d3__topbar">
+      <a class="d3__brand" href="/drum" aria-label="Back to the PointCast drum universe">
+        <span>POINTCAST</span><b>DRUM ROOM</b>
+      </a>
+      <div class="d3__meter" aria-label="Live room attendance">
+        <span class="d3__live-dot" id="d3-live-dot"></span>
+        <strong id="d3-count">0</strong><span>/ 100 HERE</span>
+        <i><span id="d3-progress"></span></i>
       </div>
-      <h1 class="dr__title">ROOM</h1>
-      <p class="dr__tagline">each visitor is a brass light · click to ring · everyone hears it</p>
+      <div class="d3__top-actions">
+        <button id="d3-audio" class="d3__chip" type="button" aria-pressed="false">SOUND OFF</button>
+        <button id="d3-invite" class="d3__chip d3__chip--hot" type="button">INVITE</button>
+      </div>
     </header>
 
-    <section class="dr__field" id="dr-field" aria-label="Click anywhere to ring">
-      <div class="dr__lights" id="dr-lights"></div>
-      <div class="dr__cue" id="dr-cue">click anywhere to ring</div>
+    <div class="d3__room-label" aria-live="polite">
+      <span>ROOM</span><strong id="d3-room-code">LOBBY</strong><em id="d3-status">CONNECTING</em>
+    </div>
+
+    <section class="d3__stage-copy" aria-label="Room orientation">
+      <p>DRAG TO LOOK AROUND · TAP THE FLOOR DRUMS</p>
+      <strong id="d3-last-hit">THE ROOM IS LISTENING</strong>
     </section>
+
+    <aside class="d3__reactions" aria-label="Send a room reaction">
+      <span>REACT</span>
+      <button type="button" data-reaction="✦" aria-label="Send sparkle">✦</button>
+      <button type="button" data-reaction="♥" aria-label="Send heart">♥</button>
+      <button type="button" data-reaction="🔥" aria-label="Send fire">🔥</button>
+      <button type="button" data-reaction="🪩" aria-label="Send disco ball">🪩</button>
+    </aside>
+
+    <section class="d3__pads" aria-label="Drum pads">
+      <button class="d3__pad d3__pad--kick" type="button" data-pad="kick"><kbd>1</kbd><strong>KICK</strong><span>LOW / ROUND</span></button>
+      <button class="d3__pad d3__pad--snare" type="button" data-pad="snare"><kbd>2</kbd><strong>SNARE</strong><span>DRY / SOFT</span></button>
+      <button class="d3__pad d3__pad--hat" type="button" data-pad="hat"><kbd>3</kbd><strong>HAT</strong><span>AIR / TICK</span></button>
+      <button class="d3__pad d3__pad--tom" type="button" data-pad="tom"><kbd>4</kbd><strong>TOM</strong><span>WARM / DEEP</span></button>
+      <button class="d3__pad d3__pad--clap" type="button" data-pad="clap"><kbd>5</kbd><strong>CLAP</strong><span>WIDE / HUMAN</span></button>
+      <button class="d3__pad d3__pad--bell" type="button" data-pad="bell"><kbd>6</kbd><strong>BELL</strong><span>GOLD / LONG</span></button>
+    </section>
+
+    <section class="d3__gate" id="d3-gate" aria-labelledby="d3-gate-title">
+      <div class="d3__gate-card">
+        <p class="d3__eyebrow">POINTCAST · LIVE WEB AUDIO · ROOM <span data-room-label>LOBBY</span></p>
+        <div class="d3__gate-art" aria-hidden="true">
+          <span class="d3__gate-orbit"></span>
+          <span class="d3__glasses"><i></i><i></i></span>
+          <b>100</b>
+        </div>
+        <h1 id="d3-gate-title">THE 3D<br />DRUM ROOM</h1>
+        <p class="d3__gate-dek">A shared drum circle in your browser. Six friendly sounds, anonymous Noun visitors, and room for one hundred people at once.</p>
+        <div class="d3__gate-actions">
+          <button id="d3-enter-sound" type="button">ENTER WITH SOUND <span>↗</span></button>
+          <button id="d3-enter-quiet" type="button">ENTER QUIETLY</button>
+        </div>
+        <p class="d3__gate-note">Headphones nice, never required. No account, wallet, microphone, or personal profile.</p>
+      </div>
+    </section>
+
+    <dialog class="d3__invite" id="d3-invite-dialog" aria-labelledby="d3-invite-title">
+      <form method="dialog"><button class="d3__close" aria-label="Close invite card">×</button></form>
+      <div class="d3__invite-card" id="d3-invite-card">
+        <div class="d3__invite-noise"></div>
+        <p>POINTCAST INVITES YOU TO</p>
+        <h2 id="d3-invite-title">THE 3D<br />DRUM ROOM</h2>
+        <div class="d3__invite-art" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <b>100<br /><small>CAN PLAY</small></b>
+        </div>
+        <div class="d3__invite-foot">
+          <strong>ROOM <span data-room-label>LOBBY</span></strong>
+          <em>pointcast.xyz/drum-room</em>
+        </div>
+      </div>
+      <div class="d3__invite-actions">
+        <button id="d3-share" type="button">SHARE INVITE</button>
+        <button id="d3-copy" type="button">COPY LINK</button>
+        <button id="d3-download" type="button">SAVE CARD</button>
+      </div>
+      <p class="d3__invite-status" id="d3-invite-status" aria-live="polite">Bring a phone. Bring a friend. Bring a beat.</p>
+    </dialog>
+
+    <div class="d3__toast-layer" id="d3-toast-layer" aria-live="polite"></div>
+    <div class="d3__sr" id="d3-announcer" aria-live="polite"></div>
   </main>
 </BlockLayout>
 
 <style is:global>
-  body:has(#dr-main) { background: #0c0410; }
-  .dr {
-    --dr-velvet: #1a0820;
-    --dr-velvet-deep: #0c0410;
-    --dr-brass: #d4a437;
-    --dr-brass-deep: #6b4d12;
-    --dr-flame: #f6c15e;
-    --dr-ink-light: #f4e7c8;
-    --dr-ink-mid: #c9b78c;
-    --dr-ink-dim: #8a7a55;
+  :root { color-scheme: dark; }
+  html:has(#d3-app), body:has(#d3-app) { background: #080a12; overflow: hidden; overscroll-behavior: none; }
+  body:has(#d3-app) { min-height: 100svh; }
+  body:has(#d3-app) > .skip-link { z-index: 50; }
+  #main-content:has(#d3-app) { min-height: 100svh; }
 
-    position: relative; isolation: isolate; margin: 0 -32px;
-    padding: 0 clamp(16px, 2vw, 56px) 32px;
-    color: var(--dr-ink-light);
-    font-family: var(--pc-font-sans, 'Inter Tight', ui-sans-serif, system-ui, sans-serif);
-    background:
-      radial-gradient(ellipse at 50% 8%, rgba(212, 164, 55, 0.10), transparent 55%),
-      linear-gradient(180deg, var(--dr-velvet) 0%, var(--dr-velvet-deep) 100%);
-    min-height: calc(100vh - 80px);
-    display: flex; flex-direction: column;
-  }
-  .dr .drum-nav { opacity: 0.40; transform: scale(0.85); transform-origin: top left; margin-bottom: clamp(6px, 0.6vh, 12px); }
-
-  .dr__header { text-align: center; padding: clamp(8px, 1vh, 16px) 0 clamp(14px, 2vh, 22px); flex-shrink: 0; }
-  .dr__chrome {
-    display: inline-flex; align-items: center; gap: clamp(6px, 0.8vw, 14px);
-    padding: 4px 16px; border: 1.5px solid var(--dr-brass-deep); border-radius: 999px;
-    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
-    font-size: clamp(10px, 0.9vw, 13px); letter-spacing: 0.22em; text-transform: uppercase;
-    color: var(--dr-ink-mid); background: rgba(0, 0, 0, 0.35);
-  }
-  .dr__chrome-sep { color: var(--dr-brass-deep); }
-  #dr-count, #dr-rings { color: var(--dr-flame); font-weight: 700; }
-
-  .dr__title {
-    margin: clamp(8px, 1vh, 14px) 0 6px;
-    font-family: 'Gloock', 'Lora', Georgia, serif;
-    font-size: clamp(40px, 7vw, 96px); font-weight: 400; letter-spacing: 0.06em;
-    color: var(--dr-brass);
-    text-shadow: 0 0 28px rgba(212, 164, 55, 0.40), 0 2px 0 var(--dr-velvet-deep);
-  }
-  .dr__tagline {
-    margin: 0; font-family: 'Lora', Georgia, serif; font-style: italic;
-    font-size: clamp(13px, 1.2vw, 17px); color: var(--dr-ink-mid);
-  }
-
-  .dr__field {
-    flex: 1; position: relative;
-    border: 1.5px solid var(--dr-brass-deep);
-    cursor: crosshair;
-    background:
-      radial-gradient(ellipse at 50% 50%, rgba(212, 164, 55, 0.08) 0%, transparent 70%),
-      var(--dr-velvet-deep);
+  .d3 {
+    --cream: #fff7df;
+    --muted: #b4b3c4;
+    --line: rgba(255,255,255,.17);
+    --blue: #5be7ff;
+    --yellow: #ffd448;
+    --coral: #ff6f61;
+    --violet: #9a7dff;
+    position: relative;
+    width: 100%;
+    height: 100svh;
+    min-height: 540px;
     overflow: hidden;
-    min-height: 380px;
+    isolation: isolate;
+    background: radial-gradient(circle at 50% 42%, #212545 0%, #0e1020 42%, #070810 76%);
+    color: var(--cream);
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    touch-action: none;
+  }
+  .d3 button, .d3 a { -webkit-tap-highlight-color: transparent; }
+  .d3__canvas, .d3__fallback, .d3__wash { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .d3__canvas { z-index: 0; display: block; touch-action: none; }
+  .d3__fallback { display: none; z-index: 0; perspective: 700px; background: radial-gradient(circle at 50% 44%, #242849, #080a12 70%); }
+  .d3[data-fallback="true"] .d3__canvas { display: none; }
+  .d3[data-fallback="true"] .d3__fallback { display: block; }
+  .d3__fallback-ring { position: absolute; width: min(68vw, 480px); aspect-ratio: 1; left: 50%; top: 48%; transform: translate(-50%,-50%) rotateX(66deg); border: 18px solid rgba(91,231,255,.12); border-radius: 50%; box-shadow: 0 0 80px rgba(154,125,255,.28), inset 0 0 90px rgba(255,212,72,.12); }
+  .d3__fallback-person { position: absolute; left: 50%; top: 47%; width: 10px; height: 10px; border-radius: 50%; background: hsl(var(--hue) 90% 65%); box-shadow: 0 0 18px hsl(var(--hue) 90% 65%); transform: translate(calc(-50% + var(--x)),calc(-50% + var(--y))); }
+  .d3__wash { z-index: 1; pointer-events: none; background: linear-gradient(180deg, rgba(4,5,10,.76) 0, transparent 18%, transparent 58%, rgba(4,5,10,.94) 100%); }
+
+  .d3__topbar { position: absolute; z-index: 8; top: 0; left: 0; right: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; padding: max(14px, env(safe-area-inset-top)) clamp(14px, 3vw, 42px) 12px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(5,6,12,.78), rgba(5,6,12,.18)); backdrop-filter: blur(14px); }
+  .d3__brand { color: var(--cream); display: inline-flex; flex-direction: column; gap: 2px; width: max-content; font-size: 11px; letter-spacing: .16em; line-height: 1; text-decoration: none !important; }
+  .d3__brand span { font-weight: 500; }
+  .d3__brand b { color: var(--blue); font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .22em; }
+  .d3__meter { display: grid; grid-template-columns: auto auto auto; align-items: baseline; column-gap: 5px; min-width: 170px; text-align: center; font-family: var(--pc-font-mono); font-size: 9px; letter-spacing: .12em; color: var(--muted); }
+  .d3__meter strong { color: var(--cream); font-size: 18px; letter-spacing: 0; }
+  .d3__meter i { grid-column: 1 / -1; position: relative; height: 3px; margin-top: 5px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .d3__meter i span { display: block; width: 0%; height: 100%; background: linear-gradient(90deg,var(--blue),var(--yellow),var(--coral)); transition: width .5s ease; }
+  .d3__live-dot { width: 7px; height: 7px; border-radius: 50%; background: #707381; box-shadow: 0 0 0 transparent; }
+  .d3[data-network="live"] .d3__live-dot { background: #55f39a; box-shadow: 0 0 12px #55f39a; animation: d3-live 1.7s ease-in-out infinite; }
+  @keyframes d3-live { 50% { opacity: .42; } }
+  .d3__top-actions { justify-self: end; display: flex; gap: 8px; }
+  .d3__chip { border: 1px solid var(--line); background: rgba(8,10,18,.58); color: var(--cream); min-height: 34px; padding: 0 12px; border-radius: 999px; font: 500 8px/1 var(--pc-font-mono); letter-spacing: .12em; cursor: pointer; }
+  .d3__chip--hot { color: #080a12; background: var(--yellow); border-color: var(--yellow); }
+
+  .d3__room-label { position: absolute; z-index: 5; top: 94px; left: clamp(14px, 3vw, 42px); display: flex; align-items: center; gap: 9px; font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .14em; color: var(--muted); }
+  .d3__room-label strong { color: var(--yellow); font-size: 10px; }
+  .d3__room-label em { padding-left: 9px; border-left: 1px solid var(--line); color: #777b89; font-style: normal; }
+  .d3[data-network="live"] .d3__room-label em { color: #55f39a; }
+
+  .d3__stage-copy { position: absolute; z-index: 3; left: 50%; top: 20%; transform: translateX(-50%); width: min(90vw, 620px); text-align: center; pointer-events: none; text-shadow: 0 2px 18px #060710; }
+  .d3__stage-copy p { margin: 0 0 7px; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .2em; color: rgba(255,255,255,.42); }
+  .d3__stage-copy strong { display: block; font-size: clamp(12px, 1.5vw, 16px); font-weight: 500; letter-spacing: .08em; color: rgba(255,247,223,.9); transition: color .18s, transform .18s; }
+  .d3__stage-copy strong[data-flash="true"] { color: var(--yellow); transform: scale(1.04); }
+
+  .d3__reactions { position: absolute; z-index: 7; right: clamp(14px, 3vw, 42px); top: 96px; display: flex; align-items: center; gap: 5px; }
+  .d3__reactions span { margin-right: 3px; font: 400 7px/1 var(--pc-font-mono); letter-spacing: .16em; color: rgba(255,255,255,.4); }
+  .d3__reactions button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: rgba(8,10,18,.52); color: var(--cream); cursor: pointer; font-size: 14px; backdrop-filter: blur(8px); }
+  .d3__reactions button:active { transform: scale(.9); }
+
+  .d3__pads { position: absolute; z-index: 7; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: grid; grid-template-columns: repeat(6, minmax(74px, 108px)); gap: 7px; width: max-content; max-width: calc(100vw - 24px); }
+  .d3__pad { --pad: var(--blue); position: relative; display: grid; grid-template-columns: 1fr auto; align-items: end; min-height: 72px; padding: 10px; border: 1px solid color-mix(in srgb, var(--pad) 52%, transparent); border-radius: 10px; overflow: hidden; background: linear-gradient(145deg,color-mix(in srgb,var(--pad) 18%,rgba(8,10,18,.94)),rgba(8,10,18,.9)); color: var(--cream); text-align: left; cursor: pointer; box-shadow: inset 0 0 28px rgba(255,255,255,.025), 0 8px 30px rgba(0,0,0,.24); backdrop-filter: blur(10px); touch-action: manipulation; }
+  .d3__pad::before { content: ''; position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 80%,var(--pad),transparent 66%); transition: opacity .12s; }
+  .d3__pad[data-hit="true"] { transform: translateY(2px) scale(.98); border-color: var(--cream); }
+  .d3__pad[data-hit="true"]::before { opacity: .62; }
+  .d3__pad kbd { align-self: start; font: 400 8px/1 var(--pc-font-mono); color: color-mix(in srgb,var(--pad) 80%,white); }
+  .d3__pad strong { grid-column: 1 / -1; position: relative; font-size: 12px; letter-spacing: .07em; }
+  .d3__pad span { grid-column: 1 / -1; position: relative; margin-top: 2px; font: 400 6px/1 var(--pc-font-mono); letter-spacing: .12em; color: var(--muted); }
+  .d3__pad--kick { --pad: #5be7ff; } .d3__pad--snare { --pad: #ff6f61; } .d3__pad--hat { --pad: #fff7df; }
+  .d3__pad--tom { --pad: #9a7dff; } .d3__pad--clap { --pad: #ff8fc5; } .d3__pad--bell { --pad: #ffd448; }
+
+  .d3__gate { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: max(22px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 70% 25%,rgba(91,231,255,.17),transparent 34%), radial-gradient(circle at 15% 75%,rgba(255,111,97,.16),transparent 34%), rgba(5,6,12,.9); backdrop-filter: blur(18px); transition: opacity .45s ease, visibility .45s; touch-action: pan-y; }
+  .d3__gate[data-open="false"] { opacity: 0; visibility: hidden; pointer-events: none; }
+  .d3__gate-card { position: relative; width: min(100%, 720px); min-height: min(720px, calc(100svh - 44px)); padding: clamp(22px, 5vw, 56px); border: 1px solid rgba(255,255,255,.24); border-radius: 26px; overflow: hidden; background: linear-gradient(145deg,rgba(25,28,49,.97),rgba(8,10,18,.98)); box-shadow: 0 40px 120px rgba(0,0,0,.55); }
+  .d3__eyebrow { margin: 0; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .17em; color: var(--blue); }
+  .d3__gate h1 { position: relative; z-index: 2; margin: clamp(70px, 14vh, 130px) 0 18px; font-size: clamp(50px, 10vw, 108px); font-weight: 500; line-height: .82; letter-spacing: -.07em; color: var(--cream); }
+  .d3__gate-dek { position: relative; z-index: 2; max-width: 530px; margin: 0; color: #cbc9d4; font-size: clamp(14px, 2.1vw, 19px); line-height: 1.45; }
+  .d3__gate-art { position: absolute; top: 46px; right: -30px; width: clamp(190px, 38vw, 360px); aspect-ratio: 1; border: 1px solid rgba(255,212,72,.42); border-radius: 50%; background: radial-gradient(circle,rgba(255,212,72,.16),transparent 64%); box-shadow: 0 0 80px rgba(255,212,72,.13); }
+  .d3__gate-orbit { position: absolute; inset: 17%; border: 13px solid rgba(154,125,255,.26); border-radius: 50%; transform: rotateX(64deg) rotateZ(-20deg); }
+  .d3__glasses { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); display: flex; gap: 8px; }
+  .d3__glasses i { width: clamp(42px, 8vw, 72px); aspect-ratio: 1.18; border: 12px solid var(--cream); background: var(--blue); box-shadow: inset 0 -13px 0 #384bd9; }
+  .d3__gate-art b { position: absolute; right: 20%; bottom: 8%; font: 500 clamp(38px,7vw,74px)/1 var(--pc-font-mono); color: var(--yellow); }
+  .d3__gate-actions { position: relative; z-index: 2; display: flex; gap: 9px; margin-top: clamp(24px,5vh,48px); }
+  .d3__gate-actions button { min-height: 52px; border-radius: 999px; border: 1px solid var(--line); padding: 0 20px; font: 500 10px/1 var(--pc-font-mono); letter-spacing: .1em; cursor: pointer; }
+  #d3-enter-sound { flex: 1; border-color: var(--yellow); background: var(--yellow); color: #090a12; display: flex; align-items: center; justify-content: space-between; }
+  #d3-enter-quiet { background: transparent; color: var(--cream); }
+  .d3__gate-note { position: relative; z-index: 2; margin: 13px 0 0; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .05em; color: #858695; }
+
+  .d3__invite { width: min(92vw, 470px); max-width: none; padding: 12px; border: 1px solid rgba(255,255,255,.25); border-radius: 24px; color: var(--cream); background: rgba(8,10,18,.97); box-shadow: 0 36px 120px rgba(0,0,0,.7); }
+  .d3__invite::backdrop { background: rgba(3,4,8,.78); backdrop-filter: blur(12px); }
+  .d3__close { position: absolute; z-index: 3; top: 20px; right: 20px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0,0,0,.36); color: white; font-size: 22px; cursor: pointer; }
+  .d3__invite-card { position: relative; aspect-ratio: 4 / 5; padding: 30px; overflow: hidden; border-radius: 15px; background: #ffd448; color: #090a12; }
+  .d3__invite-noise { position: absolute; inset: 0; opacity: .16; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E"); mix-blend-mode: multiply; }
+  .d3__invite-card > p { position: relative; z-index: 2; margin: 0; font: 500 8px/1 var(--pc-font-mono); letter-spacing: .18em; }
+  .d3__invite-card h2 { position: relative; z-index: 2; margin: 20px 0 0; font-size: clamp(43px, 12vw, 68px); font-weight: 500; line-height: .83; letter-spacing: -.075em; }
+  .d3__invite-art { position: absolute; width: 78%; aspect-ratio: 1; right: -19%; bottom: 10%; border-radius: 50%; border: 1px solid rgba(9,10,18,.35); }
+  .d3__invite-art > span { position: absolute; inset: calc(var(--i, 1) * 12%); border: 12px solid rgba(9,10,18,.13); border-radius: 50%; }
+  .d3__invite-art > span:nth-child(1) { --i: 1; border-color: #ff6f61; } .d3__invite-art > span:nth-child(2) { --i: 2; border-color: #5be7ff; } .d3__invite-art > span:nth-child(3) { --i: 3; border-color: #9a7dff; }
+  .d3__invite-art b { position: absolute; left: 3%; bottom: 11%; font: 500 74px/.7 var(--pc-font-mono); }
+  .d3__invite-art small { font-size: 9px; letter-spacing: .13em; }
+  .d3__invite-foot { position: absolute; z-index: 2; left: 30px; right: 30px; bottom: 25px; display: flex; justify-content: space-between; gap: 10px; align-items: end; border-top: 1px solid rgba(9,10,18,.4); padding-top: 10px; }
+  .d3__invite-foot strong { font: 500 10px/1 var(--pc-font-mono); letter-spacing: .1em; } .d3__invite-foot em { font: 400 8px/1 var(--pc-font-mono); font-style: normal; }
+  .d3__invite-actions { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; padding-top: 8px; }
+  .d3__invite-actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: #171a29; color: var(--cream); font: 500 8px/1 var(--pc-font-mono); letter-spacing: .08em; cursor: pointer; }
+  #d3-share { color: #090a12; background: var(--blue); border-color: var(--blue); }
+  .d3__invite-status { margin: 9px 4px 3px; text-align: center; font: 400 8px/1.4 var(--pc-font-mono); color: var(--muted); }
+
+  .d3__toast-layer { position: absolute; z-index: 9; inset: 0; pointer-events: none; overflow: hidden; }
+  .d3__toast { position: absolute; left: var(--left); top: var(--top); font-size: clamp(24px,5vw,54px); animation: d3-toast 1.8s ease-out forwards; filter: drop-shadow(0 8px 18px #000); }
+  @keyframes d3-toast { from { opacity: 0; transform: translateY(30px) scale(.6) rotate(-8deg); } 25% { opacity: 1; } to { opacity: 0; transform: translateY(-130px) scale(1.25) rotate(8deg); } }
+  .d3__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 720px) {
+    .d3 { min-height: 600px; }
+    .d3__topbar { grid-template-columns: 1fr auto; gap: 8px; padding-inline: 12px; }
+    .d3__meter { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; grid-template-columns: auto auto 1fr; text-align: left; min-width: 0; }
+    .d3__meter i { grid-column: 3; grid-row: 1; align-self: center; margin: 0 0 0 8px; }
+    .d3__top-actions { grid-column: 2; grid-row: 1; }
+    .d3__chip { min-height: 31px; padding-inline: 9px; font-size: 7px; }
+    .d3__room-label { top: 104px; left: 12px; }
+    .d3__reactions { top: 96px; right: 10px; gap: 3px; }
+    .d3__reactions span { display: none; }
+    .d3__reactions button { width: 28px; height: 28px; font-size: 12px; }
+    .d3__stage-copy { top: 24%; }
+    .d3__pads { bottom: max(10px, env(safe-area-inset-bottom)); grid-template-columns: repeat(3, minmax(0,1fr)); width: calc(100vw - 20px); gap: 5px; }
+    .d3__pad { min-height: 56px; padding: 7px 9px; border-radius: 8px; }
+    .d3__pad strong { font-size: 10px; } .d3__pad span { font-size: 5px; }
+    .d3__gate-card { min-height: auto; padding: 22px; border-radius: 20px; }
+    .d3__gate h1 { margin-top: min(20vh, 128px); font-size: clamp(48px, 17vw, 76px); }
+    .d3__gate-art { top: 48px; width: 210px; }
+    .d3__glasses i { border-width: 8px; }
+    .d3__gate-actions { flex-direction: column; }
+    .d3__gate-actions button { width: 100%; }
+    .d3__invite { margin: auto auto max(8px,env(safe-area-inset-bottom)); width: calc(100vw - 16px); }
+    .d3__invite-actions { grid-template-columns: 1fr 1fr; }
+    #d3-share { grid-column: 1 / -1; }
   }
 
-  .dr__lights {
-    position: absolute; inset: 0; pointer-events: none;
-  }
-  .dr__light {
-    position: absolute;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, oklch(0.85 0.30 var(--hue, 60)) 0%, oklch(0.55 0.25 var(--hue, 60)) 60%, transparent 100%);
-    box-shadow: 0 0 16px oklch(0.85 0.30 var(--hue, 60) / 0.55);
-    transition: transform 360ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms;
-    will-change: transform, box-shadow;
-  }
-  .dr__light--ringing {
-    transform: translate(-50%, -50%) scale(2.4);
-    box-shadow: 0 0 50px oklch(0.95 0.30 var(--hue, 60) / 0.75);
-  }
-  .dr__light--mine {
-    /* Add a subtle ring indicator */
-    outline: 2px solid rgba(244, 231, 200, 0.4);
-    outline-offset: 4px;
+  @media (max-height: 660px) and (min-width: 721px) {
+    .d3__pads { bottom: 8px; } .d3__pad { min-height: 56px; }
+    .d3__stage-copy { top: 23%; }
   }
 
-  .dr__cue {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    pointer-events: none; user-select: none;
-    font-family: 'Gloock', 'Lora', Georgia, serif;
-    font-size: clamp(24px, 3.5vw, 42px); letter-spacing: 0.06em;
-    color: rgba(244, 231, 200, 0.20);
-    transition: opacity 800ms;
+  @media (prefers-reduced-motion: reduce) {
+    .d3 *, .d3 *::before, .d3 *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
   }
-  .dr__field.dr__field--touched .dr__cue { opacity: 0; }
 </style>
 
 <script>
-  let actx = null;
-  function ctx() {
-    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  }
-  function playRoomBell(hue) {
-    const a = ctx(); const t = a.currentTime;
-    // Pitch derived from hue: low for warm hues, higher for cool
-    const f = 392 + (hue / 360) * 392;
-    const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = f;
-    const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.76;
-    const g = a.createGain(); const g2 = a.createGain();
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
-    g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.06, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
-    o.connect(g).connect(a.destination); o2.connect(g2).connect(a.destination);
-    o.start(t); o.stop(t + 1.7); o2.start(t); o2.stop(t + 1.1);
-  }
+  import * as THREE from 'three';
 
-  // Identity
-  const SID_KEY = 'pc:sid';
-  function ensureSid() {
+  type Pad = 'kick' | 'snare' | 'hat' | 'tom' | 'clap' | 'bell';
+  type Person = { id: string; avatar: number; hue: number; joinedAt: number };
+  type RoomMessage = {
+    v?: number; type?: string; room?: string; connected?: number; target?: number;
+    you?: { clientId: string; avatar: number; hue: number };
+    people?: Person[]; recentHits?: RoomHit[]; totalHits?: number;
+    clientId?: string; avatar?: number; hue?: number; pad?: Pad; velocity?: number;
+    seq?: number; serverAt?: number; emoji?: string;
+  };
+  type RoomHit = { type: 'hit'; id: string; clientId: string; avatar: number; hue: number; pad: Pad; velocity: number; seq: number; serverAt: number };
+
+  const app = document.getElementById('d3-app') as HTMLElement | null;
+  const canvas = document.getElementById('d3-canvas') as HTMLCanvasElement | null;
+  const fallbackStage = document.getElementById('d3-fallback-stage') as HTMLElement | null;
+  const countEl = document.getElementById('d3-count');
+  const progressEl = document.getElementById('d3-progress') as HTMLElement | null;
+  const statusEl = document.getElementById('d3-status');
+  const roomCodeEl = document.getElementById('d3-room-code');
+  const lastHitEl = document.getElementById('d3-last-hit') as HTMLElement | null;
+  const audioButton = document.getElementById('d3-audio') as HTMLButtonElement | null;
+  const gate = document.getElementById('d3-gate') as HTMLElement | null;
+  const inviteDialog = document.getElementById('d3-invite-dialog') as HTMLDialogElement | null;
+  const inviteStatus = document.getElementById('d3-invite-status');
+  const toastLayer = document.getElementById('d3-toast-layer');
+  const announcer = document.getElementById('d3-announcer');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function normalizedRoom(raw: string | null) {
+    const room = (raw || 'lobby').trim().toLowerCase();
+    return /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(room) ? room : 'lobby';
+  }
+  function randomRoom() {
+    const bytes = new Uint8Array(3);
+    crypto.getRandomValues(bytes);
+    return `jam-${Array.from(bytes, (value) => value.toString(36).padStart(2, '0')).join('').slice(0, 6)}`;
+  }
+  const params = new URLSearchParams(window.location.search);
+  let room = normalizedRoom(params.get('room'));
+  if (params.get('new') === '1') {
+    room = randomRoom();
+    params.delete('new');
+    params.set('room', room);
+    history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+  }
+  app?.setAttribute('data-room', room);
+  if (roomCodeEl) roomCodeEl.textContent = room.toUpperCase();
+  document.querySelectorAll('[data-room-label]').forEach((element) => { element.textContent = room.toUpperCase(); });
+
+  const SID_KEY = 'pc:drum-room:sid';
+  function sessionId() {
     try {
-      let sid = localStorage.getItem(SID_KEY);
-      if (!sid) { sid = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(SID_KEY, sid); }
-      return sid;
-    } catch { return 'sid-anon-' + Date.now(); }
+      let value = localStorage.getItem(SID_KEY);
+      if (!value) { value = crypto.randomUUID(); localStorage.setItem(SID_KEY, value); }
+      return value;
+    } catch { return crypto.randomUUID(); }
   }
-  const SID = ensureSid();
-  let MY_PID = '';
-  async function sha256short(s) {
-    const buf = new TextEncoder().encode(s);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
-  }
-  function pidToPos(pid) {
-    // Hash to 0..1 x and 0..1 y
-    let hx = 0, hy = 0;
-    for (let i = 0; i < pid.length; i++) {
-      hx = (hx * 31 + pid.charCodeAt(i)) | 0;
-      hy = (hy * 37 + pid.charCodeAt(i)) | 0;
+  const sid = sessionId();
+
+  // ── Pleasant, adaptive Web Audio kit ─────────────────────────────
+  let audioContext: AudioContext | null = null;
+  let voiceBus: GainNode | null = null;
+  let masterGain: GainNode | null = null;
+  let noiseBuffer: AudioBuffer | null = null;
+  let ambientNodes: AudioNode[] = [];
+  let soundOn = false;
+  let connected = 0;
+
+  function ensureAudio() {
+    if (!audioContext) {
+      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtor) return null;
+      audioContext = new AudioCtor();
+      voiceBus = audioContext.createGain();
+      const compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -22; compressor.knee.value = 22; compressor.ratio.value = 5; compressor.attack.value = .006; compressor.release.value = .28;
+      masterGain = audioContext.createGain(); masterGain.gain.value = .76;
+      const delay = audioContext.createDelay(.5); delay.delayTime.value = .085;
+      const feedback = audioContext.createGain(); feedback.gain.value = .13;
+      const wet = audioContext.createGain(); wet.gain.value = .14;
+      voiceBus.connect(compressor).connect(masterGain).connect(audioContext.destination);
+      voiceBus.connect(delay).connect(feedback).connect(delay); delay.connect(wet).connect(masterGain);
+      noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * .5, audioContext.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
     }
-    return { x: (Math.abs(hx) % 100) / 100, y: (Math.abs(hy) % 100) / 100 };
+    if (audioContext.state === 'suspended') void audioContext.resume();
+    return audioContext;
   }
 
-  // DOM
-  const fieldEl = document.getElementById('dr-field');
-  const lightsEl = document.getElementById('dr-lights');
-  const countEl = document.getElementById('dr-count');
-  const ringsEl = document.getElementById('dr-rings');
-  const cueEl = document.getElementById('dr-cue');
-
-  let lastRingsSeen = new Set();
-
-  async function api(action, extra) {
-    const body = { kind: 'lobby', action, sessionId: SID, ...extra };
-    const r = await fetch('/api/chamber', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return r.json();
-  }
-  async function fetchState() {
-    const r = await fetch('/api/chamber?kind=lobby', { cache: 'no-store' });
-    return r.json();
+  function envelope(node: GainNode, at: number, peak: number, decay: number, attack = .003) {
+    node.gain.setValueAtTime(.0001, at);
+    node.gain.exponentialRampToValueAtTime(Math.max(.0002, peak), at + attack);
+    node.gain.exponentialRampToValueAtTime(.0001, at + decay);
   }
 
-  function paintVisitors(visitors) {
-    if (!lightsEl) return;
-    const present = new Set(visitors.map((v) => v.pid));
-    // Remove lights for missing visitors
-    Array.from(lightsEl.querySelectorAll('.dr__light')).forEach((el) => {
-      if (!present.has(el.dataset.pid)) el.remove();
+  function playPad(pad: Pad, velocity = .78, remote = false) {
+    if (!soundOn) return;
+    const context = ensureAudio();
+    if (!context || !voiceBus || !noiseBuffer) return;
+    const at = context.currentTime + .008;
+    const crowdScale = remote ? Math.max(.16, .52 / Math.sqrt(Math.max(1, connected / 7))) : 1;
+    const amount = Math.max(.04, Math.min(1, velocity)) * crowdScale;
+    const tone = (frequency: number, end: number, type: OscillatorType, peak: number, decay: number) => {
+      const oscillator = context.createOscillator(); const gain = context.createGain();
+      oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, at); oscillator.frequency.exponentialRampToValueAtTime(Math.max(24, end), at + decay * .72);
+      envelope(gain, at, peak * amount, decay); oscillator.connect(gain).connect(voiceBus!); oscillator.start(at); oscillator.stop(at + decay + .04);
+    };
+    const noise = (filterType: BiquadFilterType, frequency: number, peak: number, decay: number, delay = 0) => {
+      const source = context.createBufferSource(); source.buffer = noiseBuffer;
+      const filter = context.createBiquadFilter(); filter.type = filterType; filter.frequency.value = frequency; filter.Q.value = .7;
+      const gain = context.createGain(); envelope(gain, at + delay, peak * amount, decay, .002);
+      source.connect(filter).connect(gain).connect(voiceBus!); source.start(at + delay); source.stop(at + delay + decay + .03);
+    };
+    if (pad === 'kick') { tone(118, 43, 'sine', .56, .34); tone(260, 65, 'triangle', .08, .08); }
+    if (pad === 'snare') { noise('bandpass', 1900, .34, .18); tone(196, 168, 'triangle', .11, .14); }
+    if (pad === 'hat') noise('highpass', 6200, .19, .075);
+    if (pad === 'tom') { tone(178, 92, 'sine', .42, .38); tone(267, 138, 'triangle', .07, .22); }
+    if (pad === 'clap') { noise('bandpass', 1400, .22, .12); noise('bandpass', 1700, .16, .10, .028); noise('bandpass', 1550, .12, .09, .055); }
+    if (pad === 'bell') { tone(523.25, 522.7, 'sine', .23, 1.4); tone(1046.5, 1044, 'sine', .09, .86); tone(1445, 1438, 'sine', .055, .62); }
+  }
+
+  function startAmbient() {
+    const context = ensureAudio();
+    if (!context || !masterGain || ambientNodes.length) return;
+    const filter = context.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 420;
+    const gain = context.createGain(); gain.gain.value = .018;
+    filter.connect(gain).connect(masterGain);
+    [65.41, 98, 130.81].forEach((frequency, index) => {
+      const oscillator = context.createOscillator(); oscillator.type = index === 0 ? 'sine' : 'triangle'; oscillator.frequency.value = frequency;
+      oscillator.detune.value = index * 3 - 2; oscillator.connect(filter); oscillator.start(); ambientNodes.push(oscillator);
     });
-    // Add or update existing
-    visitors.forEach((v) => {
-      let el = lightsEl.querySelector(`[data-pid="${v.pid}"]`);
-      if (!el) {
-        el = document.createElement('div');
-        el.className = 'dr__light';
-        el.dataset.pid = v.pid;
-        if (v.pid === MY_PID) el.classList.add('dr__light--mine');
-        lightsEl.appendChild(el);
-      }
-      const pos = pidToPos(v.pid);
-      el.style.left = `${pos.x * 100}%`;
-      el.style.top = `${pos.y * 100}%`;
-      el.style.setProperty('--hue', String(v.hue));
-    });
+    ambientNodes.push(filter, gain);
   }
 
-  function paintRings(rings) {
-    if (!lightsEl) return;
-    const now = Date.now();
-    rings.forEach((r) => {
-      // Fresh rings (within last 4s) trigger flash + audio (only once)
-      if (now - r.t > 4000) return;
-      const ringKey = `${r.pid}-${r.t}`;
-      if (lastRingsSeen.has(ringKey)) return;
-      lastRingsSeen.add(ringKey);
-      // Audio + visual flash on the corresponding light
-      try { playRoomBell(r.hue); } catch {}
-      const el = lightsEl.querySelector(`[data-pid="${r.pid}"]`);
-      if (el) {
-        el.classList.add('dr__light--ringing');
-        setTimeout(() => el.classList.remove('dr__light--ringing'), 700);
-      }
-    });
-    // Clean old keys (> 30s)
-    if (lastRingsSeen.size > 100) lastRingsSeen = new Set();
+  function setSound(next: boolean) {
+    soundOn = next;
+    if (next) { ensureAudio(); startAmbient(); }
+    if (masterGain && audioContext) masterGain.gain.setTargetAtTime(next ? .76 : .0001, audioContext.currentTime, .025);
+    if (audioButton) { audioButton.textContent = next ? 'SOUND ON' : 'SOUND OFF'; audioButton.setAttribute('aria-pressed', String(next)); }
   }
 
-  function paintCounters(state) {
-    if (!state) return;
-    if (countEl) countEl.textContent = String(state.visitors?.length || 0);
-    if (ringsEl) ringsEl.textContent = String(state.ringCount || 0);
+  // ── Small real 3D room; CSS presence fallback if WebGL is unavailable ──
+  let renderer: THREE.WebGLRenderer | null = null;
+  let scene: THREE.Scene | null = null;
+  let camera: THREE.PerspectiveCamera | null = null;
+  let raycaster: THREE.Raycaster | null = null;
+  const pointer = new THREE.Vector2();
+  const padMeshes = new Map<Pad, THREE.Mesh>();
+  const avatarGroups = new Map<string, THREE.Group>();
+  const pulseMeshes: { mesh: THREE.Mesh; born: number; hue: number }[] = [];
+  let yaw = 0;
+  let pitch = .52;
+  let radius = 12.6;
+  let pointerDown = false;
+  let pointerMoved = false;
+  let pointerX = 0;
+  let pointerY = 0;
+  const padColors: Record<Pad, number> = { kick: 0x5be7ff, snare: 0xff6f61, hat: 0xfff7df, tom: 0x9a7dff, clap: 0xff8fc5, bell: 0xffd448 };
+
+  function makeNoun(person: Person) {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(`hsl(${person.hue}, 58%, 42%)`), roughness: .75, metalness: .05 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf1c8a6, roughness: .8 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x10121e, roughness: .5 });
+    const lens = new THREE.MeshStandardMaterial({ color: padColors[(['kick','snare','hat','tom','clap','bell'] as Pad[])[person.avatar % 6] || 'kick'], emissiveIntensity: .2, emissive: 0x222222 });
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(.22, .48, 4, 8), bodyMat); body.position.y = .46; group.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(.42,.38,.37), skinMat); head.position.y = 1.08; group.add(head);
+    [-.13,.13].forEach((x) => { const glass = new THREE.Mesh(new THREE.BoxGeometry(.22,.17,.07), lens); glass.position.set(x,1.1,.215); group.add(glass); });
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(.08,.05,.08), dark); bridge.position.set(0,1.1,.215); group.add(bridge);
+    group.userData.clientId = person.id;
+    return group;
   }
 
-  // Boot
-  async function boot() {
-    MY_PID = await sha256short(SID);
-    await ping();
-    poll();
-  }
-  async function ping() {
-    try {
-      const j = await api('ping');
-      if (j?.ok && j.state) {
-        paintCounters(j.state);
-        paintVisitors(j.state.visitors || []);
-        paintRings(j.state.rings || []);
-      }
-    } catch {}
-  }
-  let pollTimer = null;
-  async function poll() {
-    try {
-      const j = await fetchState();
-      if (j?.ok && j.state) {
-        paintCounters(j.state);
-        paintVisitors(j.state.visitors || []);
-        paintRings(j.state.rings || []);
-      }
-    } catch {}
-    pollTimer = setTimeout(poll, 2000);
-  }
-
-  // Click to ring
-  fieldEl?.addEventListener('click', async () => {
-    if (fieldEl) fieldEl.classList.add('dr__field--touched');
-    // Optimistic: play locally + flash my light
-    if (MY_PID) {
-      const myLight = lightsEl?.querySelector(`[data-pid="${MY_PID}"]`);
-      if (myLight) {
-        myLight.classList.add('dr__light--ringing');
-        setTimeout(() => myLight.classList.remove('dr__light--ringing'), 700);
-      }
+  function positionPeople(people: Person[]) {
+    if (fallbackStage) {
+      fallbackStage.replaceChildren();
+      people.slice(0, 100).forEach((person, index) => {
+        const dot = document.createElement('i'); dot.className = 'd3__fallback-person';
+        const angle = (index / Math.max(1, people.length)) * Math.PI * 2; const ringIndex = index % 2; const spread = ringIndex ? 150 : 108;
+        dot.style.setProperty('--hue', String(person.hue)); dot.style.setProperty('--x', `${Math.cos(angle) * spread}px`); dot.style.setProperty('--y', `${Math.sin(angle) * spread * .36}px`);
+        fallbackStage.appendChild(dot);
+      });
     }
-    // Build hue from MY_PID
-    let h = 0;
-    for (let i = 0; i < MY_PID.length; i++) h = ((h << 7) - h + MY_PID.charCodeAt(i)) | 0;
-    const myHue = Math.abs(h) % 360;
-    try { playRoomBell(myHue); } catch {}
-    // Server
+    if (!scene) return;
+    const ids = new Set(people.map((person) => person.id));
+    for (const [id, group] of avatarGroups) { if (!ids.has(id)) { scene.remove(group); avatarGroups.delete(id); } }
+    people.forEach((person, index) => {
+      let group = avatarGroups.get(person.id);
+      if (!group) { group = makeNoun(person); avatarGroups.set(person.id, group); scene!.add(group); }
+      const ring = index < 44 ? 0 : 1;
+      const ringCount = ring === 0 ? Math.min(44, people.length) : Math.max(1, people.length - 44);
+      const ringIndex = ring === 0 ? index : index - 44;
+      const angle = (ringIndex / ringCount) * Math.PI * 2 + ring * .08;
+      const distance = ring === 0 ? 6.35 : 7.65;
+      group.position.set(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
+      group.rotation.y = -angle + Math.PI / 2;
+      group.scale.setScalar(people.length > 70 ? .72 : people.length > 38 ? .82 : .94);
+    });
+  }
+
+  function buildScene() {
+    if (!app || !canvas) return;
     try {
-      const j = await api('ring');
-      if (j?.ok && j.state) {
-        paintCounters(j.state);
-        paintVisitors(j.state.visitors || []);
-        // Mark this ring as already seen so the poll doesn't replay it
-        const myLatest = j.state.rings.find((r) => r.pid === MY_PID);
-        if (myLatest) lastRingsSeen.add(`${myLatest.pid}-${myLatest.t}`);
-      }
-    } catch {}
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+      scene = new THREE.Scene(); scene.background = new THREE.Color(0x080a12); scene.fog = new THREE.FogExp2(0x080a12, .052);
+      camera = new THREE.PerspectiveCamera(48, 1, .1, 80); raycaster = new THREE.Raycaster();
+      scene.add(new THREE.HemisphereLight(0x6d78c8, 0x11121a, 1.2));
+      const spot = new THREE.SpotLight(0xffe4a2, 34, 28, .62, .65, 1.2); spot.position.set(0,11,2); scene.add(spot);
+      const floor = new THREE.Mesh(new THREE.CylinderGeometry(8.8, 9.2, .35, 96), new THREE.MeshStandardMaterial({ color: 0x14172a, roughness: .68, metalness: .25 })); floor.position.y = -.3; scene.add(floor);
+      const floorRing = new THREE.Mesh(new THREE.RingGeometry(3.15,3.32,96), new THREE.MeshBasicMaterial({ color: 0x5be7ff, transparent: true, opacity: .26, side: THREE.DoubleSide })); floorRing.rotation.x = -Math.PI/2; floorRing.position.y = -.1; scene.add(floorRing);
+      for (let ring = 1; ring <= 4; ring += 1) { const mesh = new THREE.Mesh(new THREE.RingGeometry(1.15 * ring,1.15*ring+.018,96),new THREE.MeshBasicMaterial({color:0x929ad3,transparent:true,opacity:.12,side:THREE.DoubleSide})); mesh.rotation.x=-Math.PI/2; mesh.position.y=-.085; scene.add(mesh); }
+      const pads: Pad[] = ['kick','snare','hat','tom','clap','bell'];
+      pads.forEach((pad,index) => {
+        const angle = (index / pads.length) * Math.PI * 2 - Math.PI/2;
+        const material = new THREE.MeshStandardMaterial({ color: padColors[pad], emissive: padColors[pad], emissiveIntensity: .11, roughness: .36, metalness: .35 });
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(.68,.78,.32,32),material); mesh.position.set(Math.cos(angle)*2.15,.08,Math.sin(angle)*2.15); mesh.userData.pad=pad; scene!.add(mesh); padMeshes.set(pad,mesh);
+      });
+      const core = new THREE.Mesh(new THREE.IcosahedronGeometry(.74,1), new THREE.MeshStandardMaterial({ color: 0x242a4c, emissive: 0x9a7dff, emissiveIntensity: .32, roughness: .2, metalness: .6 })); core.position.y=.72; core.userData.core=true; scene.add(core);
+      const particlePositions = new Float32Array(330 * 3);
+      for (let i=0;i<particlePositions.length;i+=3) { const angle=Math.random()*Math.PI*2; const distance=5+Math.random()*13; particlePositions[i]=Math.cos(angle)*distance; particlePositions[i+1]=1+Math.random()*10; particlePositions[i+2]=Math.sin(angle)*distance; }
+      const stars = new THREE.BufferGeometry(); stars.setAttribute('position',new THREE.BufferAttribute(particlePositions,3)); scene.add(new THREE.Points(stars,new THREE.PointsMaterial({color:0xbec9ff,size:.045,transparent:true,opacity:.55})));
+      resizeScene(); renderScene(0);
+    } catch {
+      app.dataset.fallback = 'true'; renderer = null; scene = null; camera = null;
+    }
+  }
+
+  function resizeScene() {
+    if (!renderer || !camera || !app) return;
+    const width = app.clientWidth; const height = app.clientHeight;
+    renderer.setSize(width,height,false); camera.aspect=width/Math.max(1,height); camera.updateProjectionMatrix();
+  }
+  function updateCamera() {
+    if (!camera) return;
+    camera.position.set(Math.sin(yaw)*Math.cos(pitch)*radius, Math.sin(pitch)*radius*.72+1.2, Math.cos(yaw)*Math.cos(pitch)*radius);
+    camera.lookAt(0,.65,0);
+  }
+  function renderScene(time: number) {
+    if (!renderer || !scene || !camera) return;
+    updateCamera();
+    if (!reducedMotion) {
+      avatarGroups.forEach((group,index) => { group.position.y=Math.sin(time*.0014+index)*.045; });
+      const core = scene.children.find((child) => child.userData.core); if (core) { core.rotation.y=time*.00035; core.rotation.x=.3+Math.sin(time*.0005)*.1; }
+    }
+    for (let index=pulseMeshes.length-1;index>=0;index-=1) { const pulse=pulseMeshes[index]; if (!pulse) continue; const life=(performance.now()-pulse.born)/900; if(life>=1){scene.remove(pulse.mesh);pulseMeshes.splice(index,1);}else{pulse.mesh.scale.setScalar(1+life*7); (pulse.mesh.material as THREE.MeshBasicMaterial).opacity=(1-life)*.6;} }
+    renderer.render(scene,camera); requestAnimationFrame(renderScene);
+  }
+  function animatePad(pad: Pad, hue?: number) {
+    const button = document.querySelector(`[data-pad="${pad}"]`) as HTMLElement | null;
+    button?.setAttribute('data-hit','true'); setTimeout(() => button?.removeAttribute('data-hit'),120);
+    const mesh = padMeshes.get(pad);
+    if (mesh && scene) {
+      const material = mesh.material as THREE.MeshStandardMaterial; material.emissiveIntensity=.85; mesh.scale.set(1.08,.72,1.08);
+      setTimeout(()=>{material.emissiveIntensity=.11;mesh.scale.set(1,1,1);},150);
+      const pulse = new THREE.Mesh(new THREE.RingGeometry(.23,.27,40),new THREE.MeshBasicMaterial({color:new THREE.Color(`hsl(${hue ?? 190},90%,65%)`),transparent:true,opacity:.6,side:THREE.DoubleSide})); pulse.rotation.x=-Math.PI/2; pulse.position.copy(mesh.position); pulse.position.y=-.03; scene.add(pulse); pulseMeshes.push({mesh:pulse,born:performance.now(),hue:hue??190});
+    }
+  }
+  window.addEventListener('resize',resizeScene,{passive:true});
+  canvas?.addEventListener('pointerdown',(event)=>{pointerDown=true;pointerMoved=false;pointerX=event.clientX;pointerY=event.clientY;canvas.setPointerCapture(event.pointerId);});
+  canvas?.addEventListener('pointermove',(event)=>{if(!pointerDown)return;const dx=event.clientX-pointerX,dy=event.clientY-pointerY;if(Math.abs(dx)+Math.abs(dy)>3)pointerMoved=true;yaw-=dx*.006;pitch=Math.max(.16,Math.min(.9,pitch+dy*.004));pointerX=event.clientX;pointerY=event.clientY;});
+  canvas?.addEventListener('pointerup',(event)=>{pointerDown=false;if(pointerMoved||!renderer||!camera||!raycaster||!canvas)return;const rect=canvas.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects([...padMeshes.values()],false)[0];const pad=hit?.object.userData.pad as Pad | undefined;if(pad)triggerPad(pad,.82);});
+  canvas?.addEventListener('wheel',(event)=>{radius=Math.max(8,Math.min(17,radius+event.deltaY*.008));},{passive:true});
+  buildScene();
+
+  // ── WebSocket room protocol ─────────────────────────────────────
+  let socket: WebSocket | null = null;
+  let myId = '';
+  let seq = 0;
+  let reconnectAttempt = 0;
+  let reconnectTimer: number | null = null;
+
+  function networkStatus(status: string, live: boolean) {
+    if (statusEl) statusEl.textContent=status;
+    if (app) app.dataset.network=live?'live':'offline';
+  }
+  function paintCount(value: number) {
+    connected=Math.max(0,value); if(countEl)countEl.textContent=String(connected); if(progressEl)progressEl.style.width=`${Math.min(100,connected)}%`;
+  }
+  function flashLabel(text: string) {
+    if(!lastHitEl)return;lastHitEl.textContent=text;lastHitEl.dataset.flash='true';setTimeout(()=>{if(lastHitEl)lastHitEl.dataset.flash='false';},220);
+  }
+  function websocketUrl() {
+    const protocol=location.protocol==='https:'?'wss:':'ws:'; const url=new URL(`${protocol}//${location.host}/api/drum/room`);url.searchParams.set('room',room);url.searchParams.set('sid',sid);return url.href;
+  }
+  function connectRoom() {
+    if(socket&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(socket.readyState))return;
+    networkStatus('CONNECTING',false);
+    try { socket=new WebSocket(websocketUrl()); } catch { scheduleReconnect(); return; }
+    socket.addEventListener('open',()=>{reconnectAttempt=0;networkStatus('LIVE',true);});
+    socket.addEventListener('message',(event)=>{
+      let message: RoomMessage; try{message=JSON.parse(String(event.data));}catch{return;}
+      if(message.type==='welcome') { myId=message.you?.clientId||''; paintCount(message.connected||1); (message.recentHits||[]).slice(-8).forEach((hit)=>animatePad(hit.pad,hit.hue)); return; }
+      if(message.type==='presence') { paintCount(message.connected||0); positionPeople(message.people||[]); if((message.connected||0)===100){flashLabel('ONE HUNDRED PEOPLE ARE IN THE ROOM');} return; }
+      if(message.type==='hit'&&message.pad) { const mine=message.clientId===myId; animatePad(message.pad,message.hue); if(!mine)playPad(message.pad,message.velocity||.6,true); flashLabel(`${mine?'YOU':'NOUN '+String(message.avatar??'').padStart(4,'0')} PLAYED ${message.pad.toUpperCase()}`); return; }
+      if(message.type==='reaction'&&message.emoji){showReaction(message.emoji,message.hue||180);return;}
+      if(message.type==='rate-limit')flashLabel('EASY — LET THE ROOM BREATHE');
+      if(message.type==='busy')flashLabel('THE ROOM IS FULL OF RHYTHM');
+    });
+    socket.addEventListener('close',()=>{socket=null;networkStatus('RECONNECTING',false);scheduleReconnect();});
+    socket.addEventListener('error',()=>{try{socket?.close();}catch{}});
+  }
+  function scheduleReconnect(){if(reconnectTimer!==null)return;const delay=Math.min(10_000,700*Math.pow(1.7,reconnectAttempt++));reconnectTimer=window.setTimeout(()=>{reconnectTimer=null;connectRoom();},delay);}
+  function send(payload: Record<string,unknown>){if(socket?.readyState!==WebSocket.OPEN)return;try{socket.send(JSON.stringify(payload));}catch{}}
+
+  function triggerPad(pad: Pad, velocity=.78){if(!soundOn)setSound(true);seq+=1;playPad(pad,velocity,false);animatePad(pad);flashLabel(`YOU PLAYED ${pad.toUpperCase()}`);send({v:1,type:'hit',pad,velocity,seq,clientAt:Date.now()});if(announcer)announcer.textContent=`Played ${pad}`;}
+  document.querySelectorAll<HTMLButtonElement>('[data-pad]').forEach((button)=>button.addEventListener('pointerdown',(event)=>{event.preventDefault();triggerPad(button.dataset.pad as Pad,.78);}));
+  window.addEventListener('keydown',(event)=>{if(event.repeat)return;const map:Record<string,Pad>={"1":'kick',"2":'snare',"3":'hat',"4":'tom',"5":'clap',"6":'bell',a:'kick',s:'snare',d:'hat',f:'tom',g:'clap',h:'bell'};const pad=map[event.key.toLowerCase()];if(pad){event.preventDefault();triggerPad(pad,.8);}});
+
+  function showReaction(emoji:string,hue=180){if(!toastLayer)return;const toast=document.createElement('span');toast.className='d3__toast';toast.textContent=emoji;toast.style.setProperty('--left',`${12+Math.random()*76}%`);toast.style.setProperty('--top',`${32+Math.random()*28}%`);toast.style.filter=`drop-shadow(0 0 18px hsl(${hue} 90% 60%))`;toastLayer.appendChild(toast);setTimeout(()=>toast.remove(),1900);}
+  document.querySelectorAll<HTMLButtonElement>('[data-reaction]').forEach((button)=>button.addEventListener('click',()=>{const emoji=button.dataset.reaction||'✦';showReaction(emoji);send({v:1,type:'reaction',emoji});}));
+
+  // ── Entry and invite card ───────────────────────────────────────
+  function enter(withSound:boolean){setSound(withSound);gate?.setAttribute('data-open','false');}
+  document.getElementById('d3-enter-sound')?.addEventListener('click',()=>enter(true));
+  document.getElementById('d3-enter-quiet')?.addEventListener('click',()=>enter(false));
+  audioButton?.addEventListener('click',()=>setSound(!soundOn));
+  document.getElementById('d3-invite')?.addEventListener('click',()=>inviteDialog?.showModal());
+  const inviteUrl=()=>`${location.origin}${location.pathname}?room=${encodeURIComponent(room)}`;
+  async function copyInvite(){try{await navigator.clipboard.writeText(inviteUrl());if(inviteStatus)inviteStatus.textContent='Invite link copied.';}catch{if(inviteStatus)inviteStatus.textContent=inviteUrl();}}
+  document.getElementById('d3-copy')?.addEventListener('click',copyInvite);
+  document.getElementById('d3-share')?.addEventListener('click',async()=>{const share={title:'Join my PointCast Drum Room',text:`Meet me in room ${room.toUpperCase()}. Six sounds. Up to 100 people.`,url:inviteUrl()};if(navigator.share){try{await navigator.share(share);if(inviteStatus)inviteStatus.textContent='Invite shared.';return;}catch{}}await copyInvite();});
+  document.getElementById('d3-download')?.addEventListener('click',()=>{
+    const card=document.createElement('canvas');card.width=1080;card.height=1350;const context=card.getContext('2d');if(!context)return;
+    context.fillStyle='#ffd448';context.fillRect(0,0,1080,1350);context.fillStyle='#090a12';context.font='500 28px monospace';context.fillText('POINTCAST INVITES YOU TO',74,92);
+    context.font='500 126px Arial';context.fillText('THE 3D',70,270);context.fillText('DRUM ROOM',70,390);
+    const colors=['#ff6f61','#5be7ff','#9a7dff'];colors.forEach((color,index)=>{context.strokeStyle=color;context.lineWidth=40;context.beginPath();context.arc(775,780,330-index*84,0,Math.PI*2);context.stroke();});
+    context.fillStyle='#090a12';context.font='500 180px monospace';context.fillText('100',100,940);context.font='500 28px monospace';context.fillText('CAN PLAY AT ONCE',106,985);
+    context.lineWidth=3;context.beginPath();context.moveTo(74,1180);context.lineTo(1006,1180);context.stroke();context.font='500 29px monospace';context.fillText(`ROOM ${room.toUpperCase()}`,74,1240);context.font='400 24px monospace';context.fillText('pointcast.xyz/drum-room',648,1240);
+    const link=document.createElement('a');link.download=`pointcast-drum-room-${room}.png`;link.href=card.toDataURL('image/png');link.click();if(inviteStatus)inviteStatus.textContent='Invite card saved.';
   });
 
-  // Keep-alive ping every 8s
-  setInterval(ping, 8000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
-
-  boot();
+  connectRoom();
 </script>

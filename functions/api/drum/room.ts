@@ -1,17 +1,12 @@
 /**
  * /api/drum/room — WebSocket upgrade proxy to the DrumRoom Durable Object.
  *
- * Clients connect with `new WebSocket('/api/drum/room?sid=...')` and get
- * a fan-out connection that broadcasts any event they post to all other
- * connected clients in <100ms. Falls back to /api/sounds polling if the
- * DO binding isn't configured (e.g. Pages free tier or local dev without
- * the binding).
+ * Clients connect with `new WebSocket('/api/drum/room?room=...&sid=...')`.
+ * Each normalized room name maps to one Durable Object coordination atom.
  *
- * One global "main" room for now — `state.idFromName('main')` always
- * resolves to the same DO instance regardless of which Worker handles
- * the upgrade. Sharding (per surface or per geo) is a later optimization.
- *
- * Per docs/briefs/2026-04-26-drum-realtime.md.
+ * A normal GET with `stats=1` is forwarded too, so monitoring and the load
+ * harness can verify the real binding rather than mistaking a fallback 200
+ * for a live WebSocket system.
  */
 
 interface Env {
@@ -20,9 +15,19 @@ interface Env {
 }
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
-  // Reject anything that's not a WebSocket upgrade
-  if (request.headers.get('Upgrade') !== 'websocket') {
-    return new Response('expected WebSocket upgrade', { status: 426 });
+  const url = new URL(request.url);
+  const rawRoom = (url.searchParams.get('room') || 'lobby').trim().toLowerCase();
+  const room = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(rawRoom) ? rawRoom : 'lobby';
+  const isUpgrade = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
+  const isStats = request.method === 'GET' && url.searchParams.get('stats') === '1';
+
+  if (!isUpgrade && !isStats) {
+    return Response.json({
+      endpoint: '/api/drum/room',
+      websocket: `wss://${url.host}/api/drum/room?room={invite-code}&sid={uuid}`,
+      stats: `https://${url.host}/api/drum/room?room={invite-code}&stats=1`,
+      target: 100,
+    }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   }
 
   // No DO binding → tell the client to use polling. The client hooks
@@ -32,7 +37,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
-    const id = env.DRUM_ROOM.idFromName('main');
+    const id = env.DRUM_ROOM.idFromName(room);
     const stub = env.DRUM_ROOM.get(id);
     return await stub.fetch(request);
   } catch (err) {

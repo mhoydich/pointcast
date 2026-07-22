@@ -15,7 +15,7 @@ interface SurfaceEntry {
   title: string;
   shape: string;
   audio?: string;
-  backing?: 'static' | 'localStorage' | '/api/altar' | '/api/quintet' | '/api/chamber';
+  backing?: 'static' | 'localStorage' | '/api/altar' | '/api/quintet' | '/api/chamber' | '/api/drum/room';
   group: 'chamber-bus' | 'bell-wing' | 'index' | 'meditative' | 'very-2026' | 'pop-art' | 'gallery' | 'celebration' | 'station' | 'spotify' | 'presence-bus' | 'v2';
 }
 
@@ -62,7 +62,7 @@ const SURFACES: SurfaceEntry[] = [
   { slug: 'drum-zen-v2',      url: 'https://pointcast.xyz/drum-zen-v2',      title: 'Zen v2',      shape: 'living sand: 80 drift grains breathing; painterly 5-lane strokes', audio: 'shaker', backing: 'static', group: 'v2' },
   { slug: 'yeeee-v2',         url: 'https://pointcast.xyz/yeeee-v2',         title: 'YEEEE v2',    shape: 'firework shells: rocket arcs to apex, bursts into Noun shower', audio: 'whistle + boom + chord', backing: 'static', group: 'v2' },
   // presence bus (Sprint 1)
-  { slug: 'drum-room',        url: 'https://pointcast.xyz/drum-room',        title: 'Room',        shape: 'shared live chamber; visitors as brass lights; ring broadcasts', audio: 'hue-mapped bell', backing: '/api/chamber', group: 'presence-bus' },
+  { slug: 'drum-room',        url: 'https://pointcast.xyz/drum-room',        title: '3D Drum Room', shape: 'mobile-first 3D Noun drum circle; invite-code rooms; 100-person live target', audio: 'adaptive six-voice Web Audio kit + quiet ambient room tone', backing: '/api/drum/room', group: 'presence-bus' },
   { slug: 'drum-echo',        url: 'https://pointcast.xyz/drum-echo',        title: 'Echo',        shape: '5-hit phrase async pickup; receive others, leave your own', audio: 'bell', backing: '/api/chamber', group: 'presence-bus' },
   { slug: 'drum-procession',  url: 'https://pointcast.xyz/drum-procession',  title: 'Procession',  shape: 'shared step counter; 30s cooldown per pid', audio: '12-tone bell', backing: '/api/chamber', group: 'presence-bus' },
   { slug: 'drum-now',         url: 'https://pointcast.xyz/drum-now',         title: 'Now',         shape: 'wing-wide presence panel with 30s window', backing: '/api/chamber', group: 'presence-bus' },

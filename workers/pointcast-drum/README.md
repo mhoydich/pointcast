@@ -1,65 +1,49 @@
 # pointcast-drum
 
-Standalone Cloudflare Worker hosting the `DrumRoom` Durable Object.
+Standalone Cloudflare Worker for PointCast's realtime drum rooms. The Pages
+project forwards `/api/drum/room` to this Worker through a Durable Object
+binding.
 
-## Why this exists
+## Current room contract
 
-Cloudflare Pages can't host DurableObject classes directly inside `functions/`. The class needs to live in a Worker, and Pages binds to that Worker externally.
+- One `DrumRoomV2` SQLite-backed Durable Object per normalized invite code.
+- WebSocket Hibernation API, so idle connected rooms can sleep without
+  dropping their visitors.
+- Target: 100 visitors in one room. Safety ceiling: 125.
+- Client frame ceiling: 512 bytes.
+- Per-connection limit: 8 frames/second; room burst guard: 300 frames/second.
+- Persisted room total and the latest 24 hits; presence stays ephemeral and
+  anonymous.
+- `welcome`, `presence`, `hit`, `reaction`, `pong`, and bounded error events.
 
-This Worker exists solely to define + host the `DrumRoom` DO. The Pages project (`pointcast`) proxies WebSocket upgrades to it via `functions/api/drum/room.ts`.
-
-## Deploy
-
-```bash
-cd workers/pointcast-drum
-wrangler deploy
-```
-
-You'll need to be logged in (`wrangler login`) and have Durable Objects enabled on your Cloudflare account (paid plan).
-
-## After deploy — wire it to Pages
-
-In the parent `wrangler.toml` (top-level `pointcast/wrangler.toml`), uncomment:
-
-```toml
-[[durable_objects.bindings]]
-name = "DRUM_ROOM"
-class_name = "DrumRoom"
-script_name = "pointcast-drum"  # this Worker's name
-```
-
-Push to `main`. Pages picks up the binding on next deploy. `/api/drum/room` (which lives in the Pages project) starts proxying WebSocket upgrades to this Worker's DO.
+The legacy `DrumRoom` export remains during the two-deploy transition so the
+old Pages binding keeps working until Pages switches to `DrumRoomV2`.
 
 ## Verify
 
 ```bash
-# Watch a sample DO instance's stats
-curl https://pointcast-drum.<your-account>.workers.dev/stats
+npm install
+npm run verify
 ```
 
-On `/drum-v7` and `/drum-v8`, the **STREAM** HUD card flips from amber `polling · 150ms` to green `WebSocket · ~30–60ms p50`.
+`npm run verify` checks generated bindings, strict TypeScript, Workers-runtime
+tests (including 100 simultaneous sockets), and a Wrangler dry run.
 
-## Architecture
+For a running Worker:
 
-```
-Browser (v7/v8)
-   │  ws://pointcast.xyz/api/drum/room
-   ▼
-Pages Function functions/api/drum/room.ts
-   │  env.DRUM_ROOM.idFromName('main').fetch(req)
-   ▼
-Cloudflare Durable Object (this Worker)
-   │  fan-out to all connected sockets
-   ▼
-Other browsers (v7/v8)
+```bash
+node ../../scripts/load-drum-room.mjs \
+  'ws://127.0.0.1:8787/?room=hundred-live' \
+  --clients=100 --hold-ms=5000
 ```
 
-One global "main" room across all drum surfaces. Sharding (per surface, per geo) is a later optimization.
+## Deployment order
 
-## Costs
+1. Deploy this Worker: `npm run deploy`.
+2. Build PointCast and deploy Pages with the root binding set to
+   `class_name = "DrumRoomV2"` and `script_name = "pointcast-drum"`.
+3. Verify a real WebSocket welcome/fan-out and the Pages stats endpoint.
+4. Run the 100-client harness against the immutable Pages deployment URL.
 
-DurableObjects are paid tier. At PointCast traffic, expect pennies/day. Per-request pricing applies; per-connection-second for WS keeps the math small.
-
-## Source
-
-The `DrumRoom` class definition mirrors `pointcast/functions/durable/drum-room.ts` in the parent project — identical implementation, just packaged as a deployable Worker. If you change one, change the other (or extract to a shared module).
+The order preserves the legacy class while Pages changes bindings, avoiding a
+realtime outage during rollout.
