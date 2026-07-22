@@ -8,6 +8,7 @@ import artKittyVase from '../assets/campaigns/art-kitty-2026/vase-green-pink.web
 import networkDesk from '../assets/campaigns/network-el-segundo-2026/network-desk.jpg';
 import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-vibes-pickleball.jpg';
 import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
+import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 
 export type PointCastAdTone = 'signal' | 'garden' | 'play' | 'ritual' | 'network' | 'field';
 
@@ -28,6 +29,16 @@ export interface PointCastAd {
   status: 'house';
 }
 
+export interface OpenAdPublisher {
+  id: string;
+  name: string;
+  url: string;
+  hostname: string;
+  surface: string;
+  advertiserAliases: string[];
+  status: 'active';
+}
+
 export const OPEN_AD_PLACEMENT = {
   id: 'PC-0477',
   publisher: 'PointCast',
@@ -37,6 +48,59 @@ export const OPEN_AD_PLACEMENT = {
   settlement: 'prototype',
   tracking: 'aggregate impressions + clicks',
   note: 'One clearly labeled contextual placement across public PointCast pages. Aggregate events only; no visitor identifiers or behavioral profiles.',
+} as const;
+
+export const OPEN_AD_NETWORK = {
+  id: 'PC-OPEN-NETWORK-2026',
+  name: 'PointCast Open Ad Network',
+  inventoryUrl: 'https://pointcast.xyz/ads.json',
+  embedUrl: 'https://pointcast.xyz/open-ad-network.js',
+  format: 'Responsive portable house card',
+  selection: 'Daily contextual rotation by publisher and page URL',
+  tracking: 'Aggregate impressions + clicks by creative and publisher',
+  privacy: 'No cookies, fingerprinting, wallet data, cross-site visitor identifiers, or behavioral profiles.',
+  settlement: 'prototype',
+} as const;
+
+export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
+  {
+    id: 'pointcast',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz/',
+    hostname: 'pointcast.xyz',
+    surface: 'Native sitewide contextual rail',
+    advertiserAliases: ['PointCast', "PointCast Today's Art"],
+    status: 'active',
+  },
+  {
+    id: 'rally',
+    name: 'Rally / Common Hours',
+    url: 'https://common-hours.mhoydich.chatgpt.site/rally',
+    hostname: 'common-hours.mhoydich.chatgpt.site',
+    surface: 'A clearly labeled contextual house ad in the Rally footer',
+    advertiserAliases: ['Common Hours', 'Rally'],
+    status: 'active',
+  },
+  {
+    id: 'common-hours',
+    name: 'Common Hours / Stampz',
+    url: 'https://common-hours.mhoydich.chatgpt.site/',
+    hostname: 'common-hours.mhoydich.chatgpt.site',
+    surface: 'Shared rituals, daily bells, Passportz, Stampz, and Rally',
+    advertiserAliases: ['Common Hours', 'Rally'],
+    status: 'active',
+  },
+];
+
+export const HOLDERS_CUT_CAMPAIGN = {
+  id: 'PC-HOLDERS-CUT-2026',
+  label: 'The Holders’ Cut — 44 Plates, No Finish Line',
+  advertiser: 'The Holders’ Cut',
+  creativeCount: 1,
+  placement: 'PointCast contextual rotation plus a Rally footer placement',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A first-party public-preview campaign. The proposed 50% holder pool and 10-tez unlimited edition are visible, while Mainnet minting remains inactive pending contract and offering review.',
 } as const;
 
 export const NOUNS_ABOUT_CAMPAIGN = {
@@ -117,6 +181,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-HOLDERS-CUT-001',
+    advertiser: 'The Holders’ Cut',
+    headline: '44 plates. No finish line.',
+    copy: 'An unlimited edition at 10 tez. The public preview proposes 50% of defined net primary proceeds for eligible holder wallets; no Mainnet mint is active yet.',
+    href: 'https://the-holders-cut.mhoydich.chatgpt.site/',
+    cta: 'See the public preview',
+    tone: 'play',
+    contexts: ['rally', 'art', 'archive', 'tezos', 'collect', 'wallet', 'play', 'community', 'footer'],
+    image: holdersCutPreview.src,
+    sourceTool: 'OpenAI image generation + Michael Hoydich archive',
+    campaign: HOLDERS_CUT_CAMPAIGN.id,
+    seriesLabel: HOLDERS_CUT_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-NETWORK-EL-SEGUNDO-001',
     advertiser: 'Network El Segundo',

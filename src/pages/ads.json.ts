@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { ART_KITTY_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, NETWORK_EL_SEGUNDO_CAMPAIGN, NETWORK_FIRST_100_SIGNAL, NOUNS_ABOUT_CAMPAIGN, OPEN_AD_PLACEMENT, PERMISSION_LAB_CAMPAIGN, POINTCAST_ADS } from '../lib/open-ad-network';
+import { ART_KITTY_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, HOLDERS_CUT_CAMPAIGN, NETWORK_EL_SEGUNDO_CAMPAIGN, NETWORK_FIRST_100_SIGNAL, NOUNS_ABOUT_CAMPAIGN, OPEN_AD_NETWORK, OPEN_AD_PLACEMENT, OPEN_AD_PUBLISHERS, PERMISSION_LAB_CAMPAIGN, POINTCAST_ADS } from '../lib/open-ad-network';
 
 export const GET: APIRoute = () => {
   const payload = {
@@ -15,9 +15,18 @@ export const GET: APIRoute = () => {
       reportJson: 'https://pointcast.xyz/api/ad-metrics?days=30',
       note: 'The current release publishes aggregate, first-party impression and click counts. No IP, user agent, cookie, wallet, or visitor identifier is stored with an ad event. Reservation and tez settlement remain prototype-only.',
     },
+    network: {
+      ...OPEN_AD_NETWORK,
+      publishers: OPEN_AD_PUBLISHERS,
+      embed: {
+        mount: '<div data-pointcast-network data-publisher="YOUR-PUBLISHER-ID" data-placement="site-footer"></div>',
+        script: '<script async src="https://pointcast.xyz/open-ad-network.js"></script>',
+        attributes: ['data-publisher', 'data-placement', 'data-context', 'data-theme'],
+      },
+    },
     placement: OPEN_AD_PLACEMENT,
     ownedSignals: [NETWORK_FIRST_100_SIGNAL],
-    houseSeries: [NETWORK_EL_SEGUNDO_CAMPAIGN, ART_KITTY_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, PERMISSION_LAB_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN],
+    houseSeries: [NETWORK_EL_SEGUNDO_CAMPAIGN, ART_KITTY_CAMPAIGN, HOLDERS_CUT_CAMPAIGN, NOUNS_ABOUT_CAMPAIGN, PERMISSION_LAB_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN],
     campaigns: POINTCAST_ADS,
   };
 

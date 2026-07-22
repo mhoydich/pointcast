@@ -65,6 +65,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-PERMISSION-LAB-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 3);
+  assert.equal((registry.match(/id: 'PC-HOLDERS-CUT-001'/g) || []).length, 1);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /tracking: 'aggregate impressions \+ clicks'/);
@@ -82,12 +83,36 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /ownedSignals/);
   assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
   assert.match(receipt, /PERMISSION_LAB_CAMPAIGN/);
+  assert.match(receipt, /HOLDERS_CUT_CAMPAIGN/);
+  assert.match(receipt, /OPEN_AD_NETWORK/);
+  assert.match(receipt, /OPEN_AD_PUBLISHERS/);
   assert.match(receipt, /aggregateEventTelemetry: true/);
   assert.match(receipt, /visitorIdentifiers: false/);
   assert.match(report, /LIVE PUBLISHING REPORT/);
   assert.match(report, /These are browser events, not unique people/);
   assert.match(endpoint, /No IP, user agent, cookie, wallet, or visitor identifier/);
   assert.match(endpoint, /expirationTtl: RETENTION_DAYS/);
+});
+
+test('portable network extends The Holders Cut campaign to the Rally footer', async () => {
+  const [registry, receipt, widget, endpoint] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+    readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /id: 'rally'/);
+  assert.match(registry, /PC-HOLDERS-CUT-2026/);
+  assert.match(registry, /44 plates\. No finish line\./);
+  assert.match(registry, /no Mainnet mint is active yet/i);
+  assert.match(receipt, /open-ad-network\.js/);
+  assert.match(widget, /configured === 'common-hours'/);
+  assert.match(widget, /publisher\.id === 'rally'/);
+  assert.match(widget, /IntersectionObserver/);
+  assert.match(widget, /utm_medium', 'open-ad-network'/);
+  assert.match(endpoint, /TRUSTED_PUBLISHER_ORIGINS/);
+  assert.match(endpoint, /Publisher is the public property mounting the unit/);
 });
 
 test('Network El Segundo runs sitewide as a three-creative first-100 wallet campaign', async () => {

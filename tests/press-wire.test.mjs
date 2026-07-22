@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds eight product filings across every public kind', () => {
-  assert.equal(releases.length, 8);
+test('press wire seeds nine product filings across every public kind', () => {
+  assert.equal(releases.length, 9);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,17 @@ test('press wire seeds eight product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('The Holders Cut filing keeps the public preview separate from a live Mainnet offer', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0009');
+  assert.ok(release);
+  assert.equal(release.slug, 'the-holders-cut-opens-44-plate-unlimited-edition-preview');
+  assert.match(release.body.join(' '), /unlimited and priced at 10 tez/i);
+  assert.match(release.body.join(' '), /50 percent of defined net primary proceeds/i);
+  assert.match(release.body.join(' '), /does not originate a Tezos contract/i);
+  assert.match(release.body.join(' '), /Rally carries the same contextual creative in its footer/i);
+  assert.equal(release.productUrl, 'https://the-holders-cut.mhoydich.chatgpt.site/');
 });
 
 test('Network El Segundo filing separates the live roster from prototype sale and payout rules', () => {
@@ -74,7 +85,7 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Eight sourced product filings/);
+  assert.match(home, /Nine sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);
