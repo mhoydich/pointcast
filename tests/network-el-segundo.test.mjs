@@ -8,6 +8,7 @@ const participantApi = new URL('../functions/api/network-el-segundo/participants
 const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
+const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
 
 test('PointCast publishes Network El Segundo with a direct fallback and shared auth bridge', async () => {
   const source = await readFile(page, 'utf8');
@@ -53,10 +54,11 @@ test('PointCast proxies the public participant count without caching or collecti
 });
 
 test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distribution system', async () => {
-  const [blockSource, jsonFeedSource, rssFeedSource] = await Promise.all([
+  const [blockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
     readFile(announcementBlock, 'utf8'),
     readFile(jsonFeed, 'utf8'),
     readFile(rssFeed, 'utf8'),
+    readFile(announcementCardRoute, 'utf8'),
   ]);
   const block = JSON.parse(blockSource);
 
@@ -68,4 +70,7 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
   assert.equal(block.companions.length, 4);
   assert.match(jsonFeedSource, /getCollection\('blocks'/);
   assert.match(rssFeedSource, /getCollection\('blocks'/);
+  assert.match(cardRouteSource, /public\/images\/og\/b\/0484\.png/);
+  assert.match(cardRouteSource, /Content-Type': 'image\/png/);
+  assert.match(cardRouteSource, /max-age=31536000, immutable/);
 });
