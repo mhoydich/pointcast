@@ -50,7 +50,7 @@ test('gallery and ad receipts are in priority discovery', async () => {
   assert.match(llms, /open-ad desk/);
 });
 
-test('v2 starts with a permanent human and JSON edition spine', async () => {
+test('v2 keeps a permanent human and JSON edition spine as the daily edit advances', async () => {
   const [page, json, plan] = await Promise.all([
     readFile(new URL('src/pages/gallery/editions.astro', root), 'utf8'),
     readFile(new URL('src/pages/gallery/editions.json.ts', root), 'utf8'),
@@ -58,7 +58,8 @@ test('v2 starts with a permanent human and JSON edition spine', async () => {
   ]);
   assert.match(page, /Today,<br \/><i>kept\.<\/i>/);
   assert.match(json, /pointcast\.gallery\.editions\.v1/);
-  assert.match(json, /count: 2/);
+  assert.match(json, /count: 3/);
+  assert.match(json, /workCount: todaysGalleryManifest\.workCount/);
   assert.match(json, /workCount: 14/);
   assert.match(json, /workCount: 28/);
   assert.match(plan, /Slice B — data-driven renderer/);

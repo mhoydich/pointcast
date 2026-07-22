@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
-import { positiveIndexGalleryManifest } from '../../lib/todays-gallery';
+import { todaysGalleryManifest } from '../../lib/todays-gallery';
 
 export const prerender = true;
 
-export const GET: APIRoute = () => new Response(JSON.stringify(positiveIndexGalleryManifest, null, 2), {
+export const GET: APIRoute = () => new Response(JSON.stringify(todaysGalleryManifest, null, 2), {
   headers: {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'public, max-age=300',
