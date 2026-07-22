@@ -1,0 +1,236 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { POINTCAST_ADS } from '../../lib/open-ad-network';
+
+const inventory = [...POINTCAST_ADS].sort((a, b) => a.id.localeCompare(b.id));
+---
+
+<BaseLayout
+  title="Open Ad Network Report"
+  description="A public 30-day report of aggregate PointCast house-ad impressions and clicks, with no visitor profiles."
+>
+  <main class="report">
+    <header class="report__hero">
+      <p>POINTCAST AD DESK · LIVE PUBLISHING REPORT</p>
+      <h1>What ran.<br /><em>What moved.</em></h1>
+      <div>
+        <p>Rolling 30-day, first-party counts for every current creative. Ranked by viewability-qualified impressions.</p>
+        <nav aria-label="Ad report resources">
+          <a href="/ads">AD DESK</a>
+          <a href="/api/ad-metrics?days=30">REPORT JSON</a>
+          <a href="/ads.json">INVENTORY JSON</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="report__totals" aria-labelledby="report-period">
+      <div>
+        <p>REPORT WINDOW</p>
+        <h2 id="report-period">LAST <span data-window>30</span> DAYS</h2>
+        <small data-generated>LOADING LIVE COUNTS…</small>
+      </div>
+      <dl>
+        <div><dt>IMPRESSIONS</dt><dd data-total-impressions>—</dd></div>
+        <div><dt>CLICKS</dt><dd data-total-clicks>—</dd></div>
+        <div><dt>CLICK RATE</dt><dd data-total-ctr>—</dd></div>
+      </dl>
+    </section>
+
+    <section class="report__inventory" aria-labelledby="inventory-title">
+      <header>
+        <p>CREATIVE RANKING</p>
+        <h2 id="inventory-title">Most shown,<br /><em>in public.</em></h2>
+      </header>
+      <div class="report__table-wrap">
+        <table>
+          <thead>
+            <tr><th>CREATIVE</th><th>CAMPAIGN / DESTINATION</th><th>IMPRESSIONS</th><th>CLICKS</th><th>CTR</th></tr>
+          </thead>
+          <tbody data-ad-rows>
+            {inventory.map((ad) => (
+              <tr data-ad-id={ad.id}>
+                <th scope="row"><span>{ad.id}</span><strong>{ad.headline}</strong></th>
+                <td><span>{ad.seriesLabel || 'PointCast house rotation'}</span><a href={ad.href}>{ad.cta} →</a></td>
+                <td data-impressions>0</td>
+                <td data-clicks>0</td>
+                <td data-ctr>0.00%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="report__daily" aria-labelledby="daily-title">
+      <header>
+        <p>DAILY PUBLISHING LOG</p>
+        <h2 id="daily-title">Day by day.</h2>
+      </header>
+      <ol data-daily-list><li>Waiting for the live report…</li></ol>
+    </section>
+
+    <aside class="report__method">
+      <p>HOW THESE NUMBERS WORK</p>
+      <ul>
+        <li>An impression counts after at least 50% of a creative stays visible for one second.</li>
+        <li>Impressions are deduplicated per creative, page, and browser session. Clicks count measured creative clicks.</li>
+        <li>No IP, user agent, cookie, wallet, or visitor identifier is stored with an ad event. Do Not Track and PointCast’s local opt-out are honored.</li>
+        <li>These are browser events, not unique people. Automation that executes page JavaScript can appear in the counts.</li>
+        <li>Event records expire after 90 days. The public report refreshes from the rolling event log.</li>
+      </ul>
+      <p class="report__status" data-status aria-live="polite">CONNECTING TO LIVE REPORT…</p>
+    </aside>
+  </main>
+</BaseLayout>
+
+<script>
+  interface MetricCounter {
+    adId: string;
+    impressions: number;
+    clicks: number;
+    ctr: number;
+  }
+
+  interface ReportPayload {
+    generatedAt: string;
+    windowDays: number;
+    status: string;
+    truncated: boolean;
+    totals: Omit<MetricCounter, 'adId'>;
+    ads: MetricCounter[];
+    daily: Array<Omit<MetricCounter, 'adId'> & { date: string }>;
+  }
+
+  const count = new Intl.NumberFormat('en-US');
+  const percent = new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function put(selector: string, value: string): void {
+    const node = document.querySelector<HTMLElement>(selector);
+    if (node) node.textContent = value;
+  }
+
+  function renderDaily(report: ReportPayload): void {
+    const list = document.querySelector<HTMLOListElement>('[data-daily-list]');
+    if (!list) return;
+    list.replaceChildren();
+    if (report.daily.length === 0) {
+      const item = document.createElement('li');
+      item.textContent = 'No measured ad events in this window yet.';
+      list.append(item);
+      return;
+    }
+
+    const peak = Math.max(...report.daily.map((day) => day.impressions), 1);
+    for (const day of report.daily) {
+      const item = document.createElement('li');
+      item.style.setProperty('--daily-width', `${Math.max(2, (day.impressions / peak) * 100)}%`);
+      const date = document.createElement('time');
+      date.dateTime = day.date;
+      date.textContent = day.date;
+      const impressions = document.createElement('strong');
+      impressions.textContent = `${count.format(day.impressions)} IMP`;
+      const clicks = document.createElement('span');
+      clicks.textContent = `${count.format(day.clicks)} CLICK${day.clicks === 1 ? '' : 'S'}`;
+      item.append(date, impressions, clicks);
+      list.append(item);
+    }
+  }
+
+  function renderReport(report: ReportPayload): void {
+    put('[data-window]', String(report.windowDays));
+    put('[data-generated]', `GENERATED ${new Date(report.generatedAt).toLocaleString()} · AUTO-REFRESH 60S`);
+    put('[data-total-impressions]', count.format(report.totals.impressions));
+    put('[data-total-clicks]', count.format(report.totals.clicks));
+    put('[data-total-ctr]', percent.format(report.totals.ctr));
+
+    const metrics = new Map(report.ads.map((ad) => [ad.adId, ad]));
+    const rows = [...document.querySelectorAll<HTMLTableRowElement>('[data-ad-id]')];
+    for (const row of rows) {
+      const metric = metrics.get(row.dataset.adId || '');
+      row.querySelector<HTMLElement>('[data-impressions]')!.textContent = count.format(metric?.impressions || 0);
+      row.querySelector<HTMLElement>('[data-clicks]')!.textContent = count.format(metric?.clicks || 0);
+      row.querySelector<HTMLElement>('[data-ctr]')!.textContent = percent.format(metric?.ctr || 0);
+    }
+    rows.sort((a, b) => {
+      const aMetric = metrics.get(a.dataset.adId || '');
+      const bMetric = metrics.get(b.dataset.adId || '');
+      return (bMetric?.impressions || 0) - (aMetric?.impressions || 0)
+        || (bMetric?.clicks || 0) - (aMetric?.clicks || 0)
+        || (a.dataset.adId || '').localeCompare(b.dataset.adId || '');
+    });
+    const body = document.querySelector('[data-ad-rows]');
+    if (body) body.append(...rows);
+
+    renderDaily(report);
+    const warning = report.truncated ? ' · EVENT LIMIT REACHED; COUNTS ARE A LOWER BOUND' : '';
+    put('[data-status]', report.status === 'live' ? `LIVE · ${report.windowDays}-DAY ROLLING WINDOW${warning}` : 'REPORT STORAGE IS NOT BOUND');
+  }
+
+  async function loadReport(): Promise<void> {
+    try {
+      const response = await fetch('/api/ad-metrics?days=30', { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`report ${response.status}`);
+      renderReport(await response.json() as ReportPayload);
+    } catch {
+      put('[data-status]', 'LIVE REPORT UNAVAILABLE · STATIC INVENTORY REMAINS VISIBLE');
+    }
+  }
+
+  void loadReport();
+</script>
+
+<style>
+  .report { --ink: #11100d; --paper: #f1eadc; --red: #d24524; --blue: #154dc5; color: var(--ink); background: var(--paper); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .report a { color: inherit; }
+  .report__hero { min-height: 74vh; display: grid; align-content: space-between; gap: 32px; padding: clamp(26px, 5vw, 72px); color: #fff8e8; background: var(--blue); border-bottom: 1px solid var(--ink); }
+  .report__hero > p, .report section header > p, .report__method > p:first-child { margin: 0; font-size: 9px; letter-spacing: .15em; }
+  .report__hero > p { color: #ffd144; }
+  .report h1, .report h2 { margin: 0; font-family: 'Lora', Georgia, serif; font-weight: 400; letter-spacing: -.055em; }
+  .report h1 { font-size: clamp(62px, 12vw, 164px); line-height: .78; }
+  .report h1 em, .report h2 em { color: #ffd144; font-weight: 400; }
+  .report__hero > div { display: flex; align-items: end; justify-content: space-between; gap: 30px; }
+  .report__hero > div > p { max-width: 55ch; margin: 0; font-family: 'Lora', Georgia, serif; font-size: clamp(18px, 2vw, 27px); line-height: 1.4; }
+  .report nav { display: flex; flex-wrap: wrap; gap: 8px; }
+  .report nav a { padding: 8px 10px; border: 1px solid currentColor; font-size: 8px; letter-spacing: .1em; text-decoration: none; }
+  .report__totals { display: grid; grid-template-columns: 1fr 1.3fr; gap: 40px; padding: clamp(34px, 6vw, 88px); border-bottom: 1px solid var(--ink); }
+  .report__totals p, .report__totals small { font-size: 8px; letter-spacing: .12em; }
+  .report__totals small { display: block; margin-top: 16px; color: #6e6354; }
+  .report h2 { font-size: clamp(40px, 7vw, 94px); line-height: .9; }
+  .report__totals dl { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; }
+  .report__totals dl div { display: flex; flex-direction: column; justify-content: space-between; min-height: 150px; padding: 14px; border: 1px solid var(--ink); border-right: 0; background: #fffaf0; }
+  .report__totals dl div:last-child { border-right: 1px solid var(--ink); }
+  .report__totals dt { font-size: 8px; letter-spacing: .1em; }
+  .report__totals dd { margin: 0; color: var(--red); font-family: 'Lora', Georgia, serif; font-size: clamp(35px, 5vw, 72px); line-height: 1; }
+  .report__inventory, .report__daily { padding: clamp(34px, 6vw, 88px); border-bottom: 1px solid var(--ink); }
+  .report__inventory > header, .report__daily > header { margin-bottom: 28px; }
+  .report__inventory > header p, .report__daily > header p { color: var(--red); }
+  .report__table-wrap { overflow-x: auto; border: 1px solid var(--ink); }
+  table { width: 100%; min-width: 860px; border-collapse: collapse; background: #fffaf0; }
+  th, td { padding: 14px; border-bottom: 1px solid var(--ink); text-align: left; vertical-align: top; }
+  thead th { color: #fff8e8; background: var(--ink); font-size: 7px; letter-spacing: .12em; }
+  tbody th { width: 34%; }
+  tbody th span, tbody td span { display: block; margin-bottom: 8px; color: var(--red); font-size: 7px; letter-spacing: .08em; }
+  tbody th strong { display: block; font-family: 'Lora', Georgia, serif; font-size: 21px; font-weight: 400; line-height: 1.05; }
+  tbody td { font-size: 11px; }
+  tbody td:nth-last-child(-n+3) { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+  .report__daily { color: #fff8e8; background: var(--ink); }
+  .report__daily ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+  .report__daily li { position: relative; display: grid; grid-template-columns: 1fr auto auto; gap: 18px; padding: 11px; border: 1px solid #5b574f; font-size: 9px; overflow: hidden; }
+  .report__daily li::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--daily-width, 0%); background: #154dc5; opacity: .48; }
+  .report__daily li > * { position: relative; }
+  .report__daily li span { color: #ffd144; }
+  .report__method { padding: clamp(34px, 6vw, 88px); color: var(--ink); background: #ffd144; }
+  .report__method ul { max-width: 900px; margin: 26px 0; padding-left: 20px; font-family: 'Lora', Georgia, serif; font-size: 17px; line-height: 1.55; }
+  .report__method li + li { margin-top: 8px; }
+  .report__status { display: inline-block; margin: 0; padding: 9px 11px; color: #fff8e8; background: var(--ink); font-size: 8px; letter-spacing: .1em; }
+  @media (max-width: 760px) {
+    .report__hero > div { align-items: flex-start; flex-direction: column; }
+    .report__totals { grid-template-columns: 1fr; }
+    .report__totals dl { grid-template-columns: 1fr; }
+    .report__totals dl div { min-height: 110px; border-right: 1px solid var(--ink); border-bottom: 0; }
+    .report__totals dl div:last-child { border-bottom: 1px solid var(--ink); }
+    .report__daily li { grid-template-columns: 1fr auto; }
+    .report__daily li span { grid-column: 1 / -1; }
+  }
+</style>

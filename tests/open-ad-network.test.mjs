@@ -19,24 +19,52 @@ test('all public layout families render the shared open-ad rail', async () => {
 });
 
 test('ad inventory is contextual, transparent, and does not claim live settlement', async () => {
-  const [registry, component, receipt] = await Promise.all([
+  const [registry, component, receipt, report, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/components/OpenAdRail.astro', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads/report.astro', root), 'utf8'),
+    readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
   assert.equal((registry.match(/id: 'PC-HOUSE-/g) || []).length, 9);
   assert.equal((registry.match(/id: 'PC-DRUM-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-DRUM-UNIVERSE-001'/g) || []).length, 1);
+  assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
-  assert.match(registry, /tracking: 'none'/);
+  assert.match(registry, /tracking: 'aggregate impressions \+ clicks'/);
   assert.match(registry, /settlement: 'prototype'/);
-  assert.match(component, /NO BEHAVIORAL PROFILE/);
-  assert.match(component, /WALLET SETTLEMENT ARE NOT LIVE YET/);
+  assert.match(component, /NO VISITOR PROFILE/);
+  assert.match(component, /SETTLEMENT IS NOT LIVE YET/);
+  assert.match(component, /IntersectionObserver/);
+  assert.match(component, /intersectionRatio >= 0\.5/);
+  assert.match(component, /sessionStorage/);
   assert.match(receipt, /OPEN_AD_PLACEMENT/);
   assert.match(receipt, /DRUM_COMPENDIUM_CAMPAIGN/);
   assert.match(receipt, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);
+  assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
+  assert.match(receipt, /aggregateEventTelemetry: true/);
+  assert.match(receipt, /visitorIdentifiers: false/);
+  assert.match(report, /LIVE PUBLISHING REPORT/);
+  assert.match(report, /These are browser events, not unique people/);
+  assert.match(endpoint, /No IP, user agent, cookie, wallet, or visitor identifier/);
+  assert.match(endpoint, /expirationTtl: RETENTION_DAYS/);
+});
+
+test('Nouns About runs as a three-creative house campaign to the canonical field note', async () => {
+  const [registry, desk] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-NOUNS-ABOUT-2026/);
+  assert.equal((registry.match(/href: 'https:\/\/www\.industrynext\.xyz\/about\/'/g) || []).length, 3);
+  assert.match(registry, /Permission is the starting point\./);
+  assert.match(registry, /CC0 makes the work movable\./);
+  assert.match(registry, /A Noun is a beginning, not a boundary\./);
+  assert.match(desk, /NEW HOUSE CAMPAIGN/);
+  assert.match(desk, /SEE CAMPAIGN COUNTS/);
 });
 
 test('Drum Noun Universe is featured on home and guaranteed across other public pages', async () => {
@@ -52,7 +80,7 @@ test('Drum Noun Universe is featured on home and guaranteed across other public 
   assert.match(registry, /return \[universeCreative, \.\.\.companionAds\]\.slice/);
   assert.match(home, /<DrumNounUniverseAd\s*\/>/);
   assert.match(homeAd, /data-ad-record=\{ad\.id\}/);
-  assert.match(homeAd, /NO BEHAVIORAL PROFILE · NO PAID MEDIA/);
+  assert.match(homeAd, /NO VISITOR PROFILE · NO PAID MEDIA/);
   assert.match(rail, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);
 });
 

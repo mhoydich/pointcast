@@ -24,6 +24,7 @@ const ads = pathname === '/'
       </p>
       <div>
         <a href="/ads">HOW IT WORKS</a>
+        <a href="/ads/report">LIVE REPORT</a>
         <a href="/ads.json">PUBLIC RECEIPT</a>
       </div>
     </div>
@@ -50,10 +51,104 @@ const ads = pathname === '/'
     </div>
 
     <p class="open-ad-rail__boundary">
-      CONTEXT, NOT TRACKING · NO BEHAVIORAL PROFILE · TEZ RESERVATION + WALLET SETTLEMENT ARE NOT LIVE YET
+      CONTEXTUAL ROTATION · AGGREGATE IMPRESSIONS + CLICKS · NO VISITOR PROFILE · TEZ SETTLEMENT IS NOT LIVE YET
     </p>
   </aside>
 )}
+
+<script>
+  const endpoint = '/api/ad-metrics';
+  let observer: IntersectionObserver | undefined;
+  const viewTimers = new Map<Element, number>();
+
+  function metricsDisabled(): boolean {
+    try {
+      return navigator.doNotTrack === '1' || localStorage.getItem('pc:no-track') === '1';
+    } catch {
+      return navigator.doNotTrack === '1';
+    }
+  }
+
+  function sendMetric(event: 'impression' | 'click', adId: string): void {
+    if (metricsDisabled()) return;
+    const payload = JSON.stringify({ event, adId });
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon(endpoint, new Blob([payload], { type: 'application/json' }));
+      if (queued) return;
+    }
+    void fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    });
+  }
+
+  function impressionKey(adId: string): string {
+    return `pc:ad-impression:${location.pathname}:${adId}`;
+  }
+
+  function wasSeen(adId: string): boolean {
+    try {
+      return sessionStorage.getItem(impressionKey(adId)) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function markSeen(adId: string): void {
+    try {
+      sessionStorage.setItem(impressionKey(adId), '1');
+    } catch {
+      // Storage can be unavailable; the event remains anonymous either way.
+    }
+  }
+
+  function initializeAdMetrics(): void {
+    observer?.disconnect();
+    for (const timer of viewTimers.values()) window.clearTimeout(timer);
+    viewTimers.clear();
+    if (metricsDisabled()) return;
+
+    observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const element = entry.target as HTMLElement;
+        const adId = element.dataset.adRecord;
+        if (!adId || wasSeen(adId)) {
+          observer?.unobserve(element);
+          continue;
+        }
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (viewTimers.has(element)) continue;
+          const timer = window.setTimeout(() => {
+            markSeen(adId);
+            sendMetric('impression', adId);
+            viewTimers.delete(element);
+            observer?.unobserve(element);
+          }, 1000);
+          viewTimers.set(element, timer);
+        } else {
+          const timer = viewTimers.get(element);
+          if (timer) window.clearTimeout(timer);
+          viewTimers.delete(element);
+        }
+      }
+    }, { threshold: [0.5] });
+
+    document.querySelectorAll<HTMLElement>('[data-ad-record]').forEach((element) => observer?.observe(element));
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as Element | null;
+    const creative = target?.closest<HTMLElement>('[data-ad-record]');
+    const link = target?.closest('a');
+    if (creative?.dataset.adRecord && link) sendMetric('click', creative.dataset.adRecord);
+  }, { capture: true });
+
+  document.addEventListener('astro:page-load', initializeAdMetrics);
+  initializeAdMetrics();
+</script>
 
 <style>
   .open-ad-rail {

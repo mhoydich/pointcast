@@ -29,8 +29,19 @@ export const OPEN_AD_PLACEMENT = {
   format: 'Responsive text card',
   priceTezPerWeek: 12,
   settlement: 'prototype',
-  tracking: 'none',
-  note: 'One clearly labeled contextual placement across public PointCast pages. No behavioral profiles.',
+  tracking: 'aggregate impressions + clicks',
+  note: 'One clearly labeled contextual placement across public PointCast pages. Aggregate events only; no visitor identifiers or behavioral profiles.',
+} as const;
+
+export const NOUNS_ABOUT_CAMPAIGN = {
+  id: 'PC-NOUNS-ABOUT-2026',
+  label: 'Nouns: Permission Is the Starting Point',
+  advertiser: 'Industry Next',
+  creativeCount: 3,
+  placement: 'Contextual rotation across public PointCast pages',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'Three first-party house creatives for a concise field note on why Nouns and CC0 remain unusually interesting.',
 } as const;
 
 export const DRUM_COMPENDIUM_CAMPAIGN = {
@@ -39,7 +50,7 @@ export const DRUM_COMPENDIUM_CAMPAIGN = {
   advertiser: 'PointCast',
   creativeCount: 6,
   placement: 'One contextual creative on every public /drum surface',
-  tracking: 'none',
+  tracking: 'aggregate impressions + clicks',
   status: 'house',
   note: 'A six-part PointCast house campaign distributed by URL context, never visitor behavior.',
 } as const;
@@ -50,12 +61,51 @@ export const DRUM_NOUN_UNIVERSE_CAMPAIGN = {
   advertiser: 'PointCast',
   creativeCount: 1,
   placement: 'Featured homepage unit and contextual placement across public non-Drum pages',
-  tracking: 'none',
+  tracking: 'aggregate impressions + clicks',
   status: 'house',
-  note: 'A first-party PointCast house campaign distributed sitewide without visitor profiles, impression pixels, or paid media.',
+  note: 'A first-party PointCast house campaign distributed sitewide with aggregate event counts, no visitor profiles, and no paid media.',
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-NOUNS-ABOUT-001',
+    advertiser: 'Industry Next',
+    headline: 'Permission is the starting point.',
+    copy: 'A concise field note on Nouns, CC0, and what becomes possible when culture arrives with room to move.',
+    href: 'https://www.industrynext.xyz/about/',
+    cta: 'Read about Nouns',
+    tone: 'signal',
+    contexts: ['nouns', 'noun', 'cc0', 'open', 'art', 'culture', 'agent', 'remix', 'public', 'press'],
+    campaign: NOUNS_ABOUT_CAMPAIGN.id,
+    seriesLabel: NOUNS_ABOUT_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NOUNS-ABOUT-002',
+    advertiser: 'Industry Next',
+    headline: 'CC0 makes the work movable.',
+    copy: 'Not an exhaustive history. A high-level case for why reusable characters can keep becoming more culturally alive.',
+    href: 'https://www.industrynext.xyz/about/',
+    cta: 'Open the field note',
+    tone: 'garden',
+    contexts: ['cc0', 'art', 'gallery', 'today', 'garden', 'culture', 'commons', 'make', 'studio'],
+    campaign: NOUNS_ABOUT_CAMPAIGN.id,
+    seriesLabel: NOUNS_ABOUT_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NOUNS-ABOUT-003',
+    advertiser: 'Industry Next',
+    headline: 'A Noun is a beginning, not a boundary.',
+    copy: 'The interesting part is not only what exists. It is how freely a Noun can travel into the next image, story, tool, or game.',
+    href: 'https://www.industrynext.xyz/about/',
+    cta: 'See why it matters',
+    tone: 'play',
+    contexts: ['noun', 'nouns', 'drum', 'play', 'game', 'agent', 'town', 'network', 'story', 'tool'],
+    campaign: NOUNS_ABOUT_CAMPAIGN.id,
+    seriesLabel: NOUNS_ABOUT_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-DRUM-UNIVERSE-001',
     advertiser: 'PointCast',
