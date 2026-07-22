@@ -179,6 +179,8 @@ export const GET: APIRoute = async () => {
         drumV9: 'https://pointcast.xyz/drum-v9',
         drumRoom3d: 'https://pointcast.xyz/drum-room',
         drumRoom3dJson: 'https://pointcast.xyz/drum-room.json',
+        drumRoom3dV2: 'https://pointcast.xyz/drum-room-v2',
+        drumRoom3dV2Json: 'https://pointcast.xyz/drum-room-v2.json',
         drumRoom3dStats: 'https://pointcast.xyz/api/drum/room?room=lobby&stats=1',
         drumTrophies: 'https://pointcast.xyz/drum-trophies',
         drumApr26: 'https://pointcast.xyz/drum-apr26',

@@ -1,0 +1,1042 @@
+---
+/**
+ * /drum-room-v2 — playful multiplayer drum party experiment.
+ *
+ * One URL room code maps to one hibernating Durable Object. The browser
+ * renders locally synthesized audio and small Three.js gestures; the wire
+ * only carries bounded hits, reactions, and anonymous Noun-style presence.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'The 3D Drum Party V2';
+const description =
+  'Join a shared 3D PointCast drum party with crowd quests, combos, dancing Nouns, and room for 100 visitors.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'PointCast 3D Drum Party V2',
+  url: 'https://pointcast.xyz/drum-room-v2',
+  description,
+  applicationCategory: 'GameApplication',
+  applicationSubCategory: 'Collaborative music room',
+  operatingSystem: 'Any modern web browser',
+  isAccessibleForFree: true,
+  browserRequirements: 'JavaScript, WebSocket, Web Audio; WebGL optional',
+  featureList: [
+    'Collaborative crowd beat quests',
+    'Personal combos and room hype meter',
+    '100 visitor live room target',
+    'Mobile-first 3D drum circle',
+    'Six pleasant synthesized drum voices',
+    'Anonymous Noun-style presence',
+    'Native invite sharing and downloadable invite card',
+    'Reduced-motion and quiet-entry modes',
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og-drum.svg"
+  themeColor="#080a12"
+  immersive
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/drum-room-v2.json', title: '3D Drum Party V2 protocol and discovery JSON' }]}
+>
+  <main class="d3" id="d3-app" data-room="lobby" data-v2="true" data-vibe="sunset">
+    <canvas id="d3-canvas" class="d3__canvas" aria-hidden="true"></canvas>
+    <div class="d3__fallback" id="d3-fallback" aria-hidden="true">
+      <div class="d3__fallback-stage" id="d3-fallback-stage"></div>
+      <div class="d3__fallback-ring"></div>
+    </div>
+    <div class="d3__wash" aria-hidden="true"></div>
+
+    <header class="d3__topbar">
+      <a class="d3__brand" href="/drum" aria-label="Back to the PointCast drum universe">
+        <span>POINTCAST</span><b>DRUM PARTY V2</b>
+      </a>
+      <div class="d3__meter" aria-label="Live room attendance">
+        <span class="d3__live-dot" id="d3-live-dot"></span>
+        <strong id="d3-count">0</strong><span>/ 100 HERE</span>
+        <i><span id="d3-progress"></span></i>
+      </div>
+      <div class="d3__top-actions">
+        <button id="d3-audio" class="d3__chip" type="button" aria-pressed="false">SOUND OFF</button>
+        <button id="v2-vibe" class="d3__chip" type="button">VIBE: SUNSET</button>
+        <button id="d3-invite" class="d3__chip d3__chip--hot" type="button">INVITE</button>
+      </div>
+    </header>
+
+    <div class="d3__room-label" aria-live="polite">
+      <span>ROOM</span><strong id="d3-room-code">LOBBY</strong><em id="d3-status">CONNECTING</em>
+    </div>
+
+    <section class="v2__quest" aria-label="Collaborative crowd beat quest">
+      <header><span>CROWD QUEST</span><b id="v2-quest-number">01</b></header>
+      <strong id="v2-quest-name">SUNRISE ROLL</strong>
+      <p>EVERYONE'S HITS COUNT · PLAY IN ORDER</p>
+      <div class="v2__quest-steps" id="v2-quest-steps" aria-label="Quest sequence"></div>
+      <i><span id="v2-quest-progress"></span></i>
+    </section>
+
+    <aside class="v2__score" aria-label="Party score">
+      <div><span>YOUR COMBO</span><strong id="v2-combo">0</strong><small>KEEP IT MOVING</small></div>
+      <div><span>ROOM HYPE</span><strong id="v2-hype">0%</strong><i><b id="v2-hype-bar"></b></i></div>
+    </aside>
+
+    <section class="d3__stage-copy" aria-label="Room orientation">
+      <p>FOLLOW THE QUEST · BUILD A COMBO · FILL THE ROOM</p>
+      <strong id="d3-last-hit">THE PARTY IS LISTENING</strong>
+    </section>
+
+    <aside class="d3__reactions" aria-label="Send a room reaction">
+      <span>REACT</span>
+      <button type="button" data-reaction="✦" aria-label="Send sparkle">✦</button>
+      <button type="button" data-reaction="♥" aria-label="Send heart">♥</button>
+      <button type="button" data-reaction="🔥" aria-label="Send fire">🔥</button>
+      <button type="button" data-reaction="🪩" aria-label="Send disco ball">🪩</button>
+    </aside>
+
+    <section class="d3__pads" aria-label="Drum pads">
+      <button class="d3__pad d3__pad--kick" type="button" data-pad="kick"><kbd>1</kbd><strong>KICK</strong><span>LOW / ROUND</span></button>
+      <button class="d3__pad d3__pad--snare" type="button" data-pad="snare"><kbd>2</kbd><strong>SNARE</strong><span>DRY / SOFT</span></button>
+      <button class="d3__pad d3__pad--hat" type="button" data-pad="hat"><kbd>3</kbd><strong>HAT</strong><span>AIR / TICK</span></button>
+      <button class="d3__pad d3__pad--tom" type="button" data-pad="tom"><kbd>4</kbd><strong>TOM</strong><span>WARM / DEEP</span></button>
+      <button class="d3__pad d3__pad--clap" type="button" data-pad="clap"><kbd>5</kbd><strong>CLAP</strong><span>WIDE / HUMAN</span></button>
+      <button class="d3__pad d3__pad--bell" type="button" data-pad="bell"><kbd>6</kbd><strong>BELL</strong><span>GOLD / LONG</span></button>
+    </section>
+
+    <div class="v2__ocean-tools" aria-label="Ocean floor sculpting tools">
+      <button id="v2-sculpt" type="button" aria-pressed="false">SCULPT: DIG</button>
+      <p><b>TAP WATER</b> RIPPLE <span>·</span> <b>HOLD + DRAG</b> SCULPT</p>
+    </div>
+
+    <button class="v2__fill" id="v2-fill" type="button"><span>⚡</span> PARTY FILL <small>ONE TAP · SIX HITS</small></button>
+
+    <section class="d3__gate" id="d3-gate" aria-labelledby="d3-gate-title">
+      <div class="d3__gate-card">
+        <p class="d3__eyebrow">POINTCAST · LIVE WEB AUDIO · PARTY ROOM <span data-room-label>LOBBY</span></p>
+        <div class="d3__gate-art" aria-hidden="true">
+          <span class="d3__gate-orbit"></span>
+          <span class="d3__glasses"><i></i><i></i></span>
+          <b>100</b>
+        </div>
+        <h1 id="d3-gate-title">DRUM PARTY<br />V2</h1>
+        <p class="d3__gate-dek">A shared 3D rhythm party. Chase crowd quests, build combos, switch the vibe, and make one hundred anonymous Nouns dance.</p>
+        <div class="d3__gate-actions">
+          <button id="d3-enter-sound" type="button">ENTER WITH SOUND <span>↗</span></button>
+          <button id="d3-enter-quiet" type="button">ENTER QUIETLY</button>
+        </div>
+        <p class="d3__gate-note">Fast, silly, musical. Headphones nice, never required. No account, wallet, microphone, or profile.</p>
+      </div>
+    </section>
+
+    <dialog class="d3__invite" id="d3-invite-dialog" aria-labelledby="d3-invite-title">
+      <form method="dialog"><button class="d3__close" aria-label="Close invite card">×</button></form>
+      <div class="d3__invite-card" id="d3-invite-card">
+        <div class="d3__invite-noise"></div>
+        <p>POINTCAST INVITES YOU TO</p>
+        <h2 id="d3-invite-title">DRUM PARTY<br />V2</h2>
+        <div class="d3__invite-art" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <b>100<br /><small>CAN PLAY</small></b>
+        </div>
+        <div class="d3__invite-foot">
+          <strong>ROOM <span data-room-label>LOBBY</span></strong>
+          <em>pointcast.xyz/drum-room-v2</em>
+        </div>
+      </div>
+      <div class="d3__invite-actions">
+        <button id="d3-share" type="button">SHARE INVITE</button>
+        <button id="d3-copy" type="button">COPY LINK</button>
+        <button id="d3-download" type="button">SAVE CARD</button>
+      </div>
+      <p class="d3__invite-status" id="d3-invite-status" aria-live="polite">Bring a phone. Bring a friend. Bring a beat.</p>
+    </dialog>
+
+    <div class="d3__toast-layer" id="d3-toast-layer" aria-live="polite"></div>
+    <div class="v2__confetti-layer" id="v2-confetti-layer" aria-hidden="true"></div>
+    <div class="v2__flash" aria-hidden="true"></div>
+    <div class="d3__sr" id="d3-announcer" aria-live="polite"></div>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  :root { color-scheme: dark; }
+  html:has(#d3-app), body:has(#d3-app) { background: #080a12; overflow: hidden; overscroll-behavior: none; }
+  body:has(#d3-app) { min-height: 100svh; }
+  body:has(#d3-app) > .skip-link { z-index: 50; }
+  #main-content:has(#d3-app) { min-height: 100svh; }
+
+  .d3 {
+    --cream: #fff7df;
+    --muted: #b4b3c4;
+    --line: rgba(255,255,255,.17);
+    --blue: #5be7ff;
+    --yellow: #ffd448;
+    --coral: #ff6f61;
+    --violet: #9a7dff;
+    position: relative;
+    width: 100%;
+    height: 100svh;
+    min-height: 540px;
+    overflow: hidden;
+    isolation: isolate;
+    background: radial-gradient(circle at 50% 42%, #212545 0%, #0e1020 42%, #070810 76%);
+    color: var(--cream);
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+    touch-action: none;
+  }
+  .d3 button, .d3 a { -webkit-tap-highlight-color: transparent; }
+  .d3__canvas, .d3__fallback, .d3__wash { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .d3__canvas { z-index: 0; display: block; touch-action: none; }
+  .d3__fallback { display: none; z-index: 0; perspective: 700px; background: radial-gradient(circle at 50% 44%, #242849, #080a12 70%); }
+  .d3[data-fallback="true"] .d3__canvas { display: none; }
+  .d3[data-fallback="true"] .d3__fallback { display: block; }
+  .d3__fallback-ring { position: absolute; width: min(68vw, 480px); aspect-ratio: 1; left: 50%; top: 48%; transform: translate(-50%,-50%) rotateX(66deg); border: 18px solid rgba(91,231,255,.12); border-radius: 50%; box-shadow: 0 0 80px rgba(154,125,255,.28), inset 0 0 90px rgba(255,212,72,.12); }
+  .d3__fallback-person { position: absolute; left: 50%; top: 47%; width: 10px; height: 10px; border-radius: 50%; background: hsl(var(--hue) 90% 65%); box-shadow: 0 0 18px hsl(var(--hue) 90% 65%); transform: translate(calc(-50% + var(--x)),calc(-50% + var(--y))); }
+  .d3__wash { z-index: 1; pointer-events: none; background: linear-gradient(180deg, rgba(4,5,10,.76) 0, transparent 18%, transparent 58%, rgba(4,5,10,.94) 100%); }
+
+  .d3__topbar { position: absolute; z-index: 8; top: 0; left: 0; right: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; padding: max(14px, env(safe-area-inset-top)) clamp(14px, 3vw, 42px) 12px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(5,6,12,.78), rgba(5,6,12,.18)); backdrop-filter: blur(14px); }
+  .d3__brand { color: var(--cream); display: inline-flex; flex-direction: column; gap: 2px; width: max-content; font-size: 11px; letter-spacing: .16em; line-height: 1; text-decoration: none !important; }
+  .d3__brand span { font-weight: 500; }
+  .d3__brand b { color: var(--blue); font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .22em; }
+  .d3__meter { display: grid; grid-template-columns: auto auto auto; align-items: baseline; column-gap: 5px; min-width: 170px; text-align: center; font-family: var(--pc-font-mono); font-size: 9px; letter-spacing: .12em; color: var(--muted); }
+  .d3__meter strong { color: var(--cream); font-size: 18px; letter-spacing: 0; }
+  .d3__meter i { grid-column: 1 / -1; position: relative; height: 3px; margin-top: 5px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .d3__meter i span { display: block; width: 0%; height: 100%; background: linear-gradient(90deg,var(--blue),var(--yellow),var(--coral)); transition: width .5s ease; }
+  .d3__live-dot { width: 7px; height: 7px; border-radius: 50%; background: #707381; box-shadow: 0 0 0 transparent; }
+  .d3[data-network="live"] .d3__live-dot { background: #55f39a; box-shadow: 0 0 12px #55f39a; animation: d3-live 1.7s ease-in-out infinite; }
+  @keyframes d3-live { 50% { opacity: .42; } }
+  .d3__top-actions { justify-self: end; display: flex; gap: 8px; }
+  .d3__chip { border: 1px solid var(--line); background: rgba(8,10,18,.58); color: var(--cream); min-height: 34px; padding: 0 12px; border-radius: 999px; font: 500 8px/1 var(--pc-font-mono); letter-spacing: .12em; cursor: pointer; }
+  .d3__chip--hot { color: #080a12; background: var(--yellow); border-color: var(--yellow); }
+
+  .d3__room-label { position: absolute; z-index: 5; top: 94px; left: clamp(14px, 3vw, 42px); display: flex; align-items: center; gap: 9px; font-family: var(--pc-font-mono); font-size: 8px; letter-spacing: .14em; color: var(--muted); }
+  .d3__room-label strong { color: var(--yellow); font-size: 10px; }
+  .d3__room-label em { padding-left: 9px; border-left: 1px solid var(--line); color: #777b89; font-style: normal; }
+  .d3[data-network="live"] .d3__room-label em { color: #55f39a; }
+
+  .d3[data-v2="true"] { --ocean: #50e5ff; --ocean-deep: #070b2a; background: radial-gradient(circle at 50% 42%, #35206b 0%, #121636 43%, #050814 78%); }
+  .d3[data-vibe="aqua"] { --blue: #74ffd1; --yellow: #c5ff6d; --coral: #61d8ff; --violet: #4c8cff; --ocean: #63ffd5; --ocean-deep: #031d2b; }
+  .d3[data-vibe="acid"] { --blue: #b8ff35; --yellow: #fff04a; --coral: #ff4ee1; --violet: #8f63ff; --ocean: #c9ff39; --ocean-deep: #160323; }
+  .d3[data-vibe="sunset"] { --ocean: #54ddff; --ocean-deep: #100a34; }
+  .d3[data-celebrate="true"] .v2__flash { animation: v2-flash .85s ease-out both; }
+  .v2__flash { position: absolute; z-index: 11; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 48%, rgba(255,255,255,.9), rgba(255,212,72,.38) 32%, transparent 70%); }
+  @keyframes v2-flash { 0% { opacity: 0; } 12% { opacity: .92; } 100% { opacity: 0; } }
+
+  .v2__quest { position: absolute; z-index: 7; left: clamp(14px,3vw,42px); top: 126px; width: min(250px,27vw); padding: 11px 12px 10px; border: 1px solid color-mix(in srgb,var(--ocean) 36%,transparent); border-radius: 12px; background: rgba(6,9,25,.68); box-shadow: inset 0 0 32px rgba(84,221,255,.05), 0 16px 40px rgba(0,0,0,.18); backdrop-filter: blur(12px); }
+  .v2__quest header { display: flex; justify-content: space-between; align-items: center; font: 500 7px/1 var(--pc-font-mono); letter-spacing: .16em; color: var(--ocean); }
+  .v2__quest header b { display: grid; place-items: center; min-width: 24px; height: 17px; border-radius: 999px; background: var(--ocean); color: #06101d; font-size: 8px; }
+  .v2__quest > strong { display: block; margin-top: 8px; font-size: 12px; letter-spacing: .07em; }
+  .v2__quest > p { margin: 3px 0 8px; font: 400 6px/1.3 var(--pc-font-mono); letter-spacing: .09em; color: var(--muted); }
+  .v2__quest-steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; }
+  .v2__quest-steps span { display: grid; place-items: center; min-height: 27px; border: 1px solid color-mix(in srgb,var(--step-color) 46%,transparent); border-radius: 7px; background: color-mix(in srgb,var(--step-color) 12%,rgba(8,10,18,.7)); font: 500 7px/1 var(--pc-font-mono); color: color-mix(in srgb,var(--step-color) 74%,white); transition: transform .16s,background .16s,box-shadow .16s; }
+  .v2__quest-steps span[data-state="done"] { background: var(--step-color); color: #07101c; transform: translateY(-2px); }
+  .v2__quest-steps span[data-state="next"] { box-shadow: 0 0 18px color-mix(in srgb,var(--step-color) 48%,transparent); animation: v2-next 1s ease-in-out infinite; }
+  @keyframes v2-next { 50% { transform: translateY(-2px) scale(1.03); } }
+  .v2__quest > i { display: block; height: 3px; margin-top: 7px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .v2__quest > i span { display: block; height: 100%; width: 0; background: linear-gradient(90deg,var(--ocean),var(--yellow)); transition: width .22s ease; }
+
+  .v2__score { position: absolute; z-index: 7; top: 126px; right: clamp(14px,3vw,42px); display: grid; grid-template-columns: repeat(2,minmax(94px,116px)); gap: 6px; }
+  .v2__score > div { min-height: 70px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(6,9,25,.66); backdrop-filter: blur(12px); }
+  .v2__score span,.v2__score small { display: block; font: 400 6px/1 var(--pc-font-mono); letter-spacing: .12em; color: var(--muted); }
+  .v2__score strong { display: block; margin: 5px 0 4px; font: 500 24px/.9 var(--pc-font-mono); color: var(--yellow); }
+  .v2__score i { display: block; height: 4px; margin-top: 8px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .v2__score i b { display: block; width: 0; height: 100%; background: linear-gradient(90deg,var(--ocean),var(--yellow),var(--coral)); transition: width .2s ease; }
+
+  .v2__ocean-tools { position: absolute; z-index: 8; left: clamp(14px,3vw,42px); bottom: max(20px,env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 9px; }
+  .v2__ocean-tools button,.v2__fill { min-height: 44px; border: 1px solid color-mix(in srgb,var(--ocean) 56%,transparent); border-radius: 999px; background: rgba(5,14,30,.78); color: var(--cream); font: 500 8px/1 var(--pc-font-mono); letter-spacing: .1em; cursor: pointer; backdrop-filter: blur(12px); }
+  .v2__ocean-tools button { padding: 0 15px; color: var(--ocean); }
+  .v2__ocean-tools button[aria-pressed="true"] { color: #07101c; background: var(--yellow); border-color: var(--yellow); }
+  .v2__ocean-tools p { margin: 0; font: 400 6px/1.35 var(--pc-font-mono); letter-spacing: .08em; color: var(--muted); }
+  .v2__ocean-tools p b { color: var(--cream); font-weight: 500; }
+  .v2__ocean-tools p span { color: var(--ocean); }
+  .v2__fill { position: absolute; z-index: 8; right: clamp(14px,3vw,42px); bottom: max(20px,env(safe-area-inset-bottom)); padding: 0 17px; border-color: var(--yellow); background: var(--yellow); color: #07101c; }
+  .v2__fill span { font-size: 13px; }
+  .v2__fill small { margin-left: 5px; font-size: 6px; opacity: .65; }
+  .v2__fill:disabled { opacity: .45; cursor: wait; }
+
+  .v2__confetti-layer { position: absolute; z-index: 14; inset: 0; pointer-events: none; overflow: hidden; }
+  .v2__confetti { position: absolute; left: var(--x); top: -24px; width: 9px; height: 18px; border-radius: 2px; background: var(--c); transform: rotate(var(--r)); animation: v2-confetti var(--d) cubic-bezier(.2,.7,.3,1) forwards; }
+  @keyframes v2-confetti { to { top: 105%; transform: translateX(var(--drift)) rotate(calc(var(--r) + 720deg)); } }
+
+  .d3__stage-copy { position: absolute; z-index: 3; left: 50%; top: 20%; transform: translateX(-50%); width: min(90vw, 620px); text-align: center; pointer-events: none; text-shadow: 0 2px 18px #060710; }
+  .d3__stage-copy p { margin: 0 0 7px; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .2em; color: rgba(255,255,255,.42); }
+  .d3__stage-copy strong { display: block; font-size: clamp(12px, 1.5vw, 16px); font-weight: 500; letter-spacing: .08em; color: rgba(255,247,223,.9); transition: color .18s, transform .18s; }
+  .d3__stage-copy strong[data-flash="true"] { color: var(--yellow); transform: scale(1.04); }
+
+  .d3__reactions { position: absolute; z-index: 7; right: clamp(14px, 3vw, 42px); top: 96px; display: flex; align-items: center; gap: 5px; }
+  .d3__reactions span { margin-right: 3px; font: 400 7px/1 var(--pc-font-mono); letter-spacing: .16em; color: rgba(255,255,255,.4); }
+  .d3__reactions button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: rgba(8,10,18,.52); color: var(--cream); cursor: pointer; font-size: 14px; backdrop-filter: blur(8px); }
+  .d3__reactions button:active { transform: scale(.9); }
+
+  .d3__pads { position: absolute; z-index: 7; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: grid; grid-template-columns: repeat(6, minmax(74px, 108px)); gap: 7px; width: max-content; max-width: calc(100vw - 24px); }
+  .d3[data-v2="true"] .d3__pads { bottom: max(78px, calc(env(safe-area-inset-bottom) + 70px)); }
+  .d3__pad { --pad: var(--blue); position: relative; display: grid; grid-template-columns: 1fr auto; align-items: end; min-height: 72px; padding: 10px; border: 1px solid color-mix(in srgb, var(--pad) 52%, transparent); border-radius: 10px; overflow: hidden; background: linear-gradient(145deg,color-mix(in srgb,var(--pad) 18%,rgba(8,10,18,.94)),rgba(8,10,18,.9)); color: var(--cream); text-align: left; cursor: pointer; box-shadow: inset 0 0 28px rgba(255,255,255,.025), 0 8px 30px rgba(0,0,0,.24); backdrop-filter: blur(10px); touch-action: manipulation; }
+  .d3__pad::before { content: ''; position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 80%,var(--pad),transparent 66%); transition: opacity .12s; }
+  .d3__pad[data-hit="true"] { transform: translateY(2px) scale(.98); border-color: var(--cream); }
+  .d3__pad[data-hit="true"]::before { opacity: .62; }
+  .d3__pad kbd { align-self: start; font: 400 8px/1 var(--pc-font-mono); color: color-mix(in srgb,var(--pad) 80%,white); }
+  .d3__pad strong { grid-column: 1 / -1; position: relative; font-size: 12px; letter-spacing: .07em; }
+  .d3__pad span { grid-column: 1 / -1; position: relative; margin-top: 2px; font: 400 6px/1 var(--pc-font-mono); letter-spacing: .12em; color: var(--muted); }
+  .d3__pad--kick { --pad: #5be7ff; } .d3__pad--snare { --pad: #ff6f61; } .d3__pad--hat { --pad: #fff7df; }
+  .d3__pad--tom { --pad: #9a7dff; } .d3__pad--clap { --pad: #ff8fc5; } .d3__pad--bell { --pad: #ffd448; }
+
+  .d3__gate { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: max(22px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 70% 25%,rgba(91,231,255,.17),transparent 34%), radial-gradient(circle at 15% 75%,rgba(255,111,97,.16),transparent 34%), rgba(5,6,12,.9); backdrop-filter: blur(18px); transition: opacity .45s ease, visibility .45s; touch-action: pan-y; }
+  .d3__gate[data-open="false"] { opacity: 0; visibility: hidden; pointer-events: none; }
+  .d3__gate-card { position: relative; width: min(100%, 720px); min-height: min(720px, calc(100svh - 44px)); padding: clamp(22px, 5vw, 56px); border: 1px solid rgba(255,255,255,.24); border-radius: 26px; overflow: hidden; background: linear-gradient(145deg,rgba(25,28,49,.97),rgba(8,10,18,.98)); box-shadow: 0 40px 120px rgba(0,0,0,.55); }
+  .d3__eyebrow { margin: 0; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .17em; color: var(--blue); }
+  .d3__gate h1 { position: relative; z-index: 2; margin: clamp(70px, 14vh, 130px) 0 18px; font-size: clamp(50px, 10vw, 108px); font-weight: 500; line-height: .82; letter-spacing: -.07em; color: var(--cream); }
+  .d3__gate-dek { position: relative; z-index: 2; max-width: 530px; margin: 0; color: #cbc9d4; font-size: clamp(14px, 2.1vw, 19px); line-height: 1.45; }
+  .d3__gate-art { position: absolute; top: 46px; right: -30px; width: clamp(190px, 38vw, 360px); aspect-ratio: 1; border: 1px solid rgba(255,212,72,.42); border-radius: 50%; background: radial-gradient(circle,rgba(255,212,72,.16),transparent 64%); box-shadow: 0 0 80px rgba(255,212,72,.13); }
+  .d3__gate-orbit { position: absolute; inset: 17%; border: 13px solid rgba(154,125,255,.26); border-radius: 50%; transform: rotateX(64deg) rotateZ(-20deg); }
+  .d3__glasses { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); display: flex; gap: 8px; }
+  .d3__glasses i { width: clamp(42px, 8vw, 72px); aspect-ratio: 1.18; border: 12px solid var(--cream); background: var(--blue); box-shadow: inset 0 -13px 0 #384bd9; }
+  .d3__gate-art b { position: absolute; right: 20%; bottom: 8%; font: 500 clamp(38px,7vw,74px)/1 var(--pc-font-mono); color: var(--yellow); }
+  .d3__gate-actions { position: relative; z-index: 2; display: flex; gap: 9px; margin-top: clamp(24px,5vh,48px); }
+  .d3__gate-actions button { min-height: 52px; border-radius: 999px; border: 1px solid var(--line); padding: 0 20px; font: 500 10px/1 var(--pc-font-mono); letter-spacing: .1em; cursor: pointer; }
+  #d3-enter-sound { flex: 1; border-color: var(--yellow); background: var(--yellow); color: #090a12; display: flex; align-items: center; justify-content: space-between; }
+  #d3-enter-quiet { background: transparent; color: var(--cream); }
+  .d3__gate-note { position: relative; z-index: 2; margin: 13px 0 0; font: 400 8px/1.4 var(--pc-font-mono); letter-spacing: .05em; color: #858695; }
+
+  .d3__invite { width: min(92vw, 470px); max-width: none; padding: 12px; border: 1px solid rgba(255,255,255,.25); border-radius: 24px; color: var(--cream); background: rgba(8,10,18,.97); box-shadow: 0 36px 120px rgba(0,0,0,.7); }
+  .d3__invite::backdrop { background: rgba(3,4,8,.78); backdrop-filter: blur(12px); }
+  .d3__close { position: absolute; z-index: 3; top: 20px; right: 20px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0,0,0,.36); color: white; font-size: 22px; cursor: pointer; }
+  .d3__invite-card { position: relative; aspect-ratio: 4 / 5; padding: 30px; overflow: hidden; border-radius: 15px; background: #ffd448; color: #090a12; }
+  .d3__invite-noise { position: absolute; inset: 0; opacity: .16; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E"); mix-blend-mode: multiply; }
+  .d3__invite-card > p { position: relative; z-index: 2; margin: 0; font: 500 8px/1 var(--pc-font-mono); letter-spacing: .18em; }
+  .d3__invite-card h2 { position: relative; z-index: 2; margin: 20px 0 0; font-size: clamp(43px, 12vw, 68px); font-weight: 500; line-height: .83; letter-spacing: -.075em; }
+  .d3__invite-art { position: absolute; width: 78%; aspect-ratio: 1; right: -19%; bottom: 10%; border-radius: 50%; border: 1px solid rgba(9,10,18,.35); }
+  .d3__invite-art > span { position: absolute; inset: calc(var(--i, 1) * 12%); border: 12px solid rgba(9,10,18,.13); border-radius: 50%; }
+  .d3__invite-art > span:nth-child(1) { --i: 1; border-color: #ff6f61; } .d3__invite-art > span:nth-child(2) { --i: 2; border-color: #5be7ff; } .d3__invite-art > span:nth-child(3) { --i: 3; border-color: #9a7dff; }
+  .d3__invite-art b { position: absolute; left: 3%; bottom: 11%; font: 500 74px/.7 var(--pc-font-mono); }
+  .d3__invite-art small { font-size: 9px; letter-spacing: .13em; }
+  .d3__invite-foot { position: absolute; z-index: 2; left: 30px; right: 30px; bottom: 25px; display: flex; justify-content: space-between; gap: 10px; align-items: end; border-top: 1px solid rgba(9,10,18,.4); padding-top: 10px; }
+  .d3__invite-foot strong { font: 500 10px/1 var(--pc-font-mono); letter-spacing: .1em; } .d3__invite-foot em { font: 400 8px/1 var(--pc-font-mono); font-style: normal; }
+  .d3__invite-actions { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; padding-top: 8px; }
+  .d3__invite-actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: #171a29; color: var(--cream); font: 500 8px/1 var(--pc-font-mono); letter-spacing: .08em; cursor: pointer; }
+  #d3-share { color: #090a12; background: var(--blue); border-color: var(--blue); }
+  .d3__invite-status { margin: 9px 4px 3px; text-align: center; font: 400 8px/1.4 var(--pc-font-mono); color: var(--muted); }
+
+  .d3__toast-layer { position: absolute; z-index: 9; inset: 0; pointer-events: none; overflow: hidden; }
+  .d3__toast { position: absolute; left: var(--left); top: var(--top); font-size: clamp(24px,5vw,54px); animation: d3-toast 1.8s ease-out forwards; filter: drop-shadow(0 8px 18px #000); }
+  @keyframes d3-toast { from { opacity: 0; transform: translateY(30px) scale(.6) rotate(-8deg); } 25% { opacity: 1; } to { opacity: 0; transform: translateY(-130px) scale(1.25) rotate(8deg); } }
+  .d3__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (max-width: 720px) {
+    .d3 { min-height: 600px; }
+    .d3__topbar { grid-template-columns: 1fr auto; gap: 8px; padding-inline: 12px; }
+    .d3__meter { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; grid-template-columns: auto auto 1fr; text-align: left; min-width: 0; }
+    .d3__meter i { grid-column: 3; grid-row: 1; align-self: center; margin: 0 0 0 8px; }
+    .d3__top-actions { grid-column: 2; grid-row: 1; }
+    .d3__chip { min-height: 31px; padding-inline: 9px; font-size: 7px; }
+    .d3__room-label { top: 104px; left: 12px; }
+    .d3__reactions { top: 96px; right: 10px; gap: 3px; }
+    .d3__reactions span { display: none; }
+    .d3__reactions button { width: 28px; height: 28px; font-size: 12px; }
+    .d3__stage-copy { top: 36%; }
+    .d3__pads { grid-template-columns: repeat(3, minmax(0,1fr)); width: calc(100vw - 20px); gap: 5px; }
+    .d3__pad { min-height: 56px; padding: 7px 9px; border-radius: 8px; }
+    .d3__pad strong { font-size: 10px; } .d3__pad span { font-size: 5px; }
+    .d3__gate-card { min-height: auto; padding: 22px; border-radius: 20px; }
+    .d3__gate h1 { margin-top: min(20vh, 128px); font-size: clamp(48px, 17vw, 76px); }
+    .d3__gate-art { top: 48px; width: 210px; }
+    .d3__glasses i { border-width: 8px; }
+    .d3__gate-actions { flex-direction: column; }
+    .d3__gate-actions button { width: 100%; }
+    .d3__invite { margin: auto auto max(8px,env(safe-area-inset-bottom)); width: calc(100vw - 16px); }
+    .d3__invite-actions { grid-template-columns: 1fr 1fr; }
+    #d3-share { grid-column: 1 / -1; }
+    #v2-vibe { display: none; }
+    .v2__quest { top: 139px; left: 10px; width: calc(100vw - 20px); padding: 8px 9px; }
+    .v2__quest > strong { display: inline-block; margin-top: 6px; font-size: 10px; }
+    .v2__quest > p { display: inline-block; margin: 0 0 0 6px; }
+    .v2__quest-steps { margin-top: 6px; }
+    .v2__quest-steps span { min-height: 22px; font-size: 6px; }
+    .v2__score { top: 236px; left: 10px; right: auto; grid-template-columns: repeat(2,88px); }
+    .v2__score > div { min-height: 50px; padding: 7px; }
+    .v2__score strong { display: inline-block; margin: 5px 4px 2px 0; font-size: 17px; }
+    .v2__score small { display: inline-block; }
+    .v2__score i { margin-top: 5px; }
+    .v2__ocean-tools { left: 10px; right: 10px; bottom: max(9px,env(safe-area-inset-bottom)); gap: 5px; }
+    .v2__ocean-tools button { flex: 0 0 auto; min-height: 38px; padding-inline: 11px; font-size: 7px; }
+    .v2__ocean-tools p { max-width: 112px; font-size: 5px; }
+    .v2__fill { right: 10px; bottom: max(9px,env(safe-area-inset-bottom)); min-height: 38px; padding-inline: 10px; font-size: 7px; }
+    .v2__fill small { display: none; }
+    .d3[data-v2="true"] .d3__pads { bottom: max(58px,calc(env(safe-area-inset-bottom) + 51px)); }
+  }
+
+  @media (max-height: 660px) and (min-width: 721px) {
+    .d3__pads { bottom: 8px; } .d3__pad { min-height: 56px; }
+    .d3__stage-copy { top: 23%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .d3 *, .d3 *::before, .d3 *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+  }
+</style>
+
+<script>
+  import * as THREE from 'three';
+
+  type Pad = 'kick' | 'snare' | 'hat' | 'tom' | 'clap' | 'bell';
+  type Person = { id: string; avatar: number; hue: number; joinedAt: number };
+  type RoomMessage = {
+    v?: number; type?: string; room?: string; connected?: number; target?: number;
+    you?: { clientId: string; avatar: number; hue: number };
+    people?: Person[]; recentHits?: RoomHit[]; totalHits?: number;
+    clientId?: string; avatar?: number; hue?: number; pad?: Pad; velocity?: number;
+    seq?: number; serverAt?: number; emoji?: string;
+  };
+  type RoomHit = { type: 'hit'; id: string; clientId: string; avatar: number; hue: number; pad: Pad; velocity: number; seq: number; serverAt: number };
+
+  const PAD_LABELS: Record<Pad, string> = { kick: 'KICK', snare: 'SNARE', hat: 'HAT', tom: 'TOM', clap: 'CLAP', bell: 'BELL' };
+
+  const app = document.getElementById('d3-app') as HTMLElement | null;
+  const canvas = document.getElementById('d3-canvas') as HTMLCanvasElement | null;
+  const fallbackStage = document.getElementById('d3-fallback-stage') as HTMLElement | null;
+  const countEl = document.getElementById('d3-count');
+  const progressEl = document.getElementById('d3-progress') as HTMLElement | null;
+  const statusEl = document.getElementById('d3-status');
+  const roomCodeEl = document.getElementById('d3-room-code');
+  const lastHitEl = document.getElementById('d3-last-hit') as HTMLElement | null;
+  const audioButton = document.getElementById('d3-audio') as HTMLButtonElement | null;
+  const gate = document.getElementById('d3-gate') as HTMLElement | null;
+  const inviteDialog = document.getElementById('d3-invite-dialog') as HTMLDialogElement | null;
+  const inviteStatus = document.getElementById('d3-invite-status');
+  const toastLayer = document.getElementById('d3-toast-layer');
+  const confettiLayer = document.getElementById('v2-confetti-layer');
+  const questNumberEl = document.getElementById('v2-quest-number');
+  const questNameEl = document.getElementById('v2-quest-name');
+  const questStepsEl = document.getElementById('v2-quest-steps');
+  const questProgressEl = document.getElementById('v2-quest-progress') as HTMLElement | null;
+  const comboEl = document.getElementById('v2-combo');
+  const hypeEl = document.getElementById('v2-hype');
+  const hypeBarEl = document.getElementById('v2-hype-bar') as HTMLElement | null;
+  const fillButton = document.getElementById('v2-fill') as HTMLButtonElement | null;
+  const vibeButton = document.getElementById('v2-vibe') as HTMLButtonElement | null;
+  const sculptButton = document.getElementById('v2-sculpt') as HTMLButtonElement | null;
+  const announcer = document.getElementById('d3-announcer');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function normalizedRoom(raw: string | null) {
+    const room = (raw || 'lobby').trim().toLowerCase();
+    return /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(room) ? room : 'lobby';
+  }
+  function randomRoom() {
+    const bytes = new Uint8Array(3);
+    crypto.getRandomValues(bytes);
+    return `jam-${Array.from(bytes, (value) => value.toString(36).padStart(2, '0')).join('').slice(0, 6)}`;
+  }
+  const params = new URLSearchParams(window.location.search);
+  let room = normalizedRoom(params.get('room'));
+  if (params.get('new') === '1') {
+    room = randomRoom();
+    params.delete('new');
+    params.set('room', room);
+    history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+  }
+  app?.setAttribute('data-room', room);
+  if (roomCodeEl) roomCodeEl.textContent = room.toUpperCase();
+  document.querySelectorAll('[data-room-label]').forEach((element) => { element.textContent = room.toUpperCase(); });
+
+  const SID_KEY = 'pc:drum-room:sid';
+  function sessionId() {
+    try {
+      let value = localStorage.getItem(SID_KEY);
+      if (!value) { value = crypto.randomUUID(); localStorage.setItem(SID_KEY, value); }
+      return value;
+    } catch { return crypto.randomUUID(); }
+  }
+  const sid = sessionId();
+
+  // ── Pleasant, adaptive Web Audio kit ─────────────────────────────
+  let audioContext: AudioContext | null = null;
+  let voiceBus: GainNode | null = null;
+  let masterGain: GainNode | null = null;
+  let noiseBuffer: AudioBuffer | null = null;
+  let ambientNodes: AudioNode[] = [];
+  let soundOn = false;
+  let connected = 0;
+
+  const QUESTS: { name: string; sequence: Pad[] }[] = [
+    { name: 'SUNRISE ROLL', sequence: ['kick', 'hat', 'snare', 'hat'] },
+    { name: 'PINK THUNDER', sequence: ['clap', 'clap', 'tom', 'kick'] },
+    { name: 'GOLDEN STAIRS', sequence: ['kick', 'tom', 'clap', 'bell'] },
+    { name: 'NOUN PARADE', sequence: ['snare', 'hat', 'snare', 'bell'] },
+    { name: 'DEEP WATER', sequence: ['tom', 'kick', 'tom', 'clap'] },
+  ];
+  let questIndex = 0;
+  let questProgress = 0;
+  let roomHits = 0;
+  let combo = 0;
+  let comboTimer = 0;
+  let lastLocalHitAt = 0;
+  let hype = 0;
+  let partyEnergy = 0;
+
+  function renderQuest() {
+    const quest = QUESTS[questIndex % QUESTS.length] || QUESTS[0]!;
+    if (questNumberEl) questNumberEl.textContent = String((questIndex % QUESTS.length) + 1).padStart(2, '0');
+    if (questNameEl) questNameEl.textContent = quest.name;
+    if (questStepsEl) {
+      questStepsEl.replaceChildren();
+      quest.sequence.forEach((pad, index) => {
+        const step = document.createElement('span');
+        step.textContent = PAD_LABELS[pad];
+        step.style.setProperty('--step-color', `#${padColorsHex(pad)}`);
+        step.dataset.state = index < questProgress ? 'done' : index === questProgress ? 'next' : 'waiting';
+        questStepsEl.appendChild(step);
+      });
+    }
+    if (questProgressEl) questProgressEl.style.width = `${(questProgress / quest.sequence.length) * 100}%`;
+  }
+
+  function padColorsHex(pad: Pad) {
+    return ({ kick: '5be7ff', snare: 'ff6f61', hat: 'fff7df', tom: '9a7dff', clap: 'ff8fc5', bell: 'ffd448' } as Record<Pad,string>)[pad];
+  }
+
+  function paintCombo() {
+    if (comboEl) comboEl.textContent = String(combo);
+  }
+
+  function paintHype() {
+    const rounded = Math.round(hype);
+    if (hypeEl) hypeEl.textContent = `${rounded}%`;
+    if (hypeBarEl) hypeBarEl.style.width = `${rounded}%`;
+  }
+
+  function confetti(count = 26) {
+    if (!confettiLayer || reducedMotion) return;
+    const colors = ['var(--ocean)', 'var(--yellow)', 'var(--coral)', 'var(--violet)', '#fff7df'];
+    for (let index = 0; index < count; index += 1) {
+      const piece = document.createElement('i'); piece.className = 'v2__confetti';
+      piece.style.setProperty('--x', `${4 + Math.random() * 92}%`);
+      piece.style.setProperty('--c', colors[index % colors.length] || '#fff7df');
+      piece.style.setProperty('--r', `${Math.random() * 180}deg`);
+      piece.style.setProperty('--d', `${1.6 + Math.random() * 1.4}s`);
+      piece.style.setProperty('--drift', `${-80 + Math.random() * 160}px`);
+      confettiLayer.appendChild(piece); window.setTimeout(() => piece.remove(), 3300);
+    }
+  }
+
+  function completeQuest() {
+    questProgress = 0;
+    hype = Math.min(100, hype + 28); partyEnergy = 1;
+    paintHype(); confetti(34); showReaction('🪩', 52); flashLabel('CROWD QUEST COMPLETE · THE FLOOR IS GLOWING');
+    app?.setAttribute('data-celebrate', 'true'); window.setTimeout(() => app?.removeAttribute('data-celebrate'), 900);
+    questIndex = (questIndex + 1) % QUESTS.length; window.setTimeout(renderQuest, 360);
+  }
+
+  function feedQuest(pad: Pad) {
+    const quest = QUESTS[questIndex % QUESTS.length] || QUESTS[0]!;
+    const expected = quest.sequence[questProgress];
+    if (pad === expected) questProgress += 1;
+    else questProgress = pad === quest.sequence[0] ? 1 : 0;
+    if (questProgress >= quest.sequence.length) completeQuest(); else renderQuest();
+  }
+
+  renderQuest(); paintCombo(); paintHype();
+  window.setInterval(() => { hype = Math.max(0, hype - (hype > 70 ? 2.2 : 1.15)); paintHype(); }, 900);
+
+  function ensureAudio() {
+    if (!audioContext) {
+      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtor) return null;
+      audioContext = new AudioCtor();
+      voiceBus = audioContext.createGain();
+      const compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -22; compressor.knee.value = 22; compressor.ratio.value = 5; compressor.attack.value = .006; compressor.release.value = .28;
+      masterGain = audioContext.createGain(); masterGain.gain.value = .76;
+      const delay = audioContext.createDelay(.5); delay.delayTime.value = .085;
+      const feedback = audioContext.createGain(); feedback.gain.value = .13;
+      const wet = audioContext.createGain(); wet.gain.value = .14;
+      voiceBus.connect(compressor).connect(masterGain).connect(audioContext.destination);
+      voiceBus.connect(delay).connect(feedback).connect(delay); delay.connect(wet).connect(masterGain);
+      noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * .5, audioContext.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
+    }
+    if (audioContext.state === 'suspended') void audioContext.resume();
+    return audioContext;
+  }
+
+  function envelope(node: GainNode, at: number, peak: number, decay: number, attack = .003) {
+    node.gain.setValueAtTime(.0001, at);
+    node.gain.exponentialRampToValueAtTime(Math.max(.0002, peak), at + attack);
+    node.gain.exponentialRampToValueAtTime(.0001, at + decay);
+  }
+
+  function playPad(pad: Pad, velocity = .78, remote = false) {
+    if (!soundOn) return;
+    const context = ensureAudio();
+    if (!context || !voiceBus || !noiseBuffer) return;
+    const at = context.currentTime + .008;
+    const crowdScale = remote ? Math.max(.16, .52 / Math.sqrt(Math.max(1, connected / 7))) : 1;
+    const amount = Math.max(.04, Math.min(1, velocity)) * crowdScale;
+    const tone = (frequency: number, end: number, type: OscillatorType, peak: number, decay: number) => {
+      const oscillator = context.createOscillator(); const gain = context.createGain();
+      oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, at); oscillator.frequency.exponentialRampToValueAtTime(Math.max(24, end), at + decay * .72);
+      envelope(gain, at, peak * amount, decay); oscillator.connect(gain).connect(voiceBus!); oscillator.start(at); oscillator.stop(at + decay + .04);
+    };
+    const noise = (filterType: BiquadFilterType, frequency: number, peak: number, decay: number, delay = 0) => {
+      const source = context.createBufferSource(); source.buffer = noiseBuffer;
+      const filter = context.createBiquadFilter(); filter.type = filterType; filter.frequency.value = frequency; filter.Q.value = .7;
+      const gain = context.createGain(); envelope(gain, at + delay, peak * amount, decay, .002);
+      source.connect(filter).connect(gain).connect(voiceBus!); source.start(at + delay); source.stop(at + delay + decay + .03);
+    };
+    if (pad === 'kick') { tone(118, 43, 'sine', .56, .34); tone(260, 65, 'triangle', .08, .08); }
+    if (pad === 'snare') { noise('bandpass', 1900, .34, .18); tone(196, 168, 'triangle', .11, .14); }
+    if (pad === 'hat') noise('highpass', 6200, .19, .075);
+    if (pad === 'tom') { tone(178, 92, 'sine', .42, .38); tone(267, 138, 'triangle', .07, .22); }
+    if (pad === 'clap') { noise('bandpass', 1400, .22, .12); noise('bandpass', 1700, .16, .10, .028); noise('bandpass', 1550, .12, .09, .055); }
+    if (pad === 'bell') { tone(523.25, 522.7, 'sine', .23, 1.4); tone(1046.5, 1044, 'sine', .09, .86); tone(1445, 1438, 'sine', .055, .62); }
+  }
+
+  function startAmbient() {
+    const context = ensureAudio();
+    if (!context || !masterGain || ambientNodes.length) return;
+    const filter = context.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 420;
+    const gain = context.createGain(); gain.gain.value = .018;
+    filter.connect(gain).connect(masterGain);
+    [65.41, 98, 130.81].forEach((frequency, index) => {
+      const oscillator = context.createOscillator(); oscillator.type = index === 0 ? 'sine' : 'triangle'; oscillator.frequency.value = frequency;
+      oscillator.detune.value = index * 3 - 2; oscillator.connect(filter); oscillator.start(); ambientNodes.push(oscillator);
+    });
+    ambientNodes.push(filter, gain);
+  }
+
+  function setSound(next: boolean) {
+    soundOn = next;
+    if (next) { ensureAudio(); startAmbient(); }
+    if (masterGain && audioContext) masterGain.gain.setTargetAtTime(next ? .76 : .0001, audioContext.currentTime, .025);
+    if (audioButton) { audioButton.textContent = next ? 'SOUND ON' : 'SOUND OFF'; audioButton.setAttribute('aria-pressed', String(next)); }
+  }
+
+  // ── Small real 3D room; CSS presence fallback if WebGL is unavailable ──
+  let renderer: THREE.WebGLRenderer | null = null;
+  let scene: THREE.Scene | null = null;
+  let camera: THREE.PerspectiveCamera | null = null;
+  let raycaster: THREE.Raycaster | null = null;
+  const pointer = new THREE.Vector2();
+  const padMeshes = new Map<Pad, THREE.Mesh>();
+  const avatarGroups = new Map<string, THREE.Group>();
+  const pulseMeshes: { mesh: THREE.Mesh; born: number; hue: number }[] = [];
+  type RippleSlot = { x: number; z: number; born: number; strength: number };
+  const rippleSlots: RippleSlot[] = [];
+  const TERRAIN_SIZE = 64;
+  const TERRAIN_WORLD = 14;
+  const terrainValues = new Float32Array(TERRAIN_SIZE * TERRAIN_SIZE);
+  let terrainTexture: THREE.DataTexture | null = null;
+  let terrainMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> | null = null;
+  let waterMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null;
+  let roomLight: THREE.SpotLight | null = null;
+  let sculptMode: 'dig' | 'raise' = 'dig';
+  let sculpting = false;
+  let sculptTimer = 0;
+  let lastSculptAt = 0;
+  let yaw = 0;
+  let pitch = .52;
+  let radius = 12.6;
+  let pointerDown = false;
+  let pointerMoved = false;
+  let pointerX = 0;
+  let pointerY = 0;
+  const padColors: Record<Pad, number> = { kick: 0x5be7ff, snare: 0xff6f61, hat: 0xfff7df, tom: 0x9a7dff, clap: 0xff8fc5, bell: 0xffd448 };
+
+  const waterVertexShader = `
+    uniform float uTime;
+    uniform sampler2D uTerrain;
+    uniform vec4 uRipples[8];
+    varying vec2 vUvWater;
+    varying float vWave;
+    varying float vTerrain;
+    varying float vFocus;
+    void main() {
+      vUvWater = uv;
+      float terrain = texture2D(uTerrain, uv).r * 2.0 - 1.0;
+      vec2 texel = vec2(1.0 / 64.0, 0.0);
+      vec2 grad = vec2(
+        texture2D(uTerrain, uv + texel.xy).r - texture2D(uTerrain, uv - texel.xy).r,
+        texture2D(uTerrain, uv + texel.yx).r - texture2D(uTerrain, uv - texel.yx).r
+      );
+      vec2 world = (uv - 0.5) * 14.0;
+      float wave = sin(world.x * 1.35 + uTime * 1.25) * 0.035 + cos(world.y * 1.1 - uTime) * 0.028;
+      float focus = 0.0;
+      for (int i = 0; i < 8; i++) {
+        vec4 ripple = uRipples[i];
+        float age = uTime - ripple.z;
+        if (age > 0.0 && age < 7.0 && ripple.w > 0.0) {
+          vec2 bentWorld = world + grad * (22.0 + age * 4.0);
+          float dist = distance(bentWorld, ripple.xy);
+          float localSpeed = 1.75 + terrain * 0.72;
+          float front = dist - age * localSpeed;
+          float envelope = exp(-abs(front) * 3.6) * exp(-age * 0.24);
+          wave += sin(front * 12.0) * envelope * 0.22 * ripple.w;
+          focus += envelope * (0.45 + length(grad) * 12.0);
+        }
+      }
+      vTerrain = terrain;
+      vWave = wave;
+      vFocus = focus;
+      vec3 transformed = position;
+      transformed.z += wave + terrain * 0.018;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
+    }
+  `;
+  const waterFragmentShader = `
+    uniform float uHype;
+    uniform vec3 uShallow;
+    uniform vec3 uDeep;
+    varying vec2 vUvWater;
+    varying float vWave;
+    varying float vTerrain;
+    varying float vFocus;
+    void main() {
+      float radius = distance(vUvWater, vec2(0.5));
+      if (radius > 0.5) discard;
+      float ridge = smoothstep(-0.35, 0.82, vTerrain);
+      vec3 color = mix(uDeep, uShallow, 0.24 + ridge * 0.5 + vWave * 1.5);
+      color += vec3(0.45, 0.9, 1.0) * min(1.0, vFocus) * (0.45 + uHype * 0.45);
+      float edge = smoothstep(0.5, 0.43, radius);
+      float alpha = (0.58 + ridge * 0.13 + min(vFocus, 1.0) * 0.24) * edge;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `;
+
+  terrainValues.fill(.5);
+
+  function terrainStorageKey() { return `pc:drum-room-v2:terrain:${room}`; }
+  function loadTerrain() {
+    try {
+      const encoded = localStorage.getItem(terrainStorageKey()); if (!encoded) return;
+      const values = JSON.parse(encoded) as number[];
+      if (values.length !== terrainValues.length) return;
+      values.forEach((value, index) => { terrainValues[index] = Math.max(.05, Math.min(.95, Number(value) || .5)); });
+    } catch {}
+  }
+  function saveTerrain() {
+    try { localStorage.setItem(terrainStorageKey(), JSON.stringify(Array.from(terrainValues, (value) => Math.round(value * 1000) / 1000))); } catch {}
+  }
+  loadTerrain();
+
+  function refreshTerrainGeometry() {
+    if (terrainTexture) terrainTexture.needsUpdate = true;
+    if (!terrainMesh) return;
+    const geometry = terrainMesh.geometry;
+    const positions = geometry.attributes.position as THREE.BufferAttribute;
+    const colors = geometry.attributes.color as THREE.BufferAttribute;
+    for (let index = 0; index < positions.count; index += 1) {
+      const uv = geometry.attributes.uv as THREE.BufferAttribute;
+      const gridX = Math.max(0, Math.min(TERRAIN_SIZE - 1, Math.round(uv.getX(index) * (TERRAIN_SIZE - 1))));
+      const gridY = Math.max(0, Math.min(TERRAIN_SIZE - 1, Math.round(uv.getY(index) * (TERRAIN_SIZE - 1))));
+      const height = (terrainValues[gridY * TERRAIN_SIZE + gridX] - .5) * 1.55;
+      positions.setZ(index, height);
+      const t = height / 1.55 + .5;
+      const color = new THREE.Color().setHSL(.58 - t * .18, .5 + t * .28, .12 + t * .24);
+      colors.setXYZ(index, color.r, color.g, color.b);
+    }
+    positions.needsUpdate = true; colors.needsUpdate = true;
+    geometry.computeVertexNormals();
+  }
+
+  function sculptTerrain(point: THREE.Vector3, pressure = 1) {
+    const now = performance.now(); if (now - lastSculptAt < 28) return; lastSculptAt = now;
+    const u = point.x / TERRAIN_WORLD + .5; const v = .5 - point.z / TERRAIN_WORLD;
+    const centerX = u * (TERRAIN_SIZE - 1); const centerY = v * (TERRAIN_SIZE - 1);
+    const radiusCells = 5.4;
+    for (let y = Math.max(0, Math.floor(centerY - radiusCells)); y <= Math.min(TERRAIN_SIZE - 1, Math.ceil(centerY + radiusCells)); y += 1) {
+      for (let x = Math.max(0, Math.floor(centerX - radiusCells)); x <= Math.min(TERRAIN_SIZE - 1, Math.ceil(centerX + radiusCells)); x += 1) {
+        const distance = Math.hypot(x - centerX, y - centerY); if (distance > radiusCells) continue;
+        const falloff = Math.pow(1 - distance / radiusCells, 2);
+        const index = y * TERRAIN_SIZE + x;
+        terrainValues[index] = Math.max(.05, Math.min(.95, terrainValues[index] + (sculptMode === 'raise' ? 1 : -1) * .022 * falloff * pressure));
+      }
+    }
+    refreshTerrainGeometry(); hype = Math.min(100, hype + .45); paintHype();
+    if (app) {
+      let low = 1; let high = 0;
+      terrainValues.forEach((value) => { low = Math.min(low, value); high = Math.max(high, value); });
+      app.dataset.terrainRange = `${low.toFixed(3)}:${high.toFixed(3)}`;
+    }
+  }
+
+  function dropRipple(point: THREE.Vector3, strength = 1) {
+    rippleSlots.push({ x: point.x, z: point.z, born: performance.now() / 1000, strength });
+    if (rippleSlots.length > 8) rippleSlots.shift();
+    if (app) app.dataset.ripples = String(rippleSlots.length);
+    partyEnergy = Math.min(1, partyEnergy + .2);
+    flashLabel('LIQUID LENS · RIPPLE BENDING THROUGH YOUR TERRAIN');
+  }
+
+  function waterPointAt(clientX: number, clientY: number) {
+    if (!canvas || !camera || !raycaster || !waterMesh) return null;
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1; pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const point = raycaster.intersectObject(waterMesh, false)[0]?.point || null;
+    return point && Math.hypot(point.x, point.z) <= TERRAIN_WORLD * .49 ? point : null;
+  }
+
+  function makeNoun(person: Person) {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(`hsl(${person.hue}, 58%, 42%)`), roughness: .75, metalness: .05 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf1c8a6, roughness: .8 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x10121e, roughness: .5 });
+    const lens = new THREE.MeshStandardMaterial({ color: padColors[(['kick','snare','hat','tom','clap','bell'] as Pad[])[person.avatar % 6] || 'kick'], emissiveIntensity: .2, emissive: 0x222222 });
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(.22, .48, 4, 8), bodyMat); body.position.y = .46; group.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(.42,.38,.37), skinMat); head.position.y = 1.08; group.add(head);
+    [-.13,.13].forEach((x) => { const glass = new THREE.Mesh(new THREE.BoxGeometry(.22,.17,.07), lens); glass.position.set(x,1.1,.215); group.add(glass); });
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(.08,.05,.08), dark); bridge.position.set(0,1.1,.215); group.add(bridge);
+    group.userData.clientId = person.id;
+    return group;
+  }
+
+  function positionPeople(people: Person[]) {
+    if (fallbackStage) {
+      fallbackStage.replaceChildren();
+      people.slice(0, 100).forEach((person, index) => {
+        const dot = document.createElement('i'); dot.className = 'd3__fallback-person';
+        const angle = (index / Math.max(1, people.length)) * Math.PI * 2; const ringIndex = index % 2; const spread = ringIndex ? 150 : 108;
+        dot.style.setProperty('--hue', String(person.hue)); dot.style.setProperty('--x', `${Math.cos(angle) * spread}px`); dot.style.setProperty('--y', `${Math.sin(angle) * spread * .36}px`);
+        fallbackStage.appendChild(dot);
+      });
+    }
+    if (!scene) return;
+    const ids = new Set(people.map((person) => person.id));
+    for (const [id, group] of avatarGroups) { if (!ids.has(id)) { scene.remove(group); avatarGroups.delete(id); } }
+    people.forEach((person, index) => {
+      let group = avatarGroups.get(person.id);
+      if (!group) { group = makeNoun(person); avatarGroups.set(person.id, group); scene!.add(group); }
+      const ring = index < 44 ? 0 : 1;
+      const ringCount = ring === 0 ? Math.min(44, people.length) : Math.max(1, people.length - 44);
+      const ringIndex = ring === 0 ? index : index - 44;
+      const angle = (ringIndex / ringCount) * Math.PI * 2 + ring * .08;
+      const distance = ring === 0 ? 6.35 : 7.65;
+      group.position.set(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
+      group.rotation.y = -angle + Math.PI / 2;
+      group.scale.setScalar(people.length > 70 ? .72 : people.length > 38 ? .82 : .94);
+    });
+  }
+
+  function buildScene() {
+    if (!app || !canvas) return;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+      scene = new THREE.Scene(); scene.background = new THREE.Color(0x080a12); scene.fog = new THREE.FogExp2(0x080a12, .052);
+      camera = new THREE.PerspectiveCamera(48, 1, .1, 80); raycaster = new THREE.Raycaster();
+      scene.add(new THREE.HemisphereLight(0x6d78c8, 0x11121a, 1.2));
+      roomLight = new THREE.SpotLight(0xff78c8, 42, 30, .68, .7, 1.1); roomLight.position.set(0,11,2); scene.add(roomLight);
+      const floor = new THREE.Mesh(new THREE.CylinderGeometry(8.8, 9.2, .35, 96), new THREE.MeshStandardMaterial({ color: 0x14172a, roughness: .68, metalness: .25 })); floor.position.y = -.3; scene.add(floor);
+      terrainTexture = new THREE.DataTexture(terrainValues, TERRAIN_SIZE, TERRAIN_SIZE, THREE.RedFormat, THREE.FloatType);
+      terrainTexture.minFilter = THREE.LinearFilter; terrainTexture.magFilter = THREE.LinearFilter; terrainTexture.wrapS = terrainTexture.wrapT = THREE.ClampToEdgeWrapping; terrainTexture.needsUpdate = true;
+      const terrainGeometry = new THREE.CircleGeometry(TERRAIN_WORLD * .5, 128);
+      terrainGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrainGeometry.attributes.position.count * 3), 3));
+      terrainMesh = new THREE.Mesh(terrainGeometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: .08, side: THREE.DoubleSide }));
+      terrainMesh.rotation.x = -Math.PI / 2; terrainMesh.position.y = -.22; terrainMesh.renderOrder = 1; scene.add(terrainMesh);
+      const waterGeometry = new THREE.PlaneGeometry(TERRAIN_WORLD, TERRAIN_WORLD, 128, 128);
+      waterMesh = new THREE.Mesh(waterGeometry, new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 }, uHype: { value: 0 }, uTerrain: { value: terrainTexture },
+          uRipples: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, -99, 0)) },
+          uShallow: { value: new THREE.Color(0x56e9ff) }, uDeep: { value: new THREE.Color(0x071238) },
+        },
+        vertexShader: waterVertexShader, fragmentShader: waterFragmentShader,
+        transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.y = .035; waterMesh.renderOrder = 3; waterMesh.userData.water = true; scene.add(waterMesh);
+      refreshTerrainGeometry();
+      const floorRing = new THREE.Mesh(new THREE.RingGeometry(3.15,3.32,96), new THREE.MeshBasicMaterial({ color: 0x5be7ff, transparent: true, opacity: .26, side: THREE.DoubleSide })); floorRing.rotation.x = -Math.PI/2; floorRing.position.y = -.1; scene.add(floorRing);
+      for (let ring = 1; ring <= 4; ring += 1) { const mesh = new THREE.Mesh(new THREE.RingGeometry(1.15 * ring,1.15*ring+.018,96),new THREE.MeshBasicMaterial({color:0x929ad3,transparent:true,opacity:.12,side:THREE.DoubleSide})); mesh.rotation.x=-Math.PI/2; mesh.position.y=-.085; scene.add(mesh); }
+      const pads: Pad[] = ['kick','snare','hat','tom','clap','bell'];
+      pads.forEach((pad,index) => {
+        const angle = (index / pads.length) * Math.PI * 2 - Math.PI/2;
+        const material = new THREE.MeshStandardMaterial({ color: padColors[pad], emissive: padColors[pad], emissiveIntensity: .11, roughness: .36, metalness: .35 });
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(.68,.78,.32,32),material); mesh.position.set(Math.cos(angle)*2.15,.24,Math.sin(angle)*2.15); mesh.userData.pad=pad; mesh.renderOrder=4; scene!.add(mesh); padMeshes.set(pad,mesh);
+      });
+      const core = new THREE.Mesh(new THREE.IcosahedronGeometry(.74,1), new THREE.MeshStandardMaterial({ color: 0x242a4c, emissive: 0x9a7dff, emissiveIntensity: .32, roughness: .2, metalness: .6 })); core.position.y=.72; core.userData.core=true; scene.add(core);
+      const particlePositions = new Float32Array(330 * 3);
+      for (let i=0;i<particlePositions.length;i+=3) { const angle=Math.random()*Math.PI*2; const distance=5+Math.random()*13; particlePositions[i]=Math.cos(angle)*distance; particlePositions[i+1]=1+Math.random()*10; particlePositions[i+2]=Math.sin(angle)*distance; }
+      const stars = new THREE.BufferGeometry(); stars.setAttribute('position',new THREE.BufferAttribute(particlePositions,3)); scene.add(new THREE.Points(stars,new THREE.PointsMaterial({color:0xbec9ff,size:.045,transparent:true,opacity:.55})));
+      resizeScene(); renderScene(0);
+    } catch {
+      app.dataset.fallback = 'true'; renderer = null; scene = null; camera = null;
+    }
+  }
+
+  function resizeScene() {
+    if (!renderer || !camera || !app) return;
+    const width = app.clientWidth; const height = app.clientHeight;
+    renderer.setSize(width,height,false); camera.aspect=width/Math.max(1,height); camera.updateProjectionMatrix();
+  }
+  function updateCamera() {
+    if (!camera) return;
+    camera.position.set(Math.sin(yaw)*Math.cos(pitch)*radius, Math.sin(pitch)*radius*.72+1.2, Math.cos(yaw)*Math.cos(pitch)*radius);
+    camera.lookAt(0,.65,0);
+  }
+  function renderScene(time: number) {
+    if (!renderer || !scene || !camera) return;
+    updateCamera();
+    partyEnergy *= .972;
+    if (waterMesh) {
+      waterMesh.material.uniforms.uTime.value = time / 1000;
+      waterMesh.material.uniforms.uHype.value = hype / 100;
+      const uniforms = waterMesh.material.uniforms.uRipples.value as THREE.Vector4[];
+      for (let index = 0; index < 8; index += 1) {
+        const ripple = rippleSlots[index]; const target = uniforms[index]; if (!target) continue;
+        if (ripple) target.set(ripple.x, ripple.z, ripple.born, ripple.strength); else target.set(0, 0, -99, 0);
+      }
+    }
+    if (roomLight) { roomLight.intensity = 34 + hype * .16 + partyEnergy * 20; roomLight.position.x = Math.sin(time * .00035) * (1.5 + partyEnergy * 2); }
+    if (!reducedMotion) {
+      avatarGroups.forEach((group,index) => { group.position.y=Math.sin(time*(.0014+partyEnergy*.003)+index)*(.045+partyEnergy*.18); group.rotation.z=Math.sin(time*.004+index)*partyEnergy*.1; });
+      const core = scene.children.find((child) => child.userData.core); if (core) { core.rotation.y=time*.00035; core.rotation.x=.3+Math.sin(time*.0005)*.1; }
+    }
+    for (let index=pulseMeshes.length-1;index>=0;index-=1) { const pulse=pulseMeshes[index]; if (!pulse) continue; const life=(performance.now()-pulse.born)/900; if(life>=1){scene.remove(pulse.mesh);pulseMeshes.splice(index,1);}else{pulse.mesh.scale.setScalar(1+life*7); (pulse.mesh.material as THREE.MeshBasicMaterial).opacity=(1-life)*.6;} }
+    renderer.render(scene,camera); requestAnimationFrame(renderScene);
+  }
+  function animatePad(pad: Pad, hue?: number) {
+    const button = document.querySelector(`[data-pad="${pad}"]`) as HTMLElement | null;
+    button?.setAttribute('data-hit','true'); setTimeout(() => button?.removeAttribute('data-hit'),120);
+    const mesh = padMeshes.get(pad);
+    if (mesh && scene) {
+      const material = mesh.material as THREE.MeshStandardMaterial; material.emissiveIntensity=.85; mesh.scale.set(1.08,.72,1.08);
+      setTimeout(()=>{material.emissiveIntensity=.11;mesh.scale.set(1,1,1);},150);
+      const pulse = new THREE.Mesh(new THREE.RingGeometry(.23,.27,40),new THREE.MeshBasicMaterial({color:new THREE.Color(`hsl(${hue ?? 190},90%,65%)`),transparent:true,opacity:.6,side:THREE.DoubleSide})); pulse.rotation.x=-Math.PI/2; pulse.position.copy(mesh.position); pulse.position.y=-.03; scene.add(pulse); pulseMeshes.push({mesh:pulse,born:performance.now(),hue:hue??190});
+    }
+  }
+  window.addEventListener('resize',resizeScene,{passive:true});
+  canvas?.addEventListener('pointerdown',(event)=>{
+    pointerDown=true;pointerMoved=false;sculpting=false;pointerX=event.clientX;pointerY=event.clientY;canvas.setPointerCapture(event.pointerId);
+    window.clearTimeout(sculptTimer);
+    sculptTimer=window.setTimeout(()=>{
+      if(!pointerDown||pointerMoved)return;const point=waterPointAt(pointerX,pointerY);if(!point)return;
+      sculpting=true;app?.setAttribute('data-sculpting','true');sculptTerrain(point,1.3);flashLabel(`${sculptMode==='dig'?'DIGGING A POOL':'RAISING A RIDGE'} · DRAG TO SCULPT`);
+    },360);
+  });
+  canvas?.addEventListener('pointermove',(event)=>{
+    if(!pointerDown)return;const dx=event.clientX-pointerX,dy=event.clientY-pointerY;
+    if(sculpting){const point=waterPointAt(event.clientX,event.clientY);if(point)sculptTerrain(point,Math.min(1.8,.8+Math.hypot(dx,dy)*.08));pointerX=event.clientX;pointerY=event.clientY;return;}
+    if(Math.abs(dx)+Math.abs(dy)>6){pointerMoved=true;window.clearTimeout(sculptTimer);yaw-=dx*.006;pitch=Math.max(.16,Math.min(.9,pitch+dy*.004));pointerX=event.clientX;pointerY=event.clientY;}
+  });
+  canvas?.addEventListener('pointerup',(event)=>{
+    pointerDown=false;window.clearTimeout(sculptTimer);
+    if(sculpting){sculpting=false;app?.removeAttribute('data-sculpting');saveTerrain();flashLabel(`${sculptMode==='dig'?'POOL DUG':'RIDGE RAISED'} · TAP TO BEND A RIPPLE`);return;}
+    if(pointerMoved||!renderer||!camera||!raycaster||!canvas)return;
+    const rect=canvas.getBoundingClientRect();pointer.x=((event.clientX-rect.left)/rect.width)*2-1;pointer.y=-((event.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);
+    const hit=raycaster.intersectObjects([...padMeshes.values()],false)[0];const pad=hit?.object.userData.pad as Pad | undefined;
+    if(pad){triggerPad(pad,.82);return;}const point=waterPointAt(event.clientX,event.clientY);if(point)dropRipple(point,1);
+  });
+  canvas?.addEventListener('pointercancel',()=>{pointerDown=false;sculpting=false;window.clearTimeout(sculptTimer);app?.removeAttribute('data-sculpting');});
+  canvas?.addEventListener('contextmenu',(event)=>event.preventDefault());
+  canvas?.addEventListener('wheel',(event)=>{radius=Math.max(8,Math.min(17,radius+event.deltaY*.008));},{passive:true});
+  buildScene();
+
+  sculptButton?.addEventListener('click',()=>{
+    sculptMode=sculptMode==='dig'?'raise':'dig';sculptButton.textContent=`SCULPT: ${sculptMode.toUpperCase()}`;sculptButton.setAttribute('aria-pressed',String(sculptMode==='raise'));
+    if (app) app.dataset.sculptMode = sculptMode;
+    flashLabel(`${sculptMode==='dig'?'DIG MODE · HOLD WATER TO CARVE POOLS':'RAISE MODE · HOLD WATER TO BUILD RIDGES'}`);
+  });
+
+  const vibes = [
+    { id: 'sunset', label: 'SUNSET', scene: 0x080a20, light: 0xff78c8, shallow: 0x56e9ff, deep: 0x071238 },
+    { id: 'aqua', label: 'AQUA', scene: 0x031a25, light: 0x67ffd8, shallow: 0x63ffd5, deep: 0x032031 },
+    { id: 'acid', label: 'ACID', scene: 0x12031f, light: 0xc9ff39, shallow: 0xc9ff39, deep: 0x21052f },
+  ] as const;
+  let vibeIndex = 0;
+  function applyVibe() {
+    const vibe = vibes[vibeIndex % vibes.length] || vibes[0]; if(!vibe)return;
+    app?.setAttribute('data-vibe',vibe.id);if(vibeButton)vibeButton.textContent=`VIBE: ${vibe.label}`;
+    scene?.background?.setHex(vibe.scene);if(scene?.fog)scene.fog.color.setHex(vibe.scene);if(roomLight)roomLight.color.setHex(vibe.light);
+    if(waterMesh){waterMesh.material.uniforms.uShallow.value.setHex(vibe.shallow);waterMesh.material.uniforms.uDeep.value.setHex(vibe.deep);}
+    partyEnergy=1;confetti(10);flashLabel(`${vibe.label} WATER · NEW LIGHT IN THE ROOM`);
+  }
+  vibeButton?.addEventListener('click',()=>{vibeIndex=(vibeIndex+1)%vibes.length;applyVibe();});
+
+  fillButton?.addEventListener('click',()=>{
+    if(fillButton.disabled)return;fillButton.disabled=true;setSound(true);partyEnergy=1;confetti(14);
+    const fill:Pad[]=['kick','hat','snare','hat','tom','clap'];
+    fill.forEach((pad,index)=>window.setTimeout(()=>{
+      triggerPad(pad,.72+index*.035);const angle=(index/fill.length)*Math.PI*2;dropRipple(new THREE.Vector3(Math.cos(angle)*(2.8+index*.18),0,Math.sin(angle)*(2.8+index*.18)),.62);
+    },index*155));
+    window.setTimeout(()=>{fillButton.disabled=false;},1450);
+  });
+
+  // ── WebSocket room protocol ─────────────────────────────────────
+  let socket: WebSocket | null = null;
+  let myId = '';
+  let seq = 0;
+  let reconnectAttempt = 0;
+  let reconnectTimer: number | null = null;
+
+  function networkStatus(status: string, live: boolean) {
+    if (statusEl) statusEl.textContent=status;
+    if (app) app.dataset.network=live?'live':'offline';
+  }
+  function paintCount(value: number) {
+    connected=Math.max(0,value); if(countEl)countEl.textContent=String(connected); if(progressEl)progressEl.style.width=`${Math.min(100,connected)}%`;
+  }
+  function flashLabel(text: string) {
+    if(!lastHitEl)return;lastHitEl.textContent=text;lastHitEl.dataset.flash='true';setTimeout(()=>{if(lastHitEl)lastHitEl.dataset.flash='false';},220);
+  }
+  function websocketUrl() {
+    const protocol=location.protocol==='https:'?'wss:':'ws:'; const url=new URL(`${protocol}//${location.host}/api/drum/room`);url.searchParams.set('room',room);url.searchParams.set('sid',sid);return url.href;
+  }
+  function connectRoom() {
+    if(socket&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(socket.readyState))return;
+    networkStatus('CONNECTING',false);
+    try { socket=new WebSocket(websocketUrl()); } catch { scheduleReconnect(); return; }
+    socket.addEventListener('open',()=>{reconnectAttempt=0;networkStatus('LIVE',true);});
+    socket.addEventListener('message',(event)=>{
+      let message: RoomMessage; try{message=JSON.parse(String(event.data));}catch{return;}
+      if(message.type==='welcome') { myId=message.you?.clientId||''; paintCount(message.connected||1); roomHits=message.totalHits||0;questIndex=Math.floor(roomHits/16)%QUESTS.length;questProgress=0;renderQuest();(message.recentHits||[]).slice(-8).forEach((hit)=>animatePad(hit.pad,hit.hue)); return; }
+      if(message.type==='presence') { paintCount(message.connected||0); positionPeople(message.people||[]); if((message.connected||0)===100){flashLabel('ONE HUNDRED PEOPLE ARE IN THE ROOM');} return; }
+      if(message.type==='hit'&&message.pad) { const mine=message.clientId===myId;roomHits+=1;hype=Math.min(100,hype+(mine?8:5));partyEnergy=Math.min(1,partyEnergy+(mine ? .24 : .16));paintHype();feedQuest(message.pad);animatePad(message.pad,message.hue);const hitMesh=padMeshes.get(message.pad);if(hitMesh)dropRipple(new THREE.Vector3(hitMesh.position.x,0,hitMesh.position.z),mine ? .72 : .46);if(!mine)playPad(message.pad,message.velocity||.6,true);flashLabel(`${mine?'YOU':'NOUN '+String(message.avatar??'').padStart(4,'0')} PLAYED ${message.pad.toUpperCase()}`);return; }
+      if(message.type==='reaction'&&message.emoji){showReaction(message.emoji,message.hue||180);return;}
+      if(message.type==='rate-limit')flashLabel('EASY — LET THE ROOM BREATHE');
+      if(message.type==='busy')flashLabel('THE ROOM IS FULL OF RHYTHM');
+    });
+    socket.addEventListener('close',()=>{socket=null;networkStatus('RECONNECTING',false);scheduleReconnect();});
+    socket.addEventListener('error',()=>{try{socket?.close();}catch{}});
+  }
+  function scheduleReconnect(){if(reconnectTimer!==null)return;const delay=Math.min(10_000,700*Math.pow(1.7,reconnectAttempt++));reconnectTimer=window.setTimeout(()=>{reconnectTimer=null;connectRoom();},delay);}
+  function send(payload: Record<string,unknown>){if(socket?.readyState!==WebSocket.OPEN)return;try{socket.send(JSON.stringify(payload));}catch{}}
+
+  function triggerPad(pad: Pad, velocity=.78){
+    if(!soundOn)setSound(true);const now=performance.now();combo=now-lastLocalHitAt<1150?combo+1:1;lastLocalHitAt=now;paintCombo();window.clearTimeout(comboTimer);comboTimer=window.setTimeout(()=>{combo=0;paintCombo();},1700);
+    if(combo===8){confetti(10);flashLabel('8 HIT COMBO · THE NOUNS ARE DANCING');}if(combo===16){confetti(24);hype=Math.min(100,hype+20);paintHype();flashLabel('16 HIT COMBO · PARTY ANIMAL');}
+    seq+=1;playPad(pad,velocity,false);animatePad(pad);partyEnergy=Math.min(1,partyEnergy+.18);send({v:1,type:'hit',pad,velocity,seq,clientAt:Date.now()});if(announcer)announcer.textContent=`Played ${pad}`;
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-pad]').forEach((button)=>button.addEventListener('pointerdown',(event)=>{event.preventDefault();triggerPad(button.dataset.pad as Pad,.78);}));
+  window.addEventListener('keydown',(event)=>{if(event.repeat)return;const map:Record<string,Pad>={"1":'kick',"2":'snare',"3":'hat',"4":'tom',"5":'clap',"6":'bell',a:'kick',s:'snare',d:'hat',f:'tom',g:'clap',h:'bell'};const pad=map[event.key.toLowerCase()];if(pad){event.preventDefault();triggerPad(pad,.8);}});
+
+  function showReaction(emoji:string,hue=180){if(!toastLayer)return;const toast=document.createElement('span');toast.className='d3__toast';toast.textContent=emoji;toast.style.setProperty('--left',`${12+Math.random()*76}%`);toast.style.setProperty('--top',`${32+Math.random()*28}%`);toast.style.filter=`drop-shadow(0 0 18px hsl(${hue} 90% 60%))`;toastLayer.appendChild(toast);setTimeout(()=>toast.remove(),1900);}
+  document.querySelectorAll<HTMLButtonElement>('[data-reaction]').forEach((button)=>button.addEventListener('click',()=>{const emoji=button.dataset.reaction||'✦';showReaction(emoji);send({v:1,type:'reaction',emoji});}));
+
+  // ── Entry and invite card ───────────────────────────────────────
+  function enter(withSound:boolean){setSound(withSound);gate?.setAttribute('data-open','false');}
+  document.getElementById('d3-enter-sound')?.addEventListener('click',()=>enter(true));
+  document.getElementById('d3-enter-quiet')?.addEventListener('click',()=>enter(false));
+  audioButton?.addEventListener('click',()=>setSound(!soundOn));
+  document.getElementById('d3-invite')?.addEventListener('click',()=>inviteDialog?.showModal());
+  const inviteUrl=()=>`${location.origin}${location.pathname}?room=${encodeURIComponent(room)}`;
+  async function copyInvite(){try{await navigator.clipboard.writeText(inviteUrl());if(inviteStatus)inviteStatus.textContent='Invite link copied.';}catch{if(inviteStatus)inviteStatus.textContent=inviteUrl();}}
+  document.getElementById('d3-copy')?.addEventListener('click',copyInvite);
+  document.getElementById('d3-share')?.addEventListener('click',async()=>{const share={title:'Join my PointCast Drum Party V2',text:`Meet me in room ${room.toUpperCase()}. Sculpt the ocean, bend ripples, chase crowd quests, and make 100 Nouns dance.`,url:inviteUrl()};if(navigator.share){try{await navigator.share(share);if(inviteStatus)inviteStatus.textContent='Invite shared.';return;}catch{}}await copyInvite();});
+  document.getElementById('d3-download')?.addEventListener('click',()=>{
+    const card=document.createElement('canvas');card.width=1080;card.height=1350;const context=card.getContext('2d');if(!context)return;
+    context.fillStyle='#ffd448';context.fillRect(0,0,1080,1350);context.fillStyle='#090a12';context.font='500 28px monospace';context.fillText('POINTCAST INVITES YOU TO',74,92);
+    context.font='500 126px Arial';context.fillText('DRUM PARTY',70,270);context.fillText('V2',70,390);
+    const colors=['#ff6f61','#5be7ff','#9a7dff'];colors.forEach((color,index)=>{context.strokeStyle=color;context.lineWidth=40;context.beginPath();context.arc(775,780,330-index*84,0,Math.PI*2);context.stroke();});
+    context.fillStyle='#090a12';context.font='500 180px monospace';context.fillText('100',100,940);context.font='500 28px monospace';context.fillText('CAN PLAY AT ONCE',106,985);
+    context.lineWidth=3;context.beginPath();context.moveTo(74,1180);context.lineTo(1006,1180);context.stroke();context.font='500 29px monospace';context.fillText(`ROOM ${room.toUpperCase()}`,74,1240);context.font='400 24px monospace';context.fillText('pointcast.xyz/drum-room-v2',598,1240);
+    const link=document.createElement('a');link.download=`pointcast-drum-party-v2-${room}.png`;link.href=card.toDataURL('image/png');link.click();if(inviteStatus)inviteStatus.textContent='Invite card saved.';
+  });
+
+  connectRoom();
+</script>
