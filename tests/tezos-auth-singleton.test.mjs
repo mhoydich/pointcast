@@ -37,3 +37,13 @@ test('Tezos login challenge is short-lived and single-use', async () => {
   assert.match(route, /expirationTtl/);
   assert.match(route, /michelineStringPayload\(message\)/);
 });
+
+test('PointCast issues bounded one-use Tezos project tickets', async () => {
+  const route = await readFile(new URL('functions/api/auth/project-ticket.ts', root), 'utf8');
+  const page = await readFile(new URL('src/pages/auth/project.astro', root), 'utf8');
+  assert.match(route, /network-el-segundo/);
+  assert.match(route, /expirationTtl: TICKET_TTL_SECONDS/);
+  assert.match(route, /USERS\.delete\(key\)/);
+  assert.match(page, /pc:auth-change/);
+  assert.match(page, /One wallet/);
+});
