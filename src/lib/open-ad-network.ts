@@ -10,6 +10,10 @@ import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-v
 import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 
+const NETWORK_EL_SEGUNDO_AUTH_PATH =
+  '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
+const NETWORK_EL_SEGUNDO_AUTH_URL = `https://pointcast.xyz${NETWORK_EL_SEGUNDO_AUTH_PATH}`;
+
 export type PointCastAdTone = 'signal' | 'garden' | 'play' | 'ritual' | 'network' | 'field';
 
 export interface PointCastAd {
@@ -219,7 +223,7 @@ export const NETWORK_FIRST_100_SIGNAL = {
   id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
   label: 'Network El Segundo — First 100 Signal Strip',
   advertiser: 'Network El Segundo',
-  destination: 'https://pointcast.xyz/network-el-segundo',
+  destination: NETWORK_EL_SEGUNDO_AUTH_URL,
   placement: 'Above-the-fold strip across every public PointCast layout except the canonical campaign page',
   tracking: 'aggregate impressions + clicks',
   privacy: 'No IP, user agent, cookie, wallet, or visitor identifier is stored with an event.',
@@ -260,7 +264,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     advertiser: 'Network El Segundo',
     headline: 'The next founding light is unclaimed.',
     copy: 'Claim it in about 20 seconds: zero tez, one free Kukai message signature, no purchase, no mint, and no transaction.',
-    href: '/network-el-segundo',
+    href: NETWORK_EL_SEGUNDO_AUTH_PATH,
     cta: 'Claim the next light — free',
     tone: 'network',
     contexts: ['network', 'tezos', 'wallet', 'kukai', 'passport', 'agent', 'town', 'home', 'pointcast'],
@@ -275,7 +279,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     advertiser: 'Network El Segundo',
     headline: 'Zero tez. One signature. One light.',
     copy: 'A free Kukai wallet-control signature illuminates one of 100 public positions. Addresses stay out of the artwork.',
-    href: '/network-el-segundo',
+    href: NETWORK_EL_SEGUNDO_AUTH_PATH,
     cta: 'Take the next open seat',
     tone: 'garden',
     contexts: ['art', 'gallery', 'today', 'collect', 'mint', 'commerce', 'press', 'garden', 'flower'],
@@ -290,7 +294,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     advertiser: 'Network El Segundo',
     headline: 'Bring one wallet. Invite one more.',
     copy: 'Turn on a founding light with a free Kukai signature, then pass the clean link to one Tezos artist, collector, or builder.',
-    href: '/network-el-segundo',
+    href: NETWORK_EL_SEGUNDO_AUTH_PATH,
     cta: 'Join the first 100 — free',
     tone: 'play',
     contexts: ['play', 'sport', 'community', 'el', 'segundo', 'local', 'proof', 'wire', 'press'],

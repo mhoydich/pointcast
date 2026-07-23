@@ -85,6 +85,7 @@ test('the first-100 funnel is public, bounded, and stores no visitor identity', 
   assert.match(source, /expirationTtl: RETENTION_DAYS/);
   assert.match(source, /No IP, user agent, cookie, wallet, referrer, or visitor identifier/);
   assert.match(source, /bounded campaign label/);
+  assert.match(source, /arrival at the shared project-auth bridge/);
   assert.match(source, /pointcast_home/);
   assert.match(source, /pointcast_strip/);
   assert.match(source, /wordpress/);
@@ -111,8 +112,7 @@ test('the PointCast homepage gives the next wallet a live 100-light scoreboard',
   assert.match(signalSource, /\/auth\/project\?target=network-el-segundo/);
   assert.match(signalSource, /return_to=\$\{encodeURIComponent\(projectReturnTo\)\}/);
   assert.match(signalSource, /source=pointcast_home/);
-  assert.match(signalSource, /\/api\/network-el-segundo\/funnel/);
-  assert.match(signalSource, /event: 'join', source: 'pointcast_home'/);
+  assert.doesNotMatch(signalSource, /event: 'join'/);
   assert.match(signalSource, /PC-NETWORK-EL-SEGUNDO-HOME/);
   assert.match(signalSource, /home-first-100/);
   assert.match(signalSource, /intersectionRatio >= 0\.5/);

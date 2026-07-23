@@ -22,6 +22,8 @@ export interface PressRelease {
   disclosure: string;
   productUrl: string;
   productLabel: string;
+  actionUrl?: string;
+  actionLabel?: string;
   summary: string;
   body: string[];
   proofs: PressProof[];

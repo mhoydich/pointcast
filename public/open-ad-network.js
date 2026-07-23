@@ -102,6 +102,17 @@
   function destinationFor(ad, publisherId, placement) {
     var destination = new URL(ad.href, networkOrigin + '/');
     if (destination.protocol !== 'https:' && destination.origin !== window.location.origin) return null;
+    if (String(ad.campaign || '') === 'PC-NETWORK-EL-SEGUNDO-2026') {
+      var funnelSources = {
+        pointcast: 'pointcast_ad',
+        industrynext: 'industrynext',
+        allworthy: 'allworthy',
+        passportz: 'passportz',
+        rally: 'rally',
+        'common-hours': 'common_hours',
+      };
+      destination.searchParams.set('source', funnelSources[publisherId] || 'other');
+    }
     destination.searchParams.set('utm_source', publisherId);
     destination.searchParams.set('utm_medium', 'open-ad-network');
     destination.searchParams.set('utm_campaign', String(ad.campaign || ad.id).toLowerCase());

@@ -196,7 +196,7 @@ export const onRequestGet: PagesFunction<FunnelEnv> = async (context) => {
     participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
     methodology: {
       landing: 'Campaign wrapper remained visible for one second; deduplicated once per browser session.',
-      action: 'A deliberate click or tap on the named join or relay control.',
+      action: 'Join records an arrival at the shared project-auth bridge from a bounded campaign source; relay events record a deliberate click or tap on the named control.',
       source: 'A bounded campaign label supplied by PointCast links; raw referrers and arbitrary URL values are never stored.',
       privacy: 'No IP, user agent, cookie, wallet, referrer, or visitor identifier is stored with funnel events.',
       caveat: 'Counts are browser events, not unique people. Automation that runs page JavaScript can be counted.',

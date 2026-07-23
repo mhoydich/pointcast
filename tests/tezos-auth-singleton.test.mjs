@@ -100,6 +100,13 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(page, /pc:open-auth-menu/);
   assert.match(page, /Your PointCast Kukai session follows you into the project/);
   assert.match(page, /Zero tez; no transaction/);
+  assert.match(page, /recordProjectArrival/);
+  assert.match(page, /\/api\/network-el-segundo\/funnel/);
+  assert.match(page, /event: 'join', source: campaignSource/);
+  assert.match(page, /pc:project-join:\$\{target\}:\$\{campaignSource\}/);
+  assert.match(page, /navigator\.doNotTrack/);
+  assert.match(page, /funnelSources\.has\(requestedSource\) \? requestedSource : 'other'/);
+  assert.doesNotMatch(page, /wallet.*event: 'join'|event: 'join'.*wallet/i);
   assert.doesNotMatch(page, /data-provider="kukai"[\s\S]*\.click\(/);
   assert.match(authMenu, /data-auth-auto-open/);
   assert.match(authMenu, /root\.dataset\.authAutoOpen === 'true'/);

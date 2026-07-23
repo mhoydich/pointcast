@@ -39,8 +39,59 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       const params = new URLSearchParams(window.location.search);
       const target = params.get('target') || '';
       const returnTo = params.get('return_to') || '';
+      const requestedSource = params.get('source') || 'direct';
       const context = document.querySelector('[data-project-context]');
       let issuing = false;
+      const funnelSources = new Set([
+        'pointcast_home',
+        'pointcast_strip',
+        'pointcast_ad',
+        'industrynext',
+        'allworthy',
+        'passportz',
+        'rally',
+        'common_hours',
+        'wordpress',
+        'tumblr',
+        'press',
+        'share_kit',
+        'direct',
+        'other',
+      ]);
+      const campaignSource = funnelSources.has(requestedSource) ? requestedSource : 'other';
+
+      function trackingDisabled() {
+        try {
+          return navigator.doNotTrack === '1' || localStorage.getItem('pc:no-track') === '1';
+        } catch {
+          return navigator.doNotTrack === '1';
+        }
+      }
+
+      function recordProjectArrival() {
+        if (target !== 'network-el-segundo' || trackingDisabled()) return;
+        const key = `pc:project-join:${target}:${campaignSource}`;
+        try {
+          if (sessionStorage.getItem(key) === '1') return;
+          sessionStorage.setItem(key, '1');
+        } catch {
+          // Storage is optional; the aggregate event can still be sent.
+        }
+        const payload = JSON.stringify({ event: 'join', source: campaignSource });
+        if (navigator.sendBeacon) {
+          const queued = navigator.sendBeacon(
+            '/api/network-el-segundo/funnel',
+            new Blob([payload], { type: 'application/json' }),
+          );
+          if (queued) return;
+        }
+        void fetch('/api/network-el-segundo/funnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        });
+      }
 
       async function renderProjectContext() {
         if (target !== 'network-el-segundo' || !context) return;
@@ -92,6 +143,7 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       window.addEventListener('pc:auth-change', (event) => {
         if (event.detail?.user) void continueToProject();
       });
+      recordProjectArrival();
       void renderProjectContext();
       void continueToProject();
     </script>

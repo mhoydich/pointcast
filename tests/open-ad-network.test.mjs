@@ -43,8 +43,7 @@ test('all public layout families carry the live first-100 Tezos signal above the
   assert.match(strip, /\/api\/network-el-segundo\/participants/);
   assert.match(strip, /\/auth\/project\?target=network-el-segundo/);
   assert.match(strip, /source=pointcast_strip/);
-  assert.match(strip, /\/api\/network-el-segundo\/funnel/);
-  assert.match(strip, /event: 'join', source: 'pointcast_strip'/);
+  assert.doesNotMatch(strip, /event: 'join'/);
   assert.match(strip, /pc:wallet-active/);
   assert.match(strip, /pc:wallet-change/);
   assert.match(strip, /CLAIM LIGHT/);
@@ -124,6 +123,9 @@ test('portable network unit is reciprocal, contextual, and privacy bounded', asy
   assert.match(widget, /intersectionRatio >= 0\.5/);
   assert.match(widget, /advertiserAliases/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);
+  assert.match(widget, /funnelSources/);
+  assert.match(widget, /pointcast: 'pointcast_ad'/);
+  assert.match(widget, /'common-hours': 'common_hours'/);
   assert.match(report, /RECIPROCAL PUBLISHERS/);
   assert.match(report, /data-publisher-id/);
 });
@@ -225,7 +227,9 @@ test('Network El Segundo runs sitewide as a three-creative first-100 wallet camp
   ]);
 
   assert.match(registry, /PC-NETWORK-EL-SEGUNDO-2026/);
-  assert.equal((registry.match(/href: '\/network-el-segundo'/g) || []).length, 3);
+  assert.equal((registry.match(/href: NETWORK_EL_SEGUNDO_AUTH_PATH/g) || []).length, 3);
+  assert.match(registry, /source=pointcast_ad/);
+  assert.match(registry, /destination: NETWORK_EL_SEGUNDO_AUTH_URL/);
   assert.equal((registry.match(/image: network[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /No sale, token, payout contract, or yield system is live/);
   assert.match(registry, /The next founding light is unclaimed/);

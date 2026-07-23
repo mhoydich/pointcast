@@ -31,6 +31,9 @@ test('The First 100 Signal filing publishes the living artwork without exposing 
   assert.match(release.body.join(' '), /PointCast now carries the Signal/i);
   assert.match(release.body.join(' '), /remain inactive prototypes/i);
   assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo');
+  assert.match(release.actionUrl, /\/auth\/project\?target=network-el-segundo/);
+  assert.match(release.actionUrl, /source=press/);
+  assert.equal(release.actionLabel, 'Claim the next light — free');
 });
 
 test('The Holders Cut filing keeps the public preview separate from a live Mainnet offer', () => {
@@ -53,6 +56,8 @@ test('Network El Segundo filing separates the live roster from prototype sale an
   assert.match(release.body.join(' '), /does not deploy a sale contract, payout contract, token, or automated yield system/i);
   assert.match(release.body.join(' '), /does not promise profit or a return/i);
   assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo');
+  assert.match(release.actionUrl, /\/auth\/project\?target=network-el-segundo/);
+  assert.match(release.actionUrl, /source=press/);
 });
 
 test('Art Kitty filing discloses the equal split, earmarked ledger, and approval boundary', () => {
@@ -103,4 +108,16 @@ test('home and discovery surfaces expose the press wire', async () => {
   assert.match(llms, /PointCast Press Wire/);
   assert.match(llms, /HOME \/ Art Kitty/);
   assert.match(llms, /Network El Segundo/);
+});
+
+test('press CTAs can enter a measured action path without changing the canonical product URL', async () => {
+  const [types, page] = await Promise.all([
+    readFile(new URL('src/lib/press-wire.ts', root), 'utf8'),
+    readFile(new URL('src/pages/press/[slug].astro', root), 'utf8'),
+  ]);
+  assert.match(types, /actionUrl\?: string/);
+  assert.match(types, /actionLabel\?: string/);
+  assert.match(page, /release\.actionUrl \|\| release\.productUrl/);
+  assert.match(page, /release\.actionLabel \|\| release\.productLabel/);
+  assert.match(page, /about: \{ '@type': 'SoftwareApplication', name: release\.product, url: release\.productUrl \}/);
 });
