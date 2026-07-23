@@ -19,6 +19,27 @@ export const GET: APIRoute = () => {
       walletAddressesDisplayed: false,
       participantProof: 'Deduplicated public count only',
     },
+    latestEdition: 'signal-002',
+    editions: [
+      {
+        id: 'signal-001',
+        name: 'The First 100 Signal',
+        canonicalUrl: 'https://pointcast.xyz/network-el-segundo',
+        releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/#signal',
+        form: 'One hundred radial lights',
+        status: 'live',
+      },
+      {
+        id: 'signal-002',
+        name: '100 Windows',
+        canonicalUrl: 'https://pointcast.xyz/network-el-segundo/v2',
+        releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/v2',
+        form: 'Ten-by-ten interactive nighttime window wall',
+        localInteraction: 'Touch any window to send a visual pulse without changing the public roster.',
+        shareImage: 'https://network-el-segundo.mhoydich.chatgpt.site/og-v2.png',
+        status: 'live',
+      },
+    ],
     authentication: {
       network: 'Tezos Mainnet',
       wallet: 'Kukai-compatible Beacon message signature',

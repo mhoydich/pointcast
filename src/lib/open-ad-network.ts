@@ -8,6 +8,7 @@ import artKittyVase from '../assets/campaigns/art-kitty-2026/vase-green-pink.web
 import networkDesk from '../assets/campaigns/network-el-segundo-2026/network-desk.jpg';
 import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-vibes-pickleball.jpg';
 import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
+import networkWindows from '../assets/campaigns/network-el-segundo-2026/100-windows.png';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
@@ -212,11 +213,11 @@ export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
   id: 'PC-NETWORK-EL-SEGUNDO-2026',
   label: 'Network El Segundo — First 100 Wallets',
   advertiser: 'Network El Segundo',
-  creativeCount: 3,
+  creativeCount: 4,
   placement: 'Sitewide PointCast house campaign with a contextual creative on every public page',
   tracking: 'aggregate impressions + clicks',
   status: 'house',
-  note: 'A zero-capital first-party campaign inviting 100 verified Tezos wallets through a free Kukai-compatible message signature. No sale, token, payout contract, or yield system is live.',
+  note: 'A zero-capital first-party campaign inviting 100 verified Tezos wallets into two living public artworks through a free Kukai-compatible message signature. No sale, token, payout contract, or yield system is live.',
 } as const;
 
 export const NETWORK_FIRST_100_SIGNAL = {
@@ -300,6 +301,21 @@ export const POINTCAST_ADS: PointCastAd[] = [
     contexts: ['play', 'sport', 'community', 'el', 'segundo', 'local', 'proof', 'wire', 'press'],
     image: networkGoodVibes.src,
     sourceTool: 'Michael Hoydich archive',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-004',
+    advertiser: 'Network El Segundo',
+    headline: 'A city of 100 windows.',
+    copy: 'Each verified wallet lights one public window in Signal 002. Touch any window to send a local pulse; the roster changes only after a free Kukai signature.',
+    href: '/network-el-segundo/v2',
+    cta: 'Enter V2 / 100 Windows',
+    tone: 'field',
+    contexts: ['night', 'city', 'window', 'signal', 'art', 'network', 'tezos', 'wallet', 'public', 'el', 'segundo'],
+    image: networkWindows.src,
+    sourceTool: 'OpenAI image generation',
     campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
     seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
     status: 'house',

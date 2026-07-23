@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
+const v2Page = new URL('../src/pages/network-el-segundo/v2.astro', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
 const participantApi = new URL('../functions/api/network-el-segundo/participants.ts', import.meta.url);
 const funnelApi = new URL('../functions/api/network-el-segundo/funnel.ts', import.meta.url);
@@ -10,6 +11,7 @@ const sharePage = new URL('../src/pages/network-el-segundo/share.astro', import.
 const firstSee = new URL('../src/components/FirstSee.astro', import.meta.url);
 const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta.url);
 const signalBlock = new URL('../src/content/blocks/0485.json', import.meta.url);
+const v2Block = new URL('../src/content/blocks/0486.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
 const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
@@ -91,6 +93,24 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /objkt/);
   assert.match(source, /participant_relay/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
+  assert.match(source, /latestEdition: 'signal-002'/);
+  assert.match(source, /name: '100 Windows'/);
+  assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/v2'/);
+  assert.match(source, /Touch any window to send a visual pulse without changing the public roster/);
+});
+
+test('PointCast gives 100 Windows a distinct canonical V2 route', async () => {
+  const source = await readFile(v2Page, 'utf8');
+
+  assert.match(source, /Network El Segundo V2 — 100 Windows/);
+  assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo\/v2/);
+  assert.match(source, /https:\/\/network-el-segundo\.mhoydich\.chatgpt\.site\/v2/);
+  assert.match(source, /og-v2\.png/);
+  assert.match(source, /100 WINDOWS LIT/);
+  assert.match(source, /Each verified wallet lights one public window/);
+  assert.match(source, /\/api\/network-el-segundo\/participants/);
+  assert.match(source, /allow="clipboard-write; web-share"/);
+  assert.match(source, /Light a window \/ 0 ꜩ/);
 });
 
 test('the first-100 funnel is public, bounded, and stores no visitor identity', async () => {
@@ -189,9 +209,10 @@ test('PointCast proxies the public participant count without caching or collecti
 });
 
 test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distribution system', async () => {
-  const [blockSource, signalBlockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
+  const [blockSource, signalBlockSource, v2BlockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
     readFile(announcementBlock, 'utf8'),
     readFile(signalBlock, 'utf8'),
+    readFile(v2Block, 'utf8'),
     readFile(jsonFeed, 'utf8'),
     readFile(rssFeed, 'utf8'),
     readFile(announcementCardRoute, 'utf8'),
@@ -214,6 +235,14 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
   assert.match(signal.external.url, /^https:\/\/pointcast\.xyz\/auth\/project\?target=network-el-segundo/);
   assert.match(signal.external.url, /source=pointcast_block/);
   assert.equal(signal.meta.artwork, 'The First 100 Signal');
+  const v2 = JSON.parse(v2BlockSource);
+  assert.equal(v2.id, '0486');
+  assert.equal(v2.title, 'A city of 100 windows');
+  assert.equal(v2.external.url, 'https://pointcast.xyz/network-el-segundo/v2');
+  assert.match(v2.body, /one hundred public windows/i);
+  assert.match(v2.body, /does not change the roster/i);
+  assert.match(v2.body, /No purchase, mint, token, transfer, payout, promised return/i);
+  assert.equal(v2.meta.edition, 'Signal 002');
   assert.match(jsonFeedSource, /getCollection\('blocks'/);
   assert.match(rssFeedSource, /getCollection\('blocks'/);
   assert.match(cardRouteSource, /public\/images\/og\/b\/0484\.png/);
