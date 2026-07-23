@@ -69,7 +69,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-NOUNS-ABOUT-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-PERMISSION-LAB-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
-  assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 5);
+  assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-HOLDERS-CUT-001'/g) || []).length, 1);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
@@ -219,7 +219,7 @@ test('portable publishers can transparently pin a single house campaign', async 
   assert.match(widget, /campaign-unavailable/);
 });
 
-test('Network El Segundo runs sitewide as a five-creative art and local-signal campaign', async () => {
+test('Network El Segundo runs sitewide as a six-creative art, local-signal, and mesh-plan campaign', async () => {
   const [registry, desk, receipt] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.astro', root), 'utf8'),
@@ -228,11 +228,11 @@ test('Network El Segundo runs sitewide as a five-creative art and local-signal c
 
   assert.match(registry, /PC-NETWORK-EL-SEGUNDO-2026/);
   assert.equal((registry.match(/href: NETWORK_EL_SEGUNDO_AUTH_PATH/g) || []).length, 3);
-  assert.match(registry, /creativeCount: 5/);
+  assert.match(registry, /creativeCount: 6/);
   assert.match(registry, /source=pointcast_ad/);
   assert.match(registry, /destination: NETWORK_EL_SEGUNDO_AUTH_URL/);
-  assert.equal((registry.match(/image: network[A-Z][A-Za-z]+\.src/g) || []).length, 5);
-  assert.match(registry, /No sale, token, payout contract, certified hardware, active physical mesh, or yield system is live/);
+  assert.equal((registry.match(/image: network[A-Z][A-Za-z]+\.src/g) || []).length, 6);
+  assert.match(registry, /No sale, token, payout contract, certified hardware, active physical mesh, coverage guarantee, or yield system is live/);
   assert.match(registry, /The next founding light is unclaimed/);
   assert.match(registry, /Zero tez\. One signature\. One light/);
   assert.match(registry, /Bring one wallet\. Invite one more/);
@@ -241,12 +241,17 @@ test('Network El Segundo runs sitewide as a five-creative art and local-signal c
   assert.match(registry, /Signal the block\./);
   assert.match(registry, /mini fireworks with zero fire/);
   assert.match(registry, /href: '\/network-el-segundo\/field-kit'/);
+  assert.match(registry, /Three roofs make a mesh\./);
+  assert.match(registry, /\$295–\$395 proof link/);
+  assert.match(registry, /href: '\/network-el-segundo\/mesh-commons'/);
   assert.match(registry, /PC-NETWORK-EL-SEGUNDO-004/);
   assert.match(registry, /PC-NETWORK-EL-SEGUNDO-005/);
+  assert.match(registry, /PC-NETWORK-EL-SEGUNDO-006/);
   assert.match(registry, /networkCreative/);
   assert.match(desk, /SITEWIDE HOUSE CAMPAIGN/);
   assert.match(desk, /ENTER THE FIRST 100 SIGNAL/);
   assert.match(desk, /OPEN THE RELAY KIT/);
+  assert.match(desk, /OPEN THE MESH COMMONS PLAN/);
   assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
 });
 

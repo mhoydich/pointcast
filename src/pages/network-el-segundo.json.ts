@@ -19,7 +19,7 @@ export const GET: APIRoute = () => {
       walletAddressesDisplayed: false,
       participantProof: 'Deduplicated public count only',
     },
-    latestEdition: 'field-note-003',
+    latestEdition: 'field-note-004',
     editions: [
       {
         id: 'signal-001',
@@ -50,6 +50,17 @@ export const GET: APIRoute = () => {
         shareImage: 'https://network-el-segundo.mhoydich.chatgpt.site/og-field-kit.png',
         signedBy: 'MH',
         status: 'concept-system-published',
+      },
+      {
+        id: 'field-note-004',
+        name: 'Mesh Commons',
+        canonicalUrl: 'https://pointcast.xyz/network-el-segundo/mesh-commons',
+        machineUrl: 'https://pointcast.xyz/network-el-segundo/mesh-commons.json',
+        releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/mesh-commons',
+        form: 'Cash-floor equipment plan, five-phase two-year roadmap, nine local-only services, and a 25-mile planning horizon',
+        localInteraction: 'Switch among triangle, cluster, and horizon paths; copy a privacy-bounded roof signal card; transmit the plan.',
+        shareImage: 'https://network-el-segundo.mhoydich.chatgpt.site/og-mesh-commons.png',
+        status: 'physical-network-plan-published',
       },
     ],
     authentication: {
@@ -100,7 +111,7 @@ export const GET: APIRoute = () => {
       identifiersStored: false,
       caveat: 'Browser events are not unique people; verified participation is proven only by the deduplicated signed-wallet counter.',
     },
-    pressRelease: 'https://pointcast.xyz/press/network-el-segundo-opens-first-100-tezos-wallet-roster',
+    pressRelease: 'https://pointcast.xyz/press/network-el-segundo-publishes-mesh-commons-two-year-plan',
     campaignReceipt: 'https://pointcast.xyz/ads.json',
     disclosure: 'The verified-wallet roster and public counter are live. Sale settlement, automated participant distribution, and any yield mechanism are prototypes and must not be represented as live.',
   };
