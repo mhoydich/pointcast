@@ -1,10 +1,12 @@
 import type { APIRoute } from 'astro';
+import { NOW_PLAYING } from '../data/now-playing';
 import { ART_KITTY_CAMPAIGN, DRUM_COMPENDIUM_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, HOLDERS_CUT_CAMPAIGN, INDUSTRY_NEXT_CAMPAIGN, LOCAL_STAR_COMMONS_CAMPAIGN, NETWORK_EL_SEGUNDO_CAMPAIGN, NETWORK_FIRST_100_SIGNAL, NOUNS_ABOUT_CAMPAIGN, OPEN_AD_NETWORK, OPEN_AD_PLACEMENT, OPEN_AD_PUBLISHERS, PERMISSION_LAB_CAMPAIGN, POINTCAST_ADS } from '../lib/open-ad-network';
 
 export const GET: APIRoute = () => {
   const payload = {
     name: 'PointCast Open Ad Network receipt',
     url: 'https://pointcast.xyz/ads',
+    nowPlaying: NOW_PLAYING,
     protocol: {
       contextualOnly: true,
       behavioralProfiles: false,

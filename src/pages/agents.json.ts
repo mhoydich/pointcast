@@ -268,6 +268,7 @@ export const GET: APIRoute = async () => {
         farcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         investmentThesis: 'https://pointcast.xyz/investment-thesis.json',
         blocks: 'https://pointcast.xyz/blocks.json',
+        nowPlaying: 'https://pointcast.xyz/now-playing.json',
         archive: 'https://pointcast.xyz/archive.json',
         editions: 'https://pointcast.xyz/editions.json',
         now: 'https://pointcast.xyz/now.json',
@@ -780,7 +781,7 @@ export const GET: APIRoute = async () => {
     cors: {
       policy: 'All JSON / markdown agent surfaces carry Access-Control-Allow-Origin: *.',
       applies: [
-        '/agents.json', '/blocks.json', '/archive.json', '/editions.json',
+        '/agents.json', '/blocks.json', '/archive.json', '/editions.json', '/now-playing.json',
         '/.well-known/agents.json', '/.well-known/ai.json',
         '/.well-known/farcaster.json', '/.well-known/pointcast-peer.json',
         '/now.json', '/cast.json', '/battle.json', '/timeline.json', '/explore.json', '/explore.rss',

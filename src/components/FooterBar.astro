@@ -50,11 +50,13 @@ import { PASSPORT_STAMPS } from '../lib/play-layer';
 import { FEDERATION_PEERS } from '../data/federation-peers';
 import { RESIDENTS } from '../data/residents';
 import { SPELLS } from '../data/spells';
+import { NOW_PLAYING } from '../data/now-playing';
 import DockLauncher from './DockLauncher.astro';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 const MOOD_SPELLS_JSON = JSON.stringify(MOOD_SPELLS);
 const KIT_JSON = JSON.stringify(DOCK_KIT);
+const NOW_PLAYING_JSON = JSON.stringify(NOW_PLAYING);
 const FED_PEERS_COUNT = FEDERATION_PEERS.length;
 
 // Lookup so each tray can pull its declarative `actions` row without
@@ -437,10 +439,17 @@ const pingable = RESIDENTS.filter(
           <span class="fb-bcast__kicker mono">NOW PLAYING</span>
           <span class="fb-bcast__time mono" id="fb-bcast-time">—</span>
         </div>
-        <a class="fb-bcast__now" id="fb-bcast-now" href="/" title="Open the latest live block">
-          <span class="fb-bcast__now-id mono" id="fb-bcast-now-id">№ ----</span>
-          <span class="fb-bcast__now-title" id="fb-bcast-now-title">loading the front door…</span>
-          <span class="fb-bcast__now-channel mono" id="fb-bcast-now-channel"></span>
+        <a
+          class="fb-bcast__now"
+          id="fb-bcast-now"
+          href={NOW_PLAYING.url}
+          target="_blank"
+          rel="noopener"
+          title="Open the current track in Spotify"
+        >
+          <span class="fb-bcast__now-id mono" id="fb-bcast-now-id">SPOTIFY</span>
+          <span class="fb-bcast__now-title" id="fb-bcast-now-title">{NOW_PLAYING.title}</span>
+          <span class="fb-bcast__now-channel mono" id="fb-bcast-now-channel">{NOW_PLAYING.artist}</span>
         </a>
 
         <div class="fb-bcast__grid">
@@ -826,7 +835,7 @@ const pingable = RESIDENTS.filter(
   </div>
 </aside>
 
-<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON}; window.PC_FED_PEERS_COUNT = ${FED_PEERS_COUNT}; window.PC_MOOD_SPELLS = ${MOOD_SPELLS_JSON};`}></script>
+<script is:inline set:html={`window.PC_SOUNDTRACKS = ${SOUNDTRACKS_JSON}; window.PC_DOCK_KIT = ${KIT_JSON}; window.PC_FED_PEERS_COUNT = ${FED_PEERS_COUNT}; window.PC_MOOD_SPELLS = ${MOOD_SPELLS_JSON}; window.PC_NOW_PLAYING = ${NOW_PLAYING_JSON};`}></script>
 
 <script is:inline>
   (function () {
@@ -1924,8 +1933,8 @@ const pingable = RESIDENTS.filter(
       }
     }
 
-    // BROADCAST tray polling — read /home or /blocks.json for the
-    // latest live block + reuse presence snapshot for audience count.
+    // BROADCAST tray polling — use the editorial now-playing record and
+    // reuse the presence snapshot for audience count.
     async function refreshBroadcast() {
       var $now      = document.getElementById('fb-bcast-now');
       var $nowId    = document.getElementById('fb-bcast-now-id');
@@ -1936,34 +1945,14 @@ const pingable = RESIDENTS.filter(
       var $moodOut  = document.getElementById('fb-bcast-mood');
       var $peersOut = document.getElementById('fb-bcast-peers');
       if (!$now) return;
-      // Now-playing — pull blocks.json, take the latest non-draft.
-      try {
-        var r = await fetch('/blocks.json', { cache: 'no-store' });
-        if (r.ok) {
-          var data = await r.json();
-          var blocks = Array.isArray(data) ? data : (data && data.blocks) || [];
-          // Sort by timestamp descending — most recent first.
-          blocks.sort(function (a, b) {
-            var ta = (a && a.timestamp) || ''; var tb = (b && b.timestamp) || '';
-            return tb.localeCompare(ta);
-          });
-          var top = blocks[0];
-          if (top) {
-            if ($nowId)    $nowId.textContent    = '№ ' + (top.id || '----');
-            if ($nowTitle) $nowTitle.textContent = top.title || top.dek || '(untitled)';
-            if ($nowChan)  $nowChan.textContent  = (top.channel ? 'CH.' + top.channel : '');
-            if ($now && top.id) $now.setAttribute('href', '/b/' + top.id);
-            if ($time && top.timestamp) {
-              try {
-                var d = new Date(top.timestamp);
-                var hh = String(d.getHours()).padStart(2, '0');
-                var mm = String(d.getMinutes()).padStart(2, '0');
-                $time.textContent = hh + ':' + mm + ' PT';
-              } catch (e) {}
-            }
-          }
-        }
-      } catch (e) {}
+      var playing = window.PC_NOW_PLAYING || null;
+      if (playing) {
+        if ($nowId)    $nowId.textContent    = playing.provider || 'PLAY';
+        if ($nowTitle) $nowTitle.textContent = playing.title || '(untitled)';
+        if ($nowChan)  $nowChan.textContent  = playing.artist || 'CH.SPN';
+        if ($now && playing.url) $now.setAttribute('href', playing.url);
+        if ($time) $time.textContent = 'ON AIR';
+      }
       // Audience — reuse the live-here number we already poll.
       if ($hereOut && $liveHere) {
         $hereOut.textContent = $liveHere.textContent || '—';

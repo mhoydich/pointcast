@@ -167,6 +167,15 @@
     return node;
   }
 
+  function spotifyUrl(value) {
+    try {
+      var url = new URL(value);
+      return url.protocol === 'https:' && url.hostname === 'open.spotify.com' ? url.href : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   function tonePalette(tone) {
     return {
       signal: ['#7dd8ff', '#122a8a', '#070b23'],
@@ -233,6 +242,13 @@
       '.head,.boundary{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:8px;line-height:1.45;letter-spacing:.12em;text-transform:uppercase}',
       '.head{padding:3px 6px 10px;color:color-mix(in srgb,var(--accent) 78%,#fff);border-bottom:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}',
       '.head a,.boundary a{color:inherit;text-underline-offset:3px}',
+      '.now{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;margin-top:10px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--accent) 42%,transparent);border-radius:14px;background:color-mix(in srgb,var(--deep) 80%,#08080d);color:var(--ink);text-decoration:none}',
+      '.now:focus-visible{outline:3px solid var(--accent);outline-offset:3px}',
+      '.now__pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent),0 0 18px color-mix(in srgb,var(--accent) 70%,transparent)}',
+      '.now__copy{min-width:0;display:flex;flex-direction:column;gap:2px}',
+      '.now__label{color:color-mix(in srgb,var(--accent) 82%,#fff);font-size:7px;line-height:1.2;letter-spacing:.15em;text-transform:uppercase}',
+      '.now__title{overflow:hidden;color:#fff;font:600 12px/1.3 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-overflow:ellipsis;white-space:nowrap}',
+      '.now__cta{color:color-mix(in srgb,var(--accent) 82%,#fff);font-size:7px;letter-spacing:.12em;white-space:nowrap;text-transform:uppercase}',
       '.scene{--rx:0deg;--ry:0deg;--mx:50%;--my:50%;position:relative;min-height:clamp(360px,43vw,520px);margin-top:12px;perspective:1200px;isolation:isolate}',
       '.back,.middle,.creative{position:absolute;border-radius:22px;transform-style:preserve-3d}',
       '.back{inset:9% 6% 0;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 55%,transparent),transparent 58%),var(--deep);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);transform:rotateX(calc(var(--rx) * .35)) rotateY(calc(var(--ry) * .35)) translateZ(-80px) translateY(28px);transition:transform 500ms cubic-bezier(.2,.8,.2,1)}',
@@ -253,7 +269,7 @@
       '.hint{margin:9px 5px 0;color:#85828e;font-size:7px;letter-spacing:.11em;text-align:center;text-transform:uppercase}',
       '.boundary{padding:10px 6px 2px;color:#85828e}',
       ':host([data-theme="light"]) .unit{--paper:#11111a}',
-      '@media(max-width:640px){.unit{width:min(100% - 16px,1120px);margin:18px auto;border-radius:22px}.scene{min-height:480px}.creative{grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto auto;gap:14px;padding:24px}.creative h2,.copy{grid-column:1/-1}.number{font-size:40px}.head,.boundary{align-items:flex-start;flex-direction:column}}',
+      '@media(max-width:640px){.unit{width:min(100% - 16px,1120px);margin:18px auto;border-radius:22px}.now{grid-template-columns:auto minmax(0,1fr)}.now__cta{grid-column:2}.scene{min-height:480px}.creative{grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto auto;gap:14px;padding:24px}.creative h2,.copy{grid-column:1/-1}.number{font-size:40px}.head,.boundary{align-items:flex-start;flex-direction:column}}',
       '@media(prefers-reduced-motion:reduce){.back,.middle,.creative{transition:none;transform:none}.hint{display:none}}',
     ].join('');
 
@@ -272,6 +288,30 @@
     inspect.textContent = 'INSPECT THE NETWORK ↗';
     head.appendChild(inspect);
     unit.appendChild(head);
+
+    var playing = feed && feed.nowPlaying;
+    var playingUrl = playing ? spotifyUrl(playing.url) : '';
+    if (playing && playingUrl && playing.title && playing.artist) {
+      var now = document.createElement('a');
+      now.className = 'now';
+      now.href = playingUrl;
+      now.target = '_blank';
+      now.rel = 'noopener noreferrer';
+      now.dataset.nowPlaying = String(playing.trackId || '');
+      now.setAttribute('aria-label', 'PointCast now playing: ' + playing.title + ' by ' + playing.artist + '. Open in Spotify.');
+      var pulse = document.createElement('span');
+      pulse.className = 'now__pulse';
+      pulse.setAttribute('aria-hidden', 'true');
+      now.appendChild(pulse);
+      var nowCopy = document.createElement('span');
+      nowCopy.className = 'now__copy';
+      addText(nowCopy, 'span', 'POINTCAST NOW PLAYING', 'now__label');
+      addText(nowCopy, 'span', playing.title + ' · ' + playing.artist, 'now__title');
+      now.appendChild(nowCopy);
+      addText(now, 'span', 'OPEN SPOTIFY ↗', 'now__cta');
+      unit.appendChild(now);
+      mount.dataset.networkNowPlaying = String(playing.trackId || 'playing');
+    }
 
     var scene = document.createElement('div');
     scene.className = 'scene';
