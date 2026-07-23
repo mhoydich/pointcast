@@ -9,6 +9,7 @@ const funnelApi = new URL('../functions/api/network-el-segundo/funnel.ts', impor
 const sharePage = new URL('../src/pages/network-el-segundo/share.astro', import.meta.url);
 const firstSee = new URL('../src/components/FirstSee.astro', import.meta.url);
 const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta.url);
+const signalBlock = new URL('../src/content/blocks/0485.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
 const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
@@ -22,7 +23,8 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /\/api\/auth\/project-ticket/);
   assert.match(source, /Open the release/);
   assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo/);
-  assert.match(source, /First 100 \/ zero capital/);
+  assert.match(source, /Live artwork \/ first 100/);
+  assert.match(source, /Every verified wallet turns on one light/);
   assert.match(source, /data-share-signal/);
   assert.match(source, /data-join-signal/);
   assert.match(source, /data-funnel-action="join"/);
@@ -37,13 +39,17 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /#Tezos #TezosArt/);
   assert.match(source, /https:\/\/tezos\.com\/community/);
   assert.match(source, /\/api\/network-el-segundo\/participants/);
-  assert.match(source, /no purchase or transaction/);
+  assert.match(source, /zero tez/);
 });
 
 test('Network El Segundo publishes a machine-readable roster and prototype boundary', async () => {
   const source = await readFile(jsonPage, 'utf8');
 
   assert.match(source, /targetVerifiedWallets: 100/);
+  assert.match(source, /livingArtwork/);
+  assert.match(source, /The First 100 Signal/);
+  assert.match(source, /walletAddressesDisplayed: false/);
+  assert.match(source, /refreshSeconds: 30/);
   assert.match(source, /participantCounter/);
   assert.match(source, /transactionRequired: false/);
   assert.match(source, /livePayoutContract: false/);
@@ -102,8 +108,9 @@ test('PointCast proxies the public participant count without caching or collecti
 });
 
 test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distribution system', async () => {
-  const [blockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
+  const [blockSource, signalBlockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
     readFile(announcementBlock, 'utf8'),
+    readFile(signalBlock, 'utf8'),
     readFile(jsonFeed, 'utf8'),
     readFile(rssFeed, 'utf8'),
     readFile(announcementCardRoute, 'utf8'),
@@ -117,6 +124,13 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
   assert.match(block.body, /No live sale contract, payout contract, token, automated yield system/i);
   assert.equal(block.companions.length, 5);
   assert.equal(block.companions.at(-1).id, 'https://pointcast.xyz/network-el-segundo/share');
+  const signal = JSON.parse(signalBlockSource);
+  assert.equal(signal.id, '0485');
+  assert.equal(signal.title, 'Every wallet turns on one light');
+  assert.match(signal.body, /one hundred light positions/i);
+  assert.match(signal.body, /without publishing wallet addresses/i);
+  assert.equal(signal.external.url, 'https://pointcast.xyz/network-el-segundo');
+  assert.equal(signal.meta.artwork, 'The First 100 Signal');
   assert.match(jsonFeedSource, /getCollection\('blocks'/);
   assert.match(rssFeedSource, /getCollection\('blocks'/);
   assert.match(cardRouteSource, /public\/images\/og\/b\/0484\.png/);

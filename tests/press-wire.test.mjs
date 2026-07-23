@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds nine product filings across every public kind', () => {
-  assert.equal(releases.length, 9);
+test('press wire seeds ten product filings across every public kind', () => {
+  assert.equal(releases.length, 10);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,17 @@ test('press wire seeds nine product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('The First 100 Signal filing publishes the living artwork without exposing wallets or activating settlement', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0010');
+  assert.ok(release);
+  assert.equal(release.slug, 'network-el-segundo-turns-first-100-wallets-into-living-signal');
+  assert.match(release.body.join(' '), /one hundred light positions/i);
+  assert.match(release.body.join(' '), /does not display an address/i);
+  assert.match(release.body.join(' '), /PointCast now carries the Signal/i);
+  assert.match(release.body.join(' '), /remain inactive prototypes/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo');
 });
 
 test('The Holders Cut filing keeps the public preview separate from a live Mainnet offer', () => {
@@ -85,7 +96,7 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Nine sourced product filings/);
+  assert.match(home, /Ten sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);

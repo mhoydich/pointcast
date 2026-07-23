@@ -3,13 +3,21 @@ import type { APIRoute } from 'astro';
 export const GET: APIRoute = () => {
   const payload = {
     name: 'Network El Segundo',
-    status: 'participant-roster-live',
+    status: 'living-signal-live',
     canonicalUrl: 'https://pointcast.xyz/network-el-segundo',
     releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/',
     participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
     participantCounterSource: 'https://network-el-segundo.mhoydich.chatgpt.site/api/participants',
     publicFunnel: 'https://pointcast.xyz/api/network-el-segundo/funnel?days=7',
     targetVerifiedWallets: 100,
+    livingArtwork: {
+      name: 'The First 100 Signal',
+      url: 'https://network-el-segundo.mhoydich.chatgpt.site/#signal',
+      rule: 'Each unique verified Tezos Mainnet wallet turns on one of 100 public lights.',
+      refreshSeconds: 30,
+      walletAddressesDisplayed: false,
+      participantProof: 'Deduplicated public count only',
+    },
     authentication: {
       network: 'Tezos Mainnet',
       wallet: 'Kukai-compatible Beacon message signature',
@@ -29,8 +37,8 @@ export const GET: APIRoute = () => {
     relayKit: {
       human: 'https://pointcast.xyz/network-el-segundo/share',
       rule: 'One verified participant invites one Tezos artist, collector, builder, or curious friend.',
-      oneToOne: 'Join Network El Segundo\'s first 100 verified Tezos wallets with one free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/network-el-segundo',
-      social: 'Network El Segundo is forming a public first 100: one free Kukai wallet signature, no purchase or transaction. Join, move the transparent counter, then invite one Tezos person: https://pointcast.xyz/network-el-segundo #Tezos #TezosArt',
+      oneToOne: 'Turn on one light in Network El Segundo\'s First 100 Signal with a free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/network-el-segundo',
+      social: 'Every verified wallet turns on one light in Network El Segundo’s First 100 Signal. Join with one free Kukai signature, zero tez, then transmit the signal to one Tezos person: https://pointcast.xyz/network-el-segundo #Tezos #TezosArt',
       image: 'https://network-el-segundo.mhoydich.chatgpt.site/og.png',
       tags: ['Tezos', 'TezosArt', 'Kukai', 'cryptoart', 'participatory art'],
       ecosystemRooms: [
