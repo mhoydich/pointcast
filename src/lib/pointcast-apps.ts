@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'sunset-switchboard',
+    name: 'Sunset Switchboard',
+    kicker: 'PUBLIC SIGNAL · LOCAL LOG · BROADCAST CARDS',
+    description: 'A mobile-first El Segundo signal instrument: tune the sky, band, and reach, then share the broadcast or save it as a card.',
+    url: 'https://pointcast.xyz/sunset-switchboard',
+    path: '/sunset-switchboard',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.ESC',
+    kind: 'pointcast',
+  },
+  {
     slug: 'adventure-networks',
     name: 'Adventure Networks',
     kicker: 'FIELD GUIDE · ROUTE COMPOSER · DISPATCH',
