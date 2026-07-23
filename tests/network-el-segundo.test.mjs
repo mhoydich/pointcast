@@ -41,6 +41,10 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /pointcast_block/);
   assert.match(source, /wordpress/);
   assert.match(source, /tumblr/);
+  assert.match(source, /tezos_discord/);
+  assert.match(source, /tezos_agora/);
+  assert.match(source, /teia/);
+  assert.match(source, /objkt/);
   assert.match(source, /\/network-el-segundo\/share/);
   assert.match(source, /allow="clipboard-write; web-share"/);
   assert.match(source, /overflow-x: hidden/);
@@ -74,6 +78,10 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /publicFunnel/);
   assert.match(source, /identifiersStored: false/);
   assert.match(source, /pointcast_block/);
+  assert.match(source, /tezos_discord/);
+  assert.match(source, /tezos_agora/);
+  assert.match(source, /teia/);
+  assert.match(source, /objkt/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
 });
 
@@ -147,6 +155,14 @@ test('the first-100 relay kit makes the zero-cost invitation portable', async ()
   assert.match(source, /Copy community update/);
   assert.match(source, /https:\/\/discord\.com\/invite\/tezos/);
   assert.match(source, /https:\/\/forum\.tezosagora\.org\/c\/community-updates\/17/);
+  assert.match(source, /https:\/\/discord\.com\/invite\/US8gMfEkM2/);
+  assert.match(source, /https:\/\/discord\.gg\/Gcr9Dk6qKk/);
+  assert.match(source, /channelAuthUrl\('tezos_discord'\)/);
+  assert.match(source, /channelAuthUrl\('tezos_agora'\)/);
+  assert.match(source, /channelAuthUrl\('teia'\)/);
+  assert.match(source, /channelAuthUrl\('objkt'\)/);
+  assert.match(source, /do not mass-post or DM members/);
+  assert.match(source, /community discussion only, not a support request/);
   assert.match(source, /mailto:contact@kukai\.app/);
   assert.match(source, /Nothing on this page posts or sends itself/);
   assert.match(source, /data-relay-event="tezos_rooms"/);
