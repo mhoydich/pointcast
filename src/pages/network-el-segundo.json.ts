@@ -5,6 +5,7 @@ export const GET: APIRoute = () => {
     name: 'Network El Segundo',
     status: 'living-signal-live',
     canonicalUrl: 'https://pointcast.xyz/network-el-segundo',
+    joinUrl: 'https://pointcast.xyz/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=direct',
     releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/',
     participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
     participantCounterSource: 'https://network-el-segundo.mhoydich.chatgpt.site/api/participants',
@@ -37,8 +38,8 @@ export const GET: APIRoute = () => {
     relayKit: {
       human: 'https://pointcast.xyz/network-el-segundo/share',
       rule: 'One verified participant invites one Tezos artist, collector, builder, or curious friend.',
-      oneToOne: 'Turn on one light in Network El Segundo\'s First 100 Signal with a free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/network-el-segundo',
-      social: 'Every verified wallet turns on one light in Network El Segundo’s First 100 Signal. Join with one free Kukai signature, zero tez, then transmit the signal to one Tezos person: https://pointcast.xyz/network-el-segundo #Tezos #TezosArt',
+      oneToOne: 'Turn on one light in Network El Segundo\'s First 100 Signal with a free Kukai message signature. No purchase, mint, funding, or transaction is required: https://pointcast.xyz/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=share_kit',
+      social: 'Every verified wallet turns on one light in Network El Segundo’s First 100 Signal. Join with one free Kukai signature, zero tez, then transmit the signal to one Tezos person: https://pointcast.xyz/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=share_kit #Tezos #TezosArt',
       image: 'https://network-el-segundo.mhoydich.chatgpt.site/og.png',
       tags: ['Tezos', 'TezosArt', 'Kukai', 'cryptoart', 'participatory art'],
       ecosystemRooms: [
@@ -62,7 +63,7 @@ export const GET: APIRoute = () => {
     },
     funnelMethodology: {
       events: ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_rooms'],
-      boundedSources: ['pointcast_home', 'pointcast_strip', 'pointcast_ad', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'direct', 'other', 'legacy'],
+      boundedSources: ['pointcast_home', 'pointcast_strip', 'pointcast_ad', 'pointcast_block', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'direct', 'other', 'legacy'],
       identifiersStored: false,
       caveat: 'Browser events are not unique people; verified participation is proven only by the deduplicated signed-wallet counter.',
     },

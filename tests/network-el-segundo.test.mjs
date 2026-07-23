@@ -38,6 +38,7 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /pointcast_home/);
   assert.match(source, /pointcast_strip/);
   assert.match(source, /pointcast_ad/);
+  assert.match(source, /pointcast_block/);
   assert.match(source, /wordpress/);
   assert.match(source, /tumblr/);
   assert.match(source, /\/network-el-segundo\/share/);
@@ -54,6 +55,7 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   const source = await readFile(jsonPage, 'utf8');
 
   assert.match(source, /targetVerifiedWallets: 100/);
+  assert.match(source, /joinUrl: 'https:\/\/pointcast\.xyz\/auth\/project\?target=network-el-segundo/);
   assert.match(source, /livingArtwork/);
   assert.match(source, /The First 100 Signal/);
   assert.match(source, /walletAddressesDisplayed: false/);
@@ -71,6 +73,7 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /do not mass-tag/);
   assert.match(source, /publicFunnel/);
   assert.match(source, /identifiersStored: false/);
+  assert.match(source, /pointcast_block/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
 });
 
@@ -134,6 +137,8 @@ test('the first-100 relay kit makes the zero-cost invitation portable', async ()
   assert.match(source, /Seat <span data-next-seat>2<\/span><br \/>is open/);
   assert.match(source, /Zero tez/);
   assert.match(source, /utm_source=share_kit/);
+  assert.match(source, /\/auth\/project\?target=network-el-segundo/);
+  assert.match(source, /source=share_kit/);
   assert.match(source, /source: 'share_kit'/);
   assert.match(source, /data-copy-message/);
   assert.match(source, /navigator\.share/);
@@ -170,7 +175,8 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
 
   assert.equal(block.id, '0484');
   assert.equal(block.channel, 'ESC');
-  assert.equal(block.external.url, 'https://pointcast.xyz/network-el-segundo');
+  assert.match(block.external.url, /^https:\/\/pointcast\.xyz\/auth\/project\?target=network-el-segundo/);
+  assert.match(block.external.url, /source=pointcast_block/);
   assert.match(block.body, /one wallet-control message/i);
   assert.match(block.body, /No live sale contract, payout contract, token, automated yield system/i);
   assert.equal(block.companions.length, 5);
@@ -180,7 +186,8 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
   assert.equal(signal.title, 'Every wallet turns on one light');
   assert.match(signal.body, /one hundred light positions/i);
   assert.match(signal.body, /without publishing wallet addresses/i);
-  assert.equal(signal.external.url, 'https://pointcast.xyz/network-el-segundo');
+  assert.match(signal.external.url, /^https:\/\/pointcast\.xyz\/auth\/project\?target=network-el-segundo/);
+  assert.match(signal.external.url, /source=pointcast_block/);
   assert.equal(signal.meta.artwork, 'The First 100 Signal');
   assert.match(jsonFeedSource, /getCollection\('blocks'/);
   assert.match(rssFeedSource, /getCollection\('blocks'/);

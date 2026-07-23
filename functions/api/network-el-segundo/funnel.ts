@@ -9,6 +9,7 @@ const FUNNEL_SOURCES = [
   'pointcast_home',
   'pointcast_strip',
   'pointcast_ad',
+  'pointcast_block',
   'industrynext',
   'allworthy',
   'passportz',
