@@ -44,11 +44,12 @@ export const OPEN_AD_PLACEMENT = {
   id: 'PC-0477',
   publisher: 'PointCast',
   placement: 'Sitewide contextual rail',
-  format: 'Responsive text card',
+  format: 'Interactive CSS 3D card',
   priceTezPerWeek: 12,
   settlement: 'prototype',
   tracking: 'aggregate impressions + clicks',
-  note: 'One clearly labeled contextual placement across public PointCast pages. Aggregate events only; no visitor identifiers or behavioral profiles.',
+  interaction: 'Pointer and keyboard tilt with a reduced-motion fallback',
+  note: 'One clearly labeled interactive placement across public PointCast pages. Aggregate events only; no visitor identifiers or behavioral profiles.',
 } as const;
 
 export const OPEN_AD_NETWORK = {
@@ -56,8 +57,9 @@ export const OPEN_AD_NETWORK = {
   name: 'PointCast Open Ad Network',
   inventoryUrl: 'https://pointcast.xyz/ads.json',
   embedUrl: 'https://pointcast.xyz/open-ad-network.js',
-  format: 'Responsive portable house card',
+  format: 'Interactive portable CSS 3D house card',
   selection: 'Daily contextual rotation by publisher and page URL',
+  interaction: 'Pointer and arrow-key tilt; no autoplay; reduced-motion safe',
   tracking: 'Aggregate impressions + clicks by creative and publisher',
   privacy: 'No cookies, fingerprinting, wallet data, cross-site visitor identifiers, or behavioral profiles.',
   settlement: 'prototype',

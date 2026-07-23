@@ -124,6 +124,36 @@ test('portable network unit is reciprocal, contextual, and privacy bounded', asy
   assert.match(report, /data-publisher-id/);
 });
 
+test('ad desk and portable network render accessible interactive CSS 3D creatives', async () => {
+  const [registry, desk, stage, receipt, widget] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/components/InteractiveAdStage.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /Interactive CSS 3D card/);
+  assert.match(registry, /Pointer and arrow-key tilt; no autoplay; reduced-motion safe/);
+  assert.match(desk, /import InteractiveAdStage/);
+  assert.match(desk, /LIVE 3D CREATIVE LAB/);
+  assert.match(desk, /<InteractiveAdStage ad=\{ad\} index=\{index\}/);
+  assert.match(stage, /data-interactive-ad/);
+  assert.match(stage, /perspective: 1200px/);
+  assert.match(stage, /transform-style: preserve-3d/);
+  assert.match(stage, /pointermove/);
+  assert.match(stage, /ArrowLeft/);
+  assert.match(stage, /prefers-reduced-motion: reduce/);
+  assert.match(receipt, /pointerMovementTelemetry: false/);
+  assert.match(receipt, /Pointer movement is rendered locally and never transmitted/);
+  assert.match(widget, /function setupTilt/);
+  assert.match(widget, /perspective:1200px/);
+  assert.match(widget, /transform-style:preserve-3d/);
+  assert.match(widget, /pointermove/);
+  assert.match(widget, /ArrowRight/);
+  assert.match(widget, /prefers-reduced-motion:reduce/);
+});
+
 test('Industry Next has a direct PointCast house ad in addition to its project series', async () => {
   const [registry, desk, receipt] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
