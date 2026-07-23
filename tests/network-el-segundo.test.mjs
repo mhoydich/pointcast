@@ -13,6 +13,8 @@ const signalBlock = new URL('../src/content/blocks/0485.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
 const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
+const homePage = new URL('../src/pages/index.astro', import.meta.url);
+const homeSignal = new URL('../src/components/NetworkFirst100Home.astro', import.meta.url);
 
 test('PointCast publishes Network El Segundo with a direct fallback and shared auth bridge', async () => {
   const source = await readFile(page, 'utf8');
@@ -33,6 +35,7 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /pc:network-el-segundo:landing/);
   assert.match(source, /Claim the next light — free/);
   assert.match(source, /campaignSource/);
+  assert.match(source, /pointcast_home/);
   assert.match(source, /pointcast_strip/);
   assert.match(source, /pointcast_ad/);
   assert.match(source, /wordpress/);
@@ -82,12 +85,38 @@ test('the first-100 funnel is public, bounded, and stores no visitor identity', 
   assert.match(source, /expirationTtl: RETENTION_DAYS/);
   assert.match(source, /No IP, user agent, cookie, wallet, referrer, or visitor identifier/);
   assert.match(source, /bounded campaign label/);
+  assert.match(source, /pointcast_home/);
   assert.match(source, /pointcast_strip/);
   assert.match(source, /wordpress/);
   assert.match(source, /legacy/);
   assert.match(source, /sources/);
   assert.match(source, /Counts are browser events, not unique people/);
   assert.doesNotMatch(source, /CF-Connecting-IP|User-Agent|Referer|document\.cookie/i);
+});
+
+test('the PointCast homepage gives the next wallet a live 100-light scoreboard', async () => {
+  const [pageSource, signalSource] = await Promise.all([
+    readFile(homePage, 'utf8'),
+    readFile(homeSignal, 'utf8'),
+  ]);
+
+  assert.match(pageSource, /import NetworkFirst100Home/);
+  assert.match(pageSource, /<NetworkFirst100Home\s*\/>/);
+  assert.match(pageSource, /#first-100-home/);
+  assert.match(signalSource, /LIGHT/);
+  assert.match(signalSource, /IS OPEN/);
+  assert.match(signalSource, /Array\.from\(\{ length: 100 \}/);
+  assert.match(signalSource, /data-light-position/);
+  assert.match(signalSource, /pointcast_home/);
+  assert.match(signalSource, /PC-NETWORK-EL-SEGUNDO-HOME/);
+  assert.match(signalSource, /home-first-100/);
+  assert.match(signalSource, /intersectionRatio >= 0\.5/);
+  assert.match(signalSource, /pc:first100-home-impression/);
+  assert.match(signalSource, /navigator\.doNotTrack/);
+  assert.match(signalSource, /\/api\/network-el-segundo\/participants/);
+  assert.match(signalSource, /Claim light \$\{nextLight\} — free/);
+  assert.match(signalSource, /0 TEZ · NO PURCHASE · ABOUT 20 SECONDS/);
+  assert.match(signalSource, /50% DISTRIBUTION, OR AUTOMATED YIELD REMAINS A PROTOTYPE/);
 });
 
 test('the first-100 relay kit makes the zero-cost invitation portable', async () => {

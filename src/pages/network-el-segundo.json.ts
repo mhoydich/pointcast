@@ -62,7 +62,7 @@ export const GET: APIRoute = () => {
     },
     funnelMethodology: {
       events: ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_rooms'],
-      boundedSources: ['pointcast_strip', 'pointcast_ad', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'direct', 'other', 'legacy'],
+      boundedSources: ['pointcast_home', 'pointcast_strip', 'pointcast_ad', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'direct', 'other', 'legacy'],
       identifiersStored: false,
       caveat: 'Browser events are not unique people; verified participation is proven only by the deduplicated signed-wallet counter.',
     },

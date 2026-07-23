@@ -1,0 +1,422 @@
+---
+const destination = '/network-el-segundo?utm_source=pointcast_home&utm_medium=home-signal&utm_campaign=pc-network-el-segundo-2026';
+const lightPositions = Array.from({ length: 100 }, (_, index) => index + 1);
+---
+
+<section
+  class="first100-home"
+  id="first-100-home"
+  data-first100-home
+  aria-labelledby="first100-home-title"
+>
+  <div class="first100-home__copy">
+    <p class="first100-home__eyebrow mono">NETWORK EL SEGUNDO · LIVE TEZOS PARTICIPATION ART</p>
+    <h2 id="first100-home-title">
+      <span>LIGHT</span>
+      <strong data-home-next-light>002</strong>
+      <span>IS OPEN</span>
+    </h2>
+    <p class="first100-home__dek">
+      One hundred wallets make one public signal. The next verified participant turns on the next light with
+      one free Kukai signature.
+    </p>
+    <div class="first100-home__status" aria-live="polite">
+      <strong data-home-count>1 / 100 VERIFIED</strong>
+      <span data-home-remaining>99 LIGHTS WAITING</span>
+    </div>
+    <a class="first100-home__cta" href={destination} data-home-cta>
+      <span>Claim light 2 — free</span>
+      <small>0 TEZ · NO PURCHASE · ABOUT 20 SECONDS</small>
+    </a>
+    <p class="first100-home__boundary mono">
+      PARTICIPATION IS LIVE · ANY FUTURE SALE, 50% DISTRIBUTION, OR AUTOMATED YIELD REMAINS A PROTOTYPE
+    </p>
+  </div>
+
+  <div class="first100-home__signal" aria-label="The First 100 Signal">
+    <ol class="first100-home__grid" data-home-light-grid>
+      {lightPositions.map((position) => (
+        <li
+          class:list={[
+            'first100-home__light',
+            position === 1 && 'is-on',
+            position === 2 && 'is-next',
+          ]}
+          data-light-position={position}
+          data-light-state={position === 1 ? 'on' : position === 2 ? 'next' : 'waiting'}
+          aria-label={
+            position === 1
+              ? 'Light 1 verified'
+              : position === 2
+                ? 'Light 2 open'
+                : `Light ${position} waiting`
+          }
+        >
+          <span aria-hidden="true"></span>
+        </li>
+      ))}
+    </ol>
+    <div class="first100-home__legend mono" aria-hidden="true">
+      <span>001 · VERIFIED</span>
+      <span>002 · OPEN</span>
+      <span>100 · SIGNAL COMPLETE</span>
+    </div>
+  </div>
+</section>
+
+<script>
+  const PARTICIPANT_ENDPOINT = '/api/network-el-segundo/participants';
+  const METRIC_ENDPOINT = '/api/ad-metrics';
+  const HOME_SIGNAL_METRIC_ID = 'PC-NETWORK-EL-SEGUNDO-HOME';
+
+  function padLight(position: number): string {
+    return String(position).padStart(3, '0');
+  }
+
+  function homeSignalMetricsDisabled(): boolean {
+    try {
+      return navigator.doNotTrack === '1' || localStorage.getItem('pc:no-track') === '1';
+    } catch {
+      return navigator.doNotTrack === '1';
+    }
+  }
+
+  function sendHomeSignalMetric(event: 'impression' | 'click'): void {
+    if (homeSignalMetricsDisabled()) return;
+    const payload = JSON.stringify({
+      event,
+      adId: HOME_SIGNAL_METRIC_ID,
+      publisher: 'pointcast',
+      placement: 'home-first-100',
+    });
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon(METRIC_ENDPOINT, new Blob([payload], { type: 'application/json' }));
+      if (queued) return;
+    }
+    void fetch(METRIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    });
+  }
+
+  function renderHomeSignal(count: number, target: number): void {
+    const safeCount = Math.max(0, Math.min(count, target));
+    const nextLight = Math.min(target, safeCount + 1);
+    const complete = safeCount >= target;
+
+    document.querySelectorAll<HTMLElement>('[data-home-count]').forEach((element) => {
+      element.textContent = `${safeCount} / ${target} VERIFIED`;
+    });
+    document.querySelectorAll<HTMLElement>('[data-home-remaining]').forEach((element) => {
+      element.textContent = complete ? 'THE FIRST 100 SIGNAL IS COMPLETE' : `${target - safeCount} LIGHTS WAITING`;
+    });
+    document.querySelectorAll<HTMLElement>('[data-home-next-light]').forEach((element) => {
+      element.textContent = complete ? '100' : padLight(nextLight);
+    });
+    document.querySelectorAll<HTMLElement>('[data-home-cta] span').forEach((element) => {
+      element.textContent = complete ? 'View the complete signal' : `Claim light ${nextLight} — free`;
+    });
+
+    document.querySelectorAll<HTMLElement>('[data-light-position]').forEach((light) => {
+      const position = Number.parseInt(light.dataset.lightPosition || '0', 10);
+      const state = position <= safeCount ? 'on' : position === nextLight && !complete ? 'next' : 'waiting';
+      light.dataset.lightState = state;
+      light.classList.toggle('is-on', state === 'on');
+      light.classList.toggle('is-next', state === 'next');
+      light.setAttribute(
+        'aria-label',
+        state === 'on'
+          ? `Light ${position} verified`
+          : state === 'next'
+            ? `Light ${position} open`
+            : `Light ${position} waiting`,
+      );
+    });
+  }
+
+  async function refreshHomeSignal(): Promise<void> {
+    try {
+      const response = await fetch(PARTICIPANT_ENDPOINT, {
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) return;
+      const payload = await response.json() as { count?: number; target?: number };
+      if (!Number.isInteger(payload.count) || !Number.isInteger(payload.target)) return;
+      renderHomeSignal(payload.count as number, payload.target as number);
+    } catch {
+      // The server-rendered 1/100 state remains a useful invitation if the counter is unavailable.
+    }
+  }
+
+  function initializeHomeSignal(): void {
+    const root = document.querySelector<HTMLElement>('[data-first100-home]');
+    if (!root || root.dataset.first100HomeReady === '1') return;
+    root.dataset.first100HomeReady = '1';
+    void refreshHomeSignal();
+
+    root.querySelector<HTMLAnchorElement>('[data-home-cta]')?.addEventListener(
+      'click',
+      () => sendHomeSignalMetric('click'),
+      { once: true },
+    );
+
+    if (homeSignalMetricsDisabled()) return;
+    const impressionKey = 'pc:first100-home-impression';
+    try {
+      if (sessionStorage.getItem(impressionKey) === '1') return;
+    } catch {
+      // Storage can be unavailable; the aggregate event can still be sent.
+    }
+
+    let timer: number | undefined;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+        if (timer) return;
+        timer = window.setTimeout(() => {
+          try { sessionStorage.setItem(impressionKey, '1'); } catch { /* no-op */ }
+          sendHomeSignalMetric('impression');
+          observer.disconnect();
+          timer = undefined;
+        }, 1000);
+      } else if (timer) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+    }, { threshold: [0.5] });
+    observer.observe(root);
+  }
+
+  document.addEventListener('astro:page-load', initializeHomeSignal);
+  initializeHomeSignal();
+</script>
+
+<style>
+  .first100-home {
+    --signal-ink: #101014;
+    --signal-paper: #f7f1df;
+    --signal-acid: #efff55;
+    --signal-pink: #ff69b4;
+    display: grid;
+    grid-template-columns: minmax(260px, 0.78fr) minmax(430px, 1.22fr);
+    gap: clamp(24px, 5vw, 72px);
+    align-items: center;
+    min-height: min(760px, calc(100svh - 40px));
+    margin: 0;
+    padding: clamp(36px, 7vw, 104px) clamp(18px, 5vw, 80px);
+    overflow: hidden;
+    color: var(--signal-paper);
+    background:
+      radial-gradient(circle at 83% 24%, rgba(255, 105, 180, 0.18), transparent 28%),
+      radial-gradient(circle at 25% 85%, rgba(239, 255, 85, 0.08), transparent 35%),
+      var(--signal-ink);
+    border-block: 1px solid #000;
+  }
+
+  .first100-home__copy {
+    position: relative;
+    z-index: 1;
+  }
+
+  .first100-home__eyebrow,
+  .first100-home__boundary,
+  .first100-home__legend {
+    font-size: 8px;
+    line-height: 1.5;
+    letter-spacing: 0.15em;
+  }
+
+  .first100-home__eyebrow {
+    margin: 0 0 24px;
+    color: var(--signal-acid);
+  }
+
+  .first100-home h2 {
+    display: grid;
+    margin: 0;
+    font-family: var(--pc-font-sans, 'Syne', sans-serif);
+    font-size: clamp(44px, 7.6vw, 118px);
+    font-weight: 700;
+    line-height: 0.78;
+    letter-spacing: -0.07em;
+  }
+
+  .first100-home h2 strong {
+    color: var(--signal-pink);
+    font-size: 1.28em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .first100-home__dek {
+    max-width: 44ch;
+    margin: 32px 0 20px;
+    color: #d8d4ca;
+    font-family: 'Iowan Old Style', Palatino, Georgia, serif;
+    font-size: clamp(17px, 1.8vw, 25px);
+    line-height: 1.42;
+  }
+
+  .first100-home__status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 0 0 16px;
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .first100-home__status strong,
+  .first100-home__status span {
+    padding: 7px 9px;
+    border: 1px solid #57575d;
+  }
+
+  .first100-home__status strong {
+    color: var(--signal-ink);
+    background: var(--signal-acid);
+    border-color: var(--signal-acid);
+  }
+
+  .first100-home__cta {
+    display: grid;
+    gap: 6px;
+    width: fit-content;
+    min-width: min(100%, 310px);
+    padding: 14px 16px;
+    color: var(--signal-ink);
+    background: var(--signal-pink);
+    border: 1px solid var(--signal-pink);
+    text-decoration: none;
+    transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+  }
+
+  .first100-home__cta span {
+    font-size: 17px;
+    font-weight: 750;
+  }
+
+  .first100-home__cta small {
+    font-family: var(--pc-font-mono, ui-monospace, monospace);
+    font-size: 7px;
+    letter-spacing: 0.09em;
+  }
+
+  .first100-home__cta:hover,
+  .first100-home__cta:focus-visible {
+    color: var(--signal-ink);
+    background: var(--signal-acid);
+    border-color: var(--signal-acid);
+    text-decoration: none;
+    transform: translate(-3px, -3px);
+  }
+
+  .first100-home__cta:focus-visible {
+    outline: 2px solid var(--signal-paper);
+    outline-offset: 3px;
+  }
+
+  .first100-home__boundary {
+    max-width: 58ch;
+    margin: 17px 0 0;
+    color: #88878d;
+  }
+
+  .first100-home__signal {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+  }
+
+  .first100-home__grid {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(16px, 1fr));
+    gap: clamp(5px, 0.75vw, 11px);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .first100-home__light {
+    aspect-ratio: 1;
+    min-width: 0;
+  }
+
+  .first100-home__light span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #4c4c52;
+    border-radius: 50%;
+    background: #19191e;
+  }
+
+  .first100-home__light.is-on span {
+    background: var(--signal-acid);
+    border-color: var(--signal-acid);
+    box-shadow: 0 0 16px rgba(239, 255, 85, 0.68);
+  }
+
+  .first100-home__light.is-next span {
+    background: var(--signal-pink);
+    border-color: var(--signal-pink);
+    box-shadow: 0 0 0 5px rgba(255, 105, 180, 0.16), 0 0 24px rgba(255, 105, 180, 0.75);
+    animation: next-light-pulse 1.8s ease-in-out infinite;
+  }
+
+  .first100-home__legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 18px;
+    color: #77767d;
+  }
+
+  @keyframes next-light-pulse {
+    0%, 100% { transform: scale(0.82); opacity: 0.72; }
+    50% { transform: scale(1); opacity: 1; }
+  }
+
+  @media (max-width: 840px) {
+    .first100-home {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+
+    .first100-home__signal {
+      max-width: 620px;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .first100-home {
+      padding: 38px 14px 46px;
+    }
+
+    .first100-home h2 {
+      font-size: clamp(48px, 19vw, 78px);
+    }
+
+    .first100-home__grid {
+      gap: 6px;
+    }
+
+    .first100-home__legend span:nth-child(2) {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .first100-home__light.is-next span {
+      animation: none;
+    }
+
+    .first100-home__cta {
+      transition: none;
+    }
+  }
+</style>

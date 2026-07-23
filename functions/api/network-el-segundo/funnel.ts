@@ -6,6 +6,7 @@ const FUNNEL_EVENTS = ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_
 type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 type FunnelCounter = Record<FunnelEvent, number>;
 const FUNNEL_SOURCES = [
+  'pointcast_home',
   'pointcast_strip',
   'pointcast_ad',
   'industrynext',
