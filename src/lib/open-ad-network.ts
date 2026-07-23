@@ -10,6 +10,7 @@ import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-v
 import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
 import networkWindows from '../assets/campaigns/network-el-segundo-2026/100-windows.png';
 import networkFieldKit from '../assets/campaigns/network-el-segundo-2026/field-kit.png';
+import networkMeshCommons from '../assets/campaigns/network-el-segundo-2026/mesh-commons.png';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
@@ -214,11 +215,11 @@ export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
   id: 'PC-NETWORK-EL-SEGUNDO-2026',
   label: 'Network El Segundo — First 100 Wallets',
   advertiser: 'Network El Segundo',
-  creativeCount: 5,
+  creativeCount: 6,
   placement: 'Sitewide PointCast house campaign with a contextual creative on every public page',
   tracking: 'aggregate impressions + clicks',
   status: 'house',
-  note: 'A zero-capital first-party campaign connecting two living public artworks and one signed local-communication product study. No sale, token, payout contract, certified hardware, active physical mesh, or yield system is live.',
+  note: 'A zero-capital first-party campaign connecting two living public artworks, a local-communication product study, and a two-year physical-network plan. No sale, token, payout contract, certified hardware, active physical mesh, coverage guarantee, or yield system is live.',
 } as const;
 
 export const NETWORK_FIRST_100_SIGNAL = {
@@ -331,6 +332,21 @@ export const POINTCAST_ADS: PointCastAd[] = [
     tone: 'field',
     contexts: ['local', 'signal', 'mesh', 'light', 'sound', 'neighbor', 'civic', 'map', 'el', 'segundo', 'field', 'tool'],
     image: networkFieldKit.src,
+    sourceTool: 'OpenAI image generation',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-006',
+    advertiser: 'Network El Segundo',
+    headline: 'Three roofs make a mesh.',
+    copy: 'A $295–$395 proof link, a redundant rooftop triangle, nine local-only services, and a two-year path toward a 25-mile horizon—not blanket coverage.',
+    href: '/network-el-segundo/mesh-commons',
+    cta: 'Open the Mesh Commons plan',
+    tone: 'network',
+    contexts: ['local', 'mesh', 'network', 'infrastructure', 'roof', 'radio', 'game', 'community', 'el', 'segundo', 'civic', 'internet'],
+    image: networkMeshCommons.src,
     sourceTool: 'OpenAI image generation',
     campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
     seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,

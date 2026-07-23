@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds eleven product filings across every public kind', () => {
-  assert.equal(releases.length, 11);
+test('press wire seeds twelve product filings across every public kind', () => {
+  assert.equal(releases.length, 12);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,19 @@ test('press wire seeds eleven product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Mesh Commons filing publishes a low-cost plan without claiming active coverage', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0012');
+  assert.ok(release);
+  assert.equal(release.slug, 'network-el-segundo-publishes-mesh-commons-two-year-plan');
+  assert.match(release.body.join(' '), /\$295–\$395/);
+  assert.match(release.body.join(' '), /three consented rooftops/i);
+  assert.match(release.body.join(' '), /hello\.mesh/);
+  assert.match(release.body.join(' '), /25-mile radius is a planning horizon/i);
+  assert.match(release.body.join(' '), /not an active physical mesh/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo/mesh-commons');
+  assert.equal(release.actionUrl, 'https://network-el-segundo.mhoydich.chatgpt.site/mesh-commons');
 });
 
 test('Local Signal Field Kit filing publishes the signed product set and concept boundary', () => {

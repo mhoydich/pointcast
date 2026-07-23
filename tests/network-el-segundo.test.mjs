@@ -6,6 +6,8 @@ const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
 const v2Page = new URL('../src/pages/network-el-segundo/v2.astro', import.meta.url);
 const fieldKitPage = new URL('../src/pages/network-el-segundo/field-kit.astro', import.meta.url);
 const fieldKitJson = new URL('../src/pages/network-el-segundo/field-kit.json.ts', import.meta.url);
+const meshCommonsPage = new URL('../src/pages/network-el-segundo/mesh-commons.astro', import.meta.url);
+const meshCommonsJson = new URL('../src/pages/network-el-segundo/mesh-commons.json.ts', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
 const participantApi = new URL('../functions/api/network-el-segundo/participants.ts', import.meta.url);
 const funnelApi = new URL('../functions/api/network-el-segundo/funnel.ts', import.meta.url);
@@ -15,6 +17,7 @@ const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta
 const signalBlock = new URL('../src/content/blocks/0485.json', import.meta.url);
 const v2Block = new URL('../src/content/blocks/0486.json', import.meta.url);
 const fieldKitBlock = new URL('../src/content/blocks/0488.json', import.meta.url);
+const meshCommonsBlock = new URL('../src/content/blocks/0489.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
 const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
@@ -96,13 +99,15 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /objkt/);
   assert.match(source, /participant_relay/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
-  assert.match(source, /latestEdition: 'field-note-003'/);
+  assert.match(source, /latestEdition: 'field-note-004'/);
   assert.match(source, /name: '100 Windows'/);
   assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/v2'/);
   assert.match(source, /Touch any window to send a visual pulse without changing the public roster/);
   assert.match(source, /name: 'Local Signal Field Kit'/);
   assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/field-kit'/);
   assert.match(source, /signedBy: 'MH'/);
+  assert.match(source, /name: 'Mesh Commons'/);
+  assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/mesh-commons'/);
 });
 
 test('PointCast gives 100 Windows a distinct canonical V2 route', async () => {
@@ -139,6 +144,28 @@ test('PointCast publishes the signed Local Signal Field Kit as HTML and JSON', a
   assert.match(jsonSource, /emergencyChannel: false/);
   assert.match(jsonSource, /locationHistory: false/);
   assert.match(jsonSource, /storedData: 'None\.'/);
+});
+
+test('PointCast publishes Mesh Commons as HTML, JSON, and Block 0489', async () => {
+  const [pageSource, jsonSource, blockSource] = await Promise.all([
+    readFile(meshCommonsPage, 'utf8'),
+    readFile(meshCommonsJson, 'utf8'),
+    readFile(meshCommonsBlock, 'utf8'),
+  ]);
+
+  assert.match(pageSource, /Mesh Commons — Network El Segundo/);
+  assert.match(pageSource, /25 MILES · 24 MONTHS · \$295 FIRST LINK/);
+  assert.match(pageSource, /not active coverage/i);
+  assert.match(pageSource, /Read Block 0489/);
+  assert.match(pageSource, /allow="clipboard-write; web-share"/);
+  assert.match(jsonSource, /radiusMiles: 25/);
+  assert.match(jsonSource, /durationMonths: 24/);
+  assert.match(jsonSource, /firstMeshTriangleUsd: \{ low: 950, high: 1500 \}/);
+  assert.match(jsonSource, /'play\.mesh'/);
+  assert.match(jsonSource, /mandatoryMonthlyPriceUsd: 0/);
+  assert.match(jsonSource, /contentLogging: false/);
+  assert.match(blockSource, /Three roofs make a mesh/);
+  assert.match(blockSource, /not a coverage claim/i);
 });
 
 test('the first-100 funnel is public, bounded, and stores no visitor identity', async () => {
