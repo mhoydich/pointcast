@@ -2,8 +2,11 @@ import { authJson, readSessionFromRequest, type AuthEnv } from './session';
 
 const TICKET_PREFIX = 'project-ticket:';
 const TICKET_TTL_SECONDS = 120;
-const PROJECTS: Record<string, string> = {
-  'network-el-segundo': 'https://network-el-segundo.mhoydich.chatgpt.site',
+const PROJECTS: Record<string, { origin: string; paths: readonly string[] }> = {
+  'network-el-segundo': {
+    origin: 'https://network-el-segundo.mhoydich.chatgpt.site',
+    paths: ['/', '/v2'],
+  },
 };
 
 type Ticket = {
@@ -13,11 +16,11 @@ type Ticket = {
 };
 
 function validReturnTo(target: string, returnTo: string): string | null {
-  const allowedOrigin = PROJECTS[target];
-  if (!allowedOrigin) return null;
+  const project = PROJECTS[target];
+  if (!project) return null;
   try {
     const url = new URL(returnTo);
-    if (url.origin !== allowedOrigin || url.pathname !== '/') return null;
+    if (url.origin !== project.origin || !project.paths.includes(url.pathname)) return null;
     return url.toString();
   } catch {
     return null;

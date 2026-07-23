@@ -88,6 +88,9 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   const page = await readFile(new URL('src/pages/auth/project.astro', root), 'utf8');
   const authMenu = await readFile(new URL('src/components/AuthMenu.astro', root), 'utf8');
   assert.match(route, /network-el-segundo/);
+  assert.match(route, /paths: \['\/', '\/v2'\]/);
+  assert.match(route, /url\.origin !== project\.origin/);
+  assert.match(route, /project\.paths\.includes\(url\.pathname\)/);
   assert.match(route, /expirationTtl: TICKET_TTL_SECONDS/);
   assert.match(route, /USERS\.delete\(key\)/);
   assert.match(route, /tezos-identity-not-linked/);
