@@ -1,5 +1,6 @@
 ---
-const destination = '/network-el-segundo?utm_source=pointcast_home&utm_medium=home-signal&utm_campaign=pc-network-el-segundo-2026';
+const projectReturnTo = 'https://network-el-segundo.mhoydich.chatgpt.site/';
+const destination = `/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(projectReturnTo)}&source=pointcast_home`;
 const lightPositions = Array.from({ length: 100 }, (_, index) => index + 1);
 ---
 
@@ -67,6 +68,7 @@ const lightPositions = Array.from({ length: 100 }, (_, index) => index + 1);
 <script>
   const PARTICIPANT_ENDPOINT = '/api/network-el-segundo/participants';
   const METRIC_ENDPOINT = '/api/ad-metrics';
+  const FUNNEL_ENDPOINT = '/api/network-el-segundo/funnel';
   const HOME_SIGNAL_METRIC_ID = 'PC-NETWORK-EL-SEGUNDO-HOME';
 
   function padLight(position: number): string {
@@ -94,6 +96,21 @@ const lightPositions = Array.from({ length: 100 }, (_, index) => index + 1);
       if (queued) return;
     }
     void fetch(METRIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    });
+  }
+
+  function sendHomeJoin(): void {
+    if (homeSignalMetricsDisabled()) return;
+    const payload = JSON.stringify({ event: 'join', source: 'pointcast_home' });
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon(FUNNEL_ENDPOINT, new Blob([payload], { type: 'application/json' }));
+      if (queued) return;
+    }
+    void fetch(FUNNEL_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: payload,
@@ -159,7 +176,10 @@ const lightPositions = Array.from({ length: 100 }, (_, index) => index + 1);
 
     root.querySelector<HTMLAnchorElement>('[data-home-cta]')?.addEventListener(
       'click',
-      () => sendHomeSignalMetric('click'),
+      () => {
+        sendHomeSignalMetric('click');
+        sendHomeJoin();
+      },
       { once: true },
     );
 

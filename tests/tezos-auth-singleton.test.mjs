@@ -86,6 +86,7 @@ test('Tezos login challenge is short-lived and single-use', async () => {
 test('PointCast issues bounded one-use Tezos project tickets', async () => {
   const route = await readFile(new URL('functions/api/auth/project-ticket.ts', root), 'utf8');
   const page = await readFile(new URL('src/pages/auth/project.astro', root), 'utf8');
+  const authMenu = await readFile(new URL('src/components/AuthMenu.astro', root), 'utf8');
   assert.match(route, /network-el-segundo/);
   assert.match(route, /expirationTtl: TICKET_TTL_SECONDS/);
   assert.match(route, /USERS\.delete\(key\)/);
@@ -95,6 +96,14 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(page, /pc:wallet-active/);
   assert.match(page, /JSON\.stringify\(\{ target, returnTo, address \}\)/);
   assert.match(page, /One wallet/);
+  assert.match(page, /<AuthMenu autoOpen=\{true\}/);
+  assert.match(page, /pc:open-auth-menu/);
+  assert.match(page, /Your PointCast Kukai session follows you into the project/);
+  assert.match(page, /Zero tez; no transaction/);
+  assert.doesNotMatch(page, /data-provider="kukai"[\s\S]*\.click\(/);
+  assert.match(authMenu, /data-auth-auto-open/);
+  assert.match(authMenu, /root\.dataset\.authAutoOpen === 'true'/);
+  assert.match(authMenu, /if \(!user[\s\S]*openMenu\(root\)/);
 });
 
 test('embedded Network El Segundo receives a fresh PointCast project ticket', async () => {

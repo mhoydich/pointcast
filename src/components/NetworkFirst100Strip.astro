@@ -1,7 +1,8 @@
 ---
 const pathname = Astro.url.pathname;
 const hidden = pathname.startsWith('/admin') || pathname.startsWith('/network-el-segundo');
-const destination = '/network-el-segundo?utm_source=pointcast&utm_medium=first-100-strip&utm_campaign=pc-network-el-segundo-2026';
+const projectReturnTo = 'https://network-el-segundo.mhoydich.chatgpt.site/';
+const destination = `/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(projectReturnTo)}&source=pointcast_strip`;
 const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
 ---
 
@@ -24,6 +25,7 @@ const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
     const PARTICIPANT_ENDPOINT = '/api/network-el-segundo/participants';
     const SIGNAL_METRIC_ID = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
     const METRIC_ENDPOINT = '/api/ad-metrics';
+    const FUNNEL_ENDPOINT = '/api/network-el-segundo/funnel';
 
     function hasSharedWallet(): boolean {
       try {
@@ -99,12 +101,30 @@ const signalMetricId = 'PC-NETWORK-EL-SEGUNDO-SIGNAL';
       });
     }
 
+    function sendFirst100Join(): void {
+      if (first100MetricsDisabled()) return;
+      const payload = JSON.stringify({ event: 'join', source: 'pointcast_strip' });
+      if (navigator.sendBeacon) {
+        const queued = navigator.sendBeacon(FUNNEL_ENDPOINT, new Blob([payload], { type: 'application/json' }));
+        if (queued) return;
+      }
+      void fetch(FUNNEL_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      });
+    }
+
     function initializeFirst100Metrics(): void {
       const strip = document.querySelector<HTMLElement>('[data-first100-metric]');
       if (!strip || strip.dataset.first100MetricReady === '1' || first100MetricsDisabled()) return;
       strip.dataset.first100MetricReady = '1';
 
-      strip.querySelector('a')?.addEventListener('click', () => sendFirst100Metric('click'), { once: true });
+      strip.querySelector('a')?.addEventListener('click', () => {
+        sendFirst100Metric('click');
+        sendFirst100Join();
+      }, { once: true });
 
       const impressionKey = `pc:first100-impression:${location.pathname}`;
       try {

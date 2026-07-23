@@ -41,6 +41,10 @@ test('all public layout families carry the live first-100 Tezos signal above the
   assert.match(strip, /pc:first100-impression/);
   assert.match(strip, /navigator\.doNotTrack/);
   assert.match(strip, /\/api\/network-el-segundo\/participants/);
+  assert.match(strip, /\/auth\/project\?target=network-el-segundo/);
+  assert.match(strip, /source=pointcast_strip/);
+  assert.match(strip, /\/api\/network-el-segundo\/funnel/);
+  assert.match(strip, /event: 'join', source: 'pointcast_strip'/);
   assert.match(strip, /pc:wallet-active/);
   assert.match(strip, /pc:wallet-change/);
   assert.match(strip, /CLAIM LIGHT/);

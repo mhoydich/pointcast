@@ -16,6 +16,8 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       main { width:min(42rem,calc(100% - 2rem)); border:1px solid #e9c98d; padding:clamp(1.5rem,5vw,4rem); box-sizing:border-box; }
       p { line-height:1.6; color:#cad7df; } h1 { font:700 clamp(2.2rem,8vw,5rem)/.9 Arial,sans-serif; letter-spacing:-.07em; margin:.25em 0; }
       .eyebrow { color:#e9c98d; text-transform:uppercase; letter-spacing:.16em; font-size:.75rem; }
+      .project-context { max-width:54ch; }
+      .project-context strong { color:#f8f2df; }
       .auth-shell { margin-top:2rem; display:flex; align-items:center; gap:1rem; }
       [data-project-status] { min-height:1.5em; color:#e9c98d; }
     </style>
@@ -24,8 +26,11 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
     <main>
       <p class="eyebrow">PointCast identity bridge · Tezos Mainnet</p>
       <h1>One wallet.<br />Every project.</h1>
-      <p>Your existing PointCast session can authorize this project with a short-lived, one-use code. If you are not signed in yet, use Kukai once here; no transaction is requested.</p>
-      <div class="auth-shell"><AuthMenu /></div>
+      <p class="project-context" data-project-context>
+        Your existing PointCast session can authorize this project with a short-lived, one-use code.
+        If you are not signed in yet, use Kukai once here; no transaction is requested.
+      </p>
+      <div class="auth-shell"><AuthMenu autoOpen={true} /></div>
       <p data-project-status role="status">Checking your PointCast session…</p>
     </main>
     <TezosSessionBridge />
@@ -34,7 +39,28 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       const params = new URLSearchParams(window.location.search);
       const target = params.get('target') || '';
       const returnTo = params.get('return_to') || '';
+      const context = document.querySelector('[data-project-context]');
       let issuing = false;
+
+      async function renderProjectContext() {
+        if (target !== 'network-el-segundo' || !context) return;
+        let nextLight = 2;
+        try {
+          const response = await fetch('/api/network-el-segundo/participants', {
+            headers: { accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (response.ok) {
+            const result = await response.json();
+            if (Number.isInteger(result.count) && Number.isInteger(result.target)) {
+              nextLight = Math.min(result.target, result.count + 1);
+            }
+          }
+        } catch {
+          // The invitation still works if the public counter is unavailable.
+        }
+        context.textContent = `Light ${nextLight} is open in Network El Segundo's First 100 Signal. Your PointCast Kukai session follows you into the project. If this is your first visit, choose Kukai below and sign one free wallet-control message. Zero tez; no transaction.`;
+      }
 
       async function continueToProject() {
         if (issuing) return;
@@ -51,7 +77,8 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
           const result = await response.json();
           if (response.status === 401) {
             issuing = false;
-            if (status) status.textContent = 'Sign in with Kukai above to continue.';
+            if (status) status.textContent = 'Choose Kukai below to sign once. No transaction will be requested.';
+            window.dispatchEvent(new CustomEvent('pc:open-auth-menu'));
             return;
           }
           if (!response.ok || !result.destination) throw new Error(result.reason || 'project-ticket-failed');
@@ -65,6 +92,7 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       window.addEventListener('pc:auth-change', (event) => {
         if (event.detail?.user) void continueToProject();
       });
+      void renderProjectContext();
       void continueToProject();
     </script>
   </body>

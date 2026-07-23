@@ -108,6 +108,11 @@ test('the PointCast homepage gives the next wallet a live 100-light scoreboard',
   assert.match(signalSource, /Array\.from\(\{ length: 100 \}/);
   assert.match(signalSource, /data-light-position/);
   assert.match(signalSource, /pointcast_home/);
+  assert.match(signalSource, /\/auth\/project\?target=network-el-segundo/);
+  assert.match(signalSource, /return_to=\$\{encodeURIComponent\(projectReturnTo\)\}/);
+  assert.match(signalSource, /source=pointcast_home/);
+  assert.match(signalSource, /\/api\/network-el-segundo\/funnel/);
+  assert.match(signalSource, /event: 'join', source: 'pointcast_home'/);
   assert.match(signalSource, /PC-NETWORK-EL-SEGUNDO-HOME/);
   assert.match(signalSource, /home-first-100/);
   assert.match(signalSource, /intersectionRatio >= 0\.5/);

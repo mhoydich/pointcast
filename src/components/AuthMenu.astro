@@ -1,7 +1,16 @@
 ---
+interface Props {
+  autoOpen?: boolean;
+}
+
+const { autoOpen = false } = Astro.props;
 ---
 
-<div class="auth-menu" data-auth-menu>
+<div
+  class="auth-menu"
+  data-auth-menu
+  data-auth-auto-open={autoOpen ? 'true' : undefined}
+>
   <button
     type="button"
     class="auth-menu__trigger"
@@ -364,12 +373,15 @@
     }
   }
 
-  async function refreshSession(root: HTMLElement): Promise<void> {
+  async function refreshSession(root: HTMLElement): Promise<PointCastUser | null> {
     try {
-      renderSession(root, await getSession());
+      const user = await getSession();
+      renderSession(root, user);
+      return user;
     } catch {
       renderSession(root, null);
       setStatus(root, 'Sign-in requires the live session service.');
+      return null;
     }
   }
 
@@ -431,7 +443,9 @@
       }, { signal });
     });
 
-    void refreshSession(root);
+    void refreshSession(root).then((user) => {
+      if (!user && root.dataset.authAutoOpen === 'true') openMenu(root);
+    });
   }
 
   function initializeAuthMenus(): void {
