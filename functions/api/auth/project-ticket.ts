@@ -29,7 +29,7 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
   const current = await readSessionFromRequest(request, env);
   if (!current) return authJson({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
-  let body: { target?: unknown; returnTo?: unknown };
+  let body: { target?: unknown; returnTo?: unknown; address?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -39,7 +39,14 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
   const returnTo = typeof body.returnTo === 'string' ? validReturnTo(target, body.returnTo) : null;
   if (!returnTo) return authJson({ ok: false, reason: 'target-not-allowed' }, { status: 400 });
 
-  const identity = current.user.identities.find((item) => item.provider === 'kukai');
+  const tezosIdentities = current.user.identities.filter((item) => item.provider === 'kukai');
+  const requestedAddress = typeof body.address === 'string' ? body.address.trim() : '';
+  if (requestedAddress && !tezosIdentities.some((item) => item.id === requestedAddress)) {
+    return authJson({ ok: false, reason: 'tezos-identity-not-linked' }, { status: 403 });
+  }
+  const identity = requestedAddress
+    ? tezosIdentities.find((item) => item.id === requestedAddress)
+    : tezosIdentities.at(-1);
   if (!identity) return authJson({ ok: false, reason: 'tezos-identity-required' }, { status: 403 });
 
   const code = `pct_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;

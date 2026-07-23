@@ -78,6 +78,10 @@
 
 <script>
   type Wallet = { chain: 'tezos'; address: string; provider: string; addedAt: number; label?: string };
+  type WalletChipWindow = Window & {
+    __pointCastWalletChipAbort?: AbortController;
+    __pointCastWalletChipPageLoadInstalled?: boolean;
+  };
 
   const KEY_WALLETS = 'pc:wallets';
   const KEY_ACTIVE_ADDR = 'pc:wallet-active';
@@ -157,7 +161,22 @@
   //  DOM references
   // ────────────────────────────────────────────────────────────────────────
 
-  const chip = document.getElementById('wallet-chip')!;
+  function initWalletChip() {
+  const walletChipWindow = window as WalletChipWindow;
+  const chip = document.getElementById('wallet-chip');
+  if (!chip) {
+    walletChipWindow.__pointCastWalletChipAbort?.abort();
+    walletChipWindow.__pointCastWalletChipAbort = undefined;
+    return;
+  }
+  if (chip.dataset.walletChipInitialized === 'true') return;
+  chip.dataset.walletChipInitialized = 'true';
+
+  walletChipWindow.__pointCastWalletChipAbort?.abort();
+  const listeners = new AbortController();
+  walletChipWindow.__pointCastWalletChipAbort = listeners;
+  const listenerOptions = { signal: listeners.signal };
+
   const btn = document.getElementById('wallet-chip-btn') as HTMLButtonElement;
   const label = document.getElementById('wallet-chip-label')!;
   const menu = document.getElementById('wallet-chip-menu')!;
@@ -260,14 +279,14 @@
   function closeMenu() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
   function toggleMenu() { menu.hidden ? openMenu() : closeMenu(); }
 
-  btn.addEventListener('click', toggleMenu);
+  btn.addEventListener('click', toggleMenu, listenerOptions);
   document.addEventListener('click', (e) => {
     if (!chip.contains(e.target as Node)) closeMenu();
-  });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+  }, listenerOptions);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); }, listenerOptions);
 
   // External open trigger
-  window.addEventListener('pc:open-wallet-menu', () => openMenu());
+  window.addEventListener('pc:open-wallet-menu', () => openMenu(), listenerOptions);
 
   // ────────────────────────────────────────────────────────────────────────
   //  Beacon flows
@@ -287,7 +306,7 @@
         try { await disconnectKukai(); } catch { /* best-effort */ }
       }
       button.textContent = 'Approve free sign-in…';
-      const user = await loginWithKukai();
+      const user = await loginWithKukai({ force: true });
       const identity = user?.identities.find((item) => item.provider === 'kukai');
       if (!identity?.id) throw new Error('PointCast did not receive a Tezos identity.');
       addOrUpdate({ chain: 'tezos', address: identity.id, provider: 'kukai', addedAt: Date.now() });
@@ -308,28 +327,36 @@
     button.disabled = false;
   }
 
-  connectBtn.addEventListener('click', () => connectFlow(connectBtn, 'Open Beacon picker →'));
-  addBtn.addEventListener('click', () => connectFlow(addBtn, 'Connect another wallet →'));
+  connectBtn.addEventListener('click', () => connectFlow(connectBtn, 'Open Beacon picker →'), listenerOptions);
+  addBtn.addEventListener('click', () => connectFlow(addBtn, 'Connect another wallet →'), listenerOptions);
 
   disconnectBtn.addEventListener('click', async () => {
     const active = activeWallet();
     if (!active) return;
     try {
-      const { disconnectKukai } = await import('../lib/tezos');
-      await disconnectKukai();
+      const { logout } = await import('../lib/auth/client');
+      await logout();
     } catch { /* best-effort */ }
     removeWallet(active.address);
     render();
     closeMenu();
-  });
+  }, listenerOptions);
 
   // Cross-tab + same-tab sync
   window.addEventListener('storage', (e) => {
     if (e.key === KEY_WALLETS || e.key === KEY_ACTIVE_ADDR || e.key === KEY_LEGACY) render();
-  });
-  window.addEventListener('pc:wallet-change', () => render());
+  }, listenerOptions);
+  window.addEventListener('pc:wallet-change', () => render(), listenerOptions);
 
   render();
+  }
+
+  initWalletChip();
+  const walletChipWindow = window as WalletChipWindow;
+  if (!walletChipWindow.__pointCastWalletChipPageLoadInstalled) {
+    walletChipWindow.__pointCastWalletChipPageLoadInstalled = true;
+    document.addEventListener('astro:page-load', initWalletChip);
+  }
 </script>
 
 <style>

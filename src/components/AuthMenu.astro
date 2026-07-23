@@ -282,6 +282,11 @@
     logout,
   } from '../lib/auth/client';
 
+  type AuthMenuWindow = Window & {
+    __pointCastAuthMenuAbort?: AbortController;
+    __pointCastAuthMenuPageLoadInstalled?: boolean;
+  };
+
   const actions: Record<AuthProvider, () => Promise<PointCastUser | null>> = {
     kukai: loginWithKukai,
     google: loginWithGoogle,
@@ -325,7 +330,11 @@
     if (status) status.textContent = message;
   }
 
-  function renderSession(root: HTMLElement, user: PointCastUser | null): void {
+  function renderSession(
+    root: HTMLElement,
+    user: PointCastUser | null,
+    announce = true,
+  ): void {
     const triggerLabel = root.querySelector('[data-auth-trigger-label]');
     const account = root.querySelector('[data-auth-account]') as HTMLElement | null;
     const userName = root.querySelector('[data-auth-user-name]');
@@ -336,7 +345,11 @@
       account?.classList.remove('hidden');
       if (userName) userName.textContent = user.preferredName;
       if (userMeta) userMeta.textContent = `${user.identities.length} linked provider${user.identities.length === 1 ? '' : 's'}`;
-      window.dispatchEvent(new CustomEvent('pc:auth-change', { detail: { user } }));
+      if (announce) {
+        window.dispatchEvent(new CustomEvent('pc:auth-change', {
+          detail: { user, source: 'auth-menu' },
+        }));
+      }
       return;
     }
 
@@ -344,7 +357,11 @@
     account?.classList.add('hidden');
     if (userName) userName.textContent = '—';
     if (userMeta) userMeta.textContent = '—';
-    window.dispatchEvent(new CustomEvent('pc:auth-change', { detail: { user: null } }));
+    if (announce) {
+      window.dispatchEvent(new CustomEvent('pc:auth-change', {
+        detail: { user: null, source: 'auth-menu' },
+      }));
+    }
   }
 
   async function refreshSession(root: HTMLElement): Promise<void> {
@@ -356,7 +373,7 @@
     }
   }
 
-  function initAuthMenu(root: HTMLElement): void {
+  function initAuthMenu(root: HTMLElement, signal: AbortSignal): void {
     const trigger = root.querySelector('[data-auth-trigger]') as HTMLButtonElement | null;
     const logoutButton = root.querySelector('[data-auth-logout]') as HTMLButtonElement | null;
     const providerButtons = Array.from(root.querySelectorAll('[data-provider]')) as HTMLButtonElement[];
@@ -365,18 +382,18 @@
       const panel = root.querySelector('[data-auth-panel]');
       if (panel?.classList.contains('hidden')) openMenu(root);
       else closeMenu(root);
-    });
+    }, { signal });
 
-    window.addEventListener('pc:open-auth-menu', () => openMenu(root));
+    window.addEventListener('pc:open-auth-menu', () => openMenu(root), { signal });
 
     document.addEventListener('click', (event) => {
       const target = event.target as Node;
       if (!root.contains(target)) closeMenu(root);
-    });
+    }, { signal });
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeMenu(root);
-    });
+    }, { signal });
 
     logoutButton?.addEventListener('click', async () => {
       setStatus(root, 'logging out…');
@@ -388,7 +405,7 @@
       } catch (error) {
         setStatus(root, error instanceof Error ? error.message : 'logout failed');
       }
-    });
+    }, { signal });
 
     providerButtons.forEach((button) => {
       button.addEventListener('click', async () => {
@@ -411,13 +428,34 @@
         } catch (error) {
           setStatus(root, error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
         }
-      });
+      }, { signal });
     });
 
     void refreshSession(root);
   }
 
-  document.querySelectorAll('[data-auth-menu]').forEach((root) => {
-    initAuthMenu(root as HTMLElement);
-  });
+  function initializeAuthMenus(): void {
+    const authWindow = window as AuthMenuWindow;
+    authWindow.__pointCastAuthMenuAbort?.abort();
+    const listeners = new AbortController();
+    authWindow.__pointCastAuthMenuAbort = listeners;
+
+    document.querySelectorAll('[data-auth-menu]').forEach((root) => {
+      initAuthMenu(root as HTMLElement, listeners.signal);
+    });
+
+    window.addEventListener('pc:auth-change', (event) => {
+      const detail = (event as CustomEvent).detail;
+      document.querySelectorAll('[data-auth-menu]').forEach((root) => {
+        renderSession(root as HTMLElement, detail?.user ?? null, false);
+      });
+    }, { signal: listeners.signal });
+  }
+
+  const authWindow = window as AuthMenuWindow;
+  if (!authWindow.__pointCastAuthMenuPageLoadInstalled) {
+    authWindow.__pointCastAuthMenuPageLoadInstalled = true;
+    document.addEventListener('astro:page-load', initializeAuthMenus);
+  }
+  initializeAuthMenus();
 </script>

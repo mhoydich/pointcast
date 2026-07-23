@@ -16,8 +16,31 @@
  */
 
 import { classifyUA, recordVisit, NOUN_ID_RANGE, type Env } from './api/visit';
+import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|mp3|mp4|webm)(\?|$)/i;
+const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
+
+function injectTezosSessionBridge(response: Response): Response {
+  if (response.headers.get(TEZOS_BRIDGE_HEADER) === '1') return response;
+  const transformed = new HTMLRewriter()
+    .on('body', {
+      element(element) {
+        element.append(
+          `<script data-pointcast-tezos-session-bridge>${POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT}</script>`,
+          { html: true },
+        );
+      },
+    })
+    .transform(response);
+  const headers = new Headers(transformed.headers);
+  headers.set(TEZOS_BRIDGE_HEADER, '1');
+  return new Response(transformed.body, {
+    status: transformed.status,
+    statusText: transformed.statusText,
+    headers,
+  });
+}
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next, waitUntil } = context;
@@ -91,11 +114,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (upstream.status === 200) {
       const headers = new Headers(upstream.headers);
       headers.delete('location');
-      return new Response(upstream.body, {
+      const directoryResponse = new Response(upstream.body, {
         status: upstream.status,
         statusText: upstream.statusText,
         headers,
       });
+      const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
+      return upstreamType.startsWith('ai:')
+        ? directoryResponse
+        : injectTezosSessionBridge(directoryResponse);
     }
   }
 
@@ -165,6 +192,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   const response = await next();
+  const responseContentType = response.headers.get('content-type') ?? '';
+  const isHtmlResponse = response.status === 200 && responseContentType.startsWith('text/html');
+
+  // Restore the same signed Tezos identity on every PointCast HTML surface,
+  // including standalone/legacy pages that intentionally bypass the shared
+  // Astro layouts. Layout-backed pages contain the same script; its global
+  // singleton guard makes this middleware copy a no-op there.
+  const browserResponse = isHtmlResponse && !type.startsWith('ai:')
+    ? injectTezosSessionBridge(response)
+    : response;
 
   // ── Stripped-HTML agent mode ────────────────────────────────────────────
   //
@@ -228,5 +265,5 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  return response;
+  return browserResponse;
 };

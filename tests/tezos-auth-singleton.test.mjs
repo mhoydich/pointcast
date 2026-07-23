@@ -25,12 +25,16 @@ test('PointCast routes mainnet wallet work through one subscribed Beacon client'
   assert.match(tezos, /fetch\('\/api\/auth\/session', \{ method: 'DELETE'/);
   assert.match(auth, /signTezosPayload/);
   assert.match(auth, /connectKukaiForSigning/);
+  assert.match(auth, /tezosLoginInFlight/);
+  assert.match(auth, /if \(!options\.force\)/);
+  assert.match(auth, /getSession\(\)\.catch/);
+  assert.match(auth, /expectedAddress/);
   assert.doesNotMatch(auth, /const address = await connectKukai\(\)/);
   assert.match(tezos, /signingType: 'micheline'/);
   assert.doesNotMatch(tezos, /signingType: 'raw'/);
   assert.doesNotMatch(auth, /new BeaconWallet/);
   assert.doesNotMatch(walletConnect, /new beacon\.DAppClient|walletbeacon\.min\.js/);
-  assert.match(walletConnect, /loginWithKukai/);
+  assert.match(walletConnect, /loginWithKukai\(\{ force: true \}\)/);
   for (const source of mainnetSurfaces) {
     assert.doesNotMatch(source, /new BeaconWallet|new beacon\.BeaconWallet/);
   }
@@ -38,7 +42,9 @@ test('PointCast routes mainnet wallet work through one subscribed Beacon client'
 
 test('all public layout families restore the signed Tezos session', async () => {
   const files = await Promise.all([
+    'src/lib/auth/session-bridge-script.ts',
     'src/components/TezosSessionBridge.astro',
+    'functions/_middleware.ts',
     'src/layouts/BaseLayout.astro',
     'src/layouts/BlockLayout.astro',
     'src/layouts/DrumLayout.astro',
@@ -46,10 +52,17 @@ test('all public layout families restore the signed Tezos session', async () => 
     'src/pages/network-el-segundo.astro',
     'src/pages/auth/project.astro',
   ].map((path) => readFile(new URL(path, root), 'utf8')));
-  const [bridge, ...surfaces] = files;
-  assert.match(bridge, /restorePointCastTezosSession/);
-  assert.match(bridge, /pc:tezos-session/);
-  assert.doesNotMatch(bridge, /requestSignPayload|requestPermissions/);
+  const [bridgeScript, bridgeComponent, middleware, ...surfaces] = files;
+  assert.match(bridgeScript, /fetch\('\/api\/auth\/session'/);
+  assert.match(bridgeScript, /__pointCastTezosBridgeInstalled/);
+  assert.match(bridgeScript, /pc:tezos-session/);
+  assert.match(bridgeScript, /pc:auth-refresh/);
+  assert.doesNotMatch(bridgeScript, /requestSignPayload|requestPermissions/);
+  assert.match(bridgeComponent, /POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT/);
+  assert.match(middleware, /data-pointcast-tezos-session-bridge/);
+  assert.match(middleware, /POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT/);
+  assert.match(middleware, /TEZOS_BRIDGE_HEADER/);
+  assert.match(middleware, /response\.headers\.get\(TEZOS_BRIDGE_HEADER\) === '1'/);
   for (const surface of surfaces) assert.match(surface, /TezosSessionBridge/);
 });
 
@@ -76,7 +89,11 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(route, /network-el-segundo/);
   assert.match(route, /expirationTtl: TICKET_TTL_SECONDS/);
   assert.match(route, /USERS\.delete\(key\)/);
+  assert.match(route, /tezos-identity-not-linked/);
+  assert.match(route, /tezosIdentities\.at\(-1\)/);
   assert.match(page, /pc:auth-change/);
+  assert.match(page, /pc:wallet-active/);
+  assert.match(page, /JSON\.stringify\(\{ target, returnTo, address \}\)/);
   assert.match(page, /One wallet/);
 });
 
@@ -85,6 +102,22 @@ test('embedded Network El Segundo receives a fresh PointCast project ticket', as
   assert.match(page, /fetch\('\/api\/auth\/project-ticket'/);
   assert.match(page, /credentials: 'include'/);
   assert.match(page, /target: 'network-el-segundo'/);
+  assert.match(page, /pc:wallet-active/);
   assert.match(page, /frame\.src = result\.destination/);
   assert.doesNotMatch(page, /connectKukai|new BeaconWallet/);
+});
+
+test('wallet and auth menus rebind after Astro route transitions', async () => {
+  const [walletChip, authMenu] = await Promise.all([
+    readFile(new URL('src/components/WalletChip.astro', root), 'utf8'),
+    readFile(new URL('src/components/AuthMenu.astro', root), 'utf8'),
+  ]);
+  assert.match(walletChip, /initWalletChip/);
+  assert.match(walletChip, /astro:page-load/);
+  assert.match(walletChip, /__pointCastWalletChipAbort/);
+  assert.match(walletChip, /loginWithKukai\(\{ force: true \}\)/);
+  assert.match(authMenu, /initializeAuthMenus/);
+  assert.match(authMenu, /astro:page-load/);
+  assert.match(authMenu, /__pointCastAuthMenuAbort/);
+  assert.match(authMenu, /renderSession\(root as HTMLElement, detail\?\.user \?\? null, false\)/);
 });

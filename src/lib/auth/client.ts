@@ -28,6 +28,16 @@ const SESSION_ENDPOINT = '/api/auth/session';
 const WALLET_STORAGE_KEY = 'pc:wallet';
 const WALLETS_STORAGE_KEY = 'pc:wallets';
 const ACTIVE_WALLET_STORAGE_KEY = 'pc:wallet-active';
+let tezosLoginInFlight: Promise<PointCastUser | null> | null = null;
+
+type TezosLoginOptions = {
+  /** Skip the valid-cookie fast path and ask the active Beacon account to
+   * prove control. Used for switching/linking wallets, not ordinary sign-in. */
+  force?: boolean;
+  /** Fail closed if Beacon changes accounts while a caller is linking a
+   * specific active wallet to the PointCast session. */
+  expectedAddress?: string;
+};
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -156,8 +166,27 @@ function getPhantomProvider(): PhantomProvider | null {
   return candidate as PhantomProvider;
 }
 
-export async function loginWithKukai(): Promise<PointCastUser | null> {
+async function performKukaiLogin(options: TezosLoginOptions): Promise<PointCastUser | null> {
   if (!isBrowser()) return null;
+
+  if (!options.force) {
+    const current = await getSession().catch(() => null);
+    const identities = current?.identities.filter((item) => item.provider === 'kukai') ?? [];
+    let activeAddress = '';
+    try {
+      activeAddress = window.localStorage.getItem(ACTIVE_WALLET_STORAGE_KEY) || '';
+    } catch {
+      // The signed session remains authoritative when storage is unavailable.
+    }
+    const identity = identities.find((item) => item.id === activeAddress)
+      ?? identities.at(-1)
+      ?? null;
+    if (current && identity) {
+      persistWallet({ chain: 'tezos', address: identity.id, provider: 'kukai' });
+      return current;
+    }
+  }
+
   const { connectKukaiForSigning, signTezosPayload } = await import('../tezos');
   // Authentication is a gasless message signature. Asking Kukai for the
   // operation_request scope here can open a second permission flow (and, in
@@ -165,6 +194,9 @@ export async function loginWithKukai(): Promise<PointCastUser | null> {
   // Establish the smallest possible signing-only account first; the shared
   // Beacon client will reuse it when signTezosPayload runs below.
   const address = await connectKukaiForSigning();
+  if (options.expectedAddress && address !== options.expectedAddress) {
+    throw new Error('beacon-account-changed');
+  }
   const message = buildSignedMessage('Tezos', {
     Address: address,
     Origin: window.location.origin,
@@ -186,6 +218,24 @@ export async function loginWithKukai(): Promise<PointCastUser | null> {
   return payload.user;
 }
 
+/**
+ * Sign into PointCast with Kukai once. Concurrent auth buttons share one
+ * promise so a double click or two mounted menus cannot open competing Beacon
+ * permission/signature requests.
+ */
+export async function loginWithKukai(
+  options: TezosLoginOptions = {},
+): Promise<PointCastUser | null> {
+  if (tezosLoginInFlight) return tezosLoginInFlight;
+  const pending = performKukaiLogin(options);
+  tezosLoginInFlight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (tezosLoginInFlight === pending) tezosLoginInFlight = null;
+  }
+}
+
 /** Return the current signed user when this exact Tezos account is linked,
  * otherwise complete the free PointCast message-signature login. */
 export async function ensurePointCastTezosLogin(address: string): Promise<PointCastUser | null> {
@@ -194,7 +244,7 @@ export async function ensurePointCastTezosLogin(address: string): Promise<PointC
     persistWallet({ chain: 'tezos', address, provider: 'kukai' });
     return current;
   }
-  return loginWithKukai();
+  return loginWithKukai({ force: true, expectedAddress: address });
 }
 
 /**
@@ -318,8 +368,18 @@ export async function getSession(): Promise<PointCastUser | null> {
 export async function logout(): Promise<void> {
   if (!isBrowser()) return;
 
-  await fetch(SESSION_ENDPOINT, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
+  try {
+    const { disconnectKukai } = await import('../tezos');
+    await disconnectKukai();
+  } catch {
+    await fetch(SESSION_ENDPOINT, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  }
+  persistWallet(null);
+  window.dispatchEvent(new CustomEvent('pc:auth-change', {
+    detail: { user: null, source: 'auth-client' },
+  }));
+  window.dispatchEvent(new Event('pc:auth-refresh'));
 }
