@@ -3,6 +3,8 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import {
   BELL_MODE_COPY,
   SHRINE_CRAWL,
+  SHRINE_CRAWL_DAILY_RECEIPT_SCHEMA,
+  SHRINE_CRAWL_DAILY_ROUTE_LENGTH,
   SHRINE_CRAWL_META,
   SHRINE_CRAWL_RECEIPT_SCHEMA,
   SHRINE_CRAWL_SCREENSAVER_DURATION_MS,
@@ -16,6 +18,7 @@ const first = SHRINE_CRAWL[0];
 const firstStyle = `--active-bg: url('${first.background}'); --active-accent: ${first.accent}; --active-glow: ${first.glow};`;
 const shrineJson = JSON.stringify(SHRINE_CRAWL);
 const receiptSchemaJson = JSON.stringify(SHRINE_CRAWL_RECEIPT_SCHEMA);
+const dailyReceiptSchemaJson = JSON.stringify(SHRINE_CRAWL_DAILY_RECEIPT_SCHEMA);
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -68,8 +71,11 @@ const jsonLd = {
     data-state-key={SHRINE_CRAWL_STORAGE.state}
     data-legacy-state-key={SHRINE_CRAWL_STORAGE.legacyState}
     data-receipt-key={SHRINE_CRAWL_STORAGE.receipt}
+    data-daily-key={SHRINE_CRAWL_STORAGE.daily}
+    data-daily-route-length={SHRINE_CRAWL_DAILY_ROUTE_LENGTH}
     data-screensaver-duration={SHRINE_CRAWL_SCREENSAVER_DURATION_MS}
     data-receipt-schema={receiptSchemaJson}
+    data-daily-receipt-schema={dailyReceiptSchemaJson}
     style={firstStyle}
   >
     <script id="shrine-crawl-data" type="application/json" set:html={shrineJson}></script>
@@ -91,15 +97,15 @@ const jsonLd = {
         <p>{description}</p>
         <div class="hero__actions" aria-label="Primary crawl actions">
           <a href="#crawl-console">Start Crawl</a>
+          <a href="/shrine-crawl?mode=daily">Today's Six</a>
           <a href="/shrine-crawl?mode=screensaver">Screensaver</a>
           <a href="/shrine-crawl.json">Prompt Queue</a>
-          <a href="/next-sprint">Sprint Board</a>
         </div>
       </div>
       <div class="hero__stats" aria-label="Crawl stats">
         <span><strong>{SHRINE_CRAWL.length}</strong> shrines</span>
+        <span><strong>{SHRINE_CRAWL_DAILY_ROUTE_LENGTH}</strong> daily stops</span>
         <span><strong>{SHRINE_CRAWL_META.modes.length}</strong> bell modes</span>
-        <span><strong>24</strong> MJ prompts</span>
       </div>
     </header>
 
@@ -138,6 +144,32 @@ const jsonLd = {
             <a href="/shrine-crawl">Exit Screensaver</a>
           </div>
         </div>
+      </section>
+
+      <section class="daily-passport" data-daily-passport hidden aria-label="Today's shrine passport">
+        <div class="daily-passport__head">
+          <div>
+            <p class="kicker mono">TODAY'S SIX</p>
+            <strong data-daily-date>Daily pilgrimage</strong>
+          </div>
+          <span class="mono" data-daily-progress>0 / 6 BELLS</span>
+        </div>
+        <ol class="daily-passport__stamps">
+          {Array.from({ length: SHRINE_CRAWL_DAILY_ROUTE_LENGTH }, (_, index) => (
+            <li>
+              <button type="button" data-daily-stop={index} aria-label={`Open daily shrine ${index + 1}`}>
+                <span class="mono">{String(index + 1).padStart(2, '0')}</span>
+                <strong data-daily-stop-title>Waiting</strong>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div class="daily-passport__receipt" data-daily-receipt hidden>
+          <strong>Passport complete.</strong>
+          <span class="mono" data-daily-receipt-id></span>
+          <button type="button" data-copy-daily-receipt>Copy Daily Receipt</button>
+        </div>
+        <a class="daily-passport__exit mono" href="/shrine-crawl">All 24 Shrines</a>
       </section>
 
       <aside class="prompt-panel" aria-label="Midjourney shrine prompt">
@@ -212,6 +244,7 @@ const jsonLd = {
 
   <script>
     import { playEmojiChime, playNounVoice } from '../lib/chimes';
+    import { getShrineDailyRouteIds } from '../lib/shrine-bell-crawl';
 
     function emptyState() {
       return {
@@ -244,6 +277,13 @@ const jsonLd = {
       try {
         localStorage.setItem(stateKey, JSON.stringify(state));
       } catch (error) {}
+    }
+
+    function getLocalDateKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
 
     function copyText(text) {
@@ -288,12 +328,28 @@ const jsonLd = {
       const stateKey = root.getAttribute('data-state-key') || 'pc:shrine-crawl:v2';
       const legacyStateKey = root.getAttribute('data-legacy-state-key') || 'pc:shrine-crawl:v1';
       const receiptKey = root.getAttribute('data-receipt-key') || 'pc:shrine-crawl:v2:receipt';
+      const dailyKey = root.getAttribute('data-daily-key') || 'pc:shrine-crawl:v3:daily';
+      const dailyRouteLength = Number(root.getAttribute('data-daily-route-length') || 6);
       const receiptSchema = readJsonFromString(root.getAttribute('data-receipt-schema') || '{}', {});
+      const dailyReceiptSchema = readJsonFromString(root.getAttribute('data-daily-receipt-schema') || '{}', {});
       const screensaverDuration = Number(root.getAttribute('data-screensaver-duration') || 18000);
       const params = new URLSearchParams(window.location.search);
       const startsInScreensaver = params.get('mode') === 'screensaver';
+      const startsInDaily = params.get('mode') === 'daily';
       const state = readState(stateKey, legacyStateKey);
+      const dateKey = getLocalDateKey();
+      const dailyRouteIds = getShrineDailyRouteIds(dateKey, dailyRouteLength);
+      const dailyRoute = dailyRouteIds
+        .map((id) => shrines.find((shrine) => shrine.id === id))
+        .filter(Boolean);
       const buttons = Array.from(root.querySelectorAll('[data-shrine-select]'));
+      const dailyPassport = root.querySelector('[data-daily-passport]');
+      const dailyButtons = Array.from(root.querySelectorAll('[data-daily-stop]'));
+      const dailyDate = root.querySelector('[data-daily-date]');
+      const dailyProgress = root.querySelector('[data-daily-progress]');
+      const dailyReceipt = root.querySelector('[data-daily-receipt]');
+      const dailyReceiptId = root.querySelector('[data-daily-receipt-id]');
+      const copyDailyReceiptButton = root.querySelector('[data-copy-daily-receipt]');
       const hero = root.querySelector('.hero');
       const title = root.querySelector('[data-shrine-title]');
       const subtitle = root.querySelector('[data-shrine-subtitle]');
@@ -329,6 +385,14 @@ const jsonLd = {
         cascade: 'three bells down the rail',
         drone: 'a low bell with a bright answer',
       };
+      const dailyLedger = readDailyLedger();
+      const dailyState = dailyLedger.days[dateKey] || {
+        visited: {},
+        rung: {},
+        completedAt: null,
+        receipt: null,
+      };
+      dailyLedger.days[dateKey] = dailyState;
 
       function markVisited(shrine) {
         state.visited[shrine.id] = true;
@@ -341,6 +405,28 @@ const jsonLd = {
         } catch (error) {
           return fallback;
         }
+      }
+
+      function readDailyLedger() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(dailyKey) || '{}') || {};
+          return {
+            version: 3,
+            days: parsed.days && typeof parsed.days === 'object' ? parsed.days : {},
+          };
+        } catch (error) {
+          return { version: 3, days: {} };
+        }
+      }
+
+      function writeDailyLedger() {
+        try {
+          const retainedDays = Object.keys(dailyLedger.days).sort().slice(-31);
+          dailyLedger.days = Object.fromEntries(
+            retainedDays.map((day) => [day, dailyLedger.days[day]]),
+          );
+          localStorage.setItem(dailyKey, JSON.stringify(dailyLedger));
+        } catch (error) {}
       }
 
       function readReceipt() {
@@ -404,6 +490,75 @@ const jsonLd = {
         receiptJson.textContent = JSON.stringify(receipt, null, 2);
       }
 
+      function buildDailyReceipt() {
+        const completedAt = dailyState.completedAt || new Date().toISOString();
+        return {
+          type: dailyReceiptSchema.type || 'pointcast.shrine-crawl.daily-receipt.v3',
+          receiptId: `pc-shrine-daily-${dateKey.replaceAll('-', '')}`,
+          dateKey,
+          completedAt,
+          count: dailyRoute.length,
+          source: `${window.location.origin}/shrine-crawl?mode=daily`,
+          localOnly: true,
+          shrineIds: dailyRoute.map((shrine) => shrine.id),
+          shrines: dailyRoute.map((shrine) => ({
+            id: shrine.id,
+            number: shrine.number,
+            title: shrine.title,
+            bell: shrine.bell.label,
+          })),
+        };
+      }
+
+      function ensureDailyReceipt() {
+        if (!dailyRoute.length || !dailyRoute.every((shrine) => dailyState.rung[shrine.id])) {
+          return dailyState.receipt || null;
+        }
+        if (dailyState.receipt?.dateKey === dateKey) return dailyState.receipt;
+        dailyState.completedAt = new Date().toISOString();
+        dailyState.receipt = buildDailyReceipt();
+        writeDailyLedger();
+        return dailyState.receipt;
+      }
+
+      function renderDailyPassport() {
+        if (!dailyPassport) return;
+        dailyPassport.hidden = !startsInDaily;
+        if (!startsInDaily) return;
+
+        const rung = dailyRoute.filter((shrine) => dailyState.rung[shrine.id]).length;
+        const date = new Date(`${dateKey}T12:00:00`);
+        if (dailyDate) {
+          dailyDate.textContent = new Intl.DateTimeFormat(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          }).format(date);
+        }
+        if (dailyProgress) dailyProgress.textContent = `${rung} / ${dailyRoute.length} BELLS`;
+        root.setAttribute('data-daily-rung-count', String(rung));
+
+        dailyButtons.forEach((button, index) => {
+          const shrine = dailyRoute[index];
+          if (!shrine) {
+            button.hidden = true;
+            return;
+          }
+          button.hidden = false;
+          button.style.setProperty('--stamp-accent', shrine.accent);
+          button.classList.toggle('is-active', state.current === shrines.indexOf(shrine));
+          button.classList.toggle('is-rung', Boolean(dailyState.rung[shrine.id]));
+          button.setAttribute('aria-pressed', state.current === shrines.indexOf(shrine) ? 'true' : 'false');
+          button.setAttribute('aria-label', `${index + 1}. ${shrine.title}${dailyState.rung[shrine.id] ? ', rung' : ''}`);
+          const stopTitle = button.querySelector('[data-daily-stop-title]');
+          if (stopTitle) stopTitle.textContent = shrine.title;
+        });
+
+        const receipt = ensureDailyReceipt();
+        if (dailyReceipt) dailyReceipt.hidden = !receipt;
+        if (dailyReceiptId) dailyReceiptId.textContent = receipt?.receiptId || '';
+      }
+
       function renderProgress() {
         const visited = shrines.filter((shrine) => state.visited[shrine.id]).length;
         const rung = shrines.filter((shrine) => state.rung[shrine.id]).length;
@@ -416,6 +571,7 @@ const jsonLd = {
         root.setAttribute('data-visited-count', String(visited));
         root.setAttribute('data-rung-count', String(rung));
         renderReceipt();
+        renderDailyPassport();
       }
 
       function setScreensaver(running, paused = false) {
@@ -454,6 +610,10 @@ const jsonLd = {
         const shrine = shrines[clamped];
         state.current = clamped;
         markVisited(shrine);
+        if (startsInDaily && dailyRouteIds.includes(shrine.id)) {
+          dailyState.visited[shrine.id] = true;
+          writeDailyLedger();
+        }
         root.style.setProperty('--active-bg', `url('${shrine.background}')`);
         root.style.setProperty('--active-accent', shrine.accent);
         root.style.setProperty('--active-glow', shrine.glow);
@@ -501,11 +661,24 @@ const jsonLd = {
         });
       });
 
+      dailyButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          unlockAudio();
+          const shrine = dailyRoute[Number(button.getAttribute('data-daily-stop')) || 0];
+          const index = shrines.indexOf(shrine);
+          if (index >= 0) paint(index, { updateHash: true, scroll: false });
+        });
+      });
+
       ringButton?.addEventListener('click', () => {
         unlockAudio();
         const shrine = shrines[state.current] || shrines[0];
         playBell(shrine);
         state.rung[shrine.id] = true;
+        if (startsInDaily && dailyRouteIds.includes(shrine.id)) {
+          dailyState.rung[shrine.id] = true;
+          writeDailyLedger();
+        }
         writeState(stateKey, state);
         paint(state.current, { updateHash: true });
         scheduleScreensaver();
@@ -513,7 +686,15 @@ const jsonLd = {
 
       nextButton?.addEventListener('click', () => {
         unlockAudio();
-        paint(state.current + 1, { updateHash: true, scroll: true });
+        if (startsInDaily) {
+          const currentDailyIndex = dailyRoute.findIndex(
+            (shrine) => shrines.indexOf(shrine) === state.current,
+          );
+          const nextShrine = dailyRoute[(currentDailyIndex + 1) % dailyRoute.length];
+          paint(shrines.indexOf(nextShrine), { updateHash: true, scroll: false });
+        } else {
+          paint(state.current + 1, { updateHash: true, scroll: true });
+        }
         scheduleScreensaver();
       });
 
@@ -546,6 +727,16 @@ const jsonLd = {
         }, 1200);
       });
 
+      copyDailyReceiptButton?.addEventListener('click', async () => {
+        const receipt = ensureDailyReceipt();
+        if (!receipt) return;
+        await copyText(JSON.stringify(receipt, null, 2));
+        copyDailyReceiptButton.textContent = 'Copied';
+        window.setTimeout(() => {
+          copyDailyReceiptButton.textContent = 'Copy Daily Receipt';
+        }, 1200);
+      });
+
       window.addEventListener('hashchange', () => {
         const nextIndex = shrines.findIndex((shrine) => `#${shrine.id}` === window.location.hash);
         if (nextIndex >= 0) paint(nextIndex, { scroll: false });
@@ -557,7 +748,18 @@ const jsonLd = {
       } else {
         setScreensaver(false, false);
       }
-      paint(hashIndex >= 0 ? hashIndex : state.current, { updateHash: startsInScreensaver });
+      root.classList.toggle('is-daily', startsInDaily);
+      if (startsInDaily && nextButton) nextButton.textContent = 'Next Daily Shrine';
+      const firstWaitingDaily = dailyRoute.find((shrine) => !dailyState.rung[shrine.id]) || dailyRoute[0];
+      const dailyInitialIndex = shrines.indexOf(firstWaitingDaily);
+      paint(
+        hashIndex >= 0
+          ? hashIndex
+          : startsInDaily && dailyInitialIndex >= 0
+            ? dailyInitialIndex
+            : state.current,
+        { updateHash: startsInScreensaver || startsInDaily },
+      );
     }
 
     initShrineCrawl();
@@ -584,6 +786,8 @@ const jsonLd = {
   .prompt-panel button,
   .screensaver-controls a,
   .screensaver-controls button,
+  .daily-passport button,
+  .daily-passport__exit,
   .receipt-panel button,
   .receipt-panel a {
     font-family: var(--pc-font-mono);
@@ -675,6 +879,8 @@ const jsonLd = {
   .prompt-panel button,
   .screensaver-controls a,
   .screensaver-controls button,
+  .daily-passport__receipt button,
+  .daily-passport__exit,
   .receipt-panel button,
   .receipt-panel a {
     min-height: 42px;
@@ -692,6 +898,7 @@ const jsonLd = {
   .stage__actions button,
   .prompt-panel button,
   .screensaver-controls button:first-child,
+  .daily-passport__receipt button,
   .receipt-panel button {
     border-color: var(--active-accent);
     background: var(--active-accent);
@@ -885,6 +1092,118 @@ const jsonLd = {
     justify-content: center;
   }
 
+  .daily-passport {
+    color: #fff;
+  }
+
+  .daily-passport[hidden],
+  .daily-passport__receipt[hidden] {
+    display: none;
+  }
+
+  .daily-passport__head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .daily-passport__head .kicker {
+    margin-bottom: 3px;
+  }
+
+  .daily-passport__head strong {
+    font-size: 18px;
+  }
+
+  .daily-passport__head > .mono {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 10px;
+  }
+
+  .daily-passport__stamps {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .daily-passport__stamps button {
+    width: 100%;
+    min-width: 0;
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 9px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .daily-passport__stamps button:hover,
+  .daily-passport__stamps button:focus-visible,
+  .daily-passport__stamps button.is-active {
+    border-color: var(--stamp-accent);
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .daily-passport__stamps button.is-rung {
+    box-shadow: inset 4px 0 0 var(--stamp-accent);
+  }
+
+  .daily-passport__stamps button.is-rung .mono::after {
+    content: " / RUNG";
+  }
+
+  .daily-passport__stamps .mono {
+    color: var(--stamp-accent);
+    font-size: 9px;
+  }
+
+  .daily-passport__stamps strong {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .daily-passport__receipt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    padding-top: 10px;
+  }
+
+  .daily-passport__receipt .mono {
+    margin-right: auto;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 9px;
+  }
+
+  .daily-passport__receipt button {
+    min-height: 34px;
+    padding: 8px 10px;
+  }
+
+  .daily-passport__exit {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 9px;
+    text-decoration: none;
+  }
+
   .prompt-panel {
     padding: 18px;
     display: grid;
@@ -1022,14 +1341,33 @@ const jsonLd = {
     white-space: pre-wrap;
   }
 
-  .shrine-crawl.is-screensaver {
+  .shrine-crawl.is-screensaver,
+  .shrine-crawl.is-daily {
     min-height: 100svh;
     overflow: hidden;
     background: #070504;
   }
 
   :global(body:has(.shrine-crawl.is-screensaver) .fb),
-  :global(body:has(.shrine-crawl.is-screensaver) .skip-link) {
+  :global(body:has(.shrine-crawl.is-screensaver) .skip-link),
+  :global(body:has(.shrine-crawl.is-screensaver) .first100-strip),
+  :global(body:has(.shrine-crawl.is-screensaver) .first-see),
+  :global(body:has(.shrine-crawl.is-screensaver) .open-ad-rail),
+  :global(body:has(.shrine-crawl.is-screensaver) .dock-companion),
+  :global(body:has(.shrine-crawl.is-screensaver) #pc-spell-layer),
+  :global(body:has(.shrine-crawl.is-screensaver) .cr-cursor),
+  :global(body:has(.shrine-crawl.is-screensaver) .cr-peers),
+  :global(body:has(.shrine-crawl.is-screensaver) astro-dev-toolbar),
+  :global(body:has(.shrine-crawl.is-daily) .fb),
+  :global(body:has(.shrine-crawl.is-daily) .skip-link),
+  :global(body:has(.shrine-crawl.is-daily) .first100-strip),
+  :global(body:has(.shrine-crawl.is-daily) .first-see),
+  :global(body:has(.shrine-crawl.is-daily) .open-ad-rail),
+  :global(body:has(.shrine-crawl.is-daily) .dock-companion),
+  :global(body:has(.shrine-crawl.is-daily) #pc-spell-layer),
+  :global(body:has(.shrine-crawl.is-daily) .cr-cursor),
+  :global(body:has(.shrine-crawl.is-daily) .cr-peers),
+  :global(body:has(.shrine-crawl.is-daily) astro-dev-toolbar) {
     display: none;
   }
 
@@ -1069,7 +1407,8 @@ const jsonLd = {
     place-items: center;
     align-content: center;
     text-align: center;
-    padding: clamp(22px, 5vw, 70px);
+    gap: 12px;
+    padding: 24px clamp(24px, 5vw, 70px) 112px;
   }
 
   .shrine-crawl.is-screensaver .stage__meta,
@@ -1080,7 +1419,7 @@ const jsonLd = {
   }
 
   .shrine-crawl.is-screensaver .noun-token {
-    width: min(38svh, 240px);
+    width: min(20svh, 164px);
   }
 
   .shrine-crawl.is-screensaver .stage__copy {
@@ -1089,7 +1428,7 @@ const jsonLd = {
 
   .shrine-crawl.is-screensaver .stage__copy h2 {
     max-width: 900px;
-    font-size: clamp(48px, 8vw, 112px);
+    font-size: clamp(40px, 6vw, 80px);
   }
 
   .shrine-crawl.is-screensaver .stage__copy p {
@@ -1100,13 +1439,17 @@ const jsonLd = {
 
   .shrine-crawl.is-screensaver .bell-panel {
     width: min(100%, 680px);
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
   }
 
   .shrine-crawl.is-screensaver .ring-button {
-    min-height: 92px;
+    min-height: 78px;
     text-align: center;
     place-items: center;
+  }
+
+  .shrine-crawl.is-screensaver .stage__actions {
+    display: none;
   }
 
   .shrine-crawl.is-screensaver .screensaver-controls {
@@ -1146,6 +1489,109 @@ const jsonLd = {
 
   .shrine-crawl.is-screensaver-paused .stage__background {
     filter: saturate(0.72);
+  }
+
+  .shrine-crawl.is-daily .crumb,
+  .shrine-crawl.is-daily .hero,
+  .shrine-crawl.is-daily .prompt-panel,
+  .shrine-crawl.is-daily .progress-band,
+  .shrine-crawl.is-daily .receipt-panel,
+  .shrine-crawl.is-daily .rail,
+  .shrine-crawl.is-daily .visit-grid {
+    display: none;
+  }
+
+  .shrine-crawl.is-daily .console {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+
+  .shrine-crawl.is-daily .stage {
+    min-height: 100svh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .shrine-crawl.is-daily .stage__background {
+    background-image:
+      linear-gradient(180deg, rgba(5, 4, 3, 0.14), rgba(5, 4, 3, 0.78)),
+      var(--active-bg);
+  }
+
+  .shrine-crawl.is-daily .stage__content {
+    min-height: 100svh;
+    max-width: 980px;
+    margin: 0 auto;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+    gap: 12px;
+    padding: 24px clamp(24px, 5vw, 70px) 174px;
+  }
+
+  .shrine-crawl.is-daily[data-daily-rung-count="6"] .stage__content {
+    padding-bottom: 220px;
+  }
+
+  .shrine-crawl.is-daily .stage__meta,
+  .shrine-crawl.is-daily .stage__actions,
+  .shrine-crawl.is-daily .note-row {
+    justify-content: center;
+  }
+
+  .shrine-crawl.is-daily .noun-token {
+    width: min(20svh, 164px);
+  }
+
+  .shrine-crawl.is-daily .stage__copy {
+    align-self: center;
+  }
+
+  .shrine-crawl.is-daily .stage__copy h2 {
+    max-width: 900px;
+    font-size: clamp(40px, 6vw, 80px);
+  }
+
+  .shrine-crawl.is-daily .stage__copy p {
+    margin-left: auto;
+    margin-right: auto;
+    font-size: clamp(16px, 1.8vw, 22px);
+  }
+
+  .shrine-crawl.is-daily .bell-panel {
+    width: min(100%, 680px);
+    grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  }
+
+  .shrine-crawl.is-daily .ring-button {
+    min-height: 78px;
+    text-align: center;
+    place-items: center;
+  }
+
+  .shrine-crawl.is-daily .daily-passport:not([hidden]) {
+    position: fixed;
+    z-index: 10;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: min(calc(100% - 32px), 1120px);
+    margin: 0 auto;
+    display: grid;
+    gap: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 14px;
+    background: rgba(8, 7, 5, 0.78);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(16px);
+  }
+
+  .shrine-crawl.is-daily .daily-passport__head {
+    padding-right: 112px;
   }
 
   .rail {
@@ -1349,6 +1795,81 @@ const jsonLd = {
       bottom: 128px;
       max-height: calc(100svh - 150px);
       overflow: auto;
+    }
+
+    .shrine-crawl.is-daily {
+      overflow-y: auto;
+    }
+
+    .shrine-crawl.is-daily .stage__content,
+    .shrine-crawl.is-daily[data-daily-rung-count="6"] .stage__content {
+      gap: 12px;
+      padding: 18px 14px 250px;
+    }
+
+    .shrine-crawl.is-daily .noun-token {
+      width: min(22svh, 150px);
+    }
+
+    .shrine-crawl.is-daily .stage__copy h2 {
+      font-size: clamp(34px, 11vw, 52px);
+    }
+
+    .shrine-crawl.is-daily .stage__copy p {
+      margin-top: 7px;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .shrine-crawl.is-daily .ring-button {
+      min-height: 66px;
+    }
+
+    .shrine-crawl.is-daily .daily-passport:not([hidden]) {
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      width: calc(100% - 16px);
+      gap: 8px;
+      padding: 11px;
+    }
+
+    .shrine-crawl.is-daily .daily-passport__head {
+      padding-right: 88px;
+    }
+
+    .daily-passport__head strong {
+      font-size: 14px;
+    }
+
+    .daily-passport__stamps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .daily-passport__stamps button {
+      min-height: 36px;
+      grid-template-columns: 1fr;
+      padding: 7px;
+      text-align: center;
+    }
+
+    .daily-passport__stamps strong {
+      display: none;
+    }
+
+    .daily-passport__receipt {
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+
+    .daily-passport__receipt .mono {
+      order: 3;
+      width: 100%;
+    }
+
+    .daily-passport__receipt button {
+      margin-left: auto;
     }
 
     .rail,

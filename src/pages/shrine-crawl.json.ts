@@ -5,6 +5,9 @@ import type { APIRoute } from 'astro';
 import {
   BELL_MODE_COPY,
   SHRINE_CRAWL,
+  SHRINE_CRAWL_DAILY_ALGORITHM,
+  SHRINE_CRAWL_DAILY_RECEIPT_SCHEMA,
+  SHRINE_CRAWL_DAILY_ROUTE_LENGTH,
   SHRINE_CRAWL_META,
   SHRINE_CRAWL_RECEIPT_SCHEMA,
   SHRINE_CRAWL_SCREENSAVER_DURATION_MS,
@@ -17,10 +20,19 @@ export const GET: APIRoute = async () => {
     $schema: 'https://pointcast.xyz/for-agents',
     generatedAt: new Date().toISOString(),
     ...SHRINE_CRAWL_META,
-    version: 2,
+    version: 3,
     screensaverUrl: absoluteUrl('/shrine-crawl?mode=screensaver'),
+    dailyPilgrimageUrl: absoluteUrl('/shrine-crawl?mode=daily'),
     completionStorageKey: SHRINE_CRAWL_STORAGE.receipt,
+    dailyReceiptStorageKey: SHRINE_CRAWL_STORAGE.daily,
     receiptSchema: SHRINE_CRAWL_RECEIPT_SCHEMA,
+    dailyReceiptSchema: SHRINE_CRAWL_DAILY_RECEIPT_SCHEMA,
+    dailyRoute: {
+      length: SHRINE_CRAWL_DAILY_ROUTE_LENGTH,
+      algorithm: SHRINE_CRAWL_DAILY_ALGORITHM,
+      dateBasis: 'visitor-local-date',
+      source: 'SHRINE_CRAWL',
+    },
     bellModeCopy: BELL_MODE_COPY,
     visits: SHRINE_CRAWL.map((visit, index) => ({
       ...visit,
@@ -33,6 +45,7 @@ export const GET: APIRoute = async () => {
     })),
     caveats: [
       'Completion, visited, and rung state are local browser state only.',
+      'The six-stop daily pilgrimage is deterministic from the visitor local date and is not a server-side attendance claim.',
       'Route links remain ordinary PointCast links and do not require crawl completion.',
       'Midjourney prompts are prompt recipes for the next background generation pass; this endpoint does not claim the images have already been generated.',
       'Bell sounds reuse PointCast shared chime helpers and are triggered only from user gestures.',

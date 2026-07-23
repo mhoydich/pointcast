@@ -27,21 +27,31 @@ export const SHRINE_CRAWL_META = {
   human: 'https://pointcast.xyz/shrine-crawl',
   json: 'https://pointcast.xyz/shrine-crawl.json',
   screensaver: 'https://pointcast.xyz/shrine-crawl?mode=screensaver',
+  dailyPilgrimage: 'https://pointcast.xyz/shrine-crawl?mode=daily',
   count: 24,
   modes: ['single', 'chord', 'cascade', 'drone'] as ShrineBellMode[],
 };
 
 export const SHRINE_CRAWL_SCREENSAVER_DURATION_MS = 18000;
+export const SHRINE_CRAWL_DAILY_ROUTE_LENGTH = 6;
+export const SHRINE_CRAWL_DAILY_ALGORITHM = 'fnv1a-lcg-v1';
 
 export const SHRINE_CRAWL_STORAGE = {
   state: 'pc:shrine-crawl:v2',
   legacyState: 'pc:shrine-crawl:v1',
   receipt: 'pc:shrine-crawl:v2:receipt',
+  daily: 'pc:shrine-crawl:v3:daily',
 } as const;
 
 export const SHRINE_CRAWL_RECEIPT_SCHEMA = {
   type: 'pointcast.shrine-crawl.receipt.v2',
   required: ['receiptId', 'completedAt', 'count', 'rungShrines', 'source'],
+  localOnly: true,
+} as const;
+
+export const SHRINE_CRAWL_DAILY_RECEIPT_SCHEMA = {
+  type: 'pointcast.shrine-crawl.daily-receipt.v3',
+  required: ['receiptId', 'dateKey', 'completedAt', 'count', 'shrineIds', 'source'],
   localOnly: true,
 } as const;
 
@@ -393,3 +403,28 @@ export const SHRINE_CRAWL: ShrineVisit[] = [
     midjourney: mj('rooftop keep-going shrine with city lights, ladder rails, and a large brass bell', 'tar paper, painted steel, yellow signal flags', 'triumphant, breezy, open-ended', 2424),
   },
 ];
+
+function hashDailyRoute(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function getShrineDailyRouteIds(
+  dateKey: string,
+  count = SHRINE_CRAWL_DAILY_ROUTE_LENGTH,
+) {
+  const pool = SHRINE_CRAWL.map((shrine) => shrine.id);
+  let seed = hashDailyRoute(`pointcast-shrine-daily:${dateKey}`) || 1;
+
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const swapIndex = seed % (index + 1);
+    [pool[index], pool[swapIndex]] = [pool[swapIndex], pool[index]];
+  }
+
+  return pool.slice(0, Math.max(0, Math.min(pool.length, Math.floor(count))));
+}
