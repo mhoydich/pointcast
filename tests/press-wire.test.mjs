@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds ten product filings across every public kind', () => {
-  assert.equal(releases.length, 10);
+test('press wire seeds eleven product filings across every public kind', () => {
+  assert.equal(releases.length, 11);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,18 @@ test('press wire seeds ten product filings across every public kind', () => {
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Local Signal Field Kit filing publishes the signed product set and concept boundary', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0011');
+  assert.ok(release);
+  assert.equal(release.slug, 'network-el-segundo-opens-local-signal-field-kit');
+  assert.match(release.body.join(' '), /Porch Beam, Window Flag, Corner Chime, Microburst/);
+  assert.match(release.body.join(' '), /no flame, smoke, explosive material, projectile, or debris/i);
+  assert.match(release.body.join(' '), /signed MH/i);
+  assert.match(release.body.join(' '), /not certified hardware, emergency infrastructure, a municipal program, or an active physical mesh/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo/field-kit');
+  assert.equal(release.actionUrl, 'https://network-el-segundo.mhoydich.chatgpt.site/field-kit');
 });
 
 test('The First 100 Signal filing publishes the living artwork without exposing wallets or activating settlement', () => {
@@ -101,7 +113,7 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Ten sourced product filings/);
+  assert.match(home, /Eleven sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);

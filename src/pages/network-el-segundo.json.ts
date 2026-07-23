@@ -19,7 +19,7 @@ export const GET: APIRoute = () => {
       walletAddressesDisplayed: false,
       participantProof: 'Deduplicated public count only',
     },
-    latestEdition: 'signal-002',
+    latestEdition: 'field-note-003',
     editions: [
       {
         id: 'signal-001',
@@ -38,6 +38,18 @@ export const GET: APIRoute = () => {
         localInteraction: 'Touch any window to send a visual pulse without changing the public roster.',
         shareImage: 'https://network-el-segundo.mhoydich.chatgpt.site/og-v2.png',
         status: 'live',
+      },
+      {
+        id: 'field-note-003',
+        name: 'Local Signal Field Kit',
+        canonicalUrl: 'https://pointcast.xyz/network-el-segundo/field-kit',
+        machineUrl: 'https://pointcast.xyz/network-el-segundo/field-kit.json',
+        releaseUrl: 'https://network-el-segundo.mhoydich.chatgpt.site/field-kit',
+        form: 'Eight product briefs, four shared signals, and a three-phase El Segundo rollout map',
+        localInteraction: 'Choose products and signal codes, switch among 8, 16, and 24-node rollout phases, and run user-triggered light and low-volume audio rehearsals.',
+        shareImage: 'https://network-el-segundo.mhoydich.chatgpt.site/og-field-kit.png',
+        signedBy: 'MH',
+        status: 'concept-system-published',
       },
     ],
     authentication: {

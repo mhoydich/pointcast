@@ -9,6 +9,7 @@ import networkDesk from '../assets/campaigns/network-el-segundo-2026/network-des
 import networkGoodVibes from '../assets/campaigns/network-el-segundo-2026/good-vibes-pickleball.jpg';
 import networkFlowers from '../assets/campaigns/network-el-segundo-2026/dot-matrix-flowers.jpg';
 import networkWindows from '../assets/campaigns/network-el-segundo-2026/100-windows.png';
+import networkFieldKit from '../assets/campaigns/network-el-segundo-2026/field-kit.png';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
@@ -213,11 +214,11 @@ export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
   id: 'PC-NETWORK-EL-SEGUNDO-2026',
   label: 'Network El Segundo — First 100 Wallets',
   advertiser: 'Network El Segundo',
-  creativeCount: 4,
+  creativeCount: 5,
   placement: 'Sitewide PointCast house campaign with a contextual creative on every public page',
   tracking: 'aggregate impressions + clicks',
   status: 'house',
-  note: 'A zero-capital first-party campaign inviting 100 verified Tezos wallets into two living public artworks through a free Kukai-compatible message signature. No sale, token, payout contract, or yield system is live.',
+  note: 'A zero-capital first-party campaign connecting two living public artworks and one signed local-communication product study. No sale, token, payout contract, certified hardware, active physical mesh, or yield system is live.',
 } as const;
 
 export const NETWORK_FIRST_100_SIGNAL = {
@@ -315,6 +316,21 @@ export const POINTCAST_ADS: PointCastAd[] = [
     tone: 'field',
     contexts: ['night', 'city', 'window', 'signal', 'art', 'network', 'tezos', 'wallet', 'public', 'el', 'segundo'],
     image: networkWindows.src,
+    sourceTool: 'OpenAI image generation',
+    campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
+    seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-NETWORK-EL-SEGUNDO-005',
+    advertiser: 'Network El Segundo',
+    headline: 'Signal the block.',
+    copy: 'Eight small instruments share four neighbor-scale meanings across beams, window lights, quiet chimes, touch, paper, and mini fireworks with zero fire.',
+    href: '/network-el-segundo/field-kit',
+    cta: 'Open the local field kit',
+    tone: 'field',
+    contexts: ['local', 'signal', 'mesh', 'light', 'sound', 'neighbor', 'civic', 'map', 'el', 'segundo', 'field', 'tool'],
+    image: networkFieldKit.src,
     sourceTool: 'OpenAI image generation',
     campaign: NETWORK_EL_SEGUNDO_CAMPAIGN.id,
     seriesLabel: NETWORK_EL_SEGUNDO_CAMPAIGN.label,

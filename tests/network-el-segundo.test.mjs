@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const page = new URL('../src/pages/network-el-segundo.astro', import.meta.url);
 const v2Page = new URL('../src/pages/network-el-segundo/v2.astro', import.meta.url);
+const fieldKitPage = new URL('../src/pages/network-el-segundo/field-kit.astro', import.meta.url);
+const fieldKitJson = new URL('../src/pages/network-el-segundo/field-kit.json.ts', import.meta.url);
 const jsonPage = new URL('../src/pages/network-el-segundo.json.ts', import.meta.url);
 const participantApi = new URL('../functions/api/network-el-segundo/participants.ts', import.meta.url);
 const funnelApi = new URL('../functions/api/network-el-segundo/funnel.ts', import.meta.url);
@@ -12,6 +14,7 @@ const firstSee = new URL('../src/components/FirstSee.astro', import.meta.url);
 const announcementBlock = new URL('../src/content/blocks/0484.json', import.meta.url);
 const signalBlock = new URL('../src/content/blocks/0485.json', import.meta.url);
 const v2Block = new URL('../src/content/blocks/0486.json', import.meta.url);
+const fieldKitBlock = new URL('../src/content/blocks/0488.json', import.meta.url);
 const jsonFeed = new URL('../src/pages/feed.json.ts', import.meta.url);
 const rssFeed = new URL('../src/pages/feed.xml.ts', import.meta.url);
 const announcementCardRoute = new URL('../src/pages/images/og/b/0484.png.ts', import.meta.url);
@@ -93,10 +96,13 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /objkt/);
   assert.match(source, /participant_relay/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
-  assert.match(source, /latestEdition: 'signal-002'/);
+  assert.match(source, /latestEdition: 'field-note-003'/);
   assert.match(source, /name: '100 Windows'/);
   assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/v2'/);
   assert.match(source, /Touch any window to send a visual pulse without changing the public roster/);
+  assert.match(source, /name: 'Local Signal Field Kit'/);
+  assert.match(source, /canonicalUrl: 'https:\/\/pointcast\.xyz\/network-el-segundo\/field-kit'/);
+  assert.match(source, /signedBy: 'MH'/);
 });
 
 test('PointCast gives 100 Windows a distinct canonical V2 route', async () => {
@@ -111,6 +117,28 @@ test('PointCast gives 100 Windows a distinct canonical V2 route', async () => {
   assert.match(source, /\/api\/network-el-segundo\/participants/);
   assert.match(source, /allow="clipboard-write; web-share"/);
   assert.match(source, /Light a window \/ 0 ꜩ/);
+});
+
+test('PointCast publishes the signed Local Signal Field Kit as HTML and JSON', async () => {
+  const [pageSource, jsonSource] = await Promise.all([
+    readFile(fieldKitPage, 'utf8'),
+    readFile(fieldKitJson, 'utf8'),
+  ]);
+
+  assert.match(pageSource, /Local Signal Field Kit — Network El Segundo/);
+  assert.match(pageSource, /https:\/\/pointcast\.xyz\/network-el-segundo\/field-kit/);
+  assert.match(pageSource, /https:\/\/network-el-segundo\.mhoydich\.chatgpt\.site\/field-kit/);
+  assert.match(pageSource, /8 OBJECTS · 4 SIGNALS · 24 NODES/);
+  assert.match(pageSource, /No municipal affiliation, emergency channel, surveillance/);
+  assert.match(pageSource, /Read Block 0488/);
+  assert.match(pageSource, /allow="clipboard-write; web-share"/);
+  assert.match(jsonSource, /author: 'MH'/);
+  assert.equal((jsonSource.match(/id: '(?:beam|window|chime|burst|pebble|ripple|relay|cards)-0[1-8]'/g) ?? []).length, 8);
+  assert.match(jsonSource, /mini fireworks, zero fire/);
+  assert.match(jsonSource, /name: 'Dusk rehearsal', nodes: 24/);
+  assert.match(jsonSource, /emergencyChannel: false/);
+  assert.match(jsonSource, /locationHistory: false/);
+  assert.match(jsonSource, /storedData: 'None\.'/);
 });
 
 test('the first-100 funnel is public, bounded, and stores no visitor identity', async () => {
@@ -209,10 +237,11 @@ test('PointCast proxies the public participant count without caching or collecti
 });
 
 test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distribution system', async () => {
-  const [blockSource, signalBlockSource, v2BlockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
+  const [blockSource, signalBlockSource, v2BlockSource, fieldKitBlockSource, jsonFeedSource, rssFeedSource, cardRouteSource] = await Promise.all([
     readFile(announcementBlock, 'utf8'),
     readFile(signalBlock, 'utf8'),
     readFile(v2Block, 'utf8'),
+    readFile(fieldKitBlock, 'utf8'),
     readFile(jsonFeed, 'utf8'),
     readFile(rssFeed, 'utf8'),
     readFile(announcementCardRoute, 'utf8'),
@@ -243,6 +272,15 @@ test('the first-100 launch enters the canonical Block, JSON Feed, and RSS distri
   assert.match(v2.body, /does not change the roster/i);
   assert.match(v2.body, /No purchase, mint, token, transfer, payout, promised return/i);
   assert.equal(v2.meta.edition, 'Signal 002');
+  const fieldKit = JSON.parse(fieldKitBlockSource);
+  assert.equal(fieldKit.id, '0488');
+  assert.equal(fieldKit.title, 'Signal the block');
+  assert.equal(fieldKit.external.url, 'https://pointcast.xyz/network-el-segundo/field-kit');
+  assert.match(fieldKit.body, /eight small instruments/i);
+  assert.match(fieldKit.body, /no flame, smoke, explosive material, projectile, or debris/i);
+  assert.equal(fieldKit.meta.products, 8);
+  assert.equal(fieldKit.meta.signals, 4);
+  assert.equal(fieldKit.meta.signature, 'MH');
   assert.match(jsonFeedSource, /getCollection\('blocks'/);
   assert.match(rssFeedSource, /getCollection\('blocks'/);
   assert.match(cardRouteSource, /public\/images\/og\/b\/0484\.png/);
