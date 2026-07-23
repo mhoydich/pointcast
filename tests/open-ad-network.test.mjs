@@ -70,6 +70,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-PERMISSION-LAB-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-ART-KITTY-\d{3}'/g) || []).length, 3);
   assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 6);
+  assert.equal((registry.match(/id: 'PC-LOCAL-STAR-COMMONS-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-HOLDERS-CUT-001'/g) || []).length, 1);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
@@ -84,6 +85,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /DRUM_COMPENDIUM_CAMPAIGN/);
   assert.match(receipt, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);
   assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
+  assert.match(receipt, /LOCAL_STAR_COMMONS_CAMPAIGN/);
   assert.match(receipt, /NETWORK_FIRST_100_SIGNAL/);
   assert.match(receipt, /ownedSignals/);
   assert.match(receipt, /NOUNS_ABOUT_CAMPAIGN/);
@@ -255,6 +257,23 @@ test('Network El Segundo runs sitewide as a six-creative art, local-signal, and 
   assert.match(receipt, /NETWORK_EL_SEGUNDO_CAMPAIGN/);
 });
 
+test('LOCAL STAR COMMONS runs as a disclosed sitewide founding-movement campaign', async () => {
+  const [registry, desk, receipt] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.astro', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-LOCAL-STAR-COMMONS-2026/);
+  assert.match(registry, /PC-LOCAL-STAR-COMMONS-001/);
+  assert.match(registry, /Useful things\. Governed in common\./);
+  assert.match(registry, /no token, treasury, fundraising, binding vote, Mainnet action, or live physical mesh/i);
+  assert.match(registry, /commonsCreative/);
+  assert.match(desk, /FOUNDING MOVEMENT · SITEWIDE HOUSE CAMPAIGN/);
+  assert.match(desk, /local-star-commons-opens-contribution-governed-quality-of-life-movement/);
+  assert.match(receipt, /LOCAL_STAR_COMMONS_CAMPAIGN/);
+});
+
 test('Art Kitty runs as a three-creative contextual house campaign with public proof', async () => {
   const [registry, desk, receipt] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
@@ -318,7 +337,7 @@ test('Drum Noun Universe is featured on home and guaranteed across other public 
 
   assert.match(registry, /PC-DRUM-NOUN-UNIVERSE-2026/);
   assert.match(registry, /Featured homepage unit and contextual placement across public non-Drum pages/);
-  assert.match(registry, /return \[universeCreative, networkCreative, \.\.\.companionAds\]/);
+  assert.match(registry, /return \[universeCreative, networkCreative, commonsCreative, \.\.\.companionAds\]/);
   assert.match(home, /<DrumNounUniverseAd\s*\/>/);
   assert.match(homeAd, /data-ad-record=\{ad\.id\}/);
   assert.match(homeAd, /NO VISITOR PROFILE · NO PAID MEDIA/);

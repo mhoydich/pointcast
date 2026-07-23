@@ -12,6 +12,7 @@ import networkWindows from '../assets/campaigns/network-el-segundo-2026/100-wind
 import networkFieldKit from '../assets/campaigns/network-el-segundo-2026/field-kit.png';
 import networkMeshCommons from '../assets/campaigns/network-el-segundo-2026/mesh-commons.png';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
+import localStarCommonsOg from '../assets/campaigns/local-star-commons-2026/commons-og.png';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
   '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
@@ -222,6 +223,17 @@ export const NETWORK_EL_SEGUNDO_CAMPAIGN = {
   note: 'A zero-capital first-party campaign connecting two living public artworks, a local-communication product study, and a two-year physical-network plan. No sale, token, payout contract, certified hardware, active physical mesh, coverage guarantee, or yield system is live.',
 } as const;
 
+export const LOCAL_STAR_COMMONS_CAMPAIGN = {
+  id: 'PC-LOCAL-STAR-COMMONS-2026',
+  label: 'LOCAL STAR COMMONS — Useful Things, Governed in Common',
+  advertiser: 'LOCAL STAR COMMONS',
+  creativeCount: 1,
+  placement: 'PointCast sitewide contextual rail plus the canonical Commons and public ad desk',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A first-party founding-movement release for six local-first quality-of-life objects. Governance is off-chain and contribution-based; no token, treasury, fundraising, binding vote, Mainnet action, or live physical mesh exists.',
+} as const;
+
 export const NETWORK_FIRST_100_SIGNAL = {
   id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
   label: 'Network El Segundo — First 100 Signal Strip',
@@ -234,6 +246,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-LOCAL-STAR-COMMONS-001',
+    advertiser: 'LOCAL STAR COMMONS',
+    headline: 'Useful things. Governed in common.',
+    copy: 'Six local-first objects, five working circles, and a 25-mile El Segundo founding study. Off-chain coordination; no token or treasury.',
+    href: '/local-star-commons',
+    cta: 'Enter the Commons',
+    tone: 'network',
+    contexts: ['commons', 'local', 'network', 'care', 'air', 'water', 'light', 'power', 'governance', 'dao', 'el', 'segundo', 'repair', 'privacy', 'civic'],
+    image: localStarCommonsOg.src,
+    sourceTool: 'OpenAI image generation',
+    campaign: LOCAL_STAR_COMMONS_CAMPAIGN.id,
+    seriesLabel: LOCAL_STAR_COMMONS_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-HOLDERS-CUT-001',
     advertiser: 'The Holders’ Cut',
@@ -706,29 +733,32 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
 
   const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
+  const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
   if (!isDrumSurface) {
     const universeCreative = ranked.find((ad) => ad.campaign === DRUM_NOUN_UNIVERSE_CAMPAIGN.id);
-    if (!universeCreative && !networkCreative) return ranked.slice(0, cappedCount);
+    if (!universeCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
     const companionAds = ranked.filter((ad) => (
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
       && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
+      && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
-    return [universeCreative, networkCreative, ...companionAds]
+    return [universeCreative, networkCreative, commonsCreative, ...companionAds]
       .filter((ad): ad is PointCastAd => Boolean(ad))
       .slice(0, cappedCount);
   }
 
   const drumCreative = ranked.find((ad) => ad.campaign === DRUM_COMPENDIUM_CAMPAIGN.id);
-  if (!drumCreative && !networkCreative) return ranked.slice(0, cappedCount);
+  if (!drumCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
   const companionAds = ranked.filter((ad) => (
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
     && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
+    && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
-  return [drumCreative, networkCreative, ...companionAds]
+  return [drumCreative, networkCreative, commonsCreative, ...companionAds]
     .filter((ad): ad is PointCastAd => Boolean(ad))
     .slice(0, cappedCount);
 }

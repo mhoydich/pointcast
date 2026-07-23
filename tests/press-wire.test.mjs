@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds twelve product filings across every public kind', () => {
-  assert.equal(releases.length, 12);
+test('press wire seeds thirteen product filings across every public kind', () => {
+  assert.equal(releases.length, 13);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -33,6 +33,19 @@ test('Mesh Commons filing publishes a low-cost plan without claiming active cove
   assert.match(release.body.join(' '), /not an active physical mesh/i);
   assert.equal(release.productUrl, 'https://pointcast.xyz/network-el-segundo/mesh-commons');
   assert.equal(release.actionUrl, 'https://network-el-segundo.mhoydich.chatgpt.site/mesh-commons');
+});
+
+test('LOCAL STAR COMMONS filing publishes the product family and keeps governance off-chain', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0013');
+  assert.ok(release);
+  assert.equal(release.slug, 'local-star-commons-opens-contribution-governed-quality-of-life-movement');
+  assert.match(release.body.join(' '), /LOCAL STAR, AIR, WATER, LIGHT, CARE, and POWER/i);
+  assert.match(release.body.join(' '), /25-mile El Segundo pilot ring/i);
+  assert.match(release.body.join(' '), /not a legal entity/i);
+  assert.match(release.body.join(' '), /no token, treasury, fundraising/i);
+  assert.match(release.body.join(' '), /visitor's device/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/local-star-commons');
+  assert.equal(release.actionUrl, 'https://local-objects-tezos.mhoydich.chatgpt.site/commons');
 });
 
 test('Local Signal Field Kit filing publishes the signed product set and concept boundary', () => {
@@ -126,13 +139,14 @@ test('home and discovery surfaces expose the press wire', async () => {
   ]);
 
   assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Eleven sourced product filings/);
+  assert.match(home, /Thirteen sourced product filings/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);
   assert.match(llms, /PointCast Press Wire/);
   assert.match(llms, /HOME \/ Art Kitty/);
   assert.match(llms, /Network El Segundo/);
+  assert.match(llms, /LOCAL STAR COMMONS/);
 });
 
 test('press CTAs can enter a measured action path without changing the canonical product URL', async () => {
