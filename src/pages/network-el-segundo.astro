@@ -7,6 +7,8 @@ const projectAuthUrl = `/auth/project?target=network-el-segundo&return_to=${enco
 const campaignUrl = 'https://pointcast.xyz/network-el-segundo';
 const shareAuthUrl = `https://pointcast.xyz/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(`${releaseUrl}/`)}&source=share_kit&utm_source=share_kit&utm_medium=relay&utm_campaign=pc-network-el-segundo-2026`;
 const shareCopy = `Every verified wallet turns on one light in Network El Segundo’s First 100 Signal. Join with one free Kukai signature, zero tez, then transmit the signal to one Tezos person: ${shareAuthUrl} #Tezos #TezosArt`;
+const participantRelayAuthUrl = `https://pointcast.xyz/auth/project?target=network-el-segundo&return_to=${encodeURIComponent(`${releaseUrl}/`)}&source=participant_relay&utm_source=participant_relay&utm_medium=one-to-one&utm_campaign=pc-network-el-segundo-2026`;
+const participantRelayCopy = `The First 100 Signal just moved. One free Kukai wallet-control signature turns on the next public light—zero tez and no transaction. Take the next seat: ${participantRelayAuthUrl} #Tezos #TezosArt`;
 import TezosSessionBridge from '../components/TezosSessionBridge.astro';
 ---
 
@@ -31,7 +33,7 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       * { box-sizing: border-box; }
       html, body { margin: 0; min-height: 100%; width: 100%; overflow-x: hidden; background: #070707; }
       body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      .pointcast-frame { min-width: 0; min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr; }
+      .pointcast-frame { min-width: 0; min-height: 100vh; display: grid; grid-template-rows: auto auto auto 1fr; }
       .pointcast-rail {
         position: relative;
         z-index: 2;
@@ -101,6 +103,37 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       }
       .signal-relay__actions [data-relay-primary] { background: #f2ff47; }
       .signal-relay__status { grid-column: 2; min-height: 0; margin: 0; color: #b9f6ff; font-size: .58rem; }
+      .signal-moved {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+        padding: .8rem .75rem;
+        color: #070707;
+        background: #ff4f9f;
+        border-bottom: 2px solid #070707;
+      }
+      .signal-moved[hidden] { display: none; }
+      .signal-moved__copy { display: grid; gap: .25rem; min-width: 0; }
+      .signal-moved__copy span { font-size: .58rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+      .signal-moved__copy strong { font: 900 clamp(1.15rem, 3vw, 1.8rem)/1 Arial, sans-serif; letter-spacing: -.035em; }
+      .signal-moved__copy p { max-width: 70ch; margin: 0; font-size: .62rem; line-height: 1.4; }
+      .signal-moved__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .38rem; }
+      .signal-moved__actions a,
+      .signal-moved__actions button {
+        appearance: none;
+        padding: .45rem .55rem;
+        color: #070707;
+        background: #f2ff47;
+        border: 1px solid #070707;
+        border-radius: 0;
+        font: 900 .6rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        text-decoration: none;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
       @media (max-width: 46rem) {
         .pointcast-rail { align-items: center; min-width: 0; font-size: .58rem; }
         .pointcast-rail__signal { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -111,6 +144,8 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         .signal-relay__copy { font-size: .62rem; }
         .signal-relay__actions { gap: .32rem; }
         .signal-relay__status { grid-column: 1; }
+        .signal-moved { grid-template-columns: 1fr; }
+        .signal-moved__actions { justify-content: flex-start; }
         .network-stage { min-height: calc(100vh - 11.6rem); }
         .network-stage iframe { height: calc(100vh - 11.6rem); min-height: 640px; }
         .network-stage__fallback { display: none; }
@@ -143,6 +178,18 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         </div>
         <p class="signal-relay__status" data-relay-status aria-live="polite"></p>
       </aside>
+      <section class="signal-moved" data-signal-moved hidden aria-live="polite">
+        <div class="signal-moved__copy">
+          <span>The public signal moved</span>
+          <strong data-signal-moved-title>One more light is verified.</strong>
+          <p data-signal-moved-detail>The count changed during this visit. PointCast does not identify who signed. Pass the next light to one Tezos person.</p>
+        </div>
+        <div class="signal-moved__actions">
+          <button type="button" data-participant-share data-funnel-action="relay">Share next light</button>
+          <button type="button" data-participant-copy data-funnel-action="copy">Copy next-light invite</button>
+          <a href="/network-el-segundo/share" data-funnel-action="relay">Open relay kit</a>
+        </div>
+      </section>
       <section class="network-stage" aria-label="Network El Segundo release">
         <iframe
           id="network-el-segundo-project"
@@ -155,19 +202,24 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       </section>
     </main>
     <TezosSessionBridge />
-    <script define:vars={{ releaseUrl, campaignUrl, shareAuthUrl, shareCopy }}>
+    <script define:vars={{ releaseUrl, campaignUrl, shareAuthUrl, shareCopy, participantRelayAuthUrl, participantRelayCopy }}>
       const frame = document.getElementById('network-el-segundo-project');
       const status = document.querySelector('[data-project-auth-status]');
       const authLink = document.querySelector('[data-project-auth-link]');
       const joinLink = document.querySelector('[data-join-signal]');
       const count = document.querySelector('[data-participant-count]');
       const relayStatus = document.querySelector('[data-relay-status]');
+      const signalMoved = document.querySelector('[data-signal-moved]');
+      const signalMovedTitle = document.querySelector('[data-signal-moved-title]');
+      const signalMovedDetail = document.querySelector('[data-signal-moved-detail]');
       const funnelEndpoint = '/api/network-el-segundo/funnel';
       const funnelSources = new Set([
         'pointcast_home', 'pointcast_strip', 'pointcast_ad', 'pointcast_block', 'industrynext', 'allworthy', 'passportz',
-        'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit',
+        'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'participant_relay',
         'tezos_discord', 'tezos_agora', 'teia', 'objkt', 'direct', 'other',
       ]);
+      let initialParticipantCount = null;
+      let participantRelayShown = false;
 
       function campaignSource() {
         const params = new URLSearchParams(window.location.search);
@@ -255,6 +307,50 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
         });
       });
 
+      async function shareParticipantRelay() {
+        if (typeof navigator.share === 'function') {
+          await navigator.share({
+            title: 'Network El Segundo — pass the next light',
+            text: participantRelayCopy,
+          });
+          return;
+        }
+        await navigator.clipboard.writeText(participantRelayCopy);
+        if (relayStatus) relayStatus.textContent = 'Next-light invitation copied.';
+      }
+
+      document.querySelector('[data-participant-share]')?.addEventListener('click', () => {
+        void shareParticipantRelay().catch(() => {});
+      });
+
+      document.querySelector('[data-participant-copy]')?.addEventListener('click', () => {
+        void navigator.clipboard.writeText(participantRelayCopy).then(() => {
+          if (relayStatus) relayStatus.textContent = 'Next-light invitation copied.';
+        }).catch(() => {
+          if (relayStatus) relayStatus.textContent = participantRelayAuthUrl;
+        });
+      });
+
+      function revealParticipantRelay(result) {
+        if (!Number.isInteger(result.count) || !Number.isInteger(result.target)) return;
+        if (initialParticipantCount === null) {
+          initialParticipantCount = result.count;
+          return;
+        }
+        if (participantRelayShown || result.count <= initialParticipantCount) return;
+        participantRelayShown = true;
+        const complete = result.count >= result.target;
+        if (signalMovedTitle) {
+          signalMovedTitle.textContent = complete
+            ? `All ${result.target} lights are verified.`
+            : `Light ${result.count} is verified. Light ${result.count + 1} is open.`;
+        }
+        if (signalMovedDetail && complete) {
+          signalMovedDetail.textContent = 'The public counter reached its founding target during this visit. PointCast does not identify who signed. Pass the completed signal on.';
+        }
+        if (signalMoved instanceof HTMLElement) signalMoved.hidden = false;
+      }
+
       async function refreshParticipantCount() {
         try {
           const response = await fetch('/api/network-el-segundo/participants', { cache: 'no-store' });
@@ -263,6 +359,7 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
           const nextSeat = Math.min(result.target, result.count + 1);
           if (count) count.textContent = `${result.count} / ${result.target} · LIGHT ${nextSeat} OPEN`;
           if (joinLink) joinLink.textContent = `Claim light ${nextSeat} — free`;
+          revealParticipantRelay(result);
         } catch {
           if (count) count.textContent = 'Counter live ↗';
         }

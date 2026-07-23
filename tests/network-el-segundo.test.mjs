@@ -45,6 +45,13 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /tezos_agora/);
   assert.match(source, /teia/);
   assert.match(source, /objkt/);
+  assert.match(source, /participant_relay/);
+  assert.match(source, /data-signal-moved/);
+  assert.match(source, /initialParticipantCount/);
+  assert.match(source, /result\.count <= initialParticipantCount/);
+  assert.match(source, /PointCast does not identify who signed/);
+  assert.match(source, /Share next light/);
+  assert.match(source, /participantRelayCopy/);
   assert.match(source, /\/network-el-segundo\/share/);
   assert.match(source, /allow="clipboard-write; web-share"/);
   assert.match(source, /overflow-x: hidden/);
@@ -82,6 +89,7 @@ test('Network El Segundo publishes a machine-readable roster and prototype bound
   assert.match(source, /tezos_agora/);
   assert.match(source, /teia/);
   assert.match(source, /objkt/);
+  assert.match(source, /participant_relay/);
   assert.match(source, /https:\/\/pointcast\.xyz\/api\/network-el-segundo\/participants/);
 });
 
@@ -100,6 +108,7 @@ test('the first-100 funnel is public, bounded, and stores no visitor identity', 
   assert.match(source, /pointcast_home/);
   assert.match(source, /pointcast_strip/);
   assert.match(source, /wordpress/);
+  assert.match(source, /participant_relay/);
   assert.match(source, /legacy/);
   assert.match(source, /sources/);
   assert.match(source, /Counts are browser events, not unique people/);

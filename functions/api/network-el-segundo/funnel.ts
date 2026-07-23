@@ -19,6 +19,7 @@ const FUNNEL_SOURCES = [
   'tumblr',
   'press',
   'share_kit',
+  'participant_relay',
   'tezos_discord',
   'tezos_agora',
   'teia',

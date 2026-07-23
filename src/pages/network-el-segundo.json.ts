@@ -63,7 +63,7 @@ export const GET: APIRoute = () => {
     },
     funnelMethodology: {
       events: ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_rooms'],
-      boundedSources: ['pointcast_home', 'pointcast_strip', 'pointcast_ad', 'pointcast_block', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'tezos_discord', 'tezos_agora', 'teia', 'objkt', 'direct', 'other', 'legacy'],
+      boundedSources: ['pointcast_home', 'pointcast_strip', 'pointcast_ad', 'pointcast_block', 'industrynext', 'allworthy', 'passportz', 'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'participant_relay', 'tezos_discord', 'tezos_agora', 'teia', 'objkt', 'direct', 'other', 'legacy'],
       identifiersStored: false,
       caveat: 'Browser events are not unique people; verified participation is proven only by the deduplicated signed-wallet counter.',
     },
