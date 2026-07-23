@@ -98,8 +98,9 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     name: 'Passportz',
     url: 'https://passportz.xyz/',
     hostname: 'passportz.xyz',
-    surface: 'Public Tezos identity, art, activity, and listening passports',
+    surface: 'A first-100 Tezos wallet lead across public identity, art, activity, and listening passports',
     advertiserAliases: ['Passportz', 'Tezos Passport'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
     status: 'active',
   },
   {

@@ -150,6 +150,7 @@ test('portable network transparently pins the first-100 campaign across owned pu
 
   assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
   assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
+  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
   assert.match(registry, /id: 'rally'/);
   assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
   assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
