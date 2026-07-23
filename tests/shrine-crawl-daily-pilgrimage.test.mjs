@@ -34,6 +34,8 @@ test('daily pilgrimage has a local passport, six stamps, and a copyable receipt'
   assert.match(source, /navigator\.clipboard/);
   assert.match(source, /shrine-crawl\.is-daily[\s\S]*min-height:\s*100svh/);
   assert.match(source, /shrine-crawl\.is-daily[\s\S]*daily-passport:not\(\[hidden\]\)/);
+  assert.match(source, /shrine-crawl\.is-screensaver \.screensaver-controls[\s\S]*position:\s*fixed/);
+  assert.match(source, /shrine-crawl\.is-screensaver \.screensaver-controls[\s\S]*z-index:\s*10/);
 });
 
 test('V3 JSON advertises daily route semantics while preserving V2 screensaver fields', async () => {
