@@ -93,7 +93,12 @@ test('the first-100 relay kit makes the zero-cost invitation portable', async ()
   assert.match(source, /navigator\.share/);
   assert.match(source, /\/api\/network-el-segundo\/participants/);
   assert.match(source, /\/api\/network-el-segundo\/funnel/);
-  assert.match(source, /Tezos community rooms/);
+  assert.match(source, /Copy community update/);
+  assert.match(source, /https:\/\/discord\.com\/invite\/tezos/);
+  assert.match(source, /https:\/\/forum\.tezosagora\.org\/c\/community-updates\/17/);
+  assert.match(source, /mailto:contact@kukai\.app/);
+  assert.match(source, /Nothing on this page posts or sends itself/);
+  assert.match(source, /data-relay-event="tezos_rooms"/);
   assert.match(source, /Download poster/);
   assert.match(firstSeeSource, /\^\\\/network-el-segundo\(\?:\\\/\|\$\)/);
 });
