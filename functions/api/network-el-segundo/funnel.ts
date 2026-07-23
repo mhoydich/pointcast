@@ -5,6 +5,24 @@ interface FunnelEnv {
 const FUNNEL_EVENTS = ['landing', 'join', 'relay', 'copy', 'email', 'x', 'tezos_rooms'] as const;
 type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 type FunnelCounter = Record<FunnelEvent, number>;
+const FUNNEL_SOURCES = [
+  'pointcast_strip',
+  'pointcast_ad',
+  'industrynext',
+  'allworthy',
+  'passportz',
+  'rally',
+  'common_hours',
+  'wordpress',
+  'tumblr',
+  'press',
+  'share_kit',
+  'direct',
+  'other',
+  'legacy',
+] as const;
+type FunnelSource = (typeof FUNNEL_SOURCES)[number];
+type FunnelSourceReport = Record<FunnelSource, FunnelCounter>;
 
 const EVENT_PREFIX = 'networkfunnel:';
 const RETENTION_DAYS = 90;
@@ -37,6 +55,14 @@ function blankCounter(): FunnelCounter {
 
 function isFunnelEvent(value: unknown): value is FunnelEvent {
   return typeof value === 'string' && (FUNNEL_EVENTS as readonly string[]).includes(value);
+}
+
+function isFunnelSource(value: unknown): value is FunnelSource {
+  return typeof value === 'string' && (FUNNEL_SOURCES as readonly string[]).includes(value);
+}
+
+function blankSourceReport(): FunnelSourceReport {
+  return Object.fromEntries(FUNNEL_SOURCES.map((source) => [source, blankCounter()])) as FunnelSourceReport;
 }
 
 function isoDay(date: Date): string {
@@ -78,9 +104,9 @@ export const onRequestPost: PagesFunction<FunnelEnv> = async (context) => {
     return json({ ok: false, reason: 'body-size' }, 413);
   }
 
-  let body: { event?: unknown };
+  let body: { event?: unknown; source?: unknown };
   try {
-    body = JSON.parse(rawBody) as { event?: unknown };
+    body = JSON.parse(rawBody) as { event?: unknown; source?: unknown };
   } catch {
     return json({ ok: false, reason: 'invalid-json' }, 400);
   }
@@ -88,9 +114,10 @@ export const onRequestPost: PagesFunction<FunnelEnv> = async (context) => {
   if (!isFunnelEvent(body.event)) {
     return json({ ok: false, reason: 'invalid-event' }, 400);
   }
+  const source: FunnelSource = isFunnelSource(body.source) ? body.source : 'other';
 
   const now = new Date();
-  const key = `${EVENT_PREFIX}${isoDay(now)}:${body.event}:${now.getTime()}:${crypto.randomUUID()}`;
+  const key = `${EVENT_PREFIX}${isoDay(now)}:${body.event}:${source}:${now.getTime()}:${crypto.randomUUID()}`;
   context.waitUntil(
     context.env.PC_ANALYTICS_KV.put(key, '', {
       expirationTtl: RETENTION_DAYS * 24 * 60 * 60,
@@ -111,6 +138,7 @@ export const onRequestGet: PagesFunction<FunnelEnv> = async (context) => {
   start.setUTCDate(start.getUTCDate() - (windowDays - 1));
   const startDay = isoDay(start);
   const totals = blankCounter();
+  const sourceReport = blankSourceReport();
   const byDay = new Map<string, FunnelCounter>();
   let scanned = 0;
   let cursor: string | undefined;
@@ -125,9 +153,11 @@ export const onRequestGet: PagesFunction<FunnelEnv> = async (context) => {
         break;
       }
 
-      const [day, event] = record.name.slice(EVENT_PREFIX.length).split(':');
+      const [day, event, sourcePart] = record.name.slice(EVENT_PREFIX.length).split(':');
       if (!day || day < startDay || !isFunnelEvent(event)) continue;
+      const source: FunnelSource = isFunnelSource(sourcePart) ? sourcePart : 'legacy';
       totals[event] += 1;
+      sourceReport[source][event] += 1;
       const dayCounter = byDay.get(day) || blankCounter();
       dayCounter[event] += 1;
       byDay.set(day, dayCounter);
@@ -140,6 +170,17 @@ export const onRequestGet: PagesFunction<FunnelEnv> = async (context) => {
   const daily = [...byDay.entries()]
     .map(([date, events]) => ({ date, events }))
     .sort((a, b) => b.date.localeCompare(a.date));
+  const sources = Object.fromEntries(
+    FUNNEL_SOURCES
+      .map((source) => {
+        const events = sourceReport[source];
+        return [source, {
+          total: Object.values(events).reduce((sum, count) => sum + count, 0),
+          events,
+        }] as const;
+      })
+      .filter(([, report]) => report.total > 0),
+  );
 
   return json({
     generatedAt: generatedAt.toISOString(),
@@ -149,11 +190,13 @@ export const onRequestGet: PagesFunction<FunnelEnv> = async (context) => {
     truncated,
     totalEvents: Object.values(totals).reduce((sum, count) => sum + count, 0),
     events: totals,
+    sources,
     daily,
     participantCounter: 'https://pointcast.xyz/api/network-el-segundo/participants',
     methodology: {
       landing: 'Campaign wrapper remained visible for one second; deduplicated once per browser session.',
       action: 'A deliberate click or tap on the named join or relay control.',
+      source: 'A bounded campaign label supplied by PointCast links; raw referrers and arbitrary URL values are never stored.',
       privacy: 'No IP, user agent, cookie, wallet, referrer, or visitor identifier is stored with funnel events.',
       caveat: 'Counts are browser events, not unique people. Automation that runs page JavaScript can be counted.',
     },

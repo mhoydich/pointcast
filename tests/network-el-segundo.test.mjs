@@ -23,7 +23,7 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /\/api\/auth\/project-ticket/);
   assert.match(source, /Open the release/);
   assert.match(source, /https:\/\/pointcast\.xyz\/network-el-segundo/);
-  assert.match(source, /Live artwork \/ first 100/);
+  assert.match(source, /Next founding light is open/);
   assert.match(source, /Every verified wallet turns on one light/);
   assert.match(source, /data-share-signal/);
   assert.match(source, /data-join-signal/);
@@ -31,7 +31,12 @@ test('PointCast publishes Network El Segundo with a direct fallback and shared a
   assert.match(source, /data-funnel-action="tezos_rooms"/);
   assert.match(source, /initializeFunnelMetrics/);
   assert.match(source, /pc:network-el-segundo:landing/);
-  assert.match(source, /Join free with Kukai/);
+  assert.match(source, /Claim the next light — free/);
+  assert.match(source, /campaignSource/);
+  assert.match(source, /pointcast_strip/);
+  assert.match(source, /pointcast_ad/);
+  assert.match(source, /wordpress/);
+  assert.match(source, /tumblr/);
   assert.match(source, /\/network-el-segundo\/share/);
   assert.match(source, /allow="clipboard-write; web-share"/);
   assert.match(source, /overflow-x: hidden/);
@@ -76,6 +81,11 @@ test('the first-100 funnel is public, bounded, and stores no visitor identity', 
   assert.match(source, /crypto\.randomUUID/);
   assert.match(source, /expirationTtl: RETENTION_DAYS/);
   assert.match(source, /No IP, user agent, cookie, wallet, referrer, or visitor identifier/);
+  assert.match(source, /bounded campaign label/);
+  assert.match(source, /pointcast_strip/);
+  assert.match(source, /wordpress/);
+  assert.match(source, /legacy/);
+  assert.match(source, /sources/);
   assert.match(source, /Counts are browser events, not unique people/);
   assert.doesNotMatch(source, /CF-Connecting-IP|User-Agent|Referer|document\.cookie/i);
 });
@@ -89,6 +99,8 @@ test('the first-100 relay kit makes the zero-cost invitation portable', async ()
   assert.match(source, /PASS THE SIGNAL/);
   assert.match(source, /Seat <span data-next-seat>2<\/span><br \/>is open/);
   assert.match(source, /Zero tez/);
+  assert.match(source, /utm_source=share_kit/);
+  assert.match(source, /source: 'share_kit'/);
   assert.match(source, /data-copy-message/);
   assert.match(source, /navigator\.share/);
   assert.match(source, /\/api\/network-el-segundo\/participants/);

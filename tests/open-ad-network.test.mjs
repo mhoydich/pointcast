@@ -43,7 +43,7 @@ test('all public layout families carry the live first-100 Tezos signal above the
   assert.match(strip, /\/api\/network-el-segundo\/participants/);
   assert.match(strip, /pc:wallet-active/);
   assert.match(strip, /pc:wallet-change/);
-  assert.match(strip, /TURN ON LIGHT/);
+  assert.match(strip, /CLAIM LIGHT/);
   assert.match(strip, /Light \$\{nextSeat\} is open/);
   assert.match(strip, /one free signature · zero tez/);
   assert.match(strip, /pathname\.startsWith\('\/admin'\)/);
@@ -224,9 +224,9 @@ test('Network El Segundo runs sitewide as a three-creative first-100 wallet camp
   assert.equal((registry.match(/href: '\/network-el-segundo'/g) || []).length, 3);
   assert.equal((registry.match(/image: network[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /No sale, token, payout contract, or yield system is live/);
-  assert.match(registry, /Every wallet turns on one light/);
-  assert.match(registry, /One hundred positions\. One live signal/);
-  assert.match(registry, /Transmit the First 100 Signal/);
+  assert.match(registry, /The next founding light is unclaimed/);
+  assert.match(registry, /Zero tez\. One signature\. One light/);
+  assert.match(registry, /Bring one wallet\. Invite one more/);
   assert.match(registry, /networkCreative/);
   assert.match(desk, /SITEWIDE HOUSE CAMPAIGN/);
   assert.match(desk, /ENTER THE FIRST 100 SIGNAL/);

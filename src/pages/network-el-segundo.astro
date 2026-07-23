@@ -81,6 +81,7 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       .signal-relay__label { color: #f2ff47; font-size: .62rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
       .signal-relay__count { font-size: 1.05rem; font-weight: 900; }
       .signal-relay__copy { margin: 0; font-size: .68rem; line-height: 1.4; }
+      .signal-relay__copy strong { color: #f2ff47; }
       .signal-relay__actions { display: flex; flex-wrap: wrap; gap: .38rem; }
       .signal-relay__actions a,
       .signal-relay__actions button {
@@ -126,12 +127,12 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       </nav>
       <aside class="signal-relay" aria-label="Network El Segundo founding-wallet desk">
         <div class="signal-relay__head">
-          <span class="signal-relay__label">Live artwork / first 100</span>
+          <span class="signal-relay__label">Next founding light is open</span>
           <strong class="signal-relay__count" data-participant-count>— / 100</strong>
         </div>
-        <p class="signal-relay__copy">Every verified wallet turns on one light. Join with one free Kukai signature and zero tez; if you are verified, transmit the signal to one Tezos person.</p>
+        <p class="signal-relay__copy"><strong>0 TEZ · 1 KUKAI SIGNATURE · ABOUT 20 SECONDS.</strong> Every verified wallet turns on one light; if you are verified, transmit the signal to one Tezos person.</p>
         <div class="signal-relay__actions">
-          <a href={projectAuthUrl} data-relay-primary data-join-signal data-funnel-action="join">Join free with Kukai</a>
+          <a href={projectAuthUrl} data-relay-primary data-join-signal data-funnel-action="join">Claim the next light — free</a>
           <button type="button" data-share-signal data-funnel-action="relay">Relay signal</button>
           <button type="button" data-copy-signal data-funnel-action="copy">Copy invite</button>
           <a data-funnel-action="email" href={`mailto:?subject=${encodeURIComponent('Join the first 100 Tezos wallets')}&body=${encodeURIComponent(shareCopy)}`}>Email</a>
@@ -161,6 +162,23 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
       const count = document.querySelector('[data-participant-count]');
       const relayStatus = document.querySelector('[data-relay-status]');
       const funnelEndpoint = '/api/network-el-segundo/funnel';
+      const funnelSources = new Set([
+        'pointcast_strip', 'pointcast_ad', 'industrynext', 'allworthy', 'passportz',
+        'rally', 'common_hours', 'wordpress', 'tumblr', 'press', 'share_kit', 'direct', 'other',
+      ]);
+
+      function campaignSource() {
+        const params = new URLSearchParams(window.location.search);
+        const source = (params.get('utm_source') || '').toLowerCase();
+        const medium = (params.get('utm_medium') || '').toLowerCase();
+        if (source === 'pointcast' && medium === 'first-100-strip') return 'pointcast_strip';
+        if (source === 'pointcast' && medium === 'open-ad-rail') return 'pointcast_ad';
+        if (source === 'common-hours') return 'common_hours';
+        if (funnelSources.has(source)) return source;
+        if (medium === 'open-ad-network') return 'other';
+        return source ? 'other' : 'direct';
+      }
+      const source = campaignSource();
 
       function funnelMetricsDisabled() {
         try {
@@ -172,7 +190,7 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
 
       function sendFunnelEvent(event) {
         if (funnelMetricsDisabled()) return;
-        const payload = JSON.stringify({ event });
+        const payload = JSON.stringify({ event, source });
         if (navigator.sendBeacon) {
           const queued = navigator.sendBeacon(funnelEndpoint, new Blob([payload], { type: 'application/json' }));
           if (queued) return;
@@ -193,7 +211,7 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
           element.addEventListener('click', () => sendFunnelEvent(element.dataset.funnelAction));
         });
 
-        const landingKey = 'pc:network-el-segundo:landing';
+        const landingKey = `pc:network-el-segundo:landing:${source}`;
         try {
           if (sessionStorage.getItem(landingKey) === '1') return;
         } catch {
@@ -239,7 +257,9 @@ import TezosSessionBridge from '../components/TezosSessionBridge.astro';
           const response = await fetch('/api/network-el-segundo/participants', { cache: 'no-store' });
           const result = await response.json();
           if (!response.ok || result.ok !== true) throw new Error('counter-unavailable');
-          if (count) count.textContent = `${result.count} / ${result.target}`;
+          const nextSeat = Math.min(result.target, result.count + 1);
+          if (count) count.textContent = `${result.count} / ${result.target} · LIGHT ${nextSeat} OPEN`;
+          if (joinLink) joinLink.textContent = `Claim light ${nextSeat} — free`;
         } catch {
           if (count) count.textContent = 'Counter live ↗';
         }
