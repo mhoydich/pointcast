@@ -6,12 +6,15 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('the edited PointCast front door carries Bell & Signal field art as a switchable live signal', async () => {
-  const home = await read('src/pages/index.astro');
+  const [home, signals] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/lib/home-signals.ts'),
+  ]);
 
-  assert.match(home, /bell-fall-v2\/bg-17-wildflower-vase\.jpg/);
-  assert.match(home, /bell-fall-v2\/bg-05-yellow-car\.jpg/);
-  assert.match(home, /bell-fall-v2\/bg-10-nageire-vase\.png/);
-  assert.match(home, /bell-fall-v2\/bg-09-el-segundo-skyline\.png/);
+  assert.match(signals, /bell-fall-v2\/bg-17-wildflower-vase\.jpg/);
+  assert.match(signals, /bell-fall-v2\/bg-05-yellow-car\.jpg/);
+  assert.match(signals, /bell-fall-v2\/bg-10-nageire-vase\.png/);
+  assert.match(signals, /bell-fall-v2\/bg-09-el-segundo-skyline\.png/);
   assert.match(home, /data-fresh-hero-image/);
   assert.match(home, /data-fresh-shuffle/);
   assert.match(home, /image\.alt = next\.alt/);
