@@ -32,6 +32,10 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/common-hours.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/adventure-networks', 'weekly', '0.9'],
   ['https://pointcast.xyz/adventure-networks.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/qwen-weather', 'weekly', '0.9'],
+  ['https://pointcast.xyz/qwen-weather.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/qwen-silver-letter', 'weekly', '0.9'],
+  ['https://pointcast.xyz/qwen-silver-letter.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/sunset-switchboard', 'weekly', '0.92'],
   ['https://pointcast.xyz/sunset-switchboard.json', 'weekly', '0.88'],
   ...afterimageExamples.flatMap((example) => [
