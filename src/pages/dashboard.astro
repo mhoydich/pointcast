@@ -256,10 +256,16 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     <section class="dashboard-band dashboard-connections" id="connections" aria-labelledby="connections-title">
       <div class="dashboard-section-head">
         <div>
-          <p class="dashboard-kicker">CONNECTIONS</p>
-          <h2 id="connections-title">Identity, agents, wallet, and sites</h2>
+          <p class="dashboard-kicker">SUPER AUTH</p>
+          <h2 id="connections-title">Super Auth switchboard</h2>
         </div>
+        <a href="/auth">Open the full switchboard →</a>
       </div>
+      <a class="super-auth-callout" href="/auth">
+        <span>AUTH / SIGNAL PASSPORT</span>
+        <strong>Google names it. Spotify sounds it. Shopify stocks it. Tezos makes it an object.</strong>
+        <em>Connect only what you want →</em>
+      </a>
       <div class="connection-grid">
         <article>
           <span class="connection-grid__mark connection-grid__mark--account" aria-hidden="true">ID</span>
@@ -290,6 +296,17 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
           <span class="connection-grid__actions">
             <a href="/api/spotify/auth" data-dashboard-spotify-action>Connect →</a>
             <button type="button" data-dashboard-spotify-disconnect hidden>Disconnect</button>
+          </span>
+        </article>
+        <article data-dashboard-shopify>
+          <span class="connection-grid__mark connection-grid__mark--shopify" aria-hidden="true">SH</span>
+          <div>
+            <strong>Shopify catalog</strong>
+            <small data-dashboard-shopify-state>Checking the shelf…</small>
+          </div>
+          <span class="connection-grid__actions">
+            <a href="/auth#shopify" data-dashboard-shopify-action>Connect →</a>
+            <button type="button" data-dashboard-shopify-disconnect hidden>Disconnect</button>
           </span>
         </article>
       </div>
@@ -577,6 +594,64 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
         }
       });
 
+      const shopifyCard = root.querySelector<HTMLElement>('[data-dashboard-shopify]');
+      const shopifyState = shopifyCard?.querySelector<HTMLElement>('[data-dashboard-shopify-state]');
+      const shopifyAction = shopifyCard?.querySelector<HTMLAnchorElement>('[data-dashboard-shopify-action]');
+      const shopifyDisconnect = shopifyCard?.querySelector<HTMLButtonElement>('[data-dashboard-shopify-disconnect]');
+      void fetch('/api/shopify/connection', {
+        credentials: 'include',
+        cache: 'no-store',
+      }).then(async (response) => {
+        if (!response.ok) throw new Error('shopify-status-unavailable');
+        return response.json() as Promise<{
+          configured?: boolean;
+          connected?: boolean;
+          canManage?: boolean;
+          connection?: { shop?: string };
+        }>;
+      }).then((shopify) => {
+        if (shopifyState) {
+          shopifyState.textContent = shopify.connected
+            ? shopify.connection?.shop
+              ? `Connected · ${shopify.connection.shop}`
+              : 'Catalog signal connected'
+            : shopify.configured
+              ? shopify.canManage
+                ? 'Ready for catalog authorization'
+                : 'Broadcaster authorization only'
+              : 'Provider setup required';
+        }
+        if (shopifyAction) {
+          shopifyAction.textContent = shopify.connected ? 'Manage →' : 'Connect →';
+        }
+        if (shopifyDisconnect) {
+          shopifyDisconnect.hidden = !(shopify.connected && shopify.canManage);
+        }
+      }).catch(() => {
+        if (shopifyState) shopifyState.textContent = 'Catalog status unavailable';
+      });
+      shopifyDisconnect?.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Disconnect Shopify from PointCast? This immediately removes the encrypted catalog credential.',
+        );
+        if (!confirmed) return;
+        shopifyDisconnect.disabled = true;
+        try {
+          const response = await fetch('/api/shopify/connection', {
+            method: 'DELETE',
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!response.ok) throw new Error('shopify-disconnect-failed');
+          shopifyDisconnect.hidden = true;
+          if (shopifyState) shopifyState.textContent = 'Ready for catalog authorization';
+          if (shopifyAction) shopifyAction.textContent = 'Connect →';
+        } catch {
+          shopifyDisconnect.disabled = false;
+          if (shopifyState) shopifyState.textContent = 'Could not disconnect · try again';
+        }
+      });
+
       syncPetCareActivity();
       renderRecents();
       renderActivity();
@@ -750,20 +825,27 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .dashboard-empty { margin: 0; padding: 14px; color: #737d87; font-size: 11px; }
   .dashboard-empty--results { border: 1px solid #cdd2d7; background: #fff; }
 
-  .connection-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #cdd2d7; border-radius: 6px; overflow: hidden; background: #fff; }
-  .connection-grid article { min-width: 0; min-height: 78px; display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; padding: 12px; border-right: 1px solid #dbe0e4; }
-  .connection-grid article:last-child { border-right: 0; }
+  .super-auth-callout { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; margin-bottom: 10px; padding: 15px 17px; border: 1px solid #181a1d; border-radius: 6px; background: #eaff62; color: #181a1d; text-decoration: none; box-shadow: 4px 4px 0 #181a1d; }
+  .super-auth-callout span { font: 800 8px/1 var(--pc-font-mono, ui-monospace, monospace); letter-spacing: 0.12em; }
+  .super-auth-callout strong { font-size: 12px; line-height: 1.25; }
+  .super-auth-callout em { font: 800 8px/1 var(--pc-font-mono, ui-monospace, monospace); text-transform: uppercase; }
+  .super-auth-callout:hover { background: #dfff39; transform: translate(-1px, -1px); box-shadow: 5px 5px 0 #181a1d; }
+  .connection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid #cdd2d7; border-radius: 6px; overflow: hidden; background: #dbe0e4; }
+  .connection-grid article { min-width: 0; min-height: 78px; display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; padding: 12px; background: #fff; }
   .connection-grid__mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 4px; background: #181a1d; color: #fff; font: 800 8px/1 var(--pc-font-mono, ui-monospace, monospace); }
   .connection-grid__mark--agents { background: #b12d3b; }
   .connection-grid__mark--wallet { background: #2f8f5f; }
   .connection-grid__mark--sites { background: #145aa4; }
+  .connection-grid__mark--spotify { background: #1ed760; color: #08150d; }
+  .connection-grid__mark--shopify { background: #95bf47; color: #102006; }
   .connection-grid div { min-width: 0; display: grid; gap: 4px; }
   .connection-grid strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .connection-grid small { overflow: hidden; color: #717b85; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
   .connection-grid a,
   .connection-grid button { border: 0; padding: 0; background: none; color: #145aa4; font: 700 8px/1 var(--pc-font-mono, ui-monospace, monospace); text-decoration: none; text-transform: uppercase; cursor: pointer; }
   .connection-grid__actions { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
-  .connection-grid__actions button[data-dashboard-spotify-disconnect] { color: #9c3440; }
+  .connection-grid__actions button[data-dashboard-spotify-disconnect],
+  .connection-grid__actions button[data-dashboard-shopify-disconnect] { color: #9c3440; }
   .connection-grid__actions button:disabled { cursor: wait; opacity: 0.55; }
   .connection-grid__actions button[hidden] { display: none; }
 
@@ -775,8 +857,6 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .featured-card img { height: 128px; min-height: 0; }
     .featured-card__copy { border-top: 4px solid var(--feature-color); border-left: 0; }
     .connection-grid { grid-template-columns: repeat(2, 1fr); }
-    .connection-grid article:nth-child(2) { border-right: 0; }
-    .connection-grid article:nth-child(-n + 2) { border-bottom: 1px solid #dbe0e4; }
     .dashboard-pet-row { grid-template-columns: minmax(220px, 0.8fr) 1.4fr; }
     .dashboard-pet__actions { grid-column: 1 / -1; min-height: 38px; border-top: 1px solid #dce1e4; }
   }
@@ -805,10 +885,10 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .dashboard-filters button { flex: none; }
     .dashboard-filters span { min-width: max-content; padding-left: 14px; }
     .app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .super-auth-callout { grid-template-columns: 1fr auto; }
+    .super-auth-callout strong { grid-column: 1 / -1; grid-row: 2; }
+    .super-auth-callout em { grid-column: 2; grid-row: 1; }
     .connection-grid { grid-template-columns: 1fr; }
-    .connection-grid article,
-    .connection-grid article:nth-child(2) { border-right: 0; border-bottom: 1px solid #dbe0e4; }
-    .connection-grid article:last-child { border-bottom: 0; }
   }
 
   @media (max-width: 480px) {
@@ -823,6 +903,9 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .featured-card__copy { border-top: 4px solid var(--feature-color); border-left: 0; }
     .app-grid { grid-template-columns: 1fr; }
     .app-card > a { min-height: 164px; }
+    .super-auth-callout { grid-template-columns: 1fr; }
+    .super-auth-callout strong,
+    .super-auth-callout em { grid-column: auto; grid-row: auto; }
     .dashboard-pet__stats div,
     .dashboard-pet__stats div:last-child { min-height: 58px; padding: 10px 8px; border-bottom: 0; }
     .dashboard-pet__stats div:last-child { border-right: 0; }

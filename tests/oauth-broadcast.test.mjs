@@ -57,7 +57,7 @@ test('Spotify broadcast stores encrypted credentials and exposes only a sanitize
   assert.match(dashboard, /immediately removes the stored Spotify credentials and live track signal/);
 });
 
-test('privacy policy states the narrow Google and Spotify data boundaries', async () => {
+test('privacy policy states the narrow Google, Spotify, and Shopify data boundaries', async () => {
   const [privacy, footer] = await Promise.all([
     readFile(new URL('src/pages/privacy.astro', root), 'utf8'),
     readFile(new URL('src/components/Footer.astro', root), 'utf8'),
@@ -65,7 +65,9 @@ test('privacy policy states the narrow Google and Spotify data boundaries', asyn
 
   assert.match(privacy, /does not request access to Gmail, Google Drive, contacts, calendars/);
   assert.match(privacy, /user-read-currently-playing/);
+  assert.match(privacy, /read_products/);
+  assert.match(privacy, /does not request customer, order, checkout, payment, or write access/);
   assert.match(privacy, /expires within 24 hours/);
-  assert.match(privacy, /Disconnecting immediately deletes the stored Spotify credentials/);
+  assert.match(privacy, /Disconnecting immediately deletes that provider’s stored credentials/);
   assert.match(footer, /href="\/privacy"/);
 });
