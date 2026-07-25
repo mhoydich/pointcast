@@ -6,5 +6,8 @@ declare namespace Cloudflare {
     SPOTIFY_CLIENT_ID?: string;
     SPOTIFY_CLIENT_SECRET?: string;
     SPOTIFY_TOKEN_ENCRYPTION_KEY?: string;
+    SHOPIFY_CLIENT_ID?: string;
+    SHOPIFY_CLIENT_SECRET?: string;
+    POINTCAST_INTEGRATION_ENCRYPTION_KEY?: string;
   }
 }
