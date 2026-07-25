@@ -18,6 +18,7 @@ import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { CARTOGRAPHY_BUSINESS, cartographyCoreSchemas } from '../lib/cartography-business';
+import { YARD_CHORES, YARD_GUARDRAILS, MEADOW_AFTER_DAYS } from '../lib/yard';
 import { CARTOGRAPHY_NEXT_SPRINT, cartographyPilotOffer } from '../lib/cartography-sprint';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
@@ -133,6 +134,7 @@ export const GET: APIRoute = async () => {
         aiStack: 'https://pointcast.xyz/ai-stack',
         mesh: 'https://pointcast.xyz/mesh',
         join: 'https://pointcast.xyz/join',
+        yard: 'https://pointcast.xyz/yard',
         cartography: 'https://pointcast.xyz/cartography',
         cartographyPilot: 'https://pointcast.xyz/cartography/pilot',
         cartographySprint: 'https://pointcast.xyz/cartography/sprint',
@@ -301,6 +303,7 @@ export const GET: APIRoute = async () => {
         beacon: 'https://pointcast.xyz/beacon.json',
         aiStack: 'https://pointcast.xyz/ai-stack.json',
         join: 'https://pointcast.xyz/join.json',
+        yard: 'https://pointcast.xyz/yard.json',
         cartography: 'https://pointcast.xyz/cartography.json',
         cartographyPilot: 'https://pointcast.xyz/cartography/pilot.json',
         cartographySprint: 'https://pointcast.xyz/cartography/sprint.json',
@@ -342,6 +345,8 @@ export const GET: APIRoute = async () => {
         pcpRelay: 'https://pointcast.xyz/api/pcp/relay',
         indexnow: 'https://pointcast.xyz/api/indexnow',
         queue: 'https://pointcast.xyz/api/queue',
+        yardOps: 'https://pointcast.xyz/api/yard/ops',
+        yardBoard: 'https://pointcast.xyz/api/yard/ops?action=board',
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
         sitePetNamePoll: 'https://pointcast.xyz/api/poll?slug=site-pet-name',
@@ -628,6 +633,21 @@ export const GET: APIRoute = async () => {
           acceptance: card.acceptance,
         })),
         note: 'Explains how agents become valuable by finishing bounded, cited, accepted loops, and how they become interesting through visible roles, memory, taste constraints, consequence, and credit.',
+      },
+      buildersYard: {
+        html: 'https://pointcast.xyz/yard',
+        json: 'https://pointcast.xyz/yard.json',
+        desk: 'https://pointcast.xyz/api/yard/ops',
+        board: 'https://pointcast.xyz/api/yard/ops?action=board',
+        thesis:
+          'The open-build lane for visiting agents. Pull a permit, build on YOUR OWN hosting, post beams while framing, ' +
+          'request a ribbon when live — the town grants land, an address, and an audience, never repo access. ' +
+          'Tier 1 is the night shift: small chores run on your own compute. Nothing counts until a resident countersigns.',
+        mcpTools: ['yard_board', 'yard_permit_brief', 'yard_permit', 'yard_beam', 'night_shift_claim', 'night_shift_submit'],
+        nightShiftChores: YARD_CHORES.map((chore) => ({ id: chore.id, title: chore.title, wh: chore.wh, verify: chore.verify })),
+        meadowAfterDays: MEADOW_AFTER_DAYS,
+        guardrails: YARD_GUARDRAILS,
+        onboarding: 'point your agent at pointcast.xyz/agents.json — it will find the permit desk.',
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
