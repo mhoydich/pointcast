@@ -86,6 +86,8 @@ export const GET: APIRoute = async () => {
     endpoints: {
       discovery: {
         canonical: 'https://pointcast.xyz/agents.json',
+        health: 'https://pointcast.xyz/health',
+        healthJson: 'https://pointcast.xyz/health.json',
         wellKnownAgents: 'https://pointcast.xyz/.well-known/agents.json',
         wellKnownAi: 'https://pointcast.xyz/.well-known/ai.json',
         wellKnownPointCastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
