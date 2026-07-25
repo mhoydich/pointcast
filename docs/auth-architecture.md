@@ -25,15 +25,15 @@ flowchart LR
   F -->|read session + user| E
 ```
 
-### Scaffolded next: OAuth providers
+### Live: Google OAuth
 
 ```mermaid
 flowchart LR
   A[Browser / AuthMenu] -->|GET /api/auth/google| B[/api/auth/google]
   A -->|GET /api/auth/apple| C[/api/auth/apple]
-  B -->|302 when env is ready| D[Google OAuth]
+  B -->|state + nonce + 302| D[Google OAuth]
   C -->|302 when env is ready| E[Apple OAuth]
-  D -->|callback TBD| F[/api/auth/google/callback]
+  D -->|verified OIDC callback| F[/api/auth/google/callback]
   E -->|callback TBD| G[/api/auth/apple/callback]
   F --> H[(KV: USERS)]
   G --> H
@@ -44,7 +44,7 @@ flowchart LR
 | Provider | Status | Notes |
 | --- | --- | --- |
 | Kukai | live | Client signs a PointCast login statement, server verifies Tezos signature, session cookie is issued. |
-| Google | stub | Redirect URL is scaffolded, callback/token exchange not implemented yet. |
+| Google | live when secrets are bound | Short-lived state + nonce, verified Google ID token, linked PointCast identity, and HttpOnly session cookie. |
 | Apple | stub | Redirect URL is scaffolded, client-secret JWT + callback not implemented yet. |
 | MetaMask | stub | Client can request a signature and post SIWE-shaped payload; server returns `coming-soon`. |
 | Phantom | stub | Client can request a signature and post SIWS-shaped payload; server returns `coming-soon`. |
@@ -61,8 +61,29 @@ flowchart LR
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
-- `GOOGLE_SCOPES` (optional override, defaults to `openid email profile`)
+- `POINTCAST_BROADCAST_EMAIL` (verified Google account that may connect the live Spotify signal)
+
+The registered callback is `https://pointcast.xyz/api/auth/google/callback`;
+the requested scopes are fixed to `openid email profile`.
+
+### Spotify broadcast
+
+- `SPOTIFY_CLIENT_ID`
+- `SPOTIFY_CLIENT_SECRET`
+- `SPOTIFY_TOKEN_ENCRYPTION_KEY` (32 random bytes, base64url encoded)
+
+The registered callback is `https://pointcast.xyz/api/spotify/callback`.
+
+Spotify authorization is deliberately separate from PointCast identity. A
+Google-authenticated user with the `broadcaster` role can grant the narrow
+`user-read-currently-playing` scope. Refresh/access tokens are AES-GCM
+encrypted before they enter KV. Public responses contain track title, artist,
+artwork, link, and on-air state only—never account identity, device,
+playback position, or history.
+
+The public policy at `/privacy` documents the same boundary. The dashboard
+exposes a broadcaster-only disconnect control that deletes both the encrypted
+Spotify credentials and cached signal immediately.
 
 ### Apple
 

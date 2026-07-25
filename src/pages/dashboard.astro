@@ -281,6 +281,17 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
           <div><strong>Connected sites</strong><small>pointcast.xyz · first party</small></div>
           <a href="/federation/preview">Network →</a>
         </article>
+        <article data-dashboard-spotify>
+          <span class="connection-grid__mark connection-grid__mark--spotify" aria-hidden="true">SP</span>
+          <div>
+            <strong>Spotify broadcast</strong>
+            <small data-dashboard-spotify-state>Checking the signal…</small>
+          </div>
+          <span class="connection-grid__actions">
+            <a href="/api/spotify/auth" data-dashboard-spotify-action>Connect →</a>
+            <button type="button" data-dashboard-spotify-disconnect hidden>Disconnect</button>
+          </span>
+        </article>
       </div>
     </section>
   </main>
@@ -502,6 +513,70 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
         renderActivity();
       });
 
+      const spotifyCard = root.querySelector<HTMLElement>('[data-dashboard-spotify]');
+      const spotifyState = spotifyCard?.querySelector<HTMLElement>('[data-dashboard-spotify-state]');
+      const spotifyAction = spotifyCard?.querySelector<HTMLAnchorElement>('[data-dashboard-spotify-action]');
+      const spotifyDisconnect = spotifyCard?.querySelector<HTMLButtonElement>('[data-dashboard-spotify-disconnect]');
+      void fetch('/api/spotify/broadcast', {
+        credentials: 'include',
+        cache: 'no-store',
+      }).then(async (response) => {
+        if (!response.ok) throw new Error('spotify-status-unavailable');
+        return response.json() as Promise<{
+          configured?: boolean;
+          connected?: boolean;
+          canManage?: boolean;
+          nowPlaying?: { title?: string; artist?: string; live?: boolean };
+        }>;
+      }).then((spotify) => {
+        const title = spotify.nowPlaying?.title;
+        const artist = spotify.nowPlaying?.artist;
+        if (spotifyState) {
+          spotifyState.textContent = spotify.connected
+            ? `${spotify.nowPlaying?.live ? 'Live' : 'Ready'} · ${title ?? 'waiting'}${artist ? ` · ${artist}` : ''}`
+            : spotify.configured
+              ? 'Ready for broadcaster authorization'
+              : 'Provider setup required';
+        }
+        if (spotifyAction) {
+          if (spotify.connected && !spotify.canManage) {
+            spotifyAction.href = '/now-playing.json';
+            spotifyAction.textContent = 'Signal →';
+          } else {
+            spotifyAction.textContent = spotify.connected ? 'Reconnect →' : 'Connect →';
+          }
+        }
+        if (spotifyDisconnect) {
+          spotifyDisconnect.hidden = !(spotify.connected && spotify.canManage);
+        }
+      }).catch(() => {
+        if (spotifyState) spotifyState.textContent = 'Signal status unavailable';
+      });
+      spotifyDisconnect?.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Disconnect Spotify from PointCast? This immediately removes the stored Spotify credentials and live track signal.',
+        );
+        if (!confirmed) return;
+        spotifyDisconnect.disabled = true;
+        try {
+          const response = await fetch('/api/spotify/broadcast', {
+            method: 'DELETE',
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!response.ok) throw new Error('spotify-disconnect-failed');
+          spotifyDisconnect.hidden = true;
+          if (spotifyState) spotifyState.textContent = 'Ready for broadcaster authorization';
+          if (spotifyAction) {
+            spotifyAction.href = '/api/spotify/auth';
+            spotifyAction.textContent = 'Connect →';
+          }
+        } catch {
+          spotifyDisconnect.disabled = false;
+          if (spotifyState) spotifyState.textContent = 'Could not disconnect · try again';
+        }
+      });
+
       syncPetCareActivity();
       renderRecents();
       renderActivity();
@@ -570,6 +645,7 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #828c96; }
   .status-dot--live { background: #2f8f5f; }
   .status-dot--local { background: #d19a20; }
+  .connection-grid__mark--spotify { background: #1ed760; color: #08150c; }
 
   .dashboard-overview { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.8fr); border-top: 2px solid #181a1d; }
   .dashboard-band { padding: 22px 0 28px; border-top: 1px solid #cdd2d7; }
@@ -686,6 +762,10 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .connection-grid small { overflow: hidden; color: #717b85; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
   .connection-grid a,
   .connection-grid button { border: 0; padding: 0; background: none; color: #145aa4; font: 700 8px/1 var(--pc-font-mono, ui-monospace, monospace); text-decoration: none; text-transform: uppercase; cursor: pointer; }
+  .connection-grid__actions { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+  .connection-grid__actions button[data-dashboard-spotify-disconnect] { color: #9c3440; }
+  .connection-grid__actions button:disabled { cursor: wait; opacity: 0.55; }
+  .connection-grid__actions button[hidden] { display: none; }
 
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 

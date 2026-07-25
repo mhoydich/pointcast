@@ -176,14 +176,14 @@ const alternates = [
   }}
 >
   <div class="fresh-home">
-    <div class="fresh-on-air" aria-label="Currently spinning on PointCast">
-      <span class="fresh-on-air__label">
+    <div class="fresh-on-air" aria-label="Currently spinning on PointCast" data-live-now-playing>
+      <span class="fresh-on-air__label" data-live-now-state>
         <span class="fresh-on-air__dot" aria-hidden="true"></span>
-        On air
+        <span data-live-now-state-text>On air</span>
       </span>
       <span class="fresh-on-air__track">
-        <strong>Currently spinning</strong>
-        {nowPlaying?.data.title ?? 'PointCast live signal'}
+        <strong data-live-now-label>Currently spinning</strong>
+        <span data-live-now-title>{nowPlaying?.data.title ?? 'PointCast live signal'}</span>
       </span>
       <a class="fresh-on-air__action" href="/now-playing.json">Read the signal →</a>
     </div>
@@ -526,4 +526,60 @@ const alternates = [
       })();
     </script>
   </div>
+
+  <script>
+    type LiveNowPlaying = {
+      title?: string;
+      artist?: string;
+      status?: string;
+      live?: boolean;
+    };
+    type LiveNowWindow = Window & {
+      __pointcastLiveNowTimer?: number;
+    };
+
+    function initLiveNowPlaying() {
+      const root = document.querySelector<HTMLElement>('[data-live-now-playing]');
+      if (!root) return;
+      const liveWindow = window as LiveNowWindow;
+      if (liveWindow.__pointcastLiveNowTimer) {
+        window.clearInterval(liveWindow.__pointcastLiveNowTimer);
+      }
+
+      const refresh = async () => {
+        try {
+          const response = await fetch('/now-playing.json', {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          });
+          if (!response.ok) return;
+          const playing = await response.json() as LiveNowPlaying;
+          const state = root.querySelector<HTMLElement>('[data-live-now-state-text]');
+          const label = root.querySelector<HTMLElement>('[data-live-now-label]');
+          const title = root.querySelector<HTMLElement>('[data-live-now-title]');
+          const onAir = playing.status === 'playing' && playing.live === true;
+          if (state) state.textContent = onAir ? 'On air' : 'Standby';
+          if (label) label.textContent = onAir ? 'Currently spinning' : 'Last signal';
+          if (title && playing.title) {
+            title.textContent = playing.artist
+              ? `${playing.title} · ${playing.artist}`
+              : playing.title;
+          }
+          root.dataset.state = onAir ? 'live' : 'standby';
+          root.setAttribute(
+            'aria-label',
+            `${onAir ? 'Currently spinning' : 'Last PointCast signal'}: ${playing.title ?? 'unknown'}${playing.artist ? ` by ${playing.artist}` : ''}`,
+          );
+        } catch {
+          // The built-in editorial signal remains visible when live auth is offline.
+        }
+      };
+
+      void refresh();
+      liveWindow.__pointcastLiveNowTimer = window.setInterval(refresh, 60_000);
+    }
+
+    initLiveNowPlaying();
+    document.addEventListener('astro:page-load', initLiveNowPlaying);
+  </script>
 </BlockLayout>
