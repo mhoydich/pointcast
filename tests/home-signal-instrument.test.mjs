@@ -39,7 +39,8 @@ test('signal tuner retains reduced-motion and mobile treatments', () => {
 });
 
 test('front door keeps the Qwen study compact and makes Spotify authorization findable', () => {
-  assert.match(indexSource, /href="\/dashboard#connections"[^>]*>Spotify<\/a>/);
+  assert.match(indexSource, /href="\/auth#spotify"[^>]*>Spotify auth<\/a>/);
+  assert.match(indexSource, /<SuperAuthRibbon \/>/);
   assert.match(indexSource, /fresh-qwen-feature__media/);
   assert.match(indexSource, /Open the model study/);
   assert.match(styleSource, /grid-template-areas:[\s\S]*"topline media"/);

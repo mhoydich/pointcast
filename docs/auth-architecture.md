@@ -2,6 +2,11 @@
 
 PointCast is moving from local-only identity (`pc:drumName`, `pc:wallet`) to a cookie-backed session model with provider-specific identities stored in Cloudflare KV. This scaffold keeps the existing Kukai wallet flow intact while adding a stable user model that can eventually span OAuth and wallet providers.
 
+`/auth` is the public Super Auth switchboard. It separates identity providers
+from broadcaster integrations: Google names the operator, Spotify supplies a
+sound signal, Shopify supplies a read-only catalog signal, and Tezos proves an
+object or wallet relationship.
+
 ## KV Model
 
 - `user:{userId}` -> `PointCastUser`
@@ -45,6 +50,8 @@ flowchart LR
 | --- | --- | --- |
 | Kukai | live | Client signs a PointCast login statement, server verifies Tezos signature, session cookie is issued. |
 | Google | live when secrets are bound | Short-lived state + nonce, verified Google ID token, linked PointCast identity, and HttpOnly session cookie. |
+| Spotify | live when secrets are bound | Broadcaster-only now-playing integration with encrypted credentials and `user-read-currently-playing`. |
+| Shopify | credential-gated | Broadcaster-only authorization-code flow with HMAC/state checks, encrypted expiring offline credentials, and `read_products` only. |
 | Apple | stub | Redirect URL is scaffolded, client-secret JWT + callback not implemented yet. |
 | MetaMask | stub | Client can request a signature and post SIWE-shaped payload; server returns `coming-soon`. |
 | Phantom | stub | Client can request a signature and post SIWS-shaped payload; server returns `coming-soon`. |
@@ -85,6 +92,28 @@ The public policy at `/privacy` documents the same boundary. The dashboard
 exposes a broadcaster-only disconnect control that deletes both the encrypted
 Spotify credentials and cached signal immediately.
 
+### Shopify catalog
+
+- `SHOPIFY_CLIENT_ID`
+- `SHOPIFY_CLIENT_SECRET`
+- `POINTCAST_INTEGRATION_ENCRYPTION_KEY` (32 random bytes, base64url encoded)
+
+The registered callback is `https://pointcast.xyz/api/shopify/callback`.
+
+Shopify authorization is a broadcaster integration, not a PointCast identity.
+It starts only from an authenticated Google account with the `broadcaster`
+role. The callback validates the short-lived PointCast state, signed state
+cookie, strict `*.myshopify.com` shop domain, and Shopify HMAC before requesting
+an expiring offline token. Access and refresh credentials are AES-GCM encrypted
+before entering KV and are rotated through Shopify’s refresh-token grant.
+
+The scope is fixed in code to only `read_products`, so an environment change
+cannot silently broaden it. PointCast does not
+request orders, customers, checkout, payments, or write permissions. Public
+status discloses only whether a catalog signal is connected; the shop domain
+and granted scopes are returned only to the broadcaster. The dashboard
+disconnect control deletes the encrypted credential immediately.
+
 ### Apple
 
 - `APPLE_CLIENT_ID`
@@ -101,3 +130,5 @@ Spotify credentials and cached signal immediately.
 - Wallet addresses are treated as provider ids; no additional profile enrichment is stored yet.
 - The identity map is provider-scoped, which makes single-provider disconnects straightforward when the unlink UI/API is added.
 - Logging out clears the PointCast session cookie; wallet disconnect remains wallet-specific so existing Kukai behavior is not broken.
+- Spotify and Shopify are revocable broadcaster integrations. Neither is used
+  as a general PointCast login identity.
