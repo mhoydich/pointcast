@@ -5,7 +5,6 @@ import { access, readFile } from 'node:fs/promises';
 const shrineUrl = new URL('../src/pages/open-road-v4.astro', import.meta.url);
 const appsUrl = new URL('../src/lib/pointcast-apps.ts', import.meta.url);
 const launchStripUrl = new URL('../src/components/AppLaunchStrip.astro', import.meta.url);
-const homeUrl = new URL('../src/pages/index.astro', import.meta.url);
 
 test('Open Road IV contains five calls and five answers from ten unique older works', async () => {
   const shrineSource = await readFile(shrineUrl, 'utf8');
@@ -66,10 +65,9 @@ test('Open Road IV keeps its constellation, drift, and paired reveals calm and a
 });
 
 test('all four Open Road editions are discoverable', async () => {
-  const [appsSource, launchStripSource, homeSource] = await Promise.all([
+  const [appsSource, launchStripSource] = await Promise.all([
     readFile(appsUrl, 'utf8'),
     readFile(launchStripUrl, 'utf8'),
-    readFile(homeUrl, 'utf8'),
   ]);
 
   for (const slug of ['open-road-shrine', 'open-road-v2', 'open-road-v3', 'open-road-v4']) {
@@ -79,5 +77,4 @@ test('all four Open Road editions are discoverable', async () => {
     assert.match(launchStripSource, new RegExp("href: '" + path + "'"));
   }
   assert.match(appsSource, /path: '\/open-road-v4'/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });

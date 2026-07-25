@@ -138,8 +138,8 @@ test('home and discovery surfaces expose the press wire', async () => {
     readFile(new URL('public/llms.txt', root), 'utf8'),
   ]);
 
-  assert.match(home, /<PressWireStrip\s*\/>/);
-  assert.match(home, /Thirteen sourced product filings/);
+  assert.match(home, /href="\/press"/);
+  assert.match(home, /Editorial and machine-readable endpoints/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press'/);
   assert.match(agents, /press: 'https:\/\/pointcast\.xyz\/press\.json'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/press\.xml/);

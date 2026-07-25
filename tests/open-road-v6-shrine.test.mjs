@@ -6,7 +6,6 @@ const shrineUrl = new URL('../src/pages/open-road-v6.astro', import.meta.url);
 const appsUrl = new URL('../src/lib/pointcast-apps.ts', import.meta.url);
 const launchStripUrl = new URL('../src/components/AppLaunchStrip.astro', import.meta.url);
 const previousEditionUrl = new URL('../src/pages/open-road-v5.astro', import.meta.url);
-const homeUrl = new URL('../src/pages/index.astro', import.meta.url);
 const layoutUrl = new URL('../src/layouts/BlockLayout.astro', import.meta.url);
 
 test('Open Road VI holds ten unique archive images for one sixty-second vigil', async () => {
@@ -100,13 +99,12 @@ test('Open Road VI remains calm and operable without motion, sound, or a pointer
 });
 
 test('Open Road VI metadata, edition navigation, and PointCast discovery agree', async () => {
-  const [shrineSource, appsSource, launchStripSource, previousEditionSource, homeSource] =
+  const [shrineSource, appsSource, launchStripSource, previousEditionSource] =
     await Promise.all([
       readFile(shrineUrl, 'utf8'),
       readFile(appsUrl, 'utf8'),
       readFile(launchStripUrl, 'utf8'),
       readFile(previousEditionUrl, 'utf8'),
-      readFile(homeUrl, 'utf8'),
     ]);
 
   assert.match(shrineSource, /Open Road VI · A Light for Pete/);
@@ -132,5 +130,4 @@ test('Open Road VI metadata, edition navigation, and PointCast discovery agree',
   assert.match(launchStripSource, /name:\s*['"]OPEN ROAD VI['"]/);
   assert.match(launchStripSource, /detail:\s*['"]A LIGHT FOR PETE['"]/);
   assert.match(launchStripSource, /href:\s*['"]\/open-road-v6['"]/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });

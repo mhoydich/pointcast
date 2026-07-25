@@ -190,15 +190,15 @@ test('the first-100 funnel is public, bounded, and stores no visitor identity', 
   assert.doesNotMatch(source, /CF-Connecting-IP|User-Agent|Referer|document\.cookie/i);
 });
 
-test('the PointCast homepage gives the next wallet a live 100-light scoreboard', async () => {
+test('the PointCast front door routes to Network El Segundo while the 100-light scoreboard contract stays live', async () => {
   const [pageSource, signalSource] = await Promise.all([
     readFile(homePage, 'utf8'),
     readFile(homeSignal, 'utf8'),
   ]);
 
-  assert.match(pageSource, /import NetworkFirst100Home/);
-  assert.match(pageSource, /<NetworkFirst100Home\s*\/>/);
-  assert.match(pageSource, /#first-100-home/);
+  assert.match(pageSource, /href="\/network-el-segundo"/);
+  assert.match(pageSource, /href:\s*'\/network-el-segundo\/v2'/);
+  assert.match(pageSource, /A city of 100 windows\./);
   assert.match(signalSource, /LIGHT/);
   assert.match(signalSource, /IS OPEN/);
   assert.match(signalSource, /Array\.from\(\{ length: 100 \}/);

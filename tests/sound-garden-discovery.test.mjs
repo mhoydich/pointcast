@@ -5,12 +5,11 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Sound Garden is discoverable through the PointCast home, app shelf, machine surfaces, and sitemap', async () => {
-  const [page, packet, apps, home, sitemap, llms, llmsFull] = await Promise.all([
+test('Sound Garden is discoverable through the app registry, machine surfaces, and sitemap', async () => {
+  const [page, packet, apps, sitemap, llms, llmsFull] = await Promise.all([
     read('src/pages/sound-garden.astro'),
     read('src/pages/sound-garden.json.ts'),
     read('src/lib/pointcast-apps.ts'),
-    read('src/pages/index.astro'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
@@ -19,8 +18,6 @@ test('Sound Garden is discoverable through the PointCast home, app shelf, machin
   await access(new URL('src/assets/sound-garden/og.png', root));
   assert.match(apps, /slug: 'sound-garden'/);
   assert.match(apps, /https:\/\/sound-garden-001\.mhoydich\.chatgpt\.site/);
-  assert.match(home, /title: 'Sound Garden 001'/);
-  assert.match(home, /soundGardenCard\.src/);
   assert.match(page, /OPEN SOUND GARDEN/);
   assert.match(page, /Stable core/);
   assert.match(page, /does not listen through your microphone/i);

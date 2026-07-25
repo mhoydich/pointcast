@@ -5,19 +5,17 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Bell & Signal listening stations are distributed across the PointCast homepage', async () => {
-  const [home, component] = await Promise.all([
-    read('src/pages/index.astro'),
-    read('src/components/HomeSignalStation.astro'),
-  ]);
+test('the edited PointCast front door carries Bell & Signal field art as a switchable live signal', async () => {
+  const home = await read('src/pages/index.astro');
 
-  const placements = [...home.matchAll(/<HomeSignalStation station="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(placements, ['front', 'field', 'wire', 'commons', 'archive']);
-  assert.match(component, /data-home-casting=/);
-  assert.match(component, /aria-live="polite"/);
-  assert.match(component, /visibilitychange/);
-  assert.match(component, /prefers-reduced-motion/);
-  assert.match(component, /visit the foundry/);
+  assert.match(home, /bell-fall-v2\/bg-17-wildflower-vase\.jpg/);
+  assert.match(home, /bell-fall-v2\/bg-05-yellow-car\.jpg/);
+  assert.match(home, /bell-fall-v2\/bg-10-nageire-vase\.png/);
+  assert.match(home, /bell-fall-v2\/bg-09-el-segundo-skyline\.png/);
+  assert.match(home, /data-fresh-hero-image/);
+  assert.match(home, /data-fresh-shuffle/);
+  assert.match(home, /image\.alt = next\.alt/);
+  assert.match(home, /Field signal \$\{String\(active \+ 1\)\.padStart\(2, '0'\)\}/);
 });
 
 test('Catalog No. 2 defines fifteen unique live-coded castings and recipes', async () => {
