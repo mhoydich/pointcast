@@ -11,7 +11,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
     read('src/layouts/BlockLayout.astro'),
   ]);
 
-  assert.match(home, /one live signal, three clear doors, four current stories, then channels/i);
+  assert.match(home, /one live signal, one current feature, three clear doors, four current/i);
   assert.match(home, /showNetworkStrip=\{false\}/);
   assert.match(layout, /showNetworkStrip\?: boolean/);
   assert.match(layout, /\{showNetworkStrip && <NetworkFirst100Strip\s*\/>\}/);
@@ -31,6 +31,28 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/feed\.xml"/);
   assert.match(home, /href="\/agents\.json"/);
   assert.match(home, /href="\/for-agents"/);
+});
+
+test('the front door has one reusable editorial freshness slot with a machine-readable twin', async () => {
+  const [home, freshness, nowJson, css] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/lib/home-freshness.ts'),
+    read('src/pages/now.json.ts'),
+    read('src/styles/front-door-fresh.css'),
+  ]);
+
+  assert.match(freshness, /export const HOME_FRESH_FEATURE/);
+  assert.match(freshness, /href: '\/showcast\/bells-bloom'/);
+  assert.match(freshness, /jsonHref: '\/showcast\/bells-bloom\.json'/);
+  assert.match(freshness, /blockId: '0492'/);
+  assert.match(freshness, /facts: \['28 works', '4 movements', '8-second drift'\]/);
+  assert.match(home, /data-home-freshness=\{HOME_FRESH_FEATURE\.publishedAt\}/);
+  assert.match(home, /Enter the showcast/);
+  assert.match(home, /showLatestShip/);
+  assert.match(nowJson, /featured: \{/);
+  assert.match(nowJson, /HOME_FRESH_FEATURE\.jsonHref/);
+  assert.match(css, /\.fresh-current \{/);
+  assert.match(css, /\.fresh-current__image img \{/);
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {

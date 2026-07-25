@@ -10,6 +10,7 @@ import { getCollection } from 'astro:content';
 import { pickCardOfTheDay } from '../lib/battler/card-of-the-day';
 import { getChartOfTheDay } from '../lib/chart-of-the-day';
 import { getPrizeCastSnapshot, getNextPrizeCastDrawAt } from '../lib/prize-cast';
+import { HOME_FRESH_FEATURE } from '../lib/home-freshness';
 import contracts from '../data/contracts.json';
 import { execSync } from 'node:child_process';
 
@@ -50,6 +51,17 @@ export const GET: APIRoute = async () => {
   const payload = {
     $schema: 'https://pointcast.xyz/for-agents',
     generatedAt: new Date().toISOString(),
+    featured: {
+      label: HOME_FRESH_FEATURE.label,
+      title: HOME_FRESH_FEATURE.title,
+      description: HOME_FRESH_FEATURE.dek,
+      publishedAt: HOME_FRESH_FEATURE.publishedAt,
+      url: `https://pointcast.xyz${HOME_FRESH_FEATURE.href}`,
+      jsonUrl: `https://pointcast.xyz${HOME_FRESH_FEATURE.jsonHref}`,
+      block: `https://pointcast.xyz/b/${HOME_FRESH_FEATURE.blockId}`,
+      image: `https://pointcast.xyz${HOME_FRESH_FEATURE.image}`,
+      facts: HOME_FRESH_FEATURE.facts,
+    },
     broadcast: {
       cardOfTheDay: {
         id: todaysCard.id,

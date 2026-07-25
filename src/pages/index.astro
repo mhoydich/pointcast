@@ -3,7 +3,8 @@
  * PointCast front door — focused live edition.
  *
  * The archive remains broad; the homepage is deliberately edited:
- * one live signal, three clear doors, four current stories, then channels.
+ * one live signal, one current feature, three clear doors, four current
+ * stories, then channels.
  * This keeps PointCast legible on a first visit without hiding any route,
  * feed, block, app, room, or machine-readable surface.
  */
@@ -11,6 +12,7 @@ import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import WalletChip from '../components/WalletChip.astro';
 import { CHANNEL_LIST } from '../lib/channels';
+import { HOME_FRESH_FEATURE } from '../lib/home-freshness';
 import '../styles/front-door-fresh.css';
 
 import wildflowerReceiver from '../assets/bell-fall-v2/bg-17-wildflower-vase.jpg';
@@ -31,6 +33,7 @@ const nowPlaying = allBlocks.find((block) => {
   return meta?.currentlyPlaying === true;
 }) ?? latestBlock;
 const blockCount = allBlocks.length;
+const showLatestShip = latestBlock?.data.id !== HOME_FRESH_FEATURE.blockId;
 
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: live work, art, rooms, games, public experiments, and machine-readable receipts.';
 
@@ -130,6 +133,15 @@ const jsonLd = {
     datePublished: block.data.timestamp.toISOString(),
     url: `https://pointcast.xyz/b/${block.data.id}`,
   })),
+  mainEntity: {
+    '@type': 'CreativeWork',
+    '@id': `https://pointcast.xyz${HOME_FRESH_FEATURE.href}#showcast`,
+    name: HOME_FRESH_FEATURE.title,
+    description: HOME_FRESH_FEATURE.dek,
+    datePublished: HOME_FRESH_FEATURE.publishedAt,
+    url: `https://pointcast.xyz${HOME_FRESH_FEATURE.href}`,
+    image: `https://pointcast.xyz${HOME_FRESH_FEATURE.image}`,
+  },
 };
 
 const alternates = [
@@ -235,7 +247,48 @@ const alternates = [
           </figure>
         </section>
 
-        {latestBlock && (
+        <section
+          class="fresh-current"
+          aria-labelledby="fresh-current-title"
+          data-home-freshness={HOME_FRESH_FEATURE.publishedAt}
+        >
+          <a class="fresh-current__image" href={HOME_FRESH_FEATURE.href}>
+            <img
+              src={HOME_FRESH_FEATURE.image}
+              alt={HOME_FRESH_FEATURE.imageAlt}
+              width="1200"
+              height="630"
+              loading="eager"
+            />
+            <span class="fresh-current__stamp">
+              <span class="fresh-current__pulse" aria-hidden="true"></span>
+              {HOME_FRESH_FEATURE.label}
+            </span>
+          </a>
+
+          <div class="fresh-current__copy">
+            <div>
+              <p class="fresh-current__kicker">{HOME_FRESH_FEATURE.kicker}</p>
+              <h2 id="fresh-current-title">{HOME_FRESH_FEATURE.title}</h2>
+              <p class="fresh-current__dek">{HOME_FRESH_FEATURE.dek}</p>
+            </div>
+
+            <div>
+              <ul class="fresh-current__facts" aria-label="Showcast details">
+                {HOME_FRESH_FEATURE.facts.map((fact) => <li>{fact}</li>)}
+              </ul>
+              <div class="fresh-current__actions">
+                <a class="fresh-button fresh-button--primary" href={HOME_FRESH_FEATURE.href}>Enter the showcast</a>
+                <a class="fresh-current__text-link" href={`/b/${HOME_FRESH_FEATURE.blockId}`}>
+                  Block {HOME_FRESH_FEATURE.blockId}
+                </a>
+                <a class="fresh-current__text-link" href={HOME_FRESH_FEATURE.jsonHref}>JSON</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {latestBlock && showLatestShip && (
           <aside class="fresh-signal" aria-label="Latest PointCast ship">
             <span class="fresh-signal__label">Latest ship</span>
             <span class="fresh-signal__copy">
