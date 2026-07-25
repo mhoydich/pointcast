@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 const record = {
   schema: 'pointcast.model-study/v1',
   id: 'PC-QWEN-WEATHER-2026',
-  block: '0493',
+  block: '0494',
   title: 'QWEN / WEATHER MEMORY',
   subtitle: 'The Weather Has a Memory',
   status: 'public',

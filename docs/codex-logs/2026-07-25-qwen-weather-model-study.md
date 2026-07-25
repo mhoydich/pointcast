@@ -12,7 +12,7 @@ Add the multimedia artwork to PointCast and highlight the Qwen contribution.
 - `/qwen-weather` — public editorial model study with muted autoplay,
   visitor-enabled HappyHorse audio, and a reduced-motion poster fallback.
 - `/qwen-weather.json` — machine-readable model and artifact provenance.
-- Block `0493` in CH.FD with permanent media and companion links.
+- Block `0494` in CH.FD with permanent media and companion links.
 - Dedicated homepage feature naming all four QwenCloud models.
 - Disclosed `PC-QWEN-WEATHER-2026` PointCast house campaign.
 

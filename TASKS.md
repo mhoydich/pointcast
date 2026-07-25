@@ -10,7 +10,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 ## PointCast Model Study 001 — Qwen / Weather Memory (2026-07-25)
 
 - [x] (X) Publish a native `/qwen-weather` model study foregrounding the QwenCloud relay — `done` — Qwen 3.8 Max → GLM-5.2 → Wan 2.7 Image Pro → HappyHorse 1.1
-- [x] (X) Add Block 0493, `/qwen-weather.json`, homepage feature, and disclosed house-ad creative — `done`
+- [x] (X) Add Block 0494, `/qwen-weather.json`, homepage feature, and disclosed house-ad creative — `done`
 - [x] (X) Keep QwenCloud credentials and live metered inference out of PointCast — `done` — all media is pre-rendered
 
 ---

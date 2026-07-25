@@ -10,7 +10,7 @@ test('Qwen Weather ships as a native human, machine, Block, homepage, and ad rel
   const [page, jsonRoute, blockText, home, ads, video, poster, still] = await Promise.all([
     read('src/pages/qwen-weather.astro'),
     read('src/pages/qwen-weather.json.ts'),
-    read('src/content/blocks/0493.json'),
+    read('src/content/blocks/0494.json'),
     read('src/pages/index.astro'),
     read('src/lib/open-ad-network.ts'),
     fileStat('public/images/qwen-weather/weather-memory.mp4'),
@@ -27,7 +27,7 @@ test('Qwen Weather ships as a native human, machine, Block, homepage, and ad rel
   assert.match(page, /data-sound-button/);
   assert.match(page, /prefers-reduced-motion: reduce/);
   assert.match(jsonRoute, /pointcast\.model-study\/v1/);
-  assert.equal(block.id, '0493');
+  assert.equal(block.id, '0494');
   assert.equal(block.channel, 'FD');
   assert.equal(block.type, 'WATCH');
   assert.equal(block.meta.provider, 'QwenCloud');
@@ -45,7 +45,7 @@ test('Qwen Weather keeps credentials and live inference outside PointCast', asyn
   const [page, jsonRoute, block, ads, videoRoute, posterRoute, stillRoute] = await Promise.all([
     read('src/pages/qwen-weather.astro'),
     read('src/pages/qwen-weather.json.ts'),
-    read('src/content/blocks/0493.json'),
+    read('src/content/blocks/0494.json'),
     read('src/lib/open-ad-network.ts'),
     read('src/pages/images/qwen-weather/weather-memory.mp4.ts'),
     read('src/pages/images/qwen-weather/qwen-weather-og.png.ts'),
