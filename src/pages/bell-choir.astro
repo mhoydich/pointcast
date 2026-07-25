@@ -1,0 +1,997 @@
+---
+/**
+ * /bell-choir — a bell wall you play together.
+ *
+ * Mike, 2026-07-25: "one of my favorites is like the bell wall, where there
+ * are these bells you can drag cursor and it sounds so pleasant, now also,
+ * i'd love to create something that the kids like and is multiplayer tho
+ * kinda no luck so far."
+ *
+ * So: the /prayer-bells drag-a-hand-through-the-chimes instrument, opened up
+ * to the room. Twelve bells tuned C-major pentatonic across two octaves —
+ * nothing you play can be wrong, which is the whole reason a four-year-old
+ * can smear a hand across it and it still sounds like music. Each bell hangs
+ * under a bouquet from Mike's 2026-07-25 Midjourney session (warhol · hockney
+ * · bell glitch · ikebana). Ringing a bell turns its card to the alternate cut.
+ *
+ * MULTIPLAYER — the honest version.
+ * The transport is the live DrumRoomV2 Durable Object behind
+ * /api/drum/room (verified fan-out in production, 2026-07-25). Pitch rides
+ * in the low four bits of the protocol's `seq` field:
+ *
+ *     seq = (counter << 4) | noteIndex        // note = seq & 15
+ *
+ * The DO validates and echoes `seq` verbatim, so a twelve-note wall works on
+ * the deployed worker with no protocol change and no new binding.
+ *
+ * Every previous multiplayer room here has had the same failure mode: it is
+ * only fun when someone else happens to be standing in it, and nobody ever
+ * is. Two answers, both built in:
+ *   1. GHOSTS. The DO hands each arrival the last 24 hits. We replay them as
+ *      translucent Nouns when you walk in, and again whenever the room goes
+ *      quiet for 25s. You are never alone in here, you are just early.
+ *   2. ROOM CODES. ?room=xxxx gives a family its own wall, so "multiplayer"
+ *      doesn't depend on strangers being online at 4pm on a Tuesday.
+ *
+ * FOLLOW THE LIGHT is the co-op game: one bell glows, anyone in the room may
+ * answer it, and the count is the room's, not yours. There is no fail state,
+ * no timer, and no way to be eliminated — the only two outcomes are music and
+ * more music.
+ *
+ * Siblings: /prayer-bells (the solo garden this grew from), /drum-room-v2,
+ * /bell-walk.
+ */
+
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Bell Choir · a bell wall you play together · PointCast';
+const description =
+  'Twelve pentatonic bells under Midjourney bouquets. Drag a hand across them and nothing you play can be wrong. Everyone in the room hears every bell, everyone is a Noun, and the room replays its last visitors when it is quiet — so it is never empty.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Bell Choir',
+  url: 'https://pointcast.xyz/bell-choir',
+  description,
+  applicationCategory: 'GameApplication',
+  audience: { '@type': 'Audience', audienceType: 'Children and families' },
+  isAccessibleForFree: true,
+};
+
+/**
+ * Twelve bells, C-major pentatonic, low → high. Hue is the bell's own colour
+ * on the wall — pulled from the bouquet hanging above it, so the wall reads
+ * as one gradient from cream to cobalt.
+ */
+const BELLS = [
+  { note: 'C4', key: 'A', hue: 84, altA: 'Cream still life, banana leaf and blue delphinium beside an orange square', altB: 'The same table, blooms shifted, glitch stripes at the edge' },
+  { note: 'D4', key: 'S', hue: 96, altA: 'Sage ikebana, spider plant and red trumpet flowers over a printed grid', altB: 'Sage arrangement re-cut, grasses climbing the right margin' },
+  { note: 'E4', key: 'D', hue: 12, altA: 'Coral roses against a cobalt bar on bone paper', altB: 'The roses again, blue bar shifted, stems in a speckled vase' },
+  { note: 'G4', key: 'F', hue: 268, altA: 'Lilies and pale orchids over a lavender panel', altB: 'The lavender panel deepens, one orange square added below' },
+  { note: 'A4', key: 'G', hue: 48, altA: 'Yellow and violet stems in a primary-colour block vase', altB: 'The block vase re-stacked, plaid square swapped to blue' },
+  { note: 'C5', key: 'H', hue: 148, altA: 'Bird of paradise on a sage wall, pink and cobalt panels behind', altB: 'Same wall, patterned carpet rising into frame' },
+  { note: 'D5', key: 'J', hue: 330, altA: 'Pink ground, orchids and red-hot pokers over a black panel', altB: 'Orchids re-hung, the blue disc moved left' },
+  { note: 'E5', key: 'K', hue: 130, altA: 'Green ground, wildflower collage over a Mediterranean postcard', altB: 'The collage rebuilt, red table pushed forward' },
+  { note: 'G5', key: 'L', hue: 196, altA: 'Sky-blue ground, cherry branch and geranium beside stacked fruit', altB: 'The branch re-set, orange field widened' },
+  { note: 'A5', key: ';', hue: 24, altA: 'Linen wall, orange philodendron and a blue-and-white bowl', altB: 'Philodendron re-leafed, blue rectangle raised' },
+  { note: 'C6', key: "'", hue: 210, altA: 'Cornflower ground in a vermilion frame, yellow orchid spray', altB: 'The frame holds, blossoms crossing to the right' },
+  { note: 'D6', key: '\\', hue: 222, altA: 'Cornflower blue, red square, poppies and pink stock in a woven pot', altB: 'The red square drops, chartreuse bar enters below' },
+];
+
+/** Cord lengths. Hung unevenly, the way a real mobile hangs — the bells still
+ *  line up along the bottom, so the drag stays one clean sweep. */
+const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
+---
+
+<BlockLayout title={title} description={description} image="/images/og-bell-choir.png" jsonLd={jsonLd}>
+  <main class="bc" id="bc-main">
+    <header class="bc__header">
+      <div class="bc__chrome">
+        <span class="bc__label">BELL CHOIR</span>
+        <span class="bc__sep">·</span>
+        <span class="bc__label">ROOM</span>
+        <span class="bc__code" id="bc-room">—</span>
+        <span class="bc__sep">·</span>
+        <span class="bc__label">HERE</span>
+        <span class="bc__stat" id="bc-here">1</span>
+        <span class="bc__sep">·</span>
+        <span class="bc__label">BELLS RUNG</span>
+        <span class="bc__stat" id="bc-rung">—</span>
+        <span class="bc__link" id="bc-status" data-state="off">OFFLINE</span>
+      </div>
+      <h1 class="bc__title">BELL CHOIR</h1>
+      <p class="bc__tagline">
+        A wall of twelve bells tuned so nothing you play can be wrong. Drag a
+        hand across it. Everyone standing in this room hears every bell you
+        ring, and you hear theirs — and when the room is empty it plays back
+        the people who were here before you.
+      </p>
+    </header>
+
+    <section class="bc__console" aria-label="Room controls">
+      <div class="bc__group" role="group" aria-label="Bell voice">
+        <span class="bc__group-label">VOICE</span>
+        <button class="bc__btn bc__btn--on" type="button" data-voice="chime">CHIME</button>
+        <button class="bc__btn" type="button" data-voice="bowl">BOWL</button>
+        <button class="bc__btn" type="button" data-voice="glass">GLASS</button>
+      </div>
+
+      <div class="bc__group" role="group" aria-label="Room modes">
+        <span class="bc__group-label">WALL</span>
+        <button class="bc__btn" type="button" id="bc-wind" aria-pressed="false">WIND</button>
+        <button class="bc__btn bc__btn--game" type="button" id="bc-game" aria-pressed="false">FOLLOW THE LIGHT</button>
+      </div>
+
+      <div class="bc__group bc__group--score" aria-live="polite">
+        <span class="bc__group-label">TOGETHER</span>
+        <span class="bc__score" id="bc-score">0</span>
+        <span class="bc__score-best" id="bc-best">best —</span>
+      </div>
+
+      <div class="bc__group bc__group--invite">
+        <button class="bc__btn" type="button" id="bc-invite">COPY INVITE</button>
+        <button class="bc__btn" type="button" id="bc-newroom">NEW ROOM</button>
+      </div>
+    </section>
+
+    <div class="bc__beam" aria-hidden="true"></div>
+
+    <section class="bc__wall" id="bc-wall" aria-label="The bell wall">
+      {BELLS.map((b, i) => (
+        <button
+          class="bc__col"
+          type="button"
+          data-idx={i}
+          style={`--bc-hue:${b.hue};--bc-drop:${DROPS[i]}`}
+          aria-label={`Ring bell ${i + 1}, ${b.note}`}
+        >
+          <span class="bc__cord" aria-hidden="true"></span>
+          <span class="bc__card">
+            <img class="bc__img bc__img--on" src={`/images/bell-choir/bloom-${i + 1}a.jpg`} alt={b.altA} width="560" height="560" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" data-side="a" />
+            <img class="bc__img" src={`/images/bell-choir/bloom-${i + 1}b.jpg`} alt={b.altB} width="560" height="560" loading="lazy" decoding="async" data-side="b" />
+            <span class="bc__flash" aria-hidden="true"></span>
+          </span>
+          <span class="bc__bell" aria-hidden="true">
+            <span class="bc__note">{b.note}</span>
+            <span class="bc__key">{b.key}</span>
+          </span>
+          <span class="bc__ringers" data-ringers aria-hidden="true"></span>
+        </button>
+      ))}
+    </section>
+
+    <section class="bc__room" aria-label="Who is in the room">
+      <div class="bc__room-head">
+        <span class="bc__group-label">IN THE ROOM</span>
+        <span class="bc__room-note" id="bc-room-note">connecting…</span>
+      </div>
+      <div class="bc__faces" id="bc-faces"></div>
+    </section>
+
+    <footer class="bc__foot">
+      <p class="bc__foot-line">
+        Tap a bell, drag across the wall, or play the row
+        <code class="bc__keys">A S D F G H J K L ; ' \</code> on a keyboard.
+        Twelve bells, C-major pentatonic, two octaves.
+      </p>
+      <p class="bc__foot-line bc__foot-line--dim">
+        The bouquets are twelve pieces from Mike's 2026-07-25 Midjourney
+        session. Bells ring for everyone in the room over the PointCast drum
+        room; when nobody is here, the last visitors play it for you.
+      </p>
+      <nav class="bc__nav" aria-label="Neighbouring rooms">
+        <a href="/prayer-bells">/prayer-bells</a>
+        <a href="/showcast/bells-bloom">/showcast/bells-bloom</a>
+        <a href="/bell-walk">/bell-walk</a>
+        <a href="/drum-room-v2">/drum-room-v2</a>
+        <a href="/drum">/drum</a>
+      </nav>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  body:has(.bc) {
+    background: #08060e;
+    color: #f4e7c8;
+  }
+
+  .bc {
+    --bc-ink: #f4e7c8;
+    --bc-dim: #8d8698;
+    --bc-gold: #f6c15e;
+    --bc-deep: #0f0b18;
+    --bc-line: rgba(244, 231, 200, 0.16);
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  }
+
+  /* ── header ─────────────────────────────────────────────── */
+  .bc__chrome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bc-line);
+  }
+  .bc__label { color: var(--bc-dim); }
+  .bc__sep { color: rgba(244, 231, 200, 0.25); }
+  .bc__stat,
+  .bc__code {
+    color: var(--bc-gold);
+    font-variant-numeric: tabular-nums;
+  }
+  .bc__code { text-transform: uppercase; }
+  .bc__link {
+    margin-left: auto;
+    padding: 2px 8px;
+    border: 1px solid var(--bc-line);
+    color: var(--bc-dim);
+  }
+  .bc__link[data-state='on'] {
+    color: #8aeac0;
+    border-color: rgba(138, 234, 192, 0.45);
+  }
+  .bc__link[data-state='wait'] { color: var(--bc-gold); }
+
+  .bc__title {
+    margin: 22px 0 0;
+    font-family: 'Inter Variable', Inter, sans-serif;
+    font-size: clamp(38px, 7vw, 76px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 0.94;
+    text-wrap: balance;
+  }
+  .bc__tagline {
+    margin: 12px 0 0;
+    max-width: 62ch;
+    font-size: 15px;
+    line-height: 1.6;
+    color: rgba(244, 231, 200, 0.72);
+  }
+
+  /* ── console ────────────────────────────────────────────── */
+  .bc__console {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    align-items: center;
+    margin: 26px 0 18px;
+    padding: 12px 0;
+    border-top: 1px solid var(--bc-line);
+    border-bottom: 1px solid var(--bc-line);
+  }
+  .bc__group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bc__group--invite { margin-left: auto; }
+  .bc__group-label {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--bc-dim);
+  }
+  .bc__btn {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--bc-ink);
+    background: transparent;
+    border: 1px solid var(--bc-line);
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .bc__btn:hover { border-color: rgba(246, 193, 94, 0.6); }
+  .bc__btn:focus-visible {
+    outline: 2px solid var(--bc-gold);
+    outline-offset: 2px;
+  }
+  .bc__btn--on {
+    background: var(--bc-gold);
+    border-color: var(--bc-gold);
+    color: #120c04;
+  }
+  .bc__btn--game[aria-pressed='true'] {
+    background: #8aeac0;
+    border-color: #8aeac0;
+    color: #06170f;
+  }
+  .bc__score {
+    font-size: 24px;
+    font-weight: 700;
+    color: #8aeac0;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .bc__score-best {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--bc-dim);
+  }
+
+  /* ── the wall ───────────────────────────────────────────── */
+  .bc__wall {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 8px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .bc__col {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bc__col:focus-visible {
+    outline: 2px solid var(--bc-gold);
+    outline-offset: 3px;
+  }
+  .bc__beam {
+    height: 1px;
+    margin: 0 0 0;
+    background: linear-gradient(to right, transparent, rgba(244, 231, 200, 0.34) 12%, rgba(244, 231, 200, 0.34) 88%, transparent);
+  }
+  .bc__cord {
+    display: block;
+    height: calc(12px + var(--bc-drop, 0) * 1px);
+    width: 1px;
+    margin: 0 auto;
+    background: linear-gradient(to bottom, rgba(244, 231, 200, 0.34), rgba(244, 231, 200, 0.5));
+  }
+  .bc__card {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 4;
+    margin-bottom: 6px;
+    overflow: hidden;
+    background: var(--bc-deep);
+    border: 1px solid var(--bc-line);
+    transform-origin: 50% 0%;
+  }
+  .bc__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 260ms ease;
+  }
+  .bc__img--on { opacity: 1; }
+  .bc__flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 60%, hsla(var(--bc-hue), 95%, 72%, 0.85), transparent 70%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms ease;
+  }
+  .bc__bell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 6px 7px;
+    margin-top: auto;
+    background: hsla(var(--bc-hue), 42%, 22%, 0.55);
+    border: 1px solid hsla(var(--bc-hue), 60%, 62%, 0.42);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+  }
+  .bc__note { color: hsl(var(--bc-hue), 78%, 82%); }
+  .bc__key { color: rgba(244, 231, 200, 0.4); }
+
+  .bc__col:hover .bc__bell { background: hsla(var(--bc-hue), 55%, 34%, 0.7); }
+
+  /* rung — local */
+  .bc__col--rung .bc__card { animation: bc-swing 900ms ease-out; }
+  .bc__col--rung .bc__flash { opacity: 1; transition-duration: 90ms; }
+  .bc__col--rung .bc__bell {
+    background: hsla(var(--bc-hue), 80%, 58%, 0.9);
+    border-color: hsl(var(--bc-hue), 90%, 76%);
+    transform: translateY(2px);
+  }
+  /* rung — someone else */
+  .bc__col--remote .bc__card {
+    animation: bc-swing 900ms ease-out;
+    box-shadow: 0 0 0 2px var(--bc-remote, #8aeac0);
+  }
+  .bc__col--lit .bc__card {
+    box-shadow: 0 0 0 3px var(--bc-gold), 0 0 34px rgba(246, 193, 94, 0.55);
+  }
+  .bc__col--lit .bc__bell {
+    background: rgba(246, 193, 94, 0.28);
+    border-color: var(--bc-gold);
+  }
+
+  @keyframes bc-swing {
+    0% { transform: rotate(0deg); }
+    22% { transform: rotate(1.6deg); }
+    48% { transform: rotate(-1.1deg); }
+    74% { transform: rotate(0.5deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+  /* ringers — the Nouns that pop up when a bell is struck */
+  .bc__ringers {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 46px;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+  }
+  .bc__ringer {
+    position: absolute;
+    bottom: 0;
+    width: 38px;
+    height: 38px;
+    image-rendering: pixelated;
+    border: 1px solid var(--bc-remote, rgba(244, 231, 200, 0.6));
+    background: #0f0b18;
+    animation: bc-pop 1100ms ease-out forwards;
+  }
+  .bc__ringer--ghost { opacity: 0.42; filter: grayscale(0.5); }
+  @keyframes bc-pop {
+    0% { transform: translateY(10px) scale(0.7); opacity: 0; }
+    18% { transform: translateY(-6px) scale(1); opacity: 1; }
+    70% { transform: translateY(-10px) scale(1); opacity: 1; }
+    100% { transform: translateY(-22px) scale(0.9); opacity: 0; }
+  }
+
+  /* ── room rail ──────────────────────────────────────────── */
+  .bc__room { margin: 26px 0 0; }
+  .bc__room-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bc-line);
+  }
+  .bc__room-note {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--bc-dim);
+  }
+  .bc__faces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 12px;
+    min-height: 46px;
+  }
+  .bc__face {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    image-rendering: pixelated;
+    border: 2px solid var(--bc-remote, var(--bc-line));
+    background: #0f0b18;
+  }
+  .bc__face--you { border-color: var(--bc-gold); }
+
+  /* ── footer ─────────────────────────────────────────────── */
+  .bc__foot { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--bc-line); }
+  .bc__foot-line {
+    margin: 0 0 8px;
+    max-width: 68ch;
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(244, 231, 200, 0.66);
+  }
+  .bc__foot-line--dim { color: var(--bc-dim); }
+  .bc__keys {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--bc-gold);
+  }
+  .bc__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+  }
+  .bc__nav a { color: var(--bc-dim); text-decoration: none; border-bottom: 1px solid transparent; }
+  .bc__nav a:hover { color: var(--bc-gold); border-bottom-color: var(--bc-gold); }
+
+  @media (max-width: 1000px) {
+    .bc__wall { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
+    .bc__group--invite { margin-left: 0; }
+  }
+  @media (max-width: 560px) {
+    /* Phone: the instrument has to be reachable without a scroll, so the
+       masthead gives up its height rather than the wall giving up bells. */
+    .bc { padding: 16px 12px 60px; }
+    .bc__title { margin-top: 14px; font-size: clamp(30px, 11vw, 44px); }
+    .bc__tagline {
+      margin-top: 8px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .bc__console { margin: 14px 0 12px; padding: 10px 0; gap: 8px 14px; }
+    .bc__wall { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .bc__cord { height: calc(8px + var(--bc-drop, 0) * 0.45px); }
+    .bc__key { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bc__col--rung .bc__card,
+    .bc__col--remote .bc__card { animation: none; }
+    .bc__ringer { animation-duration: 1ms; }
+  }
+</style>
+
+<script>
+  // ── audio bus ──────────────────────────────────────────────
+  let AC: AudioContext | null = null;
+  let master: GainNode | null = null;
+  let wet: GainNode | null = null;
+
+  function ctx(): AudioContext {
+    if (!AC) {
+      const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+      AC = new Ctor();
+      master = AC.createGain();
+      master.gain.value = 0.9;
+      master.connect(AC.destination);
+      // a soft stereo bloom so a dragged hand leaves a tail
+      const delay = AC.createDelay(1);
+      delay.delayTime.value = 0.27;
+      const fb = AC.createGain();
+      fb.gain.value = 0.28;
+      const damp = AC.createBiquadFilter();
+      damp.type = 'lowpass';
+      damp.frequency.value = 2600;
+      wet = AC.createGain();
+      wet.gain.value = 0.5;
+      wet.connect(delay).connect(damp).connect(fb).connect(delay);
+      damp.connect(AC.destination);
+    }
+    if (AC.state === 'suspended') AC.resume().catch(() => {});
+    return AC;
+  }
+
+  const FREQS = [
+    261.63, 293.66, 329.63, 392.0, 440.0, 523.25,
+    587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66,
+  ];
+  const KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", '\\'];
+
+  function voice(name: string, f: number, vel: number, pan: number) {
+    const a = ctx();
+    if (!master || !wet) return;
+    const t = a.currentTime;
+    const panner = a.createStereoPanner();
+    panner.pan.value = Math.max(-0.85, Math.min(0.85, pan));
+    panner.connect(master);
+    panner.connect(wet);
+
+    const partials =
+      name === 'bowl'
+        ? [{ m: 1, g: 0.5, d: 4.2, type: 'sine' }, { m: 2.4, g: 0.14, d: 2.4, type: 'sine' }, { m: 5.4, g: 0.05, d: 1.0, type: 'sine' }]
+        : name === 'glass'
+        ? [{ m: 1, g: 0.34, d: 1.5, type: 'triangle' }, { m: 3.01, g: 0.1, d: 0.7, type: 'sine' }, { m: 6.2, g: 0.04, d: 0.3, type: 'sine' }]
+        : [{ m: 1, g: 0.42, d: 2.6, type: 'sine' }, { m: 2.76, g: 0.13, d: 1.3, type: 'sine' }, { m: 5.4, g: 0.05, d: 0.55, type: 'sine' }];
+
+    for (const p of partials) {
+      const osc = a.createOscillator();
+      osc.type = p.type as OscillatorType;
+      osc.frequency.value = f * p.m;
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, p.g * vel), t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
+      osc.connect(g).connect(panner);
+      osc.start(t);
+      osc.stop(t + p.d + 0.05);
+    }
+  }
+
+  let currentVoice = 'chime';
+
+  // ── the wall ───────────────────────────────────────────────
+  const wall = document.getElementById('bc-wall');
+  const cols = Array.from(document.querySelectorAll<HTMLElement>('.bc__col'));
+
+  function flash(idx: number, kind: 'rung' | 'remote', hue?: number) {
+    const col = cols[idx];
+    if (!col) return;
+    const cls = kind === 'rung' ? 'bc__col--rung' : 'bc__col--remote';
+    if (kind === 'remote' && hue !== undefined) col.style.setProperty('--bc-remote', `hsl(${hue}, 70%, 62%)`);
+    col.classList.remove(cls);
+    void col.offsetWidth; // restart the animation on a fast re-strike
+    col.classList.add(cls);
+    window.setTimeout(() => col.classList.remove(cls), 900);
+    const imgs = col.querySelectorAll('.bc__img');
+    if (imgs.length === 2) {
+      imgs[0].classList.toggle('bc__img--on');
+      imgs[1].classList.toggle('bc__img--on');
+    }
+  }
+
+  function ringer(idx: number, avatar: number, hue: number, ghost = false) {
+    const col = cols[idx];
+    const slot = col?.querySelector('[data-ringers]');
+    if (!slot) return;
+    const img = document.createElement('img');
+    img.className = ghost ? 'bc__ringer bc__ringer--ghost' : 'bc__ringer';
+    img.src = `https://noun.pics/${avatar % 1200}.svg`;
+    img.alt = '';
+    img.style.setProperty('--bc-remote', `hsl(${hue}, 70%, 62%)`);
+    img.style.left = `${8 + ((avatar % 7) * 9)}%`;
+    slot.appendChild(img);
+    window.setTimeout(() => img.remove(), 1150);
+  }
+
+  let lastActivityAt = Date.now();
+
+  /** Ring a bell. `who` decides the volume, the colour and whether it goes out on the wire. */
+  function ring(idx: number, vel = 0.85, who: 'me' | 'them' | 'ghost' = 'me', hue = 44, avatar = -1) {
+    const f = FREQS[idx];
+    if (f === undefined) return;
+    const pan = (idx / (FREQS.length - 1)) * 1.6 - 0.8;
+    const gain = who === 'me' ? vel : who === 'them' ? vel * 0.72 : vel * 0.34;
+    try { voice(currentVoice, f, gain, pan); } catch {}
+    flash(idx, who === 'me' ? 'rung' : 'remote', who === 'me' ? undefined : hue);
+    if (avatar >= 0) ringer(idx, avatar, hue, who === 'ghost');
+    if (who !== 'ghost') lastActivityAt = Date.now();
+    scoreHit(idx);
+    if (who === 'me') send(idx, vel);
+  }
+
+  // ── pointer: tap, and drag a hand across the wall ──────────
+  let dragging = false;
+  let lastIdx = -1;
+
+  function idxFromPoint(x: number, y: number): number {
+    const el = document.elementFromPoint(x, y);
+    const col = el?.closest?.('.bc__col') as HTMLElement | null;
+    if (!col) return -1;
+    return Number.parseInt(col.dataset.idx ?? '-1', 10);
+  }
+
+  wall?.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    lastIdx = -1;
+    const idx = idxFromPoint(e.clientX, e.clientY);
+    if (idx >= 0) { ring(idx, 0.9); lastIdx = idx; }
+  });
+  wall?.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const idx = idxFromPoint(e.clientX, e.clientY);
+    if (idx >= 0 && idx !== lastIdx) { ring(idx, 0.62); lastIdx = idx; }
+  });
+  const endDrag = () => { dragging = false; lastIdx = -1; };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  // keyboard: Enter/Space on a focused bell, or the home row
+  cols.forEach((col) => {
+    col.addEventListener('keydown', (e) => {
+      const key = (e as KeyboardEvent).key;
+      if (key !== 'Enter' && key !== ' ') return;
+      e.preventDefault();
+      ring(Number.parseInt(col.dataset.idx ?? '-1', 10), 0.85);
+    });
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    if (!(target instanceof HTMLElement)) {
+      // fall through — a keydown with no element target is still a keystroke
+    } else {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (target.classList.contains('bc__col')) return; // handled above
+    }
+    const idx = KEYS.indexOf(e.key.toLowerCase());
+    if (idx >= 0) { e.preventDefault(); ring(idx, 0.85); }
+  });
+
+  // ── voice buttons ──────────────────────────────────────────
+  document.querySelectorAll<HTMLElement>('[data-voice]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentVoice = btn.dataset.voice ?? 'chime';
+      document.querySelectorAll('[data-voice]').forEach((b) => b.classList.toggle('bc__btn--on', b === btn));
+      ring(5, 0.6);
+    });
+  });
+
+  // ── wind: the wall plays itself ────────────────────────────
+  let windOn = false;
+  let windTimer: number | null = null;
+  function gust() {
+    if (!windOn) return;
+    const pick = () => Math.max(0, Math.min(11, Math.round(5.5 + (Math.random() + Math.random() + Math.random() - 1.5) * 3.4)));
+    ring(pick(), 0.22 + Math.random() * 0.3);
+    if (Math.random() < 0.16) window.setTimeout(() => windOn && ring(pick(), 0.18 + Math.random() * 0.2), 260);
+    windTimer = window.setTimeout(gust, 1100 + Math.random() * 2600);
+  }
+  const windBtn = document.getElementById('bc-wind');
+  windBtn?.addEventListener('click', () => {
+    windOn = !windOn;
+    windBtn.setAttribute('aria-pressed', String(windOn));
+    windBtn.classList.toggle('bc__btn--on', windOn);
+    if (windOn) gust();
+    else if (windTimer) { window.clearTimeout(windTimer); windTimer = null; }
+  });
+
+  // ── follow the light — the co-op game ──────────────────────
+  // One bell glows. Anyone in the room may answer it. The count belongs to
+  // the room. There is no timer and no way to lose.
+  const scoreEl = document.getElementById('bc-score');
+  const bestEl = document.getElementById('bc-best');
+  const gameBtn = document.getElementById('bc-game');
+  let gameOn = false;
+  let litIdx = -1;
+  let score = 0;
+  let best = 0;
+
+  try {
+    best = Number.parseInt(window.localStorage.getItem('pc-bell-choir-best') ?? '0', 10) || 0;
+  } catch {}
+  if (bestEl) bestEl.textContent = best ? `best ${best}` : 'best —';
+
+  function lightNext() {
+    if (litIdx >= 0) cols[litIdx]?.classList.remove('bc__col--lit');
+    let next = Math.floor(Math.random() * 12);
+    if (next === litIdx) next = (next + 1 + Math.floor(Math.random() * 11)) % 12;
+    litIdx = next;
+    cols[litIdx]?.classList.add('bc__col--lit');
+  }
+
+  function scoreHit(idx: number) {
+    if (!gameOn || idx !== litIdx) return;
+    score += 1;
+    if (scoreEl) scoreEl.textContent = String(score);
+    if (score > best) {
+      best = score;
+      if (bestEl) bestEl.textContent = `best ${best}`;
+      try { window.localStorage.setItem('pc-bell-choir-best', String(best)); } catch {}
+    }
+    // a small sparkle above so a kid sees the reward, not just a number
+    window.setTimeout(() => lightNext(), 160);
+  }
+
+  gameBtn?.addEventListener('click', () => {
+    gameOn = !gameOn;
+    gameBtn.setAttribute('aria-pressed', String(gameOn));
+    if (gameOn) {
+      score = 0;
+      if (scoreEl) scoreEl.textContent = '0';
+      lightNext();
+    } else if (litIdx >= 0) {
+      cols[litIdx]?.classList.remove('bc__col--lit');
+      litIdx = -1;
+    }
+  });
+
+  // ── the room: DrumRoomV2 over /api/drum/room ───────────────
+  // Pitch rides in the low 4 bits of `seq` — the DO echoes seq verbatim,
+  // so twelve notes travel over the deployed protocol untouched.
+  const params = new URLSearchParams(window.location.search);
+  const rawRoom = (params.get('room') || 'bell-choir').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24) || 'bell-choir';
+  const roomEl = document.getElementById('bc-room');
+  const hereEl = document.getElementById('bc-here');
+  const rungEl = document.getElementById('bc-rung');
+  const statusEl = document.getElementById('bc-status');
+  const facesEl = document.getElementById('bc-faces');
+  const roomNote = document.getElementById('bc-room-note');
+  if (roomEl) roomEl.textContent = rawRoom;
+
+  let sid = '';
+  try {
+    sid = window.localStorage.getItem('pc-bell-choir-sid') ?? '';
+    if (!sid) {
+      sid = (crypto.randomUUID?.() ?? String(Math.random()).slice(2));
+      window.localStorage.setItem('pc-bell-choir-sid', sid);
+    }
+  } catch {
+    sid = String(Math.random()).slice(2);
+  }
+
+  let ws: WebSocket | null = null;
+  let meId = '';
+  let seqCounter = 0;
+  let totalHits = 0;
+  let retry = 0;
+  const ghosts: { note: number; hue: number; avatar: number }[] = [];
+
+  function setStatus(state: string, text: string) {
+    if (!statusEl) return;
+    statusEl.dataset.state = state;
+    statusEl.textContent = text;
+  }
+
+  function renderFaces(people: { id: string; avatar: number; hue: number }[]) {
+    if (!facesEl) return;
+    facesEl.innerHTML = '';
+    people.slice(0, 40).forEach((p) => {
+      const img = document.createElement('img');
+      img.className = p.id === meId ? 'bc__face bc__face--you' : 'bc__face';
+      img.src = `https://noun.pics/${p.avatar % 1200}.svg`;
+      img.alt = p.id === meId ? 'You' : 'Someone else in the room';
+      img.title = p.id === meId ? 'you' : 'here now';
+      img.style.setProperty('--bc-remote', `hsl(${p.hue}, 70%, 62%)`);
+      facesEl.appendChild(img);
+    });
+    if (hereEl) hereEl.textContent = String(people.length || 1);
+    if (roomNote) {
+      roomNote.textContent =
+        people.length > 1
+          ? `${people.length} playing · every bell is shared`
+          : 'just you right now · the wall remembers the last visitors';
+    }
+  }
+
+  function rememberGhost(note: number, hue: number, avatar: number) {
+    ghosts.push({ note, hue, avatar });
+    if (ghosts.length > 24) ghosts.shift();
+  }
+
+  function connect() {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${window.location.host}/api/drum/room?room=${encodeURIComponent(rawRoom)}&sid=${encodeURIComponent(sid)}`;
+    setStatus('wait', 'CONNECTING');
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      setStatus('off', 'OFFLINE');
+      return;
+    }
+
+    ws.addEventListener('open', () => { retry = 0; setStatus('on', 'LIVE'); });
+
+    ws.addEventListener('message', (event) => {
+      let msg: any;
+      try { msg = JSON.parse(String(event.data)); } catch { return; }
+
+      if (msg.type === 'welcome') {
+        meId = msg.you?.id ?? '';
+        totalHits = Number(msg.totalHits) || 0;
+        if (rungEl) rungEl.textContent = String(totalHits);
+        if (hereEl) hereEl.textContent = String(msg.connected ?? 1);
+        // the room plays back whoever was here last
+        const recent = Array.isArray(msg.recentHits) ? msg.recentHits.slice(-10) : [];
+        recent.forEach((h: any, i: number) => {
+          const note = (Number(h.seq) || 0) & 15;
+          if (note > 11) return;
+          rememberGhost(note, Number(h.hue) || 44, Number(h.avatar) || 0);
+          window.setTimeout(() => ring(note, 0.5, 'ghost', Number(h.hue) || 44, Number(h.avatar) || 0), 700 + i * 620);
+        });
+        return;
+      }
+
+      if (msg.type === 'presence' && Array.isArray(msg.people)) {
+        renderFaces(msg.people);
+        return;
+      }
+
+      if (msg.type === 'hit') {
+        totalHits += 1;
+        if (rungEl) rungEl.textContent = String(totalHits);
+        if (msg.clientId === meId) return; // our own echo
+        const note = (Number(msg.seq) || 0) & 15;
+        if (note > 11) return;
+        const hue = Number(msg.hue) || 44;
+        const avatar = Number(msg.avatar) || 0;
+        rememberGhost(note, hue, avatar);
+        ring(note, Number(msg.velocity) || 0.7, 'them', hue, avatar);
+      }
+    });
+
+    const reconnect = () => {
+      setStatus('off', 'OFFLINE');
+      ws = null;
+      retry += 1;
+      const wait = Math.min(20000, 1200 * 2 ** Math.min(retry, 4));
+      window.setTimeout(connect, wait);
+    };
+    ws.addEventListener('close', reconnect);
+    ws.addEventListener('error', () => { try { ws?.close(); } catch {} });
+  }
+
+  // send throttle — the DO allows 8 messages/sec; a dragged hand can beat
+  // that, and dropping a broadcast is always better than dropping a note.
+  let sentThisSecond = 0;
+  let windowStartedAt = 0;
+
+  function send(idx: number, vel: number) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    if (now - windowStartedAt >= 1000) { windowStartedAt = now; sentThisSecond = 0; }
+    if (sentThisSecond >= 6) return;
+    sentThisSecond += 1;
+    seqCounter = (seqCounter + 1) % 60000000;
+    try {
+      ws.send(JSON.stringify({
+        v: 1,
+        type: 'hit',
+        pad: 'bell',
+        velocity: Math.max(0.05, Math.min(1, vel)),
+        seq: (seqCounter << 4) | idx,
+        clientAt: now,
+      }));
+    } catch {}
+    pokeSoundBus(idx);
+  }
+
+  // best-effort nudge to the shared sound bus so the drum TV walls flash
+  let lastBusAt = 0;
+  function pokeSoundBus(idx: number) {
+    const now = Date.now();
+    if (now - lastBusAt < 1500) return;
+    lastBusAt = now;
+    try {
+      fetch('/api/sounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'drum', seed: idx, sessionId: sid }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+  }
+
+  // ── ghosts: when the room goes quiet, the last visitors play ──
+  window.setInterval(() => {
+    if (document.hidden || windOn || ghosts.length === 0) return;
+    if (Date.now() - lastActivityAt < 25000) return;
+    if (Math.random() > 0.55) return;
+    const g = ghosts[Math.floor(Math.random() * ghosts.length)];
+    if (g) ring(g.note, 0.42, 'ghost', g.hue, g.avatar);
+  }, 3200);
+
+  // ── invite ─────────────────────────────────────────────────
+  const inviteBtn = document.getElementById('bc-invite');
+  inviteBtn?.addEventListener('click', async () => {
+    const link = `${window.location.origin}/bell-choir?room=${encodeURIComponent(rawRoom)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      inviteBtn.textContent = 'LINK COPIED';
+    } catch {
+      inviteBtn.textContent = link;
+    }
+    window.setTimeout(() => { inviteBtn.textContent = 'COPY INVITE'; }, 2200);
+  });
+
+  document.getElementById('bc-newroom')?.addEventListener('click', () => {
+    const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let code = '';
+    for (let i = 0; i < 4; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    window.location.search = `?room=${code}`;
+  });
+
+  connect();
+</script>
