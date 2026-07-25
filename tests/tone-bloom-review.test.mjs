@@ -8,7 +8,14 @@ const blockPath = new URL('../src/content/blocks/0493.json', import.meta.url);
 const desktopPath = new URL('../public/images/tone-bloom/tone-bloom-desktop.jpg', import.meta.url);
 const mobilePath = new URL('../public/images/tone-bloom/tone-bloom-mobile-spark.jpg', import.meta.url);
 const ogPath = new URL('../public/images/tone-bloom/tone-bloom-review-og.png', import.meta.url);
-const screenshotRoutePath = new URL('../src/pages/images/tone-bloom/[asset].jpg.ts', import.meta.url);
+const desktopRoutePath = new URL(
+  '../src/pages/images/tone-bloom/tone-bloom-desktop.jpg.ts',
+  import.meta.url,
+);
+const mobileRoutePath = new URL(
+  '../src/pages/images/tone-bloom/tone-bloom-mobile-spark.jpg.ts',
+  import.meta.url,
+);
 const ogRoutePath = new URL('../src/pages/images/tone-bloom/tone-bloom-review-og.png.ts', import.meta.url);
 
 test('Tone Bloom review page carries the product facts, screenshots, and destination links', async () => {
@@ -45,13 +52,16 @@ test('Tone Bloom review has machine-readable JSON and a sourced PointCast block'
 
 test('Tone Bloom review image assets are present and prerendered across the empty publicDir boundary', async () => {
   await Promise.all([access(desktopPath), access(mobilePath), access(ogPath)]);
-  const [screenshotRoute, ogRoute] = await Promise.all([
-    readFile(screenshotRoutePath, 'utf8'),
+  const [desktopRoute, mobileRoute, ogRoute] = await Promise.all([
+    readFile(desktopRoutePath, 'utf8'),
+    readFile(mobileRoutePath, 'utf8'),
     readFile(ogRoutePath, 'utf8'),
   ]);
 
-  assert.match(screenshotRoute, /export const getStaticPaths/);
-  assert.match(screenshotRoute, /Content-Type': 'image\/jpeg'/);
+  assert.match(desktopRoute, /tone-bloom-desktop\.jpg/);
+  assert.match(desktopRoute, /Content-Type': 'image\/jpeg'/);
+  assert.match(mobileRoute, /tone-bloom-mobile-spark\.jpg/);
+  assert.match(mobileRoute, /Content-Type': 'image\/jpeg'/);
   assert.match(ogRoute, /tone-bloom-review-og\.png/);
   assert.match(ogRoute, /Content-Type': 'image\/png'/);
 });
