@@ -85,6 +85,7 @@ if (ancestor.status !== 0) {
     ...process.env,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--import=${FETCH_TIMEOUT_HOOK}`,
   });
+  run('node', ['scripts/stage-runtime-assets.mjs', `--out-dir=${buildOutDir}`]);
 
 const changed = output('git', ['status', '--porcelain']);
 
