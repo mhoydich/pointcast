@@ -63,3 +63,47 @@ test('Qwen Weather keeps credentials and live inference outside PointCast', asyn
   assert.match(posterRoute, /Content-Type': 'image\/png/);
   assert.match(stillRoute, /Content-Type': 'image\/jpeg/);
 });
+
+test('Qwen Silver Letter ships as a regional human, machine, homepage, and discovery study', async () => {
+  const [page, jsonRoute, home, llms, llmsFull, sitemap, imageRoute, poster] =
+    await Promise.all([
+      read('src/pages/qwen-silver-letter.astro'),
+      read('src/pages/qwen-silver-letter.json.ts'),
+      read('src/pages/index.astro'),
+      read('public/llms.txt'),
+      read('public/llms-full.txt'),
+      read('src/pages/sitemap-discovery.xml.ts'),
+      read('src/pages/images/qwen-silver-letter/og.png.ts'),
+      fileStat('public/images/qwen-silver-letter/og.png'),
+    ]);
+
+  assert.match(page, /银信气象台/);
+  assert.match(page, /Kaiping/);
+  assert.match(page, /Qwen does not speak for the community/);
+  assert.equal((page.match(/{ key: '[^']+'/g) ?? []).length, 4);
+  assert.match(jsonRoute, /PC-QWEN-SILVER-LETTER-2026/);
+  assert.match(jsonRoute, /staged_pending_current_plan_entitlement/);
+  assert.match(home, /fresh-qwen-followup/);
+  assert.match(home, /QWEN MODEL STUDY 002/);
+  assert.match(llms, /pointcast\.xyz\/qwen-silver-letter/);
+  assert.match(llmsFull, /Qwen model-study series/);
+  assert.match(sitemap, /pointcast\.xyz\/qwen-silver-letter/);
+  assert.match(imageRoute, /Content-Type': 'image\/png/);
+  assert.ok(poster.size > 100_000);
+});
+
+test('Qwen Silver Letter keeps its PointCast edition local and its model boundary explicit', async () => {
+  const [page, jsonRoute] = await Promise.all([
+    read('src/pages/qwen-silver-letter.astro'),
+    read('src/pages/qwen-silver-letter.json.ts'),
+  ]);
+  const publicSurface = `${page}\n${jsonRoute}`;
+
+  assert.doesNotMatch(publicSurface, /QWEN_TOKEN_PLAN_KEY|DASHSCOPE_API_KEY/);
+  assert.doesNotMatch(publicSurface, /token-plan\.ap-southeast-1\.maas\.aliyuncs\.com/);
+  assert.doesNotMatch(page, /\bfetch\s*\(/);
+  assert.match(page, /PointCast edition stays on this device/);
+  assert.match(jsonRoute, /storedIdentity: false/);
+  assert.match(jsonRoute, /storedLocation: false/);
+  assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
+});
