@@ -7,6 +7,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Model Study 001 — Qwen / Weather Memory (2026-07-25)
+
+- [x] (X) Publish a native `/qwen-weather` model study foregrounding the QwenCloud relay — `done` — Qwen 3.8 Max → GLM-5.2 → Wan 2.7 Image Pro → HappyHorse 1.1
+- [x] (X) Add Block 0494, `/qwen-weather.json`, homepage feature, and disclosed house-ad creative — `done`
+- [x] (X) Keep QwenCloud credentials and live metered inference out of PointCast — `done` — all media is pre-rendered
+
+---
+
 ## Phase 1 — Visual rebuild ✅ SHIPPED (now on `main`, live at pointcast.xyz)
 
 All foundation, component, routing, and content-migration tasks landed in commits `0ee3f44` → `05aca57`. 88 pages build, 48 blocks live across 9 channels, Manus QA + Codex Battler review both closed.

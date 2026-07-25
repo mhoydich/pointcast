@@ -13,6 +13,7 @@ import networkFieldKit from '../assets/campaigns/network-el-segundo-2026/field-k
 import networkMeshCommons from '../assets/campaigns/network-el-segundo-2026/mesh-commons.png';
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 import localStarCommonsOg from '../assets/campaigns/local-star-commons-2026/commons-og.png';
+import qwenWeatherOrganism from '../assets/campaigns/qwen-weather-2026/weather-organism.jpg';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
   '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
@@ -245,6 +246,17 @@ export const BELLS_BLOOM_CAMPAIGN = {
   note: 'A first-party 28-work Midjourney archive exhibition. Every image links to its source job; the campaign uses contextual rotation only.',
 } as const;
 
+export const QWEN_WEATHER_CAMPAIGN = {
+  id: 'PC-QWEN-WEATHER-2026',
+  label: 'Qwen / Weather Memory — PointCast Model Study 001',
+  advertiser: 'PointCast Model Study',
+  creativeCount: 1,
+  placement: 'PointCast homepage feature, Front Door Block, and contextual house rotation',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A first-party model relay made with Qwen 3.8 Max, GLM-5.2, Wan 2.7 Image Pro, and HappyHorse 1.1. All media is pre-rendered; no QwenCloud credential or live inference request enters the page.',
+} as const;
+
 export const NETWORK_FIRST_100_SIGNAL = {
   id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
   label: 'Network El Segundo — First 100 Signal Strip',
@@ -257,6 +269,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-QWEN-WEATHER-001',
+    advertiser: 'PointCast Model Study',
+    headline: 'The video made its own weather.',
+    copy: 'Qwen 3.8 wrote it. GLM-5.2 answered. Wan 2.7 imagined the organism. HappyHorse gave it motion and generated its sound.',
+    href: '/qwen-weather',
+    cta: 'Enter the Qwen model relay',
+    tone: 'signal',
+    contexts: ['qwen', 'ai', 'agent', 'model', 'art', 'image', 'video', 'audio', 'weather', 'signal', 'home', 'pointcast', 'front', 'door'],
+    image: qwenWeatherOrganism.src,
+    sourceTool: 'QwenCloud · Qwen 3.8 + GLM-5.2 + Wan 2.7 + HappyHorse 1.1',
+    campaign: QWEN_WEATHER_CAMPAIGN.id,
+    seriesLabel: QWEN_WEATHER_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-BELLS-BLOOM-001',
     advertiser: 'PointCast Showcast',
