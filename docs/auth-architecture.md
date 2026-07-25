@@ -81,6 +81,10 @@ encrypted before they enter KV. Public responses contain track title, artist,
 artwork, link, and on-air state only—never account identity, device,
 playback position, or history.
 
+The public policy at `/privacy` documents the same boundary. The dashboard
+exposes a broadcaster-only disconnect control that deletes both the encrypted
+Spotify credentials and cached signal immediately.
+
 ### Apple
 
 - `APPLE_CLIENT_ID`
