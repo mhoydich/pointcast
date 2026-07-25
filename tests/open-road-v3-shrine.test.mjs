@@ -6,7 +6,6 @@ const shrineUrl = new URL('../src/pages/open-road-v3.astro', import.meta.url);
 const shrineSource = await readFile(shrineUrl, 'utf8');
 const appsSource = await readFile(new URL('../src/lib/pointcast-apps.ts', import.meta.url), 'utf8');
 const launchStripSource = await readFile(new URL('../src/components/AppLaunchStrip.astro', import.meta.url), 'utf8');
-const homeSource = await readFile(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 
 test('Open Road III contains exactly two five-image passages from ten unique assets', async () => {
   const assetMatches = [
@@ -73,5 +72,4 @@ test('the first three Open Road editions remain discoverable', () => {
   assert.match(launchStripSource, /href: '\/open-road'/);
   assert.match(launchStripSource, /href: '\/open-road-v2'/);
   assert.match(launchStripSource, /href: '\/open-road-v3'/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });

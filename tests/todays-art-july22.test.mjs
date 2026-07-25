@@ -10,13 +10,12 @@ test('July 22 Today’s Art preserves all fifteen supplied source files', async 
   assert.deepEqual(assets.map((name) => name.slice(0, 2)), Array.from({ length: 15 }, (_, index) => String(index + 1).padStart(2, '0')));
 });
 
-test('homepage places the 3D Today’s Art rack above the prior lead module', async () => {
+test('homepage edits Today’s Art into one direct, image-led story', async () => {
   const home = await readFile(new URL('src/pages/index.astro', root), 'utf8');
-  const nowLine = home.indexOf('<NowLine');
-  const todaysArt = home.indexOf('<TodaysArt />');
-  const school = home.indexOf('<ElSegundoSchoolHome />');
-  assert.ok(nowLine > -1 && todaysArt > nowLine && school > todaysArt);
-  assert.equal(home.match(/<TodaysArt \/>/g)?.length, 1);
+  assert.match(home, /href:\s*'\/gallery\/today'/);
+  assert.match(home, /channel:\s*'TODAY’S ART'/);
+  assert.match(home, /One visual signal for the day\./);
+  assert.match(home, /garden-kiosk\.webp/);
 });
 
 test('current and permanent gallery routes point at edit 003 while edit 002 stays historical', async () => {

@@ -5,7 +5,6 @@ import { access, readFile } from 'node:fs/promises';
 const shrineUrl = new URL('../src/pages/open-road-v5.astro', import.meta.url);
 const appsUrl = new URL('../src/lib/pointcast-apps.ts', import.meta.url);
 const launchStripUrl = new URL('../src/components/AppLaunchStrip.astro', import.meta.url);
-const homeUrl = new URL('../src/pages/index.astro', import.meta.url);
 
 test('Open Road V offers ten unique image fragments for a five-petal window', async () => {
   const shrineSource = await readFile(shrineUrl, 'utf8');
@@ -82,11 +81,10 @@ test('Open Road V remains calm, inspectable, and operable without motion or a po
 });
 
 test('Open Road V metadata, edition navigation, and PointCast discovery agree', async () => {
-  const [shrineSource, appsSource, launchStripSource, homeSource] = await Promise.all([
+  const [shrineSource, appsSource, launchStripSource] = await Promise.all([
     readFile(shrineUrl, 'utf8'),
     readFile(appsUrl, 'utf8'),
     readFile(launchStripUrl, 'utf8'),
-    readFile(homeUrl, 'utf8'),
   ]);
 
   assert.match(shrineSource, /Open Road V · The Window You Make/);
@@ -101,5 +99,4 @@ test('Open Road V metadata, edition navigation, and PointCast discovery agree', 
   assert.match(appsSource, /name:\s*['"]Open Road V['"]/);
   assert.match(appsSource, /path:\s*['"]\/open-road-v5['"]/);
   assert.match(launchStripSource, /href:\s*['"]\/open-road-v5['"]/);
-  assert.match(homeSource, /discoveryAppItems\.slice\(0, 11\)/);
 });

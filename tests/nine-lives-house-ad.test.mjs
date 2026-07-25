@@ -3,15 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const advertUrl = new URL('../src/components/TownAdverts.astro', import.meta.url);
-const homeUrl = new URL('../src/pages/index.astro', import.meta.url);
+test('PointCast keeps an attributed Nine Lives house signal for town placements', async () => {
+  const advert = await readFile(advertUrl, 'utf8');
 
-test('the PointCast homepage carries an attributed Nine Lives house signal', async () => {
-  const [advert, home] = await Promise.all([
-    readFile(advertUrl, 'utf8'),
-    readFile(homeUrl, 'utf8'),
-  ]);
-
-  assert.match(home, /<TownAdverts\s*\/>/);
   assert.match(advert, /HOUSE SIGNAL · ALLWORTHY/);
   assert.match(advert, /One tez\. Nine doors\./);
   assert.match(advert, /One giant kitty\./);

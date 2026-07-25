@@ -40,8 +40,8 @@ test('Sunset Switchboard is a native, mobile PointCast instrument with a complet
   assert.equal(block.id, '0487');
   assert.equal(block.external.url, 'https://pointcast.xyz/sunset-switchboard');
   assert.match(apps, /slug: 'sunset-switchboard'/);
-  assert.match(home, /import SunsetSwitchboardHome/);
-  assert.match(home, /<SunsetSwitchboardHome\s*\/>/);
+  assert.match(home, /href:\s*'\/sunset-switchboard'/);
+  assert.match(home, /Route one good signal before dark\./);
   assert.match(homeModule, /OPEN THE SWITCHBOARD/);
   assert.match(appLaunch, /SUNSET SWITCHBOARD/);
   assert.match(sitemap, /pointcast\.xyz\/sunset-switchboard\.json/);

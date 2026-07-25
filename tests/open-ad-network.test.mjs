@@ -327,10 +327,9 @@ test('Permission Lab runs as a measured three-creative make and Made campaign', 
   assert.match(receipt, /PERMISSION_LAB_CAMPAIGN/);
 });
 
-test('Drum Noun Universe is featured on home and guaranteed across other public pages', async () => {
-  const [registry, home, homeAd, rail] = await Promise.all([
+test('Drum Noun Universe remains registered and guaranteed across contextual public pages', async () => {
+  const [registry, homeAd, rail] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
-    readFile(new URL('src/pages/index.astro', root), 'utf8'),
     readFile(new URL('src/components/DrumNounUniverseAd.astro', root), 'utf8'),
     readFile(new URL('src/components/OpenAdRail.astro', root), 'utf8'),
   ]);
@@ -338,7 +337,6 @@ test('Drum Noun Universe is featured on home and guaranteed across other public 
   assert.match(registry, /PC-DRUM-NOUN-UNIVERSE-2026/);
   assert.match(registry, /Featured homepage unit and contextual placement across public non-Drum pages/);
   assert.match(registry, /return \[universeCreative, networkCreative, commonsCreative, \.\.\.companionAds\]/);
-  assert.match(home, /<DrumNounUniverseAd\s*\/>/);
   assert.match(homeAd, /data-ad-record=\{ad\.id\}/);
   assert.match(homeAd, /NO VISITOR PROFILE · NO PAID MEDIA/);
   assert.match(rail, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);

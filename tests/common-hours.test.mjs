@@ -5,13 +5,12 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Common Hours has a featured human landing page, public machine index, app shelf entry, and discovery links', async () => {
-  const [page, json, data, apps, home, sitemap, llms, llmsFull] = await Promise.all([
+test('Common Hours has a human landing page, public machine index, app registry entry, and discovery links', async () => {
+  const [page, json, data, apps, sitemap, llms, llmsFull] = await Promise.all([
     read('src/pages/common-hours.astro'),
     read('src/pages/common-hours.json.ts'),
     read('src/lib/common-hours.ts'),
     read('src/lib/pointcast-apps.ts'),
-    read('src/pages/index.astro'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
@@ -29,8 +28,6 @@ test('Common Hours has a featured human landing page, public machine index, app 
   assert.match(data, /Morning Hours/);
   assert.match(apps, /slug: 'common-hours'/);
   assert.match(apps, /https:\/\/common-hours\.mhoydich\.chatgpt\.site/);
-  assert.match(home, /title: 'Common Hours'/);
-  assert.match(home, /commonHoursCard\.src/);
   assert.match(sitemap, /pointcast\.xyz\/common-hours\.json/);
   assert.match(llms, /Common Hours, a public field guide/);
   assert.match(llmsFull, /Common Hours:/);
