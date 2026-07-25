@@ -107,3 +107,51 @@ test('Qwen Silver Letter keeps its PointCast edition local and its model boundar
   assert.match(jsonRoute, /storedLocation: false/);
   assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
 });
+
+test('Qwen Good Intelligence ships as a human, machine, homepage, and discovery study', async () => {
+  const [page, jsonRoute, home, llms, llmsFull, sitemap, imageRoute, poster] =
+    await Promise.all([
+      read('src/pages/qwen-good-intelligence.astro'),
+      read('src/pages/qwen-good-intelligence.json.ts'),
+      read('src/pages/index.astro'),
+      read('public/llms.txt'),
+      read('public/llms-full.txt'),
+      read('src/pages/sitemap-discovery.xml.ts'),
+      read('src/pages/images/qwen-good-intelligence/og.png.ts'),
+      fileStat('public/images/qwen-good-intelligence/og.png'),
+    ]);
+
+  assert.match(page, /善智调度局/);
+  assert.match(page, /Qwen Model Study 003/);
+  assert.match(page, /Intelligence for good does not score people\./);
+  assert.equal((page.match(/data-need=\{need\.id\}/g) ?? []).length, 1);
+  assert.equal((page.match(/data-capacity=\{capacity\.id\}/g) ?? []).length, 1);
+  assert.match(page, /needs\.flatMap/);
+  assert.match(jsonRoute, /PC-QWEN-GOOD-INTELLIGENCE-2026/);
+  assert.match(jsonRoute, /staged_pending_current_plan_entitlement/);
+  assert.match(home, /QWEN MODEL STUDY 003/);
+  assert.match(home, /fresh-qwen-followup--good/);
+  assert.match(llms, /pointcast\.xyz\/qwen-good-intelligence/);
+  assert.match(llmsFull, /Good Intelligence Dispatch/);
+  assert.match(sitemap, /pointcast\.xyz\/qwen-good-intelligence/);
+  assert.match(imageRoute, /Content-Type': 'image\/png/);
+  assert.ok(poster.size > 100_000);
+});
+
+test('Qwen Good Intelligence is local, bounded, and makes no automated decision', async () => {
+  const [page, jsonRoute] = await Promise.all([
+    read('src/pages/qwen-good-intelligence.astro'),
+    read('src/pages/qwen-good-intelligence.json.ts'),
+  ]);
+  const publicSurface = `${page}\n${jsonRoute}`;
+
+  assert.doesNotMatch(publicSurface, /QWEN_TOKEN_PLAN_KEY|DASHSCOPE_API_KEY/);
+  assert.doesNotMatch(publicSurface, /token-plan\.ap-southeast-1\.maas\.aliyuncs\.com/);
+  assert.doesNotMatch(page, /\bfetch\s*\(/);
+  assert.match(page, /NOTHING LEAVES THIS DEVICE/);
+  assert.match(page, /It may not decide who deserves help\./);
+  assert.match(jsonRoute, /storedIdentity: false/);
+  assert.match(jsonRoute, /storedLocation: false/);
+  assert.match(jsonRoute, /automatedDecision: false/);
+  assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
+});
