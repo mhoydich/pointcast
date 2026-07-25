@@ -1,0 +1,147 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import register from '../data/constellation.json';
+
+const title = 'The Constellation';
+const description =
+  'The register of satellites — sibling sites in the same practice, each with its own address. PointCast is the broadcast; these are the towns it can see from the roof.';
+const alternates = [{ type: 'application/json', href: '/constellation.json', title: 'Constellation register JSON' }];
+
+const sats = register.satellites;
+const chainCount = sats.filter((s) => s.chain).length;
+const mainnetCount = sats.filter((s) => s.chain?.network === 'mainnet').length;
+---
+
+<BlockLayout title={title} description={description} alternates={alternates}>
+  <main class="cnst">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>constellation</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">Constellation Register · {register.registeredAt}</p>
+      <h1>One house, many addresses.</h1>
+      <p>{register.description}</p>
+      <p class="tally">
+        {sats.length} satellites · {chainCount} chain-backed · {mainnetCount} on mainnet ·
+        <a href="/constellation.json">machine register</a>
+      </p>
+    </header>
+
+    <section class="model" aria-label="House and network model">
+      <h2>{register.model.name}</h2>
+      <p>{register.model.summary}</p>
+      <p class="status">status: {register.model.status}</p>
+    </section>
+
+    <section aria-label="Satellites">
+      <h2>The roll</h2>
+      <ul class="sats">
+        {sats.map((s) => (
+          <li class="sat">
+            <div class="sat__head">
+              <a class="sat__name" href={s.url}>{s.name}</a>
+              {s.role === 'house' && <span class="sat__badge">HOUSE</span>}
+              {s.chain && <span class="sat__badge sat__badge--chain">{s.chain.network.toUpperCase()}</span>}
+            </div>
+            <p class="sat__desc">{s.description}</p>
+            <p class="sat__meta">
+              <span>{s.url.replace('https://', '')}</span>
+              {s.firstLight && <span>· first light {s.firstLight}</span>}
+              {s.shelf && <span>· <a href={s.shelf.replace('https://pointcast.xyz', '')}>shelf</a></span>}
+              {s.chain?.contracts?.map((c) => (
+                <span>· <a href={c.tzkt ?? `https://tzkt.io/${c.address}`}><code>{c.address.slice(0, 8)}…{c.address.slice(-4)}</code></a></span>
+              ))}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section aria-label="Peering">
+      <h2>Peering</h2>
+      <p>
+        {register.peering.note} Convention:
+        <a href="/.well-known/pointcast-peer.json"><code>/.well-known/pointcast-peer.json</code></a>.
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .cnst {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 4rem;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .crumb {
+    display: flex;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    text-transform: lowercase;
+    margin-bottom: 2rem;
+  }
+  .crumb a { color: inherit; }
+  .kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #555;
+  }
+  .hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0.5rem 0 1rem;
+  }
+  .hero p { max-width: 46rem; line-height: 1.55; }
+  .tally {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.8rem;
+    color: #444;
+  }
+  h2 {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.35rem;
+    margin: 2.25rem 0 0.9rem;
+  }
+  .model p { max-width: 46rem; line-height: 1.55; }
+  .model .status {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    color: #777;
+  }
+  .sats { list-style: none; padding: 0; margin: 0; }
+  .sat { padding: 0.9rem 0; border-bottom: 1px solid #eee; }
+  .sat__head { display: flex; align-items: baseline; gap: 0.6rem; }
+  .sat__name { font-weight: 700; font-size: 1.05rem; color: inherit; }
+  .sat__badge {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.65rem;
+    border: 1px solid #999;
+    padding: 0.05rem 0.4rem;
+    color: #555;
+  }
+  .sat__badge--chain { border-color: #0f61ff; color: #0f61ff; }
+  .sat__desc { margin: 0.3rem 0; line-height: 1.5; max-width: 44rem; }
+  .sat__meta {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    color: #666;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .sat__meta a { color: inherit; }
+  section p { line-height: 1.55; max-width: 46rem; }
+  code { font-family: 'JetBrains Mono Variable', monospace; font-size: 0.9em; }
+</style>
