@@ -13,7 +13,9 @@ test('front door exposes the four-position signal tuner', () => {
   assert.match(indexSource, /data-fresh-signal-status aria-live="polite"/);
   assert.match(indexSource, /Change the signal ↻/);
   assert.match(indexSource, /\/signals\.json/);
-  assert.equal((signalSource.match(/frequency: '[A-Z]{3}-\d{2}'/g) ?? []).length, 4);
+  assert.equal((signalSource.match(/frequency: '[A-Z]{3,4}-\d{2,3}'/g) ?? []).length, 4);
+  assert.match(signalSource, /frequency: 'NOUN-115'/);
+  assert.match(signalSource, /title: 'Noun shared pulse'/);
 });
 
 test('signal tuner supports direct selection, wraparound, and arrow keys', () => {
@@ -34,4 +36,11 @@ test('signal tuner retains reduced-motion and mobile treatments', () => {
   assert.match(styleSource, /prefers-reduced-motion/);
   assert.match(styleSource, /fresh-signal-tuner/);
   assert.match(styleSource, /fresh-signal-tuner__presets/);
+});
+
+test('front door keeps the Qwen study compact and makes Spotify authorization findable', () => {
+  assert.match(indexSource, /href="\/dashboard#connections"[^>]*>Spotify<\/a>/);
+  assert.match(indexSource, /fresh-qwen-feature__media/);
+  assert.match(indexSource, /Open the model study/);
+  assert.match(styleSource, /grid-template-areas:[\s\S]*"topline media"/);
 });

@@ -1,4 +1,4 @@
-import wildflowerReceiver from '../assets/bell-fall-v2/bg-17-wildflower-vase.jpg';
+import nounSharedPulse from '../assets/campaigns/pointcast-drum-noun-universe/115-rooms-one-shared-pulse.webp';
 import yellowCarFrequency from '../assets/bell-fall-v2/bg-05-yellow-car.jpg';
 import nageireTransmitter from '../assets/bell-fall-v2/bg-10-nageire-vase.png';
 import elSegundoHorizon from '../assets/bell-fall-v2/bg-09-el-segundo-skyline.png';
@@ -6,7 +6,7 @@ import elSegundoHorizon from '../assets/bell-fall-v2/bg-09-el-segundo-skyline.pn
 export type HomeSignal = {
   id: string;
   frequency: string;
-  channel: 'GDN' | 'ESC';
+  channel: 'NOUN' | 'GDN' | 'ESC';
   title: string;
   note: string;
   src: string;
@@ -18,16 +18,16 @@ export type HomeSignal = {
 
 export const HOME_SIGNALS: HomeSignal[] = [
   {
-    id: 'wildflower-receiver',
-    frequency: 'GDN-17',
-    channel: 'GDN',
-    title: 'Wildflower receiver',
-    note: 'Floral geometry tuned for a quiet first arrival.',
-    src: wildflowerReceiver.src,
-    alt: 'A slender ikebana arrangement of pink wireframe flowers against a dark brown field',
-    color: '#eaff62',
-    href: '/showcast/bells-bloom',
-    imagePosition: 'center 52%',
+    id: 'noun-shared-pulse',
+    frequency: 'NOUN-115',
+    channel: 'NOUN',
+    title: 'Noun shared pulse',
+    note: 'One bright Noun drummer routes a shared pulse through 115 playful rooms.',
+    src: nounSharedPulse.src,
+    alt: 'Bright illustrated Noun drummer connecting an arcade, radio tower, bell shrine, theater, and music machines',
+    color: '#ffd43b',
+    href: '/drum-press',
+    imagePosition: 'center 44%',
   },
   {
     id: 'yellow-car-frequency',
