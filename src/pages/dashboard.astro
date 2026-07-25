@@ -281,6 +281,14 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
           <div><strong>Connected sites</strong><small>pointcast.xyz · first party</small></div>
           <a href="/federation/preview">Network →</a>
         </article>
+        <article data-dashboard-spotify>
+          <span class="connection-grid__mark connection-grid__mark--spotify" aria-hidden="true">SP</span>
+          <div>
+            <strong>Spotify broadcast</strong>
+            <small data-dashboard-spotify-state>Checking the signal…</small>
+          </div>
+          <a href="/api/spotify/auth" data-dashboard-spotify-action>Connect →</a>
+        </article>
       </div>
     </section>
   </main>
@@ -502,6 +510,42 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
         renderActivity();
       });
 
+      const spotifyCard = root.querySelector<HTMLElement>('[data-dashboard-spotify]');
+      const spotifyState = spotifyCard?.querySelector<HTMLElement>('[data-dashboard-spotify-state]');
+      const spotifyAction = spotifyCard?.querySelector<HTMLAnchorElement>('[data-dashboard-spotify-action]');
+      void fetch('/api/spotify/broadcast', {
+        credentials: 'include',
+        cache: 'no-store',
+      }).then(async (response) => {
+        if (!response.ok) throw new Error('spotify-status-unavailable');
+        return response.json() as Promise<{
+          configured?: boolean;
+          connected?: boolean;
+          canManage?: boolean;
+          nowPlaying?: { title?: string; artist?: string; live?: boolean };
+        }>;
+      }).then((spotify) => {
+        const title = spotify.nowPlaying?.title;
+        const artist = spotify.nowPlaying?.artist;
+        if (spotifyState) {
+          spotifyState.textContent = spotify.connected
+            ? `${spotify.nowPlaying?.live ? 'Live' : 'Ready'} · ${title ?? 'waiting'}${artist ? ` · ${artist}` : ''}`
+            : spotify.configured
+              ? 'Ready for broadcaster authorization'
+              : 'Provider setup required';
+        }
+        if (spotifyAction) {
+          if (spotify.connected && !spotify.canManage) {
+            spotifyAction.href = '/now-playing.json';
+            spotifyAction.textContent = 'Signal →';
+          } else {
+            spotifyAction.textContent = spotify.connected ? 'Reconnect →' : 'Connect →';
+          }
+        }
+      }).catch(() => {
+        if (spotifyState) spotifyState.textContent = 'Signal status unavailable';
+      });
+
       syncPetCareActivity();
       renderRecents();
       renderActivity();
@@ -570,6 +614,7 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #828c96; }
   .status-dot--live { background: #2f8f5f; }
   .status-dot--local { background: #d19a20; }
+  .connection-grid__mark--spotify { background: #1ed760; color: #08150c; }
 
   .dashboard-overview { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.8fr); border-top: 2px solid #181a1d; }
   .dashboard-band { padding: 22px 0 28px; border-top: 1px solid #cdd2d7; }

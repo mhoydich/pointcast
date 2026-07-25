@@ -264,7 +264,13 @@ export async function restorePointCastTezosSession(): Promise<{
 }
 
 export async function loginWithGoogle(): Promise<PointCastUser | null> {
-  return openServerAuth('/api/auth/google');
+  if (!isBrowser()) return null;
+  const endpoint = new URL('/api/auth/google', window.location.origin);
+  endpoint.searchParams.set(
+    'returnTo',
+    `${window.location.pathname}${window.location.search}${window.location.hash}`,
+  );
+  return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
 }
 
 export async function loginWithApple(): Promise<PointCastUser | null> {

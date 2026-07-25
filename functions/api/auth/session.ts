@@ -1,5 +1,6 @@
 import type {
   AuthIdentity,
+  AuthRole,
   AuthSession,
   PointCastUser,
 } from '../../../src/lib/auth/types';
@@ -185,7 +186,10 @@ export async function destroySessionFromRequest(request: Request, env: AuthEnv):
 export async function upsertUserForIdentity(
   env: AuthEnv,
   identity: AuthIdentity,
-  options?: { currentUserId?: string | null },
+  options?: {
+    currentUserId?: string | null;
+    roles?: AuthRole[];
+  },
 ): Promise<PointCastUser> {
   const kv = requireUsers(env);
   const existingUserId = await kv.get(identityKey(identity.provider, identity.id));
@@ -205,6 +209,10 @@ export async function upsertUserForIdentity(
     createdAt: baseUser?.createdAt ?? nowIso(),
     identities: mergeIdentity(baseUser?.identities ?? [], identity),
     preferredName: baseUser?.preferredName || identity.name || shortName(identity.id),
+    roles: Array.from(new Set([
+      ...(baseUser?.roles ?? []),
+      ...(options?.roles ?? []),
+    ])),
   };
 
   await Promise.all([

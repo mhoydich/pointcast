@@ -1946,12 +1946,26 @@ const pingable = RESIDENTS.filter(
       var $peersOut = document.getElementById('fb-bcast-peers');
       if (!$now) return;
       var playing = window.PC_NOW_PLAYING || null;
+      try {
+        var nowResponse = await fetch('/now-playing.json', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        });
+        if (nowResponse.ok) {
+          playing = await nowResponse.json();
+          window.PC_NOW_PLAYING = playing;
+        }
+      } catch (e) {
+        // Keep the build-time editorial signal when the live bridge is offline.
+      }
       if (playing) {
         if ($nowId)    $nowId.textContent    = playing.provider || 'PLAY';
         if ($nowTitle) $nowTitle.textContent = playing.title || '(untitled)';
         if ($nowChan)  $nowChan.textContent  = playing.artist || 'CH.SPN';
         if ($now && playing.url) $now.setAttribute('href', playing.url);
-        if ($time) $time.textContent = 'ON AIR';
+        if ($time) $time.textContent = playing.status === 'playing' && playing.live === true
+          ? 'ON AIR'
+          : 'STANDBY';
       }
       // Audience — reuse the live-here number we already poll.
       if ($hereOut && $liveHere) {

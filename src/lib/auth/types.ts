@@ -7,6 +7,8 @@ export type AuthProvider =
   | 'temple'
   | 'umami';
 
+export type AuthRole = 'broadcaster';
+
 export interface AuthIdentity {
   provider: AuthProvider;
   id: string;
@@ -20,6 +22,7 @@ export interface PointCastUser {
   createdAt: string;
   identities: AuthIdentity[];
   preferredName: string;
+  roles?: AuthRole[];
 }
 
 export interface AuthSession {
