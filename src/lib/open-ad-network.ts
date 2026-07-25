@@ -234,6 +234,17 @@ export const LOCAL_STAR_COMMONS_CAMPAIGN = {
   note: 'A first-party founding-movement release for six local-first quality-of-life objects. Governance is off-chain and contribution-based; no token, treasury, fundraising, binding vote, Mainnet action, or live physical mesh exists.',
 } as const;
 
+export const BELLS_BLOOM_CAMPAIGN = {
+  id: 'PC-BELLS-BLOOM-2026',
+  label: 'Bells / Bloom — PointCast Showcast 001',
+  advertiser: 'PointCast Showcast',
+  creativeCount: 1,
+  placement: 'PointCast art surfaces and portable Open Ad Network inventory',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A first-party 28-work Midjourney archive exhibition. Every image links to its source job; the campaign uses contextual rotation only.',
+} as const;
+
 export const NETWORK_FIRST_100_SIGNAL = {
   id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
   label: 'Network El Segundo — First 100 Signal Strip',
@@ -246,6 +257,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-BELLS-BLOOM-001',
+    advertiser: 'PointCast Showcast',
+    headline: 'A bell is a flower you can hear.',
+    copy: 'Twenty-eight Midjourney studies in signal, garden, geometry, and beautiful machine weather.',
+    href: '/showcast/bells-bloom',
+    cta: 'Enter Bells / Bloom',
+    tone: 'garden',
+    contexts: ['art', 'archive', 'gallery', 'showcast', 'midjourney', 'bell', 'flower', 'garden', 'signal', 'design', 'el', 'segundo'],
+    image: '/images/og/bells-bloom-showcast.png',
+    sourceTool: 'Midjourney V8.1 / Michael Hoydich',
+    campaign: BELLS_BLOOM_CAMPAIGN.id,
+    seriesLabel: BELLS_BLOOM_CAMPAIGN.label,
+    status: 'house',
+  },
   {
     id: 'PC-LOCAL-STAR-COMMONS-001',
     advertiser: 'LOCAL STAR COMMONS',
