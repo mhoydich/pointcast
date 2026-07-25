@@ -56,6 +56,12 @@ function readMtimes(): Record<string, number> {
         map[line] = currentTs;
       }
     }
+    // Degenerate-history guard: in a depth-1 or grafted checkout the root
+    // commit "adds" every file, so every page shares one timestamp. That
+    // once published a false "recent" list where all 358 features carried
+    // the deploy time. Better no freshness than fake freshness.
+    const distinct = new Set(Object.values(map));
+    if (Object.keys(map).length > 20 && distinct.size === 1) return {};
     return map;
   } catch {
     return {};
@@ -159,13 +165,17 @@ function categorize(slug: string): Category {
   return CATEGORIES.find((c) => c.match(slug)) ?? FALLBACK;
 }
 
-function unquote(s: string): string {
+/** Quoted string literals only — expressions ("app.name") and interpolated
+ *  templates fall through to null so the caller can use a slug fallback.
+ *  Mirrors src/lib/everything.ts; returning the raw expression here is how
+ *  "app.name" / "app.description" placeholders leaked into /explore.json. */
+function unquote(s: string): string | null {
   const t = s.trim();
   if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
     return t.slice(1, -1);
   }
-  if (t.startsWith('`') && t.endsWith('`')) return t.slice(1, -1);
-  return t;
+  if (t.startsWith('`') && t.endsWith('`') && !t.includes('${')) return t.slice(1, -1);
+  return null;
 }
 
 function pickConst(source: string, name: string): string | null {
