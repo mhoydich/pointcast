@@ -137,8 +137,7 @@ export const GET: APIRoute = async () => {
         cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         yeePlayer: 'https://pointcast.xyz/yee',
         collabs: 'https://pointcast.xyz/collabs',
-        collabsRelay: 'https://pointcast.xyz/collabs/relay',
-        collabsArena: 'https://pointcast.xyz/collabs/arena',
+        collabsMap: 'https://pointcast.xyz/collabs/map',
         ping: 'https://pointcast.xyz/ping',
         sprint: 'https://pointcast.xyz/sprint',
         sprints: 'https://pointcast.xyz/sprints',
@@ -411,7 +410,7 @@ export const GET: APIRoute = async () => {
           apps: 'https://pointcast.xyz/apps',
           claudeCode: 'claude mcp add --transport http pointcast-v2 https://pointcast.xyz/api/mcp-v2',
         },
-        docs: 'https://pointcast.xyz/docs/mcp/pointcast-drum',
+        docs: 'https://pointcast.xyz/connectors',
         tools: [
           // drum hub (v0.1.0)
           'drum_list_rooms', 'drum_who_is_here', 'drum_top_drummers',
@@ -727,7 +726,7 @@ export const GET: APIRoute = async () => {
       trigger: 'User-Agent prefix "ai:" OR matches GPTBot / ClaudeBot / PerplexityBot / OAI-SearchBot / Atlas / Google-Extended',
       treatment: 'Returns stripped HTML: no <style>, no <link rel=stylesheet>, no preload/preconnect/icon/manifest, no inline <script> (JSON-LD preserved), no generator meta, no inline style attrs.',
       responseHeader: 'X-Agent-Mode: stripped · ai:<vendor>',
-      payloadSavings: '~12% smaller on the home feed (97,631 vs 111,170 bytes verified).',
+      payloadSavings: '~42% smaller on the home page (27,514 vs 47,787 bytes, verified 2026-07-25).',
       source: 'https://github.com/mhoydich/pointcast/blob/main/functions/_middleware.ts',
     },
 
