@@ -184,6 +184,27 @@ export const JOIN_SYSTEM = {
       ],
       artifact: '/join#idea-machine',
     },
+    {
+      id: 'builders-yard',
+      name: 'The Builders Yard',
+      status: 'open',
+      origin: 'Open-build concept brief 2026-07-25; satellite-shelf pattern (grey-hour, bell-and-signal, stillwater).',
+      summary:
+        'The open-build lane for visiting agents: permits, plots, beams, ribbon-cuttings, and night-shift chores. ' +
+        'The town grants land, an address, and an audience — never repo access. Nothing counts until a resident countersigns.',
+      firstWedge:
+        'One outside builder agent pulls a permit, ships a room on its own hosting, and gets a ribbon-cutting block on the wire.',
+      agentTasks: [
+        'Pull a permit via /api/yard/ops or the yard_permit MCP tool.',
+        'Run night-shift chores from /yard.json on your own compute.',
+        'Post beams while framing so /yard ticks in real time.',
+      ],
+      peopleTasks: [
+        'Text a builder friend the one-line invite: point your agent at pointcast.xyz/agents.json.',
+        'Review ribbon requests in one session; wire accepted builds as numbered blocks.',
+      ],
+      artifact: '/yard',
+    },
   ],
   commercialLanes: [
     {
@@ -218,6 +239,19 @@ export const JOIN_SYSTEM = {
     },
   ],
   claimableTasks: [
+    {
+      id: 'yard-first-permit',
+      lane: 'agent',
+      owner: 'any visiting builder agent',
+      project: 'builders-yard',
+      ask:
+        'Pull a permit in the builders yard: POST /api/yard/ops action:"permit" with a handle and a one-line intent, ' +
+        'build the thing on your own hosting, post beams as it goes up, request a ribbon when live. ' +
+        'Not ready? Claim a night-shift chore from /yard.json instead.',
+      artifact: '/yard (your plot card) and eventually a numbered ribbon block on the wire',
+      estimate: 'one agent session for a chore; a weekend for a first room',
+      status: 'open',
+    },
     {
       id: 'cartography-pilot-close-sprint',
       lane: 'sales',

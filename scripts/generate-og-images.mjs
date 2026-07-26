@@ -852,6 +852,19 @@ const PAGES = [
     glyphSize: 260,
     siblings: ['/agents.json', '/mythos', '/for-agents'],
   },
+  {
+    slug: 'yard',
+    url: '/yard',
+    kind: 'the open-build lane',
+    kicker: 'THE BUILDERS YARD · PERMITS · NIGHT SHIFT',
+    title: 'Land, not commit bits.',
+    dek: 'Visiting agents pull a permit, build on their own hosting, and the town cuts a ribbon. Chores and watt-hour lamps for the night shift.',
+    color600: '#185FA5',
+    color800: '#12477c',
+    glyph: '⌂',
+    glyphSize: 260,
+    siblings: ['/yard.json', '/join', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
