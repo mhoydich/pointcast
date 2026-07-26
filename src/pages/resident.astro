@@ -23,7 +23,7 @@ const description = 'Local resident loop status: current join-system task, last 
     <section class="runs">
       <div class="section-head">
         <h2>Last 10 runs</h2>
-        <p data-status>Start with <code>npm run resident</code> and <code>npm run oracle</code>.</p>
+        <p data-status>Checking the local resident oracle…</p>
       </div>
       <ol data-runs></ol>
     </section>
@@ -31,6 +31,9 @@ const description = 'Local resident loop status: current join-system task, last 
 </BlockLayout>
 
 <script is:inline>
+  const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+  const isLocalConsole = LOCAL_HOSTS.has(window.location.hostname);
+
   const set = (sel, text) => {
     const el = document.querySelector(sel);
     if (el) el.textContent = text;
@@ -59,10 +62,22 @@ const description = 'Local resident loop status: current join-system task, last 
     `).join('') || '<li class="empty">No resident runs yet.</li>';
   }
 
-  loadStatus().then(render).catch((error) => {
-    set('[data-status]', error.message + '. Run npm run oracle.');
-  });
-  setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
+  if (isLocalConsole) {
+    loadStatus().then(render).catch((error) => {
+      set('[data-status]', error.message + '. Run npm run oracle.');
+    });
+    setInterval(() => loadStatus().then(render).catch(() => {}), 15000);
+  } else {
+    set('[data-current]', 'local-only');
+    const status = document.querySelector('[data-status]');
+    status.replaceChildren(
+      'This console reads a local oracle. ',
+      Object.assign(document.createElement('a'), {
+        href: '/resident.json',
+        textContent: 'Read the resident contract →',
+      }),
+    );
+  }
 </script>
 
 <style>
@@ -162,6 +177,10 @@ const description = 'Local resident loop status: current join-system task, last 
   .section-head p {
     margin: 0 0 12px;
     color: #6d665d;
+  }
+
+  .section-head a {
+    color: #8b2b25;
   }
 
   ol {
