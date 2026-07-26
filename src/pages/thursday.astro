@@ -1,0 +1,1054 @@
+---
+/**
+ * /thursday — a room that keeps hours.
+ *
+ * Open Thursday 15:00–19:00 America/Los_Angeles. Shut the rest of the week.
+ *
+ * The CLOSED state is the product, not the fallback: six days and twenty
+ * hours out of every seven days, this address is a shuttered pixel
+ * storefront, a hand-lettered hours card, and a line of mono type counting
+ * down. That is the state almost every visitor will ever see, so it is the
+ * state that got the design work.
+ *
+ * Everything here is static at build time. All state is computed in the
+ * browser from the Pacific wall clock by the single <script is:inline> at
+ * the bottom of this file, which flips data-state="shut" | "open" on the
+ * root element. The OG card is deliberately state-neutral because it is
+ * frozen at build and would otherwise lie six days out of seven.
+ *
+ * The PT weekday + hour gate is lifted from
+ * src/components/HappyFridayBlock.astro (its `ptFormatter` block) — a
+ * finished, orphaned Thursday-evening gate that never got an importer.
+ * Same Intl.DateTimeFormat call, same weekday/hour parts, moved from
+ * build time to read time so a static page can keep hours at all.
+ *
+ * Server side, functions/api/bulletin.ts recomputes the same window before
+ * it writes anything, so the shutter is not merely cosmetic.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'The Thursday room';
+const description =
+  'A PointCast room that keeps hours: open Thursdays 3 to 7pm Pacific, shut the rest of the week. Same four hours the El Segundo Certified Farmers Market runs on the 300 block of Main Street. Most of the time it is a closed shutter with a countdown on it.';
+
+// State-neutral OG card. This unfurl is frozen at build time, so it must not
+// claim the room is open or closed — the site's default card is the honest
+// choice until a dedicated shutter card exists as a static asset.
+const ogImage = '/images/og/og-home-v2.png';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/thursday',
+  url: 'https://pointcast.xyz/thursday',
+  name: title,
+  description,
+  inLanguage: 'en-US',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  // The room's own hours, machine-readable. schema.org/Schedule is the right
+  // shape for a recurring window with a timezone.
+  mainEntity: {
+    '@type': 'Schedule',
+    name: 'The Thursday room, open hours',
+    byDay: 'https://schema.org/Thursday',
+    startTime: '15:00',
+    endTime: '19:00',
+    scheduleTimezone: 'America/Los_Angeles',
+    repeatFrequency: 'P1W',
+  },
+  about: {
+    '@type': 'Thing',
+    name: 'El Segundo Certified Farmers Market',
+    description:
+      'Thursdays 3 to 7pm on the 300 block of Main Street, El Segundo, California. This room keeps the same four hours; it does not speak for the market.',
+  },
+  keywords:
+    'thursday, open hours, closed, countdown, el segundo, main street, farmers market, pointcast, garden channel',
+};
+
+const alternates = [
+  { type: 'application/json', href: '/api/bulletin?board=thursday', title: 'This week on the Thursday board' },
+];
+
+// ── Storefront geometry ──────────────────────────────────────────────────────
+// viewBox is 320 x 288 on an 8px pixel grid. Every rect lands on a multiple of
+// 2 so shape-rendering="crispEdges" gives clean pixel seams at any scale.
+const INK = '#12110E';
+const TEAL = '#0F6E56'; // GDN channel 600
+const TEAL_DARK = '#0A4E3D';
+const TEAL_LIGHT = '#178A6C';
+const TEAL_PALE = '#CFE4DC';
+const PAPER = '#FFFFFF';
+const WARM = '#FFF9EC';
+const WARM_SHADE = '#EDE6D6';
+const BULB = '#F2C14E';
+
+// 19 awning stripes, 16px each, from x=8 to x=312.
+const STRIPES = Array.from({ length: 19 }, (_, i) => ({
+  x: 8 + i * 16,
+  fill: i % 2 === 0 ? TEAL : TEAL_PALE,
+  tooth: i % 2 === 0,
+}));
+
+// 15 shutter slats, 8px each, filling y=128 to y=248 exactly. Each slat is a
+// 6px face plus a 2px shadow seam, flattened into one list of rects so the
+// template stays a single map with no fragments.
+const SLATS = Array.from({ length: 15 }, (_, k) => 128 + k * 8).flatMap((y) => [
+  { y, h: 6, fill: TEAL },
+  { y: y + 6, h: 2, fill: TEAL_DARK },
+]);
+
+// Recurring calendar entry. First session is Thursday 2026-07-30, 15:00 PDT
+// (22:00Z) to 19:00 PDT (02:00Z the next day).
+const CAL_URL =
+  'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+  '&text=' + encodeURIComponent('the thursday room') +
+  '&dates=20260730T220000Z/20260731T020000Z' +
+  '&recur=' + encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY=TH') +
+  '&ctz=America%2FLos_Angeles' +
+  '&location=' + encodeURIComponent('300 Main St, El Segundo, CA 90245') +
+  '&details=' + encodeURIComponent('pointcast.xyz/thursday is open for these four hours.');
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={ogImage}
+  jsonLd={jsonLd}
+  alternates={alternates}
+>
+  <main class="thu" id="thu" data-state="shut">
+
+    <nav class="thu-crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/common-hours">common hours</a>
+      <span aria-hidden="true">/</span>
+      <span>thursday</span>
+    </nav>
+
+    <header class="thu-head">
+      <p class="thu-kicker">CH.GDN · EL SEGUNDO · 300 BLOCK OF MAIN · 33.9192 -118.4165</p>
+      <h1>the thursday room</h1>
+      <p class="thu-lede">
+        this address keeps hours. it opens thursday at three in the afternoon, pacific,
+        and it shuts at seven. the rest of the week, six days and twenty hours of it,
+        the shutter is down and there is nothing out here but a clock.
+      </p>
+    </header>
+
+    <!-- ── The storefront ────────────────────────────────────────────────── -->
+    <figure class="thu-front">
+      <svg
+        class="thu-svg"
+        viewBox="0 0 320 288"
+        shape-rendering="crispEdges"
+        role="img"
+        aria-labelledby="thu-svg-title thu-svg-desc"
+      >
+        <title id="thu-svg-title">A small pixel storefront with a roll-down shutter</title>
+        <desc id="thu-svg-desc">
+          A shopfront with a striped awning and a sign reading THURSDAY. A corrugated
+          shutter covers the opening, an hours card is taped to it, and a padlock hangs
+          from the bottom rail. On Thursday afternoons the shutter rolls up.
+        </desc>
+
+        <!-- cornice -->
+        <rect x="8" y="8" width="304" height="16" fill={INK} />
+
+        <!-- sign board -->
+        <rect x="24" y="24" width="272" height="48" fill={INK} />
+        <rect x="32" y="32" width="256" height="32" fill={PAPER} />
+        <text class="thu-sign" x="160" y="55" text-anchor="middle" fill={INK}>THURSDAY</text>
+
+        <!-- awning -->
+        {STRIPES.map((s) => <rect x={s.x} y="72" width="16" height="32" fill={s.fill} />)}
+        {STRIPES.filter((s) => s.tooth).map((s) => (
+          <rect x={s.x} y="104" width="16" height="8" fill={s.fill} />
+        ))}
+        <rect x="8" y="72" width="304" height="4" fill={INK} />
+
+        <!-- shutter housing -->
+        <rect x="16" y="112" width="288" height="16" fill={INK} />
+
+        <!-- ── interior, revealed when the shutter goes up ── -->
+        <g class="thu-room">
+          <rect x="24" y="128" width="272" height="120" fill={WARM} />
+          <rect x="24" y="128" width="272" height="8" fill={WARM_SHADE} />
+          <!-- hanging bulb -->
+          <rect x="158" y="136" width="4" height="16" fill={INK} />
+          <rect x="144" y="148" width="32" height="20" fill={BULB} opacity="0.28" />
+          <rect x="152" y="152" width="16" height="12" fill={BULB} />
+          <!-- crates on the counter -->
+          <rect x="80" y="184" width="40" height="24" fill={TEAL} />
+          <rect x="136" y="184" width="40" height="24" fill={TEAL_LIGHT} />
+          <rect x="192" y="184" width="40" height="24" fill={TEAL_DARK} />
+          <rect x="88" y="176" width="8" height="8" fill={TEAL_LIGHT} />
+          <rect x="104" y="176" width="8" height="8" fill={TEAL_LIGHT} />
+          <rect x="144" y="176" width="8" height="8" fill={TEAL_DARK} />
+          <rect x="160" y="176" width="8" height="8" fill={TEAL_DARK} />
+          <rect x="200" y="176" width="8" height="8" fill={TEAL} />
+          <rect x="216" y="176" width="8" height="8" fill={TEAL} />
+          <!-- floor, then the counter standing on it -->
+          <rect x="24" y="230" width="272" height="18" fill={WARM_SHADE} />
+          <rect x="56" y="208" width="208" height="10" fill={INK} />
+          <rect x="64" y="218" width="8" height="22" fill={INK} />
+          <rect x="248" y="218" width="8" height="22" fill={INK} />
+          <!-- open card in the window -->
+          <g class="thu-opencard">
+            <rect x="216" y="140" width="64" height="28" fill={INK} />
+            <rect x="220" y="144" width="56" height="20" fill={PAPER} />
+            <text class="thu-opentext" x="248" y="158" text-anchor="middle" fill={TEAL}>OPEN</text>
+          </g>
+        </g>
+
+        <!-- ── the shutter itself ── -->
+        <g class="thu-slats">
+          {SLATS.map((s) => <rect x="24" y={s.y} width="272" height={s.h} fill={s.fill} />)}
+        </g>
+
+        <!-- guide rails and bottom rail sit above the slats -->
+        <rect x="16" y="128" width="8" height="120" fill={INK} />
+        <rect x="296" y="128" width="8" height="120" fill={INK} />
+        <rect x="16" y="240" width="288" height="8" fill={INK} />
+
+        <!-- ── everything that only makes sense while shut ── -->
+        <g class="thu-shutgear">
+          <!-- pull handle on the last slat -->
+          <rect x="128" y="230" width="64" height="10" fill={INK} />
+          <rect x="148" y="232" width="24" height="6" fill={TEAL_LIGHT} />
+
+          <!-- hours card, taped on a slight tilt -->
+          <g transform="rotate(-2.2 160 182)">
+            <rect x="112" y="138" width="26" height="9" fill="rgba(18,17,14,0.22)" transform="rotate(-38 125 142.5)" />
+            <rect x="182" y="138" width="26" height="9" fill="rgba(18,17,14,0.22)" transform="rotate(38 195 142.5)" />
+            <rect x="104" y="142" width="112" height="80" fill={INK} />
+            <rect x="108" y="146" width="104" height="72" fill={PAPER} />
+            <text class="thu-card-kicker" x="160" y="166" text-anchor="middle" fill={INK}>HOURS</text>
+            <rect x="122" y="172" width="76" height="2" fill={INK} />
+            <text class="thu-card-day" x="160" y="197" text-anchor="middle" fill={INK}>THU</text>
+            <text class="thu-card-time" x="160" y="212" text-anchor="middle" fill={INK}>3–7 PM</text>
+          </g>
+
+          <!-- padlock on the bottom rail -->
+          <rect x="150" y="250" width="20" height="4" fill={INK} />
+          <rect x="150" y="250" width="4" height="10" fill={INK} />
+          <rect x="166" y="250" width="4" height="10" fill={INK} />
+          <rect x="144" y="258" width="32" height="18" fill={INK} />
+          <rect x="158" y="263" width="4" height="8" fill={TEAL} />
+        </g>
+
+        <!-- sidewalk -->
+        <rect x="8" y="282" width="304" height="2" fill="#C4C2BC" />
+      </svg>
+    </figure>
+
+    <!-- ── The clock line ────────────────────────────────────────────────── -->
+    <section class="thu-status" aria-live="polite" aria-label="Room status">
+      <span class="thu-status__word" id="thu-state">SHUT</span>
+      <span class="thu-status__cell">
+        <span class="thu-status__label" id="thu-remain-label">OPENS IN</span>
+        <span class="thu-status__value" id="thu-remain">—</span>
+      </span>
+      <span class="thu-status__cell thu-shut-only">
+        <span class="thu-status__label">NEXT</span>
+        <span class="thu-status__value" id="thu-next">thu · 15:00 pt</span>
+      </span>
+      <span class="thu-status__cell thu-open-only">
+        <span class="thu-status__label">PACIFIC</span>
+        <span class="thu-status__value" id="thu-clock">—</span>
+      </span>
+      <span class="thu-status__cell">
+        <span class="thu-status__label">SESSION</span>
+        <span class="thu-status__value" id="thu-session">—</span>
+      </span>
+    </section>
+
+    <!-- ── Shut ──────────────────────────────────────────────────────────── -->
+    <div class="thu-shut-only">
+      <section class="thu-sec">
+        <h2>why a room that is mostly closed</h2>
+        <p>
+          a garden is slow on purpose. a broadcast can be too. a room that is always
+          open asks nothing of you and gives back about as much. a room that is open
+          four hours a week makes those four hours somewhere you have to actually be.
+        </p>
+        <p>
+          the hours are not arbitrary. on the 300 block of main street the el segundo
+          certified farmers market sets up thursdays, three to seven, and this page
+          keeps the same clock. if you are standing on that block at four in the
+          afternoon with a phone in your hand, this is open too.
+        </p>
+      </section>
+
+      <section class="thu-sec">
+        <h2>what is behind the shutter</h2>
+        <ul class="thu-list">
+          <li><span class="thu-list__k">weather</span> the conditions on that block at that hour, live, not a forecast of it</li>
+          <li><span class="thu-list__k">clock</span> a pacific clock counting down to seven</li>
+          <li><span class="thu-list__k">one line</span> a hundred and forty characters from anyone who is here, up until the room shuts</li>
+        </ul>
+        <p class="thu-quiet">
+          that is all of it. it is not much. it is only there on thursday, which is the
+          part that makes it worth anything.
+        </p>
+        <p>
+          <a class="thu-cal" href={CAL_URL} rel="noopener noreferrer" target="_blank">put it on the calendar</a>
+        </p>
+      </section>
+
+      <section class="thu-sec thu-last" id="thu-last" hidden>
+        <h2>the last time it was open</h2>
+        <p class="thu-quiet" id="thu-last-when">—</p>
+        <ol class="thu-notes" id="thu-last-list"></ol>
+      </section>
+    </div>
+
+    <!-- ── Open ──────────────────────────────────────────────────────────── -->
+    <div class="thu-open-only">
+      <section class="thu-sec">
+        <h2>the 300 block, right now</h2>
+        <dl class="thu-wx">
+          <div><dt>TEMP</dt><dd id="thu-temp">—</dd></div>
+          <div><dt>SKY</dt><dd id="thu-cond">—</dd></div>
+          <div><dt>SUNSET</dt><dd id="thu-sunset">—</dd></div>
+        </dl>
+        <p class="thu-quiet">
+          open-meteo, read at the edge, cached ten minutes. the stalls are up while
+          this reads anything at all.
+        </p>
+      </section>
+
+      <section class="thu-sec">
+        <h2>the board</h2>
+        <p class="thu-quiet">
+          one line each. it stays up until the room shuts, then next thursday starts a
+          clean board.
+        </p>
+        <ol class="thu-notes" id="thu-board"></ol>
+        <p class="thu-quiet" id="thu-empty">
+          nothing on the board yet this week. that is allowed. the weather is still
+          the weather.
+        </p>
+        <form class="thu-form" id="thu-form" autocomplete="off">
+          <label class="thu-form__label" for="thu-input">leave one line</label>
+          <div class="thu-form__row">
+            <input
+              id="thu-input"
+              name="line"
+              type="text"
+              maxlength="140"
+              placeholder="what is on main street right now"
+            />
+            <button type="submit" id="thu-send">pin it</button>
+          </div>
+          <p class="thu-form__meta">
+            <span id="thu-count">140</span> left
+            <span class="thu-form__say" id="thu-say"></span>
+          </p>
+        </form>
+      </section>
+    </div>
+
+    <!-- ── Always ────────────────────────────────────────────────────────── -->
+    <footer class="thu-foot">
+      <p>
+        <strong>hours.</strong> thursday, 3:00 to 7:00 pm pacific. the certified farmers
+        market on the 300 block of main street runs the same four hours. this page keeps
+        its own clock and does not speak for the market.
+      </p>
+      <p class="thu-plumbing">
+        STATE COMPUTED IN YOUR BROWSER FROM AMERICA/LOS_ANGELES · THE SERVER RECHECKS THE
+        WINDOW BEFORE IT WRITES · <a href="/api/bulletin?board=thursday">board json</a> ·
+        <a href="/common-hours">the common hours index</a>
+      </p>
+    </footer>
+  </main>
+
+  <script is:inline>
+    (function () {
+      var root = document.getElementById('thu');
+      if (!root) return;
+
+      var PT = 'America/Los_Angeles';
+      var DAY = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      var OPEN_HOUR = 15;
+      var SHUT_HOUR = 19;
+      var EPOCH_MS = Date.parse('2026-07-30T00:00:00Z'); // first session, session 001
+      var CAP = 140;
+
+      // ── PT weekday + hour gate, lifted from HappyFridayBlock.astro ───────
+      var ptFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: PT,
+        weekday: 'short',
+        hour: 'numeric',
+        hour12: false,
+      });
+      function ptWeekdayHour(d) {
+        var parts = ptFormatter.formatToParts(d);
+        var weekday = '';
+        var hour = 0;
+        for (var i = 0; i < parts.length; i++) {
+          if (parts[i].type === 'weekday') weekday = parts[i].value;
+          if (parts[i].type === 'hour') hour = parseInt(parts[i].value, 10) % 24;
+        }
+        return { weekday: weekday, hour: hour };
+      }
+
+      // ── Full PT wall clock, for date arithmetic and the countdown ────────
+      var fullFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: PT,
+        weekday: 'short',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      function ptFull(d) {
+        var p = {};
+        var parts = fullFormatter.formatToParts(d);
+        for (var i = 0; i < parts.length; i++) p[parts[i].type] = parts[i].value;
+        return {
+          weekday: p.weekday,
+          year: +p.year,
+          month: +p.month,
+          day: +p.day,
+          hour: +p.hour % 24,
+          minute: +p.minute,
+          second: +p.second,
+        };
+      }
+      // Offset in ms such that ptWallClock === utcInstant + offset. Negative.
+      function ptOffsetMs(d) {
+        var p = ptFull(d);
+        var asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+        return asUTC - Math.floor(d.getTime() / 1000) * 1000;
+      }
+      // Exact UTC instant of a Pacific wall-clock moment. Two correction
+      // passes settle it on both sides of a daylight-saving change.
+      function wallToUTC(y, m, day, h) {
+        var naive = Date.UTC(y, m - 1, day, h, 0, 0);
+        var t = naive + 8 * 3600000;
+        for (var i = 0; i < 3; i++) t = naive - ptOffsetMs(new Date(t));
+        return t;
+      }
+      function shiftDays(p, n) {
+        var d = new Date(Date.UTC(p.year, p.month - 1, p.day) + n * 86400000);
+        return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+      }
+      function pad2(n) {
+        return n < 10 ? '0' + n : '' + n;
+      }
+      function dateKey(t) {
+        return t.year + '-' + pad2(t.month) + '-' + pad2(t.day);
+      }
+
+      function nextOpenMs(now) {
+        var p = ptFull(now);
+        var ahead = (4 - DAY[p.weekday] + 7) % 7;
+        if (ahead === 0 && p.hour >= OPEN_HOUR) ahead = 7;
+        var t = shiftDays(p, ahead);
+        return wallToUTC(t.year, t.month, t.day, OPEN_HOUR);
+      }
+      function shutMs(now) {
+        var p = ptFull(now);
+        return wallToUTC(p.year, p.month, p.day, SHUT_HOUR);
+      }
+      // The Thursday whose board is currently the live one. Before 15:00 on a
+      // Thursday the live board is still last week's.
+      function weekKey(now, extraWeeksBack) {
+        var p = ptFull(now);
+        var back = (DAY[p.weekday] - 4 + 7) % 7;
+        if (p.weekday === 'Thu' && p.hour < OPEN_HOUR) back = 7;
+        return dateKey(shiftDays(p, -(back + 7 * (extraWeeksBack || 0))));
+      }
+      function sessionNo(key) {
+        var n = Math.round((Date.parse(key + 'T00:00:00Z') - EPOCH_MS) / 604800000) + 1;
+        return n < 1 ? 1 : n;
+      }
+
+      function duration(ms) {
+        if (ms < 0) ms = 0;
+        var s = Math.floor(ms / 1000);
+        var d = Math.floor(s / 86400);
+        s -= d * 86400;
+        var h = Math.floor(s / 3600);
+        s -= h * 3600;
+        var m = Math.floor(s / 60);
+        s -= m * 60;
+        return (d > 0 ? d + 'd ' : '') + pad2(h) + ':' + pad2(m) + ':' + pad2(s);
+      }
+      var dayFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: PT,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+      function nextLabel(ms) {
+        return dayFormatter.format(new Date(ms)).toLowerCase() + ' · 15:00 pt';
+      }
+      function clockLabel(now) {
+        var p = ptFull(now);
+        return pad2(p.hour) + ':' + pad2(p.minute) + ':' + pad2(p.second);
+      }
+
+      // ── DOM helpers ──────────────────────────────────────────────────────
+      function el(id) {
+        return document.getElementById(id);
+      }
+      function put(id, text) {
+        var node = el(id);
+        if (node) node.textContent = text;
+      }
+
+      function renderNotes(listNode, notes) {
+        listNode.textContent = '';
+        for (var i = 0; i < notes.length; i++) {
+          var n = notes[i];
+          if (!n || typeof n.body !== 'string') continue;
+          var li = document.createElement('li');
+          var img = document.createElement('img');
+          img.src = 'https://noun.pics/' + ((n.nounId || 0) % 1200) + '.svg';
+          img.width = 24;
+          img.height = 24;
+          img.alt = '';
+          img.loading = 'lazy';
+          var span = document.createElement('span');
+          span.textContent = n.body;
+          li.appendChild(img);
+          li.appendChild(span);
+          listNode.appendChild(li);
+        }
+      }
+
+      // ── Data ─────────────────────────────────────────────────────────────
+      var weatherLoaded = 0;
+      function loadWeather() {
+        if (Date.now() - weatherLoaded < 240000) return;
+        weatherLoaded = Date.now();
+        fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (d) {
+            if (!d || !d.ok) return;
+            if (d.tempF != null) put('thu-temp', d.tempF + '°F');
+            if (d.condition) put('thu-cond', String(d.condition).toLowerCase());
+            if (d.sunset) put('thu-sunset', String(d.sunset).slice(11, 16) + ' pt');
+          })
+          .catch(function () {});
+      }
+
+      var boardLoaded = 0;
+      function loadBoard(force) {
+        var list = el('thu-board');
+        var empty = el('thu-empty');
+        if (!list) return;
+        if (!force && Date.now() - boardLoaded < 90000) return;
+        boardLoaded = Date.now();
+        fetch('/api/bulletin?board=thursday', { cache: 'no-store' })
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (d) {
+            var notes = d && d.ok && Array.isArray(d.notes) ? d.notes : [];
+            renderNotes(list, notes);
+            if (empty) empty.style.display = notes.length ? 'none' : '';
+          })
+          .catch(function () {});
+      }
+
+      var lastLoaded = false;
+      function loadLastWeek() {
+        if (lastLoaded) return;
+        lastLoaded = true;
+        var key = weekKey(new Date(), 0);
+        var section = el('thu-last');
+        var list = el('thu-last-list');
+        if (!section || !list) return;
+        fetch('/api/bulletin?board=thursday&week=' + encodeURIComponent(key), { cache: 'no-store' })
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (d) {
+            var notes = d && d.ok && Array.isArray(d.notes) ? d.notes.slice(0, 3) : [];
+            if (!notes.length) return;
+            renderNotes(list, notes);
+            put('thu-last-when', 'session ' + pad3(sessionNo(key)) + ' · ' + key);
+            section.removeAttribute('hidden');
+          })
+          .catch(function () {});
+      }
+      function pad3(n) {
+        return n < 100 ? (n < 10 ? '00' + n : '0' + n) : '' + n;
+      }
+
+      // ── Composer ─────────────────────────────────────────────────────────
+      var form = el('thu-form');
+      var input = el('thu-input');
+      var send = el('thu-send');
+      function say(msg) {
+        put('thu-say', msg || '');
+      }
+      if (input) {
+        input.addEventListener('input', function () {
+          put('thu-count', String(Math.max(0, CAP - input.value.length)));
+        });
+      }
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          if (!input) return;
+          var value = input.value.replace(/\s+/g, ' ').trim().slice(0, CAP);
+          if (!value) {
+            say('needs a line first.');
+            return;
+          }
+          if (send) send.disabled = true;
+          say('pinning…');
+          fetch('/api/bulletin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ board: 'thursday', body: value }),
+          })
+            .then(function (r) {
+              return r
+                .json()
+                .catch(function () {
+                  return null;
+                })
+                .then(function (j) {
+                  return { status: r.status, data: j };
+                });
+            })
+            .then(function (res) {
+              if (send) send.disabled = false;
+              var data = res.data;
+              if (data && data.ok) {
+                input.value = '';
+                put('thu-count', String(CAP));
+                say('up on the board.');
+                loadBoard(true);
+                return;
+              }
+              if (data && data.error === 'closed') {
+                say('the room just shut. next thursday.');
+                tick();
+                return;
+              }
+              if (res.status === 429) {
+                say('five lines an hour is plenty. give it a minute.');
+                return;
+              }
+              say('that did not stick. try again.');
+            })
+            .catch(function () {
+              if (send) send.disabled = false;
+              say('no signal. try again.');
+            });
+        });
+      }
+
+      // ── The gate ─────────────────────────────────────────────────────────
+      var wasOpen = null;
+      function tick() {
+        var now = new Date();
+        var w = ptWeekdayHour(now);
+        var open = w.weekday === 'Thu' && w.hour >= OPEN_HOUR && w.hour < SHUT_HOUR;
+
+        if (open) {
+          put('thu-state', 'OPEN');
+          put('thu-remain-label', 'SHUTS IN');
+          put('thu-remain', duration(shutMs(now) - now.getTime()));
+          put('thu-clock', clockLabel(now));
+          put('thu-session', pad3(sessionNo(weekKey(now, 0))));
+        } else {
+          var next = nextOpenMs(now);
+          put('thu-state', 'SHUT');
+          put('thu-remain-label', 'OPENS IN');
+          put('thu-remain', duration(next - now.getTime()));
+          put('thu-next', nextLabel(next));
+          var nextKey = dateKey(ptFull(new Date(next)));
+          put('thu-session', pad3(sessionNo(nextKey)));
+        }
+
+        if (open !== wasOpen) {
+          root.setAttribute('data-state', open ? 'open' : 'shut');
+          if (open) {
+            loadWeather();
+            loadBoard();
+          } else {
+            loadLastWeek();
+          }
+          wasOpen = open;
+        } else if (open) {
+          // Both are self-throttled: weather every 4 minutes, board every 90s.
+          loadWeather();
+          loadBoard();
+        }
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .thu {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 5rem;
+    font-family: var(--pc-font-sans);
+    font-weight: 400;
+  }
+
+  [hidden] { display: none !important; }
+
+  /* state switch */
+  .thu[data-state='shut'] .thu-open-only { display: none; }
+  .thu[data-state='open'] .thu-shut-only { display: none; }
+
+  /* ── head ──────────────────────────────────────────────────────────────── */
+  .thu-crumb {
+    display: flex;
+    gap: 0.5rem;
+    font-family: var(--pc-font-mono);
+    font-size: 0.72rem;
+    color: var(--pc-ink-muted);
+    margin-bottom: 2rem;
+  }
+  .thu-crumb a { color: inherit; }
+
+  .thu-kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted);
+    margin: 0;
+    word-break: break-word;
+  }
+  .thu-head h1 {
+    font-size: clamp(2rem, 7vw, 3.1rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0.6rem 0 0.9rem;
+  }
+  .thu-lede {
+    margin: 0;
+    max-width: 34rem;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    color: var(--pc-ink-soft);
+  }
+
+  /* ── storefront ────────────────────────────────────────────────────────── */
+  .thu-front {
+    margin: 2.25rem 0 0;
+    padding: 0;
+    border: 1.5px solid var(--pc-ink);
+    background: var(--pc-bg);
+  }
+  .thu-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .thu-sign {
+    font-family: var(--pc-font-mono);
+    font-size: 21px;
+    font-weight: 500;
+    letter-spacing: 0.26em;
+    /* text-anchor=middle counts the trailing letter-space, so a centred
+       string sits half a letter-space left. Nudge each one back. */
+    transform: translateX(3px);
+  }
+  .thu-card-kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.26em;
+    transform: translateX(1px);
+  }
+  .thu-card-day {
+    font-family: var(--pc-font-mono);
+    font-size: 21px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    transform: translateX(1px);
+  }
+  .thu-card-time {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    transform: translateX(1px);
+  }
+  .thu-opentext {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    transform: translateX(1px);
+  }
+
+  /* the roll-up */
+  .thu-slats {
+    transform-box: fill-box;
+    transform-origin: top;
+    transform: scaleY(1);
+    transition: transform 1100ms cubic-bezier(0.16, 0.84, 0.24, 1);
+  }
+  .thu-shutgear {
+    opacity: 1;
+    transition: opacity 340ms linear;
+  }
+  .thu-opencard {
+    opacity: 0;
+    transition: opacity 500ms linear 700ms;
+  }
+  .thu[data-state='open'] .thu-slats { transform: scaleY(0.055); }
+  .thu[data-state='open'] .thu-shutgear { opacity: 0; }
+  .thu[data-state='open'] .thu-opencard { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .thu-slats,
+    .thu-shutgear,
+    .thu-opencard { transition: none; }
+  }
+
+  /* ── status line ───────────────────────────────────────────────────────── */
+  .thu-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    border: 1.5px solid var(--pc-ink);
+    border-top: 0;
+    font-family: var(--pc-font-mono);
+  }
+  .thu-status__word {
+    background: var(--pc-ink);
+    color: #fff;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    display: flex;
+    align-items: center;
+  }
+  .thu[data-state='open'] .thu-status__word { background: #0f6e56; }
+  .thu-status__cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.55rem 0.9rem;
+    border-left: 1px solid var(--pc-rule);
+    flex: 1 1 auto;
+    min-width: 8.5rem;
+  }
+  .thu-status__label {
+    font-size: 0.58rem;
+    letter-spacing: 0.16em;
+    color: var(--pc-ink-muted);
+  }
+  .thu-status__value {
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--pc-ink);
+  }
+
+  /* ── sections ──────────────────────────────────────────────────────────── */
+  .thu-sec { margin: 2.5rem 0 0; }
+  .thu-sec h2 {
+    font-family: var(--pc-font-mono);
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    border-bottom: 1px solid var(--pc-rule-soft);
+    padding-bottom: 0.4rem;
+    margin: 0 0 1rem;
+  }
+  .thu-sec p {
+    margin: 0 0 0.9rem;
+    max-width: 34rem;
+    line-height: 1.65;
+    color: var(--pc-ink-soft);
+  }
+  .thu-quiet {
+    font-family: var(--pc-font-mono);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: var(--pc-ink-muted);
+  }
+
+  .thu-list {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    max-width: 34rem;
+  }
+  .thu-list li {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    line-height: 1.55;
+    color: var(--pc-ink-soft);
+  }
+  .thu-list__k {
+    font-family: var(--pc-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    padding-top: 0.2rem;
+  }
+
+  .thu-cal {
+    font-family: var(--pc-font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid currentColor;
+  }
+  .thu-cal:hover { text-decoration: none; }
+
+  /* ── weather ───────────────────────────────────────────────────────────── */
+  .thu-wx {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 1rem;
+    border: 1.5px solid var(--pc-rule);
+  }
+  .thu-wx > div {
+    flex: 1 1 8rem;
+    padding: 0.7rem 0.9rem;
+    border-left: 1px solid var(--pc-rule-soft);
+  }
+  .thu-wx > div:first-child { border-left: 0; }
+  .thu-wx dt {
+    font-family: var(--pc-font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.16em;
+    color: var(--pc-ink-muted);
+    margin: 0 0 0.3rem;
+  }
+  .thu-wx dd {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--pc-ink);
+  }
+
+  /* ── notes ─────────────────────────────────────────────────────────────── */
+  .thu-notes {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    max-width: 34rem;
+  }
+  .thu-notes li {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 0.7rem;
+    align-items: start;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--pc-ink);
+    overflow-wrap: anywhere;
+  }
+  .thu-notes img {
+    width: 24px;
+    height: 24px;
+    background: var(--pc-rule-soft);
+  }
+
+  /* ── composer ──────────────────────────────────────────────────────────── */
+  .thu-form { margin: 1.25rem 0 0; max-width: 34rem; }
+  .thu-form__label {
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 0.4rem;
+  }
+  .thu-form__row { display: flex; }
+  .thu-form__row input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 0.95rem;
+    padding: 0.7rem 0.8rem;
+    border: 1.5px solid var(--pc-ink);
+    border-right: 0;
+    border-radius: 0;
+    background: var(--pc-bg);
+    color: var(--pc-ink);
+  }
+  .thu-form__row input:focus {
+    outline: 2px solid #0f6e56;
+    outline-offset: -2px;
+  }
+  .thu-form__row button {
+    font-family: var(--pc-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.7rem 1.1rem;
+    border: 1.5px solid var(--pc-ink);
+    border-radius: 0;
+    background: var(--pc-ink);
+    color: #fff;
+    cursor: pointer;
+  }
+  .thu-form__row button:disabled { opacity: 0.45; cursor: default; }
+  .thu-form__meta {
+    font-family: var(--pc-font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+    margin: 0.5rem 0 0;
+    display: flex;
+    gap: 0.9rem;
+  }
+  .thu-form__say { color: #0f6e56; }
+
+  /* ── foot ──────────────────────────────────────────────────────────────── */
+  .thu-foot {
+    margin-top: 3.5rem;
+    padding-top: 1.1rem;
+    border-top: 1.5px solid var(--pc-ink);
+  }
+  .thu-foot p {
+    margin: 0 0 0.7rem;
+    max-width: 34rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--pc-ink-soft);
+  }
+  .thu-plumbing {
+    font-family: var(--pc-font-mono);
+    font-size: 0.6rem !important;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted) !important;
+    line-height: 1.8 !important;
+  }
+
+  @media (max-width: 560px) {
+    .thu-status__word { width: 100%; justify-content: center; }
+    .thu-status__cell { border-left: 0; border-top: 1px solid var(--pc-rule); min-width: 50%; }
+    .thu-list li { grid-template-columns: 1fr; gap: 0.2rem; }
+  }
+</style>
