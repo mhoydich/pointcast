@@ -13,7 +13,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   purpose: 'A living index of small daily rituals shared across PointCast and its satellites.',
   capabilities: [
     'open the Common Hours field guide',
-    'browse nine ritual doors',
+    `browse ${COMMON_HOURS_RITUALS.length} ritual doors`,
     'ring browser-native bells and chimes',
     'discover human and machine-readable PointCast surfaces',
   ],
