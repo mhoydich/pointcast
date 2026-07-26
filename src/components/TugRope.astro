@@ -1,0 +1,366 @@
+---
+/**
+ * TugRope — one rope across the town, hung above the dock.
+ *
+ * There is exactly one of these on PointCast and it is the same rope on
+ * every page. People pull it by tapping. Machines pull it by calling the
+ * `tug_pull` MCP tool. Underneath sit two numbers that never reset — how
+ * many pulls have come from people, how many from machines — and above
+ * them a knot that drifts back toward centre when nobody is pulling. So
+ * the knot reads *now* and the tallies read *ever*.
+ *
+ * It exists because every other write surface here — all five MCP write
+ * tools — lands in a sixty-second buffer. /drum-agent shipped the "watch
+ * the machines arrive" thesis on 2026-04-29 and left nothing measurable
+ * behind, because drum_tap writes to a TTL'd bus and never touches a
+ * counter. The rope is the first permanent line of record that a machine
+ * was here, and it costs one number.
+ *
+ * State lives in the presence Durable Object (workers/presence), not KV.
+ * A tug-of-war is a ledger; KV's read-modify-write loses simultaneous
+ * pulls. /api/tug is a forward-only shim onto the DO.
+ *
+ * Rendering note — the Astro scoped-CSS gotcha: scoped styles never
+ * reach nodes that JS creates at runtime. So every part of the rope is
+ * authored here in the template, and the script only sets a CSS custom
+ * property (--tug-pos), a data attribute, and text content. Nothing is
+ * constructed in JS, so nothing can lose its styling.
+ *
+ * Colors are two channel ramps, warm against cool, per BLOCKS.md:
+ *   people   → BTL oxblood-600 #8A2432 (this is a duel; people are the warm end)
+ *   machines → FD  blue-600    #185FA5 (the agent-era channel)
+ */
+---
+
+<aside class="tug" id="pc-tug" data-lead="slack" aria-label="Tug — one rope across the town">
+  <a class="tug__id mono" href="/tug" title="what the rope is">TUG</a>
+
+  <span class="tug__side tug__side--people">
+    <span class="tug__label mono">PEOPLE</span>
+    <span class="tug__count mono" id="pc-tug-human">—</span>
+  </span>
+
+  <button
+    type="button"
+    class="tug__rope"
+    id="pc-tug-pull"
+    aria-label="Pull the rope for the people"
+    title="pull"
+  >
+    <span class="tug__line" aria-hidden="true"></span>
+    <span class="tug__centre" aria-hidden="true"></span>
+    <span class="tug__knot" aria-hidden="true"></span>
+  </button>
+
+  <span class="tug__side tug__side--machines">
+    <span class="tug__count mono" id="pc-tug-machine">—</span>
+    <span class="tug__label mono">MACHINES</span>
+  </span>
+
+  <p class="tug__read mono" id="pc-tug-read" role="status" aria-live="polite">the rope is slack</p>
+</aside>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var root = document.getElementById('pc-tug');
+    if (!root) return;
+    var $pull = document.getElementById('pc-tug-pull');
+    var $human = document.getElementById('pc-tug-human');
+    var $machine = document.getElementById('pc-tug-machine');
+    var $read = document.getElementById('pc-tug-read');
+    if (!$pull) return;
+
+    // These three must match the worker (workers/presence/src/index.ts).
+    // The client only mirrors them so your own pull moves under your
+    // finger before the round trip lands; the server is always truth.
+    var HALF_LIFE_MS = 90000; // TUG_HALF_LIFE_MS
+    var HUMAN_PULL = 0.04; // TUG_HUMAN_PULL
+
+    var POLL_MS = 6000; // how often we re-read the rope
+    var TAP_FLOOR_MS = 220; // local throttle; the DO rate-limits for real
+    var SID_KEY = 'pc:room:sid'; // same visitor id the cursor room uses
+    var DEAD_ZONE = 0.02; // below this the rope simply reads slack
+
+    var knot = 0;
+    var knotAt = Date.now();
+    var humanPulls = 0;
+    var machinePulls = 0;
+    var lastTap = 0;
+    var lastRead = 'the rope is slack';
+    var pollTimer = null;
+    var paintTimer = null;
+
+    function sid() {
+      try {
+        var s = localStorage.getItem(SID_KEY);
+        if (s) return s;
+        s = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(SID_KEY, s);
+        return s;
+      } catch (e) {
+        return 's-' + Date.now().toString(36);
+      }
+    }
+
+    function fmt(n) {
+      try { return Number(n).toLocaleString('en-US'); }
+      catch (e) { return String(n); }
+    }
+
+    // Same lazy decay the worker does — the rope slackens by half every
+    // ninety seconds of quiet, computed from the clock, never ticked.
+    function decayed(now) {
+      if (!knot) return 0;
+      var d = knot * Math.pow(0.5, (now - knotAt) / HALF_LIFE_MS);
+      return Math.abs(d) < 0.0005 ? 0 : d;
+    }
+
+    function paint() {
+      var now = Date.now();
+      var k = Math.max(-1, Math.min(1, decayed(now)));
+      // −1 → 4%, 0 → 50%, +1 → 96%. The knot never reaches the posts.
+      root.style.setProperty('--tug-pos', (50 + k * 46).toFixed(2) + '%');
+      var lead = k < -DEAD_ZONE ? 'people' : k > DEAD_ZONE ? 'machines' : 'slack';
+      root.setAttribute('data-lead', lead);
+      if ($human) $human.textContent = fmt(humanPulls);
+      if ($machine) $machine.textContent = fmt(machinePulls);
+      var read = lead === 'people' ? 'people have it'
+        : lead === 'machines' ? 'machines have it'
+        : 'the rope is slack';
+      // Only speak when the reading actually changes — a live region
+      // that narrates every poll is a nuisance, not an affordance.
+      if ($read && read !== lastRead) {
+        $read.textContent = read;
+        lastRead = read;
+      }
+    }
+
+    function adopt(tug) {
+      if (!tug || typeof tug !== 'object') return;
+      if (typeof tug.humanPulls === 'number') humanPulls = tug.humanPulls;
+      if (typeof tug.machinePulls === 'number') machinePulls = tug.machinePulls;
+      if (typeof tug.knot === 'number') {
+        // The server hands back a knot already decayed to its own now,
+        // so we restamp it against ours and carry on decaying locally.
+        knot = Math.max(-1, Math.min(1, tug.knot));
+        knotAt = Date.now();
+      }
+      paint();
+    }
+
+    function read() {
+      fetch('/api/tug', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d && d.tug) adopt(d.tug); })
+        .catch(function () { /* network blip — the next poll tries again */ });
+    }
+
+    function pull() {
+      var now = Date.now();
+      if (now - lastTap < TAP_FLOOR_MS) return;
+      lastTap = now;
+
+      // Optimistic: move the knot under the finger immediately. If the
+      // DO refuses (rate limit) its response carries the true rope and
+      // adopt() puts everything back where it belongs.
+      // Swap to the short transition BEFORE moving the knot — a pull is
+      // a shove, not the slow drift back to centre.
+      root.setAttribute('data-pulled', 'people');
+      knot = Math.max(-1, Math.min(1, decayed(now) - HUMAN_PULL));
+      knotAt = now;
+      humanPulls += 1;
+      paint();
+      setTimeout(function () { root.removeAttribute('data-pulled'); }, 260);
+
+      fetch('/api/tug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ side: 'human', by: sid() }),
+        cache: 'no-store',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.tug) adopt(d.tug); })
+        .catch(function () {});
+    }
+
+    $pull.addEventListener('click', pull);
+
+    function start() {
+      if (!pollTimer) pollTimer = setInterval(read, POLL_MS);
+      // Repaint at 1 Hz so the drift back to centre is visible without
+      // a network round trip. The CSS transition smooths the steps.
+      if (!paintTimer) paintTimer = setInterval(paint, 1000);
+    }
+    function stop() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (paintTimer) { clearInterval(paintTimer); paintTimer = null; }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop();
+      else { read(); start(); }
+    });
+
+    read();
+    start();
+  })();
+</script>
+
+<style>
+  .tug {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 40px; /* sits directly on the 40px FooterBar dock */
+    z-index: 39; /* under the dock bar (40) and its trays (49) */
+    display: grid;
+    grid-template-columns: auto auto minmax(90px, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    height: 26px;
+    padding: 0 10px;
+    background: var(--pc-bg, #ffffff);
+    border-top: 1px solid var(--pc-rule, #c4c2bc);
+    color: var(--pc-ink, #12110e);
+    font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+
+    --tug-pos: 50%;
+    --tug-people: #8a2432; /* BTL oxblood-600 */
+    --tug-machines: #185fa5; /* FD blue-600 */
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  .tug__id {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .tug__id:hover {
+    color: var(--pc-ink, #12110e);
+    border-bottom-color: currentColor;
+    text-decoration: none;
+  }
+
+  .tug__side {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .tug__label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--pc-ink-muted, #5f5e5a);
+  }
+  .tug__count {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .tug__side--people .tug__count { color: var(--tug-people); }
+  .tug__side--machines .tug__count { color: var(--tug-machines); }
+
+  /* The rope itself — one hit target, three painted parts. */
+  .tug__rope {
+    position: relative;
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    height: 22px;
+    width: 100%;
+    cursor: pointer;
+    display: block;
+  }
+  .tug__rope:focus-visible {
+    outline: 2px solid var(--tug-people);
+    outline-offset: -2px;
+  }
+
+  .tug__line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    background: linear-gradient(
+      90deg,
+      var(--tug-people) 0%,
+      var(--pc-rule, #c4c2bc) 42%,
+      var(--pc-rule, #c4c2bc) 58%,
+      var(--tug-machines) 100%
+    );
+  }
+  .tug__centre {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    height: 10px;
+    margin: -5px 0 0 -0.5px;
+    background: var(--pc-rule, #c4c2bc);
+  }
+  .tug__knot {
+    position: absolute;
+    left: var(--tug-pos);
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    margin: -4.5px 0 0 -4.5px;
+    background: var(--pc-ink, #12110e);
+    transition: left 900ms linear, background 200ms linear, transform 160ms ease-out;
+  }
+  .tug[data-lead='people'] .tug__knot { background: var(--tug-people); }
+  .tug[data-lead='machines'] .tug__knot { background: var(--tug-machines); }
+  .tug__rope:hover .tug__knot { transform: scale(1.15); }
+  /* A pull is a shove, not a drift — drop the long transition for it. */
+  .tug[data-pulled] .tug__knot { transition: left 140ms ease-out, background 200ms linear; }
+
+  .tug__read {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--pc-ink-muted, #5f5e5a);
+    white-space: nowrap;
+  }
+  .tug[data-lead='people'] .tug__read { color: var(--tug-people); }
+  .tug[data-lead='machines'] .tug__read { color: var(--tug-machines); }
+
+  @media (max-width: 760px) {
+    .tug__read { display: none; }
+    .tug { grid-template-columns: auto auto minmax(70px, 1fr) auto; }
+  }
+  @media (max-width: 520px) {
+    .tug { gap: 7px; padding: 0 7px; }
+    .tug__id { display: none; }
+    .tug__label { font-size: 8px; letter-spacing: 0.08em; }
+    .tug { grid-template-columns: auto minmax(60px, 1fr) auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tug__knot { transition: none; }
+    .tug__rope:hover .tug__knot { transform: none; }
+  }
+</style>
+
+<style is:global>
+  /* The rope adds 26px of chrome above the dock. BlockLayout reserves
+     56/64px for the bar alone; bump it so the last line of any page
+     still clears both. Two-element selector so this wins over the
+     layout's own `body { padding-bottom }` regardless of sheet order. */
+  html body { padding-bottom: 84px; }
+  @media (max-width: 680px) { html body { padding-bottom: 92px; } }
+</style>

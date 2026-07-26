@@ -1,0 +1,373 @@
+---
+/**
+ * /tug — the page behind the rope in the dock.
+ *
+ * The rope itself is sitewide (src/components/TugRope.astro); this is
+ * where it is explained, shown at full length, and documented for the
+ * agents that pull it. Structure copied from src/pages/health.astro
+ * (the Town Inspector, PR #863) — crumb, hero, sections, scoped styles.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Tug';
+const description =
+  'One rope across the town. People pull it by tapping, machines pull it by calling an MCP tool, and the two numbers underneath never reset — the first permanent record on PointCast that a machine was here.';
+---
+
+<BlockLayout title={title} description={description}>
+  <div class="tugp">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/for-agents">agents</a>
+      <span aria-hidden="true">/</span>
+      <span>tug</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">One rope · el segundo · pulled from both ends</p>
+      <h1>A rope with a knot in it, hung across the town.</h1>
+      <p>
+        It is in the dock of every page, so it is the same rope wherever you are standing. People
+        pull by tapping it. Machines pull by calling <code>tug_pull</code> over
+        <a href="/api/mcp">the MCP endpoint</a>. Two numbers underneath never reset. The knot drifts
+        back toward the middle when nobody is pulling, so the knot reads <em>now</em> and the tally
+        reads <em>ever</em>.
+      </p>
+    </header>
+
+    <section class="board" aria-label="The rope">
+      <div class="board__heads">
+        <span class="board__head board__head--people">
+          <span class="board__label mono">PEOPLE</span>
+          <span class="board__count mono" id="pg-tug-human">—</span>
+        </span>
+        <span class="board__read mono" id="pg-tug-read">reading the rope…</span>
+        <span class="board__head board__head--machines">
+          <span class="board__count mono" id="pg-tug-machine">—</span>
+          <span class="board__label mono">MACHINES</span>
+        </span>
+      </div>
+
+      <div class="rope" id="pg-tug" data-lead="slack">
+        <span class="rope__line" aria-hidden="true"></span>
+        <span class="rope__centre" aria-hidden="true"></span>
+        <span class="rope__knot" aria-hidden="true"></span>
+      </div>
+
+      <button type="button" class="pullbtn mono" id="pg-tug-pull">
+        PULL FOR THE PEOPLE
+      </button>
+      <p class="board__foot mono" id="pg-tug-foot">
+        the knot loses half its lean every 90 seconds of quiet
+      </p>
+    </section>
+
+    <section aria-label="Why it exists">
+      <h2>Why a counter and not a flash</h2>
+      <p>
+        Every other thing a machine can do on PointCast writes into a sixty-second buffer.
+        <a href="/drum-agent">/drum-agent</a> shipped exactly this thesis in April 2026 — agents
+        connect, call <code>drum_tap</code>, humans watch it flash — and left nothing measurable
+        behind, because the tap lands in a TTL'd bus and never touches a counter. So the honest
+        answer to "how many machines have been through here" has always been: nobody knows.
+      </p>
+      <p>
+        The rope is the fix, and it costs one number. A pull from a machine is worth three taps from
+        a person, because a person can tap ten times in five seconds and an agent calls the tool once,
+        on purpose. That is the whole weighting argument.
+      </p>
+    </section>
+
+    <section aria-label="How it is kept">
+      <h2>Where the rope lives</h2>
+      <p>
+        In the presence Durable Object, not in KV. <code>functions/api/duel.ts</code> documents in
+        its own header that two visitors tapping at the same moment race the read-modify-write and
+        one of them disappears; the meadow shrugs that off with a line about being a meadow and not a
+        ledger.
+        A tug-of-war is a ledger. Inside the Durable Object the mutation is a synchronous edit of one
+        object in memory, so both pulls count.
+      </p>
+      <p>
+        There is no cron on this site and no alarm on the rope. The knot's slack is computed from the
+        clock every time somebody reads it, which is why it can drift back to centre while nothing at
+        all is running.
+      </p>
+    </section>
+
+    <section aria-label="For agents">
+      <h2>For agents</h2>
+      <ul class="api">
+        <li>
+          <code>GET /api/tug</code>
+          <span>read the rope — tallies, plus the knot decayed to now</span>
+        </li>
+        <li>
+          <code>POST /api/tug</code>
+          <span><code>{'{ side: "machine", by: "your-name" }'}</code> — 6 pulls per puller per 10s</span>
+        </li>
+        <li>
+          <code>tug_pull</code>
+          <span>the same pull over MCP at <a href="/api/mcp">/api/mcp</a></span>
+        </li>
+        <li>
+          <code>/api/presence/snapshot</code>
+          <span><code>tug</code> rides along in the presence payload once the rope has been pulled</span>
+        </li>
+      </ul>
+      <p class="fineprint">
+        <code>knot</code> runs from <code>-1</code> (all the way to the people's end) through
+        <code>0</code> to <code>+1</code> (all the way to the machines'). <code>humanPulls</code> and
+        <code>machinePulls</code> only ever go up.
+      </p>
+    </section>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var rope = document.getElementById('pg-tug');
+    var $pull = document.getElementById('pg-tug-pull');
+    var $human = document.getElementById('pg-tug-human');
+    var $machine = document.getElementById('pg-tug-machine');
+    var $read = document.getElementById('pg-tug-read');
+    if (!rope || !$pull) return;
+
+    var HALF_LIFE_MS = 90000; // matches TUG_HALF_LIFE_MS in the worker
+    var HUMAN_PULL = 0.04; // matches TUG_HUMAN_PULL
+    var POLL_MS = 5000;
+    var TAP_FLOOR_MS = 220;
+    var DEAD_ZONE = 0.02;
+    var SID_KEY = 'pc:room:sid';
+
+    var knot = 0, knotAt = Date.now(), humanPulls = 0, machinePulls = 0, lastTap = 0;
+
+    function sid() {
+      try {
+        var s = localStorage.getItem(SID_KEY);
+        if (s) return s;
+        s = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(SID_KEY, s);
+        return s;
+      } catch (e) {
+        return 's-' + Date.now().toString(36);
+      }
+    }
+    function fmt(n) {
+      try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+    }
+    function decayed(now) {
+      if (!knot) return 0;
+      var d = knot * Math.pow(0.5, (now - knotAt) / HALF_LIFE_MS);
+      return Math.abs(d) < 0.0005 ? 0 : d;
+    }
+    function paint() {
+      var k = Math.max(-1, Math.min(1, decayed(Date.now())));
+      rope.style.setProperty('--tug-pos', (50 + k * 46).toFixed(2) + '%');
+      var lead = k < -DEAD_ZONE ? 'people' : k > DEAD_ZONE ? 'machines' : 'slack';
+      rope.setAttribute('data-lead', lead);
+      if ($human) $human.textContent = fmt(humanPulls);
+      if ($machine) $machine.textContent = fmt(machinePulls);
+      if ($read) {
+        $read.textContent = lead === 'people' ? 'people have it'
+          : lead === 'machines' ? 'machines have it'
+          : 'the rope is slack';
+      }
+    }
+    function adopt(t) {
+      if (!t || typeof t !== 'object') return;
+      if (typeof t.humanPulls === 'number') humanPulls = t.humanPulls;
+      if (typeof t.machinePulls === 'number') machinePulls = t.machinePulls;
+      if (typeof t.knot === 'number') { knot = Math.max(-1, Math.min(1, t.knot)); knotAt = Date.now(); }
+      paint();
+    }
+    function read() {
+      fetch('/api/tug', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d && d.tug) adopt(d.tug); })
+        .catch(function () {});
+    }
+    $pull.addEventListener('click', function () {
+      var now = Date.now();
+      if (now - lastTap < TAP_FLOOR_MS) return;
+      lastTap = now;
+      knot = Math.max(-1, Math.min(1, decayed(now) - HUMAN_PULL));
+      knotAt = now;
+      humanPulls += 1;
+      paint();
+      fetch('/api/tug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ side: 'human', by: sid() }),
+        cache: 'no-store',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.tug) adopt(d.tug); })
+        .catch(function () {});
+    });
+
+    read();
+    setInterval(read, POLL_MS);
+    setInterval(paint, 1000);
+  })();
+</script>
+
+<style>
+  .tugp {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 4rem;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    --tug-people: #8a2432;
+    --tug-machines: #185fa5;
+  }
+  .mono { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+
+  .crumb {
+    display: flex;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    text-transform: lowercase;
+    margin-bottom: 2rem;
+  }
+  .crumb a { color: inherit; }
+
+  .kicker {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+    margin: 0;
+  }
+  .hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 500;
+    line-height: 1.15;
+    margin: 0.5rem 0 1rem;
+  }
+  .hero p, section p { max-width: 44rem; line-height: 1.6; }
+
+  h2 {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    margin: 2.5rem 0 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #c4c2bc;
+  }
+
+  code {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.85em;
+    background: #f4f3f0;
+    padding: 0.1em 0.35em;
+  }
+
+  /* ─── the board ─────────────────────────────────────────────── */
+  .board {
+    margin: 2rem 0 0;
+    border: 1.5px solid #12110e;
+    padding: 1.1rem 1.1rem 0.9rem;
+  }
+  .board__heads {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.9rem;
+  }
+  .board__head { display: inline-flex; align-items: baseline; gap: 0.5rem; }
+  .board__label { font-size: 0.65rem; letter-spacing: 0.14em; color: #5f5e5a; }
+  .board__count {
+    font-size: 1.4rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .board__head--people .board__count { color: var(--tug-people); }
+  .board__head--machines .board__count { color: var(--tug-machines); }
+  .board__read { font-size: 0.65rem; letter-spacing: 0.12em; color: #5f5e5a; text-align: center; }
+  .board__foot { font-size: 0.65rem; letter-spacing: 0.08em; color: #5f5e5a; margin: 0.7rem 0 0; }
+
+  .rope {
+    position: relative;
+    height: 34px;
+    --tug-pos: 50%;
+  }
+  .rope__line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 3px;
+    margin-top: -1.5px;
+    background: linear-gradient(
+      90deg,
+      var(--tug-people) 0%,
+      #c4c2bc 44%,
+      #c4c2bc 56%,
+      var(--tug-machines) 100%
+    );
+  }
+  .rope__centre {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1px;
+    height: 20px;
+    margin: -10px 0 0 -0.5px;
+    background: #c4c2bc;
+  }
+  .rope__knot {
+    position: absolute;
+    left: var(--tug-pos);
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    background: #12110e;
+    transition: left 900ms linear, background 200ms linear;
+  }
+  .rope[data-lead='people'] .rope__knot { background: var(--tug-people); }
+  .rope[data-lead='machines'] .rope__knot { background: var(--tug-machines); }
+
+  .pullbtn {
+    display: block;
+    width: 100%;
+    margin-top: 0.9rem;
+    padding: 0.7rem 1rem;
+    background: var(--tug-people);
+    color: #fff;
+    border: 0;
+    border-radius: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+  }
+  .pullbtn:hover { background: #6f1c28; }
+  .pullbtn:focus-visible { outline: 2px solid #12110e; outline-offset: 2px; }
+
+  /* ─── api list ──────────────────────────────────────────────── */
+  .api { list-style: none; padding: 0; margin: 0; }
+  .api li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    align-items: baseline;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e5e3de;
+    font-size: 0.9rem;
+  }
+  .api li span { color: #38373a; }
+  .fineprint { font-size: 0.8rem; color: #5f5e5a; margin-top: 0.9rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rope__knot { transition: none; }
+  }
+</style>

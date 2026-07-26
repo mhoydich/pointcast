@@ -20,6 +20,14 @@
  * These are additive — the broadcast payload simply gains `peers` and
  * `chat` arrays (empty in the global room since nobody sends there).
  *
+ * The rope (/tug):
+ *   GET  /tug  → { ok, tug: { humanPulls, machinePulls, knot, updatedAt }, now }
+ *   POST /tug  ← { side:'human'|'machine', by?:string }  → same shape, 429 when rate-limited
+ *   The `global` instance is the only one that is ever pulled. `tug` is
+ *   also appended to the broadcast payload and /snapshot once the rope
+ *   has been pulled at least once. Persistent — this is the only counter
+ *   on PointCast that survives past a 60-second buffer.
+ *
  * Visitor intel (option-B privacy):
  *   Public surface (what every visitor sees about every other visitor):
  *     nounId, kind, joinedAt, mood, listening, where, country, deviceClass.
@@ -164,6 +172,42 @@ interface SignalEntry {
   hue?: number;
 }
 
+/**
+ * TUG — the one rope across the town (/tug).
+ *
+ * Every other write surface on PointCast lands in a 60-second TTL buffer,
+ * so an agent that visits leaves no trace once the minute is up. The rope
+ * is the exception: two counters that never reset, kept in DO storage
+ * rather than KV precisely because a tug-of-war is a ledger and KV's
+ * read-modify-write races (see functions/api/duel.ts's own header) drop
+ * events when two pullers land in the same millisecond. Inside a Durable
+ * Object the mutation is a synchronous edit of one in-memory object, so
+ * nothing is lost.
+ *
+ * `knot` is the live position, −1 (all the way to the people's end)
+ * through 0 (dead centre) to +1 (all the way to the machines'). It is
+ * never persisted "as of now" — it is persisted with `updatedAt`, and
+ * every reader decays it lazily from that stamp. No alarm, no cron, no
+ * background tick: the rope slackens on its own just by time passing.
+ *
+ * Only the `global` DO instance ever receives a pull; room instances
+ * carry a zeroed state and are omitted from the payload entirely.
+ */
+interface TugState {
+  humanPulls: number;
+  machinePulls: number;
+  knot: number; // −1 people … 0 centre … +1 machines, at `updatedAt`
+  updatedAt: number;
+}
+
+/** Read-time view: `knot` decayed to now, tallies untouched. */
+interface TugView {
+  humanPulls: number;
+  machinePulls: number;
+  knot: number;
+  updatedAt: number;
+}
+
 interface PublicSessionView {
   nounId: number;
   kind: PresenceKind;
@@ -202,6 +246,7 @@ interface BroadcastPayload {
   waves?: WaveEntry[]; // directional waves emitted in the last WAVE_TTL_MS
   vibes?: VibeEntry[]; // broadcast emoji reactions, TTL 6s
   signals?: SignalEntry[]; // generic room-scoped interaction pulses, TTL 5s
+  tug?: TugView; // the one rope — persistent tallies + lazily-decayed knot
   you?: PrivateSessionView;
 }
 
@@ -259,6 +304,34 @@ const MAX_SIGNAL_BUFFER = 80;
 const SIGNAL_RATE_PER_SESSION = 24;
 const SIGNAL_RATE_WINDOW_MS = 10_000;
 const SIGNAL_EVENT_RE = /^[a-z0-9:_-]+$/i;
+
+// ─── Tug tunables — three numbers, and the whole rope falls out of them ──
+//
+// TUG_HUMAN_PULL: one tap moves the knot 4% of the rope's length. Small
+//   enough that a single tap is a nudge and not a verdict, large enough
+//   that you can see your own tap land. ~25 unanswered taps buries the
+//   knot at the people's end.
+// TUG_MACHINE_PULL: one MCP call is worth three human taps. A person can
+//   tap ten times in five seconds; an agent calls the tool once, on
+//   purpose, and usually only once a session. Weighting the rarer, more
+//   deliberate event heavier is what keeps the needle honest — otherwise
+//   a single bored human out-pulls every machine that has ever visited.
+// TUG_HALF_LIFE_MS: the knot loses half its offset every 90 seconds of
+//   quiet. So the knot reads *now* (the last couple of minutes of the
+//   town) while the two tallies underneath read *ever*.
+const TUG_HUMAN_PULL = 0.04;
+const TUG_MACHINE_PULL = 0.12;
+const TUG_HALF_LIFE_MS = 90_000;
+// Rate limits mirror the wave/vibe/signal pattern: per-puller sliding
+// window, silently dropped when exceeded (no confirmation channel for
+// anyone hammering the endpoint).
+const TUG_HUMAN_RATE = 10; // taps per puller per window
+const TUG_MACHINE_RATE = 6; // MCP pulls per agent per window
+const TUG_RATE_WINDOW_MS = 10_000;
+const MAX_TUG_RATE_KEYS = 500; // sweep the rate map above this size
+const TUG_KNOT_EPSILON = 0.0005; // below this the rope is simply centred
+const TUG_STORAGE_KEY = 'tug:v1';
+
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
 const ACTIVITY_WINDOW_MS = 3000; // fast mode window after last cursor/chat
@@ -346,6 +419,51 @@ function hasOwn(obj: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
+/** A rope nobody has touched yet. */
+function freshTugState(now: number): TugState {
+  return { humanPulls: 0, machinePulls: 0, knot: 0, updatedAt: now };
+}
+
+/**
+ * Coerce whatever came back out of storage into a TugState. Counters are
+ * clamped non-negative and integral; the knot is clamped to [−1, 1].
+ * Anything unreadable starts the rope over at centre rather than throwing
+ * — a corrupt row should not take presence down with it.
+ */
+function normalizeTugState(raw: unknown, now: number): TugState {
+  if (!raw || typeof raw !== 'object') return freshTugState(now);
+  const value = raw as Record<string, unknown>;
+  const humanPulls = Number(value.humanPulls);
+  const machinePulls = Number(value.machinePulls);
+  const knot = Number(value.knot);
+  const updatedAt = Number(value.updatedAt);
+  return {
+    humanPulls: Number.isFinite(humanPulls) ? Math.max(0, Math.trunc(humanPulls)) : 0,
+    machinePulls: Number.isFinite(machinePulls) ? Math.max(0, Math.trunc(machinePulls)) : 0,
+    knot: Number.isFinite(knot) ? Math.max(-1, Math.min(1, knot)) : 0,
+    updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : now,
+  };
+}
+
+/**
+ * Lazy decay. The knot drifts back toward centre by half every
+ * TUG_HALF_LIFE_MS of elapsed quiet. Pure function of the stored value
+ * and the clock, which is why the rope needs no alarm to slacken.
+ */
+function decayKnot(knot: number, elapsedMs: number): number {
+  if (!Number.isFinite(knot) || knot === 0) return 0;
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return knot;
+  const decayed = knot * Math.pow(0.5, elapsedMs / TUG_HALF_LIFE_MS);
+  return Math.abs(decayed) < TUG_KNOT_EPSILON ? 0 : decayed;
+}
+
+/** Identity of whoever pulled — a browser session id, or an agent's label. */
+function normalizePullerId(value: unknown): string {
+  if (typeof value !== 'string') return 'anon';
+  const trimmed = value.trim().slice(0, 64);
+  return trimmed || 'anon';
+}
+
 function parseDeviceClass(ua: string | null | undefined): DeviceClass {
   if (!ua) return 'unknown';
   const lower = ua.toLowerCase();
@@ -425,6 +543,13 @@ export class PresenceRoom {
   // Generic room signals + per-session rate map.
   signals: SignalEntry[] = [];
   signalRate: Map<string, number[]> = new Map();
+  // The rope. `tug` is the authoritative in-memory copy of the stored
+  // TugState — null until hydrated. `tugRate` is the per-puller sliding
+  // window, same shape as signalRate. `tugHydrating` de-duplicates the
+  // one storage read across concurrent first-touch requests.
+  tug: TugState | null = null;
+  tugRate: Map<string, number[]> = new Map();
+  tugHydrating: Promise<TugState> | null = null;
   lastActivity: number = 0;
   broadcastMode: 'idle' | 'fast' = 'idle';
 
@@ -435,8 +560,38 @@ export class PresenceRoom {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname.endsWith('/snapshot')) {
+      // Hydrate the rope in the background so subsequent snapshots and
+      // broadcasts carry `tug` without any request ever blocking on it.
+      if (!this.tug) void this.loadTug().catch(() => {});
       const viewerSid = url.searchParams.get('sid') ?? undefined;
       return Response.json(this.snapshotFor(viewerSid));
+    }
+
+    // ─── /tug — the one rope ──────────────────────────────────
+    // GET reads the rope (tallies + knot decayed to now). POST pulls it:
+    // { side: 'human' | 'machine', by?: string }. Everything else 405s.
+    if (url.pathname.endsWith('/tug')) {
+      if (request.method === 'GET') {
+        const state = await this.loadTug();
+        return Response.json({ ok: true, tug: this.viewTug(state, Date.now()), now: Date.now() });
+      }
+      if (request.method === 'POST') {
+        let body: Record<string, unknown> = {};
+        try {
+          const parsed = await request.json();
+          if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>;
+        } catch {
+          // Empty body is a valid human pull — the rope asks for nothing.
+        }
+        const side = body.side === 'machine' ? 'machine' : 'human';
+        const by = normalizePullerId(body.by);
+        const result = await this.applyTugPull(side, by);
+        return Response.json(
+          { ok: result.ok, reason: result.reason, tug: result.tug, now: Date.now() },
+          { status: result.ok ? 200 : 429 },
+        );
+      }
+      return new Response('Method Not Allowed', { status: 405 });
     }
 
     const upgradeHeader = request.headers.get('Upgrade');
@@ -779,6 +934,109 @@ export class PresenceRoom {
     return true;
   }
 
+  /**
+   * Hydrate the rope from DO storage exactly once per instance lifetime.
+   * Concurrent callers share one read via `tugHydrating`. Never throws —
+   * a storage failure yields a centred rope rather than a 500 on a
+   * presence endpoint that every page on the site depends on.
+   */
+  async loadTug(): Promise<TugState> {
+    if (this.tug) return this.tug;
+    if (!this.tugHydrating) {
+      this.tugHydrating = (async () => {
+        const now = Date.now();
+        let stored: unknown;
+        try {
+          stored = await this.state.storage.get(TUG_STORAGE_KEY);
+        } catch {
+          stored = undefined;
+        }
+        if (!this.tug) this.tug = normalizeTugState(stored, now);
+        return this.tug;
+      })();
+    }
+    return this.tugHydrating;
+  }
+
+  /**
+   * Project stored state into a read-time view: tallies verbatim, knot
+   * decayed from `updatedAt` to `now` and rounded to three places (the
+   * client renders a percentage; more precision is just bytes).
+   */
+  viewTug(state: TugState, now: number): TugView {
+    return {
+      humanPulls: state.humanPulls,
+      machinePulls: state.machinePulls,
+      knot: Math.round(decayKnot(state.knot, now - state.updatedAt) * 1000) / 1000,
+      updatedAt: state.updatedAt,
+    };
+  }
+
+  /** Drop rate-window entries that have fully expired. Called on growth. */
+  sweepTugRate(now: number) {
+    if (this.tugRate.size <= MAX_TUG_RATE_KEYS) return;
+    for (const [key, stamps] of this.tugRate) {
+      const live = stamps.filter((t) => now - t <= TUG_RATE_WINDOW_MS);
+      if (live.length) this.tugRate.set(key, live);
+      else this.tugRate.delete(key);
+    }
+  }
+
+  /**
+   * Pull the rope. People pull toward −1, machines toward +1. The stored
+   * knot is decayed to now FIRST, then the pull is added, so a pull
+   * always lands relative to where the rope actually is rather than
+   * where it was when someone last touched it.
+   *
+   * The read-modify-write here is what /api/duel and /api/meadow cannot
+   * do in KV: `state` is one shared in-memory object inside a single
+   * Durable Object, mutated synchronously between awaits, so two pullers
+   * landing in the same millisecond both count. That is the entire
+   * reason this lives in the DO.
+   */
+  async applyTugPull(
+    side: 'human' | 'machine',
+    by: string,
+  ): Promise<{ ok: boolean; reason?: string; tug: TugView }> {
+    const state = await this.loadTug();
+    const now = Date.now();
+
+    const key = `${side}:${by}`;
+    const limit = side === 'machine' ? TUG_MACHINE_RATE : TUG_HUMAN_RATE;
+    const recent = (this.tugRate.get(key) ?? []).filter((t) => now - t <= TUG_RATE_WINDOW_MS);
+    if (recent.length >= limit) {
+      return { ok: false, reason: 'rate-limited', tug: this.viewTug(state, now) };
+    }
+    recent.push(now);
+    this.tugRate.set(key, recent);
+    this.sweepTugRate(now);
+
+    const drifted = decayKnot(state.knot, now - state.updatedAt);
+    const delta = side === 'machine' ? TUG_MACHINE_PULL : -TUG_HUMAN_PULL;
+    state.knot = Math.max(-1, Math.min(1, drifted + delta));
+    if (side === 'machine') state.machinePulls += 1;
+    else state.humanPulls += 1;
+    state.updatedAt = now;
+    this.tug = state;
+
+    // Persist after the mutation. A failed write loses at most this one
+    // pull from the permanent record; the in-memory rope stays correct.
+    try {
+      await this.state.storage.put(TUG_STORAGE_KEY, state);
+    } catch {}
+
+    // Only disturb the broadcast cadence when somebody is actually
+    // holding a socket — a pull into an empty room should not spin up a
+    // 10 Hz interval just to talk to nobody.
+    if (this.connections.size > 0) {
+      this.lastActivity = now;
+      this.ensureFastMode();
+      this.broadcast();
+    }
+
+    return { ok: true, tug: this.viewTug(state, now) };
+  }
+
   applyVisitorPatch(sessionId: string, patch: Record<string, unknown>) {
     const visitor = this.visitors.get(sessionId);
     if (!visitor) return;
@@ -947,6 +1205,13 @@ export class PresenceRoom {
       const cutoff = Date.now() - SIGNAL_TTL_MS;
       this.signals = this.signals.filter((s) => s.at >= cutoff);
       if (this.signals.length) payload.signals = [...this.signals];
+    }
+
+    // The rope. Only the instance that has actually been pulled carries
+    // it — room-sharded instances hydrate a zeroed state and are omitted,
+    // so per-URL rooms keep exactly the payload shape they had before.
+    if (this.tug && (this.tug.humanPulls > 0 || this.tug.machinePulls > 0)) {
+      payload.tug = this.viewTug(this.tug, Date.now());
     }
 
     if (viewerSessionId) {
