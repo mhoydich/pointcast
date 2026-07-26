@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'super-follow',
+    name: 'Super Follow',
+    kicker: 'SOURCES · LENS · RELATIONSHIP · WANT DESK',
+    description: 'A bright personal broadcaster prototype that tunes Sony’s official sources into a readable dashboard, attributed feeds, relationship states, and a local-only Want Desk.',
+    url: 'https://pointcast.xyz/super-follow',
+    path: '/super-follow',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'sunset-switchboard',
     name: 'Sunset Switchboard',
     kicker: 'PUBLIC SIGNAL · LOCAL LOG · BROADCAST CARDS',
