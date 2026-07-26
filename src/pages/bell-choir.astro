@@ -33,10 +33,19 @@
  *   2. ROOM CODES. ?room=xxxx gives a family its own wall, so "multiplayer"
  *      doesn't depend on strangers being online at 4pm on a Tuesday.
  *
- * FOLLOW THE LIGHT is the co-op game: one bell glows, anyone in the room may
- * answer it, and the count is the room's, not yours. There is no fail state,
- * no timer, and no way to be eliminated — the only two outcomes are music and
- * more music.
+ * FOLLOW THE LIGHT is the co-op game: a bell glows on your wall and any bell
+ * struck in the room — yours or a stranger's — can answer it. There is no fail
+ * state, no timer, and no way to be eliminated; the only two outcomes are music
+ * and more music. Ghost replays and WIND deliberately do NOT score: a wall left
+ * playing itself must not run up a child's number or move the light out from
+ * under their hand.
+ *
+ * Known limit, and the obvious next move: the glowing bell is chosen per
+ * client, so two people are answering two different lights. Making it one
+ * shared light needs a control frame — the protocol's `clap` pad plus the same
+ * low-4-bits trick would carry it, with the room's oldest socket
+ * (`people[0].id === meId`, the DO sorts by joinedAt) electing itself the one
+ * that calls the next bell.
  *
  * Siblings: /prayer-bells (the solo garden this grew from), /drum-room-v2,
  * /bell-walk.
@@ -112,9 +121,9 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
     <section class="bc__console" aria-label="Room controls">
       <div class="bc__group" role="group" aria-label="Bell voice">
         <span class="bc__group-label">VOICE</span>
-        <button class="bc__btn bc__btn--on" type="button" data-voice="chime">CHIME</button>
-        <button class="bc__btn" type="button" data-voice="bowl">BOWL</button>
-        <button class="bc__btn" type="button" data-voice="glass">GLASS</button>
+        <button class="bc__btn bc__btn--on" type="button" data-voice="chime" aria-pressed="true">CHIME</button>
+        <button class="bc__btn" type="button" data-voice="bowl" aria-pressed="false">BOWL</button>
+        <button class="bc__btn" type="button" data-voice="glass" aria-pressed="false">GLASS</button>
       </div>
 
       <div class="bc__group" role="group" aria-label="Room modes">
@@ -128,6 +137,8 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
         <span class="bc__score" id="bc-score">0</span>
         <span class="bc__score-best" id="bc-best">best —</span>
       </div>
+
+      <p class="bc__sr" id="bc-lit" aria-live="polite">The light is off</p>
 
       <div class="bc__group bc__group--invite">
         <button class="bc__btn" type="button" id="bc-invite">COPY INVITE</button>
@@ -148,8 +159,8 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
         >
           <span class="bc__cord" aria-hidden="true"></span>
           <span class="bc__card">
-            <img class="bc__img bc__img--on" src={`/images/bell-choir/bloom-${i + 1}a.jpg`} alt={b.altA} width="560" height="560" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" data-side="a" />
-            <img class="bc__img" src={`/images/bell-choir/bloom-${i + 1}b.jpg`} alt={b.altB} width="560" height="560" loading="lazy" decoding="async" data-side="b" />
+            <img class="bc__img bc__img--on" src={`/images/bell-choir/bloom-${i + 1}a.jpg`} alt={b.altA} width="560" height="560" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" draggable="false" data-side="a" />
+            <img class="bc__img" src={`/images/bell-choir/bloom-${i + 1}b.jpg`} alt={b.altB} width="560" height="560" loading="lazy" decoding="async" draggable="false" data-side="b" />
             <span class="bc__flash" aria-hidden="true"></span>
           </span>
           <span class="bc__bell" aria-hidden="true">
@@ -369,12 +380,30 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
     border: 1px solid var(--bc-line);
     transform-origin: 50% 0%;
   }
+  /* screen-reader-only: what the game is doing, for people who can't see the glow */
+  .bc__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .bc__img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* a sweep across the artwork is a glissando, never a native image drag */
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
     opacity: 0;
     transition: opacity 260ms ease;
   }
@@ -559,6 +588,14 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   let AC: AudioContext | null = null;
   let master: GainNode | null = null;
   let wet: GainNode | null = null;
+  /** True once the context is actually running. Bells that arrive over the
+   *  wire before anyone has touched the page must not schedule anything: a
+   *  suspended context does not advance currentTime, so every queued voice
+   *  would detonate at once on the visitor's first tap. */
+  let audioReady = false;
+  /** Rough voice budget. A hand dragged across twelve bells stacks 36
+   *  oscillators inside a second; past this the wall just drops the extras. */
+  let liveVoices = 0;
 
   function ctx(): AudioContext {
     if (!AC) {
@@ -566,7 +603,16 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
       AC = new Ctor();
       master = AC.createGain();
       master.gain.value = 0.9;
-      master.connect(AC.destination);
+      // A limiter on the way out — twelve overlapping bells sum past full
+      // scale, and the drag is the whole point of the room, so it must not
+      // end in clipping.
+      const limiter = AC.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 6;
+      limiter.ratio.value = 12;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.25;
+      master.connect(limiter).connect(AC.destination);
       // a soft stereo bloom so a dragged hand leaves a tail
       const delay = AC.createDelay(1);
       delay.delayTime.value = 0.27;
@@ -580,7 +626,10 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
       wet.connect(delay).connect(damp).connect(fb).connect(delay);
       damp.connect(AC.destination);
     }
-    if (AC.state === 'suspended') AC.resume().catch(() => {});
+    if (AC.state === 'suspended') {
+      AC.resume().then(() => { audioReady = AC?.state === 'running'; }).catch(() => {});
+    }
+    audioReady = AC.state === 'running';
     return AC;
   }
 
@@ -605,6 +654,9 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
         : name === 'glass'
         ? [{ m: 1, g: 0.34, d: 1.5, type: 'triangle' }, { m: 3.01, g: 0.1, d: 0.7, type: 'sine' }, { m: 6.2, g: 0.04, d: 0.3, type: 'sine' }]
         : [{ m: 1, g: 0.42, d: 2.6, type: 'sine' }, { m: 2.76, g: 0.13, d: 1.3, type: 'sine' }, { m: 5.4, g: 0.05, d: 0.55, type: 'sine' }];
+
+    liveVoices += 1;
+    window.setTimeout(() => { liveVoices = Math.max(0, liveVoices - 1); }, 900);
 
     for (const p of partials) {
       const osc = a.createOscillator();
@@ -658,23 +710,40 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
 
   let lastActivityAt = Date.now();
 
-  /** Ring a bell. `who` decides the volume, the colour and whether it goes out on the wire. */
-  function ring(idx: number, vel = 0.85, who: 'me' | 'them' | 'ghost' = 'me', hue = 44, avatar = -1) {
+  type Ringer = 'me' | 'them' | 'ghost' | 'wind';
+
+  /** Ring a bell. `who` decides the volume, the colour, whether it counts for
+   *  the game, and whether it goes out on the wire. */
+  function ring(idx: number, vel = 0.85, who: Ringer = 'me', hue = 44, avatar = -1) {
     const f = FREQS[idx];
     if (f === undefined) return;
+    const ours = who === 'me' || who === 'wind';
     const pan = (idx / (FREQS.length - 1)) * 1.6 - 0.8;
-    const gain = who === 'me' ? vel : who === 'them' ? vel * 0.72 : vel * 0.34;
-    try { voice(currentVoice, f, gain, pan); } catch {}
-    flash(idx, who === 'me' ? 'rung' : 'remote', who === 'me' ? undefined : hue);
+    const gain = who === 'me' ? vel : who === 'them' ? vel * 0.72 : who === 'wind' ? vel : vel * 0.34;
+
+    // A tap is a user gesture, so it may open the audio context. Anything the
+    // room plays for us stays silent until the visitor has touched the page —
+    // otherwise it all queues on a suspended clock and fires at once later.
+    if (who === 'me') {
+      try { ctx(); } catch {}
+    }
+    if ((who === 'me' || audioReady) && liveVoices < 24) {
+      try { voice(currentVoice, f, gain, pan); } catch {}
+    }
+
+    flash(idx, ours ? 'rung' : 'remote', ours ? undefined : hue);
     if (avatar >= 0) ringer(idx, avatar, hue, who === 'ghost');
     if (who !== 'ghost') lastActivityAt = Date.now();
-    scoreHit(idx);
+    scoreHit(idx, who);
     if (who === 'me') send(idx, vel);
   }
 
   // ── pointer: tap, and drag a hand across the wall ──────────
-  let dragging = false;
-  let lastIdx = -1;
+  // Tracked per pointer id. Two kids on one tablet — or one kid with a flat
+  // hand, which is the gesture this room exists for — are several independent
+  // pointers, and a single shared "last bell" would make them ring each other's
+  // bells on every jitter and cut each other off on every lift.
+  const drags = new Map<number, number>();
 
   function idxFromPoint(x: number, y: number): number {
     const el = document.elementFromPoint(x, y);
@@ -684,38 +753,45 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   }
 
   wall?.addEventListener('pointerdown', (e) => {
-    dragging = true;
-    lastIdx = -1;
+    // Stop the browser from turning a sweep across the artwork into a native
+    // image drag, which would otherwise eat the glissando after ~5px.
+    e.preventDefault();
     const idx = idxFromPoint(e.clientX, e.clientY);
-    if (idx >= 0) { ring(idx, 0.9); lastIdx = idx; }
+    drags.set(e.pointerId, idx);
+    if (idx >= 0) ring(idx, 0.9);
   });
   wall?.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+    if (!drags.has(e.pointerId)) return;
     const idx = idxFromPoint(e.clientX, e.clientY);
-    if (idx >= 0 && idx !== lastIdx) { ring(idx, 0.62); lastIdx = idx; }
+    if (idx >= 0 && idx !== drags.get(e.pointerId)) {
+      drags.set(e.pointerId, idx);
+      ring(idx, 0.62);
+    }
   });
-  const endDrag = () => { dragging = false; lastIdx = -1; };
+  const endDrag = (e: PointerEvent) => { drags.delete(e.pointerId); };
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
+  wall?.addEventListener('dragstart', (e) => e.preventDefault());
 
   // keyboard: Enter/Space on a focused bell, or the home row
   cols.forEach((col) => {
     col.addEventListener('keydown', (e) => {
-      const key = (e as KeyboardEvent).key;
-      if (key !== 'Enter' && key !== ' ') return;
+      const ev = e as KeyboardEvent;
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
       e.preventDefault();
+      if (ev.repeat) return; // a held Space would auto-repeat ~30 bells a second
       ring(Number.parseInt(col.dataset.idx ?? '-1', 10), 0.85);
     });
   });
   window.addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     const target = e.target as HTMLElement | null;
-    if (!(target instanceof HTMLElement)) {
-      // fall through — a keydown with no element target is still a keystroke
-    } else {
+    if (target instanceof HTMLElement) {
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
-      if (target.classList.contains('bc__col')) return; // handled above
     }
+    // Note: a focused bell is NOT excluded here. Enter and Space are handled on
+    // the button itself and never appear in KEYS, so the twelve letter keys keep
+    // working after you click or tab onto a bell.
     const idx = KEYS.indexOf(e.key.toLowerCase());
     if (idx >= 0) { e.preventDefault(); ring(idx, 0.85); }
   });
@@ -724,7 +800,11 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   document.querySelectorAll<HTMLElement>('[data-voice]').forEach((btn) => {
     btn.addEventListener('click', () => {
       currentVoice = btn.dataset.voice ?? 'chime';
-      document.querySelectorAll('[data-voice]').forEach((b) => b.classList.toggle('bc__btn--on', b === btn));
+      document.querySelectorAll<HTMLElement>('[data-voice]').forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle('bc__btn--on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
       ring(5, 0.6);
     });
   });
@@ -735,8 +815,10 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   function gust() {
     if (!windOn) return;
     const pick = () => Math.max(0, Math.min(11, Math.round(5.5 + (Math.random() + Math.random() + Math.random() - 1.5) * 3.4)));
-    ring(pick(), 0.22 + Math.random() * 0.3);
-    if (Math.random() < 0.16) window.setTimeout(() => windOn && ring(pick(), 0.18 + Math.random() * 0.2), 260);
+    // 'wind' rings locally and never scores or broadcasts — a tab left open on
+    // a windy wall must not play the game for you or ring everyone else's bells.
+    ring(pick(), 0.22 + Math.random() * 0.3, 'wind');
+    if (Math.random() < 0.16) window.setTimeout(() => windOn && ring(pick(), 0.18 + Math.random() * 0.2, 'wind'), 260);
     windTimer = window.setTimeout(gust, 1100 + Math.random() * 2600);
   }
   const windBtn = document.getElementById('bc-wind');
@@ -749,11 +831,14 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   });
 
   // ── follow the light — the co-op game ──────────────────────
-  // One bell glows. Anyone in the room may answer it. The count belongs to
-  // the room. There is no timer and no way to lose.
+  // A bell glows; any bell struck in the room can answer it, yours or a
+  // stranger's. No timer, no way to lose. The wall playing itself — ghosts,
+  // wind — never scores.
   const scoreEl = document.getElementById('bc-score');
   const bestEl = document.getElementById('bc-best');
   const gameBtn = document.getElementById('bc-game');
+  const litEl = document.getElementById('bc-lit');
+  const NOTE_NAMES = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6'];
   let gameOn = false;
   let litIdx = -1;
   let score = 0;
@@ -764,15 +849,31 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   } catch {}
   if (bestEl) bestEl.textContent = best ? `best ${best}` : 'best —';
 
-  function lightNext() {
-    if (litIdx >= 0) cols[litIdx]?.classList.remove('bc__col--lit');
-    let next = Math.floor(Math.random() * 12);
-    if (next === litIdx) next = (next + 1 + Math.floor(Math.random() * 11)) % 12;
-    litIdx = next;
-    cols[litIdx]?.classList.add('bc__col--lit');
+  function clearLight() {
+    if (litIdx >= 0) {
+      cols[litIdx]?.classList.remove('bc__col--lit');
+      cols[litIdx]?.removeAttribute('aria-current');
+    }
+    litIdx = -1;
   }
 
-  function scoreHit(idx: number) {
+  function lightNext() {
+    if (!gameOn) { clearLight(); return; } // a pending hop must not relight a stopped game
+    const previous = litIdx;
+    clearLight();
+    let next = Math.floor(Math.random() * 12);
+    if (next === previous) next = (next + 1 + Math.floor(Math.random() * 11)) % 12;
+    litIdx = next;
+    const col = cols[litIdx];
+    col?.classList.add('bc__col--lit');
+    col?.setAttribute('aria-current', 'true');
+    if (litEl) litEl.textContent = `Bell ${litIdx + 1}, ${NOTE_NAMES[litIdx] ?? ''}, is glowing`;
+  }
+
+  function scoreHit(idx: number, who: Ringer) {
+    // Ghost replays and wind are the wall talking to itself. They may not
+    // score, and they may not move the light out from under a kid's hand.
+    if (who === 'ghost' || who === 'wind') return;
     if (!gameOn || idx !== litIdx) return;
     score += 1;
     if (scoreEl) scoreEl.textContent = String(score);
@@ -792,9 +893,9 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
       score = 0;
       if (scoreEl) scoreEl.textContent = '0';
       lightNext();
-    } else if (litIdx >= 0) {
-      cols[litIdx]?.classList.remove('bc__col--lit');
-      litIdx = -1;
+    } else {
+      clearLight();
+      if (litEl) litEl.textContent = 'The light is off';
     }
   });
 
@@ -802,7 +903,25 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
   // Pitch rides in the low 4 bits of `seq` — the DO echoes seq verbatim,
   // so twelve notes travel over the deployed protocol untouched.
   const params = new URLSearchParams(window.location.search);
-  const rawRoom = (params.get('room') || 'bell-choir').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24) || 'bell-choir';
+
+  /**
+   * Mirror the room grammar the worker actually enforces
+   * (`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`). Anything it rejects is quietly
+   * routed to `lobby` — the shared room the /drum-room pages sit in — so a
+   * family that types `kids-`, or a long name that picks up a hyphen when it is
+   * truncated, would believe they had a private wall while standing in the
+   * middle of a public one. Trim the edges rather than discard the name, and
+   * fall back to the room's own name if nothing usable survives.
+   */
+  function normalizeRoom(raw: string | null): string {
+    const cleaned = (raw || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '')
+      .slice(0, 24)
+      .replace(/^-+|-+$/g, '');
+    return /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(cleaned) ? cleaned : 'bell-choir';
+  }
+  const rawRoom = normalizeRoom(params.get('room'));
   const roomEl = document.getElementById('bc-room');
   const hereEl = document.getElementById('bc-here');
   const rungEl = document.getElementById('bc-rung');
@@ -824,10 +943,18 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
 
   let ws: WebSocket | null = null;
   let meId = '';
-  let seqCounter = 0;
+  // Start the counter somewhere random. Seq is per-client and the room echoes
+  // it verbatim, so two people who both started at 0 would collide on their
+  // opening bells — which matters because `mySeqs` below uses seq to recognise
+  // our own echo.
+  let seqCounter = Math.floor(Math.random() * 1_000_000);
   let totalHits = 0;
   let retry = 0;
+  let hasReplayed = false;
   const ghosts: { note: number; hue: number; avatar: number }[] = [];
+  /** Seqs we just put on the wire, so an echo of our own hit is never mistaken
+   *  for someone else playing. Belt to the clientId braces. */
+  const mySeqs = new Set<number>();
 
   function setStatus(state: string, text: string) {
     if (!statusEl) return;
@@ -879,18 +1006,42 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
       try { msg = JSON.parse(String(event.data)); } catch { return; }
 
       if (msg.type === 'welcome') {
-        meId = msg.you?.id ?? '';
+        // The room identifies you as `you.clientId` here, but as `id` inside
+        // the presence roster. Read both — getting this wrong means we never
+        // recognise our own echo and every bell rings twice.
+        meId = msg.you?.clientId ?? msg.you?.id ?? '';
         totalHits = Number(msg.totalHits) || 0;
         if (rungEl) rungEl.textContent = String(totalHits);
         if (hereEl) hereEl.textContent = String(msg.connected ?? 1);
-        // the room plays back whoever was here last
-        const recent = Array.isArray(msg.recentHits) ? msg.recentHits.slice(-10) : [];
-        recent.forEach((h: any, i: number) => {
-          const note = (Number(h.seq) || 0) & 15;
-          if (note > 11) return;
-          rememberGhost(note, Number(h.hue) || 44, Number(h.avatar) || 0);
-          window.setTimeout(() => ring(note, 0.5, 'ghost', Number(h.hue) || 44, Number(h.avatar) || 0), 700 + i * 620);
-        });
+        // The room plays back whoever was here last — once per visit. A dropped
+        // wifi packet reconnects and gets a fresh welcome, and re-dumping ten
+        // bells on every blip would turn a flaky connection into a racket.
+        if (hasReplayed) return;
+        hasReplayed = true;
+        // Hold the replay until the tab is actually being looked at: a
+        // background tab throttles these timers and would otherwise deliver the
+        // whole arrival in one clatter the moment you switch to it.
+        const recent = (Array.isArray(msg.recentHits) ? msg.recentHits : [])
+          .filter((h: any) => h?.pad === 'bell')
+          .slice(-10);
+        const replayArrival = () => {
+          recent.forEach((h: any, i: number) => {
+            const note = (Number(h.seq) || 0) & 15;
+            if (note > 11) return;
+            rememberGhost(note, Number(h.hue) || 44, Number(h.avatar) || 0);
+            window.setTimeout(() => ring(note, 0.5, 'ghost', Number(h.hue) || 44, Number(h.avatar) || 0), 700 + i * 620);
+          });
+        };
+        if (document.hidden) {
+          const onVisible = () => {
+            if (document.hidden) return;
+            document.removeEventListener('visibilitychange', onVisible);
+            replayArrival();
+          };
+          document.addEventListener('visibilitychange', onVisible);
+        } else {
+          replayArrival();
+        }
         return;
       }
 
@@ -900,9 +1051,17 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
       }
 
       if (msg.type === 'hit') {
+        // Only bells. The room name is shared plumbing — if we ever land in a
+        // room the drum pages also use, their kicks and snares must not ring a
+        // random one of our twelve bells or inflate the count.
+        if (msg.pad !== 'bell') return;
         totalHits += 1;
         if (rungEl) rungEl.textContent = String(totalHits);
-        if (msg.clientId === meId) return; // our own echo
+        // The room broadcasts every hit to everyone, sender included. Ours
+        // already rang locally, so drop the echo — by identity first, and by
+        // the seq we sent as a fallback if the identity ever goes missing.
+        if (meId && msg.clientId === meId) return;
+        if (mySeqs.delete(Number(msg.seq))) return;
         const note = (Number(msg.seq) || 0) & 15;
         if (note > 11) return;
         const hue = Number(msg.hue) || 44;
@@ -935,13 +1094,16 @@ const DROPS = [0, 22, 9, 30, 4, 18, 12, 26, 2, 20, 7, 24];
     if (sentThisSecond >= 6) return;
     sentThisSecond += 1;
     seqCounter = (seqCounter + 1) % 60000000;
+    const seq = (seqCounter << 4) | idx;
+    mySeqs.add(seq);
+    if (mySeqs.size > 48) mySeqs.delete(mySeqs.values().next().value as number);
     try {
       ws.send(JSON.stringify({
         v: 1,
         type: 'hit',
         pad: 'bell',
         velocity: Math.max(0.05, Math.min(1, vel)),
-        seq: (seqCounter << 4) | idx,
+        seq,
         clientAt: now,
       }));
     } catch {}
