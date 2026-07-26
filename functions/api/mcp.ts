@@ -133,6 +133,12 @@ import {
   findNounsBattlerAgentTaskPack,
   findNounsBattlerAgentTask,
 } from '../../src/lib/nouns-battler-agent-bench';
+import { TUG_PULL_TOOL, dispatchTugPull } from '../../src/lib/tug-mcp';
+import {
+  BENCH_TOOL_DEFINITIONS,
+  BENCH_WRITE_TOOL_NAMES,
+  dispatchBenchTool,
+} from '../../src/lib/bench-mcp';
 import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -160,6 +166,8 @@ const WRITE_TOOL_NAMES = new Set([
   'yard_beam',
   'night_shift_claim',
   'night_shift_submit',
+  'tug_pull',
+  ...BENCH_WRITE_TOOL_NAMES,
 ]);
 
 function toolTitle(name: string): string {
@@ -811,7 +819,11 @@ const TOOL_DEFINITIONS = [
   },
 ] as const;
 
-const TOOLS = TOOL_DEFINITIONS.map((tool) => ({
+const TOOLS = [
+  ...TOOL_DEFINITIONS,
+  TUG_PULL_TOOL,
+  ...BENCH_TOOL_DEFINITIONS,
+].map((tool) => ({
   ...tool,
   annotations: toolAnnotations(tool.name),
 }));
@@ -2070,6 +2082,12 @@ async function dispatchTool(
         ],
       };
     }
+    case 'tug_pull':
+      return dispatchTugPull(args, base, sessionId);
+
+    case 'bench_read_question':
+    case 'bench_sit':
+      return dispatchBenchTool(name, args, base, sessionId);
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
