@@ -38,6 +38,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/qwen-silver-letter.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/qwen-good-intelligence', 'weekly', '0.92'],
   ['https://pointcast.xyz/qwen-good-intelligence.json', 'weekly', '0.88'],
+  ['https://pointcast.xyz/qwen-tan-river', 'weekly', '0.92'],
+  ['https://pointcast.xyz/qwen-tan-river.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/sunset-switchboard', 'weekly', '0.92'],
   ['https://pointcast.xyz/sunset-switchboard.json', 'weekly', '0.88'],
   ...afterimageExamples.flatMap((example) => [
