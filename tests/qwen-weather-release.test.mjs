@@ -155,3 +155,51 @@ test('Qwen Good Intelligence is local, bounded, and makes no automated decision'
   assert.match(jsonRoute, /automatedDecision: false/);
   assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
 });
+
+test('Qwen Tan River ships as a human, machine, homepage, and discovery study', async () => {
+  const [page, jsonRoute, home, llms, llmsFull, sitemap, imageRoute, poster] =
+    await Promise.all([
+      read('src/pages/qwen-tan-river.astro'),
+      read('src/pages/qwen-tan-river.json.ts'),
+      read('src/pages/index.astro'),
+      read('public/llms.txt'),
+      read('public/llms-full.txt'),
+      read('src/pages/sitemap-discovery.xml.ts'),
+      read('src/pages/images/qwen-tan-river/og.png.ts'),
+      fileStat('public/images/qwen-tan-river/og.png'),
+    ]);
+
+  assert.match(page, /潭江记忆潮汐/);
+  assert.match(page, /Qwen Model Study 004/);
+  assert.match(page, /This map remembers\. It does not predict\./);
+  assert.match(page, /雨水浸透了银信，墨迹沿潭江散开/);
+  assert.equal((page.match(/data-tide=\{tide\.id\}/g) ?? []).length, 1);
+  assert.match(jsonRoute, /PC-QWEN-TAN-RIVER-2026/);
+  assert.match(jsonRoute, /completed_via_qwen_token_plan_2026_07_26/);
+  assert.match(home, /QWEN MODEL STUDY 004/);
+  assert.match(home, /fresh-qwen-followup--tide/);
+  assert.match(llms, /pointcast\.xyz\/qwen-tan-river/);
+  assert.match(llmsFull, /Tan River Memory Tides/);
+  assert.match(sitemap, /pointcast\.xyz\/qwen-tan-river/);
+  assert.match(imageRoute, /Content-Type': 'image\/png/);
+  assert.ok(poster.size > 100_000);
+});
+
+test('Qwen Tan River is device-local and explicitly not a warning system', async () => {
+  const [page, jsonRoute] = await Promise.all([
+    read('src/pages/qwen-tan-river.astro'),
+    read('src/pages/qwen-tan-river.json.ts'),
+  ]);
+  const publicSurface = `${page}\n${jsonRoute}`;
+
+  assert.doesNotMatch(publicSurface, /QWEN_TOKEN_PLAN_KEY|DASHSCOPE_API_KEY/);
+  assert.doesNotMatch(publicSurface, /token-plan\.ap-southeast-1\.maas\.aliyuncs\.com/);
+  assert.doesNotMatch(page, /\bfetch\s*\(/);
+  assert.match(page, /This PointCast edition stays on this device/);
+  assert.match(page, /Not a flood-warning system\./);
+  assert.match(page, /Qwen-authored poetic seeds/);
+  assert.match(jsonRoute, /storedIdentity: false/);
+  assert.match(jsonRoute, /storedVoice: false/);
+  assert.match(jsonRoute, /storedLocation: false/);
+  assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
+});
