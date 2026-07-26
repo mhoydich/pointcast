@@ -25,6 +25,12 @@
 // manually import + place WalletConnect.
 import DrumLayout from '../layouts/DrumLayout.astro';
 import DrumNav from '../components/DrumNav.astro';
+// The hallway is a rule, not a card list — see src/lib/drum-rooms.ts.
+// Every src/pages/drum-*.astro page files itself into a wing at build
+// time, version suffixes fold into one door, and anything shipped after
+// this comment shows up on its own.
+import { roomsByWing, hallwayCount, isFresh } from '../lib/drum-rooms';
+import { DRUM_GAMES, DRUM_RUNNER_VERSIONS } from '../lib/drum-games';
 
 // Percussion rack — each drum has its own noun avatar, timbre, and
 // unlock threshold. First three are always available; 4th + 5th reveal
@@ -40,6 +46,13 @@ const DRUMS = [
 ] as const;
 // Back-compat — older code/HTML may still reference a single DRUM_NOUN_ID.
 const DRUM_NOUN_ID = DRUMS[1].id;
+
+// The hallway, computed at build time.
+const WING_GROUPS = roomsByWing();
+const { doors: DOOR_COUNT, pages: PAGE_COUNT } = hallwayCount();
+// The five-game shelf leads the arcade wing with its own curated Nouns and
+// accents, so those five doors drop out of that wing's generic grid.
+const GAME_PATHS = new Set<string>(DRUM_GAMES.map((game) => game.path));
 ---
 
 <DrumLayout
@@ -53,80 +66,81 @@ const DRUM_NOUN_ID = DRUMS[1].id;
          Description moved below the drum as secondary copy. -->
     <DrumNav current="v1" />
 
-    <!-- ══ HUB STRIP — visual cards for every drum surface ══
+    <!-- ══ THE HALLWAY — every drum room, filed by wing ══
          Per Mike "/drum is where everything should land with toggles
-         and navigation". The DrumNav above is the toggle row; this
-         strip is the *visual* discovery layer. Each card shows a
-         representative Noun for the surface, the surface label, and
-         a one-line teaser. Click → that room. v1 mechanics continue
-         right below this for the visitor who wants to just tap. -->
-    <section class="hub-strip" aria-label="All drum rooms">
-      <div class="hub-strip__head">
-        <span class="hub-strip__title">⌐◨-◨ all drum rooms</span>
-        <span class="hub-strip__sub">tap a card to enter · taps + state share across them all</span>
+         and navigation". The DrumNav above is the toggle row; this is
+         the map. It used to be twelve hand-typed cards that stopped at
+         v9 while the ladder ran to v18 — so it is a rule now. The wings,
+         the version folding, and the noun seeds all live in
+         src/lib/drum-rooms.ts; nothing here is typed by hand.
+         v1 mechanics continue right below for the visitor who just
+         wants to tap. -->
+    <section class="hallway" aria-label="All drum rooms">
+      <div class="hallway__head">
+        <span class="hallway__title">⌐◨-◨ the drum hallway</span>
+        <span class="hallway__count">
+          {DOOR_COUNT} doors &middot; {PAGE_COUNT} rooms &middot; newest first
+        </span>
       </div>
-      <div class="hub-strip__grid">
-        <a href="/drum-v2" class="hub-card">
-          <img src="https://noun.pics/42.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v2 collab</div>
-          <div class="hub-card__sub">pentatonic harmony</div>
-        </a>
-        <a href="/drum-v3" class="hub-card">
-          <img src="https://noun.pics/101.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v3 spotify</div>
-          <div class="hub-card__sub">drum along</div>
-        </a>
-        <a href="/drum-v4" class="hub-card">
-          <img src="https://noun.pics/200.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v4 orchestra</div>
-          <div class="hub-card__sub">12 instruments · 6 genres</div>
-        </a>
-        <a href="/drum-v5" class="hub-card">
-          <img src="https://noun.pics/300.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v5 loops</div>
-          <div class="hub-card__sub">build · share · url</div>
-        </a>
-        <a href="/drum-v6" class="hub-card">
-          <img src="https://noun.pics/400.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v6 choir</div>
-          <div class="hub-card__sub">12 voices · 4 progressions</div>
-        </a>
-        <a href="/drum-v7" class="hub-card">
-          <img src="https://noun.pics/500.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v7 big</div>
-          <div class="hub-card__sub">30 nouns · instrument board</div>
-        </a>
-        <a href="/drum-v8" class="hub-card">
-          <img src="https://noun.pics/666.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v8 symphony</div>
-          <div class="hub-card__sub">42 nouns · giant orchestra</div>
-        </a>
-        <a href="/drum-v9" class="hub-card">
-          <img src="https://noun.pics/77.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">v9 lounge</div>
-          <div class="hub-card__sub">smooth jazz · kenny g</div>
-        </a>
-                <a href="/drum-trophies" class="hub-card hub-card--gold">
-          <img src="https://noun.pics/777.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">trophies</div>
-          <div class="hub-card__sub">on-chain · tezos</div>
-        </a>
-        <a href="/drum-tv" class="hub-card hub-card--dark">
-          <img src="https://noun.pics/123.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">tv cast</div>
-          <div class="hub-card__sub">airplay · chromecast</div>
-        </a>
-                <a href="/drum-tv-v2" class="hub-card hub-card--dark">
-          <img src="https://noun.pics/77.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">venue v2</div>
-          <div class="hub-card__sub">stage + crowd · cinema</div>
-        </a>
-                <a href="/drum-apr26" class="hub-card hub-card--dark">
-          <img src="https://noun.pics/888.svg" alt="" loading="lazy" />
-          <div class="hub-card__label">apr 26</div>
-          <div class="hub-card__sub">special edition · sequencer</div>
-        </a>
-      </div>
+      <p class="hallway__note">
+        every drum page in the repo turns up here on its own. versions fold
+        into one door. whatever ships tomorrow shows up tomorrow, without
+        anyone adding a card.
+      </p>
+
+      {WING_GROUPS.map(({ wing, rooms }) => (
+        <div class="wing" data-wing={wing.key}>
+          <div class="wing__head">
+            <h2 class="wing__label">{wing.label}</h2>
+            <span class="wing__n">{rooms.length}</span>
+            <span class="wing__blurb">{wing.blurb}</span>
+          </div>
+
+          {wing.key === 'arcade' && (
+            <div class="shelf" aria-label="The five-game shelf">
+              {DRUM_GAMES.map((game) => (
+                <a class="shelf__game" href={game.path} style={`--pad-accent:${game.accent};`}>
+                  <img src={`https://noun.pics/${game.nounId}.svg`} alt="" width="56" height="56" loading="lazy" />
+                  <span class="shelf__num">{game.number}</span>
+                  <span class="shelf__name">{game.name}</span>
+                  <span class="shelf__skill">{game.skill}</span>
+                </a>
+              ))}
+              <nav class="shelf__vers" aria-label="Beat Runner versions">
+                <span class="shelf__vers-tag">beat runner &middot; {DRUM_RUNNER_VERSIONS.length}&times;</span>
+                {DRUM_RUNNER_VERSIONS.map((version) => (
+                  <a href={version.path}>{version.id}</a>
+                ))}
+              </nav>
+            </div>
+          )}
+
+          <div class="wing__grid">
+            {rooms
+              .filter((room) => !(wing.key === 'arcade' && GAME_PATHS.has(room.slug)))
+              .map((room) => (
+                <article class:list={['door', { 'door--wide': room.versions.length > 5 }]}>
+                  <a class="door__face" href={room.slug}>
+                    <img src={`https://noun.pics/${room.noun}.svg`} alt="" width="56" height="56" loading="lazy" />
+                    <span class="door__label">
+                      {room.label}
+                      {isFresh(room.mtime) && <span class="door__new">new</span>}
+                    </span>
+                    {room.sub && <span class="door__sub">{room.sub}</span>}
+                  </a>
+                  {room.versions.length > 0 && (
+                    <nav class="door__vers" aria-label={`Other versions of ${room.label}`}>
+                      <span class="door__vers-tag">{room.count}&times;</span>
+                      {room.versions.map((version) => (
+                        <a href={`/${version.slug}`}>{version.label}</a>
+                      ))}
+                    </nav>
+                  )}
+                </article>
+              ))}
+          </div>
+        </div>
+      ))}
     </section>
 
     <header class="mb-3 flex items-baseline justify-between gap-3">
@@ -506,77 +520,162 @@ const DRUM_NOUN_ID = DRUMS[1].id;
 </DrumLayout>
 
 <style>
-  /* ── Hub strip — visual room picker above the v1 cookie-clicker.
-     Compact card row that scrolls horizontally on mobile and fans out
-     to a 3-row grid on desktop. Renders as a navigation tile, not a
-     replacement for v1 — visitor still tap-drums right below. ── */
-  .hub-strip {
-    margin: 8px 0 18px;
-    padding: 14px 16px;
+  /* ── The hallway — every drum room, filed by wing, rendered from
+     src/lib/drum-rooms.ts. Hard corners and 1.5px rules: this panel is
+     an index, and it should read like one — a wall of signal above the
+     softer v1 room below. ── */
+  .hallway {
+    margin: 8px 0 20px;
+    padding: 13px 14px 15px;
     border: 1.5px solid var(--pc-rule, #C4C2BC);
-    border-radius: 10px;
-    background: linear-gradient(180deg, rgba(194,106,74,0.05) 0%, transparent 60%);
+    background: #fff;
   }
-  .hub-strip__head {
+  .hallway__head {
     display: flex; align-items: baseline;
     justify-content: space-between; flex-wrap: wrap; gap: 8px;
-    margin-bottom: 10px;
   }
-  .hub-strip__title {
+  .hallway__title {
     font-family: var(--pc-font-mono);
     font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
     color: var(--pc-ink); font-weight: 700;
   }
-  .hub-strip__sub {
+  .hallway__count {
     font-family: var(--pc-font-mono);
     font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--pc-ink-muted, #5F5E5A);
   }
-  .hub-strip__grid {
+  .hallway__note {
+    margin: 7px 0 0;
+    max-width: 52ch;
+    font-size: 11.5px; line-height: 1.55;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+
+  .wing { margin-top: 15px; padding-top: 11px; border-top: 1px solid var(--pc-rule, #C4C2BC); }
+  .wing__head {
+    display: flex; align-items: baseline; flex-wrap: wrap;
+    gap: 4px 9px; margin-bottom: 8px;
+  }
+  .wing__label {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    font-weight: 700; color: var(--pc-ink);
+  }
+  .wing__n {
+    font-family: var(--pc-font-mono);
+    font-size: 7.5px; letter-spacing: 0.14em;
+    color: #c26a4a; border: 1px solid rgba(194,106,74,0.4);
+    padding: 1px 4px;
+  }
+  .wing__blurb { font-size: 11.5px; line-height: 1.4; color: var(--pc-ink-muted, #5F5E5A); }
+  .wing__grid {
     display: grid;
-    grid-template-columns: repeat(9, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
     gap: 6px;
   }
-  @media (max-width: 900px) { .hub-strip__grid { grid-template-columns: repeat(5, 1fr); } }
-  @media (max-width: 540px) { .hub-strip__grid { grid-template-columns: repeat(3, 1fr); } }
-  .hub-card {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 6px;
+  @media (max-width: 540px) {
+    .wing__grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  }
+
+  .door {
+    display: flex; flex-direction: column;
     border: 1.5px solid var(--pc-rule, #C4C2BC);
-    border-radius: 6px;
     background: #fff;
-    text-decoration: none;
-    color: var(--pc-ink);
-    transition: border-color 120ms, transform 80ms, box-shadow 120ms;
+    transition: border-color 120ms;
   }
-  .hub-card:hover {
-    border-color: #c26a4a;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(194,106,74,0.15);
-    text-decoration: none;
+  .door--wide { grid-column: span 2; }
+  .door:hover { border-color: #c26a4a; }
+  .door__face {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    flex: 1; padding: 7px 5px 8px;
+    text-decoration: none; color: var(--pc-ink);
   }
-  .hub-card img {
-    width: 100%; aspect-ratio: 1; max-width: 60px;
+  .door__face:hover { text-decoration: none; }
+  .door__face img {
+    width: 100%; max-width: 54px; aspect-ratio: 1;
     image-rendering: pixelated;
-    border-radius: 3px;
   }
-  .hub-card__label {
+  .door__label {
     font-family: var(--pc-font-mono);
-    font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase;
-    font-weight: 700; color: var(--pc-ink); margin-top: 2px;
-    text-align: center;
+    font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700; color: var(--pc-ink);
+    text-align: center; line-height: 1.35;
   }
-  .hub-card__sub {
-    font-family: var(--pc-font-mono);
-    font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase;
+  .door__new {
+    display: inline-block; margin-left: 4px;
+    font-size: 7px; letter-spacing: 0.14em;
+    color: #c26a4a; border: 1px solid rgba(194,106,74,0.45);
+    padding: 0 3px; vertical-align: 1px;
+  }
+  .door__sub {
+    font-size: 9.5px; line-height: 1.35; text-align: center;
     color: var(--pc-ink-muted, #5F5E5A);
-    text-align: center; line-height: 1.2;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .hub-card--gold { border-color: #f59e0b; background: linear-gradient(135deg, #fef3c7 0%, #fff 100%); }
-  .hub-card--gold .hub-card__sub { color: #f59e0b; }
-  .hub-card--dark { background: #12110E; color: #fff; border-color: #12110E; }
-  .hub-card--dark .hub-card__label,
-  .hub-card--dark .hub-card__sub { color: rgba(255,255,255,0.85); }
+  .door__vers {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 2px; padding: 0 5px 5px;
+  }
+  .door__vers-tag {
+    font-family: var(--pc-font-mono);
+    font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #c26a4a; padding: 0 2px;
+  }
+  .door__vers a {
+    font-family: var(--pc-font-mono);
+    font-size: 7px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    border: 1px solid var(--pc-rule, #C4C2BC);
+    padding: 0 3px; text-decoration: none;
+  }
+  .door__vers a:hover { color: #c26a4a; border-color: #c26a4a; text-decoration: none; }
+
+  /* The five-game shelf, straight off src/lib/drum-games.ts — the only
+     hand-curated list in the hallway, because those five have real
+     nouns, accents, and numbers already. */
+  .shelf {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px; margin-bottom: 8px;
+  }
+  @media (max-width: 540px) { .shelf { grid-template-columns: repeat(3, 1fr); } }
+  .shelf__game {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 7px 5px 8px;
+    border: 1.5px solid var(--pad-accent, #C4C2BC);
+    background: #fff; text-decoration: none; color: var(--pc-ink);
+  }
+  .shelf__game:hover { background: color-mix(in srgb, var(--pad-accent, #fff) 12%, #fff); text-decoration: none; }
+  .shelf__game img { width: 100%; max-width: 52px; aspect-ratio: 1; image-rendering: pixelated; }
+  .shelf__num {
+    font-family: var(--pc-font-mono);
+    font-size: 7px; letter-spacing: 0.18em; color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .shelf__name {
+    font-family: var(--pc-font-mono);
+    font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700; text-align: center; line-height: 1.3;
+  }
+  .shelf__skill { font-size: 9.5px; color: var(--pc-ink-muted, #5F5E5A); text-align: center; }
+  .shelf__vers {
+    grid-column: 1 / -1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+  }
+  .shelf__vers-tag {
+    font-family: var(--pc-font-mono);
+    font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+  }
+  .shelf__vers a {
+    font-family: var(--pc-font-mono);
+    font-size: 7px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--pc-ink-muted, #5F5E5A);
+    border: 1px solid var(--pc-rule, #C4C2BC);
+    padding: 0 3px; text-decoration: none;
+  }
+  .shelf__vers a:hover { color: #c26a4a; border-color: #c26a4a; text-decoration: none; }
 
   /* The tap bounce — snappy scale-down-then-up. Much faster than
      transition-transform defaults so rapid taps don't queue up. */

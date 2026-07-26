@@ -1,0 +1,786 @@
+---
+/**
+ * /marine-layer — the room, and the instrument the room never had.
+ *
+ * Two halves. The record: twelve months of KLAX hourly sky condition, resolved
+ * at read time by src/lib/burnoff.ts into one question — when did the sky open?
+ * The curriculum: the eight sits, the format, the ladder and the five
+ * principles, written in April and sitting unrendered in src/lib/marineLayer.ts
+ * ever since. The curriculum tells you where to sit. The record tells you what
+ * was over you while you sat there.
+ *
+ * Nothing here transitions. There is no cron on Cloudflare Pages and there
+ * never will be, so the day's answer is computed from the date and the data
+ * every time the page loads. That is the only reason it will still be right in
+ * November.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  FIRST_MARINE_FORMAT,
+  MARINE_LAYER_PRINCIPLES,
+  MARINE_LAYER_SESSIONS,
+  MARINE_LAYER_STEWARDSHIP,
+} from '../lib/marineLayer';
+import {
+  BURN_OFF_DEFINITION,
+  DECK_CEILING_FT,
+  HOLD_MINUTES,
+  MORNING_END_MINUTE,
+  STATE_LABEL,
+  formatClock,
+  isUnderTheLayer,
+  latestJudged,
+  longDate,
+  median,
+  resolveSeason,
+  sentenceFor,
+  summariseByMonth,
+} from '../lib/burnoff';
+import type { BurnOffDay, BurnOffRecord, Observation } from '../lib/burnoff';
+import rawRecord from '../lib/burnoff-record.json';
+
+const record = rawRecord as unknown as BurnOffRecord;
+const season: BurnOffDay[] = resolveSeason(record.days);
+const months = summariseByMonth(season);
+const latest = latestJudged(season);
+const RECENT_ROWS = 5;
+const recent = season.filter((d) => d.state !== 'no-record').slice(-RECENT_ROWS).reverse();
+
+const tally = {
+  opened: season.filter((d) => d.state === 'opened').length,
+  never: season.filter((d) => d.state === 'never').length,
+  noLayer: season.filter((d) => d.state === 'no-layer').length,
+  noRecord: season.filter((d) => d.state === 'no-record').length,
+};
+const underLayerDays = tally.opened + tally.never;
+const judgedDays = season.length - tally.noRecord;
+const medianOpen = median(
+  season.filter((d) => d.state === 'opened').map((d) => d.openedAtMinute as number),
+);
+
+// ────────────── the chart ──────────────
+// One thin row per day. Grey where a deck sat below the threshold, blue where
+// it did not, blank before sunrise. The ragged left edge is the sunrise curve;
+// nobody drew it.
+
+const PLOT_START_MINUTE = 330; // 5:30am — earlier than the earliest sunrise here
+const PLOT_END_MINUTE = MORNING_END_MINUTE; // 2:00pm
+const PAD_L = 78;
+const PAD_R = 28;
+const PAD_T = 30;
+const PAD_B = 34;
+const CHART_W = 800;
+const ROW_H = 2;
+const PLOT_W = CHART_W - PAD_L - PAD_R;
+const CHART_H = PAD_T + season.length * ROW_H + PAD_B;
+
+const x = (minute: number) =>
+  PAD_L + ((minute - PLOT_START_MINUTE) / (PLOT_END_MINUTE - PLOT_START_MINUTE)) * PLOT_W;
+
+type Run = { from: number; to: number; under: boolean };
+
+function runsFor(obs: Observation[], sunriseMinute: number): Run[] {
+  const runs: Run[] = [];
+  const morning = obs
+    .filter(([m]) => m + 60 > sunriseMinute && m < PLOT_END_MINUTE)
+    .slice()
+    .sort((a, b) => a[0] - b[0]);
+  for (const [minute, ceiling] of morning) {
+    const from = Math.max(minute, sunriseMinute, PLOT_START_MINUTE);
+    const to = Math.min(minute + 60, PLOT_END_MINUTE);
+    if (to <= from) continue;
+    const under = isUnderTheLayer(ceiling);
+    const last = runs[runs.length - 1];
+    if (last && last.under === under && to > last.to && from - last.to < 2) last.to = to;
+    else runs.push({ from, to, under });
+  }
+  return runs;
+}
+
+const rows = season.map((day, index) => {
+  const sunriseMinute = day.sunriseMinute;
+  const obs = record.days[index]?.obs ?? [];
+  const label =
+    day.state === 'opened'
+      ? `opened ${formatClock(day.openedAtMinute as number)}`
+      : STATE_LABEL[day.state];
+  return {
+    date: day.date,
+    y: PAD_T + index * ROW_H,
+    state: day.state,
+    runs: runsFor(obs, sunriseMinute),
+    openedAtMinute: day.openedAtMinute,
+    title: `${day.date} · ${label} · sunrise ${formatClock(sunriseMinute)}${
+      day.lowestCeilingFt === null ? '' : ` · deck ${day.lowestCeilingFt.toLocaleString()} ft`
+    }`,
+  };
+});
+
+const monthTicks = season
+  .map((day, index) => ({ day, index }))
+  .filter(({ day, index }) => index === 0 || day.date.slice(0, 7) !== season[index - 1].date.slice(0, 7))
+  .map(({ day, index }) => ({
+    y: PAD_T + index * ROW_H,
+    label: longDate(day.date).split(' ').slice(-1)[0],
+    year: day.date.slice(2, 4),
+  }));
+
+const hourTicks: { x: number; label: string }[] = [];
+for (let hour = 6; hour * 60 <= PLOT_END_MINUTE; hour += 1) {
+  hourTicks.push({
+    x: x(hour * 60),
+    label: hour === 12 ? '12p' : hour > 12 ? `${hour - 12}p` : `${hour}a`,
+  });
+}
+
+// ────────────── page metadata ──────────────
+
+const title = 'Marine Layer — the fog log';
+const description = `Twelve months of when the marine layer broke over El Segundo, read hour by hour from KLAX, plus the eight-week place-based sitting practice it was named for. ${underLayerDays} of ${judgedDays} mornings started under a deck.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  '@id': 'https://pointcast.xyz/marine-layer',
+  name: 'Marine Layer burn-off record — El Segundo / KLAX',
+  description,
+  url: 'https://pointcast.xyz/marine-layer',
+  temporalCoverage: `${record.firstDate}/${record.lastDate}`,
+  spatialCoverage: { '@type': 'Place', name: 'El Segundo, California' },
+  variableMeasured: 'Time of day the lowest broken or overcast ceiling cleared after sunrise',
+  isBasedOn: record.source,
+  creator: { '@type': 'EducationalOrganization', name: 'University of El Segundo' },
+  distribution: {
+    '@type': 'DataDownload',
+    encodingFormat: 'application/json',
+    contentUrl: 'https://pointcast.xyz/marine-layer.json',
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/marine-layer.json', title: 'Marine Layer (JSON)' }]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span aria-hidden="true">/</span>
+      <a href="/university-of-el-segundo">university-of-el-segundo</a><span aria-hidden="true">/</span>
+      <span>marine-layer</span>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__bar"></div>
+      <p class="kicker">UES-WP-2026-01 · AIR · TRACK 07 · {season.length} MORNINGS ON FILE</p>
+      <h1>MARINE / LAYER.</h1>
+      <p class="subtitle">A place-based sitting practice, and the fog log that keeps it honest.</p>
+
+      {latest && (
+        <div class="verdict" id="ml-verdict">
+          <p class="verdict__when">
+            <span id="ml-verdict-rel" class="verdict__rel"></span>
+            <span id="ml-verdict-date" data-date={latest.date}>{longDate(latest.date)}</span>
+          </p>
+          <p class="verdict__num" id="ml-verdict-num">
+            {latest.state === 'opened' ? formatClock(latest.openedAtMinute as number) : '—'}
+          </p>
+          <p class="verdict__say" id="ml-verdict-say">{sentenceFor(latest)}</p>
+          <p class="verdict__meta" id="ml-verdict-meta">
+            sunrise {formatClock(latest.sunriseMinute)} ·{' '}
+            {latest.lowestCeilingFt === null
+              ? 'no deck at dawn'
+              : `lowest deck ${latest.lowestCeilingFt.toLocaleString()} ft`}
+          </p>
+          <p class="verdict__live" id="ml-verdict-live">reading the last few mornings from the archive…</p>
+        </div>
+      )}
+
+      <p class="thesis">
+        The number comes from KLAX, 4.7 kilometres up the coast, not from a model. It is the hour a
+        broken or overcast deck below {DECK_CEILING_FT.toLocaleString()} feet gave up and stayed gone.
+        A garden is slow on purpose. A broadcast is too. This one keeps a log.
+      </p>
+
+      {/*
+        Exactly RECENT_ROWS rows are rendered here and the live script rewrites
+        them in place rather than replacing them. Astro scopes this page's CSS
+        with a data attribute the compiler stamps onto template elements only —
+        nodes built with createElement never get it and would render unstyled.
+      */}
+      <ul class="recent" id="ml-recent">
+        {Array.from({ length: RECENT_ROWS }).map((_, i) => {
+          const day = recent[i];
+          return (
+            <li data-date={day ? day.date : ''} hidden={!day}>
+              <span class="recent__date">{day ? longDate(day.date) : ''}</span>
+              <span class={`recent__state recent__state--${day ? day.state : 'no-record'}`}>
+                {day ? STATE_LABEL[day.state] : ''}
+              </span>
+              <span class="recent__time">
+                {day && day.state === 'opened' ? formatClock(day.openedAtMinute as number) : '—'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </header>
+
+    <section class="record">
+      <p class="kicker">THE RECORD · {record.firstDate} → {record.lastDate}</p>
+      <h2>Twelve months of mornings.</h2>
+      <p class="lede">
+        One thin row per day, oldest at the top. Grey is a deck below the threshold sitting over you.
+        Blue is open sky. The row starts at sunrise, which is why the left edge draws its own curve
+        through the year without being asked. May Gray, June Gloom and Fogust are the wide grey bands;
+        February is the thin one.
+      </p>
+
+      <figure class="chart">
+        <svg
+          viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+          width="100%"
+          role="img"
+          aria-label={`Stacked chart of ${season.length} mornings at KLAX. Each row runs from sunrise to 2pm, grey where a ceiling below ${DECK_CEILING_FT} feet was reported and blue where it was not.`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <rect x={PAD_L} y={PAD_T} width={PLOT_W} height={season.length * ROW_H} fill="#ffffff" />
+
+          {hourTicks.map((tick) => (
+            <g>
+              <line
+                x1={tick.x}
+                y1={PAD_T}
+                x2={tick.x}
+                y2={PAD_T + season.length * ROW_H}
+                stroke="#e2e5e8"
+                stroke-width="1"
+              />
+              <text x={tick.x} y={PAD_T - 10} class="svg-hour" text-anchor="middle">{tick.label}</text>
+            </g>
+          ))}
+
+          {rows.map((row) => (
+            <g>
+              <title>{row.title}</title>
+              <rect
+                x={PAD_L - 14}
+                y={row.y}
+                width={7}
+                height={ROW_H}
+                fill={
+                  row.state === 'opened'
+                    ? '#185FA5'
+                    : row.state === 'never'
+                      ? '#5c666d'
+                      : row.state === 'no-layer'
+                        ? '#bcd7ee'
+                        : '#ececec'
+                }
+              />
+              {row.runs.map((run) => (
+                <rect
+                  x={x(run.from)}
+                  y={row.y}
+                  width={Math.max(0.6, x(run.to) - x(run.from))}
+                  height={ROW_H}
+                  fill={run.under ? '#6f787e' : '#a3c9e8'}
+                />
+              ))}
+              {row.openedAtMinute !== null && (
+                <rect x={x(row.openedAtMinute) - 0.6} y={row.y} width={1.2} height={ROW_H} fill="#12212b" />
+              )}
+            </g>
+          ))}
+
+          {monthTicks.map((tick) => (
+            <g>
+              <line x1={PAD_L - 20} y1={tick.y} x2={CHART_W - PAD_R} y2={tick.y} stroke="#12212b" stroke-width="0.5" opacity="0.35" />
+              <text x={PAD_L - 24} y={tick.y + 4} class="svg-month" text-anchor="end">{tick.label} {tick.year}</text>
+            </g>
+          ))}
+
+          <text x={PAD_L} y={CHART_H - 12} class="svg-foot">
+            KLAX hourly routine reports · sunrise from NOAA · rows drawn to 2:00pm
+          </text>
+        </svg>
+
+        <figcaption class="legend">
+          <span class="legend__group">bars</span>
+          <span><i class="sw" style="background:#6f787e"></i> under the layer</span>
+          <span><i class="sw" style="background:#a3c9e8"></i> open</span>
+          <span><i class="sw sw--gap"></i> the station skipped that hour</span>
+          <span><i class="sw" style="background:#12212b"></i> the hour it broke</span>
+          <span class="legend__group">left margin</span>
+          <span><i class="sw" style="background:#185FA5"></i> opened</span>
+          <span><i class="sw" style="background:#5c666d"></i> never opened</span>
+          <span><i class="sw" style="background:#bcd7ee"></i> no layer</span>
+        </figcaption>
+      </figure>
+
+      <div class="record__grid">
+        <div class="defn">
+          <p class="kicker kicker--tight">THE DEFINITION</p>
+          <h3>What "the sky opened" means here.</h3>
+          <ol>
+            {BURN_OFF_DEFINITION.map((line) => (<li>{line}</li>))}
+          </ol>
+          <p class="defn__note">
+            It is arguable, it is local, and it is written down. The rule lives in
+            <code>src/lib/burnoff.ts</code>, runs at read time, and is never cached as a status —
+            there is no scheduler on this site to write one. Change the numbers and the whole
+            twelve months redraws.
+          </p>
+          <dl class="defn__consts">
+            <div><dt>deck counts as</dt><dd>BKN · OVC · VV</dd></div>
+            <div><dt>below</dt><dd>{DECK_CEILING_FT.toLocaleString()} ft</dd></div>
+            <div><dt>must hold</dt><dd>{HOLD_MINUTES / 60} hours</dd></div>
+            <div><dt>watched until</dt><dd>{formatClock(MORNING_END_MINUTE)}</dd></div>
+          </dl>
+        </div>
+
+        <div class="months">
+          <p class="kicker kicker--tight">BY MONTH</p>
+          <h3>The season as a table.</h3>
+          <table>
+            <thead>
+              <tr><th>month</th><th>days</th><th>under</th><th>median open</th><th>never</th></tr>
+            </thead>
+            <tbody>
+              {months.map((m) => (
+                <tr>
+                  <td class="months__label">{m.label}</td>
+                  <td>{m.days}</td>
+                  <td>{Math.round(m.layerShare * 100)}%</td>
+                  <td>{m.medianOpenMinute === null ? '—' : formatClock(m.medianOpenMinute)}</td>
+                  <td>{m.never}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul class="months__tally">
+            <li><strong>{tally.opened}</strong> mornings opened at a time we can name</li>
+            <li><strong>{tally.never}</strong> never opened before two in the afternoon</li>
+            <li><strong>{tally.noLayer}</strong> had nothing over them to begin with</li>
+            {tally.noRecord > 0 && <li><strong>{tally.noRecord}</strong> the station did not report enough of</li>}
+            {medianOpen !== null && <li>median opening across the year: <strong>{formatClock(medianOpen)}</strong></li>}
+          </ul>
+        </div>
+      </div>
+
+      <p class="provenance">
+        {record.stationName} — {record.stationNote} Archive: {record.source}. Pulled by hand with
+        <code>node scripts/fetch-burnoff.mjs</code> on {record.fetchedAt.slice(0, 10)} and committed;
+        the build never touches the network. Reanalysis grids were tried first and thrown out — a
+        25 km cell snaps inland of the shore and reports June mornings backwards.
+      </p>
+    </section>
+
+    <section class="sessions">
+      <p class="kicker">THE EIGHT SITS</p>
+      <h2>Where the cohort sits.</h2>
+      <p class="lede">
+        Eight weeks, eight places, written in April. The place is the curriculum; the record above is
+        what the sky was doing while you were in it.
+      </p>
+      <ol class="sits">
+        {MARINE_LAYER_SESSIONS.map((s) => (
+          <li class="sit" id={s.slug}>
+            <div class="sit__head">
+              <span class="sit__week">WEEK {String(s.week).padStart(2, '0')}</span>
+              <span class="sit__dur">{s.duration}</span>
+            </div>
+            <h3>{s.title}</h3>
+            <dl>
+              <div><dt>Place</dt><dd>{s.place}</dd></div>
+              <div><dt>When</dt><dd>{s.timeOfDay}</dd></div>
+              <div><dt>Breath</dt><dd>{s.breath}</dd></div>
+              <div><dt>Prompt</dt><dd>{s.prompt}</dd></div>
+              <div><dt>Artifact</dt><dd>{s.artifact}</dd></div>
+            </dl>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="format">
+      <p class="kicker">THE FIRST SIT · 75 MINUTES</p>
+      <h2>How the room opens.</h2>
+      <ol class="fmt">
+        {FIRST_MARINE_FORMAT.map((f) => (
+          <li>
+            <span class="fmt__min">{f.minutes}</span>
+            <div><h3>{f.label}</h3><p>{f.detail}</p></div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="ladder">
+      <p class="kicker">STEWARDSHIP</p>
+      <h2>Four rungs, and how you get to each.</h2>
+      <ol class="rungs">
+        {MARINE_LAYER_STEWARDSHIP.map((r, i) => (
+          <li>
+            <span class="rungs__n">{String(i + 1).padStart(2, '0')}</span>
+            <div>
+              <h3>{r.role}</h3>
+              <p class="rungs__threshold">{r.threshold}</p>
+              <p>{r.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="principles">
+      <p class="kicker">FIVE PRINCIPLES</p>
+      <h2>What the cohort agreed to.</h2>
+      <ol class="rules">
+        {MARINE_LAYER_PRINCIPLES.map((p, i) => (
+          <li><span>{String(i + 1).padStart(2, '0')}</span><p>{p}</p></li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="links">
+      <a href="/marine-layer.json">JSON</a>
+      <a href="/ues/marine-layer-weather-light-daily-seeing">UES-201 · the course</a>
+      <a href="/university-of-el-segundo">UES tracks</a>
+      <a href="/ocean-wing">Ocean Wing · water</a>
+      <a href="/fire">Fire</a>
+      <a href="/local-star-commons">Local Star Commons</a>
+      <a href="/meditate">The timer</a>
+      <a href="/window">The window</a>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  // The live edge. The chart above is committed data; deploys here are manual,
+  // so the number at the top would quietly go stale between them. Mesonet serves
+  // Access-Control-Allow-Origin: *, so the browser can ask the same archive the
+  // backfill script asked, for the last few mornings only, with no endpoint of
+  // ours in the middle. If it fails, the committed answer stays on screen.
+  import {
+    STATE_LABEL,
+    formatClock,
+    longDate,
+    mesonetUrl,
+    parseMesonetCsv,
+    resolveDay,
+    sentenceFor,
+    sunriseMinuteFor,
+  } from '../lib/burnoff';
+  import type { BurnOffDay } from '../lib/burnoff';
+
+  const LOOKBACK_DAYS = 6;
+  const TZ = 'America/Los_Angeles';
+
+  const isoIn = (tz: string, at: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(at);
+
+  const shiftIso = (iso: string, days: number) => {
+    const at = new Date(`${iso}T12:00:00Z`);
+    at.setUTCDate(at.getUTCDate() + days);
+    return at.toISOString().slice(0, 10);
+  };
+
+  const relativeLabel = (iso: string, todayIso: string) => {
+    const diff = Math.round(
+      (Date.parse(`${iso}T12:00:00Z`) - Date.parse(`${todayIso}T12:00:00Z`)) / 86_400_000,
+    );
+    if (diff === 0) return 'this morning ·';
+    if (diff === -1) return 'yesterday ·';
+    if (diff === -2) return 'the day before ·';
+    return '';
+  };
+
+  const clockOf = (day: BurnOffDay) =>
+    day.state === 'opened' ? formatClock(day.openedAtMinute as number) : '—';
+
+  const today = isoIn(TZ, new Date());
+
+  const relEl = document.getElementById('ml-verdict-rel');
+  const dateEl = document.getElementById('ml-verdict-date');
+  const numEl = document.getElementById('ml-verdict-num');
+  const sayEl = document.getElementById('ml-verdict-say');
+  const metaEl = document.getElementById('ml-verdict-meta');
+  const liveEl = document.getElementById('ml-verdict-live');
+  const recentRows = Array.from(document.querySelectorAll<HTMLLIElement>('#ml-recent li'));
+
+  // Relabel what is already on screen before asking anyone anything, so the
+  // page names the right morning even if the archive never answers.
+  if (dateEl && relEl) {
+    relEl.textContent = relativeLabel(dateEl.getAttribute('data-date') || today, today);
+  }
+
+  const run = async () => {
+    const url = mesonetUrl(shiftIso(today, -LOOKBACK_DAYS), shiftIso(today, 1));
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`mesonet ${res.status}`);
+
+    const judged = parseMesonetCsv(await res.text())
+      .map((day) => resolveDay(day))
+      .filter((day) => day.state !== 'no-record')
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    if (!judged.length) throw new Error('nothing judgeable in the window');
+
+    const newest = judged[0];
+    if (dateEl) {
+      dateEl.textContent = longDate(newest.date);
+      dateEl.setAttribute('data-date', newest.date);
+    }
+    if (relEl) relEl.textContent = relativeLabel(newest.date, today);
+    if (numEl) numEl.textContent = clockOf(newest);
+    if (sayEl) sayEl.textContent = sentenceFor(newest);
+    if (metaEl) {
+      metaEl.textContent = `sunrise ${formatClock(newest.sunriseMinute)} · ${
+        newest.lowestCeilingFt === null
+          ? 'no deck at dawn'
+          : `lowest deck ${newest.lowestCeilingFt.toLocaleString()} ft`
+      }`;
+    }
+
+    recentRows.forEach((row, i) => {
+      const day = judged[i];
+      if (!day) {
+        row.hidden = true;
+        return;
+      }
+      row.hidden = false;
+      row.setAttribute('data-date', day.date);
+      const date = row.querySelector('.recent__date');
+      const state = row.querySelector('.recent__state');
+      const time = row.querySelector('.recent__time');
+      if (date) date.textContent = longDate(day.date);
+      if (state) {
+        // Swap only the state modifier. Overwriting className would take
+        // Astro's scope class with it under class-based style scoping, and the
+        // row would come back unstyled.
+        for (const cls of Array.from(state.classList)) {
+          if (cls.startsWith('recent__state--')) state.classList.remove(cls);
+        }
+        state.classList.add(`recent__state--${day.state}`);
+        state.textContent = STATE_LABEL[day.state];
+      }
+      if (time) time.textContent = clockOf(day);
+    });
+
+    if (liveEl) {
+      liveEl.textContent = `read live from the KLAX archive just now · sunrise ${formatClock(
+        sunriseMinuteFor(newest.date),
+      )} · the chart below is the committed record`;
+    }
+  };
+
+  run().catch(() => {
+    if (liveEl) {
+      liveEl.textContent = 'the archive did not answer just now — showing the committed record.';
+    }
+  });
+</script>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 0 88px;
+    background: #ffffff;
+    color: #12212b;
+    font-family: Inter, system-ui, sans-serif;
+    font-weight: 400;
+  }
+  .page > * { padding-inline: 28px; }
+
+  .crumb {
+    padding: 18px 28px 12px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #5c666d;
+  }
+  .crumb a { color: #12212b; text-decoration: underline; text-underline-offset: 3px; }
+
+  .hero { padding: 18px 28px 36px; }
+  .hero__bar { height: 14px; background: #185FA5; margin: 0 -28px 28px; }
+
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+    color: #12212b; margin: 0 0 10px; padding: 4px 8px;
+    background: #eaf1f8; display: inline-block; border: 1px solid #185FA5;
+  }
+  .kicker--tight { margin-bottom: 8px; }
+
+  h1 {
+    font-family: var(--pc-font-mono);
+    font-size: 88px; line-height: .92; font-weight: 500; letter-spacing: -.02em;
+    margin: 8px 0 12px; text-transform: uppercase;
+  }
+  .subtitle { font-size: 19px; font-weight: 500; margin: 0 0 22px; max-width: 52ch; }
+  .thesis { font-size: 15px; line-height: 1.65; max-width: 68ch; margin: 22px 0 0; color: #2a3843; }
+
+  .verdict { border: 1.5px solid #185FA5; border-left: 8px solid #185FA5; padding: 16px 18px 14px; background: #f6fafd; }
+  .verdict__when {
+    margin: 0 0 2px;
+    font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: #4b5a66;
+  }
+  .verdict__rel { color: #185FA5; }
+  .verdict__num {
+    margin: 0; font-family: var(--pc-font-mono); font-weight: 500;
+    font-size: 62px; line-height: 1; letter-spacing: -.03em; color: #12212b;
+  }
+  .verdict__say { margin: 6px 0 0; font-size: 17px; }
+  .verdict__meta {
+    margin: 6px 0 0; font-family: var(--pc-font-mono);
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #4b5a66;
+  }
+  .verdict__live {
+    margin: 10px 0 0; font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #6a7681;
+  }
+
+  .recent { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 2px; }
+  .recent li {
+    display: grid; grid-template-columns: 1fr auto 78px; gap: 12px; align-items: baseline;
+    padding: 7px 10px; border: 1px solid #dde3e8; background: #ffffff;
+  }
+  /* display:grid above outranks the UA rule for [hidden]; say it again louder. */
+  .recent li[hidden] { display: none; }
+  .recent__date { font-size: 13px; color: #2a3843; }
+  .recent__state {
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; padding: 2px 6px; border: 1px solid currentColor;
+  }
+  .recent__state--opened { color: #185FA5; }
+  .recent__state--never { color: #5c666d; }
+  .recent__state--no-layer { color: #4a7fa8; }
+  .recent__state--no-record { color: #8d959b; }
+  .recent__time { font-family: var(--pc-font-mono); font-size: 14px; text-align: right; }
+
+  section { padding: 30px 28px; border-top: 4px solid #185FA5; }
+  h2 {
+    font-family: var(--pc-font-mono); font-size: 26px; line-height: 1;
+    font-weight: 500; margin: 0 0 14px; text-transform: uppercase;
+  }
+  h3 { font-family: var(--pc-font-mono); font-size: 15px; font-weight: 500; margin: 0 0 8px; }
+  .lede { font-size: 15px; line-height: 1.6; max-width: 74ch; margin: 0 0 20px; color: #2a3843; }
+
+  .chart { margin: 0 0 24px; border: 1.5px solid #12212b; padding: 10px 8px 6px; background: #ffffff; }
+  .chart svg { display: block; }
+  .svg-hour, .svg-month, .svg-foot {
+    font-family: var(--pc-font-mono); fill: #5c666d;
+  }
+  .svg-hour { font-size: 11px; letter-spacing: .06em; }
+  .svg-month { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; }
+  .svg-foot { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 4px 2px;
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: #4b5a66;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend__group { color: #12212b; border-bottom: 1px solid #12212b; }
+  .sw { width: 14px; height: 8px; display: inline-block; }
+  .sw--gap { background: #ffffff; border: 1px solid #c7ced4; }
+
+  .record__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .defn, .months { border: 1.5px solid #12212b; padding: 14px 16px; background: #ffffff; }
+  .defn ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
+  .defn li { font-size: 14px; line-height: 1.55; }
+  .defn__note { font-size: 13px; line-height: 1.55; color: #4b5a66; margin: 0 0 12px; }
+  .defn code, .provenance code {
+    font-family: var(--pc-font-mono); font-size: 12px; background: #eaf1f8; padding: 1px 4px;
+  }
+  .defn__consts { margin: 0; display: grid; gap: 2px; }
+  .defn__consts > div {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px;
+    padding: 4px 0; border-top: 1px solid #e2e5e8;
+  }
+  .defn__consts dt {
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; color: #5c666d;
+  }
+  .defn__consts dd { margin: 0; font-family: var(--pc-font-mono); font-size: 12px; }
+
+  .months table { width: 100%; border-collapse: collapse; font-family: var(--pc-font-mono); font-size: 12px; }
+  .months th {
+    text-align: right; font-weight: 500; font-size: 9.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: #5c666d; padding: 4px 6px; border-bottom: 1px solid #12212b;
+  }
+  .months th:first-child, .months td:first-child { text-align: left; }
+  .months td { text-align: right; padding: 4px 6px; border-bottom: 1px solid #eef1f3; }
+  .months__label { color: #12212b; }
+  .months__tally { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 5px; font-size: 13px; color: #2a3843; }
+  .months__tally strong { font-family: var(--pc-font-mono); font-weight: 500; color: #185FA5; }
+
+  .provenance { font-size: 12.5px; line-height: 1.6; color: #4b5a66; margin: 18px 0 0; max-width: 80ch; }
+
+  .sits { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .sit { padding: 14px 16px; border: 1.5px solid #12212b; border-left: 8px solid #185FA5; background: #ffffff; }
+  .sit:nth-child(even) { border-left-color: #6ea8d8; }
+  .sit__head {
+    display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px;
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  }
+  .sit__week { color: #185FA5; }
+  .sit__dur { color: #5c666d; }
+  .sit h3 { font-size: 17px; margin: 0 0 8px; }
+  .sit dl { margin: 0; display: grid; gap: 4px; }
+  .sit dl > div { display: grid; grid-template-columns: 72px 1fr; gap: 8px; padding: 4px 0; border-top: 1px solid #eef1f3; font-size: 13px; }
+  .sit dl > div:first-child { border-top: 0; }
+  .sit dt {
+    font-family: var(--pc-font-mono); font-size: 9px; letter-spacing: .14em;
+    text-transform: uppercase; color: #185FA5; padding-top: 2px;
+  }
+  .sit dd { margin: 0; line-height: 1.5; color: #2a3843; }
+
+  .fmt { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .fmt li { display: grid; grid-template-columns: 78px 1fr; gap: 14px; padding: 12px 14px; border: 1.5px solid #12212b; background: #ffffff; }
+  .fmt__min { font-family: var(--pc-font-mono); font-size: 13px; color: #185FA5; padding-top: 2px; }
+  .fmt p { margin: 0; font-size: 14px; line-height: 1.55; color: #2a3843; }
+
+  .rungs { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .rungs li { display: grid; grid-template-columns: 42px 1fr; gap: 12px; padding: 14px 16px; border: 1.5px solid #12212b; background: #ffffff; }
+  .rungs__n { font-family: var(--pc-font-mono); font-size: 22px; color: #6ea8d8; }
+  .rungs__threshold {
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; color: #185FA5; margin: 0 0 6px;
+  }
+  .rungs p { margin: 0; font-size: 14px; line-height: 1.55; color: #2a3843; }
+
+  .rules { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .rules li { display: grid; grid-template-columns: 48px 1fr; gap: 14px; padding: 12px 14px; border: 1.5px solid #12212b; background: #ffffff; align-items: baseline; }
+  .rules span { font-family: var(--pc-font-mono); font-size: 20px; color: #185FA5; }
+  .rules p { margin: 0; font-size: 15px; line-height: 1.5; }
+
+  .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .links a {
+    font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; padding: 10px 12px; background: #12212b; color: #ffffff; text-decoration: none;
+  }
+  .links a:hover { background: #185FA5; }
+
+  @media (max-width: 900px) {
+    h1 { font-size: 58px; }
+    .record__grid { grid-template-columns: 1fr; }
+    .sits { grid-template-columns: 1fr; }
+    .rungs { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    h1 { font-size: 40px; }
+    .verdict__num { font-size: 46px; }
+    .recent li { grid-template-columns: 1fr auto; }
+    .recent__time { grid-column: 2; }
+    .fmt li { grid-template-columns: 1fr; }
+  }
+</style>

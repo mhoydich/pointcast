@@ -1,0 +1,404 @@
+---
+/**
+ * /potters-field — the burned Nouns, recovered.
+ *
+ * Between Noun 1887 and Noun 1914 there is a gap. Twenty-six Nouns were
+ * minted into it, offered at auction, failed the 2.8 ETH reserve set by
+ * Prop 955, and were burned by the same contract that made them. ownerOf
+ * reverts for every one. noun.pics answers 500 for exactly that range.
+ *
+ * Burning an ERC-721 does not clear the token's entry in the `seeds`
+ * mapping, and the Nouns descriptor is a pure function of that seed. So the
+ * faces were recoverable, and scripts/recover-potters-field.mjs recovered
+ * them once, by hand, on 2026-07-26. The SVGs in public/potters-field/ and
+ * the ledger in src/data/potters-field.json are that run's output.
+ *
+ * THIS PAGE MAKES NO ETHEREUM CALL. PointCast is an all-Tezos codebase and
+ * the only Ethereum read in it lives in the hand-run script. Nothing here
+ * touches a node at build time or at request time — it reads committed JSON
+ * and committed SVG, and that is deliberate.
+ *
+ * Structure cloned from src/pages/eth-legacy.astro (crumb, kicker/title/dek
+ * head, stats strip, legend, card grid, agent strip, CollectionPage JSON-LD).
+ * All Nouns art is CC0.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import raw from '../data/potters-field.json';
+
+interface FieldNoun {
+  id: number;
+  seed: { background: number; body: number; accessory: number; head: number; glasses: number };
+  seedTuple: number[];
+  mintBlock: number | null;
+  mintTimestamp: number | null;
+  burnBlock: number | null;
+  burnTimestamp: number | null;
+  burnTx: string | null;
+  svg: string;
+}
+
+interface Field {
+  generatedAt: string;
+  note: string;
+  chain: string;
+  contracts: { token: string; descriptor: string; auctionHouse: string };
+  scan: {
+    floor: number;
+    liveAuctionId: number;
+    headBlock: number;
+    burnedCount: number;
+    runs: { from: number; to: number }[];
+  };
+  nouns: FieldNoun[];
+}
+
+const field = raw as unknown as Field;
+const nouns = [...field.nouns].sort((a, b) => a.id - b.id);
+
+// --- formatting helpers (UTC, no locale drift between build machines) -------
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function day(ts: number | null): string {
+  if (ts == null) return '—';
+  const d = new Date(ts * 1000);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+function clock(ts: number | null): string {
+  if (ts == null) return '';
+  const d = new Date(ts * 1000);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC`;
+}
+
+// El Segundo wall-clock, so the closing note stays true whenever the script is
+// re-run. Intl resolves DST; do not swap this for a fixed UTC offset.
+const LA = 'America/Los_Angeles';
+
+function laClock(ts: number | null): string {
+  if (ts == null) return '—';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: LA,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(ts * 1000));
+}
+
+function laDay(ts: number | null): string {
+  if (ts == null) return '—';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: LA,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(ts * 1000));
+}
+
+function laPartOfDay(ts: number | null): string {
+  if (ts == null) return 'sometime';
+  const h = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: LA, hour: '2-digit', hourCycle: 'h23' }).format(
+      new Date(ts * 1000),
+    ),
+  );
+  if (h < 5) return 'the middle of the night';
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  if (h < 21) return 'evening';
+  return 'night';
+}
+
+function held(a: number | null, b: number | null): string {
+  if (a == null || b == null) return '—';
+  return `${Math.round((b - a) / 3600)} h`;
+}
+
+// --- the shape of the field -------------------------------------------------
+
+const rangeLabel = field.scan.runs
+  .map((r) => (r.from === r.to ? `${r.from}` : `${r.from}–${r.to}`))
+  .join(', ');
+
+// The living Nouns on either side of the hole. Derived, never hardcoded — if
+// a later run of the script finds a larger field these move with it.
+const lastLiving = nouns.length ? nouns[0].id - 1 : null;
+const nextLiving = nouns.length ? nouns[nouns.length - 1].id + 1 : null;
+
+const burnStamps = nouns.map((n) => n.burnTimestamp).filter((t): t is number => t != null);
+const firstBurn = burnStamps.length ? Math.min(...burnStamps) : null;
+const lastBurn = burnStamps.length ? Math.max(...burnStamps) : null;
+
+const mintStamps = nouns.map((n) => n.mintTimestamp).filter((t): t is number => t != null);
+const firstMint = mintStamps.length ? Math.min(...mintStamps) : null;
+const lastMint = mintStamps.length ? Math.max(...mintStamps) : null;
+const spanDays =
+  firstBurn != null && lastBurn != null ? Math.round((lastBurn - firstBurn) / 86400) + 1 : null;
+const datesRecovered = nouns.filter((n) => n.burnTimestamp != null).length;
+
+const title = "Potter's Field — the burned Nouns, recovered";
+const description =
+  `${nouns.length} Nouns (${rangeLabel}) were minted, offered, failed the 2.8 ETH reserve, and ` +
+  'were burned. ownerOf reverts and noun.pics returns 500 for all of them. Their seeds survived ' +
+  'the burn, so the descriptor drew their faces one more time. Recovered from Ethereum mainnet, ' +
+  'served static, CC0.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: "PointCast Potter's Field",
+  description,
+  url: 'https://pointcast.xyz/potters-field',
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  isBasedOn: 'https://etherscan.io/address/0x9C8fF314C9Bc7F6e59A9d9225Fb22946427eDC03',
+  dateModified: field.generatedAt,
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: nouns.length,
+    itemListOrder: 'https://schema.org/ItemListOrderAscending',
+    itemListElement: nouns.map((n, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: `Noun ${n.id}`,
+      image: `https://pointcast.xyz${n.svg}`,
+    })),
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>potters-field</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker mono">POTTER'S FIELD · {nouns.length} RECOVERED · NOUNS {rangeLabel}</p>
+      <h1 class="title">Minted, offered, burned, recovered.</h1>
+      <p class="dek">
+        Between Noun {lastLiving} and Noun {nextLiving} there is a hole in the
+        record. {nouns.length} Nouns were minted into it, put up for auction, failed the
+        2.8 ETH reserve that Prop 955 set, and were burned by the same contract
+        that made them. <code>ownerOf</code> reverts for every one.
+        <code>dataURI</code> reverts. noun.pics returns 500 for exactly
+        {rangeLabel} and 200 on either side, so the gap in the internet's Nouns
+        image service is the burn range and nothing else. Their faces render
+        essentially nowhere.
+      </p>
+      <p class="dek">
+        But burning a token does not clear the <code>seeds</code> mapping. It is
+        a plain storage slot, and it kept all five numbers. The descriptor is a
+        pure function of those five numbers, and it will still draw them. So we
+        asked it, once, by hand, and wrote down what came back.
+      </p>
+      <ul class="stats">
+        <li><span class="stats__num mono">{nouns.length}</span><span class="stats__lbl mono">RECOVERED</span></li>
+        <li><span class="stats__num mono">{rangeLabel}</span><span class="stats__lbl mono">RANGE</span></li>
+        <li><span class="stats__num mono">2.8 Ξ</span><span class="stats__lbl mono">RESERVE UNMET</span></li>
+        {spanDays != null && (
+          <li><span class="stats__num mono">{spanDays}</span><span class="stats__lbl mono">DAYS OF BURNS</span></li>
+        )}
+        <li><span class="stats__num mono">{datesRecovered}/{nouns.length}</span><span class="stats__lbl mono">DATES RECOVERED</span></li>
+        <li><span class="stats__num mono">0</span><span class="stats__lbl mono">OWNERS</span></li>
+      </ul>
+    </header>
+
+    <section class="legend">
+      <p class="kicker mono">HOW TO READ</p>
+      <p>
+        Each stone shows the recovered face, the five-number seed that
+        determines it, the day it was minted, and the day it was burned. Every
+        one of these was held about a day: minted at the settlement of the
+        auction before it, burned at the settlement of its own. The
+        burn link goes to the transaction on Etherscan, so the record can be
+        checked without trusting this page. Nouns art is CC0 — these files are
+        free to take.
+      </p>
+    </section>
+
+    <ul class="stones">
+      {nouns.map((n) => (
+        <li class="stone">
+          <img
+            class="stone__face"
+            src={n.svg}
+            width="320"
+            height="320"
+            loading="lazy"
+            decoding="async"
+            alt={`Noun ${n.id}, redrawn from its surviving on-chain seed`}
+          />
+          <div class="stone__head">
+            <span class="stone__id mono">NOUN {n.id}</span>
+            <span class="stone__tag mono">BURNED</span>
+          </div>
+          <dl class="stone__facts mono">
+            <div><dt>SEED</dt><dd>{n.seedTuple.join(' · ')}</dd></div>
+            <div><dt>MINTED</dt><dd>{day(n.mintTimestamp)}</dd></div>
+            <div><dt>BURNED</dt><dd>{day(n.burnTimestamp)}{n.burnTimestamp != null && <span class="stone__time"> {clock(n.burnTimestamp)}</span>}</dd></div>
+            <div><dt>HELD</dt><dd>{held(n.mintTimestamp, n.burnTimestamp)}</dd></div>
+            <div><dt>BLOCK</dt><dd>{n.burnBlock ?? '—'}</dd></div>
+          </dl>
+          {n.burnTx ? (
+            <a class="stone__cta mono" href={`https://etherscan.io/tx/${n.burnTx}`} target="_blank" rel="noopener">→ the burn on etherscan</a>
+          ) : (
+            <span class="stone__cta stone__cta--dormant mono">burn date not recovered</span>
+          )}
+        </li>
+      ))}
+    </ul>
+
+    <section class="method">
+      <p class="kicker mono">HOW THESE WERE RECOVERED</p>
+      <p>
+        One script, run once by hand on
+        {' '}{day(Math.floor(new Date(field.generatedAt).getTime() / 1000))}, and
+        committed for provenance:
+        {' '}<a href="https://github.com/mhoydich/pointcast/blob/main/scripts/recover-potters-field.mjs" target="_blank" rel="noopener"><code>scripts/recover-potters-field.mjs</code></a>.
+        It reads the live auction id, sweeps <code>ownerOf</code> across
+        everything below it to find which ids are gone — no count is assumed, so
+        the field can grow — then calls <code>seeds(uint256)</code> on the token
+        and <code>generateSVGImage</code> on the descriptor for each one, and
+        recovers the burn block from the Transfer-to-zero logs.
+      </p>
+      <dl class="method__facts mono">
+        <div><dt>TOKEN</dt><dd>{field.contracts.token}</dd></div>
+        <div><dt>DESCRIPTOR</dt><dd>{field.contracts.descriptor}</dd></div>
+        <div><dt>AUCTION HOUSE</dt><dd>{field.contracts.auctionHouse}</dd></div>
+        <div><dt>SWEPT</dt><dd>{field.scan.floor} → {field.scan.liveAuctionId} at block {field.scan.headBlock}</dd></div>
+      </dl>
+      <p class="method__check">
+        The check that matters: run the same two calls against the Nouns that
+        still have owners on either side of the gap — {lastLiving} and
+        {' '}{nextLiving} — and the result is byte-for-byte identical to the file
+        noun.pics serves for them. Same code path, same output. So these are not
+        reconstructions or lookalikes. They are the faces.
+      </p>
+      <p class="method__check method__check--quiet">
+        PointCast is a Tezos site. This is the only Ethereum read in the
+        codebase and it stays in that script — the page you are reading makes no
+        network call at all. It serves {nouns.length} committed SVG files and one
+        committed JSON ledger.
+      </p>
+    </section>
+
+    <section class="note">
+      <p class="kicker mono">FIELD NOTE</p>
+      <p>
+        a potter's field is where a town buries the people nobody claimed. not a
+        punishment, just an accounting — the ground still gets dug, the row still
+        gets kept, the names go in a book somewhere even when no one comes.
+      </p>
+      <p>
+        these {nouns.length} were made the same way as every other noun, by the
+        same contract, on the same schedule — one a day, {day(firstMint)} through
+        {' '}{day(lastMint)}, each one burned about a day later. the only thing
+        that happened to them is that the room was quiet when their turn came.
+        the last of them went at {laClock(lastBurn)} on {laDay(lastBurn)}, el
+        segundo time, which is {laPartOfDay(lastBurn)} on this street. the chain
+        kept their five numbers anyway, the way a ledger keeps a plot number, and
+        a machine here read them back out and wrote them down. that is the whole
+        story. they are here now, and they are free to take.
+      </p>
+    </section>
+
+    <section class="agent-strip">
+      <p class="agent-strip__label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/potters-field/1900.svg">/potters-field/&lt;id&gt;.svg</a></li>
+        <li><a href="https://github.com/mhoydich/pointcast/blob/main/src/data/potters-field.json" target="_blank" rel="noopener">src/data/potters-field.json</a></li>
+        <li><a href="https://etherscan.io/address/0x9C8fF314C9Bc7F6e59A9d9225Fb22946427eDC03" target="_blank" rel="noopener">nouns token on etherscan</a></li>
+        <li><a href="/eth-legacy">/eth-legacy</a></li>
+        <li><a href="/for-agents">/for-agents</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <style>
+    .page { max-width: 1080px; margin: 0 auto; padding: 24px 18px 80px; }
+    .mono { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.12em; }
+    code { font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 0.9em; background: #f4f2ec; padding: 1px 4px; }
+
+    .crumb { display: flex; gap: 8px; margin-bottom: 14px; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a7a72; }
+    .crumb a { color: #8A2432; text-decoration: none; }
+
+    .head { margin-bottom: 22px; }
+    .kicker { font-size: 10px; margin: 0 0 8px; letter-spacing: 0.18em; color: #8A2432; }
+    .title { font-family: var(--pc-font-sans, 'Inter Variable', system-ui, sans-serif); font-size: clamp(28px, 5vw, 40px); font-weight: 500; line-height: 1.1; margin: 0 0 12px; color: #12110E; }
+    .dek { margin: 0 0 10px; color: #38373A; font-size: 15px; line-height: 1.6; max-width: 68ch; }
+
+    .stats { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px; }
+    .stats li { padding: 8px 10px; border: 1px dashed #d6d4cd; background: #faf9f5; display: flex; flex-direction: column; gap: 2px; }
+    .stats__num { font-size: 17px; font-weight: 500; color: #12110E; letter-spacing: 0.04em; }
+    .stats__lbl { font-size: 9px; color: #5F5E5A; }
+
+    .legend { margin-bottom: 18px; padding: 12px 14px; border: 1px dashed #d6d4cd; background: #fbfaf5; }
+    .legend p { margin: 0; font-size: 13px; line-height: 1.55; color: #5F5E5A; max-width: 74ch; }
+    .legend .kicker { margin-bottom: 6px; }
+
+    .stones { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+    .stone {
+      padding: 10px 12px 12px;
+      border: 1px solid #d6d4cd;
+      border-left: 4px solid #8A2432;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stone__face {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #f4f2ec;
+    }
+    .stone__head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+    .stone__id { font-size: 11px; letter-spacing: 0.14em; color: #12110E; font-weight: 500; }
+    .stone__tag { font-size: 8.5px; letter-spacing: 0.16em; color: #8A2432; }
+
+    .stone__facts { margin: 0; font-size: 9px; display: grid; gap: 3px; }
+    .stone__facts div { display: grid; grid-template-columns: 54px 1fr; gap: 6px; align-items: baseline; }
+    .stone__facts dt { color: #8a8878; margin: 0; letter-spacing: 0.14em; }
+    .stone__facts dd { color: #12110E; margin: 0; letter-spacing: 0; text-transform: none; font-size: 10px; }
+    .stone__time { color: #8a8878; }
+
+    .stone__cta {
+      margin-top: auto;
+      font-size: 9.5px;
+      color: #8A2432;
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      text-transform: lowercase;
+    }
+    .stone__cta:hover { text-decoration: underline; }
+    .stone__cta--dormant { color: #8a8878; cursor: default; }
+    .stone__cta--dormant:hover { text-decoration: none; }
+
+    .method { margin-top: 22px; padding: 14px 16px; border: 1px dashed #d6d4cd; background: #fbfaf5; }
+    .method p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: #38373A; max-width: 74ch; }
+    .method a { color: #8A2432; text-decoration: none; }
+    .method a:hover { text-decoration: underline; }
+    .method__facts { margin: 0 0 10px; font-size: 9px; display: grid; gap: 3px; }
+    .method__facts div { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: baseline; }
+    .method__facts dt { color: #8a8878; margin: 0; letter-spacing: 0.14em; }
+    .method__facts dd { color: #12110E; margin: 0; letter-spacing: 0; text-transform: none; font-size: 10px; overflow-wrap: anywhere; }
+    .method__check { border-left: 3px solid #8A2432; padding: 6px 12px; background: #fff; margin-bottom: 8px; }
+    .method__check--quiet { border-left-color: #d6d4cd; color: #5F5E5A; font-size: 12.5px; margin-bottom: 0; }
+
+    .note { margin-top: 22px; padding: 14px 16px; border: 1px solid #d6d4cd; background: #fff; }
+    .note p { margin: 0 0 10px; font-size: 14px; line-height: 1.7; color: #38373A; max-width: 68ch; }
+    .note p:last-child { margin-bottom: 0; }
+
+    .agent-strip { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #d6d4cd; font-family: var(--pc-font-mono, 'JetBrains Mono Variable', ui-monospace, monospace); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+    .agent-strip__label { margin: 0 0 6px; color: #5F5E5A; font-weight: 500; }
+    .agent-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+    .agent-strip a { color: #8A2432; text-decoration: none; text-transform: lowercase; letter-spacing: 0; }
+    .agent-strip a:hover { text-decoration: underline; }
+
+    @media (max-width: 520px) {
+      .stones { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    }
+  </style>
+</BlockLayout>

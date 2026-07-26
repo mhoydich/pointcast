@@ -2,12 +2,20 @@
 /**
  * /collection/visit-nouns — gallery view of the on-chain Visit Nouns FA2.
  *
- * Build-time static render of the 10 starter mints. Pulls on-chain state
- * live via TzKT at build, freezes it into the page HTML. Agents reading
- * the static HTML get the full collection state including current holders.
- * Live-refresh happens on next build (every deploy).
+ * Build-time static render of every token that has ever been minted.
+ * Pulls on-chain state live via TzKT at build, freezes it into the page
+ * HTML. Agents reading the static HTML get the full collection state
+ * including current holders. Live-refresh happens on next build.
  *
- * Per-token CTA: /b/{id} (our Block permalink) + objkt token page.
+ * 2026-07-26 correction: this page previously claimed "one 1/1 per Noun
+ * seed", "supply per token 1", and "admin-minted starter batch". All
+ * three were false. mint_noun is public and unmetered — anyone can mint
+ * any seed 0–1199, repeatedly — and tokens 137, 205 and 88 each carry
+ * totalSupply 2. The per-token CTA also linked /b/{230+i}, block IDs that
+ * were reserved for scripts/import-visit-nouns.mjs but never written;
+ * those links resolved to unrelated blocks and are gone.
+ *
+ * Per-token CTA: objkt + tzkt token pages.
  * No wallet interactions on this page — purely informational.
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
@@ -61,12 +69,25 @@ const mintedAtFmt = mintedAt
   ? new Date(mintedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   : '—';
 
+// Total editions across every seed. Not the same as tokens.length —
+// mint_noun is an open edition, so a seed can be minted more than once.
+const totalEditions = tokens.reduce((sum, t) => sum + (Number(t.totalSupply) || 0), 0);
+const repeatedSeeds = tokens.filter((t) => Number(t.totalSupply) > 1).length;
+
+const lastMintAt = tokens.reduce<string | null>(
+  (latest, t) => (t.lastTime && (!latest || t.lastTime > latest) ? t.lastTime : latest),
+  null,
+);
+const lastMintFmt = lastMintAt
+  ? new Date(lastMintAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  : '—';
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Collection',
   '@id': 'https://pointcast.xyz/collection/visit-nouns',
   name: 'PointCast Visit Nouns',
-  description: 'Visit Nouns FA2 on Tezos mainnet. One 1/1 per Noun seed. CC0 imagery via noun.pics.',
+  description: 'Visit Nouns FA2 on Tezos mainnet. Open edition per Noun seed, gas-only. CC0 imagery via noun.pics.',
   url: 'https://pointcast.xyz/collection/visit-nouns',
   hasPart: tokens.map((t) => ({
     '@type': 'CreativeWork',
@@ -81,7 +102,7 @@ const jsonLd = {
 
 <BlockLayout
   title="Visit Nouns collection"
-  description={`${tokens.length} Nouns minted on Tezos mainnet via the Visit Nouns FA2 at ${KT1}. Admin-minted starter batch; CC0 imagery via noun.pics.`}
+  description={`${tokens.length} Noun seeds minted on Tezos mainnet via the Visit Nouns FA2 at ${KT1}. Open edition, gas-only, public mint; CC0 imagery via noun.pics.`}
   jsonLd={jsonLd}
 >
   <div class="page" style={`--ch-600: ${CH.color600}; --ch-800: ${CH.color800}; --ch-50: ${CH.color50};`}>
@@ -97,16 +118,20 @@ const jsonLd = {
       <p class="kicker">COLLECTION · VISIT NOUNS · FA2 · TEZOS MAINNET</p>
       <h1>Visit Nouns</h1>
       <p class="dek">
-        {tokens.length} Noun{tokens.length === 1 ? '' : 's'} minted on Tezos mainnet starting {mintedAtFmt}.
-        One 1/1 per Noun seed. CC0 imagery via noun.pics. Admin-minted starter batch;
-        secondary market on objkt.
+        {tokens.length} Noun seed{tokens.length === 1 ? '' : 's'} minted on Tezos mainnet starting {mintedAtFmt},
+        {' '}{totalEditions} edition{totalEditions === 1 ? '' : 's'} in total. Open edition per seed — {repeatedSeeds} of
+        them {repeatedSeeds === 1 ? 'has' : 'have'} been minted more than once. mint_noun is public and costs gas only.
+        CC0 imagery via noun.pics; secondary market on objkt.
       </p>
 
       <div class="meta">
         <p><span>contract</span> <code>{KT1}</code></p>
         <p><span>standard</span> FA2 · SmartPy v0.24</p>
-        <p><span>supply per token</span> 1</p>
-        <p><span>royalties</span> 20% → admin</p>
+        <p><span>supply per seed</span> open — no cap, no per-wallet limit</p>
+        <p><span>mint price</span> 0 mutez (gas only)</p>
+        <p><span>seed range</span> 0–1199</p>
+        <p><span>last mint</span> {lastMintFmt}</p>
+        <p><span>royalties</span> 20% → contract administrator</p>
         <p><span>tzkt</span> <a href={`https://tzkt.io/${KT1}`} target="_blank" rel="noopener">view contract →</a></p>
       </div>
     </header>
@@ -120,23 +145,30 @@ const jsonLd = {
 
     {tokens.length > 0 && (
       <section class="grid">
-        {tokens.map((t, i) => {
-          const blockId = String(230 + i).padStart(4, '0'); // matches scripts/import-visit-nouns.mjs
+        {tokens.map((t) => {
           const holder = holdersByTokenId[String(t.tokenId)] ?? '';
+          const editions = Number(t.totalSupply) || 0;
+          const holders = Number(t.holdersCount) || 0;
+          const tokenUrl = `https://objkt.com/tokens/${KT1}/${t.tokenId}`;
           return (
             <article class="card">
-              <a class="card__art" href={`/b/${blockId}`}>
+              <a class="card__art" href={tokenUrl} target="_blank" rel="noopener">
                 <img src={`https://noun.pics/${t.tokenId}.svg`} alt={`Noun #${t.tokenId}`} loading="lazy" />
               </a>
               <div class="card__body">
                 <p class="card__code">№ <b>{t.tokenId}</b></p>
                 <p class="card__line"><span>minted</span> {new Date(t.firstTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
-                <p class="card__line"><span>held by</span> <b>{short(holder)}</b></p>
+                <p class="card__line"><span>editions</span> <b>{editions}</b></p>
+                {holders > 1 ? (
+                  <p class="card__line"><span>held by</span> <b>{holders} wallets</b></p>
+                ) : (
+                  <p class="card__line"><span>held by</span> <b>{short(holder)}</b></p>
+                )}
               </div>
               <div class="card__actions">
-                <a href={`/b/${blockId}`}>/b/{blockId}</a>
-                <a href={`https://objkt.com/tokens/${KT1}/${t.tokenId}`} target="_blank" rel="noopener">objkt ↗</a>
+                <a href={tokenUrl} target="_blank" rel="noopener">objkt ↗</a>
                 <a href={`https://tzkt.io/${KT1}/tokens/${t.tokenId}`} target="_blank" rel="noopener">tzkt ↗</a>
+                <a href={`/api/tezos-metadata/${t.tokenId}.json`} target="_blank" rel="noopener">metadata</a>
               </div>
             </article>
           );
