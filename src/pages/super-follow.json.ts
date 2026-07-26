@@ -3,6 +3,7 @@ import {
   SUPER_FOLLOW_BOUNDARIES,
   SUPER_FOLLOW_LENSES,
   SUPER_FOLLOW_OUTPUTS,
+  SUPER_FOLLOW_PORTABLE_FOLLOW,
   SUPER_FOLLOW_RELATIONSHIPS,
   SUPER_FOLLOW_SIGNALS,
   SUPER_FOLLOW_SOURCES,
@@ -30,6 +31,21 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     ...output,
     url: new URL(output.href, 'https://pointcast.xyz').toString(),
   })),
+  portableFollow: {
+    ...SUPER_FOLLOW_PORTABLE_FOLLOW,
+    fields: [
+      'id',
+      'subject',
+      'canonicalUrl',
+      'sources',
+      'lensNouns',
+      'expression',
+      'cadence',
+      'relationship',
+      'createdAt',
+    ],
+    receiptIsAuthority: false,
+  },
   relationships: SUPER_FOLLOW_RELATIONSHIPS,
   want: {
     schema: 'pointcast.want/v1',
@@ -49,6 +65,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   },
   storage: {
     lens: 'browser localStorage',
+    followShelf: 'browser localStorage',
     wants: 'browser localStorage',
     serverProfile: false,
     sourceHistory: false,

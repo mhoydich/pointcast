@@ -24,6 +24,9 @@ test('Super Follow is visible across human, machine, feed, and discovery surface
   assert.match(page, /Advanced/);
   assert.match(page, /Want Desk/);
   assert.match(page, /pc:super-follow:sony:v1/);
+  assert.match(page, /Build a shelf of signals/);
+  assert.match(page, /pc:super-follow:shelf:v1/);
+  assert.match(page, /pointcast\.follow\/v1/);
   assert.match(page, /data-lens-topics=\{lens\.topics\.join\(' '\)\}/);
   assert.match(page, /function selectedLensIds\(\)/);
   assert.match(page, /timeZone: 'UTC'/);
@@ -33,6 +36,7 @@ test('Super Follow is visible across human, machine, feed, and discovery surface
   assert.match(data, /noun: 'Product'/);
   assert.match(data, /noun: 'Camera'/);
   assert.match(data, /noun: 'Care'/);
+  assert.match(data, /maximumLocalBroadcasters: 12/);
   assert.match(endpoint, /super-follow-v1\.json/);
   assert.match(endpoint, /Access-Control-Allow-Origin/);
   assert.match(jsonFeed, /https:\/\/jsonfeed\.org\/version\/1\.1/);
@@ -65,7 +69,37 @@ test('Super Follow preserves source receipts and keeps follow and wants local', 
   assert.match(endpoint, /automaticCheckout: false/);
   assert.match(endpoint, /paymentInitiated: false/);
   assert.match(endpoint, /continuousCrawl: false/);
+  assert.match(endpoint, /portableFollow/);
+  assert.match(endpoint, /receiptIsAuthority: false/);
   assert.match(data, /independent PointCast prototype/);
+});
+
+test('Super Follow builds a bounded portable Follow Shelf without network activity', async () => {
+  const [page, data, endpoint] = await Promise.all([
+    readFile(new URL('src/pages/super-follow.astro', root), 'utf8'),
+    readFile(new URL('src/data/super-follow.ts', root), 'utf8'),
+    readFile(new URL('src/pages/super-follow.json.ts', root), 'utf8'),
+  ]);
+
+  assert.match(page, /data-follow-composer/);
+  assert.match(page, /data-follow-shelf-list/);
+  assert.match(page, /data-copy-shelf/);
+  assert.match(page, /function normalizeBroadcaster/);
+  assert.match(page, /function cleanHttpUrl/);
+  assert.match(page, /document\.createElement/);
+  assert.match(page, /element\.textContent = text/);
+  assert.match(page, /networkTransmission: false/);
+  assert.match(page, /sourceFetch: false/);
+  assert.match(page, /connected: false/);
+  assert.match(page, /signed: false/);
+  assert.match(page, /was removed from this browser’s shelf\. Nothing was sent/);
+  assert.doesNotMatch(page, /\bfetch\s*\(/);
+  assert.doesNotMatch(page, /\.innerHTML\s*=/);
+  assert.match(data, /sourceLimitPerBroadcaster: 8/);
+  assert.match(data, /lensNounLimit: 6/);
+  assert.match(data, /networkTransmission: false/);
+  assert.match(endpoint, /followShelf: 'browser localStorage'/);
+  assert.match(endpoint, /portableFollow/);
 });
 
 test('Super Follow cites official source desks and keeps commerce claims bounded', async () => {

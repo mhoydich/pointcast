@@ -219,13 +219,37 @@ export const SUPER_FOLLOW_OUTPUTS = [
     type: 'application/rss+xml',
     note: 'RSS 2.0 snapshot for ordinary feed readers.',
   },
+  {
+    noun: 'Shelf',
+    href: '/super-follow#follow-shelf',
+    type: 'text/html',
+    note: 'A device-local collection of personal broadcaster receipts.',
+  },
 ] as const;
+
+export const SUPER_FOLLOW_PORTABLE_FOLLOW = {
+  schema: 'pointcast.follow/v1',
+  storageKey: 'pc:super-follow:shelf:v1',
+  maximumLocalBroadcasters: 12,
+  sourceLimitPerBroadcaster: 8,
+  lensNounLimit: 6,
+  import: false,
+  export: 'copyable JSON receipt',
+  relationship: 'following',
+  storage: 'browser localStorage',
+  networkTransmission: false,
+  sourceFetch: false,
+  providerConnection: false,
+  signature: false,
+} as const;
 
 export const SUPER_FOLLOW_BOUNDARIES = [
   'This first Sony broadcaster is an independent PointCast prototype, not a Sony product or endorsement.',
   'Source links are official; assembled summaries are PointCast editorial and preserve their source receipts.',
   'The prototype does not continuously crawl, impersonate, or republish full source articles.',
   'A local follow stores lens choices on this device only.',
+  'The Follow Shelf accepts user-entered source URLs but does not fetch, verify, publish, or transmit them.',
+  'Portable follow receipts are unsigned local JSON; they do not establish a relationship with the named subject.',
   'The Want Desk does not send a request, contact a merchant, create an order, or move money.',
   'DPoP, signed webhooks, provider grants, offers, checkout, and payment are directional—not active claims.',
 ];

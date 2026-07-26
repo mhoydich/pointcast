@@ -14,8 +14,8 @@ export const POINTCAST_APPS: PointcastApp[] = [
   {
     slug: 'super-follow',
     name: 'Super Follow',
-    kicker: 'SOURCES · LENS · RELATIONSHIP · WANT DESK',
-    description: 'A bright personal broadcaster prototype that tunes Sony’s official sources into a readable dashboard, attributed feeds, relationship states, and a local-only Want Desk.',
+    kicker: 'SOURCES · LENS · FOLLOW SHELF · WANT DESK',
+    description: 'A bright personal broadcaster studio: tune Sony’s official sources, build portable local follow receipts for other subjects, and keep relationship and Want state explicit.',
     url: 'https://pointcast.xyz/super-follow',
     path: '/super-follow',
     repo: 'https://github.com/mhoydich/pointcast',
