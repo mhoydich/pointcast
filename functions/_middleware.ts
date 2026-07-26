@@ -17,6 +17,11 @@
 
 import { classifyUA, recordVisit, NOUN_ID_RANGE, type Env } from './api/visit';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
+import {
+  BELLS_BLOOM_TRANSMISSIONS,
+  getBellsBloomTransmission,
+  isBellsBloomArchive,
+} from '../src/lib/bells-bloom-transmissions';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|mp3|mp4|webm)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -35,6 +40,119 @@ function injectTezosSessionBridge(response: Response): Response {
     .transform(response);
   const headers = new Headers(transformed.headers);
   headers.set(TEZOS_BRIDGE_HEADER, '1');
+  return new Response(transformed.body, {
+    status: transformed.status,
+    statusText: transformed.statusText,
+    headers,
+  });
+}
+
+function injectTodaySignalMetadata(response: Response, pathname: string): Response {
+  if (pathname !== '/') return response;
+
+  const transmission = getBellsBloomTransmission();
+  const archived = isBellsBloomArchive();
+  const image = `https://pointcast.xyz${transmission.image}`;
+  const activeIndex = BELLS_BLOOM_TRANSMISSIONS.findIndex((item) => item.id === transmission.id);
+  const title = archived
+    ? `Recent transmission: ${transmission.title} — PointCast`
+    : `Today’s Signal: ${transmission.title} — PointCast`;
+  const description = archived
+    ? `${transmission.title} · bell ${transmission.id} / 28 · from the Bells / Bloom transmission archive.`
+    : `${transmission.title} · bell ${transmission.id} / 28 · the 8:08 PT transmission from Bells / Bloom.`;
+  const homepageDescription = archived
+    ? `Bell ${transmission.id} of 28. One of seven recent transmissions from the Bells / Bloom archive.`
+    : `Bell ${transmission.id} of 28. One morning transmission from Bells / Bloom, changing daily at 8:08 PT.`;
+
+  const transformed = new HTMLRewriter()
+    .on('meta[property="og:title"], meta[name="twitter:title"]', {
+      element(element) {
+        element.setAttribute('content', title);
+      },
+    })
+    .on('meta[property="og:description"], meta[name="twitter:description"], meta[name="description"]', {
+      element(element) {
+        element.setAttribute('content', description);
+      },
+    })
+    .on('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="fc:frame:image"]', {
+      element(element) {
+        element.setAttribute('content', image);
+      },
+    })
+    .on('meta[property="og:image:width"]', {
+      element(element) {
+        element.setAttribute('content', '1024');
+      },
+    })
+    .on('meta[property="og:image:height"]', {
+      element(element) {
+        element.setAttribute('content', '1024');
+      },
+    })
+    .on('[data-today-signal]', {
+      element(element) {
+        element.setAttribute('data-archive', archived ? 'true' : 'false');
+      },
+    })
+    .on('[data-today-signal-image]', {
+      element(element) {
+        element.setAttribute('src', transmission.image);
+        element.setAttribute('alt', transmission.alt);
+      },
+    })
+    .on('[data-today-signal-title]', {
+      element(element) {
+        element.setInnerContent(transmission.title);
+      },
+    })
+    .on('[data-today-signal-dek]', {
+      element(element) {
+        element.setInnerContent(homepageDescription);
+      },
+    })
+    .on('[data-today-signal-label]', {
+      element(element) {
+        element.setInnerContent(archived ? 'Recent transmissions' : 'Today’s signal');
+      },
+    })
+    .on('[data-today-signal-kicker]', {
+      element(element) {
+        element.setInnerContent(archived ? 'Bells / Bloom · recent transmissions' : 'Bell of the day · 08:08 PT');
+      },
+    })
+    .on('[data-today-signal-date]', {
+      element(element) {
+        element.setInnerContent(transmission.dateLabel);
+      },
+    })
+    .on('[data-today-signal-count]', {
+      element(element) {
+        element.setInnerContent(`Bell ${transmission.id} / 28`);
+      },
+    })
+    .on('[data-today-signal-mode]', {
+      element(element) {
+        element.setInnerContent(archived ? '7 transmissions' : 'Changes daily');
+      },
+    })
+    .on('[data-today-signal-rail-label]', {
+      element(element) {
+        element.setInnerContent(archived ? 'Recent transmissions' : 'This week at 08:08 PT');
+      },
+    })
+    .on('[data-today-signal-select]', {
+      element(element) {
+        const index = Number(element.getAttribute('data-today-signal-select'));
+        element.setAttribute('aria-pressed', index === activeIndex ? 'true' : 'false');
+      },
+    })
+    .transform(response);
+
+  const headers = new Headers(transformed.headers);
+  headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  headers.set('X-PointCast-Today-Signal', transmission.id);
+
   return new Response(transformed.body, {
     status: transformed.status,
     statusText: transformed.statusText,
@@ -191,7 +309,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  const response = await next();
+  const staticResponse = await next();
+  const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
+  const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
+    ? injectTodaySignalMetadata(staticResponse, url.pathname)
+    : staticResponse;
   const responseContentType = response.headers.get('content-type') ?? '';
   const isHtmlResponse = response.status === 200 && responseContentType.startsWith('text/html');
 

@@ -15,6 +15,14 @@ import WalletChip from '../components/WalletChip.astro';
 import { CHANNEL_LIST } from '../lib/channels';
 import { HOME_FRESH_FEATURE } from '../lib/home-freshness';
 import { HOME_SIGNALS } from '../lib/home-signals';
+import {
+  BELLS_BLOOM_ARCHIVE_AT,
+  BELLS_BLOOM_MANIFEST_HREF,
+  BELLS_BLOOM_SHOWCAST_HREF,
+  BELLS_BLOOM_TRANSMISSIONS,
+  getBellsBloomTransmission,
+  isBellsBloomArchive,
+} from '../lib/bells-bloom-transmissions';
 import '../styles/front-door-fresh.css';
 
 import windowsArtwork from '../assets/campaigns/network-el-segundo-2026/100-windows.png';
@@ -37,6 +45,9 @@ const showLatestShip = latestBlock?.data.id !== HOME_FRESH_FEATURE.blockId;
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: live work, art, rooms, games, public experiments, and machine-readable receipts.';
 
 const heroSignals = HOME_SIGNALS;
+const activeTransmission = getBellsBloomTransmission();
+const bellsBloomIsArchive = isBellsBloomArchive();
+const activeTransmissionDescription = `Bell ${activeTransmission.id} of 28. One morning transmission from Bells / Bloom, changing daily at 8:08 PT.`;
 
 const stories = [
   {
@@ -133,14 +144,15 @@ const alternates = [
 <BlockLayout
   title="Home"
   description={homeDescription}
-  image="https://pointcast.xyz/images/og/og-home-v2.png"
+  image={`https://pointcast.xyz${activeTransmission.image}`}
   themeColor="#eaff62"
   jsonLd={jsonLd}
   alternates={alternates}
   immersive={true}
   showNetworkStrip={false}
   frame={{
-    image: 'https://pointcast.xyz/images/og/og-home-v2.png',
+    image: `https://pointcast.xyz${activeTransmission.image}`,
+    aspectRatio: '1:1',
     buttons: [
       { label: 'Open what is live', action: 'link', target: 'https://pointcast.xyz/now' },
       { label: 'Play something', action: 'link', target: 'https://pointcast.xyz/win95-games' },
@@ -256,39 +268,63 @@ const alternates = [
           class="fresh-current"
           aria-labelledby="fresh-current-title"
           data-home-freshness={HOME_FRESH_FEATURE.publishedAt}
+          data-today-signal
+          data-archive-at={BELLS_BLOOM_ARCHIVE_AT}
         >
-          <a class="fresh-current__image" href={HOME_FRESH_FEATURE.href}>
+          <a class="fresh-current__image" href={BELLS_BLOOM_SHOWCAST_HREF} data-today-signal-link>
             <img
-              src={HOME_FRESH_FEATURE.image}
-              alt={HOME_FRESH_FEATURE.imageAlt}
-              width="1200"
-              height="630"
+              src={activeTransmission.image}
+              alt={activeTransmission.alt}
+              width="1024"
+              height="1024"
               loading="eager"
+              data-today-signal-image
             />
             <span class="fresh-current__stamp">
               <span class="fresh-current__pulse" aria-hidden="true"></span>
-              {HOME_FRESH_FEATURE.label}
+              <span data-today-signal-label>{bellsBloomIsArchive ? 'Recent transmissions' : 'Today’s signal'}</span>
             </span>
           </a>
 
           <div class="fresh-current__copy">
             <div>
-              <p class="fresh-current__kicker">{HOME_FRESH_FEATURE.kicker}</p>
-              <h2 id="fresh-current-title">{HOME_FRESH_FEATURE.title}</h2>
-              <p class="fresh-current__dek">{HOME_FRESH_FEATURE.dek}</p>
+              <p class="fresh-current__kicker" data-today-signal-kicker>
+                {bellsBloomIsArchive ? 'Bells / Bloom · recent transmissions' : 'Bell of the day · 08:08 PT'}
+              </p>
+              <h2 id="fresh-current-title" data-today-signal-title>{activeTransmission.title}</h2>
+              <p class="fresh-current__dek" data-today-signal-dek>{activeTransmissionDescription}</p>
             </div>
 
             <div>
               <ul class="fresh-current__facts" aria-label="Showcast details">
-                {HOME_FRESH_FEATURE.facts.map((fact) => <li>{fact}</li>)}
+                <li data-today-signal-date>{activeTransmission.dateLabel}</li>
+                <li data-today-signal-count>Bell {activeTransmission.id} / 28</li>
+                <li data-today-signal-mode>{bellsBloomIsArchive ? '7 transmissions' : 'Changes daily'}</li>
               </ul>
               <div class="fresh-current__actions">
-                <a class="fresh-button fresh-button--primary" href={HOME_FRESH_FEATURE.href}>Enter the showcast</a>
+                <a class="fresh-button fresh-button--primary" href={BELLS_BLOOM_SHOWCAST_HREF}>Enter the showcast</a>
                 <a class="fresh-current__text-link" href={`/b/${HOME_FRESH_FEATURE.blockId}`}>
                   Block {HOME_FRESH_FEATURE.blockId}
                 </a>
-                <a class="fresh-current__text-link" href={HOME_FRESH_FEATURE.jsonHref}>JSON</a>
+                <a class="fresh-current__text-link" href={BELLS_BLOOM_MANIFEST_HREF}>JSON</a>
               </div>
+            </div>
+          </div>
+
+          <div class="fresh-current__rail" aria-label="Bells / Bloom transmission calendar">
+            <p data-today-signal-rail-label>{bellsBloomIsArchive ? 'Recent transmissions' : 'This week at 08:08 PT'}</p>
+            <div>
+              {BELLS_BLOOM_TRANSMISSIONS.map((transmission, transmissionIndex) => (
+                <button
+                  type="button"
+                  data-today-signal-select={transmissionIndex}
+                  aria-label={`Preview ${transmission.title}, bell ${transmission.id} of 28`}
+                  aria-pressed={transmission.id === activeTransmission.id ? 'true' : 'false'}
+                >
+                  <span>{transmission.dateLabel.split(' · ')[0]}</span>
+                  <strong>{transmission.id}</strong>
+                </button>
+              ))}
             </div>
           </div>
         </section>
@@ -510,6 +546,92 @@ const alternates = [
     </div>
 
     <script id="fresh-hero-signals" type="application/json" is:inline set:html={JSON.stringify(heroSignals)} />
+    <script id="bells-bloom-transmissions" type="application/json" is:inline set:html={JSON.stringify(BELLS_BLOOM_TRANSMISSIONS)} />
+    <script is:inline>
+      (() => {
+        const payload = document.querySelector('#bells-bloom-transmissions');
+        const root = document.querySelector('[data-today-signal]');
+        if (!(root instanceof HTMLElement)) return;
+
+        let transmissions = [];
+        try {
+          transmissions = JSON.parse(payload?.textContent || '[]');
+        } catch {
+          return;
+        }
+        if (!Array.isArray(transmissions) || transmissions.length === 0) return;
+
+        const image = root.querySelector('[data-today-signal-image]');
+        const title = root.querySelector('[data-today-signal-title]');
+        const dek = root.querySelector('[data-today-signal-dek]');
+        const label = root.querySelector('[data-today-signal-label]');
+        const kicker = root.querySelector('[data-today-signal-kicker]');
+        const date = root.querySelector('[data-today-signal-date]');
+        const count = root.querySelector('[data-today-signal-count]');
+        const mode = root.querySelector('[data-today-signal-mode]');
+        const railLabel = root.querySelector('[data-today-signal-rail-label]');
+        const selectors = [...root.querySelectorAll('[data-today-signal-select]')];
+        const archiveAt = Date.parse(root.dataset.archiveAt || '');
+        let active = 0;
+        let manuallySelected = false;
+
+        const liveIndex = () => {
+          const now = Date.now();
+          let next = 0;
+          transmissions.forEach((transmission, index) => {
+            if (Date.parse(transmission.publishAt) <= now) next = index;
+          });
+          return next;
+        };
+
+        const show = (nextIndex, announce = false) => {
+          active = Math.max(0, Math.min(transmissions.length - 1, nextIndex));
+          const transmission = transmissions[active];
+          const archived = Number.isFinite(archiveAt) && Date.now() >= archiveAt;
+
+          if (image instanceof HTMLImageElement) {
+            image.src = transmission.image;
+            image.alt = transmission.alt;
+          }
+          if (title) title.textContent = transmission.title;
+          if (dek) {
+            dek.textContent = archived
+              ? `Bell ${transmission.id} of 28. One of seven recent transmissions from the Bells / Bloom archive.`
+              : `Bell ${transmission.id} of 28. One morning transmission from Bells / Bloom, changing daily at 8:08 PT.`;
+          }
+          if (label) label.textContent = archived ? 'Recent transmissions' : 'Today’s signal';
+          if (kicker) kicker.textContent = archived ? 'Bells / Bloom · recent transmissions' : 'Bell of the day · 08:08 PT';
+          if (date) date.textContent = transmission.dateLabel;
+          if (count) count.textContent = `Bell ${transmission.id} / 28`;
+          if (mode) mode.textContent = archived ? '7 transmissions' : 'Changes daily';
+          if (railLabel) railLabel.textContent = archived ? 'Recent transmissions' : 'This week at 08:08 PT';
+          root.dataset.archive = archived ? 'true' : 'false';
+
+          selectors.forEach((selector, selectorIndex) => {
+            selector.setAttribute('aria-pressed', selectorIndex === active ? 'true' : 'false');
+          });
+
+          if (announce) {
+            if (title instanceof HTMLElement) {
+              title.setAttribute('tabindex', '-1');
+              title.focus({ preventScroll: true });
+            }
+          }
+        };
+
+        selectors.forEach((selector, selectorIndex) => {
+          selector.addEventListener('click', () => {
+            manuallySelected = true;
+            show(selectorIndex, true);
+          });
+        });
+
+        show(liveIndex());
+        window.setInterval(() => {
+          if (!manuallySelected) show(liveIndex());
+        }, 30_000);
+      })();
+    </script>
     <script is:inline>
       (() => {
         const clock = document.querySelector('#fresh-clock');
