@@ -1,0 +1,768 @@
+---
+/**
+ * /faucet — the tap, read rather than turned.
+ *
+ * The Visit Nouns FA2 has had a public, unmetered, gas-only mint entrypoint
+ * since 2026-04-17. There is no per-wallet limit in its storage, nothing
+ * resets at midnight, and there is no cap. Seventeen of the twelve hundred
+ * seeds have ever been asked for, by four wallets, and the last one landed
+ * on 2026-04-28. That is the whole room. It reads the chain and says so.
+ *
+ * Two data paths, deliberately:
+ *   1. Build time — TzKT is read here and the numbers are frozen into the
+ *      static HTML, so an agent that never runs JS still gets true figures
+ *      as of the last deploy.
+ *   2. Read time — the same two TzKT calls run in the browser and overwrite
+ *      them, so a human gets the state as of right now.
+ *   Anything that would go stale between the two (days since the last claim,
+ *   today's seed) is left blank server-side and filled only by the client.
+ *
+ * Today's Noun is chosen by sha256 of the UTC date in the browser — same
+ * idiom as /drum-daily — so the room rotates with no deploy and no cron.
+ * Cloudflare Pages cannot run a scheduled handler; the date is the clock.
+ *
+ * No claim button here on purpose. The shipped MintButton faucet mode
+ * already renders on /b/0210; this page is the reading, not the tap. See
+ * the note at the foot of the page re: royalties before promoting either.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import { fetchJsonWithTimeout } from '../lib/fetch-json';
+import contracts from '../data/contracts.json';
+
+const CH = CHANNELS.FCT;
+const KT1: string = (contracts as any).visit_nouns?.mainnet ?? '';
+const MINT_PRICE_MUTEZ = Number((contracts as any).visit_nouns?.mintPriceMutez ?? 0);
+
+/** max_noun_id on the contract is 1199, so the seed space is 0–1199. */
+const SEED_MAX = 1199;
+const SEED_COUNT = SEED_MAX + 1;
+
+interface Snapshot {
+  seeds: number | null;
+  editions: number | null;
+  wallets: number | null;
+  lastMint: string | null;
+}
+
+const snap: Snapshot = { seeds: null, editions: null, wallets: null, lastMint: null };
+let snapErr: string | null = null;
+
+if (KT1.startsWith('KT1')) {
+  try {
+    const tokens = await fetchJsonWithTimeout<any[]>(
+      `https://api.tzkt.io/v1/tokens?contract=${KT1}&limit=1200`,
+    );
+    snap.seeds = tokens.length;
+    snap.editions = tokens.reduce((sum, t) => sum + (Number(t.totalSupply) || 0), 0);
+  } catch (e: any) {
+    snapErr = e?.message || 'tzkt token fetch failed';
+  }
+
+  try {
+    const transfers = await fetchJsonWithTimeout<any[]>(
+      `https://api.tzkt.io/v1/tokens/transfers?token.contract=${KT1}&limit=1000`,
+    );
+    // A transfer with no `from` is a mint. Everything else is a wallet
+    // handing a Noun to another wallet, which is not a claim.
+    const mints = transfers.filter((t) => !t?.from);
+    snap.wallets = new Set(mints.map((t) => t?.to?.address).filter(Boolean)).size;
+    snap.lastMint = mints.reduce<string | null>(
+      (latest, t) => (t?.timestamp && (!latest || t.timestamp > latest) ? t.timestamp : latest),
+      null,
+    );
+  } catch (e: any) {
+    snapErr = snapErr ?? (e?.message || 'tzkt transfer fetch failed');
+  }
+} else {
+  snapErr = 'contracts.visit_nouns.mainnet not set';
+}
+
+const WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+  'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+  'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
+];
+function word(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return '—';
+  return n >= 0 && n < WORDS.length ? WORDS[n] : String(n);
+}
+
+const MONTHS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+const lastMintDate = snap.lastMint ? new Date(snap.lastMint) : null;
+const lastMintFmt = lastMintDate
+  ? lastMintDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+  : '—';
+const lastMintMonth = lastMintDate
+  ? MONTHS[lastMintDate.getUTCMonth()] +
+    (lastMintDate.getUTCFullYear() !== new Date().getUTCFullYear() ? ` ${lastMintDate.getUTCFullYear()}` : '')
+  : '—';
+
+const num = (n: number | null) => (n === null ? '—' : String(n));
+
+const title = '/faucet — the tap, read not turned';
+const description =
+  `The Visit Nouns faucet on Tezos mainnet has been open, gas-only and unmetered since April 2026. ` +
+  `${num(snap.seeds)} of ${SEED_COUNT} seeds have ever been claimed, by ${num(snap.wallets)} wallets. ` +
+  `One Noun a day, chosen by sha256 of the date. No limit, no reset, no cap.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/faucet',
+  name: 'PointCast Faucet — Visit Nouns',
+  url: 'https://pointcast.xyz/faucet',
+  description,
+  about: {
+    '@type': 'CreativeWork',
+    name: 'PointCast Visit Nouns FA2',
+    identifier: KT1,
+    url: `https://tzkt.io/${KT1}`,
+  },
+  mainEntity: {
+    '@type': 'Dataset',
+    name: 'Visit Nouns faucet state',
+    description:
+      'Seeds ever minted, editions ever minted, distinct wallets that have ever claimed, and the ' +
+      'timestamp of the most recent claim, read from the TzKT indexer.',
+    creator: { '@type': 'Organization', name: 'PointCast' },
+    variableMeasured: [
+      { '@type': 'PropertyValue', name: 'seedsEverMinted', value: num(snap.seeds), maxValue: SEED_COUNT },
+      { '@type': 'PropertyValue', name: 'editionsEverMinted', value: num(snap.editions) },
+      { '@type': 'PropertyValue', name: 'walletsEverClaimed', value: num(snap.wallets) },
+      { '@type': 'PropertyValue', name: 'lastClaimAt', value: snap.lastMint ?? '—' },
+      { '@type': 'PropertyValue', name: 'mintPriceMutez', value: String(MINT_PRICE_MUTEZ) },
+      { '@type': 'PropertyValue', name: 'perWalletLimit', value: 'none' },
+      { '@type': 'PropertyValue', name: 'reset', value: 'none' },
+      { '@type': 'PropertyValue', name: 'supplyCap', value: 'none' },
+    ],
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main
+    class="fx"
+    data-kt1={KT1}
+    data-seed-count={SEED_COUNT}
+    style={`--ch-600: ${CH.color600}; --ch-800: ${CH.color800}; --ch-50: ${CH.color50};`}
+  >
+    <nav class="fx__crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>faucet</span>
+    </nav>
+
+    <header class="fx__head">
+      <p class="fx__kicker">CH.FCT · THE FAUCET · VISIT NOUNS FA2 · TEZOS MAINNET</p>
+      <h1 class="fx__title">the tap has been open since april. almost nobody has held a cup under it.</h1>
+      <p class="fx__dek">
+        the mint entrypoint on the Visit Nouns contract went public on april 17 and costs gas and
+        nothing else. it has never had a per-wallet limit, never had a midnight reset, never had a
+        cap. the copy that said otherwise was wrong; this is what was actually there. one Noun a
+        day, picked by the date, sitting still.
+      </p>
+    </header>
+
+    <section class="fx__stage" aria-label="Today's Noun">
+      <figure class="fx__art">
+        <div class="fx__frame">
+          <img
+            id="fx-noun"
+            alt=""
+            width="480"
+            height="480"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E"
+          />
+          <p class="fx__waiting mono" id="fx-waiting">reading the date…</p>
+        </div>
+        <figcaption class="fx__caption">
+          <p class="fx__date mono" id="fx-date">— — —</p>
+          <p class="fx__seed" id="fx-seed">seed —</p>
+          <p class="fx__derivation mono">sha256(YYYY-MM-DD, UTC) → first two bytes mod {SEED_COUNT}</p>
+          <p class="fx__claimed mono" id="fx-claimed">checking whether anyone has ever asked for it…</p>
+        </figcaption>
+      </figure>
+
+      <p class="fx__note">
+        the seed rotates at 00:00 UTC and it rotates in your browser, so no deploy makes it happen and
+        no schedule runs anywhere. the date is the clock. today's Noun is almost certainly one nobody
+        has ever claimed — that is the ordinary case here, not the exception.
+      </p>
+    </section>
+
+    <section class="fx__ledger" aria-label="Faucet state, read from the chain">
+      <p class="fx__ledger-label mono">STATE · READ FROM TZKT</p>
+
+      <p class="fx__sentence" id="fx-sentence">
+        {word(snap.seeds)} of twelve hundred. {word(snap.wallets)} {snap.wallets === 1 ? 'wallet' : 'wallets'}.
+        {snap.lastMint ? `nothing since ${lastMintMonth}.` : 'nothing yet.'}
+      </p>
+
+      <dl class="fx__rows">
+        <div class="fx__row">
+          <dt>seeds ever claimed</dt>
+          <dd><b id="fx-seeds">{num(snap.seeds)}</b> <span>/ {SEED_COUNT}</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>editions ever minted</dt>
+          <dd><b id="fx-editions">{num(snap.editions)}</b> <span>across those seeds</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>wallets that ever claimed</dt>
+          <dd><b id="fx-wallets">{num(snap.wallets)}</b></dd>
+        </div>
+        <div class="fx__row">
+          <dt>last claim</dt>
+          <dd><b id="fx-last">{lastMintFmt}</b> <span id="fx-ago"></span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>mint price</dt>
+          <dd><b>{MINT_PRICE_MUTEZ} mutez</b> <span>gas only</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>per-wallet limit</dt>
+          <dd><b>none</b> <span>not in storage, never was</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>reset</dt>
+          <dd><b>none</b> <span>nothing rolls over at midnight</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>supply cap</dt>
+          <dd><b>none</b> <span>open edition per seed</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>seed range</dt>
+          <dd><b>0–{SEED_MAX}</b> <span>max_noun_id</span></dd>
+        </div>
+        <div class="fx__row">
+          <dt>contract</dt>
+          <dd><a href={`https://tzkt.io/${KT1}`} target="_blank" rel="noopener"><code>{KT1}</code></a></dd>
+        </div>
+      </dl>
+
+      <p class="fx__freshness mono" id="fx-freshness">
+        {snapErr ? `tzkt unreachable at build — ${snapErr}` : 'frozen at build · refreshing from tzkt…'}
+      </p>
+    </section>
+
+    <section class="fx__reading">
+      <h2>what the numbers are doing</h2>
+      <p>
+        an open tap with almost nothing coming out of it is not a failure state. it is what a faucet
+        looks like when nobody has been told about it, which is the honest description of this one.
+        twenty claims had been made when this page was written, and the shape of them is worth saying
+        out loud: ten landed inside ninety seconds on the evening of april 17, from the key that had
+        just originated the contract. one more came later that night, from a wallet that wasn't it.
+        eight arrived on april 26, across two sittings about two hours apart. one on april 28. then
+        the room went quiet, and it has stayed quiet.
+      </p>
+      <p>
+        seeds 88, 137 and 205 each exist twice, because an open edition is what the contract actually
+        implements — <code>mint_noun</code> increments a per-seed counter and hands you an edition,
+        and it will do that as many times as it is asked. the site said 1/1 for three months. it
+        wasn't true, so it doesn't say it any more.
+      </p>
+      <p>
+        a garden is slow on purpose. a faucet is just slow.
+      </p>
+    </section>
+
+    <aside class="fx__caveat">
+      <p class="fx__caveat-label mono">BEFORE THIS ROOM GETS A DOOR</p>
+      <p>
+        <code>royalty_bps</code> on this contract is 2000, and the royalty recipient baked into every
+        token is the <code>administrator</code> — still the throwaway key that originated the contract
+        in april. twenty percent of any secondary sale routes there. so nothing links to this room from
+        the front door, and there is no claim button on it, until that address moves. that is Mike's
+        call to make, not an agent's.
+      </p>
+    </aside>
+
+    <aside class="fx__agents">
+      <p class="fx__agents-label mono">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/collection/visit-nouns">/collection/visit-nouns</a></li>
+        <li><a href="/b/0210">/b/0210</a></li>
+        <li><a href="/c/faucet.json">/c/faucet.json</a></li>
+        <li><a href={`https://api.tzkt.io/v1/tokens?contract=${KT1}&limit=1200`} target="_blank" rel="noopener">tzkt tokens ↗</a></li>
+        <li><a href={`https://api.tzkt.io/v1/tokens/transfers?token.contract=${KT1}&limit=1000`} target="_blank" rel="noopener">tzkt transfers ↗</a></li>
+        <li><a href={`https://api.tzkt.io/v1/contracts/${KT1}/storage`} target="_blank" rel="noopener">tzkt storage ↗</a></li>
+      </ul>
+    </aside>
+
+    <p class="fx__credit mono">
+      v0.1 · 2026-07-26 · cc · El Segundo · corrected against TzKT, not against the copy
+    </p>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    var root = document.querySelector('.fx');
+    if (!root) return;
+
+    var KT1 = root.dataset.kt1 || '';
+    var SEED_COUNT = Number(root.dataset.seedCount || 1200);
+    var TZKT = 'https://api.tzkt.io/v1';
+
+    var WORDS = [
+      'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+      'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+      'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
+    ];
+    function word(n) {
+      if (n === null || n === undefined || !isFinite(n)) return '—';
+      return n >= 0 && n < WORDS.length ? WORDS[n] : String(n);
+    }
+
+    var MONTHS = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december',
+    ];
+
+    function el(id) { return document.getElementById(id); }
+
+    // ── today's seed ────────────────────────────────────────────────────
+    // Same derivation as /drum-daily: sha256 of the UTC date string, then
+    // a byte slice. Nothing is stored, nothing is deployed, nothing is
+    // scheduled — the date is the only input.
+    function todayKey() {
+      var d = new Date();
+      var y = d.getUTCFullYear();
+      var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      var dy = String(d.getUTCDate()).padStart(2, '0');
+      return y + '-' + m + '-' + dy;
+    }
+
+    async function bytes(str) {
+      var enc = new TextEncoder().encode(str);
+      var hash = await crypto.subtle.digest('SHA-256', enc);
+      return new Uint8Array(hash);
+    }
+
+    async function paintNoun() {
+      var key = todayKey();
+      var d = new Date();
+      var dateEl = el('fx-date');
+      if (dateEl) {
+        var mon = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getUTCMonth()];
+        dateEl.textContent = d.getUTCDate() + ' ' + mon + ' ' + d.getUTCFullYear() + ' · UTC';
+      }
+
+      var seed;
+      try {
+        var b = await bytes(key);
+        seed = ((b[0] << 8) | b[1]) % SEED_COUNT;
+      } catch (err) {
+        var waiting = el('fx-waiting');
+        if (waiting) waiting.textContent = 'this browser will not do sha256 over http — open over https';
+        return;
+      }
+
+      var img = el('fx-noun');
+      if (img) {
+        img.alt = 'Noun ' + seed;
+        img.addEventListener('load', function () {
+          img.classList.add('is-loaded');
+          var w = el('fx-waiting');
+          if (w) w.remove();
+        });
+        img.addEventListener('error', function () {
+          var w = el('fx-waiting');
+          if (w) w.textContent = 'noun.pics is not answering right now';
+        });
+        img.src = 'https://noun.pics/' + seed + '.svg';
+      }
+
+      var seedEl = el('fx-seed');
+      if (seedEl) seedEl.textContent = 'seed ' + seed;
+
+      // Has this particular seed ever been asked for?
+      var claimedEl = el('fx-claimed');
+      if (!claimedEl || !KT1) return;
+      try {
+        var res = await fetch(TZKT + '/tokens?contract=' + KT1 + '&tokenId=' + seed);
+        if (!res.ok) throw new Error(String(res.status));
+        var rows = await res.json();
+        if (!rows.length) {
+          claimedEl.textContent = 'never claimed · no token exists at this id';
+        } else {
+          var supply = Number(rows[0].totalSupply) || 0;
+          claimedEl.textContent = supply === 1
+            ? 'claimed once · one edition exists'
+            : 'claimed · ' + supply + ' editions exist';
+        }
+      } catch (err) {
+        claimedEl.textContent = 'could not reach tzkt for this seed';
+      }
+    }
+
+    // ── live state ──────────────────────────────────────────────────────
+    async function paintState() {
+      if (!KT1) return;
+      var freshness = el('fx-freshness');
+
+      var seeds = null;
+      var editions = null;
+      var wallets = null;
+      var lastMint = null;
+
+      try {
+        var tRes = await fetch(TZKT + '/tokens?contract=' + KT1 + '&limit=1200');
+        if (!tRes.ok) throw new Error('tokens ' + tRes.status);
+        var tokens = await tRes.json();
+        seeds = tokens.length;
+        editions = tokens.reduce(function (sum, t) { return sum + (Number(t.totalSupply) || 0); }, 0);
+
+        var xRes = await fetch(TZKT + '/tokens/transfers?token.contract=' + KT1 + '&limit=1000');
+        if (!xRes.ok) throw new Error('transfers ' + xRes.status);
+        var transfers = await xRes.json();
+        var mints = transfers.filter(function (t) { return !t.from; });
+        var addrs = {};
+        mints.forEach(function (t) { if (t.to && t.to.address) addrs[t.to.address] = 1; });
+        wallets = Object.keys(addrs).length;
+        lastMint = mints.reduce(function (latest, t) {
+          return t.timestamp && (!latest || t.timestamp > latest) ? t.timestamp : latest;
+        }, null);
+      } catch (err) {
+        if (freshness) freshness.textContent = 'tzkt did not answer — numbers above are from the last deploy';
+        return;
+      }
+
+      if (el('fx-seeds')) el('fx-seeds').textContent = String(seeds);
+      if (el('fx-editions')) el('fx-editions').textContent = String(editions);
+      if (el('fx-wallets')) el('fx-wallets').textContent = String(wallets);
+
+      var days = null;
+      if (lastMint) {
+        var when = new Date(lastMint);
+        if (el('fx-last')) {
+          el('fx-last').textContent = when.toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+          });
+        }
+        days = Math.floor((Date.now() - when.getTime()) / 86400000);
+        if (el('fx-ago')) {
+          el('fx-ago').textContent =
+            days <= 0 ? 'today' : days === 1 ? '1 day ago' : days + ' days ago';
+        }
+      }
+
+      var sentence = el('fx-sentence');
+      if (sentence) {
+        var head = word(seeds) + ' of twelve hundred. ' + word(wallets) +
+          (wallets === 1 ? ' wallet. ' : ' wallets. ');
+        var tail;
+        if (!lastMint) {
+          tail = 'nothing yet.';
+        } else if (days !== null && days > 40) {
+          var lm = new Date(lastMint);
+          tail = 'nothing since ' + MONTHS[lm.getUTCMonth()] +
+            (days > 300 ? ' ' + lm.getUTCFullYear() : '') + '.';
+        } else {
+          tail = 'last claim ' + new Date(lastMint).toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', timeZone: 'UTC',
+          }).toLowerCase() + '.';
+        }
+        sentence.textContent = head + tail;
+      }
+
+      if (freshness) {
+        freshness.textContent = 'read from tzkt at ' + new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit',
+        }).toLowerCase() + ' in your timezone';
+      }
+    }
+
+    paintNoun().catch(function () { /* the page is still true without it */ });
+    paintState().catch(function () { /* build-time numbers stand */ });
+  })();
+</script>
+
+<style>
+  .fx {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 20px 90px;
+  }
+
+  .fx .mono,
+  .fx code {
+    font-family: var(--pc-font-mono);
+  }
+
+  /* ── crumb ─────────────────────────────────────────────────────────── */
+  .fx__crumb {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 18px;
+  }
+  .fx__crumb a { color: var(--pc-accent); }
+
+  /* ── head ──────────────────────────────────────────────────────────── */
+  .fx__head { margin-bottom: 34px; }
+
+  .fx__kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ch-800);
+    margin: 0 0 10px;
+  }
+
+  .fx__title {
+    font-family: var(--pc-font-sans);
+    font-size: 34px; line-height: 1.08; font-weight: 500;
+    letter-spacing: -0.015em;
+    margin: 0 0 12px;
+    color: var(--pc-ink);
+    max-width: 20ch;
+  }
+
+  .fx__dek {
+    font-family: var(--pc-font-sans);
+    font-size: 15.5px; line-height: 1.55; font-weight: 400;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  /* ── stage ─────────────────────────────────────────────────────────── */
+  .fx__stage {
+    margin-bottom: 40px;
+    padding-top: 22px;
+    border-top: 1.5px solid var(--ch-600);
+  }
+
+  .fx__art {
+    margin: 0 0 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .fx__frame {
+    position: relative;
+    border: 1.5px solid var(--ch-600);
+    background: var(--ch-50);
+    padding: 14px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fx__frame img {
+    width: 100%; height: 100%;
+    display: block;
+    object-fit: contain;
+    image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 0.2s linear;
+  }
+  .fx__frame img.is-loaded { opacity: 1; }
+
+  .fx__waiting {
+    position: absolute;
+    inset: auto 14px 14px;
+    margin: 0;
+    font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .fx__caption { margin: 0; align-self: center; }
+
+  .fx__date {
+    margin: 0 0 6px;
+    font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  .fx__seed {
+    margin: 0 0 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 30px; line-height: 1; font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--pc-ink);
+  }
+
+  .fx__derivation {
+    margin: 0 0 14px;
+    font-size: 9.5px; letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+    word-break: break-word;
+  }
+
+  .fx__claimed {
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--pc-rule);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .fx__note {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 14.5px; line-height: 1.6;
+    color: var(--pc-ink-soft);
+    max-width: 62ch;
+  }
+
+  @media (max-width: 639px) {
+    .fx__art { grid-template-columns: 1fr; gap: 16px; }
+    .fx__title { font-size: 27px; max-width: none; }
+  }
+
+  /* ── ledger ────────────────────────────────────────────────────────── */
+  .fx__ledger {
+    margin-bottom: 40px;
+    padding-top: 20px;
+    border-top: 1.5px solid var(--ch-600);
+  }
+
+  .fx__ledger-label {
+    margin: 0 0 14px;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .fx__sentence {
+    margin: 0 0 20px;
+    font-family: var(--pc-font-sans);
+    font-size: 24px; line-height: 1.25; font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--pc-ink);
+    max-width: 24ch;
+  }
+
+  .fx__rows {
+    margin: 0 0 12px;
+    padding: 0;
+    border-top: 1px solid var(--pc-rule-soft);
+  }
+
+  .fx__row {
+    display: grid;
+    grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+
+  .fx__row dt,
+  .fx__row dd {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+  .fx__row dd b {
+    font-weight: 500;
+    color: var(--pc-ink);
+    letter-spacing: 0.04em;
+  }
+  .fx__row dd span { color: var(--pc-ink-muted); }
+  .fx__row dd code {
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0;
+    word-break: break-all;
+  }
+  .fx__row dd a { color: var(--pc-accent); }
+
+  .fx__freshness {
+    margin: 0;
+    font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+
+  @media (max-width: 639px) {
+    .fx__row { grid-template-columns: 1fr; gap: 2px; }
+    .fx__sentence { font-size: 20px; max-width: none; }
+  }
+
+  /* ── reading ───────────────────────────────────────────────────────── */
+  .fx__reading {
+    margin-bottom: 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--pc-rule);
+  }
+
+  .fx__reading h2 {
+    margin: 0 0 12px;
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 500;
+    color: var(--ch-800);
+  }
+
+  .fx__reading p {
+    margin: 0 0 14px;
+    font-family: var(--pc-font-sans);
+    font-size: 15px; line-height: 1.65;
+    color: var(--pc-ink-soft);
+    max-width: 62ch;
+  }
+  .fx__reading p:last-child { margin-bottom: 0; }
+  .fx__reading code {
+    font-size: 13px;
+    color: var(--pc-ink);
+  }
+
+  /* ── caveat ────────────────────────────────────────────────────────── */
+  .fx__caveat {
+    margin-bottom: 28px;
+    padding: 14px 16px;
+    border-left: 3px solid var(--ch-600);
+    background: var(--ch-50);
+  }
+
+  .fx__caveat-label {
+    margin: 0 0 6px;
+    font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ch-800);
+  }
+
+  .fx__caveat p:last-child {
+    margin: 0;
+    font-family: var(--pc-font-sans);
+    font-size: 14px; line-height: 1.6;
+    color: var(--pc-ink-soft);
+    max-width: 62ch;
+  }
+  .fx__caveat code {
+    font-size: 12.5px;
+    color: var(--pc-ink);
+    word-break: break-word;
+  }
+
+  /* ── agents ────────────────────────────────────────────────────────── */
+  .fx__agents {
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    font-family: var(--pc-font-mono);
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .fx__agents-label { margin: 0 0 6px; color: var(--pc-ink-soft); font-weight: 500; }
+  .fx__agents ul {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-wrap: wrap; gap: 12px;
+  }
+
+  .fx__credit {
+    margin: 22px 0 0;
+    font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted);
+  }
+</style>
