@@ -359,6 +359,44 @@ export const SPELLS: Spell[] = [
     kind: 'ambient',
     accent: '#8a2432',
   },
+  // CC0 Nouns IP — SVGs pulled live from noun.pics for any seed
+  // 0–1199 (matches the Visit Nouns FA2 collection on Tezos).
+  {
+    id: 'noun',
+    label: 'noun',
+    blurb: 'A random Noun walks across the bottom. Click to send home.',
+    glyph: '🟥',
+    kind: 'companion',
+    durationMs: 60_000,
+    accent: '#d63c5e',
+  },
+  {
+    id: 'noggles',
+    label: 'noggles',
+    blurb: 'A wave of pixel noggles drifts across — the signature glasses.',
+    glyph: '👓',
+    kind: 'burst',
+    durationMs: 5500,
+    accent: '#1f1d29',
+  },
+  {
+    id: 'proliferate',
+    label: 'proliferate',
+    blurb: 'Twelve mini Nouns scatter outward — proliferation in pixel form.',
+    glyph: '✨',
+    kind: 'burst',
+    durationMs: 4200,
+    accent: '#d63c5e',
+  },
+  {
+    id: 'lilnoun',
+    label: 'lilnoun',
+    blurb: 'A tiny Noun bounces across the bottom. Lil. Energetic.',
+    glyph: '🟢',
+    kind: 'companion',
+    durationMs: 45_000,
+    accent: '#5b6ea8',
+  },
 ];
 
 /** Lookup helper. */
