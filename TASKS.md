@@ -16,6 +16,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Weekly 00 — What I Keep Noticing (2026-07-27)
+
+- [x] (X) Build `/noticing` as a warm, visual magazine cover and editor's letter — `done`
+- [x] (X) Shape the August run into five desks, five altitudes, and six honestly labeled planned stories — `done`
+- [x] (X) Add the interactive altitude path, next-Friday anticipation, homepage feature, and responsive editorial artwork — `done`
+- [x] (X) Add `/noticing.json`, Block 0512, social art, sitemap discovery, LLM context, and release tests — `done`
+- [x] (MH) Approve the validated branch for merge and production publication — `done` — Mike said “go”
+- [x] (X) Reconcile with PointCast 25 and Beach Commons V4, then publish the exact validated release — `done`
+
+---
+
 ## PointCast Field Study 003 — Beach Commons V3 (2026-07-27)
 
 - [x] (X) Generate and verify eight Flash Bakery + Palm Loom architectural plates — `done`

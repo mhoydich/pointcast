@@ -61,6 +61,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/llms-full.txt', 'daily', '0.9'],
   ['https://pointcast.xyz/manifesto', 'weekly', '0.9'],
   ['https://pointcast.xyz/glossary', 'weekly', '0.8'],
+  ['https://pointcast.xyz/noticing', 'weekly', '0.96'],
+  ['https://pointcast.xyz/noticing.json', 'weekly', '0.92'],
   ['https://pointcast.xyz/blocks.json', 'daily', '0.9'],
   ['https://pointcast.xyz/feed.json', 'daily', '0.8'],
   ['https://pointcast.xyz/feed.xml', 'daily', '0.8'],
