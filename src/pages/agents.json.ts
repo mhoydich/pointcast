@@ -183,6 +183,8 @@ export const GET: APIRoute = async () => {
         townsfolk: 'https://pointcast.xyz/townsfolk',
         knock: 'https://pointcast.xyz/knock',
         drum: 'https://pointcast.xyz/drum',
+        drumDirectory: 'https://pointcast.xyz/drum-directory',
+        drumDirectoryJson: 'https://pointcast.xyz/drum-directory.json',
         drumV2: 'https://pointcast.xyz/drum-v2',
         drumV3: 'https://pointcast.xyz/drum-v3',
         drumV4: 'https://pointcast.xyz/drum-v4',

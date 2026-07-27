@@ -7,6 +7,15 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Drum Directory — The Big Beat Issue (2026-07-27)
+
+- [x] (X) Publish-ready `/drum-directory` longform editorial with 30 described games, rooms, Nouns titles, TV sports, and playable oddities — `done`
+- [x] (X) Preserve and narrate all seven Beat Runner editions in one visual archive — `done`
+- [x] (X) Create and verify three original golden-era magazine plates plus 12 real browser captures — `done`
+- [x] (X) Add `/drum-directory.json`, Drum navigation, arcade/press discovery, agent manifests, LLM context, tests, print behavior, and mobile QA — `done`
+
+---
+
 ## PointCast Field Study 004 — Beach Commons V4 (2026-07-27)
 
 - [x] (X) Generate and verify eight Sculpture Yard + Element Maxxing field plates — `done`
