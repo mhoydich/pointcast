@@ -1,0 +1,1206 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  POINTCAST_25,
+  POINTCAST_25_SIGNAL_LABELS,
+  type PointCast25Signal,
+} from '../../lib/pointcast-25';
+
+const description =
+  'PointCast 25 is a college-football poll with receipts: one case, one doubt, and one next proof for every ranked team.';
+const topFive = POINTCAST_25.teams.slice(0, 5);
+const published = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date(POINTCAST_25.publishedAt));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'ItemList',
+      '@id': 'https://pointcast.xyz/25#board',
+      name: `${POINTCAST_25.title} — Board ${POINTCAST_25.board}`,
+      description,
+      url: 'https://pointcast.xyz/25',
+      numberOfItems: POINTCAST_25.teams.length,
+      datePublished: POINTCAST_25.publishedAt,
+      itemListOrder: 'https://schema.org/ItemListOrderAscending',
+      itemListElement: POINTCAST_25.teams.map((team) => ({
+        '@type': 'ListItem',
+        position: team.rank,
+        name: team.school,
+        description: team.reason,
+      })),
+    },
+    {
+      '@type': 'Product',
+      '@id': 'https://pointcast.xyz/25#season-ticket',
+      name: POINTCAST_25.sale.name,
+      description: POINTCAST_25.sale.promise,
+      brand: {
+        '@type': 'Brand',
+        name: 'PointCast',
+      },
+      offers: {
+        '@type': 'Offer',
+        price: String(POINTCAST_25.sale.priceUsd),
+        priceCurrency: 'USD',
+        url: POINTCAST_25.sale.checkout,
+        availability: 'https://schema.org/InStock',
+      },
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="25 FOR REASONS"
+  description={description}
+  image="/images/pointcast-25/board-000.png"
+  themeColor="#f4ff3f"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/25.json', title: 'PointCast 25 Board 000 JSON' },
+    { type: 'application/rss+xml', href: '/c/spinning.rss', title: 'PointCast Spinning RSS' },
+  ]}
+  frame={{
+    image: 'https://pointcast.xyz/images/pointcast-25/board-000.png',
+    aspectRatio: '1.91:1',
+    buttons: [
+      { label: 'Open the 25', action: 'link', target: 'https://pointcast.xyz/25' },
+      { label: '$25 season ticket', action: 'link', target: 'https://pointcast.xyz/api/25/checkout' },
+    ],
+  }}
+  immersive={true}
+  showNetworkStrip={false}
+>
+  <div class="p25">
+    <header class="mast">
+      <a class="mast__brand" href="/" aria-label="PointCast home">POINTCAST</a>
+      <nav class="mast__nav" aria-label="PointCast 25 navigation">
+        <a href="#board">The 25</a>
+        <a href="#method">Method</a>
+        <a href="/25/season">Season ledger</a>
+        <a href="#ticket">Season ticket</a>
+        <a href="/25.json">JSON</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="p25-title">
+        <div class="hero__number" aria-hidden="true">25</div>
+        <div class="hero__copy">
+          <p class="eyebrow">BOARD {POINTCAST_25.board} · PRESEASON · {published}</p>
+          <h1 id="p25-title">FOR<br /><em>REASONS</em></h1>
+          <p class="hero__dek">{POINTCAST_25.subtitle}</p>
+          <p class="hero__question">{POINTCAST_25.question}</p>
+          <div class="hero__actions">
+            <a class="button button--ink" href="#board">Read the board ↓</a>
+            <a
+              class="button button--paper"
+              href="/api/25/checkout"
+              target="_blank"
+              rel="noopener sponsored"
+              data-checkout-link
+            >
+              Buy season ticket · $25
+            </a>
+          </div>
+        </div>
+        <ol class="hero__five" aria-label="Top five">
+          {topFive.map((team) => (
+            <li>
+              <span>{String(team.rank).padStart(2, '0')}</span>
+              <strong>{team.school}</strong>
+              <small>{team.conference}</small>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div class="ticker" aria-label="PointCast 25 publishing schedule">
+        <span>NEW BOARD TUESDAY · 08:08 PT</span>
+        <span>THE REASONS MOVE OR THE TEAM DOESN’T</span>
+        <span>NO DELETED PRESEASON TAKES</span>
+      </div>
+
+      <section class="opening" aria-labelledby="opening-title">
+        <p class="section-label">WHY THIS EXISTS</p>
+        <div>
+          <h2 id="opening-title">The number is the headline.<br />The reason is the product.</h2>
+          <p>
+            A rank without a claim is disposable. Every team below carries a case,
+            a doubt, and the next proof we require. When the board moves, the old
+            sentence stays attached. At the end of the season, the whole argument
+            remains available for autopsy.
+          </p>
+        </div>
+      </section>
+
+      <section class="board-shell" id="board" aria-labelledby="board-title">
+        <div class="board-head">
+          <div>
+            <p class="section-label">THE BELIEF BOARD</p>
+            <h2 id="board-title">Board {POINTCAST_25.board}</h2>
+          </div>
+          <p class="board-head__note">
+            Tap a team for its receipts. Pin teams locally for your Saturday board.
+            Nothing is transmitted.
+          </p>
+        </div>
+
+        <div class="filters" role="group" aria-label="Filter the PointCast 25">
+          <button type="button" class="filter is-active" data-filter="all" aria-pressed="true">All 25</button>
+          <button type="button" class="filter" data-filter="title-weather" aria-pressed="false">Title weather</button>
+          <button type="button" class="filter" data-filter="playoff-weather" aria-pressed="false">Playoff</button>
+          <button type="button" class="filter" data-filter="fault-line" aria-pressed="false">Fault lines</button>
+          <button type="button" class="filter" data-filter="outsider" aria-pressed="false">Outsiders</button>
+          <button type="button" class="filter" data-filter="saved" aria-pressed="false">My board</button>
+        </div>
+        <p class="filter-status" data-filter-status aria-live="polite">Showing all 25 teams.</p>
+
+        <ol class="board-list">
+          {POINTCAST_25.teams.map((team) => (
+            <li
+              class="team"
+              data-team
+              data-school={team.short}
+              data-signal={team.signal}
+              style={`--team-accent:${team.accent}`}
+            >
+              <article>
+                <div class="team__rank">
+                  <span>{String(team.rank).padStart(2, '0')}</span>
+                  <small>{team.movement}</small>
+                </div>
+                <div class="team__identity">
+                  <p>{team.conference} · {POINTCAST_25_SIGNAL_LABELS[team.signal as PointCast25Signal]}</p>
+                  <h3>{team.school}</h3>
+                  <p class="team__reason">{team.reason}</p>
+                </div>
+                <button
+                  class="pin"
+                  type="button"
+                  data-pin={team.short}
+                  aria-pressed="false"
+                  aria-label={`Pin ${team.school} to my board`}
+                >
+                  <span aria-hidden="true">＋</span>
+                  <span data-pin-label>Pin</span>
+                </button>
+                <details class="receipts">
+                  <summary>Open the reasons</summary>
+                  <div class="receipts__grid">
+                    <div>
+                      <span>CASE</span>
+                      <p>{team.case}</p>
+                    </div>
+                    <div>
+                      <span>DOUBT</span>
+                      <p>{team.doubt}</p>
+                    </div>
+                    <div>
+                      <span>NEXT PROOF</span>
+                      <p>{team.proof}</p>
+                    </div>
+                  </div>
+                </details>
+              </article>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section class="method" id="method" aria-labelledby="method-title">
+        <div class="method__lead">
+          <p class="section-label">THE METHOD</p>
+          <h2 id="method-title">Opinion, made falsifiable.</h2>
+          <p>
+            This is not a résumé ranking, a recruiting ranking, or a television
+            inventory list. It is an authored belief board informed by available
+            evidence and preserved in public.
+          </p>
+        </div>
+        <ol class="method__grid">
+          {POINTCAST_25.methodology.map((item, index) => (
+            <li>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <h3>{item.label}</h3>
+              <p>{item.note}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section class="week" aria-labelledby="week-title">
+        <p class="section-label">THE WEEK</p>
+        <h2 id="week-title">One season. Four useful moments.</h2>
+        <div class="week__grid">
+          {Object.entries(POINTCAST_25.cadence).map(([day, note]) => (
+            <article>
+              <h3>{day}</h3>
+              <p>{note}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section class="ticket" id="ticket" aria-labelledby="ticket-title">
+        <div class="ticket__stub">
+          <span>PC25</span>
+          <span>2026</span>
+          <strong>$25</strong>
+        </div>
+        <div class="ticket__copy">
+          <p class="section-label">FOUNDING SEASON TICKET</p>
+          <h2 id="ticket-title">Back the complete argument.</h2>
+          <p>{POINTCAST_25.sale.promise}</p>
+          <ul>
+            <li>One payment. Not a recurring charge.</li>
+            <li>The public board, Tuesday editions, audio dispatches, and end-of-season autopsy.</li>
+            <li>Card entry and payment receipt handled on Stripe’s hosted checkout.</li>
+            <li>PointCast never receives or stores your card number.</li>
+          </ul>
+          <div class="ticket__actions">
+            <a
+              class="button button--signal"
+              href="/api/25/checkout"
+              target="_blank"
+              rel="noopener sponsored"
+              data-checkout-link
+            >
+              Buy the $25 Season Ticket ↗
+            </a>
+            <a class="text-link" href="/25/terms">Plain-language terms</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="sources" aria-labelledby="sources-title">
+        <div>
+          <p class="section-label">SOURCE DESK</p>
+          <h2 id="sources-title">Receipts behind Board {POINTCAST_25.board}.</h2>
+        </div>
+        <ol>
+          {POINTCAST_25.sources.map((source) => (
+            <li>
+              <a href={source.url} target="_blank" rel="noopener">
+                <strong>{source.label}</strong>
+                <span>{source.publisher} · checked {source.checkedAt} ↗</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <footer class="p25-footer">
+        <div>
+          <strong>25 FOR REASONS</strong>
+          <span>Board {POINTCAST_25.board} · Block 0510</span>
+        </div>
+      <nav aria-label="PointCast 25 footer navigation">
+        <a href="/25/season">Season ledger</a>
+        <a href="/25.json">JSON</a>
+          <a href="/c/spinning.rss">RSS</a>
+          <a href="/b/0510">Permanent Block</a>
+          <a href="/">PointCast</a>
+        </nav>
+      </footer>
+    </main>
+  </div>
+
+  <script is:inline>
+    (() => {
+      const root = document.querySelector('.p25');
+      if (!(root instanceof HTMLElement)) return;
+
+      const key = 'pointcast:25:watchlist:v1';
+      const teamRows = [...root.querySelectorAll('[data-team]')];
+      const filterButtons = [...root.querySelectorAll('[data-filter]')];
+      const status = root.querySelector('[data-filter-status]');
+
+      let saved = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        saved = Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'string') : [];
+      } catch {
+        saved = [];
+      }
+
+      function refreshPins() {
+        root.querySelectorAll('[data-pin]').forEach((button) => {
+          if (!(button instanceof HTMLButtonElement)) return;
+          const school = button.dataset.pin || '';
+          const active = saved.includes(school);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+          const label = button.querySelector('[data-pin-label]');
+          if (label) label.textContent = active ? 'Pinned' : 'Pin';
+        });
+      }
+
+      function applyFilter(filter) {
+        let visible = 0;
+        teamRows.forEach((row) => {
+          if (!(row instanceof HTMLElement)) return;
+          const show =
+            filter === 'all'
+            || (filter === 'saved' && saved.includes(row.dataset.school || ''))
+            || row.dataset.signal === filter;
+          row.hidden = !show;
+          if (show) visible += 1;
+        });
+
+        filterButtons.forEach((button) => {
+          if (!(button instanceof HTMLButtonElement)) return;
+          const active = button.dataset.filter === filter;
+          button.classList.toggle('is-active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        if (status) {
+          status.textContent = filter === 'saved'
+            ? (visible ? `Showing ${visible} pinned ${visible === 1 ? 'team' : 'teams'}.` : 'Your board is empty. Pin a team to begin.')
+            : `Showing ${visible} ${visible === 1 ? 'team' : 'teams'}.`;
+        }
+      }
+
+      filterButtons.forEach((button) => {
+        if (!(button instanceof HTMLButtonElement)) return;
+        button.addEventListener('click', () => applyFilter(button.dataset.filter || 'all'));
+      });
+
+      root.querySelectorAll('[data-pin]').forEach((button) => {
+        if (!(button instanceof HTMLButtonElement)) return;
+        button.addEventListener('click', () => {
+          const school = button.dataset.pin || '';
+          saved = saved.includes(school)
+            ? saved.filter((value) => value !== school)
+            : [...saved, school];
+          try {
+            localStorage.setItem(key, JSON.stringify(saved));
+          } catch {}
+          refreshPins();
+          const activeFilter = filterButtons.find((item) => item.getAttribute('aria-pressed') === 'true');
+          if (activeFilter instanceof HTMLButtonElement && activeFilter.dataset.filter === 'saved') {
+            applyFilter('saved');
+          }
+        });
+      });
+
+      refreshPins();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  :global(html) {
+    background: #f3f0e8;
+    scroll-behavior: smooth;
+  }
+
+  :global(body) {
+    margin: 0;
+    background: #f3f0e8;
+    color: #10100f;
+    font-family: var(--pc-font-sans);
+  }
+
+  :global([hidden]) {
+    display: none !important;
+  }
+
+  .p25 {
+    --signal: #f4ff3f;
+    --paper: #f3f0e8;
+    --ink: #10100f;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .mast {
+    align-items: center;
+    background: var(--ink);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    padding: 14px clamp(16px, 3vw, 42px);
+  }
+
+  .mast__brand {
+    color: white;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.06em;
+    text-decoration: none;
+  }
+
+  .mast__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+
+  .mast__nav a,
+  .p25-footer a {
+    color: inherit;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .hero {
+    background: var(--ink);
+    color: white;
+    display: grid;
+    grid-template-columns: minmax(260px, 0.75fr) minmax(360px, 1fr) minmax(240px, 0.65fr);
+    min-height: 690px;
+    position: relative;
+  }
+
+  .hero__number {
+    align-items: flex-start;
+    color: var(--signal);
+    display: flex;
+    font-size: clamp(250px, 34vw, 620px);
+    font-weight: 900;
+    letter-spacing: -0.13em;
+    line-height: 0.76;
+    padding-top: 66px;
+    transform: translateX(-0.04em);
+  }
+
+  .hero__copy {
+    align-self: center;
+    padding: 70px 24px 70px 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .eyebrow,
+  .section-label {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    margin: 0 0 14px;
+    text-transform: uppercase;
+  }
+
+  .hero h1 {
+    font-size: clamp(68px, 9.2vw, 150px);
+    font-weight: 900;
+    letter-spacing: -0.09em;
+    line-height: 0.75;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .hero h1 em {
+    color: var(--signal);
+    font-style: normal;
+  }
+
+  .hero__dek {
+    font-size: clamp(22px, 2.3vw, 38px);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    margin: 32px 0 8px;
+  }
+
+  .hero__question {
+    color: #c8c7c0;
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0;
+    max-width: 560px;
+  }
+
+  .hero__actions,
+  .ticket__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 30px;
+  }
+
+  .button {
+    align-items: center;
+    border: 1px solid currentColor;
+    display: inline-flex;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    justify-content: center;
+    letter-spacing: 0.08em;
+    min-height: 48px;
+    padding: 0 18px;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .button--ink {
+    background: var(--signal);
+    border-color: var(--signal);
+    color: var(--ink);
+  }
+
+  .button--paper {
+    color: white;
+  }
+
+  .button--signal {
+    background: var(--signal);
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .hero__five {
+    align-self: end;
+    border-left: 1px solid rgba(255, 255, 255, 0.25);
+    list-style: none;
+    margin: 0;
+    padding: 0 0 42px;
+  }
+
+  .hero__five li {
+    align-items: baseline;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 34px 1fr auto;
+    padding: 16px 22px;
+  }
+
+  .hero__five span,
+  .hero__five small {
+    color: #a7a6a0;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .hero__five strong {
+    font-size: 18px;
+    letter-spacing: -0.04em;
+  }
+
+  .ticker {
+    background: var(--signal);
+    display: flex;
+    gap: 48px;
+    justify-content: center;
+    overflow: hidden;
+    padding: 12px 18px;
+    white-space: nowrap;
+  }
+
+  .ticker span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .opening,
+  .method,
+  .week,
+  .sources {
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    gap: 50px;
+    grid-template-columns: minmax(150px, 0.3fr) minmax(0, 1fr);
+    padding: clamp(60px, 9vw, 130px) clamp(18px, 5vw, 78px);
+  }
+
+  .opening h2,
+  .method h2,
+  .week h2,
+  .sources h2,
+  .ticket h2 {
+    font-size: clamp(42px, 6.6vw, 94px);
+    letter-spacing: -0.07em;
+    line-height: 0.9;
+    margin: 0;
+  }
+
+  .opening p:not(.section-label),
+  .method__lead > p:not(.section-label),
+  .ticket__copy > p {
+    font-size: clamp(18px, 2vw, 28px);
+    line-height: 1.45;
+    max-width: 860px;
+  }
+
+  .board-shell {
+    background: #f8f7f2;
+    border-bottom: 1px solid var(--ink);
+    padding: clamp(56px, 7vw, 100px) clamp(12px, 3vw, 42px);
+  }
+
+  .board-head {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    margin: 0 auto 34px;
+    max-width: 1420px;
+  }
+
+  .board-head h2 {
+    font-size: clamp(60px, 8vw, 128px);
+    letter-spacing: -0.08em;
+    line-height: 0.8;
+    margin: 0;
+  }
+
+  .board-head__note {
+    color: #55544f;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 360px;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 auto;
+    max-width: 1420px;
+  }
+
+  .filter,
+  .pin {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    min-height: 42px;
+    padding: 0 13px;
+    text-transform: uppercase;
+  }
+
+  .filter.is-active {
+    background: var(--ink);
+    color: white;
+  }
+
+  .filter-status {
+    color: #66645f;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    margin: 12px auto 20px;
+    max-width: 1420px;
+    text-transform: uppercase;
+  }
+
+  .board-list {
+    border-top: 1px solid var(--ink);
+    list-style: none;
+    margin: 0 auto;
+    max-width: 1420px;
+    padding: 0;
+  }
+
+  .team {
+    border-bottom: 1px solid var(--ink);
+    position: relative;
+  }
+
+  .team::before {
+    background: var(--team-accent);
+    content: '';
+    height: 100%;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 7px;
+  }
+
+  .team article {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    padding: 25px 20px 25px 27px;
+  }
+
+  .team__rank span {
+    display: block;
+    font-size: clamp(48px, 5.4vw, 78px);
+    font-weight: 900;
+    letter-spacing: -0.09em;
+    line-height: 0.8;
+  }
+
+  .team__rank small,
+  .team__identity > p:first-child {
+    color: #686762;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .team__identity h3 {
+    font-size: clamp(31px, 4vw, 58px);
+    letter-spacing: -0.06em;
+    line-height: 0.9;
+    margin: 6px 0 10px;
+  }
+
+  .team__identity > p:first-child,
+  .team__reason {
+    margin: 0;
+  }
+
+  .team__reason {
+    font-size: 17px;
+    line-height: 1.45;
+    max-width: 860px;
+  }
+
+  .pin {
+    align-self: start;
+    min-width: 78px;
+  }
+
+  .pin[aria-pressed='true'] {
+    background: var(--signal);
+  }
+
+  .receipts {
+    grid-column: 2 / 4;
+    margin-top: 22px;
+  }
+
+  .receipts summary {
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .receipts__grid {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 16px;
+  }
+
+  .receipts__grid > div {
+    background: #ebe9e2;
+    padding: 18px;
+  }
+
+  .receipts__grid span {
+    color: #5d5b56;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .receipts__grid p {
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 10px 0 0;
+  }
+
+  .method {
+    background: var(--ink);
+    color: white;
+  }
+
+  .method__lead > p:not(.section-label) {
+    color: #c8c7c0;
+  }
+
+  .method__grid {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(2, 1fr);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .method__grid li {
+    border: 1px solid #56554f;
+    padding: 26px;
+  }
+
+  .method__grid span,
+  .method__grid h3 {
+    color: var(--signal);
+  }
+
+  .method__grid span {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+  }
+
+  .method__grid h3 {
+    font-size: 28px;
+    letter-spacing: -0.05em;
+    margin: 50px 0 8px;
+  }
+
+  .method__grid p,
+  .week__grid p {
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .week {
+    grid-template-columns: 1fr;
+  }
+
+  .week__grid {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .week__grid article {
+    border: 1px solid var(--ink);
+    min-height: 220px;
+    padding: 22px;
+  }
+
+  .week__grid h3 {
+    font-size: 30px;
+    letter-spacing: -0.05em;
+    margin: 0 0 70px;
+    text-transform: capitalize;
+  }
+
+  .ticket {
+    background: #d8d7ce;
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: minmax(240px, 0.42fr) minmax(0, 1fr);
+  }
+
+  .ticket__stub {
+    background: var(--signal);
+    border-right: 2px dashed var(--ink);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 620px;
+    padding: 32px;
+  }
+
+  .ticket__stub span {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+  }
+
+  .ticket__stub strong {
+    font-size: clamp(100px, 16vw, 250px);
+    letter-spacing: -0.12em;
+    line-height: 0.72;
+    writing-mode: vertical-rl;
+  }
+
+  .ticket__copy {
+    align-self: center;
+    padding: clamp(52px, 8vw, 120px);
+  }
+
+  .ticket__copy ul {
+    border-top: 1px solid var(--ink);
+    list-style: none;
+    margin: 34px 0 0;
+    padding: 0;
+  }
+
+  .ticket__copy li {
+    border-bottom: 1px solid var(--ink);
+    font-size: 14px;
+    padding: 13px 0;
+  }
+
+  .text-link {
+    align-self: center;
+    color: var(--ink);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .sources ol {
+    border-top: 1px solid var(--ink);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .sources li {
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .sources a {
+    color: var(--ink);
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    padding: 18px 0;
+    text-decoration: none;
+  }
+
+  .sources a:hover strong {
+    text-decoration: underline;
+  }
+
+  .sources span {
+    color: #5f5e58;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  .p25-footer {
+    align-items: center;
+    background: var(--ink);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    padding: 28px clamp(18px, 5vw, 78px);
+  }
+
+  .p25-footer > div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .p25-footer strong {
+    color: var(--signal);
+  }
+
+  .p25-footer span {
+    color: #aaa9a2;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    margin-top: 5px;
+    text-transform: uppercase;
+  }
+
+  .p25-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+
+  @media (max-width: 980px) {
+    .hero {
+      grid-template-columns: 0.8fr 1.2fr;
+    }
+
+    .hero__five {
+      border-left: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
+      grid-column: 1 / -1;
+      padding-bottom: 0;
+    }
+
+    .hero__five li {
+      grid-template-columns: 34px 1fr auto;
+    }
+
+    .opening,
+    .method,
+    .sources {
+      grid-template-columns: 1fr;
+    }
+
+    .week__grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 680px) {
+    .mast {
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .mast__nav {
+      gap: 10px 14px;
+      justify-content: flex-end;
+    }
+
+    .mast__nav a:nth-child(2),
+    .mast__nav a:nth-child(4) {
+      display: none;
+    }
+
+    .hero {
+      display: block;
+      min-height: 0;
+    }
+
+    .hero__number {
+      font-size: 72vw;
+      height: 52vw;
+      line-height: 0.7;
+      padding-top: 32px;
+    }
+
+    .hero__copy {
+      padding: 42px 18px 52px;
+    }
+
+    .hero h1 {
+      font-size: 21vw;
+    }
+
+    .hero__five {
+      padding: 0;
+    }
+
+    .ticker {
+      justify-content: flex-start;
+    }
+
+    .opening,
+    .method,
+    .week,
+    .sources {
+      gap: 28px;
+      padding: 58px 18px;
+    }
+
+    .opening h2,
+    .method h2,
+    .week h2,
+    .sources h2,
+    .ticket h2 {
+      font-size: 13vw;
+    }
+
+    .board-shell {
+      padding: 56px 10px;
+    }
+
+    .board-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .filters {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .filter {
+      flex: 0 0 auto;
+    }
+
+    .team article {
+      gap: 14px;
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      padding: 20px 10px 20px 19px;
+    }
+
+    .team__rank span {
+      font-size: 42px;
+    }
+
+    .team__identity h3 {
+      font-size: 33px;
+    }
+
+    .team__reason {
+      font-size: 14px;
+    }
+
+    .pin {
+      min-width: 42px;
+      padding: 0 8px;
+    }
+
+    .pin [data-pin-label] {
+      display: none;
+    }
+
+    .receipts {
+      grid-column: 1 / 4;
+    }
+
+    .receipts__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .method__grid,
+    .week__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .week__grid article {
+      min-height: 160px;
+    }
+
+    .week__grid h3 {
+      margin-bottom: 42px;
+    }
+
+    .ticket {
+      grid-template-columns: 1fr;
+    }
+
+    .ticket__stub {
+      border-bottom: 2px dashed var(--ink);
+      border-right: 0;
+      flex-direction: row;
+      min-height: 150px;
+    }
+
+    .ticket__stub strong {
+      font-size: 28vw;
+      writing-mode: horizontal-tb;
+    }
+
+    .ticket__copy {
+      padding: 58px 18px;
+    }
+
+    .sources a,
+    .p25-footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .sources span {
+      text-align: left;
+    }
+
+    .p25-footer {
+      gap: 24px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(html) {
+      scroll-behavior: auto;
+    }
+  }
+</style>

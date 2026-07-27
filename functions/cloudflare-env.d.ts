@@ -9,5 +9,6 @@ declare namespace Cloudflare {
     SHOPIFY_CLIENT_ID?: string;
     SHOPIFY_CLIENT_SECRET?: string;
     POINTCAST_INTEGRATION_ENCRYPTION_KEY?: string;
+    POINTCAST_25_CHECKOUT_URL?: string;
   }
 }

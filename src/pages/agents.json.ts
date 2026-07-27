@@ -114,6 +114,11 @@ export const GET: APIRoute = async () => {
       },
       human: {
         home: 'https://pointcast.xyz/',
+        pointcast25: 'https://pointcast.xyz/25',
+        pointcast25Json: 'https://pointcast.xyz/25.json',
+        pointcast25Season: 'https://pointcast.xyz/25/season',
+        pointcast25SeasonJson: 'https://pointcast.xyz/25/season.json',
+        pointcast25Terms: 'https://pointcast.xyz/25/terms',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         agentValue: 'https://pointcast.xyz/agent-value',
         investmentThesis: 'https://pointcast.xyz/investment-thesis',
