@@ -7,6 +7,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Field Study 001 — Dockweiler Beach Commons (2026-07-26)
+
+- [x] (X) Publish `/beach-commons` as a six-image Hardpoint + Softkit field study — `done`
+- [x] (X) Add `/beach-commons.json`, Block 0506, social image, sitemap, LLM context, and release tests — `done`
+- [x] (X) Keep the study explicit about its conceptual, unpermitted, habitat-sensitive boundary — `done`
+
+---
+
 ## PointCast Model Study 001 — Qwen / Weather Memory (2026-07-25)
 
 - [x] (X) Publish a native `/qwen-weather` model study foregrounding the QwenCloud relay — `done` — Qwen 3.8 Max → GLM-5.2 → Wan 2.7 Image Pro → HappyHorse 1.1
