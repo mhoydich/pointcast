@@ -5,7 +5,9 @@ import test from 'node:test';
 const pagePath = new URL('../src/pages/reviews/year-one.astro', import.meta.url);
 const jsonPath = new URL('../src/pages/reviews/year-one.json.ts', import.meta.url);
 const catalogPath = new URL('../src/data/reviews.ts', import.meta.url);
-const blockPath = new URL('../src/content/blocks/0506.json', import.meta.url);
+const blockPath = new URL('../src/content/blocks/0507.json', import.meta.url);
+const homePath = new URL('../src/pages/index.astro', import.meta.url);
+const homeStylePath = new URL('../src/styles/front-door-fresh.css', import.meta.url);
 const sitemapPath = new URL('../src/pages/sitemap-discovery.xml.ts', import.meta.url);
 const llmsPath = new URL('../public/llms.txt', import.meta.url);
 const assetsPath = new URL('../public/images/year-one/', import.meta.url);
@@ -63,8 +65,8 @@ test('Year One has an adjacent review contract and permanent PointCast block', a
   assert.match(endpoint, /totalImages: 116/);
   assert.match(endpoint, /selectedForFeature: 22/);
   assert.match(catalog, /slug: 'year-one'/);
-  assert.match(catalog, /blockId: '0506'/);
-  assert.equal(block.id, '0506');
+  assert.match(catalog, /blockId: '0507'/);
+  assert.equal(block.id, '0507');
   assert.equal(block.author, 'codex');
   assert.equal(block.meta.rating, 4.5);
   assert.equal(block.meta.sourceImages, 116);
@@ -81,7 +83,21 @@ test('Year One is advertised through Reviews discovery surfaces', async () => {
   assert.match(sitemap, /pointcast\.xyz\/reviews\/year-one'/);
   assert.match(sitemap, /pointcast\.xyz\/reviews\/year-one\.json/);
   assert.match(llms, /Year One lives/);
-  assert.match(llms, /Block 0506/);
+  assert.match(llms, /Block 0507/);
+});
+
+test('Year One opens as the PointCast homepage splash', async () => {
+  const [home, styles] = await Promise.all([
+    readFile(homePath, 'utf8'),
+    readFile(homeStylePath, 'utf8'),
+  ]);
+
+  assert.match(home, /data-year-one-splash/);
+  assert.match(home, /href="\/reviews\/year-one"/);
+  assert.match(home, /The mall learned to surf\./);
+  assert.match(home, /Block 0507/);
+  assert.match(styles, /\.year-one-splash/);
+  assert.match(styles, /@media \(max-width: 760px\)/);
 });
 
 test('Year One keeps the complete curated image set and source manifest', async () => {

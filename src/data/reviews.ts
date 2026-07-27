@@ -46,7 +46,7 @@ export const reviews: PointCastReview[] = [
     jsonUrl: '/reviews/year-one.json',
     experienceUrl: '/reviews/year-one',
     standaloneUrl: 'https://pointcast.xyz/reviews/year-one',
-    blockId: '0506',
+    blockId: '0507',
     status: 'published',
     tags: ['art', 'editorial', 'objects', 'Midjourney', 'easy reader'],
   },

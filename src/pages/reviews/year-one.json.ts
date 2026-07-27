@@ -83,7 +83,7 @@ const review = {
   sourceDisclosure:
     'All art in the feature was selected from the 116 PNG files supplied by Michael Hoydich in Archive 3.zip. The PointCast feature uses web-optimized derivatives and preserves the source filenames in the asset manifest.',
   companions: {
-    block: `${base}/b/0506`,
+    block: `${base}/b/0507`,
     reviews: `${base}/reviews`,
     catalog: `${base}/reviews.json`,
     socialImage: `${base}/images/year-one/year-one-og.jpg`,
