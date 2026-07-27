@@ -1,28 +1,28 @@
 import type { APIRoute } from 'astro';
 import {
-  BEACH_COMMONS_V2,
-  BEACH_COMMONS_V2_PLATES,
-} from '../../lib/beach-commons-v2';
+  BEACH_COMMONS_V3,
+  BEACH_COMMONS_V3_PLATES,
+} from '../../lib/beach-commons-v3';
 
 export const GET: APIRoute = () =>
   new Response(
     JSON.stringify(
       {
-        ...BEACH_COMMONS_V2,
-        plates: BEACH_COMMONS_V2_PLATES.map((plate) => ({
+        ...BEACH_COMMONS_V3,
+        plates: BEACH_COMMONS_V3_PLATES.map((plate) => ({
           ...plate,
-          image: new URL(plate.image, BEACH_COMMONS_V2.url).href,
+          image: new URL(plate.image, BEACH_COMMONS_V3.url).href,
         })),
         related: [
           {
-            title: 'Beach Commons V1 — Hardpoint + Softkit',
-            url: BEACH_COMMONS_V2.previousEdition.url,
+            title: 'Beach Commons V2 — Superstructures + Living Games',
+            url: BEACH_COMMONS_V3.previousEdition.url,
             relation: 'previous field-study edition',
           },
           {
-            title: 'Beach Commons V3 — Flash Bakery + Palm Loom',
-            url: BEACH_COMMONS_V2.nextEdition.url,
-            relation: 'next field-study edition',
+            title: 'The Maximum Beach — PointCast Reviews',
+            url: BEACH_COMMONS_V3.reviewUrl,
+            relation: 'companion unofficial magazine feature',
           },
           {
             title: 'Dockweiler Beach Fire Pits',
@@ -49,7 +49,7 @@ export const GET: APIRoute = () =>
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'public, max-age=300, s-maxage=3600',
         'Access-Control-Allow-Origin': '*',
-        Link: '<https://pointcast.xyz/beach-commons/v2>; rel="alternate"; type="text/html"',
+        Link: '<https://pointcast.xyz/beach-commons/v3>; rel="alternate"; type="text/html"',
       },
     },
   );

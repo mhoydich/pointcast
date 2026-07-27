@@ -7,7 +7,7 @@ const catalog = {
   name: 'PointCast Reviews',
   url: 'https://pointcast.xyz/reviews',
   description:
-    'Independent reviews of art software, small web products, listening tools, and interfaces worth living with.',
+    'Independent reviews of art software, small web products, speculative experiences, listening tools, and interfaces worth living with.',
   method: [
     'Use the released product on real desktop and mobile viewports.',
     'Preserve screenshots from the tested build.',

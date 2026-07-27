@@ -7,6 +7,15 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Field Study 003 — Beach Commons V3 (2026-07-27)
+
+- [x] (X) Generate and verify eight Flash Bakery + Palm Loom architectural plates — `done`
+- [x] (X) Publish `/beach-commons/v3` with bakery, weaving, dough relay, shade games, modest energy, food safety, cleanup, and wildlife-distance systems — `done`
+- [x] (X) Publish `/reviews/beach-commons-v3` as The Maximum Beach, an original unofficial glossy lifestyle issue with an explicit no-affiliation boundary — `done`
+- [x] (X) Add both JSON companions, Block 0509, social imagery, edition navigation, Reviews discovery, sitemap, LLM context, and release tests — `done`
+
+---
+
 ## PointCast Field Study 002 — Beach Commons V2 (2026-07-26)
 
 - [x] (X) Generate and verify eight Superstructures + Living Games architectural plates — `done`

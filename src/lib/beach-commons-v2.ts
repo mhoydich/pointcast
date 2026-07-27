@@ -26,6 +26,11 @@ export const BEACH_COMMONS_V2 = {
     url: 'https://pointcast.xyz/beach-commons',
     jsonUrl: 'https://pointcast.xyz/beach-commons.json',
   },
+  nextEdition: {
+    title: 'Beach Commons V3 — Flash Bakery + Palm Loom',
+    url: 'https://pointcast.xyz/beach-commons/v3',
+    jsonUrl: 'https://pointcast.xyz/beach-commons/v3.json',
+  },
   location: {
     name: 'Dockweiler State Beach / El Segundo coast',
     region: 'Los Angeles County, California',
