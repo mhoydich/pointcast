@@ -40,6 +40,10 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/qwen-good-intelligence.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/sunset-switchboard', 'weekly', '0.92'],
   ['https://pointcast.xyz/sunset-switchboard.json', 'weekly', '0.88'],
+  ['https://pointcast.xyz/super-follow', 'daily', '0.94'],
+  ['https://pointcast.xyz/super-follow.json', 'daily', '0.9'],
+  ['https://pointcast.xyz/super-follow.feed.json', 'daily', '0.88'],
+  ['https://pointcast.xyz/super-follow.xml', 'daily', '0.86'],
   ...afterimageExamples.flatMap((example) => [
     [`https://pointcast.xyz/afterimage/${example.slug}`, 'weekly', '0.82'] as SitemapEntry,
     [`https://pointcast.xyz/afterimage/${example.slug}.json`, 'weekly', '0.78'] as SitemapEntry,
