@@ -9,6 +9,11 @@ export const GET: APIRoute = async () => {
     $schema: 'https://pointcast.xyz/for-agents',
     generatedAt: new Date().toISOString(),
     ...NEXT_SPRINT,
+    representations: {
+      html: NEXT_SPRINT.human,
+      json: NEXT_SPRINT.json,
+      markdown: 'https://pointcast.xyz/next-sprint.md',
+    },
     caveats: [
       'Planning and sprint coordination only.',
       'Generated images must be copied into public project assets before any page references them.',
