@@ -38,10 +38,12 @@ test('signal tuner retains reduced-motion and mobile treatments', () => {
   assert.match(styleSource, /fresh-signal-tuner__presets/);
 });
 
-test('front door keeps the Qwen study compact and makes Spotify authorization findable', () => {
+test('front door makes Spotify authorization findable and keeps the current field edition bright', () => {
   assert.match(indexSource, /href="\/auth#spotify"[^>]*>Spotify auth<\/a>/);
   assert.match(indexSource, /<SuperAuthRibbon \/>/);
-  assert.match(indexSource, /fresh-qwen-feature__media/);
-  assert.match(indexSource, /Open the model study/);
-  assert.match(styleSource, /grid-template-areas:[\s\S]*"topline media"/);
+  assert.match(indexSource, /fresh-field-card--tone/);
+  assert.match(indexSource, /fresh-field-card--beach/);
+  assert.match(indexSource, /Spotify broadcast/);
+  assert.match(styleSource, /\.fresh-field-card--tone/);
+  assert.match(styleSource, /\.fresh-field-card--beach/);
 });

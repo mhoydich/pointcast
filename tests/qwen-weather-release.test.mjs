@@ -6,7 +6,7 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const fileStat = (path) => stat(new URL(path, root));
 
-test('Qwen Weather ships as a native human, machine, Block, homepage, and ad release', async () => {
+test('Qwen Weather ships as a native human, machine, Block, and ad release without homepage promotion', async () => {
   const [page, jsonRoute, blockText, home, ads, video, poster, still] = await Promise.all([
     read('src/pages/qwen-weather.astro'),
     read('src/pages/qwen-weather.json.ts'),
@@ -32,8 +32,8 @@ test('Qwen Weather ships as a native human, machine, Block, homepage, and ad rel
   assert.equal(block.type, 'WATCH');
   assert.equal(block.meta.provider, 'QwenCloud');
   assert.equal(block.meta.models.length, 4);
-  assert.match(home, /fresh-qwen-feature/);
-  assert.match(home, /One forecast\.<br \/>Four model minds\./);
+  assert.doesNotMatch(home, /fresh-qwen-feature/);
+  assert.doesNotMatch(home, /One forecast\.<br \/>Four model minds\./);
   assert.match(ads, /PC-QWEN-WEATHER-2026/);
   assert.match(ads, /PC-QWEN-WEATHER-001/);
   assert.ok(video.size > 1_000_000);
@@ -64,7 +64,7 @@ test('Qwen Weather keeps credentials and live inference outside PointCast', asyn
   assert.match(stillRoute, /Content-Type': 'image\/jpeg/);
 });
 
-test('Qwen Silver Letter ships as a regional human, machine, homepage, and discovery study', async () => {
+test('Qwen Silver Letter ships as a regional human, machine, and discovery study without homepage promotion', async () => {
   const [page, jsonRoute, home, llms, llmsFull, sitemap, imageRoute, poster] =
     await Promise.all([
       read('src/pages/qwen-silver-letter.astro'),
@@ -83,8 +83,8 @@ test('Qwen Silver Letter ships as a regional human, machine, homepage, and disco
   assert.equal((page.match(/{ key: '[^']+'/g) ?? []).length, 4);
   assert.match(jsonRoute, /PC-QWEN-SILVER-LETTER-2026/);
   assert.match(jsonRoute, /staged_pending_current_plan_entitlement/);
-  assert.match(home, /fresh-qwen-followup/);
-  assert.match(home, /QWEN MODEL STUDY 002/);
+  assert.doesNotMatch(home, /fresh-qwen-followup/);
+  assert.doesNotMatch(home, /QWEN MODEL STUDY 002/);
   assert.match(llms, /pointcast\.xyz\/qwen-silver-letter/);
   assert.match(llmsFull, /Qwen model-study series/);
   assert.match(sitemap, /pointcast\.xyz\/qwen-silver-letter/);
@@ -108,7 +108,7 @@ test('Qwen Silver Letter keeps its PointCast edition local and its model boundar
   assert.match(jsonRoute, /workspaceAccess: 'owner-only'/);
 });
 
-test('Qwen Good Intelligence ships as a human, machine, homepage, and discovery study', async () => {
+test('Qwen Good Intelligence ships as a human, machine, and discovery study without homepage promotion', async () => {
   const [page, jsonRoute, home, llms, llmsFull, sitemap, imageRoute, poster] =
     await Promise.all([
       read('src/pages/qwen-good-intelligence.astro'),
@@ -129,8 +129,8 @@ test('Qwen Good Intelligence ships as a human, machine, homepage, and discovery 
   assert.match(page, /needs\.flatMap/);
   assert.match(jsonRoute, /PC-QWEN-GOOD-INTELLIGENCE-2026/);
   assert.match(jsonRoute, /staged_pending_current_plan_entitlement/);
-  assert.match(home, /QWEN MODEL STUDY 003/);
-  assert.match(home, /fresh-qwen-followup--good/);
+  assert.doesNotMatch(home, /QWEN MODEL STUDY 003/);
+  assert.doesNotMatch(home, /fresh-qwen-followup--good/);
   assert.match(llms, /pointcast\.xyz\/qwen-good-intelligence/);
   assert.match(llmsFull, /Good Intelligence Dispatch/);
   assert.match(sitemap, /pointcast\.xyz\/qwen-good-intelligence/);
