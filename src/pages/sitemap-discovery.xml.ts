@@ -147,6 +147,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/routes', 'weekly', '0.7'],
   ['https://pointcast.xyz/builders', 'weekly', '0.7'],
   ['https://pointcast.xyz/civic', 'weekly', '0.7'],
+  ['https://pointcast.xyz/digital-pets', 'weekly', '0.96'],
+  ['https://pointcast.xyz/digital-pets.json', 'weekly', '0.92'],
   ['https://pointcast.xyz/pet', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets.json', 'weekly', '0.7'],

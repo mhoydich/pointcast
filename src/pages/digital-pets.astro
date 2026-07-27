@@ -1,0 +1,487 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  BOOK_CHAPTERS,
+  BOOK_CREDITS,
+  BOOK_META,
+  BOOK_SOURCES,
+  MIDJOURNEY_SPACERS,
+  sourceById,
+} from '../lib/digital-pets-book';
+import '../styles/digital-pets-book.css';
+
+const bookJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Book',
+  '@id': 'https://pointcast.xyz/digital-pets#book',
+  name: BOOK_META.title,
+  alternateName: `${BOOK_META.title}: ${BOOK_META.subtitle}`,
+  description: BOOK_META.description,
+  url: `https://pointcast.xyz${BOOK_META.route}`,
+  image: 'https://pointcast.xyz/images/digital-pets/plate-01-cover.webp',
+  inLanguage: 'en-US',
+  datePublished: BOOK_META.publishedAt,
+  bookFormat: 'https://schema.org/EBook',
+  numberOfPages: 12,
+  author: [
+    {
+      '@type': 'Person',
+      name: 'Michael Hoydich',
+      url: 'https://pointcast.xyz/about',
+      description: 'Originator, editor, and creative director.',
+    },
+    {
+      '@type': 'Organization',
+      name: 'OpenAI Codex',
+      url: 'https://openai.com/codex/',
+      description: 'Manuscript, research, visual system, and implementation collaborator.',
+    },
+  ],
+  publisher: {
+    '@type': 'Organization',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+  isAccessibleForFree: true,
+  license: 'https://pointcast.xyz/terms',
+  mainEntityOfPage: `https://pointcast.xyz${BOOK_META.route}`,
+  encoding: {
+    '@type': 'MediaObject',
+    contentUrl: `https://pointcast.xyz${BOOK_META.jsonRoute}`,
+    encodingFormat: 'application/json',
+  },
+  citation: BOOK_SOURCES.map((source) => source.url),
+};
+---
+
+<BaseLayout
+  title={BOOK_META.title}
+  description={BOOK_META.description}
+  image="/images/og/b/0514.png"
+  hideNav={true}
+>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(bookJsonLd)} />
+
+  <article class="pet-book" data-pet-book>
+    <div class="pet-progress" aria-hidden="true"><span data-pet-progress></span></div>
+
+    <header class="pet-masthead">
+      <a class="pet-masthead__brand" href="/">PointCast</a>
+      <span class="pet-masthead__center" data-pet-current>Future Book · First Edition</span>
+      <nav class="pet-masthead__links" aria-label="Book utilities">
+        <a href="#contents">Contents</a>
+        <a href={BOOK_META.jsonRoute}>JSON</a>
+        <a href="#credits">Credits</a>
+      </nav>
+    </header>
+
+    <section class="pet-hero" aria-labelledby="pet-book-title">
+      <div class="pet-hero__copy">
+        <div>
+          <p class="pet-kicker">PointCast Future Book 001 · Block {BOOK_META.blockId}</p>
+          <h1 id="pet-book-title">The Animal <em>After the Internet</em></h1>
+          <p class="pet-hero__dek">{BOOK_META.subtitle}.</p>
+        </div>
+        <div class="pet-hero__footer">
+          <span>Originated + edited by Michael Hoydich</span>
+          <span>Written + built with Codex / OpenAI</span>
+          <span>{BOOK_META.readingTime} · Twelve positions</span>
+        </div>
+      </div>
+      <figure class="pet-hero__image">
+        <img
+          src="/images/digital-pets/plate-01-cover.webp"
+          alt="A soft bone-colored digital creature with asymmetrical persimmon ears and a single amber aperture in a cobalt room"
+          width="1024"
+          height="1536"
+          loading="eager"
+          fetchpriority="high"
+        />
+        <figcaption>
+          <span>PLATE 01 / A CREATURE ARRIVES</span>
+          <span>OpenAI image generation · PointCast direction</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="pet-premise" aria-labelledby="pet-premise-title">
+      <div>
+        <p class="pet-section-label">The question underneath every chapter</p>
+        <h2 id="pet-premise-title">What should a person own in an AI world?</h2>
+      </div>
+      <div class="pet-premise__copy">
+        <p>
+          The next great AI product will not be the most obedient thing in the
+          room. It will be the thing somebody notices when it is missing.
+        </p>
+        <p>
+          This book argues for a digital creature with a body worth repairing,
+          a personality that survives Wi‑Fi, a memory its household can carry,
+          and a life no subscription can revoke. It treats death as a product
+          requirement, hardware as publishing, and care as something that
+          leaves marks.
+        </p>
+        <p class="pet-premise__note">
+          Editorial disclosure: Michael Hoydich originated and locked the
+          twelve positions. Codex / OpenAI developed this first-edition
+          manuscript, research ledger, visual system, and site. It is a
+          transparent collaboration—not an undisclosed imitation of Michael’s
+          reviewed prose voice.
+        </p>
+      </div>
+    </section>
+
+    <nav class="pet-toc" id="contents" aria-labelledby="pet-toc-title">
+      <div class="pet-toc__head">
+        <div>
+          <p class="pet-section-label">Six weeks · Two positions each</p>
+          <h2 id="pet-toc-title">Contents</h2>
+        </div>
+        <p>
+          Read straight through or enter where the argument catches. The
+          chapters accumulate: body becomes architecture, architecture becomes
+          ownership, and ownership becomes culture.
+        </p>
+      </div>
+      <ol>
+        {BOOK_CHAPTERS.map((chapter) => (
+          <li>
+            <a href={`#${chapter.slug}`}>
+              <span class="pet-toc__number">{String(chapter.number).padStart(2, '0')}</span>
+              <strong>{chapter.title}</strong>
+              <small>Week {chapter.week}</small>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+
+    {
+      BOOK_CHAPTERS.map((chapter) => {
+        const spacer = MIDJOURNEY_SPACERS.find((candidate) => candidate.after === chapter.number);
+        const chapterSources = chapter.sources
+          .map((sourceId) => sourceById(sourceId))
+          .filter(Boolean);
+
+        return (
+          <>
+            <section
+              class="pet-chapter"
+              id={chapter.slug}
+              data-pet-chapter
+              data-pet-title={`${String(chapter.number).padStart(2, '0')} · ${chapter.title}`}
+              aria-labelledby={`${chapter.slug}-title`}
+            >
+              <header class="pet-chapter__head">
+                <span class="pet-chapter__number" aria-hidden="true">
+                  {String(chapter.number).padStart(2, '0')}
+                </span>
+                <div>
+                  <div class="pet-chapter__meta">
+                    <span>Week {chapter.week}</span>
+                    <span>Position {String(chapter.number).padStart(2, '0')} / 12</span>
+                  </div>
+                  <h2 id={`${chapter.slug}-title`}>{chapter.title}</h2>
+                  <p class="pet-chapter__claim">{chapter.claim}</p>
+                </div>
+              </header>
+
+              <div class="pet-chapter__body">
+                {chapter.paragraphs.map((paragraph, paragraphIndex) => (
+                  <>
+                    <p>{paragraph}</p>
+                    {paragraphIndex === 2 && chapter.code && (
+                      <aside class="pet-code" aria-label={chapter.code.label}>
+                        <div class="pet-code__bar">
+                          <span>{chapter.code.label}</span>
+                          <span>PointCast proposal / not a product claim</span>
+                        </div>
+                        <pre><code>{chapter.code.value}</code></pre>
+                      </aside>
+                    )}
+                    {paragraphIndex === 3 && chapter.plate && (
+                      <figure class="pet-plate">
+                        <img
+                          src={chapter.plate.src}
+                          alt={chapter.plate.alt}
+                          width="1024"
+                          height="1536"
+                          loading="lazy"
+                        />
+                        <figcaption>{chapter.plate.caption}</figcaption>
+                      </figure>
+                    )}
+                    {paragraphIndex === 4 && (
+                      <blockquote class="pet-pullquote">{chapter.pullQuote}</blockquote>
+                    )}
+                  </>
+                ))}
+              </div>
+
+              <footer class="pet-source-list">
+                <span>Evidence in this chapter</span>
+                {chapterSources.map((source) => source && (
+                  <a href={source.url} rel="external noreferrer">
+                    {BOOK_SOURCES.findIndex((candidate) => candidate.id === source.id) + 1}. {source.publisher}
+                  </a>
+                ))}
+              </footer>
+            </section>
+
+            {chapter.number === 2 && (
+              <section class="pet-chart" aria-labelledby="pet-spec-title">
+                <div class="pet-chart__head">
+                  <div>
+                    <p class="pet-section-label">Figure 01 · Two physical grammars</p>
+                    <h2 id="pet-spec-title">A body changes the verb.</h2>
+                  </div>
+                  <p>
+                    aibo walks and performs across a room. Moflin is held.
+                    Mechanism count does not rank attachment; it reveals the
+                    kind of relationship the hardware is built to invite.
+                  </p>
+                </div>
+                <div class="pet-spec-grid" role="img" aria-label="Comparison of Sony aibo and Casio Moflin hardware specifications">
+                  <div class="pet-spec">
+                    <span class="pet-spec__label">Axes / motion</span>
+                    <div class="pet-spec__pair">
+                      <div><span>aibo</span><span class="pet-spec__bar"><i style="width:100%"></i></span><strong>22</strong></div>
+                      <div><span>Moflin</span><span class="pet-spec__bar"><i style="width:9%"></i></span><strong>2</strong></div>
+                    </div>
+                  </div>
+                  <div class="pet-spec">
+                    <span class="pet-spec__label">Approximate weight</span>
+                    <div class="pet-spec__pair">
+                      <div><span>aibo</span><span class="pet-spec__bar"><i style="width:100%"></i></span><strong>2.2 kg</strong></div>
+                      <div><span>Moflin</span><span class="pet-spec__bar"><i style="width:12%"></i></span><strong>260 g</strong></div>
+                    </div>
+                  </div>
+                  <div class="pet-spec">
+                    <span class="pet-spec__label">Listed continuous use</span>
+                    <div class="pet-spec__pair">
+                      <div><span>aibo</span><span class="pet-spec__bar"><i style="width:40%"></i></span><strong>2 h</strong></div>
+                      <div><span>Moflin</span><span class="pet-spec__bar"><i style="width:100%"></i></span><strong>5 h</strong></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="pet-chart__caption">
+                  Source: official Sony ERS‑1000 launch specifications and
+                  official Casio Moflin US specifications. Bars are normalized
+                  within each measure; they do not imply an overall product score.
+                </p>
+              </section>
+            )}
+
+            {chapter.number === 6 && (
+              <section class="pet-chart pet-chart--amber" aria-labelledby="pet-stack-title">
+                <div class="pet-chart__head">
+                  <div>
+                    <p class="pet-section-label">Figure 02 · Identity architecture</p>
+                    <h2 id="pet-stack-title">Keep the soul-shaped parts close.</h2>
+                  </div>
+                  <p>
+                    Intelligence can be distributed without distributing
+                    custody. The most replaceable layer should be the most
+                    remote; the most personal layer should remain under the
+                    owner’s control.
+                  </p>
+                </div>
+                <div class="pet-stack">
+                  <article class="pet-stack__layer pet-stack__layer--core">
+                    <span>01 · On the body</span>
+                    <h3>Reflex + identity</h3>
+                    <p>Touch, movement, mute, temperament, familiar routines, and the local minimum of life.</p>
+                  </article>
+                  <article class="pet-stack__layer">
+                    <span>02 · In owner custody</span>
+                    <h3>Memory + lineage</h3>
+                    <p>Portable relationship history, consent records, readable exports, and sealed backups.</p>
+                  </article>
+                  <article class="pet-stack__layer">
+                    <span>03 · Replaceable service</span>
+                    <h3>Models + worlds</h3>
+                    <p>Language, expansive knowledge, live events, and authored environments that may change providers.</p>
+                  </article>
+                </div>
+                <p class="pet-chart__caption">
+                  PointCast proposed architecture. The diagram is a design
+                  position, not a description of one current commercial product.
+                </p>
+              </section>
+            )}
+
+            {chapter.number === 10 && (
+              <section class="pet-chart pet-chart--lilac" aria-labelledby="pet-study-title">
+                <div class="pet-chart__head">
+                  <div>
+                    <p class="pet-section-label">Figure 03 · Four years later</p>
+                    <h2 id="pet-study-title">The robot stayed.</h2>
+                  </div>
+                  <p>
+                    Long after a field study ended, keeping the object was the
+                    rule—not the exception. That persistence turns end-of-life
+                    from a support edge case into part of the main product.
+                  </p>
+                </div>
+                <div class="pet-family-study">
+                  <div class="pet-family-study__number">
+                    <strong>18</strong>
+                    <span>of 19 families still retained the robot</span>
+                  </div>
+                  <div>
+                    <div class="pet-dots" role="img" aria-label="Nineteen circles: eighteen filled, one empty">
+                      {Array.from({ length: 19 }).map(() => <span></span>)}
+                    </div>
+                    <p class="pet-family-study__copy">
+                      The qualitative follow-up describes attachment,
+                      personification, and the robot becoming a symbolic
+                      household member. Keeping is not the same as active use;
+                      that is exactly why storage, memorial, repair, and
+                      farewell require design.
+                    </p>
+                  </div>
+                </div>
+                <p class="pet-chart__caption">
+                  Source: “The robot that stayed,” Frontiers in Robotics and AI
+                  (2025), a follow-up with 19 families roughly four years after
+                  the original study.
+                </p>
+              </section>
+            )}
+
+            {spacer && (
+              <figure class="pet-spacer">
+                <img
+                  src={spacer.src}
+                  alt={spacer.alt}
+                  width="1456"
+                  height="1456"
+                  loading="lazy"
+                />
+                <figcaption>{spacer.caption}</figcaption>
+              </figure>
+            )}
+          </>
+        );
+      })
+    }
+
+    <section class="pet-sources" id="sources" aria-labelledby="pet-sources-title">
+      <div class="pet-sources__intro">
+        <div>
+          <p class="pet-section-label">Primary-source ledger · Accessed 27 July 2026</p>
+          <h2 id="pet-sources-title">Sources</h2>
+        </div>
+        <p>
+          Product specifications and current service terms come from
+          manufacturers. Regulation comes from the FTC and European Union.
+          Cultural and moral claims are grounded in original scholarship. The
+          argument—and every proposed spec—belongs to this book.
+        </p>
+      </div>
+      <ol>
+        {BOOK_SOURCES.map((source) => (
+          <li id={`source-${source.id}`}>
+            <a href={source.url} rel="external noreferrer">{source.label}</a>
+            <p>
+              <span>{source.publisher}</span>
+              {source.note}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="pet-credits" id="credits" aria-labelledby="pet-credits-title">
+      <p class="pet-section-label">A deliberately over-honest colophon</p>
+      <h2 id="pet-credits-title">Credits</h2>
+      <div class="pet-credits__grid">
+        {BOOK_CREDITS.map((credit) => (
+          <article class="pet-credit">
+            <span class="pet-credit__role">{credit.role}</span>
+            <h3>{credit.name}</h3>
+            <p>{credit.note}</p>
+          </article>
+        ))}
+        <article class="pet-credit">
+          <span class="pet-credit__role">Reader / final model</span>
+          <h3>You</h3>
+          <p>
+            Every claim remains provisional until a person reads, argues,
+            remembers, and decides what deserves to continue.
+          </p>
+        </article>
+      </div>
+      <div class="pet-credits__fun" aria-label="Additional production credits">
+        <p>Proofreader<br />The build system, with no bedside manner</p>
+        <p>Animals harmed<br />Zero · one fictional animal became mortal</p>
+        <p>Creature name<br />Intentionally unwritten · care gets first choice</p>
+        <p>Clouds depended on<br />Disclosed in architecture, never confused with a soul</p>
+        <p>Fur wrangler<br />CSS `object-fit`, performing above contract</p>
+        <p>Dedicated to<br />Every obsolete robot still sitting in a family closet</p>
+      </div>
+    </section>
+
+    <footer class="pet-colophon">
+      <span>
+        First digital edition · 27 July 2026 · El Segundo, California · {BOOK_META.words}
+      </span>
+      <nav aria-label="End matter links">
+        <a href="/b/0514">Block 0514</a>
+        <a href={BOOK_META.jsonRoute}>Book JSON</a>
+        <a href="/pets">PointCast Pets</a>
+        <a href="/pet">Meet the local pet</a>
+        <a href="#pet-book-title">Top ↑</a>
+      </nav>
+    </footer>
+  </article>
+
+  <script is:inline>
+    function mountPetBook() {
+      const book = document.querySelector('[data-pet-book]');
+      const progress = document.querySelector('[data-pet-progress]');
+      const current = document.querySelector('[data-pet-current]');
+      const chapters = Array.from(document.querySelectorAll('[data-pet-chapter]'));
+      if (!book || !progress || !current || chapters.length === 0) return;
+      if (book.dataset.petMounted === 'true') return;
+      book.dataset.petMounted = 'true';
+
+      const update = () => {
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0;
+        progress.style.width = `${ratio * 100}%`;
+
+        const marker = window.innerHeight * 0.33;
+        let active = chapters[0];
+        for (const chapter of chapters) {
+          if (chapter.getBoundingClientRect().top <= marker) active = chapter;
+        }
+        current.textContent = active.dataset.petTitle || 'Future Book · First Edition';
+      };
+
+      update();
+      window.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update, { passive: true });
+
+      const settleHash = () => {
+        const hash = window.location.hash.slice(1);
+        if (!hash) return;
+        const target = document.getElementById(decodeURIComponent(hash));
+        if (!target) return;
+        requestAnimationFrame(() => requestAnimationFrame(() => target.scrollIntoView({ block: 'start' })));
+      };
+
+      if (document.fonts?.ready) {
+        document.fonts.ready.then(settleHash);
+      } else {
+        settleHash();
+      }
+      window.addEventListener('load', settleHash, { once: true });
+      window.setTimeout(settleHash, 400);
+      window.setTimeout(settleHash, 1400);
+    }
+
+    document.addEventListener('astro:page-load', mountPetBook);
+    mountPetBook();
+  </script>
+</BaseLayout>
