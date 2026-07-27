@@ -22,6 +22,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (X) Create and verify three original golden-era magazine plates plus 12 real browser captures — `done`
 - [x] (X) Add `/drum-directory.json`, Drum navigation, arcade/press discovery, agent manifests, LLM context, tests, print behavior, and mobile QA — `done`
 
+## The Battle Record — Noun Battler Annual 2026 (2026-07-27)
+
+- [x] (X) Build `/noun-battler-annual` as an ESPN-urgent, 1970s-newspaper interactive magazine history — `done`
+- [x] (X) Reconstruct the checked-in lineage from the deterministic duel through the 30-v-30 league, broadcast complex, and Pacific 48 — `done`
+- [x] (X) Create and verify three original newspaper-sports plates plus the eight-gang scouting book and deterministic matchup lab — `done`
+- [x] (X) Add `/noun-battler-annual.json`, source-page links, agent/LLM discovery, tests, print behavior, and desktop/mobile QA — `done`
+- [ ] (MH) Approve the validated annual for merge and production publication — `waiting-on-mh`
+
 ---
 
 ## PointCast Field Study 004 — Beach Commons V4 (2026-07-27)
