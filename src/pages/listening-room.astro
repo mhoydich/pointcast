@@ -145,7 +145,7 @@ const jsonLd = {
           Metadata links open on Spotify.
         </p>
         <ol class="lr-seq-list" data-lr-seq-list>
-          <li class="lr-seq-empty mono">Load a playlist to see the sequence.</li>
+          <li class="lr-seq-empty mono">Press play. Tracks join the sequence as the room hears them.</li>
         </ol>
       </aside>
     </div>
@@ -283,6 +283,7 @@ const jsonLd = {
 
       var currentId = DEFAULT_ID;
       var currentTracks = [];
+      var discoveredTrackPositions = {};
       var currentPlayback = {
         playingUri: null,
         isPaused: true,
@@ -339,18 +340,25 @@ const jsonLd = {
         return 'run';
       }
 
-      function renderSequencePlaceholder() {
-        currentTracks = [];
-        if ($seqList) $seqList.innerHTML = '<li class="lr-seq-empty mono">Sequence appears when metadata is available.</li>';
+      function renderSequencePlaceholder(message) {
+        if (!$seqList || currentTracks.length) return;
+        $seqList.textContent = '';
+        var empty = document.createElement('li');
+        empty.className = 'lr-seq-empty mono';
+        empty.textContent = message || 'Press play. Tracks join the sequence as the room hears them.';
+        $seqList.appendChild(empty);
       }
 
       function renderSequence(tracks) {
         if (!$seqList) return;
         if (!tracks || !tracks.length) { renderSequencePlaceholder(); return; }
         currentTracks = tracks.slice();
+        discoveredTrackPositions = {};
         $seqList.innerHTML = '';
         var len = tracks.length;
         tracks.forEach(function (t, i) {
+          var spotifyIdMatch = String(t.spotifyUrl || '').match(/\/track\/([A-Za-z0-9]{22})/);
+          if (spotifyIdMatch) discoveredTrackPositions[spotifyIdMatch[1]] = i;
           var pos = i + 1;
           var label = sequenceLabel(pos, len);
           var li = document.createElement('li');
@@ -407,6 +415,53 @@ const jsonLd = {
         return '';
       }
 
+      function trackIdFromPlayingUri(playingUri) {
+        var match = String(playingUri || '').match(/^spotify:track:([A-Za-z0-9]{22})$/);
+        return match ? match[1] : null;
+      }
+
+      function discoverPlayingTrack(playingUri) {
+        var spotifyId = trackIdFromPlayingUri(playingUri);
+        if (!spotifyId || discoveredTrackPositions[spotifyId] !== undefined) return;
+
+        var position = currentTracks.length;
+        discoveredTrackPositions[spotifyId] = position;
+        currentTracks.push({
+          name: 'Track ' + String(position + 1),
+          artists: [],
+          durationMs: null,
+          spotifyUrl: 'https://open.spotify.com/track/' + spotifyId,
+        });
+        renderSequence(currentTracks);
+        renderPlayback();
+
+        fetch('/api/spotify/track?id=' + encodeURIComponent(spotifyId))
+          .then(function (res) {
+            if (!res.ok) throw new Error('track_metadata_unavailable');
+            return res.json();
+          })
+          .then(function (data) {
+            var track = data && data.track;
+            var trackPosition = discoveredTrackPositions[spotifyId];
+            if (!track || trackPosition === undefined || !currentTracks[trackPosition]) return;
+            currentTracks[trackPosition] = {
+              name: String(track.name || ('Track ' + String(trackPosition + 1))),
+              artists: Array.isArray(track.artists)
+                ? track.artists.map(function (artist) {
+                    return typeof artist === 'string' ? artist : String(artist && artist.name || '');
+                  }).filter(Boolean)
+                : [],
+              durationMs: typeof track.durationMs === 'number' ? track.durationMs : null,
+              spotifyUrl: String(track.spotifyUrl || ('https://open.spotify.com/track/' + spotifyId)),
+            };
+            renderSequence(currentTracks);
+            renderPlayback();
+          })
+          .catch(function () {
+            // The Spotify link and heard-order position remain useful without metadata.
+          });
+      }
+
       function renderPlayback() {
         if (!$playback) return;
         var stateLabel = currentPlayback.isBuffering
@@ -438,6 +493,7 @@ const jsonLd = {
             controller.addListener('playback_started', function (event) {
               currentPlayback.playingUri = event && event.data && event.data.playingURI || null;
               currentPlayback.isPaused = false;
+              discoverPlayingTrack(currentPlayback.playingUri);
               renderPlayback();
             });
             controller.addListener('playback_update', function (event) {
@@ -447,6 +503,7 @@ const jsonLd = {
               currentPlayback.isBuffering = !!data.isBuffering;
               currentPlayback.positionMs = Number(data.position) || 0;
               currentPlayback.durationMs = Number(data.duration) || 0;
+              discoverPlayingTrack(currentPlayback.playingUri);
               renderPlayback();
             });
           });
@@ -492,6 +549,7 @@ const jsonLd = {
         loadNotes(id);
         loadMarkedMoments(id);
         currentTracks = [];
+        discoveredTrackPositions = {};
         currentPlayback = {
           playingUri: null,
           isPaused: true,
@@ -524,7 +582,13 @@ const jsonLd = {
           })
           .then(function (data) {
             if (data && Array.isArray(data.tracks)) {
-              renderSequence(data.tracks);
+              if (data.tracks.length) {
+                renderSequence(data.tracks);
+              } else {
+                renderSequencePlaceholder(
+                  'Spotify limits full playlist contents. Press play—tracks join this desk as they are heard.'
+                );
+              }
             } else {
               renderSequencePlaceholder();
             }
