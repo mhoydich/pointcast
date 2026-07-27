@@ -38,6 +38,18 @@ function dailyNounId(): number {
   return seed % 1200;
 }
 const seedNounId = dailyNounId();
+
+/**
+ * Optional room key override. When provided, the cursor room connects to a
+ * specific room identity instead of deriving it from location.pathname.
+ * Used by the playlist room companion so different playlists get different
+ * presence/chat contexts even though they share the /listening-room path.
+ * All existing pages pass nothing and keep their pathname-based room key.
+ */
+interface Props {
+  roomKey?: string;
+}
+const { roomKey } = Astro.props;
 ---
 
 <div
@@ -46,6 +58,7 @@ const seedNounId = dailyNounId();
   aria-hidden="true"
   data-on="false"
   data-seed-noun={seedNounId}
+  data-room-key={roomKey || ''}
 >
   <!-- Your Noun cursor -->
   <div class="cr-cursor" id="cr-cursor" style="display:none;">
@@ -120,16 +133,22 @@ const seedNounId = dailyNounId();
     var peers = {};
 
     // ─── persistence ────────────────────────────────────────────
+    function chatStorageKey() {
+      var explicitRoomKey = ROOT.getAttribute('data-room-key');
+      return explicitRoomKey
+        ? CHAT_STORAGE + ':' + encodeURIComponent(explicitRoomKey).slice(0, 220)
+        : CHAT_STORAGE;
+    }
     function loadLog() {
       try {
-        var raw = sessionStorage.getItem(CHAT_STORAGE);
+        var raw = sessionStorage.getItem(chatStorageKey());
         if (!raw) return [];
         var p = JSON.parse(raw);
         return Array.isArray(p) ? p.slice(-MAX_LOG) : [];
       } catch (e) { return []; }
     }
     function saveLog(log) {
-      try { sessionStorage.setItem(CHAT_STORAGE, JSON.stringify(log.slice(-MAX_LOG))); } catch (e) {}
+      try { sessionStorage.setItem(chatStorageKey(), JSON.stringify(log.slice(-MAX_LOG))); } catch (e) {}
     }
     // Sprint 29 (Mike 2026-04-24: "yah have the cursor on by default"):
     // Room defaults to ON for first-time visitors. The stored value
@@ -360,7 +379,8 @@ const seedNounId = dailyNounId();
       var proto = location.protocol === 'https:' ? 'wss' : 'ws';
       var sid = state.sid || getSid();
       state.sid = sid;
-      var url = proto + '://' + location.host + '/api/room?url=' + encodeURIComponent(location.pathname) +
+      var roomKeyValue = ROOT.getAttribute('data-room-key') || location.pathname;
+      var url = proto + '://' + location.host + '/api/room?url=' + encodeURIComponent(roomKeyValue) +
                 '&sid=' + encodeURIComponent(sid) + '&kind=human';
       state.wsState = 'connecting';
       var ws;
@@ -396,6 +416,9 @@ const seedNounId = dailyNounId();
       });
 
       ws.addEventListener('close', function () {
+        // An intentionally replaced socket may close after its successor opens.
+        // Only the currently active socket is allowed to mutate connection state.
+        if (state.ws !== ws) return;
         state.wsState = 'closed';
         state.ws = null;
         if (state.pingTimer) { clearInterval(state.pingTimer); state.pingTimer = null; }
@@ -522,9 +545,7 @@ const seedNounId = dailyNounId();
         at: Date.now(),
         sid: (state.sid || '').slice(0, 8)
       };
-      // Mark seen so the server echo doesn't dupe.
-      var key = entry.sid + '|' + entry.at + '|' + entry.msg;
-      state.seenChatKeys[key] = 1;
+      // pushLocalLogEntry marks it seen before any server echo can arrive.
       pushLocalLogEntry(entry);
       renderLog();
       // Forward to server when connected. If offline, message stays local.
@@ -541,6 +562,19 @@ const seedNounId = dailyNounId();
     window.addEventListener('pc:room:chat', function (e) {
       var msg = e && e.detail && e.detail.msg;
       if (msg) submitChat(msg);
+    });
+    window.addEventListener('pc:room:key', function (e) {
+      var nextKey = String(e && e.detail && e.detail.key || '').trim().slice(0, 256);
+      if (!/^\/[A-Za-z0-9/_-]+$/.test(nextKey)) return;
+      if (ROOT.getAttribute('data-room-key') === nextKey) return;
+      ROOT.setAttribute('data-room-key', nextKey);
+      state.seenChatKeys = {};
+      if (state.on) {
+        closeSocket();
+        state.wsBackoffMs = 800;
+        openSocket();
+      }
+      renderLog();
     });
     window.addEventListener('pc:wallet-change', refreshMe);
 
