@@ -14,6 +14,12 @@ import networkMeshCommons from '../assets/campaigns/network-el-segundo-2026/mesh
 import holdersCutPreview from '../assets/campaigns/the-holders-cut-2026/public-preview.png';
 import localStarCommonsOg from '../assets/campaigns/local-star-commons-2026/commons-og.png';
 import qwenWeatherOrganism from '../assets/campaigns/qwen-weather-2026/weather-organism.jpg';
+import {
+  NOUN_BATTLER_ANNUAL_CAMPAIGN,
+  NOUN_BATTLER_PROMO_DISPATCHES,
+} from './noun-battler-annual-promotion';
+
+export { NOUN_BATTLER_ANNUAL_CAMPAIGN } from './noun-battler-annual-promotion';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
   '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
@@ -280,6 +286,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  ...NOUN_BATTLER_PROMO_DISPATCHES.map((dispatch) => ({
+    id: dispatch.id,
+    advertiser: NOUN_BATTLER_ANNUAL_CAMPAIGN.advertiser,
+    headline: dispatch.headline,
+    copy: dispatch.copy,
+    href: dispatch.href,
+    cta: dispatch.cta,
+    tone: dispatch.tone,
+    contexts: [...dispatch.contexts],
+    image: dispatch.image,
+    sourceTool: 'PointCast generator-made editorial plate',
+    campaign: NOUN_BATTLER_ANNUAL_CAMPAIGN.id,
+    seriesLabel: NOUN_BATTLER_ANNUAL_CAMPAIGN.label,
+    status: 'house' as const,
+  })),
   {
     id: 'PC-BEACH-COMMONS-V5-001',
     advertiser: 'PointCast Field Study',
@@ -844,7 +865,9 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     .map(({ ad }) => ad);
 
   const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
+  const isNounBattlerAnnualSurface = /^\/noun-battler-annual(?:\/|$)/.test(pathname);
   const isBeachCommonsV5Surface = /^\/beach-commons\/v5(?:\/|$)/.test(pathname);
+  const annualCreative = ranked.find((ad) => ad.campaign === NOUN_BATTLER_ANNUAL_CAMPAIGN.id);
   const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
@@ -853,6 +876,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     if (!universeCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
     const companionAds = ranked.filter((ad) => (
+      ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
+      &&
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
       && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
@@ -860,6 +885,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
     return [
+      isNounBattlerAnnualSurface ? undefined : annualCreative,
       isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
       universeCreative,
       networkCreative,
@@ -874,13 +900,21 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   if (!drumCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
   const companionAds = ranked.filter((ad) => (
+    ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
+    &&
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
     && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
     && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
-  return [drumCreative, networkCreative, commonsCreative, ...companionAds]
+  return [
+    isNounBattlerAnnualSurface ? undefined : annualCreative,
+    drumCreative,
+    networkCreative,
+    commonsCreative,
+    ...companionAds,
+  ]
     .filter((ad): ad is PointCastAd => Boolean(ad))
     .slice(0, cappedCount);
 }

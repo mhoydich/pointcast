@@ -7,6 +7,11 @@ import {
   NOUN_BATTLER_ROLES,
   NOUN_BATTLER_ROUTES,
 } from "../lib/noun-battler-annual";
+import {
+  NOUN_BATTLER_ANNUAL_CAMPAIGN,
+  NOUN_BATTLER_PROMO_DISPATCHES,
+  NOUN_BATTLER_PROMO_LINKS,
+} from "../lib/noun-battler-annual-promotion";
 
 export const GET: APIRoute = async () => {
   const meta = NOUN_BATTLER_ANNUAL_META;
@@ -35,6 +40,11 @@ export const GET: APIRoute = async () => {
         url: `https://pointcast.xyz${plate.path}`,
         alt: plate.alt,
       })),
+    },
+    promotion: {
+      campaign: NOUN_BATTLER_ANNUAL_CAMPAIGN,
+      dispatches: NOUN_BATTLER_PROMO_DISPATCHES,
+      links: NOUN_BATTLER_PROMO_LINKS,
     },
     history: NOUN_BATTLER_HISTORY.map((entry) => ({
       ...entry,

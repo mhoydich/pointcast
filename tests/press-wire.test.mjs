@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds fourteen product filings across every public kind', () => {
-  assert.equal(releases.length, 14);
+test('press wire seeds fifteen product filings across every public kind', () => {
+  assert.equal(releases.length, 15);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,21 @@ test('press wire seeds fourteen product filings across every public kind', () =>
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('The Battle Record filing promotes the annual without inventing official or wagered results', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0015');
+  assert.ok(release);
+  assert.equal(release.slug, 'noun-battler-annual-publishes-browser-league-history');
+  assert.match(release.body.join(' '), /Strike, Guard, and Focus/);
+  assert.match(release.body.join(' '), /eight gangs, fourteen league days/);
+  assert.match(release.body.join(' '), /not written into the browser-local league table/i);
+  assert.match(release.body.join(' '), /no odds, wagering, or betting product/i);
+  assert.match(release.body.join(' '), /first-party house campaign selected by page context/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/noun-battler-annual');
+  assert.equal(release.actionUrl, 'https://pointcast.xyz/noun-battler-annual#lab');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/noun-battler-annual/share'));
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/ads.json'));
 });
 
 test('Beach Commons V5 filing announces the study without implying a live institution or event', () => {
