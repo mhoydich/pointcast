@@ -29,6 +29,11 @@ export const BEACH_COMMONS_V3 = {
     url: 'https://pointcast.xyz/beach-commons/v2',
     jsonUrl: 'https://pointcast.xyz/beach-commons/v2.json',
   },
+  nextEdition: {
+    title: 'Beach Commons V4 — Sculpture Yard + Element Maxxing',
+    url: 'https://pointcast.xyz/beach-commons/v4',
+    jsonUrl: 'https://pointcast.xyz/beach-commons/v4.json',
+  },
   location: {
     name: 'Dockweiler State Beach / El Segundo coast',
     region: 'Los Angeles County, California',

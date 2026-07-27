@@ -7,6 +7,15 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Field Study 004 — Beach Commons V4 (2026-07-27)
+
+- [x] (X) Generate and verify eight Sculpture Yard + Element Maxxing field plates — `done`
+- [x] (X) Publish `/beach-commons/v4` with sun, moon, wind, rain, water, fire, stone, seasonal scores, and full-image navigation — `done`
+- [x] (X) Add `/beach-commons/v4.json`, Block 0511, social imagery, V3/V4 edition navigation, sitemap, LLM context, and release tests — `done`
+- [x] (X) Keep amplification, engineering, glare, water, fire, wildlife, access, habitat, weather, and permitting boundaries explicit — `done`
+
+---
+
 ## PointCast Field Study 003 — Beach Commons V3 (2026-07-27)
 
 - [x] (X) Generate and verify eight Flash Bakery + Palm Loom architectural plates — `done`
