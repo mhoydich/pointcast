@@ -11,7 +11,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
     read('src/layouts/BlockLayout.astro'),
   ]);
 
-  assert.match(home, /one live signal, one current feature, three clear doors, four current/i);
+  assert.match(home, /one live signal, one current feature, three clear doors, two field notes/i);
   assert.match(home, /showNetworkStrip=\{false\}/);
   assert.match(layout, /showNetworkStrip\?: boolean/);
   assert.match(layout, /\{showNetworkStrip && <NetworkFirst100Strip\s*\/>\}/);
@@ -31,6 +31,24 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/feed\.xml"/);
   assert.match(home, /href="\/agents\.json"/);
   assert.match(home, /href="\/for-agents"/);
+});
+
+test('the current field edition gives Tone Bloom and Beach Commons real homepage weight', async () => {
+  const [home, css] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/styles/front-door-fresh.css'),
+  ]);
+
+  assert.match(home, /Bells, beaches, rooms\./);
+  assert.match(home, /href="\/reviews\/tone-bloom"/);
+  assert.match(home, /href="\/beach-commons"/);
+  assert.match(home, /href="\/auth#spotify"/);
+  assert.match(home, /href="\/super-follow"/);
+  assert.match(home, /href="\/beach-commons\.json"/);
+  assert.doesNotMatch(home, /fresh-qwen/);
+  assert.doesNotMatch(home, /href="\/qwen-/);
+  assert.match(css, /\.fresh-field-grid \{/);
+  assert.match(css, /\.fresh-field-shelf \{/);
 });
 
 test('the front door has one reusable editorial freshness slot with a machine-readable twin', async () => {
