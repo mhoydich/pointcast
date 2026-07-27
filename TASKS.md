@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast 25 — Audience Desk 001 (2026-07-27)
+
+- [x] (X) Publish 25 permanent team case pages with adjacent JSON receipts — `done`
+- [x] (X) Build the five-team Disagreement Index against a clearly bounded ESPN FPI reference board — `done`
+- [x] (X) Open the preseason receipt book and immutable human Board 000 — `done`
+- [x] (X) Add homepage, sitemap, agent, LLM, season-ledger, social-card, and Block 0517 discovery — `done`
+- [x] (X) Validate the full generated site, repository suite, publishing audits, and responsive browser behavior — `done`
+- [x] (MH) Approve the audience desk for merge and production publication — `done` — Mike said “go”
+
+---
+
 ## PointCast Weekly 01 — The Future of the Library (2026-07-27)
 
 - [x] (X) Report the opening dispatch from eight official El Segundo Public Library sources while keeping interviews and in-person observation explicitly pending — `done`

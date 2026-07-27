@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
+import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
 import afterimageExamples from '../data/afterimage-examples.json';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
@@ -72,7 +73,16 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25.json', 'daily', '0.94'],
   ['https://pointcast.xyz/25/season', 'weekly', '0.96'],
   ['https://pointcast.xyz/25/season.json', 'weekly', '0.92'],
+  ['https://pointcast.xyz/25/disagreements', 'weekly', '0.98'],
+  ['https://pointcast.xyz/25/disagreements.json', 'weekly', '0.94'],
+  ['https://pointcast.xyz/25/receipts', 'weekly', '0.97'],
+  ['https://pointcast.xyz/25/receipts.json', 'weekly', '0.93'],
+  ['https://pointcast.xyz/25/boards/000', 'never', '0.92'],
   ['https://pointcast.xyz/25/boards/000.json', 'never', '0.88'],
+  ...POINTCAST_25_TEAMS.flatMap((team) => [
+    [`https://pointcast.xyz/25/teams/${team.slug}`, 'weekly', '0.9'] as SitemapEntry,
+    [`https://pointcast.xyz/25/teams/${team.slug}.json`, 'weekly', '0.82'] as SitemapEntry,
+  ]),
   ['https://pointcast.xyz/25/terms', 'monthly', '0.65'],
   ['https://pointcast.xyz/press', 'daily', '0.9'],
   ['https://pointcast.xyz/press.json', 'daily', '0.85'],
