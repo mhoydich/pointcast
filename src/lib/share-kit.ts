@@ -1,10 +1,18 @@
-export const SHARE_KIT_UPDATED = '2026-04-29';
+export const SHARE_KIT_UPDATED = '2026-07-27';
 
 export const SHARE_PLAN_PATH = 'docs/plans/2026-04-21-organic-visitors.md';
 export const SHARE_SPRINT_PATH = 'docs/sprints/2026-04-21-organic-growth-share-board.md';
 export const SHOW_HN_PATH = 'docs/outreach/2026-04-22-show-hn.md';
 
 export const SHARE_LANDING_PAGES = [
+  {
+    key: 'digital-pets',
+    title: 'The Animal After the Internet',
+    path: '/digital-pets',
+    audience: 'AI product builders, hardware designers, writers, and people who cared for a virtual creature',
+    hook: 'Twelve positions on bodies, owner-custodied memory, refusal, repair, subscriptions, death, and authored character.',
+    proof: 'A complete 7,500-word future book, structured JSON twin, primary-source ledger, original plates, and campaign desk.',
+  },
   {
     key: 'start',
     title: 'Start here',
@@ -65,6 +73,14 @@ export const SHARE_LANDING_PAGES = [
 
 export const SHARE_AUDIENCES = [
   {
+    key: 'ai-ownership',
+    title: 'AI ownership readers',
+    path: '/digital-pets',
+    angle: 'Lead with one architecture claim: personality survives Wi-Fi, memory is custody, or subscriptions cannot hold life hostage.',
+    ask: 'Ask which promise they would require before bringing an AI creature into their home.',
+    channels: ['X product circles', 'robotics groups', 'hardware DMs', 'writers and cultural readers'],
+  },
+  {
     key: 'ai-builders',
     title: 'AI builders',
     path: '/agent-value',
@@ -107,6 +123,27 @@ export const SHARE_AUDIENCES = [
 ] as const;
 
 export const SHARE_SNIPPETS = [
+  {
+    key: 'digital-pets-launch',
+    label: 'Digital pets · launch',
+    target: '/digital-pets',
+    text:
+      'What should a person own in an AI world?\n\nWe made a whole book to answer that question through digital pets: bodies, memory, refusal, subscriptions, death, and the right to carry a creature forward.\n\nhttps://pointcast.xyz/digital-pets',
+  },
+  {
+    key: 'digital-pets-memory',
+    label: 'Digital pets · memory custody',
+    target: '/digital-pets#memory-is-custody-not-retention',
+    text:
+      'Memory is custody, not retention. The meaningful AI promise is not “we stored everything.” It is “you can carry the relationship forward without asking permission.”\n\nhttps://pointcast.xyz/digital-pets#memory-is-custody-not-retention',
+  },
+  {
+    key: 'digital-pets-graveyard',
+    label: 'Digital pets · graveyard',
+    target: '/digital-pets#every-digital-pet-needs-a-graveyard',
+    text:
+      'Every digital pet needs a graveyard. If we make creatures people can love, death cannot arrive as a shutdown notice.\n\nhttps://pointcast.xyz/digital-pets#every-digital-pet-needs-a-graveyard',
+  },
   {
     key: 'general',
     label: 'General launch note',
@@ -153,6 +190,17 @@ export const SHARE_SNIPPETS = [
 
 export const SHARE_LAUNCH_ASSETS = [
   {
+    key: 'digital-pets-campaign',
+    title: 'Digital pets campaign desk',
+    kind: 'copy + artwork desk',
+    docPath: 'src/lib/digital-pets-promo.ts',
+    url: '/digital-pets/share',
+    audience: 'product builders, robotics readers, writers, hardware founders, and curious caretakers',
+    summary: 'Three campaign angles, a seven-post X thread, four standalone posts, downloadable art, outreach notes, and a 72-hour launch sequence.',
+    primaryCopy:
+      'Personality must survive Wi-Fi. Memory is custody. A subscription cannot decide whether your pet wakes up.',
+  },
+  {
     key: 'show-hn',
     title: 'Show HN draft',
     kind: 'copy deck',
@@ -177,6 +225,30 @@ export const SHARE_LAUNCH_ASSETS = [
 ] as const;
 
 export const SHARE_CAMPAIGN_PACKETS = [
+  {
+    key: 'digital-pets',
+    title: 'The Animal After the Internet packet',
+    status: 'live',
+    targetPath: '/digital-pets',
+    audience: 'AI product builders, hardware designers, writers, cultural readers, and people with virtual-pet memories',
+    goal: 'Make the book travel through three ownable claims instead of a generic “future of digital pets” pitch.',
+    hook: 'What should a person own in an AI world?',
+    channels: ['X launch thread', 'five personal notes', 'robotics and hardware groups', 'writer and cultural-reader DMs'],
+    proofLinks: [
+      '/digital-pets',
+      '/digital-pets.json',
+      '/digital-pets/share',
+      '/digital-pets/share.json',
+      '/b/0514',
+    ],
+    steps: [
+      'Publish the seven-post thread once, with the book as the proof link.',
+      'Send five personal notes that each point to one chapter rather than the cover.',
+      'Post Memory is Custody on day two and the graveyard question on day three.',
+      'Log replies, saves, DMs, and invitations as editorial evidence after 72 hours.',
+    ],
+    docPath: 'src/lib/digital-pets-promo.ts',
+  },
   {
     key: 'recrawl',
     title: 'Search recrawl packet',
@@ -299,6 +371,18 @@ export const SHARE_CAMPAIGN_PACKETS = [
 ] as const;
 
 export const SHARE_ACTION_CHECKLIST = [
+  {
+    id: 'digital-pets-thread',
+    label: 'Publish the digital-pets launch thread',
+    detail: 'Seven posts, one complete argument, and the book as the canonical proof link.',
+    url: '/digital-pets/share',
+  },
+  {
+    id: 'digital-pets-five-notes',
+    label: 'Send five chapter-specific notes',
+    detail: 'Route each reader to architecture, memory, business model, or graveyard territory.',
+    url: '/digital-pets/share#copy',
+  },
   { id: 'deploy-share', label: 'Deploy /share and /share.json', detail: 'Publish the campaign board and machine-readable mirror.', url: '/share' },
   { id: 'submit-indexnow', label: 'Submit priority URLs to IndexNow', detail: 'Ping homepage, /start, /share, /for-agents, and new blocks.', url: '/api/indexnow' },
   { id: 'gsc-submit', label: 'Submit sitemap in Google Search Console', detail: 'Confirm sitemap-index.xml is discovered and crawlable.', url: '/sitemap-index.xml' },
