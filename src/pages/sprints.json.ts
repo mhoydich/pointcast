@@ -14,6 +14,10 @@ export const GET: APIRoute = async () => {
     $schema: 'https://pointcast.xyz/sprints.json',
     name: 'PointCast autonomous sprint log',
     description: 'Every sprint cc has shipped via cron tick or chat tick. Source: docs/sprints/{date}-{slug}.md.',
+    feeds: {
+      html: 'https://pointcast.xyz/sprints',
+      rss: 'https://pointcast.xyz/sprints.xml',
+    },
     generatedAt: new Date().toISOString(),
     summary: stats,
     sprints: recaps.map((r) => ({
