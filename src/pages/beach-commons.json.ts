@@ -15,6 +15,11 @@ export const GET: APIRoute = () =>
         })),
         related: [
           {
+            title: 'Beach Commons V2 — Superstructures + Living Games',
+            url: 'https://pointcast.xyz/beach-commons/v2',
+            relation: 'next field-study edition',
+          },
+          {
             title: 'Dockweiler State Beach',
             url: 'https://beaches.lacounty.gov/dockweiler-beach/',
             relation: 'place context and public facilities',

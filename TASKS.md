@@ -7,6 +7,15 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Field Study 002 — Beach Commons V2 (2026-07-26)
+
+- [x] (X) Generate and verify eight Superstructures + Living Games architectural plates — `done`
+- [x] (X) Publish `/beach-commons/v2` with cooperative sport, moon, wave, coordinated energy, fire, wildlife, repair, and collective-finale systems — `done`
+- [x] (X) Add `/beach-commons/v2.json`, Block 0508, social image, edition navigation, sitemap, LLM context, and release tests — `done`
+- [x] (X) Keep energy, fire, wildlife, access, habitat, and permitting boundaries explicit — `done`
+
+---
+
 ## PointCast Field Study 001 — Dockweiler Beach Commons (2026-07-26)
 
 - [x] (X) Publish `/beach-commons` as a six-image Hardpoint + Softkit field study — `done`
