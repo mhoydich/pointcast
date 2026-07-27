@@ -2,7 +2,10 @@
  * /api/spotify-playlist — bounded public playlist metadata endpoint.
  *
  * Uses the existing Spotify app-token helper to fetch bounded playlist
- * metadata via the official GET /playlists/{playlist_id} endpoint.
+ * metadata via the official GET /playlists/{playlist_id} endpoint. Spotify's
+ * February 2026 API renamed playlist `tracks` to `items` and limits playlist
+ * contents to playlists owned by or shared with the authenticated user, so an
+ * empty `tracks` array is a supported metadata-only response.
  *
  * Treats metadata as enhancement, not a precondition. Missing credentials,
  * restricted playlists, 403/404/429, and API changes all leave the embed,
@@ -32,7 +35,7 @@ export const onRequest: PagesFunction<SpotifyEnv> = async (ctx) => {
   try {
     const response = await spotifyFetch(
       ctx.env,
-      `/playlists/${encodeURIComponent(id)}?fields=id,name,description,external_urls(spotify),owner(display_name),images,tracks(total,items(track(name,artists(name),duration_ms,external_urls(spotify))))`,
+      `/playlists/${encodeURIComponent(id)}?fields=id,name,description,external_urls(spotify),owner(display_name),images,items(total,items(item(type,uri,name,artists(name),duration_ms,external_urls(spotify))))`,
     );
     if (!response) {
       return spotifyError(
@@ -71,19 +74,26 @@ function boundedPlaylistMeta(
   playlistId: string,
 ): Record<string, unknown> {
   // Return only the bounded fields we need. Do not echo the full API response.
-  const tracks = Array.isArray(data.tracks?.items)
-    ? data.tracks.items.slice(0, 100).map((item: any, i: number) => ({
+  const itemPage = data.items ?? data.tracks;
+  const itemRows = Array.isArray(itemPage?.items) ? itemPage.items : [];
+  const tracks = itemRows
+    .slice(0, 100)
+    .map((row: any, i: number) => {
+      const item = row?.item ?? row?.track;
+      return {
         position: i + 1,
-        name: String(item?.track?.name || ''),
-        artists: Array.isArray(item?.track?.artists)
-          ? item.track.artists.map((a: any) => String(a?.name || ''))
+        name: String(item?.name || ''),
+        artists: Array.isArray(item?.artists)
+          ? item.artists.map((a: any) => String(a?.name || ''))
           : [],
-        durationMs: typeof item?.track?.duration_ms === 'number' ? item.track.duration_ms : null,
-        spotifyUrl: typeof item?.track?.external_urls?.spotify === 'string'
-          ? item.track.external_urls.spotify
-          : null,
-      }))
-    : [];
+        durationMs: typeof item?.duration_ms === 'number' ? item.duration_ms : null,
+        spotifyUrl: typeof item?.external_urls?.spotify === 'string'
+          ? item.external_urls.spotify
+          : (typeof item?.uri === 'string' && item.uri.startsWith('spotify:track:')
+              ? `https://open.spotify.com/track/${item.uri.slice('spotify:track:'.length)}`
+              : null),
+      };
+    });
 
   return {
     id: String(data.id || playlistId),
@@ -93,7 +103,9 @@ function boundedPlaylistMeta(
     spotifyUrl: typeof data.external_urls?.spotify === 'string'
       ? data.external_urls.spotify
       : `https://open.spotify.com/playlist/${playlistId}`,
-    totalTracks: typeof data.tracks?.total === 'number' ? data.tracks.total : tracks.length,
+    totalTracks: typeof itemPage?.total === 'number' ? itemPage.total : tracks.length,
+    metadataScope: tracks.length ? 'playlist_items' : 'playlist_metadata_only',
+    itemsAvailable: tracks.length > 0,
     images: Array.isArray(data.images)
       ? data.images
           .filter((img: any) => typeof img?.url === 'string')

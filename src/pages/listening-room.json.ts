@@ -51,6 +51,10 @@ const manifest = {
     metadataEndpoint: '/api/spotify-playlist?id={playlist_id}',
     metadataIsEnhancement: true,
     metadataIsPrecondition: false,
+    playlistItemsAccess:
+      'Spotify limits full playlist contents to owned or collaborative playlists; public metadata may be playlist-only.',
+    sequenceFallback:
+      'The room discovers heard tracks from official iframe playingURI events and resolves bounded track metadata.',
     artworkPolicy: 'displayed unmodified and unobscured; never used as decorative background',
   },
 
@@ -78,7 +82,8 @@ const manifest = {
 
   degradation: {
     withoutJavaScript: 'default playlist embed renders with provider link',
-    withoutMetadataCredentials: 'embed, notes, room, sharing, and receipt remain fully usable',
+    withoutMetadataCredentials:
+      'embed, progressive heard-track sequence, notes, room, sharing, and receipt remain usable',
     withoutPresenceWorker: 'gestures remain private marked moments; shared activity is unavailable',
     withoutSpotifyAccount: 'Spotify may ask the visitor to sign in; PointCast notes and receipts remain usable',
   },

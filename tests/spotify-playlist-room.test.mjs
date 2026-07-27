@@ -320,7 +320,12 @@ test('spotify-playlist.ts validates input and degrades gracefully', async () => 
   assert.match(src, /playlist_restricted/);
   assert.match(src, /rate_limited/);
   // Bounded response fields
-  assert.match(src, /items\.slice\(0, 100\)/);
+  assert.match(src, /itemRows[\s\S]*slice\(0, 100\)/);
+  // February 2026 schema: tracks → items and nested track → item.
+  assert.match(src, /items\(total,items\(item\(/);
+  assert.match(src, /data\.items \?\? data\.tracks/);
+  assert.match(src, /row\?\.item \?\? row\?\.track/);
+  assert.match(src, /playlist_metadata_only/);
   // CORS comes from the shared Spotify JSON header helper
   assert.match(src, /SPOTIFY_JSON_HEADERS/);
 });
@@ -333,6 +338,9 @@ test('listening-room.astro hydrates shared static URLs and uses documented ifram
   assert.match(src, /playback_started/);
   assert.match(src, /playback_update/);
   assert.match(src, /loadEntity/);
+  assert.match(src, /discoverPlayingTrack/);
+  assert.match(src, /spotify:track:/);
+  assert.match(src, /\/api\/spotify\/track\?id=/);
 });
 
 // ─── PRD exists ───────────────────────────────────────────────────
