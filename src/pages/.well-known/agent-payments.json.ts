@@ -83,6 +83,32 @@ export const GET: APIRoute = async () => {
     supported_currencies: ['usd'],
     supported_credential_types: ['card', 'shared_payment_token'],
     payment_rails: ['stripe-link'],
+    offers: [
+      {
+        sku: 'PC-25-2026',
+        name: 'PointCast 25 / 2026 Founding Season Ticket',
+        kind: 'digital-editorial-patronage',
+        amount: 2500,
+        currency: 'usd',
+        recurring: false,
+        available: true,
+        human: 'https://pointcast.xyz/25',
+        machine: 'https://pointcast.xyz/25.json',
+        terms: 'https://pointcast.xyz/25/terms',
+        checkout: 'https://pointcast.xyz/api/25/checkout',
+        checkout_mode: 'stripe-hosted-redirect',
+        pointcast_card_capture: false,
+      },
+    ],
+    agentic_commerce: {
+      readiness: 'machine-readable-offer-and-hosted-checkout',
+      stripe_agentic_commerce_suite: 'private-preview-eligibility-pending',
+      acp_checkout_api: 'not-enabled',
+      shared_payment_token_processing: 'not-enabled',
+      authorization_boundary:
+        'An agent may discover and present the offer. Purchase completion requires the buyer-authorized Stripe-hosted checkout until a separately reviewed ACP integration is enabled.',
+      reference: 'https://docs.stripe.com/agentic-commerce',
+    },
     // Discovery hint: agents implementing the spec should look up receipts
     // via /money.json (paginated when archive is large; currently full list)
     // and verify each via the verifier_template.
