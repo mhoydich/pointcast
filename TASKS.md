@@ -7,6 +7,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Field Study 005 — Beach Commons V5 (2026-07-27)
+
+- [x] (X) Generate and verify eight Weather School + Tide Parliament field plates — `done`
+- [x] (X) Publish `/beach-commons/v5` with seven elemental classrooms, one public day score, a Tide Parliament finale, and full-image navigation — `done`
+- [x] (X) Add `/beach-commons/v5.json`, Block 0513, social imagery, V4/V5 edition navigation, sitemap, LLM context, and release tests — `done`
+- [x] (X) Add a disclosed three-creative Open Ad Network campaign and owned Press Wire filing — `done`
+- [x] (X) Keep authority, engineering, glare, tide, water, fire, wildlife, access, habitat, weather, food, and permitting boundaries explicit — `done`
+
 ## PointCast Drum Directory — The Big Beat Issue (2026-07-27)
 
 - [x] (X) Publish-ready `/drum-directory` longform editorial with 30 described games, rooms, Nouns titles, TV sports, and playable oddities — `done`

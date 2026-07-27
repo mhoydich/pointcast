@@ -186,12 +186,12 @@ test('portable network transparently pins the first-100 campaign across owned pu
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
-  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
-  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
-  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
+  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
+  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
+  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
   assert.match(registry, /id: 'rally'/);
-  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
-  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026'\]/);
+  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
+  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);
@@ -336,7 +336,7 @@ test('Drum Noun Universe remains registered and guaranteed across contextual pub
 
   assert.match(registry, /PC-DRUM-NOUN-UNIVERSE-2026/);
   assert.match(registry, /Featured homepage unit and contextual placement across public non-Drum pages/);
-  assert.match(registry, /return \[universeCreative, networkCreative, commonsCreative, \.\.\.companionAds\]/);
+  assert.match(registry, /isBeachCommonsV5Surface \? undefined : beachCommonsCreative,[\s\S]*universeCreative,[\s\S]*networkCreative,[\s\S]*commonsCreative/);
   assert.match(homeAd, /data-ad-record=\{ad\.id\}/);
   assert.match(homeAd, /NO VISITOR PROFILE · NO PAID MEDIA/);
   assert.match(rail, /DRUM_NOUN_UNIVERSE_CAMPAIGN/);

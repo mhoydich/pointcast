@@ -26,6 +26,11 @@ export const BEACH_COMMONS_V4 = {
     url: 'https://pointcast.xyz/beach-commons/v3',
     jsonUrl: 'https://pointcast.xyz/beach-commons/v3.json',
   },
+  nextEdition: {
+    title: 'Beach Commons V5 — Weather School + Tide Parliament',
+    url: 'https://pointcast.xyz/beach-commons/v5',
+    jsonUrl: 'https://pointcast.xyz/beach-commons/v5.json',
+  },
   location: {
     name: 'Dockweiler State Beach / El Segundo coast',
     region: 'Los Angeles County, California',

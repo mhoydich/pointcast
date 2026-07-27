@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds thirteen product filings across every public kind', () => {
-  assert.equal(releases.length, 13);
+test('press wire seeds fourteen product filings across every public kind', () => {
+  assert.equal(releases.length, 14);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,18 @@ test('press wire seeds thirteen product filings across every public kind', () =>
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Beach Commons V5 filing announces the study without implying a live institution or event', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0014');
+  assert.ok(release);
+  assert.equal(release.slug, 'beach-commons-v5-opens-weather-school-and-tide-parliament');
+  assert.match(release.body.join(' '), /eight-plate speculative field study/i);
+  assert.match(release.body.join(' '), /not an operating school, government, regulator, forecast service, scientific authority/i);
+  assert.match(release.body.join(' '), /conceptual and unpermitted/i);
+  assert.match(release.body.join(' '), /three-creative contextual house campaign/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/beach-commons/v5');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/ads.json'));
 });
 
 test('Mesh Commons filing publishes a low-cost plan without claiming active coverage', () => {

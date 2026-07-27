@@ -91,7 +91,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'www.industrynext.xyz',
     surface: 'A first-100 Tezos wallet lead across the Nouns studio, Permission Lab, and Made stream',
     advertiserAliases: ['Industry Next'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
     status: 'active',
   },
   {
@@ -101,7 +101,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'allworthy.xyz',
     surface: 'A first-100 Tezos wallet lead across public-interest funding records and experiments',
     advertiserAliases: ['Allworthy'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
     status: 'active',
   },
   {
@@ -111,7 +111,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'passportz.xyz',
     surface: 'A first-100 Tezos wallet lead across public identity, art, activity, and listening passports',
     advertiserAliases: ['Passportz', 'Tezos Passport'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
     status: 'active',
   },
   {
@@ -121,7 +121,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A clearly labeled first-100 Tezos wallet lead on Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
     status: 'active',
   },
   {
@@ -131,7 +131,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A first-100 Tezos wallet lead across shared rituals, Stampz, and Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
     status: 'active',
   },
 ];
@@ -257,6 +257,17 @@ export const QWEN_WEATHER_CAMPAIGN = {
   note: 'A first-party model relay made with Qwen 3.8 Max, GLM-5.2, Wan 2.7 Image Pro, and HappyHorse 1.1. All media is pre-rendered; no QwenCloud credential or live inference request enters the page.',
 } as const;
 
+export const BEACH_COMMONS_V5_CAMPAIGN = {
+  id: 'PC-BEACH-COMMONS-V5-2026',
+  label: 'Beach Commons V5 — Weather School + Tide Parliament',
+  advertiser: 'PointCast Field Study',
+  creativeCount: 3,
+  placement: 'PointCast sitewide contextual rail and preferred rotation across reciprocal Open Ad Network publishers',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'A first-party campaign for an unofficial, unpermitted coastal civic-architecture study. It advertises a public field study, not an operating event, school, parliament, installation, scientific authority, or invitation to build.',
+} as const;
+
 export const NETWORK_FIRST_100_SIGNAL = {
   id: 'PC-NETWORK-EL-SEGUNDO-SIGNAL',
   label: 'Network El Segundo — First 100 Signal Strip',
@@ -269,6 +280,54 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-BEACH-COMMONS-V5-001',
+    advertiser: 'PointCast Field Study',
+    headline: 'What if weather were the curriculum?',
+    copy: 'Eight coastal architecture plates turn sun, wind, rain, water, moon, fire, and stone into public lessons that completely fold away.',
+    href: '/beach-commons/v5',
+    cta: 'Enter the Weather School',
+    tone: 'field',
+    contexts: ['beach', 'commons', 'weather', 'school', 'sun', 'wind', 'rain', 'water', 'nature', 'garden', 'el', 'segundo'],
+    image: '/beach-commons/v5/assets/01-weather-school.png',
+    sourceTool: 'OpenAI image generation',
+    campaign: BEACH_COMMONS_V5_CAMPAIGN.id,
+    seriesLabel: BEACH_COMMONS_V5_CAMPAIGN.label,
+    seriesIndex: 1,
+    status: 'house',
+  },
+  {
+    id: 'PC-BEACH-COMMONS-V5-002',
+    advertiser: 'PointCast Field Study',
+    headline: 'Account for every cup.',
+    copy: 'One finite recirculated volume serves washing, cooling, bread, plants, and play—made visible as a public game without a screen.',
+    href: '/beach-commons/v5#plates',
+    cta: 'Open the Water Court',
+    tone: 'garden',
+    contexts: ['water', 'care', 'garden', 'food', 'bread', 'play', 'community', 'civic', 'repair', 'nature'],
+    image: '/beach-commons/v5/assets/05-water-accounting-court.png',
+    sourceTool: 'OpenAI image generation',
+    campaign: BEACH_COMMONS_V5_CAMPAIGN.id,
+    seriesLabel: BEACH_COMMONS_V5_CAMPAIGN.label,
+    seriesIndex: 2,
+    status: 'house',
+  },
+  {
+    id: 'PC-BEACH-COMMONS-V5-003',
+    advertiser: 'PointCast Field Study',
+    headline: 'The school closes as a parliament.',
+    copy: 'Habitat reports, short testimony, bread, weaving, sculpture, games, music, and ceramic votes gather at sunset—then the whole campus packs out.',
+    href: '/beach-commons/v5#plates',
+    cta: 'Convene the Tide Parliament',
+    tone: 'ritual',
+    contexts: ['tide', 'moon', 'ritual', 'public', 'community', 'commons', 'press', 'town', 'network', 'art', 'beach'],
+    image: '/beach-commons/v5/assets/08-tide-parliament.png',
+    sourceTool: 'OpenAI image generation',
+    campaign: BEACH_COMMONS_V5_CAMPAIGN.id,
+    seriesLabel: BEACH_COMMONS_V5_CAMPAIGN.label,
+    seriesIndex: 3,
+    status: 'house',
+  },
   {
     id: 'PC-QWEN-WEATHER-001',
     advertiser: 'PointCast Model Study',
@@ -785,6 +844,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     .map(({ ad }) => ad);
 
   const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
+  const isBeachCommonsV5Surface = /^\/beach-commons\/v5(?:\/|$)/.test(pathname);
+  const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
   if (!isDrumSurface) {
@@ -794,10 +855,17 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     const companionAds = ranked.filter((ad) => (
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
+      && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
       && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
-    return [universeCreative, networkCreative, commonsCreative, ...companionAds]
+    return [
+      isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
+      universeCreative,
+      networkCreative,
+      commonsCreative,
+      ...companionAds,
+    ]
       .filter((ad): ad is PointCastAd => Boolean(ad))
       .slice(0, cappedCount);
   }
@@ -808,6 +876,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const companionAds = ranked.filter((ad) => (
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
+    && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
     && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
