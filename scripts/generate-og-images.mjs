@@ -19,6 +19,14 @@ import sharp from 'sharp';
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/images/og');
 const BLOCKS_DIR = path.resolve(process.cwd(), 'src/content/blocks');
+const LIBRARY_ISSUE_HERO = path.resolve(
+  process.cwd(),
+  'public/images/noticing/library-issue-01/sunroom-commons.webp',
+);
+const LIBRARY_ISSUE_OG = path.resolve(
+  process.cwd(),
+  'public/images/noticing/library-issue-01-og.png',
+);
 const W = 1200, H = 630;
 
 // Channel color table — must match src/lib/channels.ts. Duplicated here
@@ -875,6 +883,36 @@ async function svgToPng(svg, outPath) {
   await fs.writeFile(outPath, buffer);
 }
 
+function libraryIssueOverlay() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="0" y="0" width="${W}" height="44" fill="#17140e" />
+    <text x="24" y="28" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.8" fill="#fff9e9">POINTCAST WEEKLY · WHAT I KEEP NOTICING · ISSUE 01</text>
+    <text x="1176" y="28" text-anchor="end" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.4" fill="#f4c928">COORDINATION</text>
+    <rect x="0" y="44" width="625" height="586" fill="#fff9e9" fill-opacity=".96" />
+    <rect x="24" y="76" width="214" height="28" fill="#17140e" />
+    <text x="36" y="95" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="2" fill="#f4c928">A PROTOCOL WITH A ROOF</text>
+    <text x="24" y="190" font-family="Inter, Helvetica, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-6" fill="#17140e">THE FUTURE</text>
+    <text x="24" y="276" font-family="Inter, Helvetica, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-6" fill="#17140e">OF THE</text>
+    <text x="24" y="362" font-family="Inter, Helvetica, Arial, sans-serif" font-size="86" font-style="italic" font-weight="800" letter-spacing="-6" fill="#1649cb">LIBRARY</text>
+    <line x1="-20" y1="406" x2="730" y2="330" stroke="#1649cb" stroke-width="8" />
+    <circle cx="515" cy="352" r="16" fill="#e85d3f" stroke="#17140e" stroke-width="3" />
+    <text x="24" y="478" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="650" fill="#17140e">The future is not fewer books.</text>
+    <text x="24" y="512" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="650" fill="#17140e">It is thicker public capacity.</text>
+    <rect x="24" y="558" width="536" height="42" fill="#f4c928" stroke="#17140e" stroke-width="2" />
+    <text x="40" y="584" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="2" fill="#17140e">MEMORY · ACCESS · ROOM · PRACTICE · VOICE</text>
+    <rect x="0" y="44" width="625" height="586" fill="none" stroke="#17140e" stroke-width="3" />
+  </svg>`;
+}
+
+async function generateLibraryIssueCard() {
+  await fs.mkdir(path.dirname(LIBRARY_ISSUE_OG), { recursive: true });
+  await sharp(LIBRARY_ISSUE_HERO)
+    .resize(W, H, { fit: 'cover', position: 'attention' })
+    .composite([{ input: Buffer.from(libraryIssueOverlay()) }])
+    .png({ compressionLevel: 9, quality: 90 })
+    .toFile(LIBRARY_ISSUE_OG);
+}
+
 async function main() {
   console.log('[og] generating default card...');
   await svgToPng(defaultCard(), path.join(OUT_DIR, 'og-home-v2.png'));
@@ -886,6 +924,10 @@ async function main() {
     await svgToPng(svg, path.join(OUT_DIR, `${page.slug}.png`));
     console.log(`  ✓ /images/og/${page.slug}.png`);
   }
+
+  console.log('[og] generating What I Keep Noticing Issue 01 card...');
+  await generateLibraryIssueCard();
+  console.log('  ✓ /images/noticing/library-issue-01-og.png');
 
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');

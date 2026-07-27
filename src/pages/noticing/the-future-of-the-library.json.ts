@@ -1,25 +1,18 @@
 import type { APIRoute } from 'astro';
-import {
-  NOTICING,
-  NOTICING_ALTITUDES,
-  NOTICING_DESKS,
-  NOTICING_STORIES,
-} from '../lib/noticing';
+import { LIBRARY_ISSUE, LIBRARY_SOURCES } from '../../lib/noticing-library';
 
 export const GET: APIRoute = () =>
   new Response(
     JSON.stringify(
       {
-        ...NOTICING,
+        ...LIBRARY_ISSUE,
         truthfulBoundary:
-          'This endpoint is an editorial calendar. Only a story with status published and a related URL is represented as published; next, on-desk, and fieldwork remain planned work.',
-        altitudes: NOTICING_ALTITUDES,
-        desks: NOTICING_DESKS,
-        schedule: NOTICING_STORIES,
+          'Current El Segundo Public Library services are separated from PointCast proposals. This opening dispatch is based on official public sources; direct interviews and in-person observation are not represented as completed.',
+        sources: LIBRARY_SOURCES,
         feeds: {
           rss: 'https://pointcast.xyz/feed.xml',
           json: 'https://pointcast.xyz/feed.json',
-          archive: 'https://pointcast.xyz/archive',
+          editorialCalendar: 'https://pointcast.xyz/noticing.json',
         },
       },
       null,

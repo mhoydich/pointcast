@@ -10,7 +10,7 @@ export interface NoticingStory {
   title: string;
   dek: string;
   altitudes: NoticingAltitude[];
-  status: 'on-desk' | 'fieldwork' | 'next';
+  status: 'published' | 'on-desk' | 'fieldwork' | 'next';
   visual: 'library' | 'lacroix' | 'crossing' | 'calendar' | 'places' | 'mesh';
   relatedUrl?: string;
   relatedLabel?: string;
@@ -60,15 +60,17 @@ export const NOTICING_STORIES: NoticingStory[] = [
   {
     id: 'future-library',
     sequence: 1,
-    targetDate: '2026-08-07T08:08:00-07:00',
-    dateLabel: 'Fri · Aug 07',
+    targetDate: '2026-07-27T15:31:00-07:00',
+    dateLabel: 'Published · Jul 27',
     desk: 'Coordination',
     format: 'Major Study',
     title: 'The future of the library',
     dek: 'A library is a town coordinating with its own memory. What happens when the shelves become protocols, studios, tools, and rooms for making?',
     altitudes: ['home', 'town', 'network', 'world'],
-    status: 'next',
+    status: 'published',
     visual: 'library',
+    relatedUrl: '/noticing/the-future-of-the-library',
+    relatedLabel: 'Read Issue 01',
   },
   {
     id: 'why-lacroix',

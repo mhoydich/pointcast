@@ -26,7 +26,7 @@ test('What I Keep Noticing publishes the selected manifesto as a warm visual iss
   assert.match(page, /Six reasons to come back/);
 });
 
-test('The issue connects six planned stories across five public altitudes', async () => {
+test('The issue connects one published story and five planned stories across five public altitudes', async () => {
   const [page, data] = await Promise.all([
     read('src/pages/noticing.astro'),
     read('src/lib/noticing.ts'),
@@ -69,19 +69,19 @@ test('The editorial calendar has truthful machine, Block, home, and discovery co
   const block = JSON.parse(blockText);
 
   assert.match(data, /pointcast\.editorial-desk\/v1/);
-  assert.match(endpoint, /not represented as published/);
+  assert.match(endpoint, /Only a story with status published and a related URL is represented as published/);
   assert.match(endpoint, /Access-Control-Allow-Origin/);
   assert.equal(block.id, '0512');
   assert.equal(block.author, 'codex');
   assert.match(block.source, /Fable 5 low/);
   assert.equal(block.external.url, 'https://pointcast.xyz/noticing');
   assert.equal(block.meta.publicationStatus, 'editorial calendar');
-  assert.match(home, /href="\/noticing"/);
-  assert.match(home, /What I keep <em>noticing/);
+  assert.match(home, /href="\/noticing\/the-future-of-the-library"/);
+  assert.match(home, /The future of the <em>library/);
   assert.match(sitemap, /pointcast\.xyz\/noticing'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\.json'/);
   assert.match(llms, /What I Keep Noticing/);
-  assert.match(llmsFull, /permanent PointCast companion is Block 0512/);
+  assert.match(llmsFull, /companion is Block 0512/);
 });
 
 test('The issue has a 1200 by 630 social card and its source SVG', async () => {

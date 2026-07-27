@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Weekly 01 — The Future of the Library (2026-07-27)
+
+- [x] (X) Report the opening dispatch from eight official El Segundo Public Library sources while keeping interviews and in-person observation explicitly pending — `done`
+- [x] (X) Generate, import, and verify three original sunlit civic-collage plates through poster-image-engine — `done`
+- [x] (X) Publish the designed Issue 01 feature with five interactive civic protocols, a printable field sheet, and three reversible proposals — `done`
+- [x] (X) Add the structured issue, Block 0515, homepage feature, social imagery, sitemap, agent manifests, LLM context, and release tests — `done`
+- [x] (MH) Approve implementation and production publication — `done` — Mike said “go”
+
+---
+
 ## PointCast Field Study 005 — Beach Commons V5 (2026-07-27)
 
 - [x] (X) Generate and verify eight Weather School + Tide Parliament field plates — `done`
