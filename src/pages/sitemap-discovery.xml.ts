@@ -87,6 +87,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/reviews/tone-bloom.json', 'weekly', '0.84'],
   ['https://pointcast.xyz/reviews/the-listening-grove', 'weekly', '0.92'],
   ['https://pointcast.xyz/reviews/the-listening-grove.json', 'weekly', '0.88'],
+  ['https://pointcast.xyz/reviews/year-one', 'weekly', '0.94'],
+  ['https://pointcast.xyz/reviews/year-one.json', 'weekly', '0.90'],
   ['https://pointcast.xyz/listening-grove', 'weekly', '0.92'],
   ['https://pointcast.xyz/marine-layer', 'weekly', '0.90'],
   ['https://pointcast.xyz/marine-layer.json', 'weekly', '0.86'],
