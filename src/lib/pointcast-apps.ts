@@ -166,6 +166,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'row-by-row',
+    name: 'ROW / ROW',
+    kicker: 'SORORITY ROW · SEC / BIG TEN · EIGHT MIDJOURNEY PLATES · THREE 2030 PLAYBOOKS',
+    description: 'A reported architecture feature on fraternity and sorority life across college-football campuses: SEC versus Big Ten spatial culture, national and local models, origins, traditions, uneven access to houses, and three playbooks for 2030.',
+    url: 'https://pointcast.xyz/25/magazine/sorority-row',
+    path: '/25/magazine/sorority-row',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',
