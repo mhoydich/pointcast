@@ -133,6 +133,8 @@ export const GET: APIRoute = async () => {
         pointcastCollegeFootballMagazineJson: 'https://pointcast.xyz/25/magazine.json',
         pointcastCollegeFootballHouseDesk: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed',
         pointcastCollegeFootballHouseDeskJson: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed.json',
+        pointcastCollegeFootballSororityRow: 'https://pointcast.xyz/25/magazine/sorority-row',
+        pointcastCollegeFootballSororityRowJson: 'https://pointcast.xyz/25/magazine/sorority-row.json',
         pointcast2029: 'https://pointcast.xyz/25/2029',
         pointcast2029Json: 'https://pointcast.xyz/25/2029.json',
         pointcast2029FieldKit: 'https://pointcast.xyz/25/2029/field-kit',

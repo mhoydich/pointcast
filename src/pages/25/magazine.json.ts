@@ -7,6 +7,7 @@ import {
   SONG_YARD_REPERTOIRE_PROGRAMS,
 } from '../../lib/pointcast-college-football-magazine';
 import { HOUSE_WE_BORROWED } from '../../lib/pointcast-college-house';
+import { ROW_BY_ROW } from '../../lib/pointcast-sorority-row';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -43,6 +44,15 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
       plates: HOUSE_WE_BORROWED.plates.length,
       imageGenerator: HOUSE_WE_BORROWED.credits.imageGeneration,
     },
+    {
+      title: ROW_BY_ROW.title,
+      subtitle: ROW_BY_ROW.subtitle,
+      human: ROW_BY_ROW.canonical,
+      machine: ROW_BY_ROW.machineEdition,
+      block: `https://pointcast.xyz/b/${ROW_BY_ROW.block}`,
+      plates: ROW_BY_ROW.plates.length,
+      imageGenerator: ROW_BY_ROW.credits.imageGeneration,
+    },
   ],
   researchSources: COLLEGE_FOOTBALL_RESEARCH_SOURCES,
   rights: {
@@ -67,6 +77,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     seasonLedger: 'https://pointcast.xyz/25/season',
     houseDesk: HOUSE_WE_BORROWED.canonical,
     houseDeskJson: HOUSE_WE_BORROWED.machineEdition,
+    rowByRow: ROW_BY_ROW.canonical,
+    rowByRowJson: ROW_BY_ROW.machineEdition,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {

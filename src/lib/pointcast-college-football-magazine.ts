@@ -545,9 +545,10 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
     {
       number: '08',
       name: 'The House Desk',
-      kicker: 'College life / fraternity / belonging',
-      description: 'Longform campus culture: the rooms, friendships, rituals, exclusions, and repairs around the game.',
-      href: '/25/magazine/the-house-we-borrowed',
+      kicker: 'College life / fraternity / sorority / architecture',
+      description: 'Longform campus culture: houses, friendships, traditions, capital, exclusions, access, and repair.',
+      href: '/25/magazine/sorority-row',
+      previousFeature: '/25/magazine/the-house-we-borrowed',
     },
   ],
   sourcePolicy: [
