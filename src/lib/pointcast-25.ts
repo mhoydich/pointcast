@@ -60,7 +60,7 @@ export const POINTCAST_25 = {
     checkoutMode: 'hosted-external',
     pointCastCardCapture: false,
     promise:
-      'Back the complete 2026 editorial season. The ranking and its receipts remain public; the ticket funds the weekly research, audio dispatches, and permanent season ledger.',
+      'Back the complete 2026 editorial season. The ranking and its receipts remain public; the ticket funds the weekly research, the Tuesday boards, and the permanent season ledger.',
   },
   sources: [
     {
@@ -84,8 +84,8 @@ export const POINTCAST_25 = {
     {
       label: 'Division I roster-limit implementation',
       publisher: 'NCAA',
-      url: 'https://www.ncaa.org/news/2025/6/23/media-center-di-board-of-directors-formally-adopts-changes-to-roster-limits.aspx',
-      checkedAt: '2026-07-27',
+      url: 'https://www.ncaa.org/media-center-di-board-of-directors-formally-adopts-changes-to-roster-limits/',
+      checkedAt: '2026-07-28',
     },
     {
       label: '2026 preseason FPI board and roster notes',
@@ -430,17 +430,22 @@ export const POINTCAST_25_SIGNAL_LABELS: Record<PointCast25Signal, string> = {
   outsider: 'Outsider',
 };
 
+// Ledger entries are frozen literals, never derived from the live POINTCAST_25
+// object — a published board's row must not move when the next board edits the lib.
 export const POINTCAST_25_EDITIONS = [
   {
-    board: POINTCAST_25.board,
-    status: POINTCAST_25.status,
-    publishedAt: POINTCAST_25.publishedAt,
-    question: POINTCAST_25.question,
-    leaders: POINTCAST_25.teams.slice(0, 5).map((team) => ({
-      rank: team.rank,
-      school: team.school,
-      reason: team.reason,
-    })),
+    board: '000',
+    status: 'preseason',
+    publishedAt: '2026-07-27T11:25:00-07:00',
+    question: 'If everybody played next Saturday, which 25 teams would we believe in most?',
+    leaders: [
+      { rank: 1, school: 'Ohio State', reason: 'The highest quarterback–receiver ceiling in the sport, carrying the season’s nastiest road schedule.' },
+      { rank: 2, school: 'Notre Dame', reason: 'Unusual defensive continuity and fewer imaginary preseason dependencies than anyone else.' },
+      { rank: 3, school: 'Texas', reason: 'The Arch Manning window is now; the unresolved run game keeps this from being No. 1.' },
+      { rank: 4, school: 'Oregon', reason: 'Dante Moore, deep talent, championship capacity—and two new coordinators to assimilate.' },
+      { rank: 5, school: 'Georgia', reason: 'Back-to-back SEC champions receive institutional trust until the rebuilt secondary spends it.' },
+    ],
+    integrity: 'sha256:2b34a571dfe7063517a8405a801b5b7c544f97f3d4b8a2feec4336cdfdf3333f',
     human: 'https://pointcast.xyz/b/0510',
     snapshot: 'https://pointcast.xyz/25/boards/000',
     machine: 'https://pointcast.xyz/25/boards/000.json',

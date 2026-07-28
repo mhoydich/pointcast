@@ -246,14 +246,14 @@ const expansionPrograms: Array<Omit<SongYardProgram, 'fieldNumber' | 'cohort'>> 
     paper: '#eddfc4',
     repertoire: [
       {
-        title: 'Here Comes the Boom',
-        artist: 'Nelly',
+        title: 'Boom (Here Comes the Boom)',
+        artist: 'P.O.D.',
         evidence: 'stadium-ritual',
         moment: 'arrival',
-        note: 'ASU documents the song’s game use and its “boom” response in the Sun Devil tradition system.',
-        sourceLabel: 'Arizona State University · Sun Devil license-plate stories',
-        sourceUrl: 'https://news.asu.edu/b/20250128-every-sun-devil-wins-firstever-license-plate-sweepstakes',
-        listenUrl: spotifySearch('Here Comes the Boom', 'Nelly'),
+        note: 'A Sun Devil traditions archive documents the kickoff ritual — when the song calls “here comes the boom,” the stadium answers “boom” — and an ASU News alumni story confirms the track is P.O.D.’s and greets game use.',
+        sourceLabel: 'Sun Devil traditions archive · kickoff boom response',
+        sourceUrl: 'https://asutraditions.wordpress.com/traditions/',
+        listenUrl: spotifySearch('Boom', 'P.O.D.'),
       },
       candidate('The Middle', 'Jimmy Eat World', 'fourth-quarter', 'A Mesa-made reassurance chorus that fits a late-game communal reset.', 'https://news.asu.edu/b/20250128-every-sun-devil-wins-firstever-license-plate-sweepstakes'),
       candidate('Hey Jealousy', 'Gin Blossoms', 'walk-home', 'A Tempe-born afterglow candidate with local authorship and an open chorus.', 'https://news.asu.edu/b/20250128-every-sun-devil-wins-firstever-license-plate-sweepstakes'),
@@ -571,7 +571,11 @@ export const COLLEGE_FOOTBALL_RESEARCH_SOURCES = [
     url: 'https://news.jrn.msu.edu/2026/04/fans-get-first-glance-of-fitzgerald-era-in-msu-football-spring-showcase/',
   },
   {
-    label: 'Arizona State University · Here Comes the Boom',
+    label: 'Sun Devil traditions archive · kickoff boom response',
+    url: 'https://asutraditions.wordpress.com/traditions/',
+  },
+  {
+    label: 'ASU News · P.O.D. boom response plate story',
     url: 'https://news.asu.edu/b/20250128-every-sun-devil-wins-firstever-license-plate-sweepstakes',
   },
   {
