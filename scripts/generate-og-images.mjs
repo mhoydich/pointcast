@@ -35,6 +35,14 @@ const LACROIX_ISSUE_OG = path.resolve(
   process.cwd(),
   'public/images/noticing/lacroix-issue-02-og.png',
 );
+const CROSSING_ISSUE_HERO = path.resolve(
+  process.cwd(),
+  'public/images/noticing/animal-crossing-issue-03/town-made-of-favors.webp',
+);
+const CROSSING_ISSUE_OG = path.resolve(
+  process.cwd(),
+  'public/images/noticing/animal-crossing-issue-03-og.png',
+);
 const W = 1200, H = 630;
 
 // Channel color table — must match src/lib/channels.ts. Duplicated here
@@ -951,6 +959,39 @@ async function generateLacroixIssueCard() {
     .toFile(LACROIX_ISSUE_OG);
 }
 
+function crossingIssueOverlay() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="0" y="0" width="${W}" height="44" fill="#182016" />
+    <text x="24" y="28" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.8" fill="#f5ecd7">POINTCAST WEEKLY · WHAT I KEEP NOTICING · ISSUE 03</text>
+    <text x="1176" y="28" text-anchor="end" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.4" fill="#f4c64e">STUDY OF</text>
+    <rect x="0" y="44" width="650" height="586" fill="#f5ecd7" fill-opacity=".95" />
+    <rect x="24" y="76" width="354" height="29" fill="#49316f" />
+    <text x="36" y="95" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="1.7" fill="#f5ecd7">THE NICEST TOWN · A MORTGAGE ATTACHED</text>
+    <text x="24" y="218" font-family="Inter, Helvetica, Arial, sans-serif" font-size="94" font-weight="900" letter-spacing="-7" fill="#182016">ANIMAL</text>
+    <text x="24" y="304" font-family="Inter, Helvetica, Arial, sans-serif" font-size="94" font-weight="900" letter-spacing="-7" fill="#182016">CROSSING</text>
+    <text x="24" y="374" font-family="Georgia, serif" font-size="54" font-style="italic" font-weight="700" letter-spacing="-3" fill="#f06b4f">is a gift economy</text>
+    <rect x="510" y="92" width="90" height="90" fill="#f4c64e" stroke="#182016" stroke-width="3" transform="rotate(3 555 137)" />
+    <text x="555" y="148" text-anchor="middle" font-family="ui-monospace, monospace" font-size="30" font-weight="900" fill="#182016">03</text>
+    <path d="M-20 430 C160 386 350 470 716 330" fill="none" stroke="#f06b4f" stroke-width="8" />
+    <circle cx="178" cy="398" r="14" fill="#79bddd" stroke="#182016" stroke-width="3" />
+    <circle cx="450" cy="409" r="14" fill="#f4c64e" stroke="#182016" stroke-width="3" />
+    <text x="24" y="496" font-family="Inter, Helvetica, Arial, sans-serif" font-size="21" font-weight="650" fill="#182016">Fruit, debt, furniture, visiting hours,</text>
+    <text x="24" y="527" font-family="Inter, Helvetica, Arial, sans-serif" font-size="21" font-weight="650" fill="#182016">and the things money cannot finish.</text>
+    <rect x="24" y="558" width="548" height="42" fill="#79bddd" stroke="#182016" stroke-width="2" />
+    <text x="40" y="584" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="1.8" fill="#182016">MARKET · DEBT · COMMONS · GIFT · REPUTATION</text>
+    <rect x="0" y="44" width="650" height="586" fill="none" stroke="#182016" stroke-width="3" />
+  </svg>`;
+}
+
+async function generateCrossingIssueCard() {
+  await fs.mkdir(path.dirname(CROSSING_ISSUE_OG), { recursive: true });
+  await sharp(CROSSING_ISSUE_HERO)
+    .resize(W, H, { fit: 'cover', position: 'attention' })
+    .composite([{ input: Buffer.from(crossingIssueOverlay()) }])
+    .png({ compressionLevel: 9, quality: 90 })
+    .toFile(CROSSING_ISSUE_OG);
+}
+
 async function main() {
   console.log('[og] generating default card...');
   await svgToPng(defaultCard(), path.join(OUT_DIR, 'og-home-v2.png'));
@@ -970,6 +1011,10 @@ async function main() {
   console.log('[og] generating What I Keep Noticing Issue 02 card...');
   await generateLacroixIssueCard();
   console.log('  ✓ /images/noticing/lacroix-issue-02-og.png');
+
+  console.log('[og] generating What I Keep Noticing Issue 03 card...');
+  await generateCrossingIssueCard();
+  console.log('  ✓ /images/noticing/animal-crossing-issue-03-og.png');
 
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');

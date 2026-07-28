@@ -204,11 +204,12 @@ export const LACROIX_ISSUE = {
   ],
   next: {
     title: 'Animal Crossing is a gift economy',
-    label: 'Next on the desk · Study Of',
+    label: 'Published next · Study Of · Issue 03',
     dek:
       'Care, debt, decoration, visiting hours, and why the nicest town square you know may be commercial software.',
-    date: '2026-08-14T08:08:00-07:00',
-    dateLabel: 'Fri · Aug 14 · 08:08 PT',
+    date: '2026-07-27T21:19:00-07:00',
+    dateLabel: 'Published · Jul 27 · Read now',
+    url: '/noticing/animal-crossing-gift-economy',
   },
 } as const;
 

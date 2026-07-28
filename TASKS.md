@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Weekly 03 — Animal Crossing Is a Gift Economy (2026-07-27)
+
+- [x] (Claude) Shape the Study Of column and the gift-economy premise — `done`
+- [x] (Codex) Research official mechanics, player studies, gift anthropology, and the market counter-reading — `done`
+- [x] (Codex) Generate and verify three original hand-built editorial plates at 1536×1024 — `done`
+- [x] (Codex) Publish the designed Issue 03 feature with a synthesized gate chime, pocket-packing instrument, and printable town rules — `done`
+- [x] (Codex) Ship the structured ten-source ledger, Block 0523, discovery routes, social cards, and canonical release checks — `done`
+
+---
+
 ## Saturday Myth Machine — Mascot Atlas 001 (2026-07-27)
 
 - [x] (X) Build 25 permanent mascot field cards with adjacent JSON receipts — `done`
