@@ -11,7 +11,7 @@ from reportlab.pdfgen import canvas
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "public" / "downloads" / "my-pet-has-retained-counsel-brief.pdf"
+OUTPUT = ROOT / "src" / "assets" / "downloads" / "my-pet-has-retained-counsel-brief.pdf"
 ART = ROOT / "public" / "images" / "digital-pets" / "counsel"
 IMAGE_CACHE = ROOT / "tmp" / "pdfs" / "counsel-campaign" / "source"
 
