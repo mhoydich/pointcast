@@ -30,6 +30,7 @@ test('Sound Desk 001 is a PointCast 25 × Tone Bloom college-football feature', 
   assert.match(data, /The Walk Home/);
   assert.match(data, /Caffeine/);
   assert.match(data, /Cannabis/);
+  assert.match(data, /social-card-v2\.png/);
   assert.equal((data.match(/playlist: \{/g) || []).length, 5);
 
   assert.match(page, /THE 25-SECOND READ/);
@@ -88,7 +89,7 @@ test('Sound Desk 001 is discoverable across the magazine and agent surfaces', as
 
 test('Sound Desk social card is a 1200 by 630 PNG', async () => {
   const card = new URL(
-    '../public/images/pointcast-focus/social-card.png',
+    '../public/images/pointcast-focus/social-card-v2.png',
     import.meta.url,
   );
   await access(card);

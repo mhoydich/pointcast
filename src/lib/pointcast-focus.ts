@@ -16,6 +16,8 @@ export const POINTCAST_SOUND_OF_FOCUS = {
   publishedAt: '2026-07-28T14:25:00-07:00',
   canonical: 'https://pointcast.xyz/25/magazine/sound-of-focus',
   machineEdition: 'https://pointcast.xyz/25/magazine/sound-of-focus.json',
+  socialImage:
+    'https://pointcast.xyz/images/pointcast-focus/social-card-v2.png',
   interactiveLab: 'https://tonebloom.xyz/focus',
   parent: 'https://pointcast.xyz/25/magazine',
   block: '0535',
