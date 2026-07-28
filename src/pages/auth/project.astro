@@ -19,6 +19,7 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
       .project-context { max-width:54ch; }
       .project-context strong { color:#f8f2df; }
       .auth-shell { margin-top:2rem; display:flex; align-items:center; gap:1rem; }
+      .wallet-path { margin:.75rem 0 0; color:#e9c98d; font-size:.75rem; }
       [data-project-status] { min-height:1.5em; color:#e9c98d; }
     </style>
   </head>
@@ -31,10 +32,15 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
         If you are not signed in yet, use Kukai once here; no transaction is requested.
       </p>
       <div class="auth-shell"><AuthMenu autoOpen={true} /></div>
+      <p class="wallet-path">Choose Kukai, then <strong>Use Browser</strong>. Kukai opens in a new tab when allowed; otherwise this page continues there.</p>
       <p data-project-status role="status">Checking your PointCast session…</p>
     </main>
     <TezosSessionBridge />
     <script>
+      import { installWalletPopupFallback } from '../../lib/auth/wallet-popup-fallback';
+
+      installWalletPopupFallback();
+
       const status = document.querySelector('[data-project-status]');
       const params = new URLSearchParams(window.location.search);
       const target = params.get('target') || '';
@@ -148,6 +154,9 @@ import TezosSessionBridge from '../../components/TezosSessionBridge.astro';
 
       window.addEventListener('pc:auth-change', (event) => {
         if (event.detail?.user) void continueToProject();
+      });
+      window.addEventListener('pc:wallet-popup-fallback', () => {
+        if (status) status.textContent = 'Popup blocked. Continuing to Kukai in this tab…';
       });
       recordProjectArrival();
       void renderProjectContext();
