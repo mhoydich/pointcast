@@ -100,6 +100,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'satellite',
   },
   {
+    slug: 'saturday-myth-machine',
+    name: 'Saturday Myth Machine',
+    kicker: '25 MASCOT CARDS · 8 CREATURE CLASSES · THREE-ROUND CLASH',
+    description: 'An unofficial college-football mascot atlas and deterministic card battler where local resources, tradition, current PointCast form, conference chemistry, creature instinct, and arena weather all become playable.',
+    url: 'https://pointcast.xyz/mascot-battler',
+    path: '/mascot-battler',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',

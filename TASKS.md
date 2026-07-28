@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Saturday Myth Machine — Mascot Atlas 001 (2026-07-27)
+
+- [x] (X) Build 25 permanent mascot field cards with adjacent JSON receipts — `done`
+- [x] (X) Define eight original creature classes, six arenas, and a deterministic three-round battle system — `done`
+- [x] (X) Generate and verify eight original archetype plates without school logos or official costume designs — `done`
+- [x] (X) Add browser-local keeping, conference/class filtering, homepage, app, sitemap, agent, LLM, and Block 0522 discovery — `done`
+- [ ] (X) Validate the generated site, full suite, responsive browser interactions, and exact production release — `in-progress`
+
+---
+
 ## PointCast Weekly 02 — Why LaCroix (2026-07-27)
 
 - [x] (X) Report the ritual essay from current company, regulatory, sensory, dental, and recycling sources while keeping claims, evidence, interpretation, and limits distinct — `done`
