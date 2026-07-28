@@ -13,7 +13,7 @@ function pngSize(buffer) {
   };
 }
 
-test('Issue 001 defines an eight-desk college-football magazine', async () => {
+test('Issue 001 defines a nine-desk college-football magazine', async () => {
   const data = await read('src/lib/pointcast-college-football-magazine.ts');
   const page = await read('src/pages/25/magazine/index.astro');
 
@@ -26,6 +26,7 @@ test('Issue 001 defines an eight-desk college-football magazine', async () => {
     'Saturday Commons',
     'The Season Ledger',
     'The House Desk',
+    'The Sound Desk',
   ]) {
     assert.match(data, new RegExp(`name: '${desk}'`));
   }

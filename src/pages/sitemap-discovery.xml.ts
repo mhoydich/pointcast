@@ -103,6 +103,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25/magazine/the-house-we-borrowed.json', 'monthly', '0.95'],
   ['https://pointcast.xyz/25/magazine/sorority-row', 'monthly', '0.99'],
   ['https://pointcast.xyz/25/magazine/sorority-row.json', 'monthly', '0.95'],
+  ['https://pointcast.xyz/25/magazine/sound-of-focus', 'monthly', '0.99'],
+  ['https://pointcast.xyz/25/magazine/sound-of-focus.json', 'monthly', '0.95'],
   ...POINTCAST_2029_IDENTITIES.flatMap((identity) => [
     [`https://pointcast.xyz/25/2029/${identity.slug}`, 'monthly', '0.9'] as SitemapEntry,
     [`https://pointcast.xyz/25/2029/${identity.slug}.json`, 'monthly', '0.84'] as SitemapEntry,
