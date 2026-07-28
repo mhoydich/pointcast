@@ -27,6 +27,14 @@ const LIBRARY_ISSUE_OG = path.resolve(
   process.cwd(),
   'public/images/noticing/library-issue-01-og.png',
 );
+const LACROIX_ISSUE_HERO = path.resolve(
+  process.cwd(),
+  'public/images/noticing/lacroix-issue-02/cold-open.webp',
+);
+const LACROIX_ISSUE_OG = path.resolve(
+  process.cwd(),
+  'public/images/noticing/lacroix-issue-02-og.png',
+);
 const W = 1200, H = 630;
 
 // Channel color table — must match src/lib/channels.ts. Duplicated here
@@ -913,6 +921,36 @@ async function generateLibraryIssueCard() {
     .toFile(LIBRARY_ISSUE_OG);
 }
 
+function lacroixIssueOverlay() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="0" y="0" width="${W}" height="44" fill="#16120d" />
+    <text x="24" y="28" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.8" fill="#fff9e9">POINTCAST WEEKLY · WHAT I KEEP NOTICING · ISSUE 02</text>
+    <text x="1176" y="28" text-anchor="end" font-family="ui-monospace, monospace" font-size="12" font-weight="700" letter-spacing="2.4" fill="#bee620">RITUAL</text>
+    <rect x="0" y="44" width="575" height="586" fill="#f7f0de" fill-opacity=".95" />
+    <rect x="24" y="76" width="286" height="29" fill="#174fc7" />
+    <text x="36" y="95" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="1.8" fill="#fff9e9">ALMOST NOTHING · AN OCCASION</text>
+    <text x="24" y="248" font-family="Inter, Helvetica, Arial, sans-serif" font-size="132" font-weight="900" letter-spacing="-10" fill="#16120d">WHY</text>
+    <text x="24" y="366" font-family="Georgia, serif" font-size="122" font-style="italic" font-weight="700" letter-spacing="-7" fill="#ff5d47">LaCroix?</text>
+    <circle cx="493" cy="160" r="42" fill="#bee620" stroke="#16120d" stroke-width="3" />
+    <text x="493" y="169" text-anchor="middle" font-family="ui-monospace, monospace" font-size="12" font-weight="900" fill="#16120d">PSSHT</text>
+    <line x1="-20" y1="413" x2="710" y2="332" stroke="#174fc7" stroke-width="8" />
+    <text x="24" y="488" font-family="Inter, Helvetica, Arial, sans-serif" font-size="22" font-weight="650" fill="#16120d">A cold can, a loud little crack,</text>
+    <text x="24" y="520" font-family="Inter, Helvetica, Arial, sans-serif" font-size="22" font-weight="650" fill="#16120d">a flavor that arrives mostly as rumor.</text>
+    <rect x="24" y="558" width="476" height="42" fill="#bee620" stroke="#16120d" stroke-width="2" />
+    <text x="40" y="584" font-family="ui-monospace, monospace" font-size="11" font-weight="700" letter-spacing="2" fill="#16120d">COLD · CRACK · BUBBLE · AROMA · COLOR</text>
+    <rect x="0" y="44" width="575" height="586" fill="none" stroke="#16120d" stroke-width="3" />
+  </svg>`;
+}
+
+async function generateLacroixIssueCard() {
+  await fs.mkdir(path.dirname(LACROIX_ISSUE_OG), { recursive: true });
+  await sharp(LACROIX_ISSUE_HERO)
+    .resize(W, H, { fit: 'cover', position: 'attention' })
+    .composite([{ input: Buffer.from(lacroixIssueOverlay()) }])
+    .png({ compressionLevel: 9, quality: 90 })
+    .toFile(LACROIX_ISSUE_OG);
+}
+
 async function main() {
   console.log('[og] generating default card...');
   await svgToPng(defaultCard(), path.join(OUT_DIR, 'og-home-v2.png'));
@@ -928,6 +966,10 @@ async function main() {
   console.log('[og] generating What I Keep Noticing Issue 01 card...');
   await generateLibraryIssueCard();
   console.log('  ✓ /images/noticing/library-issue-01-og.png');
+
+  console.log('[og] generating What I Keep Noticing Issue 02 card...');
+  await generateLacroixIssueCard();
+  console.log('  ✓ /images/noticing/lacroix-issue-02-og.png');
 
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');

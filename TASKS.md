@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast Weekly 02 — Why LaCroix (2026-07-27)
+
+- [x] (X) Report the ritual essay from current company, regulatory, sensory, dental, and recycling sources while keeping claims, evidence, interpretation, and limits distinct — `done`
+- [x] (X) Generate, import, and verify three original cold-bright editorial plates through poster-image-engine — `done`
+- [x] (X) Publish the designed Issue 02 feature with a synthesized crack, invisible-flavor instrument, and printable refrigerator-door protocol — `done`
+- [x] (X) Add the structured issue, Block 0519, homepage feature, social imagery, sitemap, agent manifests, LLM context, and release tests — `done`
+- [x] (MH) Approve implementation and production publication — `done` — Mike said “ok next publish enjoy”
+
+---
+
 ## PointCast 25 — Audience Desk 001 (2026-07-27)
 
 - [x] (X) Publish 25 permanent team case pages with adjacent JSON receipts — `done`

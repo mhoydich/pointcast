@@ -267,11 +267,12 @@ export const LIBRARY_ISSUE = {
   ],
   next: {
     title: 'Why LaCroix',
-    label: 'Next on the desk · Ritual',
+    label: 'Published next · Ritual · Issue 02',
     dek:
       'Bubbles, cans, office refrigerators, and the peculiar warmth of choosing a flavor that barely exists.',
-    date: '2026-08-11T08:08:00-07:00',
-    dateLabel: 'Tue · Aug 11 · 08:08 PT',
+    date: '2026-07-27T20:18:00-07:00',
+    dateLabel: 'Published · Jul 27 · Read now',
+    url: '/noticing/why-lacroix',
   },
 } as const;
 

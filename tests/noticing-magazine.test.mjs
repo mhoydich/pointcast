@@ -26,7 +26,7 @@ test('What I Keep Noticing publishes the selected manifesto as a warm visual iss
   assert.match(page, /Six reasons to come back/);
 });
 
-test('The issue connects one published story and five planned stories across five public altitudes', async () => {
+test('The issue connects two published stories and four planned stories across five public altitudes', async () => {
   const [page, data] = await Promise.all([
     read('src/pages/noticing.astro'),
     read('src/lib/noticing.ts'),
@@ -76,8 +76,8 @@ test('The editorial calendar has truthful machine, Block, home, and discovery co
   assert.match(block.source, /Fable 5 low/);
   assert.equal(block.external.url, 'https://pointcast.xyz/noticing');
   assert.equal(block.meta.publicationStatus, 'editorial calendar');
-  assert.match(home, /href="\/noticing\/the-future-of-the-library"/);
-  assert.match(home, /The future of the <em>library/);
+  assert.match(home, /href="\/noticing\/why-lacroix"/);
+  assert.match(home, /Why <em>LaCroix/);
   assert.match(sitemap, /pointcast\.xyz\/noticing'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\.json'/);
   assert.match(llms, /What I Keep Noticing/);
