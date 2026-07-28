@@ -252,6 +252,17 @@ export const BELLS_BLOOM_CAMPAIGN = {
   note: 'A first-party 28-work Midjourney archive exhibition. Every image links to its source job; the campaign uses contextual rotation only.',
 } as const;
 
+export const OPEN_HEART_GARDEN_CAMPAIGN = {
+  id: 'PC-GARDEN-SIGNAL-OPEN-HEART-2026',
+  label: 'OPEN HEART — Garden Signal 002',
+  advertiser: 'PointCast Garden Signal',
+  creativeCount: 1,
+  placement: 'PointCast music, garden, art, and front-door contexts',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'An independent music-companion release using four original Midjourney frames, browser-native sample-free audio, and the official Spotify embed. No recording, stems, lyrics, provider artwork, or playback telemetry enter PointCast.',
+} as const;
+
 export const QWEN_WEATHER_CAMPAIGN = {
   id: 'PC-QWEN-WEATHER-2026',
   label: 'Qwen / Weather Memory — PointCast Model Study 001',
@@ -377,6 +388,21 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'Midjourney V8.1 / Michael Hoydich',
     campaign: BELLS_BLOOM_CAMPAIGN.id,
     seriesLabel: BELLS_BLOOM_CAMPAIGN.label,
+    status: 'house',
+  },
+  {
+    id: 'PC-GARDEN-SIGNAL-OPEN-HEART-001',
+    advertiser: 'PointCast Garden Signal',
+    headline: 'A door is a promise with hardware.',
+    copy: 'Four chrome garden exposures, five original touch tones, and one official Spotify doorway.',
+    href: '/garden-signal/open-heart',
+    cta: 'Open the heart',
+    tone: 'garden',
+    contexts: ['music', 'spotify', 'listen', 'garden', 'flower', 'love', 'door', 'chrome', 'midjourney', 'art', 'signal', 'home', 'pointcast'],
+    image: '/images/og/garden-signal-open-heart.jpg',
+    sourceTool: 'Midjourney V8 + original Web Audio / Michael Hoydich + PointCast',
+    campaign: OPEN_HEART_GARDEN_CAMPAIGN.id,
+    seriesLabel: OPEN_HEART_GARDEN_CAMPAIGN.label,
     status: 'house',
   },
   {
