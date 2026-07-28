@@ -18,6 +18,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## My Pet Has Retained Counsel — Future Book 001 Companion 03 (2026-07-28)
+
+- [x] (MH) Commission a next comedy issue that genuinely tries to make readers laugh — `done`
+- [x] (X) Write the complete original El Segundo household satire and state its ownership thesis — `done`
+- [x] (X) Generate the hero and two ink cartoons; curate three existing Midjourney works as case exhibits — `done`
+- [x] (X) Build the responsive comedy issue, browser-local ruling, gesture-gated filing stamp, and JSON twin — `done`
+- [x] (X) Validate the complete issue, structured twin, full test suite, and responsive interactions — `done`
+- [x] (X) Merge and deploy the exact reviewed production build — `done`
+
+---
+
 ## The Amber Seed — Future Book 001 Companion 02 (2026-07-27)
 
 - [x] (MH) Commission a philosophical legacy story with literary-magazine presentation, cartoons, Midjourney art, and interaction — `done`
