@@ -1,4 +1,4 @@
-import { POINTCAST_2029_IDENTITIES } from './pointcast-2029';
+import { SONG_YARD_PROGRAMS } from './pointcast-college-football-magazine';
 import {
   SONG_YARD_PARTS,
   SONG_YARD_SEEDS,
@@ -468,7 +468,7 @@ export function mountSongYard(root: HTMLElement) {
   };
 
   const renderIdentity = () => {
-    const identity = POINTCAST_2029_IDENTITIES.find((item) => item.slug === identitySelect?.value) || POINTCAST_2029_IDENTITIES[0];
+    const identity = SONG_YARD_PROGRAMS.find((item) => item.slug === identitySelect?.value) || SONG_YARD_PROGRAMS[0];
     root.style.setProperty('--team', identity.primary);
     root.style.setProperty('--team-two', identity.secondary);
     root.style.setProperty('--team-paper', identity.paper);

@@ -33,13 +33,14 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/for-agents"/);
 });
 
-test('the current field edition gives Tone Bloom, Beach Commons, and the future book real homepage weight', async () => {
+test('the current field edition gives the living magazine, Tone Bloom, Beach Commons, and the future book real homepage weight', async () => {
   const [home, css] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/styles/front-door-fresh.css'),
   ]);
 
-  assert.match(home, /Bells, beaches, creatures\./);
+  assert.match(home, /One season\. Many rooms\./);
+  assert.match(home, /href="\/25\/magazine"/);
   assert.match(home, /href="\/reviews\/tone-bloom"/);
   assert.match(home, /href="\/beach-commons"/);
   assert.match(home, /href="\/digital-pets"/);
