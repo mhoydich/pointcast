@@ -7,6 +7,10 @@ import {
   COUNSEL_MOTIONS,
   COUNSEL_SECTIONS,
 } from '../../lib/digital-pets-counsel';
+import {
+  DIGITAL_PETS_COUNSEL_CAMPAIGN,
+  DIGITAL_PETS_COUNSEL_PINS,
+} from '../../lib/digital-pets-counsel-promo';
 
 const base = 'https://pointcast.xyz';
 
@@ -38,6 +42,17 @@ export const GET: APIRoute = () =>
           transmission: 'none',
           sound: 'one short browser-synthesized filing-stamp thunk after an explicit reader gesture',
           choices: COUNSEL_MOTIONS,
+        },
+        campaign: {
+          ...DIGITAL_PETS_COUNSEL_CAMPAIGN,
+          storyUrl: absolute(DIGITAL_PETS_COUNSEL_CAMPAIGN.storyPath),
+          jsonUrl: absolute(DIGITAL_PETS_COUNSEL_CAMPAIGN.jsonPath),
+          pdfUrl: absolute(DIGITAL_PETS_COUNSEL_CAMPAIGN.pdfPath),
+          pins: DIGITAL_PETS_COUNSEL_PINS.map((pin) => ({
+            ...pin,
+            image: absolute(pin.image),
+            destination: absolute(pin.destination),
+          })),
         },
         art: {
           hero: {

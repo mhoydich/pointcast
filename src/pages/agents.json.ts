@@ -304,6 +304,7 @@ export const GET: APIRoute = async () => {
         creatureCommons: 'https://pointcast.xyz/digital-pets/commons',
         digitalPetsLegacy: 'https://pointcast.xyz/digital-pets/legacy',
         digitalPetsComedy: 'https://pointcast.xyz/digital-pets/counsel',
+        digitalPetsComedyBrief: 'https://pointcast.xyz/downloads/my-pet-has-retained-counsel-brief.pdf',
         pet: 'https://pointcast.xyz/pet',
         pets: 'https://pointcast.xyz/pets',
         sitePetNamePoll: 'https://pointcast.xyz/poll/site-pet-name',

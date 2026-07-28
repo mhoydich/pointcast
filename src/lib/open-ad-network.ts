@@ -22,9 +22,14 @@ import {
   BEACH_BLANKET_PROMOTION_CAMPAIGN,
   BEACH_BLANKET_PROMO_DISPATCHES,
 } from './beach-commons-v8-promotion';
+import {
+  DIGITAL_PETS_COUNSEL_CAMPAIGN,
+  DIGITAL_PETS_COUNSEL_PROMO_DISPATCHES,
+} from './digital-pets-counsel-promo';
 
 export { NOUN_BATTLER_ANNUAL_CAMPAIGN } from './noun-battler-annual-promotion';
 export { BEACH_BLANKET_PROMOTION_CAMPAIGN } from './beach-commons-v8-promotion';
+export { DIGITAL_PETS_COUNSEL_CAMPAIGN } from './digital-pets-counsel-promo';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
   '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
@@ -102,7 +107,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'www.industrynext.xyz',
     surface: 'A first-100 Tezos wallet lead across the Nouns studio, Permission Lab, and Made stream',
     advertiserAliases: ['Industry Next'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -112,7 +117,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'allworthy.xyz',
     surface: 'A first-100 Tezos wallet lead across public-interest funding records and experiments',
     advertiserAliases: ['Allworthy'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -122,7 +127,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'passportz.xyz',
     surface: 'A first-100 Tezos wallet lead across public identity, art, activity, and listening passports',
     advertiserAliases: ['Passportz', 'Tezos Passport'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -132,7 +137,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A clearly labeled first-100 Tezos wallet lead on Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -142,7 +147,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A first-100 Tezos wallet lead across shared rituals, Stampz, and Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
 ];
@@ -302,6 +307,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  ...DIGITAL_PETS_COUNSEL_PROMO_DISPATCHES.map((counselDispatch) => ({
+    id: counselDispatch.id,
+    advertiser: DIGITAL_PETS_COUNSEL_CAMPAIGN.advertiser,
+    headline: counselDispatch.headline,
+    copy: counselDispatch.copy,
+    href: counselDispatch.href,
+    cta: counselDispatch.cta,
+    tone: counselDispatch.tone,
+    contexts: [...counselDispatch.contexts],
+    image: counselDispatch.image,
+    sourceTool: counselDispatch.sourceTool,
+    campaign: DIGITAL_PETS_COUNSEL_CAMPAIGN.id,
+    seriesLabel: DIGITAL_PETS_COUNSEL_CAMPAIGN.label,
+    status: 'house' as const,
+  })),
   ...BEACH_BLANKET_PROMO_DISPATCHES.map((blanketDispatch) => ({
     id: blanketDispatch.id,
     advertiser: BEACH_BLANKET_PROMOTION_CAMPAIGN.advertiser,
@@ -914,6 +934,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const isNounBattlerAnnualSurface = /^\/noun-battler-annual(?:\/|$)/.test(pathname);
   const isBeachCommonsV5Surface = /^\/beach-commons\/v5(?:\/|$)/.test(pathname);
   const isBeachBlanketSurface = /^\/beach-commons\/v8(?:\/|$)/.test(pathname);
+  const isCounselSurface = /^\/digital-pets\/counsel(?:\/|$)/.test(pathname);
+  const counselCreative = ranked.find((ad) => ad.campaign === DIGITAL_PETS_COUNSEL_CAMPAIGN.id);
   const annualCreative = ranked.find((ad) => ad.campaign === NOUN_BATTLER_ANNUAL_CAMPAIGN.id);
   const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
   const blanketCreative = ranked.find((ad) => ad.campaign === BEACH_BLANKET_PROMOTION_CAMPAIGN.id);
@@ -924,6 +946,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     if (!universeCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
     const companionAds = ranked.filter((ad) => (
+      ad.campaign !== DIGITAL_PETS_COUNSEL_CAMPAIGN.id
+      &&
       ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
       &&
       ad.campaign !== BEACH_BLANKET_PROMOTION_CAMPAIGN.id
@@ -935,6 +959,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
     return [
+      isCounselSurface ? undefined : counselCreative,
       isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
       isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
@@ -951,6 +976,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   if (!drumCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
 
   const companionAds = ranked.filter((ad) => (
+    ad.campaign !== DIGITAL_PETS_COUNSEL_CAMPAIGN.id
+    &&
     ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
     &&
     ad.campaign !== BEACH_BLANKET_PROMOTION_CAMPAIGN.id
@@ -962,6 +989,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
   return [
+    isCounselSurface ? undefined : counselCreative,
     isBeachBlanketSurface ? undefined : blanketCreative,
     isNounBattlerAnnualSurface ? undefined : annualCreative,
     drumCreative,
