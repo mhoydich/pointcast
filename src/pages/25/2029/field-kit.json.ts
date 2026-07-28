@@ -19,6 +19,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
       'Each original mark is available at rubber-stamp scale. The optional stamp book stores up to eight school slugs in localStorage and does not transmit identity or behavior.',
     languageMachine:
       'Three-line invitations are assembled locally from bounded PointCast-written phrase sets. They can be copied or rendered onto the current canvas background.',
+    songYard:
+      'The companion Song Yard adds six original song seeds, four sample-free rehearsal parts, a spatial whole-bowl mode, and an optional local-only pitch listener without recordings, uploads, official fight songs, or autoplay.',
     authorship:
       'Michael Hoydich directed the 2029 college-football world. Codex / OpenAI developed the original visual plates, spatial concepts, lo-fi objects, pattern recipes, text system, data contract, and PointCast implementation.',
   },
@@ -27,6 +29,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     generatedStampPng: true,
     copyableText: true,
     browserLocalStampBook: true,
+    companionSongPracticeArea: true,
     accountRequired: false,
     serverUpload: false,
     telemetryAdded: false,

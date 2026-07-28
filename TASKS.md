@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## The Song Yard — Stadium Song Practice / 2029 (2026-07-28)
+
+- [x] (MH) Direct a new area around audio practice and how stadiums can get their songs sung — `done`
+- [x] (X) Write six original short song seeds and a four-part public rehearsal method without official fight songs or recordings — `done`
+- [x] (X) Build the sample-free Web Audio practice desk, spatial whole-bowl mode, and optional local-only pitch listener — `done`
+- [x] (X) Add the twelve-minute practice path, writing rules, identity theming, privacy boundaries, and JSON twin — `done`
+- [x] (X) Add Block 0527, homepage, app, parent, field-kit, sitemap, agent, LLM, and social discovery — `done`
+- [ ] (X) Validate the full suite, responsive browser audio interactions, exact merge, and canonical production release — `in-progress`
+
+---
+
 ## The Amber Seed — Future Book 001 Companion 02 (2026-07-27)
 
 - [x] (MH) Commission a philosophical legacy story with literary-magazine presentation, cartoons, Midjourney art, and interaction — `done`
@@ -25,7 +36,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (X) Build the eight-recipe pattern loom, 25-stamp cabinet, downloadable PNGs, and browser-local eight-stamp book — `done`
 - [x] (X) Build the bounded three-line Saturday invitation generator and canvas text treatment — `done`
 - [x] (X) Add Block 0525, homepage, app, sitemap, agent, LLM, JSON, and social discovery with explicit unofficial boundaries — `done`
-- [ ] (X) Validate the generated site, full suite, responsive browser interactions, and exact production release — `in-progress`
+- [x] (X) Validate the generated site, full suite, responsive browser interactions, and exact production release — `done` — PR #904, commit `f723134`
 
 ---
 
