@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## The Amber Seed — Future Book 001 Companion 02 (2026-07-27)
+
+- [x] (MH) Commission a philosophical legacy story with literary-magazine presentation, cartoons, Midjourney art, and interaction — `done`
+- [x] (X) Write the complete original 2098 Creature Commons fable and disclose the style translation — `done`
+- [x] (X) Generate the hero and two ink cartoons; curate three existing Midjourney archive interludes — `done`
+- [x] (X) Build the responsive literary issue, browser-local amber-seed choice, gesture-gated sound, and JSON twin — `done`
+- [x] (X) Validate the complete issue, structured twin, interaction, full test suite, and responsive layouts — `done`
+- [ ] (X) Merge and deploy the exact reviewed production build — `in-progress`
+
+---
+
 ## Creature Commons LA — Future Book 001 Companion 01 (2026-07-27)
 
 - [x] (MH) Choose an open chef’s-choice brief for the local commons direction — `done`
