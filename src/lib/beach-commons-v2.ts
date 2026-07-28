@@ -23,8 +23,8 @@ export const BEACH_COMMONS_V2 = {
   publishedAt: '2026-07-26',
   previousEdition: {
     title: 'Beach Commons — Hardpoint + Softkit',
-    url: 'https://pointcast.xyz/beach-commons',
-    jsonUrl: 'https://pointcast.xyz/beach-commons.json',
+    url: 'https://pointcast.xyz/beach-commons/v1',
+    jsonUrl: 'https://pointcast.xyz/beach-commons/v1.json',
   },
   nextEdition: {
     title: 'Beach Commons V3 — Flash Bakery + Palm Loom',

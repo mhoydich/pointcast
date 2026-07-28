@@ -131,6 +131,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/garden-signal/open-heart.json', 'weekly', '0.94'],
   ['https://pointcast.xyz/beach-commons', 'weekly', '0.92'],
   ['https://pointcast.xyz/beach-commons.json', 'weekly', '0.88'],
+  ['https://pointcast.xyz/beach-commons/v1', 'weekly', '0.92'],
+  ['https://pointcast.xyz/beach-commons/v1.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/beach-commons/v2', 'weekly', '0.94'],
   ['https://pointcast.xyz/beach-commons/v2.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/beach-commons/v3', 'weekly', '0.96'],
