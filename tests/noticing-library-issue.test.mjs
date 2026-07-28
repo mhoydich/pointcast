@@ -60,7 +60,7 @@ test('current services, proposals, and reporting limits are separated truthfully
 test('Issue 01 has a Block and complete human and machine discovery', async () => {
   const [blockText, home, sitemap, agents, forAgents, llms, llmsFull] = await Promise.all([
     read('src/content/blocks/0515.json'),
-    read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('src/pages/agents.json.ts'),
     read('src/pages/for-agents.astro'),
@@ -75,7 +75,7 @@ test('Issue 01 has a Block and complete human and machine discovery', async () =
   assert.equal(block.meta.publicationStatus, 'published');
   assert.equal(block.meta.visualPlates, 3);
   assert.equal(block.meta.researchSources, 8);
-  assert.match(home, /href="\/noticing\/why-lacroix"/);
+  assert.match(home, /href="\/noticing\/the-future-of-the-library"/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/the-future-of-the-library'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/the-future-of-the-library\.json'/);
   assert.match(agents, /noticingLibrary: 'https:\/\/pointcast\.xyz\/noticing\/the-future-of-the-library'/);

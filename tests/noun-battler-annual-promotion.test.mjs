@@ -5,10 +5,9 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const promotion = await import(new URL("src/lib/noun-battler-annual-promotion.ts", root));
 
-const [home, homeStyles, registry, desk, receipt, share, shareJson, annualJson, agents, forAgents, llms, llmsFull] =
+const [homeEdition, registry, desk, receipt, share, shareJson, annualJson, agents, forAgents, llms, llmsFull] =
   await Promise.all([
-    readFile(new URL("src/pages/index.astro", root), "utf8"),
-    readFile(new URL("src/styles/front-door-fresh.css", root), "utf8"),
+    readFile(new URL("src/components/HomeNewEdition.astro", root), "utf8"),
     readFile(new URL("src/lib/open-ad-network.ts", root), "utf8"),
     readFile(new URL("src/pages/ads.astro", root), "utf8"),
     readFile(new URL("src/pages/ads.json.ts", root), "utf8"),
@@ -38,15 +37,9 @@ test("the annual gets three coherent, copy-ready sports-desk dispatches", async 
   }
 });
 
-test("the homepage runs a professional top-of-edition annual feature", () => {
-  assert.match(home, /battle-record-splash/);
-  assert.match(home, /Now on the newsstand/);
-  assert.match(home, /Read the interactive annual/);
-  assert.match(home, /NOUN_BATTLER_ANNUAL_META\.plates\[0\]\.path/);
-  assert.match(home, /mainEntity:[\s\S]*NOUN_BATTLER_ANNUAL_META\.canonical/);
-  assert.match(homeStyles, /\.battle-record-splash__scorebug/);
-  assert.match(homeStyles, /@media \(max-width: 600px\)[\s\S]*\.battle-record-splash__bottomline/);
-  assert.match(homeStyles, /grid-template-columns: minmax\(0, 1fr\) auto/);
+test("the annual remains linked from the refreshed current edition", () => {
+  assert.match(homeEdition, /href="\/noun-battler-annual"/);
+  assert.match(homeEdition, /The Battle Record/);
 });
 
 test("the opening-week campaign is public, contextual, and pinned without self-advertising", () => {

@@ -63,7 +63,7 @@ test('company claims, evidence, editorial reading, and useful limits stay separa
 test('Issue 02 has a permanent Block and complete discovery companions', async () => {
   const [blockText, home, sitemap, agents, forAgents, llms, llmsFull, calendar] = await Promise.all([
     read('src/content/blocks/0519.json'),
-    read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('src/pages/agents.json.ts'),
     read('src/pages/for-agents.astro'),

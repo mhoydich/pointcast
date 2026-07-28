@@ -61,7 +61,7 @@ test('The editorial calendar has truthful machine, Block, home, and discovery co
     read('src/pages/noticing.json.ts'),
     read('src/lib/noticing.ts'),
     read('src/content/blocks/0512.json'),
-    read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
@@ -77,7 +77,7 @@ test('The editorial calendar has truthful machine, Block, home, and discovery co
   assert.equal(block.external.url, 'https://pointcast.xyz/noticing');
   assert.equal(block.meta.publicationStatus, 'editorial calendar');
   assert.match(home, /href="\/noticing\/why-lacroix"/);
-  assert.match(home, /Why <em>LaCroix/);
+  assert.match(home, /Why LaCroix · Block 0519/);
   assert.match(sitemap, /pointcast\.xyz\/noticing'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\.json'/);
   assert.match(llms, /What I Keep Noticing/);

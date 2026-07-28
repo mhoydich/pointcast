@@ -65,7 +65,7 @@ test('Issue 03 has a permanent Block and complete discovery companions', async (
   const [blockText, home, sitemap, agents, forAgents, llms, llmsFull, calendar, priorIssue] =
     await Promise.all([
       read('src/content/blocks/0523.json'),
-      read('src/pages/index.astro'),
+      read('src/components/HomeNewEdition.astro'),
       read('src/pages/sitemap-discovery.xml.ts'),
       read('src/pages/agents.json.ts'),
       read('src/pages/for-agents.astro'),
@@ -84,7 +84,7 @@ test('Issue 03 has a permanent Block and complete discovery companions', async (
   assert.equal(block.meta.researchSources, 10);
   assert.equal(block.meta.interactiveInstruments, 2);
   assert.equal(block.meta.notAffiliatedWithNintendo, true);
-  assert.match(home, /href="\/noticing\/animal-crossing-gift-economy"/);
+  assert.match(home, /href: '\/noticing\/animal-crossing-gift-economy'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/animal-crossing-gift-economy'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/animal-crossing-gift-economy\.json'/);
   assert.match(
