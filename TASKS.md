@@ -25,7 +25,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (X) Generate the hero and two ink cartoons; curate three existing Midjourney works as case exhibits — `done`
 - [x] (X) Build the responsive comedy issue, browser-local ruling, gesture-gated filing stamp, and JSON twin — `done`
 - [x] (X) Validate the complete issue, structured twin, full test suite, and responsive interactions — `done`
-- [ ] (X) Merge and deploy the exact reviewed production build — `in-progress`
+- [x] (X) Merge and deploy the exact reviewed production build — `done`
 
 ---
 
