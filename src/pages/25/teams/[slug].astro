@@ -1,0 +1,480 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { POINTCAST_25, POINTCAST_25_SIGNAL_LABELS } from '../../../lib/pointcast-25';
+import {
+  POINTCAST_25_REFERENCE,
+  POINTCAST_25_TEAMS,
+} from '../../../lib/pointcast-25-audience';
+
+export function getStaticPaths() {
+  return POINTCAST_25_TEAMS.map((team) => ({
+    params: { slug: team.slug },
+    props: { team },
+  }));
+}
+
+const { team } = Astro.props as { team: (typeof POINTCAST_25_TEAMS)[number] };
+const teamIndex = POINTCAST_25_TEAMS.findIndex((candidate) => candidate.slug === team.slug);
+const previous = teamIndex > 0 ? POINTCAST_25_TEAMS[teamIndex - 1] : null;
+const next = teamIndex < POINTCAST_25_TEAMS.length - 1 ? POINTCAST_25_TEAMS[teamIndex + 1] : null;
+const signalLabel = POINTCAST_25_SIGNAL_LABELS[team.signal];
+const description = `${team.school} enters the 2026 college-football season No. ${team.rank} in the PointCast 25. Read the case, doubt, next proof, and preseason ranking comparison.`;
+const pageUrl = `https://pointcast.xyz/25/teams/${team.slug}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${pageUrl}#article`,
+      headline: `${team.school} 2026 football outlook and PointCast ranking`,
+      description,
+      datePublished: POINTCAST_25.publishedAt,
+      dateModified: POINTCAST_25.publishedAt,
+      url: pageUrl,
+      mainEntityOfPage: pageUrl,
+      isPartOf: {
+        '@type': 'CollectionPage',
+        '@id': 'https://pointcast.xyz/25#board',
+        name: '25 FOR REASONS',
+      },
+      about: {
+        '@type': 'SportsTeam',
+        name: team.school,
+        sport: 'College football',
+      },
+      author: {
+        '@type': 'Organization',
+        name: 'PointCast',
+        url: 'https://pointcast.xyz',
+      },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'PointCast', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: '25 FOR REASONS', item: 'https://pointcast.xyz/25' },
+        { '@type': 'ListItem', position: 3, name: team.school, item: pageUrl },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={`${team.school} 2026 Football Outlook & Ranking`}
+  description={description}
+  image="/images/pointcast-25/board-000.png"
+  themeColor={team.accent}
+  jsonLd={jsonLd}
+  immersive={true}
+  showNetworkStrip={false}
+  alternates={[
+    {
+      type: 'application/json',
+      href: `/25/teams/${team.slug}.json`,
+      title: `${team.school} PointCast 25 JSON`,
+    },
+  ]}
+>
+  <main class="team-page" style={`--team:${team.accent}`}>
+    <header class="mast">
+      <a class="brand" href="/">POINTCAST</a>
+      <nav aria-label="PointCast 25 team navigation">
+        <a href="/25">Current 25</a>
+        <a href="/25/disagreements">Disagreements</a>
+        <a href="/25/receipts">Receipts</a>
+        <a href={`/25/teams/${team.slug}.json`}>JSON</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="rank" aria-label={`PointCast rank ${team.rank}`}>
+        <small>POINTCAST RANK</small>
+        <strong>{String(team.rank).padStart(2, '0')}</strong>
+      </div>
+      <div class="identity">
+        <p>{team.conference} · {signalLabel} · Board {POINTCAST_25.board}</p>
+        <h1>{team.school}</h1>
+        <p class="reason">{team.reason}</p>
+      </div>
+    </section>
+
+    <section class="comparison" aria-labelledby="comparison-title">
+      <div>
+        <p class="label">THE DIFFERENCE</p>
+        <h2 id="comparison-title">{team.comparison}</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>PointCast</dt>
+          <dd>#{team.rank}</dd>
+        </div>
+        <div>
+          <dt>{POINTCAST_25_REFERENCE.shortName}</dt>
+          <dd>{team.referenceRank ? `#${team.referenceRank}` : 'NR'}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="receipts" aria-labelledby="receipts-title">
+      <div class="section-head">
+        <p class="label">THE RECEIPTS</p>
+        <h2 id="receipts-title">The case can survive.<br />Or it can die in public.</h2>
+      </div>
+      <div class="receipt-grid">
+        <article>
+          <span>01 · CASE</span>
+          <p>{team.case}</p>
+        </article>
+        <article>
+          <span>02 · DOUBT</span>
+          <p>{team.doubt}</p>
+        </article>
+        <article>
+          <span>03 · NEXT PROOF</span>
+          <p>{team.proof}</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="status" aria-labelledby="status-title">
+      <span class="status__mark">OPEN</span>
+      <div>
+        <p class="label">CLAIM STATUS</p>
+        <h2 id="status-title">No games yet. No victory lap yet.</h2>
+        <p>
+          This claim opened with Board {POINTCAST_25.board} on July 27, 2026.
+          PointCast will mark it proven, alive, complicated, or dead as evidence arrives.
+        </p>
+        <a href="/25/receipts">Open the complete receipt book →</a>
+      </div>
+    </section>
+
+    <section class="source" aria-labelledby="source-title">
+      <div>
+        <p class="label">REFERENCE BOARD</p>
+        <h2 id="source-title">One comparison, clearly labeled.</h2>
+      </div>
+      <p>
+        {POINTCAST_25_REFERENCE.note}
+        <a href={POINTCAST_25_REFERENCE.url} target="_blank" rel="noopener">
+          Read the reported FPI board ↗
+        </a>
+      </p>
+    </section>
+
+    <footer>
+      {previous ? (
+        <a href={`/25/teams/${previous.slug}`}>
+          <small>ONE PLACE HIGHER</small>
+          <strong>#{previous.rank} {previous.school}</strong>
+        </a>
+      ) : <span></span>}
+      {next ? (
+        <a class="next" href={`/25/teams/${next.slug}`}>
+          <small>NEXT TEAM</small>
+          <strong>#{next.rank} {next.school}</strong>
+        </a>
+      ) : <a class="next" href="/25"><small>RETURN</small><strong>THE COMPLETE 25</strong></a>}
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #f5f2e8;
+    color: #11110f;
+    font-family: var(--pc-font-sans);
+  }
+
+  .team-page {
+    margin: 0 auto;
+    max-width: 1500px;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .mast,
+  .mast nav,
+  footer {
+    align-items: center;
+    display: flex;
+  }
+
+  .mast {
+    border-bottom: 1px solid #11110f;
+    justify-content: space-between;
+    padding: 20px clamp(18px, 4vw, 64px);
+  }
+
+  .brand {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+  }
+
+  .mast nav {
+    gap: clamp(12px, 2vw, 28px);
+  }
+
+  a {
+    color: inherit;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+  }
+
+  .mast a,
+  .label,
+  .rank small,
+  .identity > p,
+  .receipt-grid span,
+  dt,
+  footer small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.34fr) 1fr;
+    min-height: 68vh;
+  }
+
+  .rank {
+    background: var(--team);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px clamp(18px, 4vw, 64px);
+  }
+
+  .rank strong {
+    font-size: clamp(150px, 28vw, 430px);
+    letter-spacing: -0.13em;
+    line-height: 0.7;
+    transform: translateX(-0.08em);
+  }
+
+  .identity {
+    align-self: end;
+    padding: 55px clamp(18px, 5vw, 80px);
+  }
+
+  .identity h1 {
+    font-size: clamp(66px, 12vw, 180px);
+    letter-spacing: -0.09em;
+    line-height: 0.78;
+    margin: 30px 0 44px;
+    max-width: 1000px;
+    text-wrap: balance;
+  }
+
+  .reason {
+    font-size: clamp(24px, 3vw, 46px);
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    margin: 0;
+    max-width: 920px;
+  }
+
+  .comparison,
+  .source {
+    border-top: 1px solid #11110f;
+    display: grid;
+    gap: 50px;
+    grid-template-columns: 1fr 0.65fr;
+    padding: 70px clamp(18px, 5vw, 80px);
+  }
+
+  .comparison h2,
+  .section-head h2,
+  .status h2,
+  .source h2 {
+    font-size: clamp(34px, 5vw, 76px);
+    letter-spacing: -0.06em;
+    line-height: 0.98;
+    margin: 18px 0 0;
+  }
+
+  dl {
+    align-self: start;
+    border-top: 8px solid #11110f;
+    margin: 0;
+  }
+
+  dl div {
+    align-items: baseline;
+    border-bottom: 1px solid #11110f;
+    display: flex;
+    justify-content: space-between;
+    padding: 18px 0;
+  }
+
+  dd {
+    font-size: clamp(48px, 7vw, 90px);
+    font-weight: 900;
+    letter-spacing: -0.08em;
+    margin: 0;
+  }
+
+  .receipts {
+    background: #11110f;
+    color: #f5f2e8;
+    padding: 90px clamp(18px, 5vw, 80px);
+  }
+
+  .section-head {
+    display: grid;
+    gap: 30px;
+    grid-template-columns: 0.3fr 1fr;
+  }
+
+  .section-head h2 {
+    margin: 0;
+  }
+
+  .receipt-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 75px;
+  }
+
+  .receipt-grid article {
+    border-left: 1px solid #4a4943;
+    min-height: 260px;
+    padding: 25px;
+  }
+
+  .receipt-grid article:first-child {
+    border-left-color: var(--team);
+  }
+
+  .receipt-grid span {
+    color: #a8a69d;
+  }
+
+  .receipt-grid p,
+  .status p,
+  .source > p {
+    font-size: clamp(19px, 2vw, 28px);
+    line-height: 1.45;
+  }
+
+  .status {
+    border-bottom: 1px solid #11110f;
+    display: grid;
+    gap: 55px;
+    grid-template-columns: minmax(180px, 0.35fr) 1fr;
+    padding: 90px clamp(18px, 5vw, 80px);
+  }
+
+  .status__mark {
+    color: var(--team);
+    font-size: clamp(70px, 12vw, 170px);
+    font-weight: 900;
+    letter-spacing: -0.1em;
+    line-height: 0.8;
+  }
+
+  .source > p {
+    margin: 0;
+  }
+
+  .source a {
+    display: block;
+    font-weight: 800;
+    margin-top: 20px;
+  }
+
+  footer {
+    background: var(--team);
+    color: #fff;
+    justify-content: space-between;
+    padding: 34px clamp(18px, 5vw, 80px);
+  }
+
+  footer a {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+  }
+
+  footer .next {
+    text-align: right;
+  }
+
+  footer strong {
+    font-size: clamp(18px, 2.5vw, 34px);
+    letter-spacing: -0.04em;
+  }
+
+  @media (max-width: 760px) {
+    .mast {
+      align-items: flex-start;
+    }
+
+    .mast nav {
+      align-items: flex-end;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hero,
+    .comparison,
+    .source,
+    .section-head,
+    .status {
+      grid-template-columns: 1fr;
+    }
+
+    .hero {
+      min-height: 0;
+    }
+
+    .rank {
+      min-height: 230px;
+    }
+
+    .rank strong {
+      font-size: 170px;
+    }
+
+    .identity {
+      padding-top: 45px;
+    }
+
+    .receipt-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .receipt-grid article {
+      border-left: 0;
+      border-top: 1px solid #4a4943;
+      min-height: 0;
+      padding: 26px 0;
+    }
+
+    .receipt-grid article:first-child {
+      border-top-color: var(--team);
+    }
+
+    .comparison,
+    .source,
+    .receipts,
+    .status {
+      padding-bottom: 64px;
+      padding-top: 64px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      scroll-behavior: auto !important;
+    }
+  }
+</style>

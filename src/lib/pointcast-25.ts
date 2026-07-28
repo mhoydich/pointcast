@@ -442,6 +442,7 @@ export const POINTCAST_25_EDITIONS = [
       reason: team.reason,
     })),
     human: 'https://pointcast.xyz/b/0510',
+    snapshot: 'https://pointcast.xyz/25/boards/000',
     machine: 'https://pointcast.xyz/25/boards/000.json',
     current: 'https://pointcast.xyz/25',
     block: '0510',

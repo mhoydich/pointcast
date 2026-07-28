@@ -127,3 +127,93 @@ test('Board 000 social card is a 1200 by 630 PNG', async () => {
   await access(card);
   assert.deepEqual(pngSize(await readFile(card)), { width: 1200, height: 630 });
 });
+
+test('every PointCast 25 team has an indexable human case and adjacent JSON receipt', async () => {
+  const [audience, teamPage, teamJson, currentJson, sitemap] = await Promise.all([
+    read('src/lib/pointcast-25-audience.ts'),
+    read('src/pages/25/teams/[slug].astro'),
+    read('src/pages/25/teams/[slug].json.ts'),
+    read('src/pages/25.json.ts'),
+    read('src/pages/sitemap-discovery.xml.ts'),
+  ]);
+
+  assert.match(audience, /POINTCAST_25_TEAMS = POINTCAST_25\.teams\.map/);
+  assert.match(teamPage, /getStaticPaths/);
+  assert.match(teamPage, /SportsTeam/);
+  assert.match(teamPage, /THE DIFFERENCE/);
+  assert.match(teamPage, /THE RECEIPTS/);
+  assert.match(teamJson, /pointcast\.25-team-receipt\/v1/);
+  assert.match(teamJson, /Access-Control-Allow-Origin/);
+  assert.match(currentJson, /teamCases: POINTCAST_25_TEAMS\.map/);
+  assert.match(sitemap, /25\/teams\/\$\{team\.slug\}/);
+});
+
+test('the Disagreement Index is a sourced, bounded comparison rather than fake consensus', async () => {
+  const [audience, page, endpoint, block] = await Promise.all([
+    read('src/lib/pointcast-25-audience.ts'),
+    read('src/pages/25/disagreements.astro'),
+    read('src/pages/25/disagreements.json.ts'),
+    read('src/content/blocks/0517.json'),
+  ]);
+  const release = JSON.parse(block);
+
+  assert.match(audience, /dissentSchools = \['Penn State', 'BYU', 'Utah', 'Washington', 'Boise State'\]/);
+  assert.match(audience, /one legible reference board, not as a universal consensus/);
+  assert.match(page, /Not anti-model/);
+  assert.match(page, /data-copy-team/);
+  assert.match(endpoint, /pointcast\.25-disagreement-index\/v1/);
+  assert.match(endpoint, /not a claim of universal consensus/);
+  assert.equal(release.id, '0517');
+  assert.equal(release.channel, 'SPN');
+  assert.equal(release.meta.disagreements, 5);
+  assert.equal(release.external.url, 'https://pointcast.xyz/25/disagreements');
+});
+
+test('the public receipt book opens every preseason claim and defines durable grades', async () => {
+  const [audience, page, endpoint, boardPage] = await Promise.all([
+    read('src/lib/pointcast-25-audience.ts'),
+    read('src/pages/25/receipts.astro'),
+    read('src/pages/25/receipts.json.ts'),
+    read('src/pages/25/boards/000.astro'),
+  ]);
+
+  assert.match(audience, /POINTCAST_25_RECEIPTS = POINTCAST_25_TEAMS\.map/);
+  assert.match(page, /KEEP/);
+  assert.match(page, /Revision is allowed/);
+  assert.match(endpoint, /OPEN/);
+  assert.match(endpoint, /ALIVE/);
+  assert.match(endpoint, /COMPLICATED/);
+  assert.match(endpoint, /PROVEN/);
+  assert.match(endpoint, /DEAD/);
+  assert.match(boardPage, /IMMUTABLE EDITION/);
+  assert.match(boardPage, /POINTCAST_25_TEAMS\.map/);
+});
+
+test('the audience desk is advertised across human, machine, LLM, and homepage discovery', async () => {
+  const [home, current, season, agents, forAgents, sitemap, llms, llmsFull] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/pages/25/index.astro'),
+    read('src/pages/25/season.astro'),
+    read('src/pages/agents.json.ts'),
+    read('src/pages/for-agents.astro'),
+    read('src/pages/sitemap-discovery.xml.ts'),
+    read('public/llms.txt'),
+    read('public/llms-full.txt'),
+  ]);
+
+  for (const text of [home, current, season, agents, forAgents, sitemap, llms, llmsFull]) {
+    assert.match(text, /25\/disagreements/);
+    assert.match(text, /25\/receipts/);
+  }
+  assert.match(home, /25 permanent team pages/);
+  assert.match(current, /POINTCAST_25_DISSENTS/);
+  assert.match(forAgents, /25\/teams/);
+  assert.match(llms, /https:\/\/pointcast\.xyz\/b\/0510/);
+  assert.doesNotMatch(llms, /Permanent release: https:\/\/pointcast\.xyz\/b\/0512/);
+});
+
+test('Disagreement Index social card is a 1200 by 630 PNG', async () => {
+  const card = new URL('../public/images/pointcast-25/disagreement-000.png', import.meta.url);
+  await access(card);
+  assert.deepEqual(pngSize(await readFile(card)), { width: 1200, height: 630 });
+});
