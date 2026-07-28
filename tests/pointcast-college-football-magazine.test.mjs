@@ -13,7 +13,7 @@ function pngSize(buffer) {
   };
 }
 
-test('Issue 001 defines a seven-desk college-football magazine', async () => {
+test('Issue 001 defines an eight-desk college-football magazine', async () => {
   const data = await read('src/lib/pointcast-college-football-magazine.ts');
   const page = await read('src/pages/25/magazine/index.astro');
 
@@ -25,13 +25,15 @@ test('Issue 001 defines a seven-desk college-football magazine', async () => {
     'Future School',
     'Saturday Commons',
     'The Season Ledger',
+    'The House Desk',
   ]) {
     assert.match(data, new RegExp(`name: '${desk}'`));
   }
 
   assert.match(data, /issue: '001'/);
   assert.match(data, /The ranking is one department/);
-  assert.match(page, /Seven desks/);
+  assert.match(page, /COLLEGE_FOOTBALL_MAGAZINE\.departments\.length/);
+  assert.match(page, /THE HOUSE/);
   assert.match(page, /THE MAGAZINE SYSTEM/);
   assert.match(page, /RESEARCH DESK/);
 });
@@ -47,6 +49,7 @@ test('the repertoire report contains 35 programs, 16 dossiers, and 48 references
   assert.equal(block.meta.researchedRepertoirePrograms, 16);
   assert.equal(block.meta.songReferences, 48);
   assert.equal(block.meta.evidenceLabels, 3);
+  assert.equal(block.meta.departments, 8);
 
   assert.match(data, /SONG_YARD_PROGRAMS/);
   assert.match(data, /SONG_YARD_REPERTOIRE_PROGRAMS/);

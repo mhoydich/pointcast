@@ -542,6 +542,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'The append-only memory that turns weekly opinion into an end-of-season autopsy.',
       href: '/25/season',
     },
+    {
+      number: '08',
+      name: 'The House Desk',
+      kicker: 'College life / fraternity / belonging',
+      description: 'Longform campus culture: the rooms, friendships, rituals, exclusions, and repairs around the game.',
+      href: '/25/magazine/the-house-we-borrowed',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
