@@ -18,6 +18,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Saturday Commons — PointCast 25 / 2029 Field Kit (2026-07-27)
+
+- [x] (MH) Direct the next 2029 volume toward design patterns, stadium views, fan experiences, campus third spaces, lo-fi accessories, stamps, backgrounds, and a text generator — `done`
+- [x] (X) Generate and verify twelve original stadium, fan-ritual, third-space, and accessory plates — `done`
+- [x] (X) Build the eight-recipe pattern loom, 25-stamp cabinet, downloadable PNGs, and browser-local eight-stamp book — `done`
+- [x] (X) Build the bounded three-line Saturday invitation generator and canvas text treatment — `done`
+- [x] (X) Add Block 0525, homepage, app, sitemap, agent, LLM, JSON, and social discovery with explicit unofficial boundaries — `done`
+- [ ] (X) Validate the generated site, full suite, responsive browser interactions, and exact production release — `in-progress`
+
+---
+
 ## Creature Commons LA — Future Book 001 Companion 01 (2026-07-27)
 
 - [x] (MH) Choose an open chef’s-choice brief for the local commons direction — `done`
