@@ -37,7 +37,9 @@ test('household legal brief campaign is a bounded three-ad, five-pin system', as
   assert.equal(new Set(promo.dispatches.map((item) => item.id)).size, 3);
   assert.equal(new Set(promo.pins.map((item) => item.id)).size, 5);
 
-  const pdf = await readFile(new URL(`public${promo.campaign.pdfPath}`, root));
+  const pdf = await readFile(
+    new URL('src/assets/downloads/my-pet-has-retained-counsel-brief.pdf', root),
+  );
   assert.ok(pdf.length > 100_000, 'campaign PDF is unexpectedly small');
   assert.equal(pdf.subarray(0, 4).toString('ascii'), '%PDF');
 
@@ -70,9 +72,10 @@ test('comedy campaign is recorded across the contextual and reciprocal ad networ
 });
 
 test('story, machine twin, and discovery surfaces expose the campaign artifact', async () => {
-  const [story, json, sitemap, agents, forAgents, llms, llmsFull, tasks] = await Promise.all([
+  const [story, json, pdfRoute, sitemap, agents, forAgents, llms, llmsFull, tasks] = await Promise.all([
     read('src/pages/digital-pets/counsel.astro'),
     read('src/pages/digital-pets/counsel.json.ts'),
+    read('src/pages/downloads/my-pet-has-retained-counsel-brief.pdf.ts'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('src/pages/agents.json.ts'),
     read('src/pages/for-agents.astro'),
@@ -84,6 +87,8 @@ test('story, machine twin, and discovery surfaces expose the campaign artifact',
   assert.match(story, /my-pet-has-retained-counsel-brief\.pdf/);
   assert.match(json, /DIGITAL_PETS_COUNSEL_PINS/);
   assert.match(json, /pdfUrl/);
+  assert.match(pdfRoute, /Content-Type': 'application\/pdf/);
+  assert.match(pdfRoute, /readFileSync\(briefPath\)/);
   assert.match(sitemap, /my-pet-has-retained-counsel-brief\.pdf/);
   assert.match(agents, /digitalPetsComedyBrief/);
   assert.match(forAgents, /PC-DIGITAL-PETS-COUNSEL-2026/);
