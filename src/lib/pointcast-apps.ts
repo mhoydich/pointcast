@@ -111,6 +111,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'saturday-rebranded-2029',
+    name: 'Saturday, Rebranded',
+    kicker: '25 NEW MARKS · FUTURE STADIUMS · CAMPUS SYSTEMS · STUDENT GEAR',
+    description: 'An unofficial 2029 visual expansion draft for the current PointCast 25: original place-derived abstract identities, civic stadium futures, campus interventions, and repairable student kit.',
+    url: 'https://pointcast.xyz/25/2029',
+    path: '/25/2029',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',
