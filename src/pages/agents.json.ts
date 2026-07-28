@@ -131,6 +131,8 @@ export const GET: APIRoute = async () => {
         pointcast25Terms: 'https://pointcast.xyz/25/terms',
         pointcast2029: 'https://pointcast.xyz/25/2029',
         pointcast2029Json: 'https://pointcast.xyz/25/2029.json',
+        pointcast2029FieldKit: 'https://pointcast.xyz/25/2029/field-kit',
+        pointcast2029FieldKitJson: 'https://pointcast.xyz/25/2029/field-kit.json',
         pointcast2029IdentityPattern: 'https://pointcast.xyz/25/2029/{team-slug}',
         pointcast2029IdentityJsonPattern: 'https://pointcast.xyz/25/2029/{team-slug}.json',
         mascotBattler: 'https://pointcast.xyz/mascot-battler',

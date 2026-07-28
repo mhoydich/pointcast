@@ -263,6 +263,12 @@ export const POINTCAST_2029 = {
   publishedAt: '2026-07-27T22:29:00-07:00',
   canonical: 'https://pointcast.xyz/25/2029',
   machineEdition: 'https://pointcast.xyz/25/2029.json',
+  fieldKit: {
+    title: 'Saturday Commons',
+    canonical: 'https://pointcast.xyz/25/2029/field-kit',
+    machineEdition: 'https://pointcast.xyz/25/2029/field-kit.json',
+    block: '0525',
+  },
   block: '0524',
   board: '000',
   visualPlates: [

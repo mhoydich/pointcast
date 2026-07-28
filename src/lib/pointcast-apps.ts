@@ -122,6 +122,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'saturday-commons-2029',
+    name: 'Saturday Commons',
+    kicker: '12 FIELD PLATES · 25 STAMPS · 8 BACKGROUNDS · TEXT MACHINE',
+    description: 'A playable 2029 field kit for the PointCast 25: new stadium views, fan rituals, campus third spaces, lo-fi carry studies, a procedural pattern loom, local stamp book, and three-line invitation generator.',
+    url: 'https://pointcast.xyz/25/2029/field-kit',
+    path: '/25/2029/field-kit',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',
