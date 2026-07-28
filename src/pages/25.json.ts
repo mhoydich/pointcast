@@ -17,6 +17,15 @@ export const GET: APIRoute = () =>
           receiptBookJson: 'https://pointcast.xyz/25/receipts.json',
           immutableBoard: 'https://pointcast.xyz/25/boards/000',
           immutableBoardJson: 'https://pointcast.xyz/25/boards/000.json',
+          fieldFiles: [
+            {
+              title: 'The State of Alabama / The State of Nick Saban',
+              human: 'https://pointcast.xyz/25/alabama-after-saban',
+              json: 'https://pointcast.xyz/25/alabama-after-saban.json',
+              block: 'https://pointcast.xyz/b/0529',
+              checkedAt: '2026-07-28',
+            },
+          ],
           teamCases: POINTCAST_25_TEAMS.map((team) => ({
             team: team.school,
             human: `https://pointcast.xyz/25/teams/${team.slug}`,
