@@ -281,13 +281,13 @@ export const POINTCAST_2029 = {
     ...[1, 2, 3, 4, 5].map((house) => ({
       kind: 'mark-house',
       title: `Mark House ${String(house).padStart(2, '0')}`,
-      image: `/images/pointcast-2029/mark-house-0${house}.png`,
+      image: `/images/pointcast-2029/mark-house-0${house}.webp`,
     })),
-    { kind: 'stadium', title: 'Great Lakes Civic Bowl', image: '/images/pointcast-2029/stadium-great-lakes.png' },
-    { kind: 'stadium', title: 'River Night Commons', image: '/images/pointcast-2029/stadium-river-night.png' },
-    { kind: 'stadium', title: 'Mountain Rain Roof', image: '/images/pointcast-2029/stadium-mountain-rain.png' },
-    { kind: 'gear', title: 'Transit Kit', image: '/images/pointcast-2029/gear-transit-kit.png' },
-    { kind: 'gear', title: 'Band, Newsroom, Night Shift', image: '/images/pointcast-2029/gear-night-shift.png' },
+    { kind: 'stadium', title: 'Great Lakes Civic Bowl', image: '/images/pointcast-2029/stadium-great-lakes.webp' },
+    { kind: 'stadium', title: 'River Night Commons', image: '/images/pointcast-2029/stadium-river-night.webp' },
+    { kind: 'stadium', title: 'Mountain Rain Roof', image: '/images/pointcast-2029/stadium-mountain-rain.webp' },
+    { kind: 'gear', title: 'Transit Kit', image: '/images/pointcast-2029/gear-transit-kit.webp' },
+    { kind: 'gear', title: 'Band, Newsroom, Night Shift', image: '/images/pointcast-2029/gear-night-shift.webp' },
   ],
   rules: [
     'Place before mascot: landscape, weather, civic memory, and useful infrastructure lead.',
@@ -320,7 +320,7 @@ export const POINTCAST_2029_IDENTITIES: PointCast2029Identity[] = MASCOT_CARDS.m
     ...direction,
     markPaths: [...direction.markPaths],
     house,
-    houseArt: `/images/pointcast-2029/mark-house-0${house}.png`,
+    houseArt: `/images/pointcast-2029/mark-house-0${house}.webp`,
     canonical: `https://pointcast.xyz/25/2029/${card.slug}`,
     machineEdition: `https://pointcast.xyz/25/2029/${card.slug}.json`,
   };

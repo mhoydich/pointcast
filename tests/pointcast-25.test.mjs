@@ -117,7 +117,7 @@ test('checkout is a narrow redirect to Stripe-hosted HTTPS pages', async () => {
   assert.match(terms, /does not renew automatically/);
   assert.match(terms, /does not receive or store/);
   assert.match(terms, /hello@pointcast\.xyz/);
-  assert.match(thanks, /Stripe will send the payment receipt/);
+  assert.match(thanks, /Stripe sends the payment receipt/);
   assert.match(thanks, /noindex=\{true\}/);
   assert.match(layout, /noindex, nofollow/);
 });
