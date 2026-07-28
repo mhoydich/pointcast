@@ -269,6 +269,12 @@ export const POINTCAST_2029 = {
     machineEdition: 'https://pointcast.xyz/25/2029/field-kit.json',
     block: '0525',
   },
+  songYard: {
+    title: 'The Song Yard',
+    canonical: 'https://pointcast.xyz/25/2029/song-yard',
+    machineEdition: 'https://pointcast.xyz/25/2029/song-yard.json',
+    block: '0527',
+  },
   block: '0524',
   board: '000',
   visualPlates: [

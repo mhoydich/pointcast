@@ -133,6 +133,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'song-yard-2029',
+    name: 'The Song Yard',
+    kicker: '6 ORIGINAL SONG SEEDS · 4 REHEARSAL PARTS · LOCAL PITCH LISTENER',
+    description: 'A sample-free stadium-song practice commons: learn one original call or answer, add the low floor and shared hands, open a spatial four-section bowl, and optionally check pitch locally without recording or uploading a voice.',
+    url: 'https://pointcast.xyz/25/2029/song-yard',
+    path: '/25/2029/song-yard',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'arcade-60',
     name: 'Arcade 60',
     kicker: '50 MINI GAMES · 10 NOUN PRESSES',
