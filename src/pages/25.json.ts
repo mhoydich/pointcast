@@ -13,6 +13,9 @@ export const GET: APIRoute = () =>
         discovery: {
           collegeFootballMagazine: 'https://pointcast.xyz/25/magazine',
           collegeFootballMagazineJson: 'https://pointcast.xyz/25/magazine.json',
+          soundOfFocus: 'https://pointcast.xyz/25/magazine/sound-of-focus',
+          soundOfFocusJson: 'https://pointcast.xyz/25/magazine/sound-of-focus.json',
+          soundOfFocusInteractiveLab: 'https://tonebloom.xyz/focus',
           houseDesk: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed',
           houseDeskJson: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed.json',
           disagreementIndex: 'https://pointcast.xyz/25/disagreements',

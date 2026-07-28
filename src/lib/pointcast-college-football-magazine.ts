@@ -550,6 +550,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       href: '/25/magazine/sorority-row',
       previousFeature: '/25/magazine/the-house-we-borrowed',
     },
+    {
+      number: '09',
+      name: 'The Sound Desk',
+      kicker: 'Attention / listening / playable study',
+      description: 'The work before the stadium: five focus states, five listening rooms, and one private field study.',
+      href: '/25/magazine/sound-of-focus',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',

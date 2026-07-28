@@ -8,6 +8,7 @@ import {
 } from '../../lib/pointcast-college-football-magazine';
 import { HOUSE_WE_BORROWED } from '../../lib/pointcast-college-house';
 import { ROW_BY_ROW } from '../../lib/pointcast-sorority-row';
+import { POINTCAST_SOUND_OF_FOCUS } from '../../lib/pointcast-focus';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -53,6 +54,17 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
       plates: ROW_BY_ROW.plates.length,
       imageGenerator: ROW_BY_ROW.credits.imageGeneration,
     },
+    {
+      title: POINTCAST_SOUND_OF_FOCUS.title,
+      subtitle: POINTCAST_SOUND_OF_FOCUS.subtitle,
+      human: POINTCAST_SOUND_OF_FOCUS.canonical,
+      machine: POINTCAST_SOUND_OF_FOCUS.machineEdition,
+      block: `https://pointcast.xyz/b/${POINTCAST_SOUND_OF_FOCUS.block}`,
+      interactiveLab: POINTCAST_SOUND_OF_FOCUS.interactiveLab,
+      focusModes: POINTCAST_SOUND_OF_FOCUS.focusModes.length,
+      spotifyPlaylists: POINTCAST_SOUND_OF_FOCUS.rights.spotifyPlaylistsCreatedForFeature,
+      byline: POINTCAST_SOUND_OF_FOCUS.byline,
+    },
   ],
   researchSources: COLLEGE_FOOTBALL_RESEARCH_SOURCES,
   rights: {
@@ -79,6 +91,9 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     houseDeskJson: HOUSE_WE_BORROWED.machineEdition,
     rowByRow: ROW_BY_ROW.canonical,
     rowByRowJson: ROW_BY_ROW.machineEdition,
+    soundOfFocus: POINTCAST_SOUND_OF_FOCUS.canonical,
+    soundOfFocusJson: POINTCAST_SOUND_OF_FOCUS.machineEdition,
+    soundOfFocusInteractiveLab: POINTCAST_SOUND_OF_FOCUS.interactiveLab,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {
