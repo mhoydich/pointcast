@@ -6,6 +6,7 @@ import {
   SONG_YARD_REPERTOIRE,
   SONG_YARD_REPERTOIRE_PROGRAMS,
 } from '../../lib/pointcast-college-football-magazine';
+import { HOUSE_WE_BORROWED } from '../../lib/pointcast-college-house';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -32,6 +33,17 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
       practiceRoom: `https://pointcast.xyz/25/2029/song-yard#${program.slug}`,
     })),
   repertoire: SONG_YARD_REPERTOIRE,
+  features: [
+    {
+      title: HOUSE_WE_BORROWED.title,
+      subtitle: HOUSE_WE_BORROWED.subtitle,
+      human: HOUSE_WE_BORROWED.canonical,
+      machine: HOUSE_WE_BORROWED.machineEdition,
+      block: `https://pointcast.xyz/b/${HOUSE_WE_BORROWED.block}`,
+      plates: HOUSE_WE_BORROWED.plates.length,
+      imageGenerator: HOUSE_WE_BORROWED.credits.imageGeneration,
+    },
+  ],
   researchSources: COLLEGE_FOOTBALL_RESEARCH_SOURCES,
   rights: {
     hostsRecordings: false,
@@ -53,6 +65,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     songYardJson: 'https://pointcast.xyz/25/2029/song-yard.json',
     mascotDesk: 'https://pointcast.xyz/mascot-battler',
     seasonLedger: 'https://pointcast.xyz/25/season',
+    houseDesk: HOUSE_WE_BORROWED.canonical,
+    houseDeskJson: HOUSE_WE_BORROWED.machineEdition,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {

@@ -13,6 +13,8 @@ export const GET: APIRoute = () =>
         discovery: {
           collegeFootballMagazine: 'https://pointcast.xyz/25/magazine',
           collegeFootballMagazineJson: 'https://pointcast.xyz/25/magazine.json',
+          houseDesk: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed',
+          houseDeskJson: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed.json',
           disagreementIndex: 'https://pointcast.xyz/25/disagreements',
           disagreementIndexJson: 'https://pointcast.xyz/25/disagreements.json',
           receiptBook: 'https://pointcast.xyz/25/receipts',
