@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast 25 Field File 001 — Alabama After Saban (2026-07-28)
+
+- [x] (MH) Direct a `/25` article on Alabama, Nick Saban, and a light SEC primer by email — `done`
+- [x] (X) Report Alabama's 2025 result, 2026 roster questions, schedule, DeBoer contract, and SEC media context — `done`
+- [x] (X) Publish the authored Alabama, Saban, and four-shelf SEC argument with 11 dated source receipts — `done`
+- [x] (X) Add the adjacent JSON edition, Block 0529, `/25` desk entry, sitemap, and LLM discovery — `done`
+- [x] (X) Validate publishing audits, generated site, responsive layouts, exact merge, and canonical production release — `done`
+
+---
+
 ## The Song Yard — Stadium Song Practice / 2029 (2026-07-28)
 
 - [x] (MH) Direct a new area around audio practice and how stadiums can get their songs sung — `done`
