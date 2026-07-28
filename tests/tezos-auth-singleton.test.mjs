@@ -87,6 +87,10 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   const route = await readFile(new URL('functions/api/auth/project-ticket.ts', root), 'utf8');
   const page = await readFile(new URL('src/pages/auth/project.astro', root), 'utf8');
   const authMenu = await readFile(new URL('src/components/AuthMenu.astro', root), 'utf8');
+  const popupFallback = await readFile(
+    new URL('src/lib/auth/wallet-popup-fallback.ts', root),
+    'utf8',
+  );
   assert.match(route, /network-el-segundo/);
   assert.match(route, /paths: \['\/', '\/v2'\]/);
   assert.match(route, /url\.origin !== project\.origin/);
@@ -99,6 +103,8 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(page, /pc:wallet-active/);
   assert.match(page, /JSON\.stringify\(\{ target, returnTo, address \}\)/);
   assert.match(page, /One wallet/);
+  assert.match(page, /Choose Kukai, then <strong>Use Browser<\/strong>/);
+  assert.match(page, /pc:wallet-popup-fallback/);
   assert.match(page, /<AuthMenu autoOpen=\{true\}/);
   assert.match(page, /pc:open-auth-menu/);
   assert.match(page, /Your PointCast Kukai session follows you into the project/);
@@ -112,8 +118,12 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.doesNotMatch(page, /wallet.*event: 'join'|event: 'join'.*wallet/i);
   assert.doesNotMatch(page, /data-provider="kukai"[\s\S]*\.click\(/);
   assert.match(authMenu, /data-auth-auto-open/);
+  assert.match(authMenu, /then choose Use Browser/);
   assert.match(authMenu, /root\.dataset\.authAutoOpen === 'true'/);
   assert.match(authMenu, /if \(!user[\s\S]*openMenu\(root\)/);
+  assert.match(popupFallback, /target !== '_blank'/);
+  assert.match(popupFallback, /window\.location\.assign\(next\)/);
+  assert.match(popupFallback, /Object\.defineProperty\(fallbackLocation, 'href'/);
 });
 
 test('embedded Network El Segundo receives a fresh PointCast project ticket', async () => {

@@ -23,6 +23,10 @@ test('Issue 03 is a complete digital-anthropology field study with two instrumen
 
   assert.match(page, /data-crossing-issue/);
   assert.match(page, /data-open-gate/);
+  assert.match(page, /Issue 03 quick path/);
+  assert.match(page, /Start here · one sentence/);
+  assert.match(page, /See the five economies/);
+  assert.match(page, /\.plate--pocket > span[\s\S]*max-width: none/);
   assert.match(page, /createOscillator/);
   assert.match(page, /data-pocket-lab/);
   assert.match(page, /data-pocket-choice="object"/);
