@@ -9,6 +9,12 @@ import {
   blanketSystemTotal,
   getBlanketPick,
 } from '../../lib/beach-commons-v8';
+import {
+  BEACH_BLANKET_COVERAGE_PATHS,
+  BEACH_BLANKET_PROMOTION_CAMPAIGN,
+  BEACH_BLANKET_PROMO_DISPATCHES,
+  BEACH_BLANKET_PROMO_LINKS,
+} from '../../lib/beach-commons-v8-promotion';
 
 export const GET: APIRoute = () =>
   new Response(
@@ -47,6 +53,12 @@ export const GET: APIRoute = () =>
           applicationPaths: AFFILIATE_PATHS,
           merchantOffers: MERCHANT_OFFERS,
         },
+        promotion: {
+          campaign: BEACH_BLANKET_PROMOTION_CAMPAIGN,
+          dispatches: BEACH_BLANKET_PROMO_DISPATCHES,
+          coveragePaths: BEACH_BLANKET_COVERAGE_PATHS,
+          links: BEACH_BLANKET_PROMO_LINKS,
+        },
         officialContext: BLANKET_OFFICIAL_CONTEXT,
         related: [
           {
@@ -58,6 +70,11 @@ export const GET: APIRoute = () =>
             title: 'PointCast Block 0521',
             url: BEACH_COMMONS_V8.blockUrl,
             relation: 'permanent feed record',
+          },
+          {
+            title: 'A Blanket Is a Tiny Public Room',
+            url: BEACH_BLANKET_PROMO_LINKS.promotionDesk,
+            relation: 'promotion desk and coverage ladder',
           },
         ],
       },

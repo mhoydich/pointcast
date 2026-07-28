@@ -72,6 +72,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-LOCAL-STAR-COMMONS-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-HOLDERS-CUT-001'/g) || []).length, 1);
+  assert.match(registry, /BEACH_BLANKET_PROMO_DISPATCHES\.map/);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
   assert.match(registry, /tracking: 'aggregate impressions \+ clicks'/);
@@ -186,12 +187,12 @@ test('portable network transparently pins the first-100 campaign across owned pu
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
-  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
-  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
-  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
+  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
   assert.match(registry, /id: 'rally'/);
-  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
-  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'\]/);
+  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);

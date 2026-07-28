@@ -18,8 +18,13 @@ import {
   NOUN_BATTLER_ANNUAL_CAMPAIGN,
   NOUN_BATTLER_PROMO_DISPATCHES,
 } from './noun-battler-annual-promotion';
+import {
+  BEACH_BLANKET_PROMOTION_CAMPAIGN,
+  BEACH_BLANKET_PROMO_DISPATCHES,
+} from './beach-commons-v8-promotion';
 
 export { NOUN_BATTLER_ANNUAL_CAMPAIGN } from './noun-battler-annual-promotion';
+export { BEACH_BLANKET_PROMOTION_CAMPAIGN } from './beach-commons-v8-promotion';
 
 const NETWORK_EL_SEGUNDO_AUTH_PATH =
   '/auth/project?target=network-el-segundo&return_to=https%3A%2F%2Fnetwork-el-segundo.mhoydich.chatgpt.site%2F&source=pointcast_ad';
@@ -97,7 +102,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'www.industrynext.xyz',
     surface: 'A first-100 Tezos wallet lead across the Nouns studio, Permission Lab, and Made stream',
     advertiserAliases: ['Industry Next'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -107,7 +112,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'allworthy.xyz',
     surface: 'A first-100 Tezos wallet lead across public-interest funding records and experiments',
     advertiserAliases: ['Allworthy'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -117,7 +122,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'passportz.xyz',
     surface: 'A first-100 Tezos wallet lead across public identity, art, activity, and listening passports',
     advertiserAliases: ['Passportz', 'Tezos Passport'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -127,7 +132,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A clearly labeled first-100 Tezos wallet lead on Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
   {
@@ -137,7 +142,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A first-100 Tezos wallet lead across shared rituals, Stampz, and Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026'],
+    campaigns: ['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
     status: 'active',
   },
 ];
@@ -297,6 +302,21 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  ...BEACH_BLANKET_PROMO_DISPATCHES.map((blanketDispatch) => ({
+    id: blanketDispatch.id,
+    advertiser: BEACH_BLANKET_PROMOTION_CAMPAIGN.advertiser,
+    headline: blanketDispatch.headline,
+    copy: blanketDispatch.copy,
+    href: blanketDispatch.href,
+    cta: blanketDispatch.cta,
+    tone: blanketDispatch.tone,
+    contexts: [...blanketDispatch.contexts],
+    image: blanketDispatch.image,
+    sourceTool: 'Credited maker or merchant editorial-reference photograph',
+    campaign: BEACH_BLANKET_PROMOTION_CAMPAIGN.id,
+    seriesLabel: BEACH_BLANKET_PROMOTION_CAMPAIGN.label,
+    status: 'house' as const,
+  })),
   ...NOUN_BATTLER_PROMO_DISPATCHES.map((dispatch) => ({
     id: dispatch.id,
     advertiser: NOUN_BATTLER_ANNUAL_CAMPAIGN.advertiser,
@@ -893,8 +913,10 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const isDrumSurface = /^\/(?:drum(?:-|\/|$)|dispatch-drum(?:\/|$))/.test(pathname);
   const isNounBattlerAnnualSurface = /^\/noun-battler-annual(?:\/|$)/.test(pathname);
   const isBeachCommonsV5Surface = /^\/beach-commons\/v5(?:\/|$)/.test(pathname);
+  const isBeachBlanketSurface = /^\/beach-commons\/v8(?:\/|$)/.test(pathname);
   const annualCreative = ranked.find((ad) => ad.campaign === NOUN_BATTLER_ANNUAL_CAMPAIGN.id);
   const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
+  const blanketCreative = ranked.find((ad) => ad.campaign === BEACH_BLANKET_PROMOTION_CAMPAIGN.id);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
   if (!isDrumSurface) {
@@ -904,6 +926,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     const companionAds = ranked.filter((ad) => (
       ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
       &&
+      ad.campaign !== BEACH_BLANKET_PROMOTION_CAMPAIGN.id
+      &&
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
       && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
@@ -911,6 +935,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
     return [
+      isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
       isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
       universeCreative,
@@ -928,6 +953,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const companionAds = ranked.filter((ad) => (
     ad.campaign !== NOUN_BATTLER_ANNUAL_CAMPAIGN.id
     &&
+    ad.campaign !== BEACH_BLANKET_PROMOTION_CAMPAIGN.id
+    &&
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
     && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
@@ -935,6 +962,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
   return [
+    isBeachBlanketSurface ? undefined : blanketCreative,
     isNounBattlerAnnualSurface ? undefined : annualCreative,
     drumCreative,
     networkCreative,

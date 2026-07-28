@@ -114,6 +114,8 @@ export const GET: APIRoute = async () => {
       },
       human: {
         home: 'https://pointcast.xyz/',
+        beachBlanketReview: 'https://pointcast.xyz/beach-commons/v8',
+        beachBlanketPromotionDesk: 'https://pointcast.xyz/beach-commons/v8/share',
         pointcast25: 'https://pointcast.xyz/25',
         pointcast25Json: 'https://pointcast.xyz/25.json',
         pointcast25Disagreements: 'https://pointcast.xyz/25/disagreements',
@@ -298,6 +300,8 @@ export const GET: APIRoute = async () => {
         agents: 'https://pointcast.xyz/agents.json',
         agentValue: 'https://pointcast.xyz/agent-value.json',
         protocol: 'https://pointcast.xyz/protocol.json',
+        beachBlanketReview: 'https://pointcast.xyz/beach-commons/v8.json',
+        beachBlanketPromotionPacket: 'https://pointcast.xyz/beach-commons/v8/share.json',
         pointcastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         farcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         constellation: 'https://pointcast.xyz/constellation.json',
