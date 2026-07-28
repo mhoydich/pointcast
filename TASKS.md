@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Saturday, Rebranded — PointCast 25 / 2029 (2026-07-27)
+
+- [x] (MH) Direct a visual redesign of the PointCast Top 25 for 2029 across identities, stadiums, campus, and student gear — `done`
+- [x] (X) Create 25 place-derived original abstract identity systems without official logos, letters, mascot costumes, or branded uniforms — `done`
+- [x] (X) Generate, import, and verify five mark houses, three stadium futures, and two student-gear plates — `done`
+- [x] (X) Build the filterable signal wall, browser-local five, and 25 permanent human plus JSON identity records — `done`
+- [x] (X) Add Block 0524, homepage, app, sitemap, agent, LLM, and social discovery with explicit unofficial boundaries — `done`
+- [ ] (X) Validate the generated site, full suite, responsive browser interactions, and exact production release — `in-progress`
+
+---
+
 ## PointCast Weekly 03 — Animal Crossing Is a Gift Economy (2026-07-27)
 
 - [x] (Claude) Shape the Study Of column and the gift-economy premise — `done`
