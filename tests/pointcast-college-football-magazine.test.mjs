@@ -39,7 +39,7 @@ test('Issue 001 defines a seven-desk college-football magazine', async () => {
 test('the repertoire report contains 35 programs, 16 dossiers, and 48 references', async () => {
   const data = await read('src/lib/pointcast-college-football-magazine.ts');
   const json = await read('src/pages/25/magazine.json.ts');
-  const block = JSON.parse(await read('src/content/blocks/0529.json'));
+  const block = JSON.parse(await read('src/content/blocks/0530.json'));
 
   assert.equal(block.meta.selectablePrograms, 35);
   assert.equal(block.meta.pointcast25Programs, 25);
@@ -104,9 +104,9 @@ test('the magazine is discoverable across the full PointCast contract', async ()
   }
 });
 
-test('Block 0529 and the social card publish the complete issue', async () => {
-  const block = JSON.parse(await read('src/content/blocks/0529.json'));
-  assert.equal(block.id, '0529');
+test('Block 0530 and the social card publish the complete issue', async () => {
+  const block = JSON.parse(await read('src/content/blocks/0530.json'));
+  assert.equal(block.id, '0530');
   assert.equal(block.channel, 'SPN');
   assert.equal(block.type, 'READ');
   assert.equal(block.meta.official, false);

@@ -13,8 +13,18 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (MH) Group the board, receipts, songs, mascots, 2029 schools, field kit, and ledger as a college-football magazine — `done`
 - [x] (X) Build 35 selectable program identities, 16 sourced dossiers, and 48 clearly labeled song references — `done`
 - [x] (X) Build the Issue 001 magazine front door, structured twin, source desk, and seasonal publishing rhythm — `done`
-- [x] (X) Add Block 0529 plus homepage, board, app, parent, sitemap, agent, LLM, JSON, and social discovery — `done`
+- [x] (X) Add Block 0530 plus homepage, board, app, parent, sitemap, agent, LLM, JSON, and social discovery — `done`
 - [x] (X) Validate full tests, responsive repertoire and practice interactions, exact merge, and canonical production release — `done`
+
+---
+
+## PointCast 25 Field File 001 — Alabama After Saban (2026-07-28)
+
+- [x] (MH) Direct a `/25` article on Alabama, Nick Saban, and a light SEC primer by email — `done`
+- [x] (X) Report Alabama's 2025 result, 2026 roster questions, schedule, DeBoer contract, and SEC media context — `done`
+- [x] (X) Publish the authored Alabama, Saban, and four-shelf SEC argument with 11 dated source receipts — `done`
+- [x] (X) Add the adjacent JSON edition, Block 0529, `/25` desk entry, sitemap, and LLM discovery — `done`
+- [x] (X) Validate publishing audits, generated site, responsive layouts, exact merge, and canonical production release — `done`
 
 ---
 

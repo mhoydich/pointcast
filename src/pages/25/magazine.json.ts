@@ -53,7 +53,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     songYardJson: 'https://pointcast.xyz/25/2029/song-yard.json',
     mascotDesk: 'https://pointcast.xyz/mascot-battler',
     seasonLedger: 'https://pointcast.xyz/25/season',
-    block: 'https://pointcast.xyz/b/0529',
+    block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {
   headers: {

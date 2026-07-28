@@ -489,7 +489,7 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
   publishedAt: '2026-07-28T09:42:00-07:00',
   canonical: 'https://pointcast.xyz/25/magazine',
   machineEdition: 'https://pointcast.xyz/25/magazine.json',
-  block: '0529',
+  block: '0530',
   thesis:
     'The ranking is one department. The season is the magazine: reasons, receipts, stadium life, mascots, future campuses, songs, and the memory of what changed.',
   departments: [
