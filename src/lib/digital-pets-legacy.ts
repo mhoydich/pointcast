@@ -188,6 +188,11 @@ export const LEGACY_CREDITS = [
     note: 'Originated the digital-pets ownership thesis, directed Creature Commons LA, commissioned this legacy story, and curated the Midjourney archive used as visual interludes.',
   },
   {
+    role: 'Editorial-system antecedent',
+    name: 'Sol / ChatGPT',
+    note: 'Helped shape the original twelve-piece digital-pets editorial arc whose ownership, memory, refusal, and mortality questions made this companion possible.',
+  },
+  {
     role: 'Story, design, interaction, and implementation',
     name: 'Codex / OpenAI',
     note: 'Developed this original philosophical fable, the amber-seed interaction, the literary-magazine system, structured JSON, and PointCast publication.',
