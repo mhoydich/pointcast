@@ -96,6 +96,12 @@ export const DIGITAL_PETS_X_THREAD = [
 
 export const DIGITAL_PETS_SINGLE_POSTS = [
   {
+    id: 'commons',
+    label: 'Local institution',
+    text:
+      'A company can publish a digital creature. Only an institution can keep repair, memory, and graceful endings from disappearing with the company. Creature Commons LA is a working proposal—not an incorporated claim.\n\nhttps://pointcast.xyz/digital-pets/commons',
+  },
+  {
     id: 'offline',
     label: 'Architecture',
     text:
@@ -149,6 +155,12 @@ export const DIGITAL_PETS_OUTREACH_NOTES = [
 ] as const;
 
 export const DIGITAL_PETS_PROMO_ASSETS = [
+  {
+    id: 'creature-commons',
+    label: 'Creature Commons workbench · 1024 × 1536',
+    path: '/images/digital-pets/plate-07-commons.webp',
+    kind: 'companion plate',
+  },
   {
     id: 'launch-card',
     label: 'Launch card · 1200 × 630',

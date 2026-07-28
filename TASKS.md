@@ -7,6 +7,18 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Creature Commons LA — Future Book 001 Companion 01 (2026-07-27)
+
+- [x] (MH) Choose an open chef’s-choice brief for the local commons direction — `done`
+- [x] (X) Select the adult-first, paired commons + authored studio model and ninety-day proof — `done`
+- [x] (X) Report the local supplier, safety, privacy, authorization, and entity gates from primary sources — `done`
+- [x] (X) Write the 790-word companion essay and complete human/JSON working charter — `done`
+- [x] (X) Generate and import Plate 07 as an original civic workbench scene — `done`
+- [x] (X) Validate the site, full suite, and responsive browser behavior — `done`
+- [x] (X) Merge and deploy the exact reviewed production build — `done`
+
+---
+
 ## Saturday, Rebranded — PointCast 25 / 2029 (2026-07-27)
 
 - [x] (MH) Direct a visual redesign of the PointCast Top 25 for 2029 across identities, stadiums, campus, and student gear — `done`
