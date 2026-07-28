@@ -71,6 +71,8 @@ export const GET: APIRoute = () =>
           creatureCommonsJson: `${base}/digital-pets/commons.json`,
           legacyStory: `${base}/digital-pets/legacy`,
           legacyStoryJson: `${base}/digital-pets/legacy.json`,
+          comedyStory: `${base}/digital-pets/counsel`,
+          comedyStoryJson: `${base}/digital-pets/counsel.json`,
           pointcastPets: `${base}/pets`,
           localPet: `${base}/pet`,
           sourceLedger: `${base}${BOOK_META.route}#sources`,

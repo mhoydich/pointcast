@@ -203,6 +203,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/digital-pets/commons.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/digital-pets/legacy', 'weekly', '0.92'],
   ['https://pointcast.xyz/digital-pets/legacy.json', 'weekly', '0.88'],
+  ['https://pointcast.xyz/digital-pets/counsel', 'weekly', '0.92'],
+  ['https://pointcast.xyz/digital-pets/counsel.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/pet', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets.json', 'weekly', '0.7'],
