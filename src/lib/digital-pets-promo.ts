@@ -1,14 +1,22 @@
 export const DIGITAL_PETS_PROMO_META = {
-  schema: 'pointcast.digital-pets-promo/v1',
+  schema: 'pointcast.digital-pets-promo/v2',
   title: 'The Animal After the Internet — campaign desk',
   description:
-    'Copy, chapter links, artwork, and a narrow 72-hour launch sequence for PointCast Future Book 001.',
+    'The live launch, reusable copy, chapter links, artwork, and six-week test office for PointCast Future Book 001.',
   route: '/digital-pets/share',
   jsonRoute: '/digital-pets/share.json',
   bookRoute: '/digital-pets',
+  officeRoute: '/digital-pets/office',
+  officeJsonRoute: '/digital-pets/office.json',
   blockRoute: '/b/0514',
   campaign: 'future-book-001-digital-pets',
-  updatedAt: '2026-07-27T15:30:00-07:00',
+  status: 'launched',
+  launchChannel: 'X',
+  launchAccount: '@mhoydich',
+  launchUrl: 'https://x.com/mhoydich/status/2081936870641205589',
+  launchedAt: '2026-07-27T19:56:00-07:00',
+  launchPosts: 7,
+  updatedAt: '2026-07-27T20:05:00-07:00',
   principle: 'Promote the ownership argument, not the topic category.',
 } as const;
 
@@ -172,26 +180,31 @@ export const DIGITAL_PETS_LAUNCH_SEQUENCE = [
     when: 'Hour 0',
     move: 'Publish the seven-post thread.',
     reason: 'Establish the whole argument once. Let the book be the proof link.',
+    status: 'complete',
   },
   {
     when: 'Hour 6–12',
     move: 'Send five personal notes, each aimed at one chapter.',
     reason: 'Replies from the right readers are worth more than broad passive impressions.',
+    status: 'next',
   },
   {
     when: 'Day 2',
     move: 'Post “Memory is custody” as a standalone claim.',
     reason: 'It carries the PointCast ownership thesis beyond the digital-pets category.',
+    status: 'queued',
   },
   {
     when: 'Day 3',
     move: 'Post the graveyard plate and ask one question.',
     reason: 'The emotional argument invites stories, not applause: what should happen when the company dies first?',
+    status: 'queued',
   },
   {
     when: 'Day 4',
     move: 'Report the first evidence.',
     reason: 'Share replies, saves, DMs, and where readers stopped. Promotion becomes editorial learning.',
+    status: 'queued',
   },
 ] as const;
 

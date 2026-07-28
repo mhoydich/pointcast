@@ -165,6 +165,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/digital-pets.json', 'weekly', '0.92'],
   ['https://pointcast.xyz/digital-pets/share', 'weekly', '0.9'],
   ['https://pointcast.xyz/digital-pets/share.json', 'weekly', '0.86'],
+  ['https://pointcast.xyz/digital-pets/office', 'weekly', '0.92'],
+  ['https://pointcast.xyz/digital-pets/office.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/pet', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets', 'weekly', '0.7'],
   ['https://pointcast.xyz/pets.json', 'weekly', '0.7'],

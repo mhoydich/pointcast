@@ -19,6 +19,8 @@ export const GET: APIRoute = async () => {
     url: absolute(DIGITAL_PETS_PROMO_META.route),
     jsonUrl: absolute(DIGITAL_PETS_PROMO_META.jsonRoute),
     bookUrl: absolute(DIGITAL_PETS_PROMO_META.bookRoute),
+    officeUrl: absolute(DIGITAL_PETS_PROMO_META.officeRoute),
+    officeJsonUrl: absolute(DIGITAL_PETS_PROMO_META.officeJsonRoute),
     blockUrl: absolute(DIGITAL_PETS_PROMO_META.blockRoute),
     angles: DIGITAL_PETS_PROMO_ANGLES.map((angle) => ({
       ...angle,
@@ -38,7 +40,7 @@ export const GET: APIRoute = async () => {
     launchSequence: DIGITAL_PETS_LAUNCH_SEQUENCE,
     measures: DIGITAL_PETS_PROMO_MEASURES,
     disclosure:
-      'Michael Hoydich originated and edited the book. Codex / OpenAI developed the first-edition manuscript, campaign system, and PointCast implementation. OpenAI image generation and Michael Hoydich’s Midjourney archive are credited inside the book.',
+      'Michael Hoydich originated and edited the book. Codex / OpenAI developed the first-edition manuscript, campaign system, six-week operating office, and PointCast implementation. The seven-post launch thread was published from @mhoydich on July 27, 2026; this payload does not claim engagement that has not been manually reported. OpenAI image generation and Michael Hoydich’s Midjourney archive are credited inside the book.',
   };
 
   return new Response(JSON.stringify(payload, null, 2), {

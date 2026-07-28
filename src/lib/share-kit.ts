@@ -11,7 +11,7 @@ export const SHARE_LANDING_PAGES = [
     path: '/digital-pets',
     audience: 'AI product builders, hardware designers, writers, and people who cared for a virtual creature',
     hook: 'Twelve positions on bodies, owner-custodied memory, refusal, repair, subscriptions, death, and authored character.',
-    proof: 'A complete 7,500-word future book, structured JSON twin, primary-source ledger, original plates, and campaign desk.',
+    proof: 'A complete 7,500-word future book, structured JSON twin, primary-source ledger, original plates, a live seven-post X launch, and a six-week operating office.',
   },
   {
     key: 'start',
@@ -191,12 +191,12 @@ export const SHARE_SNIPPETS = [
 export const SHARE_LAUNCH_ASSETS = [
   {
     key: 'digital-pets-campaign',
-    title: 'Digital pets campaign desk',
-    kind: 'copy + artwork desk',
+    title: 'Digital pets launch + six-week office',
+    kind: 'live campaign + operating desk',
     docPath: 'src/lib/digital-pets-promo.ts',
     url: '/digital-pets/share',
     audience: 'product builders, robotics readers, writers, hardware founders, and curious caretakers',
-    summary: 'Three campaign angles, a seven-post X thread, four standalone posts, downloadable art, outreach notes, and a 72-hour launch sequence.',
+    summary: 'A verified seven-post X launch, three campaign angles, four standalone posts, downloadable art, outreach notes, and a public six-week test office.',
     primaryCopy:
       'Personality must survive Wi-Fi. Memory is custody. A subscription cannot decide whether your pet wakes up.',
   },
@@ -239,13 +239,16 @@ export const SHARE_CAMPAIGN_PACKETS = [
       '/digital-pets.json',
       '/digital-pets/share',
       '/digital-pets/share.json',
+      '/digital-pets/office',
+      '/digital-pets/office.json',
+      'https://x.com/mhoydich/status/2081936870641205589',
       '/b/0514',
     ],
     steps: [
-      'Publish the seven-post thread once, with the book as the proof link.',
+      'Launch complete: the seven-post X thread is live with the book as its proof link.',
       'Send five personal notes that each point to one chapter rather than the cover.',
       'Post Memory is Custody on day two and the graveyard question on day three.',
-      'Log replies, saves, DMs, and invitations as editorial evidence after 72 hours.',
+      'Run the six-week office: log Michael’s one-line reaction and external signal after every dispatch.',
     ],
     docPath: 'src/lib/digital-pets-promo.ts',
   },
@@ -373,9 +376,15 @@ export const SHARE_CAMPAIGN_PACKETS = [
 export const SHARE_ACTION_CHECKLIST = [
   {
     id: 'digital-pets-thread',
-    label: 'Publish the digital-pets launch thread',
-    detail: 'Seven posts, one complete argument, and the book as the canonical proof link.',
-    url: '/digital-pets/share',
+    label: 'Digital-pets launch thread is live',
+    detail: 'Seven verified posts, one complete argument, and the book as the canonical proof link.',
+    url: 'https://x.com/mhoydich/status/2081936870641205589',
+  },
+  {
+    id: 'digital-pets-office',
+    label: 'Run the six-week editorial office',
+    detail: 'Tuesday and Thursday dispatches; pause after two consecutive unread pieces.',
+    url: '/digital-pets/office',
   },
   {
     id: 'digital-pets-five-notes',
