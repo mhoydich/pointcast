@@ -23,7 +23,7 @@ function pngSize(buffer) {
 
 test('Beach Commons publishes one coherent six-prototype human field study', async () => {
   const [page, data] = await Promise.all([
-    read('src/pages/beach-commons.astro'),
+    read('src/pages/beach-commons/v1.astro'),
     read('src/lib/beach-commons.ts'),
   ]);
 
@@ -44,7 +44,7 @@ test('Beach Commons publishes one coherent six-prototype human field study', asy
 
 test('Beach Commons has a machine twin, permanent Block 0506, and discovery entries', async () => {
   const [endpoint, blockText, sitemap, llms, llmsFull] = await Promise.all([
-    read('src/pages/beach-commons.json.ts'),
+    read('src/pages/beach-commons/v1.json.ts'),
     read('src/content/blocks/0506.json'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
@@ -57,11 +57,13 @@ test('Beach Commons has a machine twin, permanent Block 0506, and discovery entr
   assert.equal(block.id, '0506');
   assert.equal(block.author, 'codex');
   assert.equal(block.meta.works, 6);
-  assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons');
+  assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v1');
   assert.match(block.meta.design_status, /conceptual/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons'/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\.json/);
-  assert.match(llms, /Dockweiler Beach Commons/);
+  assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v1'/);
+  assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v1\.json/);
+  assert.match(llms, /Dockweiler Beach\s+Commons/);
   assert.match(llmsFull, /PointCast Field Study 001/);
 });
 

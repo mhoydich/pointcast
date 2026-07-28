@@ -35,7 +35,7 @@ test('Beach Commons V2 publishes eight coherent collective states', async () => 
   assert.match(page, /event\.key === 'Escape'/);
   assert.match(page, /opener\?\.focus\(\)/);
   assert.match(page, /prefers-reduced-motion/);
-  assert.match(page, /href="\/beach-commons"/);
+  assert.match(page, /href="\/beach-commons\/v1"/);
   assert.match(data, /The Great Canopy Loop/);
   assert.match(data, /Commons Field Games/);
   assert.match(data, /Moon Court/);
@@ -54,7 +54,7 @@ test('Beach Commons V2 has a machine twin, Block 0508, and edition discovery', a
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
-    read('src/pages/beach-commons.astro'),
+    read('src/pages/beach-commons/v1.astro'),
   ]);
   const block = JSON.parse(blockText);
 
