@@ -978,6 +978,30 @@ const alternates = [
     <script id="bells-bloom-transmissions" type="application/json" is:inline set:html={JSON.stringify(BELLS_BLOOM_TRANSMISSIONS)} />
     <script is:inline>
       (() => {
+        const images = [...document.querySelectorAll('.fresh-home img')];
+
+        images.forEach((image) => {
+          if (!(image instanceof HTMLImageElement)) return;
+
+          const retryOnce = () => {
+            if (image.dataset.loadRetry === 'true') return;
+
+            const failedSource = image.currentSrc || image.src;
+            if (!failedSource) return;
+
+            image.dataset.loadRetry = 'true';
+            const retryUrl = new URL(failedSource, window.location.href);
+            retryUrl.searchParams.set('pc-image-retry', '1');
+            image.src = retryUrl.toString();
+          };
+
+          image.addEventListener('error', retryOnce);
+          if (image.complete && image.naturalWidth === 0) retryOnce();
+        });
+      })();
+    </script>
+    <script is:inline>
+      (() => {
         const payload = document.querySelector('#bells-bloom-transmissions');
         const root = document.querySelector('[data-today-signal]');
         if (!(root instanceof HTMLElement)) return;

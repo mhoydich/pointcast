@@ -92,3 +92,18 @@ test('the fresh front door is responsive, accessible, and motion-safe by constru
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /\.fresh-home :focus-visible/);
 });
+
+test('homepage images preserve their proportions and recover from a transient first request failure', async () => {
+  const [home, css] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/styles/front-door-fresh.css'),
+  ]);
+
+  assert.match(
+    css,
+    /\.fresh-bell-room__image\s*\{[^}]*height:\s*auto;/s,
+  );
+  assert.match(home, /image\.addEventListener\('error', retryOnce\)/);
+  assert.match(home, /image\.dataset\.loadRetry === 'true'/);
+  assert.match(home, /retryUrl\.searchParams\.set\('pc-image-retry', '1'\)/);
+});
