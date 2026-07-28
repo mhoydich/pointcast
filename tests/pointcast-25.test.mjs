@@ -63,7 +63,7 @@ test('the board has machine, Block, discovery, and subscription surfaces', async
       read('src/pages/for-agents.astro'),
       read('public/llms.txt'),
       read('public/llms-full.txt'),
-      read('src/pages/index.astro'),
+      read('src/components/HomeNewEdition.astro'),
       read('src/pages/.well-known/agent-payments.json.ts'),
     ]);
   const block = JSON.parse(blockText);
@@ -90,7 +90,7 @@ test('the board has machine, Block, discovery, and subscription surfaces', async
   assert.match(forAgents, /25 FOR REASONS/);
   assert.match(llms, /## 25 FOR REASONS/);
   assert.match(llmsFull, /25 FOR REASONS — Board 000/);
-  assert.match(home, /POINTCAST_25/);
+  assert.match(home, /href="\/25"/);
   assert.match(agentPayments, /sku: 'PC-25-2026'/);
   assert.match(agentPayments, /stripe-hosted-redirect/);
   assert.match(agentPayments, /private-preview-eligibility-pending/);
@@ -191,7 +191,7 @@ test('the public receipt book opens every preseason claim and defines durable gr
 
 test('the audience desk is advertised across human, machine, LLM, and homepage discovery', async () => {
   const [home, current, season, agents, forAgents, sitemap, llms, llmsFull] = await Promise.all([
-    read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
     read('src/pages/25/index.astro'),
     read('src/pages/25/season.astro'),
     read('src/pages/agents.json.ts'),

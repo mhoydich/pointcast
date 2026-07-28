@@ -6,7 +6,7 @@ const pagePath = new URL('../src/pages/reviews/year-one.astro', import.meta.url)
 const jsonPath = new URL('../src/pages/reviews/year-one.json.ts', import.meta.url);
 const catalogPath = new URL('../src/data/reviews.ts', import.meta.url);
 const blockPath = new URL('../src/content/blocks/0507.json', import.meta.url);
-const homePath = new URL('../src/pages/index.astro', import.meta.url);
+const homeEditionPath = new URL('../src/components/HomeNewEdition.astro', import.meta.url);
 const homeStylePath = new URL('../src/styles/front-door-fresh.css', import.meta.url);
 const sitemapPath = new URL('../src/pages/sitemap-discovery.xml.ts', import.meta.url);
 const llmsPath = new URL('../public/llms.txt', import.meta.url);
@@ -86,16 +86,15 @@ test('Year One is advertised through Reviews discovery surfaces', async () => {
   assert.match(llms, /Block 0507/);
 });
 
-test('Year One opens as the PointCast homepage splash', async () => {
-  const [home, styles] = await Promise.all([
-    readFile(homePath, 'utf8'),
+test('Year One remains linked from the refreshed PointCast current edition', async () => {
+  const [edition, styles] = await Promise.all([
+    readFile(homeEditionPath, 'utf8'),
     readFile(homeStylePath, 'utf8'),
   ]);
 
-  assert.match(home, /data-year-one-splash/);
-  assert.match(home, /href="\/reviews\/year-one"/);
-  assert.match(home, /The mall learned to surf\./);
-  assert.match(home, /Block 0507/);
+  assert.match(edition, /data-home-archive-feature="year-one"/);
+  assert.match(edition, /href="\/reviews\/year-one"/);
+  assert.match(edition, /Year One · Block 0507/);
   assert.match(styles, /\.year-one-splash/);
   assert.match(styles, /@media \(max-width: 760px\)/);
 });

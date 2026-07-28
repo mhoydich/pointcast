@@ -11,7 +11,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
     read('src/layouts/BlockLayout.astro'),
   ]);
 
-  assert.match(home, /one live signal, one current feature, three clear doors, two field notes/i);
+  assert.match(home, /one bright current edition, one live signal, three clear doors, field notes/i);
   assert.match(home, /showNetworkStrip=\{false\}/);
   assert.match(layout, /showNetworkStrip\?: boolean/);
   assert.match(layout, /\{showNetworkStrip && <NetworkFirst100Strip\s*\/>\}/);
@@ -31,6 +31,30 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/feed\.xml"/);
   assert.match(home, /href="\/agents\.json"/);
   assert.match(home, /href="\/for-agents"/);
+});
+
+test('the opening edition promotes the complete newest release run without Qwen', async () => {
+  const [home, edition] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
+  ]);
+
+  assert.match(home, /<HomeNewEdition \/>/);
+  assert.match(home, /images\/og\/b\/0532\.png/);
+  assert.match(edition, /Keep things/);
+  assert.match(edition, /Harbor Works/);
+  assert.match(edition, /My Pet Has/);
+  assert.match(edition, /Retained Counsel/);
+  assert.match(edition, /Talkin’/);
+  assert.match(edition, /Alabama After Saban/);
+  assert.match(edition, /The Reach Line/);
+  assert.match(edition, /Tide Cabinet/);
+  assert.match(edition, /The Song Yard/);
+  assert.match(edition, /Signal Shack/);
+  assert.match(edition, /Animal Crossing/);
+  assert.match(edition, /Authorize Spotify/);
+  assert.match(edition, /Build a Follow Shelf/);
+  assert.doesNotMatch(edition, /qwen/i);
 });
 
 test('the current field edition gives the living magazine, Tone Bloom, Beach Commons, and the future book real homepage weight', async () => {
@@ -92,4 +116,19 @@ test('the fresh front door is responsive, accessible, and motion-safe by constru
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /\.fresh-home :focus-visible/);
+});
+
+test('homepage images preserve their proportions and recover from a transient first request failure', async () => {
+  const [home, css] = await Promise.all([
+    read('src/pages/index.astro'),
+    read('src/styles/front-door-fresh.css'),
+  ]);
+
+  assert.match(
+    css,
+    /\.fresh-bell-room__image\s*\{[^}]*height:\s*auto;/s,
+  );
+  assert.match(home, /image\.addEventListener\('error', retryOnce\)/);
+  assert.match(home, /image\.dataset\.loadRetry === 'true'/);
+  assert.match(home, /retryUrl\.searchParams\.set\('pc-image-retry', '1'\)/);
 });
