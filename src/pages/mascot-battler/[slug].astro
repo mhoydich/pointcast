@@ -1,0 +1,299 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  MASCOT_ARENAS,
+  MASCOT_BATTLER,
+  MASCOT_CARDS,
+  MASCOT_CLASSES,
+} from '../../lib/mascot-battler';
+
+export function getStaticPaths() {
+  return MASCOT_CARDS.map((card) => ({
+    params: { slug: card.slug },
+    props: { card },
+  }));
+}
+
+const { card } = Astro.props as { card: (typeof MASCOT_CARDS)[number] };
+const cardIndex = MASCOT_CARDS.findIndex((candidate) => candidate.slug === card.slug);
+const previous = cardIndex > 0 ? MASCOT_CARDS[cardIndex - 1] : MASCOT_CARDS[MASCOT_CARDS.length - 1];
+const next = cardIndex < MASCOT_CARDS.length - 1 ? MASCOT_CARDS[cardIndex + 1] : MASCOT_CARDS[0];
+const mascotClass = MASCOT_CLASSES.find((entry) => entry.id === card.mascotClass)!;
+const favoredArenas = MASCOT_ARENAS.filter((arena) => arena.favored.includes(card.mascotClass));
+const description =
+  `${card.school}'s ${card.mascot} becomes a ${card.className} card in PointCast's unofficial 2026 college-football Mascot Atlas. Explore local resources, tradition, current form, and five battler stats.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${card.canonical}#card`,
+      headline: `${card.school} mascot field card — ${card.mascot}`,
+      description,
+      url: card.canonical,
+      datePublished: MASCOT_BATTLER.publishedAt,
+      image: `https://pointcast.xyz${card.art}`,
+      isPartOf: {
+        '@type': 'VideoGame',
+        '@id': `${MASCOT_BATTLER.canonical}#game`,
+        name: MASCOT_BATTLER.title,
+      },
+      about: [
+        { '@type': 'SportsTeam', name: card.school, sport: 'College football' },
+        { '@type': 'Place', name: `${card.city}, ${card.state}` },
+      ],
+      author: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'PointCast', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Saturday Myth Machine', item: MASCOT_BATTLER.canonical },
+        { '@type': 'ListItem', position: 3, name: card.school, item: card.canonical },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={`${card.school} Mascot Card — ${card.mascot}`}
+  description={description}
+  image={card.art}
+  themeColor={card.accent}
+  jsonLd={jsonLd}
+  immersive={true}
+  showNetworkStrip={false}
+  alternates={[
+    {
+      type: 'application/json',
+      href: `/mascot-battler/${card.slug}.json`,
+      title: `${card.school} mascot field card JSON`,
+    },
+  ]}
+>
+  <main class="field-card" id="main-content" style={`--team:${card.accent};--class:${mascotClass.color}`}>
+    <header>
+      <a class="brand" href="/">POINTCAST</a>
+      <nav aria-label="Mascot field card navigation">
+        <a href="/mascot-battler#battle">Battle</a>
+        <a href="/mascot-battler#atlas">All 25</a>
+        <a href={`/25/teams/${card.slug}`}>Football case</a>
+        <a href={`/mascot-battler/${card.slug}.json`}>JSON</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <figure>
+        <img src={card.art} alt={`Original ${card.className} creature-family field plate`} />
+        <figcaption>ORIGINAL {card.className.toUpperCase()} FIELD PLATE · NOT OFFICIAL MASCOT ART</figcaption>
+      </figure>
+      <div class="identity">
+        <p>{card.conference} · POINTCAST #{card.rank} · {card.city}, {card.state}</p>
+        <div class="rank">{String(card.rank).padStart(2, '0')}</div>
+        <h1>{card.school}</h1>
+        <strong>{card.mascot}</strong>
+        <p class="class-line">{card.className} · {card.classFieldName}</p>
+        <button type="button" data-keep-card={card.slug}>Keep this card +</button>
+      </div>
+    </section>
+
+    <section class="stat-deck" aria-label={`${card.school} battler statistics`}>
+      <div><span>LOCALITY</span><strong>{card.locality}</strong><p>Place, habitat, civic fit.</p></div>
+      <div><span>LEGACY</span><strong>{card.legacy}</strong><p>Accumulated football memory.</p></div>
+      <div><span>MYTH</span><strong>{card.myth}</strong><p>Symbolic force and strangeness.</p></div>
+      <div><span>FORM</span><strong>{card.form}</strong><p>Current Board 000 evidence.</p></div>
+      <div><span>BALANCE</span><strong>{card.balance}</strong><p>Survivability across matchups.</p></div>
+    </section>
+
+    <section class="story">
+      <div class="story__lead">
+        <p class="label">SIGNATURE ABILITY</p>
+        <h2>{card.ability}</h2>
+        <p>{card.abilityText}</p>
+      </div>
+      <div class="story__grid">
+        <article>
+          <span>01 · LOCAL RESOURCE</span>
+          <h3>{card.localResource}</h3>
+          <p>
+            A mascot gets stronger here when its symbolic world is physically present:
+            water, rock, plant, altitude, heat, weather, or civic architecture.
+          </p>
+        </article>
+        <article>
+          <span>02 · TRADITION</span>
+          <h3>{card.tradition}</h3>
+          <p>
+            Status: {card.officialStatus.replaceAll('-', ' ')}. PointCast checked the
+            linked official athletics source on {card.sourceCheckedAt}.
+          </p>
+          <a href={card.sourceUrl} target="_blank" rel="noopener">Read {card.sourceLabel} ↗</a>
+        </article>
+        <article>
+          <span>03 · CURRENT EVIDENCE</span>
+          <h3>{card.pointcastReason}</h3>
+          <p>Next proof: {card.pointcastProof}</p>
+          <a href={`/25/teams/${card.slug}`}>Open the football receipt →</a>
+        </article>
+        <article>
+          <span>04 · CREATURE INSTINCT</span>
+          <h3>{mascotClass.instinct}</h3>
+          <p>
+            Class edge: {mascotClass.name} is strong against {mascotClass.strongAgainst}.
+            Favored arenas: {favoredArenas.map((arena) => arena.name).join(' · ')}.
+          </p>
+          <a href="/mascot-battler#battle">Put the class in battle →</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="boundary">
+      <p class="label">FIELD NOTE</p>
+      <p>{MASCOT_BATTLER.boundary}</p>
+    </section>
+
+    <footer>
+      <a href={`/mascot-battler/${previous.slug}`}>
+        <small>PREVIOUS CARD</small>
+        <strong>#{previous.rank} {previous.school}</strong>
+      </a>
+      <a class="next" href={`/mascot-battler/${next.slug}`}>
+        <small>NEXT CARD</small>
+        <strong>#{next.rank} {next.school}</strong>
+      </a>
+    </footer>
+  </main>
+
+  <script is:inline>
+    (() => {
+      const button = document.querySelector('[data-keep-card]');
+      if (!(button instanceof HTMLButtonElement)) return;
+      const key = 'pc:mascot-atlas:cards';
+      const read = () => {
+        try {
+          const value = JSON.parse(localStorage.getItem(key) || '[]');
+          return Array.isArray(value) ? value : [];
+        } catch { return []; }
+      };
+      const sync = () => {
+        const kept = read().includes(button.dataset.keepCard);
+        button.textContent = kept ? 'Kept in this browser ✓' : 'Keep this card +';
+        button.setAttribute('aria-pressed', String(kept));
+      };
+      button.addEventListener('click', () => {
+        const kept = new Set(read());
+        kept.has(button.dataset.keepCard) ? kept.delete(button.dataset.keepCard) : kept.add(button.dataset.keepCard);
+        localStorage.setItem(key, JSON.stringify(Array.from(kept)));
+        sync();
+      });
+      sync();
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #eee9dc;
+    color: #111;
+    font-family: var(--pc-font-sans);
+  }
+  :global(*) { box-sizing: border-box; }
+  .field-card { min-height: 100vh; overflow: hidden; }
+  header, header nav, footer { align-items: center; display: flex; }
+  header {
+    background: #f7f1df;
+    border-bottom: 1px solid #111;
+    justify-content: space-between;
+    padding: 18px clamp(18px, 4vw, 64px);
+  }
+  header nav { gap: clamp(10px, 2.2vw, 30px); }
+  header a { color: inherit; }
+  .brand { font-size: 18px; font-weight: 950; text-decoration: none; }
+  header a, .identity > p, .class-line, .label, .story article > span, .stat-deck span,
+  figcaption, footer small {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .hero { display: grid; grid-template-columns: minmax(360px, .82fr) 1.18fr; min-height: 77vh; }
+  figure { background: var(--class); margin: 0; overflow: hidden; position: relative; }
+  figure img { height: 100%; object-fit: cover; width: 100%; }
+  figcaption { background: #f7f1df; bottom: 18px; left: 18px; max-width: calc(100% - 36px); padding: 9px 11px; position: absolute; }
+  .identity {
+    align-items: flex-start;
+    background: #121a2b;
+    color: #f7f1df;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(48px, 8vw, 130px);
+    position: relative;
+  }
+  .identity > p:first-child { color: #e8ff3f; }
+  .rank {
+    color: var(--team);
+    font-size: clamp(120px, 19vw, 290px);
+    font-weight: 950;
+    letter-spacing: -.12em;
+    line-height: .66;
+    margin: 28px 0 42px;
+  }
+  h1 { font-size: clamp(66px, 9vw, 146px); letter-spacing: -.075em; line-height: .77; margin: 0; }
+  .identity > strong { font-size: clamp(24px, 3vw, 48px); margin: 20px 0 8px; }
+  .class-line { color: #adb4c1; }
+  .identity button {
+    background: #e8ff3f;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 900;
+    margin-top: 32px;
+    padding: 13px 17px;
+    text-transform: uppercase;
+  }
+  .identity button[aria-pressed="true"] { background: var(--team); color: #fff; }
+  .stat-deck { border-bottom: 1px solid #111; display: grid; grid-template-columns: repeat(5, 1fr); }
+  .stat-deck > div { border-right: 1px solid #111; min-height: 220px; padding: clamp(18px, 3vw, 42px); }
+  .stat-deck > div:last-child { border-right: 0; }
+  .stat-deck strong { display: block; font-size: clamp(55px, 8vw, 110px); letter-spacing: -.08em; line-height: .8; margin: 22px 0; }
+  .stat-deck p { color: #57534a; font-size: 13px; }
+  .story { padding: clamp(70px, 10vw, 150px) clamp(18px, 5vw, 80px); }
+  .story__lead { border-bottom: 2px solid #111; display: grid; gap: 24px; grid-template-columns: .5fr 1fr 1fr; padding-bottom: 52px; }
+  .story__lead h2 { font-size: clamp(58px, 8vw, 125px); letter-spacing: -.07em; line-height: .75; margin: 0; }
+  .story__lead > p:last-child { align-self: end; font-size: clamp(18px, 2vw, 28px); margin: 0; }
+  .story__grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .story article { border-bottom: 1px solid #111; border-right: 1px solid #111; min-height: 330px; padding: clamp(24px, 4vw, 58px); }
+  .story article:nth-child(even) { border-right: 0; }
+  .story h3 { font-size: clamp(29px, 3.8vw, 56px); letter-spacing: -.045em; line-height: .95; margin: 22px 0; }
+  .story article p { font-size: 16px; line-height: 1.45; }
+  .story a { color: inherit; font-weight: 900; }
+  .boundary { background: #e8ff3f; display: grid; gap: 30px; grid-template-columns: .4fr 1.6fr; padding: 46px clamp(18px, 5vw, 80px); }
+  .boundary p:last-child { font-size: clamp(17px, 2vw, 26px); margin: 0; }
+  footer { background: var(--team); color: #fff; justify-content: space-between; padding: 34px clamp(18px, 5vw, 80px); }
+  footer a { color: inherit; display: flex; flex-direction: column; text-decoration: none; }
+  footer .next { text-align: right; }
+  footer strong { font-size: clamp(18px, 2.5vw, 34px); }
+  @media (max-width: 760px) {
+    header { align-items: flex-start; }
+    header nav { align-items: flex-end; flex-direction: column; gap: 6px; }
+    .hero { grid-template-columns: 1fr; }
+    figure { height: 58vh; }
+    .identity { padding: 55px 18px; }
+    .rank { font-size: 160px; margin-bottom: 32px; }
+    h1 { font-size: clamp(64px, 20vw, 94px); }
+    .stat-deck { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .stat-deck > div { min-height: 130px; padding: 14px 8px; }
+    .stat-deck strong { font-size: 37px; }
+    .stat-deck span { font-size: 7px; }
+    .stat-deck p { display: none; }
+    .story__lead, .story__grid, .boundary { grid-template-columns: 1fr; }
+    .story article { border-right: 0; min-height: 0; }
+    footer { align-items: flex-start; gap: 20px; }
+  }
+</style>

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
 import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
+import { MASCOT_CARDS } from '../lib/mascot-battler';
 import afterimageExamples from '../data/afterimage-examples.json';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
@@ -84,6 +85,12 @@ const staticUrls: SitemapEntry[] = [
   ...POINTCAST_25_TEAMS.flatMap((team) => [
     [`https://pointcast.xyz/25/teams/${team.slug}`, 'weekly', '0.9'] as SitemapEntry,
     [`https://pointcast.xyz/25/teams/${team.slug}.json`, 'weekly', '0.82'] as SitemapEntry,
+  ]),
+  ['https://pointcast.xyz/mascot-battler', 'weekly', '0.98'],
+  ['https://pointcast.xyz/mascot-battler.json', 'weekly', '0.94'],
+  ...MASCOT_CARDS.flatMap((card) => [
+    [`https://pointcast.xyz/mascot-battler/${card.slug}`, 'monthly', '0.88'] as SitemapEntry,
+    [`https://pointcast.xyz/mascot-battler/${card.slug}.json`, 'monthly', '0.82'] as SitemapEntry,
   ]),
   ['https://pointcast.xyz/25/terms', 'monthly', '0.65'],
   ['https://pointcast.xyz/press', 'daily', '0.9'],
