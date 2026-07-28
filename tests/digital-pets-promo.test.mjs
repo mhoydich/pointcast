@@ -39,11 +39,11 @@ test('digital-pets promotion compresses the book into bounded reusable copy', ()
 
   assert.equal(promo.angles.length, 3);
   assert.equal(promo.thread.length, 7);
-  assert.equal(promo.singles.length, 4);
+  assert.equal(promo.singles.length, 5);
   assert.equal(promo.outreach.length, 3);
   assert.equal(promo.sequence.length, 5);
   assert.equal(new Set(promo.angles.map((angle) => angle.id)).size, 3);
-  assert.equal(new Set(promo.singles.map((post) => post.id)).size, 4);
+  assert.equal(new Set(promo.singles.map((post) => post.id)).size, 5);
 
   promo.thread.forEach((post, index) => {
     assert.equal(post.number, index + 1);
@@ -57,9 +57,10 @@ test('digital-pets promotion compresses the book into bounded reusable copy', ()
   });
 });
 
-test('promotion artwork reuses the published book assets', async () => {
+test('promotion artwork reuses the published book and companion assets', async () => {
   const promo = loadPromoData();
-  assert.equal(promo.assets.length, 4);
+  assert.equal(promo.assets.length, 5);
+  assert.ok(promo.assets.some((asset) => asset.path.endsWith('plate-07-commons.webp')));
 
   for (const asset of promo.assets) {
     const file = await stat(new URL(`public${asset.path}`, root));
