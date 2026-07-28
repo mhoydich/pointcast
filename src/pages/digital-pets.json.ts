@@ -69,6 +69,8 @@ export const GET: APIRoute = () =>
           block: `${base}/b/${BOOK_META.blockId}`,
           creatureCommons: `${base}/digital-pets/commons`,
           creatureCommonsJson: `${base}/digital-pets/commons.json`,
+          legacyStory: `${base}/digital-pets/legacy`,
+          legacyStoryJson: `${base}/digital-pets/legacy.json`,
           pointcastPets: `${base}/pets`,
           localPet: `${base}/pet`,
           sourceLedger: `${base}${BOOK_META.route}#sources`,
