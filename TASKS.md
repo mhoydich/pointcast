@@ -47,6 +47,9 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (X) Build the responsive comedy issue, browser-local ruling, gesture-gated filing stamp, and JSON twin — `done`
 - [x] (X) Validate the complete issue, structured twin, full test suite, and responsive interactions — `done`
 - [x] (X) Merge and deploy the exact reviewed production build — `done`
+- [x] (X) Create the five-page household legal brief and five Pinterest-ready campaign cards — `done`
+- [x] (X) Add the three-creative launch campaign to PointCast and reciprocal Open Ad Network inventory — `done`
+- [ ] (MH/X) Publish and verify LinkedIn, Pinterest, and WordPress campaign placements — `in-progress`
 
 ---
 

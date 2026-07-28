@@ -187,12 +187,12 @@ test('portable network transparently pins the first-100 campaign across owned pu
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
-  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
   assert.match(registry, /id: 'rally'/);
-  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);
