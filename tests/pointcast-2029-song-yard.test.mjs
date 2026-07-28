@@ -19,7 +19,7 @@ test('The Song Yard defines six original songs and four legible rehearsal parts'
 
   assert.equal((seeds.match(/^\s{4}id: /gm) || []).length, 6);
   assert.equal((data.split('export const SONG_YARD_PARTS')[1].split('export const SONG_YARD_SEEDS')[0].match(/^\s{4}id: /gm) || []).length, 4);
-  assert.match(data, /pointcast\.saturday-commons\.song-yard\/v1/);
+  assert.match(data, /pointcast\.saturday-commons\.song-yard\/v2/);
   assert.match(data, /Open the Gate/);
   assert.match(data, /Rain Roof Round/);
   assert.match(data, /Walk Home Slow/);
@@ -38,7 +38,7 @@ test('the practice instrument is sample-free, gesture-gated, stoppable, and redu
   assert.match(page, /data-practice-part/);
   assert.match(page, /data-beat-step/);
   assert.match(page, /prefers-reduced-motion/);
-  assert.match(page, /recordings or uploads/);
+  assert.match(page, /No recording, upload/);
   assert.match(audio, /createOscillator/);
   assert.match(audio, /createDeterministicNoise/);
   assert.match(audio, /createStereoPanner/);
@@ -89,6 +89,40 @@ test('The Song Yard is discoverable across the full PointCast contract', async (
 
   assert.match(homeCss, /fresh-field-card--song/);
   for (const surface of surfaces) assert.match(surface, /25\/2029\/song-yard/);
+});
+
+test('The Song Yard expands to 35 programs and keeps repertoire evidence explicit', async () => {
+  const [data, page, json, audio] = await Promise.all([
+    read('src/lib/pointcast-college-football-magazine.ts'),
+    read('src/pages/25/2029/song-yard/index.astro'),
+    read('src/pages/25/2029/song-yard.json.ts'),
+    read('src/lib/pointcast-2029-song-yard-audio.ts'),
+  ]);
+
+  for (const school of [
+    'West Virginia',
+    'UCLA',
+    'Michigan State',
+    'Arizona State',
+    'Colorado',
+    'Kansas',
+    'Rutgers',
+    'Syracuse',
+    'Wisconsin',
+    'Virginia Tech',
+  ]) assert.match(data, new RegExp(`school: '${school}'`));
+
+  assert.match(data, /stadium-ritual/);
+  assert.match(data, /documented-performance/);
+  assert.match(data, /pointcast-candidate/);
+  assert.match(page, /35 programs/);
+  assert.match(page, /data-repertoire-filter/);
+  assert.match(page, /data-load-program/);
+  assert.match(page, /REFERENCE, NOT RESTREAM/);
+  assert.match(json, /selectableIdentitySystems: SONG_YARD_PROGRAMS\.length/);
+  assert.match(json, /songReferences: SONG_YARD_REPERTOIRE\.length/);
+  assert.match(audio, /SONG_YARD_PROGRAMS/);
+  assert.doesNotMatch(page, /<audio|<iframe/);
 });
 
 test('Block 0527 accurately bounds the practice room', async () => {

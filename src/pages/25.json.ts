@@ -11,6 +11,8 @@ export const GET: APIRoute = () =>
         machineEdition: 'https://pointcast.xyz/25.json',
         block: 'https://pointcast.xyz/b/0510',
         discovery: {
+          collegeFootballMagazine: 'https://pointcast.xyz/25/magazine',
+          collegeFootballMagazineJson: 'https://pointcast.xyz/25/magazine.json',
           disagreementIndex: 'https://pointcast.xyz/25/disagreements',
           disagreementIndexJson: 'https://pointcast.xyz/25/disagreements.json',
           receiptBook: 'https://pointcast.xyz/25/receipts',

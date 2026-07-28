@@ -1,5 +1,9 @@
 import type { APIRoute } from 'astro';
-import { POINTCAST_2029_IDENTITIES } from '../../../lib/pointcast-2029';
+import {
+  COLLEGE_FOOTBALL_MAGAZINE,
+  SONG_YARD_PROGRAMS,
+  SONG_YARD_REPERTOIRE,
+} from '../../../lib/pointcast-college-football-magazine';
 import {
   POINTCAST_2029_SONG_YARD,
   SONG_YARD_DISCOVERY,
@@ -28,7 +32,9 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   capabilities: {
     sampleFreeWebAudio: true,
     originalSongSeeds: SONG_YARD_SEEDS.length,
-    selectableIdentitySystems: POINTCAST_2029_IDENTITIES.length,
+    selectableIdentitySystems: SONG_YARD_PROGRAMS.length,
+    researchedRepertoirePrograms: SONG_YARD_PROGRAMS.filter((program) => program.repertoire.length > 0).length,
+    songReferences: SONG_YARD_REPERTOIRE.length,
     selectablePracticeParts: SONG_YARD_PARTS.length,
     tempoAdjustment: true,
     keyAdjustment: true,
@@ -51,16 +57,36 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   songSeeds: SONG_YARD_SEEDS,
   practicePath: SONG_YARD_PRACTICE_PATH,
   writingRules: SONG_YARD_RULES,
-  identities: POINTCAST_2029_IDENTITIES.map((identity) => ({
-    rank: identity.rank,
-    slug: identity.slug,
-    school: identity.school,
-    markName: identity.markName,
-    primary: identity.primary,
-    secondary: identity.secondary,
-    paper: identity.paper,
-    source: identity.canonical,
+  programs: SONG_YARD_PROGRAMS.map((program) => ({
+    fieldNumber: program.fieldNumber,
+    cohort: program.cohort,
+    slug: program.slug,
+    school: program.school,
+    conference: program.conference,
+    city: program.city,
+    state: program.state,
+    currentStadium: program.currentStadium,
+    markName: program.markName,
+    primary: program.primary,
+    secondary: program.secondary,
+    paper: program.paper,
+    repertoire: program.repertoire,
   })),
+  identities: SONG_YARD_PROGRAMS.map((program) => ({
+    rank: program.fieldNumber,
+    slug: program.slug,
+    school: program.school,
+    markName: program.markName,
+    primary: program.primary,
+    secondary: program.secondary,
+    paper: program.paper,
+    cohort: program.cohort,
+  })),
+  repertoire: SONG_YARD_REPERTOIRE,
+  magazine: {
+    human: COLLEGE_FOOTBALL_MAGAZINE.canonical,
+    machine: COLLEGE_FOOTBALL_MAGAZINE.machineEdition,
+  },
   discovery: SONG_YARD_DISCOVERY,
 }, null, 2), {
   headers: {

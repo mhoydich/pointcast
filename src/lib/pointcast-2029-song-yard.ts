@@ -18,15 +18,17 @@ export interface SongYardSeed {
 }
 
 export const POINTCAST_2029_SONG_YARD = {
-  spec: 'pointcast.saturday-commons.song-yard/v1',
+  spec: 'pointcast.saturday-commons.song-yard/v2',
   title: 'THE SONG YARD',
-  subtitle: 'A stadium-song practice commons for PointCast 25 / 2029',
+  subtitle: 'A stadium-song practice commons and reported repertoire atlas for PointCast College Football',
   publishedAt: '2026-07-28T01:18:00-07:00',
   canonical: 'https://pointcast.xyz/25/2029/song-yard',
   machineEdition: 'https://pointcast.xyz/25/2029/song-yard.json',
   parent: 'https://pointcast.xyz/25/2029/field-kit',
   block: '0527',
-  identitySystems: 25,
+  identitySystems: 35,
+  researchedProgramDossiers: 16,
+  songReferences: 48,
   originalSongSeeds: 6,
   rehearsalParts: 4,
   bowlSections: 4,
@@ -206,6 +208,8 @@ export const SONG_YARD_RULES = [
 export const SONG_YARD_DISCOVERY = {
   human: POINTCAST_2029_SONG_YARD.canonical,
   machine: POINTCAST_2029_SONG_YARD.machineEdition,
+  magazine: 'https://pointcast.xyz/25/magazine',
+  magazineJson: 'https://pointcast.xyz/25/magazine.json',
   fieldKit: POINTCAST_2029_SONG_YARD.parent,
   visualEdition: 'https://pointcast.xyz/25/2029',
   block: 'https://pointcast.xyz/b/0527',

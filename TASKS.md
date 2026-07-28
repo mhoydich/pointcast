@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## PointCast College Football — Issue 001 + Repertoire Desk (2026-07-28)
+
+- [x] (MH) Expand stadium-song research beyond the Top 25 and name the first Open Field programs — `done`
+- [x] (MH) Group the board, receipts, songs, mascots, 2029 schools, field kit, and ledger as a college-football magazine — `done`
+- [x] (X) Build 35 selectable program identities, 16 sourced dossiers, and 48 clearly labeled song references — `done`
+- [x] (X) Build the Issue 001 magazine front door, structured twin, source desk, and seasonal publishing rhythm — `done`
+- [x] (X) Add Block 0529 plus homepage, board, app, parent, sitemap, agent, LLM, JSON, and social discovery — `done`
+- [x] (X) Validate full tests, responsive repertoire and practice interactions, exact merge, and canonical production release — `done`
+
+---
+
 ## The Song Yard — Stadium Song Practice / 2029 (2026-07-28)
 
 - [x] (MH) Direct a new area around audio practice and how stadiums can get their songs sung — `done`
