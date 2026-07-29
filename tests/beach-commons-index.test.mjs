@@ -5,7 +5,7 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Beach Commons is a thirteen-edition series with four legible paths', async () => {
+test('Beach Commons is a fourteen-edition series with four legible paths', async () => {
   const data = await read('src/lib/beach-commons-series.ts');
   const page = await read('src/pages/beach-commons.astro');
 
@@ -15,16 +15,16 @@ test('Beach Commons is a thirteen-edition series with four legible paths', async
 
   assert.deepEqual(
     editionRecords.map((match) => Number(match[1])),
-    Array.from({ length: 13 }, (_, index) => index + 1),
+    Array.from({ length: 14 }, (_, index) => index + 1),
   );
   assert.deepEqual(pathRecords.map((match) => match[1]), ['build', 'make', 'kit', 'coast']);
-  assert.equal(assignedPaths.length, 13);
-  assert.equal(assignedPaths.filter((match) => match[1] === 'build').length, 4);
+  assert.equal(assignedPaths.length, 14);
+  assert.equal(assignedPaths.filter((match) => match[1] === 'build').length, 5);
   for (const path of ['make', 'kit', 'coast']) {
     assert.equal(assignedPaths.filter((match) => match[1] === path).length, 3);
   }
 
-  assert.match(data, /currentEdition: 13/);
+  assert.match(data, /currentEdition: 14/);
   assert.match(data, /current: true/);
   assert.match(page, /Choose your way in\./);
   assert.match(page, /Public life as a design material\./);
@@ -52,11 +52,11 @@ test('Beach Commons front door publishes a bounded machine index and discovery t
   assert.match(endpoint, /network: false/);
   assert.match(endpoint, /physicalStatus/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v1'/);
-  assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v13\.json/);
+  assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v14\.json/);
   assert.match(llms, /Beach Commons — Complete Field Series/);
   assert.match(llms, /\/beach-commons\/v1/);
   assert.match(llmsFull, /Beach Commons — complete field series/);
-  assert.match(home, /All thirteen Beach Commons editions/);
+  assert.match(home, /All fourteen Beach Commons editions/);
   assert.match(home, /Beach Commons index JSON/);
 });
 
@@ -66,7 +66,7 @@ test('every Beach Commons index image exists', async () => {
     (match) => match[1],
   );
 
-  assert.equal(imagePaths.length, 13);
+  assert.equal(imagePaths.length, 14);
   await Promise.all(
     imagePaths.map(async (path) => {
       const url = new URL(`../public${path}`, import.meta.url);
