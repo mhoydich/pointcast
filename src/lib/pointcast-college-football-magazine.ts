@@ -557,6 +557,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'The work before the stadium: five focus states, five listening rooms, and one private field study.',
       href: '/25/magazine/sound-of-focus',
     },
+    {
+      number: '10',
+      name: 'The Coaches Desk',
+      kicker: 'Program / capital / players / place / aura',
+      description: 'The PointCast 50 for 2026: the coach, the seven rooms around the coach, and the next question.',
+      href: '/25/magazine/coaches-50',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
