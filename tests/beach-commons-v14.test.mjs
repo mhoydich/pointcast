@@ -132,14 +132,13 @@ test('The Hardpoint League has JSON, Block, series, homepage, and discovery twin
   assert.equal(block.meta.visualPlates, 8);
   assert.equal(block.meta.materialHouses, 6);
   assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v14');
-  assert.match(series, /currentEdition: 14/);
+  assert.match(series, /edition: 14/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v14'/);
   assert.match(llms, /PointCast Field Study 014/);
   assert.match(llmsFull, /THE HARDPOINT LEAGUE/);
-  assert.match(homepage, /href="\/beach-commons\/v14"/);
-  assert.match(homepage, /Block 0540/);
-  assert.match(homeEdition, /href="\/beach-commons\/v14"/);
-  assert.match(homeEdition, /New<br \/>0540/);
+  assert.match(homeEdition, /href: '\/beach-commons\/v14'/);
+  assert.match(homeEdition, /id: '0540'/);
+  assert.match(homepage, /All fifteen Beach Commons editions/);
 });
 
 test('Hardpoint League images have intended edition and social dimensions', async () => {
