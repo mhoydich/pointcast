@@ -20,6 +20,8 @@ export const GET: APIRoute = () => {
       ...issue,
       human: `https://pointcast.xyz${issue.route}`,
       json: `https://pointcast.xyz${issue.jsonRoute}`,
+      visualBoard: `https://pointcast.xyz${issue.boardRoute}`,
+      visualBoardJson: `https://pointcast.xyz${issue.boardJsonRoute}`,
       block: `https://pointcast.xyz/b/${issue.blockId}`,
       cover: `https://pointcast.xyz${issue.cover}`,
       playlistVisibility: 'public',

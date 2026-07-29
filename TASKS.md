@@ -18,7 +18,10 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 - [x] (MH) Direct Issue 002 as an art-forward, subtly attention-seeking 9:34 uplift for enjoyable busy work and a great life — `done`
 - [x] (X) Build the public eighteen-track THE GOOD WORK playlist and apply its original 1536-square cover — `done`
 - [x] (X) Turn both playlists into WEDNESDAY 9:34 with a publication front door, human-edited cadence, and four-week editorial calendar — `done`
-- [x] (X) Validate the complete double issue, merge, deploy the exact release, and verify canonical production — `done`
+- [x] (MH) Direct one public visual pinboard around each issue plus a LinkedIn note about the 5.6 Sol compile logic — `done`
+- [x] (X) Generate two companion prints, select six labeled Midjourney-archive works, and add six source-first outside doors — `done`
+- [ ] (X) Publish both PointCast visual boards, public Pinterest boards, and the LinkedIn compile note — `in-progress`
+- [ ] (X) Validate the complete double issue, merge, deploy the exact release, and verify canonical production — `in-progress`
 
 ---
 

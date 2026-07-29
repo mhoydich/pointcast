@@ -18,6 +18,10 @@ export const GET: APIRoute = () => {
     editorialNote: issue.editorialNote,
     human: issue.canonicalUrl,
     json: `https://pointcast.xyz${issue.jsonRoute}`,
+    visualBoard: {
+      human: 'https://pointcast.xyz/wednesday/002/board',
+      json: 'https://pointcast.xyz/wednesday/002/board.json',
+    },
     publishedAt: issue.publishedAt,
     isPartOf: {
       title: WEDNESDAY_PUBLICATION.title,

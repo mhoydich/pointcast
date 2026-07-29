@@ -1,0 +1,424 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import type { WednesdayPinboard } from '../lib/wednesday-pinboards';
+
+interface Props {
+  board: WednesdayPinboard;
+}
+
+const { board } = Astro.props;
+const isUpdraft = board.theme === 'porch-to-sky';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `${board.canonicalUrl}#pinboard`,
+  name: `${board.title} — WEDNESDAY 9:34 Issue ${board.issueNumber}`,
+  description: board.description,
+  url: board.canonicalUrl,
+  image: `https://pointcast.xyz${board.cover}`,
+  isPartOf: {
+    '@type': 'Periodical',
+    name: 'WEDNESDAY 9:34',
+    url: 'https://pointcast.xyz/wednesday',
+  },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: board.pins.length,
+    itemListElement: board.pins.map((pin, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: pin.title,
+      url: pin.href.startsWith('/') ? `https://pointcast.xyz${pin.href}` : pin.href,
+      ...(pin.image
+        ? {
+            image: pin.image.startsWith('/')
+              ? `https://pointcast.xyz${pin.image}`
+              : pin.image,
+          }
+        : {}),
+    })),
+  },
+};
+---
+
+<BlockLayout
+  title={`${board.title} — WEDNESDAY 9:34 Issue ${board.issueNumber}`}
+  description={board.description}
+  image={`https://pointcast.xyz${board.cover}`}
+  themeColor={isUpdraft ? '#f4b51e' : '#d9ed00'}
+  jsonLd={jsonLd}
+  alternates={[
+    {
+      type: 'application/json',
+      href: board.jsonRoute,
+      title: `${board.title} machine pinboard`,
+    },
+  ]}
+  immersive={true}
+  showNetworkStrip={false}
+  frame={{
+    image: `https://pointcast.xyz${board.cover}`,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Play the playlist', action: 'link', target: board.playlistUrl },
+      { label: 'Read the issue', action: 'link', target: `https://pointcast.xyz${board.issueRoute}` },
+      { label: 'Inspect pinboard JSON', action: 'link', target: `https://pointcast.xyz${board.jsonRoute}` },
+    ],
+  }}
+>
+  <main class:list={['pinboard', `pinboard--${board.theme}`]} id="main-content">
+    <nav class="pinboard__crumb mono" aria-label="Breadcrumb">
+      <a href="/">PointCast</a>
+      <span>/</span>
+      <a href="/wednesday">WEDNESDAY 9:34</a>
+      <span>/</span>
+      <a href={board.issueRoute}>Issue {board.issueNumber}</a>
+      <span>/</span>
+      <span>Visual board</span>
+    </nav>
+
+    <header class="pinboard__mast">
+      <div class="pinboard__day" aria-hidden="true">
+        <span>WED</span>
+        <strong>9:34</strong>
+      </div>
+      <div class="pinboard__title">
+        <p class="mono">ISSUE {board.issueNumber} / PUBLIC VISUAL PINBOARD</p>
+        <h1>{board.title}</h1>
+        <p class="pinboard__subtitle">{board.subtitle}</p>
+      </div>
+      <div class="pinboard__intro">
+        <p>{board.description}</p>
+        <p>{board.editorialNote}</p>
+        <div class="pinboard__actions">
+          <a href={board.playlistUrl} target="_blank" rel="noopener">Play on Spotify ↗</a>
+          <a href={board.issueRoute}>Read + play the issue</a>
+          {board.pinterestBoardUrl && (
+            <a href={board.pinterestBoardUrl} target="_blank" rel="noopener">
+              Open public Pinterest ↗
+            </a>
+          )}
+        </div>
+      </div>
+    </header>
+
+    <section class="pinboard__legend" aria-label="Pinboard provenance legend">
+      <span><i class="pinboard__dot pinboard__dot--playlist"></i> PLAYLIST</span>
+      <span><i class="pinboard__dot pinboard__dot--openai"></i> CHATGPT / OPENAI IMAGE</span>
+      <span><i class="pinboard__dot pinboard__dot--midjourney"></i> MICHAEL’S MIDJOURNEY ARCHIVE</span>
+      <span><i class="pinboard__dot pinboard__dot--outside"></i> OUTSIDE DOOR</span>
+    </section>
+
+    <section class="pinboard__pins" aria-label={`${board.title} visual pins`}>
+      {board.pins.map((pin, index) => (
+        <article
+          class:list={[
+            'pinboard__pin',
+            `pinboard__pin--${pin.kind}`,
+            `pinboard__pin--${pin.accent}`,
+          ]}
+        >
+          <a
+            class="pinboard__pin-link"
+            href={pin.href}
+            target={pin.href.startsWith('http') ? '_blank' : undefined}
+            rel={pin.href.startsWith('http') ? 'noopener' : undefined}
+          >
+            {pin.image ? (
+              <figure>
+                <img
+                  src={pin.image}
+                  alt={pin.imageAlt}
+                  width={pin.imageWidth}
+                  height={pin.imageHeight}
+                  loading={index < 2 ? 'eager' : 'lazy'}
+                />
+              </figure>
+            ) : (
+              <div class="pinboard__door" aria-hidden="true">
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <b>OPEN<br />DOOR</b>
+                <i>↗</i>
+              </div>
+            )}
+            <div class="pinboard__pin-copy">
+              <p class="mono">{pin.kind.replaceAll('-', ' ')}</p>
+              <h2>{pin.title}</h2>
+              <p>{pin.description}</p>
+              <small class="mono">{pin.credit}</small>
+            </div>
+          </a>
+        </article>
+      ))}
+    </section>
+
+    <section class="pinboard__contract" aria-labelledby="pinboard-contract-title">
+      <div>
+        <p class="mono">THE BOARD HAS RECEIPTS</p>
+        <h2 id="pinboard-contract-title">Collected, generated, and linked are different verbs.</h2>
+      </div>
+      <div>
+        <p>
+          Every image card says where it came from. The ChatGPT / OpenAI pieces
+          were generated for this issue. The Midjourney selections come from
+          Michael Hoydich’s existing PointCast archive.
+        </p>
+        <p>
+          Outside doors remain links to their publishers. Their art is not
+          copied into this board. The playlist remains public on Spotify; this
+          page supplies the visual and editorial path around it.
+        </p>
+      </div>
+    </section>
+
+    <footer class="pinboard__footer">
+      <nav aria-label="Pinboard routes">
+        <a href={board.issueRoute}>Issue {board.issueNumber}</a>
+        <a href={board.jsonRoute}>Pinboard JSON</a>
+        <a href={board.issueJsonRoute}>Issue JSON</a>
+        <a href="/wednesday">Publication + calendar</a>
+      </nav>
+      <p class="mono">POINTCAST / WEDNESDAY 9:34 / BOARD {board.issueNumber}</p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #161510;
+  }
+
+  .pinboard {
+    --ink: #161510;
+    --paper: #f4efdf;
+    --sun: #f0b51d;
+    --sky: #83b8d8;
+    --leaf: #5f8a54;
+    --coral: #ef6b42;
+    --acid: #d9ed00;
+    --blue: #1847d1;
+    --lavender: #a99ad9;
+    --red: #ef4e29;
+    width: min(1540px, calc(100% - 24px));
+    margin: 12px auto 48px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .pinboard a { color: inherit; }
+  .mono { font-family: var(--pc-font-mono); text-transform: uppercase; }
+
+  .pinboard__crumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .11em;
+  }
+
+  .pinboard__mast {
+    display: grid;
+    grid-template-columns: minmax(200px, .42fr) minmax(320px, .9fr) minmax(340px, .68fr);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .pinboard__mast > div {
+    min-width: 0;
+    padding: clamp(28px, 4.5vw, 68px);
+  }
+
+  .pinboard__mast > div + div { border-left: 2px solid var(--ink); }
+
+  .pinboard__day {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 360px;
+    background: var(--sun);
+  }
+
+  .pinboard--beautifully-lit-desk .pinboard__day { background: var(--acid); }
+  .pinboard__day span { font: 950 clamp(62px, 8vw, 122px)/.75 var(--pc-font-sans); letter-spacing: -.1em; }
+  .pinboard__day strong { align-self: flex-end; color: var(--blue); font: 950 clamp(56px, 6vw, 96px)/.8 var(--pc-font-sans); letter-spacing: -.09em; }
+  .pinboard--porch-to-sky .pinboard__day strong { color: var(--coral); }
+
+  .pinboard__title {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background:
+      linear-gradient(150deg, transparent 0 70%, rgba(22,21,16,.08) 70.2% 71%, transparent 71.2%),
+      var(--paper);
+  }
+
+  .pinboard__title > .mono {
+    margin: 0 auto auto 0;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .13em;
+  }
+
+  .pinboard__title h1 {
+    margin: 80px 0 16px;
+    max-width: 10ch;
+    font-size: clamp(56px, 7.2vw, 112px);
+    font-weight: 950;
+    letter-spacing: -.085em;
+    line-height: .78;
+  }
+
+  .pinboard__subtitle {
+    margin: 0;
+    max-width: 30ch;
+    color: var(--coral);
+    font: italic clamp(17px, 2vw, 25px)/1.1 Georgia, serif;
+  }
+
+  .pinboard--beautifully-lit-desk .pinboard__subtitle { color: var(--blue); }
+
+  .pinboard__intro {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: var(--sky);
+  }
+
+  .pinboard--beautifully-lit-desk .pinboard__intro { background: var(--lavender); }
+  .pinboard__intro > p { max-width: 38ch; font-size: 16px; line-height: 1.45; }
+  .pinboard__intro > p:first-child { font-size: clamp(21px, 2.3vw, 32px); font-weight: 800; letter-spacing: -.025em; line-height: 1.04; }
+  .pinboard__actions { display: flex; flex-direction: column; gap: 7px; margin-top: 20px; }
+  .pinboard__actions a {
+    padding: 12px 13px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    font: 900 9px/1 var(--pc-font-mono);
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .pinboard__actions a:first-child { background: var(--ink); color: var(--paper); }
+
+  .pinboard__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    padding: 13px 16px;
+    border-bottom: 2px solid var(--ink);
+    background: var(--paper);
+    font: 900 8px/1.2 var(--pc-font-mono);
+    letter-spacing: .07em;
+  }
+
+  .pinboard__legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .pinboard__dot { width: 10px; height: 10px; border: 1px solid var(--ink); border-radius: 999px; background: var(--paper); }
+  .pinboard__dot--playlist { background: var(--sun); }
+  .pinboard__dot--openai { background: var(--sky); }
+  .pinboard__dot--midjourney { background: var(--leaf); }
+  .pinboard__dot--outside { background: var(--coral); }
+
+  .pinboard__pins {
+    padding: 18px 10px 10px;
+    columns: 4 270px;
+    column-gap: 10px;
+    background:
+      linear-gradient(rgba(22,21,16,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(22,21,16,.045) 1px, transparent 1px),
+      var(--paper);
+    background-size: 26px 26px;
+  }
+
+  .pinboard__pin {
+    display: inline-block;
+    width: 100%;
+    margin: 0 0 10px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    break-inside: avoid;
+    box-shadow: 4px 5px 0 var(--ink);
+    vertical-align: top;
+  }
+
+  .pinboard__pin-link { display: block; text-decoration: none; }
+  .pinboard__pin-link:focus-visible { outline: 4px solid white; outline-offset: -7px; box-shadow: inset 0 0 0 8px var(--ink); }
+  .pinboard__pin figure { margin: 0; border-bottom: 2px solid var(--ink); background: var(--accent); overflow: hidden; }
+  .pinboard__pin img { display: block; width: 100%; height: auto; transition: transform 240ms ease; }
+  .pinboard__pin-link:hover img { transform: scale(1.018); }
+  .pinboard__pin-copy { padding: 16px 16px 18px; }
+  .pinboard__pin-copy > .mono { margin: 0; font-size: 7px; font-weight: 900; letter-spacing: .11em; }
+  .pinboard__pin-copy h2 { margin: 11px 0 9px; font-size: clamp(27px, 3vw, 44px); letter-spacing: -.055em; line-height: .88; }
+  .pinboard__pin-copy > p:not(.mono) { margin: 0 0 18px; font-size: 13px; line-height: 1.4; }
+  .pinboard__pin-copy small { display: block; padding-top: 10px; border-top: 1px solid var(--ink); font-size: 7px; font-weight: 900; letter-spacing: .06em; line-height: 1.45; }
+
+  .pinboard__pin--sun { --accent: var(--sun); }
+  .pinboard__pin--sky { --accent: var(--sky); }
+  .pinboard__pin--leaf { --accent: var(--leaf); }
+  .pinboard__pin--coral { --accent: var(--coral); }
+  .pinboard__pin--acid { --accent: var(--acid); }
+  .pinboard__pin--blue { --accent: var(--blue); }
+  .pinboard__pin--lavender { --accent: var(--lavender); }
+  .pinboard__pin--red { --accent: var(--red); }
+
+  .pinboard__pin--outside-door { background: var(--accent); }
+  .pinboard__door {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 230px;
+    padding: 16px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .pinboard__door span { font: 900 10px/1 var(--pc-font-mono); }
+  .pinboard__door b { grid-column: 1 / -1; align-self: center; font-size: clamp(48px, 5vw, 76px); letter-spacing: -.08em; line-height: .72; }
+  .pinboard__door i { grid-column: 2; grid-row: 1; justify-self: end; font: 900 28px/1 var(--pc-font-sans); }
+
+  .pinboard__contract {
+    display: grid;
+    grid-template-columns: minmax(300px, .85fr) minmax(340px, 1.15fr);
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .pinboard__contract > div { padding: clamp(30px, 5vw, 70px); }
+  .pinboard__contract > div + div { border-left: 2px solid var(--paper); }
+  .pinboard__contract .mono { margin: 0; color: var(--sun); font-size: 8px; font-weight: 900; letter-spacing: .12em; }
+  .pinboard--beautifully-lit-desk .pinboard__contract .mono { color: var(--acid); }
+  .pinboard__contract h2 { margin: 15px 0 0; max-width: 10ch; font-size: clamp(45px, 6vw, 86px); letter-spacing: -.07em; line-height: .82; }
+  .pinboard__contract > div:last-child p { max-width: 48ch; font-size: 17px; line-height: 1.5; }
+
+  .pinboard__footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 20px; }
+  .pinboard__footer nav { display: flex; flex-wrap: wrap; gap: 7px; }
+  .pinboard__footer a { padding: 9px 11px; border: 2px solid var(--ink); background: var(--sun); font: 900 8px/1 var(--pc-font-mono); letter-spacing: .07em; text-decoration: none; text-transform: uppercase; }
+  .pinboard--beautifully-lit-desk .pinboard__footer a { background: var(--acid); }
+  .pinboard__footer > p { margin: auto 0; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
+
+  @media (max-width: 940px) {
+    .pinboard__mast { grid-template-columns: 1fr 1fr; }
+    .pinboard__intro { grid-column: 1 / -1; border-top: 2px solid var(--ink); border-left: 0 !important; }
+    .pinboard__contract { grid-template-columns: 1fr; }
+    .pinboard__contract > div + div { border-top: 2px solid var(--paper); border-left: 0; }
+  }
+
+  @media (max-width: 620px) {
+    .pinboard { width: calc(100% - 10px); margin-top: 5px; }
+    .pinboard__mast { grid-template-columns: 1fr; }
+    .pinboard__mast > div + div { border-top: 2px solid var(--ink); border-left: 0; }
+    .pinboard__day { min-height: 240px; }
+    .pinboard__title h1 { margin-top: 42px; }
+    .pinboard__pins { columns: 1; padding: 9px 5px 5px; }
+    .pinboard__pin { margin-bottom: 9px; box-shadow: 3px 4px 0 var(--ink); }
+    .pinboard__legend { gap: 9px 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pinboard__pin img { transition: none; }
+  }
+</style>

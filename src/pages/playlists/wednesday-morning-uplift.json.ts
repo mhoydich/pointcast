@@ -17,6 +17,10 @@ export const GET: APIRoute = () => {
     editorialNote: playlist.editorialNote,
     human: playlist.canonicalUrl,
     json: `https://pointcast.xyz${playlist.jsonRoute}`,
+    visualBoard: {
+      human: 'https://pointcast.xyz/wednesday/001/board',
+      json: 'https://pointcast.xyz/wednesday/001/board.json',
+    },
     publishedAt: playlist.publishedAt,
     block: `https://pointcast.xyz/b/${playlist.blockId}`,
     cover: {
