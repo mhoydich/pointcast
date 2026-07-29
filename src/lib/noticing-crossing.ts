@@ -211,11 +211,12 @@ export const CROSSING_ISSUE = {
   ],
   next: {
     title: 'How to calendar a life',
-    label: 'Next on the desk · Utility',
+    label: 'Published next · Utility · Issue 04',
     dek:
       'The calendar as a humane agreement with your future attention—not a warehouse for other people’s urgency.',
-    date: '2026-08-21T08:08:00-07:00',
-    dateLabel: 'Fri · Aug 21 · 08:08 PT',
+    date: '2026-07-29T10:16:14-07:00',
+    dateLabel: 'Published · Jul 29',
+    url: '/noticing/how-to-calendar-a-life',
   },
 } as const;
 

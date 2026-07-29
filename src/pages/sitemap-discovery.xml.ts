@@ -82,6 +82,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/noticing/why-lacroix.json', 'weekly', '0.94'],
   ['https://pointcast.xyz/noticing/animal-crossing-gift-economy', 'weekly', '0.98'],
   ['https://pointcast.xyz/noticing/animal-crossing-gift-economy.json', 'weekly', '0.94'],
+  ['https://pointcast.xyz/noticing/how-to-calendar-a-life', 'weekly', '0.98'],
+  ['https://pointcast.xyz/noticing/how-to-calendar-a-life.json', 'weekly', '0.94'],
   ['https://pointcast.xyz/blocks.json', 'daily', '0.9'],
   ['https://pointcast.xyz/feed.json', 'daily', '0.8'],
   ['https://pointcast.xyz/feed.xml', 'daily', '0.8'],
