@@ -61,6 +61,36 @@ test('evidence, telemetry, synthesis, and practical limits stay separated', asyn
   assert.equal((data.match(/id: 'S\d\d'/g) ?? []).length, 10);
 });
 
+test('Appendix 04.A carries the issue into listening, looking, print, and circulation', async () => {
+  const [page, appendix, endpoint, pdf] = await Promise.all([
+    read('src/pages/noticing/how-to-calendar-a-life.astro'),
+    read('src/lib/noticing-calendar-appendix.ts'),
+    read('src/pages/noticing/how-to-calendar-a-life.appendix.json.ts'),
+    readFile(new URL('../public/downloads/a-calendar-is-a-treaty-field-edition.pdf', import.meta.url)),
+  ]);
+
+  assert.match(page, /data-calendar-appendix/);
+  assert.match(page, /Let the week have weather\./);
+  assert.match(page, /Two visual fields · 100 pins/);
+  assert.match(page, /Download the free PDF/);
+  assert.match(appendix, /open\.spotify\.com\/embed\/playlist/);
+  assert.match(appendix, /38YzecNFRdDVnDAxZcHV9d/);
+  assert.match(appendix, /02VSkAD9uXGZYi1aUVKV5B/);
+  assert.equal((appendix.match(/tracks: 18/g) ?? []).length, 2);
+  assert.equal((appendix.match(/pins: 50/g) ?? []).length, 2);
+  assert.match(appendix, /supply: 100/);
+  assert.match(appendix, /free: 60/);
+  assert.match(appendix, /retained: 40/);
+  assert.match(appendix, /status: 'live'/);
+  assert.match(appendix, /objkt\.com\/tokens\/open_objkt\/41360/);
+  assert.match(appendix, /ooUkysuqT5uPyMK5Qt64qYvhR8o1k6TmEkucKLdqKe4mKYGGFUQ/);
+  assert.match(appendix, /ooTMAhrAyhp7U2am6gDy3wi64CrtSw7Z1rkwGNkEpf6yhEpN6Ti/);
+  assert.match(endpoint, /CALENDAR_APPENDIX/);
+  assert.equal(pdf.subarray(0, 4).toString('ascii'), '%PDF');
+  assert.ok(pdf.byteLength > 1_000_000);
+  assert.equal((pdf.toString('latin1').match(/\/Type \/Page\b/g) ?? []).length, 12);
+});
+
 test('Issue 04 has a permanent Block and complete discovery companions', async () => {
   const [blockText, home, sitemap, agents, forAgents, llms, llmsFull, calendar, priorIssue] =
     await Promise.all([
@@ -85,9 +115,25 @@ test('Issue 04 has a permanent Block and complete discovery companions', async (
   assert.equal(block.meta.researchSources, 10);
   assert.equal(block.meta.interactiveInstruments, 2);
   assert.equal(block.meta.medicalOrEmploymentAdvice, false);
+  assert.equal(block.meta.spotifyPlaylists, 2);
+  assert.equal(block.meta.spotifyTracks, 36);
+  assert.equal(block.meta.pinterestBoards, 2);
+  assert.equal(block.meta.pinterestPins, 100);
+  assert.equal(block.meta.pdfPages, 12);
+  assert.equal(block.meta.objktSupply, 100);
+  assert.equal(block.meta.objktFree, 60);
+  assert.equal(block.meta.objktRetained, 40);
+  assert.equal(block.meta.objktTokenId, '41360');
+  assert.equal(block.meta.objktListingPriceTez, 0);
+  assert.match(
+    block.companions.map((companion) => companion.id).join('\n'),
+    /objkt\.com\/tokens\/open_objkt\/41360/,
+  );
   assert.match(home, /href: '\/noticing\/how-to-calendar-a-life'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/how-to-calendar-a-life'/);
   assert.match(sitemap, /pointcast\.xyz\/noticing\/how-to-calendar-a-life\.json'/);
+  assert.match(sitemap, /pointcast\.xyz\/noticing\/how-to-calendar-a-life\.appendix\.json'/);
+  assert.match(sitemap, /pointcast\.xyz\/downloads\/a-calendar-is-a-treaty-field-edition\.pdf'/);
   assert.match(
     agents,
     /noticingCalendar: 'https:\/\/pointcast\.xyz\/noticing\/how-to-calendar-a-life'/,
@@ -96,6 +142,8 @@ test('Issue 04 has a permanent Block and complete discovery companions', async (
     agents,
     /noticingCalendar: 'https:\/\/pointcast\.xyz\/noticing\/how-to-calendar-a-life\.json'/,
   );
+  assert.match(agents, /noticingCalendarAppendix/);
+  assert.match(agents, /noticingCalendarFieldEdition/);
   assert.match(forAgents, /Block <code>0539<\/code>/);
   assert.match(llms, /Block 0539/);
   assert.match(llmsFull, /What I Keep Noticing — Issue 04/);
