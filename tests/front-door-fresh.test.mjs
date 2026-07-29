@@ -40,7 +40,9 @@ test('the opening edition promotes the complete newest release run without Qwen'
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
-  assert.match(home, /images\/og\/b\/0536\.png/);
+  assert.match(home, /images\/playlists\/wednesday-0934-good-work-cover\.png/);
+  assert.match(edition, /Wednesday Morning Uplift/);
+  assert.match(edition, /THE GOOD WORK/);
   assert.match(edition, /Nothing wins/);
   assert.match(edition, /The Fermentation League/);
   assert.match(edition, /Harbor Works/);

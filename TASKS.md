@@ -7,6 +7,21 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## WEDNESDAY 9:34 — PointCast Playlist Publication (2026-07-29)
+
+- [x] (MH) Direct a Wednesday-morning uplift playlist led by picky, plucky Grateful Dead and Jerry Garcia energy with light pop-country, accessible 1970s and 1980s, and current-canon crossover — `done`
+- [x] (X) Build the exact eighteen-song, eighty-five-minute Spotify sequence in four movements — `done`
+- [x] (X) Generate and verify the original 1536-square Updraft 01 cover through poster-image-engine — `done`
+- [x] (X) Build the human playlist feature, JSON twin, Block 0537, Listening Room handoff, light participation rail, homepage lead, and discovery surfaces — `done`
+- [x] (X) Apply the cover to Spotify and validate the complete build, discovery contract, desktop layout, 390×844 layout, embed, and movement navigation — `done`
+- [x] (MH/X) Confirm public Spotify visibility for Updraft 01 — `done`
+- [x] (MH) Direct Issue 002 as an art-forward, subtly attention-seeking 9:34 uplift for enjoyable busy work and a great life — `done`
+- [x] (X) Build the public eighteen-track THE GOOD WORK playlist and apply its original 1536-square cover — `done`
+- [x] (X) Turn both playlists into WEDNESDAY 9:34 with a publication front door, human-edited cadence, and four-week editorial calendar — `done`
+- [x] (X) Validate the complete double issue, merge, deploy the exact release, and verify canonical production — `done`
+
+---
+
 ## PointCast College Football — Issue 001 + Repertoire Desk (2026-07-28)
 
 - [x] (MH) Expand stadium-song research beyond the Top 25 and name the first Open Field programs — `done`

@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'wednesday-0934',
+    name: 'WEDNESDAY 9:34',
+    kicker: 'PLAYLIST PUBLICATION · TWO LIVE ISSUES · FOUR-WEEK CALENDAR',
+    description: 'A human-edited Wednesday playlist publication with original covers, exact sequences, permanent pages, machine twins, and a public editorial calendar.',
+    url: 'https://pointcast.xyz/wednesday',
+    path: '/wednesday',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'super-follow',
     name: 'Super Follow',
     kicker: 'SOURCES · LENS · FOLLOW SHELF · WANT DESK',

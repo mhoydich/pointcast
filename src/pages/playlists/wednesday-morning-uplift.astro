@@ -1,0 +1,947 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  WEDNESDAY_MORNING_UPLIFT,
+  UPLIFT_MOVEMENTS,
+  UPLIFT_TRACKS,
+  tracksForMovement,
+} from '../../lib/wednesday-morning-uplift';
+
+const playlist = WEDNESDAY_MORNING_UPLIFT;
+const embedUrl = `https://open.spotify.com/embed/playlist/${playlist.spotifyPlaylistId}?utm_source=generator&theme=0`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'MusicPlaylist',
+  '@id': `${playlist.canonicalUrl}#playlist`,
+  name: `${playlist.title} — ${playlist.edition}`,
+  description: playlist.description,
+  url: playlist.canonicalUrl,
+  image: `https://pointcast.xyz${playlist.cover}`,
+  datePublished: playlist.publishedAt,
+  numTracks: playlist.trackCount,
+  creator: {
+    '@type': 'Organization',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+  track: UPLIFT_TRACKS.map((track) => ({
+    '@type': 'MusicRecording',
+    position: track.position,
+    name: track.title,
+    byArtist: {
+      '@type': 'MusicGroup',
+      name: track.artist,
+    },
+    url: track.spotifyUrl,
+  })),
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+};
+---
+
+<BlockLayout
+  title={`${playlist.title} — ${playlist.edition}`}
+  description={playlist.description}
+  image={`https://pointcast.xyz${playlist.cover}`}
+  themeColor="#f4b51e"
+  jsonLd={jsonLd}
+  showNetworkStrip={false}
+  alternates={[
+    {
+      type: 'application/json',
+      href: playlist.jsonRoute,
+      title: `${playlist.title} machine edition`,
+    },
+  ]}
+  frame={{
+    image: `https://pointcast.xyz${playlist.cover}`,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Play on Spotify', action: 'link', target: playlist.spotifyUrl },
+      { label: 'Enter the listening room', action: 'link', target: `https://pointcast.xyz${playlist.listeningRoomUrl}` },
+      { label: 'Read the sequence', action: 'link', target: playlist.canonicalUrl },
+    ],
+  }}
+>
+  <main class="uplift">
+    <nav class="uplift__crumb mono" aria-label="Breadcrumb">
+      <a href="/">PointCast</a>
+      <span aria-hidden="true">/</span>
+      <a href="/listening-room">Playlists</a>
+      <span aria-hidden="true">/</span>
+      <span>Updraft 01</span>
+    </nav>
+
+    <header class="uplift__hero">
+      <figure class="uplift__cover">
+        <img
+          src={playlist.cover}
+          alt={playlist.coverAlt}
+          width="1536"
+          height="1536"
+          loading="eager"
+          fetchpriority="high"
+        />
+        <figcaption class="mono">
+          Original PointCast cover · OpenAI image generation · final direction and sequence by Codex
+        </figcaption>
+      </figure>
+
+      <div class="uplift__intro">
+        <div class="uplift__flag mono">
+          <span>{playlist.kicker}</span>
+          <span>Block {playlist.blockId}</span>
+        </div>
+        <p class="uplift__weather mono">WED / 8:08 PT · MARINE LAYER OPENING</p>
+        <h1>Wednesday<br />Morning <em>Uplift</em></h1>
+        <p class="uplift__edition mono">{playlist.edition}</p>
+        <p class="uplift__dek">{playlist.description}</p>
+        <p class="uplift__thesis">{playlist.editorialNote}</p>
+
+        <div class="uplift__facts mono" aria-label="Playlist facts">
+          <span><b>{playlist.trackCount}</b> songs</span>
+          <span><b>85</b> minutes</span>
+          <span><b>04</b> movements</span>
+        </div>
+
+        <div class="uplift__actions">
+          <a class="uplift__button uplift__button--primary" href={playlist.spotifyUrl} target="_blank" rel="noopener">
+            Play the whole updraft ↗
+          </a>
+          <a class="uplift__button" href={playlist.listeningRoomUrl}>
+            Open the listening room
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <section class="uplift__player" aria-labelledby="uplift-player-title">
+      <div class="uplift__player-copy">
+        <p class="mono">PLAYBACK / SPOTIFY</p>
+        <h2 id="uplift-player-title">Press play. Keep the order.</h2>
+        <p>
+          The first four songs make the promise. Track six crosses the aisle.
+          Tracks fourteen and fifteen keep the canon from becoming a museum.
+          The final three walk home.
+        </p>
+      </div>
+      <div class="uplift__embed">
+        <iframe
+          src={embedUrl}
+          title={`${playlist.title} Spotify player`}
+          width="100%"
+          height="352"
+          frameborder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </section>
+
+    <nav class="uplift__dial" aria-label="Jump to a playlist movement">
+      {UPLIFT_MOVEMENTS.map((movement, index) => (
+        <button
+          type="button"
+          data-uplift-jump={movement.id}
+          aria-pressed={index === 0 ? 'true' : 'false'}
+        >
+          <span class="mono">{movement.number}</span>
+          <strong>{movement.title}</strong>
+        </button>
+      ))}
+    </nav>
+
+    <section class="uplift__score" aria-label="Wednesday Morning Uplift track sequence">
+      {UPLIFT_MOVEMENTS.map((movement) => (
+        <article class={`uplift__movement uplift__movement--${movement.id}`} id={`movement-${movement.id}`} data-uplift-movement={movement.id}>
+          <header class="uplift__movement-head">
+            <span class="uplift__movement-number mono">{movement.number}</span>
+            <div>
+              <p class="mono">MOVEMENT {movement.number}</p>
+              <h2>{movement.title}</h2>
+              <p>{movement.deck}</p>
+            </div>
+          </header>
+
+          <ol class="uplift__tracks" start={movement.positions[0]}>
+            {tracksForMovement(movement.id).map((track) => (
+              <li>
+                <a href={track.spotifyUrl} target="_blank" rel="noopener">
+                  <span class="uplift__track-position mono">{String(track.position).padStart(2, '0')}</span>
+                  <span class="uplift__track-main">
+                    <strong>{track.title}</strong>
+                    <small>{track.artist}</small>
+                  </span>
+                  <span class="uplift__track-note">{track.note}</span>
+                  <span class="uplift__track-time mono">{track.duration}</span>
+                  <span class="uplift__track-arrow" aria-hidden="true">↗</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </article>
+      ))}
+    </section>
+
+    <section class="uplift__liner" aria-labelledby="uplift-liner-title">
+      <div class="uplift__liner-title">
+        <p class="mono">SEQUENCE NOTE 001</p>
+        <h2 id="uplift-liner-title">Uplift is not the same thing as cheerfulness.</h2>
+      </div>
+      <div class="uplift__liner-copy">
+        <p>
+          Cheerfulness can arrive fully inflated. Uplift needs a surface to push
+          against. Here that surface is picked string, live-room patience, a
+          country-pop door that opens without apology, and the exact moment an
+          old song becomes morning equipment again.
+        </p>
+        <p>
+          The sequence keeps the Grateful Dead and Jerry Garcia as gravity, not
+          costume. No bears. No skulls. Just ensemble time, wood, wire, room, and
+          the useful feeling that the day might answer back.
+        </p>
+      </div>
+    </section>
+
+    <aside class="uplift__keep" aria-labelledby="uplift-keep-title">
+      <div>
+        <p class="mono">KEEP THE UPDRAFT / EARLY SIGNAL</p>
+        <h2 id="uplift-keep-title">Follow lightly.</h2>
+        <p>{playlist.participation.note}</p>
+      </div>
+      <div class="uplift__keep-actions">
+        {playlist.participation.actions.map((action) => (
+          <a href={action.href}>
+            <span>{action.label}</span>
+            <b aria-hidden="true">↗</b>
+          </a>
+        ))}
+      </div>
+    </aside>
+
+    <footer class="uplift__foot mono">
+      <span>PointCast Playlist 001 · {playlist.edition}</span>
+      <a href={playlist.jsonRoute}>JSON edition</a>
+      <a href={`/b/${playlist.blockId}`}>Block {playlist.blockId}</a>
+      <a href="/listening-room">Listening Room</a>
+      <a href="/">Home</a>
+    </footer>
+  </main>
+
+  <script is:inline>
+    (() => {
+      const buttons = Array.from(document.querySelectorAll('[data-uplift-jump]'));
+      const movements = Array.from(document.querySelectorAll('[data-uplift-movement]'));
+
+      const setActive = (id) => {
+        buttons.forEach((button) => {
+          button.setAttribute('aria-pressed', button.dataset.upliftJump === id ? 'true' : 'false');
+        });
+      };
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = button.dataset.upliftJump;
+          document.getElementById(`movement-${id}`)?.scrollIntoView({
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+            block: 'start',
+          });
+          setActive(id);
+        });
+      });
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (visible?.target instanceof HTMLElement) {
+            setActive(visible.target.dataset.upliftMovement);
+          }
+        }, { rootMargin: '-20% 0px -55% 0px', threshold: [0.05, 0.25, 0.5] });
+
+        movements.forEach((movement) => observer.observe(movement));
+      }
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    background: #f5edda;
+  }
+
+  .uplift {
+    --ink: #211b13;
+    --paper: #f5edda;
+    --cream: #fff8e8;
+    --sun: #f4b51e;
+    --sky: #6ca6d8;
+    --leaf: #4f7f46;
+    --coral: #e86f3a;
+    width: min(1500px, calc(100% - 20px));
+    margin: 10px auto 52px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+  }
+
+  .uplift a {
+    color: inherit;
+  }
+
+  .uplift__crumb {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--ink);
+    background: var(--ink);
+    color: var(--cream);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .uplift__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(380px, .95fr);
+    min-height: 760px;
+  }
+
+  .uplift__cover {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    border-right: 2px solid var(--ink);
+    background: var(--sky);
+  }
+
+  .uplift__cover img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+
+  .uplift__cover figcaption {
+    flex: 1;
+    padding: 10px 13px;
+    border-top: 2px solid var(--ink);
+    background: var(--cream);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    line-height: 1.45;
+    text-transform: uppercase;
+  }
+
+  .uplift__intro {
+    display: flex;
+    flex-direction: column;
+    padding: clamp(28px, 5vw, 72px);
+    background:
+      radial-gradient(circle at 92% 8%, rgba(244,181,30,.78) 0 84px, transparent 85px),
+      linear-gradient(135deg, var(--cream), #f8e9bd);
+  }
+
+  .uplift__flag,
+  .uplift__facts {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .uplift__weather {
+    margin: auto 0 16px;
+    color: #765828;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .13em;
+  }
+
+  .uplift__intro h1 {
+    margin: 0;
+    max-width: 8ch;
+    font-size: clamp(58px, 7.6vw, 124px);
+    font-weight: 900;
+    letter-spacing: -.075em;
+    line-height: .82;
+  }
+
+  .uplift__intro h1 em {
+    color: var(--coral);
+    font-family: Georgia, serif;
+    font-weight: 400;
+  }
+
+  .uplift__edition {
+    align-self: flex-start;
+    margin: 28px 0 0;
+    padding: 7px 10px;
+    border: 2px solid var(--ink);
+    background: var(--sun);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    transform: rotate(-2deg);
+  }
+
+  .uplift__dek {
+    margin: 34px 0 0;
+    max-width: 32ch;
+    font-size: clamp(20px, 2.15vw, 34px);
+    font-weight: 650;
+    letter-spacing: -.025em;
+    line-height: 1.03;
+  }
+
+  .uplift__thesis {
+    margin: 20px 0 32px;
+    max-width: 54ch;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .uplift__facts {
+    justify-content: flex-start;
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 2px solid var(--ink);
+  }
+
+  .uplift__facts span {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  .uplift__facts b {
+    font-size: 23px;
+  }
+
+  .uplift__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .uplift__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 15px;
+    border: 2px solid var(--ink);
+    background: var(--cream);
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 var(--ink);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+
+  .uplift__button--primary {
+    background: var(--leaf);
+    color: white !important;
+  }
+
+  .uplift__button:hover,
+  .uplift__button:focus-visible {
+    box-shadow: 1px 1px 0 var(--ink);
+    transform: translate(3px, 3px);
+  }
+
+  .uplift__player {
+    display: grid;
+    grid-template-columns: minmax(300px, .72fr) minmax(0, 1.28fr);
+    border-top: 2px solid var(--ink);
+    background: var(--sky);
+  }
+
+  .uplift__player-copy {
+    padding: clamp(24px, 4vw, 58px);
+    border-right: 2px solid var(--ink);
+  }
+
+  .uplift__player-copy > p:first-child,
+  .uplift__movement-head .mono,
+  .uplift__liner-title .mono,
+  .uplift__keep .mono {
+    margin: 0 0 10px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .uplift__player h2,
+  .uplift__movement h2,
+  .uplift__liner h2,
+  .uplift__keep h2 {
+    margin: 0;
+    font-size: clamp(34px, 4.2vw, 68px);
+    letter-spacing: -.055em;
+    line-height: .92;
+  }
+
+  .uplift__player-copy > p:last-child {
+    max-width: 44ch;
+    margin: 22px 0 0;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .uplift__embed {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    padding: clamp(18px, 3vw, 44px);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 36px, rgba(33,27,19,.1) 36px 38px),
+      var(--sky);
+  }
+
+  .uplift__embed iframe {
+    display: block;
+    max-width: 760px;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    box-shadow: 8px 8px 0 var(--ink);
+  }
+
+  .uplift__dial {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    background: var(--cream);
+  }
+
+  .uplift__dial button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 58px;
+    padding: 10px 13px;
+    border: 0;
+    border-right: 2px solid var(--ink);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .uplift__dial button:last-child {
+    border-right: 0;
+  }
+
+  .uplift__dial button[aria-pressed='true'] {
+    background: var(--sun);
+  }
+
+  .uplift__dial span {
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .uplift__dial strong {
+    font-size: 12px;
+  }
+
+  .uplift__movement {
+    scroll-margin-top: 64px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .uplift__movement-head {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 26px;
+    padding: clamp(32px, 6vw, 84px);
+  }
+
+  .uplift__movement--porch .uplift__movement-head { background: var(--sun); }
+  .uplift__movement--crossing .uplift__movement-head { background: var(--coral); }
+  .uplift__movement--open-road .uplift__movement-head { background: var(--sky); }
+  .uplift__movement--landing .uplift__movement-head { background: var(--leaf); color: white; }
+
+  .uplift__movement-number {
+    font-size: clamp(64px, 9vw, 150px);
+    font-weight: 900;
+    letter-spacing: -.08em;
+    line-height: .72;
+  }
+
+  .uplift__movement-head > div > p:last-child {
+    margin: 16px 0 0;
+    max-width: 54ch;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .uplift__tracks {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .uplift__tracks li {
+    border-top: 1px solid rgba(33, 27, 19, .46);
+  }
+
+  .uplift__tracks li:first-child {
+    border-top-width: 2px;
+  }
+
+  .uplift__tracks a {
+    display: grid;
+    grid-template-columns: 54px minmax(200px, 1.05fr) minmax(260px, 1fr) 52px 24px;
+    gap: 16px;
+    align-items: center;
+    min-height: 92px;
+    padding: 14px 20px;
+    background: var(--cream);
+    text-decoration: none;
+    transition: background 150ms ease, padding-left 150ms ease;
+  }
+
+  .uplift__tracks a:hover,
+  .uplift__tracks a:focus-visible {
+    padding-left: 28px;
+    background: #fff2c6;
+  }
+
+  .uplift__track-position {
+    font-size: 19px;
+    font-weight: 900;
+  }
+
+  .uplift__track-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .uplift__track-main strong {
+    font-size: clamp(17px, 2vw, 27px);
+    letter-spacing: -.02em;
+    line-height: 1.05;
+  }
+
+  .uplift__track-main small {
+    color: #6c5c48;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .uplift__track-note {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.35;
+  }
+
+  .uplift__track-time {
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .uplift__track-arrow {
+    font-size: 20px;
+    transition: transform 150ms ease;
+  }
+
+  .uplift__tracks a:hover .uplift__track-arrow {
+    transform: translate(3px, -3px);
+  }
+
+  .uplift__liner {
+    display: grid;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    border-bottom: 2px solid var(--ink);
+    background: var(--cream);
+  }
+
+  .uplift__liner-title,
+  .uplift__liner-copy {
+    padding: clamp(34px, 6vw, 88px);
+  }
+
+  .uplift__liner-title {
+    border-right: 2px solid var(--ink);
+    background:
+      radial-gradient(circle at 18% 88%, var(--sun) 0 80px, transparent 81px),
+      var(--cream);
+  }
+
+  .uplift__liner-copy {
+    columns: 2 240px;
+    column-gap: 34px;
+    font-family: Georgia, serif;
+    font-size: 19px;
+    line-height: 1.55;
+  }
+
+  .uplift__liner-copy p {
+    margin: 0 0 1em;
+  }
+
+  .uplift__keep {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+    background: var(--ink);
+    color: var(--cream);
+  }
+
+  .uplift__keep > div:first-child {
+    padding: clamp(34px, 6vw, 78px);
+  }
+
+  .uplift__keep h2 {
+    color: var(--sun);
+  }
+
+  .uplift__keep p:last-child {
+    max-width: 56ch;
+    margin: 18px 0 0;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .uplift__keep-actions {
+    display: grid;
+    align-content: stretch;
+    border-left: 2px solid var(--cream);
+  }
+
+  .uplift__keep-actions a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 26px;
+    border-bottom: 1px solid rgba(255,248,232,.5);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .uplift__keep-actions a:last-child {
+    border-bottom: 0;
+  }
+
+  .uplift__keep-actions a:hover,
+  .uplift__keep-actions a:focus-visible {
+    background: var(--leaf);
+  }
+
+  .uplift__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    padding: 12px 14px;
+    border-top: 2px solid var(--cream);
+    background: var(--ink);
+    color: var(--cream);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .uplift :focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px var(--ink);
+  }
+
+  @media (max-width: 920px) {
+    .uplift__hero,
+    .uplift__player,
+    .uplift__liner,
+    .uplift__keep {
+      grid-template-columns: 1fr;
+    }
+
+    .uplift__cover,
+    .uplift__player-copy,
+    .uplift__liner-title,
+    .uplift__keep-actions {
+      border-right: 0;
+      border-left: 0;
+    }
+
+    .uplift__cover,
+    .uplift__player-copy,
+    .uplift__liner-title {
+      border-bottom: 2px solid var(--ink);
+    }
+
+    .uplift__keep-actions {
+      border-top: 2px solid var(--cream);
+    }
+
+    .uplift__movement-head {
+      grid-template-columns: 82px minmax(0, 1fr);
+    }
+
+    .uplift__tracks a {
+      grid-template-columns: 44px minmax(0, 1fr) 46px 20px;
+    }
+
+    .uplift__track-note {
+      grid-column: 2 / -1;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .uplift {
+      width: calc(100% - 10px);
+      margin-top: 5px;
+    }
+
+    .uplift__hero {
+      min-height: 0;
+    }
+
+    .uplift__cover img {
+      aspect-ratio: auto;
+      object-fit: contain;
+    }
+
+    .uplift__intro {
+      min-height: 660px;
+      padding: 25px 20px 30px;
+    }
+
+    .uplift__flag {
+      flex-direction: column;
+    }
+
+    .uplift__facts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .uplift__facts span {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .uplift__actions {
+      display: grid;
+    }
+
+    .uplift__dial {
+      position: static;
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .uplift__dial button:nth-child(2) {
+      border-right: 0;
+    }
+
+    .uplift__dial button:nth-child(-n + 2) {
+      border-bottom: 2px solid var(--ink);
+    }
+
+    .uplift__movement-head {
+      grid-template-columns: 1fr;
+      gap: 28px;
+      padding: 40px 20px;
+    }
+
+    .uplift__movement-number {
+      font-size: 72px;
+    }
+
+    .uplift__tracks a {
+      grid-template-columns: 36px minmax(0, 1fr) 38px;
+      gap: 9px;
+      min-height: 108px;
+      padding: 15px 12px;
+    }
+
+    .uplift__track-note {
+      grid-column: 2 / -1;
+      font-size: 13px;
+    }
+
+    .uplift__track-time {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .uplift__track-arrow {
+      display: none;
+    }
+
+    .uplift__embed {
+      padding: 12px;
+    }
+
+    .uplift__embed iframe {
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    .uplift__liner-title,
+    .uplift__liner-copy,
+    .uplift__keep > div:first-child {
+      padding: 40px 20px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .uplift *,
+    .uplift *::before,
+    .uplift *::after {
+      scroll-behavior: auto !important;
+      transition: none !important;
+    }
+  }
+
+  @media print {
+    .uplift__embed,
+    .uplift__dial,
+    .uplift__actions,
+    .uplift__keep {
+      display: none;
+    }
+
+    .uplift {
+      width: 100%;
+      margin: 0;
+      border: 0;
+    }
+  }
+</style>
