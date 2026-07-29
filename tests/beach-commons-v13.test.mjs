@@ -130,7 +130,7 @@ test('The Fermentation League has JSON, Block, homepage, and discovery twins', a
   assert.match(homepage, /href="\/beach-commons\/v13"/);
   assert.match(homepage, /Block 0536/);
   assert.match(homeEdition, /href="\/beach-commons\/v13"/);
-  assert.match(homeEdition, /New<br \/>0536/);
+  assert.match(homeEdition, /The Fermentation League · Block 0536/);
 });
 
 test('Fermentation League images have intended edition and social dimensions', async () => {
