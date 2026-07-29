@@ -1,0 +1,384 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  WEDNESDAY_EDITORIAL_CALENDAR,
+  WEDNESDAY_ISSUES,
+  WEDNESDAY_PUBLICATION,
+} from '../../lib/wednesday-publication';
+
+const publication = WEDNESDAY_PUBLICATION;
+const latestIssue = WEDNESDAY_ISSUES[WEDNESDAY_ISSUES.length - 1];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Periodical',
+  '@id': `${publication.canonicalUrl}#publication`,
+  name: publication.title,
+  description: publication.description,
+  url: publication.canonicalUrl,
+  inLanguage: 'en-US',
+  publisher: {
+    '@type': 'Organization',
+    name: 'PointCast',
+    url: 'https://pointcast.xyz',
+  },
+  hasPart: WEDNESDAY_ISSUES.map((issue) => ({
+    '@type': 'MusicPlaylist',
+    name: issue.title,
+    url: `https://pointcast.xyz${issue.route}`,
+    image: `https://pointcast.xyz${issue.cover}`,
+    datePublished: issue.publishedAt,
+    numTracks: issue.trackCount,
+  })),
+};
+---
+
+<BlockLayout
+  title={`${publication.title} — PointCast playlist publication`}
+  description={publication.description}
+  image={`https://pointcast.xyz${latestIssue.cover}`}
+  themeColor="#d9ed00"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: publication.jsonRoute, title: `${publication.title} JSON` },
+  ]}
+  immersive={true}
+  showNetworkStrip={false}
+  frame={{
+    image: `https://pointcast.xyz${latestIssue.cover}`,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Play issue 002', action: 'link', target: `https://pointcast.xyz${latestIssue.route}` },
+      { label: 'Open in Spotify', action: 'link', target: latestIssue.spotifyUrl },
+      { label: 'Publication JSON', action: 'link', target: `https://pointcast.xyz${publication.jsonRoute}` },
+    ],
+  }}
+>
+  <main class="wedpub" id="main-content">
+    <nav class="wedpub__crumb mono" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><span>WEDNESDAY 9:34</span>
+    </nav>
+
+    <header class="wedpub__mast">
+      <div class="wedpub__day" aria-label="Wednesday">
+        <span>WEDNES</span>
+        <span>DAY</span>
+      </div>
+      <div class="wedpub__time">
+        <p class="mono">A POINTCAST PLAYLIST PUBLICATION</p>
+        <strong>9:34</strong>
+        <p>{publication.dek}</p>
+      </div>
+    </header>
+
+    <section class="wedpub__promise" aria-labelledby="wedpub-promise-title">
+      <div>
+        <p class="mono">THE PROMISE / HUMAN EDITED</p>
+        <h1 id="wedpub-promise-title">A little lift for the useful middle.</h1>
+      </div>
+      <div>
+        <p>{publication.description}</p>
+        <p>
+          The day leads. The cover matters. The order matters. Every issue gets
+          one reason to exist, one finite sequence, and one place to come back to.
+        </p>
+      </div>
+      <aside>
+        <strong>{publication.cadence.label}</strong>
+        <span>{publication.cadence.note}</span>
+      </aside>
+    </section>
+
+    <section class="wedpub__issues" aria-labelledby="wedpub-issues-title">
+      <header>
+        <p class="mono">PILOT DOUBLE ISSUE / 2026-07-29</p>
+        <h2 id="wedpub-issues-title">Two ways into Wednesday.</h2>
+      </header>
+
+      <div class="wedpub__issue-grid">
+        {WEDNESDAY_ISSUES.map((issue, index) => (
+          <article class:list={['wedpub__issue', { 'wedpub__issue--latest': index === WEDNESDAY_ISSUES.length - 1 }]}>
+            <a class="wedpub__cover" href={issue.route}>
+              <img
+                src={issue.cover}
+                alt={issue.coverAlt}
+                width="1536"
+                height="1536"
+                loading={index === WEDNESDAY_ISSUES.length - 1 ? 'eager' : 'lazy'}
+              />
+              <span class="mono">{issue.issueNumber}</span>
+            </a>
+            <div class="wedpub__issue-copy">
+              <p class="mono">ISSUE {issue.issueNumber} / {issue.mode}</p>
+              <h3><a href={issue.route}>{issue.title}</a></h3>
+              <p>{issue.description}</p>
+              <dl>
+                <div><dt>tracks</dt><dd>{issue.trackCount}</dd></div>
+                <div><dt>runtime</dt><dd>{issue.duration}</dd></div>
+                <div><dt>block</dt><dd>{issue.blockId}</dd></div>
+              </dl>
+              <div class="wedpub__issue-actions">
+                <a href={issue.route}>Read + play ↗</a>
+                <a href={issue.boardRoute}>Visual board ↗</a>
+                <a href={issue.spotifyUrl} target="_blank" rel="noopener">Spotify ↗</a>
+                <a href={issue.jsonRoute}>JSON ↗</a>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="wedpub__calendar" aria-labelledby="wedpub-calendar-title">
+      <header>
+        <p class="mono">PUBLIC EDITORIAL CALENDAR / FOUR WEEKS OUT</p>
+        <h2 id="wedpub-calendar-title">Close enough to become a cadence.</h2>
+        <p>
+          These are working briefs, not prewritten issues. A slot turns live
+          only when the playlist, art, editorial order, machine twin, and
+          playback have all been checked.
+        </p>
+      </header>
+
+      <ol>
+        {WEDNESDAY_EDITORIAL_CALENDAR.map((entry) => (
+          <li>
+            <time datetime={entry.date}>{entry.date}</time>
+            <strong>ISSUE {entry.issue}</strong>
+            <span class="mono">{entry.status}</span>
+            <p>{entry.brief}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="wedpub__contract" aria-labelledby="wedpub-contract-title">
+      <div>
+        <p class="mono">PUBLICATION CONTRACT / V1</p>
+        <h2 id="wedpub-contract-title">Playlist, cover, sequence, receipt.</h2>
+      </div>
+      <ol>
+        <li><b>01</b><span>One clear Wednesday use case, written before track search.</span></li>
+        <li><b>02</b><span>One original square cover that works as a thumbnail and a print.</span></li>
+        <li><b>03</b><span>One exact Spotify order with human movement notes.</span></li>
+        <li><b>04</b><span>One permanent PointCast page, JSON twin, Block, and homepage signal.</span></li>
+      </ol>
+    </section>
+
+    <footer class="wedpub__footer">
+      <p>{publication.participation.note}</p>
+      <nav aria-label="WEDNESDAY 9:34 participation">
+        <a href="/super-follow">Follow on this device</a>
+        <a href="/ping">Send a pitch or ping</a>
+        <a href="/auth">Bring a signal passport</a>
+        <a href={publication.jsonRoute}>Publication JSON</a>
+      </nav>
+    </footer>
+  </main>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #f4f0df;
+  }
+
+  .wedpub {
+    --ink: #11110e;
+    --acid: #d9ed00;
+    --blue: #1847d1;
+    --red: #ef4e29;
+    --paper: #f4f0df;
+    width: min(1500px, calc(100% - 24px));
+    margin: 12px auto 48px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .wedpub a { color: inherit; }
+  .mono { font-family: var(--pc-font-mono); }
+
+  .wedpub__crumb {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .12em;
+  }
+
+  .wedpub__mast {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(280px, .5fr);
+    min-height: 550px;
+    border-bottom: 2px solid var(--ink);
+    background: var(--acid);
+  }
+
+  .wedpub__day {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 24px 18px;
+    border-right: 2px solid var(--ink);
+    font-size: clamp(90px, 16vw, 250px);
+    font-weight: 950;
+    letter-spacing: -.095em;
+    line-height: .72;
+    overflow: hidden;
+  }
+
+  .wedpub__day span:last-child {
+    color: var(--blue);
+    transform: translateX(16%);
+  }
+
+  .wedpub__time {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 30px;
+    padding: clamp(24px, 4vw, 56px);
+  }
+
+  .wedpub__time p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .wedpub__time p:first-child {
+    font-size: 9px;
+    letter-spacing: .11em;
+  }
+
+  .wedpub__time strong {
+    color: var(--blue);
+    font-size: clamp(82px, 11vw, 170px);
+    letter-spacing: -.08em;
+    line-height: .8;
+  }
+
+  .wedpub__promise {
+    display: grid;
+    grid-template-columns: 1fr 1fr minmax(240px, .65fr);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .wedpub__promise > * {
+    min-width: 0;
+    padding: clamp(24px, 4vw, 52px);
+  }
+
+  .wedpub__promise > * + * { border-left: 2px solid var(--ink); }
+  .wedpub__promise p { margin: 0 0 18px; font-size: 17px; line-height: 1.35; }
+  .wedpub__promise .mono { font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+  .wedpub__promise h1 { margin: 12px 0 0; font-size: clamp(42px, 5vw, 78px); letter-spacing: -.06em; line-height: .88; }
+  .wedpub__promise aside { display: flex; flex-direction: column; justify-content: space-between; gap: 40px; background: var(--blue); color: white; }
+  .wedpub__promise aside strong { font-size: 28px; line-height: 1; }
+  .wedpub__promise aside span { font-size: 12px; line-height: 1.45; }
+
+  .wedpub__issues { border-bottom: 2px solid var(--ink); }
+  .wedpub__issues > header,
+  .wedpub__calendar > header { padding: clamp(28px, 5vw, 70px); }
+  .wedpub__issues header p,
+  .wedpub__calendar header .mono { margin: 0; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+  .wedpub__issues h2,
+  .wedpub__calendar h2,
+  .wedpub__contract h2 { margin: 12px 0 0; font-size: clamp(48px, 7vw, 104px); letter-spacing: -.075em; line-height: .84; }
+
+  .wedpub__issue-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 2px solid var(--ink);
+  }
+
+  .wedpub__issue + .wedpub__issue { border-left: 2px solid var(--ink); }
+  .wedpub__issue--latest { background: var(--acid); }
+  .wedpub__cover { position: relative; display: block; border-bottom: 2px solid var(--ink); overflow: hidden; }
+  .wedpub__cover img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; transition: transform 300ms ease; }
+  .wedpub__cover:hover img,
+  .wedpub__cover:focus-visible img { transform: scale(1.012); }
+  .wedpub__cover span { position: absolute; right: 14px; bottom: 14px; padding: 8px 10px; border: 2px solid var(--ink); background: var(--paper); font-size: 12px; font-weight: 900; }
+
+  .wedpub__issue-copy { padding: clamp(22px, 4vw, 48px); }
+  .wedpub__issue-copy > .mono { margin: 0; font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+  .wedpub__issue-copy h3 { margin: 13px 0 18px; font-size: clamp(34px, 4vw, 64px); letter-spacing: -.055em; line-height: .9; }
+  .wedpub__issue-copy h3 a { text-decoration: none; }
+  .wedpub__issue-copy > p:not(.mono) { max-width: 50ch; font-size: 16px; line-height: 1.4; }
+  .wedpub__issue-copy dl { display: flex; gap: 28px; margin: 28px 0; padding-top: 16px; border-top: 2px solid var(--ink); }
+  .wedpub__issue-copy dl div { display: flex; flex-direction: column; gap: 5px; }
+  .wedpub__issue-copy dt { font: 900 8px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .wedpub__issue-copy dd { margin: 0; font-size: 18px; font-weight: 850; }
+  .wedpub__issue-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .wedpub__issue-actions a { padding: 10px 12px; border: 2px solid var(--ink); background: var(--paper); font: 900 9px/1 var(--pc-font-mono); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+  .wedpub__issue--latest .wedpub__issue-actions a:first-child { background: var(--blue); color: white; }
+
+  .wedpub__calendar { display: grid; grid-template-columns: minmax(300px, .75fr) minmax(0, 1.25fr); border-bottom: 2px solid var(--ink); }
+  .wedpub__calendar > header { border-right: 2px solid var(--ink); }
+  .wedpub__calendar > header > p:last-child { max-width: 47ch; margin: 30px 0 0; line-height: 1.45; }
+  .wedpub__calendar ol { margin: 0; padding: 0; list-style: none; }
+  .wedpub__calendar li { display: grid; grid-template-columns: 110px 100px 120px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 21px 24px; border-bottom: 2px solid var(--ink); }
+  .wedpub__calendar li:last-child { border-bottom: 0; }
+  .wedpub__calendar li:first-child { background: var(--blue); color: white; }
+  .wedpub__calendar time,
+  .wedpub__calendar li span { font: 900 9px/1.2 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .wedpub__calendar li p { margin: 0; line-height: 1.25; }
+
+  .wedpub__contract {
+    display: grid;
+    grid-template-columns: .9fr 1.1fr;
+    border-bottom: 2px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .wedpub__contract > div { padding: clamp(28px, 5vw, 70px); border-right: 2px solid var(--paper); }
+  .wedpub__contract > div p { margin: 0; font: 900 9px/1 var(--pc-font-mono); letter-spacing: .12em; }
+  .wedpub__contract ol { margin: 0; padding: 0; list-style: none; }
+  .wedpub__contract li { display: grid; grid-template-columns: 60px 1fr; gap: 18px; padding: 25px 28px; border-bottom: 2px solid var(--paper); }
+  .wedpub__contract li:last-child { border-bottom: 0; }
+  .wedpub__contract li b { color: var(--acid); font-family: var(--pc-font-mono); }
+  .wedpub__contract li span { font-size: 17px; line-height: 1.25; }
+
+  .wedpub__footer { display: grid; grid-template-columns: 1fr 1.2fr; gap: 30px; padding: 26px 30px; background: var(--acid); }
+  .wedpub__footer p { margin: 0; font-size: 12px; line-height: 1.4; }
+  .wedpub__footer nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .wedpub__footer a { padding: 9px 11px; border: 2px solid var(--ink); background: var(--paper); font: 900 8px/1 var(--pc-font-mono); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+
+  .wedpub :focus-visible { outline: 3px solid white; outline-offset: 3px; box-shadow: 0 0 0 6px var(--ink); }
+
+  @media (max-width: 900px) {
+    .wedpub__mast,
+    .wedpub__promise,
+    .wedpub__calendar,
+    .wedpub__contract,
+    .wedpub__footer { grid-template-columns: 1fr; }
+    .wedpub__day { min-height: 390px; border-right: 0; border-bottom: 2px solid var(--ink); }
+    .wedpub__promise > * + *,
+    .wedpub__calendar > header,
+    .wedpub__contract > div { border-left: 0; border-right: 0; border-top: 2px solid var(--ink); }
+    .wedpub__contract > div { border-top: 0; border-bottom: 2px solid var(--paper); }
+    .wedpub__footer nav { justify-content: flex-start; }
+  }
+
+  @media (max-width: 650px) {
+    .wedpub { width: calc(100% - 10px); margin-top: 5px; }
+    .wedpub__day { min-height: 280px; font-size: clamp(76px, 27vw, 130px); }
+    .wedpub__issue-grid { grid-template-columns: 1fr; }
+    .wedpub__issue + .wedpub__issue { border-left: 0; border-top: 2px solid var(--ink); }
+    .wedpub__calendar li { grid-template-columns: 1fr 1fr; }
+    .wedpub__calendar li p { grid-column: 1 / -1; }
+    .wedpub__issue-copy dl { gap: 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wedpub__cover img { transition: none; }
+  }
+</style>
