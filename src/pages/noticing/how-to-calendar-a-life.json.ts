@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { CALENDAR_ISSUE, CALENDAR_SOURCES } from '../../lib/noticing-calendar';
+import { CALENDAR_APPENDIX } from '../../lib/noticing-calendar-appendix';
 
 export const GET: APIRoute = () =>
   new Response(
@@ -14,6 +15,7 @@ export const GET: APIRoute = () =>
           json: 'https://pointcast.xyz/feed.json',
           editorialCalendar: 'https://pointcast.xyz/noticing.json',
         },
+        appendix: CALENDAR_APPENDIX,
       },
       null,
       2,

@@ -283,6 +283,11 @@ export const GET: APIRoute = async () => {
         noticingLacroix: 'https://pointcast.xyz/noticing/why-lacroix',
         noticingAnimalCrossing: 'https://pointcast.xyz/noticing/animal-crossing-gift-economy',
         noticingCalendar: 'https://pointcast.xyz/noticing/how-to-calendar-a-life',
+        noticingCalendarAppendix:
+          'https://pointcast.xyz/noticing/how-to-calendar-a-life.appendix.json',
+        noticingCalendarFieldEdition:
+          'https://pointcast.xyz/downloads/a-calendar-is-a-treaty-field-edition.pdf',
+        noticingCalendarObjkt: 'https://objkt.com/tokens/open_objkt/41360',
         moods: 'https://pointcast.xyz/moods',
         local: 'https://pointcast.xyz/local',
         areas: 'https://pointcast.xyz/areas',
@@ -350,6 +355,8 @@ export const GET: APIRoute = async () => {
         noticingLacroix: 'https://pointcast.xyz/noticing/why-lacroix.json',
         noticingAnimalCrossing: 'https://pointcast.xyz/noticing/animal-crossing-gift-economy.json',
         noticingCalendar: 'https://pointcast.xyz/noticing/how-to-calendar-a-life.json',
+        noticingCalendarAppendix:
+          'https://pointcast.xyz/noticing/how-to-calendar-a-life.appendix.json',
         editions: 'https://pointcast.xyz/editions.json',
         now: 'https://pointcast.xyz/now.json',
         cast: 'https://pointcast.xyz/cast.json',
