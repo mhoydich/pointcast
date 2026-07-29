@@ -109,7 +109,7 @@ test('Wednesday Morning Uplift remains a public Issue 001 and travels through di
     assert.match(surface, /wednesday-morning-uplift|Wednesday Morning Uplift/);
   }
 
-  assert.match(surfaces[0], /<HomeWednesdayPublication \/>[\s\S]*<HomeNewEdition \/>/);
+  assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWednesdayPublication \/>/);
   assert.match(surfaces[0], /Periodical/);
   assert.match(surfaces[1], /ISSUE 001 \/ ALSO LIVE/);
   assert.match(surfaces[1], /follow locally/);

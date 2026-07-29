@@ -102,7 +102,7 @@ test('Issue 002 is playable, sequenced, responsive, and motion-safe', async () =
   assert.equal(block.meta.emailCollection, false);
 });
 
-test('the publication leads the homepage and travels through discovery', async () => {
+test('the publication remains on the homepage and travels through discovery', async () => {
   const surfaces = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeWednesdayPublication.astro'),
@@ -118,7 +118,7 @@ test('the publication leads the homepage and travels through discovery', async (
     assert.match(surface, /WEDNESDAY 9:34|wednesday/);
   }
 
-  assert.match(surfaces[0], /<HomeWednesdayPublication \/>[\s\S]*<HomeNewEdition \/>/);
+  assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWednesdayPublication \/>/);
   assert.match(surfaces[0], /Periodical/);
   assert.match(surfaces[1], /Get me that Wednesday playlist/);
   assert.match(surfaces[1], /Publication \+ calendar/);
