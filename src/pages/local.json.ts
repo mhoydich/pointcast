@@ -102,6 +102,8 @@ export const GET: APIRoute = async () => {
     // Adjacent surfaces — curated cross-links so an agent following
     // /local.json can fan out to related endpoints without scraping HTML.
     adjacent: {
+      pingLocalPet: 'https://pointcast.xyz/digital-pets/ping',
+      pingLocalPetJson: 'https://pointcast.xyz/digital-pets/ping.json',
       beacon: 'https://pointcast.xyz/beacon',
       beaconJson: 'https://pointcast.xyz/beacon.json',
       areas: 'https://pointcast.xyz/areas',

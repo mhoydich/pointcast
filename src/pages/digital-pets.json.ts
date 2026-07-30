@@ -67,6 +67,8 @@ export const GET: APIRoute = () =>
         },
         companions: {
           block: `${base}/b/${BOOK_META.blockId}`,
+          pingLocalPet: `${base}/digital-pets/ping`,
+          pingLocalPetJson: `${base}/digital-pets/ping.json`,
           creatureCommons: `${base}/digital-pets/commons`,
           creatureCommonsJson: `${base}/digital-pets/commons.json`,
           legacyStory: `${base}/digital-pets/legacy`,
