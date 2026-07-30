@@ -44,7 +44,8 @@ test("The Coaches' Room has human, machine, Block, magazine, homepage, and disco
   assert.equal(block.external.url, 'https://pointcast.xyz/25/magazine/coaches-50');
   assert.match(magazineData, /name: 'The Coaches Desk'/);
   assert.match(magazine, /href="\/25\/magazine\/coaches-50"/);
-  assert.match(home, /New<br \/>0541/);
+  assert.match(home, /id: '0541'/);
+  assert.match(home, /href: '\/25\/magazine\/coaches-50'/);
   assert.match(apps, /slug: 'coaches-room-2026'/);
   assert.match(llms, /The Coaches' Room — The PointCast 50 for 2026/);
   assert.match(llmsFull, /`\/25\/magazine\/coaches-50`/);

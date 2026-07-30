@@ -77,8 +77,8 @@ test('the score, carts, composer, playlist, and Pinterest companion stay bounded
   assert.equal(block.meta.affiliateRevenue, 0);
 });
 
-test('The Good Gear has JSON, Block, series, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeEdition] =
+test('The Good Gear keeps its JSON, Block, series, release-run, and discovery twins', async () => {
+  const [endpoint, blockText, series, sitemap, llms, llmsFull, homeEdition] =
     await Promise.all([
       read('src/pages/beach-commons/v15.json.ts'),
       read('src/content/blocks/0542.json'),
@@ -86,7 +86,6 @@ test('The Good Gear has JSON, Block, series, homepage, and discovery twins', asy
       read('src/pages/sitemap-discovery.xml.ts'),
       read('public/llms.txt'),
       read('public/llms-full.txt'),
-      read('src/pages/index.astro'),
       read('src/components/HomeNewEdition.astro'),
     ]);
   const block = JSON.parse(blockText);
@@ -96,14 +95,12 @@ test('The Good Gear has JSON, Block, series, homepage, and discovery twins', asy
   assert.equal(block.meta.rankedPicks, 15);
   assert.equal(block.meta.originalVisualPlates, 8);
   assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v15');
-  assert.match(series, /currentEdition: 15/);
+  assert.match(series, /edition: 15/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v15'/);
   assert.match(llms, /PointCast Field Study 015/);
   assert.match(llmsFull, /THE GOOD GEAR/);
-  assert.match(homepage, /href="\/beach-commons\/v15"/);
-  assert.match(homepage, /Block 0542/);
-  assert.match(homeEdition, /href="\/beach-commons\/v15"/);
-  assert.match(homeEdition, /New<br \/>0542/);
+  assert.match(homeEdition, /href: '\/beach-commons\/v15'/);
+  assert.match(homeEdition, /id: '0542'/);
 });
 
 test('The Good Gear images have vertical pin and social dimensions', async () => {
