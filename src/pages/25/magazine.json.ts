@@ -9,6 +9,10 @@ import {
 import { HOUSE_WE_BORROWED } from '../../lib/pointcast-college-house';
 import { ROW_BY_ROW } from '../../lib/pointcast-sorority-row';
 import { POINTCAST_SOUND_OF_FOCUS } from '../../lib/pointcast-focus';
+import {
+  COACH_WEATHER_FEATURE,
+  COACH_WEATHER_FRONTS,
+} from '../../lib/pointcast-coach-weather';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -36,6 +40,19 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: COACH_WEATHER_FEATURE.title,
+      subtitle: COACH_WEATHER_FEATURE.subtitle,
+      human: COACH_WEATHER_FEATURE.canonical,
+      machine: COACH_WEATHER_FEATURE.machineEdition,
+      block: `https://pointcast.xyz/b/${COACH_WEATHER_FEATURE.block}`,
+      pressureFronts: COACH_WEATHER_FRONTS.length,
+      movementCount: COACH_WEATHER_FRONTS.reduce(
+        (sum, front) => sum + Math.abs(front.movement),
+        0,
+      ),
+      matcherCandidates: 50,
+    },
     {
       title: HOUSE_WE_BORROWED.title,
       subtitle: HOUSE_WE_BORROWED.subtitle,
@@ -94,6 +111,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     soundOfFocus: POINTCAST_SOUND_OF_FOCUS.canonical,
     soundOfFocusJson: POINTCAST_SOUND_OF_FOCUS.machineEdition,
     soundOfFocusInteractiveLab: POINTCAST_SOUND_OF_FOCUS.interactiveLab,
+    coachWeather: COACH_WEATHER_FEATURE.canonical,
+    coachWeatherJson: COACH_WEATHER_FEATURE.machineEdition,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {

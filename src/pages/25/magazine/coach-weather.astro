@@ -1,0 +1,2014 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import SeasonTicket25 from '../../../components/SeasonTicket25.astro';
+import {
+  COACH_AXIS_LABELS,
+  POINTCAST_COACHES_50,
+  type CoachAxis,
+} from '../../../lib/pointcast-coaches-50';
+import {
+  COACH_WEATHER_BANDS,
+  COACH_WEATHER_CADENCE,
+  COACH_WEATHER_FEATURE,
+  COACH_WEATHER_FRONTS,
+  PROGRAM_BUILD_DEFAULT,
+  matchProgramBuild,
+  normalizeProgramShape,
+} from '../../../lib/pointcast-coach-weather';
+
+const feature = COACH_WEATHER_FEATURE;
+const initialMatch = matchProgramBuild(PROGRAM_BUILD_DEFAULT);
+const axisLabel = (axis: CoachAxis) =>
+  COACH_AXIS_LABELS.find((entry) => entry.id === axis)?.label ?? axis;
+const radarStyle = (index: number) => {
+  const angle = ((index * 29 + 8) * Math.PI) / 180;
+  const radius = 22 + (index % 4) * 7;
+  return `--x:${50 + Math.cos(angle) * radius}%;--y:${50 + Math.sin(angle) * radius}%`;
+};
+const matcherData = POINTCAST_COACHES_50.map((coach) => ({
+  rank: coach.rank,
+  coach: coach.coach,
+  school: coach.school,
+  conference: coach.conference,
+  signal: coach.signal,
+  case: coach.case,
+  question: coach.question,
+  shape: normalizeProgramShape(coach.scores),
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      headline: `${feature.title} — ${feature.subtitle}`,
+      description: feature.dek,
+      datePublished: feature.publishedAt,
+      dateModified: feature.updatedAt,
+      url: feature.canonical,
+      image: feature.socialImage,
+      author: { '@type': 'Organization', name: feature.byline },
+      publisher: { '@type': 'Organization', name: 'PointCast' },
+      isPartOf: {
+        '@type': 'PublicationIssue',
+        name: "PointCast College Football — Issue 001: Talkin' Season",
+        url: 'https://pointcast.xyz/25/magazine',
+      },
+      about: [
+        'college football coaches',
+        '2026 college football season',
+        'program building',
+        'college football pressure',
+      ],
+    },
+    {
+      '@type': 'ItemList',
+      name: 'Coach Weather preseason pressure map',
+      numberOfItems: COACH_WEATHER_FRONTS.length,
+      itemListElement: COACH_WEATHER_FRONTS.map((front) => ({
+        '@type': 'ListItem',
+        position: front.order,
+        name: `${front.coach.coach}, ${front.coach.school}: ${front.headline}`,
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={`${feature.title} — ${feature.subtitle}`}
+  description={feature.dek}
+  image={feature.socialImage}
+  themeColor="#c7ff3f"
+  jsonLd={jsonLd}
+  alternates={[
+    {
+      type: 'application/json',
+      href: '/25/magazine/coach-weather.json',
+      title: 'Coach Weather structured edition',
+    },
+  ]}
+  immersive={true}
+  showNetworkStrip={false}
+>
+  <main class="weather">
+    <header class="mast">
+      <a href="/" aria-label="PointCast home">POINTCAST</a>
+      <span>COLLEGE FOOTBALL · COACHES DESK 002</span>
+      <nav aria-label="Coach Weather navigation">
+        <a href="/25/magazine/coaches-50">THE 50</a>
+        <a href="/25/magazine">ISSUE 001</a>
+        <a href="/25/magazine/coach-weather.json">JSON ↗</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="weather-title">
+      <div class="hero__copy">
+        <p class="eyebrow">DISPATCH {feature.dispatch} · {feature.asOf} · PRESEASON BASELINE</p>
+        <h1 id="weather-title">COACH<br /><em>WEATHER</em></h1>
+        <p class="hero__dek">{feature.dek}</p>
+        <p class="hero__thesis">{feature.thesis}</p>
+        <div class="hero__actions">
+          <a href="#front-map">Read the front map ↓</a>
+          <a href="#build">Build your program ↘</a>
+        </div>
+      </div>
+
+      <div class="radar" aria-label="Editorial radar showing twelve preseason coach-pressure fronts">
+        <div class="radar__rings" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+          <b></b>
+        </div>
+        {COACH_WEATHER_FRONTS.map((front, index) => (
+          <a
+            href={`#front-${front.order}`}
+            class={`radar__front radar__front--${front.band}`}
+            style={radarStyle(index)}
+            aria-label={`${front.coach.coach}, ${front.pressure} pressure`}
+          >
+            <span>{front.pressure}</span>
+          </a>
+        ))}
+        <div class="radar__label">
+          <strong>12</strong>
+          <span>ROOMS<br />OPEN</span>
+        </div>
+      </div>
+
+      <aside class="hero__legend" aria-label="Coach Weather legend">
+        {COACH_WEATHER_BANDS.map((band) => (
+          <div>
+            <i style={`--band:${band.color}`}></i>
+            <span>{band.label}</span>
+          </div>
+        ))}
+        <small>PRESSURE IS NOT A PERFORMANCE GRADE.</small>
+      </aside>
+    </section>
+
+    <section class="baseline" aria-labelledby="baseline-title">
+      <p class="section-index">00 / THE HONEST OPEN</p>
+      <div>
+        <h2 id="baseline-title">Nothing moved.<br /><em>That matters.</em></h2>
+        <p>{feature.baseline}</p>
+      </div>
+      <div class="baseline__receipt">
+        <span>RANKING BASE</span>
+        <strong>50</strong>
+        <small>COACHES</small>
+        <span>MOVEMENT</span>
+        <strong>±00</strong>
+        <small>PRESEASON</small>
+      </div>
+    </section>
+
+    <section class="front-map" id="front-map" aria-labelledby="front-map-title" data-weather-map>
+      <header class="front-map__header">
+        <div>
+          <p class="section-index">01 / THE FRONT MAP</p>
+          <h2 id="front-map-title">Pressure before<br />the record.</h2>
+        </div>
+        <div class="front-map__tools">
+          <p>
+            Save coaches locally, then return to your weather instead of
+            rebuilding a feed from scratch.
+          </p>
+          <button type="button" data-watch-filter aria-pressed="false">
+            MY WEATHER · <b data-watch-count>0</b>
+          </button>
+        </div>
+      </header>
+
+      {COACH_WEATHER_BANDS.map((band) => (
+        <section
+          class={`weather-band weather-band--${band.id}`}
+          aria-labelledby={`band-${band.id}`}
+          style={`--band:${band.color}`}
+        >
+          <header>
+            <p>{band.note}</p>
+            <h3 id={`band-${band.id}`}>{band.label}</h3>
+          </header>
+          <div class="front-grid">
+            {COACH_WEATHER_FRONTS.filter((front) => front.band === band.id).map((front) => (
+              <article
+                class="front-card"
+                id={`front-${front.order}`}
+                data-weather-card
+                data-coach={front.coach.coach}
+              >
+                <div class="front-card__top">
+                  <span class="front-card__number">{String(front.order).padStart(2, '0')}</span>
+                  <div>
+                    <small>POINTCAST RANK #{String(front.coach.rank).padStart(2, '0')}</small>
+                    <h4>{front.coach.coach}</h4>
+                    <p>{front.coach.school} · {front.coach.conference}</p>
+                  </div>
+                  <div class="front-card__pressure">
+                    <strong>{front.pressure}</strong>
+                    <span>PRESSURE</span>
+                  </div>
+                </div>
+                <div class="front-card__room">
+                  <span>EXACT ROOM</span>
+                  <strong>{axisLabel(front.exactRoom)}</strong>
+                  <span>MOVEMENT</span>
+                  <strong>±00</strong>
+                </div>
+                <h5>{front.headline}</h5>
+                <p>{front.forecast}</p>
+                <blockquote>{front.trigger}</blockquote>
+                <button
+                  type="button"
+                  class="watch-button"
+                  data-watch-coach={front.coach.coach}
+                  aria-pressed="false"
+                >
+                  <span data-watch-label>WATCH THIS ROOM</span>
+                  <b aria-hidden="true">＋</b>
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <p class="front-map__empty" data-watch-empty hidden>
+        Your weather is empty. Save one room, then this becomes your private
+        return map.
+      </p>
+    </section>
+
+    <section class="room-week" aria-labelledby="room-week-title">
+      <figure>
+        <img
+          src="/images/pointcast-coaches-50/poster-02.webp"
+          alt="An imagined football program planning table with anonymous hands, maps, budget sheets, and field diagrams"
+          width="1024"
+          height="1536"
+          loading="lazy"
+        />
+        <figcaption>
+          ROOM OF THE WEEK · IMAGINED EDITORIAL SCENE · NO REAL COACH OR CAMPUS
+        </figcaption>
+      </figure>
+      <div class="room-week__copy">
+        <p class="section-index">02 / ROOM OF THE WEEK</p>
+        <span class="room-week__rank">#10 · KYLE WHITTINGHAM · MICHIGAN</span>
+        <h2 id="room-week-title">Can an operating system<br /><em>change climates?</em></h2>
+        <p class="room-week__standfirst">
+          Great fit becomes invisible. After enough years, the coach’s habits
+          begin to look like the place’s natural weather. Michigan makes that
+          illusion testable.
+        </p>
+        <div class="room-week__columns">
+          <p>
+            Whittingham’s Utah program joined physical standards, staff memory,
+            player development, regional knowledge, and public expectation so
+            tightly that it became difficult to say where the coach ended and
+            the institution began. Michigan did not hire that history. It hired
+            the person believed to have made the history repeatable.
+          </p>
+          <p>
+            The first audit is not wins. It is translation. Which meetings,
+            staffing choices, practice rhythms, personnel preferences, and
+            decision rights travel immediately? Which depended on Salt Lake
+            City, a specific recruiting map, or two decades of accumulated
+            trust? Portability is the room under pressure.
+          </p>
+        </div>
+        <blockquote>
+          The weather moves when Michigan stops looking like a program receiving
+          Whittingham and starts looking like a Whittingham program.
+        </blockquote>
+        <a href="/25/magazine/coaches-50#ranking">Open the complete ranking ↗</a>
+      </div>
+    </section>
+
+    <section class="cadence" aria-labelledby="cadence-title">
+      <header>
+        <p class="section-index">03 / RETURN RHYTHM</p>
+        <h2 id="cadence-title">A season people<br /><em>can anticipate.</em></h2>
+        <p>
+          The ranking moves only when evidence moves it. Coach Weather gives the
+          space between rankings a reliable editorial clock.
+        </p>
+      </header>
+      <ol>
+        {COACH_WEATHER_CADENCE.map((entry) => (
+          <li>
+            <div>
+              <strong>{entry.day}</strong>
+              <span>{entry.time}</span>
+            </div>
+            <h3>{entry.title}</h3>
+            <p>{entry.note}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="builder" id="build" aria-labelledby="build-title" data-build-root>
+      <header>
+        <p class="section-index">04 / BUILD YOUR PROGRAM</p>
+        <h2 id="build-title">You get<br /><em>100 points.</em></h2>
+        <p>
+          Decide what your football institution values. PointCast compares the
+          shape—not the ranking—to all 50 published coach rooms.
+        </p>
+      </header>
+
+      <div class="builder__workbench">
+        <div class="builder__controls">
+          <div class="builder__budget">
+            <span>ALLOCATED</span>
+            <strong data-build-total>100</strong>
+            <small>/ 100</small>
+          </div>
+
+          <div class="builder__presets" aria-label="Program build presets">
+            <button type="button" data-build-preset="20,15,20,10,10,10,15">BALANCED</button>
+            <button type="button" data-build-preset="15,20,15,10,10,15,15">POWERHOUSE</button>
+            <button type="button" data-build-preset="25,5,25,15,10,5,15">BUILDER</button>
+            <button type="button" data-build-preset="15,5,20,25,15,5,15">LOCAL</button>
+            <button type="button" data-build-preset="15,10,15,10,15,10,25">AURA</button>
+          </div>
+
+          <div class="builder__axes">
+            {COACH_AXIS_LABELS.map((axis) => (
+              <label>
+                <span>
+                  <strong>{axis.label}</strong>
+                  <small>{axis.note}</small>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="5"
+                  value={PROGRAM_BUILD_DEFAULT[axis.id]}
+                  data-build-axis={axis.id}
+                  aria-label={`${axis.label} allocation`}
+                />
+                <output data-build-output={axis.id}>
+                  {PROGRAM_BUILD_DEFAULT[axis.id]}
+                </output>
+              </label>
+            ))}
+          </div>
+          <p class="builder__instruction" data-build-instruction>
+            Your 100-point room is ready.
+          </p>
+        </div>
+
+        <article class="match-card" data-match-card>
+          <div class="match-card__top">
+            <span>YOUR PROGRAM MATCH</span>
+            <strong data-match-similarity>{initialMatch.similarity}%</strong>
+          </div>
+          <div class="match-card__rank">
+            <span data-match-rank>#{String(initialMatch.coach.rank).padStart(2, '0')}</span>
+            <small>POINTCAST 50</small>
+          </div>
+          <h3 data-match-school>{initialMatch.coach.school}</h3>
+          <h4 data-match-coach>{initialMatch.coach.coach}</h4>
+          <p class="match-card__signal" data-match-signal>{initialMatch.coach.signal}</p>
+          <p data-match-case>{initialMatch.coach.case}</p>
+          <blockquote data-match-question>
+            2026: {initialMatch.coach.question}
+          </blockquote>
+          <div class="match-card__signature">
+            <span>SIGNATURE ROOMS</span>
+            <strong data-match-signature>
+              {initialMatch.signature.map(axisLabel).join(' + ')}
+            </strong>
+          </div>
+          <div class="match-card__actions">
+            <button type="button" data-share-match>SHARE RESULT ↗</button>
+            <button type="button" data-download-match>DOWNLOAD CARD ↓</button>
+          </div>
+          <small>
+            Shape match, not endorsement. Your allocation remains on this device.
+          </small>
+        </article>
+      </div>
+    </section>
+
+    <section class="return-door" aria-labelledby="return-title">
+      <div>
+        <p class="section-index">05 / KEEP THE RECEIPTS</p>
+        <h2 id="return-title">Do not ask people<br />to remember the argument.</h2>
+        <p>
+          Coach Weather will preserve every baseline, forecast, movement, and
+          reason. The public page remains free. The Founding Season Ticket funds
+          the recurring desk, the Sunday audio, and the end-of-season autopsy.
+        </p>
+        <div class="return-door__links">
+          <a href="/subscribe">Follow PointCast feeds + email ↗</a>
+          <a href="/25/season">Open the season ledger ↗</a>
+        </div>
+      </div>
+      <SeasonTicket25 context="Coach Weather, weekly movement receipts, and the season autopsy are funded by the Founding Season Ticket." />
+    </section>
+
+    <section class="boundary" aria-labelledby="boundary-title">
+      <p class="section-index">06 / EDITORIAL BOUNDARY</p>
+      <div>
+        <h2 id="boundary-title">Pressure is not<br />a firing rumor.</h2>
+        <p>{feature.boundary}</p>
+        <p>{feature.matcherBoundary}</p>
+      </div>
+    </section>
+
+    <footer class="feature-footer">
+      <div>
+        <span>POINTCAST COLLEGE FOOTBALL · COACHES DESK 002</span>
+        <h2>THE POSITION<br />MEETS THE<br /><em>PRESSURE.</em></h2>
+      </div>
+      <nav aria-label="Continue reading PointCast College Football">
+        <a href="/25/magazine/coaches-50">The PointCast 50 ↗</a>
+        <a href="/25/magazine">Magazine front door ↗</a>
+        <a href="/25/season">Season ledger ↗</a>
+        <a href="/b/0545">Permanent Block 0545 ↗</a>
+      </nav>
+    </footer>
+
+    <script
+      type="application/json"
+      id="coach-weather-match-data"
+      set:html={JSON.stringify(matcherData).replace(/</g, '\\u003c')}
+    ></script>
+  </main>
+
+  <script>
+    const weatherMap = document.querySelector('[data-weather-map]');
+
+    if (weatherMap instanceof HTMLElement) {
+      const storageKey = 'pointcast:coach-weather-watchlist:v1';
+      const buttons = [...weatherMap.querySelectorAll('[data-watch-coach]')];
+      const cards = [...weatherMap.querySelectorAll('[data-weather-card]')];
+      const filter = weatherMap.querySelector('[data-watch-filter]');
+      const count = weatherMap.querySelector('[data-watch-count]');
+      const empty = weatherMap.querySelector('[data-watch-empty]');
+      let watched = new Set();
+      let onlyWatched = false;
+
+      try {
+        const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        watched = new Set(Array.isArray(stored) ? stored.filter((item) => typeof item === 'string') : []);
+      } catch {
+        watched = new Set();
+      }
+
+      const syncWatchlist = () => {
+        buttons.forEach((button) => {
+          if (!(button instanceof HTMLButtonElement)) return;
+          const coach = button.dataset.watchCoach || '';
+          const active = watched.has(coach);
+          button.setAttribute('aria-pressed', String(active));
+          const label = button.querySelector('[data-watch-label]');
+          const icon = button.querySelector('b');
+          if (label) label.textContent = active ? 'WATCHING THIS ROOM' : 'WATCH THIS ROOM';
+          if (icon) icon.textContent = active ? '✓' : '＋';
+        });
+
+        cards.forEach((card) => {
+          if (!(card instanceof HTMLElement)) return;
+          card.hidden = onlyWatched && !watched.has(card.dataset.coach || '');
+        });
+
+        if (count) count.textContent = String(watched.size);
+        if (filter instanceof HTMLButtonElement) {
+          filter.setAttribute('aria-pressed', String(onlyWatched));
+        }
+        if (empty instanceof HTMLElement) {
+          empty.hidden = !(onlyWatched && watched.size === 0);
+        }
+      };
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          if (!(button instanceof HTMLButtonElement)) return;
+          const coach = button.dataset.watchCoach || '';
+          if (!coach) return;
+          if (watched.has(coach)) watched.delete(coach);
+          else watched.add(coach);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify([...watched]));
+          } catch {
+            // The watchlist remains useful for the current visit when storage is unavailable.
+          }
+          syncWatchlist();
+        });
+      });
+
+      filter?.addEventListener('click', () => {
+        onlyWatched = !onlyWatched;
+        syncWatchlist();
+      });
+
+      syncWatchlist();
+    }
+
+    const buildRoot = document.querySelector('[data-build-root]');
+    const matchDataNode = document.querySelector('#coach-weather-match-data');
+
+    if (
+      buildRoot instanceof HTMLElement &&
+      matchDataNode instanceof HTMLScriptElement
+    ) {
+      const axes = ['program', 'capital', 'players', 'region', 'fans', 'facilities', 'aura'];
+      const labels = {
+        program: 'Program',
+        capital: 'Capital',
+        players: 'Players',
+        region: 'Region',
+        fans: 'Fans',
+        facilities: 'Facilities',
+        aura: 'Aura',
+      };
+      const inputs = axes.map((axis) => buildRoot.querySelector(`[data-build-axis="${axis}"]`));
+      const outputs = axes.map((axis) => buildRoot.querySelector(`[data-build-output="${axis}"]`));
+      const totalNode = buildRoot.querySelector('[data-build-total]');
+      const instruction = buildRoot.querySelector('[data-build-instruction]');
+      const matchCard = buildRoot.querySelector('[data-match-card]');
+      const coaches = JSON.parse(matchDataNode.textContent || '[]');
+      let currentMatch = null;
+
+      const currentValues = () =>
+        inputs.map((input) =>
+          input instanceof HTMLInputElement ? Number(input.value) : 0,
+        );
+
+      const writeMatch = (match) => {
+        currentMatch = match;
+        const write = (selector, value) => {
+          const node = buildRoot.querySelector(selector);
+          if (node) node.textContent = value;
+        };
+        write('[data-match-similarity]', `${match.similarity}%`);
+        write('[data-match-rank]', `#${String(match.rank).padStart(2, '0')}`);
+        write('[data-match-school]', match.school);
+        write('[data-match-coach]', match.coach);
+        write('[data-match-signal]', match.signal);
+        write('[data-match-case]', match.case);
+        write('[data-match-question]', `2026: ${match.question}`);
+        write(
+          '[data-match-signature]',
+          match.signature.map((axis) => labels[axis] || axis).join(' + '),
+        );
+      };
+
+      const findMatch = (values) => {
+        const matches = coaches.map((coach) => {
+          const distance = axes.reduce(
+            (sum, axis, index) =>
+              sum + Math.abs(values[index] - Number(coach.shape[axis] || 0)),
+            0,
+          );
+          const signature = [...axes]
+            .sort((a, b) => Number(coach.shape[b]) - Number(coach.shape[a]))
+            .slice(0, 2);
+          return {
+            ...coach,
+            signature,
+            similarity: Math.max(0, Math.round(100 - distance / 2)),
+          };
+        });
+
+        return matches.sort(
+          (a, b) => b.similarity - a.similarity || a.rank - b.rank,
+        )[0];
+      };
+
+      const syncBuild = ({ updateUrl = true } = {}) => {
+        const values = currentValues();
+        const total = values.reduce((sum, value) => sum + value, 0);
+
+        values.forEach((value, index) => {
+          if (outputs[index]) outputs[index].textContent = String(value);
+          if (inputs[index] instanceof HTMLInputElement) {
+            inputs[index].style.setProperty('--fill', `${(value / 40) * 100}%`);
+          }
+        });
+
+        if (totalNode) totalNode.textContent = String(total);
+        buildRoot.dataset.ready = String(total === 100);
+
+        if (total !== 100) {
+          if (instruction) {
+            instruction.textContent =
+              total < 100
+                ? `${100 - total} points remain.`
+                : `Remove ${total - 100} points.`;
+          }
+          return;
+        }
+
+        if (instruction) instruction.textContent = 'Your 100-point room is ready.';
+        const match = findMatch(values);
+        if (match) writeMatch(match);
+
+        if (updateUrl) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('build', values.join('-'));
+          history.replaceState({}, '', url);
+        }
+      };
+
+      inputs.forEach((input) => input?.addEventListener('input', () => syncBuild()));
+
+      buildRoot.querySelectorAll('[data-build-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (!(button instanceof HTMLButtonElement)) return;
+          const values = (button.dataset.buildPreset || '')
+            .split(',')
+            .map(Number);
+          if (values.length !== axes.length) return;
+          inputs.forEach((input, index) => {
+            if (input instanceof HTMLInputElement) input.value = String(values[index]);
+          });
+          syncBuild();
+        });
+      });
+
+      const shareButton = buildRoot.querySelector('[data-share-match]');
+      shareButton?.addEventListener('click', async () => {
+        if (!currentMatch || !(shareButton instanceof HTMLButtonElement)) return;
+        const share = {
+          title: `My Coach Weather program match: ${currentMatch.school}`,
+          text: `My 100-point football room matches ${currentMatch.coach} at ${currentMatch.school}.`,
+          url: window.location.href,
+        };
+
+        try {
+          if (navigator.share) await navigator.share(share);
+          else await navigator.clipboard.writeText(`${share.text} ${share.url}`);
+          shareButton.textContent = navigator.share ? 'SHARED ✓' : 'LINK COPIED ✓';
+        } catch {
+          shareButton.textContent = 'SHARE READY ↗';
+        }
+
+        window.setTimeout(() => {
+          shareButton.textContent = 'SHARE RESULT ↗';
+        }, 1800);
+      });
+
+      const downloadButton = buildRoot.querySelector('[data-download-match]');
+      downloadButton?.addEventListener('click', () => {
+        if (!currentMatch) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 630;
+        const context = canvas.getContext('2d');
+        if (!context) return;
+
+        context.fillStyle = '#111914';
+        context.fillRect(0, 0, 1200, 630);
+        context.fillStyle = '#c7ff3f';
+        context.fillRect(0, 0, 1200, 22);
+        context.fillStyle = '#ff6843';
+        context.fillRect(0, 22, 22, 608);
+        context.strokeStyle = 'rgba(199,255,63,.34)';
+        context.lineWidth = 2;
+        [110, 190, 270].forEach((radius) => {
+          context.beginPath();
+          context.arc(970, 320, radius, 0, Math.PI * 2);
+          context.stroke();
+        });
+
+        context.fillStyle = '#c7ff3f';
+        context.font = '700 18px monospace';
+        context.fillText('POINTCAST · COACH WEATHER · BUILD YOUR PROGRAM', 58, 78);
+        context.fillStyle = '#f4f2e8';
+        context.font = '900 78px Arial';
+        context.fillText('MY PROGRAM', 56, 190);
+        context.fillStyle = '#c7ff3f';
+        context.font = 'italic 92px Georgia';
+        context.fillText(currentMatch.school.toUpperCase(), 52, 296);
+        context.fillStyle = '#f4f2e8';
+        context.font = '700 34px Arial';
+        context.fillText(`${currentMatch.coach} · ${currentMatch.similarity}% SHAPE MATCH`, 58, 358);
+        context.fillStyle = '#aab4a8';
+        context.font = '700 17px monospace';
+        context.fillText(
+          `SIGNATURE: ${currentMatch.signature.map((axis) => labels[axis].toUpperCase()).join(' + ')}`,
+          58,
+          410,
+        );
+
+        const values = currentValues();
+        axes.forEach((axis, index) => {
+          const x = 58 + (index % 4) * 185;
+          const y = 482 + Math.floor(index / 4) * 58;
+          context.fillStyle = '#ff6843';
+          context.font = '900 30px Arial';
+          context.fillText(String(values[index]).padStart(2, '0'), x, y);
+          context.fillStyle = '#f4f2e8';
+          context.font = '700 12px monospace';
+          context.fillText(labels[axis].toUpperCase(), x + 46, y - 5);
+        });
+
+        context.fillStyle = '#111914';
+        context.fillRect(889, 239, 162, 162);
+        context.fillStyle = '#c7ff3f';
+        context.font = '900 72px Arial';
+        context.textAlign = 'center';
+        context.fillText(`#${String(currentMatch.rank).padStart(2, '0')}`, 970, 338);
+        context.fillStyle = '#f4f2e8';
+        context.font = '700 13px monospace';
+        context.fillText('POINTCAST 50', 970, 373);
+        context.textAlign = 'left';
+
+        const link = document.createElement('a');
+        link.download = `coach-weather-${currentMatch.school
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+
+      const sharedBuild = new URL(window.location.href).searchParams.get('build');
+      const sharedValues = sharedBuild?.split('-').map(Number);
+      if (
+        sharedValues?.length === axes.length &&
+        sharedValues.every(
+          (value) => Number.isFinite(value) && value >= 0 && value <= 40,
+        ) &&
+        sharedValues.reduce((sum, value) => sum + value, 0) === 100
+      ) {
+        inputs.forEach((input, index) => {
+          if (input instanceof HTMLInputElement) {
+            input.value = String(sharedValues[index]);
+          }
+        });
+      }
+
+      syncBuild({ updateUrl: false });
+    }
+  </script>
+</BlockLayout>
+
+<style>
+  :global(html) {
+    background: #111914;
+    scroll-behavior: smooth;
+  }
+
+  :global(body) {
+    margin: 0;
+    background: #111914;
+  }
+
+  :global(*),
+  :global(*::before),
+  :global(*::after) {
+    box-sizing: border-box;
+  }
+
+  .weather {
+    --ink: #111914;
+    --paper: #f4f2e8;
+    --acid: #c7ff3f;
+    --orange: #ff6843;
+    --blue: #7ca8ff;
+    --line: rgba(244, 242, 232, 0.24);
+    width: 100%;
+    overflow: clip;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: Inter, sans-serif;
+  }
+
+  .mast {
+    min-height: 58px;
+    padding: 0 2vw;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+    font: 700 0.68rem/1 JetBrains Mono, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mast > a {
+    color: var(--acid);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+
+  .mast nav {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+  }
+
+  .mast nav a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .hero {
+    min-height: calc(100svh - 58px);
+    padding: clamp(2rem, 4vw, 4rem);
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr) 150px;
+    gap: clamp(2rem, 4vw, 5rem);
+    align-items: center;
+    background:
+      linear-gradient(110deg, rgba(124, 168, 255, 0.07), transparent 42%),
+      radial-gradient(circle at 80% 32%, rgba(199, 255, 63, 0.08), transparent 36%);
+  }
+
+  .eyebrow,
+  .section-index {
+    margin: 0;
+    color: var(--acid);
+    font: 700 0.68rem/1 JetBrains Mono, monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .hero h1 {
+    margin: 1.4rem 0 2.2rem;
+    font-size: clamp(5rem, 9vw, 11rem);
+    line-height: 0.72;
+    letter-spacing: -0.09em;
+    text-transform: uppercase;
+  }
+
+  .hero h1 em {
+    color: var(--acid);
+    font-family: Georgia, serif;
+    font-weight: 400;
+  }
+
+  .hero__dek {
+    max-width: 820px;
+    margin: 0;
+    font-size: clamp(1.45rem, 2.7vw, 2.6rem);
+    line-height: 1.14;
+  }
+
+  .hero__thesis {
+    max-width: 720px;
+    margin: 1.5rem 0 0;
+    color: rgba(244, 242, 232, 0.72);
+    font-family: Georgia, serif;
+    font-size: 1.1rem;
+    line-height: 1.55;
+  }
+
+  .hero__actions {
+    margin-top: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+  }
+
+  .hero__actions a,
+  .room-week__copy > a,
+  .return-door__links a {
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--paper);
+    color: var(--paper);
+    font: 700 0.7rem/1 JetBrains Mono, monospace;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .hero__actions a:first-child {
+    border-color: var(--acid);
+    background: var(--acid);
+    color: var(--ink);
+  }
+
+  .radar {
+    position: relative;
+    width: min(38vw, 530px);
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    justify-self: center;
+    overflow: hidden;
+    background:
+      linear-gradient(rgba(199, 255, 63, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(199, 255, 63, 0.08) 1px, transparent 1px),
+      #0e1511;
+    background-size: 38px 38px;
+  }
+
+  .radar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 15deg,
+      transparent 0 16%,
+      rgba(199, 255, 63, 0.22) 20%,
+      transparent 24% 100%
+    );
+    animation: scan 8s linear infinite;
+    transform-origin: center;
+  }
+
+  .radar__rings {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+
+  .radar__rings i {
+    position: absolute;
+    width: calc(20% + var(--ring, 0%));
+    aspect-ratio: 1;
+    border: 1px solid rgba(199, 255, 63, 0.28);
+    border-radius: 50%;
+  }
+
+  .radar__rings i:nth-child(1) { --ring: 0%; }
+  .radar__rings i:nth-child(2) { --ring: 20%; }
+  .radar__rings i:nth-child(3) { --ring: 40%; }
+  .radar__rings i:nth-child(4) { --ring: 60%; }
+
+  .radar__rings b::before,
+  .radar__rings b::after {
+    content: '';
+    position: absolute;
+    inset: 50% 4% auto;
+    height: 1px;
+    background: rgba(199, 255, 63, 0.2);
+  }
+
+  .radar__rings b::after {
+    transform: rotate(90deg);
+  }
+
+  .radar__front {
+    position: absolute;
+    top: var(--y);
+    left: var(--x);
+    z-index: 2;
+    width: 2.1rem;
+    aspect-ratio: 1;
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--ink);
+    font: 900 0.62rem/1 JetBrains Mono, monospace;
+    text-decoration: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .radar__front--heating { background: var(--orange); }
+  .radar__front--clearing { background: var(--acid); }
+  .radar__front--storm-cell { background: var(--blue); }
+
+  .radar__label {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    z-index: 3;
+    width: 26%;
+    aspect-ratio: 1;
+    border: 1px solid var(--acid);
+    border-radius: 50%;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    transform: translate(-50%, -50%);
+    background: var(--ink);
+  }
+
+  .radar__label strong {
+    color: var(--acid);
+    font-size: clamp(2rem, 4vw, 4rem);
+    line-height: 0.8;
+  }
+
+  .radar__label span {
+    margin-top: 0.55rem;
+    font: 700 0.52rem/1.2 JetBrains Mono, monospace;
+  }
+
+  .hero__legend {
+    padding-left: 1rem;
+    border-left: 1px solid var(--line);
+  }
+
+  .hero__legend div {
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 12px 1fr;
+    align-items: center;
+    gap: 0.65rem;
+    font: 700 0.58rem/1.35 JetBrains Mono, monospace;
+    text-transform: uppercase;
+  }
+
+  .hero__legend i {
+    width: 10px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--band);
+  }
+
+  .hero__legend small {
+    display: block;
+    margin-top: 1.5rem;
+    color: rgba(244, 242, 232, 0.52);
+    font: 700 0.54rem/1.5 JetBrains Mono, monospace;
+  }
+
+  .baseline {
+    padding: clamp(4rem, 8vw, 8rem) 4vw;
+    display: grid;
+    grid-template-columns: 0.35fr 1fr 0.45fr;
+    gap: 4vw;
+    background: var(--acid);
+    color: var(--ink);
+  }
+
+  .baseline .section-index {
+    color: #5d6500;
+  }
+
+  .baseline h2,
+  .front-map h2,
+  .room-week h2,
+  .cadence h2,
+  .builder h2,
+  .return-door h2,
+  .boundary h2,
+  .feature-footer h2 {
+    margin: 0;
+    font-size: clamp(3.6rem, 7.7vw, 8.8rem);
+    line-height: 0.84;
+    letter-spacing: -0.075em;
+  }
+
+  .baseline h2 em,
+  .room-week h2 em,
+  .cadence h2 em,
+  .builder h2 em,
+  .feature-footer h2 em {
+    font-family: Georgia, serif;
+    font-weight: 400;
+  }
+
+  .baseline div > p {
+    max-width: 760px;
+    font-family: Georgia, serif;
+    font-size: clamp(1.25rem, 2vw, 1.9rem);
+    line-height: 1.45;
+  }
+
+  .baseline__receipt {
+    padding: 1.4rem;
+    border: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-content: center;
+    gap: 0.6rem 1rem;
+    font-family: JetBrains Mono, monospace;
+  }
+
+  .baseline__receipt span,
+  .baseline__receipt small {
+    font-size: 0.6rem;
+    font-weight: 800;
+  }
+
+  .baseline__receipt strong {
+    color: var(--orange);
+    font-family: Inter, sans-serif;
+    font-size: 3.4rem;
+    line-height: 0.9;
+  }
+
+  .front-map {
+    padding: clamp(5rem, 9vw, 9rem) 4vw;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .front-map .section-index,
+  .room-week .section-index,
+  .builder .section-index {
+    color: #596a00;
+  }
+
+  .front-map__header {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 5vw;
+    align-items: end;
+  }
+
+  .front-map__tools {
+    max-width: 520px;
+    justify-self: end;
+  }
+
+  .front-map__tools p {
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  .front-map__tools button {
+    width: 100%;
+    padding: 1rem;
+    border: 2px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: 800 0.72rem/1 JetBrains Mono, monospace;
+  }
+
+  .front-map__tools button[aria-pressed='true'] {
+    background: var(--ink);
+    color: var(--acid);
+  }
+
+  .weather-band {
+    margin-top: 5rem;
+  }
+
+  .weather-band > header {
+    padding: 1rem 0;
+    border-top: 5px solid var(--band);
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: end;
+    gap: 2rem;
+  }
+
+  .weather-band > header h3 {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 4.5rem);
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+  }
+
+  .weather-band > header p {
+    max-width: 560px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .front-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .weather-band--storm-cell .front-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .front-card {
+    min-width: 0;
+    padding: 1.2rem;
+    border-right: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .front-card:first-child {
+    border-left: 1px solid var(--ink);
+  }
+
+  .front-card[hidden] {
+    display: none;
+  }
+
+  .front-card__top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.8rem;
+    align-items: start;
+  }
+
+  .front-card__number {
+    color: var(--band);
+    font-size: 1.8rem;
+    font-weight: 900;
+  }
+
+  .front-card__top small,
+  .front-card__top p,
+  .front-card__pressure span,
+  .front-card__room span {
+    font: 700 0.52rem/1.35 JetBrains Mono, monospace;
+    text-transform: uppercase;
+  }
+
+  .front-card__top h4 {
+    margin: 0.2rem 0 0;
+    font-size: 1.2rem;
+    letter-spacing: -0.04em;
+  }
+
+  .front-card__top p {
+    margin: 0.3rem 0 0;
+  }
+
+  .front-card__pressure {
+    text-align: right;
+  }
+
+  .front-card__pressure strong {
+    display: block;
+    color: var(--band);
+    font-size: 2.6rem;
+    line-height: 0.8;
+  }
+
+  .front-card__room {
+    margin: 1.2rem 0;
+    padding: 0.8rem 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.45rem;
+  }
+
+  .front-card__room strong {
+    font: 900 0.68rem/1 JetBrains Mono, monospace;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  .front-card h5 {
+    margin: 0 0 1rem;
+    font-size: 1.25rem;
+    line-height: 1.05;
+  }
+
+  .front-card > p {
+    margin: 0;
+    font-family: Georgia, serif;
+    font-size: 1rem;
+    line-height: 1.42;
+  }
+
+  .front-card blockquote {
+    margin: 1.2rem 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--ink);
+    color: #62320f;
+    font-size: 0.77rem;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .watch-button {
+    margin-top: auto;
+    padding: 0.85rem 0;
+    border: 0;
+    border-top: 1px solid var(--ink);
+    display: flex;
+    justify-content: space-between;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: 800 0.56rem/1 JetBrains Mono, monospace;
+  }
+
+  .watch-button[aria-pressed='true'] {
+    color: #596a00;
+  }
+
+  .front-map__empty {
+    margin: 3rem 0 0;
+    padding: 2rem;
+    border: 2px dashed var(--ink);
+    font-family: Georgia, serif;
+    font-size: 1.3rem;
+    text-align: center;
+  }
+
+  .room-week {
+    min-height: 100svh;
+    display: grid;
+    grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
+    background: #edf2ff;
+    color: var(--ink);
+  }
+
+  .room-week figure {
+    position: relative;
+    min-height: 800px;
+    margin: 0;
+  }
+
+  .room-week figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .room-week figcaption {
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    padding: 0.8rem;
+    background: rgba(17, 25, 20, 0.85);
+    color: var(--paper);
+    font: 700 0.58rem/1.4 JetBrains Mono, monospace;
+  }
+
+  .room-week__copy {
+    padding: clamp(4rem, 8vw, 9rem) 5vw;
+    align-self: center;
+  }
+
+  .room-week__rank {
+    display: block;
+    margin: 1.5rem 0;
+    color: #5b6590;
+    font: 800 0.68rem/1 JetBrains Mono, monospace;
+  }
+
+  .room-week__standfirst {
+    max-width: 880px;
+    font-family: Georgia, serif;
+    font-size: clamp(1.45rem, 2.4vw, 2.5rem);
+    line-height: 1.2;
+  }
+
+  .room-week__columns {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    max-width: 900px;
+    line-height: 1.65;
+  }
+
+  .room-week__copy blockquote {
+    max-width: 900px;
+    margin: 2rem 0;
+    padding: 1.5rem 0 1.5rem 1.5rem;
+    border-left: 5px solid var(--orange);
+    font-family: Georgia, serif;
+    font-size: 1.4rem;
+    font-style: italic;
+    line-height: 1.35;
+  }
+
+  .room-week__copy > a,
+  .return-door__links a {
+    display: inline-block;
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .cadence {
+    padding: clamp(5rem, 9vw, 9rem) 4vw;
+    background: var(--blue);
+    color: var(--ink);
+  }
+
+  .cadence .section-index {
+    color: #233b71;
+  }
+
+  .cadence header {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    align-items: end;
+    gap: 4vw;
+  }
+
+  .cadence header > p:last-child {
+    max-width: 600px;
+    font-size: 1.1rem;
+    line-height: 1.55;
+  }
+
+  .cadence ol {
+    margin: 4rem 0 0;
+    padding: 0;
+    border-top: 2px solid var(--ink);
+    list-style: none;
+  }
+
+  .cadence li {
+    padding: 1.3rem 0;
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: 9rem 0.7fr 1.3fr;
+    gap: 2rem;
+    align-items: baseline;
+  }
+
+  .cadence li div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cadence li div strong {
+    color: #d13716;
+    font-size: 2rem;
+  }
+
+  .cadence li div span {
+    font: 700 0.58rem/1.4 JetBrains Mono, monospace;
+  }
+
+  .cadence li h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    text-transform: uppercase;
+  }
+
+  .cadence li p {
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .builder {
+    padding: clamp(5rem, 9vw, 9rem) 4vw;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .builder > header {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 4vw;
+    align-items: end;
+  }
+
+  .builder > header > p:last-child {
+    max-width: 600px;
+    font-family: Georgia, serif;
+    font-size: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .builder__workbench {
+    margin-top: 4rem;
+    border: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+
+  .builder__controls {
+    padding: 2rem;
+    border-right: 2px solid var(--ink);
+  }
+
+  .builder__budget {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+  }
+
+  .builder__budget span,
+  .builder__budget small {
+    font: 800 0.65rem/1 JetBrains Mono, monospace;
+  }
+
+  .builder__budget strong {
+    color: var(--orange);
+    font-size: 4rem;
+    line-height: 0.8;
+  }
+
+  .builder[data-ready='false'] .builder__budget strong,
+  .builder[data-ready='false'] .builder__instruction {
+    color: #a3211c;
+  }
+
+  .builder__presets {
+    margin: 2rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .builder__presets button,
+  .match-card__actions button {
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: 800 0.58rem/1 JetBrains Mono, monospace;
+  }
+
+  .builder__presets button:first-child {
+    background: var(--acid);
+  }
+
+  .builder__axes {
+    border-top: 1px solid var(--ink);
+  }
+
+  .builder__axes label {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) minmax(180px, 0.8fr) 3rem;
+    gap: 1.2rem;
+    align-items: center;
+  }
+
+  .builder__axes label > span {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .builder__axes label strong {
+    font-size: 1rem;
+    text-transform: uppercase;
+  }
+
+  .builder__axes label small {
+    margin-top: 0.3rem;
+    color: #57584f;
+    font-family: Georgia, serif;
+    line-height: 1.35;
+  }
+
+  .builder__axes input {
+    width: 100%;
+    height: 6px;
+    appearance: none;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    background: linear-gradient(
+      90deg,
+      var(--orange) 0 var(--fill, 0%),
+      transparent var(--fill, 0%) 100%
+    );
+  }
+
+  .builder__axes input::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    appearance: none;
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    background: var(--acid);
+    cursor: grab;
+  }
+
+  .builder__axes output {
+    font-size: 1.35rem;
+    font-weight: 900;
+    text-align: right;
+  }
+
+  .builder__instruction {
+    margin: 1.5rem 0 0;
+    font: 800 0.68rem/1.4 JetBrains Mono, monospace;
+    text-transform: uppercase;
+  }
+
+  .match-card {
+    position: relative;
+    min-width: 0;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(circle at 88% 12%, rgba(199, 255, 63, 0.17), transparent 25%),
+      var(--ink);
+    color: var(--paper);
+    overflow: hidden;
+  }
+
+  .match-card::after {
+    content: '';
+    position: absolute;
+    right: -100px;
+    bottom: -160px;
+    width: 390px;
+    aspect-ratio: 1;
+    border: 1px solid rgba(199, 255, 63, 0.25);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 50px rgba(199, 255, 63, 0.04),
+      0 0 0 100px rgba(199, 255, 63, 0.03);
+  }
+
+  .match-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .match-card__top {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    font: 800 0.62rem/1 JetBrains Mono, monospace;
+  }
+
+  .match-card__top strong {
+    color: var(--acid);
+  }
+
+  .match-card__rank {
+    margin-top: 2rem;
+  }
+
+  .match-card__rank span {
+    color: var(--orange);
+    font-size: 3rem;
+    font-weight: 900;
+  }
+
+  .match-card__rank small {
+    margin-left: 0.5rem;
+    font: 800 0.58rem/1 JetBrains Mono, monospace;
+  }
+
+  .match-card h3 {
+    margin: 1.2rem 0 0;
+    color: var(--acid);
+    font-size: clamp(3rem, 5vw, 6rem);
+    line-height: 0.88;
+    letter-spacing: -0.07em;
+    text-transform: uppercase;
+  }
+
+  .match-card h4 {
+    margin: 0.7rem 0 0;
+    font-family: Georgia, serif;
+    font-size: 1.7rem;
+    font-style: italic;
+  }
+
+  .match-card__signal {
+    margin: 0.7rem 0 1.5rem;
+    color: var(--blue);
+    font: 800 0.62rem/1 JetBrains Mono, monospace;
+    text-transform: uppercase;
+  }
+
+  .match-card > p:not(.match-card__signal) {
+    max-width: 540px;
+    font-family: Georgia, serif;
+    font-size: 1.08rem;
+    line-height: 1.5;
+  }
+
+  .match-card blockquote {
+    margin: 1.5rem 0;
+    padding: 1rem 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    color: #ffc0a9;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .match-card__signature {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .match-card__signature span {
+    font: 800 0.56rem/1 JetBrains Mono, monospace;
+  }
+
+  .match-card__signature strong {
+    color: var(--acid);
+    font-size: 1.2rem;
+  }
+
+  .match-card__actions {
+    margin: 2rem 0 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .match-card__actions button {
+    border-color: var(--paper);
+    color: var(--paper);
+  }
+
+  .match-card__actions button:first-child {
+    border-color: var(--acid);
+    background: var(--acid);
+    color: var(--ink);
+  }
+
+  .match-card > small {
+    color: rgba(244, 242, 232, 0.55);
+    font: 700 0.56rem/1.4 JetBrains Mono, monospace;
+  }
+
+  .return-door {
+    padding: clamp(5rem, 9vw, 9rem) 4vw;
+    display: grid;
+    grid-template-columns: 1.25fr 0.75fr;
+    gap: 5vw;
+    background: var(--acid);
+    color: var(--ink);
+  }
+
+  .return-door .section-index {
+    color: #596a00;
+  }
+
+  .return-door > div > p {
+    max-width: 800px;
+    font-family: Georgia, serif;
+    font-size: 1.25rem;
+    line-height: 1.55;
+  }
+
+  .return-door__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .boundary {
+    padding: clamp(5rem, 9vw, 9rem) 4vw;
+    display: grid;
+    grid-template-columns: 0.35fr 1.65fr;
+    gap: 4vw;
+    background: var(--orange);
+    color: var(--ink);
+  }
+
+  .boundary .section-index {
+    color: #6f1d0b;
+  }
+
+  .boundary div > p {
+    max-width: 900px;
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+
+  .feature-footer {
+    padding: clamp(4rem, 8vw, 8rem) 4vw;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 4vw;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .feature-footer span {
+    font: 800 0.62rem/1 JetBrains Mono, monospace;
+  }
+
+  .feature-footer nav {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .feature-footer a {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--ink);
+    color: inherit;
+    font-weight: 900;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  @keyframes scan {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .radar::before { animation: none; }
+    * { scroll-behavior: auto !important; }
+  }
+
+  @media (hover: hover) {
+    .mast a:hover,
+    .feature-footer a:hover {
+      color: var(--orange);
+    }
+
+    .front-card:hover {
+      box-shadow: inset 0 0 0 4px var(--band);
+    }
+  }
+
+  @media (max-width: 1120px) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+    }
+
+    .hero__legend {
+      grid-column: 1 / -1;
+      padding: 1rem 0 0;
+      border-top: 1px solid var(--line);
+      border-left: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .hero__legend small {
+      grid-column: 1 / -1;
+    }
+
+    .front-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .weather-band--storm-cell .front-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .front-card:nth-child(odd) {
+      border-left: 1px solid var(--ink);
+    }
+  }
+
+  @media (max-width: 820px) {
+    .mast {
+      grid-template-columns: 1fr auto;
+    }
+
+    .mast > span {
+      display: none;
+    }
+
+    .hero,
+    .baseline,
+    .front-map__header,
+    .cadence header,
+    .builder > header,
+    .return-door,
+    .boundary,
+    .feature-footer {
+      grid-template-columns: 1fr;
+    }
+
+    .radar {
+      width: min(82vw, 520px);
+    }
+
+    .baseline__receipt {
+      max-width: 420px;
+    }
+
+    .front-map__tools {
+      justify-self: start;
+    }
+
+    .room-week {
+      grid-template-columns: 1fr;
+    }
+
+    .room-week figure {
+      min-height: 70svh;
+      max-height: 900px;
+    }
+
+    .cadence li {
+      grid-template-columns: 7rem 1fr;
+    }
+
+    .cadence li p {
+      grid-column: 2;
+    }
+
+    .builder__workbench {
+      grid-template-columns: 1fr;
+    }
+
+    .builder__controls {
+      border-right: 0;
+      border-bottom: 2px solid var(--ink);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .mast {
+      padding: 0 1rem;
+    }
+
+    .mast nav a:first-child {
+      display: none;
+    }
+
+    .hero {
+      min-height: auto;
+      padding: 4rem 1rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(4.1rem, 20vw, 5.6rem);
+    }
+
+    .hero__actions {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .hero__actions a {
+      text-align: center;
+    }
+
+    .hero__legend {
+      grid-template-columns: 1fr;
+    }
+
+    .baseline,
+    .front-map,
+    .cadence,
+    .builder,
+    .return-door,
+    .boundary,
+    .feature-footer {
+      padding: 4.5rem 1rem;
+    }
+
+    .baseline h2,
+    .front-map h2,
+    .room-week h2,
+    .cadence h2,
+    .builder h2,
+    .return-door h2,
+    .boundary h2,
+    .feature-footer h2 {
+      font-size: clamp(3.2rem, 16vw, 5.2rem);
+    }
+
+    .weather-band > header {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .front-grid,
+    .weather-band--storm-cell .front-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .front-card,
+    .front-card:nth-child(odd) {
+      border-left: 1px solid var(--ink);
+    }
+
+    .room-week figure {
+      min-height: 58svh;
+    }
+
+    .room-week__copy {
+      padding: 4.5rem 1rem;
+    }
+
+    .room-week__columns {
+      grid-template-columns: 1fr;
+    }
+
+    .cadence li {
+      grid-template-columns: 1fr;
+      gap: 0.7rem;
+    }
+
+    .cadence li p {
+      grid-column: auto;
+    }
+
+    .builder__controls,
+    .match-card {
+      padding: 1rem;
+    }
+
+    .builder__axes label {
+      grid-template-columns: 1fr 3rem;
+    }
+
+    .builder__axes input {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    .builder__axes output {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .match-card__actions {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
