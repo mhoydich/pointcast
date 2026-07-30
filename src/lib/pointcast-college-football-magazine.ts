@@ -564,6 +564,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'The PointCast 50 for 2026: the coach, the seven rooms around the coach, and the next question.',
       href: '/25/magazine/coaches-50',
     },
+    {
+      number: '11',
+      name: 'Coach Weather',
+      kicker: 'Pressure / movement / receipts / return rhythm',
+      description: 'The recurring forecast around the ranking: twelve preseason fronts, the exact room that can move, and a local program builder.',
+      href: '/25/magazine/coach-weather',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
