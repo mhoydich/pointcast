@@ -46,6 +46,9 @@ test('PING V1 publishes a finite, truthful product and production contract', () 
   assert.equal(ping.truth.productionCryptoComplete, false);
   assert.equal(ping.alpha.revisedPlanningBomUsd, 3855);
   assert.equal(ping.alpha.orderableAsWritten, false);
+  assert.equal(ping.alpha.proofPairPartsCeilingUsd, 1250);
+  assert.equal(ping.truth.publicDisplayUnitsVisible, 7);
+  assert.equal(ping.truth.exactComputeReferencePublicStockVisible, true);
   assert.equal(ping.productionRing.length, 6);
   assert.match(ping.goToMarket.launchRule, /No interviews are required before Alpha/);
   assert.match(ping.boundaries.join(' '), /browser-only rehearsal/);
@@ -59,6 +62,10 @@ test('PING carries capital, sourcing, hardware, and claim-release gates', () => 
   assert.equal(ping.capital.immediateRoute.publishedCapUsd, 1500000);
   assert.match(ping.capital.immediateRoute.formStatus, /not submitted/);
   assert.match(ping.capital.immediateRoute.termsBoundary, /remain unknown/);
+  assert.equal(ping.capital.secondaryRoute.amountUsd, 500000);
+  assert.match(ping.capital.secondaryRoute.publishedDeal, /uncapped MFN SAFE/);
+  assert.equal(ping.truth.ycApplicationPrepared, false);
+  assert.equal(ping.truth.ycSubmissionApproved, false);
   assert.deepEqual(
     ping.buildSequence.map((step) => step.gate),
     ['G0', 'G1', 'G2', 'G3', 'G4', 'G5'],
@@ -120,9 +127,13 @@ test('PING is published across human, machine, Block, local, and agent discovery
   assert.match(builtPage, /ONE LITTLE/);
   assert.match(builtPage, /NO APPLICATION SUBMITTED/);
   assert.match(builtPage, /ESP32 TARGET LINKED/);
+  assert.match(builtPage, /PROOF-PAIR WAVE/i);
+  assert.match(builtPage, /late Fall 2026 YC application/i);
   assert.equal(manifest.truth.physicalUnitsBuilt, 0);
   assert.equal(manifest.truth.hostTestsPassed, 26);
   assert.equal(manifest.truth.esp32CompileTargetPassed, true);
+  assert.equal(manifest.truth.proofPairPartsCeilingUsd, 1250);
+  assert.equal(manifest.truth.ycApplicationPrepared, false);
   assert.equal(manifest.blockUrl, 'https://pointcast.xyz/b/0547');
 });
 
