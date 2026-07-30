@@ -578,6 +578,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A live social game with one rule: the school whose people click the button most leads the room.',
       href: '/25/fan-clique',
     },
+    {
+      number: '13',
+      name: 'The Rally Desk',
+      kicker: 'Recruit / relay / make the room visible',
+      description: 'A 35-school promotion kit with team links, copyable calls, original campaign art, and one public media invitation.',
+      href: '/25/fan-clique/rally',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
