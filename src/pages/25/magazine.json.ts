@@ -13,6 +13,10 @@ import {
   COACH_WEATHER_FEATURE,
   COACH_WEATHER_FRONTS,
 } from '../../lib/pointcast-coach-weather';
+import {
+  FAN_CLIQUE_FEATURE,
+  FAN_CLIQUE_TEAMS,
+} from '../../lib/pointcast-fan-clique';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -40,6 +44,15 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: FAN_CLIQUE_FEATURE.title,
+      subtitle: FAN_CLIQUE_FEATURE.subtitle,
+      human: FAN_CLIQUE_FEATURE.canonical,
+      machine: FAN_CLIQUE_FEATURE.machineEdition,
+      liveEndpoint: FAN_CLIQUE_FEATURE.liveEndpoint,
+      eligiblePrograms: FAN_CLIQUE_TEAMS.length,
+      score: 'accepted clicks',
+    },
     {
       title: COACH_WEATHER_FEATURE.title,
       subtitle: COACH_WEATHER_FEATURE.subtitle,
@@ -113,6 +126,9 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     soundOfFocusInteractiveLab: POINTCAST_SOUND_OF_FOCUS.interactiveLab,
     coachWeather: COACH_WEATHER_FEATURE.canonical,
     coachWeatherJson: COACH_WEATHER_FEATURE.machineEdition,
+    fanClique: FAN_CLIQUE_FEATURE.canonical,
+    fanCliqueJson: FAN_CLIQUE_FEATURE.machineEdition,
+    fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {
