@@ -51,7 +51,7 @@ test('the El Segundo radius desk filters eight current independent resources wit
     read('src/pages/beach-commons/v16.astro'),
     read('src/lib/beach-commons-v16.ts'),
     read('src/pages/beach-commons/v16.json.ts'),
-    read('src/content/blocks/0543.json'),
+    read('src/content/blocks/0544.json'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -84,7 +84,7 @@ test('V16 includes two created Spotify companions and declares the 40-pin Pinter
   const [page, data, blockText] = await Promise.all([
     read('src/pages/beach-commons/v16.astro'),
     read('src/lib/beach-commons-v16.ts'),
-    read('src/content/blocks/0543.json'),
+    read('src/content/blocks/0544.json'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -103,7 +103,7 @@ test('V16 keeps activity, place, reporting, and affiliation boundaries explicit'
   const [page, endpoint, blockText] = await Promise.all([
     read('src/pages/beach-commons/v16.astro'),
     read('src/pages/beach-commons/v16.json.ts'),
-    read('src/content/blocks/0543.json'),
+    read('src/content/blocks/0544.json'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -118,7 +118,7 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeEdition] =
     await Promise.all([
       read('src/pages/beach-commons/v16.json.ts'),
-      read('src/content/blocks/0543.json'),
+      read('src/content/blocks/0544.json'),
       read('src/lib/beach-commons-series.ts'),
       read('src/pages/sitemap-discovery.xml.ts'),
       read('public/llms.txt'),
@@ -129,19 +129,19 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   const block = JSON.parse(blockText);
 
   assert.match(endpoint, /Access-Control-Allow-Origin/);
-  assert.equal(block.id, '0543');
+  assert.equal(block.id, '0544');
   assert.equal(block.author, 'codex');
   assert.equal(block.meta.visualPlates, 3);
   assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v16');
   assert.match(series, /currentEdition: 16/);
-  assert.match(series, /blockId: '0543'/);
+  assert.match(series, /blockId: '0544'/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v16'/);
   assert.match(llms, /PointCast Field Study 016/);
   assert.match(llmsFull, /THE BILLION LITTLE NEW YORKERS/);
   assert.match(homepage, /href="\/beach-commons\/v16"/);
-  assert.match(homepage, /Block 0543/);
+  assert.match(homepage, /Block 0544/);
   assert.match(homeEdition, /href="\/beach-commons\/v16"/);
-  assert.match(homeEdition, /New<br \/>0543/);
+  assert.match(homeEdition, /New<br \/>0544/);
 });
 
 test('V16 images have intended edition and social dimensions', async () => {
@@ -154,7 +154,7 @@ test('V16 images have intended edition and social dimensions', async () => {
   );
   assert.deepEqual(assets, assetNames.map(() => ({ width: 1536, height: 1024 })));
 
-  const socialUrl = new URL('../public/images/og/b/0543.png', import.meta.url);
+  const socialUrl = new URL('../public/images/og/b/0544.png', import.meta.url);
   await access(socialUrl);
   assert.deepEqual(pngSize(await readFile(socialUrl)), { width: 1200, height: 630 });
 });

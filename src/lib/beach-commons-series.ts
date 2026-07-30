@@ -270,7 +270,7 @@ export const BEACH_COMMONS_EDITIONS: readonly BeachCommonsEdition[] = [
     image: '/beach-commons/v16/assets/01-billion-little-new-yorkers.png',
     alt: 'Students and volunteers work around a giant oyster-shaped civic map of New York Harbor in an editorial cut-paper illustration.',
     path: 'coast',
-    blockId: '0543',
+    blockId: '0544',
     measure: '2 scoreboards · 8 local doors',
     current: true,
   },

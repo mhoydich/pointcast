@@ -6,7 +6,7 @@ export const BEACH_COMMONS_V16 = {
   dek: 'The oysters did not save the harbor. The project may have saved the idea of a harbor.',
   url: 'https://pointcast.xyz/beach-commons/v16',
   jsonUrl: 'https://pointcast.xyz/beach-commons/v16.json',
-  blockUrl: 'https://pointcast.xyz/b/0543',
+  blockUrl: 'https://pointcast.xyz/b/0544',
   publishedAt: '2026-07-29',
   updatedAt: '2026-07-29T15:30:00-07:00',
   status:
