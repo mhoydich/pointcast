@@ -571,6 +571,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'The recurring forecast around the ranking: twelve preseason fronts, the exact room that can move, and a local program builder.',
       href: '/25/magazine/coach-weather',
     },
+    {
+      number: '12',
+      name: 'Fan Clique',
+      kicker: 'Choose / click / summon the crowd',
+      description: 'A live social game with one rule: the school whose people click the button most leads the room.',
+      href: '/25/fan-clique',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',

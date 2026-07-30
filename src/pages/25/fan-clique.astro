@@ -1,0 +1,1119 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  FAN_CLIQUE_FEATURE,
+  FAN_CLIQUE_TEAMS,
+} from '../../lib/pointcast-fan-clique';
+
+const feature = FAN_CLIQUE_FEATURE;
+const conferences = Array.from(new Set(FAN_CLIQUE_TEAMS.map((team) => team.conference)));
+const clientTeams = FAN_CLIQUE_TEAMS.map((team) => ({
+  slug: team.slug,
+  school: team.school,
+  short: team.short,
+  conference: team.conference,
+  primary: team.primary,
+  secondary: team.secondary,
+  paper: team.paper,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebApplication',
+      name: `${feature.title} — ${feature.subtitle}`,
+      description: feature.dek,
+      url: feature.canonical,
+      applicationCategory: 'GameApplication',
+      operatingSystem: 'Web',
+      isAccessibleForFree: true,
+      datePublished: feature.publishedAt,
+      publisher: { '@type': 'Organization', name: 'PointCast' },
+    },
+    {
+      '@type': 'ItemList',
+      name: 'Fan Clique eligible college-football programs',
+      numberOfItems: FAN_CLIQUE_TEAMS.length,
+      itemListElement: FAN_CLIQUE_TEAMS.map((team, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: team.school,
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title={`${feature.title} — ${feature.subtitle}`}
+  description={feature.dek}
+  image={feature.socialImage}
+  themeColor="#d8ff3e"
+  jsonLd={jsonLd}
+  alternates={[
+    {
+      type: 'application/json',
+      href: '/25/fan-clique.json',
+      title: 'Fan Clique rules and eligible programs',
+    },
+  ]}
+  immersive={true}
+  showNetworkStrip={false}
+>
+  <main class="clique">
+    <header class="mast">
+      <a class="mast__brand" href="/" aria-label="PointCast home">POINTCAST</a>
+      <span>COLLEGE FOOTBALL · CROWD DESK 001</span>
+      <nav aria-label="Fan Clique navigation">
+        <a href="/25">THE 25</a>
+        <a href="/25/magazine">MAGAZINE</a>
+        <a href="/25/fan-clique.json">JSON ↗</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="clique-title">
+      <div class="hero__copy">
+        <p class="eyebrow">A VERY SIMPLE SOCIAL GAME · 2026</p>
+        <h1 id="clique-title">FAN<br /><em>CLIQUE</em></h1>
+        <p class="hero__dek">{feature.dek}</p>
+        <a class="hero__button" href="#crowd-board">Find my team ↓</a>
+      </div>
+
+      <aside class="scoreboard" aria-label="Live Fan Clique score">
+        <div class="scoreboard__status">
+          <i data-live-light></i>
+          <span data-live-label>OPENING THE GATES</span>
+        </div>
+        <div class="scoreboard__leader">
+          <small>CURRENTLY LOUDEST</small>
+          <strong data-leader-school>FIRST CLICK TAKES IT</strong>
+          <span data-leader-count>0 CLICKS</span>
+        </div>
+        <div class="scoreboard__total">
+          <small>PEOPLE IN THE ROOM</small>
+          <strong data-total-clicks>0</strong>
+        </div>
+      </aside>
+    </section>
+
+    <section class="rule-strip" aria-label="Fan Clique rules">
+      <span>01 · PICK YOUR SCHOOL</span>
+      <span>02 · CLICK ONCE</span>
+      <span>03 · SEND IN YOUR PEOPLE</span>
+      <span>04 · MOST CLICKS LEADS</span>
+    </section>
+
+    <section class="top-rail" aria-labelledby="top-rail-title">
+      <header>
+        <p>THE FRONT ROW / LIVE</p>
+        <h2 id="top-rail-title">Who found<br />the room?</h2>
+      </header>
+      <ol data-top-five>
+        {Array.from({ length: 5 }, (_, index) => (
+          <li>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <strong>{index === 0 ? 'THE GATES ARE OPEN' : 'WAITING FOR A CROWD'}</strong>
+            <small>0 CLICKS</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="crowd-board" id="crowd-board" aria-labelledby="crowd-board-title">
+      <header class="crowd-board__head">
+        <div>
+          <p>THE WHOLE FIELD / {FAN_CLIQUE_TEAMS.length} PROGRAMS</p>
+          <h2 id="crowd-board-title">Vote for<br /><em>my team.</em></h2>
+        </div>
+        <div class="crowd-board__intro">
+          <p>
+            Choose a school. The big button appears. One accepted click adds
+            one point to the live board.
+          </p>
+          <label>
+            <span>FIND A SCHOOL</span>
+            <input
+              type="search"
+              placeholder="Type a school or city"
+              autocomplete="off"
+              data-team-search
+            />
+          </label>
+        </div>
+      </header>
+
+      <div class="filters" aria-label="Filter schools by conference">
+        <button type="button" data-conference="all" aria-pressed="true">ALL {FAN_CLIQUE_TEAMS.length}</button>
+        {conferences.map((conference) => (
+          <button type="button" data-conference={conference} aria-pressed="false">{conference}</button>
+        ))}
+      </div>
+
+      <p class="board-status" data-board-status role="status" aria-live="polite">
+        Live counts are arriving.
+      </p>
+
+      <div class="team-grid" data-team-grid>
+        {FAN_CLIQUE_TEAMS.map((team) => (
+          <article
+            class="team-card"
+            style={`--team:${team.primary};--team-two:${team.secondary};--team-paper:${team.paper}`}
+            data-team-card
+            data-slug={team.slug}
+            data-school={team.school.toLowerCase()}
+            data-city={team.city.toLowerCase()}
+            data-conference={team.conference}
+          >
+            <button
+              type="button"
+              data-team-select
+              aria-pressed="false"
+              aria-label={`Choose ${team.school}`}
+            >
+              <span class="team-card__rank" data-rank>—</span>
+              <svg viewBox="0 0 100 100" role="img" aria-label={`${team.markName}, PointCast original abstract mark`}>
+                {team.markPaths.map((path) => <path d={path}></path>)}
+              </svg>
+              <span class="team-card__identity">
+                <small>{team.conference} · {team.city}</small>
+                <strong>{team.school}</strong>
+                <em>CHOOSE THIS SCHOOL</em>
+              </span>
+              <span class="team-card__score">
+                <strong data-count>0</strong>
+                <small>CLICKS</small>
+              </span>
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <p class="no-results" data-no-results hidden>
+        No school matched that search. Clear it and open the whole field.
+      </p>
+    </section>
+
+    <section class="meaning" aria-labelledby="meaning-title">
+      <p>WHAT THE NUMBER MEANS</p>
+      <div>
+        <h2 id="meaning-title">Presence,<br />not power.</h2>
+        <p>
+          This is not which team would win next Saturday. It is not enrollment,
+          television audience, alumni wealth, or a scientific fan-base survey.
+          It is simply the number of accepted clicks each school received in
+          this one PointCast room.
+        </p>
+      </div>
+      <div class="meaning__receipt">
+        <span>ACCOUNT REQUIRED</span><strong>NO</strong>
+        <span>PERSONAL PROFILE</span><strong>NONE</strong>
+        <span>COUNTED CLICKS</span><strong>ONE / BROWSER</strong>
+      </div>
+    </section>
+
+    <footer>
+      <div>
+        <span>POINTCAST · CROWD DESK 001</span>
+        <span>LIVE IN 2026</span>
+      </div>
+      <p>YOUR PEOPLE<br />WERE HERE.</p>
+      <nav aria-label="Related PointCast college football pages">
+        <a href="/25">25 FOR REASONS</a>
+        <a href="/25/magazine">THE MAGAZINE</a>
+        <a href="/mascot-battler">MASCOT BATTLER</a>
+        <a href="/25/2029/song-yard">THE SONG YARD</a>
+      </nav>
+      <small>{feature.boundary}</small>
+    </footer>
+
+    <aside class="vote-dock" data-vote-dock hidden aria-label="Vote for selected school">
+      <div class="vote-dock__mark" data-dock-mark aria-hidden="true"></div>
+      <div class="vote-dock__school">
+        <small>YOUR SCHOOL</small>
+        <strong data-selected-school>CHOOSE ABOVE</strong>
+        <span data-selected-position>THE BOARD IS OPEN</span>
+      </div>
+      <button type="button" data-vote-button>VOTE FOR MY TEAM</button>
+      <button type="button" class="vote-dock__share" data-share-button>SHARE THE CALL ↗</button>
+    </aside>
+  </main>
+
+  <script
+    type="application/json"
+    id="fan-clique-teams"
+    set:html={JSON.stringify(clientTeams)}
+  ></script>
+
+  <script is:inline>
+    (() => {
+      const TYPE = 'pointcast-fan-clique-v1';
+      const STORAGE_ID = 'pc-fan-clique-v1-voter-id';
+      const STORAGE_VOTE = 'pc-fan-clique-v1-vote';
+      const teams = JSON.parse(document.getElementById('fan-clique-teams')?.textContent || '[]');
+      const teamMap = new Map(teams.map((team) => [team.slug, team]));
+      const cards = Array.from(document.querySelectorAll('[data-team-card]'));
+      const dock = document.querySelector('[data-vote-dock]');
+      const voteButton = document.querySelector('[data-vote-button]');
+      const shareButton = document.querySelector('[data-share-button]');
+      const selectedSchool = document.querySelector('[data-selected-school]');
+      const selectedPosition = document.querySelector('[data-selected-position]');
+      const dockMark = document.querySelector('[data-dock-mark]');
+      const boardStatus = document.querySelector('[data-board-status]');
+      const topFive = Array.from(document.querySelectorAll('[data-top-five] li'));
+      const totalClicks = document.querySelector('[data-total-clicks]');
+      const leaderSchool = document.querySelector('[data-leader-school]');
+      const leaderCount = document.querySelector('[data-leader-count]');
+      const liveLight = document.querySelector('[data-live-light]');
+      const liveLabel = document.querySelector('[data-live-label]');
+      const search = document.querySelector('[data-team-search]');
+      const noResults = document.querySelector('[data-no-results]');
+      let selected = null;
+      let standings = [];
+      let activeConference = 'all';
+      let recordedVote = null;
+
+      const countLabel = (value) =>
+        `${Number(value).toLocaleString()} ${Number(value) === 1 ? 'CLICK' : 'CLICKS'}`;
+
+      const safeRead = (key) => {
+        try { return localStorage.getItem(key); } catch { return null; }
+      };
+
+      const safeWrite = (key, value) => {
+        try { localStorage.setItem(key, value); } catch {}
+      };
+
+      const getVoterId = () => {
+        const existing = safeRead(STORAGE_ID);
+        if (existing && /^fc_[a-z0-9_-]{24,80}$/.test(existing)) return existing;
+        const bytes = new Uint8Array(18);
+        crypto.getRandomValues(bytes);
+        const generated = `fc_${Array.from(bytes, (byte) => byte.toString(36).padStart(2, '0')).join('')}`;
+        safeWrite(STORAGE_ID, generated);
+        return generated;
+      };
+
+      const updateDock = () => {
+        if (!selected || !dock) {
+          if (dock) dock.hidden = true;
+          return;
+        }
+        const team = teamMap.get(selected);
+        const standing = standings.find((entry) => entry.slug === selected);
+        dock.hidden = false;
+        dock.style.setProperty('--team', team.primary);
+        dock.style.setProperty('--team-two', team.secondary);
+        selectedSchool.textContent = team.school;
+        selectedPosition.textContent = standing?.count
+          ? `#${standing.rank} · ${countLabel(standing.count)}`
+          : 'ONE CLICK CAN TAKE THE LEAD';
+        dockMark.textContent = team.short;
+
+        if (recordedVote) {
+          const votedTeam = teamMap.get(recordedVote);
+          voteButton.disabled = true;
+          voteButton.textContent = recordedVote === selected
+            ? 'YOUR CLICK IS COUNTED ✓'
+            : `CLICK ALREADY WENT TO ${votedTeam?.short || 'YOUR TEAM'}`;
+        } else {
+          voteButton.disabled = false;
+          voteButton.textContent = 'VOTE FOR MY TEAM';
+        }
+      };
+
+      const selectTeam = (slug, scroll = false) => {
+        if (!teamMap.has(slug)) return;
+        selected = slug;
+        cards.forEach((card) => {
+          const active = card.dataset.slug === slug;
+          card.classList.toggle('is-selected', active);
+          card.querySelector('[data-team-select]')?.setAttribute('aria-pressed', String(active));
+          if (active && scroll) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        updateDock();
+        const url = new URL(window.location.href);
+        url.searchParams.set('team', slug);
+        history.replaceState({}, '', url);
+      };
+
+      const renderStandings = (data) => {
+        const previousCounts = new Map(standings.map((entry) => [entry.slug, entry.count]));
+        standings = (data.standings || [])
+          .map((entry) => ({
+            ...entry,
+            // A later GET may briefly reach a KV edge that has not observed
+            // this browser's accepted write. Never animate a count backward.
+            count: Math.max(Number(entry.count) || 0, previousCounts.get(entry.slug) || 0),
+          }))
+          .sort((a, b) => b.count - a.count || a.fieldNumber - b.fieldNumber)
+          .map((entry, index) => ({ ...entry, rank: index + 1 }));
+        const standingMap = new Map(standings.map((entry) => [entry.slug, entry]));
+        const renderedTotal = standings.reduce((sum, entry) => sum + entry.count, 0);
+        const renderedLeader = standings[0]?.count > 0 ? standings[0] : null;
+
+        cards.forEach((card) => {
+          const standing = standingMap.get(card.dataset.slug);
+          if (!standing) return;
+          card.style.order = String(standing.rank);
+          card.querySelector('[data-rank]').textContent = String(standing.rank).padStart(2, '0');
+          card.querySelector('[data-count]').textContent = Number(standing.count).toLocaleString();
+          card.classList.toggle('has-clicks', standing.count > 0);
+        });
+
+        topFive.forEach((row, index) => {
+          const standing = standings[index];
+          if (!standing || renderedTotal === 0) return;
+          row.querySelector('span').textContent = String(index + 1).padStart(2, '0');
+          row.querySelector('strong').textContent = standing.school;
+          row.querySelector('small').textContent = countLabel(standing.count);
+        });
+
+        totalClicks.textContent = renderedTotal.toLocaleString();
+        if (renderedLeader) {
+          leaderSchool.textContent = renderedLeader.school;
+          leaderCount.textContent = countLabel(renderedLeader.count);
+        } else {
+          leaderSchool.textContent = 'FIRST CLICK TAKES IT';
+          leaderCount.textContent = '0 CLICKS';
+        }
+
+        liveLight?.classList.toggle('is-live', Boolean(data.live));
+        liveLabel.textContent = data.live ? 'LIVE BOARD' : 'HONEST ZERO · STORE OFFLINE';
+        boardStatus.textContent = data.live
+          ? `${countLabel(renderedTotal)} across ${teams.length} schools. Updated just now.`
+          : 'The board is visible, but counting is temporarily offline.';
+        updateDock();
+      };
+
+      const refresh = async () => {
+        try {
+          const response = await fetch('/api/fan-clique', {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (!response.ok) throw new Error(`Standings returned ${response.status}`);
+          renderStandings(await response.json());
+        } catch {
+          liveLabel.textContent = 'BOARD RECONNECTING';
+          boardStatus.textContent = 'The live count did not arrive. Your school choices are still here.';
+        }
+      };
+
+      const applyFilters = () => {
+        const term = String(search?.value || '').trim().toLowerCase();
+        let visible = 0;
+        cards.forEach((card) => {
+          const conferenceMatch =
+            activeConference === 'all' || card.dataset.conference === activeConference;
+          const searchMatch =
+            !term || card.dataset.school.includes(term) || card.dataset.city.includes(term);
+          const show = conferenceMatch && searchMatch;
+          card.hidden = !show;
+          if (show) visible += 1;
+        });
+        noResults.hidden = visible > 0;
+      };
+
+      cards.forEach((card) => {
+        card.querySelector('[data-team-select]')?.addEventListener('click', () => {
+          selectTeam(card.dataset.slug);
+        });
+      });
+
+      document.querySelectorAll('[data-conference]').forEach((button) => {
+        button.addEventListener('click', () => {
+          activeConference = button.dataset.conference;
+          document.querySelectorAll('[data-conference]').forEach((peer) => {
+            peer.setAttribute('aria-pressed', String(peer === button));
+          });
+          applyFilters();
+        });
+      });
+
+      search?.addEventListener('input', applyFilters);
+
+      voteButton?.addEventListener('click', async () => {
+        if (!selected || recordedVote) return;
+        voteButton.disabled = true;
+        voteButton.textContent = 'COUNTING YOUR CLICK…';
+        boardStatus.textContent = `Sending one click to ${teamMap.get(selected).school}.`;
+
+        try {
+          const response = await fetch('/api/fan-clique', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+              type: TYPE,
+              team: selected,
+              voterId: getVoterId(),
+            }),
+          });
+          const data = await response.json();
+
+          if (response.status === 409 && data.votedFor) {
+            recordedVote = data.votedFor;
+            safeWrite(STORAGE_VOTE, recordedVote);
+            renderStandings({ ...data, live: true });
+            boardStatus.textContent =
+              `Your click was already counted for ${teamMap.get(recordedVote)?.school || 'your team'}.`;
+            return;
+          }
+
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Vote was not accepted');
+          recordedVote = selected;
+          safeWrite(STORAGE_VOTE, recordedVote);
+          renderStandings({ ...data, live: true });
+          boardStatus.textContent =
+            `${teamMap.get(selected).school} is now #${data.rank} with ${countLabel(data.count)}. Your click is counted.`;
+          dock.animate?.(
+            [
+              { transform: 'translateY(0) scale(1)' },
+              { transform: 'translateY(-8px) scale(1.015)' },
+              { transform: 'translateY(0) scale(1)' },
+            ],
+            { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' },
+          );
+        } catch {
+          voteButton.disabled = false;
+          voteButton.textContent = 'TRY THE CLICK AGAIN';
+          boardStatus.textContent = 'That click did not land. Nothing was counted; try once more.';
+        }
+      });
+
+      shareButton?.addEventListener('click', async () => {
+        if (!selected) return;
+        const team = teamMap.get(selected);
+        const standing = standings.find((entry) => entry.slug === selected);
+        const url = new URL('/25/fan-clique', window.location.origin);
+        url.searchParams.set('team', selected);
+        const text = standing?.count
+          ? `${team.school} has ${countLabel(standing.count).toLowerCase()} in PointCast Fan Clique. Bring the crowd.`
+          : `${team.school} needs the first click in PointCast Fan Clique. Bring the crowd.`;
+        try {
+          if (navigator.share) {
+            await navigator.share({
+              title: `${team.school} · Fan Clique`,
+              text,
+              url: url.toString(),
+            });
+          } else {
+            await navigator.clipboard.writeText(`${text} ${url}`);
+            shareButton.textContent = 'LINK COPIED ✓';
+            setTimeout(() => { shareButton.textContent = 'SHARE THE CALL ↗'; }, 1800);
+          }
+        } catch {}
+      });
+
+      recordedVote = safeRead(STORAGE_VOTE);
+      if (recordedVote && !teamMap.has(recordedVote)) recordedVote = null;
+      const requested = new URL(window.location.href).searchParams.get('team');
+      if (requested && teamMap.has(requested)) selectTeam(requested);
+      else if (recordedVote) selectTeam(recordedVote);
+
+      refresh();
+      window.setInterval(() => {
+        if (document.visibilityState === 'visible') refresh();
+      }, 30000);
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  :global(html) { scroll-behavior: smooth; }
+  :global(body) { margin: 0; background: #111713; }
+
+  .clique {
+    --ink: #111713;
+    --paper: #f3eddb;
+    --signal: #d8ff3e;
+    --blue: #243eff;
+    --orange: #ff5b35;
+    min-height: 100vh;
+    color: var(--ink);
+    background: var(--paper);
+    font-family: var(--pc-font-sans);
+  }
+
+  .mast {
+    position: relative;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    min-height: 64px;
+    padding: 0 clamp(1rem, 4vw, 4rem);
+    border-bottom: 2px solid var(--ink);
+    background: var(--signal);
+    font-size: 0.64rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  .mast a { color: inherit; text-decoration: none; }
+  .mast__brand { font-size: 0.78rem; }
+  .mast nav { display: flex; justify-content: flex-end; gap: 1.1rem; }
+  .mast nav a:hover,
+  .mast nav a:focus-visible { text-decoration: underline; text-decoration-thickness: 2px; }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+    min-height: 760px;
+    color: var(--paper);
+    background:
+      radial-gradient(circle at 18% 18%, rgba(216, 255, 62, 0.12), transparent 23rem),
+      repeating-linear-gradient(120deg, transparent 0 72px, rgba(255, 255, 255, 0.035) 73px 75px),
+      var(--ink);
+  }
+  .hero__copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(3rem, 8vw, 8rem) clamp(1rem, 6vw, 6rem);
+  }
+  .eyebrow {
+    margin: 0 0 2rem;
+    color: var(--signal);
+    font-size: 0.68rem;
+    font-weight: 950;
+    letter-spacing: 0.12em;
+  }
+  .hero h1 {
+    margin: 0;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    font-size: clamp(7rem, 18vw, 17rem);
+    font-weight: 900;
+    letter-spacing: -0.065em;
+    line-height: 0.7;
+    text-transform: uppercase;
+  }
+  .hero h1 em {
+    display: inline-block;
+    color: var(--signal);
+    font-style: normal;
+    transform: translateX(clamp(0px, 7vw, 96px));
+  }
+  .hero__dek {
+    max-width: 720px;
+    margin: 4rem 0 2rem;
+    font-size: clamp(1.25rem, 2.3vw, 2.2rem);
+    font-weight: 750;
+    line-height: 1.15;
+  }
+  .hero__button {
+    width: fit-content;
+    min-height: 52px;
+    padding: 1rem 1.2rem;
+    border: 2px solid var(--signal);
+    color: var(--ink);
+    background: var(--signal);
+    font-size: 0.67rem;
+    font-weight: 950;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .hero__button:hover,
+  .hero__button:focus-visible { color: var(--paper); background: transparent; }
+
+  .scoreboard {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-width: 0;
+    border-left: 2px solid var(--paper);
+    color: var(--ink);
+    background: var(--orange);
+  }
+  .scoreboard__status {
+    display: flex;
+    gap: 0.55rem;
+    align-items: center;
+    padding: 1.2rem;
+    border-bottom: 2px solid var(--ink);
+    font-size: 0.65rem;
+    font-weight: 950;
+    letter-spacing: 0.1em;
+  }
+  .scoreboard__status i {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+  }
+  .scoreboard__status i.is-live {
+    background: var(--signal);
+    box-shadow: 0 0 0 5px rgba(216, 255, 62, 0.26);
+  }
+  .scoreboard__leader {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: clamp(2rem, 5vw, 5rem) 1.2rem;
+  }
+  .scoreboard small {
+    font-size: 0.62rem;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .scoreboard__leader strong {
+    margin: 3rem 0;
+    font-family: Impact, sans-serif;
+    font-size: clamp(4rem, 8vw, 8rem);
+    letter-spacing: -0.045em;
+    line-height: 0.84;
+    overflow-wrap: anywhere;
+    text-transform: uppercase;
+  }
+  .scoreboard__leader span { font-size: 0.75rem; font-weight: 950; }
+  .scoreboard__total {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    padding: 1.2rem;
+    border-top: 2px solid var(--ink);
+    background: var(--signal);
+  }
+  .scoreboard__total strong {
+    font-family: Impact, sans-serif;
+    font-size: 5.8rem;
+    line-height: 0.72;
+  }
+
+  .rule-strip {
+    display: flex;
+    gap: 2rem;
+    justify-content: space-between;
+    overflow: hidden;
+    padding: 1rem clamp(1rem, 4vw, 4rem);
+    border-block: 2px solid var(--ink);
+    color: var(--paper);
+    background: var(--blue);
+    font-size: 0.65rem;
+    font-weight: 950;
+    white-space: nowrap;
+  }
+
+  .top-rail {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(2rem, 6vw, 6rem);
+    padding: clamp(4rem, 7vw, 7rem) clamp(1rem, 5vw, 5rem);
+  }
+  .top-rail header p,
+  .crowd-board__head > div > p,
+  .meaning > p {
+    margin: 0 0 1.4rem;
+    color: var(--blue);
+    font-size: 0.65rem;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .top-rail h2,
+  .crowd-board h2,
+  .meaning h2 {
+    margin: 0;
+    font-family: Impact, sans-serif;
+    font-size: clamp(4rem, 8vw, 8rem);
+    letter-spacing: -0.05em;
+    line-height: 0.82;
+    text-transform: uppercase;
+  }
+  .top-rail ol {
+    margin: 0;
+    padding: 0;
+    border: 2px solid var(--ink);
+    list-style: none;
+  }
+  .top-rail li {
+    display: grid;
+    grid-template-columns: 54px 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    min-height: 72px;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--ink);
+  }
+  .top-rail li:first-child { color: var(--paper); background: var(--ink); }
+  .top-rail li:last-child { border-bottom: 0; }
+  .top-rail li span {
+    color: var(--orange);
+    font-family: Impact, sans-serif;
+    font-size: 2rem;
+  }
+  .top-rail li strong {
+    font-family: Impact, sans-serif;
+    font-size: clamp(1.4rem, 3vw, 2.6rem);
+    text-transform: uppercase;
+  }
+  .top-rail li small { font-size: 0.61rem; font-weight: 950; white-space: nowrap; }
+
+  .crowd-board {
+    padding: clamp(4rem, 7vw, 7rem) clamp(0.75rem, 3vw, 3rem) 8rem;
+    color: var(--paper);
+    background: var(--ink);
+  }
+  .crowd-board__head {
+    display: grid;
+    grid-template-columns: 1fr minmax(280px, 0.6fr);
+    gap: 3rem;
+    align-items: end;
+    max-width: 1500px;
+    margin: 0 auto 3rem;
+  }
+  .crowd-board h2 em { color: var(--signal); font-style: normal; }
+  .crowd-board__intro > p {
+    margin: 0 0 1.4rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .crowd-board__intro label span {
+    display: block;
+    margin-bottom: 0.45rem;
+    color: var(--signal);
+    font-size: 0.6rem;
+    font-weight: 950;
+  }
+  .crowd-board__intro input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 52px;
+    padding: 0.8rem 1rem;
+    border: 2px solid var(--paper);
+    border-radius: 0;
+    color: var(--paper);
+    background: transparent;
+    font: inherit;
+    font-weight: 750;
+  }
+  .crowd-board__intro input::placeholder { color: rgba(243, 237, 219, 0.55); }
+  .crowd-board__intro input:focus { outline: 4px solid var(--signal); outline-offset: 2px; }
+
+  .filters {
+    display: flex;
+    gap: 0.55rem;
+    max-width: 1500px;
+    margin: 0 auto 1.2rem;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+  }
+  .filters button {
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--paper);
+    color: var(--paper);
+    background: transparent;
+    font: inherit;
+    font-size: 0.59rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .filters button[aria-pressed='true'] {
+    border-color: var(--signal);
+    color: var(--ink);
+    background: var(--signal);
+  }
+  .board-status {
+    max-width: 1500px;
+    margin: 0 auto 1rem;
+    color: var(--signal);
+    font-size: 0.66rem;
+    font-weight: 850;
+    text-transform: uppercase;
+  }
+
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+    max-width: 1500px;
+    margin: 0 auto;
+    border: 2px solid var(--paper);
+    background: var(--paper);
+  }
+  .team-card { min-width: 0; color: var(--team-two); background: var(--team-paper); }
+  .team-card[hidden] { display: none; }
+  .team-card button {
+    display: grid;
+    grid-template-columns: auto 80px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    gap: 0.8rem;
+    width: 100%;
+    min-height: 230px;
+    padding: 0.9rem;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .team-card button:hover,
+  .team-card button:focus-visible { outline: 6px solid var(--signal); outline-offset: -6px; }
+  .team-card.is-selected button {
+    outline: 8px solid var(--signal);
+    outline-offset: -8px;
+    background: color-mix(in srgb, var(--team) 12%, var(--team-paper));
+  }
+  .team-card__rank {
+    color: var(--team);
+    font-family: Impact, sans-serif;
+    font-size: 2rem;
+    line-height: 1;
+  }
+  .team-card svg { width: 78px; height: 78px; fill: var(--team); }
+  .team-card__identity {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+  .team-card__identity small,
+  .team-card__identity em {
+    font-size: 0.54rem;
+    font-style: normal;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+  .team-card__identity strong {
+    margin: 0.4rem 0 auto;
+    color: var(--team);
+    font-family: Impact, sans-serif;
+    font-size: clamp(1.7rem, 3vw, 2.8rem);
+    letter-spacing: -0.025em;
+    line-height: 0.9;
+    overflow-wrap: anywhere;
+    text-transform: uppercase;
+  }
+  .team-card__identity em { margin-top: 1rem; }
+  .team-card__score {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    align-items: end;
+    padding-top: 0.7rem;
+    border-top: 1px solid currentColor;
+  }
+  .team-card__score strong {
+    color: var(--team);
+    font-family: Impact, sans-serif;
+    font-size: 3.2rem;
+    line-height: 0.72;
+  }
+  .team-card__score small { font-size: 0.55rem; font-weight: 950; }
+  .no-results {
+    max-width: 1500px;
+    margin: 2rem auto;
+    padding: 2rem;
+    border: 2px solid var(--signal);
+    color: var(--signal);
+    font-weight: 850;
+    text-align: center;
+  }
+
+  .meaning {
+    display: grid;
+    grid-template-columns: 0.25fr 0.8fr 0.55fr;
+    gap: clamp(2rem, 5vw, 5rem);
+    padding: clamp(4rem, 8vw, 8rem) clamp(1rem, 5vw, 5rem);
+    background: var(--orange);
+  }
+  .meaning > p { color: var(--ink); }
+  .meaning > div > p {
+    max-width: 650px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.48;
+  }
+  .meaning__receipt {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-self: start;
+    border: 2px solid var(--ink);
+  }
+  .meaning__receipt span,
+  .meaning__receipt strong {
+    padding: 0.85rem;
+    border-bottom: 1px solid var(--ink);
+    font-size: 0.61rem;
+    font-weight: 950;
+  }
+  .meaning__receipt strong { border-left: 1px solid var(--ink); text-align: right; }
+  .meaning__receipt :nth-last-child(-n + 2) { border-bottom: 0; }
+
+  footer {
+    padding: clamp(4rem, 8vw, 8rem) clamp(1rem, 5vw, 5rem) 9rem;
+    color: var(--paper);
+    background: var(--blue);
+  }
+  footer > div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    font-weight: 950;
+  }
+  footer > p {
+    margin: 5rem 0;
+    color: var(--signal);
+    font-family: Impact, sans-serif;
+    font-size: clamp(6rem, 16vw, 16rem);
+    letter-spacing: -0.055em;
+    line-height: 0.72;
+    text-transform: uppercase;
+  }
+  footer nav { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-bottom: 2rem; }
+  footer nav a {
+    min-height: 44px;
+    padding: 0.8rem;
+    border: 1px solid var(--paper);
+    color: inherit;
+    font-size: 0.6rem;
+    font-weight: 950;
+    text-decoration: none;
+  }
+  footer > small {
+    display: block;
+    max-width: 940px;
+    color: rgba(243, 237, 219, 0.72);
+    font-size: 0.62rem;
+    line-height: 1.5;
+  }
+
+  .vote-dock {
+    position: fixed;
+    z-index: 20;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) minmax(220px, 0.55fr) auto;
+    gap: 1rem;
+    align-items: stretch;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.65rem;
+    border: 3px solid var(--ink);
+    color: var(--ink);
+    background: var(--paper);
+    box-shadow: 9px 9px 0 rgba(0, 0, 0, 0.28);
+  }
+  .vote-dock[hidden] { display: none; }
+  .vote-dock__mark {
+    display: grid;
+    place-items: center;
+    color: var(--paper);
+    background: var(--team);
+    font-family: Impact, sans-serif;
+    font-size: 1.25rem;
+  }
+  .vote-dock__school {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .vote-dock__school small,
+  .vote-dock__school span { font-size: 0.54rem; font-weight: 950; }
+  .vote-dock__school strong {
+    color: var(--team);
+    font-family: Impact, sans-serif;
+    font-size: clamp(1.7rem, 4vw, 3rem);
+    line-height: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .vote-dock button {
+    min-height: 62px;
+    padding: 0.8rem 1rem;
+    border: 2px solid var(--ink);
+    color: var(--paper);
+    background: var(--team);
+    font: inherit;
+    font-size: 0.66rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .vote-dock button:hover,
+  .vote-dock button:focus-visible { outline: 4px solid var(--signal); outline-offset: 2px; }
+  .vote-dock button:disabled {
+    color: var(--ink);
+    background: var(--signal);
+    cursor: default;
+  }
+  .vote-dock .vote-dock__share { color: var(--ink); background: transparent; }
+
+  @media (max-width: 1100px) {
+    .team-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .meaning { grid-template-columns: 1fr 1fr; }
+    .meaning > p { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 850px) {
+    .mast { grid-template-columns: 1fr auto; }
+    .mast > span { display: none; }
+    .hero { grid-template-columns: 1fr; }
+    .scoreboard {
+      min-height: 520px;
+      border-top: 2px solid var(--paper);
+      border-left: 0;
+    }
+    .top-rail,
+    .crowd-board__head { grid-template-columns: 1fr; }
+    .team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .vote-dock { grid-template-columns: 58px minmax(0, 1fr) minmax(180px, 0.7fr); }
+    .vote-dock__share { grid-column: 3; }
+  }
+
+  @media (max-width: 570px) {
+    .mast { padding: 0 0.8rem; }
+    .mast nav { gap: 0.7rem; }
+    .mast nav a:first-child { display: none; }
+    .hero { min-height: 0; }
+    .hero__copy { padding: 5rem 1rem; }
+    .hero h1 { font-size: 29vw; }
+    .hero h1 em { transform: translateX(0); }
+    .hero__dek { margin-top: 3rem; }
+    .scoreboard__leader strong { font-size: 20vw; }
+    .rule-strip { justify-content: flex-start; overflow-x: auto; }
+    .top-rail { padding-inline: 0.75rem; }
+    .top-rail li { grid-template-columns: 38px 1fr; }
+    .top-rail li small { grid-column: 2; }
+    .crowd-board { padding-inline: 0.45rem; }
+    .crowd-board__head { padding-inline: 0.55rem; }
+    .team-card button {
+      grid-template-columns: auto 50px minmax(0, 1fr);
+      min-height: 210px;
+      padding: 0.65rem;
+    }
+    .team-card svg { width: 48px; height: 48px; }
+    .team-card__identity strong { font-size: 1.55rem; }
+    .team-card__identity small { font-size: 0.48rem; }
+    .team-card__identity em { display: none; }
+    .team-card__score strong { font-size: 2.4rem; }
+    .meaning { grid-template-columns: 1fr; padding-inline: 1rem; }
+    .meaning > p { grid-column: auto; }
+    footer > p { font-size: 25vw; }
+    .vote-dock {
+      right: 0.45rem;
+      bottom: 0.45rem;
+      left: 0.45rem;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 0.45rem;
+      padding: 0.45rem;
+    }
+    .vote-dock button { grid-column: 1 / -1; min-height: 52px; }
+    .vote-dock__share { display: none; }
+    .vote-dock__school strong { font-size: 1.7rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(html) { scroll-behavior: auto; }
+  }
+</style>
