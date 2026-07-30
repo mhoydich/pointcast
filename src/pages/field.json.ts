@@ -29,8 +29,19 @@ const invitation = {
     nextQuestion: 'Does comfort appear before permission?',
     storage: 'on-device',
     publicSubmission: false,
-    publicCount: false,
+    publicCount: true,
+    publicCountMode: 'explicit-opt-in aggregate only',
     photoUpload: false,
+  },
+  participation: {
+    endpoint: 'https://pointcast.xyz/api/field',
+    type: 'pointcast-field-participation-v1',
+    consentRequired: true,
+    fieldsSent: ['invitation ID', 'random browser token'],
+    tokenHandling: 'SHA-256 hashed before storage',
+    neverStored: ['observation choices', 'note', 'photo', 'location', 'IP address', 'user agent'],
+    retentionDays: 180,
+    publicData: ['completed receipt count', 'returning participant count'],
   },
   sources: [
     {
@@ -46,7 +57,7 @@ const invitation = {
     completedFieldReceipts: 25,
     returningParticipants: 5,
     contributionsChangingNextEdition: 3,
-    note: 'Targets for a future consented public-participation version; this release stores no public responses.',
+    note: 'The consented count is live. Observation content remains private; any future contribution channel requires a separate explicit choice.',
   },
 } as const;
 
