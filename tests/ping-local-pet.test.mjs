@@ -34,15 +34,22 @@ test('PING V1 publishes a finite, truthful product and production contract', () 
   assert.equal(ping.truth.physicalUnitsBuilt, 0);
   assert.equal(ping.truth.capitalCommittedUsd, 0);
   assert.equal(ping.truth.applicationsSubmitted, 0);
-  assert.equal(ping.truth.hostTestsPassed, 23);
+  assert.equal(ping.truth.hostTestsPassed, 26);
   assert.equal(ping.truth.wireEnvelopeBytes, 84);
-  assert.equal(ping.truth.testSecurityOnly, true);
+  assert.equal(ping.truth.wireAcknowledgementBytes, 47);
+  assert.equal(ping.truth.hostSecurityTestDouble, true);
+  assert.equal(ping.truth.esp32CompileTargetPassed, true);
+  assert.equal(ping.truth.reproducibleBinaryHashesPassed, true);
+  assert.equal(ping.truth.boardRuntimeVerified, false);
+  assert.equal(ping.truth.secureBootProvisioned, false);
+  assert.equal(ping.truth.encryptedNvsRuntimeVerified, false);
   assert.equal(ping.truth.productionCryptoComplete, false);
   assert.equal(ping.alpha.revisedPlanningBomUsd, 3855);
   assert.equal(ping.alpha.orderableAsWritten, false);
   assert.equal(ping.productionRing.length, 6);
   assert.match(ping.goToMarket.launchRule, /No interviews are required before Alpha/);
   assert.match(ping.boundaries.join(' '), /browser-only rehearsal/);
+  assert.match(ping.notYetProof.join(' '), /No ESP32-S3 has been flashed/);
 });
 
 test('PING carries capital, sourcing, hardware, and claim-release gates', () => {
@@ -112,7 +119,10 @@ test('PING is published across human, machine, Block, local, and agent discovery
   assert.match(llmsFull, /zero physical units/);
   assert.match(builtPage, /ONE LITTLE/);
   assert.match(builtPage, /NO APPLICATION SUBMITTED/);
+  assert.match(builtPage, /ESP32 TARGET LINKED/);
   assert.equal(manifest.truth.physicalUnitsBuilt, 0);
+  assert.equal(manifest.truth.hostTestsPassed, 26);
+  assert.equal(manifest.truth.esp32CompileTargetPassed, true);
   assert.equal(manifest.blockUrl, 'https://pointcast.xyz/b/0547');
 });
 
