@@ -133,15 +133,14 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.equal(block.author, 'codex');
   assert.equal(block.meta.visualPlates, 3);
   assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v16');
-  assert.match(series, /currentEdition: 16/);
+  assert.match(series, /edition: 16/);
   assert.match(series, /blockId: '0544'/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v16'/);
   assert.match(llms, /PointCast Field Study 016/);
   assert.match(llmsFull, /THE BILLION LITTLE NEW YORKERS/);
-  assert.match(homepage, /href="\/beach-commons\/v16"/);
-  assert.match(homepage, /Block 0544/);
-  assert.match(homeEdition, /href="\/beach-commons\/v16"/);
-  assert.match(homeEdition, /New<br \/>0544/);
+  assert.match(homeEdition, /href: '\/beach-commons\/v16'/);
+  assert.match(homeEdition, /id: '0544'/);
+  assert.match(homepage, /All seventeen Beach Commons editions/);
 });
 
 test('V16 images have intended edition and social dimensions', async () => {
