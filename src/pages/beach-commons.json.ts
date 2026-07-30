@@ -27,7 +27,7 @@ export const GET: APIRoute = () =>
         localInstrument: {
           name: 'Choose a path',
           purpose:
-            'Filters the fifteen edition cards by editorial path and can select a random edition.',
+            'Filters the seventeen edition cards by editorial path and can select a random edition.',
           storage: false,
           network: false,
           analytics: false,
