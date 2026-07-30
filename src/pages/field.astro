@@ -642,6 +642,42 @@
         object-fit: cover;
       }
 
+      .count-consent {
+        margin-top: 22px;
+        border: 1px solid var(--ink);
+        padding: 17px;
+        background: var(--white);
+      }
+
+      .count-consent__choice {
+        display: grid;
+        grid-template-columns: 22px 1fr;
+        align-items: start;
+        gap: 12px;
+        cursor: pointer;
+      }
+
+      .count-consent__choice input {
+        width: 20px;
+        height: 20px;
+        margin: 1px 0 0;
+        accent-color: var(--orange);
+      }
+
+      .count-consent__choice strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.25;
+      }
+
+      .count-consent p {
+        margin: 10px 0 0 34px;
+        color: rgba(16, 42, 51, 0.68);
+        font: 650 9px/1.5 var(--mono);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
       .make-receipt {
         width: 100%;
         margin-top: 24px;
@@ -832,6 +868,41 @@
         max-width: 36ch;
         color: rgba(255, 253, 245, 0.7);
         line-height: 1.5;
+      }
+
+      .field-pulse {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: end;
+        gap: 0 13px;
+        margin-top: 28px;
+        border-top: 1px solid rgba(255, 255, 255, 0.28);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+        padding: 16px 0;
+      }
+
+      .field-pulse__number {
+        color: var(--yellow);
+        font-size: clamp(44px, 5vw, 70px);
+        font-weight: 900;
+        letter-spacing: -0.07em;
+        line-height: 0.8;
+      }
+
+      .field-pulse strong {
+        padding-bottom: 4px;
+        font: 800 10px/1.3 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .field-pulse small {
+        grid-column: 1 / -1;
+        margin-top: 10px;
+        color: rgba(255, 253, 245, 0.58);
+        font: 650 9px/1.45 var(--mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
       }
 
       .action-stack {
@@ -1231,6 +1302,21 @@
           </label>
           <img class="photo-preview" data-photo-preview alt="Preview of your field observation" hidden />
 
+          <div class="count-consent">
+            <label class="count-consent__choice">
+              <input type="checkbox" name="countReceipt" value="yes" data-count-consent />
+              <span>
+                <strong>Count this receipt toward Field Season 001</strong>
+              </span>
+            </label>
+            <p>
+              Optional · sends only this invitation ID and a random browser
+              token. Your choices, note, photograph, location, IP address, and
+              user agent are not stored. The token lets PointCast recognize a
+              future Field return.
+            </p>
+          </div>
+
           <button class="make-receipt" type="submit">Make my field receipt →</button>
         </form>
 
@@ -1244,8 +1330,9 @@
             </p>
           </div>
           <div class="privacy">
-            On-device boundary · your choices remain in this browser · no
-            location, image, or identity is transmitted
+            Private by default · your choices, note, photograph, and location
+            remain in this browser · the optional count stores only a hashed
+            random token and invitation ID for 180 days
           </div>
         </aside>
       </section>
@@ -1285,10 +1372,15 @@
             <p class="eyebrow">Something changed because you came</p>
             <h3>You turned an object into evidence.</h3>
             <p>
-              In a live edition, many tiny receipts would become the next
-              PointCast story: a public atlas of where everyday comfort
-              appears without a plan.
+              Tiny private receipts can become a shared signal without becoming
+              a feed. PointCast publishes the count; your observation remains
+              yours.
             </p>
+            <div class="field-pulse" data-field-pulse aria-live="polite">
+              <span class="field-pulse__number" data-pulse-number>—</span>
+              <strong>consented field receipts</strong>
+              <small data-pulse-copy>Reading the public field pulse…</small>
+            </div>
             <div class="action-stack">
               <button class="action-button" type="button" data-share>
                 <span>Share the observation</span><span>↗</span>
@@ -1329,7 +1421,7 @@
     </main>
 
     <footer class="prototype-note">
-      PointCast Field · live invitation · private field receipt · no public count
+      PointCast Field · live invitation · private observation · consented public count
     </footer>
 
     <script>
@@ -1345,6 +1437,11 @@
         const photoPreview = document.querySelector("[data-photo-preview]");
         const receiptPhoto = document.querySelector("[data-receipt-photo]");
         const shareStatus = document.querySelector("[data-share-status]");
+        const countConsent = document.querySelector("[data-count-consent]");
+        const pulseNumber = document.querySelector("[data-pulse-number]");
+        const pulseCopy = document.querySelector("[data-pulse-copy]");
+        const invitationId = "PC-FIELD-001";
+        const participantStorageKey = "pointcast-field-participant-v1";
         let timerId = null;
         let secondsLeft = 90;
         let photoUrl = "";
@@ -1362,6 +1459,85 @@
         }).format(today);
         document.querySelector("[data-today]").textContent = topDate;
         document.querySelector("[data-receipt-date]").textContent = longDate;
+
+        function renderPulse(aggregate) {
+          if (!aggregate || typeof aggregate.completedReceipts !== "number") {
+            pulseNumber.textContent = "—";
+            pulseCopy.textContent = "The public field pulse is taking a walk.";
+            return;
+          }
+
+          pulseNumber.textContent = String(aggregate.completedReceipts);
+          const returns = Number(aggregate.returningParticipants || 0);
+          pulseCopy.textContent = returns === 1
+            ? "1 person has returned for another Field invitation."
+            : `${returns} people have returned for another Field invitation.`;
+        }
+
+        async function loadPulse() {
+          const response = await fetch("/api/field", {
+            method: "GET",
+            credentials: "omit",
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error("field-pulse-unavailable");
+          const result = await response.json();
+          renderPulse(result.aggregate);
+        }
+
+        function getParticipantToken() {
+          try {
+            const existing = localStorage.getItem(participantStorageKey);
+            if (
+              existing
+              && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing)
+            ) {
+              return existing;
+            }
+
+            let token = "";
+            if (typeof crypto.randomUUID === "function") {
+              token = crypto.randomUUID();
+            } else {
+              const bytes = new Uint8Array(16);
+              crypto.getRandomValues(bytes);
+              bytes[6] = (bytes[6] & 0x0f) | 0x40;
+              bytes[8] = (bytes[8] & 0x3f) | 0x80;
+              const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+              token = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+            }
+
+            localStorage.setItem(participantStorageKey, token);
+            return token;
+          } catch {
+            return "";
+          }
+        }
+
+        async function countFieldReceipt() {
+          const participantToken = getParticipantToken();
+          if (!participantToken) throw new Error("participant-token-unavailable");
+
+          const response = await fetch("/api/field", {
+            method: "POST",
+            credentials: "omit",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "pointcast-field-participation-v1",
+              invitationId,
+              participantToken,
+              consent: true,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.error || "field-count-unavailable");
+
+          renderPulse(result.aggregate);
+          shareStatus.textContent = result.created
+            ? "Counted. Your choices, note, and photograph stayed on this device."
+            : "Already counted for this invitation. Your observation stayed on this device.";
+        }
 
         function showStage(name) {
           stages.forEach((stage) => {
@@ -1458,6 +1634,17 @@
           } catch {}
 
           showStage("receipt");
+
+          if (countConsent.checked) {
+            shareStatus.textContent = "Counting the receipt—not the observation…";
+            countFieldReceipt().catch(() => {
+              shareStatus.textContent =
+                "Your private receipt is safe. The optional public count is unavailable right now.";
+            });
+          } else {
+            shareStatus.textContent =
+              "Private receipt only. Nothing was sent to the public count.";
+          }
         });
 
         document.querySelector("[data-again]").addEventListener("click", () => {
@@ -1488,6 +1675,10 @@
               shareStatus.textContent = "Sharing was unavailable. Your receipt is still here.";
             }
           }
+        });
+
+        loadPulse().catch(() => {
+          renderPulse(null);
         });
       })();
     </script>
