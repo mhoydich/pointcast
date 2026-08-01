@@ -585,6 +585,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A 35-school promotion kit with team links, copyable calls, original campaign art, and one public media invitation.',
       href: '/25/fan-clique/rally',
     },
+    {
+      number: '14',
+      name: 'The Stamp Press',
+      kicker: '50 fields / profiles / wallpaper / free editions',
+      description: 'Fifty place-first signal spirits made with a six-study AI press and campus design research—free to download, remix, and collect.',
+      href: '/25/collect/signal-stamps',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
