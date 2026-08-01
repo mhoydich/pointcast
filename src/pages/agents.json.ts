@@ -31,6 +31,7 @@ import {
 } from '../lib/agent-value';
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
+import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -94,6 +95,7 @@ export const GET: APIRoute = async () => {
         wellKnownPointCastPeer: 'https://pointcast.xyz/.well-known/pointcast-peer.json',
         wellKnownFarcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
+        agentKit: 'https://pointcast.xyz/agent-kit.md',
         agentValue: 'https://pointcast.xyz/agent-value',
         agentValueJson: 'https://pointcast.xyz/agent-value.json',
         protocol: 'https://pointcast.xyz/protocol',
@@ -515,8 +517,13 @@ export const GET: APIRoute = async () => {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
           human: 'https://pointcast.xyz/connectors',
+          machineGuide: 'https://pointcast.xyz/agent-kit.md',
           apps: 'https://pointcast.xyz/apps',
+          chatgpt: POINTCAST_AGENT_KIT.starterPrompt,
+          codex: 'codex mcp add pointcast-v2 --url https://pointcast.xyz/api/mcp-v2',
           claudeCode: 'claude mcp add --transport http pointcast-v2 https://pointcast.xyz/api/mcp-v2',
+          claude: 'Settings → Connectors → Add custom connector → https://pointcast.xyz/api/mcp-v2',
+          firecrawl: POINTCAST_AGENT_KIT.webReader,
         },
         docs: 'https://pointcast.xyz/connectors',
         tools: [

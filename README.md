@@ -98,6 +98,8 @@ addressable at `/b/{id}` (HTML) and `/b/{id}.json` (machine-readable).
 | [/cast](https://pointcast.xyz/cast)               | Prize Cast — no-loss prize savings on Tezos (pending compile) |
 | [/drum](https://pointcast.xyz/drum)               | Multiplayer drum room, DRUM token claim (pending compile)     |
 | [/for-agents](https://pointcast.xyz/for-agents)   | Human-readable manifest                                       |
+| [/connectors](https://pointcast.xyz/connectors)   | ChatGPT, Codex, Claude, and Firecrawl setup                    |
+| [/agent-kit.md](https://pointcast.xyz/agent-kit.md) | Copy-ready cross-client machine guide                       |
 | [/agents.json](https://pointcast.xyz/agents.json) | Machine-readable discovery manifest                           |
 | [/llms.txt](https://pointcast.xyz/llms.txt)       | LLM summary (llmstxt.org convention)                          |
 | [/feed.xml](https://pointcast.xyz/feed.xml)       | Unified RSS 2.0 (every block)                                 |

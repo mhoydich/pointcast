@@ -2332,7 +2332,12 @@ const EVENT_SCHEMA = {
 };
 
 // ── HTML discovery page ──────────────────────────────────────────────
-const DISCOVERY_HTML = `<!doctype html>
+function discoveryHtml(request: Request) {
+  const path = new URL(request.url).pathname;
+  const isV2 = path.endsWith('/api/mcp-v2');
+  const endpoint = isV2 ? 'https://pointcast.xyz/api/mcp-v2' : 'https://pointcast.xyz/api/mcp';
+  const serverKey = isV2 ? 'pointcast-v2' : 'pointcast';
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2357,31 +2362,32 @@ const DISCOVERY_HTML = `<!doctype html>
 <h2>Connect</h2>
 
 <p><strong>Custom connector URL</strong> — paste this into Claude, ChatGPT-style app clients, Cursor, or any MCP-aware client that accepts a remote connector URL:</p>
-<pre>https://pointcast.xyz/api/mcp</pre>
+<pre>${endpoint}</pre>
 
-<p><strong>Claude Desktop</strong> — add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:</p>
-<pre>{
-  "mcpServers": {
-    "pointcast": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://pointcast.xyz/api/mcp"]
-    }
-  }
-}</pre>
+<p><strong>ChatGPT</strong> — no install is required for public exploration. Paste this into a web-enabled chat:</p>
+<pre>Read https://pointcast.xyz/agent-kit.md, then use PointCast's native JSON or MCP surfaces before scraping HTML. Help me explore PointCast and cite the stable URLs you use.</pre>
+
+<p><strong>Codex / ChatGPT desktop</strong> — run this command, or add a Streamable HTTP server from Settings → MCP servers:</p>
+<pre>codex mcp add ${serverKey} --url ${endpoint}</pre>
+
+<p><strong>Claude / Claude Desktop</strong> — open Settings → Connectors → Add custom connector. Use <code>${serverKey}</code> as the name and paste <code>${endpoint}</code>. Remote connectors belong in Settings, not <code>claude_desktop_config.json</code>.</p>
 
 <p><strong>Cursor</strong> — add to <code>~/.cursor/mcp.json</code> (or project's <code>.cursor/mcp.json</code>):</p>
 <pre>{
   "mcpServers": {
-    "pointcast": {
-      "url": "https://pointcast.xyz/api/mcp"
+    "${serverKey}": {
+      "url": "${endpoint}"
     }
   }
 }</pre>
 
 <p><strong>Claude Code</strong>:</p>
-<pre>claude mcp add --transport http pointcast https://pointcast.xyz/api/mcp</pre>
+<pre>claude mcp add --transport http ${serverKey} ${endpoint}</pre>
 
-<p>More install links: <a href="/connectors">/connectors</a>. App shelf: <a href="/apps">/apps</a>.</p>
+<p><strong>Firecrawl</strong> — the open-source reader for rendered pages and outside sources:</p>
+<pre>firecrawl scrape https://pointcast.xyz/llms.txt --format markdown --only-main-content</pre>
+
+<p>Full setup: <a href="/connectors">/connectors</a>. Machine guide: <a href="/agent-kit.md">/agent-kit.md</a>. App shelf: <a href="/apps">/apps</a>.</p>
 
 <h2>Tools — client links + apps</h2>
 <ul>
@@ -2471,10 +2477,11 @@ Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
 </p>
 </body>
 </html>`;
+}
 
 // ── Handlers ─────────────────────────────────────────────────────────
-export const onRequestGet: PagesFunction<Env> = async () => {
-  return new Response(DISCOVERY_HTML, {
+export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
+  return new Response(discoveryHtml(request), {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
   });
 };
