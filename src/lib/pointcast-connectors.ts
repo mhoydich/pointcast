@@ -51,9 +51,19 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     ],
     clients: [
       {
-        name: 'Claude custom connector',
-        label: 'Paste the endpoint URL into Add custom connector.',
-        note: 'Use "PointCast v2" as the connector name.',
+        name: 'ChatGPT',
+        label: 'Read https://pointcast.xyz/agent-kit.md in a web-enabled chat.',
+        note: 'ChatGPT Work uses plugin-provided MCP tools; the public prompt route needs no install.',
+      },
+      {
+        name: 'Codex / ChatGPT desktop',
+        label: 'codex mcp add pointcast-v2 --url https://pointcast.xyz/api/mcp-v2',
+        note: 'Or add a Streamable HTTP server from Settings → MCP servers.',
+      },
+      {
+        name: 'Claude / Claude Desktop',
+        label: 'Settings → Connectors → Add custom connector.',
+        note: 'Use “PointCast v2” as the name and paste the endpoint URL. Plan and workspace policy may apply.',
       },
       {
         name: 'Claude Code',
@@ -98,9 +108,19 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     ],
     clients: [
       {
-        name: 'Claude custom connector',
-        label: 'Paste the endpoint URL into Add custom connector.',
-        note: 'Use "PointCast" as the connector name.',
+        name: 'ChatGPT',
+        label: 'Read https://pointcast.xyz/agent-kit.md in a web-enabled chat.',
+        note: 'ChatGPT Work uses plugin-provided MCP tools; the public prompt route needs no install.',
+      },
+      {
+        name: 'Codex / ChatGPT desktop',
+        label: 'codex mcp add pointcast --url https://pointcast.xyz/api/mcp',
+        note: 'Or add a Streamable HTTP server from Settings → MCP servers.',
+      },
+      {
+        name: 'Claude / Claude Desktop',
+        label: 'Settings → Connectors → Add custom connector.',
+        note: 'Use “PointCast” as the name and paste the endpoint URL. Plan and workspace policy may apply.',
       },
       {
         name: 'Claude Code',

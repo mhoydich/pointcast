@@ -106,6 +106,8 @@ const root = rootResult.stdout;
 const requiredFiles = [
   'src/pages/agents.json.ts',
   'src/pages/for-agents.astro',
+  'src/pages/agent-kit.md.ts',
+  'src/pages/connectors.json.ts',
   'src/pages/feed.json.ts',
   'src/pages/feed.xml.ts',
   'src/pages/editions.json.ts',
@@ -153,6 +155,7 @@ const agentMentions = [
   '/agents.json',
   '/llms.txt',
   '/llms-full.txt',
+  '/agent-kit.md',
   '/feed.xml',
   '/feed.json',
   '/areas.json',

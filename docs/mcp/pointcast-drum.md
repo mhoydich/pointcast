@@ -117,20 +117,33 @@ All tools include Claude-facing MCP annotations: `readOnlyHint`,
 
 ## Configuring clients
 
-### Claude Desktop
+### ChatGPT
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
-on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
+For public exploration in a web-enabled chat, paste:
 
-```json
-{
-  "mcpServers": {
-    "pointcast": {
-      "url": "https://pointcast.xyz/api/mcp-v2"
-    }
-  }
-}
+```text
+Read https://pointcast.xyz/agent-kit.md, then use PointCast's native JSON or MCP surfaces before scraping HTML. Help me explore PointCast and cite the stable URLs you use.
 ```
+
+ChatGPT web does not read local Codex MCP settings. ChatGPT Work uses MCP
+tools bundled in installed plugins. The ChatGPT desktop app can add the
+PointCast Streamable HTTP server from **Settings → MCP servers**.
+
+### Codex / ChatGPT desktop
+
+```bash
+codex mcp add pointcast-v2 --url https://pointcast.xyz/api/mcp-v2
+```
+
+The same server can be added in the desktop UI under **Settings → MCP
+servers → Add server → Streamable HTTP**.
+
+### Claude / Claude Desktop
+
+Open **Settings → Connectors → Add custom connector**. Use `PointCast v2` as
+the name and paste `https://pointcast.xyz/api/mcp-v2`. Remote connectors are
+not configured through `claude_desktop_config.json`; availability depends on
+the user's Claude plan and workspace policy.
 
 ### Cursor
 
@@ -151,6 +164,19 @@ on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
 ```bash
 claude mcp add --transport http pointcast-v2 https://pointcast.xyz/api/mcp-v2
 ```
+
+### Firecrawl
+
+Firecrawl is the open-source web context layer for pages that do not already
+publish a clean machine surface. PointCast native JSON, feeds, and MCP remain
+the preferred path.
+
+```bash
+npx -y firecrawl-cli@latest init --all --browser
+firecrawl scrape https://pointcast.xyz/llms.txt --format markdown --only-main-content
+```
+
+Full cross-client setup: `https://pointcast.xyz/agent-kit.md`.
 
 ## Calling it directly
 

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { POINTCAST_CONNECTORS } from '../lib/pointcast-connectors';
+import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
 
 export const GET: APIRoute = async () => {
   const payload = {
@@ -9,6 +10,7 @@ export const GET: APIRoute = async () => {
       'Addable MCP connector links for AI clients. Paste the endpoint URL into a custom connector flow, or use the client-specific setup notes.',
     generatedAt: new Date().toISOString(),
     canonical: 'https://pointcast.xyz/connectors',
+    agentKit: POINTCAST_AGENT_KIT,
     connectors: POINTCAST_CONNECTORS.map((connector) => ({
       ...connector,
       installUrl: connector.endpoint,
