@@ -4,14 +4,20 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('Crystal Ball Pass publishes a complete playable PointCast surface', async () => {
-  const [page, manifest, data, styles] = await Promise.all([
+test('Crystal Ball Pass publishes a landing and preserves the complete original passage', async () => {
+  const [landing, page, manifest, data, styles, landingStyles] = await Promise.all([
     read('src/pages/crystal-ball-pass.astro'),
+    read('src/pages/crystal-ball-pass/play.astro'),
     read('src/pages/crystal-ball-pass.json.ts'),
     read('src/lib/crystal-ball-pass.ts'),
     read('src/styles/crystal-ball-pass.css'),
+    read('src/styles/crystal-ball-pass-landing.css'),
   ]);
 
+  assert.match(landing, /THE TRAILHEAD/);
+  assert.match(landing, /crystal-ball-pass\/play/);
+  assert.match(landing, /crystal-ball-pass\/v2/);
+  assert.match(landing, /THE FOREST IS NOW/);
   assert.match(page, /BEGIN PASSAGE/);
   assert.match(page, /CODEX MICRO/);
   assert.match(page, /CAMP MAGIC/);
@@ -22,11 +28,39 @@ test('Crystal Ball Pass publishes a complete playable PointCast surface', async 
   assert.match(data, /Fernwake Camp/);
   assert.match(data, /Crystal Ball Pass/);
   assert.equal((data.match(/place: '/g) ?? []).length, 7);
-  assert.match(manifest, /pointcast\.game\.crystal-ball-pass\/v1/);
+  assert.match(manifest, /pointcast\.world\.crystal-ball-pass\/v1/);
+  assert.match(manifest, /version: '1\.1\.0'/);
+  assert.match(manifest, /originalPassage/);
+  assert.match(manifest, /afterlightV2/);
   assert.match(manifest, /connectedToGame: false/);
   assert.match(manifest, /accountDataReceived: false/);
   assert.match(styles, /prefers-reduced-motion/);
   assert.match(styles, /@media \(max-width: 680px\)/);
+  assert.match(landingStyles, /prefers-reduced-motion/);
+  assert.match(landingStyles, /@media \(max-width: 680px\)/);
+});
+
+test('Afterlight V2 contains three complete local-only night routes', async () => {
+  const [page, data, styles, manifest] = await Promise.all([
+    read('src/pages/crystal-ball-pass/v2.astro'),
+    read('src/lib/crystal-ball-pass-v2.ts'),
+    read('src/styles/crystal-ball-pass-v2.css'),
+    read('src/pages/crystal-ball-pass.json.ts'),
+  ]);
+
+  assert.match(page, /THE PASS WAS/);
+  assert.match(page, /AFTERLIGHT_ROUTES/);
+  assert.match(page, /AudioContext/);
+  assert.match(page, /NO TELEMETRY/);
+  assert.match(page, /data-route/);
+  assert.match(data, /name: 'Moon Relay'/);
+  assert.match(data, /name: 'River Radio'/);
+  assert.match(data, /name: 'Weather House'/);
+  assert.equal((data.match(/place: '/g) ?? []).length, 9);
+  assert.match(styles, /prefers-reduced-motion/);
+  assert.match(styles, /@media \(max-width: 680px\)/);
+  assert.match(manifest, /routeCount: AFTERLIGHT_ROUTES\.length/);
+  assert.match(manifest, /networkWrites: false/);
 });
 
 test('Crystal Ball Pass appears in Review Center, Play, home, Block, and discovery surfaces', async () => {
@@ -48,12 +82,16 @@ test('Crystal Ball Pass appears in Review Center, Play, home, Block, and discove
   assert.match(review, /4\.6/);
   assert.match(reviewJson, /pointcast\.review\/v1/);
   assert.match(play, /id: 'crystal-ball-pass'/);
+  assert.match(play, /v2Route: '\/crystal-ball-pass\/v2'/);
   assert.match(playJson, /crystalBallPass/);
+  assert.match(playJson, /crystalBallPassV2/);
   assert.match(home, /New<br \/>0550/);
   assert.match(home, /Begin passage/);
   assert.match(block, /"id": "0550"/);
   assert.match(block, /"author": "codex"/);
   assert.match(sitemap, /pointcast\.xyz\/crystal-ball-pass/);
+  assert.match(sitemap, /pointcast\.xyz\/crystal-ball-pass\/play/);
+  assert.match(sitemap, /pointcast\.xyz\/crystal-ball-pass\/v2/);
   assert.match(sitemap, /pointcast\.xyz\/reviews\/crystal-ball-pass/);
   assert.match(llms, /Block 0550/);
   assert.match(full, /Block 0550/);

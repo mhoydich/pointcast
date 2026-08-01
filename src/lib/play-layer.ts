@@ -9,7 +9,9 @@ export const PLAY_SURFACES = [
     code: 'PASS',
     title: 'Crystal Ball Pass',
     route: '/crystal-ball-pass',
-    summary: 'A five-minute forest expedition with seven trail decisions, shifting weather, generated chimes, and a tiny Codex Micro field guide.',
+    playRoute: '/crystal-ball-pass/play',
+    v2Route: '/crystal-ball-pass/v2',
+    summary: 'A growing forest world: the original five-minute expedition plus Afterlight, a three-route night signal journey with Codex Micro.',
   },
   {
     id: 'passport',
