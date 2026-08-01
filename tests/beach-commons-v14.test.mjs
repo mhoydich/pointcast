@@ -138,7 +138,7 @@ test('The Hardpoint League has JSON, Block, series, homepage, and discovery twin
   assert.match(llmsFull, /THE HARDPOINT LEAGUE/);
   assert.match(homeEdition, /href: '\/beach-commons\/v14'/);
   assert.match(homeEdition, /id: '0540'/);
-  assert.match(homepage, /All seventeen Beach Commons editions/);
+  assert.match(homepage, /All eighteen Beach Commons editions/);
 });
 
 test('Hardpoint League images have intended edition and social dimensions', async () => {

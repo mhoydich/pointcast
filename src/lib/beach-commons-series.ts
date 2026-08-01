@@ -1,4 +1,4 @@
-export type BeachCommonsPathId = 'build' | 'make' | 'kit' | 'coast';
+export type BeachCommonsPathId = 'build' | 'make' | 'kit' | 'coast' | 'region';
 
 export type BeachCommonsEdition = {
   edition: number;
@@ -18,15 +18,15 @@ export const BEACH_COMMONS_SERIES = {
   schema: 'https://pointcast.xyz/schemas/creative-work-series/v1',
   id: 'PC-BEACH-COMMONS',
   title: 'Beach Commons',
-  subtitle: 'Seventeen field studies for making public life at the edge.',
-  dek: 'Architecture, games, weather, useful objects, radio, ecology, relays, a working harbor, fermentation, restoration, and a public science fair—organized as a growing coastal commons.',
+  subtitle: 'Eighteen field studies for making public life at the edge.',
+  dek: 'Architecture, games, weather, useful objects, radio, ecology, relays, a working harbor, fermentation, restoration, a public science fair, and a 25-mile regional atlas—organized as a growing coastal commons.',
   url: 'https://pointcast.xyz/beach-commons',
   jsonUrl: 'https://pointcast.xyz/beach-commons.json',
-  currentEdition: 17,
-  currentUrl: 'https://pointcast.xyz/beach-commons/v17',
+  currentEdition: 18,
+  currentUrl: 'https://pointcast.xyz/beach-commons/v18',
   firstEditionUrl: 'https://pointcast.xyz/beach-commons/v1',
   publishedAt: '2026-07-26',
-  updatedAt: '2026-07-29',
+  updatedAt: '2026-07-31',
   status:
     'An unofficial speculative editorial series. No physical event, installation, permit, purchase requirement, contribution drive, restoration action, or municipal affiliation is announced by this index.',
   creators: [
@@ -77,6 +77,12 @@ export const BEACH_COMMONS_PATHS = [
     description:
       'Borrow attention from shells, measure a human relay from Pacific zero, and imagine a marina as civic metabolism.',
     color: '#7bb8cf',
+  },
+  {
+    id: 'region',
+    number: '05', title: 'Connect the Ring', shortTitle: 'Region',
+    description: 'Move from a beach-scale proof to the roughly twenty-five-mile field of coast, space, gateways, making, learning, story, sport, and neighborhood enterprise.',
+    color: '#7667a8',
   },
 ] as const;
 
@@ -284,7 +290,16 @@ export const BEACH_COMMONS_EDITIONS: readonly BeachCommonsEdition[] = [
     path: 'make',
     blockId: '0546',
     measure: '7 avenues · 12 proofs',
-    current: true,
+  },
+  {
+    edition: 18,
+    slug: 'v18', title: 'Radius 25',
+    subtitle: 'Eight local powers. Twelve working pairs. One region that learns by making.',
+    invitation: 'Choose a strength, choose a goal, and finish one useful regional pairing.',
+    image: '/beach-commons/v18/assets/poster-01.png',
+    alt: 'A circular physical relief map centered on El Segundo gathers regional makers around a glowing radius ring.',
+    path: 'region',
+    blockId: '0548', measure: '8 strengths · 40 routes', current: true,
   },
 ];
 
