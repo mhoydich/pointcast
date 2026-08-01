@@ -9,6 +9,8 @@ export const GET: APIRoute = async () => {
     entrypoints: {
       play: 'https://pointcast.xyz/play',
       crystalBallPass: 'https://pointcast.xyz/crystal-ball-pass',
+      crystalBallPassOriginal: 'https://pointcast.xyz/crystal-ball-pass/play',
+      crystalBallPassV2: 'https://pointcast.xyz/crystal-ball-pass/v2',
       crystalBallPassJson: 'https://pointcast.xyz/crystal-ball-pass.json',
       passport: 'https://pointcast.xyz/passport',
       passportJson: 'https://pointcast.xyz/passport.json',

@@ -195,6 +195,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/reviews', 'weekly', '0.92'],
   ['https://pointcast.xyz/reviews.json', 'weekly', '0.88'],
   ['https://pointcast.xyz/crystal-ball-pass', 'weekly', '0.99'],
+  ['https://pointcast.xyz/crystal-ball-pass/play', 'weekly', '0.98'],
+  ['https://pointcast.xyz/crystal-ball-pass/v2', 'weekly', '0.99'],
   ['https://pointcast.xyz/crystal-ball-pass.json', 'weekly', '0.96'],
   ['https://pointcast.xyz/reviews/crystal-ball-pass', 'weekly', '0.98'],
   ['https://pointcast.xyz/reviews/crystal-ball-pass.json', 'weekly', '0.94'],
