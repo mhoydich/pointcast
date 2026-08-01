@@ -5,26 +5,27 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Beach Commons is a seventeen-edition series with four legible paths', async () => {
+test('Beach Commons is an eighteen-edition series with five legible paths', async () => {
   const data = await read('src/lib/beach-commons-series.ts');
   const page = await read('src/pages/beach-commons.astro');
 
   const editionRecords = [...data.matchAll(/^\s{4}edition: (\d+),$/gm)];
-  const pathRecords = [...data.matchAll(/^\s{4}id: '(build|make|kit|coast)',$/gm)];
-  const assignedPaths = [...data.matchAll(/^\s{4}path: '(build|make|kit|coast)',$/gm)];
+  const pathRecords = [...data.matchAll(/^\s{4}id: '(build|make|kit|coast|region)',$/gm)];
+  const assignedPaths = [...data.matchAll(/^\s{4}path: '(build|make|kit|coast|region)',$/gm)];
 
   assert.deepEqual(
     editionRecords.map((match) => Number(match[1])),
-    Array.from({ length: 17 }, (_, index) => index + 1),
+    Array.from({ length: 18 }, (_, index) => index + 1),
   );
-  assert.deepEqual(pathRecords.map((match) => match[1]), ['build', 'make', 'kit', 'coast']);
-  assert.equal(assignedPaths.length, 17);
+  assert.deepEqual(pathRecords.map((match) => match[1]), ['build', 'make', 'kit', 'coast', 'region']);
+  assert.equal(assignedPaths.length, 18);
   assert.equal(assignedPaths.filter((match) => match[1] === 'build').length, 5);
   assert.equal(assignedPaths.filter((match) => match[1] === 'make').length, 4);
   assert.equal(assignedPaths.filter((match) => match[1] === 'coast').length, 4);
   assert.equal(assignedPaths.filter((match) => match[1] === 'kit').length, 4);
+  assert.equal(assignedPaths.filter((match) => match[1] === 'region').length, 1);
 
-  assert.match(data, /currentEdition: 17/);
+  assert.match(data, /currentEdition: 18/);
   assert.match(data, /current: true/);
   assert.match(page, /Choose your way in\./);
   assert.match(page, /Public life as a design material\./);
@@ -54,10 +55,11 @@ test('Beach Commons front door publishes a bounded machine index and discovery t
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v1'/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v16\.json/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v17\.json/);
+  assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v18\.json/);
   assert.match(llms, /Beach Commons — Complete Field Series/);
   assert.match(llms, /\/beach-commons\/v1/);
   assert.match(llmsFull, /Beach Commons — complete field series/);
-  assert.match(home, /All seventeen Beach Commons editions/);
+  assert.match(home, /All eighteen Beach Commons editions/);
   assert.match(home, /Beach Commons index JSON/);
 });
 
@@ -67,7 +69,7 @@ test('every Beach Commons index image exists', async () => {
     (match) => match[1],
   );
 
-  assert.equal(imagePaths.length, 17);
+  assert.equal(imagePaths.length, 18);
   await Promise.all(
     imagePaths.map(async (path) => {
       const url = new URL(`../public${path}`, import.meta.url);

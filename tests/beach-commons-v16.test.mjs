@@ -140,7 +140,7 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(llmsFull, /THE BILLION LITTLE NEW YORKERS/);
   assert.match(homeEdition, /href: '\/beach-commons\/v16'/);
   assert.match(homeEdition, /id: '0544'/);
-  assert.match(homepage, /All seventeen Beach Commons editions/);
+  assert.match(homepage, /All eighteen Beach Commons editions/);
 });
 
 test('V16 images have intended edition and social dimensions', async () => {
