@@ -1,3 +1,5 @@
+import { CRYSTAL_BALL_PASS_REVIEW } from '../lib/crystal-ball-pass';
+
 export type PointCastReview = {
   id: string;
   slug: string;
@@ -25,6 +27,7 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  CRYSTAL_BALL_PASS_REVIEW,
   {
     id: 'beach-commons-v3',
     slug: 'beach-commons-v3',

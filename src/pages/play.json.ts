@@ -8,6 +8,8 @@ export const GET: APIRoute = async () => {
     generatedAt: new Date().toISOString(),
     entrypoints: {
       play: 'https://pointcast.xyz/play',
+      crystalBallPass: 'https://pointcast.xyz/crystal-ball-pass',
+      crystalBallPassJson: 'https://pointcast.xyz/crystal-ball-pass.json',
       passport: 'https://pointcast.xyz/passport',
       passportJson: 'https://pointcast.xyz/passport.json',
       quests: 'https://pointcast.xyz/quests',

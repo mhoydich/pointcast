@@ -50,7 +50,7 @@ test('visa registry includes live and future PointCast lanes', () => {
 test('human and machine discovery surfaces advertise the same passport model', () => {
   assert.match(jsonRoute, /buildTezosPassportManifest/);
   assert.match(jsonRoute, /access-control-allow-origin/);
-  assert.match(playLayer, /PLAY_LAYER_VERSION = '0\.3\.0'/);
+  assert.match(playLayer, /PLAY_LAYER_VERSION = '0\.4\.0'/);
   assert.match(playLayer, /passportJson:|machine: 'https:\/\/pointcast\.xyz\/passport\.json'/);
   assert.match(passportData, /machine: 'https:\/\/pointcast\.xyz\/passport\.json'/);
   assert.match(apps, /slug: 'pointcast-passport'/);

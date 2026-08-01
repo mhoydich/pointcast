@@ -1,12 +1,19 @@
-export const PLAY_LAYER_VERSION = '0.3.0';
+export const PLAY_LAYER_VERSION = '0.4.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
-    id: 'passport',
+    id: 'crystal-ball-pass',
     code: 'PASS',
+    title: 'Crystal Ball Pass',
+    route: '/crystal-ball-pass',
+    summary: 'A five-minute forest expedition with seven trail decisions, shifting weather, generated chimes, and a tiny Codex Micro field guide.',
+  },
+  {
+    id: 'passport',
+    code: 'BOOK',
     title: 'PointCast Passport',
     route: '/passport',
     summary: 'A dual-ledger booklet for private local rituals, public Tezos collection visas, and optional wallet-signed journey seals.',

@@ -203,8 +203,8 @@ test('V17 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(llms, /PointCast Field Study 017/);
   assert.match(llmsFull, /ASK THE BEACH/);
   assert.match(series, /slug: 'v17'/);
-  assert.match(homeEdition, /href="\/beach-commons\/v18\/skills"/);
+  assert.match(homeEdition, /href: '\/beach-commons\/v18\/skills'/);
   assert.match(homeEdition, /id: '0548'/);
-  assert.match(homeEdition, /New<br \/>0549/);
+  assert.match(homeEdition, /id: '0549'/);
   assert.match(indexPage, /Foundation → room → proof → radius → skill\./);
 });
