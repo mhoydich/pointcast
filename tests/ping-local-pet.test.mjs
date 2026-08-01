@@ -34,12 +34,30 @@ test('PING V1 publishes a finite, truthful product and production contract', () 
   assert.equal(ping.truth.physicalUnitsBuilt, 0);
   assert.equal(ping.truth.capitalCommittedUsd, 0);
   assert.equal(ping.truth.applicationsSubmitted, 0);
-  assert.equal(ping.truth.hostTestsPassed, 26);
-  assert.equal(ping.truth.wireEnvelopeBytes, 84);
-  assert.equal(ping.truth.wireAcknowledgementBytes, 47);
+  assert.equal(ping.schema, 'pointcast.ping-local-pet/v3');
+  assert.equal(ping.truth.hostTestsPassed, 47);
+  assert.equal(ping.truth.hostTestsTotal, 47);
+  assert.equal(ping.truth.protocolVersion, 3);
+  assert.equal(ping.truth.wireEnvelopeBytes, 168);
+  assert.equal(ping.truth.wireAcknowledgementBytes, 135);
   assert.equal(ping.truth.hostSecurityTestDouble, true);
   assert.equal(ping.truth.esp32CompileTargetPassed, true);
   assert.equal(ping.truth.reproducibleBinaryHashesPassed, true);
+  assert.equal(ping.truth.pairingContractAttemptsPassed, 100);
+  assert.equal(ping.truth.pairingHelloBytes, 153);
+  assert.equal(ping.truth.pairingConfirmationBytes, 117);
+  assert.equal(ping.truth.pairingRecordBytes, 309);
+  assert.equal(ping.truth.pairingCoreHostPassed, true);
+  assert.equal(ping.truth.pairingPsaAdapterCompiles, true);
+  assert.equal(ping.truth.pairingNvsStoreCompiles, true);
+  assert.equal(ping.truth.pairingBleTransportImplemented, false);
+  assert.equal(ping.truth.pairingPhysicalRuntimeVerified, false);
+  assert.equal(ping.truth.pairingRateLimitPersistent, false);
+  assert.equal(ping.truth.pairingIndependentlyReviewed, false);
+  assert.equal(
+    ping.truth.esp32FirmwareSha256,
+    '57de6283d2f79ee2c835d82952d53951d11102d3606316105c06d4d3c8b1f018',
+  );
   assert.equal(ping.truth.boardRuntimeVerified, false);
   assert.equal(ping.truth.secureBootProvisioned, false);
   assert.equal(ping.truth.encryptedNvsRuntimeVerified, false);
@@ -53,6 +71,8 @@ test('PING V1 publishes a finite, truthful product and production contract', () 
   assert.match(ping.goToMarket.launchRule, /No interviews are required before Alpha/);
   assert.match(ping.boundaries.join(' '), /browser-only rehearsal/);
   assert.match(ping.notYetProof.join(' '), /No ESP32-S3 has been flashed/);
+  assert.match(ping.notYetProof.join(' '), /BLE discovery/);
+  assert.match(ping.notYetProof.join(' '), /volatile across reboot/);
 });
 
 test('PING carries capital, sourcing, hardware, and claim-release gates', () => {
@@ -122,7 +142,7 @@ test('PING is published across human, machine, Block, local, and agent discovery
   assert.match(sitemap, /pointcast\.xyz\/digital-pets\/ping\.json/);
   assert.match(agents, /pingLocalPet: 'https:\/\/pointcast\.xyz\/digital-pets\/ping\.json'/);
   assert.match(forAgents, /Companion 04 is the PING/);
-  assert.match(llms, /84-byte opaque wire/);
+  assert.match(llms, /168-byte opaque Protocol/);
   assert.match(llmsFull, /zero physical units/);
   assert.match(builtPage, /ONE LITTLE/);
   assert.match(builtPage, /NO APPLICATION SUBMITTED/);
@@ -130,7 +150,9 @@ test('PING is published across human, machine, Block, local, and agent discovery
   assert.match(builtPage, /PROOF-PAIR WAVE/i);
   assert.match(builtPage, /late Fall 2026 YC application/i);
   assert.equal(manifest.truth.physicalUnitsBuilt, 0);
-  assert.equal(manifest.truth.hostTestsPassed, 26);
+  assert.equal(manifest.truth.hostTestsPassed, 47);
+  assert.equal(manifest.truth.protocolVersion, 3);
+  assert.equal(manifest.truth.pairingContractAttemptsPassed, 100);
   assert.equal(manifest.truth.esp32CompileTargetPassed, true);
   assert.equal(manifest.truth.proofPairPartsCeilingUsd, 1250);
   assert.equal(manifest.truth.ycApplicationPrepared, false);
