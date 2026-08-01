@@ -3,6 +3,7 @@ import { BEACH_COMMONS_V18, GOVERNING_RULES, RADIUS_DOORS, RADIUS_GOALS, RADIUS_
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...BEACH_COMMONS_V18,
   premise:'The regional advantage is not a list of nearby assets. Proximity becomes strength when two existing capabilities finish something useful together, publish the proof, and make repetition easier.',
+  fieldCompanion:{title:'The Skill Line',fieldStudy:'018.A',human:'https://pointcast.xyz/beach-commons/v18/skills',json:'https://pointcast.xyz/beach-commons/v18/skills.json',block:'https://pointcast.xyz/b/0549',invitation:'Declare one capability, ask for one counterpart around one finishable brief, and choose exactly which communication action you welcome.',publicDirectory:false,automaticPosting:false,automaticMatching:false},
   framework:{strengths:RADIUS_STRENGTHS,geographicDoors:RADIUS_DOORS,workingPairs:WORKING_PAIRS,goals:RADIUS_GOALS},
   combinationBuilder:{availability:'human HTML edition only',startingStrengths:8,goals:5,combinations:40,routes:ROADMAP_OPTIONS,storage:false,analytics:false,geolocation:false,registration:false,networkWrites:false,identity:false},
   roadmap:ROADMAP_PHASES,
