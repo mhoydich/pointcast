@@ -206,5 +206,5 @@ test('V17 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(homeEdition, /href: '\/beach-commons\/v18\/skills'/);
   assert.match(homeEdition, /id: '0548'/);
   assert.match(homeEdition, /id: '0549'/);
-  assert.match(indexPage, /Foundation → room → proof → radius → skill\./);
+  assert.match(indexPage, /Foundation → room → proof → radius → skill → engineering\./);
 });
