@@ -78,7 +78,7 @@ test('The Skill Line has human, JSON, Block, homepage, discovery, and social twi
   assert.match(llmsFull, /THE SKILL LINE/);
   assert.match(v18, /Open the call for skill/);
   assert.match(v18json, /fieldCompanion/);
-  assert.match(edition, /New<br \/>0549/);
+  assert.match(edition, /id: '0549', noun: 'Skill', title: 'The Skill Line'/);
   const imageUrl = new URL('../public/images/og/b/0549.png', import.meta.url);
   await access(imageUrl);
   assert.deepEqual(pngSize(await readFile(imageUrl)), { width: 1200, height: 630 });
