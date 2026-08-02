@@ -587,9 +587,9 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
     },
     {
       number: '14',
-      name: 'The Stamp Press',
-      kicker: '50 fields / profiles / wallpaper / free editions',
-      description: 'Fifty place-first signal spirits made with a six-study AI press and campus design research—free to download, remix, and collect.',
+      name: 'The Noun Press',
+      kicker: '50 Nouns / profiles / wallpaper / free editions',
+      description: 'Fifty official-trait CC0 Nouns remixed through place, campus design research, and a six-study image press—free to download, remix, and collect.',
       href: '/25/collect/signal-stamps',
     },
   ],
