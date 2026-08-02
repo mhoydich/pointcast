@@ -214,6 +214,9 @@ const alternates = [
     btn.addEventListener('click', async function () {
       var value = btn.getAttribute('data-copy') || '';
       var copied = false;
+      var old = btn.textContent;
+      var previous = btn.parentElement && btn.parentElement.querySelector('[data-copy-fallback]');
+      if (previous) previous.remove();
 
       var field = document.createElement('textarea');
       field.value = value;
@@ -226,7 +229,6 @@ const alternates = [
       try {
         copied = document.execCommand('copy');
       } catch {}
-      field.remove();
 
       if (!copied) {
         try {
@@ -236,11 +238,21 @@ const alternates = [
       }
 
       if (copied) {
-        var old = btn.textContent;
+        field.remove();
         btn.textContent = 'Copied';
         window.setTimeout(function () { btn.textContent = old || 'Copy URL'; }, 1200);
       } else {
-        window.prompt('Copy connector URL', value);
+        field.className = 'copy-fallback';
+        field.setAttribute('data-copy-fallback', '');
+        field.setAttribute('aria-label', 'Text to copy manually');
+        field.rows = 4;
+        field.style.position = '';
+        field.style.opacity = '';
+        btn.insertAdjacentElement('afterend', field);
+        field.focus();
+        field.select();
+        btn.textContent = 'Press ⌘C';
+        window.setTimeout(function () { btn.textContent = old || 'Copy URL'; }, 2400);
       }
     });
   });
@@ -471,6 +483,18 @@ const alternates = [
     cursor: pointer;
   }
   .copybtn:hover, .connector__actions a:hover { background: #185FA5; color: #fff; text-decoration: none; }
+  .copy-fallback {
+    display: block;
+    width: min(100%, 760px);
+    box-sizing: border-box;
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--pc-ink);
+    background: #fff;
+    color: var(--pc-ink);
+    font: 12px/1.5 var(--pc-font-mono);
+    resize: vertical;
+  }
 
   .connectors {
     display: grid;
