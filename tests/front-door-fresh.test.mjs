@@ -40,7 +40,10 @@ test('the opening edition promotes the complete newest release run without Qwen'
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
-  assert.match(home, /images\/playlists\/wednesday-0934-good-work-cover\.png/);
+  assert.match(home, /images\/og\/b\/0551\.png/);
+  assert.match(edition, /Find a capability/);
+  assert.match(edition, /Build the proof/);
+  assert.match(edition, /Come in through/);
   assert.match(edition, /Wednesday Morning Uplift/);
   assert.match(edition, /THE GOOD WORK/);
   assert.match(edition, /Nothing wins/);
@@ -105,12 +108,14 @@ test('the front door has one reusable editorial freshness slot with a machine-re
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {
-  const [home, css] = await Promise.all([
+  const [home, edition, css] = await Promise.all([
     read('src/pages/index.astro'),
+    read('src/components/HomeNewEdition.astro'),
     read('src/styles/front-door-fresh.css'),
   ]);
 
-  assert.equal((home.match(/<h1\b/g) ?? []).length, 1);
+  assert.equal(((home + edition).match(/<h1\b/g) ?? []).length, 1);
+  assert.match(edition, /id="home-edition-title"/);
   assert.match(home, /aria-labelledby="fresh-hero-title"/);
   assert.match(home, /aria-label="PointCast channels"/);
   assert.match(home, /alt=\{heroSignals\[0\]\.alt\}/);
