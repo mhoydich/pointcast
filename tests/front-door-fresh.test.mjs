@@ -34,9 +34,10 @@ test('the PointCast front door is a focused live edition with stable discovery e
 });
 
 test('the opening edition promotes the complete newest release run without Qwen', async () => {
-  const [home, edition] = await Promise.all([
+  const [home, edition, middleware] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
+    read('functions/_middleware.ts'),
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
@@ -61,6 +62,12 @@ test('the opening edition promotes the complete newest release run without Qwen'
   assert.match(edition, /Authorize Spotify/);
   assert.match(edition, /Build a Follow Shelf/);
   assert.doesNotMatch(edition, /qwen/i);
+
+  const socialMetadataRewrite = middleware.slice(
+    middleware.indexOf('.on(\'meta[property="og:title"]'),
+    middleware.indexOf('.on(\'[data-today-signal]\''),
+  );
+  assert.equal((socialMetadataRewrite.match(/if \(archived\) return;/g) ?? []).length, 5);
 });
 
 test('the current field edition gives the living magazine, Tone Bloom, Beach Commons, and the future book real homepage weight', async () => {
