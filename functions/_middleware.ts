@@ -67,26 +67,31 @@ function injectTodaySignalMetadata(response: Response, pathname: string): Respon
   const transformed = new HTMLRewriter()
     .on('meta[property="og:title"], meta[name="twitter:title"]', {
       element(element) {
+        if (archived) return;
         element.setAttribute('content', title);
       },
     })
     .on('meta[property="og:description"], meta[name="twitter:description"], meta[name="description"]', {
       element(element) {
+        if (archived) return;
         element.setAttribute('content', description);
       },
     })
     .on('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="fc:frame:image"]', {
       element(element) {
+        if (archived) return;
         element.setAttribute('content', image);
       },
     })
     .on('meta[property="og:image:width"]', {
       element(element) {
+        if (archived) return;
         element.setAttribute('content', '1024');
       },
     })
     .on('meta[property="og:image:height"]', {
       element(element) {
+        if (archived) return;
         element.setAttribute('content', '1024');
       },
     })
