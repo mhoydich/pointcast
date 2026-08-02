@@ -1,0 +1,262 @@
+export const FIRECRAWL_FIELD_GUIDE = {
+  version: '1.0.0',
+  title: 'Who Gets to Read the Web?',
+  subtitle: 'A field guide to Firecrawl, spiders, indexes, and the argument hiding inside every fetch.',
+  canonical: 'https://pointcast.xyz/firecrawl',
+  machine: 'https://pointcast.xyz/firecrawl.json',
+  block: '0552',
+  publishedAt: '2026-08-02T10:20:00-07:00',
+  thesis: 'The web was born linkable. The spider made it legible. The index made it governable. AI made the old bargain visible.',
+  shortThesis: 'A crawler is never only a reader. It is a policy, a pace, a memory, and a theory of who the web is for.',
+  scope: 'Independent PointCast editorial field guide. Firecrawl is discussed as an open-source product and historical case, not as a sponsor or partner.',
+} as const;
+export const CRAWL_STAGES = [
+  {
+    id: 'discover',
+    number: '01',
+    verb: 'Discover',
+    question: 'What is reachable?',
+    description: 'Begin with a URL, a sitemap, a feed, an index, or one link leading to another. Discovery defines the frontier before a page is fetched.',
+    trace: 'seed → frontier',
+  },
+  {
+    id: 'ask',
+    number: '02',
+    verb: 'Ask',
+    question: 'What has the host said?',
+    description: 'Check robots.txt, terms, identity requirements, rate expectations, and the difference between a public URL and permission for every possible use.',
+    trace: 'host → rules',
+  },
+  {
+    id: 'fetch',
+    number: '03',
+    verb: 'Fetch',
+    question: 'What did the server return?',
+    description: 'Request the resource. Status codes, redirects, cache headers, authentication, and pacing are part of the answer—not plumbing to ignore.',
+    trace: 'request → response',
+  },
+  {
+    id: 'render',
+    number: '04',
+    verb: 'Render',
+    question: 'Does the page need a browser?',
+    description: 'Modern pages may assemble themselves with JavaScript. A browser-capable crawler can wait, interact, and read the resulting document.',
+    trace: 'HTML + JS → document',
+  },
+  {
+    id: 'extract',
+    number: '05',
+    verb: 'Extract',
+    question: 'What becomes portable?',
+    description: 'Turn the document into text, Markdown, links, screenshots, or a requested JSON shape. Extraction always chooses what counts as signal.',
+    trace: 'document → record',
+  },
+  {
+    id: 'index',
+    number: '06',
+    verb: 'Index',
+    question: 'How will it be found again?',
+    description: 'Normalize, deduplicate, annotate, and store a representation. An index is a memory optimized for retrieval, not a neutral copy of the world.',
+    trace: 'record → address',
+  },
+  {
+    id: 'retrieve',
+    number: '07',
+    verb: 'Retrieve',
+    question: 'What returns, and in what order?',
+    description: 'Search, rank, cite, summarize, or answer. The final ordering exposes the values that were hidden in every earlier technical choice.',
+    trace: 'query → consequence',
+  },
+] as const;
+
+export const FIRECRAWL_INTEREST = [
+  {
+    eyebrow: 'One surface',
+    title: 'It compresses the modern crawl stack.',
+    body: 'Search, map, scrape, crawl, browser interaction, screenshots, Markdown, and structured JSON can be asked for through one API instead of assembled from separate browser and parsing tools.',
+  },
+  {
+    eyebrow: 'AI-shaped output',
+    title: 'It treats web pages as context, not just documents.',
+    body: 'A model usually wants the main content, source URLs, and a stable schema—not a raw DOM. Firecrawl’s interesting move is to make that translation a first-class product boundary.',
+  },
+  {
+    eyebrow: 'Open core',
+    title: 'The machinery is inspectable and self-hostable.',
+    body: 'The main repository is AGPL-3.0, with separately identified MIT-licensed SDK and UI portions. The public implementation lets a team inspect the layer it is trusting to read the web.',
+  },
+  {
+    eyebrow: 'Old problem, new pressure',
+    title: 'It reveals how hard “give me this page” has become.',
+    body: 'JavaScript rendering, anti-bot systems, uneven markup, freshness, extraction quality, and scale all sit behind a deceptively small request. Firecrawl makes that accumulated complexity visible.',
+  },
+] as const;
+
+export const HISTORY = [
+  {
+    year: '1989–90',
+    title: 'The web begins as an open linking system.',
+    body: 'Tim Berners-Lee proposes the web in 1989 and builds its first browser and server in 1990. Its basic social move is radical: publish an address and let another document point to it.',
+    sourceIds: ['w3c-history', 'web25'],
+  },
+  {
+    year: '1992',
+    title: 'The “resource discovery problem” is already visible.',
+    body: 'A W3C-era note says a new server enters the known web through links or indexes. Before the web is large, it already needs a way to learn what exists.',
+    sourceIds: ['w3c-keeping-track'],
+  },
+  {
+    year: '1993',
+    title: 'The Wanderer walks the web to measure it.',
+    body: 'Matthew Gray’s World Wide Web Wanderer begins running in June. It is remembered as an early robot and index-maker, but its first question is almost ecological: how quickly is this habitat growing?',
+    sourceIds: ['wanderer'],
+  },
+  {
+    year: '1994',
+    title: 'Robots.txt proposes a courtesy layer.',
+    body: 'Martijn Koster defines a convention through which site operators can tell automated visitors which paths they request not be crawled. It is etiquette communicated by a machine-readable file, not a lock.',
+    sourceIds: ['rfc9309'],
+  },
+  {
+    year: '1998',
+    title: 'The link graph becomes a ranking system.',
+    body: 'Brin and Page describe Google’s large-scale search prototype and PageRank. The crawler collects; the index organizes; the links between pages become evidence used to order attention.',
+    sourceIds: ['google-paper'],
+  },
+  {
+    year: '2004',
+    title: 'Messy HTML gets a forgiving reader.',
+    body: 'Beautiful Soup arrives as a Python library for pulling data from HTML and XML, including malformed pages. The scraper becomes an everyday programmer’s tool, not only a search-engine subsystem.',
+    sourceIds: ['beautiful-soup'],
+  },
+  {
+    year: '2007–08',
+    title: 'A shared crawl becomes public infrastructure.',
+    body: 'Common Crawl forms as a nonprofit and begins keeping open web archives. Its proposition is political as much as technical: crawl-scale data should not belong only to the largest companies.',
+    sourceIds: ['common-crawl-about', 'common-crawl-faq'],
+  },
+  {
+    year: '2022',
+    title: 'The robots convention becomes an Internet standard.',
+    body: 'RFC 9309 standardizes the Robots Exclusion Protocol while stating its limit plainly: these rules are not access authorization and must not be used as security controls.',
+    sourceIds: ['rfc9309'],
+  },
+  {
+    year: '2024',
+    title: 'Firecrawl packages the AI-era web reader.',
+    body: 'A tool born from Mendable’s repeated extraction needs launches as Firecrawl: one API for turning modern sites into model-ready Markdown or structured data, later joined by search, mapping, and browser actions.',
+    sourceIds: ['firecrawl-github', 'firecrawl-yc', 'firecrawl-july'],
+  },
+  {
+    year: '2025–26',
+    title: 'The old bargain becomes an explicit negotiation.',
+    body: 'Publishers, archives, search engines, AI companies, and infrastructure providers test new signals, blocks, licenses, and payment experiments. Cloudflare’s Pay Per Crawl makes the tension literal, even while HTTP 402 remains a reserved, nonstandard status.',
+    sourceIds: ['cloudflare-pay', 'mdn-402'],
+  },
+] as const;
+
+export const LENSES = [
+  {
+    id: 'publisher',
+    number: '01',
+    name: 'Publisher',
+    question: 'If I made the page, what did I consent to?',
+    argument: 'Publicly reachable is not the same thing as infinitely reusable. A publisher may welcome search discovery, reject model training, allow quotation, sell an API, or change their mind. One URL can carry several intended relationships.',
+    obligation: 'Publish clear signals, protect what must actually be private, distinguish indexing from reuse, and avoid pretending robots.txt can express every downstream purpose.',
+  },
+  {
+    id: 'librarian',
+    number: '02',
+    name: 'Librarian',
+    question: 'What disappears if nobody is allowed to copy?',
+    argument: 'Preservation requires making another copy before a site vanishes, a format dies, or a public record is rewritten. The archive argues for continuity, provenance, and access across time.',
+    obligation: 'Collect with a public mission, preserve context, honor appropriate restrictions, document provenance, and resist turning memory into surveillance.',
+  },
+  {
+    id: 'researcher',
+    number: '03',
+    name: 'Researcher',
+    question: 'Can public knowledge be studied at public scale?',
+    argument: 'Crawling can reveal language change, discrimination, market behavior, link decay, and cultural history that no single page can show. But people inside the dataset may never have imagined themselves as rows.',
+    obligation: 'Minimize collection, assess human risk, secure raw data, publish methods, separate public availability from ethical harmlessness, and avoid re-identification.',
+  },
+  {
+    id: 'builder',
+    number: '04',
+    name: 'Builder',
+    question: 'Why make every small team rebuild the same reader?',
+    argument: 'Open tools like Beautiful Soup, Scrapy, and Firecrawl turn web access into shared capability. They can democratize search, migration, accessibility, interoperability, and agent-making.',
+    obligation: 'Identify the client, obey boundaries, use native feeds and APIs when they are better, cache responsibly, pace requests, and do not bypass access controls.',
+  },
+  {
+    id: 'host',
+    number: '05',
+    name: 'Host',
+    question: 'Who pays for somebody else’s crawl?',
+    argument: 'Every request consumes bandwidth, compute, support, and sometimes scarce licensed content. At scale, a polite reader and an extractive flood are materially different visitors.',
+    obligation: 'Offer legible machine routes where practical, set rate and access controls, measure abuse without over-collecting people, and treat security as security—not as a robots.txt wish.',
+  },
+  {
+    id: 'artist',
+    number: '06',
+    name: 'Artist',
+    question: 'Is being seen the same as being absorbed?',
+    argument: 'Artists publish to encounter an audience, but indexing, collage, training, imitation, criticism, and commercial substitution are not one act. A culture needs both circulation and meaningful authorship.',
+    obligation: 'Keep source and transformation visible, do not erase attribution, avoid substituting a derivative for the original market, and make room for refusal as well as reference.',
+  },
+  {
+    id: 'agent',
+    number: '07',
+    name: 'Agent',
+    question: 'What must a machine remember about how it learned?',
+    argument: 'An agent turns retrieval into action. A missing source, stale page, or misread rule can propagate into confident advice. The crawler is now part of an epistemic supply chain.',
+    obligation: 'Prefer structured sources, retain URLs and timestamps, expose uncertainty, quote sparingly, cite what supports the answer, and require human approval before consequential action.',
+  },
+  {
+    id: 'public',
+    number: '08',
+    name: 'Public reader',
+    question: 'Should the open web be searchable by everyone—or only by incumbents?',
+    argument: 'A ban that only the largest platforms can technically or contractually survive does not necessarily protect the public. Open crawling can decentralize knowledge; unrestricted extraction can also concentrate it again.',
+    obligation: 'Ask who gains memory, who bears cost, who can contest an index, whose work becomes infrastructure, and whether the result expands public capability or merely private scale.',
+  },
+] as const;
+
+export const CRAWL_COMPACT = [
+  { number: '01', title: 'Introduce the machine.', body: 'Use an honest user agent and a working contact route. An invisible client has made accountability impossible before the first byte arrives.' },
+  { number: '02', title: 'Read the room.', body: 'Check robots.txt, terms, authentication, purpose-specific signals, and the site’s native feeds or APIs. A machine route may be both kinder and more accurate.' },
+  { number: '03', title: 'Take the minimum.', body: 'Fetch only what the task needs. Bound depth, domains, time, and fields. “The whole site” is a consequential choice, not a convenient default.' },
+  { number: '04', title: 'Keep a human pace.', body: 'Rate-limit, add backoff, cache, deduplicate, and stop on distress. The right speed is defined by the host’s capacity and policy, not the crawler’s maximum.' },
+  { number: '05', title: 'Do not pick locks.', body: 'Do not bypass authentication, paywalls, CAPTCHAs, or technical access controls. Public research and interoperability do not erase boundaries.' },
+  { number: '06', title: 'Carry provenance.', body: 'Keep the source URL, retrieval time, relevant title, and transformation record. Context without provenance becomes rumor at machine speed.' },
+  { number: '07', title: 'Separate reading from rights.', body: 'A successful fetch does not settle copyright, privacy, contract, database, publicity, or sector-specific rules. Technical reachability answers only a technical question.' },
+  { number: '08', title: 'Make stopping real.', body: 'Honor deletion and correction where appropriate, expire stale records, and provide a human contact. A responsible index includes a way out.' },
+] as const;
+
+export const SOURCE_LEDGER = [
+  { id: 'firecrawl-github', publisher: 'Firecrawl', title: 'firecrawl/firecrawl', href: 'https://github.com/firecrawl/firecrawl', kind: 'official repository', supports: 'Product capabilities, open-source license, robots.txt default, and user responsibility.' },
+  { id: 'firecrawl-docs', publisher: 'Firecrawl', title: 'Introduction', href: 'https://docs.firecrawl.dev/introduction', kind: 'official documentation', supports: 'Scrape, crawl, map, search, browser rendering, Markdown, and structured output.' },
+  { id: 'firecrawl-yc', publisher: 'Y Combinator', title: 'Firecrawl company profile', href: 'https://www.ycombinator.com/companies/firecrawl/jobs', kind: 'company profile', supports: '2024 founding and origin in repeated web-extraction needs at Mendable.' },
+  { id: 'firecrawl-july', publisher: 'Firecrawl', title: 'Firecrawl July 2024 updates', href: 'https://www.firecrawl.dev/blog/firecrawl-july-2024-updates', kind: 'official company history', supports: 'Early launch chronology and Y Combinator milestone.' },
+  { id: 'w3c-history', publisher: 'W3C', title: 'A Little History of the World Wide Web', href: 'https://www.w3.org/about/history/', kind: 'standards-body history', supports: '1989 proposal and first browser/server in 1990.' },
+  { id: 'web25', publisher: 'W3C', title: 'The Web at 25', href: 'https://www.w3.org/webat25/news/tbl-web25-welcome', kind: 'inventor reflection', supports: 'Open, universal, royalty-free, decentralized design values and data-governance questions.' },
+  { id: 'w3c-keeping-track', publisher: 'W3C archive', title: 'Keeping Track of WWW Servers', href: 'https://www.w3.org/History/19921103-hypertext/hypertext/WWW/FAQ/KeepingTrack.html', kind: 'historical primary source', supports: 'The 1992 resource-discovery problem and role of links and indexes.' },
+  { id: 'wanderer', publisher: 'Matthew Gray / MIT archive', title: 'The World Wide Web Wanderer', href: 'https://webdoc.gwdg.de/ebook/aw/1999/webcrawler/mak/projects/robots/active/html/wanderer.html', kind: 'historical project page', supports: 'June 1993 first run, measurement purpose, and early index.' },
+  { id: 'rfc9309', publisher: 'IETF', title: 'RFC 9309: Robots Exclusion Protocol', href: 'https://www.rfc-editor.org/rfc/rfc9309.html', kind: 'internet standard', supports: 'Crawler definition, 1994 origin, 2022 standardization, and robots.txt limits.' },
+  { id: 'google-paper', publisher: 'Stanford / Google Research', title: 'The Anatomy of a Large-Scale Hypertextual Web Search Engine', href: 'https://research.google.com/pubs/archive/334.pdf', kind: 'research paper', supports: '1998 Google prototype, crawling and indexing architecture, and PageRank.' },
+  { id: 'google-indexing', publisher: 'Google Search Central', title: 'Crawling and indexing', href: 'https://developers.google.com/search/docs/crawling-indexing', kind: 'official documentation', supports: 'The operational distinction between crawl, parse, render, index, and search controls.' },
+  { id: 'google-noindex', publisher: 'Google Search Central', title: 'Block Search indexing with noindex', href: 'https://developers.google.com/search/docs/crawling-indexing/block-indexing', kind: 'official documentation', supports: 'A crawler must access a page to see a noindex rule; robots blocking and indexing controls are distinct.' },
+  { id: 'beautiful-soup', publisher: 'Leonard Richardson', title: 'Beautiful Soup', href: 'https://www.crummy.com/software/BeautifulSoup/', kind: 'official project page', supports: '2004 origin and parsing of imperfect HTML/XML.' },
+  { id: 'common-crawl-about', publisher: 'Common Crawl', title: 'About Common Crawl', href: 'https://commoncrawl.org/about', kind: 'official nonprofit page', supports: 'Open repository mission, nonprofit history, and democratizing access to crawl data.' },
+  { id: 'common-crawl-faq', publisher: 'Common Crawl', title: 'Frequently Asked Questions', href: 'https://commoncrawl.org/faq', kind: 'official operations page', supports: 'CCBot identity, robots checking, rate limiting, and open dataset access.' },
+  { id: 'cloudflare-pay', publisher: 'Cloudflare', title: 'Introducing Pay Per Crawl', href: 'https://blog.cloudflare.com/introducing-pay-per-crawl/', kind: 'infrastructure-provider announcement', supports: '2025 block, allow, or experimental paid-crawl controls.' },
+  { id: 'mdn-402', publisher: 'MDN Web Docs', title: '402 Payment Required', href: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/402', kind: 'web reference', supports: 'HTTP 402 remains reserved/nonstandard with no standard use convention.' },
+  { id: 'hiq-opinion', publisher: 'U.S. Court of Appeals for the Ninth Circuit', title: 'hiQ Labs, Inc. v. LinkedIn Corp. (2022 opinion)', href: 'https://cdn.ca9.uscourts.gov/datastore/opinions/2022/04/18/17-16783.pdf', kind: 'court opinion', supports: 'One U.S. preliminary-injunction dispute involving automated access to public LinkedIn profiles; not a universal scraping rule.' },
+] as const;
+
+export const BOUNDARIES = {
+  legal: 'This is an editorial and technical field guide, not legal advice. Scraping questions can involve copyright, privacy, contract, computer-access, database, publicity, consumer-protection, and sector-specific law, and outcomes vary by jurisdiction and facts. The hiQ opinion is included as one narrow U.S. appellate dispute over a preliminary injunction and public profile pages—not as a general permission slip.',
+  robots: 'robots.txt communicates requested crawler behavior. RFC 9309 expressly says it is not access authorization and is not a security control.',
+  product: 'PointCast has no sponsorship, partnership, or financial relationship with Firecrawl. Product capabilities and license statements are sourced to Firecrawl’s official repository and documentation and should be rechecked before operational reliance.',
+  privacy: 'A page being public does not remove the possibility of human harm from aggregation, inference, persistence, or re-identification.',
+} as const;
