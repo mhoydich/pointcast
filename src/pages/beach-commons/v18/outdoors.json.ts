@@ -1,0 +1,57 @@
+import type { APIRoute } from 'astro';
+import {
+  DAY_RECIPES,
+  FIELD_ETIQUETTE,
+  OPEN_AIR_COMMONS,
+  OUTDOOR_ARCS,
+  OUTDOOR_GAMES,
+  OUTDOOR_MODES,
+  OUTDOOR_RESETS,
+  OUTDOOR_RESOURCES,
+  SOURCE_DESK,
+} from '../../../lib/radius25-outdoors';
+
+export const GET: APIRoute = () => new Response(JSON.stringify({
+  ...OPEN_AIR_COMMONS,
+  premise: 'Southern California already contains the public rooms. The design move is to choose an official door, fit the invitation to the place, use existing infrastructure, and leave cleanly.',
+  modes: OUTDOOR_MODES,
+  arcs: OUTDOOR_ARCS,
+  resources: OUTDOOR_RESOURCES,
+  games: OUTDOOR_GAMES,
+  resets: OUTDOOR_RESETS,
+  dayRecipes: DAY_RECIPES,
+  fieldEtiquette: FIELD_ETIQUETTE,
+  sourceDesk: SOURCE_DESK,
+  interaction: {
+    availability: 'human HTML companion only',
+    directory: 'browser-local text, mode, and editorial-arc filtering over checked-in records',
+    dayComposer: 'browser-local selection among six checked-in day recipes and 25 checked-in public resource doors',
+    copy: 'user-controlled clipboard action for the visible day card',
+    liveAvailabilityLookup: false,
+    reservation: false,
+    registration: false,
+    geolocation: false,
+    identity: false,
+    storage: false,
+    cookies: false,
+    analytics: false,
+    networkWrites: false,
+  },
+  methodology: {
+    researchCheckedAt: '2026-08-02T15:20:00-07:00',
+    sourcePolicy: 'Official city, county, state, or responsible operating-steward pages. Every resource keeps a direct source and check-before-leaving note.',
+    radiusBoundary: 'A roughly 25-mile straight-line editorial field centered on El Segundo. Arc and band labels are orientation, not measured distance, drive time, jurisdiction, service area, legal boundary, or geofence.',
+    publicDoorBoundary: 'A resource card confirms that an official public-facing source describes the place or facility. It does not confirm real-time access, public availability of every feature, vacancy, reservation, parking, program status, safety, suitability, or permission for organized use.',
+    activityBoundary: 'No event, class, team, league, gathering, reservation, installation, vendor activity, amplification, fire, field use, habitat interaction, restoration, collection, research, filming, sampling, or permit is announced or authorized.',
+    natureBoundary: 'Observe without collecting or altering. Current preserve, wildlife, marine-protected-area, trail, tide-pool, beach, water-quality, and closure rules control.',
+    movementBoundary: 'The six resets are general low-intensity recreational prompts, not medical advice, diagnosis, treatment, rehabilitation, or an individualized exercise prescription.',
+    freshness: 'Conditions change. Open the linked official source again before leaving and follow current signs, staff direction, alerts, closures, rules, permits, reservations, and public-safety guidance.',
+  },
+}, null, 2), {
+  headers: {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'public, max-age=300, s-maxage=3600',
+    'Access-Control-Allow-Origin': '*',
+    Link: '<https://pointcast.xyz/beach-commons/v18/outdoors>; rel="alternate"; type="text/html"',
+  },
+});
