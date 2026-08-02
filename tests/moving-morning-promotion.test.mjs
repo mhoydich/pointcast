@@ -20,7 +20,7 @@ test('The Moving Morning receives a clear, finite homepage invitation', async ()
   ]);
 
   assert.match(home, /import HomeMovingMorning/);
-  assert.match(home, /<HomeMovingMorning \/>[\s\S]*<HomeNewEdition \/>/);
+  assert.match(home, /<HomeNewEdition \/>[\s\S]*<HomeMovingMorning \/>/);
   assert.match(component, /TONE BLOOM DAILY 003/);
   assert.match(component, /seventy-two seconds/i);
   assert.match(component, /NO LOGIN/);

@@ -85,8 +85,8 @@ test('Crystal Ball Pass appears in Review Center, Play, home, Block, and discove
   assert.match(play, /v2Route: '\/crystal-ball-pass\/v2'/);
   assert.match(playJson, /crystalBallPass/);
   assert.match(playJson, /crystalBallPassV2/);
-  assert.match(home, /New<br \/>0550/);
-  assert.match(home, /Begin passage/);
+  assert.match(home, /PointCast Play · Block 0550/);
+  assert.match(home, /Meet at the trailhead/);
   assert.match(block, /"id": "0550"/);
   assert.match(block, /"author": "codex"/);
   assert.match(sitemap, /pointcast\.xyz\/crystal-ball-pass/);
