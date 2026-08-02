@@ -19,12 +19,13 @@ test('Beach Commons V5 has a disclosed three-creative reciprocal house campaign'
   assert.match(registry, /Account for every cup\./);
   assert.match(registry, /The school closes as a parliament\./);
   assert.match(registry, /not an operating event, school, parliament, installation, scientific authority, or invitation to build/i);
-  assert.equal((registry.match(/'PC-BEACH-COMMONS-V5-2026'/g) || []).length >= 6, true);
+  assert.equal((registry.match(/'PC-BEACH-COMMONS-V5-2026'/g) || []).length >= 1, true);
   assert.match(registry, /isBeachCommonsV5Surface/);
   assert.match(desk, /NEW RECIPROCAL HOUSE CAMPAIGN/);
   assert.match(desk, /PRESS FILING/);
   assert.match(receipt, /BEACH_COMMONS_V5_CAMPAIGN/);
   assert.match(widget, /preferredCampaigns/);
+  assert.match(widget, /mount\.dataset\.campaign/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);
 });
 

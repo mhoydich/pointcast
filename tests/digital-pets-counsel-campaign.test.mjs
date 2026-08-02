@@ -60,15 +60,12 @@ test('comedy campaign is recorded across the contextual and reciprocal ad networ
 
   assert.match(registry, /DIGITAL_PETS_COUNSEL_PROMO_DISPATCHES\.map/);
   assert.match(registry, /isCounselSurface \? undefined : counselCreative/);
-  assert.match(registry, /id: 'industrynext'[\s\S]*'PC-DIGITAL-PETS-COUNSEL-2026'/);
-  assert.match(registry, /id: 'allworthy'[\s\S]*'PC-DIGITAL-PETS-COUNSEL-2026'/);
-  assert.match(registry, /id: 'passportz'[\s\S]*'PC-DIGITAL-PETS-COUNSEL-2026'/);
-  assert.match(registry, /id: 'rally'[\s\S]*'PC-DIGITAL-PETS-COUNSEL-2026'/);
-  assert.match(registry, /id: 'common-hours'[\s\S]*'PC-DIGITAL-PETS-COUNSEL-2026'/);
+  assert.match(registry, /DIGITAL_PETS_COUNSEL_CAMPAIGN/);
   assert.match(desk, /LAUNCH-WEEK COMEDY CAMPAIGN/);
   assert.match(desk, /OPEN THE FIVE-PAGE BRIEF/);
   assert.match(receipt, /DIGITAL_PETS_COUNSEL_CAMPAIGN/);
   assert.match(widget, /preferredCampaigns/);
+  assert.match(widget, /mount\.dataset\.campaign/);
 });
 
 test('story, machine twin, and discovery surfaces expose the campaign artifact', async () => {

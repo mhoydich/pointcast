@@ -8,6 +8,10 @@
   var inventoryUrl = networkOrigin + '/ads.json';
   var metricsUrl = networkOrigin + '/api/ad-metrics';
   var inventoryPromise;
+  var audioContext;
+  var soundEnabled = false;
+  var soundButtons = [];
+  var playedMelodies = Object.create(null);
 
   function trackingDisabled() {
     try {
@@ -187,6 +191,90 @@
     }[tone] || ['#c8ff2f', '#2857ff', '#060c31'];
   }
 
+  function contextForMelody() {
+    if (audioContext) return audioContext;
+    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    try { audioContext = new AudioContextClass(); } catch (_) { return null; }
+    return audioContext;
+  }
+
+  function updateSoundButtons() {
+    soundButtons = soundButtons.filter(function (button) { return button && button.isConnected; });
+    soundButtons.forEach(function (button) {
+      button.setAttribute('aria-pressed', String(soundEnabled));
+      button.textContent = soundEnabled ? 'SOUND ON · PLAYS ON VIEW' : 'SOUND OFF · MELODY ON VIEW';
+    });
+  }
+
+  function playMelody(ad, key) {
+    if (!soundEnabled || playedMelodies[key] || !ad.melody || !Array.isArray(ad.melody.notes)) return;
+    var notes = ad.melody.notes.map(Number).filter(Number.isFinite);
+    if (!notes.length) return;
+    var context = contextForMelody();
+    if (!context) return;
+    var ready = context.state === 'running' ? Promise.resolve() : context.resume();
+    ready.then(function () {
+      if (context.state !== 'running' || playedMelodies[key]) return;
+      playedMelodies[key] = true;
+      var beat = Math.max(100, Math.min(500, Number(ad.melody.beatMs) || 190)) / 1000;
+      var waveform = ad.melody.waveform === 'triangle' ? 'triangle' : 'sine';
+      var master = context.createGain();
+      master.gain.setValueAtTime(0.0001, context.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.035);
+      master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + notes.length * beat + 0.62);
+      master.connect(context.destination);
+      notes.forEach(function (midi, index) {
+        var start = context.currentTime + 0.04 + index * beat;
+        var oscillator = context.createOscillator();
+        var voice = context.createGain();
+        oscillator.type = waveform;
+        oscillator.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), start);
+        voice.gain.setValueAtTime(0.0001, start);
+        voice.gain.exponentialRampToValueAtTime(index === notes.length - 1 ? 0.55 : 0.38, start + 0.025);
+        voice.gain.exponentialRampToValueAtTime(0.0001, start + beat * 1.8);
+        oscillator.connect(voice);
+        voice.connect(master);
+        oscillator.start(start);
+        oscillator.stop(start + beat * 1.9);
+      });
+    }).catch(function () {});
+  }
+
+  function setupMelody(creative, ad, publisher, placement, button) {
+    if (!ad.melody || !button) return;
+    var key = [publisher, window.location.pathname, placement, ad.id].join(':');
+    var visible = false;
+    var observer = 'IntersectionObserver' in window ? new IntersectionObserver(function (entries) {
+      var entry = entries[0];
+      visible = Boolean(entry && entry.isIntersecting && entry.intersectionRatio >= 0.5);
+      if (visible) playMelody(ad, key);
+    }, { threshold: [0.5] }) : null;
+    if (observer) observer.observe(creative);
+
+    soundButtons.push(button);
+    updateSoundButtons();
+    button.addEventListener('click', function () {
+      if (soundEnabled) {
+        soundEnabled = false;
+        updateSoundButtons();
+        return;
+      }
+      var context = contextForMelody();
+      if (!context) {
+        button.textContent = 'SOUND UNAVAILABLE';
+        button.disabled = true;
+        return;
+      }
+      var ready = context.state === 'running' ? Promise.resolve() : context.resume();
+      ready.then(function () {
+        soundEnabled = context.state === 'running';
+        updateSoundButtons();
+        if (soundEnabled && visible) playMelody(ad, key);
+      }).catch(function () {});
+    });
+  }
+
   function setupTilt(scene, creative) {
     var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     var precisePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -242,6 +330,9 @@
       '.head,.boundary{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:8px;line-height:1.45;letter-spacing:.12em;text-transform:uppercase}',
       '.head{padding:3px 6px 10px;color:color-mix(in srgb,var(--accent) 78%,#fff);border-bottom:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}',
       '.head a,.boundary a{color:inherit;text-underline-offset:3px}',
+      '.sound{appearance:none;padding:2px 0;color:var(--accent);background:none;border:0;border-bottom:1px solid currentColor;font:inherit;letter-spacing:inherit;text-transform:uppercase;cursor:pointer}',
+      '.sound[aria-pressed="true"]{color:#fff}',
+      '.sound:focus-visible{outline:2px solid var(--accent);outline-offset:3px}',
       '.now{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;margin-top:10px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--accent) 42%,transparent);border-radius:14px;background:color-mix(in srgb,var(--deep) 80%,#08080d);color:var(--ink);text-decoration:none}',
       '.now:focus-visible{outline:3px solid var(--accent);outline-offset:3px}',
       '.now__pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 16%,transparent),0 0 18px color-mix(in srgb,var(--accent) 70%,transparent)}',
@@ -259,6 +350,12 @@
       '.creative:focus-visible{outline:4px solid var(--accent);outline-offset:5px}',
       '.image{position:absolute;inset:0;z-index:-2;overflow:hidden;border-radius:inherit;transform:translateZ(-2px) scale(1.04)}',
       '.image img{width:100%;height:100%;display:block;object-fit:cover;filter:saturate(1.12) contrast(1.08)}',
+      '.uplift{position:absolute;inset:0;z-index:-2;overflow:hidden;background:radial-gradient(circle at 76% 25%,#fff7a8 0 9%,#ff6b3d 9% 18%,transparent 18%),repeating-linear-gradient(90deg,transparent 0 34px,color-mix(in srgb,var(--accent) 18%,transparent) 34px 35px),linear-gradient(135deg,var(--mid),var(--deep))}',
+      '.creative[data-motif="bell"] .uplift{background:radial-gradient(ellipse at 75% 38%,#f1b6ff 0 10%,#6e39bd 10% 21%,transparent 21%),repeating-radial-gradient(circle at 75% 38%,transparent 0 30px,color-mix(in srgb,#fff 18%,transparent) 31px 32px),linear-gradient(135deg,#6e39bd,#160923)}',
+      '.creative[data-motif="garden"] .uplift{background:radial-gradient(circle at 78% 24%,#fff7a8 0 8%,transparent 8%),radial-gradient(ellipse at 65% 85%,#c9ff73 0 10%,transparent 10%),radial-gradient(ellipse at 82% 78%,#7dd8ff 0 12%,transparent 12%),linear-gradient(160deg,#17785b,#071e19)}',
+      '.creative[data-motif="chorus"] .uplift{background:radial-gradient(circle at 72% 34%,#ffcf4a 0 8%,transparent 8%),radial-gradient(circle at 84% 58%,#ff8aad 0 10%,transparent 10%),radial-gradient(circle at 64% 70%,#fff 0 6%,transparent 6%),linear-gradient(135deg,#df315f,#250717)}',
+      '.creative[data-motif="lantern"] .uplift{background:radial-gradient(circle at 75% 44%,#fff7a8 0 7%,#ffcf4a 7% 13%,transparent 25%),repeating-linear-gradient(0deg,transparent 0 28px,color-mix(in srgb,#fff 9%,transparent) 28px 29px),linear-gradient(#17285e,#090c22)}',
+      '.creative[data-motif="horizon"] .uplift{background:radial-gradient(circle at 77% 42%,#fff7c2 0 8%,transparent 8%),linear-gradient(180deg,#7dd8ff 0 50%,#ff8e52 50% 57%,#ffe96d 57% 100%)}',
       '.glint{position:absolute;inset:-1px;z-index:0;border-radius:inherit;background:radial-gradient(circle at var(--mx) var(--my),color-mix(in srgb,var(--accent) 34%,transparent),transparent 30%);mix-blend-mode:screen;pointer-events:none}',
       '.meta,.number,h2,.copy,.cta{position:relative;z-index:1;transform:translateZ(52px)}',
       '.meta{align-self:start;color:var(--accent);font-size:7px;letter-spacing:.13em;text-transform:uppercase}',
@@ -286,6 +383,15 @@
     var inspect = document.createElement('a');
     inspect.href = networkOrigin + '/ads';
     inspect.textContent = 'INSPECT THE NETWORK ↗';
+    var soundButton = null;
+    if (ad.melody) {
+      soundButton = document.createElement('button');
+      soundButton.className = 'sound';
+      soundButton.type = 'button';
+      soundButton.setAttribute('aria-pressed', 'false');
+      soundButton.textContent = 'SOUND OFF · MELODY ON VIEW';
+      head.appendChild(soundButton);
+    }
     head.appendChild(inspect);
     unit.appendChild(head);
 
@@ -328,6 +434,7 @@
     creative.className = 'creative';
     creative.href = destination;
     creative.dataset.adRecord = ad.id;
+    if (ad.motif) creative.dataset.motif = ad.motif;
     creative.addEventListener('click', function () { sendMetric('click', ad.id, publisher, placement); });
     if (ad.image) {
       var imageFrame = document.createElement('span');
@@ -341,18 +448,24 @@
       imageFrame.appendChild(image);
       creative.appendChild(imageFrame);
     }
+    if (ad.motif) {
+      var uplift = document.createElement('span');
+      uplift.className = 'uplift';
+      uplift.setAttribute('aria-hidden', 'true');
+      creative.appendChild(uplift);
+    }
     var glint = document.createElement('span');
     glint.className = 'glint';
     glint.setAttribute('aria-hidden', 'true');
     creative.appendChild(glint);
     addText(creative, 'span', 'HOUSE AD · ' + ad.id + ' · ' + ad.advertiser, 'meta');
-    addText(creative, 'span', '3D', 'number').setAttribute('aria-hidden', 'true');
+    addText(creative, 'span', ad.melody ? '♪' : 'GOOD', 'number').setAttribute('aria-hidden', 'true');
     addText(creative, 'h2', ad.headline);
     addText(creative, 'span', ad.copy, 'copy');
     addText(creative, 'span', ad.cta + ' →', 'cta');
     scene.appendChild(creative);
     unit.appendChild(scene);
-    addText(unit, 'p', 'Move pointer / arrow keys to tilt · Enter to open', 'hint');
+    addText(unit, 'p', ad.melody ? 'Turn sound on, then melody plays when this view returns · Move pointer / arrow keys to tilt' : 'Move pointer / arrow keys to tilt · Enter to open', 'hint');
 
     var boundary = document.createElement('div');
     boundary.className = 'boundary';
@@ -367,6 +480,7 @@
     mount.dataset.networkPublisher = publisher;
     mount.dataset.networkCampaign = String(ad.campaign || ad.id);
     setupTilt(scene, creative);
+    setupMelody(creative, ad, publisher, placement, soundButton);
     observeImpression(creative, ad, publisher, placement);
   }
 

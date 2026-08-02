@@ -92,7 +92,7 @@ test('the campaign runs across the public ad network without advertising to itse
   assert.equal((registry.match(/id: blanketDispatch\.id/g) || []).length, 1);
   assert.match(registry, /isBeachBlanketSurface/);
   assert.match(registry, /isBeachBlanketSurface \? undefined : blanketCreative/);
-  assert.match(registry, /PC-BEACH-BLANKET-REVIEW-2026/);
+  assert.match(registry, /BEACH_BLANKET_PROMOTION_CAMPAIGN/);
   assert.match(desk, /FULL PROMOTION CAMPAIGN/);
   assert.match(desk, /OPEN THE PROMOTION DESK/);
   assert.match(receipt, /BEACH_BLANKET_PROMOTION_CAMPAIGN/);

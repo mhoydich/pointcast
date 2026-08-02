@@ -51,6 +51,12 @@ export interface PointCastAd {
   campaign?: string;
   seriesLabel?: string;
   seriesIndex?: number;
+  motif?: 'sun' | 'bell' | 'garden' | 'chorus' | 'lantern' | 'horizon';
+  melody?: {
+    notes: number[];
+    beatMs: number;
+    waveform: 'sine' | 'triangle';
+  };
   status: 'house';
 }
 
@@ -73,8 +79,8 @@ export const OPEN_AD_PLACEMENT = {
   priceTezPerWeek: 12,
   settlement: 'prototype',
   tracking: 'aggregate impressions + clicks',
-  interaction: 'Pointer and keyboard tilt with a reduced-motion fallback',
-  note: 'One clearly labeled interactive placement across public PointCast pages. Aggregate events only; no visitor identifiers or behavioral profiles.',
+  interaction: 'Pointer and keyboard tilt with a reduced-motion fallback, plus opt-in melodies that begin when selected creatives enter view',
+  note: 'One clearly labeled interactive placement across public PointCast pages. Sound requires a visitor gesture. Aggregate events only; no visitor identifiers or behavioral profiles.',
 } as const;
 
 export const OPEN_AD_NETWORK = {
@@ -84,10 +90,23 @@ export const OPEN_AD_NETWORK = {
   embedUrl: 'https://pointcast.xyz/open-ad-network.js',
   format: 'Interactive portable CSS 3D house card',
   selection: 'Daily contextual rotation by publisher and page URL',
-  interaction: 'Pointer and arrow-key tilt; no autoplay; reduced-motion safe',
+  interaction: 'Pointer and arrow-key tilt; optional synthesized melody after explicit sound-on gesture; reduced-motion safe',
   tracking: 'Aggregate impressions + clicks by creative and publisher',
   privacy: 'No cookies, fingerprinting, wallet data, cross-site visitor identifiers, or behavioral profiles.',
   settlement: 'prototype',
+} as const;
+
+export const A_LITTLE_MORE_LIGHT_CAMPAIGN = {
+  id: 'PC-A-LITTLE-MORE-LIGHT-2026',
+  label: 'A Little More Light — Six Small Invitations',
+  advertiser: 'A Little More Light',
+  creativeCount: 6,
+  melodicCreativeCount: 4,
+  placement: 'Current rotation across PointCast and every reciprocal Open Ad Network publisher',
+  tracking: 'aggregate impressions + clicks',
+  sound: 'Four browser-synthesized miniatures play on view only after a visitor turns sound on. No audio file, microphone, playback identifier, or sound telemetry is used.',
+  status: 'house',
+  note: 'An uplifting first-party house campaign for six already-public PointCast rooms. No purchase, signup, wallet, or paid media is involved.',
 } as const;
 
 export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
@@ -98,6 +117,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'pointcast.xyz',
     surface: 'Native sitewide contextual rail',
     advertiserAliases: ['PointCast', "PointCast Today's Art"],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -107,7 +127,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'www.industrynext.xyz',
     surface: 'A first-100 Tezos wallet lead across the Nouns studio, Permission Lab, and Made stream',
     advertiserAliases: ['Industry Next'],
-    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -117,7 +137,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'allworthy.xyz',
     surface: 'A first-100 Tezos wallet lead across public-interest funding records and experiments',
     advertiserAliases: ['Allworthy'],
-    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -127,7 +147,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'passportz.xyz',
     surface: 'A first-100 Tezos wallet lead across public identity, art, activity, and listening passports',
     advertiserAliases: ['Passportz', 'Tezos Passport'],
-    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -137,7 +157,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A clearly labeled first-100 Tezos wallet lead on Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -147,7 +167,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'common-hours.mhoydich.chatgpt.site',
     surface: 'A first-100 Tezos wallet lead across shared rituals, Stampz, and Rally',
     advertiserAliases: ['Common Hours', 'Rally'],
-    campaigns: ['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id],
     status: 'active',
   },
 ];
@@ -307,6 +327,94 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-LIGHT-001',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'The day is not asking you to win.',
+    copy: 'Just notice one bright thing, give it a little room, and let the morning meet you where you are.',
+    href: '/playlists/wednesday-morning-uplift',
+    cta: 'Start gently',
+    tone: 'signal',
+    contexts: ['home', 'morning', 'music', 'listen', 'playlist', 'radio', 'weather', 'light', 'day'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'sun',
+    melody: { notes: [60, 64, 67, 72], beatMs: 180, waveform: 'sine' },
+    status: 'house',
+  },
+  {
+    id: 'PC-LIGHT-002',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'Ring once for what is working.',
+    copy: 'Seventeen original bell castings and a few polite machine signals, waiting for one good reason to sound.',
+    href: '/bell-and-signal',
+    cta: 'Visit the foundry',
+    tone: 'ritual',
+    contexts: ['bell', 'sound', 'signal', 'ritual', 'hour', 'music', 'town', 'audio'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'bell',
+    melody: { notes: [67, 74, 79, 86], beatMs: 220, waveform: 'sine' },
+    status: 'house',
+  },
+  {
+    id: 'PC-LIGHT-003',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'Make room for the good accident.',
+    copy: 'Warmth, roughness, motion, and surprise become a browser-native sound organism you can grow by touch.',
+    href: '/sound-garden',
+    cta: 'Open Sound Garden',
+    tone: 'garden',
+    contexts: ['garden', 'sound', 'play', 'music', 'art', 'nature', 'touch', 'flower'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'garden',
+    melody: { notes: [62, 65, 69, 74], beatMs: 165, waveform: 'triangle' },
+    status: 'house',
+  },
+  {
+    id: 'PC-LIGHT-004',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'Someone will be glad you showed up.',
+    copy: 'A tiny room for sending a little energy into the day. No account, no score, no performance required.',
+    href: '/cheers',
+    cta: 'Send one cheer',
+    tone: 'play',
+    contexts: ['people', 'community', 'cheer', 'play', 'sport', 'town', 'friend', 'home'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'chorus',
+    status: 'house',
+  },
+  {
+    id: 'PC-LIGHT-005',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'Carry one small light.',
+    copy: 'Light a browser candle, leave no account behind, and take the quiet with you when the page closes.',
+    href: '/prayer-candles',
+    cta: 'Light a candle',
+    tone: 'ritual',
+    contexts: ['prayer', 'quiet', 'candle', 'light', 'ritual', 'care', 'meditate', 'night'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'lantern',
+    melody: { notes: [57, 64, 69, 76], beatMs: 260, waveform: 'sine' },
+    status: 'house',
+  },
+  {
+    id: 'PC-LIGHT-006',
+    advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
+    headline: 'The future is already trying.',
+    copy: 'Fourteen works gather small public miracles, useful objects, and generous evidence from a world arriving early.',
+    href: '/gallery/today',
+    cta: 'See the bright evidence',
+    tone: 'field',
+    contexts: ['art', 'gallery', 'today', 'future', 'public', 'light', 'field', 'design'],
+    campaign: A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+    seriesLabel: A_LITTLE_MORE_LIGHT_CAMPAIGN.label,
+    motif: 'horizon',
+    status: 'house',
+  },
   ...DIGITAL_PETS_COUNSEL_PROMO_DISPATCHES.map((counselDispatch) => ({
     id: counselDispatch.id,
     advertiser: DIGITAL_PETS_COUNSEL_CAMPAIGN.advertiser,
@@ -941,6 +1049,12 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const blanketCreative = ranked.find((ad) => ad.campaign === BEACH_BLANKET_PROMOTION_CAMPAIGN.id);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
+  const isAdDesk = pathname.replace(/\/+$/, '') === '/ads';
+  const upliftCreative = ranked.find((ad) => (
+    ad.campaign === A_LITTLE_MORE_LIGHT_CAMPAIGN.id
+    && (!isAdDesk || Boolean(ad.melody))
+    && !ad.href.startsWith(pathname)
+  )) ?? ranked.find((ad) => ad.campaign === A_LITTLE_MORE_LIGHT_CAMPAIGN.id);
   if (!isDrumSurface) {
     const universeCreative = ranked.find((ad) => ad.campaign === DRUM_NOUN_UNIVERSE_CAMPAIGN.id);
     if (!universeCreative && !networkCreative && !commonsCreative) return ranked.slice(0, cappedCount);
@@ -959,6 +1073,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
     ));
     return [
+      upliftCreative,
       isCounselSurface ? undefined : counselCreative,
       isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
@@ -989,6 +1104,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
   ));
   return [
+    upliftCreative,
     isCounselSurface ? undefined : counselCreative,
     isBeachBlanketSurface ? undefined : blanketCreative,
     isNounBattlerAnnualSurface ? undefined : annualCreative,

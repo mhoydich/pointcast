@@ -1,5 +1,5 @@
 ---
-import { DRUM_NOUN_UNIVERSE_CAMPAIGN, OPEN_AD_PLACEMENT, adDestination, selectAdsForPath } from '../lib/open-ad-network';
+import { A_LITTLE_MORE_LIGHT_CAMPAIGN, DRUM_NOUN_UNIVERSE_CAMPAIGN, OPEN_AD_PLACEMENT, adDestination, selectAdsForPath } from '../lib/open-ad-network';
 import DrumCompendiumAdArt from './DrumCompendiumAdArt.astro';
 
 interface Props {
@@ -14,6 +14,7 @@ const selectedAds = isPrivateSurface ? [] : selectAdsForPath(pathname, pathname 
 const ads = pathname === '/'
   ? selectedAds.filter((ad) => ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id).slice(0, count)
   : selectedAds;
+const hasMelodicAds = ads.some((ad) => ad.melody);
 ---
 
 {ads.length > 0 && (
@@ -23,6 +24,7 @@ const ads = pathname === '/'
         ADVERTISEMENT · {isDrumSurface ? 'POINTCAST HOUSE SERIES · DRUM COMPENDIUM' : `OPEN AD NETWORK · ${OPEN_AD_PLACEMENT.id}`}
       </p>
       <div>
+        {hasMelodicAds && <button type="button" data-ad-sound aria-pressed="false">SOUND OFF · MELODIES ON VIEW</button>}
         <a href="/ads">HOW IT WORKS</a>
         <a href="/ads/report">LIVE REPORT</a>
         <a href="/ads.json">PUBLIC RECEIPT</a>
@@ -32,16 +34,28 @@ const ads = pathname === '/'
     <div class="open-ad-rail__grid">
       {ads.map((ad) => (
         <a
-          class:list={['open-ad', `open-ad--${ad.tone}`, { 'open-ad--series': ad.seriesLabel }]}
+          class:list={['open-ad', `open-ad--${ad.tone}`, {
+            'open-ad--series': ad.seriesLabel,
+            'open-ad--uplift': ad.campaign === A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
+          }]}
           href={adDestination(ad, pathname)}
           data-ad-record={ad.id}
           data-ad-context={pathname}
           data-ad-series={ad.campaign}
+          data-ad-melody={ad.melody ? 'true' : undefined}
+          data-ad-notes={ad.melody?.notes.join(',')}
+          data-ad-beat={ad.melody?.beatMs}
+          data-ad-waveform={ad.melody?.waveform}
         >
+          {ad.motif && (
+            <span class="open-ad__uplift-art" data-motif={ad.motif} aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </span>
+          )}
           {ad.image && <img class="open-ad__image" src={ad.image} alt="" width="1200" height="1457" loading="lazy" />}
           {ad.seriesIndex && <DrumCompendiumAdArt sequence={ad.seriesIndex} label={ad.headline} />}
           <span class="open-ad__meta">
-            HOUSE AD · {ad.id}{ad.seriesLabel && ` · ${ad.seriesLabel.toUpperCase()}`}{ad.seriesIndex && ` ${String(ad.seriesIndex).padStart(2, '0')}/06`}
+            HOUSE AD · {ad.id}{ad.seriesLabel && ` · ${ad.seriesLabel.toUpperCase()}`}{ad.seriesIndex && ` ${String(ad.seriesIndex).padStart(2, '0')}/06`}{ad.melody && ' · MELODY ON VIEW AFTER SOUND ON'}
           </span>
           <strong>{ad.headline}</strong>
           <span class="open-ad__copy">{ad.copy}</span>
@@ -59,7 +73,101 @@ const ads = pathname === '/'
 <script>
   const endpoint = '/api/ad-metrics';
   let observer: IntersectionObserver | undefined;
+  let soundObserver: IntersectionObserver | undefined;
   const viewTimers = new Map<Element, number>();
+  const playedMelodies = new Set<string>();
+  let audioContext: AudioContext | null = null;
+  let soundEnabled = false;
+
+  interface AudioWindow extends Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+
+  function audioContextForAds(): AudioContext | null {
+    if (audioContext) return audioContext;
+    const AudioContextClass = window.AudioContext || (window as AudioWindow).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioContext = new AudioContextClass();
+    return audioContext;
+  }
+
+  function melodyKey(element: HTMLElement): string {
+    return `${location.pathname}:${element.dataset.adRecord || ''}`;
+  }
+
+  async function playMelody(element: HTMLElement): Promise<void> {
+    const key = melodyKey(element);
+    if (!soundEnabled || playedMelodies.has(key)) return;
+    const notes = (element.dataset.adNotes || '').split(',').map(Number).filter(Number.isFinite);
+    if (!notes.length) return;
+    const context = audioContextForAds();
+    if (!context) return;
+    if (context.state !== 'running') await context.resume().catch(() => undefined);
+    if (context.state !== 'running') return;
+
+    playedMelodies.add(key);
+    const beat = Math.max(100, Math.min(500, Number(element.dataset.adBeat) || 190)) / 1000;
+    const waveform = element.dataset.adWaveform === 'triangle' ? 'triangle' : 'sine';
+    const master = context.createGain();
+    master.gain.setValueAtTime(0.0001, context.currentTime);
+    master.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.035);
+    master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + notes.length * beat + 0.62);
+    master.connect(context.destination);
+
+    notes.forEach((midi, index) => {
+      const start = context.currentTime + 0.04 + index * beat;
+      const oscillator = context.createOscillator();
+      const voice = context.createGain();
+      oscillator.type = waveform;
+      oscillator.frequency.setValueAtTime(440 * 2 ** ((midi - 69) / 12), start);
+      voice.gain.setValueAtTime(0.0001, start);
+      voice.gain.exponentialRampToValueAtTime(index === notes.length - 1 ? 0.55 : 0.38, start + 0.025);
+      voice.gain.exponentialRampToValueAtTime(0.0001, start + beat * 1.8);
+      oscillator.connect(voice);
+      voice.connect(master);
+      oscillator.start(start);
+      oscillator.stop(start + beat * 1.9);
+    });
+  }
+
+  function updateSoundButtons(): void {
+    document.querySelectorAll<HTMLButtonElement>('[data-ad-sound]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(soundEnabled));
+      button.textContent = soundEnabled ? 'SOUND ON · MELODIES PLAY ON VIEW' : 'SOUND OFF · MELODIES ON VIEW';
+    });
+  }
+
+  async function toggleSound(): Promise<void> {
+    if (!soundEnabled) {
+      const context = audioContextForAds();
+      if (!context) {
+        document.querySelectorAll<HTMLButtonElement>('[data-ad-sound]').forEach((button) => {
+          button.textContent = 'SOUND UNAVAILABLE';
+          button.disabled = true;
+        });
+        return;
+      }
+      if (context.state !== 'running') await context.resume().catch(() => undefined);
+      soundEnabled = context.state === 'running';
+    } else {
+      soundEnabled = false;
+    }
+    updateSoundButtons();
+    if (soundEnabled) initializeAdSound();
+  }
+
+  function initializeAdSound(): void {
+    soundObserver?.disconnect();
+    updateSoundButtons();
+    soundObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          void playMelody(entry.target as HTMLElement);
+        }
+      }
+    }, { threshold: [0.5] });
+    document.querySelectorAll<HTMLElement>('[data-ad-melody="true"]').forEach((element) => soundObserver?.observe(element));
+  }
 
   function metricsDisabled(): boolean {
     try {
@@ -141,13 +249,20 @@ const ads = pathname === '/'
 
   document.addEventListener('click', (event) => {
     const target = event.target as Element | null;
+    if (target?.closest('[data-ad-sound]')) {
+      event.preventDefault();
+      void toggleSound();
+      return;
+    }
     const creative = target?.closest<HTMLElement>('[data-ad-record]');
     const link = target?.closest('a');
     if (creative?.dataset.adRecord && link) sendMetric('click', creative.dataset.adRecord);
   }, { capture: true });
 
   document.addEventListener('astro:page-load', initializeAdMetrics);
+  document.addEventListener('astro:page-load', initializeAdSound);
   initializeAdMetrics();
+  initializeAdSound();
 </script>
 
 <style>
@@ -177,6 +292,19 @@ const ads = pathname === '/'
   .open-ad-rail__head div { display: flex; flex-wrap: wrap; gap: 12px; }
   .open-ad-rail a { color: inherit; text-decoration: none; }
   .open-ad-rail__head a { border-bottom: 1px solid currentColor; }
+  .open-ad-rail__head button {
+    appearance: none;
+    padding: 0 0 2px;
+    color: #1647cf;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid currentColor;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+  }
+  .open-ad-rail__head button[aria-pressed="true"] { color: #26734f; }
+  .open-ad-rail__head button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
   .open-ad-rail__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 8px; }
   .open-ad {
     --tone: #174e7a;
@@ -193,6 +321,36 @@ const ads = pathname === '/'
   .open-ad:focus-visible { outline: 3px solid var(--tone); outline-offset: 2px; }
   .open-ad__meta { grid-column: 1 / -1; color: var(--tone); font-size: 7px; letter-spacing: 0.14em; }
   .open-ad__image { grid-column: 1 / -1; width: 100%; max-height: 240px; object-fit: cover; object-position: center 28%; border: 1px solid var(--ad-ink); }
+  .open-ad__uplift-art {
+    position: relative;
+    grid-column: 1 / -1;
+    min-height: 136px;
+    overflow: hidden;
+    border: 1px solid var(--ad-ink);
+    background: #ffe96d;
+    isolation: isolate;
+  }
+  .open-ad__uplift-art::before,
+  .open-ad__uplift-art::after,
+  .open-ad__uplift-art i { content: ''; position: absolute; display: block; }
+  .open-ad__uplift-art::before { inset: 0; background: repeating-linear-gradient(90deg, transparent 0 18px, rgb(23 20 15 / .14) 18px 19px); }
+  .open-ad__uplift-art::after { width: 96px; height: 96px; right: 11%; top: 20px; border-radius: 50%; background: #ff6534; box-shadow: 0 0 0 18px rgb(255 255 255 / .34); }
+  .open-ad__uplift-art i { width: 18px; height: 18px; border-radius: 50% 50% 8% 50%; background: var(--tone); }
+  .open-ad__uplift-art i:nth-child(1) { left: 8%; bottom: 14px; transform: rotate(-28deg); }
+  .open-ad__uplift-art i:nth-child(2) { left: 29%; bottom: 21px; transform: rotate(-11deg); }
+  .open-ad__uplift-art i:nth-child(3) { left: 50%; bottom: 28px; transform: rotate(6deg); }
+  .open-ad__uplift-art i:nth-child(4) { left: 71%; bottom: 35px; transform: rotate(23deg); }
+  .open-ad__uplift-art[data-motif="bell"] { background: #d7c8ff; }
+  .open-ad__uplift-art[data-motif="bell"]::after { border-radius: 50% 50% 16% 16%; background: #6f39bd; box-shadow: inset 0 -15px 0 rgb(22 9 35 / .28), 0 0 0 18px rgb(255 255 255 / .32); }
+  .open-ad__uplift-art[data-motif="garden"] { background: linear-gradient(#bcecff 0 46%, #c9ff73 46%); }
+  .open-ad__uplift-art[data-motif="garden"]::after { background: #fff9be; }
+  .open-ad__uplift-art[data-motif="chorus"] { background: linear-gradient(135deg, #ffcf4a, #ff8aad); }
+  .open-ad__uplift-art[data-motif="chorus"]::after { border-radius: 28% 72% 62% 38%; background: #df315f; }
+  .open-ad__uplift-art[data-motif="lantern"] { background: #17285e; }
+  .open-ad__uplift-art[data-motif="lantern"]::after { background: #ffd76a; box-shadow: 0 0 48px #ffd76a, 0 0 0 18px rgb(255 255 255 / .12); }
+  .open-ad__uplift-art[data-motif="horizon"] { background: linear-gradient(#8dd9ff 0 58%, #ff8e52 58% 65%, #ffe96d 65%); }
+  .open-ad__uplift-art[data-motif="horizon"]::after { top: 34px; background: #fff7c2; }
+  .open-ad--uplift { background: color-mix(in srgb, var(--tone) 7%, #fffaf0); }
   .open-ad--series { background: color-mix(in srgb, var(--tone) 4%, #fffaf0); }
   .open-ad--series > :global(.drum-ad-art) { grid-column: 1 / -1; }
   .open-ad strong {

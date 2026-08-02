@@ -72,6 +72,8 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.equal((registry.match(/id: 'PC-NETWORK-EL-SEGUNDO-\d{3}'/g) || []).length, 6);
   assert.equal((registry.match(/id: 'PC-LOCAL-STAR-COMMONS-001'/g) || []).length, 1);
   assert.equal((registry.match(/id: 'PC-HOLDERS-CUT-001'/g) || []).length, 1);
+  assert.equal((registry.match(/id: 'PC-LIGHT-\d{3}'/g) || []).length, 6);
+  assert.equal((registry.match(/melody: \{ notes:/g) || []).length, 4);
   assert.match(registry, /BEACH_BLANKET_PROMO_DISPATCHES\.map/);
   assert.equal((registry.match(/sourceTool: 'Reve'/g) || []).length, 3);
   assert.equal((registry.match(/image: reve[A-Z][A-Za-z]+\.src/g) || []).length, 3);
@@ -94,6 +96,7 @@ test('ad inventory is contextual, transparent, and does not claim live settlemen
   assert.match(receipt, /HOLDERS_CUT_CAMPAIGN/);
   assert.match(receipt, /OPEN_AD_NETWORK/);
   assert.match(receipt, /OPEN_AD_PUBLISHERS/);
+  assert.match(receipt, /A_LITTLE_MORE_LIGHT_CAMPAIGN/);
   assert.match(receipt, /aggregateEventTelemetry: true/);
   assert.match(receipt, /visitorIdentifiers: false/);
   assert.match(report, /LIVE PUBLISHING REPORT/);
@@ -143,7 +146,7 @@ test('ad desk and portable network render accessible interactive CSS 3D creative
   ]);
 
   assert.match(registry, /Interactive CSS 3D card/);
-  assert.match(registry, /Pointer and arrow-key tilt; no autoplay; reduced-motion safe/);
+  assert.match(registry, /optional synthesized melody after explicit sound-on gesture/);
   assert.match(desk, /import InteractiveAdStage/);
   assert.match(desk, /LIVE 3D CREATIVE LAB/);
   assert.match(desk, /<InteractiveAdStage ad=\{ad\} index=\{index\}/);
@@ -154,13 +157,19 @@ test('ad desk and portable network render accessible interactive CSS 3D creative
   assert.match(stage, /ArrowLeft/);
   assert.match(stage, /prefers-reduced-motion: reduce/);
   assert.match(receipt, /pointerMovementTelemetry: false/);
-  assert.match(receipt, /Pointer movement is rendered locally and never transmitted/);
+  assert.match(receipt, /Pointer movement and sound state stay local and are never transmitted/);
   assert.match(widget, /function setupTilt/);
   assert.match(widget, /perspective:1200px/);
   assert.match(widget, /transform-style:preserve-3d/);
   assert.match(widget, /pointermove/);
   assert.match(widget, /ArrowRight/);
   assert.match(widget, /prefers-reduced-motion:reduce/);
+  assert.match(widget, /function setupMelody/);
+  assert.match(widget, /SOUND OFF · MELODY ON VIEW/);
+  assert.match(widget, /context\.createOscillator/);
+  assert.match(widget, /intersectionRatio >= 0\.5/);
+  assert.match(widget, /if \(!soundEnabled/);
+  assert.doesNotMatch(widget, /sendMetric\(['"](?:sound|audio|playback)/);
 });
 
 test('Industry Next has a direct PointCast house ad in addition to its project series', async () => {
@@ -178,7 +187,7 @@ test('Industry Next has a direct PointCast house ad in addition to its project s
   assert.match(receipt, /INDUSTRY_NEXT_CAMPAIGN/);
 });
 
-test('portable network transparently pins the first-100 campaign across owned publishers', async () => {
+test('portable network transparently pins the current uplifting campaign across owned publishers', async () => {
   const [registry, receipt, widget, route, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
@@ -187,12 +196,15 @@ test('portable network transparently pins the first-100 campaign across owned pu
     readFile(new URL('functions/api/ad-metrics.ts', root), 'utf8'),
   ]);
 
-  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /PC-A-LITTLE-MORE-LIGHT-2026/);
+  assert.match(registry, /const isAdDesk = pathname\.replace/);
+  assert.match(registry, /!isAdDesk \|\| Boolean\(ad\.melody\)/);
+  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
+  assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
+  assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'rally'/);
-  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
-  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \['PC-DIGITAL-PETS-COUNSEL-2026', 'PC-NETWORK-EL-SEGUNDO-2026', 'PC-BEACH-COMMONS-V5-2026', 'PC-BEACH-BLANKET-REVIEW-2026'\]/);
+  assert.match(registry, /id: 'rally'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
+  assert.match(registry, /id: 'common-hours'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /PC-HOLDERS-CUT-2026/);
   assert.match(registry, /44 plates\. No finish line\./);
   assert.match(registry, /no Mainnet mint is active yet/i);
@@ -200,6 +212,7 @@ test('portable network transparently pins the first-100 campaign across owned pu
   assert.match(widget, /configured === 'common-hours'/);
   assert.match(widget, /publisher\.id === 'rally'/);
   assert.match(widget, /preferredCampaigns/);
+  assert.match(widget, /SOUND OFF · MELODY ON VIEW/);
   assert.match(widget, /IntersectionObserver/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);
   assert.match(route, /open-ad-network\.js\?raw/);
