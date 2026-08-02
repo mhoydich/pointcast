@@ -41,9 +41,11 @@ test('the opening edition promotes the complete newest release run without Qwen'
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
-  assert.match(home, /images\/og\/b\/0551\.png/);
-  assert.match(edition, /Find a capability/);
-  assert.match(edition, /Build the proof/);
+  assert.match(home, /images\/firecrawl\/field-guide-og\.png/);
+  assert.match(edition, /Who gets to/);
+  assert.match(edition, /read the web/);
+  assert.match(edition, /Firecrawl, spiders, scrapers, indexes/);
+  assert.match(edition, /id: '0551', noun: 'Engineering', title: 'ENG\/25'/);
   assert.match(edition, /Come in through/);
   assert.match(edition, /Wednesday Morning Uplift/);
   assert.match(edition, /THE GOOD WORK/);
