@@ -27,6 +27,8 @@ test('agent kit gives ChatGPT, Codex, Claude, and Firecrawl truthful setup paths
   assert.match(page, /Content-Type': 'text\/markdown; charset=utf-8'/);
   assert.match(connectorPage, /document\.execCommand\('copy'\)/);
   assert.match(connectorPage, /btn\.textContent = 'Copied'/);
+  assert.match(connectorPage, /data-copy-fallback/);
+  assert.match(connectorPage, /btn\.textContent = 'Press ⌘C'/);
   assert.match(connectors, /agentKit: POINTCAST_AGENT_KIT/);
   assert.match(agents, /agentKit: 'https:\/\/pointcast\.xyz\/agent-kit\.md'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/agent-kit\.md/);
