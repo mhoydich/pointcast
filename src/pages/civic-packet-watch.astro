@@ -1,0 +1,397 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  CIVIC_PACKET_WATCH,
+  civicStats,
+  conflictSignals,
+  dateLabel,
+  sourceFor,
+} from '../lib/civic-packet-watch';
+
+const conflict = conflictSignals[0];
+const conflictDetails = conflict && 'details' in conflict ? conflict.details : undefined;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  '@id': `${CIVIC_PACKET_WATCH.canonical}#dataset`,
+  name: CIVIC_PACKET_WATCH.title,
+  description: CIVIC_PACKET_WATCH.subtitle,
+  url: CIVIC_PACKET_WATCH.canonical,
+  datePublished: CIVIC_PACKET_WATCH.publishedAt,
+  dateModified: CIVIC_PACKET_WATCH.checkedAt,
+  temporalCoverage: '2026-08-04/2026-09-16',
+  spatialCoverage: { '@type': 'Place', name: CIVIC_PACKET_WATCH.coverage },
+  creator: [
+    { '@type': 'Person', name: 'Michael Hoydich', url: 'https://pointcast.xyz/about' },
+    { '@type': 'SoftwareApplication', name: 'Codex', applicationCategory: 'AI collaborator' },
+  ],
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  isAccessibleForFree: true,
+  distribution: [
+    {
+      '@type': 'DataDownload',
+      encodingFormat: 'application/json',
+      contentUrl: CIVIC_PACKET_WATCH.machine,
+    },
+    {
+      '@type': 'DataDownload',
+      encodingFormat: 'application/pdf',
+      contentUrl: CIVIC_PACKET_WATCH.edition.file,
+    },
+  ],
+  citation: CIVIC_PACKET_WATCH.sources.map((source) => source.url),
+};
+---
+
+<BlockLayout
+  title={CIVIC_PACKET_WATCH.title}
+  description={CIVIC_PACKET_WATCH.subtitle}
+  image="https://pointcast.xyz/images/civic-packet-watch/og.png"
+  themeColor="#10251b"
+  immersive={true}
+  showNetworkStrip={false}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/civic-packet-watch.json', title: 'Civic Packet Watch - machine edition' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/civic-packet-watch/og.png',
+    aspectRatio: '1.91:1',
+    buttons: [
+      { label: 'Open packet watch', action: 'link', target: CIVIC_PACKET_WATCH.canonical },
+      { label: 'Read the JSON twin', action: 'link', target: CIVIC_PACKET_WATCH.machine },
+    ],
+  }}
+>
+  <article class="civic-page">
+    <nav class="civic-nav" aria-label="Civic Packet Watch navigation">
+      <a class="civic-brand" href="/">PointCast</a>
+      <div class="civic-nav__links">
+        <a href="#board">Signal board</a>
+        <a href="#method">Method</a>
+        <a href="#ledger">Ledger</a>
+        <a href="#edition">PDF / OBJKT</a>
+        <a href="/civic-packet-watch.json">JSON</a>
+      </div>
+      <span>FIELD 002 · BLOCK 0554</span>
+    </nav>
+
+    <header class="civic-hero">
+      <div class="civic-hero__copy">
+        <p class="civic-kicker">El Segundo · official-source reader · initial baseline</p>
+        <h1>Civic<br /><em>Packet</em><br />Watch.</h1>
+        <p class="civic-hero__dek">Agendas appear. Packets change. Deadlines disagree. This small public instrument keeps the source attached.</p>
+        <div class="civic-hero__actions">
+          <a class="civic-button civic-button--ink" href="#board">Read the board ↓</a>
+          <a class="civic-button" href="/civic-packet-watch.json">Open the data ↗</a>
+        </div>
+        <p class="civic-hero__boundary">{CIVIC_PACKET_WATCH.affiliation} {CIVIC_PACKET_WATCH.disclaimer}</p>
+      </div>
+
+      <div class="civic-radar" aria-label="Six civic signals moving through an official-source reader">
+        <div class="radar-head"><span>PUBLIC SIGNAL / 002</span><span>{dateLabel(CIVIC_PACKET_WATCH.checkedAt)}</span></div>
+        <div class="radar-field" aria-hidden="true">
+          <span class="radar-ring radar-ring--one"></span>
+          <span class="radar-ring radar-ring--two"></span>
+          <span class="radar-ring radar-ring--three"></span>
+          <span class="radar-sweep"></span>
+          <span class="radar-origin">ES</span>
+          <i class="radar-ping radar-ping--one"></i>
+          <i class="radar-ping radar-ping--two"></i>
+          <i class="radar-ping radar-ping--three"></i>
+          <i class="radar-ping radar-ping--four"></i>
+          <strong>{civicStats.signals} SIGNALS</strong>
+        </div>
+        <div class="radar-stats">
+          <span><b>{civicStats.meetings}</b> meetings</span>
+          <span><b>{civicStats.opportunities}</b> opportunity</span>
+          <span><b>{civicStats.conflicts}</b> conflict</span>
+          <span><b>{civicStats.packetsAvailable}</b> documents</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="civic-alert" aria-labelledby="alert-title">
+      <div>
+        <p class="civic-kicker">The first useful catch</p>
+        <span class="alert-badge">DEADLINE CONFLICT</span>
+      </div>
+      <div>
+        <h2 id="alert-title">Five o'clock<br />is not eleven.</h2>
+        <p>The RFQ listing header displays <strong>{conflictDetails ? dateLabel(conflictDetails.listingCloseAt) : '5:00 PM'}</strong>. The body and linked official packet state <strong>{conflictDetails ? dateLabel(conflictDetails.packetDueAt) : '11:00 AM'}</strong> and warn that late qualifications will not be accepted.</p>
+        <p class="alert-rule">PointCast preserves the discrepancy. It does not choose a deadline for you.</p>
+        <div class="alert-actions">
+          <a href={conflict?.packetUrl} target="_blank" rel="noopener noreferrer">Read the official packet ↗</a>
+          <a href={conflict?.sourceUrl} target="_blank" rel="noopener noreferrer">Open the City listing ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="civic-board" id="board" aria-labelledby="board-title">
+      <header class="civic-section-head">
+        <div>
+          <p class="civic-kicker">01 / Signal board</p>
+          <h2 id="board-title">What is<br /><em>actually posted?</em></h2>
+        </div>
+        <div>
+          <p>Every row links back to an official page or document. “Baseline” means first observation—not new, breaking, or changed.</p>
+          <div class="board-filters" role="group" aria-label="Filter civic signals">
+            <button type="button" data-filter="all" aria-pressed="true">All {civicStats.signals}</button>
+            <button type="button" data-filter="meeting" aria-pressed="false">Meetings {civicStats.meetings}</button>
+            <button type="button" data-filter="opportunity" aria-pressed="false">Opportunity {civicStats.opportunities}</button>
+            <button type="button" data-filter="watch" aria-pressed="false">Needs watching</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="signal-list" data-signal-list>
+        {CIVIC_PACKET_WATCH.signals.map((signal, index) => {
+          const source = sourceFor(signal);
+          return (
+            <article class={`signal signal--${signal.status}`} data-signal data-kind={signal.kind} data-status={signal.status}>
+              <div class="signal__number">{String(index + 1).padStart(2, '0')}</div>
+              <div class="signal__date">
+                <time datetime={signal.date}>{dateLabel(signal.date)}</time>
+                <span>{signal.change}</span>
+              </div>
+              <div class="signal__body">
+                <div class="signal__meta">
+                  <span>{signal.kind}</span>
+                  <span>{signal.status.replaceAll('-', ' ')}</span>
+                  <span>{signal.documentState.replaceAll('-', ' ')}</span>
+                </div>
+                <h3>{signal.title}</h3>
+                <p>{signal.body}</p>
+                <p class="signal__action"><strong>Watch note · </strong>{signal.action}</p>
+              </div>
+              <div class="signal__source">
+                <span>{source?.publisher ?? 'Official source'}</span>
+                <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer">Open source ↗</a>
+                {'packetUrl' in signal && signal.packetUrl ? (
+                  <a href={signal.packetUrl} target="_blank" rel="noopener noreferrer">Open packet ↗</a>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      <p class="signal-empty" data-signal-empty hidden>No signals in this view.</p>
+    </section>
+
+    <section class="civic-method" id="method" aria-labelledby="method-title">
+      <header class="civic-section-head civic-section-head--dark">
+        <div>
+          <p class="civic-kicker">02 / Method</p>
+          <h2 id="method-title">A scraper with<br /><em>a brake pedal.</em></h2>
+        </div>
+        <p>{CIVIC_PACKET_WATCH.collection.summary}</p>
+      </header>
+
+      <div class="method-flow" aria-label="The Civic Packet Watch collection flow">
+        <article><span>01</span><h3>Official door</h3><p>Start with a City listing, event page, or linked PDF. No people-search frontier.</p></article>
+        <article><span>02</span><h3>Bounded read</h3><p>One known URL at a time. Respect robots.txt, 403 responses, and the absence of a document.</p></article>
+        <article><span>03</span><h3>Small record</h3><p>Keep title, time, status, availability, source, and the minimum note needed to understand it.</p></article>
+        <article><span>04</span><h3>Human check</h3><p>Compare dates and links. A model output is a candidate until someone verifies the source.</p></article>
+        <article><span>05</span><h3>Public twin</h3><p>Publish the human page, JSON twin, last-checked time, and change state together.</p></article>
+      </div>
+
+      <div class="method-terminal">
+        <div class="method-terminal__head"><span>FIRECRAWL / CANDIDATE REFRESH</span><span>NOT AUTO-PUBLISH</span></div>
+        <code><span>$</span> FIRECRAWL_API_KEY=•••• node scripts/refresh-civic-packet-watch.mjs</code>
+        <p>The repository includes a Firecrawl v2 candidate collector. It uses official URLs, requests structured JSON, keeps robots enforcement on, and writes a review file to the system temp directory. No API key is committed. No crawl result silently edits the public baseline.</p>
+        <div>
+          <a href="/firecrawl">Read the Firecrawl field guide ↗</a>
+          <a href="https://docs.firecrawl.dev/api-reference/endpoint/scrape" target="_blank" rel="noopener noreferrer">Firecrawl scrape docs ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="civic-ledger" id="ledger" aria-labelledby="ledger-title">
+      <header class="civic-section-head">
+        <div>
+          <p class="civic-kicker">03 / Change ledger</p>
+          <h2 id="ledger-title">No false<br /><em>breaking news.</em></h2>
+        </div>
+        <p>A first crawl has no earlier state to compare. The correct label is baseline. Future checks can say added, changed, removed, restored, or unchanged—with both snapshots available.</p>
+      </header>
+      <ol class="ledger-list">
+        {CIVIC_PACKET_WATCH.ledger.map((entry, index) => (
+          <li>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <time datetime={entry.at}>{dateLabel(entry.at)}</time>
+            <div><b>{entry.state}</b><h3>{entry.label}</h3><p>{entry.detail}</p></div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="civic-compact" aria-labelledby="compact-title">
+      <div class="compact-title">
+        <p class="civic-kicker">04 / Public reader compact</p>
+        <h2 id="compact-title">Useful<br />without<br /><em>becoming a dossier.</em></h2>
+      </div>
+      <ol>
+        {CIVIC_PACKET_WATCH.compact.map((rule, index) => (
+          <li><span>{String(index + 1).padStart(2, '0')}</span><p>{rule}</p></li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="civic-edition" id="edition" aria-labelledby="edition-title">
+      <div class="edition-ticket">
+        <span>POINTCAST FIELD EDITION 002</span>
+        <strong>100</strong>
+        <p>planned free editions<br />Tezos · OBJKT</p>
+        <i>PDF / SOURCE-LINKED / WALLET-SIGNED</i>
+      </div>
+      <div class="edition-copy">
+        <p class="civic-kicker">05 / Carry the packet</p>
+        <h2 id="edition-title">A civic reader<br /><em>you can hold.</em></h2>
+        <p>The four-page field edition keeps the opening baseline, deadline discrepancy, method, compact, and official source desk together as one portable artifact.</p>
+        <p class="edition-status"><strong>OBJKT status · </strong>{CIVIC_PACKET_WATCH.edition.mintStatus.replaceAll('-', ' ')}. {CIVIC_PACKET_WATCH.edition.walletBoundary}</p>
+        <div>
+          <a class="civic-button civic-button--ink" href="/downloads/civic-packet-watch-field-edition.pdf" download>Download PDF ↓</a>
+          <a class="civic-button" href="/civic-packet-watch.json">Inspect edition data ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="civic-sources" aria-labelledby="sources-title">
+      <header class="civic-section-head">
+        <div>
+          <p class="civic-kicker">06 / Source desk</p>
+          <h2 id="sources-title">The source<br /><em>keeps authority.</em></h2>
+        </div>
+        <p>Checked {dateLabel(CIVIC_PACKET_WATCH.checkedAt)}. Links can change after publication; the City’s current page or document controls.</p>
+      </header>
+      <div class="source-grid">
+        {CIVIC_PACKET_WATCH.sources.map((source, index) => (
+          <a href={source.url} target="_blank" rel="noopener noreferrer">
+            <span>{String(index + 1).padStart(2, '0')} · {source.kind.replaceAll('-', ' ')}</span>
+            <h3>{source.label}</h3>
+            <p>{source.note}</p>
+            <b>Open official source ↗</b>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <footer class="civic-footer">
+      <div>
+        <p class="civic-kicker">Civic Packet Watch · baseline 001</p>
+        <h2>Read the record.<br /><em>Keep the link.</em></h2>
+      </div>
+      <div>
+        <p>{CIVIC_PACKET_WATCH.affiliation}</p>
+        <p>{CIVIC_PACKET_WATCH.disclaimer}</p>
+        <div>
+          <a href="/civic-packet-watch.json">JSON twin</a>
+          <a href="/downloads/civic-packet-watch-field-edition.pdf">Field PDF</a>
+          <a href="/firecrawl">Field guide 001</a>
+          <a href="/contact">Corrections</a>
+        </div>
+      </div>
+    </footer>
+  </article>
+
+  <script>
+    const filterButtons = [...document.querySelectorAll('[data-filter]')];
+    const signals = [...document.querySelectorAll('[data-signal]')];
+    const empty = document.querySelector('[data-signal-empty]');
+    filterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const filter = button.getAttribute('data-filter') || 'all';
+        filterButtons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+        let visible = 0;
+        signals.forEach((signal) => {
+          const show = filter === 'all'
+            || signal.getAttribute('data-kind') === filter
+            || signal.getAttribute('data-status') === filter;
+          signal.toggleAttribute('hidden', !show);
+          if (show) visible += 1;
+        });
+        if (empty) empty.toggleAttribute('hidden', visible !== 0);
+      });
+    });
+  </script>
+
+  <style>
+    .civic-page {
+      --ink: #10251b;
+      --paper: #f2eddc;
+      --acid: #c9ff46;
+      --red: #ff5a3d;
+      --sky: #82cffc;
+      --lavender: #bfb2ff;
+      --white: #fffdf6;
+      --mono: "JetBrains Mono Variable", "JetBrains Mono", monospace;
+      min-height: 100vh;
+      overflow: hidden;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Inter Variable", Inter, sans-serif;
+    }
+    .civic-page *, .civic-page *::before, .civic-page *::after { box-sizing: border-box; }
+    .civic-page a { color: inherit; }
+    .civic-kicker { margin: 0; font: 760 0.66rem/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .civic-nav { position: relative; z-index: 5; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 56px; border-bottom: 1px solid var(--ink); padding: 0 clamp(1rem, 3vw, 3.5rem); background: var(--acid); font: 720 .61rem/1 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .civic-brand { font: 900 1rem/1 "Inter Variable", Inter, sans-serif; letter-spacing: -.06em; text-decoration: none; text-transform: none; }
+    .civic-nav__links { display: flex; align-items: center; gap: 1.3rem; }
+    .civic-nav__links a { text-decoration: none; }
+    .civic-nav > span { justify-self: end; }
+    .civic-hero { display: grid; min-height: calc(100svh - 56px); grid-template-columns: 1.04fr .96fr; border-bottom: 1px solid var(--ink); }
+    .civic-hero__copy { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; padding: clamp(2.2rem, 5vw, 6.5rem); }
+    .civic-hero h1 { margin: clamp(2rem, 6vh, 5rem) 0; font-size: clamp(5.2rem, 10vw, 10.5rem); font-weight: 880; letter-spacing: -.1em; line-height: .69; }
+    .civic-hero h1 em, .civic-section-head h2 em, .civic-alert h2 em, .compact-title h2 em, .edition-copy h2 em, .civic-footer h2 em { color: var(--red); font-family: Iowan Old Style, Palatino, Georgia, serif; font-weight: 400; letter-spacing: -.05em; }
+    .civic-hero__dek { max-width: 34ch; margin: 0; font-size: clamp(1.2rem, 2vw, 2rem); font-weight: 620; letter-spacing: -.035em; line-height: 1.14; }
+    .civic-hero__actions, .alert-actions, .edition-copy > div:last-child { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }
+    .civic-button { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; border: 1px solid var(--ink); padding: .85rem 1.1rem; font: 760 .66rem/1 var(--mono); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
+    .civic-button--ink { background: var(--ink); color: var(--white) !important; }
+    .civic-hero__boundary { max-width: 76ch; margin: 2.5rem 0 0; border-top: 1px solid var(--ink); padding-top: 1rem; font: 600 .67rem/1.55 var(--mono); }
+    .civic-radar { display: grid; min-width: 0; grid-template-rows: auto 1fr auto; border-left: 1px solid var(--ink); background: var(--ink); color: var(--acid); }
+    .radar-head { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid rgba(201,255,70,.42); padding: 1.1rem 1.3rem; font: 700 .6rem/1 var(--mono); letter-spacing: .1em; }
+    .radar-field { position: relative; min-height: 570px; overflow: hidden; background: repeating-linear-gradient(0deg, transparent 0 49px, rgba(201,255,70,.09) 50px), repeating-linear-gradient(90deg, transparent 0 49px, rgba(201,255,70,.09) 50px); }
+    .radar-ring { position: absolute; top: 50%; left: 50%; border: 1px solid rgba(201,255,70,.45); border-radius: 50%; transform: translate(-50%,-50%); }
+    .radar-ring--one { width: 28%; aspect-ratio: 1; }.radar-ring--two { width: 58%; aspect-ratio: 1; }.radar-ring--three { width: 88%; aspect-ratio: 1; }
+    .radar-sweep { position: absolute; top: 50%; left: 50%; width: 43%; height: 43%; transform-origin: 0 0; background: conic-gradient(from -7deg, rgba(201,255,70,.42), transparent 17%); animation: radar 8s linear infinite; }
+    .radar-origin { position: absolute; top: 50%; left: 50%; display: grid; width: 58px; aspect-ratio: 1; place-items: center; border-radius: 50%; background: var(--acid); color: var(--ink); font: 900 .9rem/1 var(--mono); transform: translate(-50%,-50%); }
+    .radar-ping { position: absolute; width: 11px; aspect-ratio: 1; border: 2px solid var(--acid); border-radius: 50%; box-shadow: 0 0 0 6px rgba(201,255,70,.15); }
+    .radar-ping--one { top: 23%; left: 30%; }.radar-ping--two { top: 35%; left: 70%; }.radar-ping--three { top: 70%; left: 63%; }.radar-ping--four { top: 76%; left: 25%; }
+    .radar-field strong { position: absolute; right: 1.5rem; bottom: 1.5rem; font: 800 clamp(2rem, 5vw, 5.7rem)/.8 var(--mono); letter-spacing: -.08em; }
+    .radar-stats { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid rgba(201,255,70,.42); }
+    .radar-stats span { border-right: 1px solid rgba(201,255,70,.42); padding: 1.1rem; font: 700 .56rem/1.4 var(--mono); text-transform: uppercase; }.radar-stats span:last-child { border-right: 0; }.radar-stats b { display: block; margin-bottom: .3rem; font-size: 1.5rem; }
+    @keyframes radar { to { transform: rotate(360deg); } }
+    .civic-alert { display: grid; grid-template-columns: .72fr 1.28fr; border-bottom: 1px solid var(--ink); background: var(--red); }
+    .civic-alert > div { padding: clamp(2.5rem, 5vw, 6.5rem); }.civic-alert > div:first-child { border-right: 1px solid var(--ink); }
+    .alert-badge { display: inline-block; margin-top: 3rem; border: 1px solid var(--ink); padding: .7rem; background: var(--paper); font: 800 .65rem/1 var(--mono); letter-spacing: .08em; }
+    .civic-alert h2 { max-width: 10ch; margin: 0 0 2.5rem; font-size: clamp(4.2rem, 8vw, 9rem); letter-spacing: -.09em; line-height: .78; }
+    .civic-alert h2 em { color: var(--ink); }.civic-alert p { max-width: 48ch; font-size: clamp(1.1rem, 1.8vw, 1.7rem); line-height: 1.35; }.alert-rule { border-left: 8px solid var(--ink); padding-left: 1rem; font-weight: 760; }.alert-actions a { border-bottom: 1px solid; padding: .6rem 0; font: 760 .67rem/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .civic-section-head { display: grid; grid-template-columns: 1.1fr .9fr; border-bottom: 1px solid var(--ink); }.civic-section-head > div, .civic-section-head > p { margin: 0; padding: clamp(2.8rem, 5vw, 6.5rem); }.civic-section-head > div { border-right: 1px solid var(--ink); }.civic-section-head > p { align-self: end; font-size: clamp(1.05rem, 1.65vw, 1.6rem); font-weight: 560; line-height: 1.38; }
+    .civic-section-head h2, .compact-title h2, .edition-copy h2, .civic-footer h2 { margin: 2.2rem 0 0; font-size: clamp(4rem, 7vw, 8.5rem); letter-spacing: -.09em; line-height: .78; }
+    .board-filters { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 2rem; }.board-filters button { border: 1px solid var(--ink); padding: .7rem .8rem; background: transparent; color: inherit; cursor: pointer; font: 740 .6rem/1 var(--mono); text-transform: uppercase; }.board-filters button[aria-pressed="true"] { background: var(--ink); color: var(--white); }
+    .signal-list { display: grid; }.signal { display: grid; grid-template-columns: 64px 190px minmax(0,1fr) 190px; border-bottom: 1px solid var(--ink); }.signal[hidden] { display: none; }.signal > div { border-right: 1px solid var(--ink); padding: 1.2rem; }.signal > div:last-child { border-right: 0; }.signal__number { font: 820 1rem/1 var(--mono); }.signal__date time, .signal__date span { display: block; }.signal__date time { font: 760 .72rem/1.5 var(--mono); }.signal__date span { margin-top: .7rem; color: #58675f; font: 700 .58rem/1 var(--mono); text-transform: uppercase; }.signal__meta { display: flex; flex-wrap: wrap; gap: .35rem; }.signal__meta span { border: 1px solid var(--ink); padding: .3rem .45rem; font: 720 .54rem/1 var(--mono); text-transform: uppercase; }.signal h3 { margin: 1.1rem 0 .6rem; font-size: clamp(1.5rem, 2.4vw, 2.6rem); letter-spacing: -.05em; line-height: 1; }.signal p { max-width: 64ch; margin: 0; line-height: 1.5; }.signal__action { margin-top: 1rem !important; font-size: .86rem; }.signal__source { display: flex; flex-direction: column; gap: .7rem; justify-content: flex-end; }.signal__source span { font: 700 .57rem/1.4 var(--mono); text-transform: uppercase; }.signal__source a { font: 760 .62rem/1.3 var(--mono); text-underline-offset: 3px; }.signal--canceled { background: #ffd0c7; }.signal--packet-posted { background: var(--acid); }.signal--open { background: var(--sky); }.signal-empty { padding: 3rem; text-align: center; }
+    .civic-method { background: var(--ink); color: var(--white); }.civic-section-head--dark { border-color: rgba(255,255,255,.32); }.civic-section-head--dark > div { border-color: rgba(255,255,255,.32); }.civic-section-head--dark h2 em { color: var(--acid); }
+    .method-flow { display: grid; grid-template-columns: repeat(5,1fr); }.method-flow article { min-height: 330px; border-right: 1px solid rgba(255,255,255,.28); border-bottom: 1px solid rgba(255,255,255,.28); padding: 1.5rem; }.method-flow article:last-child { border-right: 0; }.method-flow span { color: var(--acid); font: 800 .68rem/1 var(--mono); }.method-flow h3 { margin: 5rem 0 1rem; font-size: 1.55rem; letter-spacing: -.04em; }.method-flow p { margin: 0; color: rgba(255,255,255,.72); line-height: 1.5; }
+    .method-terminal { margin: clamp(2rem, 5vw, 6rem); border: 1px solid var(--acid); background: #07130e; color: var(--acid); }.method-terminal__head { display: flex; justify-content: space-between; border-bottom: 1px solid var(--acid); padding: .9rem 1rem; font: 720 .6rem/1 var(--mono); }.method-terminal code { display: block; overflow-x: auto; padding: clamp(1.2rem, 3vw, 2.5rem); font: 740 clamp(.78rem, 1.4vw, 1.15rem)/1.5 var(--mono); white-space: nowrap; }.method-terminal code span { color: var(--red); }.method-terminal > p { max-width: 80ch; margin: 0; padding: 0 clamp(1.2rem, 3vw, 2.5rem) 2rem; color: rgba(255,255,255,.72); line-height: 1.55; }.method-terminal > div:last-child { display: flex; flex-wrap: wrap; gap: 1rem; border-top: 1px solid rgba(201,255,70,.45); padding: 1rem; }.method-terminal a { font: 700 .62rem/1 var(--mono); text-transform: uppercase; }
+    .ledger-list { margin: 0; padding: 0; list-style: none; }.ledger-list li { display: grid; grid-template-columns: 64px 210px 1fr; border-bottom: 1px solid var(--ink); }.ledger-list li > * { border-right: 1px solid var(--ink); padding: 1.2rem; }.ledger-list li > *:last-child { border-right: 0; }.ledger-list > li > span, .ledger-list time, .ledger-list b { font: 750 .65rem/1.5 var(--mono); text-transform: uppercase; }.ledger-list h3 { margin: .9rem 0 .5rem; font-size: clamp(1.5rem,2.5vw,2.8rem); letter-spacing: -.05em; }.ledger-list p { margin: 0; line-height: 1.5; }
+    .civic-compact { display: grid; grid-template-columns: .85fr 1.15fr; border-bottom: 1px solid var(--ink); background: var(--lavender); }.compact-title { border-right: 1px solid var(--ink); padding: clamp(3rem, 5vw, 6rem); }.compact-title h2 { font-size: clamp(4rem, 7.4vw, 9rem); }.compact-title h2 em { color: var(--ink); }.civic-compact ol { margin: 0; padding: 0; list-style: none; }.civic-compact li { display: grid; grid-template-columns: 58px 1fr; border-bottom: 1px solid var(--ink); }.civic-compact li:last-child { border-bottom: 0; }.civic-compact li span { border-right: 1px solid var(--ink); padding: 1rem; font: 800 .64rem/1 var(--mono); }.civic-compact li p { margin: 0; padding: 1rem 1.2rem; font-weight: 650; line-height: 1.35; }
+    .civic-edition { display: grid; grid-template-columns: .82fr 1.18fr; border-bottom: 1px solid var(--ink); background: var(--acid); }.edition-ticket { display: grid; min-height: 650px; align-content: space-between; border-right: 1px dashed var(--ink); padding: clamp(2rem,5vw,5rem); background: var(--ink); color: var(--acid); }.edition-ticket > span, .edition-ticket i { font: 760 .64rem/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }.edition-ticket strong { font: 900 clamp(9rem,20vw,20rem)/.65 "Inter Variable",Inter,sans-serif; letter-spacing: -.12em; }.edition-ticket p { margin: 0; font: 780 clamp(1.2rem,2.3vw,2.4rem)/1.1 var(--mono); text-transform: uppercase; }.edition-copy { align-self: center; padding: clamp(3rem,6vw,8rem); }.edition-copy h2 em { color: var(--ink); }.edition-copy > p { max-width: 48ch; font-size: clamp(1.05rem,1.6vw,1.5rem); line-height: 1.45; }.edition-status { border-left: 7px solid var(--ink); padding-left: 1rem; }
+    .source-grid { display: grid; grid-template-columns: repeat(2,1fr); }.source-grid a { min-height: 260px; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: clamp(1.5rem,3vw,3rem); text-decoration: none; }.source-grid a:nth-child(even) { border-right: 0; }.source-grid span, .source-grid b { font: 730 .62rem/1.4 var(--mono); text-transform: uppercase; }.source-grid h3 { margin: 2.8rem 0 .8rem; font-size: clamp(1.45rem,2.5vw,2.8rem); letter-spacing: -.05em; }.source-grid p { max-width: 60ch; line-height: 1.45; }.source-grid b { display: block; margin-top: 1.5rem; color: #395c4a; }
+    .civic-footer { display: grid; min-height: 72svh; grid-template-columns: 1.1fr .9fr; background: var(--red); }.civic-footer > div { align-self: end; padding: clamp(3rem,6vw,8rem); }.civic-footer > div:first-child { border-right: 1px solid var(--ink); }.civic-footer h2 em { color: var(--ink); }.civic-footer p { max-width: 50ch; line-height: 1.5; }.civic-footer div div { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }.civic-footer div div a { border: 1px solid var(--ink); padding: .75rem; font: 720 .62rem/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    @media (max-width: 980px) {
+      .civic-nav { grid-template-columns: 1fr auto; }.civic-nav__links { display: none; }.civic-nav > span { display: none; }
+      .civic-hero, .civic-alert, .civic-section-head, .civic-compact, .civic-edition, .civic-footer { grid-template-columns: 1fr; }
+      .civic-radar, .civic-alert > div:first-child, .civic-section-head > div, .compact-title, .edition-ticket, .civic-footer > div:first-child { border-right: 0; border-bottom: 1px solid var(--ink); }
+      .method-flow { grid-template-columns: repeat(2,1fr); }.method-flow article:last-child { grid-column: 1/-1; }
+      .signal { grid-template-columns: 55px 160px minmax(0,1fr); }.signal__source { grid-column: 2/-1; border-top: 1px solid var(--ink); }
+      .source-grid { grid-template-columns: 1fr; }.source-grid a { border-right: 0; }
+    }
+    @media (max-width: 620px) {
+      .civic-hero h1 { font-size: clamp(4.7rem, 24vw, 7.2rem); }.civic-hero__copy { min-height: 720px; padding: 2rem 1.15rem; }
+      .radar-field { min-height: 480px; }.radar-stats { grid-template-columns: repeat(2,1fr); }.radar-stats span:nth-child(2) { border-right: 0; }.radar-stats span:nth-child(-n+2) { border-bottom: 1px solid rgba(201,255,70,.42); }
+      .civic-alert > div, .civic-section-head > div, .civic-section-head > p, .compact-title, .edition-copy, .civic-footer > div { padding: 3rem 1.15rem; }
+      .civic-alert h2, .civic-section-head h2, .compact-title h2, .edition-copy h2, .civic-footer h2 { font-size: clamp(3.5rem,18vw,5.6rem); }
+      .method-flow { grid-template-columns: 1fr; }.method-flow article { min-height: 250px; border-right: 0; }.method-flow article:last-child { grid-column: auto; }.method-flow h3 { margin-top: 3rem; }
+      .signal { grid-template-columns: 48px 1fr; }.signal__date { border-right: 0 !important; }.signal__body, .signal__source { grid-column: 1/-1; border-top: 1px solid var(--ink); }.signal__body { padding: 1.2rem 1rem !important; }.ledger-list li { grid-template-columns: 48px 1fr; }.ledger-list li > div { grid-column: 1/-1; border-top: 1px solid var(--ink); }.ledger-list time { border-right: 0 !important; }.edition-ticket { min-height: 560px; padding: 2.2rem 1.2rem; }.edition-ticket strong { font-size: 45vw; }
+    }
+    @media (prefers-reduced-motion: reduce) { .radar-sweep { animation: none; } }
+  </style>
+</BlockLayout>
