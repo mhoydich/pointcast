@@ -213,12 +213,33 @@ const alternates = [
   document.querySelectorAll('[data-copy]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var value = btn.getAttribute('data-copy') || '';
+      var copied = false;
+
+      var field = document.createElement('textarea');
+      field.value = value;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+
       try {
-        await navigator.clipboard.writeText(value);
+        copied = document.execCommand('copy');
+      } catch {}
+      field.remove();
+
+      if (!copied) {
+        try {
+          await navigator.clipboard.writeText(value);
+          copied = true;
+        } catch {}
+      }
+
+      if (copied) {
         var old = btn.textContent;
         btn.textContent = 'Copied';
         window.setTimeout(function () { btn.textContent = old || 'Copy URL'; }, 1200);
-      } catch {
+      } else {
         window.prompt('Copy connector URL', value);
       }
     });

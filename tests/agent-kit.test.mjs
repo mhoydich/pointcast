@@ -6,9 +6,10 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('agent kit gives ChatGPT, Codex, Claude, and Firecrawl truthful setup paths', async () => {
-  const [kit, page, connectors, agents, sitemap, forAgents, llms] = await Promise.all([
+  const [kit, page, connectorPage, connectors, agents, sitemap, forAgents, llms] = await Promise.all([
     read('src/lib/pointcast-agent-kit.ts'),
     read('src/pages/agent-kit.md.ts'),
+    read('src/pages/connectors.astro'),
     read('src/pages/connectors.json.ts'),
     read('src/pages/agents.json.ts'),
     read('src/pages/sitemap-discovery.xml.ts'),
@@ -24,6 +25,8 @@ test('agent kit gives ChatGPT, Codex, Claude, and Firecrawl truthful setup paths
   assert.match(kit, /firecrawl scrape https:\/\/pointcast\.xyz\/llms\.txt/);
   assert.match(kit, /prefer \/agent-kit\.md, \/agents\.json/);
   assert.match(page, /Content-Type': 'text\/markdown; charset=utf-8'/);
+  assert.match(connectorPage, /document\.execCommand\('copy'\)/);
+  assert.match(connectorPage, /btn\.textContent = 'Copied'/);
   assert.match(connectors, /agentKit: POINTCAST_AGENT_KIT/);
   assert.match(agents, /agentKit: 'https:\/\/pointcast\.xyz\/agent-kit\.md'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/agent-kit\.md/);
