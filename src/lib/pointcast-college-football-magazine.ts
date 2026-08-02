@@ -592,6 +592,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'Fifty official-trait CC0 Nouns remixed through place, campus design research, and a six-study image press—free to download, remix, and collect.',
       href: '/25/collect/signal-stamps',
     },
+    {
+      number: '15',
+      name: 'Kiffin Check',
+      kicker: 'Players / capital / area / press / foes',
+      description: 'A preseason LSU merger audit: eight ecosystem temperatures, the Ole Miss split screen, five season-changing games, and a carefully labeled Finebaum synthesis.',
+      href: '/25/magazine/lane-kiffin-temperature',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',

@@ -17,6 +17,10 @@ import {
   FAN_CLIQUE_FEATURE,
   FAN_CLIQUE_TEAMS,
 } from '../../lib/pointcast-fan-clique';
+import {
+  LANE_KIFFIN_TEMPERATURE_FEATURE,
+  LANE_KIFFIN_TEMPERATURE_READINGS,
+} from '../../lib/pointcast-lane-kiffin-temperature';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -44,6 +48,19 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: LANE_KIFFIN_TEMPERATURE_FEATURE.title,
+      subtitle: LANE_KIFFIN_TEMPERATURE_FEATURE.subtitle,
+      human: LANE_KIFFIN_TEMPERATURE_FEATURE.canonical,
+      machine: LANE_KIFFIN_TEMPERATURE_FEATURE.machineEdition,
+      block: `https://pointcast.xyz/b/${LANE_KIFFIN_TEMPERATURE_FEATURE.block}`,
+      overallTemperature:
+        LANE_KIFFIN_TEMPERATURE_FEATURE.overallTemperature,
+      readings: LANE_KIFFIN_TEMPERATURE_READINGS.length,
+      pointcastRank: LANE_KIFFIN_TEMPERATURE_FEATURE.pointcastRank,
+      gamesPlayed: 0,
+      finebaumCloseIsPointCastSynthesis: true,
+    },
     {
       title: FAN_CLIQUE_FEATURE.title,
       subtitle: FAN_CLIQUE_FEATURE.subtitle,
@@ -126,6 +143,9 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     soundOfFocusInteractiveLab: POINTCAST_SOUND_OF_FOCUS.interactiveLab,
     coachWeather: COACH_WEATHER_FEATURE.canonical,
     coachWeatherJson: COACH_WEATHER_FEATURE.machineEdition,
+    laneKiffinTemperature: LANE_KIFFIN_TEMPERATURE_FEATURE.canonical,
+    laneKiffinTemperatureJson:
+      LANE_KIFFIN_TEMPERATURE_FEATURE.machineEdition,
     fanClique: FAN_CLIQUE_FEATURE.canonical,
     fanCliqueJson: FAN_CLIQUE_FEATURE.machineEdition,
     fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
