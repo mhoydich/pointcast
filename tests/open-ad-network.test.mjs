@@ -212,6 +212,9 @@ test('portable network transparently pins the current uplifting campaign across 
   assert.match(widget, /configured === 'common-hours'/);
   assert.match(widget, /publisher\.id === 'rally'/);
   assert.match(widget, /preferredCampaigns/);
+  assert.match(widget, /retiredCampaignPins/);
+  assert.match(widget, /pc-network-el-segundo-2026/);
+  assert.match(widget, /networkMigratedFrom/);
   assert.match(widget, /SOUND OFF · MELODY ON VIEW/);
   assert.match(widget, /IntersectionObserver/);
   assert.match(widget, /utm_medium', 'open-ad-network'/);

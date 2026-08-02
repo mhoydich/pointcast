@@ -68,6 +68,11 @@
       return entry.toLowerCase();
     }));
     var requestedCampaign = String(mount.dataset.campaign || '').trim().toLowerCase();
+    var retiredCampaignPins = new Set(['pc-network-el-segundo-2026']);
+    if (retiredCampaignPins.has(requestedCampaign)) {
+      mount.dataset.networkMigratedFrom = requestedCampaign;
+      requestedCampaign = '';
+    }
     var candidates = (Array.isArray(feed.campaigns) ? feed.campaigns : []).filter(function (ad) {
       if (!ad || ad.status !== 'house' || aliases.has(String(ad.advertiser || '').toLowerCase())) return false;
       if (!requestedCampaign) return true;
