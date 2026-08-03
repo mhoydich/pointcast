@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'worklife-001',
+    name: 'WORK/LIFE',
+    kicker: 'NEW PUBLICATION · SIX DESKS · PUBLIC 18-TRACK OPENER',
+    description: 'A PointCast publication about what work does to a life and what a life does back, opening with Another Manic Monday.',
+    url: 'https://pointcast.xyz/worklife',
+    path: '/worklife',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'wednesday-0934',
     name: 'WEDNESDAY 9:34',
     kicker: 'PLAYLIST PUBLICATION · TWO LIVE ISSUES · FOUR-WEEK CALENDAR',
