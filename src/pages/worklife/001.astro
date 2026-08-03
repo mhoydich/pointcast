@@ -1,0 +1,358 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  MANIC_MONDAY,
+  MANIC_MONDAY_MOVEMENTS,
+  MANIC_MONDAY_TRACKS,
+  WORKLIFE_PUBLICATION,
+  tracksForWorklifeMovement,
+} from '../../lib/worklife-publication';
+
+const issue = MANIC_MONDAY;
+const publication = WORKLIFE_PUBLICATION;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'MusicPlaylist',
+  '@id': `${issue.canonicalUrl}#playlist`,
+  name: issue.displayTitle,
+  description: issue.description,
+  url: issue.canonicalUrl,
+  image: `https://pointcast.xyz${issue.cover}`,
+  datePublished: issue.publishedAt,
+  numTracks: issue.trackCount,
+  author: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  isPartOf: { '@type': 'Periodical', name: publication.title, url: publication.canonicalUrl },
+  track: MANIC_MONDAY_TRACKS.map((track) => ({
+    '@type': 'MusicRecording',
+    position: track.position,
+    name: track.title,
+    byArtist: { '@type': 'MusicGroup', name: track.artist },
+    duration: `PT${track.duration.replace(':', 'M')}S`,
+    url: track.spotifyUrl,
+  })),
+};
+---
+
+<BlockLayout
+  title={`${issue.displayTitle} — PointCast`}
+  description={issue.description}
+  image={`https://pointcast.xyz${issue.cover}`}
+  themeColor="#d7f51b"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: issue.jsonRoute, title: `${issue.displayTitle} JSON` }]}
+  immersive={true}
+  showNetworkStrip={false}
+  frame={{
+    image: `https://pointcast.xyz${issue.cover}`,
+    aspectRatio: '1:1',
+    buttons: [
+      { label: 'Play on Spotify', action: 'link', target: issue.spotifyUrl },
+      { label: 'Open WORK/LIFE', action: 'link', target: publication.canonicalUrl },
+      { label: 'Inspect JSON', action: 'link', target: `https://pointcast.xyz${issue.jsonRoute}` },
+    ],
+  }}
+>
+  <main class="manic" id="main-content">
+    <nav class="manic__crumb mono" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href={publication.route}>WORK/LIFE</a><span>/</span><span>001</span>
+    </nav>
+
+    <header class="manic__hero">
+      <figure>
+        <img src={issue.cover} alt={issue.coverAlt} width="1536" height="1536" />
+        <figcaption class="mono">ORIGINAL POINTCAST COVER / TYPE, CLOCK, TIMECARD</figcaption>
+      </figure>
+      <div class="manic__intro">
+        <p class="mono">WORK/LIFE / ISSUE 001 / BLOCK {issue.blockId}</p>
+        <h1><span>ANOTHER</span><span>MANIC</span><span>MONDAY</span></h1>
+        <p class="manic__dek">{issue.description}</p>
+        <blockquote>{issue.editorialNote}</blockquote>
+        <div class="manic__actions">
+          <a href={issue.spotifyUrl} target="_blank" rel="noopener">PLAY THE PUBLIC PLAYLIST ↗</a>
+          <a href="#sequence">READ THE ORDER ↓</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="manic__editor" aria-labelledby="manic-editor-title">
+      <div>
+        <p class="mono">EDITOR’S NOTE / 09:12 PT</p>
+        <h2 id="manic-editor-title">Monday is a feeling. Worklife is the subject.</h2>
+      </div>
+      <div>
+        <p>
+          The first issue starts with The Bangles because the joke is better than
+          pretending. From there, the playlist becomes less about Monday and more
+          about the agreements hiding inside a working life: the clock, the name
+          badge, the money, the room, the body, the exit.
+        </p>
+        <p>
+          The order is not a productivity hack. It is an opening essay made of
+          recordings: funny, angry, elegant, popular, strange, and unresolved.
+        </p>
+      </div>
+      <dl>
+        <div><dt>tracks</dt><dd>{issue.trackCount}</dd></div>
+        <div><dt>runtime</dt><dd>{issue.duration}</dd></div>
+        <div><dt>movements</dt><dd>{MANIC_MONDAY_MOVEMENTS.length}</dd></div>
+        <div><dt>automation</dt><dd>none</dd></div>
+      </dl>
+    </section>
+
+    <section class="manic__clock" aria-labelledby="manic-clock-title">
+      <header>
+        <p class="mono">LOCAL-ONLY INSTRUMENT / NO ACCOUNT / NO SEND</p>
+        <h2 id="manic-clock-title">Where are you in the day?</h2>
+      </header>
+      <div class="manic__clock-controls" role="group" aria-label="Choose your place in the working day">
+        <button type="button" data-worklife-mode="booting" aria-pressed="true">booting</button>
+        <button type="button" data-worklife-mode="in-it" aria-pressed="false">in it</button>
+        <button type="button" data-worklife-mode="drifting" aria-pressed="false">drifting</button>
+        <button type="button" data-worklife-mode="done" aria-pressed="false">done</button>
+      </div>
+      <div class="manic__clock-readout" aria-live="polite">
+        <strong data-worklife-time>09:12</strong>
+        <p data-worklife-line>Open one thing. Let the day become specific.</p>
+      </div>
+      <div class="manic__clock-bar" aria-hidden="true"><span data-worklife-bar></span></div>
+    </section>
+
+    <section class="manic__player" aria-labelledby="manic-player-title">
+      <div>
+        <p class="mono">OFFICIAL SPOTIFY PLAYER / PUBLIC PLAYLIST</p>
+        <h2 id="manic-player-title">Press play. Keep the order.</h2>
+        <p>Spotify supplies playback. PointCast does not proxy or restream audio.</p>
+      </div>
+      <iframe
+        title="WORK/LIFE 001 — Another Manic Monday on Spotify"
+        src={`https://open.spotify.com/embed/playlist/${issue.spotifyPlaylistId}?utm_source=generator&theme=0`}
+        width="100%"
+        height="352"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+      ></iframe>
+    </section>
+
+    <section class="manic__sequence" id="sequence" aria-labelledby="manic-sequence-title">
+      <header>
+        <p class="mono">THE EXACT ORDER / FOUR MOVEMENTS</p>
+        <h2 id="manic-sequence-title">A timesheet with better notes.</h2>
+      </header>
+      <nav class="manic__tabs" aria-label="Playlist movements">
+        {MANIC_MONDAY_MOVEMENTS.map((movement, index) => (
+          <button
+            type="button"
+            data-manic-tab={movement.id}
+            aria-controls={`movement-${movement.id}`}
+            aria-pressed={index === 0 ? 'true' : 'false'}
+          >
+            <span>{movement.number}</span>{movement.title}
+          </button>
+        ))}
+      </nav>
+      <div class="manic__movements">
+        {MANIC_MONDAY_MOVEMENTS.map((movement, index) => (
+          <article id={`movement-${movement.id}`} data-manic-movement={movement.id} class:list={{ 'is-active': index === 0 }}>
+            <header>
+              <span class="mono">{movement.number}</span>
+              <h3>{movement.title}</h3>
+              <p>{movement.deck}</p>
+            </header>
+            <ol start={movement.positions[0]}>
+              {tracksForWorklifeMovement(movement.id).map((track) => (
+                <li>
+                  <span class="manic__track-number mono">{String(track.position).padStart(2, '0')}</span>
+                  <div>
+                    <h4><a href={track.spotifyUrl} target="_blank" rel="noopener">{track.title}</a></h4>
+                    <p>{track.artist} · {track.album}</p>
+                  </div>
+                  <p class="manic__track-note">{track.note}</p>
+                  <time>{track.duration}</time>
+                </li>
+              ))}
+            </ol>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="manic__handoff" aria-labelledby="manic-handoff-title">
+      <p class="mono">THE PUBLICATION CONTINUES / MONDAY DOES NOT OWN IT</p>
+      <h2 id="manic-handoff-title">Next: the desk, the lunch hour, the manager, the invoice, the exit.</h2>
+      <p>{publication.description}</p>
+      <div>
+        <a href={publication.route}>Open the WORK/LIFE front door ↗</a>
+        <a href="/wednesday">Visit the playlist publication ↗</a>
+        <a href={issue.jsonRoute}>Read the machine edition ↗</a>
+      </div>
+    </section>
+
+    <footer class="manic__footer">
+      <p>
+        Independent PointCast editorial curation. No artist, label, publisher,
+        estate, or Spotify endorsement is claimed. Recording and provider
+        metadata remain with their respective rights holders and Spotify.
+      </p>
+      <nav aria-label="WORK/LIFE issue links">
+        <a href="/super-follow">Follow locally</a>
+        <a href="/ping">Pitch WORK/LIFE</a>
+        <a href={`/b/${issue.blockId}`}>Block {issue.blockId}</a>
+      </nav>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  const modeCopy = {
+    booting: { time: '09:12', line: 'Open one thing. Let the day become specific.', width: '18%' },
+    'in-it': { time: '11:43', line: 'Protect the useful middle from becoming a performance.', width: '48%' },
+    drifting: { time: '14:26', line: 'Stand up. Find water. The problem may be the room.', width: '72%' },
+    done: { time: '17:38', line: 'Close the loop. Keep the life.', width: '100%' },
+  } as const;
+
+  document.querySelectorAll<HTMLButtonElement>('[data-worklife-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.worklifeMode as keyof typeof modeCopy;
+      const copy = modeCopy[mode];
+      if (!copy) return;
+      document.querySelectorAll<HTMLButtonElement>('[data-worklife-mode]').forEach((candidate) => {
+        candidate.setAttribute('aria-pressed', String(candidate === button));
+      });
+      const time = document.querySelector<HTMLElement>('[data-worklife-time]');
+      const line = document.querySelector<HTMLElement>('[data-worklife-line]');
+      const bar = document.querySelector<HTMLElement>('[data-worklife-bar]');
+      if (time) time.textContent = copy.time;
+      if (line) line.textContent = copy.line;
+      if (bar) bar.style.width = copy.width;
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-manic-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.manicTab;
+      document.querySelectorAll<HTMLButtonElement>('[data-manic-tab]').forEach((candidate) => {
+        candidate.setAttribute('aria-pressed', String(candidate === button));
+      });
+      document.querySelectorAll<HTMLElement>('[data-manic-movement]').forEach((movement) => {
+        movement.classList.toggle('is-active', movement.dataset.manicMovement === id);
+      });
+    });
+  });
+</script>
+
+<style>
+  :global(body) { margin: 0; background: #d8d4c6; }
+  .manic {
+    --ink: #11110f; --paper: #f4efdd; --acid: #d7f51b; --blue: #1747d1; --orange: #ef542e;
+    width: min(1500px, calc(100% - 24px)); margin: 12px auto 48px; border: 2px solid var(--ink);
+    background: var(--paper); color: var(--ink); overflow: hidden;
+  }
+  .manic a { color: inherit; }
+  .mono { font-family: var(--pc-font-mono); }
+  .manic__crumb { display: flex; gap: 8px; padding: 10px 14px; background: var(--ink); color: var(--paper); font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+  .manic__hero { display: grid; grid-template-columns: minmax(340px, .92fr) minmax(0, 1.08fr); min-height: 760px; border-bottom: 2px solid var(--ink); }
+  .manic__hero figure { margin: 0; display: grid; grid-template-rows: 1fr auto; border-right: 2px solid var(--ink); background: var(--acid); }
+  .manic__hero img { width: 100%; height: 100%; min-height: 720px; object-fit: cover; }
+  .manic__hero figcaption { padding: 9px 12px; border-top: 2px solid var(--ink); font-size: 8px; font-weight: 900; letter-spacing: .08em; }
+  .manic__intro { display: flex; flex-direction: column; justify-content: center; padding: clamp(32px, 6vw, 90px); }
+  .manic__intro > p:first-child { margin: 0 0 28px; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+  .manic__intro h1 { margin: 0; font-size: clamp(70px, 9vw, 138px); line-height: .73; letter-spacing: -.08em; }
+  .manic__intro h1 span { display: block; }
+  .manic__intro h1 span:nth-child(2) { color: var(--orange); transform: translateX(8%); }
+  .manic__dek { margin: 46px 0 0; max-width: 720px; font-size: 21px; line-height: 1.38; }
+  .manic__intro blockquote { margin: 28px 0 0; padding: 18px 22px; border-left: 8px solid var(--blue); background: #fff; font-size: 16px; line-height: 1.45; }
+  .manic__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .manic__actions a { padding: 13px 16px; border: 2px solid var(--ink); font: 900 10px var(--pc-font-mono); text-decoration: none; }
+  .manic__actions a:first-child { background: var(--ink); color: var(--paper); }
+  .manic__editor { display: grid; grid-template-columns: 1fr 1fr minmax(250px, .55fr); border-bottom: 2px solid var(--ink); }
+  .manic__editor > * { padding: clamp(28px, 4vw, 56px); }
+  .manic__editor > * + * { border-left: 2px solid var(--ink); }
+  .manic__editor > div:first-child p { margin: 0; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+  .manic__editor h2 { margin: 24px 0 0; font-size: clamp(42px, 5vw, 72px); line-height: .92; letter-spacing: -.055em; }
+  .manic__editor > div:nth-child(2) p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; }
+  .manic__editor dl { margin: 0; background: var(--blue); color: var(--paper); }
+  .manic__editor dl div { padding: 18px 0; border-bottom: 1px solid rgba(255,255,255,.45); }
+  .manic__editor dl div:last-child { border-bottom: 0; }
+  .manic__editor dt { font: 800 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .manic__editor dd { margin: 5px 0 0; font-size: 25px; font-weight: 900; }
+  .manic__clock { display: grid; grid-template-columns: .8fr .7fr 1fr; align-items: stretch; border-bottom: 2px solid var(--ink); background: var(--acid); }
+  .manic__clock > * { padding: clamp(25px, 4vw, 48px); }
+  .manic__clock > * + * { border-left: 2px solid var(--ink); }
+  .manic__clock header p { margin: 0; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+  .manic__clock h2 { margin: 22px 0 0; font-size: clamp(38px, 4vw, 60px); line-height: .94; letter-spacing: -.05em; }
+  .manic__clock-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: center; }
+  .manic__clock-controls button { min-height: 58px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); font: 900 11px var(--pc-font-mono); cursor: pointer; }
+  .manic__clock-controls button[aria-pressed="true"] { background: var(--ink); color: var(--acid); }
+  .manic__clock-readout { display: flex; flex-direction: column; justify-content: center; }
+  .manic__clock-readout strong { color: var(--blue); font-size: clamp(72px, 9vw, 132px); line-height: .8; letter-spacing: -.09em; }
+  .manic__clock-readout p { margin: 25px 0 0; max-width: 38ch; font-size: 17px; font-weight: 700; }
+  .manic__clock-bar { grid-column: 1 / -1; height: 22px; padding: 0; border-left: 0 !important; border-top: 2px solid var(--ink); background: var(--paper); }
+  .manic__clock-bar span { display: block; width: 18%; height: 100%; background: var(--orange); transition: width 280ms ease; }
+  .manic__player { display: grid; grid-template-columns: .7fr 1.3fr; gap: 0; border-bottom: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  .manic__player > div { padding: clamp(30px, 5vw, 66px); border-right: 2px solid var(--paper); }
+  .manic__player > div > p:first-child { margin: 0; color: var(--acid); font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+  .manic__player h2 { margin: 28px 0; font-size: clamp(44px, 5vw, 74px); line-height: .92; letter-spacing: -.055em; }
+  .manic__player > div > p:last-child { margin: 0; font-size: 14px; line-height: 1.45; }
+  .manic__player iframe { align-self: center; border: 0; }
+  .manic__sequence > header { padding: clamp(38px, 6vw, 90px); border-bottom: 2px solid var(--ink); }
+  .manic__sequence > header p { margin: 0; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+  .manic__sequence > header h2 { margin: 30px 0 0; font-size: clamp(58px, 8vw, 120px); line-height: .84; letter-spacing: -.075em; }
+  .manic__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 2px solid var(--ink); }
+  .manic__tabs button { min-height: 90px; padding: 17px; border: 0; border-right: 2px solid var(--ink); background: var(--paper); color: var(--ink); font: 850 13px var(--pc-font-sans); text-align: left; cursor: pointer; }
+  .manic__tabs button:last-child { border-right: 0; }
+  .manic__tabs button[aria-pressed="true"] { background: var(--blue); color: var(--paper); }
+  .manic__tabs span { display: block; margin-bottom: 8px; font: 900 9px var(--pc-font-mono); }
+  [data-manic-movement] { display: none; }
+  [data-manic-movement].is-active { display: grid; grid-template-columns: minmax(280px, .55fr) minmax(0, 1.45fr); }
+  .manic__movements article > header { padding: clamp(28px, 5vw, 68px); border-right: 2px solid var(--ink); background: var(--orange); }
+  .manic__movements article > header span { font-size: 11px; font-weight: 900; }
+  .manic__movements article > header h3 { margin: 70px 0 18px; font-size: clamp(48px, 6vw, 86px); line-height: .86; letter-spacing: -.065em; }
+  .manic__movements article > header p { margin: 0; font-size: 17px; line-height: 1.4; }
+  .manic__movements ol { margin: 0; padding: 0; list-style: none; }
+  .manic__movements li { display: grid; grid-template-columns: 48px minmax(180px, .75fr) minmax(220px, 1fr) 50px; gap: 18px; align-items: center; min-height: 122px; padding: 18px 24px; border-bottom: 2px solid var(--ink); }
+  .manic__movements li:last-child { border-bottom: 0; }
+  .manic__track-number { color: var(--orange); font-size: 12px; font-weight: 900; }
+  .manic__movements h4 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
+  .manic__movements h4 a { text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  .manic__movements li div p { margin: 6px 0 0; font-size: 11px; line-height: 1.35; }
+  .manic__track-note { margin: 0; font-size: 14px; line-height: 1.42; }
+  .manic__movements time { font: 800 10px var(--pc-font-mono); }
+  .manic__handoff { padding: clamp(44px, 8vw, 120px); border-top: 2px solid var(--ink); background: var(--blue); color: var(--paper); }
+  .manic__handoff > p:first-child { margin: 0; color: var(--acid); font-size: 9px; font-weight: 900; letter-spacing: .11em; }
+  .manic__handoff h2 { max-width: 1250px; margin: 35px 0; font-size: clamp(52px, 7vw, 104px); line-height: .9; letter-spacing: -.07em; }
+  .manic__handoff > p:not(:first-child) { max-width: 780px; margin: 0; font-size: 18px; line-height: 1.45; }
+  .manic__handoff div { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+  .manic__handoff a { padding: 12px 15px; border: 2px solid var(--paper); font: 900 10px var(--pc-font-mono); text-decoration: none; }
+  .manic__footer { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; padding: 28px; background: var(--ink); color: var(--paper); }
+  .manic__footer p { margin: 0; font-size: 12px; line-height: 1.5; }
+  .manic__footer nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 16px; font: 800 10px var(--pc-font-mono); }
+  @media (max-width: 900px) {
+    .manic__hero, .manic__editor, .manic__clock, .manic__player, [data-manic-movement].is-active { grid-template-columns: 1fr; }
+    .manic__hero figure, .manic__editor > * + *, .manic__clock > * + *, .manic__player > div, .manic__movements article > header { border-right: 0; border-left: 0; border-bottom: 2px solid var(--ink); }
+    .manic__hero img { min-height: 0; }
+    .manic__clock-bar { grid-column: auto; }
+    .manic__player iframe { min-height: 352px; }
+  }
+  @media (max-width: 650px) {
+    .manic { width: calc(100% - 12px); margin: 6px auto 24px; }
+    .manic__intro { padding: 42px 20px; }
+    .manic__intro h1 { font-size: clamp(64px, 21vw, 92px); }
+    .manic__intro h1 span:nth-child(2) { transform: none; }
+    .manic__editor > *, .manic__clock > * { padding: 32px 20px; }
+    .manic__tabs { grid-template-columns: 1fr 1fr; }
+    .manic__tabs button:nth-child(2) { border-right: 0; }
+    .manic__tabs button:nth-child(-n+2) { border-bottom: 2px solid var(--ink); }
+    .manic__movements li { grid-template-columns: 38px 1fr 42px; gap: 12px; }
+    .manic__track-note { grid-column: 2 / -1; }
+    .manic__footer { grid-template-columns: 1fr; }
+    .manic__footer nav { justify-content: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) { .manic__clock-bar span { transition: none; } }
+  @media print {
+    :global(body) { background: #fff; }
+    .manic { width: 100%; margin: 0; border: 0; }
+    .manic__actions, .manic__tabs, .manic__player iframe, .manic__clock { display: none; }
+    [data-manic-movement] { display: grid !important; grid-template-columns: 1fr 2fr !important; break-inside: avoid; }
+  }
+</style>
