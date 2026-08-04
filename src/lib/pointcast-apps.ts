@@ -188,6 +188,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'california-cup-2026',
+    name: 'The California Cup',
+    kicker: '7 IN-STATE GAMES · 2 TROPHIES · 5 INVITATION DIMENSIONS',
+    description: 'A season-long California college-football table and private browser-local circuit card. Football results and PointCast field-report invitation scores remain deliberately separate.',
+    url: 'https://pointcast.xyz/25/magazine/california-cup',
+    path: '/25/magazine/california-cup',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'lane-kiffin-temperature-2026',
     name: 'Lane Kiffin Temperature Check',
     kicker: '8 ECOSYSTEM READINGS · LSU / OLE MISS SPLIT SCREEN · 5 FOE GAMES',

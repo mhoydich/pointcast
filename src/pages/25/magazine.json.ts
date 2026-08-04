@@ -29,6 +29,12 @@ import {
   CALIFORNIA_FOOTBALL_FEATURE,
   CALIFORNIA_PROGRAM_PULSE,
 } from '../../lib/pointcast-california-football';
+import {
+  CALIFORNIA_CUP_FEATURE,
+  CALIFORNIA_CUP_GAMES,
+  CALIFORNIA_CUP_INVITATION_DIMENSIONS,
+  CALIFORNIA_CUP_PROGRAMS,
+} from '../../lib/pointcast-california-cup';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -56,6 +62,18 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: CALIFORNIA_CUP_FEATURE.title,
+      subtitle: CALIFORNIA_CUP_FEATURE.subtitle,
+      human: CALIFORNIA_CUP_FEATURE.canonical,
+      machine: CALIFORNIA_CUP_FEATURE.machineEdition,
+      block: `https://pointcast.xyz/b/${CALIFORNIA_CUP_FEATURE.block}`,
+      programs: CALIFORNIA_CUP_PROGRAMS.length,
+      scheduledGames: CALIFORNIA_CUP_GAMES.length,
+      finalGames: 0,
+      invitationDimensions: CALIFORNIA_CUP_INVITATION_DIMENSIONS.length,
+      serverWrites: false,
+    },
     {
       title: CALIFORNIA_FOOTBALL_FEATURE.title,
       subtitle: CALIFORNIA_FOOTBALL_FEATURE.subtitle,
@@ -168,6 +186,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
       LANE_KIFFIN_TEMPERATURE_FEATURE.machineEdition,
     californiaFootball: CALIFORNIA_FOOTBALL_FEATURE.canonical,
     californiaFootballJson: CALIFORNIA_FOOTBALL_FEATURE.machineEdition,
+    californiaCup: CALIFORNIA_CUP_FEATURE.canonical,
+    californiaCupJson: CALIFORNIA_CUP_FEATURE.machineEdition,
     fanClique: FAN_CLIQUE_FEATURE.canonical,
     fanCliqueJson: FAN_CLIQUE_FEATURE.machineEdition,
     fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
