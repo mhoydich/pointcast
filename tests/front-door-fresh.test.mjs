@@ -46,8 +46,8 @@ test('the Monday field paper promotes PointCast Tonight and the complete newest 
   assert.match(edition, /Go out/);
   assert.match(edition, /Stay in/);
   assert.match(edition, /One official-source week/);
-  assert.match(edition, /id: '0559', noun: 'Tonight', title: 'GO OUT \/ STAY IN'/);
-  assert.match(edition, /id: '0558', noun: 'Passport', title: 'PASS\/25'/);
+  assert.match(edition, /id: '0560', noun: 'Tonight', title: 'GO OUT \/ STAY IN'/);
+  assert.match(edition, /id: '0559', noun: 'Circuit', title: 'The California Cup'/);
   assert.match(edition, /id: '0557', noun: 'State', title: 'California Football Is Not Dead'/);
   assert.match(edition, /id: '0556', noun: 'Uniform', title: 'The Clothes Have Clocked In'/);
   assert.match(edition, /id: '0555', noun: 'Shift', title: 'Another Manic Monday'/);

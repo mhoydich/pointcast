@@ -10,7 +10,7 @@ test('PointCast Tonight ships a sourced two-channel edition', async () => {
     read('src/pages/tonight.astro'),
     read('src/data/pointcast-tonight.json'),
     read('src/pages/tonight.json.ts'),
-    read('src/content/blocks/0559.json'),
+    read('src/content/blocks/0560.json'),
   ]);
   const data = JSON.parse(rawData);
   const blockData = JSON.parse(block);
@@ -35,7 +35,7 @@ test('PointCast Tonight ships a sourced two-channel edition', async () => {
   assert.match(page, /prefers-reduced-motion/);
   assert.match(jsonRoute, /Access-Control-Allow-Origin/);
   assert.match(jsonRoute, /pointcast\.xyz\/tonight/);
-  assert.equal(blockData.id, '0559');
+  assert.equal(blockData.id, '0560');
   assert.equal(blockData.author, 'codex');
   assert.match(blockData.source, /ideas 2 and 4/);
 });
@@ -69,7 +69,7 @@ test('PointCast Tonight is discoverable across the current PointCast edition', a
   for (const source of [home, apps, agents, sitemap, forAgents, llms, llmsFull]) {
     assert.match(source, /\/tonight/);
   }
-  assert.match(home, /0559/);
+  assert.match(home, /0560/);
   assert.match(home, /Go out\.<br \/><em>Stay in\.<\/em>/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/tonight\.json/);
   assert.match(agents, /pointcastTonightJson/);

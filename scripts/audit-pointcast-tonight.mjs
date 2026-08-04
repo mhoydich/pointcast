@@ -5,7 +5,7 @@ const failures = [];
 const assert = (condition, message) => { if (!condition) failures.push(message); };
 const sourceIds = new Set(data.sources.map((source) => source.id));
 
-assert(data.block === '0559', 'edition must point to Block 0559');
+assert(data.block === '0560', 'edition must point to Block 0560');
 assert(data.goOut.length >= 5, 'GO OUT needs at least five signals');
 assert(data.stayIn.length >= 3, 'STAY IN needs at least three program signals');
 assert(data.sources.some((source) => source.automation === 'allowed'), 'at least one refreshable source required');
