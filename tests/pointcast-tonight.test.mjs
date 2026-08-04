@@ -70,7 +70,7 @@ test('PointCast Tonight is discoverable across the current PointCast edition', a
     assert.match(source, /\/tonight/);
   }
   assert.match(home, /0560/);
-  assert.match(home, /Go out\.<br \/><em>Stay in\.<\/em>/);
+  assert.match(home, /id: '0560', noun: 'Tonight', title: 'GO OUT \/ STAY IN'/);
   assert.match(sitemap, /https:\/\/pointcast\.xyz\/tonight\.json/);
   assert.match(agents, /pointcastTonightJson/);
 });
