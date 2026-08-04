@@ -1,0 +1,302 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  OPEN_TO_WORK_BOARD,
+  UNIFORMS_POST,
+  WORKLIFE_PUBLICATION,
+} from '../../lib/worklife-publication';
+
+const board = OPEN_TO_WORK_BOARD;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: board.displayTitle,
+  description: board.description,
+  url: board.canonicalUrl,
+  datePublished: board.publishedAt,
+  isPartOf: { '@type': 'Periodical', name: WORKLIFE_PUBLICATION.title, url: WORKLIFE_PUBLICATION.canonicalUrl },
+  numberOfItems: board.privacy.publicCards,
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout
+  title={`${board.displayTitle} — WORK/LIFE`}
+  description={board.description}
+  image="https://pointcast.xyz/images/worklife/open-to-work-board.png"
+  themeColor="#ff5a36"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: board.jsonRoute, title: `${board.displayTitle} JSON` }]}
+  immersive={true}
+  showNetworkStrip={false}
+>
+  <main class="openboard" id="main-content">
+    <nav class="openboard__wire mono" aria-label="Breadcrumb">
+      <a href="/">POINTCAST</a><span>/</span><a href="/worklife">WORK/LIFE</a><span>/</span><span>OPEN TO WORK</span>
+      <span class="openboard__wire-end">BETA BOARD 001 / BLOCK {board.blockId}</span>
+    </nav>
+
+    <header class="openboard__hero">
+      <div class="openboard__title">
+        <p class="mono">{board.kicker}</p>
+        <h1><span>OPEN</span><span>TO</span><span>WORK</span></h1>
+      </div>
+      <div class="openboard__intro">
+        <p class="openboard__dek">{board.dek}</p>
+        <p>{board.description}</p>
+        <dl>
+          <div><dt class="mono">PUBLIC CARDS</dt><dd>{board.privacy.publicCards}</dd></div>
+          <div><dt class="mono">LOCAL DRAFTS</dt><dd data-local-count>0</dd></div>
+          <div><dt class="mono">HUMAN SCORES</dt><dd>NONE</dd></div>
+        </dl>
+        <p class="openboard__privacy mono">● DRAFTS STAY ON THIS DEVICE · NO AUTOMATIC PUBLISHING · NO MATCHING ENGINE</p>
+      </div>
+    </header>
+
+    <section class="openboard__origin" aria-labelledby="bosslist-title">
+      <div>
+        <p class="mono">RECOVERED IDEA / PRIVACY REWRITE</p>
+        <h2 id="bosslist-title">Bosslist, without ranking the humans.</h2>
+      </div>
+      <div>
+        <p>
+          In the original Bosslist notes, the big idea was an index of people: “Product Hunt for people,”
+          built as specific vertical lists—illustrators, specialists, jobs, recruiters—with visual profiles
+          assembling work scattered across the web.
+        </p>
+        <p>
+          The useful part was the public list plus the opportunity layer. This version keeps that clarity
+          and drops the invasive machinery. Nobody is imported, crawled, scored, voted up, or quietly added.
+          A person writes their own signal and decides whether it travels.
+        </p>
+      </div>
+      <div class="openboard__ledger">
+        <div>
+          <p class="mono">KEEP</p>
+          <ul>{board.origin.retained.map((item) => <li>{item}</li>)}</ul>
+        </div>
+        <div>
+          <p class="mono">RETIRE</p>
+          <ul>{board.origin.retired.map((item) => <li>{item}</li>)}</ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="openboard__maker" aria-labelledby="signal-maker-title">
+      <header>
+        <p class="mono">DEVICE-LOCAL CARD MAKER / YOU CONTROL THE EXIT</p>
+        <h2 id="signal-maker-title">Make your signal specific.</h2>
+        <p>{board.privacy.note}</p>
+      </header>
+
+      <form data-open-form>
+        {board.fields.map((field) => (
+          <label>
+            <span class="mono">{field.label}{field.required ? ' *' : ''}</span>
+            <input
+              type={field.id === 'proof' ? 'url' : 'text'}
+              name={field.id}
+              required={field.required}
+              maxlength={field.maxLength}
+              placeholder={
+                field.id === 'name' ? 'YOUR NAME OR HANDLE' :
+                field.id === 'practice' ? 'EDITOR / ENGINEER / PRODUCER / ...' :
+                field.id === 'openTo' ? 'A ROLE, PROJECT, COLLABORATION, OR CONVERSATION' :
+                field.id === 'place' ? 'LOS ANGELES / PT / REMOTE' :
+                field.id === 'proof' ? 'https://ONE-GOOD-EXAMPLE' :
+                'THE WORK YOU DO NOT WANT'
+              }
+            />
+          </label>
+        ))}
+        <div class="openboard__consent">
+          <input id="open-consent" type="checkbox" required />
+          <label for="open-consent">
+            I understand this button adds a draft only to this browser. It does not apply for a job,
+            contact PointCast, publish my card, or create an account.
+          </label>
+        </div>
+        <button type="submit">ADD TO THIS DEVICE ↘</button>
+        <p data-open-status role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="openboard__local" aria-labelledby="local-board-title">
+      <header>
+        <div>
+          <p class="mono">YOUR DEVICE / NOT THE PUBLIC INTERNET</p>
+          <h2 id="local-board-title">Local signal board</h2>
+        </div>
+        <button type="button" data-clear-local>CLEAR LOCAL BOARD</button>
+      </header>
+      <div class="openboard__empty" data-open-empty>
+        <b>NO LOCAL CARDS YET.</b>
+        <span>Make one above. It will live only in this browser.</span>
+      </div>
+      <ol data-open-list></ol>
+    </section>
+
+    <section class="openboard__public" aria-labelledby="public-board-title">
+      <div class="openboard__public-number">0</div>
+      <div>
+        <p class="mono">PUBLIC BOARD / FOUNDING ROUND</p>
+        <h2 id="public-board-title">Nobody listed without a yes.</h2>
+        <p>
+          The public board intentionally begins empty. A copied local card is still not a public card.
+          If you want PointCast to consider one for the founding round, open the pitch door and choose
+          what to send. Publication remains a separate, human-reviewed decision.
+        </p>
+        <div>
+          <a href="/ping">Open the PointCast pitch door ↗</a>
+          <a href={board.jsonRoute}>Inspect the board contract ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="openboard__footer">
+      <p class="mono">OPEN TO WORK IS A SIGNAL, NOT A VERDICT.</p>
+      <nav aria-label="WORK/LIFE board links">
+        <a href={UNIFORMS_POST.route}>Read Uniforms</a>
+        <a href="/worklife">Return to WORK/LIFE</a>
+        <a href={board.jsonRoute}>Board JSON</a>
+      </nav>
+    </footer>
+  </main>
+</BlockLayout>
+
+<template id="open-card-template">
+  <li class="open-card">
+    <div class="open-card__top"><span class="mono">OPEN TO</span><strong data-card-open></strong></div>
+    <h3 data-card-name></h3>
+    <p class="open-card__practice" data-card-practice></p>
+    <dl>
+      <div data-card-place-row><dt class="mono">PLACE</dt><dd data-card-place></dd></div>
+      <div data-card-boundary-row><dt class="mono">BOUNDARY</dt><dd data-card-boundary></dd></div>
+    </dl>
+    <a data-card-proof target="_blank" rel="noopener noreferrer">ONE PIECE OF PROOF ↗</a>
+    <div class="open-card__actions">
+      <button type="button" data-copy-card>COPY CARD JSON</button>
+      <button type="button" data-remove-card>REMOVE LOCAL CARD</button>
+    </div>
+  </li>
+</template>
+
+<script is:inline>
+  (() => {
+    const STORAGE_KEY = 'pointcast.worklife.open-to-work.v1';
+    const form = document.querySelector('[data-open-form]');
+    const list = document.querySelector('[data-open-list]');
+    const empty = document.querySelector('[data-open-empty]');
+    const countNodes = document.querySelectorAll('[data-local-count]');
+    const status = document.querySelector('[data-open-status]');
+    const template = document.querySelector('#open-card-template');
+    if (!form || !list || !empty || !template) return;
+
+    const safeRead = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.slice(0, 24) : [];
+      } catch { return []; }
+    };
+    const save = (cards) => {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cards)); return true; }
+      catch { return false; }
+    };
+    let cards = safeRead();
+
+    const setText = (node, value) => { if (node) node.textContent = value || ''; };
+    const render = () => {
+      list.textContent = '';
+      empty.hidden = cards.length > 0;
+      countNodes.forEach((node) => { node.textContent = String(cards.length); });
+      cards.forEach((card) => {
+        const fragment = template.content.cloneNode(true);
+        const item = fragment.querySelector('.open-card');
+        setText(fragment.querySelector('[data-card-name]'), card.name);
+        setText(fragment.querySelector('[data-card-practice]'), card.practice);
+        setText(fragment.querySelector('[data-card-open]'), card.openTo);
+        setText(fragment.querySelector('[data-card-place]'), card.place);
+        setText(fragment.querySelector('[data-card-boundary]'), card.boundary);
+        const placeRow = fragment.querySelector('[data-card-place-row]');
+        const boundaryRow = fragment.querySelector('[data-card-boundary-row]');
+        if (placeRow) placeRow.hidden = !card.place;
+        if (boundaryRow) boundaryRow.hidden = !card.boundary;
+        const proof = fragment.querySelector('[data-card-proof]');
+        if (proof) {
+          if (card.proof && /^https?:\/\//i.test(card.proof)) proof.href = card.proof;
+          else proof.hidden = true;
+        }
+        fragment.querySelector('[data-remove-card]')?.addEventListener('click', () => {
+          cards = cards.filter((entry) => entry.id !== card.id);
+          save(cards); render();
+          setText(status, 'Local card removed.');
+        });
+        fragment.querySelector('[data-copy-card]')?.addEventListener('click', async () => {
+          const portable = {
+            schema: 'pointcast-open-to-work-signal/v1',
+            ...card,
+            id: undefined,
+            madeAt: undefined,
+            consent: 'Author chose to copy this device-local draft. Copying is not publication.',
+          };
+          try {
+            await navigator.clipboard.writeText(JSON.stringify(portable, null, 2));
+            setText(status, `Copied ${card.name}'s portable JSON. Nothing was sent.`);
+          } catch {
+            setText(status, 'Clipboard access was unavailable. Your local card is unchanged.');
+          }
+        });
+        if (item) item.setAttribute('data-card-id', card.id);
+        list.appendChild(fragment);
+      });
+    };
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const get = (name) => String(data.get(name) || '').trim();
+      const proof = get('proof');
+      if (proof && !/^https?:\/\//i.test(proof)) {
+        setText(status, 'Proof link must begin with http:// or https://.');
+        return;
+      }
+      const card = {
+        id: globalThis.crypto?.randomUUID?.() || `local-${Date.now()}`,
+        name: get('name'), practice: get('practice'), openTo: get('openTo'),
+        place: get('place'), proof, boundary: get('boundary'),
+        madeAt: new Date().toISOString(),
+      };
+      cards = [card, ...cards].slice(0, 24);
+      if (!save(cards)) {
+        setText(status, 'This browser would not allow local storage, so the card was not kept.');
+        return;
+      }
+      form.reset(); render();
+      setText(status, 'Local card added. Nothing was sent or published.');
+    });
+
+    document.querySelector('[data-clear-local]')?.addEventListener('click', () => {
+      if (!cards.length) { setText(status, 'The local board is already empty.'); return; }
+      if (!window.confirm('Remove every OPEN TO WORK draft stored in this browser?')) return;
+      cards = []; save(cards); render();
+      setText(status, 'Local board cleared.');
+    });
+
+    render();
+  })();
+</script>
+
+<style>
+  :global(body){margin:0;background:#b7b3a8}.openboard{--ink:#12120f;--paper:#f4efdd;--acid:#d7f51b;--blue:#1747d1;--orange:#ff5a36;width:min(1500px,calc(100% - 24px));margin:12px auto 48px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);overflow:hidden}.openboard a{color:inherit}.mono{font-family:var(--pc-font-mono)}
+  .openboard [hidden]{display:none!important}
+  .openboard__wire{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--ink);color:var(--paper);font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__wire-end{margin-left:auto}
+  .openboard__hero{display:grid;grid-template-columns:1.15fr .85fr;min-height:760px;border-bottom:2px solid var(--ink);background:var(--orange)}.openboard__title{display:flex;flex-direction:column;justify-content:center;padding:clamp(30px,6vw,86px);border-right:2px solid var(--ink)}.openboard__title p{margin:0 0 42px;font-size:10px;font-weight:900;letter-spacing:.1em}.openboard__title h1{margin:0;font-size:clamp(112px,17vw,260px);line-height:.58;letter-spacing:-.095em}.openboard__title h1 span{display:block}.openboard__title h1 span:nth-child(2){color:var(--paper);transform:translateX(24%)}.openboard__title h1 span:nth-child(3){color:var(--blue)}.openboard__intro{display:flex;flex-direction:column;justify-content:flex-end;padding:clamp(34px,5vw,74px)}.openboard__intro>p{margin:20px 0 0;font-size:17px;line-height:1.45}.openboard__intro .openboard__dek{margin:0;font-size:clamp(34px,4vw,57px);font-weight:850;line-height:.98;letter-spacing:-.045em}.openboard__intro dl{display:grid;grid-template-columns:repeat(3,1fr);margin:40px 0 0;border:2px solid var(--ink)}.openboard__intro dl div{padding:14px}.openboard__intro dl div+div{border-left:2px solid var(--ink)}.openboard__intro dt{font-size:8px;font-weight:900}.openboard__intro dd{margin:7px 0 0;font-size:28px;font-weight:950}.openboard__privacy{padding:12px;background:var(--ink);color:var(--acid);font-size:9px!important;font-weight:900;letter-spacing:.06em}
+  .openboard__origin{display:grid;grid-template-columns:.8fr 1.2fr;border-bottom:2px solid var(--ink)}.openboard__origin>div{padding:clamp(38px,6vw,88px)}.openboard__origin>div:first-child{border-right:2px solid var(--ink);background:var(--blue);color:var(--paper)}.openboard__origin p{margin:0;font-size:19px;line-height:1.5}.openboard__origin p+p{margin-top:28px}.openboard__origin>div:first-child p{font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__origin h2{margin:42px 0 0;font-size:clamp(54px,7vw,105px);line-height:.86;letter-spacing:-.065em}.openboard__ledger{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr!important;padding:0!important;border-top:2px solid var(--ink);background:var(--acid)}.openboard__ledger>div{padding:34px}.openboard__ledger>div+div{border-left:2px solid var(--ink);background:var(--orange)}.openboard__ledger p{font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__ledger ul{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0 0;padding:0;list-style:none}.openboard__ledger li{padding:9px 11px;border:2px solid var(--ink);background:var(--paper);font:850 11px var(--pc-font-mono);text-transform:uppercase}
+  .openboard__maker{display:grid;grid-template-columns:.75fr 1.25fr;border-bottom:2px solid var(--ink)}.openboard__maker>header{padding:clamp(40px,6vw,82px);border-right:2px solid var(--ink);background:var(--ink);color:var(--paper)}.openboard__maker header p{margin:0;font-size:16px;line-height:1.5}.openboard__maker header p:first-child{font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__maker h2{margin:42px 0;font-size:clamp(54px,7vw,96px);line-height:.86;letter-spacing:-.065em}.openboard__maker form{display:grid;grid-template-columns:1fr 1fr;align-content:start;padding:clamp(30px,5vw,72px);gap:22px}.openboard__maker label{display:grid;gap:9px}.openboard__maker label span{font-size:9px;font-weight:900;letter-spacing:.08em}.openboard__maker input{min-width:0;padding:14px;border:2px solid var(--ink);border-radius:0;background:#fff;font:750 14px var(--pc-font-mono)}.openboard__maker label:nth-child(3),.openboard__maker label:nth-child(5){grid-column:1/-1}.openboard__consent{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;gap:12px;padding:16px;border:2px solid var(--ink);background:var(--acid);font-size:13px;line-height:1.4}.openboard__consent input{width:20px;height:20px}.openboard__maker form>button{grid-column:1/-1;padding:18px;border:2px solid var(--ink);background:var(--orange);font:950 13px var(--pc-font-mono);cursor:pointer}.openboard__maker form>p{grid-column:1/-1;min-height:20px;margin:0;font:850 11px var(--pc-font-mono);color:var(--blue)}
+  .openboard__local{border-bottom:2px solid var(--ink);background:var(--paper)}.openboard__local>header{display:flex;justify-content:space-between;align-items:end;gap:20px;padding:36px;border-bottom:2px solid var(--ink);background:var(--acid)}.openboard__local header p{margin:0;font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__local h2{margin:18px 0 0;font-size:clamp(48px,6vw,78px);line-height:.9;letter-spacing:-.055em}.openboard__local header button{padding:12px;border:2px solid var(--ink);background:transparent;font:900 9px var(--pc-font-mono);cursor:pointer}.openboard__empty{display:grid;place-items:center;gap:9px;min-height:260px;padding:24px;text-align:center}.openboard__empty b{font-size:28px}.openboard__empty span{font:800 11px var(--pc-font-mono)}.openboard__local ol{display:grid;grid-template-columns:repeat(2,1fr);margin:0;padding:0;list-style:none}.open-card{padding:28px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);background:#fff}.open-card:nth-child(2n){border-right:0}.open-card__top{display:flex;gap:10px;align-items:baseline}.open-card__top span{font-size:9px;font-weight:900}.open-card__top strong{color:var(--orange);font-size:16px;text-transform:uppercase}.open-card h3{margin:45px 0 8px;font-size:44px;line-height:.92;letter-spacing:-.055em}.open-card__practice{margin:0;color:var(--blue);font:900 15px var(--pc-font-mono);text-transform:uppercase}.open-card dl{display:grid;grid-template-columns:1fr 1fr;margin:28px 0;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}.open-card dl div{padding:13px 0}.open-card dl div+div{padding-left:15px;border-left:2px solid var(--ink)}.open-card dt{font-size:8px;font-weight:900}.open-card dd{margin:5px 0 0;font-size:13px}.open-card>a{font:900 10px var(--pc-font-mono)}.open-card__actions{display:flex;gap:8px;margin-top:30px}.open-card__actions button{padding:10px;border:2px solid var(--ink);background:var(--paper);font:900 8px var(--pc-font-mono);cursor:pointer}.open-card__actions button:last-child{background:var(--ink);color:var(--paper)}
+  .openboard__public{display:grid;grid-template-columns:.55fr 1.45fr;border-bottom:2px solid var(--ink);background:var(--blue);color:var(--paper)}.openboard__public-number{display:grid;place-items:center;padding:30px;border-right:2px solid var(--ink);color:var(--acid);font-size:clamp(250px,35vw,520px);font-weight:950;line-height:.7}.openboard__public>div:last-child{display:flex;flex-direction:column;justify-content:center;padding:clamp(40px,7vw,96px)}.openboard__public p{max-width:760px;margin:0;font-size:18px;line-height:1.5}.openboard__public p:first-child{font-size:9px;font-weight:900;letter-spacing:.1em}.openboard__public h2{margin:38px 0;font-size:clamp(55px,7vw,102px);line-height:.86;letter-spacing:-.065em}.openboard__public>div:last-child>div{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px}.openboard__public a{padding:12px 14px;border:2px solid var(--paper);font:900 10px var(--pc-font-mono);text-decoration:none}.openboard__public a:first-child{background:var(--acid);color:var(--ink);border-color:var(--ink)}
+  .openboard__footer{display:flex;justify-content:space-between;gap:25px;padding:24px;background:var(--ink);color:var(--paper)}.openboard__footer p{margin:0;font-size:10px;font-weight:900}.openboard__footer nav{display:flex;flex-wrap:wrap;gap:18px}.openboard__footer a{font:800 10px var(--pc-font-mono)}
+  @media(max-width:900px){.openboard__hero,.openboard__origin,.openboard__maker,.openboard__public{grid-template-columns:1fr}.openboard__title,.openboard__origin>div:first-child,.openboard__maker>header,.openboard__public-number{border-right:0;border-bottom:2px solid var(--ink)}.openboard__public-number{min-height:400px}.openboard__title h1{font-size:clamp(105px,26vw,220px)}.openboard__title h1 span:nth-child(2){transform:none}}
+  @media(max-width:620px){.openboard{width:calc(100% - 12px);margin:6px auto 28px}.openboard__wire-end{display:none}.openboard__hero{min-height:0}.openboard__title,.openboard__intro{padding:44px 20px}.openboard__title h1{font-size:clamp(92px,28vw,135px)}.openboard__intro dl{grid-template-columns:1fr}.openboard__intro dl div+div{border-left:0;border-top:2px solid var(--ink)}.openboard__origin>div,.openboard__maker>header{padding:48px 20px}.openboard__ledger{grid-template-columns:1fr!important}.openboard__ledger>div+div{border-left:0;border-top:2px solid var(--ink)}.openboard__maker form{grid-template-columns:1fr;padding:38px 18px}.openboard__maker form label,.openboard__maker label:nth-child(3),.openboard__maker label:nth-child(5){grid-column:1}.openboard__local>header{align-items:start;flex-direction:column;padding:30px 18px}.openboard__local ol{grid-template-columns:1fr}.open-card,.open-card:nth-child(2n){border-right:0}.openboard__public-number{min-height:290px;font-size:270px}.openboard__public>div:last-child{padding:50px 20px}.openboard__footer{flex-direction:column}}
+</style>
