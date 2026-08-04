@@ -33,7 +33,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/for-agents"/);
 });
 
-test('the Monday field paper promotes PASS/25 and the complete newest release run without Qwen', async () => {
+test('the Monday field paper promotes PointCast Tonight and the complete newest release run without Qwen', async () => {
   const [home, edition, middleware] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
@@ -41,12 +41,13 @@ test('the Monday field paper promotes PASS/25 and the complete newest release ru
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
-  assert.match(home, /images\/home\/pass25-field-paper\.png/);
+  assert.match(home, /images\/pointcast-tonight\/social-card\.png/);
   assert.match(home, /PointCast Monday field paper — August 3, 2026/);
-  assert.match(edition, /Same park/);
-  assert.match(edition, /Many worlds/);
-  assert.match(edition, /A manual outdoor passport for twenty-five public doors/);
-  assert.match(edition, /id: '0558', noun: 'Passport', title: 'PASS\/25'/);
+  assert.match(edition, /Go out/);
+  assert.match(edition, /Stay in/);
+  assert.match(edition, /One official-source week/);
+  assert.match(edition, /id: '0560', noun: 'Tonight', title: 'GO OUT \/ STAY IN'/);
+  assert.match(edition, /id: '0559', noun: 'Circuit', title: 'The California Cup'/);
   assert.match(edition, /id: '0557', noun: 'State', title: 'California Football Is Not Dead'/);
   assert.match(edition, /id: '0556', noun: 'Uniform', title: 'The Clothes Have Clocked In'/);
   assert.match(edition, /id: '0555', noun: 'Shift', title: 'Another Manic Monday'/);
@@ -54,9 +55,9 @@ test('the Monday field paper promotes PASS/25 and the complete newest release ru
   assert.match(edition, /id: '0551', noun: 'Engineering', title: 'ENG\/25'/);
   assert.match(edition, /The clothes have/);
   assert.match(edition, /California football/);
-  assert.match(edition, /<b>25<\/b> public doors/);
-  assert.match(edition, /06<\/b> ways of looking/);
-  assert.match(edition, /24<\/b> stamps/);
+  assert.match(edition, /<b>06<\/b> outings/);
+  assert.match(edition, /05<\/b> local TV signals/);
+  assert.match(edition, /07<\/b> official sources/);
   assert.match(edition, /Wednesday Morning Uplift/);
   assert.match(edition, /THE GOOD WORK/);
   assert.match(edition, /Nothing wins/);
