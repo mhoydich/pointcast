@@ -76,6 +76,143 @@ export const WORKLIFE_DESKS = [
   },
 ] as const;
 
+export const UNIFORMS_POST = {
+  schema: 'pointcast-worklife-post/v1',
+  id: 'worklife-uniforms',
+  slug: 'uniforms',
+  desk: 'The Shift',
+  title: 'THE CLOTHES HAVE CLOCKED IN',
+  displayTitle: 'UNIFORMS — THE CLOTHES HAVE CLOCKED IN',
+  kicker: 'WORK/LIFE · THE SHIFT · FIELD NOTE 001',
+  dek: 'A uniform is a portable org chart. It tells the room who may ask what of you before you have said a word.',
+  description:
+    'A visual WORK/LIFE essay about uniforms, workwear, belonging, protection, authority, disappearance, and the clothes that keep performing after the shift.',
+  route: '/worklife/uniforms',
+  jsonRoute: '/worklife/uniforms.json',
+  canonicalUrl: 'https://pointcast.xyz/worklife/uniforms',
+  cover: '/images/worklife/uniforms-cover.png',
+  coverAlt:
+    'Graphic WORK/LIFE cover made from garment pattern lines, a cobalt work jacket, chartreuse safety panel, orange name badge, and clothing-label typography',
+  publishedAt: '2026-08-03T21:23:00-07:00',
+  blockId: '0556',
+  author: 'codex',
+  source:
+    'Michael Hoydich chat directive, 2026-08-03: create a uniforms post for WORK/LIFE and consider images from his Midjourney archive.',
+  visualArchive: {
+    credit: 'Midjourney studies from the Michael Hoydich archive, May 2026',
+    note:
+      'The archive did not contain a convincing uniform study. Two empty-workplace images are used as a truthful after-shift interlude, not as documentary evidence.',
+    images: [
+      {
+        src: '/images/worklife/midjourney-empty-desk.png',
+        alt: 'Midjourney study of an empty, plant-filled home office with a black monitor and paintings',
+        title: 'THE ROOM, STILL ON DUTY',
+      },
+      {
+        src: '/images/worklife/midjourney-flower-office.png',
+        alt: 'Midjourney study of an empty office overtaken by bright flowers, plants, screens, and coastal paintings',
+        title: 'AFTER THE PERSON LEAVES',
+      },
+    ],
+  },
+} as const;
+
+export const UNIFORM_OBSERVATIONS = [
+  {
+    id: 'hi-vis',
+    garment: 'HI-VIS VEST',
+    action: 'BE SEEN / ABSORB RISK',
+    note: 'The brightest person in the landscape is often the person asked to stand closest to danger.',
+    color: '#d7f51b',
+  },
+  {
+    id: 'scrubs',
+    garment: 'SCRUBS',
+    action: 'TRUST / HOLD A BOUNDARY',
+    note: 'Competence becomes a color field. The garment makes care legible while keeping contamination in view.',
+    color: '#37b9d6',
+  },
+  {
+    id: 'black-tee',
+    garment: 'BLACK TEE',
+    action: 'REFUSE / QUIETLY CONFORM',
+    note: 'The anti-uniform became a uniform the minute a whole industry agreed it meant no fuss, all focus.',
+    color: '#171715',
+  },
+  {
+    id: 'apron',
+    garment: 'APRON',
+    action: 'SERVE / CARRY / STAIN',
+    note: 'A front-facing tool belt that remembers the shift in flour, coffee, paint, grease, soil, and receipts.',
+    color: '#ef542e',
+  },
+  {
+    id: 'blazer',
+    garment: 'BLAZER',
+    action: 'BORROW AUTHORITY',
+    note: 'Structure at the shoulder can make an instruction sound as if it came from the building itself.',
+    color: '#1747d1',
+  },
+  {
+    id: 'badge',
+    garment: 'NAME BADGE',
+    action: 'MAKE THE ROLE READABLE',
+    note: 'The smallest uniform is a rectangle that lets strangers skip the introduction and begin with the request.',
+    color: '#f4efdd',
+  },
+] as const;
+
+export const OPEN_TO_WORK_BOARD = {
+  schema: 'pointcast-open-to-work-board/v1',
+  id: 'worklife-open-to-work',
+  title: 'OPEN TO WORK',
+  displayTitle: 'OPEN TO WORK — A PUBLIC SIGNAL BOARD',
+  kicker: 'WORK/LIFE · OFFICE WEATHER · BETA BOARD 001',
+  dek: 'Say what you can do, what kind of opening would feel useful, and where the proof lives.',
+  description:
+    'A consent-first WORK/LIFE signal board inspired by the original Bosslist concept: vertical lists for people and opportunities, rebuilt without silent indexing, human ranking, or contact harvesting.',
+  route: '/worklife/open-to-work',
+  jsonRoute: '/worklife/open-to-work.json',
+  canonicalUrl: 'https://pointcast.xyz/worklife/open-to-work',
+  publishedAt: '2026-08-03T21:23:00-07:00',
+  blockId: '0556',
+  origin: {
+    concept: 'Bosslist',
+    originalIdea:
+      'A visual, searchable set of vertical lists that brought scattered professional work, people, jobs, recruiters, and trusted context into one legible place.',
+    retained: [
+      'public vertical list',
+      'proof before biography',
+      'specific opportunity signals',
+      'visual cards made for scanning',
+    ],
+    retired: [
+      'silent indexing',
+      'contact importing',
+      'automatic profile crawling',
+      'up/down voting on people',
+      'opaque human ranking',
+    ],
+  },
+  privacy: {
+    publicCards: 0,
+    storage: 'device-local only',
+    networkWrites: false,
+    automaticPublishing: false,
+    automaticMatching: false,
+    note:
+      'Draft cards stay in this browser until their author copies, removes, or explicitly pitches one. PointCast does not receive a draft merely because it was made.',
+  },
+  fields: [
+    { id: 'name', label: 'NAME OR WORKING HANDLE', required: true, maxLength: 60 },
+    { id: 'practice', label: 'WHAT I DO', required: true, maxLength: 120 },
+    { id: 'openTo', label: 'I AM OPEN TO', required: true, maxLength: 160 },
+    { id: 'place', label: 'PLACE / TIME ZONE / REMOTE', required: false, maxLength: 80 },
+    { id: 'proof', label: 'ONE PROOF LINK', required: false, maxLength: 240 },
+    { id: 'boundary', label: 'NOT LOOKING FOR', required: false, maxLength: 120 },
+  ],
+} as const;
+
 export const MANIC_MONDAY = {
   schema: 'pointcast-worklife-issue/v1',
   id: 'worklife-001',

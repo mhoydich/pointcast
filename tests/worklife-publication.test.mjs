@@ -97,8 +97,8 @@ test('WORK/LIFE travels through the homepage and discovery surfaces', async () =
   for (const surface of surfaces) assert.match(surface, /WORK\/LIFE|worklife/);
   assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWorklifeOpener \/>/);
   assert.match(surfaces[0], /Periodical/);
-  assert.match(surfaces[1], /NOT JUST MONDAY/);
-  assert.match(surfaces[2], /worklife-001/);
+  assert.match(surfaces[1], /THE PLAYLIST IS STILL THE OPENER/);
+  assert.match(surfaces[2], /slug: 'worklife'/);
   assert.match(surfaces[3], /worklife\/001\.json/);
   assert.match(surfaces[4], /worklifeIssue001/);
 });
