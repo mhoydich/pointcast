@@ -1,0 +1,247 @@
+---
+/**
+ * HomeBeatDesk — "THE BEAT DESK", a thin playable strip for the front door.
+ *
+ * Four square pads (each fronted by a real Noun head from noun.pics), each
+ * wired to an inline WebAudio voice: kick / snare / bell / chime, keys
+ * D F J K. Sits in the front door's fresh-main stack (index.astro), just
+ * under the follow ribbons, borrowing the SPN channel ramp.
+ *
+ * Grammar is BLOCKS.md: white bg, hard corners,
+ * 1.5px channel border with a 6px left accent, JetBrains Mono ALL-CAPS
+ * letterspaced labels, two weights only. Tokens come from BlockLayout's :root.
+ *
+ * Astro gotcha honored: every node is rendered server-side; the script only
+ * toggles classes and textContent, so scoped styles always reach them.
+ * Broadcast rides the same throttled best-effort /api/sounds bus as
+ * /drum-hero (localStorage 'pc-drum-live-session').
+ */
+import { CHANNELS } from '../lib/channels';
+
+const spn = CHANNELS.SPN;
+const rampStyle = `--ch-50:${spn.color50};--ch-600:${spn.color600};--ch-800:${spn.color800};`;
+
+// Real Noun heads — seeds 0-1199 match the Visit Nouns FA2 / noun.pics set.
+const PADS = [
+  { seed: 88, label: 'KICK', key: 'D', voice: 'kick', aria: 'Play the kick drum (or press D)' },
+  { seed: 421, label: 'SNARE', key: 'F', voice: 'snare', aria: 'Play the snare (or press F)' },
+  { seed: 654, label: 'BELL', key: 'J', voice: 'bell', aria: 'Play the bell (or press J)' },
+  { seed: 1017, label: 'CHIME', key: 'K', voice: 'chime', aria: 'Play the chime (or press K)' },
+] as const;
+---
+
+<section class="hbd" aria-label="The beat desk" style={rampStyle}>
+  <div class="hbd-side">
+    <p class="hbd-kicker">THE BEAT DESK · PLAY THE FRONT DOOR</p>
+    <p class="hbd-count"><span id="hbd-hits">0</span> HITS THIS VISIT</p>
+    <p class="hbd-links">
+      <span class="hbd-links__row">
+        NEW TONIGHT →
+        <a href="/drum-noun-whack">/drum-noun-whack</a>
+        <span class="hbd-dot">·</span>
+        <a href="/drum-noun-crossing">/drum-noun-crossing</a>
+      </span>
+      <span class="hbd-links__row">
+        THE WHOLE DRUM HOUSE →
+        <a href="/drum">/drum</a>
+      </span>
+    </p>
+  </div>
+  <div class="hbd-pads">
+    {PADS.map((p, i) => (
+      <button type="button" class="hbd-pad" data-pad={i} data-voice={p.voice} aria-label={p.aria}>
+        <img src={`https://noun.pics/${p.seed}.svg`} width="34" height="34" alt={`Noun ${p.seed}`} loading="lazy" />
+        <span class="hbd-pad__label">{p.label}<span class="hbd-pad__key">/{p.key}</span></span>
+      </button>
+    ))}
+  </div>
+</section>
+
+<script>
+  (() => {
+    const pads = Array.from(document.querySelectorAll<HTMLButtonElement>('.hbd-pad'));
+    const hitsEl = document.getElementById('hbd-hits');
+    if (!pads.length) return;
+
+    let hits = 0;
+
+    // ---- audio (lazy singleton, first-gesture safe) ----
+    let actx: AudioContext | null = null;
+    function ctx(): AudioContext {
+      if (!actx) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        actx = new AC();
+      }
+      if (actx!.state === 'suspended') actx!.resume();
+      return actx!;
+    }
+
+    function vKick() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(42, t + 0.16);
+      g.gain.setValueAtTime(0.4, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.28);
+    }
+    function vSnare() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const dur = 0.14;
+      const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const n = a.createBufferSource(); n.buffer = buf;
+      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 0.9;
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      n.connect(bp).connect(g).connect(a.destination); n.start(t);
+    }
+    function vBell() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(659.25, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.28, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 1.3);
+      const o2 = a.createOscillator(); const g2 = a.createGain();
+      o2.type = 'sine';
+      o2.frequency.setValueAtTime(1318.5, t);
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.exponentialRampToValueAtTime(0.08, t + 0.006);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+      o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.75);
+    }
+    function vChime() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      // Two sines a fifth apart (A5 → E6), gently detuned, short.
+      [{ f: 878.4, v: 0.16 }, { f: 1321.8, v: 0.1 }].forEach(({ f, v }) => {
+        const o = a.createOscillator(); const g = a.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(v, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+        o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.42);
+      });
+    }
+    const VOICES: Record<string, () => void> = { kick: vKick, snare: vSnare, bell: vBell, chime: vChime };
+
+    // ---- shared bus (best effort, throttled) — same idiom as /drum-hero ----
+    let lastBroadcast = 0;
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+    const SESSION_ID = getOrCreateSession();
+    function broadcast(padIndex: number) {
+      const now = Date.now();
+      if (now - lastBroadcast < 900) return; // don't flood the bus
+      lastBroadcast = now;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed: padIndex, sessionId: SESSION_ID }),
+        }).catch(() => {});
+      } catch { /* best effort */ }
+    }
+
+    // ---- interaction ----
+    function hit(i: number) {
+      const pad = pads[i];
+      if (!pad) return;
+      try { VOICES[pad.dataset.voice || '']?.(); } catch { /* audio is optional */ }
+      pad.classList.add('is-hit');
+      window.setTimeout(() => pad.classList.remove('is-hit'), 120);
+      hits += 1;
+      if (hitsEl) hitsEl.textContent = String(hits);
+      broadcast(i);
+    }
+
+    pads.forEach((pad, i) => {
+      pad.addEventListener('pointerdown', (e) => { e.preventDefault(); hit(i); });
+      // Keyboard activation of the focused button (Enter/Space) — pointerdown
+      // never fires for those, and real clicks carry detail > 0.
+      pad.addEventListener('click', (e) => { if (e.detail === 0) hit(i); });
+    });
+
+    const KEYMAP: Record<string, number> = { d: 0, f: 1, j: 2, k: 3 };
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const i = KEYMAP[e.key.toLowerCase()];
+      if (i === undefined) return;
+      hit(i);
+    });
+  })();
+</script>
+
+<style>
+  .hbd {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+    margin: 8px 0 0; padding: 10px 14px;
+    border: 1.5px solid var(--ch-600); border-left-width: 6px; border-radius: 2px;
+    background: #fff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  }
+  .hbd a { color: inherit; text-decoration: none; }
+
+  .hbd-side { display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px; min-width: 220px; }
+  .hbd-kicker {
+    margin: 0; font-size: 11px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ch-800); text-transform: uppercase;
+  }
+  .hbd-count {
+    margin: 0; font-size: 10px; letter-spacing: 0.1em; color: var(--pc-ink-muted);
+    text-transform: uppercase; font-variant-numeric: tabular-nums;
+  }
+  .hbd-links {
+    margin: 0; display: flex; flex-direction: column; gap: 2px;
+    font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted); text-transform: uppercase;
+  }
+  .hbd-links a { color: var(--pc-ink-soft); font-weight: 500; }
+  .hbd-links a:hover { color: var(--ch-800); }
+  .hbd-dot { margin: 0 3px; color: var(--pc-ink-muted); }
+
+  .hbd-pads { display: grid; grid-template-columns: repeat(4, 76px); gap: 8px; }
+  .hbd-pad {
+    aspect-ratio: 1 / 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
+    font-family: inherit; padding: 6px 4px; cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .hbd-pad img { display: block; width: 34px; height: 34px; image-rendering: pixelated; }
+  .hbd-pad__label {
+    font-size: 9.5px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--pc-ink); text-transform: uppercase;
+  }
+  .hbd-pad__key { color: var(--pc-ink-muted); font-weight: 400; margin-left: 2px; }
+  .hbd-pad:hover, .hbd-pad:focus-visible { border-color: var(--ch-600); background: var(--ch-50); outline: none; }
+  .hbd-pad.is-hit { border-color: var(--ch-600); background: var(--ch-50); transform: translateY(1px); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hbd-pad { transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hbd-pad.is-hit { transform: none; }
+  }
+
+  @media (max-width: 560px) {
+    .hbd-pads { grid-template-columns: repeat(2, minmax(72px, 1fr)); width: 100%; }
+  }
+</style>
