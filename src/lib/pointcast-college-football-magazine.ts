@@ -599,6 +599,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A preseason LSU merger audit: eight ecosystem temperatures, the Ole Miss split screen, five season-changing games, and a carefully labeled Finebaum synthesis.',
       href: '/25/magazine/lane-kiffin-temperature',
     },
+    {
+      number: '16',
+      name: 'California State Desk',
+      kicker: 'Eight programs / five conferences / one missing ritual',
+      description: 'A state report, 2025 attendance ledger, 2026 in-state circuit, and five-part compact for building a Saturday California can recognize as its own.',
+      href: '/25/magazine/california-football',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
