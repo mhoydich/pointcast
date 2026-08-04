@@ -10,7 +10,7 @@ export const HOME_CARTOGRAPHY = {
   json: 'https://pointcast.xyz/cartography/home.json',
   parent: 'https://pointcast.xyz/cartography',
   parentJson: 'https://pointcast.xyz/cartography.json',
-  sourceDoc: 'docs/prd/2026-08-04-home-cartography-device-concept.md',
+  sourceDoc: 'https://github.com/mhoydich/pointcast/blob/main/docs/prd/2026-08-04-home-cartography-device-concept.md',
   credit: 'A Mike Hoydich production',
   summary:
     'Buy a device, walk your home, and index everything you own - barcodes, QR codes, computer vision - into a private, user-owned inventory that becomes your personal data API and MCP server. Your house gets a map, your stuff gets a ledger, and AI gets permissioned access to both.',
