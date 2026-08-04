@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'pointcast-tonight',
+    name: 'PointCast Tonight',
+    kicker: 'GO OUT · STAY IN · OFFICIAL SOURCES · PUBLIC ACCESS TV',
+    description: 'A human-sized entertainment guide around El Segundo: one week of official-source outings, municipal television signals, visible canceled slots, and a crawler that stages rather than auto-publishes.',
+    url: 'https://pointcast.xyz/tonight',
+    path: '/tonight',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'worklife',
     name: 'WORK/LIFE',
     kicker: 'UNIFORMS · OPEN TO WORK · PUBLIC 18-TRACK OPENER',
