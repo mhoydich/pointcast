@@ -64,6 +64,8 @@ export const GET: APIRoute = async () => {
       sprintJson: 'https://pointcast.xyz/cartography/sprint.json',
       demo: 'https://pointcast.xyz/cartography/demo',
       demoJson: 'https://pointcast.xyz/cartography/demo.json',
+      home: 'https://pointcast.xyz/cartography/home',
+      homeJson: 'https://pointcast.xyz/cartography/home.json',
       announcementBlock: 'https://pointcast.xyz/b/0442',
       sprintBlock: 'https://pointcast.xyz/b/0443',
       purpose: 'Turn Digital Identity Cartography into a brand-first service-to-SaaS product board, $50k paid pilot offer, and May 7-15 pilot close sprint with non-financial yield artifacts.',
