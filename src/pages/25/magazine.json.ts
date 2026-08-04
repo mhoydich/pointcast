@@ -21,6 +21,14 @@ import {
   LANE_KIFFIN_TEMPERATURE_FEATURE,
   LANE_KIFFIN_TEMPERATURE_READINGS,
 } from '../../lib/pointcast-lane-kiffin-temperature';
+import {
+  CALIFORNIA_ATTENDANCE_2025,
+  CALIFORNIA_CIRCUIT_2026,
+  CALIFORNIA_CONFERENCE_MAP,
+  CALIFORNIA_FOOTBALL_COMPACT,
+  CALIFORNIA_FOOTBALL_FEATURE,
+  CALIFORNIA_PROGRAM_PULSE,
+} from '../../lib/pointcast-california-football';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -48,6 +56,18 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: CALIFORNIA_FOOTBALL_FEATURE.title,
+      subtitle: CALIFORNIA_FOOTBALL_FEATURE.subtitle,
+      human: CALIFORNIA_FOOTBALL_FEATURE.canonical,
+      machine: CALIFORNIA_FOOTBALL_FEATURE.machineEdition,
+      block: `https://pointcast.xyz/b/${CALIFORNIA_FOOTBALL_FEATURE.block}`,
+      fbsPrograms: CALIFORNIA_PROGRAM_PULSE.length,
+      conferences: CALIFORNIA_CONFERENCE_MAP.length,
+      attendancePrograms: CALIFORNIA_ATTENDANCE_2025.length,
+      inStateCircuitGames: CALIFORNIA_CIRCUIT_2026.length,
+      compactPromises: CALIFORNIA_FOOTBALL_COMPACT.length,
+    },
     {
       title: LANE_KIFFIN_TEMPERATURE_FEATURE.title,
       subtitle: LANE_KIFFIN_TEMPERATURE_FEATURE.subtitle,
@@ -146,6 +166,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     laneKiffinTemperature: LANE_KIFFIN_TEMPERATURE_FEATURE.canonical,
     laneKiffinTemperatureJson:
       LANE_KIFFIN_TEMPERATURE_FEATURE.machineEdition,
+    californiaFootball: CALIFORNIA_FOOTBALL_FEATURE.canonical,
+    californiaFootballJson: CALIFORNIA_FOOTBALL_FEATURE.machineEdition,
     fanClique: FAN_CLIQUE_FEATURE.canonical,
     fanCliqueJson: FAN_CLIQUE_FEATURE.machineEdition,
     fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
