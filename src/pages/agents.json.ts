@@ -96,6 +96,8 @@ export const GET: APIRoute = async () => {
         wellKnownFarcaster: 'https://pointcast.xyz/.well-known/farcaster.json',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         agentKit: 'https://pointcast.xyz/agent-kit.md',
+        pointcastTonight: 'https://pointcast.xyz/tonight',
+        pointcastTonightJson: 'https://pointcast.xyz/tonight.json',
         firecrawlFieldGuide: 'https://pointcast.xyz/firecrawl',
         firecrawlFieldGuideJson: 'https://pointcast.xyz/firecrawl.json',
         agentValue: 'https://pointcast.xyz/agent-value',

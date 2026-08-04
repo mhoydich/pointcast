@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'pointcast-tonight',
+    name: 'PointCast Tonight',
+    kicker: 'GO OUT · STAY IN · OFFICIAL SOURCES · PUBLIC ACCESS TV',
+    description: 'A human-sized entertainment guide around El Segundo: one week of official-source outings, municipal television signals, visible canceled slots, and a crawler that stages rather than auto-publishes.',
+    url: 'https://pointcast.xyz/tonight',
+    path: '/tonight',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'worklife',
     name: 'WORK/LIFE',
     kicker: 'UNIFORMS · OPEN TO WORK · PUBLIC 18-TRACK OPENER',
@@ -183,6 +194,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     description: 'A timestamped state report on California college football: the broken conference map, eight program chapters, official 2025 attendance, growing girls flag participation, a 2026 circuit, and a five-part PointCast compact.',
     url: 'https://pointcast.xyz/25/magazine/california-football',
     path: '/25/magazine/california-football',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
+    slug: 'california-cup-2026',
+    name: 'The California Cup',
+    kicker: '7 IN-STATE GAMES · 2 TROPHIES · 5 INVITATION DIMENSIONS',
+    description: 'A season-long California college-football table and private browser-local circuit card. Football results and PointCast field-report invitation scores remain deliberately separate.',
+    url: 'https://pointcast.xyz/25/magazine/california-cup',
+    path: '/25/magazine/california-cup',
     repo: 'https://github.com/mhoydich/pointcast',
     channel: 'CH.SPN',
     kind: 'pointcast',

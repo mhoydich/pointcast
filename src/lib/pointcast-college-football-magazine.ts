@@ -606,6 +606,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A state report, 2025 attendance ledger, 2026 in-state circuit, and five-part compact for building a Saturday California can recognize as its own.',
       href: '/25/magazine/california-football',
     },
+    {
+      number: '17',
+      name: 'The California Cup',
+      kicker: 'Seven games / two trophies / one private circuit card',
+      description: 'A season-long table that keeps football results separate from a five-dimension host invitation score, plus a browser-local fan card for picks and field-note priorities.',
+      href: '/25/magazine/california-cup',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
