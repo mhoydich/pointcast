@@ -1,0 +1,488 @@
+---
+/**
+ * HomeOceanDrum — "THE SWELL DESK", the Friday calm ocean drum on the front door.
+ *
+ * Four riso-printed ocean panels (2026-08-07 drop) play as wave pads, each
+ * with its own inline WebAudio voice: swell / glass / spray / chop, keys
+ * Q W E R (D F J K belong to the Beat Desk below — no collisions). A Noun
+ * buoy bobs on every pad and a Noun surfer crosses the strip when you ride
+ * a full set.
+ *
+ * The game is call-and-response with no fail state: the tide plays a slow
+ * phrase, you echo it. Miss a wave and the tide just repeats itself,
+ * kindly. Free play always works; hits ride the same throttled best-effort
+ * /api/sounds bus as /drum-hero (localStorage 'pc-drum-live-session').
+ *
+ * Grammar is BLOCKS.md: white bg, hard corners, 1.5px channel border with
+ * a 6px left accent (GDN — the calm lane), JetBrains Mono ALL-CAPS
+ * letterspaced labels, two weights only. Tokens from BlockLayout's :root.
+ *
+ * Astro gotcha honored: every node is rendered server-side; the script only
+ * toggles classes and textContent, so scoped styles always reach them.
+ */
+import { Image } from 'astro:assets';
+import { CHANNELS } from '../lib/channels';
+
+import chopGrid from '../assets/ocean-drum/chop-grid.webp';
+import glassHorizon from '../assets/ocean-drum/glass-horizon.webp';
+import sprayClouds from '../assets/ocean-drum/spray-clouds.webp';
+import swellSunset from '../assets/ocean-drum/swell-sunset.webp';
+
+const gdn = CHANNELS.GDN;
+const rampStyle = `--ch-50:${gdn.color50};--ch-600:${gdn.color600};--ch-800:${gdn.color800};`;
+
+// Real Noun heads — seeds 0-1199 match the Visit Nouns FA2 / noun.pics set.
+const SURFER_SEED = 259;
+const PADS = [
+  {
+    img: swellSunset,
+    alt: 'Riso print: teal open-ocean swells under a peach sunset sky',
+    seed: 137,
+    label: 'SWELL',
+    key: 'Q',
+    voice: 'swell',
+    aria: 'Play the groundswell drum (or press Q)',
+  },
+  {
+    img: glassHorizon,
+    alt: 'Riso print: a calm banded horizon, silver sea under a pale peach sky',
+    seed: 372,
+    label: 'GLASS',
+    key: 'W',
+    voice: 'glass',
+    aria: 'Play the glass buoy bell (or press W)',
+  },
+  {
+    img: sprayClouds,
+    alt: 'Riso print grid: pink clouds over blue breaking waves, six panels',
+    seed: 580,
+    label: 'SPRAY',
+    key: 'E',
+    voice: 'spray',
+    aria: 'Play the spray wash (or press E)',
+  },
+  {
+    img: chopGrid,
+    alt: 'Riso print grid: eight overprinted panels of wind chop in pink and blue',
+    seed: 921,
+    label: 'CHOP',
+    key: 'R',
+    voice: 'chop',
+    aria: 'Play the chop tick (or press R)',
+  },
+] as const;
+---
+
+<section class="hod" aria-label="The swell desk — Friday calm ocean drum" style={rampStyle}>
+  <header class="hod-head">
+    <p class="hod-kicker">THE SWELL DESK · FRIDAY CALM</p>
+    <p class="hod-sub">FOUR WAVES, RISO-PRINTED. THE TIDE CALLS, YOU ANSWER.</p>
+    <div class="hod-meta">
+      <span><span id="hod-hits">0</span> HITS</span>
+      <span class="hod-dot">·</span>
+      <span><span id="hod-sets">0</span> SETS RIDDEN</span>
+      <span class="hod-dot">·</span>
+      <a href="/b/0564">BLOCK 0564</a>
+    </div>
+  </header>
+
+  <div class="hod-strip">
+    <div class="hod-pads">
+      {PADS.map((p, i) => (
+        <button type="button" class="hod-pad" data-pad={i} data-voice={p.voice} aria-label={p.aria}>
+          <Image class="hod-pad__art" src={p.img} alt={p.alt} width={720} quality={72} loading="lazy" />
+          <img
+            class="hod-pad__buoy"
+            src={`https://noun.pics/${p.seed}.svg`}
+            width="30"
+            height="30"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+          />
+          <span class="hod-pad__label">{p.label}<span class="hod-pad__key">/{p.key}</span></span>
+        </button>
+      ))}
+    </div>
+    <img
+      class="hod-surfer"
+      id="hod-surfer"
+      src={`https://noun.pics/${SURFER_SEED}.svg`}
+      width="38"
+      height="38"
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+    />
+  </div>
+
+  <footer class="hod-foot">
+    <p class="hod-status" id="hod-status" aria-live="polite">FREE PLAY · TAP A WAVE</p>
+    <div class="hod-actions">
+      <button type="button" class="hod-btn" id="hod-ride">RIDE A SET</button>
+      <button type="button" class="hod-btn" id="hod-tide" aria-pressed="false">TIDE AMBIENCE: OFF</button>
+      <span class="hod-links">THE DRUM HOUSE → <a href="/drum">/drum</a> <span class="hod-dot">·</span> <a href="/drum-tide">/drum-tide</a></span>
+    </div>
+  </footer>
+</section>
+
+<script>
+  (() => {
+    const pads = Array.from(document.querySelectorAll<HTMLButtonElement>('.hod-pad'));
+    const hitsEl = document.getElementById('hod-hits');
+    const setsEl = document.getElementById('hod-sets');
+    const statusEl = document.getElementById('hod-status');
+    const rideBtn = document.getElementById('hod-ride') as HTMLButtonElement | null;
+    const tideBtn = document.getElementById('hod-tide') as HTMLButtonElement | null;
+    const surfer = document.getElementById('hod-surfer');
+    if (pads.length !== 4) return;
+
+    let hits = 0;
+    let sets = 0;
+
+    // ---- audio (lazy singleton, first-gesture safe) ----
+    let actx: AudioContext | null = null;
+    function ctx(): AudioContext {
+      if (!actx) {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        actx = new AC();
+      }
+      if (actx!.state === 'suspended') actx!.resume();
+      return actx!;
+    }
+
+    // Deep groundswell — a slow soft tom.
+    function vSwell() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(100, t);
+      o.frequency.exponentialRampToValueAtTime(36, t + 0.4);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.34, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6);
+    }
+    // Glass buoy bell — two partials, long quiet decay.
+    function vGlass() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      [{ f: 523.25, v: 0.2, d: 1.6, type: 'triangle' }, { f: 1046.5, v: 0.06, d: 0.9, type: 'sine' }].forEach((p) => {
+        const o = a.createOscillator(); const g = a.createGain();
+        o.type = p.type as OscillatorType;
+        o.frequency.setValueAtTime(p.f, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(p.v, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
+        o.connect(g).connect(a.destination); o.start(t); o.stop(t + p.d + 0.1);
+      });
+    }
+    // Spray — a soft lowpassed wash, slow attack like foam.
+    function vSpray() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const dur = 0.6;
+      const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const n = a.createBufferSource(); n.buffer = buf;
+      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(1400, t);
+      lp.frequency.exponentialRampToValueAtTime(500, t + dur);
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      n.connect(lp).connect(g).connect(a.destination); n.start(t);
+    }
+    // Chop — a short tick: filtered noise + a low blip.
+    function vChop() {
+      const a = ctx(); const t = a.currentTime + 0.003;
+      const dur = 0.09;
+      const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const n = a.createBufferSource(); n.buffer = buf;
+      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.2;
+      const g = a.createGain();
+      g.gain.setValueAtTime(0.16, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      n.connect(bp).connect(g).connect(a.destination); n.start(t);
+      const o = a.createOscillator(); const g2 = a.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(220, t);
+      g2.gain.setValueAtTime(0.12, t);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+      o.connect(g2).connect(a.destination); o.start(t); o.stop(t + 0.13);
+    }
+    const VOICES: Record<string, () => void> = { swell: vSwell, glass: vGlass, spray: vSpray, chop: vChop };
+
+    // ---- tide ambience (very quiet looped swell, toggleable) ----
+    let tideNodes: { src: AudioBufferSourceNode; lfo: OscillatorNode } | null = null;
+    function tideOn() {
+      const a = ctx();
+      const dur = 4;
+      const buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = a.createBufferSource(); src.buffer = buf; src.loop = true;
+      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+      const g = a.createGain(); g.gain.value = 0.03;
+      // Slow LFO on the gain — the breathing of the water.
+      const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.09;
+      const lfoGain = a.createGain(); lfoGain.gain.value = 0.02;
+      lfo.connect(lfoGain).connect(g.gain);
+      src.connect(lp).connect(g).connect(a.destination);
+      src.start(); lfo.start();
+      tideNodes = { src, lfo };
+    }
+    function tideOff() {
+      try { tideNodes?.src.stop(); tideNodes?.lfo.stop(); } catch { /* already stopped */ }
+      tideNodes = null;
+    }
+    tideBtn?.addEventListener('click', () => {
+      if (tideNodes) {
+        tideOff();
+        tideBtn.textContent = 'TIDE AMBIENCE: OFF';
+        tideBtn.setAttribute('aria-pressed', 'false');
+      } else {
+        tideOn();
+        tideBtn.textContent = 'TIDE AMBIENCE: ON';
+        tideBtn.setAttribute('aria-pressed', 'true');
+      }
+    });
+
+    // ---- shared bus (best effort, throttled) — same idiom as /drum-hero ----
+    let lastBroadcast = 0;
+    function getOrCreateSession(): string {
+      try {
+        let sid = localStorage.getItem('pc-drum-live-session');
+        if (!sid) {
+          sid = `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('pc-drum-live-session', sid);
+        }
+        return sid;
+      } catch {
+        return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    }
+    const SESSION_ID = getOrCreateSession();
+    function broadcast(padIndex: number) {
+      const now = Date.now();
+      if (now - lastBroadcast < 900) return; // don't flood the bus
+      lastBroadcast = now;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed: padIndex, sessionId: SESSION_ID }),
+        }).catch(() => {});
+      } catch { /* best effort */ }
+    }
+
+    // ---- the tide game: call and response, no fail state ----
+    // 'free' → 'calling' (tide plays) → 'echoing' (your turn) → back around.
+    let mode: 'free' | 'calling' | 'echoing' = 'free';
+    let phrase: number[] = [];
+    let echoPos = 0;
+    let timers: number[] = [];
+    const GAP_MS = 720;
+
+    function setStatus(text: string) {
+      if (statusEl) statusEl.textContent = text;
+    }
+    function clearTimers() {
+      timers.forEach((id) => window.clearTimeout(id));
+      timers = [];
+    }
+    function flash(i: number, cls: string) {
+      const pad = pads[i];
+      pad.classList.add(cls);
+      window.setTimeout(() => pad.classList.remove(cls), 260);
+    }
+    function newPhrase() {
+      const len = Math.min(3 + sets, 6);
+      phrase = Array.from({ length: len }, () => Math.floor(Math.random() * 4));
+    }
+    function playCall() {
+      mode = 'calling';
+      setStatus('THE TIDE CALLS…');
+      clearTimers();
+      phrase.forEach((padIdx, step) => {
+        timers.push(window.setTimeout(() => {
+          try { VOICES[pads[padIdx].dataset.voice || '']?.(); } catch { /* audio optional */ }
+          flash(padIdx, 'is-call');
+          if (step === phrase.length - 1) {
+            timers.push(window.setTimeout(() => {
+              mode = 'echoing';
+              echoPos = 0;
+              setStatus('YOUR TURN — ECHO THE SET');
+            }, GAP_MS));
+          }
+        }, step * GAP_MS));
+      });
+    }
+    function rideSurfer() {
+      if (!surfer) return;
+      surfer.classList.remove('is-riding');
+      // restart the animation
+      void (surfer as HTMLElement).offsetWidth;
+      surfer.classList.add('is-riding');
+    }
+    rideBtn?.addEventListener('click', () => {
+      if (mode === 'calling') return;
+      newPhrase();
+      playCall();
+    });
+
+    // ---- interaction ----
+    function hit(i: number) {
+      const pad = pads[i];
+      if (!pad) return;
+      try { VOICES[pad.dataset.voice || '']?.(); } catch { /* audio is optional */ }
+      pad.classList.add('is-hit');
+      window.setTimeout(() => pad.classList.remove('is-hit'), 140);
+      hits += 1;
+      if (hitsEl) hitsEl.textContent = String(hits);
+      broadcast(i);
+
+      if (mode !== 'echoing') return;
+      if (i === phrase[echoPos]) {
+        echoPos += 1;
+        if (echoPos >= phrase.length) {
+          sets += 1;
+          if (setsEl) setsEl.textContent = String(sets);
+          mode = 'free';
+          setStatus('SET RIDDEN · THE TIDE GROWS');
+          rideSurfer();
+          timers.push(window.setTimeout(() => {
+            newPhrase();
+            playCall();
+          }, 1800));
+        }
+      } else {
+        // No fail state on a calm Friday — the tide repeats itself, kindly.
+        mode = 'free';
+        setStatus('THE TIDE REPEATS ITSELF, KINDLY…');
+        timers.push(window.setTimeout(() => playCall(), 1100));
+      }
+    }
+
+    pads.forEach((pad, i) => {
+      pad.addEventListener('pointerdown', (e) => { e.preventDefault(); hit(i); });
+      // Keyboard activation of the focused button (Enter/Space) — pointerdown
+      // never fires for those, and real clicks carry detail > 0.
+      pad.addEventListener('click', (e) => { if (e.detail === 0) hit(i); });
+    });
+
+    const KEYMAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3 };
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const i = KEYMAP[e.key.toLowerCase()];
+      if (i === undefined) return;
+      hit(i);
+    });
+  })();
+</script>
+
+<style>
+  .hod {
+    margin: 8px 0 0; padding: 12px 14px 10px;
+    border: 1.5px solid var(--ch-600); border-left-width: 6px; border-radius: 2px;
+    background: #fff;
+    font-family: var(--pc-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  }
+  .hod a { color: inherit; text-decoration: none; }
+
+  .hod-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 0 0 10px; }
+  .hod-kicker {
+    margin: 0; font-size: 11px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ch-800); text-transform: uppercase;
+  }
+  .hod-sub {
+    margin: 0; font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted);
+    text-transform: uppercase;
+  }
+  .hod-meta {
+    margin-left: auto; display: flex; gap: 6px; font-size: 10px; letter-spacing: 0.1em;
+    color: var(--pc-ink-muted); text-transform: uppercase; font-variant-numeric: tabular-nums;
+  }
+  .hod-dot { color: var(--pc-ink-muted); }
+
+  .hod-strip { position: relative; }
+  .hod-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .hod-pad {
+    position: relative; display: block; padding: 0; overflow: hidden;
+    aspect-ratio: 3 / 2;
+    border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
+    font-family: inherit; cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .hod-pad__art { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .hod-pad__buoy {
+    position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
+    image-rendering: pixelated; pointer-events: none;
+  }
+  .hod-pad__label {
+    position: absolute; left: 0; bottom: 0; padding: 3px 7px;
+    background: #fff; border-top: 1.5px solid var(--pc-rule); border-right: 1.5px solid var(--pc-rule);
+    font-size: 9.5px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--pc-ink); text-transform: uppercase;
+  }
+  .hod-pad__key { color: var(--pc-ink-muted); font-weight: 400; margin-left: 2px; }
+  .hod-pad:hover, .hod-pad:focus-visible { border-color: var(--ch-600); outline: none; }
+  .hod-pad.is-hit { border-color: var(--ch-600); transform: translateY(1px); }
+  .hod-pad.is-hit .hod-pad__buoy { transform: translateY(-4px) rotate(-8deg); }
+  .hod-pad.is-call { border-color: var(--ch-800); box-shadow: inset 0 0 0 2px var(--ch-600); }
+
+  .hod-surfer {
+    position: absolute; top: -19px; left: -44px; width: 38px; height: 38px;
+    image-rendering: pixelated; pointer-events: none; opacity: 0;
+  }
+  .hod-surfer.is-riding { animation: hod-ride 2.6s linear forwards; }
+  @keyframes hod-ride {
+    0% { opacity: 0; transform: translateX(0) rotate(6deg); }
+    8% { opacity: 1; }
+    50% { transform: translateX(calc(50vw - 44px)) rotate(-6deg) translateY(4px); }
+    92% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(calc(100vw - 88px)) rotate(6deg); }
+  }
+
+  .hod-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 10px; }
+  .hod-status {
+    margin: 0; font-size: 10px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--ch-800); text-transform: uppercase; min-width: 220px;
+  }
+  .hod-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-left: auto; }
+  .hod-btn {
+    padding: 5px 10px; border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
+    font-family: inherit; font-size: 10px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--pc-ink); text-transform: uppercase; cursor: pointer;
+  }
+  .hod-btn:hover, .hod-btn:focus-visible { border-color: var(--ch-600); background: var(--ch-50); outline: none; }
+  .hod-links {
+    font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted); text-transform: uppercase;
+  }
+  .hod-links a { color: var(--pc-ink-soft); font-weight: 500; }
+  .hod-links a:hover { color: var(--ch-800); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hod-pad { transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease; }
+    .hod-pad__buoy { transition: transform 0.12s ease; animation: hod-bob 3.4s ease-in-out infinite; }
+    .hod-pad:nth-child(2) .hod-pad__buoy { animation-delay: -0.9s; }
+    .hod-pad:nth-child(3) .hod-pad__buoy { animation-delay: -1.7s; }
+    .hod-pad:nth-child(4) .hod-pad__buoy { animation-delay: -2.5s; }
+  }
+  @keyframes hod-bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(3px) rotate(3deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hod-pad.is-hit { transform: none; }
+    .hod-surfer.is-riding { animation: none; opacity: 0; }
+  }
+
+  @media (max-width: 640px) {
+    .hod-pads { grid-template-columns: repeat(2, 1fr); }
+    .hod-meta { margin-left: 0; }
+    .hod-actions { margin-left: 0; }
+  }
+</style>
