@@ -1,24 +1,40 @@
 ---
 /**
- * HomeOceanDrum — "THE SWELL DESK", the Friday calm ocean drum on the front door.
+ * HomeOceanDrum v2 — "THE SWELL DESK · THE LINEUP", the Friday calm ocean
+ * drum on the front door, now with the Nouns as the resident band.
  *
- * Four riso-printed ocean panels (2026-08-07 drop) play as wave pads, each
- * with its own inline WebAudio voice: swell / glass / spray / chop, keys
- * Q W E R (D F J K belong to the Beat Desk below — no collisions). A Noun
- * buoy bobs on every pad and a Noun surfer crosses the strip when you ride
- * a full set.
+ * Four riso-printed ocean panels (2026-08-07 drop) play as wave pads, and
+ * four resident Noun performers ride them: 137 LONGBOARDER on the swell,
+ * 372 BELL KEEPER on the glass, 580 FOAM KID in the spray, 921 PADDLER on
+ * the chop. Every hit makes its performer react in character and drop a
+ * speech tick. The tide game is unchanged at heart — call and response,
+ * keys Q W E R, no fail state, "the tide repeats itself, kindly."
  *
- * The game is call-and-response with no fail state: the tide plays a slow
- * phrase, you echo it. Miss a wave and the tide just repeats itself,
- * kindly. Free play always works; hits ride the same throttled best-effort
- * /api/sounds bus as /drum-hero (localStorage 'pc-drum-live-session').
+ * New in v2:
+ *  - The band demonstrates: during the tide's call each called performer
+ *    does their signature move; during your echo the next expected
+ *    performer cues gently. A ridden set ends in a staggered four-Noun bow
+ *    plus a fixed tag riff at low gain — the desk's sign-off.
+ *  - Energy tiers: RESTING → AWAKE → CARVING per pad from recent hits
+ *    (decay interval hard-gated on document.hidden). Tiers deepen the idle
+ *    bob, light the energy dots, and at CARVING each voice gains one quiet
+ *    partial. All four performers awake at once → a low ensemble drone.
+ *  - Recruit memory: the first ridden set mints a personal deskSeed; each
+ *    set recruits Noun (deskSeed + i*733) % 1200 — a stable roster, not a
+ *    slot machine. The v1 surfer crossing IS the recruit arriving; it
+ *    lands as a chip in the footer (six shown, then "+N OUT THE BACK").
+ *    Stored under localStorage 'pc-swell-desk'; blocked storage degrades
+ *    to v1 behavior.
  *
  * Grammar is BLOCKS.md: white bg, hard corners, 1.5px channel border with
  * a 6px left accent (GDN — the calm lane), JetBrains Mono ALL-CAPS
  * letterspaced labels, two weights only. Tokens from BlockLayout's :root.
  *
- * Astro gotcha honored: every node is rendered server-side; the script only
- * toggles classes and textContent, so scoped styles always reach them.
+ * Astro gotcha honored: every node is rendered server-side; the script
+ * only toggles classes, textContent, and inline style (backgroundImage /
+ * src on pre-rendered nodes), so scoped styles always reach them.
+ * Broadcast rides the same throttled best-effort /api/sounds bus as
+ * /drum-hero (localStorage 'pc-drum-live-session').
  */
 import { Image } from 'astro:assets';
 import { CHANNELS } from '../lib/channels';
@@ -32,12 +48,13 @@ const gdn = CHANNELS.GDN;
 const rampStyle = `--ch-50:${gdn.color50};--ch-600:${gdn.color600};--ch-800:${gdn.color800};`;
 
 // Real Noun heads — seeds 0-1199 match the Visit Nouns FA2 / noun.pics set.
-const SURFER_SEED = 259;
+// The four residents carry over from v1's buoys; they got promoted.
 const PADS = [
   {
     img: swellSunset,
     alt: 'Riso print: teal open-ocean swells under a peach sunset sky',
     seed: 137,
+    name: 'LONGBOARDER',
     label: 'SWELL',
     key: 'Q',
     voice: 'swell',
@@ -47,6 +64,7 @@ const PADS = [
     img: glassHorizon,
     alt: 'Riso print: a calm banded horizon, silver sea under a pale peach sky',
     seed: 372,
+    name: 'BELL KEEPER',
     label: 'GLASS',
     key: 'W',
     voice: 'glass',
@@ -56,6 +74,7 @@ const PADS = [
     img: sprayClouds,
     alt: 'Riso print grid: pink clouds over blue breaking waves, six panels',
     seed: 580,
+    name: 'FOAM KID',
     label: 'SPRAY',
     key: 'E',
     voice: 'spray',
@@ -65,25 +84,31 @@ const PADS = [
     img: chopGrid,
     alt: 'Riso print grid: eight overprinted panels of wind chop in pink and blue',
     seed: 921,
+    name: 'PADDLER',
     label: 'CHOP',
     key: 'R',
     voice: 'chop',
     aria: 'Play the chop tick (or press R)',
   },
 ] as const;
+
+const RECRUIT_CHIPS = 6;
 ---
 
-<section class="hod" aria-label="The swell desk — Friday calm ocean drum" style={rampStyle}>
+<section class="hod" aria-label="The swell desk — Friday calm ocean drum with the Noun lineup" style={rampStyle}>
   <header class="hod-head">
     <p class="hod-kicker">THE SWELL DESK · FRIDAY CALM</p>
-    <p class="hod-sub">FOUR WAVES, RISO-PRINTED. THE TIDE CALLS, YOU ANSWER.</p>
+    <p class="hod-sub">FOUR WAVES, RISO-PRINTED. THE TIDE CALLS, THE BAND ANSWERS.</p>
     <div class="hod-meta">
       <span><span id="hod-hits">0</span> HITS</span>
       <span class="hod-dot">·</span>
       <span><span id="hod-sets">0</span> SETS RIDDEN</span>
       <span class="hod-dot">·</span>
-      <a href="/b/0564">BLOCK 0564</a>
+      <a href="/b/0565">BLOCK 0565</a>
     </div>
+    <p class="hod-roster">THE LINEUP · {PADS.map((p, i) => (
+      <span class="hod-roster__name">{p.seed} {p.name}{i < PADS.length - 1 ? ' · ' : ''}</span>
+    ))}</p>
   </header>
 
   <div class="hod-strip">
@@ -91,23 +116,30 @@ const PADS = [
       {PADS.map((p, i) => (
         <button type="button" class="hod-pad" data-pad={i} data-voice={p.voice} aria-label={p.aria}>
           <Image class="hod-pad__art" src={p.img} alt={p.alt} width={720} quality={72} loading="lazy" />
+          <span class="hod-pad__board" aria-hidden="true"></span>
           <img
-            class="hod-pad__buoy"
+            class="hod-pad__performer"
             src={`https://noun.pics/${p.seed}.svg`}
-            width="30"
-            height="30"
+            width="44"
+            height="44"
             alt=""
             aria-hidden="true"
             loading="lazy"
           />
-          <span class="hod-pad__label">{p.label}<span class="hod-pad__key">/{p.key}</span></span>
+          <span class="hod-pad__say" aria-hidden="true"></span>
+          <span class="hod-pad__label">
+            {p.label}<span class="hod-pad__key">/{p.key}</span>
+            <span class="hod-pad__energy" aria-hidden="true">
+              <span class="hod-pad__dot-e"></span><span class="hod-pad__dot-e"></span><span class="hod-pad__dot-e"></span>
+            </span>
+          </span>
         </button>
       ))}
     </div>
     <img
       class="hod-surfer"
       id="hod-surfer"
-      src={`https://noun.pics/${SURFER_SEED}.svg`}
+      src="https://noun.pics/259.svg"
       width="38"
       height="38"
       alt=""
@@ -117,7 +149,13 @@ const PADS = [
   </div>
 
   <footer class="hod-foot">
-    <p class="hod-status" id="hod-status" aria-live="polite">FREE PLAY · TAP A WAVE</p>
+    <p class="hod-status" id="hod-status" aria-live="polite">FREE PLAY · THE LINEUP IS OUT</p>
+    <div class="hod-recruits" id="hod-recruits" aria-label="Nouns recruited to your lineup">
+      {Array.from({ length: RECRUIT_CHIPS }).map(() => (
+        <span class="hod-chip" aria-hidden="true"></span>
+      ))}
+      <span class="hod-chip-more" id="hod-more" hidden></span>
+    </div>
     <div class="hod-actions">
       <button type="button" class="hod-btn" id="hod-ride">RIDE A SET</button>
       <button type="button" class="hod-btn" id="hod-tide" aria-pressed="false">TIDE AMBIENCE: OFF</button>
@@ -129,16 +167,83 @@ const PADS = [
 <script>
   (() => {
     const pads = Array.from(document.querySelectorAll<HTMLButtonElement>('.hod-pad'));
+    const performers = Array.from(document.querySelectorAll<HTMLImageElement>('.hod-pad__performer'));
+    const says = Array.from(document.querySelectorAll<HTMLElement>('.hod-pad__say'));
+    const energyDots = pads.map((p) => Array.from(p.querySelectorAll<HTMLElement>('.hod-pad__dot-e')));
+    const chips = Array.from(document.querySelectorAll<HTMLElement>('.hod-chip'));
+    const moreChip = document.getElementById('hod-more');
     const hitsEl = document.getElementById('hod-hits');
     const setsEl = document.getElementById('hod-sets');
     const statusEl = document.getElementById('hod-status');
     const rideBtn = document.getElementById('hod-ride') as HTMLButtonElement | null;
     const tideBtn = document.getElementById('hod-tide') as HTMLButtonElement | null;
-    const surfer = document.getElementById('hod-surfer');
+    const surfer = document.getElementById('hod-surfer') as HTMLImageElement | null;
     if (pads.length !== 4) return;
 
-    let hits = 0;
-    let sets = 0;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    // ---- persistent desk memory ('pc-swell-desk'). Blocked storage → v1 behavior. ----
+    type DeskState = {
+      v: number;
+      deskSeed: number | null;
+      hits: number;
+      sets: number;
+      padHits: number[];
+      lastVisit: string;
+      recruitDates: string[];
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    function loadState(): DeskState {
+      const fresh: DeskState = { v: 2, deskSeed: null, hits: 0, sets: 0, padHits: [0, 0, 0, 0], lastVisit: today, recruitDates: [] };
+      try {
+        const raw = localStorage.getItem('pc-swell-desk');
+        if (!raw) return fresh;
+        const s = JSON.parse(raw);
+        if (typeof s !== 'object' || s === null) return fresh;
+        return {
+          v: 2,
+          deskSeed: Number.isInteger(s.deskSeed) ? s.deskSeed : null,
+          hits: Number.isInteger(s.hits) && s.hits >= 0 ? s.hits : 0,
+          sets: Number.isInteger(s.sets) && s.sets >= 0 ? s.sets : 0,
+          padHits: Array.isArray(s.padHits) && s.padHits.length === 4
+            ? s.padHits.map((n: unknown) => (Number.isInteger(n) && (n as number) >= 0 ? (n as number) : 0))
+            : [0, 0, 0, 0],
+          lastVisit: typeof s.lastVisit === 'string' ? s.lastVisit : today,
+          recruitDates: Array.isArray(s.recruitDates) ? s.recruitDates.filter((d: unknown) => typeof d === 'string') : [],
+        };
+      } catch {
+        return fresh;
+      }
+    }
+    const state = loadState();
+    let saveTimer = 0;
+    let lastWrite = 0;
+    function save(now = false) {
+      const write = () => {
+        lastWrite = Date.now();
+        try {
+          // Merge with whatever another tab wrote — take the larger counts and
+          // whichever roster identity exists, so neither tab erases the other.
+          const other = loadState();
+          if (state.deskSeed === null) state.deskSeed = other.deskSeed;
+          state.hits = Math.max(state.hits, other.hits);
+          state.sets = Math.max(state.sets, other.sets);
+          state.padHits = state.padHits.map((n, i) => Math.max(n, other.padHits[i]));
+          if (other.recruitDates.length > state.recruitDates.length) state.recruitDates = other.recruitDates;
+          state.lastVisit = today;
+          localStorage.setItem('pc-swell-desk', JSON.stringify(state));
+        } catch { /* private mode — the desk just forgets */ }
+      };
+      window.clearTimeout(saveTimer);
+      // A drummer resets a plain debounce forever — force a write every 2s.
+      if (now || Date.now() - lastWrite > 2000) { write(); return; }
+      saveTimer = window.setTimeout(write, 500);
+    }
+    // Recruit i (0-based) — 733 is coprime with 1200, so the walk visits
+    // every seed once before repeating: a roster, not a slot machine.
+    function recruitSeed(i: number): number {
+      return ((state.deskSeed ?? 0) + i * 733) % 1200;
+    }
 
     // ---- audio (lazy singleton, first-gesture safe) ----
     let actx: AudioContext | null = null;
@@ -151,35 +256,81 @@ const PADS = [
       return actx!;
     }
 
-    // Deep groundswell — a slow soft tom.
-    function vSwell() {
+    // ---- energy tiers: RESTING (0) / AWAKE (1) / CARVING (2) ----
+    const energy = [0, 0, 0, 0];
+    function tier(i: number): number {
+      return energy[i] >= 6 ? 2 : energy[i] >= 2 ? 1 : 0;
+    }
+    function renderEnergy(i: number) {
+      const t = tier(i);
+      pads[i].classList.toggle('is-awake', t === 1);
+      pads[i].classList.toggle('is-carving', t === 2);
+      energyDots[i].forEach((d, k) => d.classList.toggle('is-on', energy[i] > 0 && k <= t));
+    }
+    // Decay interval — hard-gated on visibility so an idle background tab
+    // never animates or drones for nobody.
+    window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      let allAwake = true;
+      for (let i = 0; i < 4; i++) {
+        if (energy[i] > 0) { energy[i] -= 1; renderEnergy(i); }
+        if (tier(i) < 1) allAwake = false;
+      }
+      if (!allAwake) droneOff();
+    }, 1000);
+    // The gate above also skips droneOff, so a hidden tab must silence the
+    // drone itself — and flush the desk's memory while it's at it.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        droneOff();
+        save(true);
+      }
+    });
+    window.addEventListener('pagehide', () => save(true));
+
+    // Deep groundswell — a slow soft tom. At CARVING, a 55Hz sub rides under it.
+    function vSwell(scale = 1, carving = false) {
       const a = ctx(); const t = a.currentTime + 0.003;
       const o = a.createOscillator(); const g = a.createGain();
       o.type = 'sine';
       o.frequency.setValueAtTime(100, t);
       o.frequency.exponentialRampToValueAtTime(36, t + 0.4);
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.34, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.34 * scale, t + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
       o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.6);
+      if (carving) {
+        const o2 = a.createOscillator(); const g2 = a.createGain();
+        o2.type = 'sine'; o2.frequency.setValueAtTime(55, t);
+        g2.gain.setValueAtTime(0.0001, t);
+        g2.gain.exponentialRampToValueAtTime(0.08 * scale, t + 0.02);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.55);
+      }
     }
-    // Glass buoy bell — two partials, long quiet decay.
-    function vGlass() {
+    // Glass buoy bell — two partials, long quiet decay. CARVING adds a high shimmer.
+    function vGlass(scale = 1, carving = false) {
       const a = ctx(); const t = a.currentTime + 0.003;
-      [{ f: 523.25, v: 0.2, d: 1.6, type: 'triangle' }, { f: 1046.5, v: 0.06, d: 0.9, type: 'sine' }].forEach((p) => {
+      const parts: Array<{ f: number; v: number; d: number; kind: OscillatorType }> = [
+        { f: 523.25, v: 0.2, d: 1.6, kind: 'triangle' },
+        { f: 1046.5, v: 0.06, d: 0.9, kind: 'sine' },
+      ];
+      if (carving) parts.push({ f: 1568, v: 0.03, d: 1.1, kind: 'sine' });
+      parts.forEach((p) => {
         const o = a.createOscillator(); const g = a.createGain();
-        o.type = p.type as OscillatorType;
+        o.type = p.kind;
         o.frequency.setValueAtTime(p.f, t);
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(p.v, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(p.v * scale, t + 0.006);
         g.gain.exponentialRampToValueAtTime(0.0001, t + p.d);
         o.connect(g).connect(a.destination); o.start(t); o.stop(t + p.d + 0.1);
       });
     }
-    // Spray — a soft lowpassed wash, slow attack like foam.
-    function vSpray() {
+    // Spray — a soft lowpassed wash, slow attack like foam. CARVING blooms slower.
+    function vSpray(scale = 1, carving = false) {
       const a = ctx(); const t = a.currentTime + 0.003;
       const dur = 0.6;
+      const attack = carving ? 0.09 : 0.05;
       const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
       const d = buf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -188,35 +339,93 @@ const PADS = [
       lp.frequency.exponentialRampToValueAtTime(500, t + dur);
       const g = a.createGain();
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.22, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.22 * scale, t + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       n.connect(lp).connect(g).connect(a.destination); n.start(t);
     }
-    // Chop — a short tick: filtered noise + a low blip.
-    function vChop() {
-      const a = ctx(); const t = a.currentTime + 0.003;
-      const dur = 0.09;
-      const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-      const n = a.createBufferSource(); n.buffer = buf;
-      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.2;
-      const g = a.createGain();
-      g.gain.setValueAtTime(0.16, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      n.connect(bp).connect(g).connect(a.destination); n.start(t);
-      const o = a.createOscillator(); const g2 = a.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(220, t);
-      g2.gain.setValueAtTime(0.12, t);
-      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
-      o.connect(g2).connect(a.destination); o.start(t); o.stop(t + 0.13);
+    // Chop — a short tick: filtered noise + a low blip. CARVING adds a grace note.
+    function vChop(scale = 1, carving = false) {
+      const a = ctx(); const base = a.currentTime + 0.003;
+      const tick = (at: number, s: number) => {
+        const dur = 0.09;
+        const buf = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = a.createBufferSource(); n.buffer = buf;
+        const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.2;
+        const g = a.createGain();
+        g.gain.setValueAtTime(0.16 * s, at);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        n.connect(bp).connect(g).connect(a.destination); n.start(at);
+        const o = a.createOscillator(); const g2 = a.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(220, at);
+        g2.gain.setValueAtTime(0.12 * s, at);
+        g2.gain.exponentialRampToValueAtTime(0.0001, at + 0.11);
+        o.connect(g2).connect(a.destination); o.start(at); o.stop(at + 0.13);
+      };
+      tick(base, scale);
+      if (carving) tick(base + 0.06, scale * 0.6);
     }
-    const VOICES: Record<string, () => void> = { swell: vSwell, glass: vGlass, spray: vSpray, chop: vChop };
+    const VOICES: Record<string, (scale?: number, carving?: boolean) => void> = {
+      swell: vSwell, glass: vGlass, spray: vSpray, chop: vChop,
+    };
+    function playVoice(i: number, scale = 1) {
+      if (document.visibilityState === 'hidden') return; // no drums for nobody
+      const name = pads[i].dataset.voice || '';
+      try { VOICES[name]?.(scale, tier(i) === 2); } catch { /* audio is optional */ }
+    }
+    // One-shot plip — a recruit chip landing on the shelf.
+    function vPlip() {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const a = ctx(); const t = a.currentTime + 0.003;
+        const o = a.createOscillator(); const g = a.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(300, t);
+        o.frequency.exponentialRampToValueAtTime(150, t + 0.12);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.15);
+      } catch { /* audio is optional */ }
+    }
+
+    // ---- ensemble drone: all four performers at least AWAKE → listen low ----
+    let droneNodes: { o1: OscillatorNode; o2: OscillatorNode; g: GainNode } | null = null;
+    function droneOn() {
+      if (droneNodes || document.visibilityState === 'hidden') return;
+      try {
+        const a = ctx();
+        const g = a.createGain(); g.gain.setValueAtTime(0.0001, a.currentTime);
+        g.gain.linearRampToValueAtTime(0.025, a.currentTime + 2);
+        const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
+        const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 65.4;
+        const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 65.6;
+        o1.connect(lp); o2.connect(lp); lp.connect(g).connect(a.destination);
+        o1.start(); o2.start();
+        droneNodes = { o1, o2, g };
+      } catch { return; /* audio is optional */ }
+      if (mode === 'free') setStatus('ALL FOUR PADDLED IN · LISTEN LOW');
+    }
+    function droneOff() {
+      if (!droneNodes || !actx) return;
+      const { o1, o2, g } = droneNodes;
+      droneNodes = null;
+      try {
+        g.gain.cancelScheduledValues(actx.currentTime);
+        g.gain.setValueAtTime(g.gain.value, actx.currentTime);
+        g.gain.linearRampToValueAtTime(0.0001, actx.currentTime + 3);
+        o1.stop(actx.currentTime + 3.1); o2.stop(actx.currentTime + 3.1);
+      } catch { /* already stopped */ }
+    }
+    function maybeDrone() {
+      if ([0, 1, 2, 3].every((i) => tier(i) >= 1)) droneOn();
+    }
 
     // ---- tide ambience (very quiet looped swell, toggleable) ----
     let tideNodes: { src: AudioBufferSourceNode; lfo: OscillatorNode } | null = null;
     function tideOn() {
-      const a = ctx();
+      let a: AudioContext;
+      try { a = ctx(); } catch { return; /* audio is optional */ }
       const dur = 4;
       const buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate);
       const d = buf.getChannelData(0);
@@ -243,8 +452,10 @@ const PADS = [
         tideBtn.setAttribute('aria-pressed', 'false');
       } else {
         tideOn();
-        tideBtn.textContent = 'TIDE AMBIENCE: ON';
-        tideBtn.setAttribute('aria-pressed', 'true');
+        if (tideNodes) {
+          tideBtn.textContent = 'TIDE AMBIENCE: ON';
+          tideBtn.setAttribute('aria-pressed', 'true');
+        }
       }
     });
 
@@ -276,9 +487,69 @@ const PADS = [
       } catch { /* best effort */ }
     }
 
+    // ---- performers: reactions and speech ticks ----
+    const REACTS = ['is-bottom-turn', 'is-bell-nod', 'is-pop-up', 'is-double-nod'];
+    const reactTimers = [0, 0, 0, 0];
+    function react(i: number) {
+      const el = performers[i];
+      el.classList.remove(REACTS[i]);
+      void el.offsetWidth; // restart the animation even mid-flight
+      el.classList.add(REACTS[i]);
+      // Remove after the longest reaction (600ms) — a lingering reaction class
+      // outranks the idle bob and latches the reduced-motion outline forever.
+      window.clearTimeout(reactTimers[i]);
+      reactTimers[i] = window.setTimeout(() => el.classList.remove(REACTS[i]), 650);
+    }
+    const PHRASES = [
+      ['MMM.', 'DEEP ONE.', 'LONG WALL.'],
+      ['DING.', 'STILL RINGING.', 'CLEAN.'],
+      ['PSSHH!', 'FOAM!', 'ALL WHITE.'],
+      ['TAP TAP.', 'QUICK ONE.', "WIND'S UP."],
+    ];
+    const sayTimers = [0, 0, 0, 0];
+    const sayNext = [0, 0, 0, 0];
+    function speak(i: number) {
+      const el = says[i];
+      el.textContent = PHRASES[i][sayNext[i] % PHRASES[i].length];
+      sayNext[i] += 1;
+      el.classList.add('is-saying');
+      window.clearTimeout(sayTimers[i]);
+      sayTimers[i] = window.setTimeout(() => el.classList.remove('is-saying'), 1200);
+    }
+
+    // ---- recruit shelf ----
+    function renderRecruits(stagger = false) {
+      if (state.deskSeed === null) return;
+      const total = state.sets;
+      const shown = Math.min(total, chips.length);
+      for (let c = 0; c < shown; c++) {
+        const chip = chips[c];
+        // newest-first: chip 0 is the latest recruit
+        const idx = total - 1 - c;
+        chip.style.backgroundImage = `url(https://noun.pics/${recruitSeed(idx)}.svg)`;
+        chip.classList.add('has-noun');
+        if (stagger && !reducedMotion.matches) {
+          chip.classList.remove('is-in');
+          void chip.offsetWidth;
+          window.setTimeout(() => chip.classList.add('is-in'), c * 80);
+        } else {
+          chip.classList.add('is-in');
+        }
+      }
+      if (moreChip) {
+        if (total > chips.length) {
+          moreChip.textContent = `+${total - chips.length} OUT THE BACK`;
+          moreChip.hidden = false;
+        } else {
+          moreChip.hidden = true;
+        }
+      }
+    }
+
     // ---- the tide game: call and response, no fail state ----
-    // 'free' → 'calling' (tide plays) → 'echoing' (your turn) → back around.
+    // 'free' → 'calling' (the band demonstrates) → 'echoing' (you follow) → around.
     let mode: 'free' | 'calling' | 'echoing' = 'free';
+    let sequencing = false; // true through the post-set bow/riff/recruit window
     let phrase: number[] = [];
     let echoPos = 0;
     let timers: number[] = [];
@@ -296,37 +567,70 @@ const PADS = [
       pad.classList.add(cls);
       window.setTimeout(() => pad.classList.remove(cls), 260);
     }
+    function setCue(i: number | null) {
+      performers.forEach((p, k) => p.classList.toggle('is-cueing', k === i));
+      pads.forEach((p, k) => p.classList.toggle('is-cued', k === i));
+    }
     function newPhrase() {
-      const len = Math.min(3 + sets, 6);
+      const len = Math.min(3 + state.sets, 6);
       phrase = Array.from({ length: len }, () => Math.floor(Math.random() * 4));
     }
     function playCall() {
       mode = 'calling';
-      setStatus('THE TIDE CALLS…');
+      setStatus('THE TIDE CALLS — WATCH THE BAND');
+      setCue(null);
       clearTimers();
       phrase.forEach((padIdx, step) => {
         timers.push(window.setTimeout(() => {
-          try { VOICES[pads[padIdx].dataset.voice || '']?.(); } catch { /* audio optional */ }
+          playVoice(padIdx);
+          react(padIdx);
           flash(padIdx, 'is-call');
           if (step === phrase.length - 1) {
             timers.push(window.setTimeout(() => {
               mode = 'echoing';
               echoPos = 0;
-              setStatus('YOUR TURN — ECHO THE SET');
+              setStatus('YOUR TURN — THE BAND FOLLOWS YOU');
+              setCue(phrase[0]);
             }, GAP_MS));
           }
         }, step * GAP_MS));
       });
     }
+    // The desk's sign-off: a fixed tag riff at low gain, same every time.
+    // swell · chop · glass · chop · rest · spray · rest · glass, 300ms grid.
+    const TAG_RIFF: Array<number | null> = [0, 3, 1, 3, null, 2, null, 1];
+    function playTagRiff() {
+      TAG_RIFF.forEach((padIdx, step) => {
+        if (padIdx === null) return;
+        timers.push(window.setTimeout(() => {
+          playVoice(padIdx, 0.6);
+          react(padIdx);
+        }, step * 300));
+      });
+    }
+    function bow() {
+      performers.forEach((p) => p.classList.remove('is-bowing'));
+      void performers[0].offsetWidth;
+      performers.forEach((p) => p.classList.add('is-bowing'));
+      // Standalone timer — clearTimers() must never strand the bow class.
+      window.setTimeout(() => {
+        performers.forEach((p) => p.classList.remove('is-bowing'));
+      }, 1400);
+    }
     function rideSurfer() {
       if (!surfer) return;
+      // The surfer IS the recruit arriving — wear the new Noun for the crossing.
+      if (state.deskSeed !== null && state.sets > 0) {
+        surfer.src = `https://noun.pics/${recruitSeed(state.sets - 1)}.svg`;
+      }
       surfer.classList.remove('is-riding');
-      // restart the animation
-      void (surfer as HTMLElement).offsetWidth;
+      void surfer.offsetWidth;
       surfer.classList.add('is-riding');
     }
     rideBtn?.addEventListener('click', () => {
-      if (mode === 'calling') return;
+      // Blocked during the call and during the post-set bow/riff/recruit
+      // sequence — a mid-sequence RIDE would cancel the reveal timers.
+      if (mode === 'calling' || sequencing) return;
       newPhrase();
       playCall();
     });
@@ -335,30 +639,60 @@ const PADS = [
     function hit(i: number) {
       const pad = pads[i];
       if (!pad) return;
-      try { VOICES[pad.dataset.voice || '']?.(); } catch { /* audio is optional */ }
+      playVoice(i);
+      react(i);
+      speak(i);
       pad.classList.add('is-hit');
       window.setTimeout(() => pad.classList.remove('is-hit'), 140);
-      hits += 1;
-      if (hitsEl) hitsEl.textContent = String(hits);
+      state.hits += 1;
+      state.padHits[i] += 1;
+      if (hitsEl) hitsEl.textContent = String(state.hits);
+      energy[i] = Math.min(energy[i] + 2, 8);
+      renderEnergy(i);
+      maybeDrone();
       broadcast(i);
+      save();
 
       if (mode !== 'echoing') return;
       if (i === phrase[echoPos]) {
         echoPos += 1;
-        if (echoPos >= phrase.length) {
-          sets += 1;
-          if (setsEl) setsEl.textContent = String(sets);
-          mode = 'free';
-          setStatus('SET RIDDEN · THE TIDE GROWS');
-          rideSurfer();
-          timers.push(window.setTimeout(() => {
-            newPhrase();
-            playCall();
-          }, 1800));
+        if (echoPos < phrase.length) {
+          setCue(phrase[echoPos]);
+          return;
         }
+        // Set ridden — the lineup bows, the tag riff plays, a guest paddles in.
+        state.sets += 1;
+        if (state.deskSeed === null) {
+          // First set ever: the desk mints its seed — your roster starts here.
+          state.deskSeed = Math.floor(Math.random() * 1200);
+        }
+        if (setsEl) setsEl.textContent = String(state.sets);
+        state.recruitDates.push(today);
+        mode = 'free';
+        sequencing = true;
+        setCue(null);
+        const newSeed = recruitSeed(state.sets - 1);
+        setStatus('SET RIDDEN · THE LINEUP BOWS');
+        bow();
+        rideSurfer();
+        save(true);
+        timers.push(window.setTimeout(() => playTagRiff(), 700));
+        // Standalone timers — the reveal and the hand-back must land even if
+        // something else calls clearTimers() meanwhile.
+        window.setTimeout(() => {
+          renderRecruits(true);
+          vPlip();
+          if (mode === 'free') setStatus(`GUEST No ${state.sets} · NOUN ${newSeed} PADDLED THROUGH`);
+        }, 2600);
+        window.setTimeout(() => {
+          sequencing = false;
+          newPhrase();
+          playCall();
+        }, 4600);
       } else {
         // No fail state on a calm Friday — the tide repeats itself, kindly.
         mode = 'free';
+        setCue(null);
         setStatus('THE TIDE REPEATS ITSELF, KINDLY…');
         timers.push(window.setTimeout(() => playCall(), 1100));
       }
@@ -373,13 +707,27 @@ const PADS = [
 
     const KEYMAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3 };
     window.addEventListener('keydown', (e) => {
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       const i = KEYMAP[e.key.toLowerCase()];
       if (i === undefined) return;
       hit(i);
     });
+
+    // ---- welcome back ----
+    if (state.hits > 0 || state.sets > 0) {
+      if (hitsEl) hitsEl.textContent = String(state.hits);
+      if (setsEl) setsEl.textContent = String(state.sets);
+      renderRecruits(true);
+      if (state.sets > 0) {
+        setStatus(`WELCOME BACK · ${state.sets} SET${state.sets === 1 ? '' : 'S'} ON THE BOOKS`);
+        let best = 0;
+        for (let i = 1; i < 4; i++) if (state.padHits[i] > state.padHits[best]) best = i;
+        performers[best].classList.add('is-waving');
+        window.setTimeout(() => performers[best].classList.remove('is-waving'), 1000);
+      }
+    }
   })();
 </script>
 
@@ -405,6 +753,11 @@ const PADS = [
     margin-left: auto; display: flex; gap: 6px; font-size: 10px; letter-spacing: 0.1em;
     color: var(--pc-ink-muted); text-transform: uppercase; font-variant-numeric: tabular-nums;
   }
+  .hod-roster {
+    margin: 0; flex-basis: 100%; font-size: 9px; letter-spacing: 0.1em;
+    color: var(--pc-ink-muted); text-transform: uppercase;
+  }
+  .hod-roster__name { color: var(--pc-ink-soft); }
   .hod-dot { color: var(--pc-ink-muted); }
 
   .hod-strip { position: relative; }
@@ -417,33 +770,109 @@ const PADS = [
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
   .hod-pad__art { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .hod-pad__buoy {
-    position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
-    image-rendering: pixelated; pointer-events: none;
+
+  /* The board — a hard rule the performer stands on, 60% of pad width. */
+  .hod-pad__board {
+    position: absolute; left: 20%; right: 20%; bottom: 16px; height: 0;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.85); pointer-events: none;
   }
+  .hod-pad__performer {
+    position: absolute; left: 50%; bottom: 17px; width: 44px; height: 44px;
+    margin-left: -22px; image-rendering: pixelated; pointer-events: none;
+    transform-origin: 50% 100%;
+  }
+  .hod-pad__say {
+    position: absolute; top: 8px; left: 8px; padding: 2px 6px;
+    background: #fff; border: 1.5px solid var(--pc-rule); border-radius: 2px;
+    font-size: 8.5px; letter-spacing: 0.1em; font-weight: 500;
+    color: var(--pc-ink); text-transform: uppercase;
+    opacity: 0; pointer-events: none;
+  }
+  .hod-pad__say.is-saying { opacity: 1; }
+
   .hod-pad__label {
     position: absolute; left: 0; bottom: 0; padding: 3px 7px;
+    display: inline-flex; align-items: center; gap: 5px;
     background: #fff; border-top: 1.5px solid var(--pc-rule); border-right: 1.5px solid var(--pc-rule);
     font-size: 9.5px; letter-spacing: 0.1em; font-weight: 500;
     color: var(--pc-ink); text-transform: uppercase;
   }
   .hod-pad__key { color: var(--pc-ink-muted); font-weight: 400; margin-left: 2px; }
-  .hod-pad:hover, .hod-pad:focus-visible { border-color: var(--ch-600); outline: none; }
+  .hod-pad__energy { display: inline-flex; gap: 2px; }
+  .hod-pad__dot-e {
+    width: 3px; height: 3px; background: var(--pc-rule); display: inline-block;
+  }
+  .hod-pad__dot-e.is-on { background: var(--ch-600); }
+
+  .hod-pad:hover { border-color: var(--ch-600); }
+  .hod-pad:focus-visible { border-color: var(--ch-600); outline: 2px solid var(--ch-800); outline-offset: 1px; }
   .hod-pad.is-hit { border-color: var(--ch-600); transform: translateY(1px); }
-  .hod-pad.is-hit .hod-pad__buoy { transform: translateY(-4px) rotate(-8deg); }
   .hod-pad.is-call { border-color: var(--ch-800); box-shadow: inset 0 0 0 2px var(--ch-600); }
+  .hod-pad.is-cued { border-color: var(--ch-600); }
+
+  /* Signature reactions — one per resident, on the shared react() path. */
+  @keyframes hod-bottom-turn {
+    0% { transform: translateY(0) rotate(0deg); }
+    40% { transform: translateY(3px) rotate(-10deg); }
+    100% { transform: translateY(0) rotate(0deg); }
+  }
+  @keyframes hod-bell-nod {
+    0%, 100% { transform: rotate(0deg); }
+    30% { transform: rotate(6deg); }
+    70% { transform: rotate(-6deg); }
+  }
+  @keyframes hod-pop-up {
+    0% { transform: translateY(0) scale(1); }
+    40% { transform: translateY(-6px) scale(1.08); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  @keyframes hod-double-nod {
+    0%, 100% { transform: translateY(0); }
+    25% { transform: translateY(2px); }
+    50% { transform: translateY(0); }
+    75% { transform: translateY(2px); }
+  }
+  .hod-pad__performer.is-bottom-turn { animation: hod-bottom-turn 0.4s ease-out; }
+  .hod-pad__performer.is-bell-nod { animation: hod-bell-nod 0.6s ease-in-out; }
+  .hod-pad__performer.is-pop-up { animation: hod-pop-up 0.25s ease-out; }
+  .hod-pad__performer.is-double-nod { animation: hod-double-nod 0.36s ease-in-out; }
+
+  @keyframes hod-cue {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-2px) rotate(4deg); }
+  }
+  .hod-pad__performer.is-cueing { animation: hod-cue 1.5s ease-in-out infinite; }
+
+  @keyframes hod-bow {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(4px) rotate(12deg); }
+  }
+  .hod-pad__performer.is-bowing { animation: hod-bow 0.6s ease-in-out; }
+  .hod-pad:nth-child(2) .hod-pad__performer.is-bowing { animation-delay: 0.12s; }
+  .hod-pad:nth-child(3) .hod-pad__performer.is-bowing { animation-delay: 0.24s; }
+  .hod-pad:nth-child(4) .hod-pad__performer.is-bowing { animation-delay: 0.36s; }
+
+  @keyframes hod-wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(8deg); }
+    75% { transform: rotate(-8deg); }
+  }
+  .hod-pad__performer.is-waving { animation: hod-wave 0.8s ease-in-out; }
 
   .hod-surfer {
-    position: absolute; top: -19px; left: -44px; width: 38px; height: 38px;
+    position: absolute; top: -19px; left: 0; width: 38px; height: 38px;
     image-rendering: pixelated; pointer-events: none; opacity: 0;
   }
-  .hod-surfer.is-riding { animation: hod-ride 2.6s linear forwards; }
+  /* The crossing animates `left` fully within the strip — vw-based
+     transforms overflow the viewport on wide screens where the shell is
+     capped, and a `forwards` fill would park that overflow permanently. */
+  .hod-surfer.is-riding { animation: hod-ride 2.6s linear; }
   @keyframes hod-ride {
-    0% { opacity: 0; transform: translateX(0) rotate(6deg); }
+    0% { opacity: 0; left: 0; transform: rotate(6deg); }
     8% { opacity: 1; }
-    50% { transform: translateX(calc(50vw - 44px)) rotate(-6deg) translateY(4px); }
+    50% { left: calc(50% - 19px); transform: rotate(-6deg) translateY(4px); }
     92% { opacity: 1; }
-    100% { opacity: 0; transform: translateX(calc(100vw - 88px)) rotate(6deg); }
+    100% { opacity: 0; left: calc(100% - 38px); transform: rotate(6deg); }
   }
 
   .hod-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 10px; }
@@ -451,13 +880,26 @@ const PADS = [
     margin: 0; font-size: 10px; letter-spacing: 0.1em; font-weight: 500;
     color: var(--ch-800); text-transform: uppercase; min-width: 220px;
   }
+  .hod-recruits { display: inline-flex; align-items: center; gap: 4px; }
+  .hod-chip {
+    width: 20px; height: 20px; display: inline-block;
+    border: 1.5px dashed var(--pc-rule); border-radius: 2px; opacity: 0.4;
+    background-size: contain; background-repeat: no-repeat; background-position: center;
+    image-rendering: pixelated;
+  }
+  .hod-chip.has-noun { border-style: solid; }
+  .hod-chip.is-in { opacity: 1; }
+  .hod-chip-more {
+    font-size: 9px; letter-spacing: 0.1em; color: var(--pc-ink-muted); text-transform: uppercase;
+  }
   .hod-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-left: auto; }
   .hod-btn {
     padding: 5px 10px; border: 1.5px solid var(--pc-rule); border-radius: 2px; background: #fff;
     font-family: inherit; font-size: 10px; letter-spacing: 0.1em; font-weight: 500;
     color: var(--pc-ink); text-transform: uppercase; cursor: pointer;
   }
-  .hod-btn:hover, .hod-btn:focus-visible { border-color: var(--ch-600); background: var(--ch-50); outline: none; }
+  .hod-btn:hover { border-color: var(--ch-600); background: var(--ch-50); }
+  .hod-btn:focus-visible { border-color: var(--ch-600); background: var(--ch-50); outline: 2px solid var(--ch-800); outline-offset: 1px; }
   .hod-links {
     font-size: 10px; letter-spacing: 0.08em; color: var(--pc-ink-muted); text-transform: uppercase;
   }
@@ -466,18 +908,43 @@ const PADS = [
 
   @media (prefers-reduced-motion: no-preference) {
     .hod-pad { transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease; }
-    .hod-pad__buoy { transition: transform 0.12s ease; animation: hod-bob 3.4s ease-in-out infinite; }
-    .hod-pad:nth-child(2) .hod-pad__buoy { animation-delay: -0.9s; }
-    .hod-pad:nth-child(3) .hod-pad__buoy { animation-delay: -1.7s; }
-    .hod-pad:nth-child(4) .hod-pad__buoy { animation-delay: -2.5s; }
+    .hod-pad__say { transition: opacity 0.15s ease; }
+    .hod-chip { transition: opacity 0.3s ease, transform 0.3s ease; }
+    .hod-chip.has-noun:not(.is-in) { transform: translateY(8px); }
+    .hod-chip.is-in { transform: translateY(0); }
+    /* Idle bob — the residents breathe with the water, deeper as the pad wakes.
+       Tier and stagger rules set ONLY custom properties: longhand overrides
+       here would outrank the reaction classes' animation shorthand and break
+       their duration/delay. */
+    @keyframes hod-idle {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(var(--bob, 1px)) rotate(var(--bob-tilt, 0deg)); }
+    }
+    .hod-pad__performer {
+      --bob: 1px; --bob-tilt: 0deg; --idle-dur: 4.2s; --idle-delay: 0s;
+      animation: hod-idle var(--idle-dur) ease-in-out var(--idle-delay) infinite;
+    }
+    .hod-pad.is-awake .hod-pad__performer { --bob: 3px; --idle-dur: 3.4s; }
+    .hod-pad.is-carving .hod-pad__performer { --bob: 5px; --bob-tilt: 3deg; --idle-dur: 2.6s; }
+    .hod-pad:nth-child(2) .hod-pad__performer { --idle-delay: -0.9s; }
+    .hod-pad:nth-child(3) .hod-pad__performer { --idle-delay: -1.7s; }
+    .hod-pad:nth-child(4) .hod-pad__performer { --idle-delay: -2.5s; }
   }
-  @keyframes hod-bob {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(3px) rotate(3deg); }
-  }
+
   @media (prefers-reduced-motion: reduce) {
     .hod-pad.is-hit { transform: none; }
     .hod-surfer.is-riding { animation: none; opacity: 0; }
+    /* No performer transforms anywhere — feedback moves to outline and underline.
+       react()/bow()/wave timers remove these classes, so the outline is a
+       per-event flash, not a latch. */
+    .hod-pad__performer { animation: none !important; transform: none !important; }
+    .hod-pad__performer.is-bottom-turn, .hod-pad__performer.is-bell-nod,
+    .hod-pad__performer.is-pop-up, .hod-pad__performer.is-double-nod,
+    .hod-pad__performer.is-bowing, .hod-pad__performer.is-waving {
+      outline: 2px solid var(--ch-600);
+    }
+    .hod-pad.is-cued .hod-pad__label { text-decoration: underline; }
+    .hod-chip { transition: none; }
   }
 
   @media (max-width: 640px) {
