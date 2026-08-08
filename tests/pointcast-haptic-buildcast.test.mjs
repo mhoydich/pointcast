@@ -14,7 +14,8 @@ test('Open Studio keeps the public build ledger beside the playable artifact', a
   ]);
 
   assert.match(page, /class="studio-grid"/);
-  assert.match(page, /src="\/haptic-dreams#instrument"/);
+  assert.match(page, /src="\/haptic-dreams\/play"/);
+  assert.match(page, /title="Saturday Kingdom: Signal Run playable game"/);
   assert.match(page, /WATCH THE BUILD/);
   assert.match(page, /PLAY THE GAME/);
   assert.match(page, /aria-live="polite"/);
