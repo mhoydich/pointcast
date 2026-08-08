@@ -1,0 +1,455 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  BUILDCAST_PUBLIC_BOUNDARY,
+  HAPTIC_BUILDCAST_SEED_EVENTS,
+  HAPTIC_BUILDCAST_SESSION,
+} from '../../lib/pointcast-buildcast';
+
+const title = 'Saturday Kingdom · Open Studio';
+const description = 'A quiet public window onto the making of Haptic Dreams, shown beside the playable Saturday Kingdom artifact.';
+const eventTime = (iso: string) => new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date(iso));
+const eventDate = (iso: string) => new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date(iso));
+---
+
+<BaseLayout title={title} description={description} image="/images/pointcast-haptic-dreams/social-card.png" hideAds={true}>
+  <main class="buildcast" data-mobile-view="studio">
+    <header class="mast">
+      <div class="identity">
+        <a href="/" class="wordmark">POINTCAST</a>
+        <span class="slash">/</span>
+        <a href="/haptic-dreams">HAPTIC DREAMS</a>
+        <span class="edition">OPEN STUDIO 001</span>
+      </div>
+      <div class="signal" aria-live="polite">
+        <span class="signal__dot" aria-hidden="true"></span>
+        <span id="stream-mode">SEEDED STUDIO</span>
+        <span class="signal__time" id="last-checked">READY</span>
+      </div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <p class="eyebrow">THE MAKING, BESIDE THE THING</p>
+        <h1>Watch the kingdom<br /><em>become playable.</em></h1>
+      </div>
+      <p class="intro__note">
+        This is a curated studio window, not a terminal. It shares small,
+        verified milestones from the build while the complete artifact stays
+        open beside them.
+      </p>
+    </section>
+
+    <nav class="mobile-switch" aria-label="Choose studio or game view">
+      <button type="button" class="mobile-switch__button active" data-show="studio" aria-pressed="true">WATCH THE BUILD</button>
+      <button type="button" class="mobile-switch__button" data-show="game" aria-pressed="false">PLAY THE GAME</button>
+    </nav>
+
+    <div class="studio-grid">
+      <section class="studio-panel" id="studio-panel" aria-labelledby="studio-title">
+        <header class="panel-head">
+          <div>
+            <p class="panel-label">PUBLIC BUILD LEDGER</p>
+            <h2 id="studio-title">Saturday Kingdom</h2>
+          </div>
+          <div class="phase">
+            <span>PHASE</span>
+            <strong id="current-phase">BUILD</strong>
+          </div>
+        </header>
+
+        <div class="studio-art" aria-hidden="true">
+          <img src="/images/pointcast-haptic-dreams/jon-snow-lion.webp" alt="" />
+          <p>SESSION<br />{HAPTIC_BUILDCAST_SESSION.toUpperCase()}</p>
+        </div>
+
+        <div class="feed-shell">
+          <ol class="event-feed" id="event-feed" aria-live="polite" aria-relevant="additions">
+            {HAPTIC_BUILDCAST_SEED_EVENTS.map((event) => (
+              <li class={`event event--${event.status}`} data-event-id={event.id} data-sequence={event.sequence}>
+                <div class="event__rail" aria-hidden="true"><span></span></div>
+                <article>
+                  <header class="event__meta">
+                    <span class={`agent agent--${event.agent}`}>{event.agent}</span>
+                    <span>{event.phase}</span>
+                    <time datetime={event.at}>{eventDate(event.at)} · {eventTime(event.at)} PT</time>
+                  </header>
+                  <h3>{event.title}</h3>
+                  <p>{event.summary}</p>
+                  {(event.metrics || event.link) && (
+                    <footer>
+                      {event.metrics?.testsPassed !== undefined && <span>{event.metrics.testsPassed} checks passed</span>}
+                      {event.metrics?.testsFailed !== undefined && event.metrics.testsFailed > 0 && <span>{event.metrics.testsFailed} need attention</span>}
+                      {event.metrics?.pagesBuilt !== undefined && <span>{event.metrics.pagesBuilt} pages built</span>}
+                      {event.link && <a href={event.link}>PUBLIC RECEIPT ↗</a>}
+                    </footer>
+                  )}
+                </article>
+              </li>
+            ))}
+          </ol>
+          <button type="button" class="follow" id="resume-follow" hidden>RETURN TO LATEST ↓</button>
+        </div>
+
+        <footer class="boundary">
+          <details>
+            <summary>WHAT THIS WINDOW WILL NEVER SHOW</summary>
+            <ul>
+              {BUILDCAST_PUBLIC_BOUNDARY.notPublished.map((item) => <li>{item}</li>)}
+            </ul>
+          </details>
+          <p id="stream-note">Seeded public milestones · authenticated updates are not configured yet.</p>
+        </footer>
+      </section>
+
+      <section class="game-panel" id="game-panel" aria-labelledby="game-title">
+        <header class="panel-head panel-head--game">
+          <div>
+            <p class="panel-label">PLAYABLE ARTIFACT</p>
+            <h2 id="game-title">The Game, Re-felt</h2>
+          </div>
+          <a href="/haptic-dreams">OPEN FULL SCREEN ↗</a>
+        </header>
+        <div class="frame-wrap">
+          <iframe
+            src="/haptic-dreams#instrument"
+            title="Haptic Dreams: Saturday Kingdom playable artifact"
+            loading="eager"
+            allow="fullscreen"
+          ></iframe>
+        </div>
+        <p class="game-note">Sound and vibration remain off until you explicitly turn them on inside the game.</p>
+      </section>
+    </div>
+
+    <footer class="page-foot">
+      <p>POINTCAST · HAPTIC DREAMS · OPEN STUDIO 001</p>
+      <nav aria-label="Buildcast discovery">
+        <a href="/haptic-dreams">ARTIFACT</a>
+        <a href="/haptic-dreams.json">EVENT GRAMMAR</a>
+        <a href="/api/buildcast?project=haptic-dreams">PUBLIC BUILD DATA</a>
+      </nav>
+    </footer>
+  </main>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    'use strict';
+    var root = document.querySelector('.buildcast');
+    var feed = document.getElementById('event-feed');
+    var feedShell = document.querySelector('.feed-shell');
+    var resume = document.getElementById('resume-follow');
+    var mode = document.getElementById('stream-mode');
+    var note = document.getElementById('stream-note');
+    var checked = document.getElementById('last-checked');
+    var phase = document.getElementById('current-phase');
+    if (!root || !feed || !feedShell) return;
+
+    var latestSequence = Array.from(feed.querySelectorAll('[data-sequence]')).reduce(function (max, item) {
+      return Math.max(max, Number(item.getAttribute('data-sequence')) || 0);
+    }, 0);
+    var known = new Set(Array.from(feed.querySelectorAll('[data-event-id]')).map(function (item) {
+      return item.getAttribute('data-event-id');
+    }));
+    var following = true;
+    var polling = false;
+    var timer = null;
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, function (char) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+      });
+    }
+
+    function isPublicLink(value) {
+      try {
+        var url = new URL(value);
+        return url.protocol === 'https:' && (
+          url.hostname === 'pointcast.xyz' ||
+          url.hostname === 'www.pointcast.xyz' ||
+          url.hostname.endsWith('.pointcast.pages.dev') ||
+          (url.hostname === 'github.com' && url.pathname.indexOf('/mhoydich/pointcast') === 0)
+        );
+      } catch (_) { return false; }
+    }
+
+    function formatStamp(value) {
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'NOW';
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        timeZone: 'America/Los_Angeles'
+      }).format(date) + ' PT';
+    }
+
+    function metricsMarkup(metrics) {
+      if (!metrics || typeof metrics !== 'object') return '';
+      var parts = [];
+      if (Number.isInteger(metrics.testsPassed)) parts.push('<span>' + metrics.testsPassed + ' checks passed</span>');
+      if (Number.isInteger(metrics.testsFailed) && metrics.testsFailed > 0) parts.push('<span>' + metrics.testsFailed + ' need attention</span>');
+      if (Number.isInteger(metrics.pagesBuilt)) parts.push('<span>' + metrics.pagesBuilt + ' pages built</span>');
+      return parts.join('');
+    }
+
+    function eventMarkup(event) {
+      var agent = ['terra', 'luna', 'codex', 'mike', 'system'].includes(event.agent) ? event.agent : 'system';
+      var status = ['working', 'passed', 'needs-attention', 'shipped'].includes(event.status) ? event.status : 'working';
+      var receipt = event.link && isPublicLink(event.link)
+        ? '<a href="' + escapeHtml(event.link) + '">PUBLIC RECEIPT ↗</a>' : '';
+      var footer = metricsMarkup(event.metrics) + receipt;
+      return '<li class="event event--' + status + '" data-event-id="' + escapeHtml(event.id) + '" data-sequence="' + Number(event.sequence) + '">' +
+        '<div class="event__rail" aria-hidden="true"><span></span></div><article>' +
+        '<header class="event__meta"><span class="agent agent--' + agent + '">' + escapeHtml(agent) + '</span>' +
+        '<span>' + escapeHtml(event.phase) + '</span><time datetime="' + escapeHtml(event.at) + '">' + escapeHtml(formatStamp(event.at)) + '</time></header>' +
+        '<h3>' + escapeHtml(event.title) + '</h3><p>' + escapeHtml(event.summary) + '</p>' +
+        (footer ? '<footer>' + footer + '</footer>' : '') + '</article></li>';
+    }
+
+    function scrollLatest(behavior) {
+      feedShell.scrollTo({ top: feedShell.scrollHeight, behavior: behavior || 'smooth' });
+    }
+
+    feedShell.addEventListener('scroll', function () {
+      var distance = feedShell.scrollHeight - feedShell.scrollTop - feedShell.clientHeight;
+      following = distance < 72;
+      if (resume) resume.hidden = following;
+    }, { passive: true });
+
+    if (resume) resume.addEventListener('click', function () {
+      following = true;
+      resume.hidden = true;
+      scrollLatest('smooth');
+    });
+
+    async function poll() {
+      if (polling || document.hidden) return;
+      polling = true;
+      try {
+        var url = '/api/buildcast?project=haptic-dreams&session=saturday-kingdom-v1&since=' + encodeURIComponent(latestSequence);
+        var response = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('unavailable');
+        var data = await response.json();
+        var events = Array.isArray(data.events) ? data.events : [];
+        events.sort(function (a, b) { return Number(a.sequence) - Number(b.sequence); }).forEach(function (event) {
+          if (!event || known.has(event.id)) return;
+          known.add(event.id);
+          latestSequence = Math.max(latestSequence, Number(event.sequence) || 0);
+          feed.insertAdjacentHTML('beforeend', eventMarkup(event));
+        });
+        if (data.currentPhase && phase) phase.textContent = String(data.currentPhase).toUpperCase();
+        if (mode) mode.textContent = data.liveUpdates ? 'CURATED EDGE ACTIVE' : 'SEEDED STUDIO';
+        if (note) note.textContent = data.liveUpdates
+          ? 'Curated public milestones · private working material stays private.'
+          : 'Seeded public milestones · authenticated updates are not configured yet.';
+        if (checked) checked.textContent = 'CHECKED ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        if (events.length && following) requestAnimationFrame(function () { scrollLatest('smooth'); });
+      } catch (_) {
+        if (mode) mode.textContent = 'SEEDED STUDIO';
+        if (checked) checked.textContent = 'QUIET FALLBACK';
+      } finally {
+        polling = false;
+      }
+    }
+
+    function schedule() {
+      if (timer) clearInterval(timer);
+      timer = setInterval(poll, 3500);
+    }
+    poll();
+    schedule();
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+
+    document.querySelectorAll('[data-show]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var view = button.getAttribute('data-show') === 'game' ? 'game' : 'studio';
+        root.setAttribute('data-mobile-view', view);
+        document.querySelectorAll('[data-show]').forEach(function (candidate) {
+          var active = candidate === button;
+          candidate.classList.toggle('active', active);
+          candidate.setAttribute('aria-pressed', String(active));
+        });
+        document.getElementById(view === 'game' ? 'game-panel' : 'studio-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+</script>
+
+<style>
+  :global(body) { background: #e9e5dc; color: #191b1c; }
+  :global(body) { padding-bottom: 0 !important; }
+  :global(.site-nav),
+  :global(.footer-bar),
+  :global(.first100-strip),
+  :global(.conav),
+  :global(.first-see),
+  :global(.pc-freshness),
+  :global(.pc-peer-cursors),
+  :global(.pc-cursor-say),
+  :global(body > footer) { display: none !important; }
+  .buildcast {
+    --ink: #191b1c;
+    --paper: #f3f0e8;
+    --quiet: #77766f;
+    --blue: #243d55;
+    --blue-soft: #d5dfe4;
+    --red: #8b3535;
+    min-height: 100vh;
+    background:
+      linear-gradient(rgba(36, 61, 85, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(36, 61, 85, 0.035) 1px, transparent 1px),
+      #e9e5dc;
+    background-size: 24px 24px;
+  }
+  .mast {
+    min-height: 52px;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid rgba(25, 27, 28, 0.25);
+    background: rgba(243, 240, 232, 0.94);
+    font: 700 10px/1.2 var(--pc-font-mono, monospace);
+    letter-spacing: 0.12em;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+  }
+  .identity, .signal { display: flex; align-items: center; gap: 10px; }
+  .identity a { color: inherit; text-decoration: none; }
+  .wordmark { letter-spacing: 0.2em; }
+  .slash { color: var(--quiet); }
+  .edition { color: var(--red); }
+  .signal { color: var(--blue); }
+  .signal__dot { width: 7px; height: 7px; border-radius: 50%; background: #607f6a; box-shadow: 0 0 0 4px rgba(96,127,106,.12); }
+  .signal__time { color: var(--quiet); font-weight: 500; }
+  .intro {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 36px 28px 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, .6fr);
+    align-items: end;
+    gap: 44px;
+  }
+  .eyebrow, .panel-label {
+    margin: 0 0 9px;
+    color: var(--red);
+    font: 700 10px/1 var(--pc-font-mono, monospace);
+    letter-spacing: .18em;
+  }
+  h1 { margin: 0; font: 400 clamp(38px, 5.2vw, 76px)/.93 Georgia, serif; letter-spacing: -.045em; }
+  h1 em { color: var(--blue); font-weight: 400; }
+  .intro__note { max-width: 510px; margin: 0; font: 400 16px/1.55 Georgia, serif; color: #50504c; }
+  .mobile-switch { display: none; }
+  .studio-grid {
+    max-width: 1500px;
+    min-height: 700px;
+    height: calc(100vh - 238px);
+    margin: 0 auto;
+    padding: 0 28px 32px;
+    display: grid;
+    grid-template-columns: minmax(340px, .7fr) minmax(620px, 1.3fr);
+    gap: 14px;
+  }
+  .studio-panel, .game-panel {
+    min-height: 0;
+    border: 1px solid rgba(25, 27, 28, .22);
+    background: var(--paper);
+    box-shadow: 0 14px 40px rgba(24, 27, 29, .09);
+  }
+  .studio-panel { display: grid; grid-template-rows: auto 110px minmax(0, 1fr) auto; }
+  .game-panel { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #17202a; }
+  .panel-head {
+    min-height: 74px;
+    padding: 15px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid rgba(25, 27, 28, .18);
+  }
+  .panel-head h2 { margin: 0; font: 400 24px/1 Georgia, serif; }
+  .phase { text-align: right; font: 700 9px/1.35 var(--pc-font-mono, monospace); letter-spacing: .13em; color: var(--quiet); }
+  .phase strong { display: block; color: var(--blue); font-size: 12px; }
+  .panel-head--game { color: #f0ede5; border-color: rgba(255,255,255,.18); }
+  .panel-head--game .panel-label { color: #cba86b; }
+  .panel-head--game a { color: #dbe5e9; font: 700 9px/1 var(--pc-font-mono, monospace); letter-spacing: .1em; }
+  .studio-art { position: relative; overflow: hidden; border-bottom: 1px solid rgba(25,27,28,.16); background: var(--blue-soft); }
+  .studio-art img { position: absolute; width: 132px; right: 14px; top: -36px; opacity: .22; filter: grayscale(1) contrast(1.3); }
+  .studio-art p { position: absolute; left: 18px; bottom: 14px; margin: 0; color: var(--blue); font: 700 11px/1.4 var(--pc-font-mono, monospace); letter-spacing: .14em; }
+  .feed-shell { min-height: 0; overflow-y: auto; position: relative; scroll-behavior: smooth; }
+  .event-feed { list-style: none; margin: 0; padding: 14px 18px 36px; }
+  .event { display: grid; grid-template-columns: 18px 1fr; gap: 9px; }
+  .event__rail { display: flex; justify-content: center; position: relative; }
+  .event__rail::after { content: ''; position: absolute; top: 14px; bottom: -6px; width: 1px; background: rgba(36,61,85,.2); }
+  .event:last-child .event__rail::after { display: none; }
+  .event__rail span { width: 7px; height: 7px; margin-top: 8px; border-radius: 50%; background: #9c9a91; z-index: 1; box-shadow: 0 0 0 4px var(--paper); }
+  .event--passed .event__rail span, .event--shipped .event__rail span { background: #607f6a; }
+  .event--working .event__rail span { background: #b47f3c; }
+  .event--needs-attention .event__rail span { background: var(--red); }
+  .event article { padding: 0 0 22px; }
+  .event__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 7px; color: var(--quiet); font: 600 8px/1 var(--pc-font-mono, monospace); letter-spacing: .1em; text-transform: uppercase; }
+  .event__meta time { margin-left: auto; }
+  .agent { padding: 4px 6px; color: white; background: var(--blue); }
+  .agent--mike { background: #222; }
+  .agent--codex { background: #246978; }
+  .agent--terra { background: #6f5b39; }
+  .agent--luna { background: #5a507c; }
+  .agent--system { background: #666; }
+  .event h3 { margin: 0 0 6px; font: 700 15px/1.18 Georgia, serif; }
+  .event p { margin: 0; color: #565650; font: 400 13px/1.45 Georgia, serif; }
+  .event footer { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 9px; color: var(--blue); font: 700 8px/1 var(--pc-font-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
+  .event footer a { color: var(--red); }
+  .follow { position: sticky; bottom: 12px; display: block; margin: -34px auto 10px; padding: 9px 12px; border: 1px solid var(--blue); background: var(--paper); color: var(--blue); font: 700 9px/1 var(--pc-font-mono, monospace); letter-spacing: .1em; cursor: pointer; }
+  .follow[hidden] { display: none; }
+  .boundary { padding: 10px 18px 12px; border-top: 1px solid rgba(25,27,28,.16); color: var(--quiet); font: 500 8px/1.45 var(--pc-font-mono, monospace); letter-spacing: .07em; text-transform: uppercase; }
+  .boundary summary { color: var(--ink); cursor: pointer; }
+  .boundary ul { padding-left: 17px; }
+  .boundary p { margin: 7px 0 0; }
+  .frame-wrap { min-height: 0; padding: 10px; }
+  iframe { width: 100%; height: 100%; min-height: 570px; border: 0; background: #111827; }
+  .game-note { margin: 0; padding: 10px 16px 13px; color: rgba(240,237,229,.68); border-top: 1px solid rgba(255,255,255,.14); font: 500 8px/1.4 var(--pc-font-mono, monospace); letter-spacing: .09em; text-transform: uppercase; }
+  .page-foot { padding: 20px 28px 34px; display: flex; justify-content: space-between; gap: 20px; color: var(--quiet); font: 600 9px/1.4 var(--pc-font-mono, monospace); letter-spacing: .1em; }
+  .page-foot p { margin: 0; }
+  .page-foot nav { display: flex; flex-wrap: wrap; gap: 14px; }
+  .page-foot a { color: var(--blue); }
+
+  @media (max-width: 900px) {
+    .intro { grid-template-columns: 1fr; gap: 18px; padding-top: 28px; }
+    .mobile-switch { margin: 0 18px 12px; display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(25,27,28,.25); background: var(--paper); }
+    .mobile-switch__button { min-height: 45px; border: 0; background: transparent; color: var(--quiet); font: 700 9px/1 var(--pc-font-mono, monospace); letter-spacing: .1em; }
+    .mobile-switch__button.active { background: var(--blue); color: white; }
+    .studio-grid { display: block; height: auto; min-height: 0; padding: 0 18px 24px; }
+    .studio-panel, .game-panel { min-height: 680px; }
+    .buildcast[data-mobile-view="studio"] .game-panel { display: none; }
+    .buildcast[data-mobile-view="game"] .studio-panel { display: none; }
+    .game-panel { grid-template-rows: auto minmax(570px, 1fr) auto; }
+    .frame-wrap { min-height: 570px; }
+  }
+  @media (max-width: 560px) {
+    .mast { padding: 0 14px; min-height: 48px; }
+    .identity .edition, .identity .slash, .signal__time { display: none; }
+    .intro { padding: 24px 18px 22px; }
+    h1 { font-size: 42px; }
+    .intro__note { font-size: 14px; }
+    .studio-panel, .game-panel { min-height: calc(100vh - 170px); }
+    .event__meta time { width: 100%; margin-left: 0; }
+    .page-foot { padding: 18px; display: block; }
+    .page-foot nav { margin-top: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    .signal__dot { box-shadow: none; }
+  }
+</style>
