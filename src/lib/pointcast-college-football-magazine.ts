@@ -613,6 +613,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A season-long table that keeps football results separate from a five-dimension host invitation score, plus a browser-local fan card for picks and field-note priorities.',
       href: '/25/magazine/california-cup',
     },
+    {
+      number: '18',
+      name: 'Georgia, Ground Zero',
+      kicker: 'Machine / students / Athens / state / the Hedges Test',
+      description: 'A reported field essay on college football’s most complete operating system—and seven questions for keeping the Saturday human.',
+      href: '/25/magazine/georgia-ground-zero',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
