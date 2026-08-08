@@ -35,6 +35,12 @@ import {
   CALIFORNIA_CUP_INVITATION_DIMENSIONS,
   CALIFORNIA_CUP_PROGRAMS,
 } from '../../lib/pointcast-california-cup';
+import {
+  GEORGIA_GROUND_ZERO_FEATURE,
+  GEORGIA_GROUND_ZERO_SOURCES,
+  GEORGIA_HEDGES_TEST,
+  GEORGIA_MACHINE_INPUTS,
+} from '../../lib/pointcast-georgia-ground-zero';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -62,6 +68,17 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: GEORGIA_GROUND_ZERO_FEATURE.title,
+      subtitle: GEORGIA_GROUND_ZERO_FEATURE.subtitle,
+      human: GEORGIA_GROUND_ZERO_FEATURE.canonical,
+      machine: GEORGIA_GROUND_ZERO_FEATURE.machineEdition,
+      block: `https://pointcast.xyz/b/${GEORGIA_GROUND_ZERO_FEATURE.block}`,
+      machineInputs: GEORGIA_MACHINE_INPUTS.length,
+      hedgesTestQuestions: GEORGIA_HEDGES_TEST.length,
+      sources: GEORGIA_GROUND_ZERO_SOURCES.length,
+      currentAsOf: GEORGIA_GROUND_ZERO_FEATURE.asOf,
+    },
     {
       title: CALIFORNIA_CUP_FEATURE.title,
       subtitle: CALIFORNIA_CUP_FEATURE.subtitle,
@@ -191,6 +208,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     fanClique: FAN_CLIQUE_FEATURE.canonical,
     fanCliqueJson: FAN_CLIQUE_FEATURE.machineEdition,
     fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
+    georgiaGroundZero: GEORGIA_GROUND_ZERO_FEATURE.canonical,
+    georgiaGroundZeroJson: GEORGIA_GROUND_ZERO_FEATURE.machineEdition,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {
