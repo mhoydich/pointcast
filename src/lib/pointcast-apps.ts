@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'haptic-dreams-saturday-kingdom',
+    name: 'Haptic Dreams: Saturday Kingdom',
+    kicker: '18 REAL PLAYS · 11 HAPTIC PHRASES · ONE LIVING WORLD',
+    description: 'A sourced football replay translated through one shared event grammar into an eight-zone haptic sleeve, a cumulative illustrated kingdom, quiet generated sound, and a visible text record.',
+    url: 'https://pointcast.xyz/haptic-dreams',
+    path: '/haptic-dreams',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'pointcast-tonight',
     name: 'PointCast Tonight',
     kicker: 'GO OUT · STAY IN · OFFICIAL SOURCES · PUBLIC ACCESS TV',

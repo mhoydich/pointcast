@@ -41,6 +41,11 @@ import {
   GEORGIA_HEDGES_TEST,
   GEORGIA_MACHINE_INPUTS,
 } from '../../lib/pointcast-georgia-ground-zero';
+import {
+  HAPTIC_DREAMS,
+  HAPTIC_DREAMS_PLAYS,
+  HAPTIC_PATTERNS,
+} from '../../lib/pointcast-haptic-dreams';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -68,6 +73,16 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: HAPTIC_DREAMS.title,
+      subtitle: HAPTIC_DREAMS.subtitle,
+      human: HAPTIC_DREAMS.canonical,
+      machine: HAPTIC_DREAMS.machine,
+      block: 'https://pointcast.xyz/b/0567',
+      selectedPlays: HAPTIC_DREAMS_PLAYS.length,
+      hapticPatterns: HAPTIC_PATTERNS.length,
+      liveFeed: false,
+    },
     {
       title: GEORGIA_GROUND_ZERO_FEATURE.title,
       subtitle: GEORGIA_GROUND_ZERO_FEATURE.subtitle,
@@ -210,6 +225,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     fanCliqueLive: FAN_CLIQUE_FEATURE.liveEndpoint,
     georgiaGroundZero: GEORGIA_GROUND_ZERO_FEATURE.canonical,
     georgiaGroundZeroJson: GEORGIA_GROUND_ZERO_FEATURE.machineEdition,
+    hapticDreams: HAPTIC_DREAMS.canonical,
+    hapticDreamsJson: HAPTIC_DREAMS.machine,
     block: 'https://pointcast.xyz/b/0530',
   },
 }, null, 2), {
