@@ -23,6 +23,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'haptic-dreams-open-studio',
+    name: 'Haptic Dreams: Open Studio',
+    kicker: 'PUBLIC BUILD LEDGER · PLAYABLE ARTIFACT',
+    description: 'A quiet, curated making-of stream shown beside the playable Saturday Kingdom artifact, with a public-safe contract for future authenticated milestones.',
+    url: 'https://pointcast.xyz/haptic-dreams/build',
+    path: '/haptic-dreams/build',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'pointcast-tonight',
     name: 'PointCast Tonight',
     kicker: 'GO OUT · STAY IN · OFFICIAL SOURCES · PUBLIC ACCESS TV',
