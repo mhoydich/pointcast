@@ -144,7 +144,7 @@ export const CATEGORIES: Category[] = [
     key: 'apps',
     label: 'Apps & Connectors',
     blurb: 'Surfaces, apps, and outbound rails.',
-    match: (s) => s === 'apps' || s === 'connectors' || s === 'collabs' || s === 'beacon' || s === 'booth',
+    match: (s) => s === 'apps' || s === 'connectors' || s === 'collabs' || s === 'federation' || s === 'beacon' || s === 'booth',
   },
   {
     key: 'collect',

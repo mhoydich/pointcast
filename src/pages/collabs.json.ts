@@ -3,12 +3,13 @@
  */
 import type { APIRoute } from 'astro';
 import { COLLABORATORS, ROLE_LABEL } from '../lib/collaborators';
+import { FEDERATION_META, FEDERATION_RECEIPT_STATES, FEDERATION_STEPS } from '../lib/federation';
 
 export const GET: APIRoute = async () => {
   const payload = {
     $schema: 'https://pointcast.xyz/collabs.json',
     name: 'PointCast collaborators registry',
-    description: 'Humans, AI systems, and federated sites contributing to PointCast. Three-step federation spec to plug in a compatible site.',
+    description: 'Humans, AI systems, and federated sites contributing to PointCast. Joining rules live in the PointCast Federation guide.',
     generatedAt: new Date().toISOString(),
     homepage: 'https://pointcast.xyz',
     collaborators: COLLABORATORS.map((c) => ({
@@ -29,24 +30,14 @@ export const GET: APIRoute = async () => {
       anchor: `https://pointcast.xyz/collabs#${c.slug}`,
     })),
     federationSpec: {
-      steps: [
-        {
-          n: 1,
-          name: 'Expose a feed',
-          detail: 'RSS 2.0 at /feed.xml, JSON Feed at /feed.json, or both. Optionally mirror the Block primitive at /b/{id}.json. See pointcast.xyz/for-agents for the BLOCKS.md shape.',
-        },
-        {
-          n: 2,
-          name: 'Publish an agent manifest',
-          detail: 'A JSON file at /agents.json on your domain listing your feeds, contracts, citation format. Copy pointcast.xyz/agents.json as a template.',
-        },
-        {
-          n: 3,
-          name: 'PR the registry',
-          detail: 'Add an entry to src/lib/collaborators.ts in the github.com/mhoydich/pointcast repo. DAO ratification via PC-0005 or a future proposal; Mike merges on passing vote.',
-        },
-      ],
-      contact: 'hello@pointcast.xyz',
+      protocol: FEDERATION_META.protocol,
+      status: FEDERATION_META.status,
+      human: FEDERATION_META.canonical,
+      json: FEDERATION_META.json,
+      markdown: FEDERATION_META.markdown,
+      steps: FEDERATION_STEPS,
+      receiptStates: FEDERATION_RECEIPT_STATES,
+      contact: FEDERATION_META.contact,
       ping: 'https://pointcast.xyz/ping',
     },
     joinSystem: {
