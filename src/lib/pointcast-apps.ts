@@ -199,6 +199,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'western-heat-brains-2026',
+    name: 'Western Heat / Brains 25',
+    kicker: '3 FOOTBALL PROGRAMS · 25 RESEARCH MACHINES · 5 SYSTEMS-UNDER-PRESSURE RESULTS',
+    description: 'A PointCast Magazine double issue: Colorado, Arizona State, and Wyoming as three different football institutions, followed by a factual NSF research Power 25 and a recurring scoreboard for missions, prototypes, student teams, public value, and next proof.',
+    url: 'https://pointcast.xyz/25/magazine/western-heat-brains',
+    path: '/25/magazine/western-heat-brains',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'georgia-ground-zero-2026',
     name: 'Georgia, Ground Zero',
     kicker: '5 MACHINE INPUTS · 7 HEDGES TEST QUESTIONS · 17 OPEN SOURCES',

@@ -33,7 +33,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/for-agents"/);
 });
 
-test('the Monday field paper promotes SHRINE/25 and the complete newest release run without Qwen', async () => {
+test('the Saturday field paper promotes Western Heat / Brains 25 and the complete newest release run without Qwen', async () => {
   const [home, edition, middleware] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
@@ -41,11 +41,12 @@ test('the Monday field paper promotes SHRINE/25 and the complete newest release 
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
-  assert.match(home, /beach-commons\/v18\/shrines\/og\.png/);
-  assert.match(home, /PointCast Monday field paper — August 3, 2026/);
-  assert.match(edition, /Nothing left/);
-  assert.match(edition, /Attention stays/);
-  assert.match(edition, /Twelve portable public rituals/);
+  assert.match(home, /href="\/25\/magazine\/western-heat-brains"/);
+  assert.match(edition, /PointCast · Saturday field paper/);
+  assert.match(edition, /Western Heat/);
+  assert.match(edition, /Brains 25/);
+  assert.match(edition, /research desk separates billion-dollar scale/);
+  assert.match(edition, /id: '0568', noun: 'Proof', title: 'WESTERN HEAT \/ BRAINS 25'/);
   assert.match(edition, /id: '0562', noun: 'Shrine', title: 'SHRINE\/25'/);
   assert.match(edition, /id: '0561', noun: 'Drum', title: 'THE DRUM HOUSE'/);
   assert.match(edition, /id: '0560', noun: 'Tonight', title: 'GO OUT \/ STAY IN'/);
@@ -57,9 +58,9 @@ test('the Monday field paper promotes SHRINE/25 and the complete newest release 
   assert.match(edition, /id: '0551', noun: 'Engineering', title: 'ENG\/25'/);
   assert.match(edition, /The clothes have/);
   assert.match(edition, /California football/);
-  assert.match(edition, /<b>12<\/b> portable rituals/);
-  assert.match(edition, /<b>04<\/b> reality lanes/);
-  assert.match(edition, /<b>00<\/b> objects left/);
+  assert.match(edition, /<b>03<\/b> football programs/);
+  assert.match(edition, /<b>25<\/b> research machines/);
+  assert.match(edition, /<b>05<\/b> results under pressure/);
   assert.match(edition, /Wednesday Morning Uplift/);
   assert.match(edition, /THE GOOD WORK/);
   assert.match(edition, /Nothing wins/);

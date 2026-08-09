@@ -620,6 +620,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A reported field essay on college football’s most complete operating system—and seven questions for keeping the Saturday human.',
       href: '/25/magazine/georgia-ground-zero',
     },
+    {
+      number: '19',
+      name: 'Western Heat / Brains 25',
+      kicker: 'Football / research / place / public proof',
+      description: 'A double issue on what football does to Colorado, Arizona State, and Wyoming—followed by a research Power 25 that keeps resources, results, and student agency on separate boards.',
+      href: '/25/magazine/western-heat-brains',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
