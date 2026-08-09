@@ -46,6 +46,8 @@
  *   drum_top_drummers     (no input)   leaderboard from /api/drum/top
  *   drum_now_playing      (no input)   current Spotify track in v3
  *   drum_global_count     (no input)   global cumulative drum count
+ *   bloom_party_state     ({room})     live phase/round/standings for a
+ *                                      Bloom Party room (read-only)
  *   drum_tap              (no input)   tap a drum on /drum (v1 classic)
  *   drum_play_instrument  ({inst})     fire a v4/v7 orchestra instrument
  *   drum_sing_voice       ({voice})    fire a v6 choir voice
@@ -221,6 +223,22 @@ const TOOL_DEFINITIONS = [
     description:
       'Return the global cumulative drum count across every /drum* surface and every visitor since the room opened.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'bloom_party_state',
+    description:
+      'Read the live state of a Bloom Party room (/bloom-party) by its six-letter code: phase, round, connected players, and standings. Read-only by design — there is no tool to join, build, or vote, because Bloom Party is played by people who are in the same room as each other.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        room: {
+          type: 'string',
+          description: 'Six-character room code, e.g. "KTP4XR". Uppercase base32 with no O, I, L or U.',
+        },
+      },
+      required: ['room'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'drum_tap',
@@ -1239,6 +1257,27 @@ async function dispatchTool(
       return textContent(
         `global drum count: ${(data?.globalTotal ?? 0).toLocaleString()} taps across every /drum* surface, every visitor, since the room opened`,
       );
+    }
+    case 'bloom_party_state': {
+      const room = String(args.room ?? '').trim().toUpperCase();
+      if (!/^[A-HJKMNP-TV-Z2-9]{6}$/.test(room)) {
+        return textContent('that is not a Bloom Party room code — six uppercase base32 characters, no O, I, L or U');
+      }
+      const data = await callJson(`${base}/api/bloom/room?room=${room}&stats=1`);
+      if (!data?.ok) return textContent(`room ${room} is not open right now`);
+      const standings = Array.isArray(data.standings) ? data.standings : [];
+      const board = standings.length
+        ? standings.map((row: { name?: string; score?: number }, i: number) => `${i + 1}. ${row.name || 'someone'} — ${row.score ?? 0}`).join('\n')
+        : 'no scores yet';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `bloom party ${room}: phase ${data.phase}, round ${data.round}/${data.rounds}, ${data.connected} of ${data.players} players connected\n\n${board}`,
+          },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
     }
     case 'drum_tap': {
       const combo = Math.max(1, Math.min(5, Number(args.combo) || 1));
@@ -2393,6 +2432,7 @@ function discoveryHtml(request: Request) {
 <ul>
   <li><code>connector_links</code> — addable MCP URLs for AI clients</li>
   <li><code>apps_list</code> — PointCast app shelf for the client</li>
+  <li><code>bloom_party_state</code> — live phase, round and standings for a Bloom Party room (read-only)</li>
 </ul>
 
 <h2>Tools — Nouns Nation Battler</h2>
