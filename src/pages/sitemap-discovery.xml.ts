@@ -10,6 +10,8 @@ type SitemapEntry = [loc: string, changefreq: string, priority: string];
 
 const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
+  ['https://pointcast.xyz/second-shift', 'weekly', '1.0'],
+  ['https://pointcast.xyz/second-shift.json', 'weekly', '0.98'],
   ['https://pointcast.xyz/tonight', 'daily', '0.99'],
   ['https://pointcast.xyz/tonight.json', 'daily', '0.96'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],

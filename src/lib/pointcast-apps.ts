@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'second-shift',
+    name: 'Second Shift',
+    kicker: '6 LOCAL ORDERS · 5 CAPABILITIES · ONE FINITE NIGHT SHIFT',
+    description: 'A finite El Segundo manufacturing clicker: make six useful parts, share plans, teach the line, sort offcuts, and reach a simulated dawn receipt.',
+    url: 'https://el-segundo-2026-atlas.mhoydich.chatgpt.site/second-shift',
+    path: '/second-shift',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.ESC',
+    kind: 'satellite',
+  },
+  {
     slug: 'saturday-atlas-2026',
     name: 'The Saturday Atlas',
     kicker: '266 DIVISION I PROGRAMS · 138 FBS · 128 FCS · PRIVATE SHORTLIST',
