@@ -46,6 +46,10 @@ import {
   HAPTIC_DREAMS_PLAYS,
   HAPTIC_PATTERNS,
 } from '../../lib/pointcast-haptic-dreams';
+import {
+  DIVISION_ONE_DIRECTORY,
+  DIVISION_ONE_PROGRAMS,
+} from '../../lib/pointcast-division-one-directory';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   ...COLLEGE_FOOTBALL_MAGAZINE,
@@ -73,6 +77,19 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    {
+      title: DIVISION_ONE_DIRECTORY.title,
+      subtitle: DIVISION_ONE_DIRECTORY.subtitle,
+      human: DIVISION_ONE_DIRECTORY.canonical,
+      machine: DIVISION_ONE_DIRECTORY.machineEdition,
+      block: `https://pointcast.xyz/b/${DIVISION_ONE_DIRECTORY.block}`,
+      programs: DIVISION_ONE_PROGRAMS.length,
+      fbs: DIVISION_ONE_DIRECTORY.counts.fbs,
+      fcs: DIVISION_ONE_DIRECTORY.counts.fcs,
+      pointcastRanked: 25,
+      remainingOrderIsRanking: false,
+      serverWrites: false,
+    },
     {
       title: HAPTIC_DREAMS.title,
       subtitle: HAPTIC_DREAMS.subtitle,

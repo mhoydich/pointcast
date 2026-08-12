@@ -634,6 +634,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'Texas football as a public institution repeatedly invented: student club, color vote, steer, memorial, oil horizon, wishbone, integration, No. 34, the song archive, fourth-and-five, and one unfinished SEC season.',
       href: '/25/magazine/texas-football-history',
     },
+    {
+      number: '21',
+      name: 'The Saturday Atlas',
+      kicker: '266 programs / FBS + FCS / one student lens',
+      description: 'A complete NCAA Division I football directory with the PointCast 25 on top, honest browse order everywhere else, official campus and athletics links, filters, and a private device-local shortlist.',
+      href: '/25/directory',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',

@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'saturday-atlas-2026',
+    name: 'The Saturday Atlas',
+    kicker: '266 DIVISION I PROGRAMS · 138 FBS · 128 FCS · PRIVATE SHORTLIST',
+    description: 'A complete student-facing NCAA Division I football directory with the current PointCast 25 on top, browse order everywhere else, official campus and athletics links, live filters, and a browser-local shortlist.',
+    url: 'https://pointcast.xyz/25/directory',
+    path: '/25/directory',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'haptic-dreams-saturday-kingdom',
     name: 'Haptic Dreams: Saturday Kingdom',
     kicker: '18 REAL PLAYS · 11 HAPTIC PHRASES · ONE LIVING WORLD',

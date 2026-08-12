@@ -33,7 +33,7 @@ test('the PointCast front door is a focused live edition with stable discovery e
   assert.match(home, /href="\/for-agents"/);
 });
 
-test('the Saturday field paper promotes the Texas archive issue and keeps the complete release run without Qwen', async () => {
+test('the Saturday field paper leads with the complete Division I atlas and keeps Texas in the release run', async () => {
   const [home, edition, middleware] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
@@ -41,12 +41,13 @@ test('the Saturday field paper promotes the Texas archive issue and keeps the co
   ]);
 
   assert.match(home, /<HomeNewEdition \/>/);
+  assert.match(home, /href="\/25\/directory"/);
   assert.match(home, /href="\/25\/magazine\/texas-football-history"/);
   assert.match(home, /href="\/25\/magazine\/western-heat-brains"/);
   assert.match(edition, /PointCast · Saturday field paper/);
-  assert.match(edition, /Texas was never/);
-  assert.match(edition, /inevitable/);
-  assert.match(edition, /generations of players kept remaking Texas/);
+  assert.match(edition, /Every program/);
+  assert.match(edition, /One honest map/);
+  assert.match(edition, /id: '0570', noun: 'Atlas', title: 'THE SATURDAY ATLAS'/);
   assert.match(edition, /id: '0569', noun: 'Archive', title: 'THE HISTORY OF TEXAS FOOTBALL'/);
   assert.match(edition, /id: '0568', noun: 'Proof', title: 'WESTERN HEAT \/ BRAINS 25'/);
   assert.match(edition, /id: '0562', noun: 'Shrine', title: 'SHRINE\/25'/);
@@ -58,11 +59,11 @@ test('the Saturday field paper promotes the Texas archive issue and keeps the co
   assert.match(edition, /id: '0555', noun: 'Shift', title: 'Another Manic Monday'/);
   assert.match(edition, /id: '0554', noun: 'Outside', title: 'OPEN\/25'/);
   assert.match(edition, /id: '0551', noun: 'Engineering', title: 'ENG\/25'/);
-  assert.match(edition, /The clothes have/);
+  assert.match(edition, /Texas was never/);
   assert.match(edition, /California football/);
-  assert.match(edition, /<b>10<\/b> objects/);
-  assert.match(edition, /<b>134<\/b> seasons/);
-  assert.match(edition, /<b>18<\/b> public receipts/);
+  assert.match(edition, /<b>138<\/b> FBS/);
+  assert.match(edition, /<b>128<\/b> FCS/);
+  assert.match(edition, /<b>21<\/b> HBCUs/);
   assert.match(edition, /Wednesday Morning Uplift/);
   assert.match(edition, /THE GOOD WORK/);
   assert.match(edition, /Nothing wins/);
