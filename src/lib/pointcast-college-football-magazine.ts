@@ -627,6 +627,13 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A double issue on what football does to Colorado, Arizona State, and Wyoming—followed by a research Power 25 that keeps resources, results, and student agency on separate boards.',
       href: '/25/magazine/western-heat-brains',
     },
+    {
+      number: '20',
+      name: 'The History of Texas Football',
+      kicker: 'Archive / ten objects / 1893 to 2026',
+      description: 'Texas football as a public institution repeatedly invented: student club, color vote, steer, memorial, oil horizon, wishbone, integration, No. 34, the song archive, fourth-and-five, and one unfinished SEC season.',
+      href: '/25/magazine/texas-football-history',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
