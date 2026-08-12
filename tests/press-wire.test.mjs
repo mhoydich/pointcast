@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds eighteen product filings across every public kind', () => {
-  assert.equal(releases.length, 18);
+test('press wire seeds nineteen product filings across every public kind', () => {
+  assert.equal(releases.length, 19);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -20,6 +20,18 @@ test('press wire seeds eighteen product filings across every public kind', () =>
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('Texas football archive filing publishes ten sourced objects without claiming official status', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0019');
+  assert.ok(release);
+  assert.equal(release.slug, 'history-of-texas-football-opens-archive-desk');
+  assert.match(release.body.join(' '), /ten material objects/i);
+  assert.match(release.body.join(' '), /first Black football letterman/i);
+  assert.match(release.body.join(' '), /three consecutive 10-win years/i);
+  assert.match(release.body.join(' '), /rather than an official mark/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/25/magazine/texas-football-history');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/b/0569'));
 });
 
 test('Western Heat / Brains 25 filing keeps football judgment and research evidence separate', () => {
