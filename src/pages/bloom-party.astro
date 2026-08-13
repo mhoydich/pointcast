@@ -70,6 +70,18 @@ const jsonLd = {
       <p class="bp-lede">{BLOOM_PARTY.tagline}</p>
 
       <div class="bp-door-actions">
+        <div class="bp-field">
+          <label for="player-name">What should we call you?</label>
+          <input
+            id="player-name"
+            name="playerName"
+            autocomplete="nickname"
+            spellcheck="false"
+            maxlength="16"
+            placeholder="Mike"
+          />
+        </div>
+        <button type="button" class="bp-btn bp-btn--big" id="open-stage" hidden>Open the stage</button>
         <button type="button" class="bp-btn bp-btn--big" id="make-room">Start a room</button>
         <form class="bp-join" id="join-form">
           <label for="join-code">or type a code</label>
@@ -373,11 +385,15 @@ const jsonLd = {
     width: 100%;
     font: inherit;
   }
-  .bp-field select {
+  .bp-field select,
+  .bp-field input[type='text'],
+  .bp-field input:not([type]) {
     padding: 0.6rem;
     border: 2px solid var(--ink);
     border-radius: 0.5rem;
     background: var(--paper);
+    width: 100%;
+    font-size: 1rem; /* 16px — anything smaller makes iOS zoom on focus */
   }
   .bp-field input[type='range'] { height: 2.5rem; accent-color: var(--teal); }
 
@@ -463,7 +479,10 @@ const jsonLd = {
     ROUNDS_PER_GAME,
     VOICES,
     cutoffHz,
+    mulberry32,
     normalizeRoomCode,
+    orderBallot,
+    playableItems,
     normalizeSpec,
     paceFor,
     scheduleBloom,
@@ -527,25 +546,47 @@ const jsonLd = {
   }
 
   let noiseBuffer: AudioBuffer | null = null;
+  /**
+   * Shaped noise for the breathy voices. Seeded, not Math.random() — the
+   * whole design rests on every phone rendering the identical bloom, and an
+   * unseeded buffer gave Water Drop and Glass Rain a different transient
+   * texture on each device.
+   */
   function noise(audio: AudioContext): AudioBuffer {
     if (noiseBuffer) return noiseBuffer;
     const length = Math.floor(audio.sampleRate * 0.6);
     const buffer = audio.createBuffer(1, length, audio.sampleRate);
     const data = buffer.getChannelData(0);
+    const rand = mulberry32(0xb1008);
     for (let i = 0; i < length; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+      data[i] = (rand() * 2 - 1) * (1 - i / length);
     }
     noiseBuffer = buffer;
     return buffer;
   }
 
   let liveNodes: AudioScheduledSourceNode[] = [];
+  let liveEffects: AudioNode[] = [];
 
+  /**
+   * Silence everything currently scheduled. Every source node stays tracked
+   * until it is stopped — an earlier version capped the list at 400 to bound
+   * memory, which meant a single dense Spark bloom overflowed it and left the
+   * dropped nodes playing through the next phase with no handle to stop them.
+   *
+   * The per-bloom reverb pair is torn down here too; it is a feedback loop
+   * connected to master, so leaving it attached kept a tail ringing after the
+   * sources went quiet and stacked up one live delay line per bloom.
+   */
   function stopAudio(): void {
     for (const node of liveNodes) {
-      try { node.stop(); } catch { /* already stopped */ }
+      try { node.stop(); } catch { /* already stopped or never started */ }
     }
     liveNodes = [];
+    for (const node of liveEffects) {
+      try { node.disconnect(); } catch { /* already detached */ }
+    }
+    liveEffects = [];
   }
 
   /**
@@ -568,6 +609,7 @@ const jsonLd = {
     spaceGain.gain.value = 0.22 + spec.drift * 0.18;
     space.connect(spaceGain).connect(space);
     spaceGain.connect(master);
+    liveEffects.push(space, spaceGain);
 
     const cutoff = cutoffHz(spec.brightness);
 
@@ -628,7 +670,6 @@ const jsonLd = {
       }
     }
 
-    if (liveNodes.length > 400) liveNodes = liveNodes.slice(-400);
     paint(spec, notes, performance.now() + startDelaySec * 1000, durationMs);
   }
 
@@ -729,14 +770,19 @@ const jsonLd = {
       spec = normalizeSpec({ ...spec, voice: (event.target as HTMLSelectElement).value });
       previewSoon();
     });
+    // The sliders preview like the chips do — silent knobs made it impossible
+    // to tell whether dragging brightness had done anything.
     ($('pick-brightness') as HTMLInputElement).addEventListener('input', (event) => {
       spec = normalizeSpec({ ...spec, brightness: Number((event.target as HTMLInputElement).value) / 100 });
+      previewSoon();
     });
     ($('pick-drift') as HTMLInputElement).addEventListener('input', (event) => {
       spec = normalizeSpec({ ...spec, drift: Number((event.target as HTMLInputElement).value) / 100 });
+      previewSoon();
     });
     ($('pick-density') as HTMLInputElement).addEventListener('input', (event) => {
       spec = normalizeSpec({ ...spec, density: Number((event.target as HTMLInputElement).value) });
+      previewSoon();
     });
     for (const chip of document.querySelectorAll<HTMLButtonElement>('#pick-pace .bp-chip')) {
       chip.addEventListener('click', () => {
@@ -807,6 +853,12 @@ const jsonLd = {
   let heatsLeft = 0;
   let currentBallot: number[] = [];
   let playbackTimers: number[] = [];
+  /** Slots in the order the room heard them, used to label the ballot. */
+  let playbackOrder: number[] = [];
+  let voteAccepted = false;
+  let wantConnection = false;
+  let reconnectTimer = 0;
+  let reconnectAttempts = 0;
 
   function serverNow(): number {
     return Date.now() + clockOffset;
@@ -819,6 +871,7 @@ const jsonLd = {
     const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     const url = `${proto}${location.host}/api/bloom/room?room=${code}&sid=${encodeURIComponent(sessionId())}&role=${stage ? 'stage' : 'player'}`;
 
+    wantConnection = true;
     say('Connecting…');
     try {
       socket = new WebSocket(url);
@@ -829,8 +882,12 @@ const jsonLd = {
     }
 
     socket.addEventListener('open', () => {
+      reconnectAttempts = 0;
       say('');
-      send({ type: 'hello', role: stage ? 'stage' : 'player', name: savedName() });
+      send({ type: 'hello', role: stage ? 'stage' : 'player', name: stage ? '' : claimName() });
+      // Ask for a full snapshot so a reconnecting phone lands on the room's
+      // current phase rather than whatever it was showing when it dropped.
+      send({ type: 'sync' });
     });
     socket.addEventListener('message', (event) => {
       try {
@@ -838,11 +895,28 @@ const jsonLd = {
       } catch { /* a malformed frame is not worth killing the party over */ }
     });
     socket.addEventListener('close', () => {
-      say('Disconnected. Reload to rejoin — your score is kept.');
+      // iOS drops the socket every time the phone locks, which at a party is
+      // constantly. Reconnect on our own rather than telling fifteen people to
+      // reload; the server keys identity off a stored sid, so the seat and the
+      // score come back with us.
+      if (!wantConnection) return;
+      say('Reconnecting…');
+      scheduleReconnect();
     });
     socket.addEventListener('error', () => {
-      say('The room is not reachable. Try /bloom-party?solo=1 to hear the synth.');
+      say('The room is not reachable — retrying. Try /bloom-party?solo=1 to hear the synth on your own.');
     });
+  }
+
+  function scheduleReconnect(): void {
+    if (reconnectTimer) return;
+    reconnectAttempts += 1;
+    const waitMs = Math.min(8000, 500 * 2 ** Math.min(4, reconnectAttempts - 1));
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = 0;
+      if (!wantConnection || !roomCode) return;
+      connect(roomCode, isStage);
+    }, waitMs);
   }
 
   function send(payload: Record<string, unknown>): void {
@@ -852,6 +926,16 @@ const jsonLd = {
 
   function savedName(): string {
     return localStorage.getItem('bloom-party:name') || '';
+  }
+
+  /** Read the name field, remember it for next time, and fall back to
+   *  something friendlier than a blank chip on the roster. */
+  function claimName(): string {
+    const field = document.getElementById('player-name') as HTMLInputElement | null;
+    const typed = (field?.value ?? '').trim().slice(0, 16);
+    const name = typed || savedName() || `Guest ${Math.floor(Math.random() * 90 + 10)}`;
+    localStorage.setItem('bloom-party:name', name);
+    return name;
   }
 
   function onMessage(msg: Record<string, any>): void {
@@ -883,6 +967,7 @@ const jsonLd = {
         say('Locked in. Waiting for everyone else.');
         break;
       case 'voted':
+        voteAccepted = true;
         say('Vote counted.');
         break;
       case 'heat-ack':
@@ -891,9 +976,11 @@ const jsonLd = {
         break;
       case 'error':
         say(errorText(String(msg.code ?? '')));
+        reopenBallot();
         break;
       case 'rate-limit':
         say('Easy — slow down a moment.');
+        reopenBallot();
         break;
       case 'room-closed':
         say('The room closed.');
@@ -905,8 +992,9 @@ const jsonLd = {
     switch (code) {
       case 'host-only': return 'Only the host can do that.';
       case 'need-more-players': return 'Wait for at least one more phone.';
-      case 'no-self-vote': return 'You cannot vote for your own bloom.';
+      case 'no-self-vote': return 'That one is yours — pick another.';
       case 'no-self-heat': return 'That one is yours.';
+      case 'no-such-bloom': return 'That bloom is no longer in the round.';
       case 'already-voted': return 'You already voted this round.';
       case 'no-heats-left': return 'Out of picks for this round.';
       case 'not-on-ballot': return 'That one did not make the shortlist.';
@@ -956,14 +1044,21 @@ const jsonLd = {
     $('next-round').hidden = !(isHost && phase === 'scoreboard');
     $('play-again').hidden = !(isHost && phase === 'final');
 
+    // Anything still queued from playback belongs to a phase that is over.
+    if (phase !== 'playback') clearPlayback();
+
     if (phase === 'build') {
       stopAudio();
       syncBuildUI();
+      // A new round means nothing is locked yet, whatever last round's button
+      // said.
+      ($('lock-bloom') as HTMLButtonElement).textContent = 'Lock it in';
       say('Build a bloom that matches the prompt, then lock it in.');
     }
     if (phase === 'vote') renderBallot();
     if (phase === 'prompt') {
       stopAudio();
+      playbackOrder = [];
       say('');
     }
   }
@@ -978,7 +1073,7 @@ const jsonLd = {
     livePlayers = players.filter((player) => player.connected).length;
     const markup = players.map((player) => {
       const ready = player.submitted || player.voted ? '1' : '0';
-      const emoji = EMOJI[player.emoji % EMOJI.length];
+      const emoji = EMOJI[Math.abs(Number(player.emoji) || 0) % EMOJI.length];
       const name = player.name || 'someone';
       const crown = player.isHost ? ' ♦' : '';
       return `<li data-ready="${ready}" data-connected="${player.connected ? '1' : '0'}">${emoji} ${escapeHtml(name)}${crown} <b>${player.score}</b></li>`;
@@ -1001,10 +1096,17 @@ const jsonLd = {
     ));
   }
 
-  function runPlayback(msg: Record<string, any>): void {
-    stopAudio();
+  /** Drop every bloom still waiting to play. Called whenever the room leaves
+   *  playback — including an early advance, which used to leave the remaining
+   *  timers to fire over the top of the voting screen. */
+  function clearPlayback(): void {
     for (const timer of playbackTimers) window.clearTimeout(timer);
     playbackTimers = [];
+  }
+
+  function runPlayback(msg: Record<string, any>): void {
+    stopAudio();
+    clearPlayback();
 
     heatsLeft = Number(msg.heats ?? 0);
     const heatBtn = $('heat-btn') as HTMLButtonElement;
@@ -1014,28 +1116,50 @@ const jsonLd = {
     const items: Array<{ slot: number; spec: BloomSpec; startAt: number }> = msg.items ?? [];
     const durationMs = Number(msg.durationMs ?? 4000);
 
-    for (const [index, item] of items.entries()) {
+    // Remember the order the room hears these in. The ballot is labelled from
+    // this, not from its own array order — with a heat shortlist the two
+    // differ, and "Bloom #2" has to mean the second thing people heard or the
+    // vote is meaningless.
+    playbackOrder = items.map((item) => item.slot);
+
+    for (const item of playableItems(items, serverNow())) {
       const delayMs = item.startAt - serverNow();
-      // A phone that joins mid-phase skips whatever already played rather
-      // than restarting the timeline out of step with the room.
-      if (delayMs + durationMs < 0) continue;
+      const position = playbackOrder.indexOf(item.slot) + 1;
       const timer = window.setTimeout(() => {
         heatBtn.dataset.slot = String(item.slot);
-        $('slot-line').textContent = `#${index + 1} of ${items.length}`;
+        $('slot-line').textContent = `#${position} of ${items.length}`;
         renderBloom(normalizeSpec(item.spec), durationMs);
-      }, Math.max(0, delayMs));
+      }, delayMs);
       playbackTimers.push(timer);
     }
     say(heatsLeft > 0 ? 'Tap “That one” for the ones worth a second listen.' : 'Listen. Voting is next.');
   }
 
+  /** Re-open the ballot after a rejected vote. Without this, tapping your own
+   *  bloom — which you cannot identify, since playback is anonymous — burned
+   *  your whole vote for the round. */
+  function reopenBallot(): void {
+    if (voteAccepted) return;
+    for (const button of $('ballot').querySelectorAll('button')) {
+      button.removeAttribute('aria-pressed');
+      button.setAttribute('aria-pressed', 'false');
+      (button as HTMLButtonElement).disabled = false;
+    }
+  }
+
   function renderBallot(): void {
     const container = $('ballot');
     container.innerHTML = '';
-    for (const slot of currentBallot) {
+    voteAccepted = false;
+    // Show the ballot in the order the room heard the blooms, so the numbers
+    // on the buttons match the numbers announced during playback.
+    const ordered = orderBallot(playbackOrder, currentBallot);
+
+    for (const slot of ordered) {
+      const position = playbackOrder.indexOf(slot);
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = `Bloom #${currentBallot.indexOf(slot) + 1}`;
+      button.textContent = position >= 0 ? `Bloom #${position + 1}` : `Bloom ${slot + 1}`;
       button.dataset.slot = String(slot);
       button.setAttribute('aria-pressed', 'false');
       button.addEventListener('click', () => {
@@ -1048,7 +1172,7 @@ const jsonLd = {
       });
       container.append(button);
     }
-    if (currentBallot.length === 0) say('Nothing to vote on this round.');
+    if (ordered.length === 0) say('Nothing to vote on this round.');
   }
 
   function showResults(msg: Record<string, any>): void {
@@ -1145,23 +1269,55 @@ const jsonLd = {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
       unlock();
+      if (wantConnection && (!socket || socket.readyState > WebSocket.OPEN)) {
+        // The socket died while the screen was off; `send` would no-op here.
+        scheduleReconnect();
+        return;
+      }
       send({ type: 'sync' });
     });
 
-    const params = new URLSearchParams(location.search);
-    if (params.get('solo') === '1') {
-      startSolo();
-      return;
-    }
-    const code = normalizeRoomCode(params.get('room'));
-    if (code) {
+    $('open-stage').addEventListener('click', () => {
+      unlock();
+      const code = normalizeRoomCode(new URLSearchParams(location.search).get('room'));
+      if (!code) return;
       showScreen('lobby');
       $('room-code').textContent = code;
-      updateShareLinks();
-      connect(code, params.get('view') === 'stage');
+      connect(code, true);
+    });
+
+    // Every path into the game ends on the door, and the door always costs one
+    // tap. That tap is the only thing iOS accepts as permission to start an
+    // AudioContext — a phone that connected straight from a shared link, or a
+    // stage phone propped up and never touched, stayed silent for the whole
+    // game.
+    const params = new URLSearchParams(location.search);
+    const code = normalizeRoomCode(params.get('room'));
+    const nameField = $('player-name') as HTMLInputElement;
+    nameField.value = savedName();
+
+    showScreen('door');
+
+    if (params.get('solo') === '1') {
+      say('Tap “Just let me hear it” to start the synth.');
       return;
     }
-    showScreen('door');
+    if (code && params.get('view') === 'stage') {
+      // A stage phone has no player and needs no name.
+      $('open-stage').hidden = false;
+      $('make-room').hidden = true;
+      $('join-form').hidden = true;
+      $('try-solo').hidden = true;
+      nameField.closest('.bp-field')!.setAttribute('hidden', '');
+      say(`Stage view for room ${code}. Tap to open it, then prop the phone up.`);
+      return;
+    }
+    if (code) {
+      ($('join-code') as HTMLInputElement).value = code;
+      $('make-room').hidden = true;
+      say(`Room ${code}. Add your name and tap Join.`);
+      nameField.focus();
+    }
   }
 
   boot();

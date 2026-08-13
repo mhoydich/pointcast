@@ -553,6 +553,45 @@ export function tallyRound(
   return { tallies, points, winningSlots, unanimous };
 }
 
+/**
+ * Put the ballot in the order the room actually heard the blooms.
+ *
+ * With a heat shortlist the ballot arrives sorted by heat, so labelling
+ * buttons by their position in that array told people to vote for "Bloom #2"
+ * when the thing they heard second wasn't on the ballot at all. Voting is only
+ * meaningful if the numbers match what came out of the speaker.
+ *
+ * A client that joined after playback has no order to work from; it gets the
+ * ballot unchanged.
+ */
+export function orderBallot(playbackOrder: number[], ballot: number[]): number[] {
+  if (playbackOrder.length === 0) return ballot.slice();
+  const ordered = playbackOrder.filter((slot) => ballot.includes(slot));
+  // Anything on the ballot we never saw play still belongs on it.
+  for (const slot of ballot) {
+    if (!ordered.includes(slot)) ordered.push(slot);
+  }
+  return ordered;
+}
+
+export interface PlaybackItem {
+  slot: number;
+  startAt: number;
+}
+
+/**
+ * Which blooms a client should still schedule, given where the room is in the
+ * playback timeline.
+ *
+ * Anything already started is dropped, not restarted. The scheduler cannot
+ * seek into the middle of a bloom, so a phone rejoining three seconds into a
+ * four-second bloom would otherwise play it from the top — a beat behind
+ * everyone else and overlapping whatever comes next.
+ */
+export function playableItems<T extends PlaybackItem>(items: T[], nowMs: number): T[] {
+  return items.filter((item) => item.startAt - nowMs >= 0);
+}
+
 /** Slots that advance to the shortlist ballot, highest heat first. */
 export function shortlistSlots(tallies: RoundTally[], players: number): number[] {
   if (!usesHeat(players)) return tallies.map((tally) => tally.slot);

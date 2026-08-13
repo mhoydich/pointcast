@@ -24,6 +24,8 @@ import {
   heatAllowance,
   normalizeRoomCode,
   normalizeSpec,
+  orderBallot,
+  playableItems,
   playbackMs,
   scheduleBloom,
   shortlistSlots,
@@ -59,6 +61,16 @@ test('the page offers every voice and pace, driven from the shared module', asyn
   assert.match(page, /PACES\.map\(/);
   assert.match(page, /ROOTS\.map\(/);
   assert.match(page, /join-code/, 'the page needs a room-code input');
+  // Without this the whole scoreboard reads "someone — 6 votes".
+  assert.match(page, /id="player-name"/, 'players must be able to enter a name');
+  assert.match(page, /localStorage\.setItem\('bloom-party:name'/, 'the name must actually be saved');
+  // iOS only starts an AudioContext inside a user gesture, so every entry
+  // path — shared link, stage view, solo — has to land on a tap first.
+  assert.match(page, /id="open-stage"/, 'the stage view needs its own gesture');
+  assert.match(page, /function clearPlayback/, 'queued blooms must be cancellable');
+  assert.match(page, /function reopenBallot/, 'a rejected vote must be recastable');
+  assert.match(page, /mulberry32\(0xb1008\)/, 'the noise buffer must be seeded, not Math.random');
+  assert.ok(!/Math\.random\(\) \* 2 - 1/.test(page), 'unseeded noise breaks cross-device determinism');
   assert.match(page, /view=stage/, 'the page needs the shared stage view');
   assert.match(page, /solo/, 'the page needs solo mode for when the DO is unavailable');
 });
@@ -85,23 +97,94 @@ test('a spec from the wire is clamped, never crashed on', () => {
   assert.doesNotThrow(() => normalizeSpec('nope'));
 });
 
-test('the same spec renders the same bloom on every phone', () => {
-  const spec = normalizeSpec({ voice: 'bell', pace: 'quick', brightness: 0.42, drift: 0.6, density: 3, root: 'g', seed: 7 });
-  const a = scheduleBloom(spec, 4000);
-  const b = scheduleBloom(spec, 4000);
-  assert.deepEqual(a, b, 'playback is only anonymous if it is also identical everywhere');
-  assert.ok(a.length > 0);
-  assert.equal(specToSeed(spec), specToSeed({ ...spec }));
-  assert.notEqual(specToSeed(spec), specToSeed({ ...spec, seed: 8 }));
+/**
+ * A golden vector. Calling scheduleBloom twice in one process only proves the
+ * function is pure; it cannot catch the thing that actually matters, which is
+ * that a build shipped today renders the same audio as the build on someone
+ * else's phone. Pinning real numbers does.
+ *
+ * If this test fails, every phone in a room mid-game disagrees about what it
+ * is hearing. Do not update the expected values without bumping
+ * BLOOM_PARTY.protocolVersion.
+ */
+test('a known spec produces exactly these notes, on every build', () => {
+  const spec = normalizeSpec({ voice: 'bell', pace: 'quick', brightness: 0.42, drift: 0.6, density: 2, root: 'g', seed: 7 });
+  assert.equal(specToSeed(spec), 1821011309, 'the spec hash is the seed for everything downstream');
+
+  const notes = scheduleBloom(spec, 1500);
+  assert.equal(notes.length, 6);
+  const rounded = notes.map((note) => [
+    Number(note.at.toFixed(6)),
+    Number(note.hz.toFixed(4)),
+    Number(note.gain.toFixed(6)),
+    Number(note.pan.toFixed(6)),
+  ]);
+  assert.deepEqual(rounded, [
+    [0, 392, 0.849395, 0.243724],
+    [0.012, 980, 0.426031, 0.077867],
+    [0.5586, 784, 0.865683, 0.452843],
+    [0.5706, 1764, 0.486461, -0.054837],
+    [0.98, 653.3333, 0.745939, 0.121486],
+    [0.992, 588, 0.388187, 0.16453],
+  ]);
 });
 
-test('a bloom fills the time it is given without overrunning it', () => {
+test('the same spec renders the same bloom on every phone', () => {
+  const spec = normalizeSpec({ voice: 'bell', pace: 'quick', brightness: 0.42, drift: 0.6, density: 3, root: 'g', seed: 7 });
+  assert.deepEqual(scheduleBloom(spec, 4000), scheduleBloom(spec, 4000));
+  assert.equal(specToSeed(spec), specToSeed({ ...spec }));
+  assert.notEqual(specToSeed(spec), specToSeed({ ...spec, seed: 8 }));
+  // A float that survives a JSON round-trip must hash identically — this is
+  // the path a spec takes from the builder's phone to everyone else's.
+  const wired = normalizeSpec(JSON.parse(JSON.stringify(spec)));
+  assert.equal(specToSeed(wired), specToSeed(spec));
+  assert.deepEqual(scheduleBloom(wired, 4000), scheduleBloom(spec, 4000));
+});
+
+test('a bloom never schedules a note past the time it was given', () => {
   for (const pace of PACES) {
     const spec = normalizeSpec({ pace: pace.slug, density: 1 });
     const notes = scheduleBloom(spec, 3000);
     assert.ok(notes.length >= 1, `${pace.label} produced no notes`);
-    assert.ok(notes.every((note) => note.at * 1000 < 3000 + note.durationSec * 1000));
+    // The note must *start* inside the window. The earlier version of this
+    // assertion allowed `at` to run a full note-length past the end, which is
+    // exactly the overrun its name claimed to forbid.
+    assert.ok(
+      notes.every((note) => note.at * 1000 < 3000),
+      `${pace.label} scheduled a note starting after the bloom ended`,
+    );
   }
+});
+
+test('the ballot is labelled in the order the room heard the blooms', () => {
+  // 10 players, heat cut to 5. shortlistSlots returns them heat-sorted; the
+  // ballot must come back in playback order or "Bloom #2" means nothing.
+  const heard = [7, 2, 9, 0, 4, 1, 8, 3, 6, 5];
+  const shortlist = [8, 2, 5, 7, 0];
+  assert.deepEqual(orderBallot(heard, shortlist), [7, 2, 0, 8, 5]);
+
+  // A phone that joined after playback has no order and takes the ballot as-is.
+  assert.deepEqual(orderBallot([], shortlist), shortlist);
+  // A ballot entry never heard is kept, not dropped.
+  assert.deepEqual(orderBallot([3, 1], [1, 3, 9]), [3, 1, 9]);
+  assert.deepEqual(orderBallot(heard, []), []);
+});
+
+test('a phone rejoining mid-playback waits for the next bloom', () => {
+  const items = [
+    { slot: 4, startAt: 1000 },
+    { slot: 1, startAt: 5000 },
+    { slot: 7, startAt: 9000 },
+  ];
+  // Fresh arrival — everything still ahead.
+  assert.deepEqual(playableItems(items, 0).map((i) => i.slot), [4, 1, 7]);
+  // Mid-way through bloom #2: it is dropped rather than restarted from the
+  // top, which would put this phone a beat behind and overlap bloom #3.
+  assert.deepEqual(playableItems(items, 6000).map((i) => i.slot), [7]);
+  // Exactly on a boundary still plays.
+  assert.deepEqual(playableItems(items, 5000).map((i) => i.slot), [1, 7]);
+  // Arrived after the whole phase.
+  assert.deepEqual(playableItems(items, 99_000), []);
 });
 
 // ---------- room codes ------------------------------------------------------
@@ -280,6 +363,24 @@ test('the worker validates frames and refuses an unknown room code', async () =>
   assert.match(worker, /setAlarm/, 'phase timing must survive hibernation');
   assert.ok(!/\bsetInterval\s*\(/.test(worker), 'setInterval does not survive WebSocket hibernation');
   assert.match(worker, /no-self-vote/);
+
+  // A DO has one alarm slot, shared by the phase deadline and the idle sweep.
+  // Arming it anywhere but armAlarm() is how a reconnecting phone used to push
+  // the running phase 45 minutes out and freeze the room.
+  const alarmCalls = worker.match(/this\.ctx\.storage\.setAlarm\(/g) ?? [];
+  assert.equal(alarmCalls.length, 1, 'only armAlarm() may set the alarm');
+  assert.match(worker, /private armAlarm\(\): void \{[^}]*phase_ends_at/s);
+
+  // Playback order must not be submission order — the roster shows who has
+  // submitted, live, so sequential slots would name every bloom in advance.
+  assert.match(worker, /Math\.random\(\)[^\n]*\n?\s*\}?\s*$|free\[Math\.floor\(Math\.random\(\)/s);
+  assert.match(worker, /private nextSlot/);
+  assert.ok(!/for \(let slot = 0; slot < MAX_PLAYERS; slot\+\+\) \{\s*\n\s*if \(!used\.has\(slot\)\) return slot;/.test(worker),
+    'nextSlot must not hand out the lowest free slot');
+
+  // The rules that depend on room size are frozen when playback starts.
+  assert.match(worker, /round_players/);
+  assert.match(worker, /private roundPlayers\(\)/);
 
   const proxy = await read('functions/api/bloom/room.ts');
   assert.match(proxy, /bad-room-code/, 'an unknown code must not fall back to a shared room');

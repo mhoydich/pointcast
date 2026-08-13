@@ -327,7 +327,7 @@ export class BloomPartyRoom extends DurableObject<Env> {
 
     this.send(server, this.welcome(room, identity.playerId, requestedRole));
     this.broadcastRoster();
-    this.scheduleIdleSweep();
+    this.armAlarm();
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -387,6 +387,10 @@ export class BloomPartyRoom extends DurableObject<Env> {
     console.error(JSON.stringify({ message: "bloom-party-websocket-error", error: String(error) }));
     this.broadcastRoster(socket);
     this.ensureHost(socket);
+    // A socket that dies by error rather than close still removes an
+    // outstanding submitter or voter; without this the room waits out the
+    // full deadline for someone who is already gone.
+    this.maybeAdvanceEarly();
   }
 
   // ---------- the alarm is the clock -----------------------------------
@@ -408,8 +412,10 @@ export class BloomPartyRoom extends DurableObject<Env> {
       return;
     }
 
+    // Fired early. `phase_ends_at` is the authority, so re-arm rather than
+    // advancing a phase that has not actually run out.
     if (endsAt > now + 50) {
-      await this.ctx.storage.setAlarm(endsAt);
+      this.armAlarm();
       return;
     }
     this.advance(now);
@@ -494,14 +500,23 @@ export class BloomPartyRoom extends DurableObject<Env> {
 
       case "heat": {
         if (phase !== "playback" || attachment.role !== "player") return;
-        if (!usesHeat(this.livePlayerCount())) return;
+        const frozen = this.roundPlayers();
+        if (!usesHeat(frozen)) return;
         const round = this.round();
         if (this.ownsSlot(round, attachment.playerId, message.slot)) {
           this.send(socket, { v: 1, type: "error", code: "no-self-heat" });
           return;
         }
+        // A slot with no submission behind it is not heatable. Without this a
+        // heat aimed at a bloom whose author just unsubmitted is acked as a
+        // success while the tally throws it away — the player silently loses
+        // one of their picks.
+        if (!this.slotsForRound(round).includes(message.slot)) {
+          this.send(socket, { v: 1, type: "error", code: "no-such-bloom" });
+          return;
+        }
         const used = this.voteCount(round, attachment.playerId, "heat");
-        if (used >= heatAllowance(this.livePlayerCount())) {
+        if (used >= heatAllowance(frozen)) {
           this.send(socket, { v: 1, type: "error", code: "no-heats-left" });
           return;
         }
@@ -516,7 +531,7 @@ export class BloomPartyRoom extends DurableObject<Env> {
           v: 1,
           type: "heat-ack",
           slot: message.slot,
-          remaining: Math.max(0, heatAllowance(this.livePlayerCount()) - this.voteCount(round, attachment.playerId, "heat")),
+          remaining: Math.max(0, heatAllowance(frozen) - this.voteCount(round, attachment.playerId, "heat")),
         });
         return;
       }
@@ -586,6 +601,8 @@ export class BloomPartyRoom extends DurableObject<Env> {
     this.setMeta("prompt_text", card.text);
     this.setMeta("ballot", "[]");
     this.setMeta("playback_index", "0");
+    // Cleared here, re-frozen when this round reaches playback.
+    this.setMeta("round_players", "0");
     this.enter("prompt", PROMPT_MS, now);
   }
 
@@ -607,17 +624,29 @@ export class BloomPartyRoom extends DurableObject<Env> {
           this.finishRound(now, true);
           return;
         }
+        // Freeze the room size for the rest of the round. Every rule that
+        // depends on it — heat mode, heat allowance, how many blooms reach the
+        // ballot — must agree from playback through tally. Re-reading the live
+        // count at each step let a single reconnect flip a 6-player room into
+        // 7-player shortlist mode with zero heats cast, silently dropping two
+        // people's blooms off the ballot.
+        this.setMeta("round_players", String(players));
         this.enter("playback", slots.length * playbackMs(players), now);
         this.emitPlayback(now);
         return;
       }
 
       case "playback": {
+        const frozen = this.roundPlayers();
         const tallies = this.talliesForRound(this.round());
-        const ballot = shortlistSlots(tallies, players)
+        const ballot = shortlistSlots(tallies, frozen)
           .filter((slot) => tallies.some((tally) => tally.slot === slot));
         this.setMeta("ballot", JSON.stringify(ballot));
         this.enter("vote", voteMs(ballot.length), now);
+        // Everyone eligible may already have been eliminated from voting (a
+        // one-bloom ballot owned by the only live player), in which case no
+        // vote message will ever arrive to trigger the early advance.
+        this.maybeAdvanceEarly();
         return;
       }
 
@@ -688,11 +717,7 @@ export class BloomPartyRoom extends DurableObject<Env> {
     this.setMeta("phase", phase);
     this.setMeta("phase_ends_at", String(endsAt));
     this.broadcastPhase(now);
-    if (endsAt > 0) {
-      void this.ctx.storage.setAlarm(endsAt);
-    } else {
-      this.scheduleIdleSweep();
-    }
+    this.armAlarm();
   }
 
   /**
@@ -723,7 +748,7 @@ export class BloomPartyRoom extends DurableObject<Env> {
 
   private emitPlayback(now: number): void {
     const round = this.round();
-    const players = this.livePlayerCount();
+    const players = this.roundPlayers();
     const per = playbackMs(players);
     const rows = this.submissionsForRound(round).sort((a, b) => a.slot - b.slot);
 
@@ -917,12 +942,31 @@ export class BloomPartyRoom extends DurableObject<Env> {
     return this.submissionsForRound(round).map((row) => row.slot);
   }
 
+  /** The player count this round's rules were frozen at, set when playback
+   *  begins. Falls back to the live count before that point. */
+  private roundPlayers(): number {
+    const frozen = Number(this.meta("round_players") ?? "0");
+    return frozen > 0 ? frozen : this.livePlayerCount();
+  }
+
+  /**
+   * Pick a random free slot, not the lowest one.
+   *
+   * Slots are the anonymous handle a bloom is played and voted under, and
+   * playback runs in slot order. Handing them out sequentially made playback
+   * order identical to submission order — and the roster shows who has
+   * submitted, live, as they do it. Anyone watching the lobby fill in could
+   * name every bloom before it played, which defeats the entire point of an
+   * anonymous vote. Randomising here decouples the two.
+   */
   private nextSlot(round: number): number {
     const used = new Set(this.slotsForRound(round));
+    const free: number[] = [];
     for (let slot = 0; slot < MAX_PLAYERS; slot++) {
-      if (!used.has(slot)) return slot;
+      if (!used.has(slot)) free.push(slot);
     }
-    return used.size;
+    if (free.length === 0) return used.size;
+    return free[Math.floor(Math.random() * free.length)] ?? free[0]!;
   }
 
   private ownsSlot(round: number, playerId: string, slot: number): boolean {
@@ -1022,22 +1066,31 @@ export class BloomPartyRoom extends DurableObject<Env> {
     }
   }
 
-  /** In lobby and final there is no phase deadline, so park an alarm far out
-   *  to reap an abandoned room's storage. */
-  private scheduleIdleSweep(): void {
-    void this.ctx.storage.setAlarm(Date.now() + IDLE_SHUTDOWN_MS);
+  /**
+   * A Durable Object has exactly one alarm slot, and this room wants it for
+   * two different things: the current phase deadline, and a far-out sweep that
+   * reaps an abandoned room's storage. The phase deadline always wins.
+   *
+   * This is the only place that arms an alarm. Calling `setAlarm` directly
+   * from a join handler is how a reconnecting phone used to silently push the
+   * running phase's deadline 45 minutes into the future — which happened
+   * constantly, because phones lock.
+   */
+  private armAlarm(): void {
+    const endsAt = Number(this.meta("phase_ends_at") ?? "0");
+    void this.ctx.storage.setAlarm(endsAt > 0 ? endsAt : Date.now() + IDLE_SHUTDOWN_MS);
   }
 
   private sweepIdle(now: number): void {
     if (this.liveSockets().length > 0) {
-      this.scheduleIdleSweep();
+      this.armAlarm();
       return;
     }
     const lastSeen = this.ctx.storage.sql
       .exec<{ t: number }>("SELECT MAX(last_seen) AS t FROM players")
       .toArray()[0]?.t ?? 0;
     if (now - lastSeen < IDLE_SHUTDOWN_MS) {
-      this.scheduleIdleSweep();
+      this.armAlarm();
       return;
     }
     void this.ctx.storage.deleteAll();
