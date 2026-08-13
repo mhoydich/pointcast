@@ -286,9 +286,9 @@ test('the worker validates frames and refuses an unknown room code', async () =>
   assert.match(proxy, /BLOOM_ROOM/);
 });
 
-test('block 0568 is the permanent record', async () => {
-  const block = JSON.parse(await read('src/content/blocks/0568.json'));
-  assert.equal(block.id, '0568');
+test('block 0572 is the permanent record', async () => {
+  const block = JSON.parse(await read('src/content/blocks/0572.json'));
+  assert.equal(block.id, '0572');
   assert.equal(block.channel, 'GDN');
   assert.equal(block.external.url, 'https://pointcast.xyz/bloom-party');
   assert.equal(block.author, 'cc');

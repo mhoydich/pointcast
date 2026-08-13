@@ -1,9 +1,16 @@
 export const PLAY_LAYER_VERSION = '0.4.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
+  {
+    id: 'second-shift',
+    code: 'MAKE',
+    title: 'Second Shift',
+    route: '/second-shift',
+    summary: 'A finite local-manufacturing clicker: complete six ordinary night orders and leave the line more capable than you found it.',
+  },
   {
     id: 'crystal-ball-pass',
     code: 'PASS',

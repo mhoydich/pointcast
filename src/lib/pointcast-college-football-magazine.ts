@@ -620,6 +620,27 @@ export const COLLEGE_FOOTBALL_MAGAZINE = {
       description: 'A reported field essay on college football’s most complete operating system—and seven questions for keeping the Saturday human.',
       href: '/25/magazine/georgia-ground-zero',
     },
+    {
+      number: '19',
+      name: 'Western Heat / Brains 25',
+      kicker: 'Football / research / place / public proof',
+      description: 'A double issue on what football does to Colorado, Arizona State, and Wyoming—followed by a research Power 25 that keeps resources, results, and student agency on separate boards.',
+      href: '/25/magazine/western-heat-brains',
+    },
+    {
+      number: '20',
+      name: 'The History of Texas Football',
+      kicker: 'Archive / ten objects / 1893 to 2026',
+      description: 'Texas football as a public institution repeatedly invented: student club, color vote, steer, memorial, oil horizon, wishbone, integration, No. 34, the song archive, fourth-and-five, and one unfinished SEC season.',
+      href: '/25/magazine/texas-football-history',
+    },
+    {
+      number: '21',
+      name: 'The Saturday Atlas',
+      kicker: '266 programs / FBS + FCS / one student lens',
+      description: 'A complete NCAA Division I football directory with the PointCast 25 on top, honest browse order everywhere else, official campus and athletics links, filters, and a private device-local shortlist.',
+      href: '/25/directory',
+    },
   ],
   sourcePolicy: [
     'Stadium ritual means a reliable source documents repeated game-day use.',
