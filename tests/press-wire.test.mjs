@@ -5,13 +5,13 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds seventeen product filings across every public kind', () => {
-  assert.equal(releases.length, 17);
+test('press wire seeds twenty product filings across every public kind', () => {
+  assert.equal(releases.length, 20);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
     new Set(releases.map((release) => release.kind)),
-    new Set(['product', 'data', 'archive', 'game', 'engineering']),
+    new Set(['product', 'data', 'archive', 'game', 'engineering', 'editorial']),
   );
 
   const excludedAdRoutes = new Set([
@@ -20,6 +20,41 @@ test('press wire seeds seventeen product filings across every public kind', () =
     'https://allworthy.xyz/nine-lives',
   ]);
   releases.forEach((release) => assert.equal(excludedAdRoutes.has(release.productUrl), false));
+});
+
+test('The Saturday Atlas filing keeps the PointCast ranking separate from directory order', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0020');
+  assert.ok(release);
+  assert.equal(release.slug, 'saturday-atlas-opens-all-division-one-football-programs');
+  assert.match(release.body.join(' '), /266 Division I football programs/i);
+  assert.match(release.body.join(' '), /browse order rather than a claimed football, academic, admissions, value, or student-experience ranking/i);
+  assert.match(release.body.join(' '), /device-local shortlist/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/25/directory');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/b/0570'));
+});
+
+test('Texas football archive filing publishes ten sourced objects without claiming official status', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0019');
+  assert.ok(release);
+  assert.equal(release.slug, 'history-of-texas-football-opens-archive-desk');
+  assert.match(release.body.join(' '), /ten material objects/i);
+  assert.match(release.body.join(' '), /first Black football letterman/i);
+  assert.match(release.body.join(' '), /three consecutive 10-win years/i);
+  assert.match(release.body.join(' '), /rather than an official mark/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/25/magazine/texas-football-history');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/b/0569'));
+});
+
+test('Western Heat / Brains 25 filing keeps football judgment and research evidence separate', () => {
+  const release = releases.find((item) => item.id === 'PCPW-2026-0018');
+  assert.ok(release);
+  assert.equal(release.slug, 'western-heat-brains-25-opens-double-issue');
+  assert.match(release.body.join(' '), /attention, leverage, institutional stakes/i);
+  assert.match(release.body.join(' '), /research scale, not discovery quality/i);
+  assert.match(release.body.join(' '), /without combining unlike contests/i);
+  assert.match(release.body.join(' '), /not documentary photography/i);
+  assert.equal(release.productUrl, 'https://pointcast.xyz/25/magazine/western-heat-brains');
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/b/0568'));
 });
 
 test('The Battle Record filing promotes the annual without inventing official or wagered results', () => {

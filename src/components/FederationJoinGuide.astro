@@ -1,0 +1,209 @@
+---
+import {
+  FEDERATION_JOIN_PATHS,
+  FEDERATION_META,
+  FEDERATION_NODE_TEMPLATE,
+  FEDERATION_RECEIPT_STATES,
+  FEDERATION_STEPS,
+} from '../lib/federation';
+
+const nodeTemplate = JSON.stringify(FEDERATION_NODE_TEMPLATE, null, 2);
+const joinSubject = encodeURIComponent('PointCast Federation join request');
+const joinBody = encodeURIComponent(`Name or community:\nHome node (PointCast is okay):\nPreferred channel type:\nPermission: ask-first / direct:\nAnything we should know about register or tone:\n\nDo not include passwords or access tokens.`);
+const joinHref = `mailto:${FEDERATION_META.contact}?subject=${joinSubject}&body=${joinBody}`;
+---
+
+<section class="fjg" id="join-network" aria-labelledby="fjg-title">
+  <header class="fjg__head">
+    <div>
+      <p class="fjg__label">ADD TO THE NETWORK · {FEDERATION_META.protocol}</p>
+      <h2 id="fjg-title">A public route.<br />A private destination.</h2>
+    </div>
+    <p>
+      Join as a person on the PointCast node, maintain a directory for your own
+      community, or take responsibility for one channel adapter. Start with one
+      consenting person and one human-approved message.
+    </p>
+  </header>
+
+  <div class="fjg__status" aria-label="Current federation status">
+    <div><span>REGISTRY</span><strong>LIVE</strong></div>
+    <div><span>JOIN REVIEW</span><strong>MANUAL</strong></div>
+    <div><span>FIRST ROUTE</span><strong>HUMAN-APPROVED</strong></div>
+    <div><span>CROSS-NODE SEND</span><strong>NOT LIVE YET</strong></div>
+  </div>
+
+  <div class="fjg__paths">
+    {FEDERATION_JOIN_PATHS.map((path, index) => (
+      <article>
+        <p class="fjg__number">0{index + 1}</p>
+        <h3>{path.label}</h3>
+        <p>{path.summary}</p>
+        <ul>{path.fields.map((field) => <li>{field}</li>)}</ul>
+      </article>
+    ))}
+  </div>
+
+  <div class="fjg__instructions">
+    <div class="fjg__intro">
+      <p class="fjg__label">JOINING INSTRUCTIONS</p>
+      <h2>Four moves.<br />One real route.</h2>
+      <p>
+        The home node keeps the actual email address, phone number, or private
+        handle. The network sees only what is needed to request a route.
+      </p>
+      <div class="fjg__actions">
+        <a class="fjg__button fjg__button--dark" href={joinHref}>Join the PointCast node</a>
+        <a class="fjg__button" href={`${FEDERATION_META.repository}/pulls`} target="_blank" rel="noopener">Submit a public node</a>
+      </div>
+      <small>Private details go by email. Public node metadata can go through GitHub.</small>
+    </div>
+
+    <ol class="fjg__steps">
+      {FEDERATION_STEPS.map((step) => (
+        <li>
+          <span>{String(step.n).padStart(2, '0')}</span>
+          <div><h3>{step.name}</h3><p>{step.detail}</p></div>
+        </li>
+      ))}
+    </ol>
+  </div>
+
+  <div class="fjg__manifest">
+    <div>
+      <p class="fjg__label">FOR COMMUNITY MAINTAINERS</p>
+      <h2>Publish one small card.</h2>
+      <p>
+        Put this at <code>/.well-known/pointcast-federation.json</code> on your domain.
+        Replace the examples, keep private destinations local, then submit the URL
+        to the registry.
+      </p>
+      <button type="button" data-copy-federation>Copy node card</button>
+      <p class="fjg__copy-status" data-copy-federation-status aria-live="polite"></p>
+    </div>
+    <pre><code data-federation-manifest>{nodeTemplate}</code></pre>
+  </div>
+
+  <div class="fjg__boundary">
+    <div>
+      <p class="fjg__label">THE BOUNDARY</p>
+      <h2>Never put private contact information in a public card or pull request.</h2>
+    </div>
+    <ul>
+      <li><strong>Never public:</strong> email addresses, phone numbers, private handles, access tokens.</li>
+      <li><strong>Public by choice:</strong> name, home node, channel types, consent state.</li>
+      <li><strong>Revocable:</strong> a person can change their route or leave the directory.</li>
+      <li><strong>Relationship edges:</strong> require a real introduction or collaboration.</li>
+    </ul>
+  </div>
+
+  <div class="fjg__receipts">
+    <p class="fjg__label">RECEIPTS, NOT CLAIMS</p>
+    <h2>Say exactly what happened.</h2>
+    <div class="fjg__receipt-line">
+      {FEDERATION_RECEIPT_STATES.map((state, index) => (
+        <span class:list={['fjg__receipt', { 'fjg__receipt--later': index > 2 }]}>{state}</span>
+      ))}
+    </div>
+    <p>
+      Submitted does not mean delivered. Delivered does not mean personally
+      confirmed. A receipt advances only when the evidence exists.
+    </p>
+  </div>
+
+  <footer class="fjg__footer">
+    <a href="/federation.json">Machine contract ↗</a>
+    <a href="/federation.md">Plain instructions ↗</a>
+    <a href="/collabs">Current registry ↗</a>
+    <a href={FEDERATION_META.repository} target="_blank" rel="noopener">Open source ↗</a>
+  </footer>
+</section>
+
+<script define:vars={{ nodeTemplate }}>
+  const button = document.querySelector('[data-copy-federation]');
+  const status = document.querySelector('[data-copy-federation-status]');
+  button?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(nodeTemplate);
+      if (status) status.textContent = 'Copied. Replace the example values before publishing.';
+    } catch {
+      const manifest = document.querySelector('[data-federation-manifest]');
+      if (!manifest) return;
+      const range = document.createRange();
+      range.selectNodeContents(manifest);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      if (status) status.textContent = 'Selected. Press ⌘C to copy.';
+    }
+  });
+</script>
+
+<style>
+  .fjg { --fjg-ink: #12110e; --fjg-paper: #f1efe5; --fjg-blue: #2864e8; --fjg-orange: #ef5b35; --fjg-acid: #d9fb55; margin-top: 72px; border: 1px solid var(--fjg-ink); background: var(--fjg-paper); color: var(--fjg-ink); }
+  .fjg__head { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; padding: 56px; border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__head h2, .fjg__intro h2, .fjg__manifest h2, .fjg__boundary h2, .fjg__receipts h2 { margin: 0; font-size: clamp(38px, 6vw, 76px); line-height: .92; letter-spacing: -.055em; }
+  .fjg__head > p, .fjg__intro > p:not(.fjg__label), .fjg__manifest > div > p:not(.fjg__label), .fjg__receipts > p:last-of-type { margin: 0; font-size: 19px; line-height: 1.48; }
+  .fjg__label, .fjg__number { margin: 0 0 18px; font: 800 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .fjg__status { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__status div { display: grid; gap: 7px; padding: 16px; border-right: 1px solid var(--fjg-ink); }
+  .fjg__status div:last-child { border-right: 0; }
+  .fjg__status span { font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+  .fjg__status strong { font-size: 13px; }
+  .fjg__paths { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .fjg__paths article { min-height: 330px; padding: 30px; border-right: 1px solid var(--fjg-ink); border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__paths article:nth-child(1) { background: var(--fjg-acid); }
+  .fjg__paths article:nth-child(2) { background: var(--fjg-blue); color: white; }
+  .fjg__paths article:nth-child(3) { border-right: 0; background: var(--fjg-orange); }
+  .fjg__paths h3 { margin: 44px 0 14px; font-size: 28px; line-height: 1; letter-spacing: -.04em; }
+  .fjg__paths article > p:not(.fjg__number) { font-size: 15px; line-height: 1.45; }
+  .fjg__paths ul { margin: 20px 0 0; padding: 0; list-style: none; font: 700 10px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+  .fjg__paths li::before { content: '↳ '; }
+  .fjg__instructions { display: grid; grid-template-columns: .8fr 1.2fr; gap: 56px; padding: 64px 56px; border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__intro > p:not(.fjg__label) { margin-top: 24px; }
+  .fjg__actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 26px; }
+  .fjg__button, .fjg__footer a { display: inline-flex; min-height: 43px; align-items: center; border: 1px solid var(--fjg-ink); padding: 0 14px; color: inherit; font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; text-transform: uppercase; }
+  .fjg__button--dark { background: var(--fjg-ink); color: var(--fjg-paper); }
+  .fjg__intro small { display: block; margin-top: 10px; font-size: 11px; line-height: 1.4; }
+  .fjg__steps { margin: 0; padding: 0; list-style: none; }
+  .fjg__steps li { display: grid; grid-template-columns: 50px 1fr; gap: 18px; padding: 22px 0; border-top: 1px solid var(--fjg-ink); }
+  .fjg__steps li > span { display: grid; width: 42px; height: 42px; place-items: center; background: var(--fjg-ink); color: var(--fjg-paper); font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .fjg__steps h3 { margin: 0 0 8px; font-size: 20px; }
+  .fjg__steps p { margin: 0; font-size: 14px; line-height: 1.48; }
+  .fjg__manifest { display: grid; grid-template-columns: .72fr 1.28fr; gap: 42px; padding: 56px; border-bottom: 1px solid var(--fjg-ink); background: var(--fjg-ink); color: var(--fjg-paper); }
+  .fjg__manifest > div > p:not(.fjg__label) { margin-top: 24px; }
+  .fjg__manifest code { color: var(--fjg-acid); }
+  .fjg__manifest pre { max-height: 520px; overflow: auto; margin: 0; border: 1px solid #555; padding: 20px; background: #08090b; color: var(--fjg-paper); font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .fjg__manifest button { margin-top: 24px; border: 0; padding: 13px 16px; background: var(--fjg-acid); color: var(--fjg-ink); font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; cursor: pointer; }
+  .fjg__copy-status { min-height: 18px; margin: 10px 0 0 !important; color: var(--fjg-acid); font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace !important; }
+  .fjg__boundary { display: grid; grid-template-columns: .9fr 1.1fr; gap: 48px; padding: 56px; border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__boundary h2 { font-size: clamp(34px, 4vw, 55px); }
+  .fjg__boundary ul { margin: 0; padding: 0; list-style: none; }
+  .fjg__boundary li { padding: 18px 0; border-top: 1px solid var(--fjg-ink); font-size: 15px; line-height: 1.45; }
+  .fjg__receipts { padding: 56px; border-bottom: 1px solid var(--fjg-ink); }
+  .fjg__receipt-line { display: grid; grid-template-columns: repeat(6, 1fr); margin: 34px 0 24px; border: 1px solid var(--fjg-ink); }
+  .fjg__receipt { display: grid; min-height: 80px; place-items: center; border-right: 1px solid var(--fjg-ink); background: var(--fjg-acid); font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+  .fjg__receipt:last-child { border-right: 0; }
+  .fjg__receipt--later { background: transparent; }
+  .fjg__footer { display: flex; flex-wrap: wrap; gap: 8px; padding: 24px; }
+  .fjg__footer a:hover, .fjg__button:hover { background: var(--fjg-acid); color: var(--fjg-ink); }
+  @media (max-width: 820px) {
+    .fjg__head, .fjg__instructions, .fjg__manifest, .fjg__boundary { grid-template-columns: 1fr; padding: 40px 28px; }
+    .fjg__status { grid-template-columns: 1fr 1fr; }
+    .fjg__paths { grid-template-columns: 1fr; }
+    .fjg__paths article { min-height: auto; border-right: 0; }
+    .fjg__receipt-line { grid-template-columns: repeat(3, 1fr); }
+    .fjg__receipt:nth-child(3) { border-right: 0; }
+    .fjg__receipt:nth-child(-n+3) { border-bottom: 1px solid var(--fjg-ink); }
+    .fjg__receipts { padding: 40px 28px; }
+  }
+  @media (max-width: 480px) {
+    .fjg__status { grid-template-columns: 1fr; }
+    .fjg__status div { border-right: 0; border-bottom: 1px solid var(--fjg-ink); }
+    .fjg__receipt-line { grid-template-columns: 1fr 1fr; }
+    .fjg__receipt:nth-child(odd) { border-right: 1px solid var(--fjg-ink); }
+    .fjg__receipt:nth-child(even) { border-right: 0; }
+    .fjg__receipt:nth-child(-n+4) { border-bottom: 1px solid var(--fjg-ink); }
+  }
+</style>
+
