@@ -108,6 +108,20 @@ export const HAPTIC_BUILDCAST_SEED_EVENTS: BuildcastEvent[] = [
     summary: 'A quiet public ledger is being placed beside the playable artifact. It shares milestones, never private prompts, inboxes, secrets, or raw logs.',
     status: 'working',
   },
+  {
+    id: 'seed-005',
+    project: HAPTIC_BUILDCAST_PROJECT,
+    session: HAPTIC_BUILDCAST_SESSION,
+    sequence: 5,
+    at: '2026-08-16T01:13:00.000Z',
+    agent: 'codex',
+    type: 'session.completed',
+    phase: 'release',
+    title: 'Signal Run and Open Studio are release-ready',
+    summary: 'The production-equivalent package built cleanly and the complete automated suite passed before canonical release.',
+    status: 'passed',
+    metrics: { testsPassed: 720, testsFailed: 0, pagesBuilt: 1947 },
+  },
 ];
 
 export const BUILDCAST_PUBLIC_BOUNDARY = {

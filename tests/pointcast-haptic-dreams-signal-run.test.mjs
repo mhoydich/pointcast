@@ -20,6 +20,9 @@ test('Signal Run is a bounded, local player-fidelity game over the existing arch
   assert.match(page, /HAPTIC_DREAMS_PLAYS\.map/);
   assert.match(page, /localStorage/);
   assert.match(page, /setPointerCapture/);
+  assert.match(page, /const play = activePlay\(\);[\s\S]{0,120}if \(!play\) \{ pointer = null; tapAt = 0; return; \}/);
+  assert.match(page, /pointer = null;[\s\S]{0,30}tapAt = 0;[\s\S]{0,80}const play = activePlay\(\)/);
+  assert.doesNotMatch(page, /activePlay\(\)\.team/);
   assert.match(page, /window\.addEventListener\('keydown'/);
   assert.match(page, /prefers-reduced-motion/);
   assert.match(page, /soundOn = false/);
@@ -37,4 +40,18 @@ test('Signal Run has no live, ranked, wallet, or alternate-score surface', async
   assert.match(page, /not a live score feed/);
   assert.match(page, /cannot alter the recorded game/);
   assert.match(page, /HAPTIC_DREAMS_SOURCES/);
+});
+
+test('Signal Run is present across PointCast machine discovery', async () => {
+  const [agents, sitemap, llms, llmsFull] = await Promise.all([
+    read('src/pages/agents.json.ts'),
+    read('src/pages/sitemap-discovery.xml.ts'),
+    read('public/llms.txt'),
+    read('public/llms-full.txt'),
+  ]);
+
+  for (const surface of [agents, sitemap, llms, llmsFull]) {
+    assert.match(surface, /haptic-dreams\/play/);
+  }
+  assert.match(agents, /hapticDreamsSignalRun/);
 });

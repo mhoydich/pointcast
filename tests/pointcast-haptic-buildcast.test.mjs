@@ -24,7 +24,10 @@ test('Open Studio keeps the public build ledger beside the playable artifact', a
   assert.match(page, /RETURN TO LATEST/);
   assert.match(page, /prefers-reduced-motion/);
   assert.match(page, /Sound and vibration remain off/);
-  assert.equal((data.match(/id: 'seed-/g) ?? []).length, 4);
+  assert.equal((data.match(/id: 'seed-/g) ?? []).length, 5);
+  assert.match(data, /type: 'session\.completed'/);
+  assert.match(data, /phase: 'release'/);
+  assert.match(data, /metrics: \{ testsPassed: 720, testsFailed: 0, pagesBuilt: 1947 \}/);
   assert.match(data, /Seeded milestones work without infrastructure/);
 });
 
@@ -78,8 +81,11 @@ test('Open Studio is discoverable without pretending its writer bindings exist',
   ]);
   assert.match(apps, /slug: 'haptic-dreams-open-studio'/);
   assert.match(agents, /hapticDreamsBuildcast/);
+  assert.match(agents, /hapticDreamsSignalRun/);
   assert.match(agents, /buildcast: 'https:\/\/pointcast\.xyz\/api\/buildcast\?project=haptic-dreams'/);
+  assert.match(sitemap, /pointcast\.xyz\/haptic-dreams\/play/);
   assert.match(sitemap, /pointcast\.xyz\/haptic-dreams\/build/);
+  assert.match(llms, /Play Signal Run/);
   assert.match(llms, /Public build data/);
   assert.match(llmsFull, /not a raw activity monitor/);
   assert.doesNotMatch(wrangler, /binding = "PC_BUILDCAST_KV"/);

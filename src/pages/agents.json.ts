@@ -272,6 +272,7 @@ export const GET: APIRoute = async () => {
         nounsNationBattlerMoon: 'https://pointcast.xyz/nouns-nation-battler-moon/',
         battle: 'https://pointcast.xyz/battle',
         now: 'https://pointcast.xyz/now',
+        hapticDreamsSignalRun: 'https://pointcast.xyz/haptic-dreams/play',
         hapticDreamsBuildcast: 'https://pointcast.xyz/haptic-dreams/build',
         worklifePublication: 'https://pointcast.xyz/worklife',
         worklifeUniforms: 'https://pointcast.xyz/worklife/uniforms',

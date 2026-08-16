@@ -136,6 +136,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25/magazine', 'weekly', '1.0'],
   ['https://pointcast.xyz/25/magazine.json', 'weekly', '0.96'],
   ['https://pointcast.xyz/haptic-dreams', 'weekly', '0.99'],
+  ['https://pointcast.xyz/haptic-dreams/play', 'weekly', '0.98'],
   ['https://pointcast.xyz/haptic-dreams.json', 'weekly', '0.95'],
   ['https://pointcast.xyz/haptic-dreams/build', 'weekly', '0.96'],
   ['https://pointcast.xyz/25/magazine/the-house-we-borrowed', 'monthly', '0.99'],

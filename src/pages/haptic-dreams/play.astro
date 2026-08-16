@@ -174,6 +174,8 @@ const jsonLd = {
   }
 
   function render() {
+    pointer = null;
+    tapAt = 0;
     const play = activePlay();
     if (!play) return finish();
     const challenge = play.challenge;
@@ -226,13 +228,14 @@ const jsonLd = {
   }
 
   function start() {
-    index = 0; fidelity = 0; startedAt = Date.now();
+    index = 0; fidelity = 0; startedAt = Date.now(); pointer = null; tapAt = 0;
     $('#intro').hidden = true; $('#result').hidden = true; $('#game').hidden = false;
     window.clearInterval(clockTimer); clockTimer = window.setInterval(updateClock, 250); updateClock(); render();
   }
 
   function finish() {
     window.clearTimeout(eventTimer); window.clearTimeout(missTimer); window.clearInterval(clockTimer);
+    pointer = null; tapAt = 0;
     $('#game').hidden = true; $('#result').hidden = false;
     const best = Math.max(safelyReadBest(), fidelity); safelySaveBest(best);
     const percent = Math.round((fidelity / (run.length * 100)) * 100);
@@ -245,12 +248,14 @@ const jsonLd = {
 
   function pointerAction(event) {
     if (!pointer) return;
+    const play = activePlay();
+    if (!play) { pointer = null; tapAt = 0; return; }
     const elapsed = Date.now() - pointer.at;
     const dx = event.clientX - pointer.x;
     const dy = event.clientY - pointer.y;
     let action = null;
     if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy)) {
-      const forward = activePlay().team === 'MICH' ? dx > 0 : dx < 0;
+      const forward = play.team === 'MICH' ? dx > 0 : dx < 0;
       action = forward ? 'advance' : 'reverse';
     } else if (elapsed > 260) {
       action = Math.abs(dy) > 26 ? 'arc' : 'settle';
