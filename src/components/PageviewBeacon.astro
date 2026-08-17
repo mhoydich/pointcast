@@ -1,0 +1,21 @@
+---
+/**
+ * PageviewBeacon — one path-only event per page load to /api/analytics.
+ * Sends { event: 'pageview', meta: { path } } and nothing else: no referrer,
+ * no user-agent, no wallet, no id. The endpoint keeps events 90 days.
+ * Purpose: give every room a real USE number for the project scoreboard
+ * (scripts/score-projects.mjs). Skips obvious bots and localhost.
+ */
+---
+<script is:inline>
+  (function () {
+    try {
+      if (!location.hostname.endsWith('pointcast.xyz')) return;
+      if (navigator.webdriver || /bot|crawl|spider|slurp|headless|lighthouse/i.test(navigator.userAgent)) return;
+      var path = location.pathname.replace(/\/+$/, '') || '/';
+      var body = JSON.stringify({ event: 'pageview', meta: { path: path.slice(0, 120) } });
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/analytics', new Blob([body], { type: 'application/json' }));
+      else fetch('/api/analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: true }).catch(function () {});
+    } catch (e) {}
+  })();
+</script>
