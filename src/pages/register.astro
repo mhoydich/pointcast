@@ -1,0 +1,167 @@
+---
+/**
+ * /register — the experiment register.
+ *
+ * PointCast is a giant experiment. This page shows every room and app scored
+ * on what can actually be measured, and says plainly what is not measured yet.
+ * (Not /scoreboard — that is the agent-competition ledger.) Snapshot lives in src/data/scoreboard.json; refresh with
+ *   node scripts/score-live.mjs && node scripts/score-projects.mjs s../data/scoreboard.json
+ * Machine twin: /register.json
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import board from '../data/scoreboard.json';
+
+type Row = (typeof board.rows)[number];
+const rows: Row[] = board.rows;
+const generated = new Date(board.generatedAt);
+const generatedLabel = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Los_Angeles' }).format(generated);
+const withUse = rows.filter((r) => r.use != null);
+const topUse = [...withUse].sort((a, b) => (b.use ?? 0) - (a.use ?? 0));
+const drum = rows.find((r) => r.path === '/drum-house');
+const runnerUp = topUse.find((r) => !r.path.startsWith('/drum'));
+
+const title = 'Register';
+const description = `PointCast is a giant experiment. ${rows.length} rooms and apps scored on measured use, craft, and reach — and an honest list of what is not measured yet.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: 'PointCast experiment register',
+  description,
+  url: 'https://pointcast.xyz/register',
+  dateModified: board.generatedAt,
+  distribution: [{ '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/register.json' }],
+  creator: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+
+const prep2027 = [
+  { k: 'Measure before we scale', v: 'Every page now reports one path-only pageview. In 90 days every room has a real use number and this board ranks on visitors, not proxies.' },
+  { k: 'Keep the winners lit', v: 'The drum is the one room strangers actually use. It gets the front door, the maintenance, and the next multiplayer work.' },
+  { k: 'Retire quietly, keep the receipt', v: 'Rooms that stay under ten uses for a season move to the archive shelf. Their blocks and routes stay live; nothing is deleted.' },
+  { k: 'Fewer doors, better doors', v: 'The front door edits down to a handful of proven rooms plus one live experiment, instead of a stack of every recent edition.' },
+  { k: 'Machine-readable everything', v: 'Board, blocks, and rooms stay readable by agents (/register.json, /agents.json, /blocks.json). 2027 traffic may not be human first.' },
+  { k: 'A season, not a launch', v: 'No flood of traffic is expected soon. The goal is a town that is worth arriving at whenever people do — and a ledger that proves what worked.' },
+];
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/register.json', title: 'Scoreboard (JSON)' }]}
+>
+  <main class="sb">
+    <header class="sb__head">
+      <p class="sb__kicker">The experiment register · snapshot {generatedLabel}</p>
+      <h1>PointCast is a giant experiment. <em>Here is what is measured.</em></h1>
+      <p class="sb__lede">
+        {rows.length} rooms and apps, scored on what can actually be counted today. Only {withUse.length} of them keep
+        a public counter, so most rows are <b>craft</b> (how much was built) and <b>reach</b> (how hard the town
+        points at it), not proof anyone came. One number is not a proxy: {drum ? <b>the drum has {drum.use?.toLocaleString()} public hits</b> : null}{runnerUp ? <>; the next-most-used room has {runnerUp.use?.toLocaleString()}.</> : '.'}
+      </p>
+      <dl class="sb__stats">
+        <div><dt>projects</dt><dd>{rows.length}</dd></div>
+        <div><dt>with a use counter</dt><dd>{withUse.length}</dd></div>
+        <div><dt>drum hits</dt><dd>{drum?.use?.toLocaleString() ?? '—'}</dd></div>
+        <div><dt>expected traffic</dt><dd>not yet</dd></div>
+      </dl>
+    </header>
+
+    <section class="sb__board" aria-labelledby="sb-board-title">
+      <h2 id="sb-board-title">Board</h2>
+      <div class="sb__tablewrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>room / app</th><th class="r">score</th><th class="r">use</th><th>craft</th><th>reach</th><th class="r">loc</th><th class="r">tests</th><th class="r">inbound</th><th class="r">blocks</th><th>door</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr>
+                <td class="mono dim">{String(i + 1).padStart(2, '0')}</td>
+                <td class="name"><a href={r.path}>{r.name}</a><small>{r.path}</small></td>
+                <td class="r score">{r.total}</td>
+                <td class="r">{r.use == null ? <span class="dim mono">—</span> : r.use.toLocaleString()}</td>
+                <td><span class="bar" aria-label={`craft ${r.craft}`}><i style={`width:${Math.round(r.craft * 100)}%`}></i></span><span class="mono">{r.craft.toFixed(2)}</span></td>
+                <td><span class="bar" aria-label={`reach ${r.reach}`}><i style={`width:${Math.round(r.reach * 100)}%`}></i></span><span class="mono">{r.reach.toFixed(2)}</span></td>
+                <td class="r mono">{r.loc.toLocaleString()}</td>
+                <td class="r mono">{r.tests}</td>
+                <td class="r mono">{r.inbound}</td>
+                <td class="r mono">{r.blockRefs}</td>
+                <td class="mono">{r.onHome ? '●' : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sb__two" aria-labelledby="sb-method-title">
+      <div>
+        <h2 id="sb-method-title">How the score works</h2>
+        <dl class="sb__rubric">
+          <div><dt>Use</dt><dd>A public counter the room already keeps (drum hits, votives lit, prayers said, letters left) or, from now on, path-only pageviews. Log-scaled: about 30,000 ≈ 1.0.</dd></div>
+          <div><dt>Craft</dt><dd>Lines of source across the room's pages, components, functions and lib (log-scaled; 20,000 ≈ 1.0) plus tests that name it. How much got built, not how good it is.</dd></div>
+          <div><dt>Reach</dt><dd>Other pages that link to it, wire blocks that point at it, and whether it is on the front door.</dd></div>
+          <div><dt>Score</dt><dd>With a counter: 45% use, 27.5% craft, 27.5% reach. Without one: half craft, half reach. Re-runnable from the repo; the JSON twin is at /register.json.</dd></div>
+        </dl>
+        <h2>What is not measured yet</h2>
+        <ul class="sb__caveats">
+          <li>Commit history was flattened on July 30, 2026, so cadence, authorship and age are unusable until it grows back.</li>
+          <li>Route-level human traffic. A path-only pageview beacon went live on August 17, 2026; the first full read is a season away.</li>
+          <li>Taste. Nothing here knows which rooms Mike thinks are the best. That column is his to fill.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Prep for 2027</h2>
+        <ol class="sb__prep">
+          {prep2027.map((p) => (
+            <li><strong>{p.k}</strong><span>{p.v}</span></li>
+          ))}
+        </ol>
+        <p class="sb__foot">
+          Machine twin: <a href="/register.json">/register.json</a> · everything else: <a href="/agents.json">/agents.json</a>, <a href="/blocks.json">/blocks.json</a> · <a href="/">front door</a>
+        </p>
+      </div>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .sb { max-width: 1240px; margin: 0 auto; padding: 24px 16px 80px; color: var(--pc-ink, #111); }
+  .sb__kicker { margin: 0 0 10px; font: 700 9px var(--pc-font-mono); letter-spacing: .14em; text-transform: uppercase; color: #185FA5; }
+  .sb h1 { margin: 0; font-size: clamp(30px, 4vw, 52px); font-weight: 750; line-height: .98; letter-spacing: -.04em; text-wrap: balance; max-width: 22ch; }
+  .sb h1 em { font-style: normal; color: #993C1D; }
+  .sb__lede { max-width: 68ch; margin: 18px 0 0; font-size: 16px; line-height: 1.5; }
+  .sb__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 24px 0 0; padding: 0; background: #111; border: 2px solid #111; }
+  .sb__stats div { background: #fff; padding: 12px 14px; }
+  .sb__stats dt { font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: #5a6170; }
+  .sb__stats dd { margin: 4px 0 0; font-size: 26px; font-weight: 750; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .sb h2 { margin: 36px 0 12px; font: 700 11px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  .sb__tablewrap { overflow-x: auto; border: 2px solid #111; }
+  table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #dfe3ea; text-align: left; white-space: nowrap; vertical-align: middle; }
+  th { position: sticky; top: 0; background: #f3f5f8; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5a6170; }
+  .r { text-align: right; }
+  .mono { font-family: var(--pc-font-mono); font-size: 11px; }
+  .dim { color: #8a919e; }
+  td.name a { color: #111; font-weight: 600; text-decoration: none; }
+  td.name a:hover { color: #185FA5; text-decoration: underline; }
+  td.name small { display: block; font: 10px var(--pc-font-mono); color: #5a6170; }
+  td.score { font-weight: 750; font-size: 15px; }
+  .bar { display: inline-block; width: 64px; height: 8px; margin-right: 6px; border: 1px solid #111; background: #fff; vertical-align: middle; }
+  .bar i { display: block; height: 100%; background: #0B3E73; }
+  .sb__two { display: grid; grid-template-columns: 1.15fr .85fr; gap: 0 40px; }
+  .sb__rubric, .sb__caveats, .sb__prep { margin: 0; padding: 0; }
+  .sb__rubric div { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid #dfe3ea; }
+  .sb__rubric dt { font: 700 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; padding-top: 3px; }
+  .sb__rubric dd { margin: 0; font-size: 13.5px; line-height: 1.45; color: #2b303a; }
+  .sb__caveats { list-style: none; }
+  .sb__caveats li { padding: 8px 12px; margin: 0 0 6px; border-left: 3px solid #993C1D; background: #f7f4ee; font-size: 13.5px; line-height: 1.45; }
+  .sb__prep { list-style: none; counter-reset: prep; border-top: 2px solid #111; }
+  .sb__prep li { counter-increment: prep; display: grid; grid-template-columns: 28px 1fr; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid #dfe3ea; }
+  .sb__prep li::before { content: counter(prep, decimal-leading-zero); grid-row: 1 / span 2; font: 700 11px var(--pc-font-mono); color: #993C1D; padding-top: 2px; }
+  .sb__prep strong { font-size: 14px; letter-spacing: -.01em; }
+  .sb__prep span { font-size: 13px; line-height: 1.45; color: #2b303a; }
+  .sb__foot { margin-top: 20px; font: 11px var(--pc-font-mono); color: #5a6170; }
+  @media (max-width: 880px) { .sb__two { grid-template-columns: 1fr; } .sb__stats { grid-template-columns: repeat(2, 1fr); } }
+</style>

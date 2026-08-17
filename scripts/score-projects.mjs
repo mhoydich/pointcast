@@ -83,7 +83,7 @@ for (const proj of projects.values()) {
   let inbound = 0;
   for (const f of pageFiles) { if (files.some(o => f.startsWith(o))) continue; if (hrefRe.test(text(f))) inbound++; }
   const blockRefs = blocks.filter(b => JSON.stringify(b).includes(`pointcast.xyz${proj.path}`) || JSON.stringify(b).includes(`"${proj.path}`)).length;
-  const onHome = hrefRe.test(homeSrc);
+  const onHome = hrefRe.test(homeSrc) || homeSrc.includes(`href: '${proj.path}'`);  // data-driven doors (Start Here) use href: '/x'
   const use = live[proj.path] ?? null;
 
   const craft = Math.min(1, Math.log10(1 + loc) / 4.3) * 0.7 + Math.min(1, tests / 3) * 0.3;              // 20k LOC ≈ 1 (git history was flattened 2026-07-30, so commits are not a signal)

@@ -1,0 +1,64 @@
+---
+/**
+ * HomeScoreboard — the experiment register on the front door.
+ * Reads the committed snapshot; top rooms by measured use, then by score.
+ */
+import board from '../data/scoreboard.json';
+const rows = board.rows;
+const withUse = rows.filter((r) => r.use != null).sort((a, b) => (b.use ?? 0) - (a.use ?? 0)).slice(0, 3);
+const byScore = rows.filter((r) => !withUse.includes(r)).slice(0, 5);
+const drum = rows.find((r) => r.path === '/drum-house');
+const label = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }).format(new Date(board.generatedAt));
+---
+
+<section class="home-sb" aria-labelledby="home-sb-title">
+  <div class="home-sb__copy">
+    <p class="home-sb__kicker">The experiment register · {rows.length} rooms scored · {label}</p>
+    <h2 id="home-sb-title">PointCast is a giant experiment. <em>The board is public.</em></h2>
+    <p>
+      No flood of traffic is expected soon; the point is a town worth arriving at, and a ledger that
+      shows what worked. {drum ? <>So far one room is not a proxy: the drum has <b>{drum.use?.toLocaleString()}</b> public hits.</> : null}
+      This front door is now edited by the board.
+    </p>
+    <div class="home-sb__actions">
+      <a href="/register">Open the register <span aria-hidden="true">→</span></a>
+      <a href="/register.json">JSON</a>
+    </div>
+  </div>
+  <div class="home-sb__lists">
+    <div>
+      <h3>Most used</h3>
+      <ol>{withUse.map((r) => <li><a href={r.path}><span>{r.name}</span><b>{r.use?.toLocaleString()}</b></a></li>)}</ol>
+    </div>
+    <div>
+      <h3>Highest score (craft + reach)</h3>
+      <ol>{byScore.map((r) => <li><a href={r.path}><span>{r.name}</span><b>{r.total}</b></a></li>)}</ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  .home-sb { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.2fr); margin-top: 16px; border: 2px solid #111; background: #fff; color: #111; box-shadow: 7px 7px 0 #993C1D; }
+  .home-sb__copy { padding: clamp(24px, 4vw, 40px); border-right: 2px solid #111; }
+  .home-sb__kicker { margin: 0 0 10px; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; color: #993C1D; }
+  .home-sb h2 { margin: 0; font-size: clamp(26px, 3vw, 40px); font-weight: 750; line-height: 1; letter-spacing: -.04em; text-wrap: balance; }
+  .home-sb h2 em { font-style: normal; color: #185FA5; }
+  .home-sb__copy p:not(.home-sb__kicker) { max-width: 48ch; margin: 16px 0 0; font-size: 14.5px; line-height: 1.5; }
+  .home-sb__actions { display: flex; gap: 6px; margin-top: 20px; }
+  .home-sb__actions a { padding: 9px 12px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; color: #111; }
+  .home-sb__actions a:first-child { background: #111; color: #fff; }
+  .home-sb__actions a:hover { background: #993C1D; border-color: #993C1D; color: #fff; text-decoration: none; }
+  .home-sb__lists { display: grid; grid-template-columns: 1fr 1fr; }
+  .home-sb__lists > div { padding: 18px 16px; }
+  .home-sb__lists > div:first-child { border-right: 1px solid #dfe3ea; }
+  .home-sb h3 { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: #5a6170; }
+  .home-sb ol { margin: 0; padding: 0; list-style: none; counter-reset: sb; }
+  .home-sb li { counter-increment: sb; border-top: 1px solid #dfe3ea; }
+  .home-sb li a { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; padding: 8px 0; color: #111; }
+  .home-sb li a::before { content: counter(sb, decimal-leading-zero); font: 700 9px var(--pc-font-mono); color: #993C1D; }
+  .home-sb li a:hover { text-decoration: none; color: #185FA5; }
+  .home-sb li span { font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+  .home-sb li b { font: 700 12px var(--pc-font-mono); font-variant-numeric: tabular-nums; }
+  @media (max-width: 880px) { .home-sb { grid-template-columns: 1fr; } .home-sb__copy { border-right: 0; border-bottom: 2px solid #111; } }
+  @media (max-width: 560px) { .home-sb { box-shadow: 4px 4px 0 #993C1D; } .home-sb__lists { grid-template-columns: 1fr; } .home-sb__lists > div:first-child { border-right: 0; border-bottom: 1px solid #dfe3ea; } }
+</style>
