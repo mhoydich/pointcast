@@ -1,0 +1,105 @@
+---
+/**
+ * HomeBackCatalog — "From the back catalog": six older blocks a day.
+ *
+ * The page embeds a pool of ~30 evergreen-ish blocks (30+ days old, with a
+ * title and dek). Client JS picks six deterministically from the PT date
+ * (same fnv1a formula as door-of-the-day) so every visitor sees the same
+ * six, and a shuffle button re-deals. Without JS the first six show.
+ */
+export interface CatalogItem {
+  id: string;
+  title: string;
+  dek: string;
+  code: string;
+  channelName: string;
+  color: string;
+  bg: string;
+  date: string;
+  image: string;
+  imageAlt: string;
+  href: string;
+}
+interface Props { pool: CatalogItem[]; total: number }
+const { pool, total } = Astro.props;
+---
+
+<section class="back-catalog" aria-labelledby="back-catalog-title" data-back-catalog>
+  <header class="back-catalog__head">
+    <div>
+      <p class="back-catalog__eyebrow">From the back catalog · six a day · {total} blocks deep</p>
+      <h2 id="back-catalog-title">Older, <em>still open.</em></h2>
+    </div>
+    <div class="back-catalog__controls">
+      <span data-back-catalog-status aria-live="polite">Today’s six</span>
+      <button type="button" data-back-catalog-shuffle>Deal six more ↻</button>
+      <a href="/archive">Whole archive →</a>
+    </div>
+  </header>
+  <ul class="back-catalog__grid" data-back-catalog-list>
+    {pool.map((item, i) => (
+      <li data-back-catalog-item hidden={i >= 6 ? true : undefined}>
+        <a href={item.href} style={`--bc-color:${item.color};--bc-bg:${item.bg}`}>
+          <span class="back-catalog__media">
+            <img src={item.image} alt={item.imageAlt} width="320" height="320" loading="lazy" decoding="async" />
+          </span>
+          <span class="back-catalog__meta">
+            <span class="back-catalog__code">CH.{item.code} · {item.channelName}</span>
+            <span class="back-catalog__id">№ {item.id} · {item.date}</span>
+          </span>
+          <strong>{item.title}</strong>
+          <small>{item.dek}</small>
+        </a>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<script>
+  const root = document.querySelector('[data-back-catalog]');
+  if (root) {
+    const items = Array.from(root.querySelectorAll('[data-back-catalog-item]'));
+    const status = root.querySelector('[data-back-catalog-status]');
+    const button = root.querySelector('[data-back-catalog-shuffle]');
+    const fnv1a = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
+    const ptDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const deal = (seed, label) => {
+      const n = items.length; if (!n) return;
+      const start = fnv1a(seed) % n;
+      const step = 7; // coprime-ish stride so the six spread across the pool
+      const chosen = new Set();
+      for (let i = 0; chosen.size < Math.min(6, n) && i < n * 2; i++) chosen.add((start + i * step) % n);
+      items.forEach((li, idx) => { li.hidden = !chosen.has(idx); });
+      if (status) status.textContent = label;
+    };
+    deal(ptDate(), 'Today’s six');
+    let deals = 0;
+    button?.addEventListener('click', () => { deals += 1; deal(`${ptDate()}:${deals}:${Math.random()}`, `Deal ${deals + 1}`); });
+  }
+</script>
+
+<style>
+  .back-catalog { margin-top: 16px; border: 2px solid #111; background: #f4f1e8; color: #111; }
+  .back-catalog__head { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding: 18px 20px 14px; border-bottom: 2px solid #111; }
+  .back-catalog__eyebrow { margin: 0 0 6px; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; color: #6A2810; }
+  .back-catalog h2 { margin: 0; font-size: clamp(26px, 3vw, 38px); font-weight: 730; letter-spacing: -.04em; line-height: 1; }
+  .back-catalog h2 em { font-style: normal; color: #993C1D; }
+  .back-catalog__controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .back-catalog__controls span { font: 700 9px var(--pc-font-mono); letter-spacing: .1em; color: rgba(0,0,0,.6); }
+  .back-catalog__controls button, .back-catalog__controls a { padding: 8px 10px; border: 1px solid #111; background: transparent; color: #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; }
+  .back-catalog__controls button:hover, .back-catalog__controls a:hover { background: #111; color: #f4f1e8; text-decoration: none; }
+  .back-catalog__grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  .back-catalog__grid li { border-right: 1px solid rgba(0,0,0,.18); }
+  .back-catalog__grid li:last-child, .back-catalog__grid li:nth-child(6n) { border-right: 0; }
+  .back-catalog__grid a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 12px; color: #111; }
+  .back-catalog__grid a:hover { background: var(--bc-bg); text-decoration: none; }
+  .back-catalog__media { display: block; aspect-ratio: 1; overflow: hidden; border: 1px solid #111; background: #fff; }
+  .back-catalog__media img { width: 100%; height: 100%; object-fit: cover; image-rendering: auto; }
+  .back-catalog__meta { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .back-catalog__code { font: 700 8px var(--pc-font-mono); letter-spacing: .1em; color: var(--bc-color); }
+  .back-catalog__id { font: 8px var(--pc-font-mono); letter-spacing: .06em; color: rgba(0,0,0,.55); }
+  .back-catalog__grid strong { font-size: 13.5px; line-height: 1.15; letter-spacing: -.01em; }
+  .back-catalog__grid small { font-size: 11px; line-height: 1.35; color: rgba(0,0,0,.7); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  @media (max-width: 1000px) { .back-catalog__grid { grid-template-columns: repeat(3, 1fr); } .back-catalog__grid li:nth-child(6n) { border-right: 1px solid rgba(0,0,0,.18); } .back-catalog__grid li:nth-child(3n) { border-right: 0; } .back-catalog__grid li:nth-child(-n+3) { border-bottom: 1px solid rgba(0,0,0,.18); } }
+  @media (max-width: 560px) { .back-catalog__head { flex-direction: column; align-items: flex-start; } .back-catalog__grid { grid-template-columns: repeat(2, 1fr); } .back-catalog__grid li:nth-child(3n) { border-right: 1px solid rgba(0,0,0,.18); } .back-catalog__grid li:nth-child(2n) { border-right: 0; } .back-catalog__grid li:nth-child(-n+4) { border-bottom: 1px solid rgba(0,0,0,.18); } }
+</style>
