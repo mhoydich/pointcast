@@ -42,7 +42,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const ipHint = ip.includes('.') ? `${ip.split('.').slice(0, 1).join('.')}.x` : ip.split(':')[0] || '';
   const payload = JSON.stringify({ event, meta, ts, ipHint });
   const rand = crypto.randomUUID().slice(0, 8);
-  const key = `event:${event}:${ts}:${rand}`;
+  // Pageviews are keyed by path so a prefix list (`pv:/route:`) counts them
+  // without reading values — see scripts/score-projects.mjs.
+  const pvPath = event === 'pageview' && meta && typeof (meta as { path?: unknown }).path === 'string'
+    ? String((meta as { path: string }).path).replace(/[^\w\-\/.]/g, '').slice(0, 120)
+    : '';
+  const key = pvPath ? `pv:${pvPath}:${ts}:${rand}` : `event:${event}:${ts}:${rand}`;
 
   await env.PC_ANALYTICS_KV.put(key, payload, { expirationTtl: 60 * 60 * 24 * 90 });
   return new Response(null, { status: 204, headers: cors });
