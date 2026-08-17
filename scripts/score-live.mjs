@@ -1,19 +1,33 @@
 #!/usr/bin/env node
 /**
  * score-live.mjs — refresh .score-live.json for score-projects.mjs.
- * 1) counts pageviews per path from PC_ANALYTICS_KV (`pv:` keys, 90-day TTL) via wrangler
+ * 1) counts pageviews per path from PC_ANALYTICS_KV (`pv:` keys, 90-day TTL) via the CF REST API
+ *    (uses wrangler's OAuth token, or CLOUDFLARE_API_TOKEN). Paths starting with /_ are ignored (smoke tests).
  * 2) merges the public room counters (drum hits, prayers, votives, …)
- * Usage: node scripts/score-live.mjs   (needs wrangler login)
+ * Usage: node scripts/score-live.mjs   (needs a wrangler login on this machine)
  */
-import { execSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
 const NS = (readFileSync('wrangler.toml', 'utf8').match(/binding = "PC_ANALYTICS_KV"\s*\nid = "([0-9a-f]+)"/) || [])[1];
+const ACCOUNT = '699061394cac705067bad6a7a4bd2db5';
+// `wrangler kv key list` silently returns [] for this namespace (verified 2026-08-17),
+// so read keys through the REST API with wrangler's own OAuth token.
+const tokenFile = [`${process.env.HOME}/.wrangler/config/default.toml`, `${process.env.HOME}/Library/Preferences/.wrangler/config/default.toml`].find((f) => { try { readFileSync(f); return true; } catch { return false; } });
+const TOKEN = process.env.CLOUDFLARE_API_TOKEN || (tokenFile && (readFileSync(tokenFile, 'utf8').match(/oauth_token = "([^"]+)"/) || [])[1]);
 const live = { pageviews: {}, counters: {} };
-if (NS) {
-  try {
-    const keys = JSON.parse(execSync(`npx wrangler kv key list --namespace-id ${NS} --prefix pv:`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
-    for (const k of keys) { const path = k.name.slice(3).replace(/:\d{4}-\d{2}-\d{2}T.*$/, ''); live.pageviews[path] = (live.pageviews[path] || 0) + 1; }
-  } catch (e) { console.error('kv list failed', e.message); }
+if (NS && TOKEN) {
+  let cursor = '';
+  let pages = 0;
+  do {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/storage/kv/namespaces/${NS}/keys?limit=1000&prefix=pv:${cursor ? `&cursor=${cursor}` : ''}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const data = await res.json();
+    if (!data.success) { console.error('kv list failed', JSON.stringify(data.errors)); break; }
+    for (const k of data.result) { const path = k.name.slice(3).replace(/:\d{4}-\d{2}-\d{2}T.*$/, ''); if (path.startsWith('/_')) continue; live.pageviews[path] = (live.pageviews[path] || 0) + 1; }
+    cursor = data.result_info?.cursor || '';
+    pages += 1;
+  } while (cursor && pages < 200);
+} else {
+  console.error('no namespace id or token; skipping pageviews');
 }
 const j = async (u) => { try { const r = await fetch(u, { signal: AbortSignal.timeout(8000) }); return r.ok ? r.json() : null; } catch { return null; } };
 const drum = await j('https://pointcast.xyz/api/drum'); if (drum?.globalTotal) { live.counters['/drum-house'] = drum.globalTotal; live.counters['/drum-v8'] = drum.globalTotal; }
