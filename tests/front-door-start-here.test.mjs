@@ -16,10 +16,11 @@ test('the front door orients a first-time visitor and recycles the back catalog'
   assert.match(home, /<HomeStartHere[\s\S]*<HomeSecondShift \/>/);
   assert.match(home, /fresh-still-open[\s\S]*<HomeOceanDrum \/>[\s\S]*<HomeWednesdayPublication \/>/);
   // Six evergreen doors, all long-lived rooms.
-  for (const href of ['/coffee', '/window', '/race', '/bell-choir', '/win95-games', '/prayer-candles']) {
+  for (const href of ['/coffee', '/window', '/race', '/bell-choir', '/win95-games', '/drum-house']) {
     assert.match(start, new RegExp(`href: '${href}'`));
   }
   assert.match(start, /noun\.pics\//);
+  assert.match(home, /<HomeScoreboard \/>/);
   // Back catalog: 30+ days old, no Cola flood, deterministic daily deal.
   assert.match(home, /CATALOG_MIN_AGE_MS = 30 \* 24/);
   assert.match(home, /Nouns Cola poster/);
