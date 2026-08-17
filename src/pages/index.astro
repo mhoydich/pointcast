@@ -19,10 +19,13 @@ import HomeWednesdayPublication from '../components/HomeWednesdayPublication.ast
 import HomeBeatDesk from '../components/HomeBeatDesk.astro';
 import HomeSecondShift from '../components/HomeSecondShift.astro';
 import HomeHapticDreams from '../components/HomeHapticDreams.astro';
+import HomeStartHere from '../components/HomeStartHere.astro';
+import HomeBackCatalog from '../components/HomeBackCatalog.astro';
+import type { CatalogItem } from '../components/HomeBackCatalog.astro';
 import SuperAuthRibbon from '../components/SuperAuthRibbon.astro';
 import SuperFollowRibbon from '../components/SuperFollowRibbon.astro';
 import WalletChip from '../components/WalletChip.astro';
-import { CHANNEL_LIST } from '../lib/channels';
+import { CHANNEL_LIST, getChannel } from '../lib/channels';
 import { HOME_FRESH_FEATURE } from '../lib/home-freshness';
 import { HOME_SIGNALS } from '../lib/home-signals';
 import {
@@ -50,6 +53,50 @@ const nowPlaying = allBlocks.find((block) => {
 }) ?? latestBlock;
 const blockCount = allBlocks.length;
 const showLatestShip = latestBlock?.data.id !== HOME_FRESH_FEATURE.blockId;
+
+// Back-catalog pool: 30+ days old, has a dek, round-robin across channels so
+// no single desk (Cola posters, objkt drops) floods the shelf.
+const CATALOG_MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const catalogCutoff = Date.now() - CATALOG_MIN_AGE_MS;
+const catalogByChannel = new Map<string, typeof allBlocks>();
+for (const block of allBlocks) {
+  const d = block.data;
+  if (d.timestamp.getTime() > catalogCutoff) continue;
+  if (!d.dek || d.type === 'BIRTHDAY') continue;
+  if (/^Nouns Cola poster/i.test(d.title)) continue;
+  const list = catalogByChannel.get(d.channel) ?? [];
+  if (list.length >= 6) continue;
+  list.push(block);
+  catalogByChannel.set(d.channel, list);
+}
+const catalogPool: CatalogItem[] = [];
+for (let round = 0; catalogPool.length < 30; round++) {
+  let added = false;
+  for (const [, list] of catalogByChannel) {
+    const block = list[round];
+    if (!block) continue;
+    added = true;
+    const d = block.data;
+    const channel = getChannel(d.channel);
+    const media = d.media as { kind?: string; src?: string; thumbnail?: string; alt?: string } | undefined;
+    const image = media?.kind === 'image' && media.src ? (media.thumbnail ?? media.src) : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`;
+    catalogPool.push({
+      id: d.id,
+      title: d.title,
+      dek: d.dek ?? '',
+      code: d.channel,
+      channelName: channel?.name ?? d.channel,
+      color: channel?.color800 ?? '#111',
+      bg: channel?.color50 ?? '#fff',
+      date: new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'America/Los_Angeles' }).format(d.timestamp),
+      image,
+      imageAlt: media?.alt ?? '',
+      href: `/b/${d.id}`,
+    });
+    if (catalogPool.length >= 30) break;
+  }
+  if (!added) break;
+}
 
 const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: new books, field studies, rooms, sound, games, public experiments, and machine-readable receipts.';
 
@@ -226,13 +273,10 @@ const alternates = [
 
       <div class="fresh-main">
         <HomeHapticDreams />
+        <HomeStartHere blockCount={blockCount} />
         <HomeSecondShift />
-        <HomeOceanDrum />
         <HomeNewEdition />
-        <HomeWorklifeOpener />
-        <HomePointCastField />
-        <HomeMovingMorning />
-        <HomeWednesdayPublication />
+        <HomeBackCatalog pool={catalogPool} total={blockCount} />
 
         <section class="fresh-hero" aria-labelledby="fresh-hero-title">
           <div class="fresh-hero__copy">
@@ -891,6 +935,24 @@ const alternates = [
               </a>
             ))}
           </div>
+        </section>
+
+        <section class="fresh-section fresh-still-open" aria-labelledby="fresh-still-open-title">
+          <div class="fresh-section-heading">
+            <div>
+              <p class="fresh-section-heading__kicker">Recent editions · still open</p>
+              <h2 id="fresh-still-open-title">Last month’s front doors, kept lit.</h2>
+            </div>
+            <p class="fresh-section-heading__note">
+              Each of these led the homepage in July or August. They still work,
+              still update, and still have their own routes.
+            </p>
+          </div>
+          <HomeOceanDrum />
+          <HomeWorklifeOpener />
+          <HomePointCastField />
+          <HomeMovingMorning />
+          <HomeWednesdayPublication />
         </section>
 
         <section class="fresh-section" aria-labelledby="fresh-channels-title">
