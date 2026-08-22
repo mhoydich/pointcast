@@ -24,6 +24,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return new Response(null, { status: 400, headers: cors });
   }
 
+  // Per-page-load analytics can exhaust the daily KV write budget. Keep this
+  // guard even after removing the client beacons so cached pages cannot write.
+  if (event === 'pageview' || event === 'page_view') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...cors,
+        'Cache-Control': 'no-store',
+        'X-PC-Analytics': 'pageview-suppressed',
+      },
+    });
+  }
+
   const meta = body.meta && typeof body.meta === 'object' ? body.meta : undefined;
   const metaJson = meta ? JSON.stringify(meta) : undefined;
   if (metaJson && metaJson.length > 2048) {
