@@ -176,7 +176,7 @@ const rooms: Room[] = [
               <div class="win-body">
                 <div class={`iso room-${r.variant}`}>
                   <span class="iso-label">{r.label}</span>
-                  <span class={`iso-live${r.cold ? ' cold' : ''}`}>{r.presence}</span>
+                  <span class={`iso-live${r.cold ? ' cold' : ''}`} data-room-path={r.href}>{r.presence}</span>
                   <div class="bldg"></div>
                   <div class="iso-now">{r.now}</div>
                 </div>
@@ -251,7 +251,7 @@ const rooms: Room[] = [
   </main>
 
   <footer class="rooms-foot">
-    pointcast.xyz · /rooms · v0 · pixel-iso town
+    pointcast.xyz · /rooms · v1 · pixel-iso town
   </footer>
 </BaseLayout>
 
@@ -317,6 +317,143 @@ const rooms: Room[] = [
       } catch {}
     });
   });
+
+  // ── v1.1 Per-room presence counts ──────────────────────────────────────
+  // The global PRESENCE DO broadcasts sessions[].currentPath — we bucket
+  // visitors by room without touching the DO. Cold tiles keep their static
+  // labels; hot rooms get a live count.
+  (() => {
+    if (!window.location.host.endsWith('pointcast.xyz') && !window.location.host.endsWith('.pages.dev')) return;
+
+    const sessionId = (() => {
+      const KEY = 'pc:session';
+      let v = localStorage.getItem(KEY);
+      if (!v) {
+        v = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
+        try { localStorage.setItem(KEY, v); } catch {}
+      }
+      return v;
+    })();
+
+    const wsURL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://')
+      + window.location.host + '/api/presence';
+
+    function applyRoomCounts(sessions: Array<{ currentPath?: string }>) {
+      const counts = new Map<string, number>();
+      for (const s of sessions) {
+        if (s.currentPath) counts.set(s.currentPath, (counts.get(s.currentPath) ?? 0) + 1);
+      }
+      document.querySelectorAll<HTMLElement>('[data-room-path]').forEach((el) => {
+        const path = el.dataset.roomPath;
+        if (!path || path === '#') return;
+        if (el.classList.contains('cold')) return;
+        const n = counts.get(path) ?? 0;
+        el.textContent = n > 0 ? `${n} here` : '0 here';
+      });
+    }
+
+    try {
+      const ws = new WebSocket(`${wsURL}?sid=${encodeURIComponent(sessionId)}&kind=human`);
+      ws.addEventListener('message', (evt) => {
+        try {
+          const { sessions } = JSON.parse(evt.data as string) as { sessions?: Array<{ currentPath?: string }> };
+          if (Array.isArray(sessions)) applyRoomCounts(sessions);
+        } catch {}
+      });
+      // Silently close on error/timeout — presence is enhancement-only.
+      const fallback = window.setTimeout(() => { try { ws.close(); } catch {} }, 4000);
+      ws.addEventListener('open', () => clearTimeout(fallback));
+      ws.addEventListener('error', () => clearTimeout(fallback));
+    } catch {}
+  })();
+
+  // ── v1.2 Live "now playing" from /api/bath + /api/drum ─────────────────
+  // Each fetch races a 500ms AbortController so a slow endpoint never
+  // degrades the page; static fallback strings remain on timeout/error.
+  (() => {
+    const TIMEOUT = 500;
+
+    function timed(url: string): Promise<Response> {
+      const ctrl = new AbortController();
+      const id = window.setTimeout(() => ctrl.abort(), TIMEOUT);
+      return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id));
+    }
+
+    timed('/api/bath')
+      .then((r) => r.json())
+      .then((d: { recent?: Array<{ mood: string; spotify_type: string }> }) => {
+        const latest = d.recent?.[0];
+        if (!latest) return;
+        const el = document.querySelector<HTMLElement>('.room-bath .iso-now');
+        if (el) el.textContent = `▶ ${latest.spotify_type} · ${latest.mood} palette`;
+      })
+      .catch(() => {});
+
+    timed('/api/drum')
+      .then((r) => r.json())
+      .then((d: { globalTotal?: number }) => {
+        if (typeof d.globalTotal !== 'number') return;
+        const el = document.querySelector<HTMLElement>('.room-drum .iso-now');
+        if (el) el.textContent = `▶ ${d.globalTotal.toLocaleString()} beats · orchestra`;
+      })
+      .catch(() => {});
+  })();
+
+  // ── v1.3 Live FA2 collection counts from TzKT ──────────────────────────
+  // Fires on page load (if wallet already in localStorage) and on every
+  // pc:wallet-change event. Empty KT1 slots (trophy/snap) stay static.
+  (() => {
+    const CONTRACTS: Record<string, string> = {
+      mug:    'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt', // Coffee Mugs
+      noun:   'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh', // Visit Nouns
+      // trophy and snap contracts not yet originated on mainnet
+    };
+
+    const LABEL: Record<string, string> = {
+      mug: 'mugs', noun: 'nouns', trophy: 'trophies', snap: 'snaps',
+    };
+
+    function fetchCounts(address: string) {
+      for (const [key, kt1] of Object.entries(CONTRACTS)) {
+        const tile = document.querySelector<HTMLElement>(`.col-tile.${key}`);
+        if (!tile) continue;
+        fetch(
+          `https://api.tzkt.io/v1/tokens/balances/count`
+          + `?account=${encodeURIComponent(address)}`
+          + `&token.contract=${encodeURIComponent(kt1)}`
+          + `&balance.gt=0`,
+        )
+          .then((r) => r.json())
+          .then((count: number) => {
+            if (typeof count === 'number') {
+              tile.dataset.label = `${LABEL[key] ?? key} · ${count}`;
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    function activeAddress(): string | null {
+      try {
+        const addr = localStorage.getItem('pc:wallet-active');
+        if (addr) return addr;
+        const raw = localStorage.getItem('pc:wallet');
+        if (raw) {
+          const w = JSON.parse(raw) as { address?: string };
+          if (typeof w.address === 'string') return w.address;
+        }
+      } catch {}
+      return null;
+    }
+
+    const initial = activeAddress();
+    if (initial) fetchCounts(initial);
+
+    window.addEventListener('pc:wallet-change', ((evt: CustomEvent<{ address?: string } | null>) => {
+      const addr = evt.detail?.address ?? activeAddress();
+      if (addr) fetchCounts(addr);
+    }) as EventListener);
+  })();
 </script>
 
 <style>
