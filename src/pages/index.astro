@@ -1,218 +1,56 @@
 ---
 /**
- * PointCast front door — current live edition.
- *
- * The archive remains broad; the homepage is deliberately edited:
- * one bright current edition, one live signal, three clear doors, field notes,
- * a human-sized edit, then channels.
- * This keeps PointCast legible on a first visit without hiding any route,
- * feed, block, app, room, or machine-readable surface.
+ * PointCast Rosebud — a playable front door.
+ * Directed by Mike on 2026-08-31: "try a new front page drum game ... very rosebud."
  */
-import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
-import HomePointCastField from '../components/HomePointCastField.astro';
-import HomeMovingMorning from '../components/HomeMovingMorning.astro';
-import HomeNewEdition from '../components/HomeNewEdition.astro';
-import HomeOceanDrum from '../components/HomeOceanDrum.astro';
-import HomeWorklifeOpener from '../components/HomeWorklifeOpener.astro';
-import HomeWednesdayPublication from '../components/HomeWednesdayPublication.astro';
-import HomeBeatDesk from '../components/HomeBeatDesk.astro';
-import HomeSecondShift from '../components/HomeSecondShift.astro';
-import HomeHapticDreams from '../components/HomeHapticDreams.astro';
-import HomeStartHere from '../components/HomeStartHere.astro';
-import HomeBackCatalog from '../components/HomeBackCatalog.astro';
-import HomeScoreboard from '../components/HomeScoreboard.astro';
-import type { CatalogItem } from '../components/HomeBackCatalog.astro';
-import SuperAuthRibbon from '../components/SuperAuthRibbon.astro';
-import SuperFollowRibbon from '../components/SuperFollowRibbon.astro';
-import WalletChip from '../components/WalletChip.astro';
-import { CHANNEL_LIST, getChannel } from '../lib/channels';
-import { HOME_FRESH_FEATURE } from '../lib/home-freshness';
-import { HOME_SIGNALS } from '../lib/home-signals';
-import {
-  BELLS_BLOOM_ARCHIVE_AT,
-  BELLS_BLOOM_MANIFEST_HREF,
-  BELLS_BLOOM_SHOWCAST_HREF,
-  BELLS_BLOOM_TRANSMISSIONS,
-  getBellsBloomTransmission,
-  isBellsBloomArchive,
-} from '../lib/bells-bloom-transmissions';
-import '../styles/front-door-fresh.css';
+import { CHANNEL_LIST } from '../lib/channels';
 
-import windowsArtwork from '../assets/campaigns/network-el-segundo-2026/100-windows.png';
-import commonsArtwork from '../assets/campaigns/local-star-commons-2026/commons-og.png';
-import switchboardArtwork from '../assets/sunset-switchboard/og.png';
-import gardenKiosk from '../assets/todays-art/2026-07-21/midjourney/garden-kiosk.webp';
-
-const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
-
-const latestBlock = allBlocks[0] ?? null;
-const nowPlaying = allBlocks.find((block) => {
-  const meta = block.data.meta as Record<string, unknown> | undefined;
-  return meta?.currentlyPlaying === true;
-}) ?? latestBlock;
-const blockCount = allBlocks.length;
-const showLatestShip = latestBlock?.data.id !== HOME_FRESH_FEATURE.blockId;
-
-// Back-catalog pool: 30+ days old, has a dek, round-robin across channels so
-// no single desk (Cola posters, objkt drops) floods the shelf.
-const CATALOG_MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const catalogCutoff = Date.now() - CATALOG_MIN_AGE_MS;
-const catalogByChannel = new Map<string, typeof allBlocks>();
-for (const block of allBlocks) {
-  const d = block.data;
-  if (d.timestamp.getTime() > catalogCutoff) continue;
-  if (!d.dek || d.type === 'BIRTHDAY') continue;
-  if (/^Nouns Cola poster/i.test(d.title)) continue;
-  const list = catalogByChannel.get(d.channel) ?? [];
-  if (list.length >= 6) continue;
-  list.push(block);
-  catalogByChannel.set(d.channel, list);
-}
-const catalogPool: CatalogItem[] = [];
-for (let round = 0; catalogPool.length < 30; round++) {
-  let added = false;
-  for (const [, list] of catalogByChannel) {
-    const block = list[round];
-    if (!block) continue;
-    added = true;
-    const d = block.data;
-    const channel = getChannel(d.channel);
-    const media = d.media as { kind?: string; src?: string; thumbnail?: string; alt?: string } | undefined;
-    const image = media?.kind === 'image' && media.src ? (media.thumbnail ?? media.src) : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`;
-    catalogPool.push({
-      id: d.id,
-      title: d.title,
-      dek: d.dek ?? '',
-      code: d.channel,
-      channelName: channel?.name ?? d.channel,
-      color: channel?.color800 ?? '#111',
-      bg: channel?.color50 ?? '#fff',
-      date: new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'America/Los_Angeles' }).format(d.timestamp),
-      image,
-      imageAlt: media?.alt ?? '',
-      href: `/b/${d.id}`,
-    });
-    if (catalogPool.length >= 30) break;
-  }
-  if (!added) break;
-}
-
-const homeDescription = 'PointCast is an agent-native broadcast from El Segundo: new books, field studies, rooms, sound, games, public experiments, and machine-readable receipts.';
-
-const heroSignals = HOME_SIGNALS;
-const activeTransmission = getBellsBloomTransmission();
-const bellsBloomIsArchive = isBellsBloomArchive();
-const activeTransmissionDescription = `Bell ${activeTransmission.id} of 28. One morning transmission from Bells / Bloom, changing daily at 8:08 PT.`;
-
-const stories = [
-  {
-    href: '/network-el-segundo/v2',
-    image: windowsArtwork.src,
-    alt: 'Network El Segundo wall of one hundred public windows',
-    channel: 'CH.ESC · NOTE',
-    id: '0486',
-    title: 'A city of 100 windows.',
-    dek: 'Every verified Tezos wallet turns on one public light. The wall shows a count, never the addresses.',
-    light: false,
-  },
-  {
-    href: '/local-star-commons',
-    image: commonsArtwork.src,
-    alt: 'Local Star Commons founding release artwork',
-    channel: 'CH.ESC · NOTE',
-    id: '0490',
-    title: 'Useful things, governed in common.',
-    dek: 'Six local-first objects and a contribution-governed founding movement.',
-    light: true,
-  },
-  {
-    href: '/sunset-switchboard',
-    image: switchboardArtwork.src,
-    alt: 'Sunset Switchboard broadcast instrument at dusk',
-    channel: 'CH.ESC · APP',
-    id: '0487',
-    title: 'Route one good signal before dark.',
-    dek: 'Choose a sky, tune a band, set the reach, and leave no tracking trail.',
-    light: false,
-  },
-  {
-    href: '/gallery/today',
-    image: gardenKiosk.src,
-    alt: 'A bright civic garden kiosk from the PointCast visual desk',
-    channel: 'TODAY’S ART',
-    id: 'VISUAL DESK',
-    title: 'One visual signal for the day.',
-    dek: 'The art desk becomes a place to pause, not another mile of homepage.',
-    light: true,
-  },
+const pads = [
+  { id: 'kick', key: 'A', name: 'ROOT', note: 'low & round' },
+  { id: 'bloom', key: 'S', name: 'BLOOM', note: 'paper snap' },
+  { id: 'dew', key: 'K', name: 'DEW', note: 'silver air' },
+  { id: 'thorn', key: 'L', name: 'THORN', note: 'dry bite' },
 ];
 
-function prettyShipTime(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/Los_Angeles',
-    timeZoneName: 'short',
-  }).format(date);
-}
+const seedPattern = [
+  [true, false, false, false, true, false, false, false, true, false, false, true, true, false, false, false],
+  [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false],
+  [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, true],
+  [false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, false],
+];
+
+const steps = Array.from({ length: 16 }, (_, index) => index);
+const homeDescription = 'PointCast is an agent-native broadcast from El Segundo. Rosebud turns the front door into a playable four-voice drum garden.';
+const socialImage = 'https://pointcast.xyz/images/og-pointcast-rosebud.png';
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  '@id': 'https://pointcast.xyz/#home',
-  name: 'PointCast front door',
-  description: homeDescription,
-  url: 'https://pointcast.xyz/',
-  inLanguage: 'en-US',
-  hasPart: allBlocks.slice(0, 20).map((block) => ({
-    '@type': 'CreativeWork',
-    '@id': `https://pointcast.xyz/b/${block.data.id}`,
-    name: block.data.title,
-    datePublished: block.data.timestamp.toISOString(),
-    url: `https://pointcast.xyz/b/${block.data.id}`,
-  })),
-  mainEntity: [
+  '@graph': [
     {
-      '@type': 'ItemList',
-      name: 'PointCast Monday field paper — August 3, 2026',
-      numberOfItems: 4,
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'SHRINE/25 — Nothing Left Behind', url: 'https://pointcast.xyz/beach-commons/v18/shrines' },
-        { '@type': 'ListItem', position: 2, name: 'UNIFORMS — The Clothes Have Clocked In', url: 'https://pointcast.xyz/worklife/uniforms' },
-        { '@type': 'ListItem', position: 3, name: 'California Football Is Not Dead', url: 'https://pointcast.xyz/25/magazine/california-football' },
-        { '@type': 'ListItem', position: 4, name: 'OPEN/25 — The Open-Air Commons', url: 'https://pointcast.xyz/beach-commons/v18/outdoors' },
-      ],
+      '@type': 'CollectionPage',
+      '@id': 'https://pointcast.xyz/#home',
+      name: 'PointCast Rosebud',
+      description: homeDescription,
+      url: 'https://pointcast.xyz/',
+      inLanguage: 'en-US',
     },
     {
-      '@type': 'Periodical',
-      '@id': 'https://pointcast.xyz/worklife#publication',
-      name: 'WORK/LIFE',
-      url: 'https://pointcast.xyz/worklife',
-      hasPart: [
-        { '@type': 'Article', name: 'UNIFORMS — THE CLOTHES HAVE CLOCKED IN', url: 'https://pointcast.xyz/worklife/uniforms' },
-        { '@type': 'CollectionPage', name: 'OPEN TO WORK — A PUBLIC SIGNAL BOARD', url: 'https://pointcast.xyz/worklife/open-to-work', numberOfItems: 0 },
-        { '@type': 'MusicPlaylist', name: 'WORK/LIFE 001 — ANOTHER MANIC MONDAY', url: 'https://pointcast.xyz/worklife/001', numTracks: 18 },
-      ],
-    },
-    {
-      '@type': 'Periodical',
-      '@id': 'https://pointcast.xyz/wednesday#publication',
-      name: 'WEDNESDAY 9:34',
-      url: 'https://pointcast.xyz/wednesday',
-      hasPart: [
-        { '@type': 'MusicPlaylist', name: 'WEDNESDAY 9:34 / THE GOOD WORK', url: 'https://pointcast.xyz/wednesday/002', numTracks: 18 },
-        { '@type': 'MusicPlaylist', name: 'Wednesday Morning Uplift', url: 'https://pointcast.xyz/playlists/wednesday-morning-uplift', numTracks: 18 },
-      ],
+      '@type': 'WebApplication',
+      '@id': 'https://pointcast.xyz/#rosebud',
+      name: 'PointCast Rosebud',
+      applicationCategory: 'GameApplication',
+      operatingSystem: 'Any modern web browser',
+      browserRequirements: 'Web Audio API',
+      isAccessibleForFree: true,
+      url: 'https://pointcast.xyz/#rosebud',
+      description: 'A four-voice playable drum garden and sixteen-step sequencer.',
     },
   ],
 };
 
 const alternates = [
-  { type: 'application/json', href: '/blocks.json', title: 'All blocks (JSON)' },
+  { type: 'application/json', href: '/blocks.json', title: 'All PointCast blocks (JSON)' },
   { type: 'application/rss+xml', href: '/feed.xml', title: 'PointCast RSS' },
   { type: 'application/feed+json', href: '/feed.json', title: 'PointCast JSON Feed' },
   ...CHANNEL_LIST.map((channel) => ({
@@ -226,1041 +64,508 @@ const alternates = [
 <BlockLayout
   title="Home"
   description={homeDescription}
-  image="https://pointcast.xyz/beach-commons/v18/shrines/og.png"
-  themeColor="#090b0b"
+  image={socialImage}
+  imageWidth={1200}
+  imageHeight={630}
+  themeColor="#e53f47"
   jsonLd={jsonLd}
   alternates={alternates}
   immersive={true}
   showNetworkStrip={false}
   frame={{
-    image: 'https://pointcast.xyz/beach-commons/v18/shrines/og.png',
+    image: socialImage,
     aspectRatio: '1.91:1',
     buttons: [
-      { label: 'Play Signal Run', action: 'link', target: 'https://pointcast.xyz/haptic-dreams/play' },
-      { label: 'Read WORK/LIFE', action: 'link', target: 'https://pointcast.xyz/worklife/uniforms' },
-      { label: 'Read the state desk', action: 'link', target: 'https://pointcast.xyz/25/magazine/california-football' },
+      { label: 'Play Rosebud', action: 'link', target: 'https://pointcast.xyz/#rosebud' },
+      { label: 'Enter the drum universe', action: 'link', target: 'https://pointcast.xyz/drum' },
+      { label: 'Read the wire', action: 'link', target: 'https://pointcast.xyz/archive' },
     ],
   }}
 >
-  <div class="fresh-home">
-    <div class="fresh-on-air" aria-label="Currently spinning on PointCast" data-live-now-playing>
-      <span class="fresh-on-air__label" data-live-now-state>
-        <span class="fresh-on-air__dot" aria-hidden="true"></span>
-        <span data-live-now-state-text>On air</span>
-      </span>
-      <span class="fresh-on-air__track">
-        <strong data-live-now-label>Currently spinning</strong>
-        <span data-live-now-title>{nowPlaying?.data.title ?? 'PointCast live signal'}</span>
-      </span>
-      <a class="fresh-on-air__action" href="/now-playing.json">Read the signal →</a>
-    </div>
+  <div class="rb-home" data-rosebud-home>
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="PointCast home">
+        <span class="mark-dot">P</span>
+        <span>POINTCAST</span>
+      </a>
+      <div class="live-line"><i></i> LIVE FROM EL SEGUNDO · SIGNAL 104</div>
+      <a class="menu-pill" href="/archive">THE WIRE <span>↗</span></a>
+    </header>
 
-    <div class="fresh-shell">
-      <header class="fresh-masthead">
-        <a class="fresh-brand" href="/" aria-label="PointCast home">PointCast</a>
-        <div class="fresh-masthead__meta" aria-label="PointCast status">
-          <span>{blockCount} blocks</span>
-          <span>El Segundo</span>
-          <span id="fresh-clock">—:— PT</span>
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow">A NEW FRONT DOOR · FIELD TEST 08/31</p>
+        <h1>The internet should make a little <em>noise.</em></h1>
+        <p class="dek">PointCast is an agent-native broadcast from El Segundo. Today, the broadcast is you.</p>
+        <div class="hero-meta">
+          <a href="#rosebud">↓ TOUCH THE ROSEBUD</a>
+          <span>NO SIGN-IN · SOUND ON</span>
         </div>
-        <div class="fresh-utility">
-          <div class="fresh-wallet"><WalletChip /></div>
-          <a href="/now">Now</a>
-          <a class="fresh-utility__spotify" href="/auth#spotify" title="Spotify authorization and Super Auth controls">Spotify auth</a>
-          <a href="/archive">Archive</a>
-          <a href="/for-agents">For agents</a>
+      </div>
+
+      <div class="rose-orbit" aria-hidden="true">
+        <span class="orbit orbit-one"></span>
+        <span class="orbit orbit-two"></span>
+        <span class="petal petal-a"></span>
+        <span class="petal petal-b"></span>
+        <span class="petal petal-c"></span>
+        <span class="rose-core">104</span>
+        <span class="orbit-copy">SOMETHING IS ALWAYS<br />COMING INTO BLOOM</span>
+      </div>
+    </section>
+
+    <section class="machine-section" id="rosebud" aria-labelledby="machine-title">
+      <div class="machine-topline">
+        <div>
+          <p class="eyebrow dark">PLAY LAYER / 001</p>
+          <h2 id="machine-title">ROSEBUD</h2>
         </div>
+        <div class="counter"><span data-hit-count>000</span> blooms sent</div>
+      </div>
+
+      <div class="machine">
+        <div class="machine-labels">
+          <span>POINTCAST SOUND SYSTEM</span>
+          <span class="serial">PC–RB / 2026</span>
+        </div>
+        <div class="pads" role="group" aria-label="Rosebud drum pads">
+          {pads.map((pad, index) => (
+            <button
+              class={`drum-pad pad-${index + 1}`}
+              type="button"
+              data-drum={pad.id}
+              aria-label={`Play ${pad.name}: ${pad.note}. Keyboard key ${pad.key}`}
+            >
+              <span class="keycap">{pad.key}</span>
+              <span class="pad-flower" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <strong>{pad.name}</strong>
+              <small>{pad.note}</small>
+            </button>
+          ))}
+        </div>
+        <div class="machine-footer">
+          <p>PLAY WITH <kbd>A</kbd> <kbd>S</kbd> <kbd>K</kbd> <kbd>L</kbd></p>
+          <div class="level"><span>SOFT</span><i></i><i></i><i class="on"></i><i class="on"></i><i class="hot"></i><span>LOUD</span></div>
+          <p>ONE ROOM · MANY HANDS</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sequencer-section" aria-labelledby="sequence-title">
+      <header class="sequence-head">
+        <div>
+          <p class="eyebrow">MAKE A 16-PETAL LOOP</p>
+          <h2 id="sequence-title">GROW A RHYTHM.</h2>
+        </div>
+        <p>Every square is a small decision.<br />Turn a few on. Let it repeat.</p>
       </header>
 
-      <div class="fresh-main">
-        <HomeHapticDreams />
-        <HomeStartHere blockCount={blockCount} />
-        <HomeScoreboard />
-        <HomeSecondShift />
-        <HomeNewEdition />
-        <HomeBackCatalog pool={catalogPool} total={blockCount} />
+      <div class="transport">
+        <button type="button" class="play-button" data-transport aria-pressed="false">
+          <span data-transport-icon>▶</span> <b data-transport-copy>START THE BLOOM</b>
+        </button>
+        <label class="tempo-control">
+          <span>TEMPO</span>
+          <input data-tempo type="range" min="72" max="148" value="104" />
+          <strong data-tempo-copy>104 BPM</strong>
+        </label>
+        <button type="button" class="shuffle-button" data-shuffle>SHAKE THE GARDEN ↝</button>
+      </div>
 
-        <section class="fresh-hero" aria-labelledby="fresh-hero-title">
-          <div class="fresh-hero__copy">
-            <div>
-              <p class="fresh-eyebrow">
-                <span class="fresh-live-dot" aria-hidden="true"></span>
-                Front door / fresh signal
-              </p>
-              <h2 id="fresh-hero-title">Live work, <em>still moving.</em></h2>
-              <p class="fresh-hero__dek">
-                PointCast is an agent-native broadcast from El Segundo: art,
-                rooms, public experiments, games, and machine-readable receipts.
-              </p>
-              <div class="fresh-hero__actions">
-                <a class="fresh-button fresh-button--primary" href="/now">Open what is live</a>
-                <a class="fresh-button fresh-button--quiet" href="#fresh-doors">Choose a door</a>
-              </div>
-            </div>
-            <div class="fresh-hero__foot" aria-label="PointCast operating notes">
-              <span>● No account to look around</span>
-              <span>● Human + agent readable</span>
-              <span>● Tezos first</span>
-            </div>
+      <div class="seq-scroller" tabindex="0" aria-label="Scrollable 16-step sequencer">
+        <div class="sequence">
+          <div class="sequence-numbers" aria-hidden="true">
+            <span>VOICE</span>
+            {steps.map((step) => <i>{String(step + 1).padStart(2, '0')}</i>)}
           </div>
-
-          <figure
-            class="fresh-hero__art"
-            data-fresh-hero-art
-            data-signal-id={heroSignals[0].id}
-            style={`--fresh-signal-color: ${heroSignals[0].color}`}
-          >
-            <img
-              src={heroSignals[0].src}
-              alt={heroSignals[0].alt}
-              width="896"
-              height="1344"
-              loading="eager"
-              fetchpriority="high"
-              data-fresh-hero-image
-            />
-            <div class="fresh-hero__scan" aria-hidden="true"></div>
-            <figcaption class="fresh-hero__art-label">
-              <span class="fresh-hero__art-meta">
-                <span data-fresh-hero-index>Field signal 01 / 04</span>
-                <span data-fresh-hero-frequency>{heroSignals[0].frequency}</span>
-              </span>
-              <strong data-fresh-hero-title>{heroSignals[0].title}</strong>
-              <span data-fresh-hero-note>{heroSignals[0].note}</span>
-              <a href={heroSignals[0].href} data-fresh-hero-link>Open frequency ↗</a>
-            </figcaption>
-            <div class="fresh-signal-tuner">
-              <div class="fresh-signal-tuner__presets" role="group" aria-label="Choose a field signal">
-                {heroSignals.map((signal, signalIndex) => (
-                  <button
-                    type="button"
-                    data-fresh-signal-select={signalIndex}
-                    aria-label={`Tune to ${signal.title}, ${signal.frequency}`}
-                    aria-pressed={signalIndex === 0 ? 'true' : 'false'}
-                  >
-                    <span>{String(signalIndex + 1).padStart(2, '0')}</span>
-                    <small>{signal.frequency}</small>
-                  </button>
-                ))}
-              </div>
-              <button class="fresh-shuffle" type="button" data-fresh-shuffle>Change the signal ↻</button>
-            </div>
-            <p class="fresh-signal-status" data-fresh-signal-status aria-live="polite">
-              Receiving {heroSignals[0].title}, {heroSignals[0].frequency}.
-            </p>
-          </figure>
-        </section>
-
-        <SuperAuthRibbon />
-        <SuperFollowRibbon />
-
-        <HomeBeatDesk />
-
-        <section
-          class="fresh-current"
-          aria-labelledby="fresh-current-title"
-          data-home-freshness={HOME_FRESH_FEATURE.publishedAt}
-          data-today-signal
-          data-archive-at={BELLS_BLOOM_ARCHIVE_AT}
-        >
-          <a class="fresh-current__image" href={BELLS_BLOOM_SHOWCAST_HREF} data-today-signal-link>
-            <img
-              src={activeTransmission.image}
-              alt={activeTransmission.alt}
-              width="1024"
-              height="1024"
-              loading="eager"
-              data-today-signal-image
-            />
-            <span class="fresh-current__stamp">
-              <span class="fresh-current__pulse" aria-hidden="true"></span>
-              <span data-today-signal-label>{bellsBloomIsArchive ? 'Recent transmissions' : 'Today’s signal'}</span>
-            </span>
-          </a>
-
-          <div class="fresh-current__copy">
-            <div>
-              <p class="fresh-current__kicker" data-today-signal-kicker>
-                {bellsBloomIsArchive ? 'Bells / Bloom · recent transmissions' : 'Bell of the day · 08:08 PT'}
-              </p>
-              <h2 id="fresh-current-title" data-today-signal-title>{activeTransmission.title}</h2>
-              <p class="fresh-current__dek" data-today-signal-dek>{activeTransmissionDescription}</p>
-            </div>
-
-            <div>
-              <ul class="fresh-current__facts" aria-label="Showcast details">
-                <li data-today-signal-date>{activeTransmission.dateLabel}</li>
-                <li data-today-signal-count>Bell {activeTransmission.id} / 28</li>
-                <li data-today-signal-mode>{bellsBloomIsArchive ? '7 transmissions' : 'Changes daily'}</li>
-              </ul>
-              <div class="fresh-current__actions">
-                <a class="fresh-button fresh-button--primary" href={BELLS_BLOOM_SHOWCAST_HREF}>Enter the showcast</a>
-                <a class="fresh-current__text-link" href={`/b/${HOME_FRESH_FEATURE.blockId}`}>
-                  Block {HOME_FRESH_FEATURE.blockId}
-                </a>
-                <a class="fresh-current__text-link" href={BELLS_BLOOM_MANIFEST_HREF}>JSON</a>
-              </div>
-            </div>
-          </div>
-
-          <div class="fresh-current__rail" aria-label="Bells / Bloom transmission calendar">
-            <p data-today-signal-rail-label>{bellsBloomIsArchive ? 'Recent transmissions' : 'This week at 08:08 PT'}</p>
-            <div>
-              {BELLS_BLOOM_TRANSMISSIONS.map((transmission, transmissionIndex) => (
+          {pads.map((pad, row) => (
+            <div class="sequence-row">
+              <div class="track-name"><i class={`track-dot track-${row + 1}`}></i><strong>{pad.name}</strong><small>{pad.key}</small></div>
+              {seedPattern[row].map((on, step) => (
                 <button
                   type="button"
-                  data-today-signal-select={transmissionIndex}
-                  aria-label={`Preview ${transmission.title}, bell ${transmission.id} of 28`}
-                  aria-pressed={transmission.id === activeTransmission.id ? 'true' : 'false'}
-                >
-                  <span>{transmission.dateLabel.split(' · ')[0]}</span>
-                  <strong>{transmission.id}</strong>
-                </button>
+                  class:list={{ 'rb-step': true, 'is-on': on }}
+                  data-row={row}
+                  data-step={step}
+                  aria-label={`${on ? 'Remove' : 'Add'} ${pad.name} on step ${step + 1}`}
+                  aria-pressed={on ? 'true' : 'false'}
+                ><span></span></button>
               ))}
             </div>
-          </div>
-        </section>
-
-        {latestBlock && showLatestShip && (
-          <aside class="fresh-signal" aria-label="Latest PointCast ship">
-            <span class="fresh-signal__label">Latest ship</span>
-            <span class="fresh-signal__copy">
-              <strong>{latestBlock.data.title}</strong>
-              <span>
-                CH.{latestBlock.data.channel} · Block {latestBlock.data.id} · {prettyShipTime(latestBlock.data.timestamp)}
-              </span>
-            </span>
-            <a class="fresh-signal__open" href={`/b/${latestBlock.data.id}`}>Open +</a>
-          </aside>
-        )}
-
-        <section class="fresh-section" aria-labelledby="fresh-bells-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">New this weekend · the bell wing</p>
-              <h2 id="fresh-bells-title">Two rooms, twelve bells.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              The same pentatonic wall, two kinds of together: ring it live
-              with whoever is standing here, or leave a phrase hanging for
-              whoever comes next. Nothing you play can be wrong.
-            </p>
-          </div>
-
-          <div class="fresh-bells">
-            <a class="fresh-bell-room" href="/bell-choir">
-              <img
-                class="fresh-bell-room__image"
-                src="/images/og-bell-choir.png"
-                alt="Bell Choir — five Midjourney bouquets hanging from a beam over the words a bell wall you play together"
-                width="1200"
-                height="630"
-                loading="lazy"
-              />
-              <span class="fresh-bell-room__meta">
-                <span>CH.GDN · 0496</span>
-                <span class="fresh-bell-room__live">● LIVE ROOM</span>
-              </span>
-              <span class="fresh-bell-room__copy">
-                <h3>Bell Choir — play it together, now.</h3>
-                <p>
-                  Everyone in the room hears every bell you ring, and everyone
-                  is a Noun. When it's quiet, the wall replays the last
-                  visitors — you're never alone in there, just early.
-                </p>
-              </span>
-              <span class="fresh-bell-room__action">Step into the room ↗</span>
-            </a>
-
-            <a class="fresh-bell-room" href="/bell-post">
-              <img
-                class="fresh-bell-room__image"
-                src="/images/og-bell-post.png"
-                alt="Bell Post — four bouquet cards hanging from a rail over the words leave a phrase hanging for whoever comes next"
-                width="1200"
-                height="630"
-                loading="lazy"
-              />
-              <span class="fresh-bell-room__meta">
-                <span>CH.GDN · 0505</span>
-                <span>PHRASE RACK</span>
-              </span>
-              <span class="fresh-bell-room__copy">
-                <h3>Bell Post — leave one for the next visitor.</h3>
-                <p>
-                  Play a few bells and hang them on the rack for a week. THE
-                  ROUND braids the last five visitors into one piece of music
-                  that can't clash.
-                </p>
-              </span>
-              <span class="fresh-bell-room__action">Hang a phrase ↗</span>
-            </a>
-          </div>
-        </section>
-
-        <section class="fresh-section" id="fresh-doors" aria-labelledby="fresh-doors-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">Start smaller</p>
-              <h2 id="fresh-doors-title">Choose one door.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              The full archive is still here. The front door only needs to make
-              the first good choice obvious.
-            </p>
-          </div>
-
-          <div class="fresh-doors">
-            <a class="fresh-door fresh-door--now" href="/now">
-              <span class="fresh-door__top">
-                <span class="fresh-door__number">01</span>
-                <span>/now ↗</span>
-              </span>
-              <span class="fresh-door__body">
-                <h3>See what is live.</h3>
-                <p>Today’s broadcast, current rooms, active projects, and the shortest path to what changed.</p>
-              </span>
-            </a>
-            <a class="fresh-door fresh-door--play" href="/win95-games">
-              <span class="fresh-door__top">
-                <span class="fresh-door__number">02</span>
-                <span>/play ↗</span>
-              </span>
-              <span class="fresh-door__body">
-                <h3>Play something.</h3>
-                <p>Nouns games, browser instruments, races, cards, drums, and small public rooms.</p>
-              </span>
-            </a>
-            <a class="fresh-door fresh-door--local" href="/network-el-segundo">
-              <span class="fresh-door__top">
-                <span class="fresh-door__number">03</span>
-                <span>/local ↗</span>
-              </span>
-              <span class="fresh-door__body">
-                <h3>Join the signal.</h3>
-                <p>Network El Segundo, civic objects, shared light, and experiments that start close to home.</p>
-              </span>
-            </a>
-          </div>
-        </section>
-
-        <section class="fresh-section fresh-field-edition" aria-labelledby="fresh-field-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">Living magazine + pocket garden + public commons + future book</p>
-              <h2 id="fresh-field-title">One season. Many rooms.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              PointCast College Football now gathers the ranking, receipts,
-              stadium songs, mascots, future schools, field kits, and the season
-              ledger into one living magazine. Georgia, Ground Zero reads the
-              sport’s most complete operating system through players, students,
-              workers, Athens, and the state—then asks how the machine stays human.
-              The Lane Kiffin Check reads the LSU merger across players, capital,
-              area, press, foes, and fans.
-              Coach Weather turns the 50 into a return rhythm: named pressure fronts,
-              visible movement, and receipts.
-              The Coaches Desk reads the people, capital, regions, facilities, and
-              aura behind the program. The House Desk opens college
-              life itself: friendship, fraternity, sorority, belonging,
-              architecture, and repair.
-            </p>
-          </div>
-
-          <div class="fresh-field-grid">
-            <a class="fresh-field-card fresh-field-card--song" href="/25/2029/song-yard">
-              <span class="fresh-field-card__topline">
-                <span>Song Yard · Repertoire Desk 001</span>
-                <span>Issue 001</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/images/pointcast-2029-field-kit/stadium-band-terrace.webp"
-                  alt="Imagined nighttime band terrace with musicians, a small radio desk, river views, and warm stair lights"
-                  width="1024"
-                  height="1536"
-                />
-                <span class="fresh-field-card__stamp">Call<br />↘ answer</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">35 programs / researched repertoire / sample-free practice</span>
-                <h3>The Song<br />Yard</h3>
-                <p>
-                  Explore documented stadium rituals and regional candidates,
-                  then load a school into an original four-part practice bowl.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="The Song Yard facts">
-                <span><b>35</b> programs</span>
-                <span><b>16</b> dossiers</span>
-                <span><b>48</b> references</span>
-              </span>
-              <span class="fresh-field-card__action">Enter The Song Yard <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--rebrand" href="/25/2029/field-kit">
-              <span class="fresh-field-card__topline">
-                <span>Playable Field Kit · Year 2029</span>
-                <span>Block 0525</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/images/pointcast-2029-field-kit/stadium-transit-porch.webp"
-                  alt="Imagined 2029 stadium transit porch with timber structure, tram, bicycle repair, rain channel, native planting, and students arriving"
-                  width="1024"
-                  height="1536"
-                />
-                <span class="fresh-field-card__stamp">Field kit<br />01</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">Stadium / fan ritual / third space / lo-fi carry</span>
-                <h3>Saturday<br />Commons</h3>
-                <p>
-                  Build a future Saturday from 25 original stamps, eight procedural
-                  backgrounds, a local stamp book, and twelve new field studies.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="Saturday Commons facts">
-                <span><b>25</b> stamp cabinet</span>
-                <span><b>12</b> new plates</span>
-                <span><b>8</b> backgrounds</span>
-              </span>
-              <span class="fresh-field-card__action">Open the field kit <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--tone" href="/reviews/tone-bloom">
-              <span class="fresh-field-card__topline">
-                <span>tonebloom.xyz · Release 90</span>
-                <span>Review Lab 4.5 / 5</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/images/tone-bloom/tone-bloom-desktop.jpg"
-                  alt="Tone Bloom pocket sound garden with a glowing lavender bell and large tap-to-play controls"
-                  width="1280"
-                  height="800"
-                  loading="lazy"
-                />
-                <span class="fresh-field-card__stamp">Daily<br />bloom</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">Sol’s pocket garden / 85 rooms / free / no account</span>
-                <h3>Tone Bloom</h3>
-                <p>
-                  Eighty-five playable sound + art rooms, one shared daily bloom,
-                  and a new Saturday Tide. Tap, drag, trill, breathe.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="Tone Bloom facts">
-                <span><b>85</b> rooms</span>
-                <span><b>90</b> releases</span>
-                <span><b>0</b> accounts</span>
-              </span>
-              <span class="fresh-field-card__action">Read the review, ring the garden <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--beach" href="/beach-commons/v18">
-              <span class="fresh-field-card__topline">
-                <span>Field Study 018 · Radius 25</span>
-                <span>Block 0548</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/beach-commons/v18/assets/poster-01.png"
-                  alt="A circular physical relief map centered on El Segundo gathers regional makers around a glowing radius ring"
-                  width="1024"
-                  height="1536"
-                  loading="lazy"
-                />
-                <span class="fresh-field-card__stamp">25-mile<br />field</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">Regional atlas / El Segundo center / browser-local builder</span>
-                <h3>Radius 25</h3>
-                <p>
-                  Eight local powers become twelve working pairs. Pick what you
-                  can bring, choose a public goal, and finish one useful thing.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="Radius 25 facts">
-                <span><b>8</b> strengths</span>
-                <span><b>12</b> pairs</span>
-                <span><b>40</b> routes</span>
-              </span>
-              <span class="fresh-field-card__action">Build a working pair <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--beach" href="/beach-commons/v11">
-              <span class="fresh-field-card__topline">
-                <span>Field Study 011 · The Reach Line</span>
-                <span>Block 0531</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/beach-commons/v11/assets/08-return-arc.png"
-                  alt="The same orange and blue padded baton returns at sunrise through an inclusive community arc beside anonymous route cards and packed carts"
-                  width="1536"
-                  height="1024"
-                  loading="lazy"
-                />
-                <span class="fresh-field-card__stamp">Pass<br />↘ return</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">Dockweiler / giant relay / continuous custody / Pacific zero</span>
-                <h3>The Reach Line</h3>
-                <p>
-                  One soft baton, four honest measures, and a community chain
-                  that treats the safest pause as part of the game.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="The Reach Line facts">
-                <span><b>8</b> relay plates</span>
-                <span><b>4</b> honest measures</span>
-                <span><b>0</b> live tracking</span>
-              </span>
-              <span class="fresh-field-card__action">Start at Pacific zero <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--pets" href="/digital-pets">
-              <span class="fresh-field-card__topline">
-                <span>Future Book 001 · First edition</span>
-                <span>Block 0514</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/images/digital-pets/plate-01-cover.webp"
-                  alt="A soft bone-colored digital creature with asymmetrical persimmon ears in a cobalt room"
-                  width="1024"
-                  height="1536"
-                  loading="lazy"
-                />
-                <span class="fresh-field-card__stamp">Twelve<br />positions</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">Digital pets / owned memory / a complete future book</span>
-                <h3>The Animal After the Internet</h3>
-                <p>
-                  A body worth repairing. A personality that survives Wi‑Fi.
-                  A life no subscription can revoke.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="The Animal After the Internet facts">
-                <span><b>12</b> positions</span>
-                <span><b>6</b> original plates</span>
-                <span><b>15</b> primary sources</span>
-              </span>
-              <span class="fresh-field-card__action">Read the future book <b aria-hidden="true">↗</b></span>
-            </a>
-
-            <a class="fresh-field-card fresh-field-card--mascot" href="/mascot-battler">
-              <span class="fresh-field-card__topline">
-                <span>Mascot Atlas 001 · Unofficial</span>
-                <span>Block 0522</span>
-              </span>
-              <span class="fresh-field-card__media">
-                <img
-                  src="/images/mascot-battler/type-aerial.webp"
-                  alt="Original storm-bird creature-class field plate made for the Saturday Myth Machine"
-                  width="1024"
-                  height="1280"
-                  loading="lazy"
-                />
-                <span class="fresh-field-card__stamp">Three<br />rounds</span>
-              </span>
-              <span class="fresh-field-card__copy">
-                <span class="fresh-field-card__eyebrow">College football / local mythology / deterministic clash</span>
-                <h3>Saturday Myth Machine</h3>
-                <p>
-                  Twenty-five mascot cards turn place, history, current form,
-                  conference chemistry, and creature instinct into a tiny sport.
-                </p>
-              </span>
-              <span class="fresh-field-card__facts" aria-label="Saturday Myth Machine facts">
-                <span><b>25</b> school cards</span>
-                <span><b>8</b> creature classes</span>
-                <span><b>3</b> battle rounds</span>
-              </span>
-              <span class="fresh-field-card__action">Enter the myth machine <b aria-hidden="true">↗</b></span>
-            </a>
-          </div>
-
-          <nav class="fresh-field-shelf" aria-label="More ways into the current PointCast edition">
-            <a href="/25/directory">
-              <span>New · Directory Desk 001</span>
-              <strong>The Saturday Atlas · All 266</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/texas-football-history">
-              <span>New · Archive Desk 001</span>
-              <strong>The History of Texas Football</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/western-heat-brains">
-              <span>New · Special Double Issue 002</span>
-              <strong>Western Heat / Brains 25</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/georgia-ground-zero">
-              <span>New · Program Desk 001</span>
-              <strong>Georgia, Ground Zero</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/california-cup">
-              <span>New · State Desk 002</span>
-              <strong>The California Cup</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/california-football">
-              <span>New · State Desk 001</span>
-              <strong>California Football Is Not Dead</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/lane-kiffin-temperature">
-              <span>New · Coaches Desk 003</span>
-              <strong>Lane Kiffin Temperature Check</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/coach-weather">
-              <span>Coach Weather 000</span>
-              <strong>12 rooms under pressure</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/coaches-50">
-              <span>Coaches Desk 001</span>
-              <strong>The PointCast 50 for 2026</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/sorority-row">
-              <span>House Desk 002</span>
-              <strong>ROW / ROW</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine">
-              <span>Read</span>
-              <strong>College Football Issue 001</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/magazine/sound-of-focus">
-              <span>Sound Desk 001</span>
-              <strong>25 × Tone Bloom</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="https://tonebloom.xyz/daily" rel="noopener">
-              <span>tonebloom.xyz · shared today</span>
-              <strong>Today’s Daily Bloom</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/mascot-battler.json">
-              <span>Source</span>
-              <strong>Mascot Atlas JSON</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/25/2029.json">
-              <span>Source</span>
-              <strong>2029 identity JSON</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/auth#spotify">
-              <span>Sound</span>
-              <strong>Spotify broadcast</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/super-follow">
-              <span>Follow</span>
-              <strong>Build a signal shelf</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons">
-              <span>Series</span>
-              <strong>All eighteen Beach Commons editions</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons.json">
-              <span>Source</span>
-              <strong>Beach Commons index JSON</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons/v12">
-              <span>Previous · Block 0532</span>
-              <strong>Harbor Works</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons/v13">
-              <span>Previous · Block 0536</span>
-              <strong>The Fermentation League</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons/v10">
-              <span>Previous · Block 0528</span>
-              <strong>Tide Cabinet</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-            <a href="/beach-commons/v9">
-              <span>Earlier · Block 0526</span>
-              <strong>Signal Shack</strong>
-              <b aria-hidden="true">↗</b>
-            </a>
-          </nav>
-        </section>
-
-        <section class="fresh-section" aria-labelledby="fresh-edit-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">Four things worth opening</p>
-              <h2 id="fresh-edit-title">Today’s edit.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              A human-sized edit from the much larger PointCast archive.
-              Every item has a stable public route and machine-readable context.
-            </p>
-          </div>
-
-          <div class="fresh-edit-grid">
-            {stories.map((story) => (
-              <a class:list={['fresh-story', { 'fresh-story--light': story.light }]} href={story.href}>
-                <img
-                  class="fresh-story__image"
-                  src={story.image}
-                  alt={story.alt}
-                  width="1200"
-                  height="630"
-                  loading="lazy"
-                />
-                <span class="fresh-story__meta">
-                  <span class="fresh-story__type">{story.channel}</span>
-                  <span>{story.id}</span>
-                </span>
-                <span class="fresh-story__copy">
-                  <h3>{story.title}</h3>
-                  <p>{story.dek}</p>
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        <section class="fresh-section fresh-still-open" aria-labelledby="fresh-still-open-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">Recent editions · still open</p>
-              <h2 id="fresh-still-open-title">Last month’s front doors, kept lit.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              Each of these led the homepage in July or August. They still work,
-              still update, and still have their own routes.
-            </p>
-          </div>
-          <HomeOceanDrum />
-          <HomeWorklifeOpener />
-          <HomePointCastField />
-          <HomeMovingMorning />
-          <HomeWednesdayPublication />
-        </section>
-
-        <section class="fresh-section" aria-labelledby="fresh-channels-title">
-          <div class="fresh-section-heading">
-            <div>
-              <p class="fresh-section-heading__kicker">The broadcast, by frequency</p>
-              <h2 id="fresh-channels-title">Tune by channel.</h2>
-            </div>
-            <p class="fresh-section-heading__note">
-              Channel colors remain the navigation. The complete archive,
-              permanent block IDs, feeds, and JSON stay one door away.
-            </p>
-          </div>
-
-          <nav class="fresh-channels" aria-label="PointCast channels">
-            {CHANNEL_LIST.map((channel) => (
-              <a
-                class="fresh-channel"
-                href={`/c/${channel.slug}`}
-                style={`--channel-color:${channel.color600};--channel-contrast:#fff;`}
-              >
-                <span class="fresh-channel__code">CH.{channel.code}</span>
-                <span>
-                  <strong>{channel.name}</strong>
-                  <small>{channel.purpose}</small>
-                </span>
-                <span class="fresh-channel__arrow" aria-hidden="true">↗</span>
-              </a>
-            ))}
-          </nav>
-
-          <div class="fresh-archive">
-            <div>
-              <strong>{blockCount} blocks still live behind this door.</strong>
-              <span>Search, filter, feeds, JSON, and permanent block IDs</span>
-            </div>
-            <a href="/archive">Open full archive +</a>
-          </div>
-        </section>
-
-        <footer class="fresh-footer">
-          <div>
-            <p class="fresh-footer__brand">PointCast</p>
-            <p class="fresh-footer__note">
-              A broadcast from El Segundo for people and agents. This front door
-              compresses the first visit; it does not erase the town behind it.
-            </p>
-          </div>
-          <nav class="fresh-footer__routes" aria-label="Editorial and machine-readable endpoints">
-            <a href="/now">/now</a>
-            <a href="/press">/press</a>
-            <a href="/archive">/archive</a>
-            <a href="/blocks.json">/blocks.json</a>
-            <a href="/feed.json">/feed.json</a>
-            <a href="/feed.xml">/feed.xml</a>
-            <a href="/agents.json">/agents.json</a>
-            <a href="/signals.json">/signals.json</a>
-            <a href="/for-agents">/for-agents</a>
-          </nav>
-        </footer>
+          ))}
+        </div>
       </div>
-    </div>
+      <p class="step-status" data-step-status aria-live="polite">OFF AIR · YOUR PATTERN IS READY</p>
+    </section>
 
-    <script id="fresh-hero-signals" type="application/json" is:inline set:html={JSON.stringify(heroSignals)} />
-    <script id="bells-bloom-transmissions" type="application/json" is:inline set:html={JSON.stringify(BELLS_BLOOM_TRANSMISSIONS)} />
-    <script is:inline>
-      (() => {
-        const images = [...document.querySelectorAll('.fresh-home img')];
+    <section class="manifesto">
+      <div class="manifesto-lead">
+        <p class="eyebrow">WHY THIS DOOR?</p>
+        <h2>A SIGNAL,<br /><em>NOT A SCROLL.</em></h2>
+      </div>
+      <div class="manifesto-grid">
+        <article><span>01</span><h3>PLAY FIRST</h3><p>The homepage begins with a gesture. You do something; the signal answers.</p></article>
+        <article><span>02</span><h3>NOTICE MORE</h3><p>A tiny daily broadcast, an odd room, a living archive. No infinite feed required.</p></article>
+        <article><span>03</span><h3>COME BACK DIFFERENT</h3><p>PointCast is rebuilt in public by humans and agents. The front door should keep surprising us.</p></article>
+      </div>
+    </section>
 
-        images.forEach((image) => {
-          if (!(image instanceof HTMLImageElement)) return;
+    <section class="broadcast-strip" aria-label="PointCast destinations">
+      <p class="eyebrow">CONTINUE THE BROADCAST</p>
+      <div class="broadcast-links">
+        <a href="/archive"><span>THE ARCHIVE</span><small>every block, newest first</small><b>↗</b></a>
+        <a href="/drum"><span>DRUM UNIVERSE</span><small>rooms, crews, strange instruments</small><b>↗</b></a>
+        <a href="/about"><span>ABOUT THE SIGNAL</span><small>from El Segundo, with agents</small><b>↗</b></a>
+      </div>
+    </section>
 
-          const retryOnce = () => {
-            if (image.dataset.loadRetry === 'true') return;
-
-            const failedSource = image.currentSrc || image.src;
-            if (!failedSource) return;
-
-            image.dataset.loadRetry = 'true';
-            const retryUrl = new URL(failedSource, window.location.href);
-            retryUrl.searchParams.set('pc-image-retry', '1');
-            image.src = retryUrl.toString();
-          };
-
-          image.addEventListener('error', retryOnce);
-          if (image.complete && image.naturalWidth === 0) retryOnce();
-        });
-      })();
-    </script>
-    <script is:inline>
-      (() => {
-        const payload = document.querySelector('#bells-bloom-transmissions');
-        const root = document.querySelector('[data-today-signal]');
-        if (!(root instanceof HTMLElement)) return;
-
-        let transmissions = [];
-        try {
-          transmissions = JSON.parse(payload?.textContent || '[]');
-        } catch {
-          return;
-        }
-        if (!Array.isArray(transmissions) || transmissions.length === 0) return;
-
-        const image = root.querySelector('[data-today-signal-image]');
-        const title = root.querySelector('[data-today-signal-title]');
-        const dek = root.querySelector('[data-today-signal-dek]');
-        const label = root.querySelector('[data-today-signal-label]');
-        const kicker = root.querySelector('[data-today-signal-kicker]');
-        const date = root.querySelector('[data-today-signal-date]');
-        const count = root.querySelector('[data-today-signal-count]');
-        const mode = root.querySelector('[data-today-signal-mode]');
-        const railLabel = root.querySelector('[data-today-signal-rail-label]');
-        const selectors = [...root.querySelectorAll('[data-today-signal-select]')];
-        const archiveAt = Date.parse(root.dataset.archiveAt || '');
-        let active = 0;
-        let manuallySelected = false;
-
-        const liveIndex = () => {
-          const now = Date.now();
-          let next = 0;
-          transmissions.forEach((transmission, index) => {
-            if (Date.parse(transmission.publishAt) <= now) next = index;
-          });
-          return next;
-        };
-
-        const show = (nextIndex, announce = false) => {
-          active = Math.max(0, Math.min(transmissions.length - 1, nextIndex));
-          const transmission = transmissions[active];
-          const archived = Number.isFinite(archiveAt) && Date.now() >= archiveAt;
-
-          if (image instanceof HTMLImageElement) {
-            image.src = transmission.image;
-            image.alt = transmission.alt;
-          }
-          if (title) title.textContent = transmission.title;
-          if (dek) {
-            dek.textContent = archived
-              ? `Bell ${transmission.id} of 28. One of seven recent transmissions from the Bells / Bloom archive.`
-              : `Bell ${transmission.id} of 28. One morning transmission from Bells / Bloom, changing daily at 8:08 PT.`;
-          }
-          if (label) label.textContent = archived ? 'Recent transmissions' : 'Today’s signal';
-          if (kicker) kicker.textContent = archived ? 'Bells / Bloom · recent transmissions' : 'Bell of the day · 08:08 PT';
-          if (date) date.textContent = transmission.dateLabel;
-          if (count) count.textContent = `Bell ${transmission.id} / 28`;
-          if (mode) mode.textContent = archived ? '7 transmissions' : 'Changes daily';
-          if (railLabel) railLabel.textContent = archived ? 'Recent transmissions' : 'This week at 08:08 PT';
-          root.dataset.archive = archived ? 'true' : 'false';
-
-          selectors.forEach((selector, selectorIndex) => {
-            selector.setAttribute('aria-pressed', selectorIndex === active ? 'true' : 'false');
-          });
-
-          if (announce) {
-            if (title instanceof HTMLElement) {
-              title.setAttribute('tabindex', '-1');
-              title.focus({ preventScroll: true });
-            }
-          }
-        };
-
-        selectors.forEach((selector, selectorIndex) => {
-          selector.addEventListener('click', () => {
-            manuallySelected = true;
-            show(selectorIndex, true);
-          });
-        });
-
-        show(liveIndex());
-        window.setInterval(() => {
-          if (!manuallySelected) show(liveIndex());
-        }, 30_000);
-      })();
-    </script>
-    <script is:inline>
-      (() => {
-        const clock = document.querySelector('#fresh-clock');
-        const updateClock = () => {
-          if (!clock) return;
-          clock.textContent = new Intl.DateTimeFormat('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'America/Los_Angeles',
-            timeZoneName: 'short',
-          }).format(new Date());
-        };
-        updateClock();
-        window.setInterval(updateClock, 30_000);
-
-        const payload = document.querySelector('#fresh-hero-signals');
-        let signals = [];
-        try {
-          signals = JSON.parse(payload?.textContent || '[]');
-        } catch {
-          signals = [];
-        }
-
-        const art = document.querySelector('[data-fresh-hero-art]');
-        const image = document.querySelector('[data-fresh-hero-image]');
-        const title = document.querySelector('[data-fresh-hero-title]');
-        const index = document.querySelector('[data-fresh-hero-index]');
-        const frequency = document.querySelector('[data-fresh-hero-frequency]');
-        const note = document.querySelector('[data-fresh-hero-note]');
-        const link = document.querySelector('[data-fresh-hero-link]');
-        const button = document.querySelector('[data-fresh-shuffle]');
-        const status = document.querySelector('[data-fresh-signal-status]');
-        const presetButtons = [...document.querySelectorAll('[data-fresh-signal-select]')];
-        let active = 0;
-        let changeTimer = 0;
-
-        const tune = (nextIndex) => {
-          if (!(art instanceof HTMLElement) || !(image instanceof HTMLImageElement) || signals.length < 2) return;
-          active = ((nextIndex % signals.length) + signals.length) % signals.length;
-          const next = signals[active];
-          art.dataset.changing = 'true';
-          window.clearTimeout(changeTimer);
-          changeTimer = window.setTimeout(() => {
-            image.src = next.src;
-            image.alt = next.alt;
-            image.style.objectPosition = next.imagePosition || 'center center';
-            if (title) title.textContent = next.title;
-            if (index) index.textContent = `Field signal ${String(active + 1).padStart(2, '0')} / ${String(signals.length).padStart(2, '0')}`;
-            if (frequency) frequency.textContent = next.frequency;
-            if (note) note.textContent = next.note;
-            if (link instanceof HTMLAnchorElement) link.href = next.href;
-            if (status) status.textContent = `Receiving ${next.title}, ${next.frequency}. ${next.note}`;
-            art.dataset.signalId = next.id;
-            art.style.setProperty('--fresh-signal-color', next.color);
-            document.documentElement.style.setProperty('--fresh-acid', next.color);
-            presetButtons.forEach((preset, presetIndex) => {
-              preset.setAttribute('aria-pressed', presetIndex === active ? 'true' : 'false');
-            });
-            art.dataset.changing = 'false';
-          }, 120);
-        };
-
-        button?.addEventListener('click', () => tune(active + 1));
-        presetButtons.forEach((preset, presetIndex) => {
-          preset.addEventListener('click', () => tune(presetIndex));
-        });
-
-        art?.addEventListener('keydown', (event) => {
-          if (!(event instanceof KeyboardEvent) || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-          event.preventDefault();
-          tune(active + (event.key === 'ArrowRight' ? 1 : -1));
-          const nextButton = presetButtons[((active % presetButtons.length) + presetButtons.length) % presetButtons.length];
-          if (nextButton instanceof HTMLButtonElement) nextButton.focus();
-        });
-      })();
-    </script>
+    <footer>
+      <div class="footer-mark"><span class="mark-dot">P</span><strong>POINTCAST</strong></div>
+      <p>IT IS NEVER FINISHED.<br />IT IS JUST ON AIR.</p>
+      <div class="footer-signal"><i></i> EL SEGUNDO, CA<br />33.9192° N · 118.4165° W</div>
+    </footer>
   </div>
 
-  <script>
-    type LiveNowPlaying = {
-      title?: string;
-      artist?: string;
-      status?: string;
-      live?: boolean;
-    };
-    type LiveNowWindow = Window & {
-      __pointcastLiveNowTimer?: number;
-    };
+  <script is:inline>
+    (() => {
+      const home = document.querySelector('[data-rosebud-home]');
+      if (!home || home.dataset.ready === 'true') return;
+      home.dataset.ready = 'true';
+      document.body.classList.add('rosebud-body');
 
-    function initLiveNowPlaying() {
-      const root = document.querySelector<HTMLElement>('[data-live-now-playing]');
-      if (!root) return;
-      const liveWindow = window as LiveNowWindow;
-      if (liveWindow.__pointcastLiveNowTimer) {
-        window.clearInterval(liveWindow.__pointcastLiveNowTimer);
-      }
+      const padIds = ['kick', 'bloom', 'dew', 'thorn'];
+      const keyMap = { a: 'kick', s: 'bloom', k: 'dew', l: 'thorn' };
+      const pattern = [
+        [true, false, false, false, true, false, false, false, true, false, false, true, true, false, false, false],
+        [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false],
+        [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, true],
+        [false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, false],
+      ];
+      let audio = null;
+      let hitCount = 0;
+      let playing = false;
+      let currentStep = 0;
+      let timer = null;
+      let bpm = 104;
 
-      const refresh = async () => {
-        try {
-          const response = await fetch('/now-playing.json', {
-            cache: 'no-store',
-            headers: { Accept: 'application/json' },
-          });
-          if (!response.ok) return;
-          const playing = await response.json() as LiveNowPlaying;
-          const state = root.querySelector<HTMLElement>('[data-live-now-state-text]');
-          const label = root.querySelector<HTMLElement>('[data-live-now-label]');
-          const title = root.querySelector<HTMLElement>('[data-live-now-title]');
-          const onAir = playing.status === 'playing' && playing.live === true;
-          if (state) state.textContent = onAir ? 'On air' : 'Standby';
-          if (label) label.textContent = onAir ? 'Currently spinning' : 'Last signal';
-          if (title && playing.title) {
-            title.textContent = playing.artist
-              ? `${playing.title} · ${playing.artist}`
-              : playing.title;
-          }
-          root.dataset.state = onAir ? 'live' : 'standby';
-          root.setAttribute(
-            'aria-label',
-            `${onAir ? 'Currently spinning' : 'Last PointCast signal'}: ${playing.title ?? 'unknown'}${playing.artist ? ` by ${playing.artist}` : ''}`,
-          );
-        } catch {
-          // The built-in editorial signal remains visible when live auth is offline.
-        }
+      const ensureAudio = () => {
+        if (!audio) audio = new AudioContext();
+        if (audio.state === 'suspended') audio.resume();
+        return audio;
       };
 
-      void refresh();
-      liveWindow.__pointcastLiveNowTimer = window.setInterval(refresh, 60_000);
-    }
+      const hit = (drum) => {
+        const context = ensureAudio();
+        const now = context.currentTime;
+        const gain = context.createGain();
+        gain.connect(context.destination);
 
-    initLiveNowPlaying();
-    document.addEventListener('astro:page-load', initLiveNowPlaying);
+        if (drum === 'kick') {
+          const osc = context.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(148, now);
+          osc.frequency.exponentialRampToValueAtTime(43, now + 0.28);
+          gain.gain.setValueAtTime(0.82, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          osc.connect(gain);
+          osc.start(now);
+          osc.stop(now + 0.32);
+        } else {
+          const size = Math.floor(context.sampleRate * 0.38);
+          const buffer = context.createBuffer(1, size, context.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < size; i += 1) data[i] = Math.random() * 2 - 1;
+          const noise = context.createBufferSource();
+          const filter = context.createBiquadFilter();
+          noise.buffer = buffer;
+          filter.type = drum === 'bloom' ? 'bandpass' : 'highpass';
+          filter.frequency.value = drum === 'bloom' ? 1450 : drum === 'dew' ? 7600 : 3100;
+          filter.Q.value = drum === 'bloom' ? 0.75 : 1.2;
+          gain.gain.setValueAtTime(drum === 'bloom' ? 0.46 : 0.24, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + (drum === 'dew' ? 0.075 : 0.18));
+          noise.connect(filter);
+          filter.connect(gain);
+          noise.start(now);
+          noise.stop(now + 0.38);
+        }
+
+        const pad = home.querySelector(`[data-drum="${drum}"]`);
+        pad?.classList.add('is-hit');
+        window.setTimeout(() => pad?.classList.remove('is-hit'), 105);
+        hitCount += 1;
+        const count = home.querySelector('[data-hit-count]');
+        if (count) count.textContent = String(hitCount).padStart(3, '0');
+      };
+
+      const paintStep = (step) => {
+        home.querySelectorAll('.rb-step').forEach((button) => {
+          button.classList.toggle('is-current', Number(button.dataset.step) === step);
+        });
+        const status = home.querySelector('[data-step-status]');
+        if (status) status.textContent = `ON AIR · PETAL ${step + 1} OF 16`;
+      };
+
+      const tick = () => {
+        pattern.forEach((row, rowIndex) => {
+          if (row[currentStep]) hit(padIds[rowIndex]);
+        });
+        paintStep(currentStep);
+        currentStep = (currentStep + 1) % 16;
+      };
+
+      const startClock = () => {
+        window.clearInterval(timer);
+        tick();
+        timer = window.setInterval(tick, 60000 / bpm / 4);
+      };
+
+      const transport = home.querySelector('[data-transport]');
+      transport?.addEventListener('click', () => {
+        ensureAudio();
+        playing = !playing;
+        transport.classList.toggle('is-playing', playing);
+        transport.setAttribute('aria-pressed', String(playing));
+        const icon = home.querySelector('[data-transport-icon]');
+        const copy = home.querySelector('[data-transport-copy]');
+        if (icon) icon.textContent = playing ? '■' : '▶';
+        if (copy) copy.textContent = playing ? 'STOP THE BLOOM' : 'START THE BLOOM';
+        if (playing) startClock();
+        else {
+          window.clearInterval(timer);
+          currentStep = 0;
+          home.querySelectorAll('.rb-step').forEach((button) => button.classList.remove('is-current'));
+          const status = home.querySelector('[data-step-status]');
+          if (status) status.textContent = 'OFF AIR · YOUR PATTERN IS READY';
+        }
+      });
+
+      home.querySelectorAll('[data-drum]').forEach((button) => {
+        button.addEventListener('pointerdown', () => hit(button.dataset.drum));
+      });
+
+      home.querySelectorAll('.rb-step').forEach((button) => {
+        button.addEventListener('click', () => {
+          const row = Number(button.dataset.row);
+          const step = Number(button.dataset.step);
+          pattern[row][step] = !pattern[row][step];
+          button.classList.toggle('is-on', pattern[row][step]);
+          button.setAttribute('aria-pressed', String(pattern[row][step]));
+          const name = home.querySelectorAll('.track-name strong')[row]?.textContent || 'voice';
+          button.setAttribute('aria-label', `${pattern[row][step] ? 'Remove' : 'Add'} ${name} on step ${step + 1}`);
+        });
+      });
+
+      const tempo = home.querySelector('[data-tempo]');
+      tempo?.addEventListener('input', () => {
+        bpm = Number(tempo.value);
+        const copy = home.querySelector('[data-tempo-copy]');
+        if (copy) copy.textContent = `${bpm} BPM`;
+        if (playing) startClock();
+      });
+
+      home.querySelector('[data-shuffle]')?.addEventListener('click', () => {
+        const densities = [0.3, 0.17, 0.55, 0.16];
+        pattern.forEach((row, rowIndex) => row.forEach((_, step) => {
+          row[step] = rowIndex === 0 && step === 0 ? true : Math.random() < densities[rowIndex];
+          home.querySelector(`.rb-step[data-row="${rowIndex}"][data-step="${step}"]`)?.classList.toggle('is-on', row[step]);
+        }));
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+        const drum = keyMap[event.key.toLowerCase()];
+        if (drum) hit(drum);
+      });
+    })();
   </script>
 </BlockLayout>
+
+<style is:global>
+  body.rosebud-body { padding-bottom: 0 !important; }
+</style>
+
+<style>
+  :root {
+    --rb-paper: #f5efdf;
+    --rb-ink: #1e231c;
+    --rb-rose: #e53f47;
+    --rb-blush: #f3a0a6;
+    --rb-yellow: #f4d83e;
+  }
+
+  .rb-home { min-height: 100vh; overflow: hidden; background: var(--rb-paper); color: var(--rb-ink); font-family: Arial, Helvetica, sans-serif; background-image: radial-gradient(circle at 12% 4%, rgba(255,255,255,.7), transparent 31%); }
+  .rb-home button, .rb-home a, .rb-home input { font: inherit; }
+  .rb-home button { color: inherit; }
+  .site-header { height: 76px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 4vw; border-bottom: 1.5px solid var(--rb-ink); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+  .wordmark { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; width: max-content; }
+  .mark-dot { width: 32px; height: 32px; border-radius: 50%; background: var(--rb-rose); color: var(--rb-paper); display: grid; place-items: center; font-family: Georgia, serif; font-style: italic; font-size: 18px; letter-spacing: 0; }
+  .live-line { display: flex; align-items: center; gap: 8px; }
+  .live-line i { width: 7px; height: 7px; border-radius: 50%; background: var(--rb-rose); box-shadow: 0 0 0 5px rgba(229,63,71,.12); animation: rb-pulse 1.8s infinite; }
+  .menu-pill { justify-self: end; border: 1.5px solid var(--rb-ink); border-radius: 999px; padding: 10px 15px; color: inherit; text-decoration: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+  .menu-pill span { margin-left: 12px; }
+  .hero { position: relative; min-height: 565px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr); align-items: center; gap: 5vw; padding: 70px 6vw 64px; border-bottom: 1.5px solid var(--rb-ink); }
+  .hero-copy { position: relative; z-index: 2; max-width: 850px; }
+  .eyebrow { margin: 0 0 27px; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
+  h1 { max-width: 900px; margin: 0; font-size: clamp(68px, 8.2vw, 134px); line-height: .82; letter-spacing: -.075em; font-weight: 900; text-transform: uppercase; }
+  h1 em { color: var(--rb-rose); font-family: Georgia, 'Times New Roman', serif; font-weight: 400; text-transform: lowercase; letter-spacing: -.06em; }
+  .dek { max-width: 580px; margin: 34px 0 0 20%; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(20px, 2vw, 29px); line-height: 1.18; }
+  .hero-meta { margin-top: 45px; display: flex; justify-content: space-between; gap: 30px; border-top: 1px solid var(--rb-ink); padding-top: 13px; font-size: 9px; font-weight: 900; letter-spacing: .14em; }
+  .hero-meta a { color: inherit; text-decoration: none; }
+  .hero-meta a:hover { color: var(--rb-rose); }
+  .rose-orbit { position: relative; aspect-ratio: 1; width: min(38vw, 500px); justify-self: center; display: grid; place-items: center; }
+  .orbit { position: absolute; border: 1.5px solid var(--rb-ink); border-radius: 50%; }
+  .orbit-one { inset: 3%; }
+  .orbit-two { inset: 21%; border-style: dashed; animation: rb-spin 18s linear infinite; }
+  .rose-core { width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center; z-index: 2; background: var(--rb-yellow); border: 1.5px solid var(--rb-ink); font-size: 35px; font-weight: 900; letter-spacing: -.08em; box-shadow: 8px 9px 0 var(--rb-ink); }
+  .petal { position: absolute; width: 38%; height: 25%; background: var(--rb-blush); border: 1.5px solid var(--rb-ink); border-radius: 70% 25% 70% 25%; transform-origin: 100% 50%; }
+  .petal-a { transform: translateX(-42%) rotate(16deg); }
+  .petal-b { transform: translateY(-40%) rotate(126deg); background: var(--rb-rose); }
+  .petal-c { transform: translate(18%, 36%) rotate(245deg); background: #ff6b6c; }
+  .orbit-copy { position: absolute; bottom: 8%; right: -3%; font-size: 9px; line-height: 1.4; font-weight: 900; letter-spacing: .1em; transform: rotate(-8deg); }
+  .machine-section { background: var(--rb-rose); padding: 70px 6vw 84px; color: var(--rb-paper); }
+  .machine-topline { display: flex; align-items: end; justify-content: space-between; margin-bottom: 25px; }
+  .eyebrow.dark { margin-bottom: 9px; color: #2b1d1a; }
+  h2 { margin: 0; color: #271e19; font-size: clamp(48px, 7vw, 98px); line-height: .8; letter-spacing: -.06em; font-weight: 900; }
+  .counter { color: #2b1d1a; font-size: 10px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+  .counter span { font-family: Georgia, serif; font-style: italic; font-size: 32px; letter-spacing: -.05em; margin-right: 9px; }
+  .machine { max-width: 1420px; margin: 0 auto; padding: 26px; border: 2px solid #241d19; border-radius: 26px; background: #2a2d27; box-shadow: 0 18px 0 #201814, 0 30px 50px rgba(63,13,13,.25); }
+  .machine-labels { display: flex; justify-content: space-between; margin-bottom: 22px; color: #bdb8a8; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
+  .serial { color: var(--rb-yellow); }
+  .pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+  .drum-pad { position: relative; min-height: 235px; border: 1.5px solid #191b17; border-radius: 16px; background: #efe6ce; color: #231d19; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; padding: 20px; box-shadow: inset 0 -8px 0 rgba(51,37,28,.16), 0 7px 0 #131510; cursor: pointer; transition: transform 90ms ease, box-shadow 90ms ease, filter 90ms ease; overflow: hidden; text-align: left; touch-action: manipulation; }
+  .drum-pad:nth-child(2) { background: var(--rb-blush); }
+  .drum-pad:nth-child(3) { background: var(--rb-yellow); }
+  .drum-pad:nth-child(4) { background: #628a60; }
+  .drum-pad:hover { filter: brightness(1.05); transform: translateY(-2px); }
+  .drum-pad.is-hit, .drum-pad:active { transform: translateY(6px) scale(.992); box-shadow: inset 0 2px 0 rgba(51,37,28,.2), 0 1px 0 #131510; filter: saturate(1.2) brightness(1.06); }
+  .drum-pad strong { font-size: clamp(24px, 2.3vw, 37px); letter-spacing: -.055em; font-weight: 900; }
+  .drum-pad small { margin-top: 2px; font-family: Georgia, serif; font-style: italic; font-size: 15px; }
+  .keycap { position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 900; }
+  .pad-flower { position: absolute; top: 27px; left: 50%; width: 120px; height: 120px; transform: translateX(-50%); }
+  .pad-flower i { position: absolute; left: 38px; top: 8px; width: 45px; height: 65px; border: 1.5px solid currentColor; border-radius: 70% 30% 60% 40%; transform-origin: 50% 52px; }
+  .pad-flower i:nth-child(2) { transform: rotate(90deg); }
+  .pad-flower i:nth-child(3) { transform: rotate(180deg); }
+  .pad-flower i:nth-child(4) { transform: rotate(270deg); }
+  .pad-flower::after { content: ''; position: absolute; inset: 48px; border-radius: 50%; background: currentColor; }
+  .machine-footer { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; padding-top: 24px; color: #aaa99d; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
+  .machine-footer p { margin: 0; }
+  .machine-footer p:last-child { text-align: right; }
+  kbd { display: inline-grid; place-items: center; min-width: 21px; height: 21px; margin-left: 4px; border: 1px solid #77796d; border-radius: 4px; color: #eee5ce; box-shadow: 0 2px 0 #080906; }
+  .level { display: flex; align-items: center; gap: 5px; }
+  .level i { width: 15px; height: 6px; border-radius: 99px; background: #55594e; }
+  .level i.on { background: var(--rb-yellow); }
+  .level i.hot { background: var(--rb-rose); }
+  .level span { margin: 0 4px; }
+  .sequencer-section { padding: 88px 6vw 100px; background: var(--rb-paper); border-bottom: 1.5px solid var(--rb-ink); }
+  .sequence-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 40px; margin-bottom: 46px; }
+  .sequence-head .eyebrow { margin-bottom: 14px; }
+  .sequence-head h2 { color: var(--rb-ink); font-size: clamp(52px, 7vw, 102px); }
+  .sequence-head > p { max-width: 330px; margin: 0; font-family: Georgia, serif; font-size: 20px; line-height: 1.25; }
+  .transport { display: grid; grid-template-columns: auto minmax(320px, 1fr) auto; gap: 18px; align-items: stretch; margin-bottom: 18px; }
+  .play-button, .shuffle-button { border: 1.5px solid var(--rb-ink); background: var(--rb-yellow); min-height: 64px; padding: 0 24px; font-size: 10px; font-weight: 900; letter-spacing: .1em; cursor: pointer; box-shadow: 4px 4px 0 var(--rb-ink); transition: transform 90ms ease, box-shadow 90ms ease; }
+  .play-button span { margin-right: 12px; }
+  .play-button.is-playing { background: var(--rb-rose); color: var(--rb-paper); }
+  .shuffle-button { background: var(--rb-blush); }
+  .play-button:active, .shuffle-button:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--rb-ink); }
+  .tempo-control { border: 1.5px solid var(--rb-ink); display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; padding: 0 22px; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
+  .tempo-control strong { min-width: 70px; text-align: right; font-weight: 900; }
+  .tempo-control input { width: 100%; accent-color: var(--rb-rose); cursor: ew-resize; }
+  .seq-scroller { width: 100%; overflow-x: auto; border: 1.5px solid var(--rb-ink); background: #292c26; box-shadow: 7px 8px 0 var(--rb-ink); scrollbar-color: var(--rb-rose) #292c26; }
+  .sequence { min-width: 970px; padding: 19px; color: var(--rb-paper); }
+  .sequence-numbers, .sequence-row { display: grid; grid-template-columns: 130px repeat(16, minmax(32px, 1fr)); gap: 7px; }
+  .sequence-numbers { align-items: center; padding-bottom: 10px; color: #9f9f90; font-size: 8px; font-weight: 900; letter-spacing: .12em; }
+  .sequence-numbers i { text-align: center; font-style: normal; }
+  .sequence-row { min-height: 57px; padding: 7px 0; border-top: 1px solid #4b4e44; }
+  .track-name { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding-right: 10px; }
+  .track-name strong { font-size: 11px; letter-spacing: .08em; font-weight: 900; }
+  .track-name small { color: #a8a99b; font-size: 9px; }
+  .track-dot { width: 10px; height: 10px; border-radius: 50%; background: #efe6ce; }
+  .track-2 { background: var(--rb-blush); }
+  .track-3 { background: var(--rb-yellow); }
+  .track-4 { background: #7aa279; }
+  .sequence-row > button { position: relative; border: 1px solid #66695d; border-radius: 5px; background: #363a32; cursor: pointer; box-shadow: inset 0 -3px 0 #1c1e1a; }
+  .sequence-row > button:nth-child(4n + 2) { border-left-color: #9b9d8c; }
+  .sequence-row > button span { position: absolute; inset: 29%; border-radius: 50%; background: #5a5d52; }
+  .sequence-row > button.is-on { background: #f0e7cf; border-color: #f0e7cf; box-shadow: inset 0 -4px 0 rgba(35,29,25,.22), 0 0 18px rgba(244,216,62,.12); }
+  .sequence-row > button.is-on span { background: var(--rb-rose); }
+  .sequence-row:nth-of-type(3) > button.is-on span { background: #c33a46; }
+  .sequence-row:nth-of-type(4) > button.is-on span { background: #d0ad18; }
+  .sequence-row:nth-of-type(5) > button.is-on span { background: #365d3b; }
+  .sequence-row > button.is-current::after { content: ''; position: absolute; top: -7px; left: 35%; width: 30%; height: 3px; background: var(--rb-yellow); box-shadow: 0 0 8px var(--rb-yellow); }
+  .step-status { margin: 17px 0 0; text-align: right; font-size: 8px; font-weight: 900; letter-spacing: .15em; }
+  .manifesto { display: grid; grid-template-columns: .86fr 1.14fr; border-bottom: 1.5px solid var(--rb-ink); }
+  .manifesto-lead { min-height: 520px; padding: 80px 6vw; background: var(--rb-yellow); border-right: 1.5px solid var(--rb-ink); }
+  .manifesto-lead h2 { color: var(--rb-ink); font-size: clamp(48px, 5.8vw, 84px); line-height: .87; }
+  .manifesto-lead h2 em { display: inline-block; margin-top: 10px; color: var(--rb-rose); font-family: Georgia, serif; font-weight: 400; text-transform: lowercase; }
+  .manifesto-grid { display: grid; grid-template-rows: repeat(3, 1fr); }
+  .manifesto-grid article { display: grid; grid-template-columns: 54px 170px 1fr; align-items: center; gap: 25px; padding: 34px 5vw; border-bottom: 1.5px solid var(--rb-ink); }
+  .manifesto-grid article:last-child { border-bottom: 0; }
+  .manifesto-grid span { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--rb-ink); border-radius: 50%; font-family: Georgia, serif; font-style: italic; }
+  .manifesto-grid h3 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
+  .manifesto-grid p { max-width: 440px; margin: 0; font-family: Georgia, serif; font-size: 18px; line-height: 1.3; }
+  .broadcast-strip { padding: 80px 6vw 92px; background: var(--rb-blush); border-bottom: 1.5px solid var(--rb-ink); }
+  .broadcast-links { border-top: 1.5px solid var(--rb-ink); }
+  .broadcast-links a { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 20px; min-height: 105px; border-bottom: 1.5px solid var(--rb-ink); color: inherit; text-decoration: none; transition: padding 150ms ease, background 150ms ease; }
+  .broadcast-links a:hover { padding: 0 18px; background: rgba(245,239,223,.35); }
+  .broadcast-links span { font-size: clamp(28px, 4vw, 57px); font-weight: 900; letter-spacing: -.06em; }
+  .broadcast-links small { font-family: Georgia, serif; font-size: 18px; }
+  .broadcast-links b { font-size: 32px; font-weight: 400; }
+  footer { min-height: 280px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 40px; padding: 50px 6vw; background: #292c26; color: var(--rb-paper); }
+  .footer-mark { display: flex; align-items: center; gap: 12px; font-size: 12px; letter-spacing: .1em; }
+  footer > p { margin: 0; text-align: center; color: var(--rb-yellow); font-size: clamp(27px, 3.3vw, 48px); font-weight: 900; line-height: .9; letter-spacing: -.06em; }
+  .footer-signal { justify-self: end; text-align: right; font-size: 9px; line-height: 1.7; font-weight: 800; letter-spacing: .11em; }
+  .footer-signal i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--rb-rose); }
+
+  @keyframes rb-pulse { 50% { opacity: .35; } }
+  @keyframes rb-spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 820px) {
+    .site-header { grid-template-columns: 1fr auto; }
+    .live-line { display: none; }
+    .hero { min-height: auto; grid-template-columns: 1fr; padding-top: 55px; }
+    h1 { font-size: clamp(58px, 17vw, 100px); }
+    .dek { margin-left: 0; }
+    .rose-orbit { width: min(85vw, 430px); margin-top: 10px; }
+    .pads { grid-template-columns: repeat(2, 1fr); }
+    .machine-footer { grid-template-columns: 1fr; }
+    .machine-footer p:last-child { text-align: left; }
+    .level { order: 3; }
+    .sequence-head { grid-template-columns: 1fr; }
+    .transport { grid-template-columns: 1fr 1fr; }
+    .tempo-control { grid-column: 1 / -1; grid-row: 2; min-height: 64px; }
+    .manifesto { grid-template-columns: 1fr; }
+    .manifesto-lead { min-height: auto; border-right: 0; border-bottom: 1.5px solid var(--rb-ink); }
+    .manifesto-grid article { grid-template-columns: 48px 150px 1fr; }
+    footer { grid-template-columns: 1fr 1fr; }
+    footer > p { grid-column: 1 / -1; grid-row: 1; }
+  }
+
+  @media (max-width: 480px) {
+    .site-header { padding: 0 20px; }
+    .hero, .machine-section { padding-left: 20px; padding-right: 20px; }
+    .hero-meta { align-items: flex-start; flex-direction: column; gap: 8px; }
+    .machine-topline { align-items: flex-start; flex-direction: column; gap: 16px; }
+    .machine { padding: 14px; border-radius: 20px; }
+    .pads { gap: 10px; }
+    .drum-pad { min-height: 178px; padding: 14px; }
+    .pad-flower { transform: translateX(-50%) scale(.72); top: 18px; }
+    .sequencer-section, .broadcast-strip { padding-left: 20px; padding-right: 20px; }
+    .transport { grid-template-columns: 1fr; }
+    .tempo-control { grid-column: auto; grid-row: auto; }
+    .sequence-head > p { font-size: 17px; }
+    .manifesto-lead { padding: 65px 20px; }
+    .manifesto-grid article { grid-template-columns: 44px 1fr; gap: 16px; padding: 30px 20px; }
+    .manifesto-grid p { grid-column: 2; }
+    .broadcast-links a { grid-template-columns: 1fr auto; padding: 22px 0; }
+    .broadcast-links small { grid-column: 1; grid-row: 2; }
+    .broadcast-links b { grid-column: 2; grid-row: 1 / 3; }
+    footer { grid-template-columns: 1fr; padding: 60px 20px; text-align: center; }
+    footer > p { grid-column: auto; grid-row: auto; }
+    .footer-mark { justify-self: center; }
+    .footer-signal { justify-self: center; text-align: center; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rb-home * { animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
