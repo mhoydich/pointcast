@@ -1,0 +1,654 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/digital-pets-microduck.css';
+
+const missions = [
+  {
+    id: 'scout',
+    label: 'ROOM SCOUT',
+    goal: 'Find the red ball, approach it, and stop one body-length away.',
+    verbs: ['gaze', 'get_frame', 'search_scan', 'walk_to', 'stop'],
+    build: 'Vision target + bounded approach controller',
+    reward: '+ target centered · + distance reduced · − collision · − unstable pitch',
+    gate: '20 randomized rooms · 95% clean stops · zero stair-edge entries',
+  },
+  {
+    id: 'bow',
+    label: 'NFC GREETER',
+    goal: 'When a familiar NFC tag taps the beak, bow once and quack softly.',
+    verbs: ['nfc_read', 'stand', 'gaze', 'quack'],
+    build: 'Event trigger + head/neck motion policy',
+    reward: '+ smooth pose match · − foot slip · − joint speed · − repeat trigger',
+    gate: '500 simulated taps · head pitch capped at 25° · 10-second cooldown',
+  },
+  {
+    id: 'flock',
+    label: 'FLOCK MODE',
+    goal: 'Two ducks find the ball together; only the better-positioned duck kicks.',
+    verbs: ['search_scan', 'broadcast', 'walk_to', 'yield', 'kick'],
+    build: 'Shared task state + local skill arbitration',
+    reward: '+ single clean kick · + role clarity · − duplicate motion · − contact',
+    gate: 'No double-kicks · radio dropout recovery · local stop always wins',
+  },
+] as const;
+
+const canonicalUrl = 'https://pointcast.xyz/digital-pets/microduck';
+const socialImage = 'https://pointcast.xyz/images/digital-pets/microduck/social-card.jpg';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Review',
+  '@id': `${canonicalUrl}#review`,
+  name: 'The First Computer That Can Waddle',
+  headline: 'The First Computer That Can Waddle',
+  description:
+    'A public-spec review of Microduck, its open software stack, programming behavior with AI agents, and the consumer arc beyond the first approachable embodied computers.',
+  url: canonicalUrl,
+  image: socialImage,
+  datePublished: '2026-08-31',
+  inLanguage: 'en-US',
+  isAccessibleForFree: true,
+  author: [
+    { '@type': 'Person', name: 'Michael Hoydich', description: 'Direction and editorial brief.' },
+    { '@type': 'Organization', name: 'OpenAI Codex', description: 'Research, writing, design, and implementation collaborator.' },
+  ],
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  itemReviewed: {
+    '@type': 'Product',
+    name: 'Microduck',
+    brand: { '@type': 'Brand', name: 'Pollen Robotics' },
+    url: 'https://pollen-robotics.com/microduck/',
+    offers: { '@type': 'Offer', price: '399', priceCurrency: 'USD', availability: 'https://schema.org/PreOrder' },
+  },
+  reviewRating: { '@type': 'Rating', ratingValue: '8.5', bestRating: '10', worstRating: '0' },
+  isPartOf: {
+    '@type': 'Book',
+    name: 'The Animal After the Internet',
+    url: 'https://pointcast.xyz/digital-pets',
+  },
+};
+---
+
+<BaseLayout
+  title="The First Computer That Can Waddle"
+  description="A full review of Microduck, its open software stack, and the agentic consumer future it points toward."
+  image="/images/digital-pets/microduck/social-card.jpg"
+  hideNav={true}
+  hideAds={true}
+>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+
+    <main class="microduck-page shell-cream" data-microduck-page>
+      <header class="masthead">
+        <a class="wordmark" href="/digital-pets" aria-label="Future Book home">
+          <span>POINT</span><i>•</i><span>CAST</span>
+        </a>
+        <nav aria-label="Article sections">
+          <a href="#review">Review</a>
+          <a href="#specs">Specs</a>
+          <a href="#program">Program it</a>
+          <a href="#horizon">What comes next</a>
+        </nav>
+        <div class="date">31 AUG 2026</div>
+      </header>
+
+      <article id="top">
+        <section class="hero">
+          <div class="hero-copy">
+            <div class="hero-signal" aria-hidden="true">AV–031 / PHYSICAL AI</div>
+            <p class="kicker">Physical AI / Field review</p>
+            <h1>The first computer<br />that can <em>waddle</em>.</h1>
+            <p class="dek">
+              Microduck is a $399 robot with an open software stack that turns
+              programming from instructions on a screen into behavior in a room.
+              The toy is the hook. The real product is a body for agents.
+            </p>
+            <div class="byline">
+              <span>POINTCAST RESEARCH</span>
+              <span>14 MIN READ</span>
+              <span>PUBLIC-SPEC REVIEW</span>
+            </div>
+            <div class="shell-picker" aria-label="Microduck colorways">
+              <span>CHOOSE A SHELL SIGNAL</span>
+              <div>
+                {['cream', 'graphite', 'lavender', 'sky'].map((color) => (
+                  <button
+                    class={`swatch ${color}`}
+                    type="button"
+                    data-shell={color}
+                    aria-label={`${color} colorway`}
+                    aria-pressed={color === 'cream' ? 'true' : 'false'}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <figure class="hero-image">
+            <img
+              src="/images/digital-pets/microduck/morning.webp"
+              alt="A cream Microduck robot standing on a desk beside a monitor and game controller"
+            />
+            <figcaption>MICRODUCK / CREAM — Pollen Robotics</figcaption>
+          </figure>
+
+          <div class="stat-strip" aria-label="Key specifications">
+            <div><b>25</b><span>CM TALL</span></div>
+            <div><b>15</b><span>MOTORS</span></div>
+            <div><b>50</b><span>HZ POLICY LOOP</span></div>
+            <div><b>$399</b><span>INTRO PRICE</span></div>
+          </div>
+        </section>
+
+        <div class="tape-line" aria-hidden="true">
+          <span>PLAYABLE OUT OF THE BOX</span><i>★</i><span>YOURS TO RETRAIN</span><i>★</i>
+          <span>SIM → REAL</span><i>★</i><span>OPEN SOFTWARE</span><i>★</i>
+        </div>
+
+        <aside class="disclosure">
+          <b>REVIEW NOTE</b>
+          <p>
+            Microduck has not shipped. This is a review of the launch hardware,
+            public code and documented developer path—not a hands-on durability or
+            battery test. Several specifications remain provisional.
+          </p>
+        </aside>
+
+        <section class="story section-grid">
+          <div class="section-label">01 / THE STORY</div>
+          <div class="story-body prose">
+            <p class="lede">
+              At 7:14 in the morning, the duck fails its first job. It walks toward
+              a red ball, catches a chair leg, folds onto the floor and goes still.
+              Then its head lifts. One foot finds the carpet. Fifteen small motors
+              negotiate with gravity, and the machine stands back up.
+            </p>
+            <p>
+              That tiny recovery contains the whole pitch. For most of the computing
+              era, failure has been abstract: an error message, a bad answer, a tab
+              you can close. A physical agent has weight. It can get stuck, drain a
+              battery, knock something over or simply face the wrong direction. It
+              has to sense, decide and recover in the same untidy world we inhabit.
+            </p>
+            <p>
+              Pollen Robotics, the Bordeaux team acquired by Hugging Face in 2025,
+              has packaged that problem as a 25-centimeter duck. Microduck ships with
+              a controller and seven trained moves—walking, sitting, crouching,
+              kicking, grasping, rolling and getting up—so it is a toy before it is a
+              thesis. Clip on the optional wheels and it roller-skates. Pull them off
+              and a different learned policy makes it waddle.
+            </p>
+            <blockquote>
+              <span>“</span>
+              The breakthrough is not that an AI can write code. It is that a person
+              can describe an outcome, watch a body attempt it, and ask the AI to make
+              the behavior better.
+            </blockquote>
+            <p>
+              The beak is the important design decision. It is simultaneously a face,
+              a gripper and a promise that this is not a miniature factory arm. The
+              form makes people want to approach it. That matters because consumer
+              robotics has never been blocked only by motors or models; it has been
+              blocked by the awkwardness of living with a machine. Microduck’s answer
+              is charm first, capability second, extensibility underneath.
+            </p>
+          </div>
+        </section>
+
+        <section id="review" class="review-band">
+          <div class="review-heading">
+            <p class="eyebrow">THE POINTCAST VERDICT</p>
+            <h2>A development platform<br />disguised as a character.</h2>
+            <p>
+              At $399, Microduck is unusually inexpensive for a complete biped with
+              perception, audio and a published sim-to-real stack. It is compelling
+              for builders, classrooms and anyone curious about physical AI. It is
+              not yet the autonomous companion the silhouette suggests.
+            </p>
+          </div>
+          <div class="scorecard">
+            <div><span>APPROACHABILITY</span><b>9.0</b></div>
+            <div><span>SOFTWARE OPENNESS</span><b>8.5</b></div>
+            <div><span>OUT-OF-BOX AUTONOMY</span><b>4.0</b></div>
+            <div><span>BUILDER VALUE</span><b>8.5</b></div>
+          </div>
+          <div class="buy-call">
+            <div>
+              <b>PRE-ORDER IF</b>
+              <p>You want to train, modify and break things—in simulation first.</p>
+            </div>
+            <div>
+              <b>WAIT IF</b>
+              <p>You expect a polished household assistant that understands open-ended requests.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="specs" class="specs section-grid">
+          <div class="section-label">02 / WHAT YOU GET</div>
+          <div>
+            <div class="section-title-row">
+              <h2>Small body.<br />Serious stack.</h2>
+              <p>
+                The compute is modest by laptop standards. That is intentional: the
+                board executes compact ONNX policies while heavier training and
+                language-model planning happen elsewhere.
+              </p>
+            </div>
+
+            <div class="spec-grid">
+              <div class="spec-card feature"><small>BODY</small><b>25 × 14 cm</b><span>Under 800 g; articulated legs, head, neck and grasping beak.</span></div>
+              <div class="spec-card orange"><small>MOTION</small><b>15 DoF</b><span>Neural policies run through a 50 Hz onboard control loop.</span></div>
+              <div class="spec-card"><small>COMPUTE</small><b>RK3566</b><span>Rockchip processor with AI accelerator, 1 GB RAM and 32 GB storage.</span></div>
+              <div class="spec-card"><small>VISION</small><b>Camera + ToF</b><span>Front camera and compact 8×8 time-of-flight depth matrix.</span></div>
+              <div class="spec-card"><small>ORIENTATION</small><b>2 IMUs</b><span>One in the body and one in the head for posture and motion sensing.</span></div>
+              <div class="spec-card"><small>INTERACTION</small><b>Mic / speaker / NFC</b><span>Two NFC antennas—head and beak—and a generated voice unique to each unit.</span></div>
+              <div class="spec-card"><small>RADIOS</small><b>Wi-Fi + Bluetooth</b><span>Gamepad control, local configuration and networked development.</span></div>
+              <div class="spec-card acid"><small>POWER</small><b>≈ 1 hour</b><span>Removable 2,600 mAh NP-F550 camera battery charged over the supplied setup.</span></div>
+            </div>
+
+            <p class="spec-caveat">
+              Camera resolution and field of view, LiDAR range, radio versions, SDK
+              languages and age guidance were still being finalized on August 31.
+              “Open source” applies to the software stack; the mechanical and
+              electronic design files are not open hardware.
+            </p>
+          </div>
+        </section>
+
+        <section class="photo-break">
+          <figure>
+            <img src="/images/digital-pets/microduck/watching.webp" alt="Microduck standing in front of a laptop in teal light" />
+            <figcaption>THE BODY / LOCAL POLICIES</figcaption>
+          </figure>
+          <div class="photo-copy">
+            <span>THE REAL PRODUCT</span>
+            <p>Not the duck.</p>
+            <h2>The loop between imagination, simulation and matter.</h2>
+          </div>
+          <figure class="wide-photo">
+            <img src="/images/digital-pets/microduck/kickabout.webp" alt="Two Microduck robots playing with a ball on green turf" />
+            <figcaption>THE FLOCK / SHARED BEHAVIOR</figcaption>
+          </figure>
+        </section>
+
+        <section class="stack-section">
+          <div class="stack-intro section-grid">
+            <div class="section-label light">03 / UNDER THE SHELL</div>
+            <div>
+              <h2>Reflexes live in the duck.<br />Intent can live anywhere.</h2>
+              <p>
+                Microduck’s architecture draws the right line between a language
+                model and a body. A frontier model should not improvise individual
+                servo commands. It should choose a bounded skill; the local runtime
+                decides whether and how that skill is safe to execute.
+              </p>
+            </div>
+          </div>
+
+          <div class="architecture" aria-label="Agent to robot architecture">
+            <div class="arch-node human"><small>01 / GOAL</small><b>“Find the ball<br />and kick it.”</b><span>Human intent</span></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node model"><small>02 / PLAN</small><b>Choose one<br />allowed verb</b><span>Cloud or local model</span></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node guard"><small>03 / CONTRACT</small><b>Check limits,<br />budget, consent</b><span>Agent runtime</span></div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node duck"><small>04 / MOVE</small><b>Run learned<br />policy at 50 Hz</b><span>robotd + ONNX</span></div>
+          </div>
+          <p class="architecture-note">
+            Camera frame + robot state travel back to the planner. The loop repeats
+            until the goal is complete, impossible or out of budget. This goal-to-skill
+            pattern is demonstrated by the independent, unofficial{' '}
+            <a href="https://github.com/rokbenko/quackd" target="_blank" rel="noreferrer">quackd project</a>;
+            it is not an advertised Pollen Robotics feature.
+          </p>
+
+          <div class="daemon-grid">
+            <div><code>robotd</code><span>Motors, kinematics, learned gaits and safety—the authority on physical movement.</span></div>
+            <div><code>mediad</code><span>Camera, microphone, perception and WebRTC without risking the motor loop.</span></div>
+            <div><code>tofd</code><span>The 8×8 depth sensor, isolated so sensor trouble cannot take down control.</span></div>
+            <div><code>padd / btd</code><span>Gamepad and Bluetooth paths translated into the same calls other clients use.</span></div>
+            <div><code>configd</code><span>Network, identity and pairing remain reachable even if the robot brain crashes.</span></div>
+            <div><code>updaterd</code><span>Signed updates, health gates and automatic rollback when a release fails.</span></div>
+          </div>
+        </section>
+
+        <section id="program" class="program section-grid">
+          <div class="section-label">04 / HOW TO PROGRAM IT</div>
+          <div>
+            <div class="section-title-row">
+              <h2>Three ways<br />to make a duck.</h2>
+              <p>
+                Start with commands, graduate to learned motion, then add an agent
+                that composes reliable skills. Each layer has a different failure
+                mode—and should keep a different amount of authority.
+              </p>
+            </div>
+
+            <div class="program-steps">
+              <section>
+                <div class="step-no">1</div>
+                <div class="step-copy">
+                  <p class="eyebrow">OPERATE + OBSERVE</p>
+                  <h3>Learn the body before changing the brain.</h3>
+                  <p>
+                    SSH into the robot, confirm every service is on the same release,
+                    run the health report and watch the live control loop. The monitor
+                    exposes commanded versus applied motion, joint state, posture,
+                    fall status, battery and achieved loop rate.
+                  </p>
+                </div>
+                <pre><code>{`ssh microduck
+robotctl version
+robotctl health
+robotctl monitor
+
+# Capture a 50 Hz run for analysis
+robotctl monitor --json --hz 50 > run.jsonl`}</code></pre>
+              </section>
+
+              <section>
+                <div class="step-no">2</div>
+                <div class="step-copy">
+                  <p class="eyebrow">TRAIN A BEHAVIOR</p>
+                  <h3>Write a reward, not a choreography.</h3>
+                  <p>
+                    In the companion <code>microduck_rl</code> repository, thousands
+                    of simulated ducks practice in parallel under MuJoCo Warp. PPO
+                    turns a reward function into a policy. Domain randomization varies
+                    battery voltage, friction, command delay and gear backlash so the
+                    learned movement survives contact with real hardware.
+                  </p>
+                </div>
+                <pre><code>{`git clone https://github.com/pollen-robotics/microduck_rl
+cd microduck_rl
+
+# Train a walking policy on a CUDA GPU
+uv run train Mjlab-Velocity-Flat-MicroDuck \\
+  --env.scene.num-envs 4096
+
+# Export and rehearse the same ONNX policy
+uv run scripts/export.py Mjlab-Velocity-Flat-MicroDuck \\
+  --wandb-run-path <entity/project/run_id>
+uv run scripts/infer_policy.py --walking output.onnx`}</code></pre>
+              </section>
+
+              <section>
+                <div class="step-no">3</div>
+                <div class="step-copy">
+                  <p class="eyebrow">PROGRAM WITH AI</p>
+                  <h3>Describe the outcome; let an agent build the loop.</h3>
+                  <p>
+                    Ask an AI coding agent to inspect the simulator, define the task,
+                    draft reward terms, launch training, compare runs and prepare the
+                    ONNX artifact. The human job becomes specification and judgment:
+                    What counts as success? Which shortcuts are unacceptable? How many
+                    falls are safe in simulation before a real-world test?
+                  </p>
+                  <div class="prompt-card">
+                    <small>EXAMPLE BUILD BRIEF</small>
+                    <p>
+                      “Create a Microduck policy that bows after it recognizes an NFC
+                      tag. Keep both feet planted, cap head pitch at 25°, penalize
+                      abrupt joint velocity, train in simulation, and give me a video
+                      plus the reward curves before exporting anything.”
+                    </p>
+                  </div>
+                </div>
+                <div class="agent-rules">
+                  <div><b>SIMULATE</b><span>Run new motion away from hardware first.</span></div>
+                  <div><b>EVALUATE</b><span>Measure stability, energy and unintended shortcuts.</span></div>
+                  <div><b>APPROVE</b><span>Require a person before deployment or risky actions.</span></div>
+                  <div><b>ROLL BACK</b><span>Keep the last healthy policy one command away.</span></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="field-lab">
+          <div class="lab-heading">
+            <p class="eyebrow">POINTCAST BEHAVIOR LAB / INTERACTIVE</p>
+            <h2>Teach it a trick.<br /><span>Before you own it.</span></h2>
+            <p>
+              Choose an outcome. The agent’s job is to turn that intention into a
+              bounded skill, a reward design and a simulation gate—not to improvise
+              motor commands in the room.
+            </p>
+          </div>
+
+          <div class="lab-console">
+            <div class="lab-tabs" role="tablist" aria-label="Behavior missions">
+              {missions.map((item, index) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-controls="microduck-mission-panel"
+                  aria-selected={index === 0 ? 'true' : 'false'}
+                  data-mission={item.id}
+                  data-goal={item.goal}
+                  data-verbs={JSON.stringify(item.verbs)}
+                  data-build={item.build}
+                  data-reward={item.reward}
+                  data-gate={item.gate}
+                >
+                  <span>0{index + 1}</span>{item.label}
+                </button>
+              ))}
+            </div>
+
+            <div class="lab-screen" id="microduck-mission-panel" role="tabpanel">
+              <div class="lab-goal">
+                <small>YOUR INTENTION</small>
+                <p data-mission-goal>“{missions[0].goal}”</p>
+                <div class="verb-row" data-mission-verbs>
+                  {missions[0].verbs.map((verb) => <code>{verb}</code>)}
+                </div>
+              </div>
+              <div class="lab-build">
+                <div><small>AGENT BUILDS</small><b data-mission-build>{missions[0].build}</b></div>
+                <div><small>REWARD SKETCH</small><b data-mission-reward>{missions[0].reward}</b></div>
+                <div><small>DEPLOYMENT GATE</small><b data-mission-gate>{missions[0].gate}</b></div>
+              </div>
+              <div class="sim-status">
+                <span class="pulse" /> SIMULATION ONLY
+                <b>HUMAN APPROVAL REQUIRED FOR HARDWARE</b>
+              </div>
+            </div>
+          </div>
+          <div class="comic-burst" aria-hidden="true">TAP<br />TAP!</div>
+        </section>
+
+        <section class="agent-forward">
+          <div class="section-grid">
+            <div class="section-label light">05 / AGENT-FORWARD</div>
+            <div>
+              <p class="eyebrow lime">THE MOST INTERESTING WORK IS ABOVE THE MOTOR LOOP</p>
+              <h2>Five projects that make<br />Microduck more than a toy.</h2>
+              <div class="idea-grid">
+                <article><b>01</b><h3>Natural-language skill builder</h3><p>An agent converts “follow this color, but stop at stairs” into perception code, a test suite and a bounded composite skill.</p></article>
+                <article><b>02</b><h3>Embodied memory</h3><p>The duck remembers where objects tend to be and which interactions a household allows—locally, visibly and revocably.</p></article>
+                <article><b>03</b><h3>Reward design partner</h3><p>A coding model proposes reward terms, detects reward hacking in replays and runs adversarial simulation before export.</p></article>
+                <article><b>04</b><h3>Flock orchestration</h3><p>One planner decomposes a room-level goal among several cheap bodies while each robot keeps its own reflexes and stop rules.</p></article>
+                <article><b>05</b><h3>Skill provenance</h3><p>Every downloaded behavior carries tests, hardware limits, training data notes and a visible chain of authorship.</p></article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="horizon" class="models section-grid">
+          <div class="section-label">06 / THE MODEL HORIZON</div>
+          <div>
+            <div class="section-title-row">
+              <h2>Astra and Mythos<br />change the author.</h2>
+              <p>
+                Neither model belongs inside Microduck’s 50 Hz reflex loop. Their
+                relevance is that frontier agents increasingly can author, test and
+                maintain the software around that loop—and plan with the skills it exposes.
+              </p>
+            </div>
+
+            <div class="model-table" role="table" aria-label="AI model roles for physical agents">
+              <div class="model-row header" role="row"><span>MODEL LAYER</span><span>ROLE</span><span>REALITY CHECK</span></div>
+              <div class="model-row" role="row"><b>Microduck ONNX policies</b><span>Balance, walk, recover, kick and grasp at 50 Hz on-device.</span><span class="status live">SHIPPING STACK</span></div>
+              <div class="model-row" role="row"><b>General cloud / local LLM</b><span>Interpret goals, select bounded skills and write ordinary control software.</span><span class="status today">AVAILABLE NOW</span></div>
+              <div class="model-row" role="row"><b>Claude Mythos 5</b><span>Advanced coding and research capability; a signal of how powerful software agents are becoming.</span><span class="status restricted">RESTRICTED ACCESS</span></div>
+              <div class="model-row" role="row"><b>OpenAI Astra</b><span>Reported by OpenAI to show major gains in agentic coding and cybersecurity.</span><span class="status future">UPCOMING / NOT RELEASED</span></div>
+            </div>
+
+            <div class="model-analysis prose">
+              <p>
+                Mythos 5 is not a consumer robot brain. Anthropic currently limits it
+                to vetted partners for cybersecurity and biology, while the safeguarded
+                Fable 5 shares its underlying model for broader work. Astra is even
+                more provisional: OpenAI describes it as upcoming and says it may meet
+                a critical cybersecurity threshold. Any claim that either model is
+                “compatible with Microduck” today would be fiction.
+              </p>
+              <p>
+                But their trajectory matters. Better long-horizon coding agents make
+                a difficult robotics workflow—read an unfamiliar codebase, alter an
+                environment, launch training, inspect failure, patch, test, document—
+                accessible through a conversation. The likely consumer breakthrough
+                is not a single omniscient model installed in a duck. It is a system
+                that quietly routes each job: tiny policy for balance, vision model
+                for perception, general agent for planning, specialist coding model
+                for building the next skill.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="limits">
+          <div class="limits-title"><span>THE CATCH</span><h2>Charm is not autonomy.</h2></div>
+          <div class="limits-grid">
+            <article><b>01 / PRE-RELEASE</b><p>No independent battery, noise, drop, latency or long-term servo testing yet. First deliveries are only targeted before Christmas 2026.</p></article>
+            <article><b>02 / THIN COMPUTE</b><p>One gigabyte of RAM is for control and compact inference, not a frontier multimodal model. Open-ended intelligence needs a nearby computer or cloud service.</p></article>
+            <article><b>03 / PRIVATE ROOMS</b><p>A camera and microphone with mobility demand a visible recording state, local controls, network isolation and an easy physical off switch.</p></article>
+            <article><b>04 / OPEN, WITH AN ASTERISK</b><p>The software is Apache-2.0 and inspectable. The chassis, electronics and mechanical design are not published as open hardware.</p></article>
+            <article><b>05 / PHYSICS CHARGES INTEREST</b><p>Language models can retry cheaply. Motors wear, batteries sag and bad policies fall. Every agent needs budgets measured in motion, heat and risk—not only tokens.</p></article>
+            <article><b>06 / THE LAST METER</b><p>Recognizing a ball is not the same as reaching it across carpet, glare and chair legs. Reliability comes from the whole loop, not a benchmark score.</p></article>
+          </div>
+        </section>
+
+        <section class="future section-grid">
+          <div class="section-label">07 / BEYOND MICRODUCK</div>
+          <div>
+            <div class="section-title-row">
+              <h2>The consumer arc:<br />from apps to abilities.</h2>
+              <p>
+                Microduck is likely to be remembered less as the first useful home
+                robot than as one of the first approachable machines that showed what
+                comes after the app store.
+              </p>
+            </div>
+
+            <div class="timeline">
+              <article><div class="year">NOW</div><div><b>PLAYABLE BODY</b><h3>Buy the character.</h3><p>Control it immediately. Download code. Train a gait if you are ambitious. The robot is a hobby with a face.</p></div></article>
+              <article><div class="year">+1–2Y</div><div><b>AI-AUTHORED SKILLS</b><h3>Describe the behavior.</h3><p>An agent writes the environment, reward and tests. You approve videos from simulation; the system exports only after meeting physical safety gates.</p></div></article>
+              <article><div class="year">+2–4Y</div><div><b>ABILITY MARKET</b><h3>Install what a body can do.</h3><p>Skills arrive with provenance and hardware envelopes. “Morning scout” is not one model—it is a trusted bundle of perception, policy and permissions.</p></div></article>
+              <article><div class="year">+4–7Y</div><div><b>HOUSEHOLD FLEET</b><h3>Give goals to the room.</h3><p>Small, legible machines share maps and jobs. The consumer programs policy: which spaces, people, objects, times and costs are allowed.</p></div></article>
+            </div>
+
+            <div class="future-thesis">
+              <span>THE SHIFT</span>
+              <p>Yesterday: <b>write the steps.</b></p>
+              <p>Today: <b>describe the result.</b></p>
+              <p>Tomorrow: <b>set the values and limits.</b></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="closing">
+          <p class="eyebrow">THE LAST WORD</p>
+          <h2>We will not all become roboticists.</h2>
+          <p>
+            We will become directors of behavior. We will say what we want a machine
+            to notice, what it may touch, how it should fail and when it must ask.
+            The code will still matter. The motors will matter more. But the most
+            valuable programming language may be a carefully written intention,
+            tested against a simulated world before it enters the real one.
+          </p>
+          <p>
+            Microduck is not that future finished. It is that future small enough to
+            put on a desk, cheap enough to experiment with, and charming enough that
+            people may actually try.
+          </p>
+          <a class="cta" href="https://pollen-robotics.com/microduck/" target="_blank" rel="noreferrer">Explore Microduck ↗</a>
+        </section>
+
+        <section class="sources">
+          <div><span>REPORTING</span><h2>Sources & further reading</h2></div>
+          <ol>
+            <li><a href="https://pollen-robotics.com/microduck/press-kit/" target="_blank" rel="noreferrer">Pollen Robotics — Microduck press kit and provisional specification sheet</a></li>
+            <li><a href="https://github.com/pollen-robotics/microduck" target="_blank" rel="noreferrer">Pollen Robotics — Microduck runtime, robot tools and architecture</a></li>
+            <li><a href="https://github.com/pollen-robotics/microduck_rl" target="_blank" rel="noreferrer">Pollen Robotics — Microduck RL training environments and sim-to-real recipe</a></li>
+            <li><a href="https://github.com/rokbenko/quackd" target="_blank" rel="noreferrer">quackd — independent language-model planner and simulator for Microduck</a></li>
+            <li><a href="https://www.anthropic.com/claude/mythos" target="_blank" rel="noreferrer">Anthropic — Claude Mythos 5 availability, safeguards and positioning</a></li>
+            <li><a href="https://openai.com/index/responding-next-frontier-critical-cyber-capabilities/" target="_blank" rel="noreferrer">OpenAI — public status and evaluation notes for upcoming Astra</a></li>
+          </ol>
+          <p class="source-note">
+            Product photography courtesy of Pollen Robotics’ press kit. Facts checked
+            against primary sources on August 31, 2026. Future timelines are Pointcast
+            analysis, not manufacturer roadmaps.
+          </p>
+        </section>
+      </article>
+
+      <footer class="microduck-footer">
+        <a class="wordmark footer-mark" href="/digital-pets"><span>POINT</span><i>•</i><span>CAST</span></a>
+        <p>Future Book 001 · Field Report 01</p>
+        <a href="#top">BACK TO TOP ↑</a>
+      </footer>
+    </main>
+
+  <script is:inline>
+    function mountMicroduckFeature() {
+      const page = document.querySelector('[data-microduck-page]');
+      if (!page || page.dataset.microduckMounted === 'true') return;
+      page.dataset.microduckMounted = 'true';
+
+      const shellNames = ['cream', 'graphite', 'lavender', 'sky'];
+      const shellButtons = Array.from(page.querySelectorAll('[data-shell]'));
+      shellButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const shell = button.dataset.shell;
+          shellNames.forEach((name) => page.classList.remove(`shell-${name}`));
+          page.classList.add(`shell-${shell}`);
+          shellButtons.forEach((candidate) => {
+            candidate.setAttribute('aria-pressed', candidate === button ? 'true' : 'false');
+          });
+        });
+      });
+
+      const missionButtons = Array.from(page.querySelectorAll('[data-mission]'));
+      const goal = page.querySelector('[data-mission-goal]');
+      const verbs = page.querySelector('[data-mission-verbs]');
+      const build = page.querySelector('[data-mission-build]');
+      const reward = page.querySelector('[data-mission-reward]');
+      const gate = page.querySelector('[data-mission-gate]');
+
+      missionButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          missionButtons.forEach((candidate) => {
+            candidate.setAttribute('aria-selected', candidate === button ? 'true' : 'false');
+          });
+          if (goal) goal.textContent = `“${button.dataset.goal}”`;
+          if (build) build.textContent = button.dataset.build || '';
+          if (reward) reward.textContent = button.dataset.reward || '';
+          if (gate) gate.textContent = button.dataset.gate || '';
+          if (verbs) {
+            const values = JSON.parse(button.dataset.verbs || '[]');
+            verbs.replaceChildren(...values.map((value) => {
+              const code = document.createElement('code');
+              code.textContent = value;
+              return code;
+            }));
+          }
+        });
+      });
+    }
+
+    document.addEventListener('astro:page-load', mountMicroduckFeature);
+    mountMicroduckFeature();
+  </script>
+</BaseLayout>

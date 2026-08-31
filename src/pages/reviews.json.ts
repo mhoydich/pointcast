@@ -10,6 +10,7 @@ const catalog = {
     'Independent reviews of art software, small web products, speculative experiences, listening tools, and interfaces worth living with.',
   method: [
     'Use the released product on real desktop and mobile viewports.',
+    'When a product is pre-release, label the review public-spec and separate documented capability from hands-on evidence.',
     'Preserve screenshots from the tested build.',
     'Separate design promise from working behavior.',
     'Do not call a wallet handoff a completed transaction without an operation hash and independent confirmation.',

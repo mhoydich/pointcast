@@ -27,6 +27,31 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'microduck-public-spec-2026',
+    slug: 'microduck',
+    product: 'Microduck',
+    version: 'Launch edition',
+    category: 'Public-spec field review',
+    platform: 'Physical AI / open robotics',
+    title: 'The first computer that can waddle',
+    dek: 'A $399 biped, an open sim-to-real stack, and the first approachable glimpse of programming physical behavior with AI agents.',
+    publishedAt: '2026-08-31T16:10:00-07:00',
+    reviewer: 'Michael Hoydich + Codex for PointCast Research',
+    rating: 4.3,
+    image: '/images/digital-pets/microduck/social-card.jpg',
+    imageWidth: 1672,
+    imageHeight: 941,
+    imageAlt: 'A PointCast editorial illustration for The First Computer That Can Waddle featuring a stylized Microduck',
+    verdict: 'A development platform disguised as a character—compelling for builders, not yet the autonomous companion the silhouette suggests.',
+    reviewUrl: '/digital-pets/microduck',
+    jsonUrl: '/digital-pets/microduck.json',
+    experienceUrl: 'https://pollen-robotics.com/microduck/',
+    standaloneUrl: 'https://mhoydich.github.io/pointcast-microduck/',
+    blockId: '0579',
+    status: 'published',
+    tags: ['robotics', 'physical AI', 'agents', 'open source', 'pre-release'],
+  },
   CRYSTAL_BALL_PASS_REVIEW,
   {
     id: 'beach-commons-v3',
