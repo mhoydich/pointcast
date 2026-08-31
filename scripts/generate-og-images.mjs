@@ -889,6 +889,19 @@ const PAGES = [
     glyphSize: 260,
     siblings: ['/yard.json', '/join', '/for-agents'],
   },
+  {
+    slug: 'ai-income',
+    url: '/ai-income',
+    kind: 'field guide',
+    kicker: 'AI INCOME · FIELD GUIDE',
+    title: 'Where the money actually is.',
+    dek: 'How people get paid in the AI economy — expert marketplaces, building, services, content, teaching, agents. Honest tiers, no course to sell.',
+    color600: '#185FA5',
+    color800: '#0B3E73',
+    glyph: '$',
+    glyphSize: 280,
+    siblings: ['/ai-income.json', '/ai-stack', '/for-agents'],
+  },
 ];
 
 async function svgToPng(svg, outPath) {
