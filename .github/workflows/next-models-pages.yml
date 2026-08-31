@@ -1,0 +1,54 @@
+name: Deploy Next Models to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/next-models-pages.yml'
+      - 'astro.config.mjs'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'public/images/next-models/**'
+      - 'scripts/stage-next-models-pages.mjs'
+      - 'src/components/**'
+      - 'src/layouts/**'
+      - 'src/lib/next-models.ts'
+      - 'src/lib/seo.ts'
+      - 'src/pages/next-models.astro'
+      - 'src/pages/next-models.json.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: next-models-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PointCast
+        uses: actions/checkout@v5
+
+      - name: Build focused Pages artifact
+        uses: withastro/action@v5
+        with:
+          node-version: 22
+          build-cmd: npm run build:pages
+        env:
+          POINTCAST_GITHUB_PAGES: '1'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

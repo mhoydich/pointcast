@@ -5,9 +5,12 @@ import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
+const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
+
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://pointcast.xyz',
+  site: githubPages ? 'https://mhoydich.github.io' : 'https://pointcast.xyz',
+  ...(githubPages ? { base: '/pointcast' } : {}),
   // publicDir stays the default ./public. On 2026-07-11 a nightly-automation
   // commit (369554e4) pointed it at an empty tmp dir, which silently dropped
   // the entire public/ tree — games, _redirects, decks, static .well-known —
