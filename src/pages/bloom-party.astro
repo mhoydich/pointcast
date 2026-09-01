@@ -1,0 +1,1330 @@
+---
+/**
+ * /bloom-party — Bloom Party, a party game for 4-15 co-located phones.
+ *
+ * One URL serves three roles:
+ *   /bloom-party                    → make a room, get a six-letter code
+ *   /bloom-party?room=CODE          → join on your own phone
+ *   /bloom-party?room=CODE&view=stage → prop a phone up as the shared screen
+ *   /bloom-party?solo=1             → play with the synth alone, no server
+ *
+ * The round loop is Match the Vibe: a prompt appears, everyone builds a short
+ * bloom, all blooms play back anonymously, the room votes. Five rounds.
+ *
+ * Audio and visuals are synthesized in the browser from a ten-field spec.
+ * Nothing but that spec crosses the wire, which is why fifteen phones cost
+ * what four do.
+ *
+ * Author: cc. Source: Mike Hoydich chat directive, 2026-08-08: "create a fun
+ * party game on tone bloom and publish, about 10 to 15 of us getting together
+ * and could be all could be 4 enjoy".
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  BLOOM_PARTY,
+  HOW_TO_PLAY,
+  PACES,
+  ROOTS,
+  ROUNDS_PER_GAME,
+  VOICES,
+} from '../lib/bloom-party';
+
+const title = 'Bloom Party';
+const description =
+  'A party game for four to fifteen phones. A prompt appears, everyone builds a short bloom, the room votes on who matched the vibe. No app, no account, six-letter room code.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Bloom Party',
+  url: 'https://pointcast.xyz/bloom-party',
+  description,
+  applicationCategory: 'GameApplication',
+  applicationSubCategory: 'Local multiplayer party game',
+  operatingSystem: 'Any modern web browser',
+  isAccessibleForFree: true,
+  browserRequirements: 'JavaScript, WebSocket, Web Audio',
+  featureList: [
+    'Four to fifteen players, each on their own phone',
+    'Six-letter room code, no account and no install',
+    'Twelve synthesized voices and four pace modes',
+    'Anonymous playback and room voting',
+    'Optional shared stage view on a propped-up phone',
+  ],
+  isBasedOn: BLOOM_PARTY.inspiredBy,
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  themeColor="#0F6E56"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/bloom-party.json', title: 'Bloom Party as JSON' }]}
+>
+  <main class="bp" data-rounds={ROUNDS_PER_GAME}>
+    <!-- ── door ─────────────────────────────────────────────────────── -->
+    <section class="bp-screen" id="screen-door" data-screen="door">
+      <p class="bp-eyebrow">CH.GDN · PARTY GAME</p>
+      <h1>Bloom<span>Party</span></h1>
+      <p class="bp-lede">{BLOOM_PARTY.tagline}</p>
+
+      <div class="bp-door-actions">
+        <div class="bp-field">
+          <label for="player-name">What should we call you?</label>
+          <input
+            id="player-name"
+            name="playerName"
+            autocomplete="nickname"
+            spellcheck="false"
+            maxlength="16"
+            placeholder="Mike"
+          />
+        </div>
+        <button type="button" class="bp-btn bp-btn--big" id="open-stage" hidden>Open the stage</button>
+        <button type="button" class="bp-btn bp-btn--big" id="make-room">Start a room</button>
+        <form class="bp-join" id="join-form">
+          <label for="join-code">or type a code</label>
+          <input
+            id="join-code"
+            name="code"
+            inputmode="latin"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="6"
+            placeholder="ABCDEF"
+          />
+          <button type="submit" class="bp-btn">Join</button>
+        </form>
+        <button type="button" class="bp-btn bp-btn--ghost" id="try-solo">Just let me hear it</button>
+      </div>
+
+      <ol class="bp-how">
+        {HOW_TO_PLAY.map((step) => <li>{step}</li>)}
+      </ol>
+
+      <p class="bp-fine">
+        Built on PointCast, in the vocabulary of
+        <a href={BLOOM_PARTY.inspiredBy} rel="noopener">Tone Bloom</a> —
+        twelve voices, four speeds. We
+        <a href={BLOOM_PARTY.review}>reviewed it</a>, then wanted to play it with
+        a room full of people. Everything you hear is synthesized on your phone.
+      </p>
+    </section>
+
+    <!-- ── lobby ────────────────────────────────────────────────────── -->
+    <section class="bp-screen" id="screen-lobby" data-screen="lobby" hidden>
+      <p class="bp-eyebrow">ROOM CODE</p>
+      <p class="bp-code" id="room-code">------</p>
+      <p class="bp-lede" id="lobby-hint">Everyone else types that on their own phone.</p>
+      <div class="bp-share">
+        <button type="button" class="bp-btn bp-btn--ghost" id="copy-link">Copy the link</button>
+        <a class="bp-btn bp-btn--ghost" id="stage-link" href="#">Open the stage view</a>
+      </div>
+      <ul class="bp-roster" id="lobby-roster"></ul>
+      <button type="button" class="bp-btn bp-btn--big" id="start-game" hidden>Start the game</button>
+      <p class="bp-fine" id="lobby-wait">Waiting for the host to start.</p>
+    </section>
+
+    <!-- ── play ─────────────────────────────────────────────────────── -->
+    <section class="bp-screen bp-play" id="screen-play" data-screen="play" hidden>
+      <header class="bp-bar">
+        <span class="bp-bar__round" id="round-label">Round 1 / {ROUNDS_PER_GAME}</span>
+        <span class="bp-bar__phase" id="phase-label">—</span>
+        <span class="bp-bar__timer" id="timer">—</span>
+      </header>
+
+      <p class="bp-prompt" id="prompt-text">—</p>
+
+      <canvas class="bp-canvas" id="bloom-canvas" width="640" height="640" aria-hidden="true"></canvas>
+      <p class="bp-canvas-alt" id="canvas-alt" role="status" aria-live="polite"></p>
+
+      <!-- build controls -->
+      <div class="bp-build" id="build-controls" hidden>
+        <div class="bp-field">
+          <label for="pick-voice">Voice</label>
+          <select id="pick-voice">
+            {VOICES.map((voice) => <option value={voice.slug}>{voice.label}</option>)}
+          </select>
+        </div>
+        <div class="bp-field">
+          <label>Pace</label>
+          <div class="bp-chips" id="pick-pace">
+            {PACES.map((pace) => (
+              <button type="button" class="bp-chip" data-pace={pace.slug}>{pace.label}</button>
+            ))}
+          </div>
+        </div>
+        <div class="bp-field">
+          <label for="pick-brightness">Brightness</label>
+          <input type="range" id="pick-brightness" min="0" max="100" value="50" />
+        </div>
+        <div class="bp-field">
+          <label for="pick-drift">Drift</label>
+          <input type="range" id="pick-drift" min="0" max="100" value="30" />
+        </div>
+        <div class="bp-field">
+          <label for="pick-density">Density</label>
+          <input type="range" id="pick-density" min="1" max="4" value="2" />
+        </div>
+        <div class="bp-field">
+          <label>Key</label>
+          <div class="bp-chips" id="pick-root">
+            {ROOTS.map((root) => (
+              <button type="button" class="bp-chip" data-root={root.slug}>{root.label}</button>
+            ))}
+          </div>
+        </div>
+        <div class="bp-build__actions">
+          <button type="button" class="bp-btn bp-btn--ghost" id="preview-bloom">Hear it</button>
+          <button type="button" class="bp-btn bp-btn--ghost" id="reroll-bloom">Reroll</button>
+          <button type="button" class="bp-btn bp-btn--big" id="lock-bloom">Lock it in</button>
+        </div>
+      </div>
+
+      <!-- playback / heat -->
+      <div class="bp-playback" id="playback-controls" hidden>
+        <p class="bp-slotline" id="slot-line">—</p>
+        <button type="button" class="bp-btn bp-btn--heat" id="heat-btn" hidden>
+          That one <span id="heat-left"></span>
+        </button>
+      </div>
+
+      <!-- vote -->
+      <div class="bp-vote" id="vote-controls" hidden>
+        <p class="bp-fine">Which one matched the prompt?</p>
+        <div class="bp-ballot" id="ballot"></div>
+      </div>
+
+      <!-- results -->
+      <div class="bp-results" id="results-panel" hidden>
+        <ul class="bp-results__list" id="results-list"></ul>
+      </div>
+
+      <!-- scoreboard -->
+      <div class="bp-scores" id="scoreboard-panel" hidden>
+        <h2 id="scoreboard-title">Scoreboard</h2>
+        <ol class="bp-standings" id="standings"></ol>
+        <button type="button" class="bp-btn bp-btn--big" id="next-round" hidden>Next round</button>
+        <button type="button" class="bp-btn bp-btn--big" id="play-again" hidden>Play again</button>
+      </div>
+
+      <ul class="bp-roster bp-roster--compact" id="play-roster"></ul>
+    </section>
+
+    <p class="bp-status" id="status" role="status" aria-live="polite"></p>
+  </main>
+</BlockLayout>
+
+<style>
+  .bp {
+    --ink: #0d1512;
+    --paper: #f4f1e8;
+    --teal: #0f6e56;
+    --teal-deep: #083d30;
+    --acid: #d8f24a;
+    --coral: #d86440;
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 4rem;
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  .bp-eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    color: var(--teal);
+    margin: 0 0 0.5rem;
+  }
+
+  .bp h1 {
+    font-size: clamp(2.6rem, 14vw, 4rem);
+    line-height: 0.92;
+    letter-spacing: -0.03em;
+    margin: 0 0 0.75rem;
+    text-transform: uppercase;
+  }
+  .bp h1 span { display: block; color: var(--teal); }
+
+  .bp-lede { font-size: 1.05rem; line-height: 1.45; margin: 0 0 1.5rem; }
+
+  .bp-btn {
+    font: inherit;
+    font-weight: 650;
+    padding: 0.75rem 1.1rem;
+    border: 2px solid var(--ink);
+    border-radius: 0.6rem;
+    background: var(--acid);
+    color: var(--ink);
+    cursor: pointer;
+    min-height: 3rem;
+  }
+  .bp-btn:active { transform: translateY(1px); }
+  .bp-btn--big { width: 100%; font-size: 1.15rem; padding: 1rem; }
+  .bp-btn--ghost { background: transparent; }
+  .bp-btn--heat { background: var(--coral); color: var(--paper); width: 100%; font-size: 1.2rem; padding: 1.2rem; }
+  .bp-btn[disabled] { opacity: 0.45; cursor: default; }
+
+  .bp-door-actions { display: grid; gap: 0.75rem; margin-bottom: 2rem; }
+
+  .bp-join {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .bp-join label {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    color: #4a5a55;
+  }
+  .bp-join input {
+    font: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.4rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 0.7rem 0.8rem;
+    border: 2px solid var(--ink);
+    border-radius: 0.6rem;
+    min-width: 0;
+  }
+
+  .bp-how {
+    margin: 0 0 1.5rem;
+    padding-left: 1.2rem;
+    line-height: 1.5;
+    font-size: 0.95rem;
+  }
+  .bp-how li { margin-bottom: 0.4rem; }
+
+  .bp-fine { font-size: 0.85rem; line-height: 1.5; color: #4a5a55; }
+  .bp-fine a { color: var(--teal); }
+
+  .bp-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: clamp(2.8rem, 18vw, 5rem);
+    letter-spacing: 0.16em;
+    margin: 0 0 0.5rem;
+    color: var(--teal-deep);
+  }
+
+  .bp-share { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .bp-share .bp-btn { text-decoration: none; }
+
+  .bp-roster {
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .bp-roster li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.9rem;
+    background: var(--paper);
+  }
+  .bp-roster li[data-ready='1'] { background: var(--acid); }
+  .bp-roster li[data-connected='0'] { opacity: 0.4; }
+  .bp-roster--compact li { font-size: 0.8rem; padding: 0.2rem 0.5rem; }
+
+  .bp-bar {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 1rem;
+  }
+  .bp-bar__timer { font-variant-numeric: tabular-nums; }
+
+  .bp-prompt {
+    font-size: clamp(1.6rem, 8vw, 2.4rem);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+  }
+
+  .bp-canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    display: block;
+    border: 2px solid var(--ink);
+    border-radius: 0.8rem;
+    background: var(--teal-deep);
+    margin-bottom: 0.75rem;
+  }
+  .bp-canvas-alt { font-size: 0.85rem; color: #4a5a55; margin: 0 0 1rem; min-height: 1.2em; }
+
+  .bp-field { margin-bottom: 0.9rem; }
+  .bp-field label {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+    color: #4a5a55;
+  }
+  .bp-field select,
+  .bp-field input[type='range'] {
+    width: 100%;
+    font: inherit;
+  }
+  .bp-field select,
+  .bp-field input[type='text'],
+  .bp-field input:not([type]) {
+    padding: 0.6rem;
+    border: 2px solid var(--ink);
+    border-radius: 0.5rem;
+    background: var(--paper);
+    width: 100%;
+    font-size: 1rem; /* 16px — anything smaller makes iOS zoom on focus */
+  }
+  .bp-field input[type='range'] { height: 2.5rem; accent-color: var(--teal); }
+
+  .bp-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .bp-chip {
+    font: inherit;
+    padding: 0.55rem 0.9rem;
+    border: 2px solid var(--ink);
+    border-radius: 0.5rem;
+    background: var(--paper);
+    cursor: pointer;
+    min-height: 2.75rem;
+  }
+  .bp-chip[aria-pressed='true'] { background: var(--teal); color: var(--paper); }
+
+  .bp-build__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 1rem; }
+  .bp-build__actions .bp-btn--big { grid-column: 1 / -1; }
+
+  .bp-slotline {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .bp-ballot { display: grid; gap: 0.5rem; }
+  .bp-ballot button {
+    font: inherit;
+    text-align: left;
+    padding: 0.9rem 1rem;
+    border: 2px solid var(--ink);
+    border-radius: 0.6rem;
+    background: var(--paper);
+    cursor: pointer;
+    min-height: 3.25rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .bp-ballot button[aria-pressed='true'] { background: var(--acid); }
+  .bp-ballot button[disabled] { opacity: 0.4; }
+
+  .bp-results__list, .bp-standings { padding-left: 1.2rem; line-height: 1.6; }
+  .bp-results__list { list-style: none; padding-left: 0; }
+  .bp-results__list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(13, 21, 18, 0.15);
+  }
+  .bp-results__list li[data-winner='1'] { font-weight: 700; color: var(--teal); }
+  .bp-standings li { padding: 0.35rem 0; font-size: 1.05rem; }
+
+  .bp-status {
+    margin-top: 1.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    color: var(--coral);
+    min-height: 1.2em;
+  }
+
+  /* The stage view is a propped-up phone across the room — bigger type, no
+     controls, everything readable from four feet away. */
+  .bp[data-view='stage'] { max-width: 52rem; }
+  .bp[data-view='stage'] .bp-prompt { font-size: clamp(2.2rem, 6vw, 4rem); }
+  .bp[data-view='stage'] .bp-build,
+  .bp[data-view='stage'] .bp-vote,
+  .bp[data-view='stage'] .bp-playback { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bp-btn:active { transform: none; }
+  }
+</style>
+
+<script>
+  import {
+    BLOOM_PARTY,
+    DEFAULT_SPEC,
+    MAX_PLAYERS,
+    PACES,
+    ROOTS,
+    ROUNDS_PER_GAME,
+    VOICES,
+    cutoffHz,
+    mulberry32,
+    normalizeRoomCode,
+    orderBallot,
+    playableItems,
+    normalizeSpec,
+    paceFor,
+    scheduleBloom,
+    specToSeed,
+    voiceFor,
+    type BloomSpec,
+  } from '../lib/bloom-party';
+
+  // ---------- room code -------------------------------------------------
+
+  const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
+
+  function makeCode(): string {
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    let code = '';
+    for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+    return code;
+  }
+
+  function sessionId(): string {
+    const key = 'bloom-party:sid';
+    let sid = localStorage.getItem(key);
+    if (!sid) {
+      sid = crypto.randomUUID();
+      localStorage.setItem(key, sid);
+    }
+    return sid;
+  }
+
+  // ---------- audio -----------------------------------------------------
+
+  let ctx: AudioContext | null = null;
+  let master: GainNode | null = null;
+
+  /**
+   * iOS will not start an AudioContext outside a user gesture, and it
+   * suspends one whenever the phone locks. Every entry point into the game
+   * runs through here, so the first tap on any screen arms the audio.
+   */
+  function unlock(): AudioContext {
+    if (!ctx) {
+      const Ctor = window.AudioContext
+        || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      ctx = new Ctor!();
+      master = ctx.createGain();
+      master.gain.value = 0.7;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.ratio.value = 6;
+      master.connect(comp).connect(ctx.destination);
+      // A single silent frame is what actually convinces iOS the context is live.
+      const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    }
+    if (ctx.state === 'suspended') void ctx.resume();
+    return ctx;
+  }
+
+  let noiseBuffer: AudioBuffer | null = null;
+  /**
+   * Shaped noise for the breathy voices. Seeded, not Math.random() — the
+   * whole design rests on every phone rendering the identical bloom, and an
+   * unseeded buffer gave Water Drop and Glass Rain a different transient
+   * texture on each device.
+   */
+  function noise(audio: AudioContext): AudioBuffer {
+    if (noiseBuffer) return noiseBuffer;
+    const length = Math.floor(audio.sampleRate * 0.6);
+    const buffer = audio.createBuffer(1, length, audio.sampleRate);
+    const data = buffer.getChannelData(0);
+    const rand = mulberry32(0xb1008);
+    for (let i = 0; i < length; i++) {
+      data[i] = (rand() * 2 - 1) * (1 - i / length);
+    }
+    noiseBuffer = buffer;
+    return buffer;
+  }
+
+  let liveNodes: AudioScheduledSourceNode[] = [];
+  let liveEffects: AudioNode[] = [];
+
+  /**
+   * Silence everything currently scheduled. Every source node stays tracked
+   * until it is stopped — an earlier version capped the list at 400 to bound
+   * memory, which meant a single dense Spark bloom overflowed it and left the
+   * dropped nodes playing through the next phase with no handle to stop them.
+   *
+   * The per-bloom reverb pair is torn down here too; it is a feedback loop
+   * connected to master, so leaving it attached kept a tail ringing after the
+   * sources went quiet and stacked up one live delay line per bloom.
+   */
+  function stopAudio(): void {
+    for (const node of liveNodes) {
+      try { node.stop(); } catch { /* already stopped or never started */ }
+    }
+    liveNodes = [];
+    for (const node of liveEffects) {
+      try { node.disconnect(); } catch { /* already detached */ }
+    }
+    liveEffects = [];
+  }
+
+  /**
+   * Render one bloom. The whole note list is scheduled in a single pass
+   * against the AudioContext clock — no setTimeout per note, which is what
+   * keeps a phone under load from smearing the rhythm.
+   */
+  function renderBloom(spec: BloomSpec, durationMs: number, startDelaySec = 0): void {
+    const audio = unlock();
+    if (!master) return;
+    const voice = voiceFor(spec);
+    const notes = scheduleBloom(spec, durationMs);
+    const t0 = audio.currentTime + Math.max(0, startDelaySec) + 0.03;
+
+    // A short feedback delay pair stands in for reverb. Cheaper on a phone
+    // than generating an impulse response for a ConvolverNode.
+    const space = audio.createDelay(0.5);
+    space.delayTime.value = 0.19;
+    const spaceGain = audio.createGain();
+    spaceGain.gain.value = 0.22 + spec.drift * 0.18;
+    space.connect(spaceGain).connect(space);
+    spaceGain.connect(master);
+    liveEffects.push(space, spaceGain);
+
+    const cutoff = cutoffHz(spec.brightness);
+
+    for (const note of notes) {
+      const when = t0 + note.at;
+      const filter = audio.createBiquadFilter();
+      filter.type = voice.filterType;
+      filter.frequency.value = Math.min(cutoff, audio.sampleRate / 2 - 100);
+      filter.Q.value = voice.q;
+
+      const panner = audio.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, note.pan));
+
+      const envelope = audio.createGain();
+      const peak = note.gain * 0.16;
+      envelope.gain.setValueAtTime(0.0001, when);
+      envelope.gain.linearRampToValueAtTime(peak, when + voice.attack);
+      envelope.gain.setTargetAtTime(peak * voice.sustain + 0.0001, when + voice.attack, voice.decay / 3);
+      envelope.gain.setTargetAtTime(0.0001, when + note.durationSec, voice.release / 4);
+
+      filter.connect(panner).connect(envelope);
+      envelope.connect(master);
+      envelope.connect(space);
+
+      if (spec.drift > 0.02) {
+        const lfo = audio.createOscillator();
+        const depth = audio.createGain();
+        lfo.frequency.value = 0.4 + spec.drift * 3;
+        depth.gain.value = spec.drift * 40;
+        lfo.connect(depth).connect(filter.detune);
+        lfo.start(when);
+        lfo.stop(when + note.durationSec + voice.release);
+        liveNodes.push(lfo);
+      }
+
+      for (const [ratio, gain] of voice.partials) {
+        const osc = audio.createOscillator();
+        osc.type = voice.wave;
+        osc.frequency.value = note.hz * ratio;
+        osc.detune.value = voice.detuneCents * (ratio > 1 ? 1 : -1);
+        const partial = audio.createGain();
+        partial.gain.value = gain;
+        osc.connect(partial).connect(filter);
+        osc.start(when);
+        osc.stop(when + note.durationSec + voice.release);
+        liveNodes.push(osc);
+      }
+
+      if (voice.noiseMix > 0) {
+        const source = audio.createBufferSource();
+        source.buffer = noise(audio);
+        const breath = audio.createGain();
+        breath.gain.value = voice.noiseMix * note.gain;
+        source.connect(breath).connect(filter);
+        source.start(when);
+        source.stop(when + Math.min(0.6, note.durationSec + 0.1));
+        liveNodes.push(source);
+      }
+    }
+
+    paint(spec, notes, performance.now() + startDelaySec * 1000, durationMs);
+  }
+
+  // ---------- visual ----------------------------------------------------
+
+  const canvas = document.getElementById('bloom-canvas') as HTMLCanvasElement | null;
+  const canvasAlt = document.getElementById('canvas-alt');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let paintFrame = 0;
+
+  function describe(spec: BloomSpec): string {
+    const voice = voiceFor(spec);
+    const pace = paceFor(spec);
+    const root = ROOTS.find((r) => r.slug === spec.root)?.label ?? '';
+    return `${voice.label}, ${pace.label}, key ${root}, brightness ${Math.round(spec.brightness * 100)}, drift ${Math.round(spec.drift * 100)}, ${spec.density} layer${spec.density === 1 ? '' : 's'}.`;
+  }
+
+  /** Petals drawn off the same scheduled note list the synth plays, so the
+   *  picture is the sound rather than an analyser's guess at it. */
+  function paint(spec: BloomSpec, notes: ReturnType<typeof scheduleBloom>, startMs: number, durationMs: number): void {
+    if (canvasAlt) canvasAlt.textContent = describe(spec);
+    if (!canvas) return;
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    cancelAnimationFrame(paintFrame);
+
+    const size = canvas.width;
+    const hue = (specToSeed(spec) % 360);
+
+    const draw = (now: number) => {
+      const elapsed = (now - startMs) / 1000;
+      g.fillStyle = '#083d30';
+      g.fillRect(0, 0, size, size);
+
+      for (const note of notes) {
+        const age = elapsed - note.at;
+        if (age < 0 || age > 2.4) continue;
+        const life = reduceMotion ? 0.5 : 1 - age / 2.4;
+        const radius = (size * 0.06) + age * size * 0.16;
+        const angle = (note.hz % 360) * (Math.PI / 180);
+        const cx = size / 2 + Math.cos(angle) * note.pan * size * 0.22;
+        const cy = size / 2 + Math.sin(angle) * size * 0.1;
+
+        g.beginPath();
+        g.arc(cx, cy, Math.max(2, radius), 0, Math.PI * 2);
+        g.strokeStyle = `hsla(${(hue + note.hz / 4) % 360} 80% 62% / ${life * 0.85})`;
+        g.lineWidth = Math.max(1, 6 * life * note.gain);
+        g.stroke();
+      }
+
+      if (elapsed < durationMs / 1000 + 2.4) {
+        paintFrame = requestAnimationFrame(draw);
+      }
+    };
+    paintFrame = requestAnimationFrame(draw);
+  }
+
+  // ---------- DOM handles ------------------------------------------------
+
+  const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+  const root = document.querySelector('.bp') as HTMLElement;
+  const screens = {
+    door: $('screen-door'),
+    lobby: $('screen-lobby'),
+    play: $('screen-play'),
+  };
+  const statusEl = $('status');
+
+  function showScreen(name: keyof typeof screens): void {
+    for (const [key, node] of Object.entries(screens)) node.hidden = key !== name;
+  }
+
+  function say(message: string): void {
+    statusEl.textContent = message;
+  }
+
+  // ---------- build state ------------------------------------------------
+
+  let spec: BloomSpec = { ...DEFAULT_SPEC, seed: Math.floor(Math.random() * 10000) };
+
+  function syncBuildUI(): void {
+    ($('pick-voice') as HTMLSelectElement).value = spec.voice;
+    ($('pick-brightness') as HTMLInputElement).value = String(Math.round(spec.brightness * 100));
+    ($('pick-drift') as HTMLInputElement).value = String(Math.round(spec.drift * 100));
+    ($('pick-density') as HTMLInputElement).value = String(spec.density);
+    for (const chip of document.querySelectorAll<HTMLButtonElement>('#pick-pace .bp-chip')) {
+      chip.setAttribute('aria-pressed', String(chip.dataset.pace === spec.pace));
+    }
+    for (const chip of document.querySelectorAll<HTMLButtonElement>('#pick-root .bp-chip')) {
+      chip.setAttribute('aria-pressed', String(chip.dataset.root === spec.root));
+    }
+    if (canvasAlt) canvasAlt.textContent = describe(spec);
+  }
+
+  function wireBuildControls(): void {
+    ($('pick-voice') as HTMLSelectElement).addEventListener('change', (event) => {
+      spec = normalizeSpec({ ...spec, voice: (event.target as HTMLSelectElement).value });
+      previewSoon();
+    });
+    // The sliders preview like the chips do — silent knobs made it impossible
+    // to tell whether dragging brightness had done anything.
+    ($('pick-brightness') as HTMLInputElement).addEventListener('input', (event) => {
+      spec = normalizeSpec({ ...spec, brightness: Number((event.target as HTMLInputElement).value) / 100 });
+      previewSoon();
+    });
+    ($('pick-drift') as HTMLInputElement).addEventListener('input', (event) => {
+      spec = normalizeSpec({ ...spec, drift: Number((event.target as HTMLInputElement).value) / 100 });
+      previewSoon();
+    });
+    ($('pick-density') as HTMLInputElement).addEventListener('input', (event) => {
+      spec = normalizeSpec({ ...spec, density: Number((event.target as HTMLInputElement).value) });
+      previewSoon();
+    });
+    for (const chip of document.querySelectorAll<HTMLButtonElement>('#pick-pace .bp-chip')) {
+      chip.addEventListener('click', () => {
+        spec = normalizeSpec({ ...spec, pace: chip.dataset.pace });
+        syncBuildUI();
+        previewSoon();
+      });
+    }
+    for (const chip of document.querySelectorAll<HTMLButtonElement>('#pick-root .bp-chip')) {
+      chip.addEventListener('click', () => {
+        spec = normalizeSpec({ ...spec, root: chip.dataset.root });
+        syncBuildUI();
+        previewSoon();
+      });
+    }
+    $('preview-bloom').addEventListener('click', () => preview());
+    $('reroll-bloom').addEventListener('click', () => {
+      spec = normalizeSpec({ ...spec, seed: Math.floor(Math.random() * 10000) });
+      preview();
+    });
+  }
+
+  let previewTimer = 0;
+  function previewSoon(): void {
+    window.clearTimeout(previewTimer);
+    previewTimer = window.setTimeout(() => preview(), 180);
+  }
+
+  function preview(): void {
+    stopAudio();
+    renderBloom(spec, 3200);
+  }
+
+  // ---------- solo mode --------------------------------------------------
+
+  function startSolo(): void {
+    root.dataset.view = 'solo';
+    showScreen('play');
+    $('phase-label').textContent = 'Solo';
+    $('round-label').textContent = 'No room';
+    $('timer').textContent = '';
+    $('prompt-text').textContent = 'Make something you like.';
+    $('build-controls').hidden = false;
+    $('lock-bloom').hidden = true;
+    syncBuildUI();
+    preview();
+    say('Solo mode — nothing is sent anywhere. Start a room when your people arrive.');
+  }
+
+  // ---------- networked game ---------------------------------------------
+
+  interface RosterEntry {
+    id: string; name: string; emoji: number; hue: number; score: number;
+    isHost: boolean; connected: boolean; submitted: boolean; voted: boolean;
+  }
+
+  const EMOJI = ['🌱', '🌿', '🍃', '🌾', '🌸', '🌺', '🌼', '🌻', '🪴', '🌵', '🍄', '🐚',
+    '🌊', '☁️', '⭐', '🌙', '🔆', '❄️', '🪶', '🫧', '🎐', '🕯️', '📻', '🎏'];
+
+  let socket: WebSocket | null = null;
+  let roomCode = '';
+  let myId = '';
+  let isHost = false;
+  let isStage = false;
+  let clockOffset = 0;
+  let phaseEndsAt = 0;
+  let livePlayers = 0;
+  let heatsLeft = 0;
+  let currentBallot: number[] = [];
+  let playbackTimers: number[] = [];
+  /** Slots in the order the room heard them, used to label the ballot. */
+  let playbackOrder: number[] = [];
+  let voteAccepted = false;
+  let wantConnection = false;
+  let reconnectTimer = 0;
+  let reconnectAttempts = 0;
+
+  function serverNow(): number {
+    return Date.now() + clockOffset;
+  }
+
+  function connect(code: string, stage: boolean): void {
+    roomCode = code;
+    isStage = stage;
+    root.dataset.view = stage ? 'stage' : 'player';
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const url = `${proto}${location.host}/api/bloom/room?room=${code}&sid=${encodeURIComponent(sessionId())}&role=${stage ? 'stage' : 'player'}`;
+
+    wantConnection = true;
+    say('Connecting…');
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      say('Could not open a room. Playing solo instead.');
+      startSolo();
+      return;
+    }
+
+    socket.addEventListener('open', () => {
+      reconnectAttempts = 0;
+      say('');
+      send({ type: 'hello', role: stage ? 'stage' : 'player', name: stage ? '' : claimName() });
+      // Ask for a full snapshot so a reconnecting phone lands on the room's
+      // current phase rather than whatever it was showing when it dropped.
+      send({ type: 'sync' });
+    });
+    socket.addEventListener('message', (event) => {
+      try {
+        onMessage(JSON.parse(String(event.data)));
+      } catch { /* a malformed frame is not worth killing the party over */ }
+    });
+    socket.addEventListener('close', () => {
+      // iOS drops the socket every time the phone locks, which at a party is
+      // constantly. Reconnect on our own rather than telling fifteen people to
+      // reload; the server keys identity off a stored sid, so the seat and the
+      // score come back with us.
+      if (!wantConnection) return;
+      say('Reconnecting…');
+      scheduleReconnect();
+    });
+    socket.addEventListener('error', () => {
+      say('The room is not reachable — retrying. Try /bloom-party?solo=1 to hear the synth on your own.');
+    });
+  }
+
+  function scheduleReconnect(): void {
+    if (reconnectTimer) return;
+    reconnectAttempts += 1;
+    const waitMs = Math.min(8000, 500 * 2 ** Math.min(4, reconnectAttempts - 1));
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = 0;
+      if (!wantConnection || !roomCode) return;
+      connect(roomCode, isStage);
+    }, waitMs);
+  }
+
+  function send(payload: Record<string, unknown>): void {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ v: 1, ...payload }));
+  }
+
+  function savedName(): string {
+    return localStorage.getItem('bloom-party:name') || '';
+  }
+
+  /** Read the name field, remember it for next time, and fall back to
+   *  something friendlier than a blank chip on the roster. */
+  function claimName(): string {
+    const field = document.getElementById('player-name') as HTMLInputElement | null;
+    const typed = (field?.value ?? '').trim().slice(0, 16);
+    const name = typed || savedName() || `Guest ${Math.floor(Math.random() * 90 + 10)}`;
+    localStorage.setItem('bloom-party:name', name);
+    return name;
+  }
+
+  function onMessage(msg: Record<string, any>): void {
+    switch (msg.type) {
+      case 'welcome':
+        myId = msg.you?.playerId ?? '';
+        isHost = Boolean(msg.you?.isHost);
+        clockOffset = Number(msg.serverAt ?? Date.now()) - Date.now();
+        $('room-code').textContent = msg.room ?? roomCode;
+        applyPhase(msg);
+        renderRoster(msg.players ?? []);
+        break;
+      case 'roster':
+        renderRoster(msg.players ?? []);
+        break;
+      case 'phase':
+        applyPhase(msg);
+        break;
+      case 'playback':
+        runPlayback(msg);
+        break;
+      case 'results':
+        showResults(msg);
+        break;
+      case 'scoreboard':
+        showScoreboard(msg);
+        break;
+      case 'submitted':
+        say('Locked in. Waiting for everyone else.');
+        break;
+      case 'voted':
+        voteAccepted = true;
+        say('Vote counted.');
+        break;
+      case 'heat-ack':
+        heatsLeft = Number(msg.remaining ?? 0);
+        $('heat-left').textContent = heatsLeft > 0 ? `(${heatsLeft} left)` : '(that was your last)';
+        break;
+      case 'error':
+        say(errorText(String(msg.code ?? '')));
+        reopenBallot();
+        break;
+      case 'rate-limit':
+        say('Easy — slow down a moment.');
+        reopenBallot();
+        break;
+      case 'room-closed':
+        say('The room closed.');
+        break;
+    }
+  }
+
+  function errorText(code: string): string {
+    switch (code) {
+      case 'host-only': return 'Only the host can do that.';
+      case 'need-more-players': return 'Wait for at least one more phone.';
+      case 'no-self-vote': return 'That one is yours — pick another.';
+      case 'no-self-heat': return 'That one is yours.';
+      case 'no-such-bloom': return 'That bloom is no longer in the round.';
+      case 'already-voted': return 'You already voted this round.';
+      case 'no-heats-left': return 'Out of picks for this round.';
+      case 'not-on-ballot': return 'That one did not make the shortlist.';
+      case 'wrong-phase': return '';
+      default: return '';
+    }
+  }
+
+  const PHASE_LABEL: Record<string, string> = {
+    lobby: 'Lobby',
+    prompt: 'Get ready',
+    build: 'Build it',
+    playback: 'Listen',
+    vote: 'Vote',
+    reveal: 'Results',
+    scoreboard: 'Scores',
+    final: 'Final',
+  };
+
+  function applyPhase(msg: Record<string, any>): void {
+    const phase = String(msg.phase ?? 'lobby');
+    phaseEndsAt = Number(msg.phaseEndsAt ?? 0);
+    livePlayers = Number(msg.players ?? livePlayers);
+    currentBallot = Array.isArray(msg.ballot) ? msg.ballot : [];
+    if (typeof msg.serverAt === 'number') clockOffset = msg.serverAt - Date.now();
+
+    if (phase === 'lobby') {
+      showScreen('lobby');
+      $('start-game').hidden = !isHost;
+      $('lobby-wait').hidden = isHost;
+      $('room-code').textContent = roomCode;
+      updateShareLinks();
+      return;
+    }
+
+    showScreen('play');
+    $('phase-label').textContent = PHASE_LABEL[phase] ?? phase;
+    $('round-label').textContent = `Round ${msg.round ?? 1} / ${ROUNDS_PER_GAME}`;
+    if (msg.prompt) $('prompt-text').textContent = String(msg.prompt);
+
+    $('build-controls').hidden = !(phase === 'build' && !isStage);
+    $('lock-bloom').hidden = isStage;
+    $('playback-controls').hidden = phase !== 'playback';
+    $('vote-controls').hidden = !(phase === 'vote' && !isStage);
+    $('results-panel').hidden = phase !== 'reveal';
+    $('scoreboard-panel').hidden = !(phase === 'scoreboard' || phase === 'final');
+    $('next-round').hidden = !(isHost && phase === 'scoreboard');
+    $('play-again').hidden = !(isHost && phase === 'final');
+
+    // Anything still queued from playback belongs to a phase that is over.
+    if (phase !== 'playback') clearPlayback();
+
+    if (phase === 'build') {
+      stopAudio();
+      syncBuildUI();
+      // A new round means nothing is locked yet, whatever last round's button
+      // said.
+      ($('lock-bloom') as HTMLButtonElement).textContent = 'Lock it in';
+      say('Build a bloom that matches the prompt, then lock it in.');
+    }
+    if (phase === 'vote') renderBallot();
+    if (phase === 'prompt') {
+      stopAudio();
+      playbackOrder = [];
+      say('');
+    }
+  }
+
+  function tick(): void {
+    const remaining = phaseEndsAt > 0 ? Math.max(0, phaseEndsAt - serverNow()) : 0;
+    $('timer').textContent = phaseEndsAt > 0 ? `${Math.ceil(remaining / 1000)}s` : '';
+    requestAnimationFrame(tick);
+  }
+
+  function renderRoster(players: RosterEntry[]): void {
+    livePlayers = players.filter((player) => player.connected).length;
+    const markup = players.map((player) => {
+      const ready = player.submitted || player.voted ? '1' : '0';
+      const emoji = EMOJI[Math.abs(Number(player.emoji) || 0) % EMOJI.length];
+      const name = player.name || 'someone';
+      const crown = player.isHost ? ' ♦' : '';
+      return `<li data-ready="${ready}" data-connected="${player.connected ? '1' : '0'}">${emoji} ${escapeHtml(name)}${crown} <b>${player.score}</b></li>`;
+    }).join('');
+    $('lobby-roster').innerHTML = markup;
+    $('play-roster').innerHTML = markup;
+
+    const me = players.find((player) => player.id === myId);
+    if (me) isHost = me.isHost;
+    $('start-game').hidden = !isHost;
+    $('lobby-wait').hidden = isHost;
+    $('lobby-hint').textContent = players.length < 2
+      ? 'Everyone else types that on their own phone.'
+      : `${livePlayers} here. Up to ${MAX_PLAYERS} can play.`;
+  }
+
+  function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, (ch) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] ?? ch
+    ));
+  }
+
+  /** Drop every bloom still waiting to play. Called whenever the room leaves
+   *  playback — including an early advance, which used to leave the remaining
+   *  timers to fire over the top of the voting screen. */
+  function clearPlayback(): void {
+    for (const timer of playbackTimers) window.clearTimeout(timer);
+    playbackTimers = [];
+  }
+
+  function runPlayback(msg: Record<string, any>): void {
+    stopAudio();
+    clearPlayback();
+
+    heatsLeft = Number(msg.heats ?? 0);
+    const heatBtn = $('heat-btn') as HTMLButtonElement;
+    heatBtn.hidden = heatsLeft <= 0 || isStage;
+    $('heat-left').textContent = heatsLeft > 0 ? `(${heatsLeft} left)` : '';
+
+    const items: Array<{ slot: number; spec: BloomSpec; startAt: number }> = msg.items ?? [];
+    const durationMs = Number(msg.durationMs ?? 4000);
+
+    // Remember the order the room hears these in. The ballot is labelled from
+    // this, not from its own array order — with a heat shortlist the two
+    // differ, and "Bloom #2" has to mean the second thing people heard or the
+    // vote is meaningless.
+    playbackOrder = items.map((item) => item.slot);
+
+    for (const item of playableItems(items, serverNow())) {
+      const delayMs = item.startAt - serverNow();
+      const position = playbackOrder.indexOf(item.slot) + 1;
+      const timer = window.setTimeout(() => {
+        heatBtn.dataset.slot = String(item.slot);
+        $('slot-line').textContent = `#${position} of ${items.length}`;
+        renderBloom(normalizeSpec(item.spec), durationMs);
+      }, delayMs);
+      playbackTimers.push(timer);
+    }
+    say(heatsLeft > 0 ? 'Tap “That one” for the ones worth a second listen.' : 'Listen. Voting is next.');
+  }
+
+  /** Re-open the ballot after a rejected vote. Without this, tapping your own
+   *  bloom — which you cannot identify, since playback is anonymous — burned
+   *  your whole vote for the round. */
+  function reopenBallot(): void {
+    if (voteAccepted) return;
+    for (const button of $('ballot').querySelectorAll('button')) {
+      button.removeAttribute('aria-pressed');
+      button.setAttribute('aria-pressed', 'false');
+      (button as HTMLButtonElement).disabled = false;
+    }
+  }
+
+  function renderBallot(): void {
+    const container = $('ballot');
+    container.innerHTML = '';
+    voteAccepted = false;
+    // Show the ballot in the order the room heard the blooms, so the numbers
+    // on the buttons match the numbers announced during playback.
+    const ordered = orderBallot(playbackOrder, currentBallot);
+
+    for (const slot of ordered) {
+      const position = playbackOrder.indexOf(slot);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = position >= 0 ? `Bloom #${position + 1}` : `Bloom ${slot + 1}`;
+      button.dataset.slot = String(slot);
+      button.setAttribute('aria-pressed', 'false');
+      button.addEventListener('click', () => {
+        for (const other of container.querySelectorAll('button')) {
+          other.setAttribute('aria-pressed', 'false');
+          (other as HTMLButtonElement).disabled = true;
+        }
+        button.setAttribute('aria-pressed', 'true');
+        send({ type: 'vote', slot });
+      });
+      container.append(button);
+    }
+    if (ordered.length === 0) say('Nothing to vote on this round.');
+  }
+
+  function showResults(msg: Record<string, any>): void {
+    const tallies: Array<Record<string, any>> = msg.tallies ?? [];
+    const winners: number[] = msg.winningSlots ?? [];
+    $('results-list').innerHTML = tallies.map((tally, index) => {
+      const won = winners.includes(tally.slot) ? '1' : '0';
+      const name = escapeHtml(String(tally.name || 'someone'));
+      const votes = Number(tally.votes ?? 0);
+      return `<li data-winner="${won}"><span>#${index + 1} · ${name}</span><span>${votes} vote${votes === 1 ? '' : 's'}</span></li>`;
+    }).join('');
+    say(msg.unanimous ? 'The room agreed. That is worth extra.' : '');
+  }
+
+  function showScoreboard(msg: Record<string, any>): void {
+    const standings: Array<Record<string, any>> = msg.standings ?? [];
+    $('standings').innerHTML = standings.map((row) => {
+      const emoji = EMOJI[Number(row.emoji ?? 0) % EMOJI.length];
+      return `<li>${emoji} ${escapeHtml(String(row.name || 'someone'))} — <b>${row.score}</b></li>`;
+    }).join('');
+    $('scoreboard-title').textContent = msg.final ? 'Final' : 'Scoreboard';
+  }
+
+  function updateShareLinks(): void {
+    const stage = $('stage-link') as HTMLAnchorElement;
+    stage.href = `/bloom-party?room=${roomCode}&view=stage`;
+  }
+
+  // ---------- wiring -----------------------------------------------------
+
+  function boot(): void {
+    wireBuildControls();
+    syncBuildUI();
+    requestAnimationFrame(tick);
+
+    $('make-room').addEventListener('click', () => {
+      unlock();
+      const code = makeCode();
+      history.replaceState(null, '', `/bloom-party?room=${code}`);
+      showScreen('lobby');
+      $('room-code').textContent = code;
+      connect(code, false);
+    });
+
+    $('join-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      unlock();
+      const raw = ($('join-code') as HTMLInputElement).value;
+      const code = normalizeRoomCode(raw);
+      if (!code) {
+        say('That is not a room code. Six letters, no O, I, L, or U.');
+        return;
+      }
+      history.replaceState(null, '', `/bloom-party?room=${code}`);
+      showScreen('lobby');
+      $('room-code').textContent = code;
+      connect(code, false);
+    });
+
+    $('try-solo').addEventListener('click', () => {
+      unlock();
+      startSolo();
+    });
+
+    $('start-game').addEventListener('click', () => {
+      unlock();
+      send({ type: 'start' });
+    });
+    $('next-round').addEventListener('click', () => send({ type: 'next' }));
+    $('play-again').addEventListener('click', () => send({ type: 'start' }));
+
+    $('lock-bloom').addEventListener('click', () => {
+      send({ type: 'submit', spec });
+      ($('lock-bloom') as HTMLButtonElement).textContent = 'Locked — change it?';
+    });
+
+    $('heat-btn').addEventListener('click', () => {
+      const slot = Number(($('heat-btn') as HTMLElement).dataset.slot ?? '-1');
+      if (slot >= 0) send({ type: 'heat', slot });
+    });
+
+    $('copy-link').addEventListener('click', async () => {
+      const link = `${location.origin}/bloom-party?room=${roomCode}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        say('Link copied.');
+      } catch {
+        say(link);
+      }
+    });
+
+    // Coming back from a locked screen: re-arm audio and ask for a fresh
+    // snapshot rather than trusting whatever phase we were in.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      unlock();
+      if (wantConnection && (!socket || socket.readyState > WebSocket.OPEN)) {
+        // The socket died while the screen was off; `send` would no-op here.
+        scheduleReconnect();
+        return;
+      }
+      send({ type: 'sync' });
+    });
+
+    $('open-stage').addEventListener('click', () => {
+      unlock();
+      const code = normalizeRoomCode(new URLSearchParams(location.search).get('room'));
+      if (!code) return;
+      showScreen('lobby');
+      $('room-code').textContent = code;
+      connect(code, true);
+    });
+
+    // Every path into the game ends on the door, and the door always costs one
+    // tap. That tap is the only thing iOS accepts as permission to start an
+    // AudioContext — a phone that connected straight from a shared link, or a
+    // stage phone propped up and never touched, stayed silent for the whole
+    // game.
+    const params = new URLSearchParams(location.search);
+    const code = normalizeRoomCode(params.get('room'));
+    const nameField = $('player-name') as HTMLInputElement;
+    nameField.value = savedName();
+
+    showScreen('door');
+
+    if (params.get('solo') === '1') {
+      say('Tap “Just let me hear it” to start the synth.');
+      return;
+    }
+    if (code && params.get('view') === 'stage') {
+      // A stage phone has no player and needs no name.
+      $('open-stage').hidden = false;
+      $('make-room').hidden = true;
+      $('join-form').hidden = true;
+      $('try-solo').hidden = true;
+      nameField.closest('.bp-field')!.setAttribute('hidden', '');
+      say(`Stage view for room ${code}. Tap to open it, then prop the phone up.`);
+      return;
+    }
+    if (code) {
+      ($('join-code') as HTMLInputElement).value = code;
+      $('make-room').hidden = true;
+      say(`Room ${code}. Add your name and tap Join.`);
+      nameField.focus();
+    }
+  }
+
+  boot();
+  // Keep the vocabulary reachable from the console for QA sessions.
+  (window as typeof window & { BLOOM_PARTY?: unknown }).BLOOM_PARTY = {
+    ...BLOOM_PARTY,
+    voices: VOICES.map((voice) => voice.label),
+    paces: PACES.map((pace) => pace.label),
+  };
+</script>

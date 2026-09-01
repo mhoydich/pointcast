@@ -7,6 +7,22 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## BLOOM PARTY — party game at /bloom-party (2026-08-08)
+
+- [x] (MH) Direct a fun party game on Tone Bloom for a group of ten to fifteen that also works at four — `done`
+- [x] (CC) Establish that Tone Bloom is an external satellite, so the game ships as a PointCast-hosted route in its vocabulary rather than a change to the app — `done`
+- [x] (CC) Build `src/lib/bloom-party.ts` — twelve voices, four paces, forty prompt cards, seeded synth spec, scoring, and the 4-vs-15 scaling curve — `done`
+- [x] (CC) Build the `pointcast-bloom` Worker and `BloomPartyRoom` Durable Object: hibernation-safe alarm state machine, SQLite roster/submissions/votes, rate limits — `done`
+- [x] (CC) Build `/bloom-party` (door, lobby, build, playback, vote, scoreboard, stage view, solo mode) plus `/api/bloom/room` and `/bloom-party.json` — `done`
+- [x] (CC) Fan out registration: `BLOOM_ROOM` binding, app shelf, `/agents.json`, read-only `bloom_party_state` MCP tool, `llms.txt`, `llms-full.txt`, Block 0572 — `done`
+- [x] (CC) Merge `main` and renumber the block from 0568 to 0572 — the Western Heat / Brains 25 release claimed 0568 while this was in flight — `done`
+- [x] (CC) Validate: `build:bare` clean at 1950 pages, 736/736 tests including 23 new, `audit:agents` and `audit:publishing` pass — `done`
+- [ ] (MH) Deploy the `pointcast-bloom` Worker **before** the next Pages deploy, or the `script_name` binding will not resolve — `waiting-on-mh`
+- [ ] (M) Real-device QA per `docs/briefs/2026-08-08-manus-bloom-party.md`: play at 4 phones and at 15, iOS audio unlock and screen-lock, WebSocket through the Pages edge, clock skew, speaker mode — `handoff`
+- [ ] (X) Review the alarm-driven state machine and the read-only MCP surface before merge — `queued`
+
+---
+
 ## WEDNESDAY 9:34 — PointCast Playlist Publication (2026-07-29)
 
 - [x] (MH) Direct a Wednesday-morning uplift playlist led by picky, plucky Grateful Dead and Jerry Garcia energy with light pop-country, accessible 1970s and 1980s, and current-canon crossover — `done`

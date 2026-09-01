@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'bloom-party',
+    name: 'Bloom Party',
+    kicker: '4 TO 15 PHONES · SIX-LETTER CODE · NO INSTALL',
+    description: 'A party game for a room full of people. A prompt card appears, everyone builds a short bloom on their own phone from twelve synthesized voices and four pace modes, all of them play back anonymously, and the room votes on who matched the vibe.',
+    url: 'https://pointcast.xyz/bloom-party',
+    path: '/bloom-party',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'second-shift',
     name: 'Second Shift',
     kicker: '6 LOCAL ORDERS · 5 CAPABILITIES · ONE FINITE NIGHT SHIFT',
