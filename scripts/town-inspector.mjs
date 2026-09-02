@@ -16,6 +16,16 @@
  *   node scripts/town-inspector.mjs --write         # save the report to
  *                                                   # src/data/town-inspector-report.json
  *
+ * npm aliases: `npm run inspect:town -- --write` (production, save) and
+ * `npm run inspect:town:preview -- URL` (a Pages preview).
+ *
+ * The saved report is what /health and /health.json serve. It is not
+ * regenerated at build or deploy — the deployer walks production after
+ * each deploy and commits the report in the next PR (README, "Publishing
+ * live"). Both surfaces compute the report's age from the build date and
+ * label a walk older than INSPECTOR_STALE_AFTER_DAYS (src/lib/town-inspector.ts)
+ * as stale, so a skipped walk shows instead of hiding.
+ *
  * Exits 1 when any door is broken or any claim fails, so it can gate a
  * deploy. Network-only — safe to run from anywhere with no repo state.
  */

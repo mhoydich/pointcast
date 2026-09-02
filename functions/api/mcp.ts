@@ -969,6 +969,19 @@ const RESOURCES = [
   },
 ] as const;
 
+// ── Catalogue, exported ──────────────────────────────────────────────
+// /agents.json (src/pages/agents.json.ts) imports these at build time so
+// the manifest advertises exactly what tools/list and resources/list
+// serve. Add a tool above and the manifest picks it up on the next build;
+// there is no second list to keep in step.
+export const MCP_TOOL_NAMES: string[] = TOOLS.map((tool) => tool.name);
+export const MCP_RESOURCE_URIS: string[] = RESOURCES.map((resource) => resource.uri);
+export const MCP_SERVER_INFO = {
+  name: V2_SERVER_NAME,
+  version: V2_SERVER_VERSION,
+  protocolVersion: MCP_PROTOCOL_VERSION,
+} as const;
+
 // ── Helpers ──────────────────────────────────────────────────────────
 function rpcResult(id: number | string | null, result: unknown): Response {
   return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), {
