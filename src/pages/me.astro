@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import contracts from '../data/contracts.json';
+import { isProfileContractConfigured } from '../lib/profile-object.mjs';
+
+const profileContract = contracts.profile_objects.mainnet;
+const configured = isProfileContractConfigured(profileContract);
+---
+
+<BaseLayout title="My profile object" description="Claim the owned PointCast profile object paired with your attested seals." hideAds>
+  <main class="profile-door" data-profile-claim-door data-contract={profileContract} data-contract-configured={String(configured)}>
+    <header>
+      <p>PROFILE DESK · OWNED + ATTESTED</p>
+      <h1>One object moves.<br />One seal stays.</h1>
+      <div class="profile-door__identity" data-profile-session-state aria-live="polite">Checking your PointCast account…</div>
+    </header>
+
+    <section class="profile-door__lanes">
+      <article>
+        <span>01 · OWNED</span>
+        <h2>Profile object</h2>
+        <p>Claim a unique handle, edit its page while you own it, or transfer the token and its edit rights to a new owner.</p>
+      </article>
+      <article>
+        <span>02 · ATTESTED</span>
+        <h2>Soulbound seal</h2>
+        <p>PointCast or an allowlisted issuer attests what you did. A seal cannot be traded away and can be revoked by its issuer.</p>
+      </article>
+    </section>
+
+    {configured ? (
+      <form data-profile-claim-form novalidate>
+        <p>CLAIM YOUR HANDLE · MAINNET CONTRACT CONFIGURED</p>
+        <label>
+          <span>Handle</span>
+          <span class="profile-door__field"><b>@</b><input name="handle" type="text" inputmode="text" autocomplete="nickname" minlength="3" maxlength="24" pattern="[a-z0-9-]{3,24}" placeholder="your-handle" required /></span>
+        </label>
+        <button type="submit">Check claim readiness →</button>
+        <output data-profile-claim-result aria-live="polite">Claims originate paused. This compile-only door does not submit a transaction.</output>
+      </form>
+    ) : (
+      <aside>
+        <p>CONTRACT GATE · CLOSED</p>
+        <h2>Compiled, not originated.</h2>
+        <p>The claim form appears only after <code>profile_objects.mainnet</code> contains a verified KT1 address. No visitor wallet is substituted while that address is empty.</p>
+      </aside>
+    )}
+
+    <footer><a href="/p">Browse profile objects</a><a href="/auth">Manage linked identities</a></footer>
+  </main>
+</BaseLayout>
+
+<script>
+  import { getSession } from '../lib/auth/client';
+
+  type ProfileDoorWindow = Window & { __pointCastProfileDoorController?: AbortController };
+
+  function linkedTezosAddress(user: Awaited<ReturnType<typeof getSession>>): string {
+    if (!user) return '';
+    const identity = user.identities.find((item) =>
+      ['kukai', 'temple', 'umami'].includes(item.provider) && /^tz[1-4]/.test(item.id)
+    );
+    return identity?.id || '';
+  }
+
+  function shortAddress(address: string): string {
+    return address ? `${address.slice(0, 7)}…${address.slice(-5)}` : '';
+  }
+
+  async function renderDoor(root: HTMLElement): Promise<void> {
+    const state = root.querySelector<HTMLElement>('[data-profile-session-state]');
+    try {
+      const user = await getSession();
+      const address = linkedTezosAddress(user);
+      root.dataset.profileUserAddress = address;
+      if (!state) return;
+      if (!user) state.replaceChildren('Signed out · browse freely, sign in before a future claim.');
+      else if (!address) state.replaceChildren(`${user.preferredName} · account linked · no Tezos identity linked.`);
+      else state.replaceChildren(`${user.preferredName} · ${shortAddress(address)} · verified identity`);
+    } catch {
+      root.dataset.profileUserAddress = '';
+      state?.replaceChildren('Account service unavailable · no wallet assumed.');
+    }
+  }
+
+  function initializeDoors(): void {
+    document.querySelectorAll<HTMLElement>('[data-profile-claim-door]').forEach((root) => void renderDoor(root));
+  }
+
+  const scope = window as ProfileDoorWindow;
+  scope.__pointCastProfileDoorController?.abort();
+  const controller = new AbortController();
+  scope.__pointCastProfileDoorController = controller;
+
+  document.addEventListener('submit', (event) => {
+    const form = (event.target as Element | null)?.closest<HTMLFormElement>('[data-profile-claim-form]');
+    if (!form) return;
+    event.preventDefault();
+    const root = form.closest<HTMLElement>('[data-profile-claim-door]');
+    const result = form.querySelector<HTMLOutputElement>('[data-profile-claim-result]');
+    const input = form.elements.namedItem('handle') as HTMLInputElement | null;
+    const handle = input?.value.trim() || '';
+    if (!/^[a-z0-9-]{3,24}$/.test(handle)) {
+      result?.replaceChildren('Use 3–24 lowercase letters, numbers, or hyphens.');
+      return;
+    }
+    if (!root?.dataset.profileUserAddress) {
+      result?.replaceChildren('Link a Tezos identity on /auth before claiming. No wallet was assumed.');
+      return;
+    }
+    result?.replaceChildren(`@${handle} is locally valid. Transaction submission is intentionally stubbed in this compile-only PR.`);
+  }, { signal: controller.signal });
+
+  window.addEventListener('pc:auth-change', initializeDoors, { signal: controller.signal });
+  document.addEventListener('astro:page-load', initializeDoors, { signal: controller.signal });
+  initializeDoors();
+</script>
+
+<style>
+  .profile-door { --owned: #185fa5; --attested: #8a2432; width: min(1040px, calc(100vw - 24px)); margin: 0 auto; padding: 28px 0 100px; }
+  header { padding: 22px; border: 1.5px solid var(--owned); background: #f4f9fd; }
+  header > p, article span, form > p, aside > p, output, footer { font: 500 10px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  header > p { margin: 0; color: var(--owned); } h1 { margin: 12px 0; font-size: clamp(48px, 8vw, 100px); line-height: .88; letter-spacing: -.065em; font-weight: 500; }
+  .profile-door__identity { padding-top: 14px; border-top: 1px solid var(--owned); color: var(--owned); font: 400 11px var(--pc-font-mono); }
+  .profile-door__lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  article { padding: 22px; border: 1.5px solid var(--owned); } article + article { border-color: var(--attested); }
+  article span { color: var(--owned); } article + article span { color: var(--attested); } h2 { margin: 10px 0; font-size: clamp(30px, 4vw, 50px); font-weight: 500; letter-spacing: -.04em; }
+  article p, aside p { max-width: 48ch; line-height: 1.5; }
+  form, aside { display: grid; gap: 16px; margin-top: 8px; padding: 22px; border: 1.5px solid var(--owned); }
+  form > p, aside > p { margin: 0; color: var(--owned); }
+  label { display: grid; gap: 7px; font: 500 11px var(--pc-font-mono); letter-spacing: .07em; text-transform: uppercase; }
+  .profile-door__field { display: flex; align-items: center; border: 1.5px solid var(--owned); background: white; } .profile-door__field b { padding-left: 12px; color: var(--owned); }
+  input { width: 100%; border: 0; outline: 0; padding: 13px 12px 13px 4px; background: transparent; color: inherit; font: 18px var(--pc-font-mono); }
+  button { width: fit-content; border: 0; padding: 13px 15px; background: var(--owned); color: white; cursor: pointer; font: 500 10px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  output { display: block; color: var(--pc-ink-soft); line-height: 1.5; text-transform: none; }
+  aside h2 { margin: 0; } aside code { font-family: var(--pc-font-mono); }
+  footer { display: flex; justify-content: space-between; gap: 10px; padding: 14px 0; } footer a { color: var(--owned); }
+  @media (max-width: 680px) { .profile-door__lanes { grid-template-columns: 1fr; } footer { flex-direction: column; } }
+</style>
