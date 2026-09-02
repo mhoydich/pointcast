@@ -26,10 +26,25 @@ export type PublicCollector = {
 
 let collectorsPromise: Promise<PublicCollector[]> | null = null;
 
+async function listProfilesForBuild() {
+  const attempts = 4;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await listProfilePages(contracts.profile_objects.mainnet);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable = /TzKT .* read failed \((?:429|5\d\d)\)/.test(message);
+      if (!retryable || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+    }
+  }
+  return [];
+}
+
 export function listPublicCollectors(): Promise<PublicCollector[]> {
   if (collectorsPromise) return collectorsPromise;
   collectorsPromise = (async () => {
-    const profiles = await listProfilePages(contracts.profile_objects.mainnet);
+    const profiles = await listProfilesForBuild();
     const today = collectSitting();
     return Promise.all(profiles.map(async (profile) => {
       const wallet = await getWalletHoldings(profile.owner, { cache: null });
@@ -64,4 +79,3 @@ export function listPublicCollectors(): Promise<PublicCollector[]> {
   })();
   return collectorsPromise;
 }
-
