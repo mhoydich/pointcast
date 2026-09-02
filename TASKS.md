@@ -17,6 +17,7 @@ Thirty-one painted dog portraits in a heritage equestrian register, one assigned
 - [ ] (MH) Answer: December (31 sittings) or September (30)? Edition model per sitting: 24-hour open edition or fixed cap (proposed 31)? Price in tez? Origination signer? — `waiting-on-mh`
 - [ ] (CC) Write `contracts/v2/kennel_club_fa2.py` with a per-day mint window, wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
 - [ ] (M) objkt collection check, Shadownet then mainnet daily-window mint QA, mobile pass — `queued` — after the KT1 lands
+- [ ] (CC) Plan a decentralized project-owned wallet/multisig for the Kennel Club series treasury and signer — `queued` — later idea from MH 2026-09-02; do not build
 
 ---
 

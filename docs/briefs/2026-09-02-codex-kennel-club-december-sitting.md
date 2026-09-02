@@ -8,9 +8,9 @@
 
 ## tl;dr
 
-Generate **31 original painted dog portraits**, one per calendar day of December 2026, through the local **poster-image-engine** workflow. Each portrait is a "sitting": a named dog of a distinct breed, dressed in heritage equestrian and Ivy menswear (tweed, tartan, cable knit, camel, navy, oxblood, brass), posed in an old-money country-estate December setting, painted like a nineteenth-century society portrait. Regal, warm, slightly amused. The series mints one token per day on Tezos; cc wires the contract and the page once the plates land.
+Generate **31 original painted dog portraits**, one per calendar day of December 2026, through the local **poster-image-engine** workflow. Each portrait is a "sitting": a named dog of a distinct breed, dressed in heritage equestrian and Ivy menswear (tweed, tartan, cable knit, camel, navy, oxblood, brass), posed in a country-estate December setting, painted in a bright flat acrylic-and-screenprint register. Regal, warm, slightly amused. The series mints one token per day on Tezos; cc wires the contract and the page once the plates land.
 
-**Calendar note.** The ask names both December and September. December is used as the mint calendar because it is stated as the mint month and has 31 days. If Mike wants September instead, drop Sitting 31 and change the `mintDate` values; nothing else in the data moves.
+**Calendar note.** December 2026 is confirmed as the mint calendar. Tezos minting is confirmed: 31 tokens, with token id = day − 1. Contract implementation is cc's follow-up.
 
 **Do not use any brand name in prompts or outputs.** The look is described by materials, cut, and setting. No logos, monograms, crests, or trademarked patterns. No humans. Same boundary the Mascot Atlas and 2029 identity plates followed.
 
@@ -30,7 +30,7 @@ Generate **31 original painted dog portraits**, one per calendar day of December
 Every prompt in the JSON is already composed as `styleBase + subject + scene + composition + antiPrompt`. Use them as written; tune only if the engine drifts.
 
 **Style base**
-> Formal painted portrait of a single dog, rendered like a nineteenth-century society oil painting with visible brushwork and varnish depth. The dog is dressed in a heritage equestrian and Ivy menswear register: tweed, tartan, cable knit, camel hair, navy wool, oxblood leather, brass hardware. Old-money country-estate setting, dark wood, aged brass, warm lamplight, winter light at the windows. Dignified posture, slightly amused expression, eyes on the viewer. Anatomically correct dog with a natural coat; clothing sits on the body plausibly. Muted rich palette: hunter green, oxblood, camel, navy, cream, mahogany.
+> Painted portrait of a single dog in the manner of David Hockney's flat acrylic California clarity crossed with Andy Warhol's pop silkscreen: flat saturated color fields, crisp hard-edged shapes, bold simplified outlines, visible acrylic brush texture, off-register color blocks and a single high-key screenprint accent. Sun-washed poolside or drawing-room interiors are reduced to planes; no varnish gloom. The dog wears heritage equestrian and Ivy menswear: tweed, tartan, cable knit, camel hair, navy wool, oxblood leather, brass hardware. Dignified posture, slightly amused expression, eyes on the viewer. Anatomically correct dog with a natural coat; clothing sits plausibly on the body. Bright palette: swimming-pool blue, marigold, coral, lilac, spring green, with camel, navy, and oxblood wardrobe accents.
 
 **Composition rule (ikebana balance)**
 > Ikebana balance: asymmetrical, subject on one two-thirds side alternating by day parity, negative space on the other third, one focal point. Never dead-center.
@@ -42,14 +42,14 @@ Every prompt in the JSON is already composed as `styleBase + subject + scene + c
 
 | name | hex |
 |---|---|
-| hunter | `#1f3a2a` |
+| swimmingPoolBlue | `#42bfea` |
 | oxblood | `#5a1818` |
 | camel | `#b98a4e` |
 | navy | `#1c2a44` |
-| cream | `#f3ead8` |
-| mahogany | `#4a2a1a` |
-| brass | `#b08d57` |
-| tartanRed | `#8f1d21` |
+| marigold | `#f4b11a` |
+| coral | `#f36d5d` |
+| lilac | `#b7a0d2` |
+| springGreen | `#8bcb78` |
 
 ## The 31 sittings
 
