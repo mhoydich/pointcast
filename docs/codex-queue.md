@@ -91,3 +91,30 @@ git diff
 # If good: keep going. If bad: git restore + iterate.
 # codex apply re-applies the most recent diff if needed.
 ```
+
+## Home Cartography — Codex tasks (2026-08-14)
+
+Concept: `docs/prd/2026-08-04-home-cartography-device-concept.md`. Landing on PR #961 (branch `claude/home-cartography-device-73wphl`): `/cartography/home` (+`.json`) concept board, `/cartography/home/demo` (+`.json`, "The Dune Street House", 20 fictional items), and six MCP tools on `https://pointcast.xyz/api/mcp-v2` (and `/api/mcp`): `home_index_summary`, `home_index_find({query})`, `home_index_room({room})`, `home_index_valuation`, `home_index_lendable`, `home_index_sell_draft({itemId})`.
+
+### 1. Review PR #961's MCP additions + cartography surfaces
+Review `functions/api/mcp.ts`'s new Home Cartography tool additions alongside the `/cartography/home` and `/cartography/home/demo` routes for:
+- **Correctness** — tool schemas match their handlers, `sell_draft` and `find`/`room` handle missing/unknown IDs and rooms gracefully, the `.json` twins stay in sync with their `.astro` pages.
+- **Agent-readability** — tool descriptions and parameter docs are unambiguous for an agent calling cold, sample inputs in descriptions actually resolve against `demo.json`.
+- **Guardrails** — everything on these surfaces is clearly fictional-only (the Dune Street House is a demo household, not Mike's real home), and `home_index_valuation` carries no financial-advice framing (per the concept doc's "Guardrails" section: informational, not financial advice).
+
+Leave findings as PR comments on #961, not a rewrite.
+
+### 2. Generative hero art for /cartography/home
+Brief: write code-generated, innovative visuals for `/cartography/home` and its OG image — not decorative, not stock-illustration. Idea seed: render a house as a topographic contour map where contour density = stuff density per room; item glyphs plotted as survey markers; the whole thing literally drawn from `demo.json` (item count/room, categories, value) as a seeded SVG/canvas generator rather than a hand-drawn illustration.
+
+Outputs:
+- An `.astro` or `.ts` SVG generator that takes the demo (or concept) index JSON as input and renders the hero art
+- A 1200×630 OG PNG export path/script
+- A variant sheet (a few seed/palette variations) for Mike to pick from
+
+Constraints:
+- Type: `--pc-font-mono` / `--pc-font-sans` house tokens
+- Palette: `#185fa5`, `#0f6e56`, `#8a2432`, `#fffdf5`, `#12110e`, `#d8d4ca` (as used on the live page)
+- **Write to `/sketches/home-cartography/` only — never `src/`.**
+
+Ask for neat and innovative, not decorative — this is a concept page selling an idea, the art should make the "your house as a machine-readable map" pitch legible at a glance.

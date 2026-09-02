@@ -97,5 +97,9 @@ The index is exposed as **your own API and MCP server**. You grant access per-ag
 ## Next Steps
 
 1. Decide naming/route relationship to the existing Cartography line.
-2. Prototype the index schema (`item`, `location`, `provenance`, `document`, `valuation`) and a demo MCP server over a fictional household.
+2. ~~Prototype the index schema (`item`, `location`, `provenance`, `document`, `valuation`) and a demo MCP server over a fictional household.~~ **Done (2026-08-14, PR #961):**
+   - Concept board: `/cartography/home` (+ `.json`)
+   - Demo household ("The Dune Street House," 20 items): `/cartography/home/demo` (+ `.json`)
+   - Demo MCP server, six tools on `https://pointcast.xyz/api/mcp-v2` (and `/api/mcp`): `home_index_summary`, `home_index_find({query})`, `home_index_room({room})`, `home_index_valuation`, `home_index_lendable`, `home_index_sell_draft({itemId})`
+   - Session log: `docs/claude-code-logs/2026-08-14-home-cartography.md`
 3. Test the wedge: scan one real room, generate a valuation + sell-one-item flow, and see if it feels like magic.

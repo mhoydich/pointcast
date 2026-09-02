@@ -30,6 +30,14 @@
  *           full-moon knockout, championship-history seed ordering, and
  *           the Sports Desk Thu→Sat→Mon cadence without re-implementing
  *           any of it.
+ * v0.13.0 — Home Cartography index desk: agent-readable wrappers around the
+ *           fictional demo household at /cartography/home/demo.json. Adds
+ *           home_index_summary, home_index_find, home_index_room,
+ *           home_index_valuation, home_index_lendable, and
+ *           home_index_sell_draft so an agent can answer "where is it",
+ *           "what is it worth", "what can I borrow", and "draft the listing"
+ *           against a user-owned home index without re-implementing the
+ *           rollups. Demo data only — every item and price is invented.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -89,6 +97,14 @@
  *   battler_seeds         ({top?})     championship-history seed ordering, top-N filter
  *   battler_trilogy       ({beat?})    Sports Desk Thu→Sat→Mon beats (0411, 0422, 0434)
  *
+ * Home Cartography tools (v0.13.0) — fictional demo household
+ *   home_index_summary    (no input)   house, item count, paid vs value, density, rooms
+ *   home_index_find       ({query})    where is X — substring match across the index
+ *   home_index_room       ({room})     one room's rollup + its items (id or label)
+ *   home_index_valuation  (no input)   totals, warranties, lifecycle, duplicates, stale items
+ *   home_index_lendable   (no input)   only items opted into lending; rest stays private
+ *   home_index_sell_draft ({itemId})   listing draft from the index evidence
+ *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
  *   drum://now-playing    current room track
@@ -143,7 +159,7 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.12.0';
+const SERVER_VERSION = '0.13.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.7.0';
 
@@ -817,6 +833,68 @@ const TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
   },
+
+  // ── Home Cartography (home index demo) ──────────────────────────────
+  // Agent-readable wrappers around /cartography/home/demo.json. The
+  // household is FICTIONAL — every item, price, and serial is invented,
+  // and no real inventory data is collected anywhere in this surface.
+  {
+    name: 'home_index_summary',
+    description:
+      'Home Cartography demo index overview — house label, square footage, item count, total paid vs estimated value, stuff-per-square-foot density score, and the per-room rollup. FICTIONAL demo household; no real inventory data.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'home_index_find',
+    description:
+      'Answer "where is X" against the Home Cartography demo index. Case-insensitive substring match across item name, category, room, location, retailer, and serial. Returns name · room · location · estimated value. FICTIONAL demo household.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to look for, e.g. "drill", "amazon", "garage", "SN-88213B".' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'home_index_room',
+    description:
+      'One room of the Home Cartography demo index — its rollup (item count, estimated value, items per 100 sqft) and every indexed item in it. Accepts a room id (living, kitchen, office, bedroom, garage) or a room label. FICTIONAL demo household.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        room: { type: 'string', description: 'Room id or label, e.g. "garage" or "Primary bedroom".' },
+      },
+      required: ['room'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'home_index_valuation',
+    description:
+      'Valuation view of the Home Cartography demo index — total paid vs estimated value, value by room, active warranty watch, lifecycle flags, detected duplicates, and items untouched for two years. Informational only, not financial or insurance advice. FICTIONAL demo household.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'home_index_lendable',
+    description:
+      'Only the items the owner opted into lending from the Home Cartography demo index. The rest of the index stays private — sharing is per-item and opt-in, never the whole household. FICTIONAL demo household.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'home_index_sell_draft',
+    description:
+      'Draft a resale listing for one item in the Home Cartography demo index — title, ask price from estimated value, the evidence the index can attach (photos, serial, receipt, condition history), and suggested channels. Get item ids from home_index_find or home_index_room. FICTIONAL demo household; nothing is listed anywhere.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'An item id from the index, e.g. "it-014".' },
+      },
+      required: ['itemId'],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 const TOOLS = [
@@ -1171,6 +1249,38 @@ function buildBattlerResultTracker(args: Record<string, unknown>): any {
 }
 
 // ── Tool dispatchers ──────────────────────────────────────────────────
+// ── Home Cartography demo index helpers ───────────────────────────────
+// Everything below reads /cartography/home/demo.json, a FICTIONAL demo
+// household. Each tool response repeats that so no agent downstream
+// mistakes it for a real person's inventory.
+const HOME_DEMO_FICTION_NOTE =
+  'FICTIONAL demo household — every item, price, retailer, and serial is invented. No real inventory data is collected.';
+
+async function homeDemoIndex(base: string): Promise<any> {
+  return callJson(`${base}/cartography/home/demo.json`);
+}
+
+function homeDemoItems(data: any): any[] {
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+function homeDemoRoomLabel(data: any, roomId: string): string {
+  const room = (data?.house?.rooms || []).find((r: any) => r?.id === roomId);
+  return room?.label || roomId;
+}
+
+function homeDemoItemLine(data: any, item: any): string {
+  return `  · ${item.name} · ${homeDemoRoomLabel(data, item.room)} · ${item.location} · est $${item.estValueUsd}`;
+}
+
+function homeDemoItemNames(data: any, ids: unknown): string[] {
+  const list = Array.isArray(ids) ? ids : [];
+  return list.map((id: any) => {
+    const item = homeDemoItems(data).find((i: any) => i.id === id);
+    return item ? `${item.name} (${id})` : String(id);
+  });
+}
+
 async function dispatchTool(
   name: string,
   args: Record<string, unknown>,
@@ -2082,6 +2192,212 @@ async function dispatchTool(
         ],
       };
     }
+    // ── Home Cartography (home index demo) ───────────────────────────
+    case 'home_index_summary': {
+      const data = await homeDemoIndex(base);
+      const house = data?.house || {};
+      const rollups = data?.rollups || {};
+      const density = rollups.densityScore || {};
+      const lines = [
+        `${house.label || 'the demo house'} — ${house.squareFeet} sqft, ${rollups.itemCount} indexed items`,
+        `  paid $${rollups.totalPaidUsd} · estimated value now $${rollups.totalEstValueUsd}`,
+        `  density: ${density.itemsPerHundredSqft} items per 100 sqft`,
+        `  ${density.note || ''}`.trimEnd(),
+        '',
+        'by room:',
+        ...(rollups.byRoom || []).map(
+          (r: any) => `  · ${r.label} · ${r.sqft} sqft · ${r.itemCount} items · est $${r.estValueUsd} · ${r.itemsPerHundredSqft}/100sqft`,
+        ),
+        '',
+        house.note || '',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify({ house, rollups, note: data?.note }, null, 2) },
+        ],
+      };
+    }
+    case 'home_index_find': {
+      const query = String(args.query || '').trim().toLowerCase();
+      if (!query) return { content: [{ type: 'text', text: 'query is required — try "drill", "garage", or a serial' }], isError: true };
+      const data = await homeDemoIndex(base);
+      const hits = homeDemoItems(data).filter((item: any) => {
+        const hay = [
+          item.name,
+          item.category,
+          homeDemoRoomLabel(data, item.room),
+          item.room,
+          item.location,
+          item.retailer,
+          item.serial || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(query);
+      });
+      const summary = hits.length === 0
+        ? `nothing in the demo index matches "${args.query}"\n${HOME_DEMO_FICTION_NOTE}`
+        : [
+            `${hits.length} match${hits.length === 1 ? '' : 'es'} for "${args.query}":`,
+            ...hits.map((item: any) => homeDemoItemLine(data, item)),
+            '',
+            HOME_DEMO_FICTION_NOTE,
+          ].join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(hits, null, 2) },
+        ],
+      };
+    }
+    case 'home_index_room': {
+      const wanted = String(args.room || '').trim().toLowerCase();
+      if (!wanted) return { content: [{ type: 'text', text: 'room is required — try "garage" or "Primary bedroom"' }], isError: true };
+      const data = await homeDemoIndex(base);
+      const rooms = data?.house?.rooms || [];
+      const room = rooms.find(
+        (r: any) => String(r.id).toLowerCase() === wanted || String(r.label).toLowerCase() === wanted,
+      );
+      if (!room) {
+        return {
+          content: [{
+            type: 'text',
+            text: `no room "${args.room}" in the demo index — try: ${rooms.map((r: any) => `${r.id} (${r.label})`).join(', ')}`,
+          }],
+          isError: true,
+        };
+      }
+      const rollup = (data?.rollups?.byRoom || []).find((r: any) => r.room === room.id) || null;
+      const items = homeDemoItems(data).filter((item: any) => item.room === room.id);
+      const lines = [
+        `${room.label} — ${room.sqft} sqft, ${items.length} indexed items`,
+        rollup ? `  est value $${rollup.estValueUsd} · ${rollup.itemsPerHundredSqft} items per 100 sqft` : '',
+        '',
+        ...items.map((item: any) => homeDemoItemLine(data, item)),
+        '',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify({ room, rollup, items }, null, 2) },
+        ],
+      };
+    }
+    case 'home_index_valuation': {
+      const data = await homeDemoIndex(base);
+      const rollups = data?.rollups || {};
+      const density = rollups.densityScore || {};
+      const stale = homeDemoItemNames(data, density.untouchedTwoYears);
+      const lines = [
+        `valuation — paid $${rollups.totalPaidUsd} across ${rollups.itemCount} items, estimated value now $${rollups.totalEstValueUsd}`,
+        '',
+        'value by room:',
+        ...(rollups.byRoom || []).map((r: any) => `  · ${r.label} · ${r.itemCount} items · est $${r.estValueUsd}`),
+        '',
+        'warranty watch:',
+        ...((rollups.warrantyWatch || []).map((w: any) => `  · ${w.name} — covered until ${w.warrantyUntil}`)),
+        '',
+        'lifecycle flags:',
+        ...((rollups.lifecycleFlags || []).map((f: any) => `  · ${f.name} — ${f.flag}`)),
+        '',
+        'duplicates:',
+        ...((rollups.duplicates || []).map((d: any) => `  · ${d.name} ×${d.count} — ${d.suggestion}`)),
+        '',
+        'untouched two years or more:',
+        ...(stale.length ? stale.map((n: string) => `  · ${n}`) : ['  · none']),
+        '',
+        'Informational only — these are demo estimates, not financial, insurance, or appraisal advice.',
+        HOME_DEMO_FICTION_NOTE,
+      ];
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          {
+            type: 'text',
+            text: JSON.stringify({
+              totalPaidUsd: rollups.totalPaidUsd,
+              totalEstValueUsd: rollups.totalEstValueUsd,
+              byRoom: rollups.byRoom,
+              warrantyWatch: rollups.warrantyWatch,
+              lifecycleFlags: rollups.lifecycleFlags,
+              duplicates: rollups.duplicates,
+              untouchedTwoYears: stale,
+            }, null, 2),
+          },
+        ],
+      };
+    }
+    case 'home_index_lendable': {
+      const data = await homeDemoIndex(base);
+      const lend = data?.lendFlow || {};
+      const items = homeDemoItems(data).filter((item: any) => item.id === lend.match);
+      const lines = [
+        items.length
+          ? `${items.length} item${items.length === 1 ? '' : 's'} opted into lending:`
+          : 'nothing is opted into lending in this demo index right now.',
+        ...items.map((item: any) => `${homeDemoItemLine(data, item)} · last used ${item.lastTouched} · condition ${item.condition}`),
+        '',
+        lend.response || '',
+        'Everything else in the index stays private. Sharing is per-item and opt-in — an asking agent never sees the household.',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify({ lendable: items, lendFlow: lend }, null, 2) },
+        ],
+      };
+    }
+    case 'home_index_sell_draft': {
+      const itemId = String(args.itemId || '').trim();
+      if (!itemId) return { content: [{ type: 'text', text: 'itemId is required — get ids from home_index_find or home_index_room' }], isError: true };
+      const data = await homeDemoIndex(base);
+      const items = homeDemoItems(data);
+      const item = items.find((i: any) => i.id === itemId);
+      if (!item) {
+        return {
+          content: [{
+            type: 'text',
+            text: `no item "${itemId}" in the demo index. Valid ids: ${items.map((i: any) => `${i.id} (${i.name})`).join(', ')}`,
+          }],
+          isError: true,
+        };
+      }
+      const sellFlow = data?.sellFlow || {};
+      const isDemoFlow = sellFlow.item === itemId && sellFlow.generatedListing;
+      const listing = isDemoFlow
+        ? sellFlow.generatedListing
+        : {
+            title: `${item.name} — ${item.condition} condition, one owner`,
+            askUsd: item.estValueUsd,
+            comps: 'Price against recent local sold listings for the same model before posting.',
+            evidence: `Photos, ${item.serial ? `serial ${item.serial}, ` : ''}purchase record (${item.retailer}, ${item.purchased}, $${item.pricePaidUsd}), and condition history attach automatically from the index.`,
+            channels: ['Facebook Marketplace', 'OfferUp', 'Craigslist'],
+          };
+      const lines = [
+        `${isDemoFlow ? 'demo sell flow' : 'synthesized draft'} for ${item.name} (${item.id})`,
+        `  title: ${listing.title}`,
+        `  ask: $${listing.askUsd}`,
+        `  comps: ${listing.comps}`,
+        `  evidence: ${listing.evidence}`,
+        `  channels: ${(listing.channels || []).join(', ')}`,
+        isDemoFlow && sellFlow.why ? `  why: ${sellFlow.why}` : '',
+        isDemoFlow ? '' : '  Draft is synthesized from the index record, not a curated demo listing.',
+        '',
+        'Nothing is posted anywhere — this is a draft an owner reviews and lists themselves.',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify({ item, listing, source: isDemoFlow ? 'demo-sell-flow' : 'synthesized' }, null, 2) },
+        ],
+      };
+    }
+
     case 'tug_pull':
       return dispatchTugPull(args, base, sessionId);
 
@@ -2463,6 +2779,17 @@ function discoveryHtml(request: Request) {
   <li><code>night_shift_claim</code> — claim a chore for your own compute</li>
   <li><code>night_shift_submit</code> — submit the artifact; countersign lights your lamp</li>
 </ul>
+
+<h2>Tools — Home Cartography (home index demo)</h2>
+<ul>
+  <li><code>home_index_summary</code> — house, item count, paid vs value, density, rooms</li>
+  <li><code>home_index_find</code> — where is X, across name/category/room/location/retailer/serial</li>
+  <li><code>home_index_room</code> — one room's rollup and its items</li>
+  <li><code>home_index_valuation</code> — totals, warranties, lifecycle, duplicates, stale items</li>
+  <li><code>home_index_lendable</code> — only items opted into lending; the rest stays private</li>
+  <li><code>home_index_sell_draft</code> — listing draft from the index evidence</li>
+</ul>
+<p style="font-size:12px;color:#5F5E5A;">Fictional demo household at <code>/cartography/home/demo.json</code>. Every item, price, and serial is invented; no real inventory data is collected.</p>
 
 <h2>Resources</h2>
 <ul>

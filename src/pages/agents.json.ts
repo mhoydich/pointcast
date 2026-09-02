@@ -684,6 +684,14 @@ export const GET: APIRoute = async () => {
         guardrails: CARTOGRAPHY_BUSINESS.guardrails,
         note: 'Brand-first service-to-SaaS product surface for Digital Identity Cartography. Yield means leads, deals, campaign proof, and contribution receipts, not financial return.',
       },
+      homeCartography: {
+        html: 'https://pointcast.xyz/cartography/home',
+        json: 'https://pointcast.xyz/cartography/home.json',
+        demo: 'https://pointcast.xyz/cartography/home/demo',
+        demoJson: 'https://pointcast.xyz/cartography/home/demo.json',
+        mcpTools: ['home_index_summary', 'home_index_find', 'home_index_room', 'home_index_valuation', 'home_index_lendable', 'home_index_sell_draft'],
+        note: 'Concept v0: scan and index a household into a user-owned inventory. Tools read the fictional Dune Street demo household — no real inventory data is collected.',
+      },
       nounsNationBattlerAgentBench: {
         hub: 'https://pointcast.xyz/nouns-nation/',
         roadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
