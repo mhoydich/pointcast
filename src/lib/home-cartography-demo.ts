@@ -130,3 +130,72 @@ export const homeCartographyDemoJsonLd = {
   isPartOf: { '@type': 'WebPage', '@id': 'https://pointcast.xyz/cartography/home' },
   publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
 };
+
+/**
+ * Receipts layer — the paper trail behind the index. Every receipt below is
+ * invented alongside the household it reconciles against.
+ */
+export interface DemoReceipt {
+  id: string;
+  source: 'gmail' | 'amazon' | 'apple' | 'best-buy' | 'photo';
+  merchant: string;
+  date: string;
+  totalUsd: number;
+  itemIds: string[];
+  status: 'matched' | 'unmatched' | 'needs-camera';
+  note?: string;
+}
+
+export const DEMO_RECEIPTS: DemoReceipt[] = [
+  { id: 'rc-001', source: 'best-buy', merchant: 'Best Buy', date: '2024-11-29', totalUsd: 1499, itemIds: ['it-001'], status: 'matched', note: 'Order confirmation email; serial matched the wall-mount photo on the first pass.' },
+  { id: 'rc-002', source: 'apple', merchant: 'Apple', date: '2025-10-30', totalUsd: 1999, itemIds: ['it-007'], status: 'matched', note: 'Coverage end date came straight off the receipt — no warranty guesswork.' },
+  { id: 'rc-003', source: 'amazon', merchant: 'Amazon', date: '2024-01-12', totalUsd: 899, itemIds: ['it-008'], status: 'matched', note: 'Monitor order; the receipt carried the model, the camera pass carried the desk.' },
+  { id: 'rc-004', source: 'amazon', merchant: 'Amazon', date: '2024-02-02', totalUsd: 45, itemIds: ['it-009'], status: 'matched', note: 'First of three identical 65W charger orders — this is where the duplicate trail starts.' },
+  { id: 'rc-005', source: 'amazon', merchant: 'Amazon', date: '2024-06-15', totalUsd: 45, itemIds: ['it-010'], status: 'matched', note: 'Second charger, reordered five months later because the first one was in another room.' },
+  { id: 'rc-006', source: 'gmail', merchant: 'Home Depot', date: '2024-03-11', totalUsd: 129, itemIds: ['it-015'], status: 'matched', note: 'Emailed receipt; the 2020 tape measure predates the mailbox and matched by camera instead.' },
+  { id: 'rc-007', source: 'gmail', merchant: 'Avocado', date: '2023-08-20', totalUsd: 1295, itemIds: ['it-012'], status: 'matched', note: 'Ten-year warranty registration lives on this receipt.' },
+  { id: 'rc-008', source: 'photo', merchant: 'Williams Sonoma', date: '2023-03-14', totalUsd: 699, itemIds: ['it-004'], status: 'matched', note: 'Paper receipt photographed inside the machine box; OCR pulled merchant, date, and total.' },
+  { id: 'rc-009', source: 'amazon', merchant: 'Amazon', date: '2026-07-19', totalUsd: 38, itemIds: [], status: 'unmatched', note: 'Cable organizer, 6-pack. Nothing in the index looks like it — either consumed, gifted, or still in a drawer nobody has scanned.' },
+  { id: 'rc-010', source: 'gmail', merchant: 'Harbor Freight', date: '2023-09-03', totalUsd: 289, itemIds: ['it-018'], status: 'needs-camera', note: 'Receipt found and priced, but the garage floor under the workbench has no confirmed photo yet. Flagged for the next camera pass.' },
+];
+
+const matchedReceipts = DEMO_RECEIPTS.filter((receipt) => receipt.status === 'matched');
+const matchedItemIds = Array.from(new Set(matchedReceipts.flatMap((receipt) => receipt.itemIds)));
+const matchedValue = DEMO_ITEMS
+  .filter((item) => matchedItemIds.includes(item.id))
+  .reduce((sum, item) => sum + item.estValueUsd, 0);
+
+export const demoReceiptReconciliation = {
+  receiptsIngested: DEMO_RECEIPTS.length,
+  matchedItems: matchedItemIds.length,
+  coveragePercentOfItems: round((matchedItemIds.length / DEMO_ITEMS.length) * 100),
+  coveragePercentOfValue: round((matchedValue / totalValue) * 100),
+  unmatched: DEMO_RECEIPTS.filter((receipt) => receipt.status === 'unmatched').map((receipt) => receipt.id),
+  needsCamera: DEMO_RECEIPTS.filter((receipt) => receipt.status === 'needs-camera').map((receipt) => receipt.id),
+  note: 'Receipts first, camera second: the mailbox already knows what was bought, for how much, and when. The camera pass only has to answer where it ended up.',
+};
+
+const INSURANCE_THRESHOLD_USD = 200;
+
+const insuranceLines = DEMO_ITEMS
+  .filter((item) => item.estValueUsd >= INSURANCE_THRESHOLD_USD)
+  .slice()
+  .sort((a, b) => b.estValueUsd - a.estValueUsd)
+  .map((item) => ({
+    itemId: item.id,
+    name: item.name,
+    serial: item.serial ?? null,
+    room: DEMO_HOUSE.rooms.find((room) => room.id === item.room)?.label ?? item.room,
+    purchased: item.purchased,
+    pricePaidUsd: item.pricePaidUsd,
+    estValueUsd: item.estValueUsd,
+    receiptId: DEMO_RECEIPTS.find((receipt) => receipt.itemIds.includes(item.id))?.id ?? null,
+  }));
+
+export const demoInsuranceSchedule = {
+  thresholdUsd: INSURANCE_THRESHOLD_USD,
+  lines: insuranceLines,
+  lineCount: insuranceLines.length,
+  totalEstValueUsd: round(insuranceLines.reduce((sum, line) => sum + line.estValueUsd, 0)),
+  coverageNote: 'Informational contents schedule for a fictional household — not an appraisal, policy, or claim document.',
+};

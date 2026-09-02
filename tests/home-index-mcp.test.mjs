@@ -12,11 +12,13 @@ const HOME_INDEX_TOOLS = [
   'home_index_valuation',
   'home_index_lendable',
   'home_index_sell_draft',
+  'home_index_receipts',
+  'home_index_insurance_schedule',
 ];
 
-test('MCP server declares SERVER_VERSION 0.13.0', async () => {
+test('MCP server declares SERVER_VERSION 0.14.0', async () => {
   const source = await readFile(MCP_LIB, 'utf8');
-  assert.match(source, /SERVER_VERSION = '0\.13\.0'/);
+  assert.match(source, /SERVER_VERSION = '0\.14\.0'/);
 });
 
 test('MCP server declares each home_index tool by name', async () => {
@@ -88,4 +90,40 @@ test('Home Cartography demo data: DEMO_ITEMS ids are unique', async () => {
 
   assert.ok(ids.length >= 20, 'expected at least 20 demo items');
   assert.equal(new Set(ids).size, ids.length, 'DEMO_ITEMS ids should be unique');
+});
+
+test('Home Cartography demo data: DEMO_RECEIPTS ids are unique', async () => {
+  const source = await readFile(HOME_DEMO_LIB, 'utf8');
+  const block = source.match(/export const DEMO_RECEIPTS: DemoReceipt\[\] = \[([\s\S]*?)\n\];/);
+  assert.ok(block, 'expected DEMO_RECEIPTS array to be found');
+  const ids = [...block[1].matchAll(/\{ id: '(rc-\d+)'/g)].map((m) => m[1]);
+
+  assert.ok(ids.length >= 8, 'expected at least 8 demo receipts');
+  assert.equal(new Set(ids).size, ids.length, 'DEMO_RECEIPTS ids should be unique');
+});
+
+test('Home Cartography demo data: every receipt itemId exists in DEMO_ITEMS', async () => {
+  const source = await readFile(HOME_DEMO_LIB, 'utf8');
+  const block = source.match(/export const DEMO_RECEIPTS: DemoReceipt\[\] = \[([\s\S]*?)\n\];/);
+  assert.ok(block, 'expected DEMO_RECEIPTS array to be found');
+
+  const itemIds = [...block[1].matchAll(/'(it-\d+)'/g)].map((m) => m[1]);
+  assert.ok(itemIds.length > 0, 'expected at least one item id referenced by a receipt');
+
+  for (const id of new Set(itemIds)) {
+    assert.match(source, new RegExp(`\\{ id: '${id}'`), `receipt-referenced item ${id} should exist in DEMO_ITEMS`);
+  }
+});
+
+test('Home Cartography demo data: receipts carry an unmatched and a needs-camera line', async () => {
+  const source = await readFile(HOME_DEMO_LIB, 'utf8');
+  assert.match(source, /status: 'unmatched'/);
+  assert.match(source, /status: 'needs-camera'/);
+});
+
+test('Home Cartography demo data: insurance schedule threshold and disclaimer', async () => {
+  const source = await readFile(HOME_DEMO_LIB, 'utf8');
+  assert.match(source, /export const demoInsuranceSchedule = \{/);
+  assert.match(source, /INSURANCE_THRESHOLD_USD = 200/);
+  assert.match(source, /not an appraisal, policy, or claim document/);
 });

@@ -118,3 +118,12 @@ Constraints:
 - **Write to `/sketches/home-cartography/` only — never `src/`.**
 
 Ask for neat and innovative, not decorative — this is a concept page selling an idea, the art should make the "your house as a machine-readable map" pitch legible at a glance.
+
+### 3. Review the receipt-ingestion spec (2026-09-02)
+Spec: `docs/prd/2026-09-02-home-cartography-receipt-ingestion-spec.md` — how purchase emails/receipts are proposed to fill in provenance fields (price paid, purchase date, warranty start) without a manual scan, plus the fictional `DEMO_RECEIPTS` / `demoReceiptReconciliation` / `demoInsuranceSchedule` shape it's demonstrated against on `/cartography/home/demo`.
+
+Review for:
+- **Reconciliation edge cases** — ambiguous merchant/date/amount matches, duplicate receipts for the same item, partial refunds or returns, multi-item receipts splitting across several inventory items, receipts that arrive after the item has already been scanned by camera, and what happens when a receipt matches nothing (the `unmatched` case) or an item has no receipt at all.
+- **Privacy posture** — how inbox/email access is scoped, what receipt data gets stored versus discarded after matching, whether merchant/purchase data could deanonymize a household, and whether the spec's guardrails are as strong as the concept doc's existing fictional-only / no-financial-advice framing.
+
+Leave findings as comments on the spec doc — no rewrite, no code changes.

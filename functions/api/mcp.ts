@@ -38,6 +38,13 @@
  *           "what is it worth", "what can I borrow", and "draft the listing"
  *           against a user-owned home index without re-implementing the
  *           rollups. Demo data only — every item and price is invented.
+ * v0.14.0 — Home Cartography receipts + insurance layer: adds
+ *           home_index_receipts (receipt reconciliation — what the mailbox
+ *           already proved, what is unmatched, what still needs a camera
+ *           pass) and home_index_insurance_schedule (an informational
+ *           contents schedule of every item at or above $200, with serials
+ *           and matching receipt ids). Read-only, and still the same
+ *           fictional demo household.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -105,6 +112,10 @@
  *   home_index_lendable   (no input)   only items opted into lending; rest stays private
  *   home_index_sell_draft ({itemId})   listing draft from the index evidence
  *
+ * Home Cartography receipts + insurance (v0.14.0)
+ *   home_index_receipts   (no input)   receipt reconciliation, unmatched, needs-camera
+ *   home_index_insurance_schedule (no input) contents schedule of items >= $200
+ *
  * Resources
  *   drum://rooms          markdown list of all drum surfaces
  *   drum://now-playing    current room track
@@ -159,7 +170,7 @@ import type { Env } from './visit';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.13.0';
+const SERVER_VERSION = '0.14.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.7.0';
 
@@ -894,6 +905,18 @@ const TOOL_DEFINITIONS = [
       required: ['itemId'],
       additionalProperties: false,
     },
+  },
+  {
+    name: 'home_index_receipts',
+    description:
+      'Receipt reconciliation for the Home Cartography demo index — how many receipts were ingested from email, retailer accounts, and photographed paper, how much of the index they cover by item count and by value, plus the receipts that matched nothing and the ones still waiting on a camera pass. Read-only. FICTIONAL demo household.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'home_index_insurance_schedule',
+    description:
+      'Informational contents schedule from the Home Cartography demo index — every item at or above the $200 threshold with serial, room, purchase record, estimated value, and matching receipt id, sorted highest value first. Not an appraisal, policy, or claim document. FICTIONAL demo household.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
 ] as const;
 
@@ -2397,6 +2420,53 @@ async function dispatchTool(
         ],
       };
     }
+    case 'home_index_receipts': {
+      const data = await homeDemoIndex(base);
+      const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
+      const recon = data?.receiptReconciliation || {};
+      const lines = [
+        `${recon.receiptsIngested ?? receipts.length} receipts ingested — ${recon.matchedItems ?? 0} items matched`,
+        `  coverage: ${recon.coveragePercentOfItems ?? 0}% of items · ${recon.coveragePercentOfValue ?? 0}% of estimated value`,
+        `  unmatched: ${(recon.unmatched || []).join(', ') || 'none'}`,
+        `  needs a camera pass: ${(recon.needsCamera || []).join(', ') || 'none'}`,
+        '',
+        'receipts:',
+        ...receipts.map(
+          (r: any) => `  · ${r.id} · ${r.source} · ${r.merchant} · ${r.date} · $${r.totalUsd} · ${r.status} · ${(r.itemIds || []).join(', ') || 'no items'}`,
+        ),
+        '',
+        recon.note || '',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify({ receiptReconciliation: recon, receipts }, null, 2) },
+        ],
+      };
+    }
+    case 'home_index_insurance_schedule': {
+      const data = await homeDemoIndex(base);
+      const schedule = data?.insuranceSchedule || {};
+      const scheduleLines = Array.isArray(schedule.lines) ? schedule.lines : [];
+      const lines = [
+        `contents schedule — ${schedule.lineCount ?? scheduleLines.length} items at or above $${schedule.thresholdUsd ?? 200}`,
+        '',
+        ...scheduleLines.map(
+          (line: any) => `  · ${line.name} · ${line.room} · est $${line.estValueUsd} · paid $${line.pricePaidUsd} on ${line.purchased} · serial ${line.serial || 'none on file'} · receipt ${line.receiptId || 'none'}`,
+        ),
+        '',
+        `total estimated value on schedule: $${schedule.totalEstValueUsd ?? 0}`,
+        schedule.coverageNote || '',
+        HOME_DEMO_FICTION_NOTE,
+      ].filter((line) => line !== '');
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify(schedule, null, 2) },
+        ],
+      };
+    }
 
     case 'tug_pull':
       return dispatchTugPull(args, base, sessionId);
@@ -2788,6 +2858,8 @@ function discoveryHtml(request: Request) {
   <li><code>home_index_valuation</code> — totals, warranties, lifecycle, duplicates, stale items</li>
   <li><code>home_index_lendable</code> — only items opted into lending; the rest stays private</li>
   <li><code>home_index_sell_draft</code> — listing draft from the index evidence</li>
+  <li><code>home_index_receipts</code> — receipt reconciliation, unmatched receipts, camera backlog</li>
+  <li><code>home_index_insurance_schedule</code> — informational contents schedule of items $200 and up</li>
 </ul>
 <p style="font-size:12px;color:#5F5E5A;">Fictional demo household at <code>/cartography/home/demo.json</code>. Every item, price, and serial is invented; no real inventory data is collected.</p>
 

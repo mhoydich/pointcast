@@ -36,3 +36,20 @@
 1. **Receipt-ingestion spec** — design how purchase emails/receipts fill in provenance fields (price paid, purchase date, warranty start) without a manual scan, per the concept doc's "Device" section.
 2. **Scan a real room** — the concept doc's own next step: validate the item/location/provenance/valuation schema against one real room instead of only the fictional demo, to see if the cold-start experience actually delivers a "wow."
 3. **Own name/route decision** — if Home Cartography graduates past concept, decide whether it stays under `/cartography/home` (sibling to Digital Identity Cartography) or gets its own top-level route/brand name, per the concept doc's open question.
+
+## Continuation (2026-09-02)
+
+**Session goal:** answer the 2026-08-14 log's "no receipt/email ingestion yet" gap with a fictional-but-concrete pass — receipts, reconciliation against the item ledger, and a derived insurance schedule — plus a new field-kit route, via another multi-lane Claude Code effort.
+
+Lane roster (same shape as 2026-08-14): **Fable** coordinating; **Sol** (Opus) — lib exports on `src/lib/home-cartography-demo.ts`; **Terra** — the new `/cartography/home/field-kit` route; **Luna** (this lane) — demo page sections + docs; **Codex** — review queued in `docs/codex-queue.md`; **Manus** — QA brief updated in `docs/briefs/2026-08-14-manus-home-cartography-qa.md`.
+
+- **Receipts + reconciliation** — `DEMO_RECEIPTS` (ten fictional receipts across gmail/amazon/apple/best-buy/photo sources) and `demoReceiptReconciliation` (receipts ingested, items matched, % of items, % of value, unmatched/needs-camera lists, note) landed in `src/lib/home-cartography-demo.ts`. Rendered on `/cartography/home/demo` as a new "RECEIPTS FIRST, CAMERA SECOND" section: a reconciliation stat line plus a receipts table (id, source, merchant, date, total, status, items).
+- **Insurance schedule** — `demoInsuranceSchedule` (threshold, per-item lines with serial/room/purchased/paid/est value/receipt, line count, total est value, coverage note) landed alongside the receipts exports. Rendered as a new "INSURANCE SCHEDULE" section on the same demo page: intro line naming the $200 threshold, a schedule table, a totals line, and the coverage note as a footnote.
+- **MCP v0.14.0** — two new tools, `home_index_receipts` and `home_index_insurance_schedule`, exposing the reconciliation and schedule data above to any MCP client.
+- **Receipt-ingestion spec** — `docs/prd/2026-09-02-home-cartography-receipt-ingestion-spec.md`, closing the 2026-08-14 log's open item on how purchase emails/receipts fill in provenance fields without a manual scan.
+- **Field kit route** — `/cartography/home/field-kit` (+ `.json`), a new surface for the real-room-scan next step.
+
+### Remaining risk (continuation)
+- Receipt matching is still hand-authored fiction, not a real ingestion pipeline — the spec describes the approach, nothing runs yet.
+- Insurance schedule is explicitly informational only (see `coverageNote`); it must not read as an appraisal or policy document.
+- Field kit route is new and unreviewed by Manus as of this entry.

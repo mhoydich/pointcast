@@ -64,3 +64,23 @@ Confirm both return `200`, `content-type: application/json` (or similar), and an
 ## Mike approval
 
 Nothing in this QA pass needs Mike's approval — it's read-only testing against already-fictional demo data. The one exception: **merging PR #961 itself** is a Mike-approval step, separate from this QA brief, and should happen before you run these tests (the URLs above 404 until then).
+
+## Addendum (2026-09-02) — receipts, insurance schedule, field kit
+
+The 2026-09-02 continuation lane added two new sections to `/cartography/home/demo` (receipts + reconciliation, insurance schedule), two new MCP tools, and a new route `/cartography/home/field-kit`. Add these to the QA pass:
+
+### 4. New demo-page sections on mobile
+- Open `https://pointcast.xyz/cartography/home/demo` at mobile viewport (or a real phone).
+- Confirm the new "RECEIPTS FIRST, CAMERA SECOND" section renders cleanly: the reconciliation stat line and the receipts table scroll horizontally inside their own container rather than pushing the page wide. Screenshot it.
+- Confirm the new "INSURANCE SCHEDULE" section renders the same way — intro line, table, totals line, coverage note footnote all readable at phone width. Screenshot it.
+
+### 5. Field kit route on mobile
+- Open `https://pointcast.xyz/cartography/home/field-kit` on desktop and at mobile viewport. Screenshot both.
+- Check for horizontal overflow and readable copy at phone width, same bar as the other Home Cartography pages.
+
+### 6. New MCP tools
+- Using the same custom connector at `https://pointcast.xyz/api/mcp-v2`, call:
+  1. `home_index_receipts` — no args. Screenshot the response; confirm it returns the reconciliation summary and receipt list tied to the Dune Street House demo, with no real merchant/personal data implied.
+  2. `home_index_insurance_schedule` — no args. Screenshot the response; confirm it reads as informational only (matches the page's coverage note) and not as an appraisal or policy document.
+
+Add these results to `docs/manus-logs/2026-08-14-home-cartography-qa.md` (or a dated follow-up log if that file is already closed out) with the same pass/fail format as the original acceptance criteria.

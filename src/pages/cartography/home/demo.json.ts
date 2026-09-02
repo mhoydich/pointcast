@@ -5,7 +5,10 @@ import type { APIRoute } from 'astro';
 import {
   DEMO_HOUSE,
   DEMO_ITEMS,
+  DEMO_RECEIPTS,
+  demoInsuranceSchedule,
   demoLendFlow,
+  demoReceiptReconciliation,
   demoRollups,
   demoSellFlow,
 } from '../../../lib/home-cartography-demo';
@@ -26,6 +29,9 @@ export const GET: APIRoute = async () => {
     rollups: demoRollups,
     sellFlow: demoSellFlow,
     lendFlow: demoLendFlow,
+    receipts: DEMO_RECEIPTS,
+    receiptReconciliation: demoReceiptReconciliation,
+    insuranceSchedule: demoInsuranceSchedule,
   };
 
   return new Response(JSON.stringify(payload, null, 2), {

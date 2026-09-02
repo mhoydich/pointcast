@@ -102,4 +102,5 @@ The index is exposed as **your own API and MCP server**. You grant access per-ag
    - Demo household ("The Dune Street House," 20 items): `/cartography/home/demo` (+ `.json`)
    - Demo MCP server, six tools on `https://pointcast.xyz/api/mcp-v2` (and `/api/mcp`): `home_index_summary`, `home_index_find({query})`, `home_index_room({room})`, `home_index_valuation`, `home_index_lendable`, `home_index_sell_draft({itemId})`
    - Session log: `docs/claude-code-logs/2026-08-14-home-cartography.md`
-3. Test the wedge: scan one real room, generate a valuation + sell-one-item flow, and see if it feels like magic.
+3. Test the wedge: scan one real room, generate a valuation + sell-one-item flow, and see if it feels like magic. Field kit published at `/cartography/home/field-kit` — awaiting a real-room scan by Mike.
+4. Receipt ingestion spec — done (`docs/prd/2026-09-02-home-cartography-receipt-ingestion-spec.md`).

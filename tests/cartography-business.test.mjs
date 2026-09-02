@@ -62,6 +62,8 @@ test('Agent-facing discovery surfaces include Cartography routes', async () => {
     '/cartography/home.json',
     '/cartography/home/demo',
     '/cartography/home/demo.json',
+    '/cartography/home/field-kit',
+    '/cartography/home/field-kit.json',
   ]) {
     assert.match(agents, new RegExp(path.replace(/\//g, '\\/')));
     assert.match(forAgents, new RegExp(path.replace(/\//g, '\\/')));
@@ -71,7 +73,7 @@ test('Agent-facing discovery surfaces include Cartography routes', async () => {
 test('Cartography JSON surfaces are CORS-open in the static headers file', async () => {
   const headers = await readFile(HEADERS, 'utf8');
 
-  for (const path of ['/cartography.json', '/cartography/pilot.json', '/cartography/sprint.json', '/cartography/demo.json', '/cartography/home.json', '/cartography/home/demo.json', '/join.json']) {
+  for (const path of ['/cartography.json', '/cartography/pilot.json', '/cartography/sprint.json', '/cartography/demo.json', '/cartography/home.json', '/cartography/home/demo.json', '/cartography/home/field-kit.json', '/join.json']) {
     assert.match(headers, new RegExp(`${path}\\n\\s+Access-Control-Allow-Origin: \\*`));
   }
 });
