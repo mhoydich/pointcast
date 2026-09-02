@@ -6,6 +6,12 @@
  * timezone: a sitting changes at local midnight, not UTC midnight.
  */
 import series from '../data/kennel-club-september-sitting.json';
+import {
+  KENNEL_CLUB_CONTRACT,
+  KENNEL_CLUB_EDITION,
+  KENNEL_CLUB_NETWORK,
+  KENNEL_CLUB_PRICE_MUTEZ,
+} from './kennel-club-mint';
 
 export const KENNEL_CLUB = series;
 export const KENNEL_CLUB_CANONICAL = 'https://pointcast.xyz/kennel-club';
@@ -72,9 +78,12 @@ export function sittingPayload(sitting: KennelSitting) {
     collectionJson: `${KENNEL_CLUB_CANONICAL}.json`,
     mint: {
       chain: KENNEL_CLUB.mint.chain,
-      network: KENNEL_CLUB.mint.network,
-      status: 'contract-pending',
-      note: 'Mint window opens when the contract lands.',
+      contract: KENNEL_CLUB_CONTRACT,
+      network: KENNEL_CLUB_NETWORK,
+      priceMutez: KENNEL_CLUB_PRICE_MUTEZ,
+      edition: KENNEL_CLUB_EDITION,
+      status: 'live, paused until unpause',
+      note: 'The live state is read from TzKT.',
       tokenId: sitting.tokenId,
       mintDate: sitting.mintDate,
     },
