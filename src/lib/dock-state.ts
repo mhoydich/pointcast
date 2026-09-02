@@ -18,6 +18,8 @@ export const DOCK_RECENTS_KEY = 'pc:dock:recents:v1';
 export const DOCK_ACTIVITY_KEY = 'pc:dock:activity:v1';
 export const DOCK_SAVED_KEY = 'pc:dock:saved:v1';
 
+import { readMeState, writeMeState } from './me-state';
+
 const RECENT_LIMIT = 16;
 const ACTIVITY_LIMIT = 40;
 
@@ -86,7 +88,7 @@ export function readDockActivity(): DockActivityItem[] {
 }
 
 export function readDockSaved(): string[] {
-  const items = readJson<string[]>(DOCK_SAVED_KEY, []);
+  const items = readMeState<string[]>('library', []);
   return Array.isArray(items) ? items.filter((path) => typeof path === 'string') : [];
 }
 
@@ -144,7 +146,7 @@ export function toggleDockSaved(path: string, title: string): boolean {
   const next = exists
     ? saved.filter((item) => item !== normalizedPath)
     : [normalizedPath, ...saved].slice(0, 48);
-  writeJson(DOCK_SAVED_KEY, next);
+  writeMeState('library', next);
   recordDockActivity(
     exists ? 'remove' : 'save',
     `${exists ? 'Removed' : 'Saved'} ${normalizeTitle(title, normalizedPath)}`,
