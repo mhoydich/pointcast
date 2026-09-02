@@ -3,7 +3,8 @@
  * Generate Open Graph unfurl cards — default site card + one per Block.
  *
  * Output: public/images/og/
- *   ├── og-home-v2.png     (1200×630 default, used by / and /for-agents)
+ *   ├── og-home-v2.png     (1200×630 legacy default; the wordmark + channel bar)
+ *   ├── og-home-v4.png     (1200×630 the front door — used by / and BlockLayout's default; see og-home-card.mjs)
  *   └── b/{id}.png         (per-block card with channel color + title + Noun)
  *
  * We hand-roll SVG templates and let sharp rasterize to PNG. Satori would
@@ -16,6 +17,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
+import { homeCard } from './og-home-card.mjs';
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/images/og');
 const BLOCKS_DIR = path.resolve(process.cwd(), 'src/content/blocks');
@@ -1009,6 +1011,14 @@ async function main() {
   console.log('[og] generating default card...');
   await svgToPng(defaultCard(), path.join(OUT_DIR, 'og-home-v2.png'));
   console.log('  ✓ /images/og/og-home-v2.png');
+
+  // The front-door card. Block count is computed here (published, non-draft)
+  // so the footer stays honest without a hand-typed number.
+  const publishedBlocks = (await fs.readdir(BLOCKS_DIR))
+    .filter((f) => /^\d{4}\.json$/.test(f))
+    .filter((f) => !JSON.parse(readFileSync(path.join(BLOCKS_DIR, f), 'utf8')).draft).length;
+  await svgToPng(homeCard({ blockCount: publishedBlocks }), path.join(OUT_DIR, 'og-home-v4.png'));
+  console.log(`  ✓ /images/og/og-home-v4.png (${publishedBlocks} blocks)`);
 
   console.log('[og] generating', PAGES.length, 'page cards...');
   for (const page of PAGES) {
