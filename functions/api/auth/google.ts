@@ -6,7 +6,9 @@ import {
 } from './_oauth';
 import {
   authJson,
+  hasAuthStorage,
   readSessionFromRequest,
+  writeAuthState,
 } from './session';
 
 type GoogleEnv = Cloudflare.Env;
@@ -14,7 +16,7 @@ type GoogleEnv = Cloudflare.Env;
 const STATE_PREFIX = 'oauth-state:google:';
 
 export const onRequestGet: PagesFunction<GoogleEnv> = async ({ request, env }) => {
-  if (!env.USERS) {
+  if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
@@ -38,9 +40,7 @@ export const onRequestGet: PagesFunction<GoogleEnv> = async ({ request, env }) =
     currentUserId: current?.user.userId ?? null,
     createdAt: new Date().toISOString(),
   };
-  await env.USERS.put(`${STATE_PREFIX}${state}`, JSON.stringify(stateRecord), {
-    expirationTtl: OAUTH_STATE_TTL_SECONDS,
-  });
+  await writeAuthState(env, `${STATE_PREFIX}${state}`, stateRecord, OAUTH_STATE_TTL_SECONDS);
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);

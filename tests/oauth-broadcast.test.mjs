@@ -14,12 +14,13 @@ test('Google OAuth verifies state, nonce, and the provider ID token before issui
   ]);
 
   assert.match(start, /crypto|getRandomValues|randomUrlSafeString/);
-  assert.match(start, /expirationTtl: OAUTH_STATE_TTL_SECONDS/);
+  assert.match(start, /writeAuthState\(env,[\s\S]*OAUTH_STATE_TTL_SECONDS\)/);
   assert.match(start, /authUrl\.searchParams\.set\('nonce', nonce\)/);
   assert.match(callback, /createRemoteJWKSet/);
   assert.match(callback, /jwtVerify/);
   assert.match(callback, /audience: env\.GOOGLE_CLIENT_ID/);
   assert.match(callback, /secureEqual\(nonce, stateRecord\.nonce\)/);
+  assert.match(callback, /consumeAuthState<OAuthStateRecord>/);
   assert.match(callback, /POINTCAST_BROADCAST_EMAIL/);
   assert.match(callback, /withSessionCookie/);
   assert.match(session, /roles: Array\.from\(new Set/);
