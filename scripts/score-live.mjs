@@ -29,6 +29,10 @@ if (NS && TOKEN) {
       let records; try { records = await valueRes.json(); } catch { continue; }
       if (!Array.isArray(records)) continue;
       for (const record of records) {
+        if (record?.event === 'dock') {
+          live.counters['/dock'] = (live.counters['/dock'] || 0) + 1;
+          continue;
+        }
         const path = typeof record?.meta?.path === 'string' ? record.meta.path : '';
         if ((record?.event !== 'pageview' && record?.event !== 'page_view') || !path || path.startsWith('/_')) continue;
         const weight = Number.isFinite(record.sampled) && record.sampled > 0 ? record.sampled : 1;

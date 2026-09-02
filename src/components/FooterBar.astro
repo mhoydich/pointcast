@@ -52,6 +52,7 @@ import { RESIDENTS } from '../data/residents';
 import { SPELLS } from '../data/spells';
 import { NOW_PLAYING } from '../data/now-playing';
 import DockLauncher from './DockLauncher.astro';
+import DockBurstTicker from './DockBurstTicker.astro';
 
 const SOUNDTRACKS_JSON = JSON.stringify(MOOD_SOUNDTRACKS);
 const MOOD_SPELLS_JSON = JSON.stringify(MOOD_SPELLS);
@@ -62,6 +63,8 @@ const FED_PEERS_COUNT = FEDERATION_PEERS.length;
 // Lookup so each tray can pull its declarative `actions` row without
 // re-iterating DOCK_KIT in five places. (v4.1, Mike's "buttons" sprint.)
 const KIT_BY_ID = Object.fromEntries(DOCK_KIT.map((k) => [k.id, k]));
+const STRIP_DOCK_KIT = DOCK_KIT.filter((item) => item.placement !== 'workbench');
+const WORKBENCH_DOCK_KIT = DOCK_KIT.filter((item) => item.placement === 'workbench');
 
 function dailyNounId(): number {
   const day = Math.floor(Date.now() / (24 * 3600 * 1000));
@@ -76,6 +79,7 @@ const pingable = RESIDENTS.filter(
 ---
 
 <aside class="fb" id="pc-fb" aria-label="PointCast dock">
+  <DockBurstTicker />
   <div class="fb__bar">
     <button
       type="button"
@@ -135,7 +139,7 @@ const pingable = RESIDENTS.filter(
 
     <div class="fb__right">
       <div class="fb__kit" role="toolbar" aria-label="PointCast kit">
-        {DOCK_KIT.map((item) => (
+        {STRIP_DOCK_KIT.map((item) => (
           <button
             type="button"
             class="fb__stamp"
@@ -754,9 +758,9 @@ const pingable = RESIDENTS.filter(
         <div class="fb__soundtrack" id="fb-soundtrack" transition:persist="pc-soundtrack" hidden></div>
 
         <section class="fb-binder">
-        <p class="fb-binder__label mono">KIT — {DOCK_KIT.length} / {DOCK_KIT.length} collected</p>
+        <p class="fb-binder__label mono">KIT — {STRIP_DOCK_KIT.length} LIVE</p>
         <ul class="fb-binder__grid">
-          {DOCK_KIT.map((item) => (
+          {STRIP_DOCK_KIT.map((item) => (
             <li class="fb-binder__card" style={`--stamp-accent: ${item.accent}`}>
               <button
                 type="button"
@@ -773,6 +777,23 @@ const pingable = RESIDENTS.filter(
                   height="44"
                   loading="lazy"
                 />
+                <span class="fb-binder__glyph" aria-hidden="true">{item.glyph}</span>
+                <span class="fb-binder__name">{item.name}</span>
+                <span class="fb-binder__blurb mono">{item.blurb}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        </section>
+
+        <section class="fb-binder fb-binder--workbench">
+        <p class="fb-binder__label mono">WORKBENCH · COMING</p>
+        <ul class="fb-binder__grid">
+          {WORKBENCH_DOCK_KIT.map((item) => (
+            <li class="fb-binder__card" style={`--stamp-accent: ${item.accent}`}>
+              <button type="button" class="fb-binder__open" data-tray={item.tray} aria-label={`Open ${item.name} workbench tray`}>
+                <span class="fb-binder__num mono">№ {item.number} · COMING</span>
+                <img class="fb-binder__noun" src={`https://noun.pics/${item.nounSeed}.svg`} alt="" width="44" height="44" loading="lazy" />
                 <span class="fb-binder__glyph" aria-hidden="true">{item.glyph}</span>
                 <span class="fb-binder__name">{item.name}</span>
                 <span class="fb-binder__blurb mono">{item.blurb}</span>
@@ -929,15 +950,16 @@ const pingable = RESIDENTS.filter(
     function openTray(id) {
       var tray = getTrayEl(id);
       var stamp = getStampEl(id);
-      if (!tray || !stamp) return;
+      if (!tray) return;
+      var anchor = stamp || $menuBtn;
       closeAll();
       lastFocused = document.activeElement;
       tray.hidden = false;
       void tray.offsetWidth;
       tray.setAttribute('data-open', 'true');
-      stamp.setAttribute('aria-expanded', 'true');
+      if (stamp) stamp.setAttribute('aria-expanded', 'true');
       try {
-        var rect = stamp.getBoundingClientRect();
+        var rect = anchor.getBoundingClientRect();
         var trayWidth = tray.getBoundingClientRect().width || 320;
         var winWidth = window.innerWidth;
         var center = rect.left + rect.width / 2;
@@ -954,7 +976,7 @@ const pingable = RESIDENTS.filter(
       openPopover = 'tray:' + id;
       document.addEventListener('keydown', onEsc);
       document.documentElement.classList.add('pc-dock-open');
-      window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: true } }));
+      window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: true, tray: id } }));
       // Per-tray on-open hooks (defined later in the IIFE; hoisted because
       // they're function declarations).
       try {
@@ -1022,10 +1044,10 @@ const pingable = RESIDENTS.filter(
         return;
       }
       if (e.key >= '1' && e.key <= '9') {
-        var idx = Number(e.key) - 1;
-        if (KIT[idx]) {
+        var numbered = KIT.find(function (item) { return Number(item.number) === Number(e.key); });
+        if (numbered) {
           e.preventDefault();
-          openTray(KIT[idx].id);
+          openTray(numbered.id);
         }
       }
     });
@@ -1076,7 +1098,7 @@ const pingable = RESIDENTS.filter(
         if (spellId === 'clear') {
           window.dispatchEvent(new CustomEvent('pc:spell:clear'));
         } else if (spellId) {
-          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: spellId } }));
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: spellId, source: 'magic-word' } }));
         }
         $omni.value = '';
         applyOmniMode();
@@ -1362,6 +1384,7 @@ const pingable = RESIDENTS.filter(
             var b = blocks[j];
             var src = (b && b.source) || '';
             if (typeof src === 'string' && src.indexOf(echo.key) !== -1) {
+              var wasAnswered = echo.status === 'answered';
               echo.status = 'answered';
               echo.blockId = b.id;
               echo.blockHref = '/b/' + b.id;
@@ -1371,6 +1394,13 @@ const pingable = RESIDENTS.filter(
               echo.blockTitle = String(b.title || '').slice(0, 80);
               echo.blockBody = String(b.body || b.dek || '').slice(0, 320);
               echo.blockAuthor = String(b.author || 'cast').slice(0, 20);
+              if (!wasAnswered) {
+                window.dispatchEvent(new CustomEvent('pc:burst:request', { detail: {
+                  kind: 'ping-answered',
+                  by: { handle: echo.blockAuthor },
+                  meta: { label: echo.blockTitle || ('ping ' + echo.key), blockId: String(b.id || ''), color: '#185fa5' }
+                } }));
+              }
               changed = true;
               break;
             }
@@ -1715,8 +1745,6 @@ const pingable = RESIDENTS.filter(
     updatePresence();
     setInterval(updatePresence, 45 * 1000);
 
-    // Initial pulses for echoes + agent activity. Both fail silently
-    // when the endpoints aren't reachable (dev preview, offline).
     setTimeout(function () {
       try { reconcileEchoes(); } catch (e) {}
       try { refreshAgentActivity(); } catch (e) {}
@@ -1727,12 +1755,6 @@ const pingable = RESIDENTS.filter(
     setInterval(function () {
       try { refreshAgentActivity(); } catch (e) {}
     }, 5 * 60 * 1000);
-
-    // ─── v4.1 — buttons + studio + comms hooks ───────────────────
-    // Sprint 2026-04-30: "go towards buttons and expanded menus, and
-    // then eventually broadcaster, director" + "communicate with others".
-    // The single switch below routes every quick-action click to its
-    // handler. New trays/actions add a `case` here, not new wiring.
 
     // Walked-up wallet address — used to auto-stamp pings with `address`.
     function activeWalletAddress() {
@@ -2112,7 +2134,7 @@ const pingable = RESIDENTS.filter(
         if (action === 'clear') {
           window.dispatchEvent(new CustomEvent('pc:spell:clear'));
         } else {
-          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: action } }));
+          window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: action, source: 'dock' } }));
         }
         return;
       }
@@ -2137,13 +2159,7 @@ const pingable = RESIDENTS.filter(
     }
 
     // ─── № 08 SEISMO — the town seismograph ────────────────────────
-    // A rolling strip chart on canvas. The needle's energy comes from
-    // three honest places: the wire (/wire.json — last-24h commits +
-    // blocks set the ambient floor; anything under 20 minutes old
-    // still rings), your own pointer on the strip (microseism), and
-    // the drum ('thump'). A quiet wire draws a quiet line. Felt
-    // reports persist in pc:seismo:marks; the strip itself is live
-    // only — paper doesn't rewind.
+    // Wire activity, pointer motion, and drum thumps drive the needle.
     var SG_MARKS_KEY = 'pc:seismo:marks';
     var sgCanvas = document.getElementById('fb-sg-strip');
     var sgCtx = sgCanvas ? sgCanvas.getContext('2d') : null;
@@ -2238,6 +2254,7 @@ const pingable = RESIDENTS.filter(
 
     function sgFrame() {
       if (!sgRunning) return;
+      if (document.hidden) { sgRunning = false; return; }
       var tray = getTrayEl('seismo');
       if (!tray || tray.getAttribute('data-open') !== 'true') { sgRunning = false; return; }
       sgStep();
@@ -2350,6 +2367,13 @@ const pingable = RESIDENTS.filter(
       sgCanvas.addEventListener('pointerleave', function () { sgLastX = null; sgLastY = null; });
       sgCanvas.addEventListener('pointerdown', function () {
         if (sgRunning) sgEnergy = Math.min(3, sgEnergy + 0.35);
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) sgRunning = false;
+        else {
+          var tray = getTrayEl('seismo');
+          if (tray && tray.getAttribute('data-open') === 'true') seismoOpen();
+        }
       });
     }
 

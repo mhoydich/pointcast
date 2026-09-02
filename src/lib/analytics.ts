@@ -6,6 +6,7 @@ export type AnalyticsEvent =
   | 'hello_earned'
   | 'mood_set'
   | 'node_connect'
+  | 'dock'
   | 'page_view';
 
 /** Payload sent to the analytics endpoint. */
