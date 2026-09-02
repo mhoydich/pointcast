@@ -12,7 +12,7 @@ const { tokenId } = Astro.props;
 
 <script>
   type MintState = { paused: boolean; today: { tokenId: number; windowOpen: boolean; minted: number } };
-  const TZKT = 'https://api.tzkt.io';
+  const MINT_LIVE_URL = 'https://pointcast.xyz/api/kennel-club/mint';
 
   function describe(state: MintState): string {
     if (state.paused) return 'paused — opens when the admin unpauses';
@@ -21,21 +21,12 @@ const { tokenId } = Astro.props;
   }
 
   async function readState(root: HTMLElement): Promise<MintState> {
-    const contract = root.dataset.contract || '';
     const tokenId = Number(root.dataset.tokenId || 0);
-    const storageResponse = await fetch(`${TZKT}/v1/contracts/${contract}/storage`);
-    if (!storageResponse.ok) throw new Error(`TzKT storage read failed (${storageResponse.status})`);
-    const storage = await storageResponse.json();
-    const [supplyResponse, windowResponse] = await Promise.all([
-      fetch(`${TZKT}/v1/bigmaps/${storage.supply}/keys?key=${tokenId}`),
-      fetch(`${TZKT}/v1/bigmaps/${storage.windows}/keys?key=${tokenId}`),
-    ]);
-    const supplyRows = supplyResponse.status === 204 ? [] : await supplyResponse.json();
-    const windowRows = windowResponse.status === 204 ? [] : await windowResponse.json();
-    const window = windowRows[0]?.value;
-    const now = Date.now();
-    const windowOpen = Boolean(window?.open_at && window?.close_at && now >= Date.parse(window.open_at) && now < Date.parse(window.close_at));
-    return { paused: Boolean(storage.paused), today: { tokenId, windowOpen, minted: Number(supplyRows[0]?.value || 0) } };
+    const response = await fetch(MINT_LIVE_URL);
+    if (!response.ok) throw new Error(`mint state read failed (${response.status})`);
+    const payload = await response.json() as MintState;
+    if (payload.today?.tokenId !== tokenId) throw new Error('mint state is for a different sitting');
+    return payload;
   }
 
   async function refresh(root: HTMLElement): Promise<MintState | null> {

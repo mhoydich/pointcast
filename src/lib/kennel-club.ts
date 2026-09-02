@@ -16,6 +16,7 @@ import {
 export const KENNEL_CLUB = series;
 export const KENNEL_CLUB_CANONICAL = 'https://pointcast.xyz/kennel-club';
 export const KENNEL_CLUB_TIME_ZONE = 'America/Los_Angeles';
+export const KENNEL_CLUB_MINT_LIVE_URL = 'https://pointcast.xyz/api/kennel-club/mint';
 
 export type KennelSitting = (typeof series.sittings)[number];
 export type SittingStatus = 'past' | 'today' | 'future';
@@ -82,8 +83,10 @@ export function sittingPayload(sitting: KennelSitting) {
       network: KENNEL_CLUB_NETWORK,
       priceMutez: KENNEL_CLUB_PRICE_MUTEZ,
       edition: KENNEL_CLUB_EDITION,
-      status: 'live, paused until unpause',
-      note: 'The live state is read from TzKT.',
+      status: 'live; query liveUrl for current mint state',
+      note: 'The live state is served by the edge-cached TzKT reader.',
+      liveUrl: KENNEL_CLUB_MINT_LIVE_URL,
+      snapshotAt: new Date().toISOString(),
       tokenId: sitting.tokenId,
       mintDate: sitting.mintDate,
     },

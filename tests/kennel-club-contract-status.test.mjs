@@ -22,7 +22,8 @@ test('Kennel Club mainnet FA2 is registered consistently across contract discove
   assert.equal(series.mint.contractAddress, contracts.kennel_club.mainnet);
   assert.equal(series.mint.priceMutez, 1_000_000);
   assert.match(agents, /kennelClub:/);
-  assert.match(agents, /live, paused until unpause/);
+  assert.match(agents, /kennelClubMint: 'https:\/\/pointcast\.xyz\/api\/kennel-club\/mint'/);
+  assert.match(agents, /mintState: kennelClub \? 'https:\/\/pointcast\.xyz\/api\/kennel-club\/mint' : null/);
   assert.match(status, /Kennel Club FA2 · Mainnet · live, paused until unpause/);
   const blockData = JSON.parse(block);
   assert.equal(blockData.type, 'MINT');
