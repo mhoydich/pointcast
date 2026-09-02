@@ -17,6 +17,10 @@ interface TopEntry {
   count: number;
 }
 
+interface TopSqlEntry extends TopEntry {
+  [key: string]: string | number | null;
+}
+
 function json(value: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(value), {
     ...init,
@@ -59,6 +63,7 @@ export class DrumCounter extends DurableObject<Env> {
     if (!/^[a-f0-9]{16}$/i.test(session) && session) return json({ ok: false, reason: "bad-session" }, { status: 400 });
 
     if (request.method === "GET") {
+      if (url.searchParams.get("top") === "1") return json({ entries: await this.topEntries() });
       const globalTotal = await this.globalTotal();
       const yourTotal = session ? await this.sessionTotal(session) : 0;
       return json({ globalTotal, yourTotal });
@@ -87,7 +92,10 @@ export class DrumCounter extends DurableObject<Env> {
     const nounId = typeof body.nounId === "number" && Number.isInteger(body.nounId)
       ? Math.max(0, Math.min(1199, body.nounId))
       : null;
-    this.ctx.storage.sql.exec("UPDATE drum_counter_meta SET value = ? WHERE key = 'global'", nextGlobal);
+    // The first request normally hydrates this from KV, but a brand-new
+    // namespace has no `global` row to UPDATE. Upsert so the DO, rather than
+    // the lagging mirror, remains authoritative from its very first tap.
+    this.setMeta("global", nextGlobal);
     this.ctx.storage.sql.exec(
       `UPDATE drum_counter_sessions
        SET total = ?, dirty = 1, leaderboard_hash = COALESCE(?, leaderboard_hash), noun_id = COALESCE(?, noun_id)
@@ -132,7 +140,11 @@ export class DrumCounter extends DurableObject<Env> {
     const changed = this.ctx.storage.sql.exec<{
       session_hash: string; total: number; leaderboard_hash: string | null; noun_id: number | null;
     }>("SELECT session_hash, total, leaderboard_hash, noun_id FROM drum_counter_sessions WHERE dirty = 1").toArray();
-    const writes: Promise<void>[] = [this.env.VISITS.put(KEY_GLOBAL, String(globalTotal))];
+    // A deployment can briefly leave more than one isolate with pending
+    // mirror work. KV is last-writer-wins, so never let an older mirror write
+    // a smaller global total over a newer one. The DO remains authoritative.
+    const mirroredGlobal = Math.max(countOf(await this.env.VISITS.get(KEY_GLOBAL)), globalTotal);
+    const writes: Promise<void>[] = [this.env.VISITS.put(KEY_GLOBAL, String(mirroredGlobal))];
     for (const row of changed) {
       writes.push(this.env.VISITS.put(`${SESSION_PREFIX}${row.session_hash}`, String(row.total), { expirationTtl: SESSION_TTL_SECONDS }));
     }
@@ -158,12 +170,39 @@ export class DrumCounter extends DurableObject<Env> {
     } catch { /* treat malformed legacy data as an empty board */ }
     for (const candidate of candidates) {
       const existing = current.find((entry) => entry.hash === candidate.leaderboard_hash);
-      if (existing) existing.count = candidate.total;
+      if (existing) existing.count = Math.max(existing.count, candidate.total);
       else if (current.length < 10 || candidate.total > (current[current.length - 1]?.count ?? 0)) {
         current.push({ hash: candidate.leaderboard_hash, nounId: candidate.noun_id, count: candidate.total });
       }
     }
     return current.sort((a, b) => b.count - a.count).slice(0, 10);
+  }
+
+  private async topEntries(): Promise<Array<TopEntry & { rank: number }>> {
+    const rows = this.ctx.storage.sql.exec<TopSqlEntry>(
+      `SELECT leaderboard_hash AS hash, noun_id AS nounId, total AS count
+       FROM drum_counter_sessions
+       WHERE leaderboard_hash IS NOT NULL AND noun_id IS NOT NULL
+       ORDER BY total DESC, session_hash ASC
+       LIMIT 10`,
+    ).toArray();
+    let current: TopEntry[] = [];
+    try {
+      const raw = await this.env.VISITS.get(KEY_TOP);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) current = parsed.filter((entry): entry is TopEntry =>
+        typeof entry?.hash === "string" && typeof entry?.nounId === "number" && typeof entry?.count === "number",
+      );
+    } catch { /* an unavailable or malformed compatibility mirror is non-fatal */ }
+    for (const row of rows) {
+      const existing = current.find((entry) => entry.hash === row.hash);
+      if (existing) existing.count = Math.max(existing.count, row.count);
+      else current.push({ hash: row.hash, nounId: row.nounId, count: row.count });
+    }
+    return current
+      .sort((a, b) => b.count - a.count || a.hash.localeCompare(b.hash))
+      .slice(0, 10)
+      .map((row, index) => ({ rank: index + 1, ...row }));
   }
 
   private rowValue(key: string): number | undefined {

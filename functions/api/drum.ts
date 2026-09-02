@@ -149,7 +149,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (counter) {
     return new Response(counter.body, {
       status: counter.status,
-      headers: { ...JSON_HEADERS, 'Cache-Control': 'private, max-age=3' },
+      headers: { ...JSON_HEADERS, 'Cache-Control': 'no-store' },
     });
   }
   const [globalTotal, yourTotal] = await Promise.all([
