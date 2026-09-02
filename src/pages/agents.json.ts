@@ -48,6 +48,7 @@ export const GET: APIRoute = async () => {
   const marketplace = ((contracts as any).marketplace?.mainnet ?? '').trim();
   const zenCats = ((contracts as any).zen_cats?.mainnet ?? '').trim();
   const postcards = ((contracts as any).postcards?.mainnet ?? '').trim();
+  const kennelClub = ((contracts as any).kennel_club?.mainnet ?? '').trim();
 
   const payload = {
     $schema: 'https://pointcast.xyz/BLOCKS.md',
@@ -812,6 +813,18 @@ export const GET: APIRoute = async () => {
         tzkt: visitNouns ? `https://tzkt.io/${visitNouns}` : null,
         objkt: visitNouns ? `https://objkt.com/collection/${visitNouns}` : null,
         description: 'Visit Nouns FA2 — open-supply, each token is a Nouns seed 0-1199.',
+      },
+      kennelClub: {
+        chain: 'tezos',
+        network: 'mainnet',
+        address: kennelClub || null,
+        standard: 'FA2 / TZIP-21',
+        status: kennelClub ? 'live, paused until unpause' : 'pending',
+        priceMutez: 1_000_000,
+        edition: 'open',
+        tokenIdConvention: 'day - 1 in America/Los_Angeles',
+        tzkt: kennelClub ? `https://tzkt.io/${kennelClub}` : null,
+        description: 'Kennel Club September Sitting daily editions. TzKT supplies the current paused, window, and minted state.',
       },
       zenCats: {
         chain: 'tezos',
