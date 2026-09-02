@@ -150,3 +150,15 @@ test('wallet and auth menus rebind after Astro route transitions', async () => {
   assert.match(authMenu, /__pointCastAuthMenuAbort/);
   assert.match(authMenu, /renderSession\(root as HTMLElement, detail\?\.user \?\? null, false\)/);
 });
+
+test('dock identity updates immediately for both sign-in and sign-out auth events', async () => {
+  const [footer, dock] = await Promise.all([
+    readFile(new URL('src/components/FooterBar.astro', root), 'utf8'),
+    readFile(new URL('src/components/DockLauncher.astro', root), 'utf8'),
+  ]);
+  assert.match(footer, /window\.addEventListener\('pc:auth-change'/);
+  assert.match(footer, /if \(!user\) \{\s*refreshWalletUI\(\);/);
+  assert.match(dock, /window\.addEventListener\('pc:auth-change'/);
+  assert.match(dock, /name\) name\.textContent = 'Visitor mode'/);
+  assert.match(dock, /name\) name\.textContent = user\.preferredName/);
+});

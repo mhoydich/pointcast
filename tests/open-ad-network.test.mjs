@@ -18,7 +18,7 @@ test('all public layout families render the shared open-ad rail', async () => {
   }
 });
 
-test('all public layout families carry the live first-100 Tezos signal above the fold', async () => {
+test('the first-100 Tezos signal remains available on its own page but is not sitewide chrome', async () => {
   const [layouts, strip] = await Promise.all([
     Promise.all([
       'BaseLayout.astro',
@@ -30,8 +30,8 @@ test('all public layout families carry the live first-100 Tezos signal above the
   ]);
 
   for (const layout of layouts) {
-    assert.match(layout, /import NetworkFirst100Strip/);
-    assert.match(layout, /<NetworkFirst100Strip\s*\/>/);
+    assert.doesNotMatch(layout, /import NetworkFirst100Strip/);
+    assert.doesNotMatch(layout, /<NetworkFirst100Strip\s*\/>/);
   }
 
   assert.match(strip, /data-network-first100/);
