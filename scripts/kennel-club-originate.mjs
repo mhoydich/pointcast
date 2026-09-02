@@ -3,11 +3,16 @@
 /**
  * Prepare and, only with --execute, originate the Kennel Club FA2.
  *
- * Mainnet uses Taquito's wallet operation API with Beacon/Kukai. Origination
- * is an operation request; Beacon's requestSignPayload is deliberately not
- * used (that method is only the raw-payload workaround for attestations).
- * Shadownet automation uses an env-only InMemorySigner and reveals it in a
- * separate operation before origination when necessary.
+ * Mainnet has two signing paths. Kukai (the default) uses Taquito's wallet
+ * operation API with Beacon; origination is an operation request, so Beacon's
+ * requestSignPayload is deliberately not used (that method is only the
+ * raw-payload workaround for attestations). The agent path uses an env-only
+ * InMemorySigner and is gated hard: --signer inmemory on mainnet requires both
+ * --confirm-mainnet I_UNDERSTAND_MAINNET and KENNEL_CLUB_MAINNET_SECRET_KEY in
+ * env. Shadownet automation uses the same in-memory path with
+ * KENNEL_CLUB_TESTNET_SECRET_KEY. Either way the key is read from env only and
+ * is never logged, and the signer reveals itself in a separate operation
+ * before origination when necessary.
  */
 
 import { createHash } from 'node:crypto';
@@ -31,6 +36,11 @@ const STORAGE_FILE = `${BUILD_DIR}/step_003_cont_0_storage.json`;
 const CONTRACT_PR = 1008;
 const CONTRACT_COMMIT = '5c6701d758127606cc19e6d1a562d1c31882d92c';
 const MIKE_KUKAI = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+const SECRET_KEY_ENV = {
+  mainnet: 'KENNEL_CLUB_MAINNET_SECRET_KEY',
+  shadownet: 'KENNEL_CLUB_TESTNET_SECRET_KEY',
+};
+const MIN_BALANCE_MUTEZ = { mainnet: 3_000_000, shadownet: 2_000_000 };
 const NETWORKS = {
   shadownet: {
     rpc: 'https://shadownet.smartpy.io',
@@ -46,7 +56,7 @@ const NETWORKS = {
   },
 };
 
-function parseArgs(argv) {
+export function parseArgs(argv, env = process.env) {
   const options = {
     network: 'shadownet',
     signer: null,
@@ -89,8 +99,16 @@ function parseArgs(argv) {
   if (options.signer === 'kukai' && options.network !== 'mainnet') {
     throw new Error('Kukai is mainnet-only. Use --network shadownet --signer inmemory for the smoke origination.');
   }
-  if (options.signer === 'inmemory' && options.network !== 'shadownet') {
-    throw new Error('InMemorySigner is restricted to Shadownet by this script. Mainnet must use Kukai.');
+  if (options.signer === 'inmemory' && options.network === 'mainnet') {
+    // The agent path on mainnet is gated twice: the explicit acknowledgement
+    // flag and the presence of the key in env. Neither value is ever logged.
+    if (options.confirmMainnet !== 'I_UNDERSTAND_MAINNET' || !env[SECRET_KEY_ENV.mainnet]) {
+      throw new Error(
+        'InMemorySigner on mainnet requires both --confirm-mainnet I_UNDERSTAND_MAINNET and ' +
+        `${SECRET_KEY_ENV.mainnet} in env. Otherwise use --signer kukai, or ` +
+        '--network shadownet --signer inmemory for the smoke origination.',
+      );
+    }
   }
   if (!['open', 'capped'].includes(options.edition)) throw new Error('--edition must be open or capped');
   if (!Number.isSafeInteger(options.cap) || options.cap < 1) throw new Error('--cap must be a positive integer');
@@ -114,9 +132,12 @@ function usage() {
     `  --unpaused                            originate open for minting (default is paused)\n` +
     `  --rpc URL                             override the network RPC\n` +
     `  --execute                             broadcast; omitted means preparation-only\n` +
-    `  --confirm-mainnet I_UNDERSTAND_MAINNET required with mainnet --execute\n\n` +
+    `  --confirm-mainnet I_UNDERSTAND_MAINNET required with mainnet --execute, and with mainnet --signer inmemory\n\n` +
     `Shadownet execution requires KENNEL_CLUB_TESTNET_SECRET_KEY in env.\n` +
-    `Mainnet execution opens a local Beacon page; Mike confirms the Kukai operation there.`);
+    `Mainnet Kukai execution opens a local Beacon page; Mike confirms the operation there.\n` +
+    `Mainnet --signer inmemory (the agent path) is gated twice: it requires\n` +
+    `--confirm-mainnet I_UNDERSTAND_MAINNET and KENNEL_CLUB_MAINNET_SECRET_KEY in env,\n` +
+    `and the signing account must hold at least 3 tez. Keys are read from env only and never logged.`);
 }
 
 function readArtifact(relativePath) {
@@ -325,16 +346,25 @@ async function selectHealthyRpc(network, requested) {
 }
 
 async function originateWithSigner({ code, storage, options }) {
-  const secretKey = process.env.KENNEL_CLUB_TESTNET_SECRET_KEY;
-  if (!secretKey) throw new Error('KENNEL_CLUB_TESTNET_SECRET_KEY is required for Shadownet execution; keys are read from env only.');
-  const rpc = await selectHealthyRpc('shadownet', options.rpc);
+  const { network } = options;
+  const envName = SECRET_KEY_ENV[network];
+  // Keys are read from env only. Never log secretKey or the env value itself.
+  const secretKey = process.env[envName];
+  if (!secretKey) throw new Error(`${envName} is required for ${network} execution; keys are read from env only.`);
+  const rpc = await selectHealthyRpc(network, options.rpc);
   const signer = await InMemorySigner.fromSecretKey(secretKey);
   const address = await signer.publicKeyHash();
   const tezos = new TezosToolkit(rpc);
   tezos.setProvider({ signer });
   const balance = await tezos.tz.getBalance(address);
-  if (balance.toNumber() < 2_000_000) {
-    throw new Error(`Testnet signer ${address} has less than 2 tez. Fund it with: npx @tacoinfra/get-tez ${address} --amount 100 --network shadownet`);
+  const minimum = MIN_BALANCE_MUTEZ[network];
+  if (balance.toNumber() < minimum) {
+    const have = (balance.toNumber() / 1_000_000).toFixed(6);
+    const need = minimum / 1_000_000;
+    if (network === 'mainnet') {
+      throw new Error(`Mainnet signer ${address} holds ${have} tez; origination needs at least ${need} tez. Fund it before retrying.`);
+    }
+    throw new Error(`Testnet signer ${address} holds ${have} tez; origination needs at least ${need} tez. Fund it with: npx @tacoinfra/get-tez ${address} --amount 100 --network ${network}`);
   }
   const managerKey = await tezos.rpc.getManagerKey(address);
   if (!managerKey) {
@@ -345,7 +375,7 @@ async function originateWithSigner({ code, storage, options }) {
   }
   const operation = await tezos.contract.originate({ code, init: storage });
   console.log(`[originate] broadcast ${operation.hash}`);
-  console.log(`[originate] ${NETWORKS.shadownet.explorer}/${operation.hash}`);
+  console.log(`[originate] ${NETWORKS[network].explorer}/${operation.hash}`);
   const contract = await operation.contract();
   console.log(`[originate] confirmed ${contract.address}`);
   return contract.address;

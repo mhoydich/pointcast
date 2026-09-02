@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { TREASURY_PLACEHOLDER } from '../scripts/lib/kennel-club-metadata.mjs';
-import { browserClientSource, septemberWindows } from '../scripts/kennel-club-originate.mjs';
+import { browserClientSource, parseArgs, septemberWindows } from '../scripts/kennel-club-originate.mjs';
 
 const ROOT = process.cwd();
 const METADATA_DIR = path.join(ROOT, 'contracts/kennel-club/metadata');
@@ -86,6 +86,37 @@ test('September windows are LA midnights and Ghostnet fails closed', () => {
   const run = spawnSync(process.execPath, ['scripts/kennel-club-originate.mjs', '--network', 'ghostnet'], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(run.status, 1);
   assert.match(run.stderr, /Ghostnet is retired/);
+});
+
+test('mainnet in-memory signing is gated by both the confirmation flag and the env key', () => {
+  const mainnetInMemory = ['--network', 'mainnet', '--signer', 'inmemory'];
+  const confirmed = [...mainnetInMemory, '--confirm-mainnet', 'I_UNDERSTAND_MAINNET'];
+  const withKey = { KENNEL_CLUB_MAINNET_SECRET_KEY: 'edsk-not-a-real-key' };
+
+  assert.throws(
+    () => parseArgs(mainnetInMemory, withKey),
+    /--confirm-mainnet I_UNDERSTAND_MAINNET and KENNEL_CLUB_MAINNET_SECRET_KEY/,
+    'the key alone must not unlock mainnet in-memory signing',
+  );
+  assert.throws(
+    () => parseArgs(confirmed, {}),
+    /--confirm-mainnet I_UNDERSTAND_MAINNET and KENNEL_CLUB_MAINNET_SECRET_KEY/,
+    'the confirmation alone must not unlock mainnet in-memory signing',
+  );
+
+  const allowed = parseArgs(confirmed, withKey);
+  assert.equal(allowed.network, 'mainnet');
+  assert.equal(allowed.signer, 'inmemory');
+  assert.equal(allowed.confirmMainnet, 'I_UNDERSTAND_MAINNET');
+  assert.equal(allowed.paused, true, 'origination stays paused by default');
+  assert.equal(allowed.execute, false, '--execute is never implied');
+});
+
+test('the other signer rules stay closed', () => {
+  assert.equal(parseArgs(['--network', 'mainnet'], {}).signer, 'kukai');
+  assert.equal(parseArgs(['--network', 'shadownet'], {}).signer, 'inmemory');
+  assert.throws(() => parseArgs(['--network', 'ghostnet'], {}), /Ghostnet is retired/);
+  assert.throws(() => parseArgs(['--network', 'shadownet', '--signer', 'kukai'], {}), /Kukai is mainnet-only/);
 });
 
 test('origination uses Taquito 25 wallet operations and never raw payload signing', async () => {
