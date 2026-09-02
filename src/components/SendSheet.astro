@@ -1,0 +1,315 @@
+---
+/**
+ * SendSheet — one one-sheet in the shelf grammar (home-shelf.css).
+ *
+ * Head = kicker · title · dek + the twin links and "Copy the text".
+ * Sections = cells (or plain lines). Foot = the "Send this" line:
+ * sms:, mailto:, copy link. No social buttons. The plain text the copy
+ * button uses is rendered at build time by renderSheetText() and sits in
+ * a hidden textarea, which doubles as the manual-copy fallback.
+ *
+ * The page that uses this must import ../styles/home-shelf.css.
+ */
+import { SEND_DATE, sheetStamp, sheetUrl, type SendItem, type SendSheet } from '../lib/send-sheets';
+
+interface Props {
+  sheet: SendSheet;
+  text: string;
+  /** h1 on a sheet page, h2 when embedded. */
+  level?: 1 | 2;
+}
+
+const { sheet, text, level = 1 } = Astro.props;
+const url = sheetUrl(sheet);
+const Heading = level === 1 ? 'h1' : 'h2';
+const titleId = `sheet-${sheet.slug}-title`;
+
+const emIndex = sheet.em ? sheet.title.indexOf(sheet.em) : -1;
+const before = emIndex >= 0 ? sheet.title.slice(0, emIndex) : sheet.title;
+const em = emIndex >= 0 ? sheet.em : '';
+const after = emIndex >= 0 ? sheet.title.slice(emIndex + (sheet.em?.length ?? 0)) : '';
+
+const smsHref = `sms:?&body=${encodeURIComponent(`${sheet.title} ${url}`)}`;
+const mailHref = `mailto:?subject=${encodeURIComponent(sheet.title)}&body=${encodeURIComponent(
+  `${sheet.dek}\n\n${url}\nPlain text: ${url}.txt`,
+)}`;
+
+const isExternal = (href: string) => /^https?:\/\//.test(href);
+const showHref = (item: SendItem) => (item.href ? item.href.replace(/^https?:\/\//, '') : '');
+const linkable = (item: SendItem) => Boolean(item.href) && !item.command;
+---
+
+<article class="shelf sheet" style={`--shelf-color:${sheet.color};--shelf-color-2:${sheet.color2}`} aria-labelledby={titleId}>
+  <header class="shelf__head">
+    <div>
+      <p class="shelf__kicker">{sheet.kicker}</p>
+      <Heading class="shelf__title" id={titleId}>{before}{em && <em>{em}</em>}{after}</Heading>
+      <p class="shelf__dek">{sheet.dek}</p>
+    </div>
+    <div class="shelf__actions">
+      <button type="button" class="shelf__button shelf__button--primary" data-copy-sheet>Copy the text</button>
+      <a href={`${sheet.href}.txt`}>Plain text</a>
+      <a href={`${sheet.href}.json`}>JSON</a>
+    </div>
+  </header>
+
+  {sheet.sections.map((section, index) => {
+    const headingId = `sheet-${sheet.slug}-s${index + 1}`;
+    const columns = section.columns ?? 2;
+    return (
+      <section class="sheet__section" aria-labelledby={headingId}>
+        <div class="sheet__section-head">
+          <h2 class="sheet__heading" id={headingId}>{section.heading}</h2>
+          {section.lead && <p class="sheet__lead">{section.lead}</p>}
+        </div>
+        {section.items && section.items.length > 0 && (
+          <ul class={`shelf__grid shelf__grid--${columns}`}>
+            {section.items.map((item) =>
+              linkable(item) ? (
+                <li>
+                  <a class="cell" href={item.href} rel={isExternal(item.href!) ? 'noopener' : undefined}>
+                    {item.tag && <span class="cell__tag">{item.tag}</span>}
+                    <span class="cell__title">{item.title}</span>
+                    {item.note && <span class="cell__note">{item.note}</span>}
+                    {item.verify && <span class="cell__note"><b>Test it:</b> {item.verify}</span>}
+                    {item.extra && <span class="cell__note sheet__extra">{item.extra}</span>}
+                    <span class="cell__meta">{item.meta}{item.meta && item.href ? ' · ' : ''}{item.href && <b>{showHref(item)}</b>}</span>
+                  </a>
+                </li>
+              ) : (
+                <li>
+                  <div class="cell">
+                    {item.tag && <span class="cell__tag">{item.tag}</span>}
+                    <span class="cell__title">{item.title}</span>
+                    {item.note && <span class="cell__note">{item.note}</span>}
+                    {item.command && (
+                      <div class="sheet__command">
+                        <pre><code>{item.command}</code></pre>
+                        <button type="button" data-copy={item.command}>Copy</button>
+                      </div>
+                    )}
+                    {item.verify && <span class="cell__note"><b>Test it:</b> {item.verify}</span>}
+                    {item.extra && <span class="cell__note sheet__extra">{item.extra}</span>}
+                    {(item.meta || item.href) && (
+                      <span class="cell__meta">
+                        {item.meta}
+                        {item.meta && item.href ? ' · ' : ''}
+                        {item.href && <a href={item.href}>{showHref(item)}</a>}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
+        {section.lines && section.lines.length > 0 && (
+          <ul class="sheet__lines">
+            {section.lines.map((line) => <li>{line}</li>)}
+          </ul>
+        )}
+      </section>
+    );
+  })}
+
+  {sheet.close && (
+    <p class="sheet__close">
+      <q>{sheet.close}</q> <a href="/b/0576">block 0576</a>
+    </p>
+  )}
+
+  <footer class="shelf__foot sheet__send" aria-label="Send this">
+    <span>Send this</span>
+    <span class="sheet__send-links">
+      <a href={smsHref}>Text it</a>
+      <a href={mailHref}>Email it</a>
+      <button type="button" class="sheet__linkbtn" data-copy={url}>Copy link</button>
+    </span>
+  </footer>
+  <p class="sheet__stamp"><time datetime={SEND_DATE}>{sheetStamp(sheet)}</time></p>
+  <textarea class="sheet__raw" readonly hidden aria-label="Plain text of this sheet" data-sheet-text>{text}</textarea>
+</article>
+
+<script is:inline>
+  (function () {
+    function put(value) {
+      var field = document.createElement('textarea');
+      field.value = value;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (e) {}
+      field.remove();
+      if (copied) return Promise.resolve(true);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(value).then(function () { return true; }, function () { return false; });
+      }
+      return Promise.resolve(false);
+    }
+    function flash(btn, label) {
+      var old = btn.textContent;
+      btn.textContent = label;
+      window.setTimeout(function () { btn.textContent = old; }, 1400);
+    }
+    document.querySelectorAll('[data-copy]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        put(btn.getAttribute('data-copy') || '').then(function (ok) { flash(btn, ok ? 'Copied' : 'Press ⌘C'); });
+      });
+    });
+    document.querySelectorAll('[data-copy-sheet]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var sheet = btn.closest('.sheet');
+        var raw = sheet && sheet.querySelector('[data-sheet-text]');
+        if (!raw) return;
+        put(raw.value).then(function (ok) {
+          if (ok) { flash(btn, 'Copied'); return; }
+          raw.hidden = false;
+          raw.focus();
+          raw.select();
+          flash(btn, 'Press ⌘C');
+        });
+      });
+    });
+  })();
+</script>
+
+<style>
+  .sheet { margin-top: 12px; }
+  .sheet__section { border-bottom: 1px solid var(--home-rule); }
+  .sheet__section:last-of-type { border-bottom: 0; }
+  .sheet__section-head {
+    display: grid;
+    gap: 4px;
+    padding: 12px clamp(16px, 3vw, 28px) 10px;
+    border-bottom: 1px solid var(--home-rule);
+    background: var(--home-paper-warm);
+  }
+  .sheet__heading {
+    margin: 0;
+    font: 700 9px var(--pc-font-mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--shelf-color);
+  }
+  .sheet__lead { margin: 0; font-size: 13px; line-height: 1.45; color: var(--home-muted); max-width: 60ch; }
+  .sheet .cell__note b { font-weight: 600; color: var(--home-ink); }
+  .sheet__extra { color: var(--home-faint); }
+  .sheet .cell__meta a { color: var(--home-ink); }
+  .sheet__command {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin: 6px 0 2px;
+    border: 1px solid var(--home-ink);
+    background: #fff;
+  }
+  .sheet__command pre {
+    margin: 0;
+    min-width: 0;
+    padding: 9px 10px;
+    font: 11.5px/1.5 var(--pc-font-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .sheet__command button,
+  .sheet__linkbtn {
+    border: 0;
+    border-left: 1px solid var(--home-ink);
+    background: var(--home-ink);
+    color: #fff;
+    padding: 8px 10px;
+    font: 700 9px var(--pc-font-mono);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .sheet__command button:hover,
+  .sheet__linkbtn:hover { background: var(--shelf-color); }
+  .sheet__lines {
+    margin: 0;
+    padding: 12px clamp(16px, 3vw, 28px) 14px;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+  }
+  .sheet__lines li {
+    position: relative;
+    padding-left: 14px;
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  .sheet__lines li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    background: var(--shelf-color);
+  }
+  .sheet__close {
+    margin: 0;
+    padding: 16px clamp(16px, 3vw, 28px);
+    border-top: 2px solid var(--home-ink);
+    font-size: clamp(18px, 2.2vw, 24px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .sheet__close q { quotes: '\201C' '\201D'; }
+  .sheet__close a {
+    margin-left: 8px;
+    font: 700 9px var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--shelf-color);
+    vertical-align: middle;
+  }
+  .sheet__send { border-top: 2px solid var(--home-ink); align-items: center; }
+  .sheet__send-links { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .sheet__send-links a,
+  .sheet__linkbtn {
+    display: inline-block;
+    padding: 7px 9px;
+    border: 1px solid var(--home-ink);
+    background: transparent;
+    color: var(--home-ink);
+    font: 700 9px var(--pc-font-mono);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .sheet__send-links a:hover { background: var(--shelf-color); border-color: var(--shelf-color); color: #fff; text-decoration: none; }
+  .sheet__linkbtn { border-left: 1px solid var(--home-ink); }
+  .sheet__stamp {
+    margin: 0;
+    padding: 8px clamp(16px, 3vw, 28px) 10px;
+    border-top: 1px solid var(--home-rule);
+    font: 700 8px var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--home-faint);
+    overflow-wrap: anywhere;
+  }
+  .sheet__raw {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 10px clamp(16px, 3vw, 28px);
+    border: 0;
+    border-top: 1px solid var(--home-rule);
+    background: #fff;
+    color: var(--home-ink);
+    font: 11.5px/1.5 var(--pc-font-mono);
+    min-height: 220px;
+    resize: vertical;
+  }
+  .sheet__raw[hidden] { display: none; }
+  @media (max-width: 560px) {
+    .sheet__command { grid-template-columns: 1fr; }
+    .sheet__command button { border-left: 0; border-top: 1px solid var(--home-ink); }
+  }
+</style>
