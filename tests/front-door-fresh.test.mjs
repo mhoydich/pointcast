@@ -13,11 +13,9 @@ test('the PointCast front door is a catalog of the whole town with stable discov
 
   // front door rebuilt 2026-09-01: the thesis is "carry the whole town", not one bright edition with three doors.
   assert.match(home, /rebuilt 2026-09-01 to carry the whole town/);
-  assert.match(home, /showNetworkStrip=\{false\}/);
   assert.match(home, /immersive=\{false\}/);
   assert.match(home, /import '\.\.\/styles\/home-shelf\.css'/);
-  assert.match(layout, /showNetworkStrip\?: boolean/);
-  assert.match(layout, /\{showNetworkStrip && <NetworkFirst100Strip\s*\/>\}/);
+  assert.doesNotMatch(layout, /NetworkFirst100Strip/);
 
   // front door rebuilt 2026-09-01: the three "fresh-door" cards became twelve shelf sections in a fixed order.
   const sections = ['HomePlayFirst', 'HomeStartHere', 'HomeGlance', 'HomeMagazineRack', 'HomeDrumUniverse', 'HomeRoomsShelf', 'HomeConstellation', 'HomeAgentDesk', 'HomeShipLog', 'HomeScoreboard', 'HomeWire', 'HomeBackCatalog'];
