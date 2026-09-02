@@ -95,7 +95,9 @@ test('WORK/LIFE travels through the homepage and discovery surfaces', async () =
     read('public/llms-full.txt'),
   ]);
   for (const surface of surfaces) assert.match(surface, /WORK\/LIFE|worklife/);
-  assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWorklifeOpener \/>/);
+  // front door rebuilt 2026-09-01: the edition modules are gone; the magazine rack carries /25/magazine and /worklife as covers.
+  assert.match(surfaces[0], /href: '\/25\/magazine'/);
+  assert.match(surfaces[0], /href: '\/worklife'/);
   assert.match(surfaces[0], /Periodical/);
   assert.match(surfaces[1], /THE PLAYLIST IS STILL THE OPENER/);
   assert.match(surfaces[2], /slug: 'worklife'/);

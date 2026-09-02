@@ -10,12 +10,16 @@ test('July 22 Today’s Art preserves all fifteen supplied source files', async 
   assert.deepEqual(assets.map((name) => name.slice(0, 2)), Array.from({ length: 15 }, (_, index) => String(index + 1).padStart(2, '0')));
 });
 
-test('homepage edits Today’s Art into one direct, image-led story', async () => {
+test('homepage keeps Today’s Art as one direct, Noun-led door on the rooms shelf', async () => {
   const home = await readFile(new URL('src/pages/index.astro', root), 'utf8');
   assert.match(home, /href:\s*'\/gallery\/today'/);
-  assert.match(home, /channel:\s*'TODAY’S ART'/);
+  // front door rebuilt 2026-09-01: the image-led story card became a rooms-shelf entry — title + GALLERY tag replace the TODAY’S ART channel label
+  assert.match(home, /title:\s*'Today’s art',\s*href:\s*'\/gallery\/today'[^\n]*tag:\s*'GALLERY'/);
   assert.match(home, /One visual signal for the day\./);
-  assert.match(home, /garden-kiosk\.webp/);
+  // front door rebuilt 2026-09-01: the garden-kiosk hero became a real Noun avatar (noun.pics seed 722) rendered by HomeRoomsShelf
+  assert.match(home, /href:\s*'\/gallery\/today'[^\n]*noun:\s*722/);
+  const shelf = await readFile(new URL('src/components/HomeRoomsShelf.astro', root), 'utf8');
+  assert.match(shelf, /noun\.pics\/\$\{room\.noun\}\.svg/);
 });
 
 test('current and permanent gallery routes point at edit 003 while edit 002 stays historical', async () => {

@@ -113,7 +113,7 @@ test('coastal materials, structure, place, and event boundaries stay explicit', 
 });
 
 test('The Hardpoint League has JSON, Block, series, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeEdition] =
+  const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeRack, homeEdition] =
     await Promise.all([
       read('src/pages/beach-commons/v14.json.ts'),
       read('src/content/blocks/0540.json'),
@@ -122,6 +122,7 @@ test('The Hardpoint League has JSON, Block, series, homepage, and discovery twin
       read('public/llms.txt'),
       read('public/llms-full.txt'),
       read('src/pages/index.astro'),
+      read('src/components/HomeMagazineRack.astro'),
       read('src/components/HomeNewEdition.astro'),
     ]);
   const block = JSON.parse(blockText);
@@ -138,7 +139,11 @@ test('The Hardpoint League has JSON, Block, series, homepage, and discovery twin
   assert.match(llmsFull, /THE HARDPOINT LEAGUE/);
   assert.match(homeEdition, /href: '\/beach-commons\/v14'/);
   assert.match(homeEdition, /id: '0540'/);
-  assert.match(homepage, /All eighteen Beach Commons editions/);
+  // front door rebuilt 2026-09-01: the V14 chip lives in index.astro's beachCommonsVolumes,
+  // and the "All eighteen" door is rendered by HomeMagazineRack from that array.
+  assert.match(homepage, /href: '\/beach-commons\/v14'/);
+  assert.match(homepage, /<HomeMagazineRack\b[^>]*volumes=\{beachCommonsVolumes\}/);
+  assert.match(homeRack, /All eighteen Beach Commons editions/);
 });
 
 test('Hardpoint League images have intended edition and social dimensions', async () => {

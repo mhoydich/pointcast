@@ -1,0 +1,139 @@
+---
+/**
+ * HomeConstellation — "One house, many addresses." The satellites and the
+ * Tezos line on the front door.
+ *
+ * index.astro maps src/data/constellation.json (the register: 18 sibling
+ * sites, each curl-checked at build) into Satellite, appends the few that
+ * shipped after the register was cut, and passes the contract roster with
+ * its honest statuses. Nothing here is typed twice: the live count, the
+ * KT1 count and the pending count are all computed from the props.
+ *
+ * Every satellite link leaves the site (target _blank, rel noopener). A
+ * contract with an empty kt1 prints "not originated" or "no KT1" rather
+ * than pretending; the note next to it says why.
+ *
+ * Section colours: FD 800 (#0B3E73) for the shadow, SPN 600 (#993C1D) for
+ * the title accent.
+ */
+export interface Satellite {
+  name: string;     // "Standard Time"
+  url: string;      // "https://www.standardtime.xyz"
+  dek: string;      // one line, clamped to three on the shelf
+  kind: string;     // "satellite" | "house" — from the register's role
+  live: boolean;    // curl 200 at build → "answering", else "quiet"
+  chain?: string;   // "mainnet" | "shadownet" when the site carries a contract
+}
+export interface Contract {
+  name: string;                 // "Visit Nouns FA2"
+  status: 'live' | 'pending';   // pending = drafted, not originated
+  kt1: string;                  // '' when there is no Tezos address (not originated, or not a Tezos rail)
+  href: string;                 // the room on PointCast, or the satellite that owns it
+  note: string;                 // the honest line: mints, trades, claims, or why there is no address yet
+}
+export interface Props { satellites: Satellite[]; contracts: Contract[]; countedAt: string }
+const { satellites, contracts, countedAt } = Astro.props;
+
+const answering = satellites.filter((s) => s.live).length;
+const liveContracts = contracts.filter((c) => c.status === 'live').length;
+const pendingContracts = contracts.filter((c) => c.status === 'pending').length;
+const withKt1 = contracts.filter((c) => c.kt1).length;
+
+const host = (url: string) => {
+  try { return new URL(url).host.replace(/^www\./, ''); } catch { return url; }
+};
+const short = (kt1: string) => `${kt1.slice(0, 7)}…${kt1.slice(-4)}`;
+const external = (href: string) => /^https?:\/\//i.test(href);
+---
+
+<section class="shelf constellation" id="constellation" aria-labelledby="constellation-title" style="--shelf-color:#0B3E73;--shelf-color-2:#993C1D">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The constellation · {satellites.length} satellites · {answering} answering · counted <span class="constellation__nowrap">{countedAt}</span></p>
+      <h2 class="shelf__title" id="constellation-title">One house, <em>many addresses.</em></h2>
+      <p class="shelf__dek">Sibling sites built from the same house, each with its own door: an on-chain agency, a savings circle, a pickleball ledger, a sound foundry, a riso zine, two encyclopedias on GitHub Pages. PointCast is the broadcast; these are the towns it can see from the roof.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/constellation">The register</a>
+      <a href="/collection">The collection</a>
+      <a href="/minted">Minted</a>
+      <a href="/x402">x402</a>
+    </div>
+  </div>
+
+  <ul class="shelf__grid shelf__grid--6 constellation__sats" aria-label="Satellites">
+    {satellites.map((s) => (
+      <li>
+        <a class="cell constellation__cell" href={s.url} target="_blank" rel="noopener">
+          <span class="cell__tag">{host(s.url)}</span>
+          <span class="cell__title">{s.name}</span>
+          <span class="cell__note">{s.dek}</span>
+          <span class="cell__meta">
+            <span class={`chip ${s.live ? 'chip--live' : 'chip--off'}`}>{s.live ? 'answering' : 'quiet'}</span>{s.chain ? ` · ${s.chain}` : ''}
+          </span>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+  <div class="constellation__chain">
+    <div class="constellation__chainhead">
+      <h3 id="constellation-chain-title">On chain, honestly.</h3>
+      <p class="constellation__chainnote">{liveContracts} live · {pendingContracts} pending · {withKt1} with a KT1 · addresses open on TzKT</p>
+    </div>
+    <ol class="shelf__grid shelf__grid--2 constellation__contracts" aria-labelledby="constellation-chain-title">
+      {contracts.map((c) => (
+        <li>
+          <div class="cell constellation__contract">
+            <span class="constellation__row">
+              <a class="cell__title" href={c.href} target={external(c.href) ? '_blank' : undefined} rel={external(c.href) ? 'noopener' : undefined}>{c.name}</a>
+              <span class={`chip chip--${c.status}`}>{c.status}</span>
+            </span>
+            {c.kt1
+              ? <a class="constellation__kt1" href={`https://tzkt.io/${c.kt1}`} title={c.kt1} target="_blank" rel="noopener">{short(c.kt1)}</a>
+              : <span class="constellation__kt1 constellation__kt1--none">{c.status === 'pending' ? 'not originated' : 'no KT1'}</span>}
+            <span class="cell__note">{c.note}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+
+  <p class="shelf__foot">
+    <span>Only Mike signs origination; drafts stay drafts</span>
+    <span><a href="https://tzkt.io/KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh" target="_blank" rel="noopener">Visit Nouns on TzKT</a></span>
+  </p>
+</section>
+
+<style>
+  /* Satellites: small cells, six across. */
+  .constellation__cell { padding: 12px 12px 10px; }
+  .constellation__cell > .cell__title { font-size: 14px; }
+  .constellation__cell > .cell__note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .constellation__cell > .cell__meta { line-height: 1.7; }
+  .constellation__nowrap { white-space: nowrap; }
+  .constellation .cell__tag,
+  .constellation .cell__title,
+  .constellation .cell__note,
+  .constellation__kt1 { overflow-wrap: anywhere; }
+
+  /* The Tezos line: a subhead bar, then the contracts two across. */
+  .constellation__chain { margin-top: -1px; border-top: 2px solid var(--home-ink); }
+  .constellation__chainhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; padding: 14px 16px 12px; border-bottom: 1px solid var(--home-rule); }
+  .constellation__chainhead h3 { margin: 0; font-size: 20px; font-weight: 730; line-height: 1; letter-spacing: -0.03em; }
+  .constellation__chainnote { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: 0.11em; text-transform: uppercase; color: var(--home-faint); }
+  .constellation__row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .constellation__row .chip { flex-shrink: 0; }
+  .constellation__kt1 { font: 700 11px var(--pc-font-mono); letter-spacing: 0.02em; color: var(--home-ink); text-decoration: underline dotted; text-decoration-color: var(--home-rule); text-underline-offset: 2px; }
+  a.constellation__kt1:hover { color: var(--shelf-color); text-decoration: underline dotted; text-decoration-color: var(--shelf-color); }
+  .constellation__kt1--none { color: var(--home-faint); text-decoration: none; }
+
+  .constellation a:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+
+  @media (max-width: 560px) {
+    .constellation__chainhead { padding: 12px 12px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .constellation .cell { transition: none; }
+  }
+</style>

@@ -42,7 +42,8 @@ test('Super Follow is visible across human, machine, feed, and discovery surface
   assert.match(jsonFeed, /https:\/\/jsonfeed\.org\/version\/1\.1/);
   assert.match(rss, /application\/rss\+xml/);
   assert.match(ribbon, /A company is not one feed/);
-  assert.match(homepage, /<SuperFollowRibbon \/>/);
+  // front door rebuilt 2026-09-01: the SuperFollowRibbon module retired; the homepage now links /super-follow from its machine-surfaces shelf.
+  assert.match(homepage, /href="\/super-follow"/);
   assert.match(apps, /slug: 'super-follow'/);
   assert.match(sitemap, /super-follow\.feed\.json/);
   assert.match(llms, /Super Follow personal broadcaster/);

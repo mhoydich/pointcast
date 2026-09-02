@@ -31,7 +31,8 @@ test('Texas football history publishes human, machine, Block, homepage, magazine
   assert.match(json, /Access-Control-Allow-Origin/);
   assert.match(block, /"id": "0569"/);
   assert.match(block, /"historyObjects": 10/);
-  assert.match(home, /href="\/25\/magazine\/texas-football-history"/);
+  // front door rebuilt 2026-09-01: the Texas cover now lives in index.astro's `covers` frontmatter array (href: '…'), not an inline attribute
+  assert.match(home, /href(?:="|: ')\/25\/magazine\/texas-football-history['"]/);
   assert.match(homeEdition, /id: '0569'/);
   assert.match(magazine, /sound-feature--texas/);
   assert.match(apps, /slug: 'texas-football-history-2026'/);

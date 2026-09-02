@@ -127,8 +127,9 @@ test('The Fermentation League has JSON, Block, homepage, and discovery twins', a
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v13'/);
   assert.match(llms, /PointCast Field Study 013/);
   assert.match(llmsFull, /THE FERMENTATION LEAGUE/);
-  assert.match(homepage, /href="\/beach-commons\/v13"/);
-  assert.match(homepage, /Block 0536/);
+  // front door rebuilt 2026-09-01: V13 is a Beach Commons chip in index.astro's beachCommonsVolumes array (rendered by HomeMagazineRack as "V13 The Fermentation League · № 0536")
+  assert.match(homepage, /href: '\/beach-commons\/v13'/);
+  assert.match(homepage, /label: 'V13 The Fermentation League', blockId: '0536'/);
   assert.match(homeEdition, /href="\/beach-commons\/v13"/);
   assert.match(homeEdition, /The Fermentation League · Block 0536/);
 });

@@ -96,8 +96,10 @@ test('Second Shift is wired into home, apps, play, sitemap, and agent text', asy
     read('public/llms-full.txt'),
   ]);
 
-  assert.match(home, /<HomeSecondShift \/>/);
-  assert.ok(home.indexOf('<HomeSecondShift />') < home.indexOf('<HomeOceanDrum />'));
+  // front door rebuilt 2026-09-01: the HomeSecondShift lead module retired; Second Shift is now a
+  // magazine-rack cover (№ 0571) filed ahead of the drum house door, both curated in index.astro's frontmatter.
+  assert.match(home, /href: '\/second-shift'[^\n]*blockId: '0571'/);
+  assert.ok(home.indexOf("href: '/second-shift'") < home.indexOf("href: '/drum'"));
   assert.match(module, /href="\/second-shift"/);
   assert.match(module, /SIMULATED RECEIPT/);
   assert.match(edition, /id: '0571'[\s\S]*href: '\/second-shift'/);

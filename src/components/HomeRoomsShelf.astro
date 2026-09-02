@@ -1,0 +1,101 @@
+---
+/**
+ * HomeRoomsShelf — "Small rooms, real clocks." Rooms & rituals on the front door.
+ *
+ * Every room comes in from index.astro (ROOMS), so the list, the Noun seeds,
+ * the channel colours and the measured counters are typed exactly once. Where
+ * a room has a public counter it is printed in bold; where it does not, the
+ * meta line says so plainly. Deks are rendered verbatim.
+ *
+ * Avatars are real Nouns from noun.pics/{seed}.svg (seeds 0–1199), never a
+ * procedural lookalike. No client JS: nothing here refreshes at runtime.
+ */
+export interface Room {
+  title: string;   // "Pour a cup"
+  href: string;    // "/coffee"
+  dek: string;     // rendered verbatim, clamped to three lines
+  tag: string;     // "CAFE"
+  noun: number;    // noun.pics seed, 0–1199
+  color: string;   // channel hex, drives --cell-color
+  use?: string;    // measured public counter, e.g. "69 prayers · 12 stations"
+}
+export interface Props { rooms: Room[] }
+const { rooms } = Astro.props;
+const num = (i: number) => String(i + 1).padStart(2, '0');
+---
+
+<section class="shelf rooms" id="rooms" aria-labelledby="rooms-title" style="--shelf-color:#3B6D11;--shelf-color-2:#993C1D">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">Rooms &amp; rituals · {rooms.length} doors · counters printed where one exists</p>
+      <h2 class="shelf__title" id="rooms-title">Small rooms, <em>real clocks.</em></h2>
+      <p class="shelf__dek">A coffee pot you can pour from. A window onto the actual El Segundo sky. A bench with one question a day. Candles, bells, a labyrinth, a tide pool on real NOAA tides. None of it is enormous. That is the point.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/rooms">All rooms</a>
+      <a href="/town">The map</a>
+      <a href="/explore">Every door</a>
+      <a href="/register">The register</a>
+    </div>
+  </div>
+  <ol class="shelf__grid rooms__grid">
+    {rooms.map((room, i) => (
+      <li>
+        <a class="cell rooms__cell" href={room.href} style={`--cell-color:${room.color}`}>
+          <span class="cell__num" aria-hidden="true">{num(i)}</span>
+          <img class="cell__noun" src={`https://noun.pics/${room.noun}.svg`} alt="" width="48" height="48" loading="lazy" decoding="async" />
+          <span class="rooms__body">
+            <span class="cell__tag">{room.tag}</span>
+            <span class="cell__title">{room.title}</span>
+            <span class="cell__note">{room.dek}</span>
+            <span class="cell__meta">{room.use ? <b>{room.use}</b> : 'no public counter'}</span>
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+  <p class="shelf__foot">
+    <span>Nothing needs an account · resets at midnight PT where it resets at all</span>
+    <span><a href="/today">today's drop</a> · <a href="/random">a random door</a> · <a href="/everything">the census</a></span>
+  </p>
+</section>
+
+<style>
+  /* Avatar left, text right. The body is a flex column so cell__meta's
+     margin-top:auto still pins the counter to the bottom of the cell. */
+  .rooms .rooms__cell {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: stretch;
+  }
+  .rooms .rooms__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .rooms .rooms__body > .cell__note {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Rules sit on the top of each row (not the bottom) so the last row never
+     doubles up against the foot's own rule, whatever the count of rooms. */
+  .rooms .rooms__grid > li { border-bottom: 0; border-top: 1px solid var(--home-rule); }
+  .rooms .rooms__grid > li:nth-child(-n + 4) { border-top: 0; }
+
+  .rooms a:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: -2px; }
+
+  @media (max-width: 880px) {
+    .rooms .rooms__grid > li:nth-child(-n + 4) { border-top: 1px solid var(--home-rule); }
+    .rooms .rooms__grid > li:nth-child(-n + 2) { border-top: 0; }
+  }
+  @media (max-width: 560px) {
+    .rooms .rooms__grid > li:nth-child(-n + 2) { border-top: 1px solid var(--home-rule); }
+    .rooms .rooms__grid > li:first-child { border-top: 0; }
+  }
+</style>

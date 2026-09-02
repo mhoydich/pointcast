@@ -1,0 +1,211 @@
+---
+/**
+ * HomeDrumUniverse — the drum house on the front door.
+ *
+ * The one room strangers measurably use. Three parts: the public hit counter
+ * with the seven wings as a bar table, the eight ten-second games as cells,
+ * and ten more rooms with a beat as a dense two-column list. Every value is
+ * a prop from index.astro (wings and rooms from the live /drum hallway, the
+ * tap count pinned with its source and refreshed client-side from
+ * GET /api/drum {globalTotal}). Nothing here is typed twice.
+ *
+ * Art: real front-door thumbs (/images/front-door/drum-*.jpg, 720×480, shown
+ * cropped to the shelf's 1.91:1 plate) where one exists, otherwise a real Noun
+ * from noun.pics — never a procedural lookalike.
+ */
+export interface DrumFamily { name: string; count: number; href: string; note: string }
+export interface DrumGame { title: string; href: string; dek: string; image: string; kicker: string }
+export interface DrumRoom { title: string; href: string; dek: string; kicker: string }
+export interface Props {
+  families: DrumFamily[];
+  games: DrumGame[];
+  rooms: DrumRoom[];
+  taps: number;
+  pages: number;
+  doors: number;
+}
+const { families, games, rooms, taps, pages, doors } = Astro.props;
+
+const tapsLabel = taps.toLocaleString('en-US');
+const maxCount = Math.max(1, ...families.map((f) => f.count));
+const pct = (n: number) => Math.max(0, Math.min(100, Math.round((n / maxCount) * 100)));
+const nounSeed = (i: number) => (i * 97) % 1200;
+---
+
+<section class="shelf shelf--warm drum" id="drum" aria-labelledby="drum-title" style="--shelf-color:#993C1D;--shelf-color-2:#185FA5">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The drum house · {pages} pages · {doors} doors · {families.length} wings · <span data-drum-taps>{tapsLabel}</span> public hits</p>
+      <h2 class="shelf__title" id="drum-title">The room strangers <em>actually use.</em></h2>
+      <p class="shelf__dek">Rhythm games, a shared beat, bells, trophies, and a token you earn by drumming. Everything is synthesized live: no samples, just oscillators doing their best. Twenty-six thousand public hits so far. The next room in town has sixty-nine.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/drum">The hallway</a>
+      <a href="/drum-games">The arcade</a>
+      <a href="/drum-directory">The directory</a>
+      <a href="/drum-agents">Drum over MCP</a>
+    </div>
+  </div>
+
+  <div class="drum__body">
+    <div class="drum__left">
+      <p class="drum__counter">
+        <span class="num drum__num" data-drum-taps>{tapsLabel}</span>
+        <span class="drum__counter-label"><span class="chip chip--live">Live</span> public hits</span>
+      </p>
+      <h3 class="drum__h3">The wings · {families.length}</h3>
+      <ol class="drum__families" aria-label="The seven wings of the drum house, by size">
+        {families.map((f) => (
+          <li>
+            <a class="drum__family-name" href={f.href}>{f.name}</a>
+            <span class="drum__bar" aria-hidden="true"><i style={`width:${pct(f.count)}%`}></i></span>
+            <span class="drum__family-count">{f.count}</span>
+            <span class="drum__family-note">{f.note}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+
+    <div class="drum__right">
+      <h3 class="drum__h3 drum__h3--pad">The arcade · {games.length} games · ten seconds each · no account</h3>
+      <ol class="shelf__grid shelf__grid--4 drum__games">
+        {games.map((g, i) => (
+          <li>
+            <a class="cell drum__cell" href={g.href}>
+              {g.image
+                ? <img class="cell__art" src={g.image} alt={`${g.title} thumbnail`} width="360" height="240" loading="lazy" decoding="async" />
+                : <span class="drum__plate"><img class="cell__noun" src={`https://noun.pics/${nounSeed(i)}.svg`} alt="" width="48" height="48" loading="lazy" decoding="async" /></span>}
+              <span class="cell__tag">{g.kicker}</span>
+              <span class="cell__title">{g.title}</span>
+              <span class="cell__note">{g.dek}</span>
+              <span class="cell__meta">Play → no account</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </div>
+
+  <div class="drum__rooms-wrap">
+    <h3 class="drum__h3 drum__h3--pad">Rooms with a beat · {rooms.length}</h3>
+    <ol class="drum__rooms">
+      {rooms.map((r) => (
+        <li>
+          <a class="drum__room" href={r.href}>
+            <span class="drum__room-row">
+              <span class="drum__room-title">{r.title}</span>
+              <span class="cell__tag">{r.kicker}</span>
+            </span>
+            <span class="cell__note">{r.dek}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </div>
+
+  <p class="shelf__foot">
+    <span>Counter is the drum house's own, every /drum* surface, every visitor, since April 17</span>
+    <span><a href="/api/drum">/api/drum</a></span>
+  </p>
+</section>
+
+<script is:inline>
+  (() => {
+    const root = document.getElementById('drum');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+    const targets = root.querySelectorAll('[data-drum-taps]');
+    if (!targets.length || typeof fetch !== 'function') return;
+    // Refresh the drum house's public counter; keep the build-time number if this fails.
+    try {
+      fetch('/api/drum', { headers: { accept: 'application/json' } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j || typeof j.globalTotal !== 'number' || !Number.isFinite(j.globalTotal)) return;
+          const text = j.globalTotal.toLocaleString('en-US');
+          targets.forEach((el) => { el.textContent = text; });
+        })
+        .catch(() => {});
+    } catch (_) { /* leave the SSR number */ }
+  })();
+</script>
+
+<style>
+  .drum__body { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr); border-bottom: 1px solid var(--home-rule); }
+  .drum__left { padding: 18px 16px 14px; border-right: 1px solid var(--home-rule); }
+  .drum__right { min-width: 0; }
+
+  .drum__h3 { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-faint); }
+  .drum__h3--pad { margin: 0; padding: 12px 16px 8px; border-bottom: 1px solid var(--home-rule); }
+
+  /* (A) the live counter */
+  .drum__counter { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; }
+  .drum__num { font-size: clamp(40px, 5vw, 64px); color: var(--shelf-color); }
+  .drum__counter-label { display: inline-flex; align-items: center; gap: 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .11em; text-transform: uppercase; color: var(--home-ink); }
+
+  /* (A) the wings table */
+  .drum__families { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--home-rule); }
+  .drum__families li {
+    display: grid;
+    grid-template-columns: minmax(0, 10.5em) minmax(40px, 1fr) minmax(3ch, auto);
+    grid-template-areas: "name bar count" "note note note";
+    column-gap: 10px;
+    row-gap: 2px;
+    align-items: center;
+    padding: 7px 0 6px;
+    border-bottom: 1px solid var(--home-rule-soft);
+  }
+  .drum__families li:hover { background: color-mix(in srgb, var(--shelf-color) 8%, var(--shelf-bg)); }
+  .drum__family-name { grid-area: name; font-size: 13.5px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .drum__family-name:hover { color: var(--shelf-color); text-decoration: none; }
+  .drum__bar { grid-area: bar; display: block; height: 8px; background: var(--home-rule-soft); }
+  .drum__bar i { display: block; height: 100%; background: var(--shelf-color); }
+  .drum__family-count { grid-area: count; font: 700 12px var(--pc-font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .drum__family-note { grid-area: note; font-size: 11px; line-height: 1.3; color: var(--home-muted); overflow-wrap: anywhere; }
+
+  /* (B) the games */
+  .drum__cell { padding: 0 0 14px; }
+  .drum__cell > .cell__art,
+  .drum__cell > .drum__plate { margin-bottom: 8px; }
+  .drum__plate { display: grid; place-items: center; width: 100%; aspect-ratio: 1.91 / 1; background: #f3f1ec; border-bottom: 1px solid var(--home-rule); }
+  .drum__cell > .cell__tag,
+  .drum__cell > .cell__title,
+  .drum__cell > .cell__note,
+  .drum__cell > .cell__meta { padding-left: 14px; padding-right: 14px; }
+  .drum .cell__title,
+  .drum .cell__note,
+  .drum .cell__tag { overflow-wrap: anywhere; }
+  .drum__games > li:nth-last-child(-n+4) { border-bottom: 0; }
+
+  /* (C) the rooms */
+  .drum__rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  .drum__rooms li { min-width: 0; border-bottom: 1px solid var(--home-rule-soft); }
+  .drum__rooms li:nth-child(2n) { border-left: 1px solid var(--home-rule); }
+  .drum__rooms li:nth-last-child(-n+2) { border-bottom: 0; }
+  .drum__room { display: flex; flex-direction: column; gap: 3px; height: 100%; padding: 10px 16px 9px; color: var(--home-ink); transition: background .15s; }
+  .drum__room:hover { background: color-mix(in srgb, var(--shelf-color-2) 8%, var(--shelf-bg)); text-decoration: none; }
+  .drum__room-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+  .drum__room-title { font-size: 14px; font-weight: 600; line-height: 1.2; letter-spacing: -.015em; overflow-wrap: anywhere; }
+  .drum__room-row .cell__tag { color: var(--shelf-color-2); }
+
+  .drum a:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+
+  @media (max-width: 880px) {
+    .drum__body { grid-template-columns: 1fr; }
+    .drum__left { border-right: 0; border-bottom: 1px solid var(--home-rule); }
+    .drum__games > li { border-bottom: 1px solid var(--home-rule); }
+    .drum__games > li:nth-last-child(-n+2) { border-bottom: 0; }
+  }
+  @media (max-width: 560px) {
+    .drum__families li { grid-template-columns: minmax(0, 1fr) minmax(40px, 1fr) minmax(3ch, auto); }
+    .drum__games > li { border-bottom: 1px solid var(--home-rule); }
+    .drum__games > li:last-child { border-bottom: 0; }
+    .drum__rooms { grid-template-columns: 1fr; }
+    .drum__rooms li:nth-child(2n) { border-left: 0; }
+    .drum__rooms li:nth-last-child(-n+2) { border-bottom: 1px solid var(--home-rule-soft); }
+    .drum__rooms li:last-child { border-bottom: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .drum__room { transition: none; }
+  }
+</style>

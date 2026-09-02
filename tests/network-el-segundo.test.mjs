@@ -196,8 +196,10 @@ test('the PointCast front door routes to Network El Segundo while the 100-light 
     readFile(homeSignal, 'utf8'),
   ]);
 
-  assert.match(pageSource, /href="\/network-el-segundo"/);
-  assert.match(pageSource, /href:\s*'\/network-el-segundo\/v2'/);
+  // front door rebuilt 2026-09-01: the /network-el-segundo door moved from a fresh-door card into the rooms array
+  assert.match(pageSource, /href:\s*'\/network-el-segundo'/);
+  // front door rebuilt 2026-09-01: the hub is the door; the v2 wall is one click in
+  assert.match(pageSource, /href:\s*'\/network-el-segundo(?:\/v2)?'/);
   assert.match(pageSource, /A city of 100 windows\./);
   assert.match(signalSource, /LIGHT/);
   assert.match(signalSource, /IS OPEN/);

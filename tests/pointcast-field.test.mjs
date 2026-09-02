@@ -67,8 +67,9 @@ test('the homepage gives PointCast Field a direct doorway without replacing /now
     read('src/pages/today.astro'),
   ]);
 
-  assert.match(homepage, /import HomePointCastField/);
-  assert.match(homepage, /<HomePointCastField \/>/);
+  // front door rebuilt 2026-09-01: /field is a door in the `rooms` array rendered by HomeRoomsShelf, not a HomePointCastField module
+  assert.match(homepage, /href: '\/field'/);
+  assert.match(homepage, /<HomeRoomsShelf rooms=\{rooms\} \/>/);
   assert.match(component, /href="\/field"/);
   assert.match(component, /Take today’s field prompt/);
   assert.match(component, /No account/);

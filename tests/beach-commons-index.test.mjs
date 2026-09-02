@@ -39,12 +39,13 @@ test('Beach Commons is an eighteen-edition series with five legible paths', asyn
 });
 
 test('Beach Commons front door publishes a bounded machine index and discovery trail', async () => {
-  const [endpoint, sitemap, llms, llmsFull, home] = await Promise.all([
+  const [endpoint, sitemap, llms, llmsFull, home, rack] = await Promise.all([
     read('src/pages/beach-commons.json.ts'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
     read('src/pages/index.astro'),
+    read('src/components/HomeMagazineRack.astro'),
   ]);
 
   assert.match(endpoint, /Access-Control-Allow-Origin/);
@@ -59,8 +60,11 @@ test('Beach Commons front door publishes a bounded machine index and discovery t
   assert.match(llms, /Beach Commons — Complete Field Series/);
   assert.match(llms, /\/beach-commons\/v1/);
   assert.match(llmsFull, /Beach Commons — complete field series/);
-  assert.match(home, /All eighteen Beach Commons editions/);
-  assert.match(home, /Beach Commons index JSON/);
+  // front door rebuilt 2026-09-01: the Beach Commons discovery trail now renders through HomeMagazineRack, fed from index.astro's covers array
+  assert.match(home, /href: '\/beach-commons'/);
+  assert.match(home, /<HomeMagazineRack\b/);
+  assert.match(rack, /All eighteen Beach Commons editions/);
+  assert.match(rack, /Beach Commons index JSON/);
 });
 
 test('every Beach Commons index image exists', async () => {

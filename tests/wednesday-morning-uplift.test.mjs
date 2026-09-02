@@ -109,7 +109,10 @@ test('Wednesday Morning Uplift remains a public Issue 001 and travels through di
     assert.match(surface, /wednesday-morning-uplift|Wednesday Morning Uplift/);
   }
 
-  assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWednesdayPublication \/>/);
+  // front door rebuilt 2026-09-01: the HomeNewEdition / HomeWednesdayPublication modules retired; both doors are now
+  // covers in index.astro's frontmatter (the lead edition and WEDNESDAY 9:34 on the magazine rack; order was incidental).
+  assert.match(surfaces[0], /href[:=]\s*["']\/25\/magazine["']/);
+  assert.match(surfaces[0], /href[:=]\s*["']\/wednesday["']/);
   assert.match(surfaces[0], /Periodical/);
   assert.match(surfaces[1], /ISSUE 001 \/ ALSO LIVE/);
   assert.match(surfaces[1], /follow locally/);

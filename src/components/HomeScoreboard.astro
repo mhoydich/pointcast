@@ -5,9 +5,16 @@
  */
 import board from '../data/scoreboard.json';
 const rows = board.rows;
-const withUse = rows.filter((r) => r.use != null).sort((a, b) => (b.use ?? 0) - (a.use ?? 0)).slice(0, 3);
+// One public counter per room: the scorer copies the global drum counter onto every drum family row,
+// so identical use values collapse to the first (highest-scored) row that carries them.
+const seenUse = new Set<number>();
+const withUse = rows
+  .filter((r) => r.use != null)
+  .sort((a, b) => (b.use ?? 0) - (a.use ?? 0) || (b.total ?? 0) - (a.total ?? 0))
+  .filter((r) => { const u = r.use as number; if (seenUse.has(u)) return false; seenUse.add(u); return true; })
+  .slice(0, 3);
 const byScore = rows.filter((r) => !withUse.includes(r)).slice(0, 5);
-const drum = rows.find((r) => r.path === '/drum-house');
+const drum = rows.find((r) => r.path === '/drum');
 const label = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }).format(new Date(board.generatedAt));
 ---
 
