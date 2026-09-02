@@ -249,7 +249,7 @@ const DESK_SECTIONS: SendSection[] = [
       tool('model studies', 'Qwen', 'Three model studies: /qwen-weather, /qwen-silver-letter, /qwen-good-intelligence. Outputs are pre-rendered static media.', 'runs on a QwenCloud Personal Token Plan; price not stated here', '/qwen-weather'),
       tool('reader', 'Firecrawl', 'The open-source web reader for pages without a clean machine surface. Field guide at /firecrawl, setup at /connectors.', 'open source (core AGPL-3.0, MCP server MIT); the smoke test needs no account', '/firecrawl'),
       tool('rail', 'Stripe', 'Hosted checkout for the $25 season ticket at /25. Stripe Link receipts in the /money ledger.', 'sells the $25 ticket; fees not stated here', '/25'),
-      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /minted. Taquito 24.2, Beacon SDK 24.2.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
+      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /minted. Taquito 25.0 with Beacon wallet operations.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
       tool('runtime', 'Cloudflare Pages + KV', 'Static hosting, Pages Functions, and KV for presence, reactions, and drum taps.', NOT_STATED, '/stack'),
       tool('runtime', 'Astro 6.1', 'The static-site framework: islands, file routing, content collections for blocks.', NOT_STATED, '/stack'),
     ],

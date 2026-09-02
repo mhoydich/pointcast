@@ -55,7 +55,7 @@ export function tezosSignedMessage(
 function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
   if (_tezos && _wallet) return { tezos: _tezos, wallet: _wallet };
   _tezos = new TezosToolkit(RPC_URL);
-  // Beacon SDK (as shipped inside @taquito/beacon-wallet 24.2) removed
+  // Beacon SDK (as shipped inside @taquito/beacon-wallet 25.0) removed
   // the `network` argument from requestPermissions and now reads it
   // exclusively from DAppClient construction options. See
   //   node_modules/@ecadlabs/beacon-dapp/dist/esm/dapp-client/DAppClient.js:1100
@@ -67,7 +67,7 @@ function getToolkit(): { tezos: TezosToolkit; wallet: BeaconWallet } {
     preferredNetwork: 'mainnet' as any,
     enableMetrics: false,
   } as any);
-  // Beacon 24.2 still attempts to write disabled metrics to an IndexedDB
+  // Beacon can still attempt to write disabled metrics to an IndexedDB
   // object store in some browsers. No-op it so connect/sign flows do not fail
   // before the wallet UI opens.
   (_wallet.client as any).sendMetrics = () => {};

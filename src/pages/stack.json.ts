@@ -36,8 +36,8 @@ const LAYERS = [
     note: 'Free mainnet FA2 for Visit Nouns; FA1.2 DRUM + Prize Cast in development.',
     items: [
       { name: 'SmartPy', version: '0.24', url: 'https://smartpy.io', role: 'contract language' },
-      { name: 'Taquito', version: '24.2', url: 'https://tezostaquito.io', role: 'Tezos JS SDK' },
-      { name: 'Beacon SDK', version: '24.2', url: 'https://walletbeacon.io', role: 'wallet connector' },
+      { name: 'Taquito', version: '25.0.0', url: 'https://tezostaquito.io', role: 'Tezos JS SDK' },
+      { name: 'Beacon via Taquito', version: '25.0.0', url: 'https://walletbeacon.io', role: 'wallet connector' },
       { name: 'TzKT', url: 'https://tzkt.io', role: 'indexer + REST API' },
       { name: 'objkt.com', url: 'https://objkt.com', role: 'marketplace' },
       { name: 'noun.pics', url: 'https://noun.pics', role: 'CC0 Nouns avatars' },
