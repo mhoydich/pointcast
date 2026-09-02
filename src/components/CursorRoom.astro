@@ -28,7 +28,8 @@
  *   pc:room:chat   {detail: {msg: string}}
  *
  * Dispatches back:
- *   pc:room:log-update {detail: {log: Array<{who, msg, at}>}}
+ *   pc:room:log-update {detail: {log: Array<{id, who, msg, at}>}}
+ *   pc:burst:seen     {detail: {kind, at, by, meta}}
  */
 
 // Day-seeded Noun ID as fallback when no wallet-bound Noun is known.
@@ -123,10 +124,17 @@ const { roomKey } = Astro.props;
       ws: null,
       wsState: 'idle',           // idle | connecting | open | closed
       wsBackoffMs: 800,
+      burstWs: null,
+      burstWsState: 'idle',
+      burstBackoffMs: 800,
+      burstReconnectTimer: null,
+      burstPingTimer: null,
+      burstPrimed: false,
       lastCursorSentAt: 0,
       pingTimer: null,
       peerCount: 0,
-      seenChatKeys: {}           // sid|at|msg → 1
+      seenChatKeys: {},          // server id; sid|at|msg fallback for old peers
+      seenBurstKeys: {}
     };
     var bubbleTimeout = null;
     /** @type {Record<string, {el:HTMLElement, img:HTMLImageElement, bub:HTMLElement, tag:HTMLElement, tx:number, ty:number, rx:number, ry:number, nounId:number, tagText:string, lastAt:number, msg:string, msgAt:number}>} */
@@ -234,7 +242,7 @@ const { roomKey } = Astro.props;
 
     function pushLocalLogEntry(entry) {
       var log = loadLog();
-      var key = (entry.sid || '') + '|' + (entry.at || 0) + '|' + entry.msg;
+      var key = entry.id ? ('id:' + entry.id) : ((entry.sid || '') + '|' + (entry.at || 0) + '|' + entry.msg);
       if (state.seenChatKeys[key]) return false;
       state.seenChatKeys[key] = 1;
       log.push(entry);
@@ -429,6 +437,110 @@ const { roomKey } = Astro.props;
       });
     }
 
+    function burstKey(burst) {
+      var by = burst && burst.by || {};
+      return [burst && burst.kind, burst && burst.at, by.handle || '', by.noun == null ? '' : by.noun].join('|');
+    }
+
+    function showBurst(burst) {
+      if (!burst || typeof burst.kind !== 'string' || typeof burst.at !== 'number') return;
+      window.dispatchEvent(new CustomEvent('pc:burst:seen', { detail: burst }));
+      var ownCast = burst.kind === 'cast' && burst.meta && burst.meta.clientId === (state.sid || '').slice(0, 96);
+      if (!ownCast && Date.now() - burst.at < 10_000) {
+        window.dispatchEvent(new CustomEvent('pc:burst', { detail: burst }));
+      }
+    }
+
+    function applyBurstPayload(payload) {
+      if (!payload || !Array.isArray(payload.bursts)) return;
+      var fresh = [];
+      for (var i = 0; i < payload.bursts.length; i++) {
+        var burst = payload.bursts[i];
+        var key = burstKey(burst);
+        if (!key || state.seenBurstKeys[key]) continue;
+        state.seenBurstKeys[key] = 1;
+        fresh.push(burst);
+      }
+      if (!fresh.length) { state.burstPrimed = true; return; }
+      if (!state.burstPrimed) {
+        state.burstPrimed = true;
+        var newest = fresh[fresh.length - 1];
+        if (Date.now() - newest.at < 10_000) showBurst(newest);
+        return;
+      }
+      fresh.forEach(showBurst);
+    }
+
+    function openBurstSocket() {
+      if (state.burstWs || state.burstWsState === 'connecting' || state.burstWsState === 'open') return;
+      var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      var sid = state.sid || getSid();
+      state.sid = sid;
+      state.burstWsState = 'connecting';
+      var ws;
+      try { ws = new WebSocket(proto + '://' + location.host + '/api/burst?sid=' + encodeURIComponent(sid) + '&kind=human'); }
+      catch (e) { state.burstWsState = 'closed'; scheduleBurstReconnect(); return; }
+      state.burstWs = ws;
+      ws.addEventListener('open', function () {
+        state.burstWsState = 'open';
+        state.burstBackoffMs = 800;
+        if (state.burstPingTimer) clearInterval(state.burstPingTimer);
+        state.burstPingTimer = setInterval(function () {
+          if (state.burstWsState === 'open') try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
+        }, 30_000);
+      });
+      ws.addEventListener('message', function (event) {
+        if (typeof event.data !== 'string') return;
+        try { applyBurstPayload(JSON.parse(event.data)); } catch (e) {}
+      });
+      ws.addEventListener('close', function () {
+        if (state.burstWs !== ws) return;
+        state.burstWs = null;
+        state.burstWsState = 'closed';
+        if (state.burstPingTimer) { clearInterval(state.burstPingTimer); state.burstPingTimer = null; }
+        if (state.on) scheduleBurstReconnect();
+      });
+      ws.addEventListener('error', function () { try { ws.close(); } catch (e) {} });
+    }
+
+    function scheduleBurstReconnect() {
+      if (!state.on || state.burstReconnectTimer) return;
+      var delay = state.burstBackoffMs;
+      state.burstBackoffMs = Math.min(10_000, Math.round(state.burstBackoffMs * 1.8));
+      state.burstReconnectTimer = setTimeout(function () {
+        state.burstReconnectTimer = null;
+        if (state.on) openBurstSocket();
+      }, delay);
+    }
+
+    function closeBurstSocket() {
+      if (state.burstReconnectTimer) { clearTimeout(state.burstReconnectTimer); state.burstReconnectTimer = null; }
+      if (state.burstPingTimer) { clearInterval(state.burstPingTimer); state.burstPingTimer = null; }
+      if (state.burstWs) { try { state.burstWs.close(1000, 'room off'); } catch (e) {} }
+      state.burstWs = null;
+      state.burstWsState = 'closed';
+    }
+
+    function postBurst(detail) {
+      if (!detail || !detail.kind) return;
+      var sid = state.sid || getSid();
+      state.sid = sid;
+      var suppliedBy = detail.by && typeof detail.by === 'object' ? detail.by : null;
+      var meta = detail.meta && typeof detail.meta === 'object' ? Object.assign({}, detail.meta) : {};
+      if (detail.kind === 'cast') meta.clientId = sid.slice(0, 96);
+      fetch('/api/burst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: detail.kind,
+          clientId: sid,
+          by: suppliedBy || { handle: resolveMeTag(), noun: mySeedNoun() },
+          meta: meta,
+        }),
+        keepalive: true,
+      }).catch(function () {});
+    }
+
     function closeSocket() {
       if (state.pingTimer) { clearInterval(state.pingTimer); state.pingTimer = null; }
       if (state.ws) {
@@ -444,6 +556,7 @@ const { roomKey } = Astro.props;
       }
       peers = {};
       state.peerCount = 0;
+      closeBurstSocket();
     }
 
     function scheduleReconnect() {
@@ -522,6 +635,7 @@ const { roomKey } = Astro.props;
         refreshMe();
         if (!state.sid) state.sid = getSid();
         openSocket();
+        openBurstSocket();
         renderLog();
       } else {
         $cursor.style.display = 'none';
@@ -545,12 +659,13 @@ const { roomKey } = Astro.props;
         at: Date.now(),
         sid: (state.sid || '').slice(0, 8)
       };
-      // pushLocalLogEntry marks it seen before any server echo can arrive.
-      pushLocalLogEntry(entry);
-      renderLog();
-      // Forward to server when connected. If offline, message stays local.
+      // Connected messages enter the ticker only when the server assigns an
+      // id and echoes them. Offline messages keep the old local fallback.
       if (state.wsState === 'open' && state.ws) {
         try { state.ws.send(JSON.stringify({ type: 'chat', msg: msg })); } catch (e) {}
+      } else {
+        pushLocalLogEntry(entry);
+        renderLog();
       }
     }
 
@@ -563,6 +678,16 @@ const { roomKey } = Astro.props;
       var msg = e && e.detail && e.detail.msg;
       if (msg) submitChat(msg);
     });
+    window.addEventListener('pc:burst:request', function (e) {
+      postBurst(e && e.detail);
+    });
+    window.addEventListener('pc:spell:cast', function (e) {
+      var detail = e && e.detail || {};
+      if (!state.on) return;
+      if (detail.source !== 'magic-word' && detail.source !== 'dock') return;
+      if (!/^(confetti|rain|cat|breath)$/.test(String(detail.id || ''))) return;
+      postBurst({ kind: 'cast', meta: { spell: detail.id, label: detail.id, color: '#a78bfa' } });
+    });
     window.addEventListener('pc:room:key', function (e) {
       var nextKey = String(e && e.detail && e.detail.key || '').trim().slice(0, 256);
       if (!/^\/[A-Za-z0-9/_-]+$/.test(nextKey)) return;
@@ -573,6 +698,7 @@ const { roomKey } = Astro.props;
         closeSocket();
         state.wsBackoffMs = 800;
         openSocket();
+        openBurstSocket();
       }
       renderLog();
     });
@@ -590,6 +716,7 @@ const { roomKey } = Astro.props;
         // Re-open for the new URL.
         state.on = true;
         openSocket();
+        openBurstSocket();
       }
     });
 

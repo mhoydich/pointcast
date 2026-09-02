@@ -138,6 +138,36 @@ const { tokenId } = Astro.props;
     }
   }
 
+  async function emitMintBurst(root: HTMLElement, opHash: string): Promise<void> {
+    let address = '';
+    try {
+      const { getActiveAddress } = await import('../lib/tezos');
+      address = await getActiveAddress() || '';
+    } catch {}
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const response = await fetch('/api/burst', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'mint',
+            clientId: address || `mint:${opHash}`,
+            by: { handle: address || 'collector' },
+            meta: {
+              opHash,
+              tokenId: Number(root.dataset.tokenId || 0),
+              label: sittingName(root),
+              color: '#8a2432',
+            },
+          }),
+        });
+        if (response.ok) return;
+        if (response.status !== 409 && response.status !== 503) return;
+      } catch {}
+      await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+    }
+  }
+
   function initialize(root: HTMLElement): void {
     if (root.dataset.kennelMintReady === 'true') return;
     root.dataset.kennelMintReady = 'true';
@@ -177,6 +207,7 @@ const { tokenId } = Astro.props;
       root.dataset.kennelMinted = String(target);
       setTzktState(root, `You minted ${sittingName(root)} · ${target} minted`, href, 'view on TzKT');
       button.textContent = 'Minted';
+      void emitMintBurst(root, operation.opHash);
       void refreshWallet(root);
       void pollMinted(root, target);
     } catch (error) {

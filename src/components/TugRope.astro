@@ -78,7 +78,8 @@
     var HALF_LIFE_MS = 90000; // TUG_HALF_LIFE_MS
     var HUMAN_PULL = 0.04; // TUG_HUMAN_PULL
 
-    var POLL_MS = 6000; // how often we re-read the rope
+    var POLL_MS = 6000; // visible cadence
+    var HIDDEN_POLL_MS = 30000; // retain a quiet pulse for a background tab
     var TAP_FLOOR_MS = 220; // local throttle; the DO rate-limits for real
     var SID_KEY = 'pc:room:sid'; // same visitor id the cursor room uses
     var DEAD_ZONE = 0.02; // below this the rope simply reads slack
@@ -91,6 +92,7 @@
     var lastRead = 'the rope is slack';
     var pollTimer = null;
     var paintTimer = null;
+    var inViewport = false;
 
     function sid() {
       try {
@@ -189,24 +191,46 @@
 
     $pull.addEventListener('click', pull);
 
+    function schedulePoll(immediate) {
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+      if (!inViewport) return;
+      var delay = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
+      if (immediate) read();
+      pollTimer = setTimeout(function tick() {
+        read();
+        schedulePoll(false);
+      }, delay);
+    }
     function start() {
-      if (!pollTimer) pollTimer = setInterval(read, POLL_MS);
+      schedulePoll(true);
       // Repaint at 1 Hz so the drift back to centre is visible without
       // a network round trip. The CSS transition smooths the steps.
-      if (!paintTimer) paintTimer = setInterval(paint, 1000);
+      if (!document.hidden && !paintTimer) paintTimer = setInterval(paint, 1000);
     }
     function stop() {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
       if (paintTimer) { clearInterval(paintTimer); paintTimer = null; }
     }
 
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) stop();
-      else { read(); start(); }
+      if (!inViewport) { stop(); return; }
+      if (document.hidden) {
+        if (paintTimer) { clearInterval(paintTimer); paintTimer = null; }
+        schedulePoll(false);
+      } else start();
     });
 
-    read();
-    start();
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        inViewport = !!(entries[0] && entries[0].isIntersecting);
+        if (inViewport) start();
+        else stop();
+      }, { threshold: 0.01 });
+      observer.observe(root);
+    } else {
+      inViewport = true;
+      start();
+    }
   })();
 </script>
 

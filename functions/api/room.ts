@@ -14,7 +14,7 @@
  *   DO → client (100 ms while active, 1 Hz when idle):
  *     { humans, agents, sessions,
  *       peers?:  Array<{sessionId, nounId, kind, tag, x, y, at}>,
- *       chat?:   Array<{who, nounId, msg, at, sid}>,
+ *       chat?:   Array<{id, who, nounId, msg, at, sid}>,
  *       you?:    PrivateSessionView }
  *
  *     peers excludes the viewer, so you don't see your own cursor coming

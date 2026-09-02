@@ -66,6 +66,10 @@ export interface DockKitItem {
   readOnly?: boolean;
   federated?: boolean;
   source?: string;
+  /** Primary strip items are visible at all times; workbench items live in the ≡ tray. */
+  placement?: 'strip' | 'workbench';
+  /** Workbench items remain inspectable while their product path is unfinished. */
+  status?: 'live' | 'coming';
 }
 
 export const DOCK_KIT: DockKitItem[] = [
@@ -124,6 +128,8 @@ export const DOCK_KIT: DockKitItem[] = [
     nounSeed: 911,
     tray: 'fed',
     accent: '#2f8f5f',
+    placement: 'workbench',
+    status: 'coming',
     actions: [
       { id: 'discover', label: 'discover', glyph: '🛰️', hint: 'Probe each peer\'s /agents.json — see who\'s alive' },
       { id: 'rfc',      label: 'lexicon',  glyph: '📜', hint: 'Open the xyz.pointcast.block RFC', style: 'ghost' },
@@ -139,6 +145,8 @@ export const DOCK_KIT: DockKitItem[] = [
     tray: 'broadcast',
     accent: '#c4952e',
     readOnly: true,
+    placement: 'workbench',
+    status: 'coming',
     actions: [
       { id: 'now',      label: 'now',      glyph: '▶', hint: 'Jump to the latest live block' },
       { id: 'channel',  label: 'channel',  glyph: '📺', hint: 'See today\'s channel rotation', style: 'ghost' },

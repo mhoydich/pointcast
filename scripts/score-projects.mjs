@@ -33,6 +33,7 @@ const hand = [
   ['/digital-pets','Digital Pets'],['/network-el-segundo','Network El Segundo'],['/local-star-commons','Local Star Commons'],['/sunset-switchboard','Sunset Switchboard'],['/gallery/today','Today’s Art'],
   ['/25','PointCast 25 / CFB'],['/noun-battler','Nouns Nation Battler'],['/mascot-battler','Mascot Battler'],['/haptic-dreams','Haptic Dreams'],['/second-shift','Second Shift'],['/worklife','Work/Life'],['/wednesday','Wednesday 9:34'],
   ['/cake','Cake'],['/graffiti','Graffiti'],['/letters','Letters'],['/bulletin','Bulletin'],['/meadow','Meadow'],['/bath','The Bath'],['/anytime','Anytime'],['/taproom','Taproom'],['/zen-cats','Zen Cats'],['/field','PointCast Field'],
+  ['/dock','PointCast Dock'],
 ];
 for (const [p, n] of hand) add(p, n, 'room');
 
@@ -50,6 +51,12 @@ const text = (f) => { if (!fileText.has(f)) { try { fileText.set(f, readFileSync
 
 const slugOf = (p) => p.replace(/^\//, '').replace(/\//g, '-');
 const filesFor = (p) => {
+  if (p === '/dock') return [
+    'src/components/FooterBar.astro', 'src/components/DockBurstTicker.astro',
+    'src/components/CursorRoom.astro', 'src/components/TugRope.astro',
+    'src/components/SpellLayer.astro', 'src/data/dock-kit.ts',
+    'functions/api/burst.ts', 'workers/presence/src/index.ts',
+  ].filter(existsSync);
   const slug = p.replace(/^\//, '');
   const first = slug.split('/')[0];
   const cands = new Set();
