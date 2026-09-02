@@ -37,7 +37,11 @@ export async function handleKennelClubClaim(
   if (!ipLimit.allowed) return rateLimitResponse(ipLimit, 'Too many claim attempts from this connection.');
   if (!userLimit.allowed) return rateLimitResponse(userLimit, 'This account has made too many claim attempts.');
 
-  const today = sittingOfTheDay(losAngelesDate());
+  const date = losAngelesDate();
+  const today = sittingOfTheDay(date);
+  if (today.mintDate !== date) {
+    return authJson({ ok: false, configured: true, reason: 'claim-window-closed' }, { status: 409 });
+  }
   const result = await claimKennelClubDog({
     env,
     user: current.user,

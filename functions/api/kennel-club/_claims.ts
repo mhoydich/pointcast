@@ -229,13 +229,14 @@ async function reserveClaim(
     if (Number.isFinite(reservedAt) && Date.now() - reservedAt < FAILED_RETRY_DELAY_MS) {
       return { row: existing, reason: 'claim-in-progress' };
     }
+    const retriedAt = new Date().toISOString();
     const retried = await db.prepare(`
       UPDATE claims
       SET op_hash = NULL, delivered_to = NULL, created_at = ?
-      WHERE id = ? AND status = 'failed'
+      WHERE id = ? AND status = 'failed' AND created_at = ?
       RETURNING id, user_id, token_id, status, op_hash, delivered_to, created_at
-    `).bind(new Date().toISOString(), existing.id).first<KennelClaimRow>();
-    return retried ? { row: retried } : { row: null, reason: 'already-claimed' };
+    `).bind(retriedAt, existing.id, existing.created_at).first<KennelClaimRow>();
+    return retried ? { row: retried } : { row: existing, reason: 'claim-in-progress' };
   }
 
   const id = `kcc_${crypto.randomUUID().replaceAll('-', '')}`;

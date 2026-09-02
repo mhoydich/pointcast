@@ -63,7 +63,7 @@ class FakeD1Statement {
     }
     if (sql.startsWith('UPDATE claims SET op_hash = NULL')) {
       const row = db.claims.get(args[1]);
-      if (!row || row.status !== 'failed') return null;
+      if (!row || row.status !== 'failed' || row.created_at !== args[2]) return null;
       Object.assign(row, { op_hash: null, delivered_to: null, created_at: args[0] });
       return { ...row };
     }
@@ -380,6 +380,7 @@ test('claim source batches mint plus transfer and links delivery from the Tezos 
   assert.match(claimsSource, /contract\.batch\(\)\.withContractCall/);
   assert.match(claimsSource, /methodsObject\.mint\(tokenId\)/);
   assert.match(claimsSource, /methodsObject\.transfer/);
+  assert.match(claimsSource, /status = 'failed' AND created_at = \?/);
   assert.match(authSource, /waitUntil\(deliverHeldKennelClubDogs/);
   assert.match(burstSource, /body\.kind === 'mint' \|\| body\.kind === 'claim'/);
   assert.match(burstSource, /claim-not-verified/);
