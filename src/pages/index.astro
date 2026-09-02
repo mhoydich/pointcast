@@ -36,6 +36,7 @@ import type { CatalogItem } from '../components/HomeBackCatalog.astro';
 import WalletChip from '../components/WalletChip.astro';
 import { CHANNEL_LIST, CHANNELS, getChannel } from '../lib/channels';
 import { FEATURES } from '../lib/explore';
+import { hallwayCount } from '../lib/drum-rooms';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
 import { RESIDENTS } from '../data/residents';
 import constellation from '../data/constellation.json';
@@ -58,7 +59,6 @@ const PINNED = {
     { type: 'bot:apple', count: 1 }, { type: 'bot:baidu', count: 1 }, { type: 'ai:anthropic', count: 1 }, { type: 'human', count: 0 },
   ],
   drumTaps: 26103,           // GET /api/drum .globalTotal (2026-09-01) — refreshed live below
-  drumDoors: 88,             // live /drum hallway: 88 doors · 118 rooms · 7 wings (2026-09-01)
   x402Receipts: 0,           // GET /api/x402/receipt?list=1 total_count (2026-09-01)
   tugPulls: { human: 1, machine: 1 }, // GET /api/tug (2026-09-01)
   benchSitsToday: 0,         // GET /api/bench (2026-09-01)
@@ -105,7 +105,7 @@ for (const block of allBlocks) {
   const author = ((block.data as { author?: string }).author ?? 'unsigned').toString();
   authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
 }
-const monthLabel = (key: string) => key === 'imports' ? '2025 imports' : new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(new Date(`${key}-15T12:00:00Z`));
+const monthLabel = (key: string) => key === 'imports' ? '2025' : new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(new Date(`${key}-15T12:00:00Z`));
 const blocksByMonth = ['imports', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
   .map((key) => ({ label: monthLabel(key), count: monthCounts.get(key) ?? 0 }));
 const authors = [...authorCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, blocks]) => ({ name, blocks }));
@@ -168,7 +168,9 @@ for (let round = 0; catalogPool.length < 30; round++) {
 
 // ---------- counts from repo data ----------
 const doorCount = FEATURES.length;
-const drumPages = FEATURES.filter((f) => f.prefix === 'drum').length;
+const hallway = hallwayCount(); // the same count the /drum hallway prints: doors on the wall, pages behind them
+const drumPages = hallway.pages;
+const drumDoors = hallway.doors;
 const appCount = POINTCAST_APPS.length;
 const residentCounts = {
   resident: RESIDENTS.filter((r) => r.status === 'resident').length,
@@ -179,35 +181,35 @@ const residentCounts = {
 // ---------- 1. the magazine rack ----------
 // image: /images/front-door/*.jpg thumbs (≤120 KB) or a block OG card (≤20 KB). Never the raw 1–3 MB social cards.
 const covers = [
-  { title: 'PointCast College Football — Issue 001', href: '/25/magazine', dek: 'One living college-football magazine: the belief board, receipts, house desks, coach weather, and a song yard.', kicker: 'Issue 001 · 21 departments · 11 desks', image: '/images/front-door/cfb-magazine.jpg', imageAlt: 'PointCast College Football Issue 001 cover', channel: 'SPN', date: '2026-07-28', blockId: '0530' },
-  { title: '25 FOR REASONS — Board 000', href: '/25', dek: 'A college-football Top 25 with receipts: one case, one doubt, and one next proof for every ranked team.', kicker: 'Board 000 · 25 teams · $25 season ticket', image: '/images/pointcast-25/board-000.png', imageAlt: '25 for Reasons board 000', channel: 'SPN', date: '2026-07-27', blockId: '0510' },
-  { title: 'Beach Commons', href: '/beach-commons', dek: 'Eighteen field studies for making public life at the edge of Dockweiler, from fire rings to a 25-mile atlas.', kicker: '18 volumes · 5 paths · 23 wire blocks', image: '/images/front-door/beach-commons.jpg', imageAlt: 'Beach Commons series card', channel: 'GDN', date: '2026-07-26', blockId: '0506' },
-  { title: 'The Animal After the Internet', href: '/digital-pets', dek: 'A future book on why the next AI product is a creature, not an assistant, and why its memory should be yours.', kicker: 'Future Book 001 · 12 positions · 6 rooms', image: '/images/digital-pets/plate-01-cover.webp', imageAlt: 'The Animal After the Internet, plate one', channel: 'FD', date: '2026-07-27', blockId: '0514' },
-  { title: 'The first computer that can waddle', href: '/digital-pets/microduck', dek: 'A full review of Microduck, its open software stack, and how to program a duck’s behavior with agents.', kicker: 'Digital Pets desk · review · № 0579', image: '/images/front-door/microduck.jpg', imageAlt: 'Microduck review card', channel: 'FD', date: '2026-08-31', blockId: '0579' },
-  { title: 'AI income — where the money actually is', href: '/ai-income', dek: 'A field guide to getting paid in the AI economy: 29 routes across 7 lanes, honest tiers, no course to sell.', kicker: '29 routes · 7 lanes · № 0576', image: '/images/og/b/0576.png', imageAlt: 'AI Income block card', channel: 'FD', date: '2026-08-31', blockId: '0576' },
-  { title: 'The Saturday Atlas', href: '/25/directory', dek: 'Every Division I program in one honest place: 138 FBS, 128 FCS, official links, and a private shortlist.', kicker: '266 programs · 138 FBS · 128 FCS', image: '/images/pointcast-d1-directory/social-card.png', imageAlt: 'The Saturday Atlas directory card', channel: 'SPN', date: '2026-08-12', blockId: '0570' },
-  { title: 'Next Models', href: '/next-models', dek: 'A sourced field guide to the model horizon: frontier systems, Chinese open weights, moving-image stacks.', kicker: '9 models · 3 lanes · researched 2026-08-31', image: '/images/front-door/next-models.jpg', imageAlt: 'Next Models desk card', channel: 'FD', date: '2026-08-31', blockId: '' },
-  { title: 'The September Pass', href: 'https://mhoydich.github.io/september-pass/', dek: 'An agent-readiness pass on pointcast.xyz plus a six-month model outlook, filed from El Segundo.', kicker: 'GitHub Pages satellite · № 0577', image: '/images/september-pass/pass-card.svg', imageAlt: 'The September Pass card', channel: 'FD', date: '2026-08-31', blockId: '0577' },
+  { title: 'PointCast College Football — Issue 001', href: '/25/magazine', dek: 'One living college-football magazine: the belief board, receipts, house desks, coach weather, and a song yard.', kicker: 'Issue 001 · 21 departments · 11 desks', image: '/images/front-door/cfb-magazine.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-28', blockId: '0530' },
+  { title: '25 FOR REASONS — Board 000', href: '/25', dek: 'A college-football Top 25 with receipts: one case, one doubt, and one next proof for every ranked team.', kicker: 'Board 000 · 25 teams · $25 season ticket', image: '/images/pointcast-25/board-000.png', imageAlt: '', channel: 'SPN', date: '2026-07-27', blockId: '0510' },
+  { title: 'Beach Commons', href: '/beach-commons', dek: 'Eighteen field studies for making public life at the edge of Dockweiler, from fire rings to a 25-mile atlas.', kicker: '18 volumes · 5 paths · 23 wire blocks', image: '/images/front-door/beach-commons.jpg', imageAlt: '', channel: 'GDN', date: '2026-07-26', blockId: '0506' },
+  { title: 'The Animal After the Internet', href: '/digital-pets', dek: 'A future book on why the next AI product is a creature, not an assistant, and why its memory should be yours.', kicker: 'Future Book 001 · 12 positions · 6 rooms', image: '/images/digital-pets/plate-01-cover.webp', imageAlt: '', channel: 'FD', date: '2026-07-27', blockId: '0514' },
+  { title: 'The first computer that can waddle', href: '/digital-pets/microduck', dek: 'A full review of Microduck, its open software stack, and how to program a duck’s behavior with agents.', kicker: 'Digital Pets desk · review · № 0579', image: '/images/front-door/microduck.jpg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0579' },
+  { title: 'AI income — where the money actually is', href: '/ai-income', dek: 'A field guide to getting paid in the AI economy: 29 routes across 7 lanes, honest tiers, no course to sell.', kicker: '29 routes · 7 lanes · № 0576', image: '/images/og/b/0576.png', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0576' },
+  { title: 'The Saturday Atlas', href: '/25/directory', dek: 'Every Division I program in one honest place: 138 FBS, 128 FCS, official links, and a private shortlist.', kicker: '266 programs · 138 FBS · 128 FCS', image: '/images/pointcast-d1-directory/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-12', blockId: '0570' },
+  { title: 'Next Models', href: '/next-models', dek: 'A sourced field guide to the model horizon: frontier systems, Chinese open weights, moving-image stacks.', kicker: '9 models · 3 lanes · researched 2026-08-31', image: '/images/front-door/next-models.jpg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '' },
+  { title: 'The September Pass', href: 'https://mhoydich.github.io/september-pass/', dek: 'An agent-readiness pass on pointcast.xyz plus a six-month model outlook, filed from El Segundo.', kicker: 'GitHub Pages satellite · № 0577', image: '/images/september-pass/pass-card.svg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0577' },
   { title: 'THE HEARST FILE', href: 'https://mhoydich.github.io/hearst-file/', dek: 'A pocket encyclopedia of one American obsession: the hill, the man, the movie.', kicker: 'GitHub Pages satellite · № 0578', image: '/images/og/b/0578.png', imageAlt: '', channel: 'ESC', date: '2026-08-31', blockId: '0578' },
-  { title: 'Haptic Dreams: Saturday Kingdom', href: '/haptic-dreams', dek: 'A real football game turned into touch and a drawn kingdom: scores build cities, turnovers flip the field.', kicker: 'Play + build rooms · № 0567 · № 0573', image: '/images/front-door/haptic-dreams.jpg', imageAlt: 'Haptic Dreams Saturday Kingdom card', channel: 'SPN', date: '2026-08-08', blockId: '0567' },
-  { title: 'What I Keep Noticing', href: '/noticing', dek: 'A sunlit weekly on rituals, towns, networks, and the agreements that let people live together.', kicker: '4 issues · 2 in fieldwork · № 0512', image: '/images/noticing/noticing-og.png', imageAlt: 'What I Keep Noticing card', channel: 'FD', date: '2026-07-27', blockId: '0512' },
-  { title: 'WORK/LIFE', href: '/worklife', dek: 'What work does to a life, and what a life does back: uniforms, a consent-first open-to-work board, and a manic Monday.', kicker: 'Issue 001 · uniforms · open to work · 18 tracks', image: '/images/worklife/001-cover.png', imageAlt: 'WORK/LIFE issue 001 cover', channel: 'SPN', date: '2026-08-03', blockId: '0555' },
-  { title: 'WEDNESDAY 9:34', href: '/wednesday', dek: 'One good playlist for the useful middle of the week, original covers and permanent pages, Wednesdays at 9:34.', kicker: 'Issue 002 · Wednesday Morning Uplift is 001', image: '/images/front-door/wednesday.jpg', imageAlt: 'WEDNESDAY 9:34 cover', channel: 'SPN', date: '2026-07-29', blockId: '0538' },
-  { title: 'PointCast Tonight — GO OUT / STAY IN', href: '/tonight', dek: 'One small week of official-source culture and local television around El Segundo: go out, or stay in.', kicker: 'Edition 001 · 6 outings · 3 stay-ins', image: '/images/pointcast-tonight/social-card.png', imageAlt: 'PointCast Tonight card', channel: 'SPN', date: '2026-08-03', blockId: '0560' },
-  { title: 'Georgia, Ground Zero', href: '/25/magazine/georgia-ground-zero', dek: 'A reported field essay on college football’s most complete operating system, and the town that keeps it human.', kicker: 'Magazine desk · № 0566', image: '/images/front-door/georgia.jpg', imageAlt: 'Georgia, Ground Zero card', channel: 'SPN', date: '2026-08-08', blockId: '0566' },
-  { title: 'The History of Texas Football', href: '/25/magazine/texas-football-history', dek: 'Texas football as a public institution repeatedly invented, told in ten objects and one unfinished season.', kicker: 'Issue 003 · 10 objects · № 0569', image: '/images/pointcast-texas-football-history/social-card.png', imageAlt: 'History of Texas Football card', channel: 'SPN', date: '2026-08-12', blockId: '0569' },
-  { title: 'Western Heat / Brains 25', href: '/25/magazine/western-heat-brains', dek: 'Three kinds of football pressure, then a factual research Power 25 with its own recurring scoreboard.', kicker: 'Double issue · № 0568', image: '/images/front-door/western-heat.jpg', imageAlt: 'Western Heat / Brains 25 card', channel: 'SPN', date: '2026-08-08', blockId: '0568' },
-  { title: 'California Football Is Not Dead', href: '/25/magazine/california-football', dek: 'A timestamped state report: the broken conference map, eight programs, a 2026 circuit, and the California Cup.', kicker: 'State desk · california-cup · № 0557', image: '/images/front-door/california-football.jpg', imageAlt: 'California football state desk card', channel: 'SPN', date: '2026-08-03', blockId: '0557' },
+  { title: 'Haptic Dreams: Saturday Kingdom', href: '/haptic-dreams', dek: 'A real football game turned into touch and a drawn kingdom: scores build cities, turnovers flip the field.', kicker: 'Play + build rooms · № 0567 · № 0573', image: '/images/front-door/haptic-dreams.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0567' },
+  { title: 'What I Keep Noticing', href: '/noticing', dek: 'A sunlit weekly on rituals, towns, networks, and the agreements that let people live together.', kicker: '4 issues · 2 in fieldwork · № 0512', image: '/images/noticing/noticing-og.png', imageAlt: '', channel: 'FD', date: '2026-07-27', blockId: '0512' },
+  { title: 'WORK/LIFE', href: '/worklife', dek: 'What work does to a life, and what a life does back: uniforms, a consent-first open-to-work board, and a manic Monday.', kicker: 'Issue 001 · uniforms · open to work · 18 tracks', image: '/images/worklife/001-cover.png', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0555' },
+  { title: 'WEDNESDAY 9:34', href: '/wednesday', dek: 'One good playlist for the useful middle of the week, original covers and permanent pages, Wednesdays at 9:34.', kicker: 'Issue 002 · Wednesday Morning Uplift is 001', image: '/images/front-door/wednesday.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-29', blockId: '0538' },
+  { title: 'PointCast Tonight — GO OUT / STAY IN', href: '/tonight', dek: 'One small week of official-source culture and local television around El Segundo: go out, or stay in.', kicker: 'Edition 001 · 6 outings · 3 stay-ins', image: '/images/pointcast-tonight/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0560' },
+  { title: 'Georgia, Ground Zero', href: '/25/magazine/georgia-ground-zero', dek: 'A reported field essay on college football’s most complete operating system, and the town that keeps it human.', kicker: 'Magazine desk · № 0566', image: '/images/front-door/georgia.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0566' },
+  { title: 'The History of Texas Football', href: '/25/magazine/texas-football-history', dek: 'Texas football as a public institution repeatedly invented, told in ten objects and one unfinished season.', kicker: 'Issue 003 · 10 objects · № 0569', image: '/images/pointcast-texas-football-history/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-12', blockId: '0569' },
+  { title: 'Western Heat / Brains 25', href: '/25/magazine/western-heat-brains', dek: 'Three kinds of football pressure, then a factual research Power 25 with its own recurring scoreboard.', kicker: 'Double issue · № 0568', image: '/images/front-door/western-heat.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0568' },
+  { title: 'California Football Is Not Dead', href: '/25/magazine/california-football', dek: 'A timestamped state report: the broken conference map, eight programs, a 2026 circuit, and the California Cup.', kicker: 'State desk · california-cup · № 0557', image: '/images/front-door/california-football.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0557' },
   { title: 'Lane Kiffin Temperature Check', href: '/25/magazine/lane-kiffin-temperature', dek: 'A preseason LSU merger audit across program, players, capital, Louisiana, staff, press, foes, and fans.', kicker: 'Magazine desk · № 0553', image: '/images/og/b/0553.png', imageAlt: '', channel: 'SPN', date: '2026-08-02', blockId: '0553' },
   { title: 'ROW / ROW', href: '/25/magazine/sorority-row', dek: 'Sorority row as architecture: SEC versus Big Ten spatial culture, origins, uneven access, three 2030 playbooks.', kicker: 'House desk 002 · sorority-row · № 0534', image: '/images/og/b/0534.png', imageAlt: '', channel: 'SPN', date: '2026-07-28', blockId: '0534' },
-  { title: 'Saturday, Rebranded — 2029', href: '/25/2029', dek: 'The Top 25 redrawn for 2029: 25 abstract marks, future stadiums, campus interventions, student-made gear.', kicker: '25 identities · field kit · song yard · № 0524', image: '/images/front-door/saturday-2029.jpg', imageAlt: 'Saturday, Rebranded 2029 card', channel: 'BTL', date: '2026-07-27', blockId: '0524' },
-  { title: 'The Song Yard', href: '/25/2029/song-yard', dek: 'A stadium-song practice commons: 35 programs, a source-labeled repertoire atlas, six song seeds, four parts.', kicker: '35 programs · 6 seeds · № 0527', image: '/images/front-door/song-yard.jpg', imageAlt: 'The Song Yard card', channel: 'BTL', date: '2026-07-28', blockId: '0527' },
+  { title: 'Saturday, Rebranded — 2029', href: '/25/2029', dek: 'The Top 25 redrawn for 2029: 25 abstract marks, future stadiums, campus interventions, student-made gear.', kicker: '25 identities · field kit · song yard · № 0524', image: '/images/front-door/saturday-2029.jpg', imageAlt: '', channel: 'BTL', date: '2026-07-27', blockId: '0524' },
+  { title: 'The Song Yard', href: '/25/2029/song-yard', dek: 'A stadium-song practice commons: 35 programs, a source-labeled repertoire atlas, six song seeds, four parts.', kicker: '35 programs · 6 seeds · № 0527', image: '/images/front-door/song-yard.jpg', imageAlt: '', channel: 'BTL', date: '2026-07-28', blockId: '0527' },
   { title: 'Saturday Commons — 2029 field kit', href: '/25/2029/field-kit', dek: 'Twelve field plates, 25 stamps, eight backgrounds and a three-line invitation machine for the 2029 Saturday.', kicker: '12 plates · 25 stamps · № 0525', image: '/images/og/b/0525.png', imageAlt: '', channel: 'BTL', date: '2026-07-28', blockId: '0525' },
-  { title: 'Coach Weather', href: '/25/magazine/coach-weather', dek: 'Rankings say where coaches stand; weather says what can move them. Twelve fronts and a program builder.', kicker: 'Dispatch 000 · 12 fronts · № 0545', image: '/images/front-door/coach-weather.jpg', imageAlt: 'Coach Weather card', channel: 'SPN', date: '2026-07-29', blockId: '0545' },
-  { title: 'Second Shift', href: '/second-shift', dek: 'A finite El Segundo manufacturing clicker: make six ordinary needs before dawn, then teach the town the line.', kicker: 'Satellite game · 6 orders · № 0571', image: '/images/front-door/second-shift.jpg', imageAlt: 'Second Shift card', channel: 'ESC', date: '2026-08-12', blockId: '0571' },
-  { title: 'Who Gets to Read the Web?', href: '/firecrawl', dek: 'A field guide to Firecrawl, spiders, indexes, and the argument hiding inside every fetch.', kicker: '6-step field guide · № 0552', image: '/images/firecrawl/field-guide-og.png', imageAlt: 'Firecrawl field guide card', channel: 'FCT', date: '2026-08-02', blockId: '0552' },
-  { title: 'Tone Bloom rings in the tiny web', href: '/reviews/tone-bloom', dek: 'Twelve synthesized voices, four speeds, 38 chosen images, and the rare consumer app that knows when to stop.', kicker: 'Review · 4.5/5 · tonebloom.xyz · № 0493', image: '/images/front-door/tone-bloom.jpg', imageAlt: 'Tone Bloom review card', channel: 'GDN', date: '2026-07-25', blockId: '0493' },
-  { title: 'The Noun Press — Saturday Signal Stamps', href: '/25/collect/signal-stamps', dek: 'Fifty real Nouns remixed into place portraits: take a stamp, wear a profile, or collect a free Tezos edition.', kicker: '50 Nouns · CC0 · free Tezos edition', image: '/images/front-door/signal-stamps.jpg', imageAlt: 'Saturday Signal Stamps card', channel: 'SPN', date: '2026-08-01', blockId: '' },
+  { title: 'Coach Weather', href: '/25/magazine/coach-weather', dek: 'Rankings say where coaches stand; weather says what can move them. Twelve fronts and a program builder.', kicker: 'Dispatch 000 · 12 fronts · № 0545', image: '/images/front-door/coach-weather.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-29', blockId: '0545' },
+  { title: 'Second Shift', href: '/second-shift', dek: 'A finite El Segundo manufacturing clicker: make six ordinary needs before dawn, then teach the town the line.', kicker: 'Satellite game · 6 orders · № 0571', image: '/images/front-door/second-shift.jpg', imageAlt: '', channel: 'ESC', date: '2026-08-12', blockId: '0571' },
+  { title: 'Who Gets to Read the Web?', href: '/firecrawl', dek: 'A field guide to Firecrawl, spiders, indexes, and the argument hiding inside every fetch.', kicker: '6-step field guide · № 0552', image: '/images/firecrawl/field-guide-og.png', imageAlt: '', channel: 'FCT', date: '2026-08-02', blockId: '0552' },
+  { title: 'Tone Bloom rings in the tiny web', href: '/reviews/tone-bloom', dek: 'Twelve synthesized voices, four speeds, 38 chosen images, and the rare consumer app that knows when to stop.', kicker: 'Review · 4.5/5 · tonebloom.xyz · № 0493', image: '/images/front-door/tone-bloom.jpg', imageAlt: '', channel: 'GDN', date: '2026-07-25', blockId: '0493' },
+  { title: 'The Noun Press — Saturday Signal Stamps', href: '/25/collect/signal-stamps', dek: 'Fifty real Nouns remixed into place portraits: take a stamp, wear a profile, or collect a free Tezos edition.', kicker: '50 Nouns · CC0 · free Tezos edition', image: '/images/front-door/signal-stamps.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-01', blockId: '' },
 ];
 const beachCommonsVolumes = [
   { href: '/beach-commons/v9', label: 'V9 Signal Shack', blockId: '0526' },
@@ -383,7 +385,7 @@ const milestones = [
   { date: '2026-04-14', title: 'The repo opens; the front door is agentic', href: '/b/0205', blockId: '0205' },
   { date: '2026-04-17', title: 'Visit Nouns FA2 goes live on Tezos mainnet', href: '/b/0229', blockId: '0229' },
   { date: '2026-04-17', title: 'The drum opens; /agents.json goes up the same day', href: '/b/0228', blockId: '0228' },
-  { date: '2026-04-22', title: 'First Codex PR merges; five briefs in a day', href: '/b/0283', blockId: '0283' },
+  { date: '2026-04-22', title: 'Codex gets a real project; its first PR merges', href: '/b/0283', blockId: '0283' }, // PR #3 merged 2026-04-22 (gh)
   { date: '2026-04-25', title: 'Coffee Mugs FA2 live; 47 PRs merged in one day', href: '/b/0364', blockId: '0364' },
   { date: '2026-04-27', title: 'The drum becomes an MCP server', href: '/b/0379', blockId: '0379' },
   { date: '2026-04-28', title: 'Busiest day: 51 PRs and the Nouns Nation Battler', href: '/b/0390', blockId: '0390' },
@@ -395,7 +397,7 @@ const milestones = [
   { date: '2026-07-18', title: 'The prayer wing opens: five rooms, sixty pieces', href: '/b/0471', blockId: '0471' },
   { date: '2026-07-26', title: 'The Yard opens; the satellites get a register', href: '/b/0497', blockId: '0497' },
   { date: '2026-07-27', title: '25 FOR REASONS opens; 56 PRs in two days', href: '/b/0510', blockId: '0510' },
-  { date: '2026-07-30', title: 'Git history flattened; the repo restarts at 79 commits', href: 'https://github.com/mhoydich/pointcast/commits/main', blockId: '' },
+  { date: '2026-07-30', title: 'Git history flattened; commit counts restart here', href: 'https://github.com/mhoydich/pointcast/commits/main', blockId: '' },
   { date: '2026-08-08', title: 'Haptic Dreams: Saturday Kingdom', href: '/b/0567', blockId: '0567' },
   { date: '2026-08-17', title: 'The register, the scoreboard, and x402', href: '/b/0574', blockId: '0574' },
   { date: '2026-08-31', title: 'Rosebud, the September Pass, the Hearst File, Microduck', href: '/b/0577', blockId: '0577' },
@@ -413,8 +415,8 @@ const glance = [
   { label: 'blocks', value: blockCount.toLocaleString('en-US'), href: '/archive', note: `since ${sinceLabel} · newest № ${latestId}` },
   { label: 'channels', value: String(CHANNEL_LIST.length), href: '#channels', note: 'ten lanes, one grammar' },
   { label: 'doors', value: doorCount.toLocaleString('en-US'), href: '/explore', note: 'top-level pages, sorted' },
-  { label: 'apps', value: String(appCount), href: '/apps', note: 'rooms, tools, satellites, two MCP connectors' },
-  { label: 'drum pages', value: String(drumPages), href: '/drum-directory', note: `${PINNED.drumDoors} doors · 7 wings` },
+  { label: 'apps', value: String(appCount), href: '/apps', note: `${POINTCAST_APPS.filter((a) => a.kind === 'pointcast').length} rooms and tools · ${POINTCAST_APPS.filter((a) => a.kind === 'satellite').length} satellites on the shelf` },
+  { label: 'drum pages', value: String(drumPages), href: '/drum-directory', note: `${drumDoors} doors · 7 wings` },
   { label: 'drum hits', value: PINNED.drumTaps.toLocaleString('en-US'), href: '/drum', note: 'every visitor, since April 17', live: true, id: 'drum-taps' },
   { label: 'satellites', value: String(satellites.length), href: '/constellation', note: 'sibling sites, all answering' },
   { label: 'contracts', value: String(contracts.filter((c) => c.status === 'live').length), href: '#constellation-chain', note: `${contracts.filter((c) => c.kt1).length} with a KT1 · ${contracts.filter((c) => c.status === 'pending').length} pending` },
@@ -424,6 +426,7 @@ const glance = [
   { label: 'visits logged', value: PINNED.visitsTotal.toLocaleString('en-US'), href: '/here', note: 'mostly crawlers · it says so', live: true, id: 'visits' },
 ];
 
+const builtOn = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const homeDescription = `PointCast is a small internet town broadcasting from El Segundo: ${blockCount} numbered blocks, a magazine, a drum house, a few dozen rooms, a constellation of sibling sites, and a desk for agents. Still experimental. Still on.`;
 const socialImage = 'https://pointcast.xyz/images/og/og-home-v2.png';
 
@@ -522,11 +525,11 @@ const alternates = [
       <HomeStartHere blockCount={blockCount} />
     </div>
 
-    <HomeGlance numbers={glance} asOf={PINNED.countedAt} />
+    <HomeGlance numbers={glance} asOf={builtOn} />
 
     <HomeMagazineRack covers={covers} volumes={beachCommonsVolumes} editorialBlocksSinceJuly={editorialBlocksSinceJuly} latestId={latestId} />
 
-    <HomeDrumUniverse families={drumFamilies} games={drumGames} rooms={drumRooms} taps={PINNED.drumTaps} pages={drumPages} doors={PINNED.drumDoors} />
+    <HomeDrumUniverse families={drumFamilies} games={drumGames} rooms={drumRooms} taps={PINNED.drumTaps} pages={drumPages} doors={drumDoors} />
 
     <HomeRoomsShelf rooms={rooms} />
 
@@ -649,7 +652,7 @@ const alternates = [
 <style>
   .masthead { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px 20px; padding: 14px 0 10px; border-bottom: 2px solid #111; }
   .masthead__brand { font-size: 22px; font-weight: 730; letter-spacing: -.04em; color: #111; }
-  .masthead__meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(0,0,0,.55); }
+  .masthead__meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; }
   .masthead__air b { color: #111; text-transform: none; letter-spacing: 0; }
   .masthead__utility { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .masthead__utility a { padding: 7px 9px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; color: #111; }
@@ -665,7 +668,7 @@ const alternates = [
   .channels__code { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; color: var(--ch-ink); }
   .channels__cell strong { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
   .channels__cell small { font-size: 11.5px; line-height: 1.35; color: rgba(0,0,0,.72); }
-  .channels__feeds { margin-top: auto; padding-top: 8px; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(0,0,0,.45); }
+  .channels__feeds { margin-top: auto; padding-top: 8px; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; }
   .channels__feeds span { color: #111; }
 
   .machine__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
