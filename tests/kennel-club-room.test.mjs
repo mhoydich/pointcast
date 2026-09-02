@@ -42,6 +42,16 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
   assert.match(mintComponent, /Mint today&apos;s sitting · 1 ꜩ/);
   assert.match(mintComponent, /https:\/\/pointcast\.xyz\/api\/kennel-club\/mint/);
   assert.doesNotMatch(mintComponent, /https:\/\/api\.tzkt\.io/);
+  assert.match(mintComponent, /Confirm in Kukai/);
+  assert.match(mintComponent, /Broadcast · waiting for 1 confirmation/);
+  assert.match(mintComponent, /You minted \$\{sittingName\(root\)\}/);
+  assert.match(mintComponent, /POLL_MS = 5_000/);
+  assert.match(mintComponent, /POLL_TRIES = 12/);
+  assert.match(mintComponent, /connected · \$\{shortAddress/);
+  assert.match(mintComponent, /already minted by you/);
+  assert.match(mintComponent, /pc:wallet-change/);
+  assert.match(mintHelper, /walletHoldsKennelClubSitting/);
+  assert.match(mintHelper, /v1\/tokens\/balances\?account=/);
   assert.match(mintApi, /getKennelClubMintSnapshot/);
   assert.match(mintApi, /unavailableKennelClubMintSnapshot/);
   assert.match(mintApi, /max-age=30, s-maxage=30/);
@@ -56,7 +66,7 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
   assert.match(helper, /liveUrl/);
   assert.match(helper, /snapshotAt/);
   assert.match(tezos, /mintKennelClubSitting/);
-  assert.match(tezos, /\.methods as any\)\.mint\(params\.tokenId\)\.send/);
+  assert.match(tezos, /\.methodsObject as any\)\.mint\(params\.tokenId\)\.send/);
   assert.match(room, /calendar__grid/);
   assert.match(room, /data-sitting-date/);
   assert.match(room, /imageWidth=\{1024\}/);
@@ -88,6 +98,27 @@ test('Kennel Club TzKT reader maps paused storage, today\'s supply, and window w
     assert.equal(state.today.windowOpen, true);
     assert.equal(requests.length, 3);
     assert.ok(requests.every((url) => url.startsWith('https://api.tzkt.io/')));
+  } finally {
+    await server.close();
+  }
+});
+
+test('Kennel Club checks the connected wallet for a positive balance of the selected Sitting', async () => {
+  const { createServer } = await import('vite');
+  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
+  try {
+    const { walletHoldsKennelClubSitting } = await server.ssrLoadModule('/src/lib/kennel-club-mint.ts');
+    const requests = [];
+    const holds = await walletHoldsKennelClubSitting(1, 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw', {
+      fetcher: async (url) => {
+        requests.push(url);
+        return { ok: true, status: 200, json: async () => [{ balance: '1' }] };
+      },
+    });
+    assert.equal(holds, true);
+    assert.match(requests[0], /v1\/tokens\/balances\?account=tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw/);
+    assert.match(requests[0], /token\.tokenId=1/);
+    assert.match(requests[0], /balance\.gt=0/);
   } finally {
     await server.close();
   }
@@ -171,6 +202,7 @@ test('Kennel Club mint API returns a live 30-token snapshot and a static fallbac
     const fallback = await onRequestGet({ request: new Request('https://pointcast.xyz/api/kennel-club/mint') });
     const fallbackPayload = await fallback.json();
     assert.equal(fallbackPayload.live, false);
+    assert.equal(fallback.headers.get('cache-control'), 'no-store');
     assert.equal(fallbackPayload.paused, true);
     assert.equal(Object.keys(fallbackPayload.minted).length, 30);
     assert.equal(fallbackPayload.totalMinted, 0);

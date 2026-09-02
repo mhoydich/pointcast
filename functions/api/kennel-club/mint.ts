@@ -21,6 +21,11 @@ const JSON_HEADERS = {
   'Cache-Control': 'public, max-age=30, s-maxage=30',
 };
 
+const NO_STORE_JSON_HEADERS = {
+  ...JSON_HEADERS,
+  'Cache-Control': 'no-store',
+};
+
 function json(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
     ...init,
@@ -47,6 +52,6 @@ export const onRequestGet: PagesFunction = async () => {
       ...unavailableKennelClubMintSnapshot(today.tokenId),
       live: false,
       updatedAt: new Date().toISOString(),
-    });
+    }, { headers: NO_STORE_JSON_HEADERS });
   }
 };

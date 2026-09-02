@@ -40,6 +40,21 @@ export type KennelClubMintSnapshot = KennelClubMintState & {
   totalMinted: number;
 };
 
+/** Whether an address has a positive balance of a Sitting's FA2 token. */
+export async function walletHoldsKennelClubSitting(
+  tokenId: number,
+  address: string,
+  { fetcher = fetch as FetchLike }: { fetcher?: FetchLike } = {},
+): Promise<boolean> {
+  if (!KENNEL_CLUB_CONTRACT.startsWith('KT1') || !address) return false;
+  if (!Number.isInteger(tokenId) || tokenId < 0) return false;
+  const balances = await json<any>(
+    fetcher,
+    `${KENNEL_CLUB_TZKT}/v1/tokens/balances?account=${encodeURIComponent(address)}&token.contract=${KENNEL_CLUB_CONTRACT}&token.tokenId=${tokenId}&balance.gt=0&limit=1`,
+  );
+  return Array.isArray(balances) && balances.length > 0;
+}
+
 function numberValue(value: unknown): number {
   const result = Number(value ?? 0);
   return Number.isFinite(result) ? result : 0;
