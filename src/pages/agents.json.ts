@@ -32,6 +32,9 @@ import {
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
+// The MCP catalogue comes from the server file itself, so the manifest
+// advertises exactly what tools/list and resources/list serve.
+import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -537,8 +540,8 @@ export const GET: APIRoute = async () => {
         aliases: ['https://pointcast.xyz/api/mcp'],
         transport: 'http',
         protocol: 'json-rpc-2.0',
-        protocolVersion: '2025-06-18',
-        server: { name: 'pointcast-v2', version: '2.7.0' },
+        protocolVersion: MCP_SERVER_INFO.protocolVersion,
+        server: { name: MCP_SERVER_INFO.name, version: MCP_SERVER_INFO.version },
         install: {
           customConnectorUrl: 'https://pointcast.xyz/api/mcp-v2',
           originalConnectorUrl: 'https://pointcast.xyz/api/mcp',
@@ -552,35 +555,12 @@ export const GET: APIRoute = async () => {
           firecrawl: POINTCAST_AGENT_KIT.webReader,
         },
         docs: 'https://pointcast.xyz/connectors',
-        tools: [
-          // drum hub (v0.1.0)
-          'drum_list_rooms', 'drum_who_is_here', 'drum_top_drummers',
-          'drum_now_playing', 'drum_global_count',
-          'drum_tap', 'drum_play_instrument', 'drum_sing_voice', 'drum_set_track',
-          // whole site (v0.2.0)
-          'town_map', 'surfaces_list', 'presence_snapshot', 'now_snapshot',
-          'today_highlights', 'blocks_recent', 'block_read', 'blocks_by_channel',
-          'blocks_search', 'local_snapshot', 'weather_get', 'editions_summary',
-          'contracts_status', 'channels_list', 'agents_manifest',
-          // client install layer (v0.3.0)
-          'connector_links', 'apps_list',
-          // Nouns Nation Battler agent bench + wiki (v0.11.0 / v2.7.0)
-          'nouns_battler_wiki', 'nouns_battler_manifest', 'nouns_battler_agent_tasks', 'nouns_battler_presence',
-          // Nouns Nation Battler results desk (v0.5.0 / v2.2.0)
-          'nouns_battler_result_tracker', 'nouns_battler_cowork_brief',
-          // Nouns Nation Battler claim + production desk (v0.10.0 / v2.6.0)
-          'nouns_battler_asset_factory', 'nouns_battler_sponsorship_desk', 'nouns_battler_production_desk',
-          'nouns_battler_claim_board',
-        ],
-        resources: [
-          'drum://rooms', 'drum://now-playing', 'drum://leaderboard', 'drum://schema',
-          'pointcast://map', 'pointcast://now', 'pointcast://feed',
-          'pointcast://contracts', 'pointcast://channels',
-          'pointcast://connectors', 'pointcast://apps',
-          'nouns-battler://wiki', 'nouns-battler://agent-bench', 'nouns-battler://manifest', 'nouns-battler://results-kit',
-          'nouns-battler://asset-factory', 'nouns-battler://sponsorship-desk', 'nouns-battler://production-desk',
-          'nouns-battler://claim-board',
-        ],
+        // Derived from functions/api/mcp.ts at build time — the same arrays
+        // tools/list and resources/list serve. Never hand-type these.
+        toolCount: MCP_TOOL_NAMES.length,
+        tools: MCP_TOOL_NAMES,
+        resourceCount: MCP_RESOURCE_URIS.length,
+        resources: MCP_RESOURCE_URIS,
         note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
       rss: {

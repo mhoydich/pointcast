@@ -39,6 +39,7 @@ The repo lies about freshness. The site moves 10+ PRs/day. Always fetch:
   ```
 
   Don't assume green CI = live. Verify on prod with `curl`.
+- **After the deploy is live, walk the town.** `npm run inspect:town -- --write` walks production and writes `src/data/town-inspector-report.json`; commit it in the next PR (`chore(inspector): walk YYYY-MM-DD`). The report is what `/health` and `/health.json` serve — it is never regenerated at deploy — and both mark a walk older than 14 days `stale`. `npm run inspect:town:preview -- <preview URL>` walks a Pages preview without touching the report. Details in README, "After the deploy: walk the town".
 
 ## Brief and handoff cadence
 

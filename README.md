@@ -161,6 +161,27 @@ npm run publish:live -- "feat(scope): describe the ship"
 The command fetches `origin/main`, refuses if the current HEAD is behind,
 runs the full build, commits local changes, and pushes `HEAD:main`.
 
+### After the deploy: walk the town
+
+The town inspector (`scripts/town-inspector.mjs`) walks every door
+`/agents.json` advertises and re-checks the manifest's claims. Its report
+is a committed file, `src/data/town-inspector-report.json`, served at
+`/health` and `/health.json`. Nothing regenerates it at deploy — a dirty
+tree at deploy time is not a commit — so the deployer runs it against
+production once the deploy is live and files the report in the next PR:
+
+```sh
+npm run inspect:town -- --write        # walks https://pointcast.xyz, writes the report
+git add src/data/town-inspector-report.json
+git commit -m "chore(inspector): walk $(date -u +%Y-%m-%d)"
+```
+
+`npm run inspect:town:preview -- https://<hash>.pointcast.pages.dev` walks
+a Pages preview instead (add `--write` to keep that report; usually you
+don't). Both surfaces compute the report's age from the build date and
+mark a walk older than 14 days `stale`, so a skipped walk shows on the
+page instead of hiding behind an old CLEAN.
+
 ---
 
 ## Contributing

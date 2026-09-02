@@ -1,14 +1,20 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import report from '../data/town-inspector-report.json';
+import { inspectorFreshness } from '../lib/town-inspector';
 
 const title = 'The Town Inspector';
 const description =
   'PointCast walks every door its manifest advertises and re-verifies every claim it makes. The report is public — drift becomes a filing, not a surprise.';
 const alternates = [{ type: 'application/json', href: '/health.json', title: 'Town Inspector report JSON' }];
 
+// Freshness is computed from the build date, the same way /health.json does
+// it, so a walk nobody has re-run since the last deploy is labelled stale
+// here instead of reading as current.
+const freshness = inspectorFreshness(report.inspectedAt, new Date());
 const inspected = new Date(report.inspectedAt);
 const inspectedLabel = inspected.toISOString().slice(0, 16).replace('T', ' · ') + ' UTC';
+const ageLabel = `${freshness.ageDays} day${freshness.ageDays === 1 ? '' : 's'} old`;
 const clean = report.verdict === 'clean';
 const passCount = report.claims.filter((c) => c.ok).length;
 ---
@@ -24,7 +30,7 @@ const passCount = report.claims.filter((c) => c.ok).length;
     </nav>
 
     <header class="hero">
-      <p class="kicker">Town Inspector · {inspectedLabel}</p>
+      <p class="kicker">Town Inspector · {inspectedLabel} · {ageLabel}{freshness.stale ? ' · stale' : ''}</p>
       <h1>A manifest is a promise. This office checks it.</h1>
       <p>
         The inspector reads <a href="/agents.json">/agents.json</a>, walks every advertised door on
@@ -36,6 +42,14 @@ const passCount = report.claims.filter((c) => c.ok).length;
         {clean ? 'CLEAN' : 'DRIFT'} — {report.doors.open}/{report.doors.checked} doors open ·
         {passCount}/{report.claims.length} claims verified
       </p>
+      {freshness.stale && (
+        <p class="stale" data-stale-after={freshness.staleAfterDays} data-age-days={freshness.ageDays}>
+          <span class="stale__mark">STALE</span>
+          This walk is {freshness.ageDays} days old. A walk older than {freshness.staleAfterDays} days is a
+          record, not evidence — the doors may have moved since. The next deploy should run
+          <code>npm run inspect:town -- --write</code> and commit the report.
+        </p>
+      )}
     </header>
 
     <section aria-label="Claims">
@@ -77,10 +91,13 @@ const passCount = report.claims.filter((c) => c.ok).length;
     <section aria-label="How it works">
       <h2>How it works</h2>
       <p>
-        <code>npm run inspect:town</code> runs the walk from any machine; <code>--write</code> commits
-        the findings to the repo, and this page serves them. An inspection is a deploy-time act, not a
-        per-request one — <code>inspectedAt</code> is the truth timestamp. Agents: fetch
-        <a href="/health.json">/health.json</a> before trusting stale corners of the manifest.
+        <code>npm run inspect:town</code> runs the walk from any machine; <code>--write</code> saves
+        the findings to the repo, and this page serves them. Nothing runs at deploy on its own: after
+        each deploy the deployer walks production with <code>--write</code> and commits the report in
+        the next PR. <code>inspectedAt</code> is the truth timestamp. This page and
+        <a href="/health.json">/health.json</a> compute the report's age from the build date and mark
+        a walk older than {freshness.staleAfterDays} days <code>stale</code>. Agents: read
+        <code>stale</code> before trusting the verdict.
       </p>
     </section>
   </main>
@@ -126,6 +143,24 @@ const passCount = report.claims.filter((c) => c.ok).length;
   }
   .verdict--clean { color: #1d6b3c; }
   .verdict--drift { color: #8a2b1d; }
+  .stale {
+    max-width: 44rem;
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #8a5a1d;
+    border-left-width: 4px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #333;
+  }
+  .stale__mark {
+    font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #8a5a1d;
+    margin-right: 0.5rem;
+  }
   h2 {
     font-family: 'JetBrains Mono Variable', monospace;
     font-size: 0.8rem;
