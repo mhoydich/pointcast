@@ -9,14 +9,19 @@ export function pagePayload(params) {
   if (params.bio.length > 280) throw new Error('Bio must be 280 characters or fewer.');
   if (params.links.length > 8) throw new Error('Add no more than 8 links.');
   if (!Number.isInteger(params.nounSeed) || params.nounSeed < 0 || params.nounSeed >= 1200) throw new Error('Choose a Noun seed from 0–1199.');
+  const name = String(params.name).trim();
+  if (new TextEncoder().encode(name).length > 64) throw new Error('Name must fit in 64 UTF-8 bytes.');
+  if (new TextEncoder().encode(params.bio).length > 512) throw new Error('Bio must fit in 512 UTF-8 bytes.');
+  const links = params.links.map(({ label, url }) => JSON.stringify({
+    label: String(label || url).trim().slice(0, 80),
+    url: String(url).trim(),
+  }));
+  if (links.some((link) => new TextEncoder().encode(link).length > 256)) throw new Error('Each link label and URL must fit in 256 UTF-8 bytes.');
   return {
     page: {
       bio: utf8ToHex(params.bio),
-      links: params.links.map(({ label, url }) => utf8ToHex(JSON.stringify({
-        label: String(label || url).trim().slice(0, 80),
-        url: String(url).trim(),
-      }))),
-      name: utf8ToHex(String(params.name).trim().slice(0, 64)),
+      links: links.map(utf8ToHex),
+      name: utf8ToHex(name),
       noun_seed: params.nounSeed,
     },
     token_id: params.tokenId,
