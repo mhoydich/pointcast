@@ -2,6 +2,9 @@ declare namespace Cloudflare {
   interface Env {
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
+    PASSKEY_ALLOWED_ORIGINS?: string;
+    SEND_EMAIL?: SendEmail;
+    PC_RATES_KV?: KVNamespace;
     POINTCAST_BROADCAST_EMAIL?: string;
     SPOTIFY_CLIENT_ID?: string;
     SPOTIFY_CLIENT_SECRET?: string;
