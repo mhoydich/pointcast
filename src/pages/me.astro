@@ -69,6 +69,25 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
         <ul class="me-identities" data-me-identities aria-label="Linked identities"></ul>
       </header>
 
+      <section class="me-passkeys" data-me-passkeys aria-label="Your passkeys">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">RETURN KEY · FACE ID / TOUCH ID</p>
+            <h2>Passkeys</h2>
+          </div>
+          <span data-me-passkey-count>Checking…</span>
+        </header>
+        <form class="me-passkeys__form" data-me-passkey-form>
+          <label>
+            <span>Device label</span>
+            <input name="label" type="text" maxlength="64" placeholder="This device" autocomplete="off" />
+          </label>
+          <button type="submit">Add a passkey to this device</button>
+        </form>
+        <output class="me-passkeys__status" data-me-passkey-status aria-live="polite"></output>
+        <ul class="me-passkeys__list" data-me-passkey-list></ul>
+      </section>
+
       <section class="me-summary" aria-label="Your PointCast utilities">
         <a class="me-summary__card me-summary__card--passport" href="/passport">
           <span class="me-summary__code">01 · PASSPORT</span>
@@ -170,7 +189,14 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
 
 <script>
   import type { AuthIdentity, PointCastUser } from '../lib/auth/types';
-  import { getSession, logout } from '../lib/auth/client';
+  import {
+    getPasskeys,
+    getSession,
+    logout,
+    registerPasskey,
+    removePasskey,
+    type PasskeySummary,
+  } from '../lib/auth/client';
   import { readPetSnapshot } from '../lib/pet-state';
 
   type HoldingToken = {
@@ -295,6 +321,42 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
       return item;
     });
     list.replaceChildren(...nodes);
+  }
+
+  function renderPasskeys(root: HTMLElement, passkeys: PasskeySummary[]): void {
+    const count = root.querySelector<HTMLElement>('[data-me-passkey-count]');
+    const list = root.querySelector<HTMLElement>('[data-me-passkey-list]');
+    if (count) count.textContent = `${passkeys.length} registered`;
+    if (!list) return;
+    if (!passkeys.length) {
+      list.replaceChildren(create('li', 'me-passkeys__empty', 'No passkey registered yet. Your current sign-in still works.'));
+      return;
+    }
+    list.replaceChildren(...passkeys.map((passkey) => {
+      const item = create('li', 'me-passkey');
+      const copy = create('span', 'me-passkey__copy');
+      copy.append(
+        create('strong', '', passkey.label),
+        create('small', '', passkey.lastUsedAt
+          ? `last used ${new Date(passkey.lastUsedAt).toLocaleDateString()}`
+          : `added ${new Date(passkey.createdAt).toLocaleDateString()}`),
+      );
+      const remove = create('button', '', 'Remove');
+      remove.type = 'button';
+      remove.dataset.meAction = 'passkey-remove';
+      remove.dataset.credentialId = passkey.credentialId;
+      item.append(copy, remove);
+      return item;
+    }));
+  }
+
+  async function refreshPasskeys(root: HTMLElement): Promise<void> {
+    const status = root.querySelector<HTMLOutputElement>('[data-me-passkey-status]');
+    try {
+      renderPasskeys(root, await getPasskeys());
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : 'Could not read passkeys.';
+    }
   }
 
   function renderWallets(root: HTMLElement, wallets: Wallet[]): void {
@@ -443,6 +505,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     renderCollections(root, payload);
     renderClaimDoor(root, payload.wallets);
     renderLocalState(root);
+    void refreshPasskeys(root);
     if (window.location.hash === '#holdings') {
       window.requestAnimationFrame(() => {
         root.querySelector<HTMLElement>('[data-me-holdings]')?.scrollIntoView({ block: 'start' });
@@ -499,7 +562,8 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
 
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      const action = target?.closest<HTMLElement>('[data-me-action]')?.dataset.meAction;
+      const actionElement = target?.closest<HTMLElement>('[data-me-action]');
+      const action = actionElement?.dataset.meAction;
       if (!action) return;
       if (action === 'link') {
         event.preventDefault();
@@ -510,12 +574,55 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
       } else if (action === 'retry') {
         event.preventDefault();
         roots.forEach((root) => void loadRoot(root, controller.signal));
+      } else if (action === 'passkey-remove') {
+        event.preventDefault();
+        const root = actionElement.closest<HTMLElement>('[data-me-root]');
+        const credentialId = actionElement.dataset.credentialId || '';
+        const status = root?.querySelector<HTMLOutputElement>('[data-me-passkey-status]');
+        if (!root || !credentialId) return;
+        actionElement.setAttribute('aria-disabled', 'true');
+        if (status) status.textContent = 'Removing passkey…';
+        void removePasskey(credentialId)
+          .then(async () => {
+            if (status) status.textContent = 'Passkey removed.';
+            await refreshPasskeys(root);
+          })
+          .catch((error) => {
+            actionElement.removeAttribute('aria-disabled');
+            if (status) status.textContent = error instanceof Error ? error.message : 'Could not remove passkey.';
+          });
       }
     }, { signal: controller.signal });
 
     document.addEventListener('submit', (event) => {
-      const form = (event.target instanceof Element ? event.target : null)
-        ?.closest<HTMLFormElement>('[data-me-claim-form]');
+      const target = event.target instanceof Element ? event.target : null;
+      const passkeyForm = target?.closest<HTMLFormElement>('[data-me-passkey-form]');
+      if (passkeyForm) {
+        event.preventDefault();
+        const root = passkeyForm.closest<HTMLElement>('[data-me-root]');
+        const labelField = passkeyForm.elements.namedItem('label');
+        const label = labelField instanceof HTMLInputElement ? labelField.value.trim() : '';
+        const button = passkeyForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+        const status = root?.querySelector<HTMLOutputElement>('[data-me-passkey-status]');
+        if (!root) return;
+        if (button) button.disabled = true;
+        if (status) status.textContent = 'Waiting for Face ID / Touch ID…';
+        void registerPasskey(label || 'This device')
+          .then(async () => {
+            if (status) status.textContent = 'Passkey added. You can return after clearing this browser.';
+            passkeyForm.reset();
+            await refreshPasskeys(root);
+          })
+          .catch((error) => {
+            if (status) status.textContent = error instanceof Error ? error.message : 'Could not add passkey.';
+          })
+          .finally(() => {
+            if (button) button.disabled = false;
+          });
+        return;
+      }
+
+      const form = target?.closest<HTMLFormElement>('[data-me-claim-form]');
       if (!form) return;
       event.preventDefault();
       const door = form.closest<HTMLElement>('[data-me-claim]');
@@ -622,6 +729,21 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-identity__copy small { max-width: 230px; overflow: hidden; color: #65717b; font: 400 8px/1.4 var(--pc-font-mono); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
 
   .me-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .me-passkeys { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-blue); background: #f5f9ff; }
+  .me-passkeys .me-section-head { margin-bottom: 12px; }
+  .me-passkeys__form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  .me-passkeys__form label { display: grid; gap: 6px; color: #667078; font: 500 8px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-passkeys__form input { min-width: min(280px, 70vw); padding: 10px; border: 1px solid #9bb7d2; background: #fff; font: 500 11px/1 var(--pc-font-mono); }
+  .me-passkeys__form button, .me-passkey button { padding: 10px 12px; border: 1px solid var(--me-blue); background: var(--me-blue); color: #fff; font: 500 8px/1 var(--pc-font-mono); text-transform: uppercase; cursor: pointer; }
+  .me-passkeys__form button:disabled { cursor: wait; opacity: .55; }
+  .me-passkeys__status { display: block; min-height: 14px; margin-top: 10px; color: #4f6478; font: 400 9px/1.4 var(--pc-font-mono); }
+  .me-passkeys__list { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .me-passkey { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px; border: 1px solid #bfd0df; background: #fff; }
+  .me-passkey__copy { display: grid; gap: 3px; }
+  .me-passkey__copy strong { font-size: 12px; font-weight: 600; }
+  .me-passkey__copy small, .me-passkeys__empty { color: #667078; font: 400 8px/1.4 var(--pc-font-mono); text-transform: uppercase; }
+  .me-passkey button { padding: 7px 9px; background: #fff; color: var(--me-blue); }
+  .me-passkey [aria-disabled='true'] { pointer-events: none; opacity: .5; }
   .me-summary__card { position: relative; min-height: 132px; padding: 14px; border: 1.5px solid currentColor; border-radius: 0; color: var(--me-ink); text-decoration: none; }
   .me-summary__card--passport { background: #fff3da; color: #795016; }
   .me-summary__card--seals { background: #dff3ed; color: #0f5b49; }
