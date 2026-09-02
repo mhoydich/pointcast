@@ -7,6 +7,19 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Kennel Club — The December Sitting (2026-09-02)
+
+Thirty-one painted dog portraits in a heritage equestrian register, one assigned to each day of December 2026, minted one per day on Tezos. Series data: `src/data/kennel-club-december-sitting.json`. Codex brief: `docs/briefs/2026-09-02-codex-kennel-club-december-sitting.md`. Manus brief: `docs/briefs/2026-09-02-manus-kennel-club-objkt.md`.
+
+- [x] (MH) Direct a daily-mint dog character series, regal heritage menswear register, one per day, on Tezos — `done` — chat 2026-09-02
+- [x] (CC) Name and cast 31 sittings with composed prompts, palette, composition rule, TZIP-21 attribute plan, and a series test — `done`
+- [ ] (X) Generate and verify the 31 plates at 1024×1280 through poster-image-engine, save PNG + WebP twins, flip `image.status` to `verified`, write the Codex log — `handoff`
+- [ ] (MH) Answer: December (31 sittings) or September (30)? Edition model per sitting: 24-hour open edition or fixed cap (proposed 31)? Price in tez? Origination signer? — `waiting-on-mh`
+- [ ] (CC) Write `contracts/v2/kennel_club_fa2.py` with a per-day mint window, wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
+- [ ] (M) objkt collection check, Shadownet then mainnet daily-window mint QA, mobile pass — `queued` — after the KT1 lands
+
+---
+
 ## WEDNESDAY 9:34 — PointCast Playlist Publication (2026-07-29)
 
 - [x] (MH) Direct a Wednesday-morning uplift playlist led by picky, plucky Grateful Dead and Jerry Garcia energy with light pop-country, accessible 1970s and 1980s, and current-canon crossover — `done`
