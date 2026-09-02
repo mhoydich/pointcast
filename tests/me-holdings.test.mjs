@@ -79,7 +79,41 @@ test('wallet holdings normalize TZIP-21 images and cache one snapshot per addres
       cache,
     });
     assert.equal(second.cache, 'hit');
-    assert.equal(calls, 2);
+    assert.equal(calls, 3);
+  });
+});
+
+test('seal big-map is queried once per address and travels inside the address cache', async () => {
+  await withHoldingsModule(async ({ getWalletHoldings }) => {
+    const address = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
+    const stored = new Map();
+    const cache = {
+      async match(request) { return stored.get(request.url)?.clone(); },
+      async put(request, response) { stored.set(request.url, response.clone()); },
+    };
+    let sealCalls = 0;
+    const fetcher = async (url) => {
+      const value = String(url);
+      if (value.includes('/tokens/balances/count')) return Response.json(1);
+      if (value.includes('/bigmaps/seals/keys')) {
+        sealCalls += 1;
+        return Response.json([{ key: '4', value: {
+          holder: address,
+          kind: '73686f7765642d7570',
+          evidence: '6669656c642d72656365697074',
+          issuer: 'tz2CfwkUFqB9LYwhQ5zu6gH1hgbKYdNwmLQp',
+          attested_at: '2026-09-02T21:30:55Z',
+          revoked: false,
+        } }]);
+      }
+      return Response.json([]);
+    };
+    const first = await getWalletHoldings(address, { collections: [], fetcher, cache });
+    assert.equal(first.seals[0].kind, 'showed-up');
+    assert.equal(first.seals[0].evidence, 'field-receipt');
+    const second = await getWalletHoldings(address, { collections: [], fetcher, cache });
+    assert.equal(second.seals[0].tokenId, '4');
+    assert.equal(sealCalls, 1);
   });
 });
 
