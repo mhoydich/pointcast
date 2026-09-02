@@ -27,7 +27,9 @@ test('Super Auth is a visible human and machine-readable PointCast surface', asy
   assert.match(registry, /noun: 'Shop'/);
   assert.match(registry, /noun: 'Object'/);
   assert.match(ribbon, /Identity becomes broadcast/);
-  assert.match(homepage, /<SuperAuthRibbon \/>/);
+  // front door rebuilt 2026-09-01: the SuperAuthRibbon module retired; the masthead carries the Super Auth door instead.
+  assert.match(homepage, /href="\/auth#spotify"/);
+  assert.match(homepage, /title="Spotify broadcast authorization and Super Auth controls"/);
   assert.match(dashboard, /data-dashboard-shopify/);
   assert.match(dashboard, /Super Auth switchboard/);
 });

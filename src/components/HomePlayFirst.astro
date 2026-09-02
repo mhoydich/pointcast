@@ -1,0 +1,174 @@
+---
+/**
+ * HomePlayFirst — the compact Rosebud on the front door.
+ *
+ * Mike, 2026-08-31: "try a new front page drum game ... very rosebud."
+ * Codex shipped the full garden as the whole homepage; on 2026-09-01 the
+ * front door was rebuilt to carry the whole town, so the four pads stay
+ * here as the first thing you can touch and the full instrument (pads +
+ * sixteen-step sequencer) lives at /rosebud. Same four voices, same synth.
+ *
+ * No audio until the first pointerdown / keydown creates the AudioContext.
+ * The local hit count is yours and resets when you leave; the global count
+ * is read from GET /api/drum ({globalTotal}) and is the drum house's own
+ * public counter, not this pad's.
+ */
+interface Props { taps: number; blockCount: number }
+const { taps, blockCount } = Astro.props;
+
+const pads = [
+  { id: 'kick', key: 'A', name: 'Root', note: 'low & round', color: '#efe6ce' },
+  { id: 'bloom', key: 'S', name: 'Bloom', note: 'paper snap', color: '#f3a0a6' },
+  { id: 'dew', key: 'K', name: 'Dew', note: 'silver air', color: '#f4d83e' },
+  { id: 'thorn', key: 'L', name: 'Thorn', note: 'dry bite', color: '#7aa279' },
+];
+---
+
+<section class="shelf play" id="play" aria-labelledby="play-title" data-play-first style="--shelf-color:#993C1D;--shelf-color-2:#185FA5">
+  <div class="play__copy">
+    <p class="shelf__kicker">Play first · Rosebud · 4 pads · no account · sound on</p>
+    <h1 class="play__title" id="play-title">Still experimental. <em>Still on.</em></h1>
+    <p class="play__dek">
+      {blockCount} numbered blocks, a magazine, a drum house, a few dozen rooms, a constellation of sibling sites,
+      and a desk for agents, made in public from El Segundo by Mike and three resident agents. The board is public,
+      the traffic is thin, and the long game is the point.
+    </p>
+    <p class="play__hint">Hit a pad, or press <kbd>A</kbd> <kbd>S</kbd> <kbd>K</kbd> <kbd>L</kbd>. Then pick a door.</p>
+    <div class="shelf__actions">
+      <a href="/rosebud">Open the full garden</a>
+      <a href="/drum">The drum universe</a>
+      <a href="#start-here">Start here ↓</a>
+    </div>
+  </div>
+  <div class="play__machine" role="group" aria-label="Rosebud drum pads">
+    <div class="play__labels"><span>PointCast sound system</span><span>PC–RB / 2026 · by Codex</span></div>
+    <div class="play__pads">
+      {pads.map((pad) => (
+        <button class="play__pad" type="button" data-drum={pad.id} style={`--pad:${pad.color}`} aria-label={`Play ${pad.name}: ${pad.note}. Keyboard key ${pad.key}`}>
+          <span class="play__key" aria-hidden="true">{pad.key}</span>
+          <span class="play__flower" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <strong>{pad.name}</strong>
+          <small>{pad.note}</small>
+        </button>
+      ))}
+    </div>
+    <div class="play__counters">
+      <span><b data-hit-count>000</b> hits this visit · yours, resets when you leave</span>
+      <span><b data-drum-global>{taps.toLocaleString('en-US')}</b> public hits in the drum house · <a href="/api/drum">/api/drum</a></span>
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-play-first]');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+    const keyMap = { a: 'kick', s: 'bloom', k: 'dew', l: 'thorn' };
+    let audio = null;
+    let hits = 0;
+    const ensureAudio = () => {
+      if (!audio) audio = new AudioContext();
+      if (audio.state === 'suspended') audio.resume();
+      return audio;
+    };
+    const hit = (drum) => {
+      const ctx = ensureAudio();
+      const now = ctx.currentTime;
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      if (drum === 'kick') {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(148, now);
+        osc.frequency.exponentialRampToValueAtTime(43, now + 0.28);
+        gain.gain.setValueAtTime(0.82, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.32);
+      } else {
+        const size = Math.floor(ctx.sampleRate * 0.38);
+        const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < size; i += 1) data[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        const filter = ctx.createBiquadFilter();
+        noise.buffer = buffer;
+        filter.type = drum === 'bloom' ? 'bandpass' : 'highpass';
+        filter.frequency.value = drum === 'bloom' ? 1450 : drum === 'dew' ? 7600 : 3100;
+        filter.Q.value = drum === 'bloom' ? 0.75 : 1.2;
+        gain.gain.setValueAtTime(drum === 'bloom' ? 0.46 : 0.24, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (drum === 'dew' ? 0.075 : 0.18));
+        noise.connect(filter);
+        filter.connect(gain);
+        noise.start(now);
+        noise.stop(now + 0.38);
+      }
+      const pad = root.querySelector(`[data-drum="${drum}"]`);
+      pad?.classList.add('is-hit');
+      window.setTimeout(() => pad?.classList.remove('is-hit'), 105);
+      hits += 1;
+      const count = root.querySelector('[data-hit-count]');
+      if (count) count.textContent = String(hits).padStart(3, '0');
+    };
+    root.querySelectorAll('[data-drum]').forEach((button) => {
+      button.addEventListener('pointerdown', (event) => { event.preventDefault(); hit(button.dataset.drum); });
+      button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); hit(button.dataset.drum); } });
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      const drum = keyMap[event.key.toLowerCase()];
+      if (drum) hit(drum);
+    });
+    // The page fetches /api/drum once and broadcasts it; keep the build-time number if it never arrives.
+    document.addEventListener('pc:drum', (event) => {
+      const j = event.detail;
+      const el = root.querySelector('[data-drum-global]');
+      if (el && j && typeof j.globalTotal === 'number') el.textContent = j.globalTotal.toLocaleString('en-US');
+    });
+  })();
+</script>
+
+<style>
+  .play { display: grid; grid-template-columns: minmax(300px, .95fr) minmax(0, 1.25fr); margin-top: 16px; }
+  .play__copy { display: flex; flex-direction: column; gap: 14px; padding: clamp(22px, 3.5vw, 40px); border-right: 2px solid var(--home-ink); }
+  .play__title { margin: 0; font-size: clamp(34px, 4.6vw, 62px); font-weight: 730; line-height: .94; letter-spacing: -.045em; text-wrap: balance; }
+  .play__title em { font-style: normal; color: #993C1D; }
+  .play__dek { margin: 0; max-width: 50ch; font-size: 15.5px; line-height: 1.5; }
+  .play__hint { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--home-faint); }
+  .play__hint kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid var(--home-ink); font: inherit; color: var(--home-ink); box-shadow: 0 2px 0 var(--home-ink); }
+  .play .shelf__actions { margin-top: auto; }
+  .play__machine { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: clamp(14px, 2.5vw, 22px); background: #2a2d27; color: #efe6ce; }
+  .play__labels { display: flex; justify-content: space-between; font: 700 9px var(--pc-font-mono); letter-spacing: .16em; text-transform: uppercase; color: #bdb8a8; }
+  .play__pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex: 1; }
+  .play__pad { position: relative; min-height: 168px; padding: 14px; border: 1.5px solid #191b17; background: var(--pad); color: #231d19; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; text-align: left; font-family: inherit; cursor: pointer; overflow: hidden; touch-action: manipulation; box-shadow: inset 0 -8px 0 rgba(51,37,28,.16), 0 6px 0 #131510; transition: transform 90ms ease, box-shadow 90ms ease, filter 90ms ease; }
+  .play__pad:hover { filter: brightness(1.05); transform: translateY(-2px); }
+  .play__pad.is-hit, .play__pad:active { transform: translateY(5px); box-shadow: inset 0 2px 0 rgba(51,37,28,.2), 0 1px 0 #131510; filter: saturate(1.2) brightness(1.06); }
+  .play__pad:focus-visible { outline: 3px solid #f4d83e; outline-offset: 2px; }
+  .play__pad strong { font-size: clamp(20px, 2vw, 28px); font-weight: 730; letter-spacing: -.04em; line-height: 1; }
+  .play__pad small { margin-top: 4px; font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  .play__key { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid currentColor; font: 700 9px var(--pc-font-mono); }
+  .play__flower { position: absolute; top: 14px; left: 50%; width: 88px; height: 88px; transform: translateX(-50%); opacity: .55; }
+  .play__flower i { position: absolute; left: 28px; top: 6px; width: 32px; height: 48px; border: 1.5px solid currentColor; border-radius: 70% 30% 60% 40%; transform-origin: 50% 38px; }
+  .play__flower i:nth-child(2) { transform: rotate(90deg); }
+  .play__flower i:nth-child(3) { transform: rotate(180deg); }
+  .play__flower i:nth-child(4) { transform: rotate(270deg); }
+  .play__flower::after { content: ''; position: absolute; inset: 36px; border-radius: 50%; background: currentColor; }
+  .play__counters { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #aaa99d; }
+  .play__counters b { color: #f4d83e; font-weight: 700; }
+  .play__counters a { color: #efe6ce; }
+  @media (max-width: 880px) {
+    .play { grid-template-columns: 1fr; }
+    .play__copy { border-right: 0; border-bottom: 2px solid var(--home-ink); }
+    .play__pads { grid-template-columns: repeat(2, 1fr); }
+    .play__pad { min-height: 132px; }
+  }
+  @media (max-width: 560px) {
+    .play__pad { min-height: 112px; padding: 10px; }
+    .play__flower { transform: translateX(-50%) scale(.7); top: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .play__pad { transition: none; } }
+</style>

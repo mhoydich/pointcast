@@ -22,7 +22,8 @@ test('the Future Book doorway and homepage link to the native Microduck route', 
   assert.match(book, /The living edition/);
   assert.match(book, /href="\/digital-pets\/microduck"/);
   assert.match(book, /Companion 05/);
-  assert.match(home, /href="\/digital-pets\/microduck"/);
+  // front door rebuilt 2026-09-01: the Microduck door is a `covers` entry in index.astro's frontmatter (href: '/digital-pets/microduck', № 0579), not an inline <a href="…">.
+  assert.match(home, /href(?:="|: ')\/digital-pets\/microduck["']/);
 });
 
 test('Microduck publishes full human and machine surfaces', async () => {

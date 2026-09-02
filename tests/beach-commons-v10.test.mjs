@@ -99,13 +99,14 @@ test('Collecting, netting, wildlife, restoration, and event boundaries stay expl
 });
 
 test('Tide Cabinet has machine, Block, feed, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, sitemap, llms, llmsFull, homepage] = await Promise.all([
+  const [endpoint, blockText, sitemap, llms, llmsFull, homepage, rack] = await Promise.all([
     read('src/pages/beach-commons/v10.json.ts'),
     read('src/content/blocks/0528.json'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
     read('src/pages/index.astro'),
+    read('src/components/HomeMagazineRack.astro'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -118,10 +119,13 @@ test('Tide Cabinet has machine, Block, feed, homepage, and discovery twins', asy
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v10'/);
   assert.match(llms, /PointCast Field Study 010/);
   assert.match(llmsFull, /TIDE CABINET/);
-  assert.match(homepage, /href="\/beach-commons\/v10"/);
-  assert.match(homepage, /Block 0528/);
-  assert.match(homepage, /href="\/beach-commons"/);
-  assert.match(homepage, /href="\/beach-commons\.json"/);
+  // front door rebuilt 2026-09-01: Beach Commons doors live in index.astro's beachCommonsVolumes/covers arrays and render through <HomeMagazineRack /> (№ blockId chips + the index JSON link).
+  assert.match(homepage, /<HomeMagazineRack\b/);
+  assert.match(homepage, /href: '\/beach-commons\/v10'/);
+  assert.match(homepage, /blockId: '0528'/);
+  assert.match(rack, /№ \{v\.blockId\}/);
+  assert.match(homepage, /href: '\/beach-commons'/);
+  assert.match(rack, /href="\/beach-commons\.json"/);
 });
 
 test('Tide Cabinet image assets have the intended dimensions', async () => {

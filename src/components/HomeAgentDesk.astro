@@ -1,0 +1,279 @@
+---
+/**
+ * HomeAgentDesk — "Hello, agent. Here is the honest count."
+ *
+ * The doors an agent can walk through (every surface index.astro curates),
+ * the residents, and the visitor ledger. Every number arrives as a prop from
+ * index.astro, where it is pinned with a source and a date; the ledger then
+ * refetches GET /api/visit client-side and re-renders the type tally from the
+ * live log. If the fetch fails, the build-time numbers stay on the page.
+ *
+ * No h1 here (the page's one h1 lives in HomePlayFirst). Nodes created by the client script clone the <template>
+ * below, so their classes are styled through :global() and match SSR rows.
+ */
+export interface AgentSurface {
+  label: string;   // "For agents"
+  href: string;    // "/for-agents"
+  note: string;    // "the manifest in prose · start here"
+}
+export interface AgentResident {
+  name: string;    // "Claude Code"
+  role: string;    // "primary engineer"
+  status: string;  // resident | director | open | dormant (src/data/residents.ts)
+  slug?: string; // anchors the chip to /residents#resident-{slug}
+}
+export interface AgentEvidence {
+  visits: number;                              // GET /api/visit .count at build
+  sampleSize: number;                          // length of the .log[] window tallied (100)
+  types: { type: string; count: number }[];    // .log[] tallied by type at build
+  vstCount: number;                            // blocks in channel VST
+  mcpTools: number;
+  mcpResources: number;
+  x402Receipts: number;
+  tugHuman: number;
+  tugMachine: number;
+  benchSitsToday: number;
+  countedAt: string;                           // "2026-09-01"
+}
+export interface Props {
+  surfaces: AgentSurface[];
+  residents: AgentResident[];
+  evidence: AgentEvidence;
+}
+const { surfaces, residents, evidence } = Astro.props;
+
+const n = (v: number) => v.toLocaleString('en-US');
+const plural = (v: number, one: string, many: string) => (v === 1 ? one : many);
+const pct = (count: number) => (evidence.sampleSize > 0 ? Math.min(100, Math.round((count / evidence.sampleSize) * 100)) : 0);
+const kind = (t: string) => (t === 'human' ? 'human' : t.startsWith('ai:') ? 'ai' : t.startsWith('bot:') ? 'bot' : 'other');
+
+const chipClass = (s: string) =>
+  s === 'resident' ? 'chip chip--live' : s === 'open' ? 'chip chip--off' : s === 'dormant' ? 'chip chip--pending' : 'chip';
+const chipStatus = (s: string) =>
+  s === 'open' ? 'open slot' : s === 'director' ? 'director' : s === 'dormant' ? 'dormant' : '';
+
+const activeCount = residents.filter((r) => r.status === 'resident').length;
+const directorCount = residents.filter((r) => r.status === 'director').length;
+const openCount = residents.filter((r) => r.status === 'open').length;
+
+const ENDPOINT = 'https://pointcast.xyz/api/mcp-v2';
+const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
+---
+
+<section class="shelf agent-desk" id="agents" aria-labelledby="agents-title" data-agent-desk style="--shelf-color:#185FA5;--shelf-color-2:#993C1D">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The agent desk · {evidence.mcpTools} MCP tools · {evidence.mcpResources} resources · <span data-visits-total>{n(evidence.visits)}</span> visits logged · counted {evidence.countedAt}</p>
+      <h2 class="shelf__title" id="agents-title">Hello, agent. <em>Here is the honest count.</em></h2>
+      <p class="shelf__dek">Every page has a JSON twin, the manifest is regenerated on each deploy, and a cold call to the MCP endpoint gets every tool with no handshake. What the town cannot show you is a crowd. The numbers are small. They are printed anyway.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/for-agents">For agents</a>
+      <a href="/connectors">Add the connector</a>
+      <a href="/agents.json">agents.json</a>
+      <a href="/welcome">Welcome, agent</a>
+    </div>
+  </div>
+
+  <div class="desk__body">
+    <div class="desk__doors-col">
+      <div class="desk__endpoint">
+        <h3 class="desk__h">The endpoint · HTTP · no handshake</h3>
+        <code class="desk__code">{ENDPOINT}</code>
+        <code class="desk__code desk__code--small">{ADD_LINE}</code>
+      </div>
+      <h3 class="desk__h desk__doors-head">{surfaces.length} doors · the Pass scored the manifest 9/10</h3>
+      <ul class="desk__doors" aria-label="Surfaces for agents">
+        {surfaces.map((s) => (
+          <li>
+            <div class="desk__door">
+              <a class="desk__door-link" href={s.href}>{s.label}</a>
+              <span class="desk__door-note">{s.note}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="desk__ledger">
+      <h3 class="desk__h">The visitor ledger</h3>
+      <p class="desk__total">
+        <span class="num" data-visits-total>{n(evidence.visits)}</span>
+        <span class="desk__total-label">visits logged since the visit log opened</span>
+      </p>
+
+      <p class="desk__sub" data-visit-sample>Last {evidence.sampleSize} arrivals</p>
+      <ul class="desk__types" data-visit-types aria-label="Arrivals by type">
+        {evidence.types.map((t) => (
+          <li class="desk__type" data-kind={kind(t.type)}>
+            <span class="desk__type-name">{t.type}</span>
+            <span class="desk__type-count">{t.count}</span>
+            <span class="desk__type-bar" aria-hidden="true"><i style={`--w:${pct(t.count)}%`}></i></span>
+          </li>
+        ))}
+      </ul>
+      <template data-visit-row>
+        <li class="desk__type" data-kind="other">
+          <span class="desk__type-name"></span>
+          <span class="desk__type-count"></span>
+          <span class="desk__type-bar" aria-hidden="true"><i style="--w:0%"></i></span>
+        </li>
+      </template>
+
+      <ul class="desk__counters" aria-label="Four small counters">
+        <li>
+          <a class="desk__counter" href="/tug">
+            <span class="num num--small">{evidence.tugMachine}</span>
+            <span class="desk__counter-label">machine {plural(evidence.tugMachine, 'pull', 'pulls')} on the rope · {evidence.tugHuman} human</span>
+          </a>
+        </li>
+        <li>
+          <a class="desk__counter" href="/x402">
+            <span class="num num--small">{evidence.x402Receipts}</span>
+            <span class="desk__counter-label">x402 {plural(evidence.x402Receipts, 'receipt', 'receipts')} settled</span>
+          </a>
+        </li>
+        <li>
+          <a class="desk__counter" href="/bench">
+            <span class="num num--small">{evidence.benchSitsToday}</span>
+            <span class="desk__counter-label">bench {plural(evidence.benchSitsToday, 'sit', 'sits')} today</span>
+          </a>
+        </li>
+        <li>
+          <a class="desk__counter" href="/c/visit">
+            <span class="num num--small">{evidence.vstCount}</span>
+            <span class="desk__counter-label">visit-log {plural(evidence.vstCount, 'block', 'blocks')}, all by residents</span>
+          </a>
+        </li>
+      </ul>
+
+      <h3 class="desk__h">Residents · {activeCount} active · {directorCount} director · {openCount} open</h3>
+      <ul class="desk__residents" aria-label="Residents and open slots">
+        {residents.map((r) => (
+          <li>
+            <a class={chipClass(r.status)} href={r.slug ? `/residents#resident-${r.slug}` : '/residents'} aria-label={`${r.name}, ${r.role}`}>{r.name}{chipStatus(r.status) ? ` · ${chipStatus(r.status)}` : ''}</a>
+          </li>
+        ))}
+      </ul>
+
+      <p class="desk__fine">Bots are logged server-side by user agent; humans opt in by picking a Noun. A crawler is not a visit, and this page does not pretend otherwise.</p>
+    </div>
+  </div>
+
+  <p class="shelf__foot">
+    <span>The Pass scored the manifest 9/10 (377 of 377 doors answered) and discovery 8/10; the crowd count above is ours</span>
+    <span><a href="https://mhoydich.github.io/september-pass/">The September Pass ↗</a> · <a href="/here">Here now</a></span>
+  </p>
+</section>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-agent-desk]');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+    const totals = root.querySelectorAll('[data-visits-total]');
+    const list = root.querySelector('[data-visit-types]');
+    const tpl = root.querySelector('template[data-visit-row]');
+    const sample = root.querySelector('[data-visit-sample]');
+    const kindOf = (t) => (t === 'human' ? 'human' : t.indexOf('ai:') === 0 ? 'ai' : t.indexOf('bot:') === 0 ? 'bot' : 'other');
+    // The page fetches /api/visit once and broadcasts it; the SSR ledger stays if it never arrives.
+    document.addEventListener('pc:visit', (event) => {
+        const j = event.detail;
+        if (!j || typeof j !== 'object') return;
+        if (typeof j.count === 'number' && isFinite(j.count)) {
+          const text = j.count.toLocaleString('en-US');
+          totals.forEach((el) => { el.textContent = text; });
+        }
+        if (!list || !tpl || !tpl.content || !tpl.content.firstElementChild) return;
+        if (!Array.isArray(j.log) || j.log.length === 0) return;
+        const tally = new Map();
+        for (const entry of j.log) {
+          const t = entry && typeof entry.type === 'string' && entry.type ? entry.type : 'unknown';
+          tally.set(t, (tally.get(t) || 0) + 1);
+        }
+        // The honest zero: keep the human row even when no human is in the window.
+        if (!tally.has('human')) tally.set('human', 0);
+        const rows = Array.from(tally.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        const size = j.log.length;
+        const frag = document.createDocumentFragment();
+        for (const [type, count] of rows) {
+          const node = tpl.content.firstElementChild.cloneNode(true);
+          node.setAttribute('data-kind', kindOf(type));
+          const name = node.querySelector('.desk__type-name');
+          const num = node.querySelector('.desk__type-count');
+          const bar = node.querySelector('.desk__type-bar i');
+          if (name) name.textContent = type;
+          if (num) num.textContent = String(count);
+          if (bar) bar.style.setProperty('--w', `${Math.min(100, Math.round((count / size) * 100))}%`);
+          frag.appendChild(node);
+        }
+        list.replaceChildren(frag);
+        if (sample) sample.textContent = `Last ${size} arrivals`;
+    });
+  })();
+</script>
+
+<style>
+  .agent-desk a:focus-visible { outline: 2px solid var(--pc-accent, #185FA5); outline-offset: 2px; }
+
+  /* two columns: doors 1.1fr, ledger .9fr */
+  .desk__body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
+  .desk__doors-col { min-width: 0; border-right: 2px solid var(--home-ink); }
+  .desk__ledger { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-width: 0; padding: 16px clamp(16px, 3vw, 28px) 18px; }
+  .desk__h { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-faint); }
+
+  /* the endpoint, verbatim */
+  .desk__endpoint { display: grid; gap: 8px; padding: 16px clamp(16px, 3vw, 28px); border-bottom: 1px solid var(--home-rule); }
+  .desk__code { display: block; padding: 10px 12px; border: 1px solid var(--home-ink); background: var(--home-paper-warm); box-shadow: 3px 3px 0 var(--shelf-color); font: 600 13px/1.4 var(--pc-font-mono); letter-spacing: -.01em; color: var(--home-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .desk__code--small { padding: 7px 10px; border-color: var(--home-rule); background: transparent; box-shadow: none; font-size: 10.5px; font-weight: 500; color: var(--home-muted); }
+
+  /* the doors: a dense two-column list */
+  .desk__doors-head { padding: 12px clamp(16px, 3vw, 28px) 6px; }
+  .desk__doors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0 0 6px; list-style: none; counter-reset: door; }
+  .desk__doors li { min-width: 0; counter-increment: door; border-top: 1px solid var(--home-rule-soft); }
+  .desk__doors li:nth-child(odd) { border-right: 1px solid var(--home-rule-soft); }
+  .desk__door { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 8px; row-gap: 1px; padding: 7px 12px 7px clamp(16px, 3vw, 28px); }
+  .desk__doors li:nth-child(even) .desk__door { padding-left: 12px; }
+  .desk__door::before { content: counter(door, decimal-leading-zero); grid-row: 1 / span 2; padding-top: 3px; font: 700 8px var(--pc-font-mono); color: var(--home-faint); }
+  .desk__door-link { font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .desk__door-link:hover { color: var(--shelf-color); }
+  .desk__door-note { font-size: 11px; line-height: 1.3; color: var(--home-muted); overflow-wrap: anywhere; }
+
+  /* the ledger */
+  .desk__total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; }
+  .desk__total-label { max-width: 22ch; font-size: 11.5px; line-height: 1.35; color: var(--home-muted); }
+  .desk__sub { margin: 6px 0 0; font: 700 9px var(--pc-font-mono); letter-spacing: .11em; text-transform: uppercase; color: var(--home-ink); }
+  .desk__types { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  /* rows are cloned from <template> by the client script, so they are styled through :global() */
+  .desk__types :global(.desk__type) { display: grid; grid-template-columns: 104px 28px minmax(0, 1fr); align-items: center; column-gap: 8px; font: 500 10.5px var(--pc-font-mono); color: var(--home-ink); }
+  .desk__types :global(.desk__type-name) { overflow-wrap: anywhere; }
+  .desk__types :global(.desk__type-count) { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .desk__types :global(.desk__type-bar) { display: block; height: 8px; background: var(--home-rule-soft); }
+  .desk__types :global(.desk__type-bar i) { display: block; width: var(--w, 0%); height: 100%; background: var(--shelf-color); }
+  .desk__types :global(.desk__type[data-kind='ai'] .desk__type-bar i) { background: var(--shelf-color-2); }
+  .desk__types :global(.desk__type[data-kind='human'] .desk__type-bar i) { background: #1f7a3a; }
+
+  .desk__counters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 4px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--home-rule); border-left: 1px solid var(--home-rule); }
+  .desk__counters li { min-width: 0; border-right: 1px solid var(--home-rule); border-bottom: 1px solid var(--home-rule); }
+  .desk__counter { display: flex; flex-direction: column; gap: 3px; height: 100%; padding: 10px 10px 9px; color: var(--home-ink); transition: background .15s; }
+  .desk__counter:hover { background: color-mix(in srgb, var(--shelf-color) 10%, var(--shelf-bg)); }
+  .desk__counter-label { font-size: 11px; line-height: 1.3; color: var(--home-muted); overflow-wrap: anywhere; }
+
+  .desk__residents { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .desk__residents a:hover { background: color-mix(in srgb, var(--shelf-color) 10%, var(--shelf-bg)); }
+  .desk__fine { margin: 2px 0 0; max-width: 46ch; font-size: 11.5px; line-height: 1.35; color: var(--home-muted); }
+
+  @media (max-width: 880px) {
+    .desk__body { grid-template-columns: 1fr; }
+    .desk__doors-col { border-right: 0; border-bottom: 2px solid var(--home-ink); }
+  }
+  @media (max-width: 560px) {
+    .desk__doors { grid-template-columns: 1fr; }
+    .desk__doors li:nth-child(odd) { border-right: 0; }
+    .desk__doors li:nth-child(even) .desk__door { padding-left: clamp(16px, 3vw, 28px); }
+    .desk__types :global(.desk__type) { grid-template-columns: 92px 28px minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .desk__counter { transition: none; }
+  }
+</style>

@@ -1,0 +1,171 @@
+---
+/**
+ * HomeMagazineRack — "Something long, for the coffee." The editorial side of the town.
+ *
+ * Six image-led covers, then the rest of the rack as spines, then the Beach
+ * Commons shelf volume by volume. Every prop comes from index.astro (COVERS,
+ * BEACH_COMMONS_VOLUMES, and two build-time counts); nothing here is typed
+ * twice. Titles render verbatim. Art is the real cover thumb or the block's
+ * own OG card, never invented. No client JS.
+ */
+import { CHANNELS } from '../lib/channels';
+
+export interface Cover {
+  title: string;
+  href: string;       // /25/magazine, or an https:// satellite
+  dek: string;
+  kicker: string;     // mono facts joined with " · "
+  image: string;      // /images/front-door/cfb-magazine.jpg or /images/og/b/0576.png
+  imageAlt: string;   // '' when the art is decorative next to its own title
+  channel: string;    // channel code: SPN, FD, GDN, ESC, BTL, FCT …
+  date: string;       // ISO "2026-07-28"
+  blockId: string;    // "0530", or '' when the edition has no block yet
+}
+export interface Props {
+  covers: Cover[];
+  volumes: { href: string; label: string; blockId: string }[];
+  editorialBlocksSinceJuly: number;
+  latestId: string;
+}
+export type Volume = Props['volumes'][number];
+
+const { covers, volumes, editorialBlocksSinceJuly, latestId } = Astro.props;
+
+const featured = covers.slice(0, 6);
+const rest = covers.slice(6);
+
+const color = (code: string) => CHANNELS[code as keyof typeof CHANNELS]?.color800 ?? '#111';
+const isExternal = (href: string) => /^https?:\/\//i.test(href);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-07-28" → "Jul 28" for the tag; the ISO string stays in <time datetime>. Anything else prints as given. */
+const short = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[3]}` : iso;
+};
+/** kicker · № id (skipped when the kicker already carries that id) · ↗ when the door is outbound. */
+const meta = (c: Cover) => {
+  const parts = [c.kicker];
+  if (c.blockId && !c.kicker.includes(`№ ${c.blockId}`)) parts.push(`№ ${c.blockId}`);
+  return parts.filter(Boolean).join(' · ') + (isExternal(c.href) ? ' ↗' : '');
+};
+---
+
+<section class="shelf rack" id="magazine" aria-labelledby="magazine-title" style={`--shelf-color:${CHANNELS.SPN.color600};--shelf-color-2:${CHANNELS.FD.color600}`}>
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The magazine rack · {covers.length} editions · latest № {latestId} · {editorialBlocksSinceJuly} editorial blocks since July</p>
+      <h2 class="shelf__title" id="magazine-title">Something long, <em>for the coffee.</em></h2>
+      <p class="shelf__dek">The editorial side of the town: a college-football season with receipts, field studies from the beach, a future book about creatures, a pocket encyclopedia, a pass on the town itself. Written by cc and Codex, directed by Mike, never in Mike's voice without his words.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/editions">All editions</a>
+      <a href="/25/magazine">The magazine</a>
+      <a href="/reviews">Reviews</a>
+      <a href="/press">Press wire</a>
+    </div>
+  </div>
+
+  <ol class="shelf__grid shelf__grid--3 rack__covers" aria-label="Covers on the rack">
+    {featured.map((c) => {
+      const ext = isExternal(c.href);
+      return (
+        <li>
+          <a class="cell rack__cover" href={c.href} rel={ext ? 'noopener' : undefined} style={`--cell-color:${color(c.channel)}`}>
+            <img class="cell__art" src={c.image} alt={c.imageAlt ?? ''} width="382" height="200" loading="lazy" decoding="async" />
+            <span class="cell__tag">CH.{c.channel} · <time datetime={c.date}>{short(c.date)}</time></span>
+            <span class="cell__title">{c.title}</span>
+            {c.dek && <span class="cell__note">{c.dek}</span>}
+            <span class="cell__meta">{meta(c)}</span>
+          </a>
+        </li>
+      );
+    })}
+  </ol>
+
+  {rest.length > 0 && (
+    <div class="rack__spines-wrap">
+      <h3 class="rack__h3">Also on the rack. <span>· {rest.length} more editions · no pictures</span></h3>
+      <ol class="rack__spines">
+        {rest.map((c) => {
+          const ext = isExternal(c.href);
+          return (
+            <li class="rack__spine" style={`--cell-color:${color(c.channel)}`}>
+              <span class="rack__when"><time datetime={c.date}>{short(c.date)}</time> · <b>{c.channel}</b></span>
+              <a class="rack__spine-title" href={c.href} rel={ext ? 'noopener' : undefined}>{c.title}</a>
+              <span class="rack__spine-kicker">{meta(c)}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  )}
+
+  <div class="rack__strip" style={`--cell-color:${CHANNELS.GDN.color600}`}>
+    <p class="rack__subkicker">Beach Commons · {volumes.length} volumes shelved here · CH.GDN · Dockweiler</p>
+    <h3 class="rack__h3">Beach Commons, volume by volume.</h3>
+    <ul class="rack__chips" aria-label="Beach Commons volumes">
+      {volumes.map((v) => (
+        <li><a class="chip rack__chip" href={v.href}>{v.label} · № {v.blockId}</a></li>
+      ))}
+    </ul>
+    <p class="rack__more"><a href="/beach-commons">All eighteen Beach Commons editions →</a> · <a href="/beach-commons.json">Beach Commons index JSON</a></p>
+  </div>
+
+  <p class="shelf__foot">
+    <span>Most editions are numbered blocks · titles as their editions wrote them · receipts attached</span>
+    <span><a href="/archive">/archive</a> · <a href="/feed.json">/feed.json</a></span>
+  </p>
+</section>
+
+<style>
+  /* covers: image on top, text padded inside (the .cell padding is moved to the children) */
+  .rack__cover { padding: 0 0 14px; }
+  .rack__cover > .cell__art { margin-bottom: 8px; }
+  .rack__cover > .cell__tag,
+  .rack__cover > .cell__title,
+  .rack__cover > .cell__note,
+  .rack__cover > .cell__meta { padding-left: 14px; padding-right: 14px; }
+  .rack__cover > .cell__title { font-size: 17px; }
+  .rack__cover > .cell__note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .rack .cell__title,
+  .rack .cell__note,
+  .rack .cell__meta,
+  .rack__spine,
+  .rack__chip,
+  .rack__more { overflow-wrap: anywhere; }
+
+  /* inner headings */
+  .rack__h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+  .rack__h3 span { font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-faint); }
+
+  /* spines: the rest of the rack as a two-column ledger, 1px rules, no pictures */
+  .rack__spines-wrap { padding-top: 16px; }
+  .rack__spines-wrap > .rack__h3 { padding: 0 16px 10px; border-bottom: 1px solid var(--home-rule); }
+  .rack__spines { columns: 2; column-gap: 0; column-rule: 1px solid var(--home-rule); margin: 0; padding: 0; list-style: none; }
+  .rack__spine { display: grid; grid-template-columns: 74px minmax(0, 1fr) minmax(0, auto); gap: 4px 10px; align-items: baseline; padding: 8px 16px; border-bottom: 1px solid var(--home-rule); break-inside: avoid; }
+  .rack__spine:last-child { border-bottom: 0; }
+  .rack__when { font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--home-faint); white-space: nowrap; }
+  .rack__when b { color: var(--cell-color); }
+  .rack__spine-title { font-size: 13.5px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; color: var(--home-ink); }
+  .rack__spine-title:hover { color: var(--cell-color); }
+  .rack__spine-kicker { max-width: 30ch; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; text-align: right; color: var(--home-faint); }
+
+  /* Beach Commons strip */
+  .rack__strip { padding: 16px 16px 18px; border-top: 2px solid var(--home-ink); }
+  .rack__subkicker { margin: 0 0 6px; font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--cell-color); }
+  .rack__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .rack__chip:hover { background: var(--cell-color); border-color: var(--cell-color); color: #fff; text-decoration: none; }
+  .rack__more { margin: 12px 0 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--home-faint); }
+  .rack__more a { color: var(--home-ink); }
+  .rack__more a:hover { color: var(--cell-color); }
+
+  .rack a:focus-visible { outline: 2px solid var(--pc-accent, #185FA5); outline-offset: 2px; }
+
+  @media (max-width: 560px) {
+    .rack__spines { columns: 1; }
+    .rack__spine { grid-template-columns: 74px minmax(0, 1fr); padding-left: 12px; padding-right: 12px; }
+    .rack__spine-kicker { grid-column: 2; max-width: none; text-align: left; }
+    .rack__spines-wrap > .rack__h3 { padding-left: 12px; padding-right: 12px; }
+    .rack__strip { padding-left: 12px; padding-right: 12px; }
+  }
+</style>

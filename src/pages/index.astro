@@ -1,28 +1,435 @@
 ---
 /**
- * PointCast Rosebud — a playable front door.
- * Directed by Mike on 2026-08-31: "try a new front page drum game ... very rosebud."
+ * PointCast front door — rebuilt 2026-09-01 to carry the whole town.
+ *
+ * Mike: "redo pointcast homepage, have it flourish with all that's been built …
+ * its still super experimental, we have no visitors … lets keep going, playing
+ * the long game."
+ *
+ * Order: play first (the Rosebud pads codex shipped on 08-31, full garden at
+ * /rosebud) → start here → the town at a glance → the magazine rack → the drum
+ * house → rooms & rituals → the constellation → the agent desk → the ship log →
+ * the register → the wire → the back catalog → channels → machine surfaces.
+ *
+ * Every curated door lives in the arrays below so the ~44 tests that read this
+ * file can grep hrefs. Every number is computed from repo data at build or
+ * pinned once in PINNED with its source and date, and the live ones refresh
+ * client-side with the build-time value as the fallback.
  */
+import { getCollection } from 'astro:content';
+import { existsSync } from 'node:fs';
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { CHANNEL_LIST } from '../lib/channels';
+import HomePlayFirst from '../components/HomePlayFirst.astro';
+import HomeStartHere from '../components/HomeStartHere.astro';
+import HomeGlance from '../components/HomeGlance.astro';
+import HomeMagazineRack from '../components/HomeMagazineRack.astro';
+import HomeDrumUniverse from '../components/HomeDrumUniverse.astro';
+import HomeRoomsShelf from '../components/HomeRoomsShelf.astro';
+import HomeConstellation from '../components/HomeConstellation.astro';
+import HomeAgentDesk from '../components/HomeAgentDesk.astro';
+import HomeShipLog from '../components/HomeShipLog.astro';
+import HomeScoreboard from '../components/HomeScoreboard.astro';
+import HomeWire from '../components/HomeWire.astro';
+import type { WireItem } from '../components/HomeWire.astro';
+import HomeBackCatalog from '../components/HomeBackCatalog.astro';
+import type { CatalogItem } from '../components/HomeBackCatalog.astro';
+import WalletChip from '../components/WalletChip.astro';
+import { CHANNEL_LIST, CHANNELS, getChannel } from '../lib/channels';
+import { FEATURES } from '../lib/explore';
+import { hallwayCount } from '../lib/drum-rooms';
+import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import { RESIDENTS } from '../data/residents';
+import constellation from '../data/constellation.json';
+import '../styles/home-shelf.css';
 
-const pads = [
-  { id: 'kick', key: 'A', name: 'ROOT', note: 'low & round' },
-  { id: 'bloom', key: 'S', name: 'BLOOM', note: 'paper snap' },
-  { id: 'dew', key: 'K', name: 'DEW', note: 'silver air' },
-  { id: 'thorn', key: 'L', name: 'THORN', note: 'dry bite' },
+// ---------- pinned constants: the only hand-typed numbers, each with a source + date ----------
+const PINNED = {
+  countedAt: '2026-09-01',
+  mergedPrs: 820,            // gh pr list --state merged --limit 1000 (2026-09-01)
+  openPrs: 60,               // gh pr list --state open (2026-09-01)
+  prsByMonth: [              // gh pr list --state merged --json mergedAt, bucketed (2026-09-01)
+    { label: 'Apr', count: 241 }, { label: 'May', count: 361 }, { label: 'Jun', count: 5 }, { label: 'Jul', count: 165 }, { label: 'Aug', count: 48 }, { label: 'Sep', count: 0 },
+  ],
+  commitsSinceFlatten: 79,   // git rev-list --count HEAD; history flattened 2026-07-30
+  mcpTools: 50,              // functions/api/mcp.ts TOOL_DEFINITIONS + tug + bench; live tools/list on /api/mcp-v2 (2026-09-01)
+  mcpResources: 22,          // functions/api/mcp.ts RESOURCES (2026-09-01)
+  visitsTotal: 108864,       // GET /api/visit .count (2026-09-01) — refreshed live below
+  visitsLast100: [           // GET /api/visit .log[] tallied (2026-09-01, 82-minute window) — refreshed live below
+    { type: 'bot:other', count: 90 }, { type: 'bot:seo', count: 6 }, { type: 'bot:google', count: 1 },
+    { type: 'bot:apple', count: 1 }, { type: 'bot:baidu', count: 1 }, { type: 'ai:anthropic', count: 1 }, { type: 'human', count: 0 },
+  ],
+  drumTaps: 26103,           // GET /api/drum .globalTotal (2026-09-01) — refreshed live below
+  x402Receipts: 0,           // GET /api/x402/receipt?list=1 total_count (2026-09-01)
+  tugPulls: { human: 1, machine: 1 }, // GET /api/tug (2026-09-01)
+  benchSitsToday: 0,         // GET /api/bench (2026-09-01)
+};
+
+// ---------- blocks: computed, never typed ----------
+const allBlocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const blockCount = allBlocks.length;
+const latestBlock = allBlocks[0] ?? null;
+const latestId = latestBlock?.data.id ?? '0000';
+const ptMonthDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' });
+const ptMonthYear = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'America/Los_Angeles' });
+const firstBlock = allBlocks[allBlocks.length - 1] ?? null;
+const sinceLabel = firstBlock ? ptMonthYear.format(firstBlock.data.timestamp) : '';
+
+const hostOf = (url?: string) => {
+  if (!url) return '';
+  try { const u = new URL(url, 'https://pointcast.xyz'); return u.host === 'pointcast.xyz' ? u.pathname : u.host.replace(/^www\./, ''); } catch { return ''; }
+};
+const latestWire: WireItem[] = allBlocks.slice(0, 8).map((block) => {
+  const d = block.data;
+  return {
+    id: d.id,
+    title: d.title,
+    channel: d.channel,
+    type: d.type,
+    date: ptMonthDay.format(d.timestamp),
+    href: `/b/${d.id}`,
+    image: `/images/og/b/${d.id}.png`,
+    dek: d.dek ?? '',
+    external: d.external?.url ? hostOf(d.external.url) : undefined,
+  };
+});
+
+// Blocks per month + per author, for the ship log. Pre-repo imports (2025) are bucketed once.
+const monthKey = (t: Date) => new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', timeZone: 'America/Los_Angeles' }).format(t);
+const monthCounts = new Map<string, number>();
+const authorCounts = new Map<string, number>();
+for (const block of allBlocks) {
+  const key = monthKey(block.data.timestamp);
+  const bucket = key < '2026-04' ? 'imports' : key;
+  monthCounts.set(bucket, (monthCounts.get(bucket) ?? 0) + 1);
+  const author = ((block.data as { author?: string }).author ?? 'unsigned').toString();
+  authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
+}
+const monthLabel = (key: string) => key === 'imports' ? '2025' : new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(new Date(`${key}-15T12:00:00Z`));
+const blocksByMonth = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
+  .map((key) => ({ label: monthLabel(key), count: monthCounts.get(key) ?? 0 }));
+const blocksImported = monthCounts.get('imports') ?? 0; // pre-repo blocks carried in from 2025
+const authors = [...authorCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, blocks]) => ({ name, blocks }));
+
+// Editorial blocks since July 1: any block whose destination is one of the magazine wing's paths.
+const EDITORIAL_PATHS = ['/25', '/worklife', '/wednesday', '/tonight', '/noticing', '/digital-pets', '/beach-commons', '/ai-income', '/next-models', '/firecrawl', '/haptic-dreams', '/second-shift', '/playlists', '/reviews', 'mhoydich.github.io'];
+const julyFirst = new Date('2026-07-01T00:00:00-07:00').getTime();
+const editorialBlocksSinceJuly = allBlocks.filter((b) => {
+  if (b.data.timestamp.getTime() < julyFirst) return false;
+  const url = b.data.external?.url ?? '';
+  return EDITORIAL_PATHS.some((p) => url.includes(`pointcast.xyz${p}`) || url.includes(p));
+}).length;
+
+// Back-catalog pool: 30+ days old, has a dek, round-robin across channels so
+// no single desk (Cola posters, objkt drops) floods the shelf.
+const CATALOG_MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const catalogCutoff = Date.now() - CATALOG_MIN_AGE_MS;
+const catalogByChannel = new Map<string, typeof allBlocks>();
+for (const block of allBlocks) {
+  const d = block.data;
+  if (d.timestamp.getTime() > catalogCutoff) continue;
+  if (!d.dek || d.type === 'BIRTHDAY') continue;
+  if (/^Nouns Cola poster/i.test(d.title)) continue;
+  const list = catalogByChannel.get(d.channel) ?? [];
+  if (list.length >= 6) continue;
+  list.push(block);
+  catalogByChannel.set(d.channel, list);
+}
+const catalogPool: CatalogItem[] = [];
+for (let round = 0; catalogPool.length < 30; round++) {
+  let added = false;
+  for (const [, list] of catalogByChannel) {
+    const block = list[round];
+    if (!block) continue;
+    added = true;
+    const d = block.data;
+    const channel = getChannel(d.channel);
+    const media = d.media as { kind?: string; src?: string; thumbnail?: string; alt?: string } | undefined;
+    // Prefer the block's own OG card (~13 KB) over the full-size social card; a declared thumbnail wins,
+    // and a block whose card has not been generated yet falls back to its Noun.
+    const ogCard = `/images/og/b/${d.id}.png`;
+    const image = media?.thumbnail ?? (existsSync(`public${ogCard}`) ? ogCard : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`);
+    catalogPool.push({
+      id: d.id,
+      title: d.title,
+      dek: d.dek ?? '',
+      code: d.channel,
+      channelName: channel?.name ?? d.channel,
+      color: channel?.color800 ?? '#111',
+      bg: channel?.color50 ?? '#fff',
+      date: ptMonthYear.format(d.timestamp),
+      image,
+      imageAlt: media?.alt ?? '',
+      href: `/b/${d.id}`,
+    });
+    if (catalogPool.length >= 30) break;
+  }
+  if (!added) break;
+}
+
+// ---------- counts from repo data ----------
+const doorCount = FEATURES.length;
+const hallway = hallwayCount(); // the same count the /drum hallway prints: doors on the wall, pages behind them
+const drumPages = hallway.pages;
+const drumDoors = hallway.doors;
+const appCount = POINTCAST_APPS.length;
+const residentCounts = {
+  resident: RESIDENTS.filter((r) => r.status === 'resident').length,
+  director: RESIDENTS.filter((r) => r.status === 'director').length,
+  open: RESIDENTS.filter((r) => r.status === 'open').length,
+};
+
+// ---------- 1. the magazine rack ----------
+// image: /images/front-door/*.jpg thumbs (≤120 KB) or a block OG card (≤20 KB). Never the raw 1–3 MB social cards.
+const covers = [
+  { title: 'PointCast College Football — Issue 001', href: '/25/magazine', dek: 'One living college-football magazine: the belief board, receipts, house desks, coach weather, and a song yard.', kicker: 'Issue 001 · 21 departments · 11 desks', image: '/images/front-door/cfb-magazine.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-28', blockId: '0530' },
+  { title: '25 FOR REASONS — Board 000', href: '/25', dek: 'A college-football Top 25 with receipts: one case, one doubt, and one next proof for every ranked team.', kicker: 'Board 000 · 25 teams · $25 season ticket', image: '/images/pointcast-25/board-000.png', imageAlt: '', channel: 'SPN', date: '2026-07-27', blockId: '0510' },
+  { title: 'Beach Commons', href: '/beach-commons', dek: 'Eighteen field studies for making public life at the edge of Dockweiler, from fire rings to a 25-mile atlas.', kicker: '18 volumes · 5 paths · 23 wire blocks', image: '/images/front-door/beach-commons.jpg', imageAlt: '', channel: 'ESC', date: '2026-07-26', blockId: '0506' }, // 0506 is filed ESC; the volumes are GDN
+  { title: 'The Animal After the Internet', href: '/digital-pets', dek: 'A future book on why the next AI product is a creature, not an assistant, and why its memory should be yours.', kicker: 'Future Book 001 · 12 positions · 6 rooms', image: '/images/digital-pets/plate-01-cover.webp', imageAlt: '', channel: 'FD', date: '2026-07-27', blockId: '0514' },
+  { title: 'The first computer that can waddle', href: '/digital-pets/microduck', dek: 'A full review of Microduck, its open software stack, and how to program a duck’s behavior with agents.', kicker: 'Digital Pets desk · review · № 0579', image: '/images/front-door/microduck.jpg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0579' },
+  { title: 'AI income — where the money actually is', href: '/ai-income', dek: 'A field guide to getting paid in the AI economy: 29 routes across 7 lanes, honest tiers, no course to sell.', kicker: '29 routes · 7 lanes · № 0576', image: '/images/og/b/0576.png', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0576' },
+  { title: 'The Saturday Atlas', href: '/25/directory', dek: 'Every Division I program in one honest place: 138 FBS, 128 FCS, official links, and a private shortlist.', kicker: '266 programs · 138 FBS · 128 FCS', image: '/images/pointcast-d1-directory/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-12', blockId: '0570' },
+  { title: 'Next Models', href: '/next-models', dek: 'A sourced field guide to the model horizon: frontier systems, Chinese open weights, moving-image stacks.', kicker: '9 models · 3 lanes · researched 2026-08-31', image: '/images/front-door/next-models.jpg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '' },
+  { title: 'The September Pass', href: 'https://mhoydich.github.io/september-pass/', dek: 'An agent-readiness pass on pointcast.xyz plus a six-month model outlook, filed from El Segundo.', kicker: 'GitHub Pages satellite · № 0577', image: '/images/september-pass/pass-card.svg', imageAlt: '', channel: 'FD', date: '2026-08-31', blockId: '0577' },
+  { title: 'THE HEARST FILE', href: 'https://mhoydich.github.io/hearst-file/', dek: 'A pocket encyclopedia of one American obsession: the hill, the man, the movie.', kicker: 'GitHub Pages satellite · № 0578', image: '/images/og/b/0578.png', imageAlt: '', channel: 'ESC', date: '2026-08-31', blockId: '0578' },
+  { title: 'Haptic Dreams: Saturday Kingdom', href: '/haptic-dreams', dek: 'A real football game turned into touch and a drawn kingdom: scores build cities, turnovers flip the field.', kicker: 'Play + build rooms · № 0567 · № 0573', image: '/images/front-door/haptic-dreams.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0567' },
+  { title: 'What I Keep Noticing', href: '/noticing', dek: 'A sunlit weekly on rituals, towns, networks, and the agreements that let people live together.', kicker: '4 issues · 2 in fieldwork · № 0512', image: '/images/noticing/noticing-og.png', imageAlt: '', channel: 'FD', date: '2026-07-27', blockId: '0512' },
+  { title: 'WORK/LIFE', href: '/worklife', dek: 'What work does to a life, and what a life does back: uniforms, a consent-first open-to-work board, and a manic Monday.', kicker: 'Issue 001 · uniforms · open to work · 18 tracks', image: '/images/worklife/001-cover.png', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0555' },
+  { title: 'WEDNESDAY 9:34', href: '/wednesday', dek: 'One good playlist for the useful middle of the week, original covers and permanent pages, Wednesdays at 9:34.', kicker: 'Issue 002 · Wednesday Morning Uplift is 001', image: '/images/front-door/wednesday.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-29', blockId: '0538' },
+  { title: 'PointCast Tonight — GO OUT / STAY IN', href: '/tonight', dek: 'One small week of official-source culture and local television around El Segundo: go out, or stay in.', kicker: 'Edition 001 · 6 outings · 3 stay-ins', image: '/images/pointcast-tonight/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0560' },
+  { title: 'Georgia, Ground Zero', href: '/25/magazine/georgia-ground-zero', dek: 'A reported field essay on college football’s most complete operating system, and the town that keeps it human.', kicker: 'Magazine desk · № 0566', image: '/images/front-door/georgia.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0566' },
+  { title: 'The History of Texas Football', href: '/25/magazine/texas-football-history', dek: 'Texas football as a public institution repeatedly invented, told in ten objects and one unfinished season.', kicker: 'Issue 003 · 10 objects · № 0569', image: '/images/pointcast-texas-football-history/social-card.png', imageAlt: '', channel: 'SPN', date: '2026-08-12', blockId: '0569' },
+  { title: 'Western Heat / Brains 25', href: '/25/magazine/western-heat-brains', dek: 'Three kinds of football pressure, then a factual research Power 25 with its own recurring scoreboard.', kicker: 'Double issue · № 0568', image: '/images/front-door/western-heat.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-08', blockId: '0568' },
+  { title: 'California Football Is Not Dead', href: '/25/magazine/california-football', dek: 'A timestamped state report: the broken conference map, eight programs, a 2026 circuit, and the California Cup.', kicker: 'State desk · california-cup · № 0557', image: '/images/front-door/california-football.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-03', blockId: '0557' },
+  { title: 'Lane Kiffin Temperature Check', href: '/25/magazine/lane-kiffin-temperature', dek: 'A preseason LSU merger audit across program, players, capital, Louisiana, staff, press, foes, and fans.', kicker: 'Magazine desk · № 0553', image: '/images/og/b/0553.png', imageAlt: '', channel: 'SPN', date: '2026-08-02', blockId: '0553' },
+  { title: 'ROW / ROW', href: '/25/magazine/sorority-row', dek: 'Sorority row as architecture: SEC versus Big Ten spatial culture, origins, uneven access, three 2030 playbooks.', kicker: 'House desk 002 · sorority-row · № 0534', image: '/images/og/b/0534.png', imageAlt: '', channel: 'SPN', date: '2026-07-28', blockId: '0534' },
+  { title: 'Saturday, Rebranded — 2029', href: '/25/2029', dek: 'The Top 25 redrawn for 2029: 25 abstract marks, future stadiums, campus interventions, student-made gear.', kicker: '25 identities · field kit · song yard · № 0524', image: '/images/front-door/saturday-2029.jpg', imageAlt: '', channel: 'BTL', date: '2026-07-27', blockId: '0524' },
+  { title: 'The Song Yard', href: '/25/2029/song-yard', dek: 'A stadium-song practice commons: 35 programs, a source-labeled repertoire atlas, six song seeds, four parts.', kicker: '35 programs · 6 seeds · № 0527', image: '/images/front-door/song-yard.jpg', imageAlt: '', channel: 'BTL', date: '2026-07-28', blockId: '0527' },
+  { title: 'Saturday Commons — 2029 field kit', href: '/25/2029/field-kit', dek: 'Twelve field plates, 25 stamps, eight backgrounds and a three-line invitation machine for the 2029 Saturday.', kicker: '12 plates · 25 stamps · № 0525', image: '/images/og/b/0525.png', imageAlt: '', channel: 'BTL', date: '2026-07-28', blockId: '0525' },
+  { title: 'Coach Weather', href: '/25/magazine/coach-weather', dek: 'Rankings say where coaches stand; weather says what can move them. Twelve fronts and a program builder.', kicker: 'Dispatch 000 · 12 fronts · № 0545', image: '/images/front-door/coach-weather.jpg', imageAlt: '', channel: 'SPN', date: '2026-07-29', blockId: '0545' },
+  { title: 'Second Shift', href: '/second-shift', dek: 'A finite El Segundo manufacturing clicker: make six ordinary needs before dawn, then teach the town the line.', kicker: 'Satellite game · 6 orders · № 0571', image: '/images/front-door/second-shift.jpg', imageAlt: '', channel: 'ESC', date: '2026-08-12', blockId: '0571' },
+  { title: 'Who Gets to Read the Web?', href: '/firecrawl', dek: 'A field guide to Firecrawl, spiders, indexes, and the argument hiding inside every fetch.', kicker: '6-step field guide · № 0552', image: '/images/firecrawl/field-guide-og.png', imageAlt: '', channel: 'FCT', date: '2026-08-02', blockId: '0552' },
+  { title: 'Tone Bloom rings in the tiny web', href: '/reviews/tone-bloom', dek: 'Twelve synthesized voices, four speeds, 38 chosen images, and the rare consumer app that knows when to stop.', kicker: 'Review · 4.5/5 · tonebloom.xyz · № 0493', image: '/images/front-door/tone-bloom.jpg', imageAlt: '', channel: 'GDN', date: '2026-07-25', blockId: '0493' },
+  { title: 'The Noun Press — Saturday Signal Stamps', href: '/25/collect/signal-stamps', dek: 'Fifty real Nouns remixed into place portraits: take a stamp, wear a profile, or collect a free Tezos edition.', kicker: '50 Nouns · CC0 · free Tezos edition', image: '/images/front-door/signal-stamps.jpg', imageAlt: '', channel: 'SPN', date: '2026-08-01', blockId: '' },
+];
+const beachCommonsVolumes = [
+  { href: '/beach-commons/v9', label: 'V9 Signal Shack', blockId: '0526' },
+  { href: '/beach-commons/v10', label: 'V10 Tide Cabinet', blockId: '0528' },
+  { href: '/beach-commons/v11', label: 'V11 The Reach Line', blockId: '0531' },
+  { href: '/beach-commons/v12', label: 'V12 Harbor Works', blockId: '0532' },
+  { href: '/beach-commons/v13', label: 'V13 The Fermentation League', blockId: '0536' },
+  { href: '/beach-commons/v14', label: 'V14 The Hardpoint League', blockId: '0540' },
+  { href: '/beach-commons/v16', label: 'V16 The Billion Little New Yorkers', blockId: '0544' },
+  { href: '/beach-commons/v17', label: 'V17 Ask the Beach', blockId: '0546' },
+  { href: '/beach-commons/v18', label: 'V18 Radius 25', blockId: '0548' },
+  { href: '/beach-commons/v18/skills', label: 'The Skill Line', blockId: '0549' },
+  { href: '/beach-commons/v18/engineering', label: 'ENG/25', blockId: '0551' },
+  { href: '/beach-commons/v18/outdoors', label: 'OPEN/25', blockId: '0554' },
+  { href: '/beach-commons/v18/passport', label: 'PASS/25', blockId: '0558' },
+  { href: '/beach-commons/v18/shrines', label: 'SHRINE/25', blockId: '0562' },
 ];
 
-const seedPattern = [
-  [true, false, false, false, true, false, false, false, true, false, false, true, true, false, false, false],
-  [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false],
-  [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, true],
-  [false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, false],
+// ---------- 2. the drum house ----------
+const drumFamilies = [ // live /drum hallway wings (2026-09-01)
+  { name: 'The instruments', count: 29, href: '/drum#instruments', note: '12 doors · rooms you play' },
+  { name: 'The broadcast', count: 18, href: '/drum-tv', note: '16 doors · TV walls and casts' },
+  { name: 'The arcade', count: 17, href: '/drum-games', note: '11 doors · games with scores' },
+  { name: 'The chapel', count: 25, href: '/drum-altars', note: '21 doors · altars, bells, sand, tide' },
+  { name: 'The crowd', count: 13, href: '/drum-room-v2', note: '12 doors · multiplayer rooms' },
+  { name: 'The front desk', count: 7, href: '/drum-agents', note: '7 doors · agent surfaces' },
+  { name: 'The keepsakes', count: 6, href: '/drum-trophies', note: '6 doors · trophies, cards, stickers' },
+];
+const drumGames = [ // playable in ten seconds, no account
+  { title: 'Drum Says', href: '/drum-says', dek: 'A Noun calls a pattern on four drums. Echo it back; every round adds one more hit.', image: '/images/front-door/drum-says.jpg', kicker: 'memory · keys 1–4' },
+  { title: 'Whack-a-Noun', href: '/drum-noun-whack', dek: 'Nouns pop out of nine burrows on a 104 BPM groove. Bonk them before they duck; the golden one pays triple.', image: '/images/og/b/0561.png', kicker: '60 sec · keys Q–C · № 0561' },
+  { title: 'The Noun Crossing', href: '/drum-noun-crossing', dek: 'You are the crossing guard of a small seaside town. Wave each Noun through while it is on the stripes.', image: '/images/og/b/0561.png', kicker: '60 sec · one whistle · № 0561' },
+  { title: 'Quick Draw', href: '/drum-quickdraw', dek: 'The pad flashes when you least expect it. Slap it fast, but feints and false starts are fouls.', image: '/images/front-door/drum-quickdraw.jpg', kicker: 'reaction · 10 draws' },
+  { title: 'Beat Runner VII · Loop Siege', href: '/drum-runner', dek: 'Build a sixteen-step loop under fire. Every hit attacks now and returns one loop later as a ghost.', image: '/images/front-door/drum-runner.jpg', kicker: '7 editions · D F J K' },
+  { title: 'Fill the Bar', href: '/drum-fill', dek: 'An eight-step groove loops with one hit missing. Tap the moment the playhead crosses the gap.', image: '/images/front-door/drum-fill.jpg', kicker: 'listen · find the gap' },
+  { title: 'Steady Hands', href: '/drum-steady', dek: 'Four clicks set the pulse, then silence. Keep the tempo by feel for 32 beats; lowest drift wins.', image: '/images/front-door/drum-steady.jpg', kicker: 'silent tempo · 32 beats' },
+  { title: 'DRUM VS', href: '/drum-vs', dek: 'Send a link, tap together, first to fifty wins. Your Noun pulls one end of the rope, your friend the other.', image: '/images/og-drum-vs.png', kicker: '1v1 · first to 50' },
+];
+const drumRooms = [
+  { title: 'The Drum Room', href: '/drum', dek: 'The hallway of the whole drum house. Every drum page files itself into a wing at build time.', kicker: 'hub · 88 doors · 7 wings' },
+  { title: 'Bell Choir', href: '/bell-choir', dek: 'Twelve pentatonic bells under Midjourney bouquets. Everyone here hears every bell.', kicker: '12 bells · multiplayer · № 0496' },
+  { title: 'Bell Post', href: '/bell-post', dek: 'Play a short run of bells and hang it on the wall. The rack braids the newest five into a round.', kicker: 'time-shifted · № 0505' },
+  { title: 'Prayer Bells · The Angelus', href: '/prayer-bells', dek: 'A chime garden under Midjourney skies. Twelve brass chimes, three voices, wind mode, echo memory.', kicker: '12 chimes · № 0477' },
+  { title: 'Drum Room v8 · The Symphony', href: '/drum-v8', dek: 'A 42-piece classical orchestra of Nouns. Tap any seat, or hit auto for an algorithmic symphony.', kicker: '42 seats · 17 retunings' },
+  { title: 'The 3D Drum Party', href: '/drum-room-v2', dek: 'A shared 3D drum party with crowd quests, combos, dancing Nouns, and room for a hundred visitors.', kicker: '3D · WebSockets · room for 100' },
+  { title: 'The Drum Directory', href: '/drum-directory', dek: 'The Big Beat Issue: an illustrated field guide to the games, rooms, races, loops, Nouns, and bells.', kicker: '30 games · 4 chapters · 3 plates' },
+  { title: 'Hall of Agents', href: '/drum-agents', dek: 'The residents on the drum wall and the MCP door any model can use to tap alongside people.', kicker: 'drum_tap over MCP' },
+  { title: 'Sing', href: '/sing', dek: 'Tap through the syllables to sing happy birthday. With others you hear a soft chorus.', kicker: 'Web Audio · /api/sing' },
+  { title: 'Bell & Signal', href: '/bell-and-signal', dek: 'A small sound foundry: bells, breaths, and signals cast in code, every one born live. No samples.', kicker: 'satellite · 17 castings · № 0479' },
 ];
 
-const steps = Array.from({ length: 16 }, (_, index) => index);
-const homeDescription = 'PointCast is an agent-native broadcast from El Segundo. Rosebud turns the front door into a playable four-voice drum garden.';
-const socialImage = 'https://pointcast.xyz/images/og-pointcast-rosebud.png';
+// ---------- 3. rooms & rituals (noun = Visit Nouns seed for the avatar; use = the room's own public counter) ----------
+const rooms = [
+  { title: 'Pour a cup', href: '/coffee', dek: 'A pixel moka pot with a pour button and a count of cups poured today. The pot has been quiet all week.', tag: 'CAFE', noun: 12, color: '#834F0A', use: '0 cups · 7 days' },
+  { title: 'Look outside', href: '/window', dek: 'A small El Segundo window that follows the real time of day and the weather outside. Sun, moon, fog, stars.', tag: 'WINDOW', noun: 105, color: '#185FA5' },
+  { title: 'Pull the rope', href: '/tug', dek: 'One rope across the town. People pull by tapping, machines pull by MCP, and the two numbers never reset.', tag: 'TUG', noun: 500, color: '#0B3E73', use: '1 human · 1 machine' },
+  { title: 'Sit on the bench', href: '/bench', dek: 'One question a day, asked of everyone who walks past. Answer once, never scored.', tag: 'BENCH', noun: 501, color: '#3B6D11', use: '0 sits today' },
+  { title: 'The morning hours', href: '/prayer-altars', dek: 'Five morning stations, thirty paintings on slow rotation. Tap PRAY, leave a prayer; four sister rooms nearby.', tag: 'PRAYER', noun: 471, color: '#6B2139', use: '69 prayers · 12 stations' },
+  { title: 'The evening hours', href: '/prayer-altars-evening', dek: 'Vespers, lucernarium, compline, vigil: the evening half of the prayer wing.', tag: 'PRAYER', noun: 473, color: '#6B2139' },
+  { title: 'Light a votive', href: '/prayer-candles', dek: 'Light a candle for one of eleven intentions and it burns twenty-four real hours where everyone can see it.', tag: 'VOTIVE', noun: 482, color: '#993C1D', use: '2 lit ever · 0 burning' },
+  { title: 'Walk the labyrinth', href: '/prayer-labyrinth', dek: 'A traced walk, one turn at a time. The fifth room of the prayer wing.', tag: 'WALK', noun: 483, color: '#6B2139' },
+  { title: 'Play the arcade', href: '/win95-games', dek: 'A Windows 95 desktop of Nouns games: Solitaire, Memory, Pyramid, Mines, with a daily challenge and local bests.', tag: 'ARCADE', noun: 486, color: '#0B3E73' },
+  { title: 'Arcade 60', href: '/arcade-60', dek: 'Fifty one-minute games in one cabinet, plus ten CC0 Noun presses.', tag: 'ARCADE', noun: 60, color: '#0B3E73' },
+  { title: 'Last Tag', href: '/last-tag', dek: 'Six runners, one tag, a shrinking yard. Dash, pass it on, and don’t be it when the clock hits zero.', tag: 'GAME', noun: 389, color: '#993C1D' },
+  { title: 'Saturday Myth Machine', href: '/mascot-battler', dek: 'Twenty-five college mascot cards, then a three-round clash of a conference deck against a creature class.', tag: 'BATTLER', noun: 522, color: '#6B2139' },
+  { title: 'Nouns Nation Battler', href: '/nouns-nation-battler', dek: 'A sports-desk hub for the 30-vs-30 Nouns match: live scorebug, league table, match queue, TV cast.', tag: 'BATTLER', noun: 390, color: '#6B2139' },
+  { title: 'Noun Battler · Pacific 48', href: '/noun-battler', dek: 'A five-round CC0 Noun stat battle with 48 battlers, a local stamp book, and a Passport card you can carry.', tag: 'BATTLER', noun: 48, color: '#6B2139' },
+  { title: 'Shrine of the Open Road', href: '/open-road', dek: 'A one-minute shrine: breathe with a 1955 Chevrolet, offer a light, leave gently. Seven more passages follow.', tag: 'SHRINE', noun: 755, color: '#834F0A' },
+  { title: 'Elemental Shrine', href: '/elemental-shrine', dek: 'A quiet altar of stone, light, fire and water, with an original soundscape made in ElevenLabs.', tag: 'SHRINE', noun: 4, color: '#834F0A' },
+  { title: 'Ocean meditation', href: '/meditate', dek: 'An ocean room with Calm Bay, Deep Current and Moon Tide programs, timed breathing and a tide log.', tag: 'QUIET', noun: 337, color: '#185FA5' },
+  { title: 'Tide Pool', href: '/tidepool', dek: 'A pixel tide pool south of El Porto whose water level is driven by real NOAA tides.', tag: 'QUIET', noun: 1088, color: '#185FA5' },
+  { title: 'Zen Cat Garden', href: '/zen-cats', dek: 'One calm cat a day to care for and collect locally.', tag: 'PET', noun: 368, color: '#3B6D11' },
+  { title: 'The town map', href: '/town', dek: 'A pixel isometric map of the town. Every building is a real page; visitors walk between them as Nouns.', tag: 'MAP', noun: 777, color: '#0B3E73' },
+  { title: 'The El Segundo School', href: '/el-segundo-school', dek: 'A three-dimensional archive of 652 Midjourney works, with one-tez Passport postcards and Stampz makers.', tag: 'GALLERY', noun: 652, color: '#993C1D' },
+  { title: 'The Listening Grove', href: '/listening-grove', dek: 'A 617-work audiovisual Midjourney archive with generative bells.', tag: 'GALLERY', noun: 617, color: '#993C1D' },
+  { title: 'Today’s art', href: '/gallery/today', dek: 'One visual signal for the day.', tag: 'GALLERY', noun: 722, color: '#993C1D' },
+  { title: 'The daily drop', href: '/today', dek: 'One block a day, the same pick for every visitor. Tap to collect.', tag: 'DAILY', noun: 526, color: '#185FA5' },
+  { title: 'A random door', href: '/random', dek: 'One random block, redirected on every visit. The fastest way to land somewhere you didn’t plan.', tag: 'DAILY', noun: 999, color: '#185FA5' },
+  { title: 'The Thursday room', href: '/thursday', dek: 'A room that keeps hours: open Thursdays 3 to 7pm Pacific, same as the farmers market.', tag: 'ESC', noun: 502, color: '#0B3E73' },
+  { title: 'Marine layer — the fog log', href: '/marine-layer', dek: 'When the fog broke over El Segundo, hour by hour from KLAX for a year. 161 of 365 mornings started under a deck.', tag: 'LEDGER', noun: 504, color: '#3B6D11' },
+  { title: 'Potters Field', href: '/potters-field', dek: 'The rooms that closed, kept on the record.', tag: 'LEDGER', noun: 503, color: '#5F5E5A' },
+  { title: 'The Yard', href: '/yard', dek: 'Agents pull a permit, build on their own hosting, and the town cuts a ribbon. Night-shift chores for the rest.', tag: 'AGENTS', noun: 497, color: '#185FA5' },
+  { title: 'Network El Segundo', href: '/network-el-segundo', dek: 'A city of 100 windows. Every verified Tezos wallet turns on one public light; the wall shows a count, never the addresses.', tag: 'ESC', noun: 484, color: '#0B3E73' },
+  { title: 'Local Star Commons', href: '/local-star-commons', dek: 'Useful things, governed in common. Six local-first objects, governed by contribution.', tag: 'ESC', noun: 490, color: '#0B3E73' },
+  { title: 'Sunset Switchboard', href: '/sunset-switchboard', dek: 'Route one good signal before dark. Choose a sky, tune a band, set the reach, and leave no tracking trail.', tag: 'ESC', noun: 487, color: '#0B3E73' },
+  { title: 'PointCast Field', href: '/field', dek: 'Take today’s field prompt. No account, private by default.', tag: 'FIELD', noun: 512, color: '#3B6D11' },
+  { title: 'Crystal Ball Pass', href: '/crystal-ball-pass', dek: 'A five-minute forest expedition, then Afterlight. The map is damp, but hopeful.', tag: 'WALK', noun: 550, color: '#3B6D11' },
+  { title: 'The kettle', href: '/kettle', dek: 'A multiplayer kettle. Pour, wait, and it boils for everyone at once.', tag: 'ROOM', noun: 768, color: '#834F0A' },
+  { title: 'Sit', href: '/sit', dek: 'An ambient room for sitting still a while.', tag: 'QUIET', noun: 900, color: '#185FA5' },
+  { title: 'The farm', href: '/farm', dek: 'Nine tiles, a season, a slow harvest.', tag: 'ROOM', noun: 9, color: '#3B6D11' },
+  { title: 'The polls', href: '/polls', dek: 'Schelling-point polls for the town, with a zeitgeist map.', tag: 'ROOM', noun: 1001, color: '#185FA5' },
+  { title: 'The cake', href: '/cake', dek: 'Birthdays celebrated on PointCast: one block per person per year, one Noun per person forever.', tag: 'BDY', noun: 3, color: '#993C1D' },
+  { title: 'The bath', href: '/bath', dek: 'A warm room to soak in.', tag: 'QUIET', noun: 42, color: '#185FA5' },
+  { title: 'The taproom', href: '/taproom', dek: 'Eight breweries, twenty-seven beers, updated April 24. The one brewed-here beer everyone asks about.', tag: 'ESC', noun: 276, color: '#834F0A' },
+  { title: 'TV', href: '/tv', dek: 'Fifteen geo-stations, each with its own weather feed.', tag: 'TV', noun: 15, color: '#0B3E73' },
+  { title: 'Local · 100 miles', href: '/local', dek: 'A 100-mile lens on the areas, the university, the honey league, the paddle exchange, the meetups.', tag: 'LOCAL', noun: 100, color: '#3B6D11' },
+  { title: 'The race', href: '/race', dek: 'A short race at the front door. One race so far, resolved April 25. It is due another.', tag: 'RACE', noun: 271, color: '#993C1D' },
+  { title: 'The passport', href: '/passport', dek: 'A dual-ledger passport: private ritual stamps, public Tezos visas, one optional wallet signature.', tag: 'PASSPORT', noun: 470, color: '#0B3E73' },
+  { title: 'The play layer', href: '/play', dek: 'Fifteen local-first surfaces on one hub: passport, quests, walk, routes, builders, civic, pet.', tag: 'PLAY', noun: 404, color: '#993C1D' },
+  { title: 'Every door', href: '/explore', dek: `Every top-level surface in the town, on one street. ${doorCount} doors, sorted.`, tag: 'INDEX', noun: 395, color: '#5F5E5A' },
+  { title: 'Everything', href: '/everything', dek: 'The census. Every door in town, counted.', tag: 'INDEX', noun: 1199, color: '#5F5E5A' },
+];
+
+// ---------- 4. the constellation ----------
+type Satellite = { name: string; url: string; dek: string; kind: string; live: boolean; chain?: string };
+const satellites: Satellite[] = [
+  ...constellation.satellites.map((s) => ({
+    name: s.name,
+    url: s.url,
+    dek: s.description,
+    kind: s.role ?? 'satellite',
+    live: s.status === 'live',
+    chain: s.chain?.network ? `${s.chain.network}${s.chain.contracts?.length ? ` · ${s.chain.contracts.length}\u00a0KT1` : ''}` : undefined,
+  })),
+  { name: 'Tone Bloom', url: 'https://tonebloom.xyz', dek: 'Sol’s sound + art instrument. Twelve voices, a daily bloom, reviewed 4.5/5 on the shelf.', kind: 'satellite', live: true },
+  { name: 'The September Pass', url: 'https://mhoydich.github.io/september-pass/', dek: 'A walk of every door before fall, on GitHub Pages. № 0577.', kind: 'satellite', live: true },
+  { name: 'THE HEARST FILE', url: 'https://mhoydich.github.io/hearst-file/', dek: 'A pocket encyclopedia on GitHub Pages. № 0578.', kind: 'satellite', live: true },
+  { name: 'Hoydich Estates', url: 'https://hoydich-estates.pages.dev', dek: 'The family fork of the Flower Standard. № 0462.', kind: 'satellite', live: true },
+];
+const contracts = [
+  { name: 'Visit Nouns FA2', status: 'live' as const, kt1: 'KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh', href: '/collection/visit-nouns', note: '17 seeds · 20 editions · last mint 2026-04-28' },
+  { name: 'Coffee Mugs FA2', status: 'live' as const, kt1: 'KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt', href: '/coffee', note: '2 mugs · 3 editions' },
+  { name: 'Marketplace v3.1', status: 'live' as const, kt1: 'KT1X9LUxV5qaPVLr17uzRfxgRWPdGfRMYxQT', href: '/marketplace', note: '0 trades since 2026-04-28' },
+  { name: 'DRUM FA2 (tez-drum)', status: 'live' as const, kt1: 'KT1P2F1MoWPLZBSgTG6bVtQgLaHu1vDShhME', href: 'https://tez-drum.pages.dev', note: '0 tokens claimed' },
+  { name: 'Prize Cast', status: 'pending' as const, kt1: '', href: '/cast', note: 'not yet originated · draw placeholder Sun 18:00 UTC' },
+  { name: 'x402 receipt (Etherlink)', status: 'live' as const, kt1: '', href: '/x402', note: 'HTTP 402 · $0.01 USDC · 0 receipts settled' },
+];
+
+// ---------- 5. the agent desk ----------
+const agentSurfaces = [
+  { label: 'agents.json', href: '/agents.json', note: '21 endpoint groups · regenerated each deploy' },
+  { label: 'MCP connector', href: '/connectors', note: 'https://pointcast.xyz/api/mcp-v2 · 50 tools · 22 resources · no auth' },
+  { label: 'agent-kit.md', href: '/agent-kit.md', note: '4 KB · four client setups' },
+  { label: 'llms.txt', href: '/llms.txt', note: '112 KB · every link checked' },
+  { label: 'Welcome, agent', href: '/welcome', note: 'mint a Visit Noun pass' },
+  { label: 'The builders yard', href: '/yard', note: 'permits · countersigned receipts · 5 chores' },
+  { label: 'The lobby', href: '/lobby', note: 'guestbook by pull request' },
+  { label: 'Here now', href: '/here', note: 'the visit log, every arrival gets a Noun' },
+  { label: 'x402', href: '/x402', note: 'pay the town one cent, get a receipt' },
+  { label: 'PING', href: '/ping', note: 'the async inbox the residents read' },
+  { label: 'Peer protocol', href: '/protocol', note: 'signed Block packets · /messages' },
+  { label: 'Handshakes', href: '/handshakes', note: 'reciprocal probes fired back at crawlers' },
+  { label: 'Federation', href: '/federation', note: '5 nodes · open draft' },
+  { label: 'Residents', href: '/residents', note: `${residentCounts.resident} residents · ${residentCounts.director} director · ${residentCounts.open} open rooms` },
+  { label: 'Agent ships', href: '/scoreboard', note: 'commits + blocks per resident' },
+  { label: 'The register', href: '/register', note: '52 rooms scored · what is not measured' },
+  { label: 'Town inspector', href: '/health', note: 'last full walk 2026-07-26' },
+  { label: 'The bench', href: '/bench', note: 'one question a day · models may sit' },
+  { label: 'Sparrow', href: '/sparrow', note: 'a hosted reader' },
+  { label: 'Native shell', href: '/app', note: 'installable home screen' },
+  { label: 'Atlas · Ask', href: '/atlas', note: 'UMAP of every block · local RAG at /ask' },
+  { label: 'Visit channel', href: '/c/visit', note: '31 visit-log blocks · all by residents' },
+  { label: 'Agent value', href: '/agent-value', note: 'what an agent can finish here, and what it is worth' },
+];
+const vstCount = allBlocks.filter((b) => b.data.channel === 'VST').length;
+const evidence = {
+  visits: PINNED.visitsTotal,
+  sampleSize: 100,
+  types: PINNED.visitsLast100,
+  vstCount,
+  mcpTools: PINNED.mcpTools,
+  mcpResources: PINNED.mcpResources,
+  x402Receipts: PINNED.x402Receipts,
+  tugHuman: PINNED.tugPulls.human,
+  tugMachine: PINNED.tugPulls.machine,
+  benchSitsToday: PINNED.benchSitsToday,
+  countedAt: PINNED.countedAt,
+};
+const residents = RESIDENTS.map((r) => ({ name: r.name, role: r.role, status: r.status, slug: r.slug }));
+
+// ---------- 6. the ship log ----------
+const milestones = [
+  { date: '2026-04-14', title: 'The repo opens; the front door is agentic', href: '/b/0205', blockId: '0205' },
+  { date: '2026-04-17', title: 'Visit Nouns FA2 goes live on Tezos mainnet', href: '/b/0229', blockId: '0229' },
+  { date: '2026-04-17', title: 'The drum opens; /agents.json goes up the same day', href: '/b/0228', blockId: '0228' },
+  { date: '2026-04-22', title: 'Codex gets a real project; its first PR merges', href: '/b/0283', blockId: '0283' }, // PR #3 merged 2026-04-22 (gh)
+  { date: '2026-04-25', title: 'Coffee Mugs FA2 live; 47 PRs merged in one day', href: '/b/0364', blockId: '0364' },
+  { date: '2026-04-27', title: 'The drum becomes an MCP server', href: '/b/0379', blockId: '0379' },
+  { date: '2026-04-28', title: 'Busiest day: 51 PRs and the Nouns Nation Battler', href: '/b/0390', blockId: '0390' },
+  { date: '2026-04-30', title: 'BLOCKS.md v2.2, the Blocks pivot goes live', href: 'https://github.com/mhoydich/pointcast/blob/main/BLOCKS.md', blockId: '' },
+  { date: '2026-05-05', title: 'The May wing doubles overnight; 361 PRs that month', href: '/b/0429', blockId: '0429' },
+  { date: '2026-05-17', title: 'The summer dark: 54 silent days on the wire', href: '/b/0458', blockId: '0458' },
+  { date: '2026-07-04', title: 'Season Two: heartbeat, manifest, a live NOW line', href: 'https://github.com/mhoydich/pointcast/pull/737', blockId: '' },
+  { date: '2026-07-07', title: 'The arcade day: six Win95 games and a match-3 trio', href: 'https://github.com/mhoydich/pointcast/pull/754', blockId: '' },
+  { date: '2026-07-18', title: 'The prayer wing opens: five rooms, sixty pieces', href: '/b/0471', blockId: '0471' },
+  { date: '2026-07-26', title: 'The Yard opens; the satellites get a register', href: '/b/0497', blockId: '0497' },
+  { date: '2026-07-27', title: '25 FOR REASONS opens; 56 PRs in two days', href: '/b/0510', blockId: '0510' },
+  { date: '2026-07-30', title: 'Git history flattened; commit counts restart here', href: 'https://github.com/mhoydich/pointcast/commits/main', blockId: '' },
+  { date: '2026-08-08', title: 'Haptic Dreams: Saturday Kingdom', href: '/b/0567', blockId: '0567' },
+  { date: '2026-08-17', title: 'The register, the scoreboard, and x402', href: '/b/0574', blockId: '0574' },
+  { date: '2026-08-31', title: 'Rosebud, the September Pass, the Hearst File, Microduck', href: '/b/0577', blockId: '0577' },
+  { date: '2026-09-01', title: 'The front door rebuilt to carry the whole town', href: '/b/0580', blockId: '0580' },
+];
+const shipTotals = [
+  { label: 'merged pull requests', value: PINNED.mergedPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged' },
+  { label: 'numbered blocks on the wire', value: blockCount.toLocaleString('en-US'), href: '/archive' },
+  { label: 'commits since the July 30 flatten', value: PINNED.commitsSinceFlatten.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/commits/main' },
+  { label: 'pull requests still open', value: PINNED.openPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls' },
+];
+
+// ---------- the town at a glance ----------
+const glance = [
+  { label: 'blocks', value: blockCount.toLocaleString('en-US'), href: '/archive', note: `since ${sinceLabel} · newest № ${latestId}` },
+  { label: 'channels', value: String(CHANNEL_LIST.length), href: '#channels', note: 'ten lanes, one grammar' },
+  { label: 'doors', value: doorCount.toLocaleString('en-US'), href: '/explore', note: 'top-level pages, sorted' },
+  { label: 'apps', value: String(appCount), href: '/apps', note: `${POINTCAST_APPS.filter((a) => a.kind === 'pointcast').length} rooms and tools · ${POINTCAST_APPS.filter((a) => a.kind === 'satellite').length} satellites on the shelf` },
+  { label: 'drum pages', value: String(drumPages), href: '/drum-directory', note: `${drumDoors} doors · 7 wings` },
+  { label: 'drum hits', value: PINNED.drumTaps.toLocaleString('en-US'), href: '/drum', note: 'every visitor, since April 17', live: true, id: 'drum-taps' },
+  { label: 'satellites', value: String(satellites.length), href: '/constellation', note: 'sibling sites, all answering' },
+  { label: 'contracts', value: String(contracts.filter((c) => c.status === 'live').length), href: '#constellation-chain', note: `${contracts.filter((c) => c.kt1).length} with a KT1 · ${contracts.filter((c) => c.status === 'pending').length} pending` },
+  { label: 'merged PRs', value: PINNED.mergedPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged', note: `repo opened 2026-04-14` },
+  { label: 'residents', value: `${residentCounts.resident}+${residentCounts.director}`, href: '/residents', note: `${residentCounts.open} rooms open for plus-ones` },
+  { label: 'MCP tools', value: String(PINNED.mcpTools), href: '/connectors', note: 'no auth, one URL' },
+  { label: 'visits logged', value: PINNED.visitsTotal.toLocaleString('en-US'), href: '/here', note: 'mostly crawlers · it says so', live: true, id: 'visits' },
+];
+
+const builtOn = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const homeDescription = `PointCast is a small internet town broadcasting from El Segundo: ${blockCount} numbered blocks, a magazine, a drum house, a few dozen rooms, a constellation of sibling sites, and a desk for agents. Still experimental. Still on.`;
+const socialImage = 'https://pointcast.xyz/images/og/og-home-v2.png';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -30,27 +437,40 @@ const jsonLd = {
     {
       '@type': 'CollectionPage',
       '@id': 'https://pointcast.xyz/#home',
-      name: 'PointCast Rosebud',
+      name: 'PointCast',
       description: homeDescription,
       url: 'https://pointcast.xyz/',
       inLanguage: 'en-US',
+      isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#site', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      hasPart: [
+        { '@type': 'ItemList', name: 'The magazine rack', numberOfItems: covers.length, url: 'https://pointcast.xyz/#magazine' },
+        { '@type': 'ItemList', name: 'The drum house', numberOfItems: drumPages, url: 'https://pointcast.xyz/drum' },
+        { '@type': 'ItemList', name: 'Rooms & rituals', numberOfItems: rooms.length, url: 'https://pointcast.xyz/#rooms' },
+        { '@type': 'ItemList', name: 'The constellation', numberOfItems: satellites.length, url: 'https://pointcast.xyz/constellation' },
+        { '@type': 'ItemList', name: 'The agent desk', numberOfItems: agentSurfaces.length, url: 'https://pointcast.xyz/for-agents' },
+        { '@type': 'ItemList', name: 'The ship log', numberOfItems: milestones.length, url: 'https://pointcast.xyz/#ships' },
+      ],
     },
     {
       '@type': 'WebApplication',
-      '@id': 'https://pointcast.xyz/#rosebud',
+      '@id': 'https://pointcast.xyz/rosebud#rosebud',
       name: 'PointCast Rosebud',
       applicationCategory: 'GameApplication',
       operatingSystem: 'Any modern web browser',
       browserRequirements: 'Web Audio API',
       isAccessibleForFree: true,
-      url: 'https://pointcast.xyz/#rosebud',
-      description: 'A four-voice playable drum garden and sixteen-step sequencer.',
+      url: 'https://pointcast.xyz/rosebud',
+      description: 'A four-voice playable drum garden and sixteen-step sequencer. The pads sit on the front door; the full garden lives at /rosebud.',
     },
+    { '@type': 'Periodical', '@id': 'https://pointcast.xyz/25/magazine#publication', name: 'PointCast College Football', url: 'https://pointcast.xyz/25/magazine' },
+    { '@type': 'Periodical', '@id': 'https://pointcast.xyz/worklife#publication', name: 'WORK/LIFE', url: 'https://pointcast.xyz/worklife' },
+    { '@type': 'Periodical', '@id': 'https://pointcast.xyz/wednesday#publication', name: 'WEDNESDAY 9:34', url: 'https://pointcast.xyz/wednesday' },
+    { '@type': 'Periodical', '@id': 'https://pointcast.xyz/beach-commons#publication', name: 'Beach Commons', url: 'https://pointcast.xyz/beach-commons' },
   ],
 };
 
 const alternates = [
-  { type: 'application/json', href: '/blocks.json', title: 'All PointCast blocks (JSON)' },
+  { type: 'application/json', href: '/blocks.json', title: 'All blocks (JSON)' },
   { type: 'application/rss+xml', href: '/feed.xml', title: 'PointCast RSS' },
   { type: 'application/feed+json', href: '/feed.json', title: 'PointCast JSON Feed' },
   ...CHANNEL_LIST.map((channel) => ({
@@ -67,508 +487,214 @@ const alternates = [
   image={socialImage}
   imageWidth={1200}
   imageHeight={630}
-  themeColor="#e53f47"
+  themeColor="#185FA5"
   jsonLd={jsonLd}
   alternates={alternates}
-  immersive={true}
+  immersive={false}
   showNetworkStrip={false}
   frame={{
     image: socialImage,
     aspectRatio: '1.91:1',
     buttons: [
-      { label: 'Play Rosebud', action: 'link', target: 'https://pointcast.xyz/#rosebud' },
-      { label: 'Enter the drum universe', action: 'link', target: 'https://pointcast.xyz/drum' },
-      { label: 'Read the wire', action: 'link', target: 'https://pointcast.xyz/archive' },
+      { label: 'Play Rosebud', action: 'link', target: 'https://pointcast.xyz/rosebud' },
+      { label: 'Read the magazine', action: 'link', target: 'https://pointcast.xyz/25/magazine' },
+      { label: 'For agents', action: 'link', target: 'https://pointcast.xyz/for-agents' },
     ],
   }}
 >
-  <div class="rb-home" data-rosebud-home>
-    <header class="site-header">
-      <a class="wordmark" href="#top" aria-label="PointCast home">
-        <span class="mark-dot">P</span>
-        <span>POINTCAST</span>
-      </a>
-      <div class="live-line"><i></i> LIVE FROM EL SEGUNDO · SIGNAL 104</div>
-      <a class="menu-pill" href="/archive">THE WIRE <span>↗</span></a>
+  <div class="home" data-front-door>
+    <header class="masthead" aria-label="PointCast masthead">
+      <a class="masthead__brand" href="/" aria-label="PointCast home">PointCast</a>
+      <p class="masthead__meta">
+        <span>{blockCount} blocks</span>
+        <span>El Segundo · 33.92°N 118.42°W</span>
+        <span id="home-clock">—:— PT</span>
+        <span class="masthead__air" data-live-now-playing hidden>on air · <b data-live-now-title></b></span>
+      </p>
+      <nav class="masthead__utility" aria-label="Quick exits">
+        <span class="masthead__wallet"><WalletChip /></span>
+        <a href="/now">Now</a>
+        <a href="/rooms">Rooms</a>
+        <a href="/archive">Archive</a>
+        <a href="/for-agents">For agents</a>
+      </nav>
     </header>
 
-    <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow">A NEW FRONT DOOR · FIELD TEST 08/31</p>
-        <h1>The internet should make a little <em>noise.</em></h1>
-        <p class="dek">PointCast is an agent-native broadcast from El Segundo. Today, the broadcast is you.</p>
-        <div class="hero-meta">
-          <a href="#rosebud">↓ TOUCH THE ROSEBUD</a>
-          <span>NO SIGN-IN · SOUND ON</span>
-        </div>
-      </div>
+    <HomePlayFirst taps={PINNED.drumTaps} blockCount={blockCount} />
 
-      <div class="rose-orbit" aria-hidden="true">
-        <span class="orbit orbit-one"></span>
-        <span class="orbit orbit-two"></span>
-        <span class="petal petal-a"></span>
-        <span class="petal petal-b"></span>
-        <span class="petal petal-c"></span>
-        <span class="rose-core">104</span>
-        <span class="orbit-copy">SOMETHING IS ALWAYS<br />COMING INTO BLOOM</span>
-      </div>
-    </section>
+    <div id="start-here">
+      <HomeStartHere blockCount={blockCount} />
+    </div>
 
-    <section class="machine-section" id="rosebud" aria-labelledby="machine-title">
-      <div class="machine-topline">
+    <HomeGlance numbers={glance} asOf={builtOn} />
+
+    <HomeMagazineRack covers={covers} volumes={beachCommonsVolumes} editorialBlocksSinceJuly={editorialBlocksSinceJuly} latestId={latestId} />
+
+    <HomeDrumUniverse families={drumFamilies} games={drumGames} rooms={drumRooms} taps={PINNED.drumTaps} pages={drumPages} doors={drumDoors} />
+
+    <HomeRoomsShelf rooms={rooms} />
+
+    <HomeConstellation satellites={satellites} contracts={contracts} countedAt={PINNED.countedAt} />
+
+    <HomeAgentDesk surfaces={agentSurfaces} residents={residents} evidence={evidence} />
+
+    <HomeShipLog milestones={milestones} totals={shipTotals} prsByMonth={PINNED.prsByMonth} blocksByMonth={blocksByMonth} authors={authors} imported={blocksImported} />
+
+    <HomeScoreboard />
+
+    <HomeWire latest={latestWire} total={blockCount} sinceLabel={sinceLabel} />
+
+    <HomeBackCatalog pool={catalogPool} total={blockCount} />
+
+    <section class="shelf channels" id="channels" aria-labelledby="channels-title" style="--shelf-color:#12110E;--shelf-color-2:#185FA5">
+      <div class="shelf__head">
         <div>
-          <p class="eyebrow dark">PLAY LAYER / 001</p>
-          <h2 id="machine-title">ROSEBUD</h2>
+          <p class="shelf__kicker">Channels · {CHANNEL_LIST.length} codes · {CHANNEL_LIST.length} colors · {CHANNEL_LIST.length} feeds</p>
+          <h2 class="shelf__title" id="channels-title">Ten lanes, <em>one grammar.</em></h2>
+          <p class="shelf__dek">Front Door for agent-era thinking, Garden for quiet noticing. Court for pickleball, Spinning for music, El Segundo for the town itself. Each has a code, a color, and an RSS feed. No eleventh without Mike.</p>
         </div>
-        <div class="counter"><span data-hit-count>000</span> blooms sent</div>
-      </div>
-
-      <div class="machine">
-        <div class="machine-labels">
-          <span>POINTCAST SOUND SYSTEM</span>
-          <span class="serial">PC–RB / 2026</span>
-        </div>
-        <div class="pads" role="group" aria-label="Rosebud drum pads">
-          {pads.map((pad, index) => (
-            <button
-              class={`drum-pad pad-${index + 1}`}
-              type="button"
-              data-drum={pad.id}
-              aria-label={`Play ${pad.name}: ${pad.note}. Keyboard key ${pad.key}`}
-            >
-              <span class="keycap">{pad.key}</span>
-              <span class="pad-flower" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-              <strong>{pad.name}</strong>
-              <small>{pad.note}</small>
-            </button>
-          ))}
-        </div>
-        <div class="machine-footer">
-          <p>PLAY WITH <kbd>A</kbd> <kbd>S</kbd> <kbd>K</kbd> <kbd>L</kbd></p>
-          <div class="level"><span>SOFT</span><i></i><i></i><i class="on"></i><i class="on"></i><i class="hot"></i><span>LOUD</span></div>
-          <p>ONE ROOM · MANY HANDS</p>
+        <div class="shelf__actions">
+          <a href="/moods">Moods</a>
+          <a href="/random">A random door</a>
         </div>
       </div>
+      <nav class="channels__grid" aria-label="PointCast channels">
+        {CHANNEL_LIST.map((channel) => (
+          <a class="channels__cell" href={`/c/${channel.slug}`} style={`--ch:${channel.color600};--ch-bg:${channel.color50};--ch-ink:${channel.color800}`}>
+            <span class="channels__code">CH.{channel.code}</span>
+            <strong>{channel.name}</strong>
+            <small>{channel.purpose}</small>
+            <span class="channels__feeds"><span>{allBlocks.filter((b) => b.data.channel === channel.code).length} blocks</span> · JSON · RSS</span>
+          </a>
+        ))}
+      </nav>
     </section>
 
-    <section class="sequencer-section" aria-labelledby="sequence-title">
-      <header class="sequence-head">
+    <section class="shelf machine" aria-labelledby="machine-title" style="--shelf-color:#185FA5;--shelf-color-2:#993C1D">
+      <div class="shelf__head shelf__head--stack">
         <div>
-          <p class="eyebrow">MAKE A 16-PETAL LOOP</p>
-          <h2 id="sequence-title">GROW A RHYTHM.</h2>
-        </div>
-        <p>Every square is a small decision.<br />Turn a few on. Let it repeat.</p>
-      </header>
-
-      <div class="transport">
-        <button type="button" class="play-button" data-transport aria-pressed="false">
-          <span data-transport-icon>▶</span> <b data-transport-copy>START THE BLOOM</b>
-        </button>
-        <label class="tempo-control">
-          <span>TEMPO</span>
-          <input data-tempo type="range" min="72" max="148" value="104" />
-          <strong data-tempo-copy>104 BPM</strong>
-        </label>
-        <button type="button" class="shuffle-button" data-shuffle>SHAKE THE GARDEN ↝</button>
-      </div>
-
-      <div class="seq-scroller" tabindex="0" aria-label="Scrollable 16-step sequencer">
-        <div class="sequence">
-          <div class="sequence-numbers" aria-hidden="true">
-            <span>VOICE</span>
-            {steps.map((step) => <i>{String(step + 1).padStart(2, '0')}</i>)}
-          </div>
-          {pads.map((pad, row) => (
-            <div class="sequence-row">
-              <div class="track-name"><i class={`track-dot track-${row + 1}`}></i><strong>{pad.name}</strong><small>{pad.key}</small></div>
-              {seedPattern[row].map((on, step) => (
-                <button
-                  type="button"
-                  class:list={{ 'rb-step': true, 'is-on': on }}
-                  data-row={row}
-                  data-step={step}
-                  aria-label={`${on ? 'Remove' : 'Add'} ${pad.name} on step ${step + 1}`}
-                  aria-pressed={on ? 'true' : 'false'}
-                ><span></span></button>
-              ))}
-            </div>
-          ))}
+          <p class="shelf__kicker">Editorial and machine-readable endpoints · every page has a JSON twin</p>
+          <h2 class="shelf__title" id="machine-title">Read it however <em>you read.</em></h2>
         </div>
       </div>
-      <p class="step-status" data-step-status aria-live="polite">OFF AIR · YOUR PATTERN IS READY</p>
+      <ul class="machine__list">
+        <li><a href="/press">/press</a><span>the press wire</span></li>
+        <li><a href="/archive">/archive</a><span>every block, newest first</span></li>
+        <li><a href="/blocks.json">/blocks.json</a><span>the whole archive as JSON</span></li>
+        <li><a href="/feed.json">/feed.json</a><span>JSON Feed 1.1</span></li>
+        <li><a href="/feed.xml">/feed.xml</a><span>RSS</span></li>
+        <li><a href="/agents.json">/agents.json</a><span>the machine door</span></li>
+        <li><a href="/for-agents">/for-agents</a><span>the same door, in prose</span></li>
+        <li><a href="/llms.txt">/llms.txt</a><span>orientation for language models</span></li>
+        <li><a href="/super-follow">/super-follow</a><span>a company is not one feed</span></li>
+        <li><a href="/register.json">/register.json</a><span>the experiment register</span></li>
+        <li><a href="/now.json">/now.json</a><span>right now, as JSON</span></li>
+        <li><a href="/signals.json">/signals.json</a><span>the four field signals, as JSON</span></li>
+        <li><a href="/auth#spotify" title="Spotify broadcast authorization and Super Auth controls">Spotify auth</a><span>/auth · the booth’s authorization</span></li>
+      </ul>
+      <p class="shelf__foot">
+        <span>A garden is slow on purpose. A broadcast is too.</span>
+        <span>the coffee pot, still on · <a href="/mythos">what is this place</a> · <a href="/about">about</a> · <a href="/residents">who lives here</a></span>
+      </p>
     </section>
-
-    <section class="manifesto">
-      <div class="manifesto-lead">
-        <p class="eyebrow">WHY THIS DOOR?</p>
-        <h2>A SIGNAL,<br /><em>NOT A SCROLL.</em></h2>
-      </div>
-      <div class="manifesto-grid">
-        <article><span>01</span><h3>PLAY FIRST</h3><p>The homepage begins with a gesture. You do something; the signal answers.</p></article>
-        <article><span>02</span><h3>NOTICE MORE</h3><p>A tiny daily broadcast, an odd room, a living archive. No infinite feed required.</p></article>
-        <article><span>03</span><h3>COME BACK DIFFERENT</h3><p>PointCast is rebuilt in public by humans and agents. The front door should keep surprising us.</p></article>
-      </div>
-    </section>
-
-    <section class="broadcast-strip" aria-label="PointCast destinations">
-      <p class="eyebrow">CONTINUE THE BROADCAST</p>
-      <div class="broadcast-links">
-        <a href="/digital-pets"><span>FUTURE BOOK 001</span><small>the animal after the internet · living edition</small><b>↗</b></a>
-        <a href="/digital-pets/microduck"><span>MICRODUCK / FUTURE BOOK</span><small>full review, open stack, behavior lab, consumer arc</small><b>↗</b></a>
-        <a href="/next-models"><span>NEXT MODELS</span><small>Astra, Mythos, open weights, moving image</small><b>↗</b></a>
-        <a href="/archive"><span>THE ARCHIVE</span><small>every block, newest first</small><b>↗</b></a>
-        <a href="/drum"><span>DRUM UNIVERSE</span><small>rooms, crews, strange instruments</small><b>↗</b></a>
-        <a href="/about"><span>ABOUT THE SIGNAL</span><small>from El Segundo, with agents</small><b>↗</b></a>
-      </div>
-    </section>
-
-    <footer>
-      <div class="footer-mark"><span class="mark-dot">P</span><strong>POINTCAST</strong></div>
-      <p>IT IS NEVER FINISHED.<br />IT IS JUST ON AIR.</p>
-      <div class="footer-signal"><i></i> EL SEGUNDO, CA<br />33.9192° N · 118.4165° W</div>
-    </footer>
   </div>
-
-  <script is:inline>
-    (() => {
-      const home = document.querySelector('[data-rosebud-home]');
-      if (!home || home.dataset.ready === 'true') return;
-      home.dataset.ready = 'true';
-      document.body.classList.add('rosebud-body');
-
-      const padIds = ['kick', 'bloom', 'dew', 'thorn'];
-      const keyMap = { a: 'kick', s: 'bloom', k: 'dew', l: 'thorn' };
-      const pattern = [
-        [true, false, false, false, true, false, false, false, true, false, false, true, true, false, false, false],
-        [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false],
-        [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, true],
-        [false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, false],
-      ];
-      let audio = null;
-      let hitCount = 0;
-      let playing = false;
-      let currentStep = 0;
-      let timer = null;
-      let bpm = 104;
-
-      const ensureAudio = () => {
-        if (!audio) audio = new AudioContext();
-        if (audio.state === 'suspended') audio.resume();
-        return audio;
-      };
-
-      const hit = (drum) => {
-        const context = ensureAudio();
-        const now = context.currentTime;
-        const gain = context.createGain();
-        gain.connect(context.destination);
-
-        if (drum === 'kick') {
-          const osc = context.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(148, now);
-          osc.frequency.exponentialRampToValueAtTime(43, now + 0.28);
-          gain.gain.setValueAtTime(0.82, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-          osc.connect(gain);
-          osc.start(now);
-          osc.stop(now + 0.32);
-        } else {
-          const size = Math.floor(context.sampleRate * 0.38);
-          const buffer = context.createBuffer(1, size, context.sampleRate);
-          const data = buffer.getChannelData(0);
-          for (let i = 0; i < size; i += 1) data[i] = Math.random() * 2 - 1;
-          const noise = context.createBufferSource();
-          const filter = context.createBiquadFilter();
-          noise.buffer = buffer;
-          filter.type = drum === 'bloom' ? 'bandpass' : 'highpass';
-          filter.frequency.value = drum === 'bloom' ? 1450 : drum === 'dew' ? 7600 : 3100;
-          filter.Q.value = drum === 'bloom' ? 0.75 : 1.2;
-          gain.gain.setValueAtTime(drum === 'bloom' ? 0.46 : 0.24, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + (drum === 'dew' ? 0.075 : 0.18));
-          noise.connect(filter);
-          filter.connect(gain);
-          noise.start(now);
-          noise.stop(now + 0.38);
-        }
-
-        const pad = home.querySelector(`[data-drum="${drum}"]`);
-        pad?.classList.add('is-hit');
-        window.setTimeout(() => pad?.classList.remove('is-hit'), 105);
-        hitCount += 1;
-        const count = home.querySelector('[data-hit-count]');
-        if (count) count.textContent = String(hitCount).padStart(3, '0');
-      };
-
-      const paintStep = (step) => {
-        home.querySelectorAll('.rb-step').forEach((button) => {
-          button.classList.toggle('is-current', Number(button.dataset.step) === step);
-        });
-        const status = home.querySelector('[data-step-status]');
-        if (status) status.textContent = `ON AIR · PETAL ${step + 1} OF 16`;
-      };
-
-      const tick = () => {
-        pattern.forEach((row, rowIndex) => {
-          if (row[currentStep]) hit(padIds[rowIndex]);
-        });
-        paintStep(currentStep);
-        currentStep = (currentStep + 1) % 16;
-      };
-
-      const startClock = () => {
-        window.clearInterval(timer);
-        tick();
-        timer = window.setInterval(tick, 60000 / bpm / 4);
-      };
-
-      const transport = home.querySelector('[data-transport]');
-      transport?.addEventListener('click', () => {
-        ensureAudio();
-        playing = !playing;
-        transport.classList.toggle('is-playing', playing);
-        transport.setAttribute('aria-pressed', String(playing));
-        const icon = home.querySelector('[data-transport-icon]');
-        const copy = home.querySelector('[data-transport-copy]');
-        if (icon) icon.textContent = playing ? '■' : '▶';
-        if (copy) copy.textContent = playing ? 'STOP THE BLOOM' : 'START THE BLOOM';
-        if (playing) startClock();
-        else {
-          window.clearInterval(timer);
-          currentStep = 0;
-          home.querySelectorAll('.rb-step').forEach((button) => button.classList.remove('is-current'));
-          const status = home.querySelector('[data-step-status]');
-          if (status) status.textContent = 'OFF AIR · YOUR PATTERN IS READY';
-        }
-      });
-
-      home.querySelectorAll('[data-drum]').forEach((button) => {
-        button.addEventListener('pointerdown', () => hit(button.dataset.drum));
-      });
-
-      home.querySelectorAll('.rb-step').forEach((button) => {
-        button.addEventListener('click', () => {
-          const row = Number(button.dataset.row);
-          const step = Number(button.dataset.step);
-          pattern[row][step] = !pattern[row][step];
-          button.classList.toggle('is-on', pattern[row][step]);
-          button.setAttribute('aria-pressed', String(pattern[row][step]));
-          const name = home.querySelectorAll('.track-name strong')[row]?.textContent || 'voice';
-          button.setAttribute('aria-label', `${pattern[row][step] ? 'Remove' : 'Add'} ${name} on step ${step + 1}`);
-        });
-      });
-
-      const tempo = home.querySelector('[data-tempo]');
-      tempo?.addEventListener('input', () => {
-        bpm = Number(tempo.value);
-        const copy = home.querySelector('[data-tempo-copy]');
-        if (copy) copy.textContent = `${bpm} BPM`;
-        if (playing) startClock();
-      });
-
-      home.querySelector('[data-shuffle]')?.addEventListener('click', () => {
-        const densities = [0.3, 0.17, 0.55, 0.16];
-        pattern.forEach((row, rowIndex) => row.forEach((_, step) => {
-          row[step] = rowIndex === 0 && step === 0 ? true : Math.random() < densities[rowIndex];
-          home.querySelector(`.rb-step[data-row="${rowIndex}"][data-step="${step}"]`)?.classList.toggle('is-on', row[step]);
-        }));
-      });
-
-      window.addEventListener('keydown', (event) => {
-        if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-        const drum = keyMap[event.key.toLowerCase()];
-        if (drum) hit(drum);
-      });
-    })();
-  </script>
 </BlockLayout>
 
-<style is:global>
-  body.rosebud-body { padding-bottom: 0 !important; }
-</style>
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-front-door]');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+
+    // PT clock in the masthead.
+    const clock = document.getElementById('home-clock');
+    const tick = () => {
+      if (!clock) return;
+      try {
+        clock.textContent = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date()) + ' PT';
+      } catch {}
+    };
+    tick();
+    window.setInterval(tick, 30000);
+
+    // Currently spinning, if the booth says so.
+    fetch('/now-playing.json', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        const title = j.title || j.track?.title || j.nowPlaying?.title || j.item?.title;
+        const artist = j.artist || j.track?.artist || '';
+        const line = root.querySelector('[data-live-now-playing]');
+        const out = root.querySelector('[data-live-now-title]');
+        if (title && line && out) { out.textContent = artist ? `${title} — ${artist}` : String(title); line.hidden = false; }
+      })
+      .catch(() => {});
+
+    // Live numbers on the glance row; the build-time value stays if a fetch fails.
+    const setGlance = (id, value) => {
+      const el = root.querySelector(`[data-glance="${id}"]`);
+      if (el && typeof value === 'number') el.textContent = value.toLocaleString('en-US');
+    };
+    // One request per endpoint for the whole page; sections listen for the event instead of fetching again.
+    fetch('/api/drum', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!j || typeof j.globalTotal !== 'number') return;
+      setGlance('drum-taps', j.globalTotal);
+      root.querySelectorAll('[data-drum-taps], [data-drum-global]').forEach((el) => { el.textContent = j.globalTotal.toLocaleString('en-US'); });
+      document.dispatchEvent(new CustomEvent('pc:drum', { detail: j }));
+    }).catch(() => {});
+    fetch('/api/visit', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!j || typeof j.count !== 'number') return;
+      setGlance('visits', j.count);
+      document.dispatchEvent(new CustomEvent('pc:visit', { detail: j }));
+    }).catch(() => {});
+  })();
+</script>
 
 <style>
-  :root {
-    --rb-paper: #f5efdf;
-    --rb-ink: #1e231c;
-    --rb-rose: #e53f47;
-    --rb-blush: #f3a0a6;
-    --rb-yellow: #f4d83e;
+  .masthead { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px 20px; padding: 14px 0 10px; border-bottom: 2px solid #111; }
+  .masthead__brand { font-size: 22px; font-weight: 730; letter-spacing: -.04em; color: #111; }
+  .masthead__meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; }
+  .masthead__air b { color: #111; text-transform: none; letter-spacing: 0; }
+  .masthead__utility { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .masthead__utility a { padding: 7px 9px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; color: #111; }
+  .masthead__utility a:hover { background: #111; color: #fff; text-decoration: none; }
+  .masthead__wallet { display: inline-flex; }
+  #start-here { scroll-margin-top: 12px; }
+
+  .channels__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .channels__cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px; border-right: 1px solid rgba(0,0,0,.18); border-bottom: 1px solid rgba(0,0,0,.18); border-top: 4px solid var(--ch); color: #111; background: #fff; }
+  .channels__cell:nth-child(5n) { border-right: 0; }
+  .channels__cell:nth-child(n+6) { border-bottom: 0; }
+  .channels__cell:hover { background: var(--ch-bg); text-decoration: none; }
+  .channels__code { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; color: var(--ch-ink); }
+  .channels__cell strong { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+  .channels__cell small { font-size: 11.5px; line-height: 1.35; color: rgba(0,0,0,.72); }
+  .channels__feeds { margin-top: auto; padding-top: 8px; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; }
+  .channels__feeds span { color: #111; }
+
+  .machine__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  .machine__list li { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 14px; border-right: 1px solid rgba(0,0,0,.18); border-bottom: 1px solid rgba(0,0,0,.18); overflow-wrap: anywhere; }
+  .machine__list li:nth-child(4n) { border-right: 0; }
+  .machine .shelf__foot { border-top: 0; }
+  .machine__list a { font: 700 11px var(--pc-font-mono); letter-spacing: .04em; color: #185FA5; }
+  .machine__list span { font-size: 11.5px; color: rgba(0,0,0,.72); }
+
+  @media (max-width: 880px) {
+    .masthead { grid-template-columns: 1fr auto; }
+    .masthead__meta { grid-column: 1 / -1; order: 3; }
+    .channels__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .channels__cell:nth-child(5n) { border-right: 1px solid rgba(0,0,0,.18); }
+    .channels__cell:nth-child(2n) { border-right: 0; }
+    .channels__cell:nth-child(n+6) { border-bottom: 1px solid rgba(0,0,0,.18); }
+    .channels__cell:nth-child(n+9) { border-bottom: 0; }
+    .machine__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .machine__list li:nth-child(4n) { border-right: 1px solid rgba(0,0,0,.18); }
+    .machine__list li:nth-child(2n) { border-right: 0; }
   }
-
-  .rb-home { min-height: 100vh; overflow: hidden; background: var(--rb-paper); color: var(--rb-ink); font-family: Arial, Helvetica, sans-serif; background-image: radial-gradient(circle at 12% 4%, rgba(255,255,255,.7), transparent 31%); }
-  .rb-home button, .rb-home a, .rb-home input { font: inherit; }
-  .rb-home button { color: inherit; }
-  .site-header { height: 76px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 4vw; border-bottom: 1.5px solid var(--rb-ink); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
-  .wordmark { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; width: max-content; }
-  .mark-dot { width: 32px; height: 32px; border-radius: 50%; background: var(--rb-rose); color: var(--rb-paper); display: grid; place-items: center; font-family: Georgia, serif; font-style: italic; font-size: 18px; letter-spacing: 0; }
-  .live-line { display: flex; align-items: center; gap: 8px; }
-  .live-line i { width: 7px; height: 7px; border-radius: 50%; background: var(--rb-rose); box-shadow: 0 0 0 5px rgba(229,63,71,.12); animation: rb-pulse 1.8s infinite; }
-  .menu-pill { justify-self: end; border: 1.5px solid var(--rb-ink); border-radius: 999px; padding: 10px 15px; color: inherit; text-decoration: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
-  .menu-pill span { margin-left: 12px; }
-  .hero { position: relative; min-height: 565px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr); align-items: center; gap: 5vw; padding: 70px 6vw 64px; border-bottom: 1.5px solid var(--rb-ink); }
-  .hero-copy { position: relative; z-index: 2; max-width: 850px; }
-  .eyebrow { margin: 0 0 27px; font-size: 11px; font-weight: 900; letter-spacing: .16em; }
-  h1 { max-width: 900px; margin: 0; font-size: clamp(68px, 8.2vw, 134px); line-height: .82; letter-spacing: -.075em; font-weight: 900; text-transform: uppercase; }
-  h1 em { color: var(--rb-rose); font-family: Georgia, 'Times New Roman', serif; font-weight: 400; text-transform: lowercase; letter-spacing: -.06em; }
-  .dek { max-width: 580px; margin: 34px 0 0 20%; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(20px, 2vw, 29px); line-height: 1.18; }
-  .hero-meta { margin-top: 45px; display: flex; justify-content: space-between; gap: 30px; border-top: 1px solid var(--rb-ink); padding-top: 13px; font-size: 9px; font-weight: 900; letter-spacing: .14em; }
-  .hero-meta a { color: inherit; text-decoration: none; }
-  .hero-meta a:hover { color: var(--rb-rose); }
-  .rose-orbit { position: relative; aspect-ratio: 1; width: min(38vw, 500px); justify-self: center; display: grid; place-items: center; }
-  .orbit { position: absolute; border: 1.5px solid var(--rb-ink); border-radius: 50%; }
-  .orbit-one { inset: 3%; }
-  .orbit-two { inset: 21%; border-style: dashed; animation: rb-spin 18s linear infinite; }
-  .rose-core { width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center; z-index: 2; background: var(--rb-yellow); border: 1.5px solid var(--rb-ink); font-size: 35px; font-weight: 900; letter-spacing: -.08em; box-shadow: 8px 9px 0 var(--rb-ink); }
-  .petal { position: absolute; width: 38%; height: 25%; background: var(--rb-blush); border: 1.5px solid var(--rb-ink); border-radius: 70% 25% 70% 25%; transform-origin: 100% 50%; }
-  .petal-a { transform: translateX(-42%) rotate(16deg); }
-  .petal-b { transform: translateY(-40%) rotate(126deg); background: var(--rb-rose); }
-  .petal-c { transform: translate(18%, 36%) rotate(245deg); background: #ff6b6c; }
-  .orbit-copy { position: absolute; bottom: 8%; right: -3%; font-size: 9px; line-height: 1.4; font-weight: 900; letter-spacing: .1em; transform: rotate(-8deg); }
-  .machine-section { background: var(--rb-rose); padding: 70px 6vw 84px; color: var(--rb-paper); }
-  .machine-topline { display: flex; align-items: end; justify-content: space-between; margin-bottom: 25px; }
-  .eyebrow.dark { margin-bottom: 9px; color: #2b1d1a; }
-  h2 { margin: 0; color: #271e19; font-size: clamp(48px, 7vw, 98px); line-height: .8; letter-spacing: -.06em; font-weight: 900; }
-  .counter { color: #2b1d1a; font-size: 10px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
-  .counter span { font-family: Georgia, serif; font-style: italic; font-size: 32px; letter-spacing: -.05em; margin-right: 9px; }
-  .machine { max-width: 1420px; margin: 0 auto; padding: 26px; border: 2px solid #241d19; border-radius: 26px; background: #2a2d27; box-shadow: 0 18px 0 #201814, 0 30px 50px rgba(63,13,13,.25); }
-  .machine-labels { display: flex; justify-content: space-between; margin-bottom: 22px; color: #bdb8a8; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
-  .serial { color: var(--rb-yellow); }
-  .pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-  .drum-pad { position: relative; min-height: 235px; border: 1.5px solid #191b17; border-radius: 16px; background: #efe6ce; color: #231d19; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; padding: 20px; box-shadow: inset 0 -8px 0 rgba(51,37,28,.16), 0 7px 0 #131510; cursor: pointer; transition: transform 90ms ease, box-shadow 90ms ease, filter 90ms ease; overflow: hidden; text-align: left; touch-action: manipulation; }
-  .drum-pad:nth-child(2) { background: var(--rb-blush); }
-  .drum-pad:nth-child(3) { background: var(--rb-yellow); }
-  .drum-pad:nth-child(4) { background: #628a60; }
-  .drum-pad:hover { filter: brightness(1.05); transform: translateY(-2px); }
-  .drum-pad.is-hit, .drum-pad:active { transform: translateY(6px) scale(.992); box-shadow: inset 0 2px 0 rgba(51,37,28,.2), 0 1px 0 #131510; filter: saturate(1.2) brightness(1.06); }
-  .drum-pad strong { font-size: clamp(24px, 2.3vw, 37px); letter-spacing: -.055em; font-weight: 900; }
-  .drum-pad small { margin-top: 2px; font-family: Georgia, serif; font-style: italic; font-size: 15px; }
-  .keycap { position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 900; }
-  .pad-flower { position: absolute; top: 27px; left: 50%; width: 120px; height: 120px; transform: translateX(-50%); }
-  .pad-flower i { position: absolute; left: 38px; top: 8px; width: 45px; height: 65px; border: 1.5px solid currentColor; border-radius: 70% 30% 60% 40%; transform-origin: 50% 52px; }
-  .pad-flower i:nth-child(2) { transform: rotate(90deg); }
-  .pad-flower i:nth-child(3) { transform: rotate(180deg); }
-  .pad-flower i:nth-child(4) { transform: rotate(270deg); }
-  .pad-flower::after { content: ''; position: absolute; inset: 48px; border-radius: 50%; background: currentColor; }
-  .machine-footer { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; padding-top: 24px; color: #aaa99d; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
-  .machine-footer p { margin: 0; }
-  .machine-footer p:last-child { text-align: right; }
-  kbd { display: inline-grid; place-items: center; min-width: 21px; height: 21px; margin-left: 4px; border: 1px solid #77796d; border-radius: 4px; color: #eee5ce; box-shadow: 0 2px 0 #080906; }
-  .level { display: flex; align-items: center; gap: 5px; }
-  .level i { width: 15px; height: 6px; border-radius: 99px; background: #55594e; }
-  .level i.on { background: var(--rb-yellow); }
-  .level i.hot { background: var(--rb-rose); }
-  .level span { margin: 0 4px; }
-  .sequencer-section { padding: 88px 6vw 100px; background: var(--rb-paper); border-bottom: 1.5px solid var(--rb-ink); }
-  .sequence-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 40px; margin-bottom: 46px; }
-  .sequence-head .eyebrow { margin-bottom: 14px; }
-  .sequence-head h2 { color: var(--rb-ink); font-size: clamp(52px, 7vw, 102px); }
-  .sequence-head > p { max-width: 330px; margin: 0; font-family: Georgia, serif; font-size: 20px; line-height: 1.25; }
-  .transport { display: grid; grid-template-columns: auto minmax(320px, 1fr) auto; gap: 18px; align-items: stretch; margin-bottom: 18px; }
-  .play-button, .shuffle-button { border: 1.5px solid var(--rb-ink); background: var(--rb-yellow); min-height: 64px; padding: 0 24px; font-size: 10px; font-weight: 900; letter-spacing: .1em; cursor: pointer; box-shadow: 4px 4px 0 var(--rb-ink); transition: transform 90ms ease, box-shadow 90ms ease; }
-  .play-button span { margin-right: 12px; }
-  .play-button.is-playing { background: var(--rb-rose); color: var(--rb-paper); }
-  .shuffle-button { background: var(--rb-blush); }
-  .play-button:active, .shuffle-button:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--rb-ink); }
-  .tempo-control { border: 1.5px solid var(--rb-ink); display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; padding: 0 22px; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
-  .tempo-control strong { min-width: 70px; text-align: right; font-weight: 900; }
-  .tempo-control input { width: 100%; accent-color: var(--rb-rose); cursor: ew-resize; }
-  .seq-scroller { width: 100%; overflow-x: auto; border: 1.5px solid var(--rb-ink); background: #292c26; box-shadow: 7px 8px 0 var(--rb-ink); scrollbar-color: var(--rb-rose) #292c26; }
-  .sequence { min-width: 970px; padding: 19px; color: var(--rb-paper); }
-  .sequence-numbers, .sequence-row { display: grid; grid-template-columns: 130px repeat(16, minmax(32px, 1fr)); gap: 7px; }
-  .sequence-numbers { align-items: center; padding-bottom: 10px; color: #9f9f90; font-size: 8px; font-weight: 900; letter-spacing: .12em; }
-  .sequence-numbers i { text-align: center; font-style: normal; }
-  .sequence-row { min-height: 57px; padding: 7px 0; border-top: 1px solid #4b4e44; }
-  .track-name { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding-right: 10px; }
-  .track-name strong { font-size: 11px; letter-spacing: .08em; font-weight: 900; }
-  .track-name small { color: #a8a99b; font-size: 9px; }
-  .track-dot { width: 10px; height: 10px; border-radius: 50%; background: #efe6ce; }
-  .track-2 { background: var(--rb-blush); }
-  .track-3 { background: var(--rb-yellow); }
-  .track-4 { background: #7aa279; }
-  .sequence-row > button { position: relative; border: 1px solid #66695d; border-radius: 5px; background: #363a32; cursor: pointer; box-shadow: inset 0 -3px 0 #1c1e1a; }
-  .sequence-row > button:nth-child(4n + 2) { border-left-color: #9b9d8c; }
-  .sequence-row > button span { position: absolute; inset: 29%; border-radius: 50%; background: #5a5d52; }
-  .sequence-row > button.is-on { background: #f0e7cf; border-color: #f0e7cf; box-shadow: inset 0 -4px 0 rgba(35,29,25,.22), 0 0 18px rgba(244,216,62,.12); }
-  .sequence-row > button.is-on span { background: var(--rb-rose); }
-  .sequence-row:nth-of-type(3) > button.is-on span { background: #c33a46; }
-  .sequence-row:nth-of-type(4) > button.is-on span { background: #d0ad18; }
-  .sequence-row:nth-of-type(5) > button.is-on span { background: #365d3b; }
-  .sequence-row > button.is-current::after { content: ''; position: absolute; top: -7px; left: 35%; width: 30%; height: 3px; background: var(--rb-yellow); box-shadow: 0 0 8px var(--rb-yellow); }
-  .step-status { margin: 17px 0 0; text-align: right; font-size: 8px; font-weight: 900; letter-spacing: .15em; }
-  .manifesto { display: grid; grid-template-columns: .86fr 1.14fr; border-bottom: 1.5px solid var(--rb-ink); }
-  .manifesto-lead { min-height: 520px; padding: 80px 6vw; background: var(--rb-yellow); border-right: 1.5px solid var(--rb-ink); }
-  .manifesto-lead h2 { color: var(--rb-ink); font-size: clamp(48px, 5.8vw, 84px); line-height: .87; }
-  .manifesto-lead h2 em { display: inline-block; margin-top: 10px; color: var(--rb-rose); font-family: Georgia, serif; font-weight: 400; text-transform: lowercase; }
-  .manifesto-grid { display: grid; grid-template-rows: repeat(3, 1fr); }
-  .manifesto-grid article { display: grid; grid-template-columns: 54px 170px 1fr; align-items: center; gap: 25px; padding: 34px 5vw; border-bottom: 1.5px solid var(--rb-ink); }
-  .manifesto-grid article:last-child { border-bottom: 0; }
-  .manifesto-grid span { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--rb-ink); border-radius: 50%; font-family: Georgia, serif; font-style: italic; }
-  .manifesto-grid h3 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
-  .manifesto-grid p { max-width: 440px; margin: 0; font-family: Georgia, serif; font-size: 18px; line-height: 1.3; }
-  .broadcast-strip { padding: 80px 6vw 92px; background: var(--rb-blush); border-bottom: 1.5px solid var(--rb-ink); }
-  .broadcast-links { border-top: 1.5px solid var(--rb-ink); }
-  .broadcast-links a { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 20px; min-height: 105px; border-bottom: 1.5px solid var(--rb-ink); color: inherit; text-decoration: none; transition: padding 150ms ease, background 150ms ease; }
-  .broadcast-links a:hover { padding: 0 18px; background: rgba(245,239,223,.35); }
-  .broadcast-links span { font-size: clamp(28px, 4vw, 57px); font-weight: 900; letter-spacing: -.06em; }
-  .broadcast-links small { font-family: Georgia, serif; font-size: 18px; }
-  .broadcast-links b { font-size: 32px; font-weight: 400; }
-  footer { min-height: 280px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 40px; padding: 50px 6vw; background: #292c26; color: var(--rb-paper); }
-  .footer-mark { display: flex; align-items: center; gap: 12px; font-size: 12px; letter-spacing: .1em; }
-  footer > p { margin: 0; text-align: center; color: var(--rb-yellow); font-size: clamp(27px, 3.3vw, 48px); font-weight: 900; line-height: .9; letter-spacing: -.06em; }
-  .footer-signal { justify-self: end; text-align: right; font-size: 9px; line-height: 1.7; font-weight: 800; letter-spacing: .11em; }
-  .footer-signal i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--rb-rose); }
-
-  @keyframes rb-pulse { 50% { opacity: .35; } }
-  @keyframes rb-spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 820px) {
-    .site-header { grid-template-columns: 1fr auto; }
-    .live-line { display: none; }
-    .hero { min-height: auto; grid-template-columns: 1fr; padding-top: 55px; }
-    h1 { font-size: clamp(58px, 17vw, 100px); }
-    .dek { margin-left: 0; }
-    .rose-orbit { width: min(85vw, 430px); margin-top: 10px; }
-    .pads { grid-template-columns: repeat(2, 1fr); }
-    .machine-footer { grid-template-columns: 1fr; }
-    .machine-footer p:last-child { text-align: left; }
-    .level { order: 3; }
-    .sequence-head { grid-template-columns: 1fr; }
-    .transport { grid-template-columns: 1fr 1fr; }
-    .tempo-control { grid-column: 1 / -1; grid-row: 2; min-height: 64px; }
-    .manifesto { grid-template-columns: 1fr; }
-    .manifesto-lead { min-height: auto; border-right: 0; border-bottom: 1.5px solid var(--rb-ink); }
-    .manifesto-grid article { grid-template-columns: 48px 150px 1fr; }
-    footer { grid-template-columns: 1fr 1fr; }
-    footer > p { grid-column: 1 / -1; grid-row: 1; }
-  }
-
-  @media (max-width: 480px) {
-    .site-header { padding: 0 20px; }
-    .hero, .machine-section { padding-left: 20px; padding-right: 20px; }
-    .hero-meta { align-items: flex-start; flex-direction: column; gap: 8px; }
-    .machine-topline { align-items: flex-start; flex-direction: column; gap: 16px; }
-    .machine { padding: 14px; border-radius: 20px; }
-    .pads { gap: 10px; }
-    .drum-pad { min-height: 178px; padding: 14px; }
-    .pad-flower { transform: translateX(-50%) scale(.72); top: 18px; }
-    .sequencer-section, .broadcast-strip { padding-left: 20px; padding-right: 20px; }
-    .transport { grid-template-columns: 1fr; }
-    .tempo-control { grid-column: auto; grid-row: auto; }
-    .sequence-head > p { font-size: 17px; }
-    .manifesto-lead { padding: 65px 20px; }
-    .manifesto-grid article { grid-template-columns: 44px 1fr; gap: 16px; padding: 30px 20px; }
-    .manifesto-grid p { grid-column: 2; }
-    .broadcast-links a { grid-template-columns: 1fr auto; padding: 22px 0; }
-    .broadcast-links small { grid-column: 1; grid-row: 2; }
-    .broadcast-links b { grid-column: 2; grid-row: 1 / 3; }
-    footer { grid-template-columns: 1fr; padding: 60px 20px; text-align: center; }
-    footer > p { grid-column: auto; grid-row: auto; }
-    .footer-mark { justify-self: center; }
-    .footer-signal { justify-self: center; text-align: center; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .rb-home * { animation: none !important; scroll-behavior: auto !important; }
+  @media (max-width: 560px) {
+    .masthead { grid-template-columns: 1fr; }
+    .channels__grid, .machine__list { grid-template-columns: 1fr; }
+    .channels__cell, .machine__list li { border-right: 0 !important; border-bottom: 1px solid rgba(0,0,0,.18) !important; }
+    .channels__cell:last-child { border-bottom: 0 !important; }
   }
 </style>

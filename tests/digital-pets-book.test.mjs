@@ -59,7 +59,8 @@ test('Future Book 001 has complete human, machine, Block, homepage, and discover
   assert.match(json, /pointcast\.future-book\/v1/);
   assert.match(block, /"id": "0514"/);
   assert.match(block, /"author": "codex"/);
-  assert.match(home, /href="\/digital-pets"/);
+  // front door rebuilt 2026-09-01: the Digital Pets door is a `covers` entry in index.astro's frontmatter (href: '/digital-pets'), not an inline <a href="…">.
+  assert.match(home, /href(?:="|: ')\/digital-pets["']/);
   assert.match(sitemap, /pointcast\.xyz\/digital-pets\.json/);
   assert.match(agents, /digitalPets: 'https:\/\/pointcast\.xyz\/digital-pets\.json'/);
   assert.match(llms, /PointCast Future Book 001/);

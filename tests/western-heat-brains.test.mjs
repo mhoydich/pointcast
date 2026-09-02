@@ -29,7 +29,8 @@ test('Western Heat / Brains 25 publishes human, machine, Block, homepage, magazi
   assert.match(block, /"id": "0568"/);
   assert.match(block, /"footballHeatScoresAreEditorial": true/);
   assert.match(block, /"resourcesEqualResults": false/);
-  assert.match(home, /href="\/25\/magazine\/western-heat-brains"/);
+  // front door rebuilt 2026-09-01: the cover now lives in index.astro's frontmatter `covers` array (href: '…'), not an inline <a href="…">
+  assert.match(home, /href(?:="|: ')\/25\/magazine\/western-heat-brains(?:"|')/);
   assert.match(homeEdition, /id: '0568'/);
   assert.match(magazine, /sound-feature--double/);
   assert.match(apps, /slug: 'western-heat-brains-2026'/);

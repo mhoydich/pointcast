@@ -5,9 +5,16 @@
  */
 import board from '../data/scoreboard.json';
 const rows = board.rows;
-const withUse = rows.filter((r) => r.use != null).sort((a, b) => (b.use ?? 0) - (a.use ?? 0)).slice(0, 3);
+// One public counter per room: the scorer copies the global drum counter onto every drum family row,
+// so identical use values collapse to the first (highest-scored) row that carries them.
+const seenUse = new Set<number>();
+const withUse = rows
+  .filter((r) => r.use != null)
+  .sort((a, b) => (b.use ?? 0) - (a.use ?? 0) || (b.total ?? 0) - (a.total ?? 0))
+  .filter((r) => { const u = r.use as number; if (seenUse.has(u)) return false; seenUse.add(u); return true; })
+  .slice(0, 3);
 const byScore = rows.filter((r) => !withUse.includes(r)).slice(0, 5);
-const drum = rows.find((r) => r.path === '/drum-house');
+const drum = rows.find((r) => r.path === '/drum');
 const label = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }).format(new Date(board.generatedAt));
 ---
 
@@ -50,8 +57,8 @@ const label = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric',
   .home-sb__actions a:hover { background: #993C1D; border-color: #993C1D; color: #fff; text-decoration: none; }
   .home-sb__lists { display: grid; grid-template-columns: 1fr 1fr; }
   .home-sb__lists > div { padding: 18px 16px; }
-  .home-sb__lists > div:first-child { border-right: 1px solid #dfe3ea; }
-  .home-sb h3 { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: #5a6170; }
+  .home-sb__lists > div:first-child { border-right: 1px solid var(--home-rule, #dfe3ea); }
+  .home-sb h3 { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-faint, #5a6170); }
   .home-sb ol { margin: 0; padding: 0; list-style: none; counter-reset: sb; }
   .home-sb li { counter-increment: sb; border-top: 1px solid #dfe3ea; }
   .home-sb li a { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; padding: 8px 0; color: #111; }

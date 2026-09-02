@@ -1,0 +1,75 @@
+---
+/**
+ * HomeWire — "What just shipped." The newest blocks on the front door.
+ *
+ * Props come from index.astro (getCollection('blocks')), so the list is
+ * computed at build and never hand-typed. Art is the block's own OG card
+ * (/images/og/b/{id}.png — one exists for every block) with the block's
+ * media image preferred when it is a local file.
+ */
+import { CHANNELS } from '../lib/channels';
+
+export interface WireItem {
+  id: string;
+  title: string;
+  channel: string;
+  type: string;
+  date: string;      // "Aug 31"
+  href: string;      // /b/0579
+  image: string;     // /images/og/b/0579.png
+  dek: string;
+  external?: string; // outbound destination if the block is a LINK/VISIT
+}
+interface Props { latest: WireItem[]; total: number; sinceLabel: string }
+const { latest, total, sinceLabel } = Astro.props;
+const color = (code: string) => CHANNELS[code as keyof typeof CHANNELS]?.color800 ?? '#111';
+const name = (code: string) => CHANNELS[code as keyof typeof CHANNELS]?.name ?? code;
+---
+
+<section class="shelf shelf--wire" id="wire" aria-labelledby="wire-title" style="--shelf-color:#185FA5;--shelf-color-2:#993C1D">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The wire · latest {latest.length} · {total} blocks since {sinceLabel}</p>
+      <h2 class="shelf__title" id="wire-title">What just <em>shipped.</em></h2>
+      <p class="shelf__dek">Every piece of the town is a numbered block with a channel, a type, and a timestamp. These are the newest. The older ones are still open.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/archive">Whole archive</a>
+      <a href="/wire">The wire</a>
+      <a href="/feed.json">JSON feed</a>
+      <a href="/feed.xml">RSS</a>
+    </div>
+  </div>
+  <ol class="shelf__grid shelf__grid--4 wire__grid">
+    {latest.map((item) => (
+      <li>
+        <a class="cell wire__cell" href={item.href} style={`--cell-color:${color(item.channel)}`}>
+          <img class="cell__art" src={item.image} alt="" width="320" height="168" loading="lazy" decoding="async" />
+          <span class="wire__row">
+            <span class="cell__tag">CH.{item.channel} · {name(item.channel)}</span>
+            <span class="wire__type">{item.type}</span>
+          </span>
+          <span class="cell__title">{item.title}</span>
+          {item.dek && <span class="cell__note">{item.dek}</span>}
+          <span class="cell__meta">№ {item.id} · {item.date}{item.external ? <> · <b>{item.external} ↗</b></> : null}</span>
+        </a>
+      </li>
+    ))}
+  </ol>
+  <p class="shelf__foot">
+    <span>Block IDs are monotonic and never reused</span>
+    <span><a href="/blocks.json">/blocks.json</a> · <a href="/api/blocks.jsonl">/api/blocks.jsonl</a> · <a href="/today">today's drop</a> · <a href="/random">a random door</a></span>
+  </p>
+</section>
+
+<style>
+  .wire__cell { padding: 0 0 14px; }
+  .wire__cell > .cell__art { margin-bottom: 8px; }
+  .wire__cell > .wire__row,
+  .wire__cell > .cell__title,
+  .wire__cell > .cell__note,
+  .wire__cell > .cell__meta { padding-left: 14px; padding-right: 14px; }
+  .wire__row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .wire__type { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; color: var(--home-faint); }
+  .wire__cell > .cell__note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+</style>

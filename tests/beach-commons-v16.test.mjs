@@ -115,7 +115,7 @@ test('V16 keeps activity, place, reporting, and affiliation boundaries explicit'
 });
 
 test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeEdition] =
+  const [endpoint, blockText, series, sitemap, llms, llmsFull, homepage, homeEdition, homeRack] =
     await Promise.all([
       read('src/pages/beach-commons/v16.json.ts'),
       read('src/content/blocks/0544.json'),
@@ -125,6 +125,7 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
       read('public/llms-full.txt'),
       read('src/pages/index.astro'),
       read('src/components/HomeNewEdition.astro'),
+      read('src/components/HomeMagazineRack.astro'),
     ]);
   const block = JSON.parse(blockText);
 
@@ -140,7 +141,11 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(llmsFull, /THE BILLION LITTLE NEW YORKERS/);
   assert.match(homeEdition, /href: '\/beach-commons\/v16'/);
   assert.match(homeEdition, /id: '0544'/);
-  assert.match(homepage, /All eighteen Beach Commons editions/);
+  // front door rebuilt 2026-09-01: index.astro shelves V16 as a Beach Commons chip; the
+  // "All eighteen …" link now renders from HomeMagazineRack, which index.astro imports.
+  assert.match(homepage, /href: '\/beach-commons\/v16'/);
+  assert.match(homepage, /HomeMagazineRack/);
+  assert.match(homeRack, /All eighteen Beach Commons editions/);
 });
 
 test('V16 images have intended edition and social dimensions', async () => {

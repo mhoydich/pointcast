@@ -19,8 +19,10 @@ test('The Moving Morning receives a clear, finite homepage invitation', async ()
     read('src/components/HomeMovingMorning.astro'),
   ]);
 
-  assert.match(home, /import HomeMovingMorning/);
-  assert.match(home, /<HomeNewEdition \/>[\s\S]*<HomeMovingMorning \/>/);
+  // front door rebuilt 2026-09-01: the HomeMovingMorning module retired; its door is now the
+  // Tone Bloom review cover on the magazine rack beside the lead edition (order was incidental).
+  assert.match(home, /href[:=]\s*["']\/25\/magazine["']/);
+  assert.match(home, /href[:=]\s*["']\/reviews\/tone-bloom["']/);
   assert.match(component, /TONE BLOOM DAILY 003/);
   assert.match(component, /seventy-two seconds/i);
   assert.match(component, /NO LOGIN/);

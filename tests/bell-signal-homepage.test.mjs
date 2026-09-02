@@ -5,9 +5,10 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('the edited PointCast front door carries Nouns and Bell & Signal art as a switchable live signal', async () => {
-  const [home, signals] = await Promise.all([
+test('the rebuilt PointCast front door keeps the home-signals catalog and carries Nouns and Bell & Signal as live doors', async () => {
+  const [home, playFirst, signals] = await Promise.all([
     read('src/pages/index.astro'),
+    read('src/components/HomePlayFirst.astro'),
     read('src/lib/home-signals.ts'),
   ]);
 
@@ -15,10 +16,16 @@ test('the edited PointCast front door carries Nouns and Bell & Signal art as a s
   assert.match(signals, /bell-fall-v2\/bg-05-yellow-car\.jpg/);
   assert.match(signals, /bell-fall-v2\/bg-10-nageire-vase\.png/);
   assert.match(signals, /bell-fall-v2\/bg-09-el-segundo-skyline\.png/);
-  assert.match(home, /data-fresh-hero-image/);
-  assert.match(home, /data-fresh-shuffle/);
-  assert.match(home, /image\.alt = next\.alt/);
-  assert.match(home, /Field signal \$\{String\(active \+ 1\)\.padStart\(2, '0'\)\}/);
+  // front door rebuilt 2026-09-01: the four-position signal tuner (data-fresh-hero-image / data-fresh-shuffle /
+  // "Field signal NN / 04") gave way to HomePlayFirst as the single hero, a live now-playing line, real Nouns
+  // from noun.pics, and Bell & Signal as a door on the drum shelf.
+  assert.match(home, /<HomePlayFirst\b/);
+  assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
+  assert.equal((playFirst.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(home, /fetch\('\/now-playing\.json'/);
+  assert.match(home, /data-live-now-playing/);
+  assert.match(home, /https:\/\/noun\.pics\/\$\{d\.noun \?\? Number\(d\.id\)\}\.svg/);
+  assert.match(home, /href: '\/bell-and-signal'/);
 });
 
 test('Catalog No. 2 defines fifteen unique live-coded castings and recipes', async () => {

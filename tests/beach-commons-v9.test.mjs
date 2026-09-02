@@ -115,8 +115,10 @@ test('Signal Shack has machine, Block, feed, homepage, and discovery twins', asy
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v9'/);
   assert.match(llms, /PointCast Field Study 009/);
   assert.match(llmsFull, /SIGNAL SHACK/);
-  assert.match(homepage, /href="\/beach-commons\/v9"/);
-  assert.match(homepage, /Block 0526/);
+  // front door rebuilt 2026-09-01: V9 is a Beach Commons chip in index.astro's
+  // beachCommonsVolumes array (HomeMagazineRack renders it as "V9 Signal Shack · № 0526").
+  assert.match(homepage, /href: '\/beach-commons\/v9'/);
+  assert.match(homepage, /href: '\/beach-commons\/v9'[^\n]*blockId: '0526'/);
 });
 
 test('Signal Shack image assets have the intended dimensions', async () => {

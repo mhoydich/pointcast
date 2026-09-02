@@ -118,7 +118,9 @@ test('the publication remains on the homepage and travels through discovery', as
     assert.match(surface, /WEDNESDAY 9:34|wednesday/);
   }
 
-  assert.match(surfaces[0], /<HomeNewEdition \/>[\s\S]*<HomeWednesdayPublication \/>/);
+  // front door rebuilt 2026-09-01: the edition modules became magazine-rack covers, so check the doors, not the components.
+  assert.match(surfaces[0], /href(?:=|: )['"]\/25\/magazine['"]/);
+  assert.match(surfaces[0], /href(?:=|: )['"]\/wednesday['"]/);
   assert.match(surfaces[0], /Periodical/);
   assert.match(surfaces[1], /Get me that Wednesday playlist/);
   assert.match(surfaces[1], /Publication \+ calendar/);

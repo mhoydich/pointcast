@@ -101,13 +101,14 @@ test('Harbor Works keeps ownership, hazards, work, and current-condition claims 
 });
 
 test('Harbor Works has machine, Block, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, sitemap, llms, llmsFull, homepage] = await Promise.all([
+  const [endpoint, blockText, sitemap, llms, llmsFull, homepage, rack] = await Promise.all([
     read('src/pages/beach-commons/v12.json.ts'),
     read('src/content/blocks/0532.json'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
     read('src/pages/index.astro'),
+    read('src/components/HomeMagazineRack.astro'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -120,11 +121,14 @@ test('Harbor Works has machine, Block, homepage, and discovery twins', async () 
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v12'/);
   assert.match(llms, /PointCast Field Study 012/);
   assert.match(llmsFull, /HARBOR WORKS/);
-  assert.match(homepage, /href="\/beach-commons\/v12"/);
-  assert.match(homepage, /Block 0532/);
-  assert.match(homepage, /href="\/beach-commons\/v11"/);
-  assert.match(homepage, /href="\/beach-commons"/);
-  assert.match(homepage, /href="\/beach-commons\.json"/);
+  // front door rebuilt 2026-09-01: Beach Commons doors live in index.astro's beachCommonsVolumes/covers arrays and render through <HomeMagazineRack /> (№ blockId chips + the index JSON link).
+  assert.match(homepage, /<HomeMagazineRack\b/);
+  assert.match(homepage, /href: '\/beach-commons\/v12'/);
+  assert.match(homepage, /label: 'V12 Harbor Works', blockId: '0532'/);
+  assert.match(rack, /№ \{v\.blockId\}/);
+  assert.match(homepage, /href: '\/beach-commons\/v11'/);
+  assert.match(homepage, /href: '\/beach-commons'/);
+  assert.match(rack, /href="\/beach-commons\.json"/);
 });
 
 test('Harbor Works image assets have the intended dimensions', async () => {

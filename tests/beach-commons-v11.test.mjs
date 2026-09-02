@@ -104,13 +104,14 @@ test('Relay safety and event boundaries remain explicit', async () => {
 });
 
 test('The Reach Line has machine, Block, homepage, and discovery twins', async () => {
-  const [endpoint, blockText, sitemap, llms, llmsFull, homepage] = await Promise.all([
+  const [endpoint, blockText, sitemap, llms, llmsFull, homepage, rack] = await Promise.all([
     read('src/pages/beach-commons/v11.json.ts'),
     read('src/content/blocks/0531.json'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
     read('src/pages/index.astro'),
+    read('src/components/HomeMagazineRack.astro'),
   ]);
   const block = JSON.parse(blockText);
 
@@ -122,11 +123,15 @@ test('The Reach Line has machine, Block, homepage, and discovery twins', async (
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v11'/);
   assert.match(llms, /PointCast Field Study 011/);
   assert.match(llmsFull, /THE REACH LINE/);
-  assert.match(homepage, /href="\/beach-commons\/v11"/);
-  assert.match(homepage, /Block 0531/);
-  assert.match(homepage, /href="\/beach-commons"/);
-  assert.match(homepage, /href="\/beach-commons\.json"/);
-  assert.match(homepage, /href="\/beach-commons\/v10"/);
+  // front door rebuilt 2026-09-01: Beach Commons doors live in index.astro's covers/beachCommonsVolumes
+  // arrays (single-quoted hrefs, block ids as blockId) and render as chips through HomeMagazineRack.
+  assert.match(homepage, /href: '\/beach-commons\/v11'/);
+  assert.match(homepage, /'\/beach-commons\/v11'.*blockId: '0531'/);
+  assert.match(homepage, /href: '\/beach-commons'/);
+  assert.match(homepage, /<HomeMagazineRack\b/);
+  assert.match(rack, /href="\/beach-commons"/);
+  assert.match(rack, /href="\/beach-commons\.json"/);
+  assert.match(homepage, /href: '\/beach-commons\/v10'/);
 });
 
 test('The Reach Line image assets have the intended dimensions', async () => {

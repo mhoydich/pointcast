@@ -1,0 +1,259 @@
+---
+/**
+ * HomeShipLog — "What got built, by whom, when." The season ledger on the front door.
+ *
+ * Left: the hand-picked milestones (index.astro owns the list) as a dated,
+ * signed timeline. Right: two small bar charts (pull requests merged and
+ * blocks published, by month), a stacked bar of blocks by author, and the
+ * four totals, each linking to the page or endpoint it was counted from.
+ *
+ * Every number arrives as a prop. The month buckets and author tallies are
+ * computed by index.astro from the block collection and the pinned PR
+ * constants; nothing is typed twice here. Pure CSS bars, no chart library,
+ * no client JS. The one hand-typed date on this shelf (the 2026-07-30
+ * flatten) is a fact of history, not a count that can rot.
+ */
+import { CHANNELS } from '../lib/channels';
+
+export interface Milestone {
+  date: string;     // "2026-04-14"
+  title: string;    // "The repo opens; the front door is agentic"
+  href: string;     // "/b/0205" or a GitHub URL
+  blockId: string;  // "0205" or "" when the entry is a PR / commit, not a block
+}
+export interface ShipTotal {
+  label: string;    // "merged PRs"
+  value: string;    // "820"
+  href: string;     // where it was counted
+}
+export interface MonthCount {
+  label: string;    // "Apr"
+  count: number;    // 241
+}
+export interface AuthorCount {
+  name: string;     // "cc" — the signature as written in block frontmatter
+  blocks: number;   // 189
+}
+export interface Props {
+  milestones: Milestone[];
+  totals: ShipTotal[];
+  prsByMonth: MonthCount[];
+  blocksByMonth: MonthCount[];
+  authors: AuthorCount[];
+  /** ISO date the repo was created (PINNED.repoCreated). Defaults to the earliest milestone. */
+  repoOpened?: string;
+  /** Blocks carried in from before the repo (2025 imports); kept off the chart, stated in the label. */
+  imported?: number;
+}
+const { milestones, totals, prsByMonth, blocksByMonth, authors, repoOpened, imported = 0 } = Astro.props;
+
+const isExternal = (href: string) => /^https?:\/\//i.test(href);
+const fmt = (n: number) => n.toLocaleString('en-US');
+
+const opened = repoOpened ?? [...milestones].map((m) => m.date).sort()[0] ?? '';
+const firstDate = milestones[0]?.date ?? '';
+const lastDate = milestones[milestones.length - 1]?.date ?? '';
+const merged = totals.find((t) => /merged/i.test(t.label)) ?? totals[0];
+const blocks = totals.find((t) => /^blocks$/i.test(t.label)) ?? totals[1];
+
+const sum = (rows: MonthCount[]) => rows.reduce((a, r) => a + r.count, 0);
+const bars = (rows: MonthCount[]) => {
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return rows.map((r) => ({ ...r, pct: Math.round((r.count / max) * 1000) / 10 }));
+};
+const describe = (rows: MonthCount[]) => rows.map((r) => `${r.label} ${fmt(r.count)}`).join(' · ');
+const prBars = bars(prsByMonth);
+const blockBars = bars(blocksByMonth);
+
+// Author segments take the channel primaries, in a fixed order, so the same signature keeps the same colour between builds.
+const palette = [
+  'var(--shelf-color)',
+  CHANNELS.FD.color600,
+  CHANNELS.SPN.color600,
+  CHANNELS.GDN.color600,
+  CHANNELS.FCT.color600,
+  CHANNELS.ESC.color600,
+  CHANNELS.GF.color600,
+  CHANNELS.BTL.color600,
+];
+const authorSum = authors.reduce((a, r) => a + r.blocks, 0);
+const stack = authors.map((a, i) => ({
+  ...a,
+  pct: Math.round((a.blocks / Math.max(1, authorSum)) * 1000) / 10,
+  color: palette[i % palette.length],
+}));
+const describeAuthors = stack.map((a) => `${a.name} ${fmt(a.blocks)}`).join(' · ');
+
+const sourceLabel = (href: string) => {
+  if (!isExternal(href)) return href;
+  try { return `${new URL(href).hostname.replace(/^www\./, '')} ↗`; } catch { return 'link ↗'; }
+};
+---
+
+<section class="shelf shiplog" id="ships" aria-labelledby="ships-title" style="--shelf-color:#12110E;--shelf-color-2:#185FA5">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">The ship log · {merged?.value} merged PRs · {blocks?.value} blocks · repo opened {opened}</p>
+      <h2 class="shelf__title" id="ships-title">What got built, <em>by whom, when.</em></h2>
+      <p class="shelf__dek">Dated and hand-picked. Each entry names the block or the pull request; the author bar says who signed what. The raw firehose is on GitHub; the wire is the part worth reading with a cup.</p>
+    </div>
+    <div class="shelf__actions">
+      <a href="/wire">The wire</a>
+      <a href="/scoreboard">Agent ships</a>
+      <a href="/changelog">Changelog</a>
+      <a href="https://github.com/mhoydich/pointcast">GitHub ↗</a>
+    </div>
+  </div>
+
+  <div class="shiplog__body">
+    <div class="shiplog__log">
+      <h3 class="shiplog__h">Milestones <span>· {milestones.length} entries · {firstDate} → {lastDate}</span></h3>
+      <ol class="shiplog__timeline">
+        {milestones.map((m) => (
+          <li class="shiplog__row">
+            <time class="shiplog__date" datetime={m.date}>{m.date}</time>
+            <a class="shiplog__link" href={m.href}>{m.title}{isExternal(m.href) ? <span aria-hidden="true"> ↗</span> : null}</a>
+            {m.blockId ? <span class="chip shiplog__chip">№ {m.blockId}</span> : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+
+    <div class="shiplog__side">
+      <div class="shiplog__panel">
+        <h3 class="shiplog__h">Pull requests merged, by month <span>· {fmt(sum(prsByMonth))} across {prsByMonth.length} months</span></h3>
+        <div class="shiplog__bars" role="img" aria-label={`Pull requests merged by month: ${describe(prsByMonth)}`}>
+          {prBars.map((b) => (
+            <div class="shiplog__col">
+              <b class="shiplog__count">{fmt(b.count)}</b>
+              <div class="shiplog__track"><i class="shiplog__fill" style={`--h:${b.pct}%`}></i></div>
+              <span class="shiplog__month">{b.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="shiplog__panel">
+        <h3 class="shiplog__h">Blocks published, by month <span>· {fmt(sum(blocksByMonth))} across {blocksByMonth.length} months{imported ? ` · ${fmt(imported)} imported from 2025` : ''}</span></h3>
+        <div class="shiplog__bars shiplog__bars--blocks" role="img" aria-label={`Blocks published by month: ${describe(blocksByMonth)}`}>
+          {blockBars.map((b) => (
+            <div class="shiplog__col">
+              <b class="shiplog__count">{fmt(b.count)}</b>
+              <div class="shiplog__track"><i class="shiplog__fill" style={`--h:${b.pct}%`}></i></div>
+              <span class="shiplog__month">{b.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="shiplog__panel">
+        <h3 class="shiplog__h">Blocks by author <span>· {fmt(authorSum)} blocks · {authors.length} signatures</span></h3>
+        <div class="shiplog__stack" role="img" aria-label={`Blocks by author: ${describeAuthors}`}>
+          {stack.map((a) => <i class="shiplog__seg" style={`--w:${a.pct}%;--c:${a.color}`}></i>)}
+        </div>
+        <ul class="shiplog__legend">
+          {stack.map((a) => (
+            <li><i class="shiplog__swatch" style={`--c:${a.color}`} aria-hidden="true"></i><b>{a.name}</b> <span>{fmt(a.blocks)}</span></li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="shiplog__panel">
+        <h3 class="shiplog__h">Totals <span>· each links to where it was counted</span></h3>
+        <ul class="shiplog__totals">
+          {totals.map((t) => (
+            <li>
+              <a href={t.href}>
+                <b>{t.value}</b>
+                <span class="shiplog__label">{t.label}</span>
+                <span class="shiplog__src">{sourceLabel(t.href)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p class="shelf__foot">
+    <span>History was flattened on 2026-07-30; commit counts before that are not usable</span>
+    <span><a href="/timeline">Timeline</a> · <a href="/press">Press</a></span>
+  </p>
+</section>
+
+<style>
+  .shiplog__body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .shiplog__log { min-width: 0; padding: 18px clamp(16px, 3vw, 28px) 20px; border-right: 2px solid var(--home-ink); }
+  .shiplog__side { display: grid; grid-template-columns: 1fr; align-content: start; min-width: 0; }
+  .shiplog__panel { min-width: 0; padding: 16px 18px 18px; border-bottom: 1px solid var(--home-rule); }
+  .shiplog__panel:last-child { border-bottom: 0; }
+  .shiplog__h { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 10px; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-ink); }
+  .shiplog__h span { color: var(--home-faint); font-weight: 700; }
+  .shiplog a:focus-visible { outline: 2px solid var(--pc-accent, #185FA5); outline-offset: 2px; }
+
+  /* ---- timeline: a 2px rule, a square marker per row, the newest row in the second colour ---- */
+  .shiplog__timeline { position: relative; margin: 0; padding: 0 0 0 18px; list-style: none; border-left: 2px solid var(--home-ink); }
+  .shiplog__row { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; padding: 7px 4px 7px 0; border-top: 1px solid var(--home-rule); transition: background .15s; }
+  .shiplog__row:first-child { border-top: 0; }
+  .shiplog__row:hover { background: color-mix(in srgb, var(--shelf-color-2) 7%, var(--shelf-bg)); }
+  .shiplog__row::before { content: ''; position: absolute; left: -23px; top: 11px; width: 8px; height: 8px; background: var(--home-ink); }
+  .shiplog__date { font: 700 10px var(--pc-font-mono); letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--home-faint); }
+  .shiplog__link { font-size: 13.5px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; overflow-wrap: anywhere; color: var(--home-ink); }
+  .shiplog__link:hover { color: var(--shelf-color-2); }
+  .shiplog__chip { padding: 3px 6px; white-space: nowrap; }
+  .shiplog__row:last-child::before { background: var(--shelf-color-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--shelf-color-2) 18%, #fff); }
+  .shiplog__row:last-child .shiplog__date,
+  .shiplog__row:last-child .shiplog__link { color: var(--shelf-color-2); }
+  .shiplog__row:last-child .shiplog__chip { border-color: var(--shelf-color-2); color: var(--shelf-color-2); }
+
+  /* ---- bar charts: pure divs, one column per month ---- */
+  .shiplog__bars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; align-items: end; }
+  .shiplog__col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+  .shiplog__count { font: 700 10px var(--pc-font-mono); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--home-ink); }
+  .shiplog__track { display: flex; align-items: flex-end; width: 100%; height: 84px; border-bottom: 1px solid var(--home-ink); }
+  .shiplog__fill { display: block; width: 100%; height: var(--h, 0%); min-height: 2px; background: var(--shiplog-bar, var(--shelf-color)); }
+  .shiplog__bars--blocks { --shiplog-bar: var(--shelf-color-2); }
+  .shiplog__month { font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; text-align: center; overflow-wrap: anywhere; color: var(--home-faint); }
+
+  /* ---- stacked bar by author ---- */
+  .shiplog__stack { display: flex; height: 14px; border: 1px solid var(--home-ink); background: var(--home-paper); }
+  .shiplog__seg { flex: 0 1 var(--w, 0%); min-width: 0; box-sizing: border-box; background: var(--c); border-right: 1px solid #fff; }
+  .shiplog__seg:last-child { border-right: 0; }
+  .shiplog__legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; padding: 0; list-style: none; font: 700 10px var(--pc-font-mono); letter-spacing: .04em; }
+  .shiplog__legend li { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+  .shiplog__legend b { font-weight: 700; color: var(--home-ink); }
+  .shiplog__legend span { color: var(--home-faint); font-variant-numeric: tabular-nums; }
+  .shiplog__swatch { flex: 0 0 8px; width: 8px; height: 8px; background: var(--c); border: 1px solid rgba(0, 0, 0, .2); }
+
+  /* ---- totals: value, label, source ---- */
+  .shiplog__totals { margin: 0; padding: 0; list-style: none; }
+  .shiplog__totals li { border-top: 1px solid var(--home-rule); }
+  .shiplog__totals li:first-child { border-top: 0; }
+  .shiplog__totals a { display: grid; grid-template-columns: minmax(56px, auto) minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 0; color: var(--home-ink); transition: background .15s; }
+  .shiplog__totals a:hover { background: color-mix(in srgb, var(--shelf-color-2) 7%, var(--shelf-bg)); }
+  .shiplog__totals b { font: 700 16px var(--pc-font-mono); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .shiplog__label { font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .shiplog__src { font: 700 8px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; color: var(--home-faint); }
+
+  @media (max-width: 880px) {
+    .shiplog__body { grid-template-columns: 1fr; }
+    .shiplog__log { border-right: 0; border-bottom: 2px solid var(--home-ink); }
+    .shiplog__side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .shiplog__panel:nth-child(odd) { border-right: 1px solid var(--home-rule); }
+    .shiplog__panel:nth-child(odd):nth-last-child(2) { border-bottom: 0; }
+  }
+  @media (max-width: 560px) {
+    .shiplog__side { grid-template-columns: 1fr; }
+    .shiplog__panel { border-right: 0 !important; border-bottom: 1px solid var(--home-rule); }
+    .shiplog__panel:last-child { border-bottom: 0; }
+    .shiplog__timeline { padding-left: 14px; }
+    .shiplog__row { grid-template-columns: 74px minmax(0, 1fr); }
+    .shiplog__row::before { left: -19px; }
+    .shiplog__chip { grid-column: 2; justify-self: start; }
+    .shiplog__track { height: 64px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shiplog__row,
+    .shiplog__totals a { transition: none; }
+  }
+</style>
