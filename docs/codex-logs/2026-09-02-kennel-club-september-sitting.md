@@ -3,7 +3,7 @@
 Date: 2026-09-02
 Owner: X (Codex)
 Branch: `codex/kennel-club-plates-20260902`
-Status: Part 1 complete and pushed; plate generation pending local engine hydration
+Status: complete — all 30 plates verified and pushed; PR #1003 remains open
 
 ## Completed
 
@@ -17,26 +17,24 @@ Status: Part 1 complete and pushed; plate generation pending local engine hydrat
 - Confirmed September 2026 and the 30-token Tezos sequence (token id = day − 1) in the brief and task queue.
 - Logged the later project-owned wallet/multisig idea in `TASKS.md`; it is explicitly not built.
 
-## Plate-generation block
+## Plate generation
 
-The required local engine path exists in iCloud Drive, but its files were evicted. A `brctl download` is already running in the background. Per the safe hydration procedure, do not read an evicted file: poll its allocated blocks with `stat -f '%b %N'` until local content is available.
+The engine project hydrated successfully. I generated the set with the built-in `gpt-image` image model (provenance version 2.0), in six five-sitting batches. Each batch was imported and verified through `poster-image-engine`; the final manifest verification reported `30/30` at `1024×1280`.
 
-No image-generation model has been invoked for this September series. No PNG or WebP plate has been created, imported, or verified. All 30 `image.status` values intentionally remain `pending`; no unverified asset is represented as ready.
-
-Engine: `poster-image-engine` local workflow requested, unavailable before plan
-Model: not invoked
-Cost: $0
-Generation time: 0 minutes
-Regenerations: 0
+- Output: 30 PNGs plus 30 WebP twins under `public/images/kennel-club/september-sitting/`
+- Data: all 30 `image.status` values are `verified`; no pending sittings
+- Generation attempts: 34 total for 30 accepted plates
+- Regenerations: 4 — Hartley (rendered book-spine text), Barnaby (humanlike pose), Wilhelmina (ambiguous extra boots), Percival (extra-leg artifact)
+- Time: approximately 40 minutes, completed 2026-09-02 08:09 PDT
+- Cost: not exposed by the image-generation tool
 
 ## Validation
 
-- `node --test tests/kennel-club-series.test.mjs`: pending the September test update validation.
-- Prompt audit: 30 / 30 prompts recomposed from `styleBase + subject + scene + composition + antiPrompt`.
-- Metadata audit: 0 artist-name occurrences in token metadata; no prohibited brand terms in the visual system or composed prompts.
-- `npm test`: blocked by an existing incomplete dependency tree (`ERR_MODULE_NOT_FOUND: sharp` in `tests/western-heat-brains.test.mjs`), followed by expected missing-`dist` failures; 671 passed, 22 failed, 4 skipped.
-- `npm run build:bare`: blocked because `node_modules/astro/bin/astro.mjs` is absent.
+- `npm run verify -- projects/kennel-club-september-sitting-2026/generated/manifest.json`: `Verified 30/30 posters at 1024x1280`.
+- Asset inventory: 60 public files (30 PNG + 30 WebP), all `1024×1280`.
+- `node --test tests/kennel-club-series.test.mjs`: 2 passed, 0 failed after every five-plate batch and at completion.
+- Visual review: each accepted plate was screened for extra legs, floating clothing, rendered text, human hands, brand-looking marks, and dead-center framing.
 
-## Next move
+## Handoff
 
-Once hydration succeeds, run the September project through `plan`, generate/import, and verify. Only then should the 60 public assets be added and statuses changed to `verified`.
+The committed branch is ready for cc’s metadata/page work. No merge or contract deployment was performed.
