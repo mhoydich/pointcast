@@ -79,6 +79,23 @@
       }
     }
 
+    // ─── dock burst pulse (site-wide, ephemeral) ──────────────────────
+    // Starts at the dock, expands in the event's channel colour, then leaves
+    // no DOM behind. Reduced-motion visitors get the ticker but no pulse.
+    function castBurstPulse(color) {
+      if (reduce()) return;
+      var safeColor = /^#[0-9a-f]{6}$/i.test(String(color || '')) ? color : '#185fa5';
+      var pulse = document.createElement('span');
+      pulse.className = 'spell-burst-pulse';
+      pulse.style.setProperty('--spell-burst-color', safeColor);
+      $layer.appendChild(pulse);
+      active.bursts++;
+      setTimeout(function () {
+        if (pulse.parentNode) pulse.parentNode.removeChild(pulse);
+        active.bursts = Math.max(0, active.bursts - 1);
+      }, 950);
+    }
+
     // ─── cat (companion) ────────────────────────────────────────
     function castCat(durationMs) {
       // One cat at a time — recasting sends the existing one off.
@@ -1277,6 +1294,17 @@
       if (id) castSpell(id);
     });
     window.addEventListener('pc:spell:clear', clearAll);
+    window.addEventListener('pc:burst', function (e) {
+      var burst = e && e.detail;
+      if (!burst || !burst.kind) return;
+      var meta = burst.meta || {};
+      castBurstPulse(meta.color);
+      if (burst.kind === 'mint') castConfetti(3600);
+      else if (burst.kind === 'ping-answered') castCat(16000);
+      else if (burst.kind === 'cast' && /^(confetti|rain|cat|breath)$/.test(String(meta.spell || ''))) {
+        castSpell(meta.spell);
+      }
+    });
   })();
 </script>
 
@@ -1287,6 +1315,23 @@
     z-index: 30; /* under footer (40) + trays (49) but above page content */
     pointer-events: none;
     overflow: hidden;
+  }
+
+  .spell-burst-pulse {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    width: 22px;
+    height: 22px;
+    border: 3px solid var(--spell-burst-color, #185fa5);
+    border-radius: 50%;
+    opacity: .9;
+    transform: translateX(-50%) scale(.25);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--spell-burst-color, #185fa5), transparent 30%);
+    animation: spell-burst-pulse 900ms cubic-bezier(.16,.72,.28,1) forwards;
+  }
+  @keyframes spell-burst-pulse {
+    to { opacity: 0; transform: translateX(-50%) scale(34); }
   }
 
   /* ── confetti ────────────────────────────────────────────── */
@@ -2411,6 +2456,7 @@
     .spell-campfire__flame--side,
     .spell-campfire__glow,
     .spell-lantern { animation: none; }
+    .spell-burst-pulse { display: none; animation: none; }
     .spell-cat,
     .spell-pup,
     .spell-penguin,

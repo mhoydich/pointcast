@@ -28,6 +28,12 @@
  *   has been pulled at least once. Persistent — this is the only counter
  *   on PointCast that survives past a 60-second buffer.
  *
+ * Site-wide bursts (/burst):
+ *   POST /burst ← { kind, by:{handle?/noun?}, meta, clientId? }
+ *   WS   /burst → normal presence payload + bursts (last 20 in memory)
+ *   Kinds: mint, tug, bell, ping-answered, cast. New broadcasts are globally
+ *   capped at one per second; same-kind arrivals coalesce. No burst touches KV.
+ *
  * Visitor intel (option-B privacy):
  *   Public surface (what every visitor sees about every other visitor):
  *     nounId, kind, joinedAt, mood, listening, where, country, deviceClass.
@@ -106,6 +112,7 @@ interface PeerView {
 }
 
 interface ChatEntry {
+  id: string; // server-assigned; clients use this instead of timing-based echo guesses
   who: string; // tag
   nounId: number;
   msg: string;
@@ -208,6 +215,21 @@ interface TugView {
   updatedAt: number;
 }
 
+type BurstKind = 'mint' | 'tug' | 'bell' | 'ping-answered' | 'cast';
+
+interface BurstBy {
+  handle?: string;
+  noun?: number;
+}
+
+/** Ephemeral site-wide event. Kept in DO memory only; never written to KV. */
+interface BurstEvent {
+  kind: BurstKind;
+  at: number;
+  by: BurstBy;
+  meta: Record<string, string | number | boolean>;
+}
+
 interface PublicSessionView {
   nounId: number;
   kind: PresenceKind;
@@ -247,6 +269,7 @@ interface BroadcastPayload {
   vibes?: VibeEntry[]; // broadcast emoji reactions, TTL 6s
   signals?: SignalEntry[]; // generic room-scoped interaction pulses, TTL 5s
   tug?: TugView; // the one rope — persistent tallies + lazily-decayed knot
+  bursts?: BurstEvent[]; // site-wide ephemeral ring (last 20, memory only)
   you?: PrivateSessionView;
 }
 
@@ -331,6 +354,12 @@ const TUG_RATE_WINDOW_MS = 10_000;
 const MAX_TUG_RATE_KEYS = 500; // sweep the rate map above this size
 const TUG_KNOT_EPSILON = 0.0005; // below this the rope is simply centred
 const TUG_STORAGE_KEY = 'tug:v1';
+const TUG_BURST_THRESHOLD = 0.6;
+
+const BURST_KINDS = new Set<BurstKind>(['mint', 'tug', 'bell', 'ping-answered', 'cast']);
+const MAX_BURST_BUFFER = 20;
+const BURST_MIN_INTERVAL_MS = 1_000;
+const MAX_BURST_RATE_KEYS = 500;
 
 const FAST_BROADCAST_MS = 100; // 10 Hz while active
 const IDLE_BROADCAST_MS = 1000; // 1 Hz otherwise
@@ -365,6 +394,40 @@ function normalizeText(value: unknown, maxLength: number): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLength);
+}
+
+function normalizeBurstKind(value: unknown): BurstKind | undefined {
+  return typeof value === 'string' && BURST_KINDS.has(value as BurstKind)
+    ? value as BurstKind
+    : undefined;
+}
+
+function normalizeBurstBy(value: unknown): BurstBy {
+  if (!value || typeof value !== 'object') return { handle: 'someone' };
+  const input = value as Record<string, unknown>;
+  const handle = normalizeText(input.handle, 64);
+  const rawNoun = Number(input.noun);
+  const noun = Number.isFinite(rawNoun) && rawNoun >= 0 && rawNoun < 1200
+    ? Math.trunc(rawNoun)
+    : undefined;
+  return {
+    ...(handle ? { handle } : {}),
+    ...(typeof noun === 'number' ? { noun } : {}),
+    ...(!handle && typeof noun !== 'number' ? { handle: 'someone' } : {}),
+  };
+}
+
+function normalizeBurstMeta(value: unknown): Record<string, string | number | boolean> {
+  if (!value || typeof value !== 'object') return {};
+  const out: Record<string, string | number | boolean> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, 10)) {
+    const key = rawKey.replace(/[^a-z0-9_-]/gi, '').slice(0, 32);
+    if (!key) continue;
+    if (typeof rawValue === 'string') out[key] = rawValue.slice(0, 160);
+    else if (typeof rawValue === 'number' && Number.isFinite(rawValue)) out[key] = rawValue;
+    else if (typeof rawValue === 'boolean') out[key] = rawValue;
+  }
+  return out;
 }
 
 function normalizeSignalEvent(value: unknown): string | undefined {
@@ -550,6 +613,12 @@ export class PresenceRoom {
   tug: TugState | null = null;
   tugRate: Map<string, number[]> = new Map();
   tugHydrating: Promise<TugState> | null = null;
+  bursts: BurstEvent[] = [];
+  burstClientAt: Map<string, number> = new Map();
+  burstKindAt: Map<BurstKind, number> = new Map();
+  pendingBursts: Map<BurstKind, BurstEvent> = new Map();
+  burstFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  lastBurstBroadcastAt = 0;
   lastActivity: number = 0;
   broadcastMode: 'idle' | 'fast' = 'idle';
 
@@ -592,6 +661,25 @@ export class PresenceRoom {
         );
       }
       return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // ─── /burst — global ephemeral event bus ──────────────────
+    // POST accepts a typed burst. GET without Upgrade returns the in-memory
+    // tail; WebSocket GET falls through to the normal connection path.
+    if (url.pathname.endsWith('/burst') && request.method === 'POST') {
+      let body: Record<string, unknown> = {};
+      try {
+        const parsed = await request.json();
+        if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>;
+      } catch {
+        return Response.json({ ok: false, reason: 'invalid-json' }, { status: 400 });
+      }
+      const result = this.submitBurst(body, request.headers.get('CF-Connecting-IP') ?? 'anonymous');
+      const status = result.ok ? (result.coalesced ? 202 : 200) : result.reason === 'invalid-kind' ? 400 : 429;
+      return Response.json(result, { status });
+    }
+    if (url.pathname.endsWith('/burst') && request.method === 'GET' && request.headers.get('Upgrade') !== 'websocket') {
+      return Response.json({ ok: true, bursts: [...this.bursts], now: Date.now() });
     }
 
     const upgradeHeader = request.headers.get('Upgrade');
@@ -784,6 +872,7 @@ export class PresenceRoom {
     if (!msg) return;
     const who = visitor.tag ?? 'visitor';
     const entry: ChatEntry = {
+      id: `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`,
       who,
       nounId: visitor.nounId,
       msg,
@@ -934,6 +1023,89 @@ export class PresenceRoom {
     return true;
   }
 
+  submitBurst(
+    input: Record<string, unknown>,
+    fallbackClient: string,
+    now = Date.now(),
+  ): { ok: boolean; coalesced?: boolean; reason?: string; burst?: BurstEvent } {
+    const kind = normalizeBurstKind(input.kind);
+    if (!kind) return { ok: false, reason: 'invalid-kind' };
+
+    const by = normalizeBurstBy(input.by);
+    const client = normalizeText(input.clientId, 96) || by.handle || fallbackClient;
+    const priorClient = this.burstClientAt.get(client) ?? 0;
+    if (now - priorClient < BURST_MIN_INTERVAL_MS) {
+      return { ok: false, reason: 'rate-limited' };
+    }
+    this.burstClientAt.set(client, now);
+    this.sweepBurstRates(now);
+
+    const burst: BurstEvent = {
+      kind,
+      at: now,
+      by,
+      meta: normalizeBurstMeta(input.meta),
+    };
+    const kindReady = now - (this.burstKindAt.get(kind) ?? 0) >= BURST_MIN_INTERVAL_MS;
+    const busReady = now - this.lastBurstBroadcastAt >= BURST_MIN_INTERVAL_MS;
+    if (kindReady && busReady && this.pendingBursts.size === 0) {
+      this.publishBurst(burst);
+      return { ok: true, coalesced: false, burst };
+    }
+
+    const pending = this.pendingBursts.get(kind);
+    if (pending) {
+      const count = Number(pending.meta.count || 1) + 1;
+      burst.meta = { ...burst.meta, count };
+    }
+    this.pendingBursts.set(kind, burst);
+    this.scheduleBurstFlush(now);
+    return { ok: true, coalesced: true, burst };
+  }
+
+  sweepBurstRates(now: number) {
+    if (this.burstClientAt.size <= MAX_BURST_RATE_KEYS) return;
+    for (const [key, at] of this.burstClientAt) {
+      if (now - at >= BURST_MIN_INTERVAL_MS) this.burstClientAt.delete(key);
+    }
+  }
+
+  publishBurst(burst: BurstEvent) {
+    this.bursts.push(burst);
+    if (this.bursts.length > MAX_BURST_BUFFER) {
+      this.bursts.splice(0, this.bursts.length - MAX_BURST_BUFFER);
+    }
+    this.lastBurstBroadcastAt = burst.at;
+    this.burstKindAt.set(burst.kind, burst.at);
+    this.broadcast();
+  }
+
+  scheduleBurstFlush(now = Date.now()) {
+    if (this.burstFlushTimer || this.pendingBursts.size === 0) return;
+    let nextAt = this.lastBurstBroadcastAt + BURST_MIN_INTERVAL_MS;
+    for (const kind of this.pendingBursts.keys()) {
+      nextAt = Math.max(nextAt, (this.burstKindAt.get(kind) ?? 0) + BURST_MIN_INTERVAL_MS);
+    }
+    this.burstFlushTimer = setTimeout(() => {
+      this.burstFlushTimer = null;
+      this.flushBurst();
+    }, Math.max(0, nextAt - now));
+  }
+
+  flushBurst(now = Date.now()) {
+    if (now - this.lastBurstBroadcastAt < BURST_MIN_INTERVAL_MS) {
+      this.scheduleBurstFlush(now);
+      return;
+    }
+    for (const [kind, burst] of this.pendingBursts) {
+      if (now - (this.burstKindAt.get(kind) ?? 0) < BURST_MIN_INTERVAL_MS) continue;
+      this.pendingBursts.delete(kind);
+      this.publishBurst({ ...burst, at: now });
+      break;
+    }
+    if (this.pendingBursts.size) this.scheduleBurstFlush(now);
+  }
+
   /**
    * Hydrate the rope from DO storage exactly once per instance lifetime.
    * Concurrent callers share one read via `tugHydrating`. Never throws —
@@ -1024,6 +1196,21 @@ export class PresenceRoom {
     try {
       await this.state.storage.put(TUG_STORAGE_KEY, state);
     } catch {}
+
+    const crossedThreshold = Math.abs(drifted) < TUG_BURST_THRESHOLD && Math.abs(state.knot) >= TUG_BURST_THRESHOLD;
+    if (crossedThreshold) {
+      this.submitBurst({
+        kind: 'tug',
+        clientId: `tug:${by}`,
+        by: { handle: by },
+        meta: {
+          side,
+          knot: Math.round(state.knot * 100) / 100,
+          label: side === 'human' ? 'the people side' : 'the machine side',
+          color: side === 'human' ? '#8a2432' : '#185fa5',
+        },
+      }, by, now);
+    }
 
     // Only disturb the broadcast cadence when somebody is actually
     // holding a socket — a pull into an empty room should not spin up a
@@ -1213,6 +1400,7 @@ export class PresenceRoom {
     if (this.tug && (this.tug.humanPulls > 0 || this.tug.machinePulls > 0)) {
       payload.tug = this.viewTug(this.tug, Date.now());
     }
+    if (this.bursts.length) payload.bursts = [...this.bursts];
 
     if (viewerSessionId) {
       const you = this.visitors.get(viewerSessionId);
