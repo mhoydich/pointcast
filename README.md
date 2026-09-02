@@ -32,7 +32,7 @@ Jump to the project definition: **[/manifesto](https://pointcast.xyz/manifesto)*
 - **Framework:** [Astro 6.1](https://astro.build) (static site + islands)
 - **Hosting:** [Cloudflare Pages](https://pages.cloudflare.com) + Pages Functions
 - **Chain:** [Tezos](https://tezos.com) mainnet, integrated via
-  [Taquito 24.2](https://tezostaquito.io) + [Beacon SDK 24.2](https://walletbeacon.io)
+  [Taquito 25.0](https://tezostaquito.io) + [Beacon via Taquito](https://walletbeacon.io)
 - **Contracts:** [SmartPy](https://smartpy.io) 0.24 (FA2 for Visit Nouns,
   FA1.2 for DRUM, custom for Prize Cast)
 - **Indexing:** [TzKT](https://tzkt.io) for on-chain reads

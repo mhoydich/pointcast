@@ -21,7 +21,7 @@ export default defineConfig({
   },
   vite: {
     plugins: [
-      // Taquito + @airgap/beacon-sdk reference Node globals (process, Buffer,
+      // Taquito + its Beacon stack reference Node globals (process, Buffer,
       // etc.) that don't exist in the browser. Polyfill them so the on-chain
       // mint flow runs cleanly without "process is not defined" errors.
       nodePolyfills({
