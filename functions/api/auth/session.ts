@@ -186,6 +186,10 @@ async function loadUser(env: AuthEnv, userId: string): Promise<PointCastUser | n
   return readKvUser(requireUsers(env), userKey(userId));
 }
 
+export async function loadUserById(env: AuthEnv, userId: string): Promise<PointCastUser | null> {
+  return loadUser(env, userId);
+}
+
 async function loadIdentityUserId(
   env: AuthEnv,
   provider: AuthIdentity['provider'],

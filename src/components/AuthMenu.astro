@@ -44,6 +44,40 @@ const { autoOpen = false } = Astro.props;
 
     <div class="auth-menu__providers">
       <button
+        data-provider="passkey"
+        type="button"
+        class="auth-menu__provider auth-menu__provider--wide"
+        role="menuitem"
+      >
+        <span class="auth-menu__provider-code">key</span>
+        <div class="auth-menu__provider-body">
+          <p class="auth-menu__provider-name">Passkey</p>
+          <p class="auth-menu__provider-detail">Face ID / Touch ID · no browser memory required</p>
+        </div>
+        <span class="auth-menu__badge auth-menu__badge--live">live</span>
+      </button>
+
+      <form class="auth-menu__email auth-menu__provider--wide" data-auth-email-form role="none">
+        <span class="auth-menu__provider-code" aria-hidden="true">@</span>
+        <label class="auth-menu__email-body">
+          <span class="auth-menu__provider-name">Email me a link</span>
+          <span class="auth-menu__provider-detail">Single use · expires in 15 minutes</span>
+          <span class="auth-menu__email-controls">
+            <input
+              type="email"
+              name="email"
+              autocomplete="email"
+              inputmode="email"
+              placeholder="you@example.com"
+              required
+              data-auth-email
+            />
+            <button type="submit" data-auth-email-submit>send</button>
+          </span>
+        </label>
+      </form>
+
+      <button
         data-provider="kukai"
         type="button"
         class="auth-menu__provider"
@@ -145,7 +179,7 @@ const { autoOpen = false } = Astro.props;
 
     <div class="auth-menu__footer">
       <p class="auth-menu__status" data-auth-status>
-        kukai + google are live. other providers remain previews.
+        passkey, email, kukai + google are live. other providers remain previews.
       </p>
     </div>
   </div>
@@ -247,6 +281,7 @@ const { autoOpen = false } = Astro.props;
     cursor: pointer;
   }
   .auth-menu__provider:nth-child(2n) { border-right: 0; }
+  .auth-menu__provider--wide { grid-column: 1 / -1; border-right: 0; }
   .auth-menu__provider:hover:not(:disabled) { background: #f3f7fa; }
   .auth-menu__provider:disabled { color: #7d858d; cursor: not-allowed; opacity: 0.58; }
   .auth-menu__provider-code {
@@ -276,6 +311,34 @@ const { autoOpen = false } = Astro.props;
     background: #edf9f1;
     color: #246941;
   }
+  .auth-menu__email {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid #e0e3e6;
+    background: #fff;
+  }
+  .auth-menu__email-body { display: grid; min-width: 0; }
+  .auth-menu__email-controls { display: flex; gap: 5px; margin-top: 8px; }
+  .auth-menu__email-controls input {
+    min-width: 0;
+    width: 100%;
+    padding: 7px 8px;
+    border: 1px solid #c8cdd2;
+    border-radius: 3px;
+    font: 500 10px/1 var(--pc-font-mono, ui-monospace, monospace);
+  }
+  .auth-menu__email-controls button {
+    padding: 7px 9px;
+    border: 1px solid #181818;
+    border-radius: 3px;
+    background: #181818;
+    color: #fff;
+    font: 700 8px/1 var(--pc-font-mono, ui-monospace, monospace);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
   .auth-menu__footer { padding: 10px 12px; background: #f5f7f9; }
   .auth-menu__status { min-height: 12px; color: #68737e; font-size: 8px; line-height: 1.45; }
 
@@ -292,8 +355,10 @@ const { autoOpen = false } = Astro.props;
     loginWithGoogle,
     loginWithKukai,
     loginWithMetaMask,
+    loginWithPasskey,
     loginWithPhantom,
     logout,
+    requestEmailMagicLink,
   } from '../lib/auth/client';
 
   type AuthMenuWindow = Window & {
@@ -301,7 +366,8 @@ const { autoOpen = false } = Astro.props;
     __pointCastAuthMenuPageLoadInstalled?: boolean;
   };
 
-  const actions: Record<AuthProvider, () => Promise<PointCastUser | null>> = {
+  const actions: Partial<Record<AuthProvider, () => Promise<PointCastUser | null>>> = {
+    passkey: loginWithPasskey,
     kukai: loginWithKukai,
     google: loginWithGoogle,
     apple: loginWithApple,
@@ -316,6 +382,8 @@ const { autoOpen = false } = Astro.props;
   };
 
   const providerLabels: Record<AuthProvider, string> = {
+    passkey: 'Passkey',
+    email: 'Email',
     kukai: 'Kukai',
     google: 'Google',
     apple: 'Apple',
@@ -391,14 +459,80 @@ const { autoOpen = false } = Astro.props;
   }
 
   function initAuthMenu(root: HTMLElement, signal: AbortSignal): void {
-    const trigger = root.querySelector('[data-auth-trigger]') as HTMLButtonElement | null;
-    const logoutButton = root.querySelector('[data-auth-logout]') as HTMLButtonElement | null;
-    const providerButtons = Array.from(root.querySelectorAll('[data-provider]')) as HTMLButtonElement[];
+    root.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      if (target.closest('[data-auth-trigger]')) {
+        const panel = root.querySelector('[data-auth-panel]');
+        if (panel?.classList.contains('hidden')) openMenu(root);
+        else closeMenu(root);
+        return;
+      }
 
-    trigger?.addEventListener('click', () => {
-      const panel = root.querySelector('[data-auth-panel]');
-      if (panel?.classList.contains('hidden')) openMenu(root);
-      else closeMenu(root);
+      if (target.closest('[data-auth-logout]')) {
+        event.preventDefault();
+        setStatus(root, 'logging out…');
+        void logout()
+          .then(() => refreshSession(root))
+          .then(() => {
+            setStatus(root, 'session cleared');
+            closeMenu(root);
+          })
+          .catch((error) => {
+            setStatus(root, error instanceof Error ? error.message : 'logout failed');
+          });
+        return;
+      }
+
+      const button = target.closest<HTMLButtonElement>('[data-provider]');
+      if (!button || button.disabled) return;
+      event.preventDefault();
+      const provider = button.dataset.provider as AuthProvider;
+      const action = actions[provider];
+      if (!action) return;
+      setStatus(
+        root,
+        provider === 'kukai'
+          ? 'Choose Kukai, then Use Browser.'
+          : `${providerLabels[provider]}…`,
+      );
+
+      void action()
+        .then((user) => {
+          if (user) {
+            renderSession(root, user);
+            setStatus(root, `${providerLabels[provider]} ready`);
+            closeMenu(root);
+            return;
+          }
+          setStatus(root, `${providerLabels[provider]} redirecting…`);
+        })
+        .catch((error) => {
+          setStatus(root, error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
+        });
+    }, { signal });
+
+    root.addEventListener('submit', (event) => {
+      const form = (event.target instanceof Element ? event.target : null)
+        ?.closest<HTMLFormElement>('[data-auth-email-form]');
+      if (!form) return;
+      event.preventDefault();
+      const input = form.elements.namedItem('email');
+      const email = input instanceof HTMLInputElement ? input.value.trim() : '';
+      if (!email || !form.reportValidity()) return;
+      const submit = form.querySelector<HTMLButtonElement>('[data-auth-email-submit]');
+      if (submit) submit.disabled = true;
+      setStatus(root, 'Sending a one-time sign-in link…');
+      void requestEmailMagicLink(email)
+        .then((message) => {
+          setStatus(root, message || 'Check your email for a sign-in link.');
+        })
+        .catch((error) => {
+          setStatus(root, error instanceof Error ? error.message : 'Email sign-in failed.');
+        })
+        .finally(() => {
+          if (submit) submit.disabled = false;
+        });
     }, { signal });
 
     window.addEventListener('pc:open-auth-menu', () => openMenu(root), { signal });
@@ -411,47 +545,6 @@ const { autoOpen = false } = Astro.props;
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeMenu(root);
     }, { signal });
-
-    logoutButton?.addEventListener('click', async () => {
-      setStatus(root, 'logging out…');
-      try {
-        await logout();
-        await refreshSession(root);
-        setStatus(root, 'session cleared');
-        closeMenu(root);
-      } catch (error) {
-        setStatus(root, error instanceof Error ? error.message : 'logout failed');
-      }
-    }, { signal });
-
-    providerButtons.forEach((button) => {
-      button.addEventListener('click', async () => {
-        if (button.disabled) return;
-
-        const provider = button.dataset.provider as AuthProvider;
-        const action = actions[provider];
-        setStatus(
-          root,
-          provider === 'kukai'
-            ? 'Choose Kukai, then Use Browser.'
-            : `${providerLabels[provider]}…`,
-        );
-
-        try {
-          const user = await action();
-          if (user) {
-            renderSession(root, user);
-            setStatus(root, `${providerLabels[provider]} ready`);
-            closeMenu(root);
-            return;
-          }
-
-          setStatus(root, `${providerLabels[provider]} redirecting…`);
-        } catch (error) {
-          setStatus(root, error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
-        }
-      }, { signal });
-    });
 
     void refreshSession(root).then((user) => {
       if (!user && root.dataset.authAutoOpen === 'true') openMenu(root);

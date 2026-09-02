@@ -1,4 +1,8 @@
 import type { PointCastUser } from './types';
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/server';
 
 type SupportedWalletProvider = 'kukai' | 'metamask' | 'phantom';
 
@@ -29,6 +33,15 @@ const WALLET_STORAGE_KEY = 'pc:wallet';
 const WALLETS_STORAGE_KEY = 'pc:wallets';
 const ACTIVE_WALLET_STORAGE_KEY = 'pc:wallet-active';
 let tezosLoginInFlight: Promise<PointCastUser | null> | null = null;
+let passkeyLoginInFlight: Promise<PointCastUser | null> | null = null;
+
+export interface PasskeySummary {
+  credentialId: string;
+  label: string;
+  transports: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+}
 
 type TezosLoginOptions = {
   /** Skip the valid-cookie fast path and ask the active Beacon account to
@@ -121,9 +134,9 @@ function openServerAuth(pathname: string): null {
   return null;
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
+async function postJson<T>(url: string, body: unknown, method = 'POST'): Promise<T> {
   const response = await fetch(url, {
-    method: 'POST',
+    method,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -139,10 +152,10 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
-    const reason = typeof payload?.reason === 'string'
-      ? payload.reason
-      : typeof payload?.message === 'string'
-        ? payload.message
+    const reason = typeof payload?.message === 'string'
+      ? payload.message
+      : typeof payload?.reason === 'string'
+        ? payload.reason
         : `Request failed with ${response.status}`;
     throw new Error(reason);
   }
@@ -271,6 +284,90 @@ export async function loginWithGoogle(): Promise<PointCastUser | null> {
     `${window.location.pathname}${window.location.search}${window.location.hash}`,
   );
   return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
+}
+
+async function performPasskeyLogin(): Promise<PointCastUser | null> {
+  if (!isBrowser()) return null;
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    throw new Error('Passkeys are not supported in this browser.');
+  }
+  const challenge = await postJson<{
+    flowId: string;
+    options: PublicKeyCredentialRequestOptionsJSON;
+  }>('/api/auth/passkey/login/options', {});
+  const { startAuthentication } = await import('@simplewebauthn/browser');
+  const response = await startAuthentication({ optionsJSON: challenge.options });
+  const result = await postJson<{ ok: true; user: PointCastUser }>(
+    '/api/auth/passkey/login/verify',
+    { flowId: challenge.flowId, response },
+  );
+  window.dispatchEvent(new CustomEvent('pc:auth-change', {
+    detail: { user: result.user, source: 'passkey' },
+  }));
+  window.dispatchEvent(new Event('pc:auth-refresh'));
+  return result.user;
+}
+
+export async function loginWithPasskey(): Promise<PointCastUser | null> {
+  if (passkeyLoginInFlight) return passkeyLoginInFlight;
+  const pending = performPasskeyLogin();
+  passkeyLoginInFlight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (passkeyLoginInFlight === pending) passkeyLoginInFlight = null;
+  }
+}
+
+export async function registerPasskey(label: string): Promise<PointCastUser> {
+  if (!isBrowser() || !window.PublicKeyCredential || !navigator.credentials) {
+    throw new Error('Passkeys are not supported in this browser.');
+  }
+  const challenge = await postJson<{
+    flowId: string;
+    options: PublicKeyCredentialCreationOptionsJSON;
+  }>('/api/auth/passkey/register/options', { label });
+  const { startRegistration } = await import('@simplewebauthn/browser');
+  const response = await startRegistration({ optionsJSON: challenge.options });
+  const result = await postJson<{ ok: true; user: PointCastUser }>(
+    '/api/auth/passkey/register/verify',
+    { flowId: challenge.flowId, response },
+  );
+  window.dispatchEvent(new CustomEvent('pc:auth-change', {
+    detail: { user: result.user, source: 'passkey-registration' },
+  }));
+  window.dispatchEvent(new Event('pc:auth-refresh'));
+  return result.user;
+}
+
+export async function requestEmailMagicLink(email: string): Promise<string> {
+  if (!isBrowser()) return '';
+  const result = await postJson<{ ok: true; message: string }>('/api/auth/email/start', {
+    email,
+    returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+  });
+  return result.message;
+}
+
+export async function getPasskeys(): Promise<PasskeySummary[]> {
+  if (!isBrowser()) return [];
+  const response = await fetch('/api/auth/passkey/credentials', {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (response.status === 401) return [];
+  const payload = await response.json() as {
+    passkeys?: PasskeySummary[];
+    reason?: string;
+  };
+  if (!response.ok) throw new Error(payload.reason || `passkeys-fetch-failed:${response.status}`);
+  return payload.passkeys ?? [];
+}
+
+export async function removePasskey(credentialId: string): Promise<void> {
+  await postJson<{ ok: true; removed: string }>('/api/auth/passkey/credentials', {
+    credentialId,
+  }, 'DELETE');
 }
 
 export async function loginWithApple(): Promise<PointCastUser | null> {
