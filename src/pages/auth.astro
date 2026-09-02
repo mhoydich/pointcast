@@ -101,7 +101,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
     import { buildAccountDeskView } from '../lib/auth/account-desk.mjs';
 
     type AccountDeskWindow = Window & {
-      __pointCastAccountDeskAbort?: AbortController;
+      __pointCastAccountDeskCleanup?: () => void;
       __pointCastAccountDeskPageLoadInstalled?: boolean;
     };
 
@@ -196,13 +196,11 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
 
     function initializeAccountDesk(): void {
       const accountWindow = window as AccountDeskWindow;
-      accountWindow.__pointCastAccountDeskAbort?.abort();
-      const listeners = new AbortController();
-      accountWindow.__pointCastAccountDeskAbort = listeners;
+      accountWindow.__pointCastAccountDeskCleanup?.();
       const roots = document.querySelectorAll<HTMLElement>('[data-account-desk]');
       if (!roots.length) return;
 
-      document.addEventListener('click', (event) => {
+      const handleAccountClick = (event: MouseEvent): void => {
         const target = event.target instanceof Element ? event.target : null;
         const actionButton = target?.closest<HTMLButtonElement>('[data-account-action]');
         const root = actionButton?.closest<HTMLElement>('[data-account-desk]');
@@ -220,11 +218,18 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
         void performAccountAction(root, action).catch((error) => {
           showActionStatus(root, error instanceof Error ? error.message : 'Account action stopped.');
         });
-      }, { capture: true, signal: listeners.signal });
+      };
 
-      window.addEventListener('pc:auth-change', () => {
+      const handleAccountChange = (): void => {
         void refreshAccountDesk();
-      }, { signal: listeners.signal });
+      };
+
+      document.addEventListener('click', handleAccountClick, { capture: true });
+      window.addEventListener('pc:auth-change', handleAccountChange);
+      accountWindow.__pointCastAccountDeskCleanup = () => {
+        document.removeEventListener('click', handleAccountClick, { capture: true });
+        window.removeEventListener('pc:auth-change', handleAccountChange);
+      };
 
       void refreshAccountDesk();
     }
