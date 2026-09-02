@@ -148,7 +148,10 @@ test('the AUTH_DB binding points Wrangler at the complete auth migration', async
 
   assert.match(config, /\[\[d1_databases\]\][\s\S]*binding = "AUTH_DB"/);
   assert.match(config, /database_name = "pointcast-auth"/);
-  assert.match(config, /database_id = "REPLACE_ME"/);
+  assert.match(
+    config,
+    /database_id = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/,
+  );
   assert.match(config, /migrations_dir = "migrations\/auth"/);
   for (const table of ['users', 'identities', 'sessions', 'oauth_states']) {
     assert.match(migration, new RegExp(`CREATE TABLE ${table}`));
