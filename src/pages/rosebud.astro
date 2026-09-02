@@ -123,7 +123,7 @@ const alternates = [
           <p class="eyebrow dark">PLAY LAYER / 001</p>
           <h2 id="machine-title">ROSEBUD</h2>
         </div>
-        <div class="counter"><span data-hit-count>000</span> blooms sent</div>
+        <div class="counter"><span data-hit-count>000</span> blooms sent · pad hits count in the drum house</div>
       </div>
 
       <div class="machine">
@@ -255,6 +255,72 @@ const alternates = [
       let timer = null;
       let bpm = 104;
 
+      // --- Drum house bus -------------------------------------------------
+      // Same localStorage key as DrumModule / drum.astro, so one visitor is one drummer everywhere.
+      const SESSION_KEY = 'pc:reactSessionId';
+      const sessionId = (() => {
+        try {
+          let id = localStorage.getItem(SESSION_KEY);
+          if (!id) {
+            id = crypto.randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            localStorage.setItem(SESSION_KEY, id);
+          }
+          return id;
+        } catch {
+          return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+      })();
+      // Batched delta to POST /api/drum: every ten hits or five seconds, whichever comes first.
+      // functions/api/drum.ts clamps one delta to 1000 and answers { ok, globalTotal, yourTotal }.
+      let pendingDelta = 0;
+      let flushTimer = null;
+      const flushDelta = async () => {
+        if (pendingDelta <= 0) return;
+        const delta = pendingDelta;
+        pendingDelta = 0;
+        if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+        try {
+          const res = await fetch('/api/drum', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delta, sessionId }),
+            keepalive: true,
+          });
+          if (!res.ok) throw new Error(String(res.status));
+        } catch {
+          pendingDelta += delta;
+        }
+      };
+      const queueDrum = () => {
+        pendingDelta += 1;
+        if (pendingDelta >= 10) { flushDelta(); return; }
+        if (flushTimer) clearTimeout(flushTimer);
+        flushTimer = window.setTimeout(flushDelta, 5000);
+      };
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDelta(); });
+      window.addEventListener('pagehide', () => {
+        if (pendingDelta <= 0) return;
+        const delta = pendingDelta;
+        pendingDelta = 0;
+        try { navigator.sendBeacon('/api/drum', new Blob([JSON.stringify({ delta, sessionId })], { type: 'application/json' })); } catch {}
+      });
+      // Shared sounds bus: the body HomeBeatDesk sends, throttled so one visitor cannot flood it, best effort.
+      const padOrder = ['kick', 'bloom', 'dew', 'thorn'];
+      let lastBroadcast = 0;
+      const broadcast = (drum) => {
+        const now = Date.now();
+        if (now - lastBroadcast < 900) return;
+        lastBroadcast = now;
+        try {
+          fetch('/api/sounds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'drum', seed: padOrder.indexOf(drum), sessionId }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch {}
+      };
+
       const ensureAudio = () => {
         if (!audio) audio = new AudioContext();
         if (audio.state === 'suspended') audio.resume();
@@ -304,6 +370,13 @@ const alternates = [
         if (count) count.textContent = String(hitCount).padStart(3, '0');
       };
 
+      // A hand hit: the voice, plus the drum house. The sequencer plays hit() on its own and does not count.
+      const strike = (drum) => {
+        hit(drum);
+        queueDrum();
+        broadcast(drum);
+      };
+
       const paintStep = (step) => {
         home.querySelectorAll('.rb-step').forEach((button) => {
           button.classList.toggle('is-current', Number(button.dataset.step) === step);
@@ -347,7 +420,7 @@ const alternates = [
       });
 
       home.querySelectorAll('[data-drum]').forEach((button) => {
-        button.addEventListener('pointerdown', () => hit(button.dataset.drum));
+        button.addEventListener('pointerdown', () => strike(button.dataset.drum));
       });
 
       home.querySelectorAll('.rb-step').forEach((button) => {
@@ -381,7 +454,7 @@ const alternates = [
       window.addEventListener('keydown', (event) => {
         if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
         const drum = keyMap[event.key.toLowerCase()];
-        if (drum) hit(drum);
+        if (drum) strike(drum);
       });
     })();
   </script>

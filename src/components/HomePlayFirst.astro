@@ -9,9 +9,13 @@
  * sixteen-step sequencer) lives at /rosebud. Same four voices, same synth.
  *
  * No audio until the first pointerdown / keydown creates the AudioContext.
- * The local hit count is yours and resets when you leave; the global count
- * is read from GET /api/drum ({globalTotal}) and is the drum house's own
- * public counter, not this pad's.
+ * The local hit count is yours and resets when you leave. Every pad hit
+ * also counts in the drum house: deltas batch to POST /api/drum (every
+ * ten hits or five seconds, sessionId shared with /drum through
+ * localStorage 'pc:reactSessionId') and each hit rides the shared
+ * /api/sounds bus, throttled, best effort, never blocking audio. The
+ * page fetches GET /api/drum once and broadcasts 'pc:drum'; this file
+ * never fetches it on load.
  */
 interface Props { taps: number; blockCount: number }
 const { taps, blockCount } = Astro.props;
@@ -53,7 +57,7 @@ const pads = [
       ))}
     </div>
     <div class="play__counters">
-      <span><b data-hit-count>000</b> hits this visit · yours, resets when you leave</span>
+      <span><b data-hit-count>000</b> hits this visit · they count in the drum house</span>
       <span><b data-drum-global>{taps.toLocaleString('en-US')}</b> public hits in the drum house · <a href="/api/drum">/api/drum</a></span>
     </div>
   </div>
@@ -67,6 +71,74 @@ const pads = [
     const keyMap = { a: 'kick', s: 'bloom', k: 'dew', l: 'thorn' };
     let audio = null;
     let hits = 0;
+    // --- Drum house bus -------------------------------------------------
+    // Same localStorage key as DrumModule / drum.astro, so one visitor is one drummer everywhere.
+    const SESSION_KEY = 'pc:reactSessionId';
+    const sessionId = (() => {
+      try {
+        let id = localStorage.getItem(SESSION_KEY);
+        if (!id) {
+          id = crypto.randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem(SESSION_KEY, id);
+        }
+        return id;
+      } catch {
+        return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    })();
+    // Batched delta to POST /api/drum: every ten hits or five seconds, whichever comes first.
+    // functions/api/drum.ts clamps one delta to 1000 and answers { ok, globalTotal, yourTotal }.
+    let pendingDelta = 0;
+    let flushTimer = null;
+    const flushDelta = async () => {
+      if (pendingDelta <= 0) return;
+      const delta = pendingDelta;
+      pendingDelta = 0;
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      try {
+        const res = await fetch('/api/drum', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delta, sessionId }),
+          keepalive: true,
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        // The house answered with its new total: hand it to every section listening for pc:drum, this one included.
+        if (data && typeof data.globalTotal === 'number') document.dispatchEvent(new CustomEvent('pc:drum', { detail: data }));
+      } catch {
+        pendingDelta += delta;
+      }
+    };
+    const queueDrum = () => {
+      pendingDelta += 1;
+      if (pendingDelta >= 10) { flushDelta(); return; }
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = window.setTimeout(flushDelta, 5000);
+    };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDelta(); });
+    window.addEventListener('pagehide', () => {
+      if (pendingDelta <= 0) return;
+      const delta = pendingDelta;
+      pendingDelta = 0;
+      try { navigator.sendBeacon('/api/drum', new Blob([JSON.stringify({ delta, sessionId })], { type: 'application/json' })); } catch {}
+    });
+    // Shared sounds bus: the body HomeBeatDesk sends, throttled so one visitor cannot flood it, best effort.
+    const padOrder = ['kick', 'bloom', 'dew', 'thorn'];
+    let lastBroadcast = 0;
+    const broadcast = (drum) => {
+      const now = Date.now();
+      if (now - lastBroadcast < 900) return;
+      lastBroadcast = now;
+      try {
+        fetch('/api/sounds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'drum', seed: padOrder.indexOf(drum), sessionId }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {}
+    };
     const ensureAudio = () => {
       if (!audio) audio = new AudioContext();
       if (audio.state === 'suspended') audio.resume();
@@ -111,6 +183,8 @@ const pads = [
       hits += 1;
       const count = root.querySelector('[data-hit-count]');
       if (count) count.textContent = String(hits).padStart(3, '0');
+      queueDrum();
+      broadcast(drum);
     };
     root.querySelectorAll('[data-drum]').forEach((button) => {
       button.addEventListener('pointerdown', (event) => { event.preventDefault(); hit(button.dataset.drum); });
