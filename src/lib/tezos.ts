@@ -324,7 +324,8 @@ export async function mintKennelClubSitting(params: {
   // raw payload; Beacon's operation flow owns the approval.
   await ensurePointCastPermissions(wallet);
   const contract = await tezos.wallet.at(params.contract);
-  const operation = await (contract.methods as any).mint(params.tokenId).send({
+  // Taquito 20+ removed `contract.methods`; `methodsObject` takes the bare nat.
+  const operation = await (contract.methodsObject as any).mint(params.tokenId).send({
     amount: params.priceMutez,
     mutez: true,
   });
