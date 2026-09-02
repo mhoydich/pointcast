@@ -30,7 +30,7 @@ import { InMemorySigner } from '@taquito/signer';
 const SIGNER_KEY_FILE = '/tmp/pointcast-mainnet-signer.json';
 const CONTRACTS_JSON = path.resolve(process.cwd(), 'src/data/contracts.json');
 const DEFAULT_BASE = 'https://pointcast.xyz/api/tezos-metadata';
-const RPC = 'https://mainnet.api.tez.ie';
+const RPC = 'https://mainnet.smartpy.io';
 
 function log(...args) { console.log('[set-metadata-base-cid]', ...args); }
 

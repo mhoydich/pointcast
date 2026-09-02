@@ -14,8 +14,8 @@ import { TezosToolkit, MichelsonMap } from '@taquito/taquito';
 import { BeaconWallet } from '@taquito/beacon-wallet';
 import { getPkhfromPk, stringToBytes, verifySignature } from '@taquito/utils';
 
-// A public mainnet RPC. ecadinfra is run by the Taquito maintainers.
-const RPC_URL = 'https://mainnet.api.tez.ie';
+// Public mainnet RPC. ECAD's mainnet.api.tez.ie was retired in 2026 (browser 'Failed to fetch'); rpc.tzkt.io answers with CORS from pointcast.xyz.
+const RPC_URL = 'https://rpc.tzkt.io/mainnet';
 
 let _tezos: TezosToolkit | null = null;
 let _wallet: BeaconWallet | null = null;
