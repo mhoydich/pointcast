@@ -1,9 +1,11 @@
 import type { APIRoute } from 'astro';
 import { KENNEL_CLUB, KENNEL_CLUB_CANONICAL, calendar, losAngelesDate, sittingOfTheDay, sittingPayload } from '../lib/kennel-club';
+import { getKennelClubMintState, unavailableKennelClubMintState } from '../lib/kennel-club-mint';
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
   const date = losAngelesDate();
   const today = sittingOfTheDay(date);
+  const mint = await getKennelClubMintState(today.tokenId).catch(() => unavailableKennelClubMintState(today.tokenId));
   return new Response(JSON.stringify({
     spec: 'pointcast.kennel-club-calendar/v1',
     canonical: KENNEL_CLUB_CANONICAL,
@@ -13,7 +15,7 @@ export const GET: APIRoute = () => {
     status: KENNEL_CLUB.status,
     today: { date, ...sittingPayload(today) },
     lateStartNote: 'The club opened two days late; the first two dogs were already waiting.',
-    mint: { ...KENNEL_CLUB.mint, status: 'contract-pending', note: 'Mint window opens when the contract lands.' },
+    mint,
     calendar: calendar(date),
   }, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300, s-maxage=3600', 'Access-Control-Allow-Origin': '*' } });
 };

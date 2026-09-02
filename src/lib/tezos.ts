@@ -309,3 +309,24 @@ export async function collectToken(params: {
     confirmation: op.confirmation(1),
   };
 }
+
+/** Submit the paid `mint(token_id)` call for the live Kennel Club FA2. */
+export async function mintKennelClubSitting(params: {
+  contract: string;
+  tokenId: number;
+  priceMutez: number;
+}): Promise<{ opHash: string; confirmation: Promise<unknown> }> {
+  if (!params.contract.startsWith('KT1')) throw new Error('Kennel Club contract is not configured.');
+  if (!Number.isInteger(params.tokenId) || params.tokenId < 0) throw new Error('Invalid Kennel Club token id.');
+  const { tezos, wallet } = getToolkit();
+  // This calls wallet.client.requestPermissions when no reusable PointCast
+  // operation permission exists. A contract call is never made by signing a
+  // raw payload; Beacon's operation flow owns the approval.
+  await ensurePointCastPermissions(wallet);
+  const contract = await tezos.wallet.at(params.contract);
+  const operation = await (contract.methods as any).mint(params.tokenId).send({
+    amount: params.priceMutez,
+    mutez: true,
+  });
+  return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
+}
