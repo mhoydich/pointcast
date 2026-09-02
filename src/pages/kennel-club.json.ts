@@ -1,11 +1,16 @@
 import type { APIRoute } from 'astro';
-import { KENNEL_CLUB, KENNEL_CLUB_CANONICAL, calendar, losAngelesDate, sittingOfTheDay, sittingPayload } from '../lib/kennel-club';
+import { KENNEL_CLUB, KENNEL_CLUB_CANONICAL, KENNEL_CLUB_MINT_LIVE_URL, calendar, losAngelesDate, sittingOfTheDay, sittingPayload } from '../lib/kennel-club';
 import { getKennelClubMintState, unavailableKennelClubMintState } from '../lib/kennel-club-mint';
 
 export const GET: APIRoute = async () => {
   const date = losAngelesDate();
   const today = sittingOfTheDay(date);
-  const mint = await getKennelClubMintState(today.tokenId).catch(() => unavailableKennelClubMintState(today.tokenId));
+  const snapshotAt = new Date().toISOString();
+  const mint = {
+    ...(await getKennelClubMintState(today.tokenId).catch(() => unavailableKennelClubMintState(today.tokenId))),
+    liveUrl: KENNEL_CLUB_MINT_LIVE_URL,
+    snapshotAt,
+  };
   return new Response(JSON.stringify({
     spec: 'pointcast.kennel-club-calendar/v1',
     canonical: KENNEL_CLUB_CANONICAL,

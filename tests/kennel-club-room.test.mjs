@@ -12,6 +12,7 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
     'src/lib/kennel-club.ts',
     'src/lib/kennel-club-mint.ts',
     'src/components/KennelClubMint.astro',
+    'functions/api/kennel-club/mint.ts',
     'src/pages/kennel-club.astro',
     'src/pages/kennel-club.json.ts',
     'src/pages/kennel-club/[slug].astro',
@@ -21,11 +22,12 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
     'src/pages/send/kennel-club.txt.ts',
   ]) assert.ok(exists(path), path);
 
-  const [room, helper, mintHelper, mintComponent, plate, plateJson, calendarJson, tezos] = await Promise.all([
+  const [room, helper, mintHelper, mintComponent, mintApi, plate, plateJson, calendarJson, tezos] = await Promise.all([
     read('src/pages/kennel-club.astro'),
     read('src/lib/kennel-club.ts'),
     read('src/lib/kennel-club-mint.ts'),
     read('src/components/KennelClubMint.astro'),
+    read('functions/api/kennel-club/mint.ts'),
     read('src/pages/kennel-club/[slug].astro'),
     read('src/pages/kennel-club/[slug].json.ts'),
     read('src/pages/kennel-club.json.ts'),
@@ -38,13 +40,21 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
   assert.match(room, /KennelClubMint tokenId=\{today\.tokenId\}/);
   assert.match(plate, /KennelClubMint tokenId=\{sitting\.tokenId\}/);
   assert.match(mintComponent, /Mint today&apos;s sitting · 1 ꜩ/);
-  assert.match(mintComponent, /https:\/\/api\.tzkt\.io/);
+  assert.match(mintComponent, /https:\/\/pointcast\.xyz\/api\/kennel-club\/mint/);
+  assert.doesNotMatch(mintComponent, /https:\/\/api\.tzkt\.io/);
+  assert.match(mintApi, /getKennelClubMintSnapshot/);
+  assert.match(mintApi, /unavailableKennelClubMintSnapshot/);
+  assert.match(mintApi, /max-age=30, s-maxage=30/);
   assert.match(mintComponent, /document\.addEventListener\('click'/);
   assert.doesNotMatch(mintComponent, /\s(?:id|for)=/);
   assert.match(mintHelper, /v1\/contracts\/\$\{KENNEL_CLUB_CONTRACT\}\/storage/);
   assert.match(mintHelper, /v1\/bigmaps\/\$\{supplyBigMap\}\/keys\?key=\$\{tokenId\}/);
   assert.match(calendarJson, /getKennelClubMintState/);
   assert.match(calendarJson, /unavailableKennelClubMintState/);
+  assert.match(calendarJson, /liveUrl/);
+  assert.match(calendarJson, /snapshotAt/);
+  assert.match(helper, /liveUrl/);
+  assert.match(helper, /snapshotAt/);
   assert.match(tezos, /mintKennelClubSitting/);
   assert.match(tezos, /\.methods as any\)\.mint\(params\.tokenId\)\.send/);
   assert.match(room, /calendar__grid/);
@@ -123,7 +133,49 @@ test('built Kennel Club routes have a resolved today, 30 calendar records, and p
   assert.equal(calendar.mint.today.tokenId, calendar.today.mint.tokenId);
   assert.equal(typeof calendar.mint.today.windowOpen, 'boolean');
   assert.equal(typeof calendar.mint.today.minted, 'number');
+  assert.equal(calendar.mint.liveUrl, 'https://pointcast.xyz/api/kennel-club/mint');
+  assert.ok(Date.parse(calendar.mint.snapshotAt), 'calendar mint has a build timestamp');
+  assert.equal(sitting.mint.liveUrl, 'https://pointcast.xyz/api/kennel-club/mint');
+  assert.ok(Date.parse(sitting.mint.snapshotAt), 'plate mint has a build timestamp');
   assert.equal(sitting.attributes.length, 5, 'TZIP-21-style attributes arrive in the JSON twin');
   assert.match(page, /og:image/);
   assert.match(page, /02-hartley\.png/);
+});
+
+test('Kennel Club mint API returns a live 30-token snapshot and a static fallback with mocked TzKT', async () => {
+  const { createServer } = await import('vite');
+  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
+  const originalFetch = globalThis.fetch;
+  try {
+    const { onRequestGet } = await server.ssrLoadModule('/functions/api/kennel-club/mint.ts');
+    const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+    globalThis.fetch = async (url) => {
+      const text = String(url);
+      if (text.endsWith('/storage')) return response({ paused: false, price_mutez: '1000000', edition_mode: 'open', supply: 91, windows: 92 });
+      if (text.includes('/bigmaps/91/')) return response([{ key: 0, value: '3' }, { key: 1, value: '7' }]);
+      if (text.includes('/bigmaps/92/')) return response([{ value: { open_at: '2026-09-01T07:00:00Z', close_at: '2026-10-01T07:00:00Z' } }]);
+      throw new Error(`unexpected TzKT URL: ${text}`);
+    };
+    const live = await onRequestGet({ request: new Request('https://pointcast.xyz/api/kennel-club/mint') });
+    const payload = await live.json();
+    assert.equal(live.headers.get('access-control-allow-origin'), '*');
+    assert.equal(live.headers.get('cache-control'), 'public, max-age=30, s-maxage=30');
+    assert.equal(payload.live, true);
+    assert.equal(payload.paused, false);
+    assert.equal(payload.minted['0'], 3);
+    assert.equal(payload.minted['1'], 7);
+    assert.equal(Object.keys(payload.minted).length, 30);
+    assert.equal(payload.totalMinted, 10);
+
+    globalThis.fetch = async () => { throw new Error('TzKT unavailable'); };
+    const fallback = await onRequestGet({ request: new Request('https://pointcast.xyz/api/kennel-club/mint') });
+    const fallbackPayload = await fallback.json();
+    assert.equal(fallbackPayload.live, false);
+    assert.equal(fallbackPayload.paused, true);
+    assert.equal(Object.keys(fallbackPayload.minted).length, 30);
+    assert.equal(fallbackPayload.totalMinted, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await server.close();
+  }
 });

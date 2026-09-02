@@ -35,6 +35,11 @@ export type KennelClubMintState = {
   };
 };
 
+export type KennelClubMintSnapshot = KennelClubMintState & {
+  minted: Record<string, number>;
+  totalMinted: number;
+};
+
 function numberValue(value: unknown): number {
   const result = Number(value ?? 0);
   return Number.isFinite(result) ? result : 0;
@@ -52,6 +57,18 @@ async function json<T>(fetcher: FetchLike, url: string): Promise<T> {
 function keyValue(payload: any): unknown {
   if (Array.isArray(payload)) return payload[0]?.value;
   return payload?.value;
+}
+
+function tokenIdFromKey(key: unknown): number | null {
+  const value = typeof key === 'object' && key !== null
+    ? (key as any).int ?? (key as any).nat ?? (key as any).value
+    : key;
+  const tokenId = Number(value);
+  return Number.isInteger(tokenId) ? tokenId : null;
+}
+
+function emptyMinted(): Record<string, number> {
+  return Object.fromEntries(Array.from({ length: 30 }, (_, tokenId) => [String(tokenId), 0]));
 }
 
 export function kennelClubWindowOpen(window: { openAt: string; closeAt: string } | null, now = new Date()): boolean {
@@ -97,6 +114,43 @@ export async function getKennelClubMintState(
   };
 }
 
+/** Read the full September supply map plus the requested sitting's mint window. */
+export async function getKennelClubMintSnapshot(
+  tokenId: number,
+  { fetcher = fetch as FetchLike, now = new Date() }: { fetcher?: FetchLike; now?: Date } = {},
+): Promise<KennelClubMintSnapshot> {
+  if (!KENNEL_CLUB_CONTRACT.startsWith('KT1')) throw new Error('Kennel Club contract is not configured.');
+  const storage: any = await json(fetcher, `${KENNEL_CLUB_TZKT}/v1/contracts/${KENNEL_CLUB_CONTRACT}/storage`);
+  const supplyBigMap = Number(storage?.supply);
+  const windowsBigMap = Number(storage?.windows);
+  if (!Number.isInteger(supplyBigMap) || !Number.isInteger(windowsBigMap)) {
+    throw new Error('Kennel Club storage does not expose supply and windows big maps.');
+  }
+  const [supplyPayload, windowPayload] = await Promise.all([
+    json<any>(fetcher, `${KENNEL_CLUB_TZKT}/v1/bigmaps/${supplyBigMap}/keys?limit=1000`),
+    json<any>(fetcher, `${KENNEL_CLUB_TZKT}/v1/bigmaps/${windowsBigMap}/keys?key=${tokenId}`),
+  ]);
+  const minted = emptyMinted();
+  for (const row of Array.isArray(supplyPayload) ? supplyPayload : []) {
+    const id = tokenIdFromKey(row?.key);
+    if (id !== null && id >= 0 && id < 30) minted[String(id)] = numberValue(row?.value);
+  }
+  const rawWindow = keyValue(windowPayload) as { open_at?: string; close_at?: string } | undefined;
+  const window = rawWindow?.open_at && rawWindow?.close_at
+    ? { openAt: rawWindow.open_at, closeAt: rawWindow.close_at }
+    : null;
+  return {
+    contract: KENNEL_CLUB_CONTRACT,
+    network: KENNEL_CLUB_NETWORK,
+    priceMutez: numberValue(storage?.price_mutez) || KENNEL_CLUB_PRICE_MUTEZ,
+    edition: String(storage?.edition_mode ?? KENNEL_CLUB_EDITION),
+    paused: Boolean(storage?.paused),
+    today: { tokenId, windowOpen: kennelClubWindowOpen(window, now), minted: minted[String(tokenId)] ?? 0, window },
+    minted,
+    totalMinted: Object.values(minted).reduce((total, value) => total + value, 0),
+  };
+}
+
 /** A truthful shape when TzKT cannot be reached while an SSG build runs. */
 export function unavailableKennelClubMintState(tokenId: number): KennelClubMintState & { unavailable: true } {
   return {
@@ -108,4 +162,10 @@ export function unavailableKennelClubMintState(tokenId: number): KennelClubMintS
     today: { tokenId, windowOpen: false, minted: 0, window: null },
     unavailable: true,
   };
+}
+
+export function unavailableKennelClubMintSnapshot(tokenId: number): KennelClubMintSnapshot & { unavailable: true } {
+  const state = unavailableKennelClubMintState(tokenId);
+  const minted = emptyMinted();
+  return { ...state, minted, totalMinted: 0 };
 }
