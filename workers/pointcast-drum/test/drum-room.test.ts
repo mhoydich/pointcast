@@ -104,3 +104,20 @@ describe("drum room protocol", () => {
     for (const client of clients) client.socket.close(1000, "load-complete");
   });
 });
+
+describe("drum counter KV mirror", () => {
+  it("coalesces the legacy KV mirror until 50 taps", async () => {
+    await env.VISITS.put("drum:total", "5");
+    const stub = env.DRUM_COUNTER.getByName("global");
+    const post = (delta: number) => stub.fetch("https://pointcast.test/?session=0123456789abcdef", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta, leaderboardHash: "01234567", nounId: 22 }),
+    });
+    expect(await (await post(1)).json()).toMatchObject({ ok: true, globalTotal: 6, yourTotal: 1 });
+    expect(await env.VISITS.get("drum:total")).toBe("5");
+    expect(await (await post(49)).json()).toMatchObject({ ok: true, globalTotal: 55, yourTotal: 50 });
+    expect(await env.VISITS.get("drum:total")).toBe("55");
+    expect(await env.VISITS.get("drum:session:0123456789abcdef")).toBe("50");
+  });
+});

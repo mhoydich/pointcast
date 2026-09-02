@@ -23,8 +23,11 @@
  *   response: { globalTotal, yourTotal }
  */
 
-import { sha256, type Env } from './visit';
-import { updateLeaderboard } from './drum/top';
+import { sha256, type Env as VisitsEnv } from './visit.ts';
+
+interface Env extends VisitsEnv {
+  DRUM_COUNTER?: DurableObjectNamespace;
+}
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -61,6 +64,25 @@ async function hashSession(sessionId: string): Promise<string> {
   return (await sha256(sessionId)).slice(0, 16);
 }
 
+async function counterRequest(
+  env: Env,
+  sessionHash: string,
+  init: RequestInit,
+): Promise<Response | null> {
+  if (!env.DRUM_COUNTER) return null;
+  try {
+    const id = env.DRUM_COUNTER.idFromName('global');
+    return await env.DRUM_COUNTER.get(id).fetch(
+      `https://drum-counter.internal/?session=${encodeURIComponent(sessionHash)}`,
+      init,
+    );
+  } catch {
+    // The legacy KV path remains a safe rollback while the external DO is
+    // deployed ahead of Pages, as documented in wrangler.toml.
+    return null;
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' });
 
@@ -77,9 +99,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 128) : '';
   if (!sessionId) return json({ ok: false, reason: 'missing-session' }, { status: 400 });
   const delta = Math.max(0, Math.min(MAX_DELTA_PER_REQ, deltaRaw));
+  const sessionHash = await hashSession(sessionId);
+  const leaderboardHash = (await sha256(sessionId)).slice(0, 8);
+  const nounId = parseInt((await sha256(`${sessionId}:noun`)).slice(0, 6), 16) % 1200;
+  const counter = await counterRequest(env, sessionHash, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ delta, leaderboardHash, nounId }),
+  });
+  if (counter) {
+    return new Response(counter.body, { status: counter.status, headers: JSON_HEADERS });
+  }
   if (delta === 0) {
     // No-op — return current state so client can still sync.
-    const sessionHash = await hashSession(sessionId);
     const [globalTotal, yourTotal] = await Promise.all([
       loadGlobal(env),
       loadSession(env, sessionHash),
@@ -87,7 +119,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ ok: true, globalTotal, yourTotal });
   }
 
-  const sessionHash = await hashSession(sessionId);
   const [globalTotal, yourTotal] = await Promise.all([
     loadGlobal(env),
     loadSession(env, sessionHash),
@@ -105,9 +136,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       String(nextYour),
       { expirationTtl: SESSION_TTL_SECONDS },
     ),
-    // Fire-and-forget leaderboard update. KV eventual consistency +
-    // read-modify-write race is fine for a "top 10" display.
-    updateLeaderboard(env, sessionId, nextYour).catch(() => {}),
   ]);
 
   return json({ ok: true, globalTotal: nextGlobal, yourTotal: nextYour });
@@ -116,9 +144,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
   const sessionId = (url.searchParams.get('sessionId') ?? '').slice(0, 128);
+  const sessionHash = sessionId ? await hashSession(sessionId) : '';
+  const counter = await counterRequest(env, sessionHash, { method: 'GET' });
+  if (counter) {
+    return new Response(counter.body, {
+      status: counter.status,
+      headers: { ...JSON_HEADERS, 'Cache-Control': 'private, max-age=3' },
+    });
+  }
   const [globalTotal, yourTotal] = await Promise.all([
     loadGlobal(env),
-    sessionId ? hashSession(sessionId).then((h) => loadSession(env, h)) : Promise.resolve(0),
+    sessionHash ? loadSession(env, sessionHash) : Promise.resolve(0),
   ]);
   return json(
     { globalTotal, yourTotal },
