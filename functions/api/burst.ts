@@ -10,6 +10,7 @@ import { KENNEL_CLUB_CONTRACT } from '../../src/lib/kennel-club-mint';
 
 interface Env {
   PRESENCE?: DurableObjectNamespace;
+  AUTH_DB?: D1Database;
 }
 
 type BurstBody = {
@@ -42,6 +43,24 @@ function json(body: unknown, status = 200): Response {
 function addressOf(value: TzktTransaction['sender']): string {
   if (typeof value === 'string') return value;
   return typeof value?.address === 'string' ? value.address : '';
+}
+
+function publicFirstName(value: unknown): string {
+  const candidate = typeof value === 'string' ? value.trim().split(/\s+/)[0] : '';
+  if (!candidate || candidate.includes('@') || candidate.startsWith('tz')) return 'Member';
+  return candidate.replace(/[^\p{L}\p{M}'’-]/gu, '').slice(0, 30) || 'Member';
+}
+
+async function verifiedClaimName(db: D1Database | undefined, opHash: string): Promise<string | null> {
+  if (!db) return null;
+  const row = await db.prepare(`
+    SELECT json_extract(u.payload, '$.preferredName') AS preferred_name
+    FROM claims c
+    JOIN users u ON u.id = c.user_id
+    WHERE c.op_hash = ? AND c.status IN ('held', 'delivered')
+    LIMIT 1
+  `).bind(opHash).first<{ preferred_name: string | null }>();
+  return row ? publicFirstName(row.preferred_name) : null;
 }
 
 export async function verifyKennelMint(
@@ -92,7 +111,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ ok: false, reason: 'invalid-json' }, 400);
   }
 
-  if (body.kind === 'mint') {
+  if (body.kind === 'mint' || body.kind === 'claim') {
     const meta = body.meta && typeof body.meta === 'object' ? body.meta as Record<string, unknown> : {};
     const opHash = typeof meta.opHash === 'string' ? meta.opHash.trim() : '';
     let verified: { ok: boolean; sender?: string };
@@ -103,9 +122,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ ok: false, reason: 'tzkt-unavailable' }, 503);
     }
     if (!verified.ok) return json({ ok: false, reason: 'mint-not-verified' }, 409);
+    const claimName = body.kind === 'claim'
+      ? await verifiedClaimName(env.AUTH_DB, opHash)
+      : null;
+    if (body.kind === 'claim' && !claimName) {
+      return json({ ok: false, reason: 'claim-not-verified' }, 409);
+    }
     body = {
       ...body,
-      by: { handle: verified.sender || 'collector' },
+      by: { handle: claimName || verified.sender || 'collector' },
       meta: { ...meta, opHash, contract: KENNEL_CLUB_CONTRACT, verifiedBy: 'TzKT' },
     };
   }

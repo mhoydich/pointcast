@@ -31,7 +31,7 @@
  * Site-wide bursts (/burst):
  *   POST /burst ← { kind, by:{handle?/noun?}, meta, clientId? }
  *   WS   /burst → normal presence payload + bursts (last 20 in memory)
- *   Kinds: mint, tug, bell, ping-answered, cast. New broadcasts are globally
+ *   Kinds: mint, claim, tug, bell, ping-answered, cast. New broadcasts are globally
  *   capped at one per second; same-kind arrivals coalesce. No burst touches KV.
  *
  * Visitor intel (option-B privacy):
@@ -215,7 +215,7 @@ interface TugView {
   updatedAt: number;
 }
 
-type BurstKind = 'mint' | 'tug' | 'bell' | 'ping-answered' | 'cast';
+type BurstKind = 'mint' | 'claim' | 'tug' | 'bell' | 'ping-answered' | 'cast';
 
 interface BurstBy {
   handle?: string;
@@ -356,7 +356,7 @@ const TUG_KNOT_EPSILON = 0.0005; // below this the rope is simply centred
 const TUG_STORAGE_KEY = 'tug:v1';
 const TUG_BURST_THRESHOLD = 0.6;
 
-const BURST_KINDS = new Set<BurstKind>(['mint', 'tug', 'bell', 'ping-answered', 'cast']);
+const BURST_KINDS = new Set<BurstKind>(['mint', 'claim', 'tug', 'bell', 'ping-answered', 'cast']);
 const MAX_BURST_BUFFER = 20;
 const BURST_MIN_INTERVAL_MS = 1_000;
 const MAX_BURST_RATE_KEYS = 500;

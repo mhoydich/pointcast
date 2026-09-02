@@ -9,6 +9,11 @@ import { getPkhfromPk, verifySignature } from '@taquito/utils';
 
 import type { AuthIdentity } from '../../../src/lib/auth/types';
 import {
+  deliverHeldKennelClubDogs,
+  linkedTezosAddress,
+  type KennelClaimEnv,
+} from '../kennel-club/_claims';
+import {
   IdentityConflictError,
   authJson,
   hasAuthStorage,
@@ -61,7 +66,8 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<AuthEnv & KennelClaimEnv> = async (context) => {
+  const { request, env } = context;
   if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
@@ -139,6 +145,20 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
     const user = await upsertUserForIdentity(env, identity, {
       currentUserId: current?.user.userId ?? null,
     });
+    const deliveryAddress = linkedTezosAddress(user);
+    if (deliveryAddress && env.AUTH_DB && env.KENNEL_CLUB_CLAIM_SECRET_KEY) {
+      context.waitUntil(deliverHeldKennelClubDogs({
+        env,
+        userId: user.userId,
+        deliveredTo: deliveryAddress,
+      }).catch((error) => {
+        console.error(JSON.stringify({
+          message: 'kennel-club-auto-delivery-failed',
+          userId: user.userId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }));
+    }
     const session = await issueSession(env, user.userId);
     return withSessionCookie(
       authJson({
