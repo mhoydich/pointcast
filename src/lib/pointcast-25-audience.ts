@@ -1,4 +1,5 @@
 import { POINTCAST_25 } from './pointcast-25';
+import board000 from './pointcast-25-board-000.frozen.json';
 
 export const POINTCAST_25_REFERENCE = {
   name: 'ESPN preseason FPI Top 25',
@@ -95,17 +96,33 @@ export const POINTCAST_25_DISSENTS = dissentSchools.map((school) => {
   };
 });
 
-export const POINTCAST_25_RECEIPTS = POINTCAST_25_TEAMS.map((team) => ({
-  id: `${POINTCAST_25.board}-${team.slug}`,
-  board: POINTCAST_25.board,
-  team: team.school,
-  teamUrl: `https://pointcast.xyz/25/teams/${team.slug}`,
-  rank: team.rank,
-  openedAt: POINTCAST_25.publishedAt,
-  status: 'OPEN' as const,
-  claim: team.reason,
-  nextProof: team.proof,
-}));
+// A claim opens on the board that first published its sentence. Board 000's
+// frozen capture is the reference: a reason carried forward verbatim keeps its
+// July 27 opening date and its 000-prefixed receipt id; a rewritten reason opens
+// fresh on the current board.
+const openingReasons = new Map(board000.teams.map((team) => [team.school, team.reason]));
+
+export const POINTCAST_25_RECEIPTS = POINTCAST_25_TEAMS.map((team) => {
+  const carried = openingReasons.get(team.school) === team.reason;
+  const openedBoard = carried ? board000.board : POINTCAST_25.board;
+  return {
+    id: `${openedBoard}-${team.slug}`,
+    board: POINTCAST_25.board,
+    openedBoard,
+    team: team.school,
+    teamUrl: `https://pointcast.xyz/25/teams/${team.slug}`,
+    rank: team.rank,
+    previousRank: team.previousRank,
+    movement: team.movement,
+    openedAt: carried ? board000.publishedAt : POINTCAST_25.publishedAt,
+    reviewedAt: POINTCAST_25.publishedAt,
+    status: 'OPEN' as const,
+    claim: team.reason,
+    nextProof: team.proof,
+    change: team.change,
+    sources: team.sources,
+  };
+});
 
 export function getPointcast25Team(slug: string) {
   return POINTCAST_25_TEAMS.find((team) => team.slug === slug);

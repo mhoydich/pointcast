@@ -1,0 +1,466 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import frozen from '../../../lib/pointcast-25-board-001.frozen.json';
+import { pointcast25TeamSlug } from '../../../lib/pointcast-25-audience';
+
+// Board 001 renders from its frozen capture, never from the live POINTCAST_25
+// object. The current board keeps moving every Tuesday; this page does not.
+const board = frozen;
+const teams = board.teams.map((team) => ({ ...team, slug: pointcast25TeamSlug(team.school) }));
+
+type FrozenTeam = (typeof teams)[number];
+
+function movementLabel(team: FrozenTeam): string {
+  if (team.movement === 'NEW' || team.previousRank === null) return 'NEW';
+  if (team.movement === 'HOLD') return 'HOLD';
+  const delta = Math.abs(team.previousRank - team.rank);
+  return `${team.movement === 'UP' ? '▲' : '▼'} ${delta}`;
+}
+
+function sourceHost(url: string): string {
+  return new URL(url).hostname.replace(/^www\./, '');
+}
+
+const description =
+  'Permanent Week 1 edition of the 2026 PointCast college-football Top 25: all 25 teams with previous rank, movement, a change receipt under every reason, and the sources behind each line.';
+const pageUrl = 'https://pointcast.xyz/25/boards/001';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  '@id': `${pageUrl}#board`,
+  name: 'PointCast 25 — 2026 Board 001 (Week 1)',
+  description,
+  url: pageUrl,
+  datePublished: board.publishedAt,
+  numberOfItems: teams.length,
+  itemListOrder: 'https://schema.org/ItemListOrderAscending',
+  itemListElement: teams.map((team) => ({
+    '@type': 'ListItem',
+    position: team.rank,
+    url: `https://pointcast.xyz/25/teams/${team.slug}`,
+    name: team.school,
+    description: team.reason,
+  })),
+};
+---
+
+<BlockLayout
+  title="2026 College Football Top 25 — Board 001 (Week 1)"
+  description={description}
+  image="/images/pointcast-25/board-001.png"
+  themeColor="#f4ff3f"
+  jsonLd={jsonLd}
+  immersive={true}
+  showNetworkStrip={false}
+  alternates={[
+    {
+      type: 'application/json',
+      href: '/25/boards/001.json',
+      title: 'PointCast 25 Board 001 immutable JSON',
+    },
+  ]}
+>
+  <main class="board-page">
+    <header class="mast">
+      <a class="brand" href="/">POINTCAST</a>
+      <nav aria-label="Board 001 navigation">
+        <a href="/25">Current board</a>
+        <a href="/25/boards/000">Board 000</a>
+        <a href="/25/season">Season ledger</a>
+        <a href="/25/receipts">Receipts</a>
+        <a href="/25/boards/001.json">JSON</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="number">001</div>
+      <div>
+        <p>PERMANENT BOARD · SEPTEMBER 1, 2026 · WEEK 1</p>
+        <h1>THE FIRST<br /><em>TUESDAY.</em></h1>
+        <p class="dek">{board.question}</p>
+      </div>
+    </section>
+
+    <section class="notice">
+      <strong>IMMUTABLE EDITION</strong>
+      <p>
+        This page preserves the human-readable Board 001. Only one of the twenty-five
+        had played at press time; the other twenty-four carry the preseason case forward
+        with the opener named under every reason. The current presentation may move;
+        these rankings, reasons, and change receipts do not.
+      </p>
+    </section>
+
+    <p class="moves" aria-label="Board 001 movement summary">
+      <span>{board.movements.up} UP</span>
+      <span>{board.movements.down} DOWN</span>
+      <span data-hot>{board.movements.hold} HOLD</span>
+      <span>{board.movements.new} NEW</span>
+      <span>{board.movements.dropped} DROPPED</span>
+      <span data-hot>{board.movements.gamesPlayed} OF 25 PLAYED</span>
+    </p>
+
+    <ol class="board">
+      {teams.map((team) => (
+        <li style={`--team:${team.accent}`}>
+          <a href={`/25/teams/${team.slug}`}>
+            <span class="rank">
+              {String(team.rank).padStart(2, '0')}
+              <small class="move" data-movement={team.movement}>{movementLabel(team)}</small>
+            </span>
+            <span class="identity">
+              <small>{team.conference} · FROM {team.previousRank === null ? 'NR' : `No. ${team.previousRank}`}</small>
+              <strong>{team.school}</strong>
+            </span>
+            <span class="copy">
+              <span class="reason">{team.reason}</span>
+              <span class="change"><b>CHANGE</b>{team.change}</span>
+            </span>
+            <span class="arrow" aria-hidden="true">↗</span>
+          </a>
+          <p class="sources">
+            {team.sources.map((url) => (
+              <a href={url} target="_blank" rel="noopener">{sourceHost(url)} ↗</a>
+            ))}
+          </p>
+        </li>
+      ))}
+    </ol>
+
+    <section class="note">
+      <p>EDITOR’S NOTE · BOARD 001</p>
+      <blockquote>{board.editorsNote}</blockquote>
+    </section>
+
+    <section class="after">
+      <div>
+        <p>WHAT AGED WELL?</p>
+        <h2>Come back when<br />the evidence arrives.</h2>
+      </div>
+      <div>
+        <a href="/25">Open the current board →</a>
+        <a href="/25/boards/000">Open permanent Board 000 →</a>
+        <a href="/25/season">Open the season ledger →</a>
+        <a href="/25/receipts">Open the public receipt book →</a>
+      </div>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: #10100f;
+    color: #f6f3e9;
+    font-family: var(--pc-font-sans);
+  }
+
+  .board-page {
+    margin: 0 auto;
+    max-width: 1500px;
+  }
+
+  .mast,
+  .mast nav {
+    align-items: center;
+    display: flex;
+  }
+
+  .mast {
+    border-bottom: 1px solid #44433f;
+    justify-content: space-between;
+    padding: 20px clamp(18px, 4vw, 64px);
+  }
+
+  .brand {
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .mast nav {
+    flex-wrap: wrap;
+    gap: clamp(12px, 2vw, 28px);
+  }
+
+  a {
+    color: inherit;
+    text-underline-offset: 4px;
+  }
+
+  .mast a,
+  .hero p,
+  .notice strong,
+  .identity small,
+  .move,
+  .moves span,
+  .change b,
+  .sources a,
+  .note > p,
+  .after p {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .hero {
+    display: grid;
+    gap: 50px;
+    grid-template-columns: minmax(240px, 0.4fr) 1fr;
+    min-height: 72vh;
+    padding: 55px clamp(18px, 5vw, 80px);
+  }
+
+  .number {
+    color: #f4ff3f;
+    font-size: clamp(130px, 24vw, 360px);
+    font-weight: 900;
+    letter-spacing: -0.14em;
+    line-height: 0.7;
+    writing-mode: vertical-rl;
+  }
+
+  .hero > div:last-child {
+    align-self: end;
+  }
+
+  .hero h1 {
+    font-size: clamp(65px, 10vw, 150px);
+    letter-spacing: -0.08em;
+    line-height: 0.78;
+    margin: 35px 0 48px;
+  }
+
+  .hero em {
+    color: #f4ff3f;
+    font-style: normal;
+  }
+
+  .dek {
+    font-family: var(--pc-font-sans) !important;
+    font-size: clamp(23px, 3vw, 42px) !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.15;
+    max-width: 900px;
+    text-transform: none !important;
+  }
+
+  .notice {
+    background: #f4ff3f;
+    color: #10100f;
+    display: grid;
+    gap: 30px;
+    grid-template-columns: 0.3fr 1fr;
+    padding: 34px clamp(18px, 5vw, 80px);
+  }
+
+  .notice p {
+    font-size: clamp(18px, 2vw, 28px);
+    margin: 0;
+  }
+
+  .moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 26px clamp(18px, 5vw, 80px) 10px;
+  }
+
+  .moves span {
+    border: 1px solid #77756f;
+    padding: 6px 10px;
+  }
+
+  .moves span[data-hot] {
+    background: #f4ff3f;
+    border-color: #f4ff3f;
+    color: #10100f;
+    font-weight: 800;
+  }
+
+  .board {
+    list-style: none;
+    margin: 0;
+    padding: 0 clamp(18px, 5vw, 80px);
+  }
+
+  .board li {
+    border-bottom: 1px solid #44433f;
+    padding-bottom: 18px;
+  }
+
+  .board li > a {
+    align-items: start;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 90px minmax(170px, 0.33fr) 1fr 30px;
+    padding: 25px 0 12px;
+    text-decoration: none;
+  }
+
+  .rank {
+    color: var(--team);
+    display: flex;
+    flex-direction: column;
+    font-size: 40px;
+    font-weight: 900;
+    gap: 8px;
+    letter-spacing: -0.06em;
+  }
+
+  .move {
+    border: 1px solid currentColor;
+    color: #aaa8a1;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 3px 6px;
+    width: max-content;
+  }
+
+  .move[data-movement='UP'] {
+    color: #7ee29b;
+  }
+
+  .move[data-movement='DOWN'] {
+    color: #ff8a8a;
+  }
+
+  .move[data-movement='NEW'] {
+    background: #f4ff3f;
+    border-color: #f4ff3f;
+    color: #10100f;
+  }
+
+  .identity {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .identity strong {
+    font-size: clamp(24px, 3vw, 42px);
+    letter-spacing: -0.05em;
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reason {
+    font-size: clamp(16px, 1.7vw, 23px);
+    line-height: 1.35;
+  }
+
+  .change {
+    border-left: 2px solid var(--team);
+    color: #d9d6cc;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 12px;
+  }
+
+  .change b {
+    color: #aaa8a1;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .arrow {
+    color: #f4ff3f;
+    font-size: 28px;
+  }
+
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 0 0 0 110px;
+  }
+
+  .sources a {
+    color: #8f8e85;
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+
+  .note {
+    padding: 70px clamp(18px, 5vw, 80px) 0;
+  }
+
+  .note > p {
+    color: #aaa8a1;
+    margin: 0 0 16px;
+  }
+
+  .note blockquote {
+    border-left: 3px solid #f4ff3f;
+    font-size: clamp(17px, 1.8vw, 24px);
+    line-height: 1.45;
+    margin: 0;
+    max-width: 960px;
+    padding-left: 22px;
+  }
+
+  .after {
+    display: grid;
+    gap: 50px;
+    grid-template-columns: 1fr 0.65fr;
+    padding: 100px clamp(18px, 5vw, 80px);
+  }
+
+  .after h2 {
+    font-size: clamp(45px, 7vw, 100px);
+    letter-spacing: -0.07em;
+    line-height: 0.9;
+    margin: 22px 0 0;
+  }
+
+  .after > div:last-child {
+    align-self: end;
+    display: flex;
+    flex-direction: column;
+    font-size: 18px;
+    gap: 18px;
+  }
+
+  @media (max-width: 740px) {
+    .mast {
+      align-items: flex-start;
+    }
+
+    .mast nav {
+      align-items: flex-end;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hero,
+    .notice,
+    .after {
+      grid-template-columns: 1fr;
+    }
+
+    .hero {
+      min-height: 0;
+    }
+
+    .number {
+      font-size: 150px;
+      writing-mode: initial;
+    }
+
+    .board li > a {
+      grid-template-columns: 64px 1fr 26px;
+    }
+
+    .copy {
+      grid-column: 2 / -1;
+    }
+
+    .sources {
+      margin-left: 0;
+    }
+  }
+</style>

@@ -2,6 +2,7 @@
 import BlockLayout from '../../../layouts/BlockLayout.astro';
 import { POINTCAST_25, POINTCAST_25_SIGNAL_LABELS } from '../../../lib/pointcast-25';
 import {
+  POINTCAST_25_RECEIPTS,
   POINTCAST_25_REFERENCE,
   POINTCAST_25_TEAMS,
 } from '../../../lib/pointcast-25-audience';
@@ -18,6 +19,27 @@ const teamIndex = POINTCAST_25_TEAMS.findIndex((candidate) => candidate.slug ===
 const previous = teamIndex > 0 ? POINTCAST_25_TEAMS[teamIndex - 1] : null;
 const next = teamIndex < POINTCAST_25_TEAMS.length - 1 ? POINTCAST_25_TEAMS[teamIndex + 1] : null;
 const signalLabel = POINTCAST_25_SIGNAL_LABELS[team.signal];
+const receipt = POINTCAST_25_RECEIPTS.find((candidate) => candidate.team === team.school);
+if (!receipt) throw new Error(`Missing PointCast 25 receipt: ${team.school}`);
+const longDate = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'America/Los_Angeles',
+});
+const openedOn = longDate.format(new Date(receipt.openedAt));
+const reviewedOn = longDate.format(new Date(POINTCAST_25.publishedAt));
+const movementLabel =
+  team.movement === 'NEW' || team.previousRank === null
+    ? 'NEW'
+    : team.movement === 'HOLD'
+      ? 'HOLD'
+      : `${team.movement === 'UP' ? '▲' : '▼'} ${Math.abs(team.previousRank - team.rank)}`;
+const movementTitle =
+  team.previousRank === null
+    ? `not on Board ${POINTCAST_25.previousBoard}`
+    : `No. ${team.previousRank} on Board ${POINTCAST_25.previousBoard}`;
+const sourceHost = (url: string) => new URL(url).hostname.replace(/^www\./, '');
 const description = `${team.school} enters the 2026 college-football season No. ${team.rank} in the PointCast 25. Read the case, doubt, next proof, and preseason ranking comparison.`;
 const pageUrl = `https://pointcast.xyz/25/teams/${team.slug}`;
 
@@ -29,7 +51,7 @@ const jsonLd = {
       '@id': `${pageUrl}#article`,
       headline: `${team.school} 2026 football outlook and PointCast ranking`,
       description,
-      datePublished: POINTCAST_25.publishedAt,
+      datePublished: receipt.openedAt,
       dateModified: POINTCAST_25.publishedAt,
       url: pageUrl,
       mainEntityOfPage: pageUrl,
@@ -64,7 +86,7 @@ const jsonLd = {
 <BlockLayout
   title={`${team.school} 2026 Football Outlook & Ranking`}
   description={description}
-  image="/images/pointcast-25/board-000.png"
+  image="/images/pointcast-25/board-001.png"
   themeColor={team.accent}
   jsonLd={jsonLd}
   immersive={true}
@@ -94,7 +116,7 @@ const jsonLd = {
         <strong>{String(team.rank).padStart(2, '0')}</strong>
       </div>
       <div class="identity">
-        <p>{team.conference} · {signalLabel} · Board {POINTCAST_25.board}</p>
+        <p>{team.conference} · {signalLabel} · Board {POINTCAST_25.board} · {movementLabel} · {movementTitle}</p>
         <h1>{team.school}</h1>
         <p class="reason">{team.reason}</p>
       </div>
@@ -135,6 +157,15 @@ const jsonLd = {
           <span>03 · NEXT PROOF</span>
           <p>{team.proof}</p>
         </article>
+        <article class="change">
+          <span>04 · CHANGE · BOARD {POINTCAST_25.previousBoard} → {POINTCAST_25.board}</span>
+          <p>{team.change}</p>
+          <ul class="change__sources" aria-label={`Sources behind ${team.school}'s change receipt`}>
+            {team.sources.map((url) => (
+              <li><a href={url} target="_blank" rel="noopener">{sourceHost(url)} ↗</a></li>
+            ))}
+          </ul>
+        </article>
       </div>
     </section>
 
@@ -142,9 +173,10 @@ const jsonLd = {
       <span class="status__mark">OPEN</span>
       <div>
         <p class="label">CLAIM STATUS</p>
-        <h2 id="status-title">No games yet. No victory lap yet.</h2>
+        <h2 id="status-title">{team.result ? 'One game in. No victory lap yet.' : 'No games yet. No victory lap yet.'}</h2>
         <p>
-          This claim opened with Board {POINTCAST_25.board} on July 27, 2026.
+          This claim opened with Board {receipt.openedBoard} on {openedOn} and was last
+          reviewed with Board {POINTCAST_25.board} on {reviewedOn}.
           PointCast will mark it proven, alive, complicated, or dead as evidence arrives.
         </p>
         <a href="/25/receipts">Open the complete receipt book →</a>
@@ -352,6 +384,28 @@ const jsonLd = {
 
   .receipt-grid article:first-child {
     border-left-color: var(--team);
+  }
+
+  .receipt-grid article.change {
+    border-left-color: var(--team);
+    border-top: 1px solid #4a4943;
+    grid-column: 1 / -1;
+    min-height: 0;
+  }
+
+  .change__sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 0;
+  }
+
+  .change__sources a {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
 
   .receipt-grid span {

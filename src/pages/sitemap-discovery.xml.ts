@@ -133,6 +133,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25/receipts.json', 'weekly', '0.93'],
   ['https://pointcast.xyz/25/boards/000', 'never', '0.92'],
   ['https://pointcast.xyz/25/boards/000.json', 'never', '0.88'],
+  ['https://pointcast.xyz/25/boards/001', 'never', '0.92'],
+  ['https://pointcast.xyz/25/boards/001.json', 'never', '0.88'],
   ['https://pointcast.xyz/25/alabama-after-saban', 'weekly', '0.98'],
   ['https://pointcast.xyz/25/alabama-after-saban.json', 'weekly', '0.94'],
   ...POINTCAST_25_TEAMS.flatMap((team) => [
