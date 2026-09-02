@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+export { DrumCounter } from "./drum-counter";
 
 const ROOM_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 const MAX_CONNECTIONS = 125;

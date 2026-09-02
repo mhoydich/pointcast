@@ -15,6 +15,7 @@ Thirty painted dog portraits in a heritage equestrian register, one assigned to 
 - [x] (CC) Name and cast 30 sittings with composed prompts, palette, composition rule, TZIP-21 attribute plan, and a series test — `done`
 - [ ] (X) Generate and verify the 30 plates at 1024×1280 through poster-image-engine, save PNG + WebP twins, flip `image.status` to `verified`, write the Codex log — `in-progress` — hydration polling started 2026-09-02; see Codex log
 - [ ] (MH) Answer: edition model per sitting (24-hour open edition or fixed cap, proposed 30), price in tez, and origination signer — `waiting-on-mh` — September 2026 and Tezos are confirmed
+- [ ] (CC) Write `contracts/v2/kennel_club_fa2.py` with a per-day mint window, wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
 - [x] (X) Write and compile `contracts/v2/kennel_club_fa2.py` with per-day mint windows and placeholder TZIP-21 metadata — `done` — compile-only; SmartPy 0.24.1 scenarios and artifacts verified, no origination
 - [ ] (CC) Wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
 - [ ] (M) objkt collection check, Shadownet then mainnet daily-window mint QA, mobile pass — `queued` — after the KT1 lands

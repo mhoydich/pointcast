@@ -23,7 +23,7 @@ interface SpotifyTokenResponse {
 const STATE_PREFIX = 'oauth-state:spotify:';
 const SPOTIFY_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 
-function errorRedirect(request: Request, reason: string, returnTo = '/dashboard'): Response {
+function errorRedirect(request: Request, reason: string, returnTo = '/dashboard#broadcast'): Response {
   const target = appendResult(safeReturnTo(returnTo), 'spotify_error', reason);
   return Response.redirect(new URL(target, request.url).toString(), 302);
 }

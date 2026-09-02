@@ -6,12 +6,32 @@ import type {
 } from '../../../src/lib/auth/types';
 
 export interface AuthEnv {
+  AUTH_DB?: D1Database;
   USERS?: KVNamespace;
 }
 
 interface SessionContext {
   session: AuthSession;
   user: PointCastUser;
+}
+
+interface UserRow {
+  payload: string;
+}
+
+interface IdentityRow {
+  user_id: string;
+}
+
+interface SessionRow {
+  token: string;
+  user_id: string;
+  expires_at: number;
+}
+
+interface AuthStateRow {
+  payload: string;
+  expires_at: number;
 }
 
 const SESSION_COOKIE_NAME = 'pc_session';
@@ -40,10 +60,12 @@ export function authJson(body: unknown, init?: ResponseInit): Response {
   });
 }
 
+export function hasAuthStorage(env: AuthEnv): boolean {
+  return Boolean(env.AUTH_DB || env.USERS);
+}
+
 function requireUsers(env: AuthEnv): KVNamespace {
-  if (!env.USERS) {
-    throw new Error('kv-not-bound');
-  }
+  if (!env.USERS) throw new Error('kv-not-bound');
   return env.USERS;
 }
 
@@ -82,9 +104,33 @@ function getCookieValue(request: Request, name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function readJson<T>(kv: KVNamespace, key: string): Promise<T | null> {
+function parseStoredValue<T>(raw: string | null): T | null {
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return raw as T;
+  }
+}
+
+async function readKvValue<T>(kv: KVNamespace, key: string): Promise<T | null> {
+  return parseStoredValue<T>(await kv.get(key));
+}
+
+async function readKvUser(kv: KVNamespace, key: string): Promise<PointCastUser | null> {
   const raw = await kv.get(key);
-  if (!raw) return null;
+  return raw === null ? null : parseUser(raw);
+}
+
+function parseUser(raw: string): PointCastUser | null {
+  try {
+    return JSON.parse(raw) as PointCastUser;
+  } catch {
+    return null;
+  }
+}
+
+function parseAuthState<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T;
   } catch {
@@ -92,8 +138,174 @@ async function readJson<T>(kv: KVNamespace, key: string): Promise<T | null> {
   }
 }
 
+function cleanupStatements(db: D1Database, now = Date.now()): D1PreparedStatement[] {
+  return [
+    db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
+    db.prepare('DELETE FROM oauth_states WHERE expires_at <= ?').bind(now),
+  ];
+}
+
+async function writeUserToD1(db: D1Database, user: PointCastUser): Promise<void> {
+  const statements = [
+    ...cleanupStatements(db),
+    db.prepare(`
+      INSERT INTO users (id, payload, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET payload = excluded.payload
+    `).bind(user.userId, JSON.stringify(user), user.createdAt),
+    ...user.identities.map((identity) => db.prepare(`
+      INSERT INTO identities (provider, id, user_id, payload)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(provider, id) DO UPDATE SET
+        user_id = excluded.user_id,
+        payload = excluded.payload
+    `).bind(identity.provider, identity.id, user.userId, JSON.stringify(identity))),
+  ];
+  await db.batch(statements);
+}
+
 async function loadUser(env: AuthEnv, userId: string): Promise<PointCastUser | null> {
-  return readJson<PointCastUser>(requireUsers(env), userKey(userId));
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare('SELECT payload FROM users WHERE id = ?')
+      .bind(userId)
+      .first<UserRow>();
+    if (row) return parseUser(row.payload);
+
+    // Existing KV accounts migrate lazily. This is needed by session
+    // read-through so a cutover does not strand the session's user record.
+    if (env.USERS) {
+      const legacyUser = await readKvUser(env.USERS, userKey(userId));
+      if (legacyUser) {
+        await writeUserToD1(env.AUTH_DB, legacyUser);
+        return legacyUser;
+      }
+    }
+    return null;
+  }
+
+  return readKvUser(requireUsers(env), userKey(userId));
+}
+
+async function loadIdentityUserId(
+  env: AuthEnv,
+  provider: AuthIdentity['provider'],
+  id: string,
+): Promise<string | null> {
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare(
+      'SELECT user_id FROM identities WHERE provider = ? AND id = ?',
+    ).bind(provider, id).first<IdentityRow>();
+    if (row) return row.user_id;
+
+    // Preserve returning users whose old cookie has expired: migrate the KV
+    // identity mapping and its user before treating the login as a new account.
+    if (env.USERS) {
+      const legacyUserId = await env.USERS.get(identityKey(provider, id));
+      if (legacyUserId) {
+        const legacyUser = await loadUser(env, legacyUserId);
+        if (legacyUser) return legacyUser.userId;
+      }
+    }
+    return null;
+  }
+
+  return requireUsers(env).get(identityKey(provider, id));
+}
+
+async function writeSessionToD1(db: D1Database, session: AuthSession): Promise<void> {
+  const expiresAt = Date.parse(session.expiresAt);
+  await db.batch([
+    ...cleanupStatements(db),
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, expires_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(token) DO UPDATE SET
+        user_id = excluded.user_id,
+        expires_at = excluded.expires_at
+    `).bind(session.sessionToken, session.userId, expiresAt),
+  ]);
+}
+
+export async function deleteSession(env: AuthEnv, sessionToken: string): Promise<void> {
+  if (env.AUTH_DB) {
+    await env.AUTH_DB.prepare('DELETE FROM sessions WHERE token = ?').bind(sessionToken).run();
+    // A lazily migrated session can still have its original KV record. Remove
+    // it only when it exists so D1 logout/rotation cannot resurrect via KV.
+    if (env.USERS && await env.USERS.get(sessionKey(sessionToken))) {
+      await env.USERS.delete(sessionKey(sessionToken));
+    }
+    return;
+  }
+  if (env.USERS) await env.USERS.delete(sessionKey(sessionToken));
+}
+
+export async function writeAuthState<T>(
+  env: AuthEnv,
+  state: string,
+  payload: T,
+  ttlSeconds: number,
+): Promise<void> {
+  if (env.AUTH_DB) {
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    await env.AUTH_DB.batch([
+      ...cleanupStatements(env.AUTH_DB),
+      env.AUTH_DB.prepare(`
+        INSERT INTO oauth_states (state, payload, expires_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(state) DO UPDATE SET
+          payload = excluded.payload,
+          expires_at = excluded.expires_at
+      `).bind(state, JSON.stringify(payload), expiresAt),
+    ]);
+    return;
+  }
+
+  await requireUsers(env).put(state, JSON.stringify(payload), { expirationTtl: ttlSeconds });
+}
+
+export async function readAuthState<T>(env: AuthEnv, state: string): Promise<T | null> {
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare(
+      'SELECT payload, expires_at FROM oauth_states WHERE state = ?',
+    ).bind(state).first<AuthStateRow>();
+    if (row) {
+      if (row.expires_at <= Date.now()) {
+        await env.AUTH_DB.prepare('DELETE FROM oauth_states WHERE state = ?').bind(state).run();
+        return null;
+      }
+      return parseAuthState<T>(row.payload);
+    }
+
+    // Allows an OAuth flow started immediately before the D1 deploy to finish.
+    if (env.USERS) return readKvValue<T>(env.USERS, state);
+    return null;
+  }
+
+  return readKvValue<T>(requireUsers(env), state);
+}
+
+export async function consumeAuthState<T>(env: AuthEnv, state: string): Promise<T | null> {
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare(`
+      DELETE FROM oauth_states
+      WHERE state = ?
+      RETURNING payload, expires_at
+    `).bind(state).first<AuthStateRow>();
+    if (row) return row.expires_at > Date.now() ? parseAuthState<T>(row.payload) : null;
+
+    // Consume legacy KV state once when it was issued before cutover.
+    if (env.USERS) {
+      const legacy = await readKvValue<T>(env.USERS, state);
+      if (legacy !== null) await env.USERS.delete(state);
+      return legacy;
+    }
+    return null;
+  }
+
+  const kv = requireUsers(env);
+  const value = await readKvValue<T>(kv, state);
+  if (value !== null) await kv.delete(state);
+  return value;
 }
 
 function mergeIdentity(identities: AuthIdentity[], incoming: AuthIdentity): AuthIdentity[] {
@@ -134,15 +346,19 @@ export async function issueSession(
   userId: string,
   ttlSeconds = SESSION_TTL_SECONDS,
 ): Promise<AuthSession> {
-  const kv = requireUsers(env);
   const session: AuthSession = {
     userId,
     sessionToken: makeSessionToken(),
     expiresAt: futureIso(ttlSeconds),
   };
-  await kv.put(sessionKey(session.sessionToken), JSON.stringify(session), {
-    expirationTtl: ttlSeconds,
-  });
+
+  if (env.AUTH_DB) {
+    await writeSessionToD1(env.AUTH_DB, session);
+  } else {
+    await requireUsers(env).put(sessionKey(session.sessionToken), JSON.stringify(session), {
+      expirationTtl: ttlSeconds,
+    });
+  }
   return session;
 }
 
@@ -150,23 +366,48 @@ export async function readSessionFromRequest(
   request: Request,
   env: AuthEnv,
 ): Promise<SessionContext | null> {
-  const kv = env.USERS;
-  if (!kv) return null;
+  if (!hasAuthStorage(env)) return null;
 
   const sessionToken = getCookieValue(request, SESSION_COOKIE_NAME);
   if (!sessionToken) return null;
 
-  const session = await readJson<AuthSession>(kv, sessionKey(sessionToken));
-  if (!session) return null;
+  let session: AuthSession | null = null;
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare(
+      'SELECT token, user_id, expires_at FROM sessions WHERE token = ?',
+    ).bind(sessionToken).first<SessionRow>();
+    if (row) {
+      session = {
+        userId: row.user_id,
+        sessionToken: row.token,
+        expiresAt: new Date(row.expires_at).toISOString(),
+      };
+    } else if (env.USERS) {
+      const legacySession = await readKvValue<AuthSession>(env.USERS, sessionKey(sessionToken));
+      if (legacySession && Date.parse(legacySession.expiresAt) > Date.now()) {
+        // Load/migrate the user first to satisfy the sessions foreign key,
+        // then copy the legacy session into D1 and continue this request.
+        const legacyUser = await loadUser(env, legacySession.userId);
+        if (legacyUser) {
+          await writeSessionToD1(env.AUTH_DB, legacySession);
+          return { session: legacySession, user: legacyUser };
+        }
+      }
+      return null;
+    }
+  } else {
+    session = await readKvValue<AuthSession>(requireUsers(env), sessionKey(sessionToken));
+  }
 
+  if (!session) return null;
   if (Date.parse(session.expiresAt) <= Date.now()) {
-    await kv.delete(sessionKey(sessionToken));
+    await deleteSession(env, sessionToken);
     return null;
   }
 
   const user = await loadUser(env, session.userId);
   if (!user) {
-    await kv.delete(sessionKey(sessionToken));
+    await deleteSession(env, sessionToken);
     return null;
   }
 
@@ -174,13 +415,8 @@ export async function readSessionFromRequest(
 }
 
 export async function destroySessionFromRequest(request: Request, env: AuthEnv): Promise<void> {
-  const kv = env.USERS;
-  if (!kv) return;
-
   const sessionToken = getCookieValue(request, SESSION_COOKIE_NAME);
-  if (!sessionToken) return;
-
-  await kv.delete(sessionKey(sessionToken));
+  if (sessionToken) await deleteSession(env, sessionToken);
 }
 
 export async function upsertUserForIdentity(
@@ -191,8 +427,9 @@ export async function upsertUserForIdentity(
     roles?: AuthRole[];
   },
 ): Promise<PointCastUser> {
-  const kv = requireUsers(env);
-  const existingUserId = await kv.get(identityKey(identity.provider, identity.id));
+  if (!hasAuthStorage(env)) throw new Error('kv-not-bound');
+
+  const existingUserId = await loadIdentityUserId(env, identity.provider, identity.id);
   const currentUserId = options?.currentUserId ?? null;
 
   if (currentUserId && existingUserId && existingUserId !== currentUserId) {
@@ -215,16 +452,21 @@ export async function upsertUserForIdentity(
     ])),
   };
 
-  await Promise.all([
-    kv.put(userKey(nextUser.userId), JSON.stringify(nextUser)),
-    kv.put(identityKey(identity.provider, identity.id), nextUser.userId),
-  ]);
+  if (env.AUTH_DB) {
+    await writeUserToD1(env.AUTH_DB, nextUser);
+  } else {
+    const kv = requireUsers(env);
+    await Promise.all([
+      kv.put(userKey(nextUser.userId), JSON.stringify(nextUser)),
+      kv.put(identityKey(identity.provider, identity.id), nextUser.userId),
+    ]);
+  }
 
   return nextUser;
 }
 
 export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!env.USERS) {
+  if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
 
@@ -241,12 +483,12 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
 
   // Keep active PointCast members signed in without weakening the 30-day
   // inactivity boundary. A site visit during the final seven days rotates the
-  // opaque cookie and KV record; a long-absent browser must sign again.
+  // opaque cookie and storage record; a long-absent browser must sign again.
   const remainingSeconds = Math.floor((Date.parse(current.session.expiresAt) - Date.now()) / 1000);
   if (remainingSeconds > SESSION_REFRESH_WINDOW_SECONDS) return authJson(body);
 
   const renewed = await issueSession(env, current.user.userId);
-  await env.USERS.delete(sessionKey(current.session.sessionToken));
+  await deleteSession(env, current.session.sessionToken);
   return withSessionCookie(
     authJson({ ...body, session: renewed, renewed: true }),
     renewed,
@@ -254,7 +496,7 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
 };
 
 export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!env.USERS) {
+  if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
 

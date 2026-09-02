@@ -61,6 +61,8 @@ export interface SendSheet {
   close?: string;
   /** Routes this sheet was distilled from. Printed in the dated footer. */
   sources: string[];
+  /** Defaults to the shelf's filing date; series sheets may carry their own. */
+  date?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -247,7 +249,7 @@ const DESK_SECTIONS: SendSection[] = [
       tool('model studies', 'Qwen', 'Three model studies: /qwen-weather, /qwen-silver-letter, /qwen-good-intelligence. Outputs are pre-rendered static media.', 'runs on a QwenCloud Personal Token Plan; price not stated here', '/qwen-weather'),
       tool('reader', 'Firecrawl', 'The open-source web reader for pages without a clean machine surface. Field guide at /firecrawl, setup at /connectors.', 'open source (core AGPL-3.0, MCP server MIT); the smoke test needs no account', '/firecrawl'),
       tool('rail', 'Stripe', 'Hosted checkout for the $25 season ticket at /25. Stripe Link receipts in the /money ledger.', 'sells the $25 ticket; fees not stated here', '/25'),
-      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /minted. Taquito 24.2, Beacon SDK 24.2.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
+      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /minted. Taquito 25.0 with Beacon wallet operations.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
       tool('runtime', 'Cloudflare Pages + KV', 'Static hosting, Pages Functions, and KV for presence, reactions, and drum taps.', NOT_STATED, '/stack'),
       tool('runtime', 'Astro 6.1', 'The static-site framework: islands, file routing, content collections for blocks.', NOT_STATED, '/stack'),
     ],
@@ -428,6 +430,44 @@ const AI_CAPITAL_SHEET: SendSheet = {
 };
 
 /* ------------------------------------------------------------------ */
+/* 04 · Kennel Club.                                                   */
+/* Source: src/data/kennel-club-september-sitting.json (September 2). */
+/* ------------------------------------------------------------------ */
+
+const KENNEL_CLUB_SHEET: SendSheet = {
+  slug: 'kennel-club',
+  href: '/send/kennel-club',
+  kicker: 'One-sheet · Kennel Club · September 2026 · 30 daily sittings',
+  title: 'Kennel Club: thirty dogs, one a day.',
+  em: 'one a day.',
+  dek: 'Thirty original dog portrait plates, assigned to every calendar day in September 2026. The plates are public now. The Tezos mint is waiting on its contract.',
+  color: '#8A2432',
+  color2: '#BA7517',
+  sections: [
+    {
+      heading: 'The sitting',
+      columns: 3,
+      items: [
+        { tag: '01–30 · September', title: 'One dog every day', note: 'Each date has a named dog, distinct breed, title, wardrobe line, portrait plate, and planned Tezos token id.', meta: 'calendar true · America/Los_Angeles', href: '/kennel-club' },
+        { tag: 'Today', title: 'Follow the daily plate', note: 'Open the Kennel Club room for the current sitting, yesterday’s faded plate, tomorrow’s held silhouette, and the full thirty-day calendar.', meta: 'human room + calendar JSON', href: '/kennel-club' },
+        { tag: 'Machine read', title: 'Thirty metadata records', note: 'Every sitting has its own JSON twin with image URLs and TZIP-21-style attributes: sitting, mint date, breed, title, wardrobe, scene, and token id.', meta: '30 static JSON doors', href: '/kennel-club.json' },
+      ],
+    },
+    {
+      heading: 'Mint coming',
+      lines: [
+        'The series is planned for Tezos mainnet: 30 token ids, numbered 0 through 29, one associated with each September day.',
+        'No wallet, chain call, price, edition cap, or contract address is live on this sheet. The room says plainly: mint window opens when the contract lands.',
+        'September 1 and 2 opened late. The first two dogs were already waiting.',
+      ],
+    },
+  ],
+  close: 'Follow the sitting. The mint comes after the contract.',
+  sources: ['/kennel-club', '/kennel-club.json'],
+  date: '2026-09-02',
+};
+
+/* ------------------------------------------------------------------ */
 /* The hub.                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -435,11 +475,12 @@ export const SEND_SHEETS = {
   mcp: MCP_SHEET,
   'ai-tools': AI_TOOLS_SHEET,
   'ai-capital': AI_CAPITAL_SHEET,
+  'kennel-club': KENNEL_CLUB_SHEET,
 } as const;
 
 export type SendSlug = keyof typeof SEND_SHEETS;
 
-export const SEND_SHEET_LIST: SendSheet[] = [MCP_SHEET, AI_TOOLS_SHEET, AI_CAPITAL_SHEET];
+export const SEND_SHEET_LIST: SendSheet[] = [MCP_SHEET, AI_TOOLS_SHEET, AI_CAPITAL_SHEET, KENNEL_CLUB_SHEET];
 
 export const SEND_HUB: SendSheet = {
   slug: 'send',
@@ -484,6 +525,7 @@ export function sheetUrl(sheet: SendSheet): string {
 }
 
 export function sheetStamp(sheet: SendSheet): string {
+  if (sheet.date) return `PointCast · one-sheet · ${sheet.date} · source pages: ${sheet.sources.join(', ')}`;
   return `PointCast · one-sheet · ${SEND_DATE} · source pages: ${sheet.sources.join(', ')}`;
 }
 
@@ -535,7 +577,7 @@ export function sheetPayload(sheet: SendSheet) {
   return {
     $schema: 'https://pointcast.xyz/for-agents',
     generatedAt: new Date().toISOString(),
-    date: SEND_DATE,
+    date: sheet.date ?? SEND_DATE,
     site: SEND_ORIGIN,
     hub: `${SEND_ORIGIN}/send`,
     canonical: sheetUrl(sheet),

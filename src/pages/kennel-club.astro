@@ -1,0 +1,144 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  KENNEL_CLUB,
+  KENNEL_CLUB_CANONICAL,
+  calendar,
+  imageUrl,
+  losAngelesDate,
+  sittingOfTheDay,
+  sittingStatus,
+} from '../lib/kennel-club';
+
+const todayDate = losAngelesDate();
+const today = sittingOfTheDay(todayDate);
+const yesterday = KENNEL_CLUB.sittings.find((sitting) => sitting.day === today.day - 1);
+const tomorrow = KENNEL_CLUB.sittings.find((sitting) => sitting.day === today.day + 1);
+const days = calendar(todayDate);
+const lateStart = todayDate >= '2026-09-01' && todayDate <= '2026-09-02';
+const title = 'Kennel Club · The September Sitting';
+const description = 'Thirty original dog portrait sittings, one for each day of September 2026. The daily Tezos mint is pending the contract.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': KENNEL_CLUB_CANONICAL,
+  name: title,
+  description,
+  image: imageUrl(today, 'png'),
+  numberOfItems: KENNEL_CLUB.sittings.length,
+  hasPart: KENNEL_CLUB.sittings.map((sitting) => ({ '@type': 'VisualArtwork', name: sitting.tokenMetadata.name, image: imageUrl(sitting, 'png'), url: `${KENNEL_CLUB_CANONICAL}/${sitting.slug}` })),
+};
+---
+
+<BlockLayout title={title} description={description} image={today.image.png} imageWidth={1024} imageHeight={1280} themeColor="#8A2432" jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/kennel-club.json', title: 'Kennel Club calendar JSON' }]}>
+  <main class="kennel" data-kennel-club data-today={todayDate}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><span>Kennel Club</span><a href="/kennel-club.json">JSON</a></nav>
+    <header class="mast">
+      <p class="kicker">Kennel Club · September 2026 · 30 daily portrait sittings</p>
+      <h1>The September <em>Sitting.</em></h1>
+      <p>One dog, one calendar day. Original plates from El Segundo. Tezos metadata is prepared; the mint window opens when the contract lands.</p>
+    </header>
+
+    {lateStart && <p class="late-note">The club opened two days late; the first two dogs were already waiting.</p>}
+
+    <section class="sitting" aria-labelledby="today-title">
+      <div class="sitting__label"><span>Sitting of the day</span><time datetime={today.mintDate}>{today.mintDate} · America/Los_Angeles</time></div>
+      <div class="sitting__cards">
+        {yesterday ? <a class="sitting__side sitting__side--past" href={`/kennel-club/${yesterday.slug}`} aria-label={`Yesterday: ${yesterday.name}`}><img src={yesterday.image.webp} alt="" width="1024" height="1280" /><span>Yesterday · {yesterday.name}</span></a> : <div class="sitting__side sitting__side--empty"><span>September begins here</span></div>}
+        <article class="sitting__today">
+          <img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" />
+          <div class="sitting__copy">
+            <p>Sitting {String(today.day).padStart(2, '0')} · Token {today.tokenId}</p>
+            <h2 id="today-title">{today.name}</h2>
+            <strong>{today.breed}</strong>
+            <span>{today.title}</span>
+            <small>{today.wardrobe}</small>
+            <a href={`/kennel-club/${today.slug}`}>Open this sitting →</a>
+          </div>
+        </article>
+        {tomorrow ? <div class="sitting__side sitting__side--future" aria-label={`Tomorrow: Sitting ${String(tomorrow.day).padStart(2, '0')}`}><span>Tomorrow</span><b>{String(tomorrow.day).padStart(2, '0')}</b><small>Plate held until {tomorrow.mintDate}</small></div> : <div class="sitting__side sitting__side--empty"><span>The final sitting</span></div>}
+      </div>
+      <div class="mint-note"><span>Tezos mint · contract pending</span><b>Mint window opens when the contract lands.</b><a href="/send/kennel-club">Send the one-sheet →</a></div>
+    </section>
+
+    <section class="calendar" aria-labelledby="calendar-title">
+      <div class="calendar__head"><div><p class="kicker">Calendar true · September 2026</p><h2 id="calendar-title">Thirty plates, <em>one at a time.</em></h2></div><a href="/kennel-club.json">Calendar JSON →</a></div>
+      <ol class="calendar__grid" aria-label="September 2026 Kennel Club calendar">
+        {days.map((day) => (
+          <li class:list={['calendar__day', `calendar__day--${day.status}`]} data-sitting-date={day.date}>
+            <a href={`/kennel-club/${day.slug}`}><img src={day.image.webp.replace('https://pointcast.xyz', '')} alt={day.status === 'today' ? day.image.alt : ''} width="1024" height="1280" loading={day.status === 'today' ? 'eager' : 'lazy'} /><span><b>{String(day.day).padStart(2, '0')}</b><em>Today</em></span></a>
+            <span class="calendar__future"><b>{String(day.day).padStart(2, '0')}</b><small>Held</small></span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-kennel-club]');
+    if (!root) return;
+    const la = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    root.querySelectorAll('[data-sitting-date]').forEach((cell) => {
+      if (!(cell instanceof HTMLElement)) return;
+      const date = cell.dataset.sittingDate || '';
+      cell.classList.toggle('calendar__day--past', date < la);
+      cell.classList.toggle('calendar__day--today', date === la);
+      cell.classList.toggle('calendar__day--future', date > la);
+    });
+  })();
+</script>
+
+<style>
+  .kennel { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; --club: #8A2432; --club-wash: #fbf1f1; }
+  .crumb, .kicker, .sitting__label, .sitting__copy p, .mint-note, .calendar__future, .calendar__day span { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
+  .crumb a:last-child { margin-left: auto; }
+  .mast { border-top: 2px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); padding: 22px 0 26px; }
+  .kicker { margin: 0 0 10px; color: var(--club); }
+  h1, h2 { margin: 0; font-weight: 400; letter-spacing: -.05em; line-height: .88; }
+  h1 { font-size: clamp(54px, 10vw, 128px); }
+  h1 em, h2 em { color: var(--club); font-style: normal; }
+  .mast > p:last-child { max-width: 640px; margin: 18px 0 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
+  .late-note { margin: 12px 0; border-left: 4px solid var(--club); background: var(--club-wash); padding: 11px 13px; font-size: 13px; }
+  .sitting { margin-top: 24px; border-top: 2px solid var(--pc-ink); }
+  .sitting__label, .mint-note { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; color: var(--pc-ink-muted); }
+  .sitting__cards { display: grid; grid-template-columns: minmax(120px, .45fr) minmax(0, 1.2fr) minmax(120px, .45fr); border: 1px solid var(--pc-ink); }
+  .sitting__side { min-height: 100%; background: var(--club-wash); color: var(--pc-ink); text-decoration: none; }
+  .sitting__side img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(.8); opacity: .34; }
+  .sitting__side--past { position: relative; overflow: hidden; }
+  .sitting__side--past span { position: absolute; right: 8px; bottom: 8px; left: 8px; background: #fff; padding: 7px; font: 400 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .sitting__side--future, .sitting__side--empty { display: grid; place-content: center; gap: 10px; padding: 16px; text-align: center; border-left: 1px solid var(--pc-ink); }
+  .sitting__side--future b { font-size: clamp(34px, 5vw, 68px); font-weight: 400; line-height: .8; color: var(--club); }
+  .sitting__side--future small, .sitting__side--empty { font: 400 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pc-ink-muted); }
+  .sitting__today { position: relative; min-height: 570px; overflow: hidden; background: var(--club); }
+  .sitting__today > img { width: 100%; height: 100%; object-fit: cover; }
+  .sitting__copy { position: absolute; right: 14px; bottom: 14px; left: 14px; padding: 16px; background: rgba(255,255,255,.94); border-left: 4px solid var(--club); }
+  .sitting__copy p { margin: 0 0 6px; color: var(--club); }
+  .sitting__copy h2 { font-size: clamp(38px, 6vw, 68px); }
+  .sitting__copy strong, .sitting__copy span, .sitting__copy small { display: block; margin-top: 6px; }
+  .sitting__copy strong { font-size: 16px; font-weight: 500; }
+  .sitting__copy span { font-size: 14px; color: var(--club); }
+  .sitting__copy small { max-width: 50ch; color: var(--pc-ink-soft); line-height: 1.4; }
+  .sitting__copy a { display: inline-block; margin-top: 12px; color: var(--club); font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .mint-note { align-items: center; border-bottom: 1px solid var(--pc-ink); }
+  .mint-note span { color: var(--club); } .mint-note b { font-weight: 500; color: var(--pc-ink); } .mint-note a { margin-left: auto; color: var(--club); }
+  .calendar { margin-top: 42px; }
+  .calendar__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--pc-ink); }
+  .calendar__head h2 { font-size: clamp(34px, 6vw, 72px); }
+  .calendar__head > a { flex: 0 0 auto; font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--club); }
+  .calendar__grid { display: grid; grid-template-columns: repeat(6, 1fr); margin: 0; padding: 0; list-style: none; border-left: 1px solid var(--pc-ink); }
+  .calendar__day { position: relative; min-height: 146px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); overflow: hidden; }
+  .calendar__day a { display: block; height: 100%; color: var(--pc-ink); }
+  .calendar__day img { width: 100%; height: 100%; object-fit: cover; }
+  .calendar__day span { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; align-items: center; background: #fff; padding: 3px 5px; color: var(--pc-ink); }
+  .calendar__day span b { font-weight: 400; } .calendar__day span em { color: var(--club); font-style: normal; }
+  .calendar__day--today { box-shadow: inset 0 0 0 4px var(--club); z-index: 1; }
+  .calendar__day--today img { filter: none; }
+  .calendar__day--future a { display: none; } .calendar__day:not(.calendar__day--future) .calendar__future { display: none; }
+  .calendar__future { display: grid; height: 100%; place-content: center; gap: 7px; background: #fff; color: var(--pc-ink-muted); text-align: center; }
+  .calendar__future b { color: var(--pc-ink); font-size: 25px; font-weight: 400; }
+  @media (max-width: 760px) { .sitting__cards { grid-template-columns: 1fr; } .sitting__side { display: none; } .sitting__today { min-height: min(135vw, 620px); } .calendar__grid { grid-template-columns: repeat(4, 1fr); } .calendar__day { min-height: 120px; } }
+  @media (max-width: 480px) { .kennel { width: min(100% - 20px, 1180px); } .calendar__grid { grid-template-columns: repeat(3, 1fr); } .calendar__day { min-height: 128px; } .mint-note { align-items: flex-start; flex-direction: column; } .mint-note a { margin-left: 0; } }
+</style>

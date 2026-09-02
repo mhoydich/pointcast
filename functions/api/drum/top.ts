@@ -16,7 +16,11 @@
  *   → { entries: [{ rank, hash, nounId, count }, ...] }
  */
 
-import { sha256, type Env } from '../visit';
+import { sha256, type Env as VisitsEnv } from '../visit.ts';
+
+interface Env extends VisitsEnv {
+  DRUM_COUNTER?: DurableObjectNamespace;
+}
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -54,6 +58,21 @@ async function loadTop(env: Env): Promise<TopEntry[]> {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+  if (env.DRUM_COUNTER) {
+    try {
+      const id = env.DRUM_COUNTER.idFromName('global');
+      const response = await env.DRUM_COUNTER.get(id).fetch('https://drum-counter.internal/?top=1');
+      if (response.ok) {
+        return new Response(response.body, {
+          status: response.status,
+          headers: { ...JSON_HEADERS, 'Cache-Control': 'no-store' },
+        });
+      }
+    } catch {
+      // During a rollback or an unavailable external binding, use the legacy
+      // mirror rather than turning a non-critical leaderboard into a 5xx.
+    }
+  }
   const entries = await loadTop(env);
   const ranked = entries
     .sort((a, b) => b.count - a.count)

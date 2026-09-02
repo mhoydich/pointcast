@@ -24,6 +24,8 @@ test('the front door orients a first-time visitor and recycles the back catalog'
     assert.match(start, new RegExp(`href: '${href}'`));
   }
   assert.match(start, /noun\.pics\//);
+  assert.match(start, /href: '\/auth', label: 'Sign in'/);
+  assert.doesNotMatch(start, /Sign in \/ your account/);
   assert.match(home, /<HomeScoreboard \/>/);
   // Back catalog: 30+ days old, no Cola flood, deterministic daily deal.
   assert.match(home, /CATALOG_MIN_AGE_MS = 30 \* 24/);

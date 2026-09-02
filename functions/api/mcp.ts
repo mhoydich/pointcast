@@ -1255,6 +1255,15 @@ async function dispatchTool(
     }
     case 'drum_tap': {
       const combo = Math.max(1, Math.min(5, Number(args.combo) || 1));
+      // Keep the tool's declared "tap" semantics in the authoritative drum
+      // counter as well as on the real-time sound bus. The counter endpoint
+      // is DO-backed, so this stays correct while its KV mirror is delayed.
+      const counter = await fetch(`${base}/api/drum`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta: combo, sessionId: `mcp-${sessionId}` }),
+      });
+      if (!counter.ok) return { content: [{ type: 'text', text: 'drum counter unavailable; tap was not broadcast' }], isError: true };
       // Dual broadcast: type=drum so /drum-tv, /drum-marquee, /drum-radio
       // and the cast surfaces flash on the original drum bus; type=agent
       // so /drum-agent (the Machine Room) surfaces the agent in real time.

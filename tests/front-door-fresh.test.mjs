@@ -87,7 +87,7 @@ test('the Saturday field paper leads with the complete Division I atlas and keep
   assert.match(edition, /The Song Yard/);
   assert.match(edition, /Signal Shack/);
   assert.match(edition, /Animal Crossing/);
-  assert.match(edition, /Authorize Spotify/);
+  assert.match(edition, /Broadcaster panel/);
   assert.match(edition, /Build a Follow Shelf/);
   assert.doesNotMatch(edition, /qwen/i);
 
@@ -112,7 +112,7 @@ test('the current field edition gives the living magazine, Tone Bloom, Beach Com
   assert.match(home, /href(?:="|: ')\/beach-commons["']/);
   assert.match(home, /href(?:="|: ')\/digital-pets["']/);
   assert.match(home, /The Animal After the Internet/);
-  assert.match(home, /href="\/auth#spotify"/);
+  assert.match(home, /href="\/dashboard#broadcast"/);
   assert.match(home, /href="\/super-follow"/);
   // front door rebuilt 2026-09-01: the Beach Commons index door now sits at the foot of the rack component.
   assert.match(rack, /All eighteen Beach Commons editions →/);

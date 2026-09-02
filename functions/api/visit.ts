@@ -62,6 +62,10 @@ export const RATE_LIMIT_SECONDS = 2;
 // Bumped from 300s to 600s so someone showing PointCast to a friend has
 // breathing room before presence drops. 10 min is the "conversation window".
 export const PRESENCE_TTL_SECONDS = 600;
+// The client heartbeats every minute. Refreshing an unchanged entry halfway
+// through its TTL keeps the same visible ten-minute presence window without a
+// KV overwrite on every heartbeat.
+export const PRESENCE_REFRESH_MS = (PRESENCE_TTL_SECONDS * 1000) / 2;
 export const REACTIONS_TTL_SECONDS = 600;  // outlive presence a bit
 export const NOUN_ID_RANGE = 1200;      // noun.pics supports ~0-1300 reliably
 export const KEY_COUNT = 'count';
@@ -184,6 +188,37 @@ async function listPresent(env: Env): Promise<PresenceEntry[]> {
   }
 }
 
+async function refreshPresenceIfNeeded(
+  env: Env,
+  key: string,
+  entry: PresenceEntry,
+): Promise<boolean> {
+  const now = Date.now();
+  try {
+    const raw = await env.VISITS!.get(key);
+    if (raw) {
+      const prior = JSON.parse(raw) as PresenceEntry;
+      if (
+        prior.type === entry.type &&
+        prior.nounId === entry.nounId &&
+        prior.pid === entry.pid &&
+        typeof prior.t === 'number' &&
+        now - prior.t < PRESENCE_REFRESH_MS
+      ) {
+        return false;
+      }
+    }
+  } catch {
+    // A malformed legacy presence record is safely replaced below.
+  }
+  await env.VISITS!.put(
+    key,
+    JSON.stringify({ ...entry, t: now }),
+    { expirationTtl: PRESENCE_TTL_SECONDS },
+  );
+  return true;
+}
+
 /**
  * Load aggregate reaction counts for a set of presence IDs. Each reactions
  * key holds `{ [emoji]: [sessionIdHash,...] }`; we return the per-pid list
@@ -240,11 +275,7 @@ export async function pingPresence(opts: {
   const nid = Math.max(0, Math.min(NOUN_ID_RANGE - 1, Math.floor(nounId)));
   const ipHash = await sha256(ip || 'unknown');
   const pid = ipHash.slice(0, 12);
-  await env.VISITS.put(
-    `${PRESENCE_PREFIX}${ipHash}`,
-    JSON.stringify({ t: Date.now(), type, nounId: nid, pid }),
-    { expirationTtl: PRESENCE_TTL_SECONDS },
-  );
+  await refreshPresenceIfNeeded(env, `${PRESENCE_PREFIX}${ipHash}`, { t: Date.now(), type, nounId: nid, pid });
   const present = await listPresent(env);
   return { ok: true, present };
 }
@@ -285,11 +316,7 @@ export async function recordVisit(opts: {
   // Always refresh presence with full identity (type + noun + pid). This
   // powers the live "here now" strip on the client, and the pid lets the
   // reactions feature target specific visitors.
-  await env.VISITS.put(
-    presenceKey,
-    JSON.stringify({ t: Date.now(), type: forcedType ?? type, nounId: nid, pid }),
-    { expirationTtl: PRESENCE_TTL_SECONDS },
-  );
+  await refreshPresenceIfNeeded(env, presenceKey, { t: Date.now(), type: forcedType ?? type, nounId: nid, pid });
 
   // No rate limit — every committed noun logs. The client widget's 10s
   // countdown + manual regenerate naturally paces the cadence. KV-based

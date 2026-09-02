@@ -51,14 +51,13 @@ test('signal tuner retains reduced-motion and mobile treatments', () => {
   assert.match(styleSource, /fresh-signal-tuner__presets/);
 });
 
-test('front door makes Spotify authorization findable and keeps the current field edition bright', () => {
-  assert.match(indexSource, /href="\/auth#spotify"[^>]*>Spotify auth<\/a>/);
-  // front door rebuilt 2026-09-01: <SuperAuthRibbon /> retired — the masthead Spotify link carries the Super Auth door; the tone/beach field cards became magazine-rack covers + Beach Commons chips.
-  assert.match(indexSource, /href="\/auth#spotify" title="Spotify broadcast authorization and Super Auth controls"/);
+test('front door points private connections to the dashboard and keeps the current field edition bright', () => {
+  assert.match(indexSource, /href="\/dashboard#broadcast"[^>]*>Broadcaster panel<\/a>/);
+  assert.match(indexSource, /title="Private Spotify and Shopify controls"/);
   assert.match(indexSource, /href: '\/reviews\/tone-bloom'/);
   assert.match(indexSource, /href: '\/beach-commons\/v18'/);
   assert.match(indexSource, /href: '\/beach-commons\/v11'/);
-  assert.match(indexSource, /Spotify broadcast/);
+  assert.match(indexSource, /\/dashboard · private connections/);
   assert.match(styleSource, /\.fresh-field-card--tone/);
   assert.match(styleSource, /\.fresh-field-card--beach/);
 });

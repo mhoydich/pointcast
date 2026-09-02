@@ -1,68 +1,45 @@
-export type SuperAuthState = 'live' | 'credential-gated' | 'next';
-
-export interface SuperAuthProvider {
-  id: string;
+export interface AccountProvider {
+  id: 'google' | 'apple' | 'kukai' | 'metamask' | 'phantom';
   provider: string;
-  noun: string;
-  signal: string;
-  state: SuperAuthState;
-  publicData: string[];
-  privateData: string[];
+  kind: string;
+  availability: 'available' | 'preview';
+  keeps: string[];
 }
 
-export const SUPER_AUTH_PROVIDERS: SuperAuthProvider[] = [
+export const ACCOUNT_PROVIDERS: AccountProvider[] = [
   {
     id: 'google',
     provider: 'Google',
-    noun: 'Identity',
-    signal: 'Names the PointCast broadcaster and restores a first-party session.',
-    state: 'live',
-    publicData: ['PointCast display name'],
-    privateData: ['provider id', 'verified email', 'profile image', 'session'],
+    kind: 'Account',
+    availability: 'available',
+    keeps: ['verified email', 'display name', 'profile image'],
   },
   {
-    id: 'spotify',
-    provider: 'Spotify',
-    noun: 'Sound',
-    signal: 'Carries the authorized broadcaster’s current track into the public SPN signal.',
-    state: 'live',
-    publicData: ['track', 'artist', 'cover', 'link', 'playing state'],
-    privateData: ['encrypted access token', 'encrypted refresh token'],
+    id: 'kukai',
+    provider: 'Kukai',
+    kind: 'Tezos wallet',
+    availability: 'available',
+    keeps: ['public address', 'wallet-control proof'],
   },
   {
-    id: 'shopify',
-    provider: 'Shopify',
-    noun: 'Shop',
-    signal: 'Opens a read-only product-catalog relay without touching customers or checkout.',
-    state: 'credential-gated',
-    publicData: ['connected storefront state', 'future selected product signals'],
-    privateData: ['encrypted expiring access token', 'encrypted rotating refresh token'],
+    id: 'metamask',
+    provider: 'MetaMask',
+    kind: 'Ethereum wallet',
+    availability: 'preview',
+    keeps: ['public address', 'wallet-control proof'],
   },
   {
-    id: 'tezos',
-    provider: 'Tezos',
-    noun: 'Object',
-    signal: 'Signs wallet identity, collections, receipts, and explicitly approved operations.',
-    state: 'live',
-    publicData: ['public wallet address', 'public chain receipts'],
-    privateData: ['wallet session proof'],
-  },
-];
-
-export const SUPER_AUTH_NEXT = [
-  {
-    provider: 'GitHub',
-    noun: 'Release',
-    signal: 'Attach authorship and repository receipts to machine-readable ships.',
+    id: 'apple',
+    provider: 'Apple',
+    kind: 'Account',
+    availability: 'preview',
+    keeps: ['verified email', 'display name'],
   },
   {
-    provider: 'Farcaster',
-    noun: 'Cast',
-    signal: 'Let a verified social identity carry a PointCast signal outward.',
-  },
-  {
-    provider: 'Agent keys',
-    noun: 'Node',
-    signal: 'Issue narrow, revocable publishing grants to resident agents.',
+    id: 'phantom',
+    provider: 'Phantom',
+    kind: 'Solana wallet',
+    availability: 'preview',
+    keeps: ['public address', 'wallet-control proof'],
   },
 ];

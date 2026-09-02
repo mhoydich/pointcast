@@ -70,7 +70,7 @@ test('active PointCast sessions rotate inside a bounded renewal window', async (
   const route = await readFile(new URL('functions/api/auth/session.ts', root), 'utf8');
   assert.match(route, /SESSION_REFRESH_WINDOW_SECONDS/);
   assert.match(route, /issueSession\(env, current\.user\.userId\)/);
-  assert.match(route, /USERS\.delete\(sessionKey\(current\.session\.sessionToken\)\)/);
+  assert.match(route, /deleteSession\(env, current\.session\.sessionToken\)/);
   assert.match(route, /renewed: true/);
 });
 
@@ -79,7 +79,7 @@ test('Tezos login challenge is short-lived and single-use', async () => {
   assert.match(route, /MESSAGE_TTL_MS/);
   assert.match(route, /auth-nonce:tezos:/);
   assert.match(route, /replayed-message/);
-  assert.match(route, /expirationTtl/);
+  assert.match(route, /writeAuthState\(env, nonceKey, address/);
   assert.match(route, /michelineStringPayload\(message\)/);
 });
 
@@ -95,8 +95,8 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(route, /paths: \['\/', '\/v2'\]/);
   assert.match(route, /url\.origin !== project\.origin/);
   assert.match(route, /project\.paths\.includes\(url\.pathname\)/);
-  assert.match(route, /expirationTtl: TICKET_TTL_SECONDS/);
-  assert.match(route, /USERS\.delete\(key\)/);
+  assert.match(route, /writeAuthState\(env,[\s\S]*TICKET_TTL_SECONDS\)/);
+  assert.match(route, /consumeAuthState<Ticket>\(env, key\)/);
   assert.match(route, /tezos-identity-not-linked/);
   assert.match(route, /tezosIdentities\.at\(-1\)/);
   assert.match(page, /pc:auth-change/);

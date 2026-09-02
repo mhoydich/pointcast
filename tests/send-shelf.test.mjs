@@ -7,7 +7,7 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const exists = (path) => existsSync(new URL(path, root));
 
-const SLUGS = ['mcp', 'ai-tools', 'ai-capital'];
+const SLUGS = ['mcp', 'ai-tools', 'ai-capital', 'kennel-club'];
 const OWN_FILES = [
   'src/lib/send-sheets.ts',
   'src/components/SendSheet.astro',
@@ -17,7 +17,7 @@ const OWN_FILES = [
 // PointCast voice: never these, in any form.
 const BANNED = /\b(unlock|discover|explore|experience|seamless|elevate)\w*/i;
 
-test('the /send shelf ships a hub and three sheets, each with JSON and plain-text twins', () => {
+test('the /send shelf ships a hub and four sheets, each with JSON and plain-text twins', () => {
   assert.ok(exists('src/lib/send-sheets.ts'));
   assert.ok(exists('src/components/SendSheet.astro'));
   assert.ok(exists('src/pages/send.astro'));
@@ -155,7 +155,7 @@ test('every sheet ends with the dated stamp naming its source pages', async () =
   const lib = await read('src/lib/send-sheets.ts');
   assert.match(lib, /SEND_DATE = '2026-09-01'/);
   assert.match(lib, /`PointCast · one-sheet · \$\{SEND_DATE\} · source pages: \$\{sheet\.sources\.join\(', '\)\}`/);
-  assert.equal((lib.match(/^\s+sources: \[/gm) ?? []).length, 3, 'the three sheets each declare their source routes');
+  assert.equal((lib.match(/^\s+sources: \[/gm) ?? []).length, 4, 'the four sheets each declare their source routes');
   assert.match(lib, /sources: SEND_SHEET_LIST\.map\(\(sheet\) => sheet\.href\)/, 'the hub names the sheets as its sources');
   const component = await read('src/components/SendSheet.astro');
   assert.match(component, /sheetStamp\(sheet\)/);
@@ -191,8 +191,10 @@ test('built twins render the recipes, the stamp, and the send line (needs dist/)
   const tools = await read('dist/send/ai-tools.txt');
   assert.match(tools, /cost not stated here/);
   const hubJson = JSON.parse(await read('dist/send.json'));
-  assert.equal(hubJson.sheets.length, 3);
+  assert.equal(hubJson.sheets.length, 4);
   assert.equal(hubJson.sheets[0].txt, 'https://pointcast.xyz/send/mcp.txt');
+  const kennel = JSON.parse(await read('dist/send/kennel-club.json'));
+  assert.match(kennel.text, /THIRTY DOGS, ONE A DAY\./);
   const html = await read('dist/send/mcp/index.html');
   assert.match(html, /Copy the text/);
   assert.match(html, /href="sms:\?(?:&|&amp;|&#38;)body=/);

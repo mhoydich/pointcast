@@ -14,12 +14,13 @@ test('Google OAuth verifies state, nonce, and the provider ID token before issui
   ]);
 
   assert.match(start, /crypto|getRandomValues|randomUrlSafeString/);
-  assert.match(start, /expirationTtl: OAUTH_STATE_TTL_SECONDS/);
+  assert.match(start, /writeAuthState\(env,[\s\S]*OAUTH_STATE_TTL_SECONDS\)/);
   assert.match(start, /authUrl\.searchParams\.set\('nonce', nonce\)/);
   assert.match(callback, /createRemoteJWKSet/);
   assert.match(callback, /jwtVerify/);
   assert.match(callback, /audience: env\.GOOGLE_CLIENT_ID/);
   assert.match(callback, /secureEqual\(nonce, stateRecord\.nonce\)/);
+  assert.match(callback, /consumeAuthState<OAuthStateRecord>/);
   assert.match(callback, /POINTCAST_BROADCAST_EMAIL/);
   assert.match(callback, /withSessionCookie/);
   assert.match(session, /roles: Array\.from\(new Set/);
@@ -28,8 +29,8 @@ test('Google OAuth verifies state, nonce, and the provider ID token before issui
   assert.doesNotMatch(callback, /console\.log|access_token|refresh_token/);
 });
 
-test('Spotify broadcast stores encrypted credentials and exposes only a sanitized live signal', async () => {
-  const [auth, callback, broadcast, endpoint, homepage, footer, dashboard] = await Promise.all([
+test('broadcaster connections stay private to the dashboard and expose only a sanitized live signal', async () => {
+  const [auth, callback, broadcast, endpoint, homepage, footer, dashboard, shopifyAuth, shopifyCallback] = await Promise.all([
     readFile(new URL('functions/api/spotify/auth.ts', root), 'utf8'),
     readFile(new URL('functions/api/spotify/callback.ts', root), 'utf8'),
     readFile(new URL('functions/api/spotify/_broadcast.ts', root), 'utf8'),
@@ -37,6 +38,8 @@ test('Spotify broadcast stores encrypted credentials and exposes only a sanitize
     readFile(new URL('src/pages/index.astro', root), 'utf8'),
     readFile(new URL('src/components/FooterBar.astro', root), 'utf8'),
     readFile(new URL('src/pages/dashboard.astro', root), 'utf8'),
+    readFile(new URL('functions/api/shopify/auth.ts', root), 'utf8'),
+    readFile(new URL('functions/api/shopify/callback.ts', root), 'utf8'),
   ]);
 
   assert.match(auth, /user-read-currently-playing/);
@@ -53,8 +56,17 @@ test('Spotify broadcast stores encrypted credentials and exposes only a sanitize
   assert.match(footer, /await fetch\('\/now-playing\.json'/);
   assert.match(dashboard, /\/api\/spotify\/broadcast/);
   assert.match(dashboard, /data-dashboard-spotify-disconnect/);
+  assert.match(dashboard, /data-dashboard-broadcaster-panel hidden/);
+  assert.match(dashboard, /This desk belongs to the broadcaster/);
+  assert.match(dashboard, /roles\?\.includes\('broadcaster'\)/);
+  assert.match(dashboard, /data-dashboard-shopify-form/);
+  assert.match(dashboard, /destination\.searchParams\.set\('returnTo', '\/dashboard#broadcast'\)/);
   assert.match(dashboard, /method: 'DELETE'/);
-  assert.match(dashboard, /immediately removes the stored Spotify credentials and live track signal/);
+  assert.match(dashboard, /immediately removes the stored Spotify credentials and cached now-playing item/);
+  assert.match(auth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/dashboard#broadcast'\)/);
+  assert.match(callback, /returnTo = '\/dashboard#broadcast'/);
+  assert.match(shopifyAuth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/dashboard#broadcast'\)/);
+  assert.match(shopifyCallback, /safeReturnTo\(returnTo, '\/dashboard#broadcast'\)/);
 });
 
 test('privacy policy states the narrow Google, Spotify, and Shopify data boundaries', async () => {

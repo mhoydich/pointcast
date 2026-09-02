@@ -1,10 +1,8 @@
 /**
  * /api/auth/tezos
  *
- * Before deploying this route:
- *  - create a Cloudflare KV namespace named `USERS`
- *  - bind it to the Pages Functions runtime as `USERS` in `wrangler.toml`
- *    or the Cloudflare Pages dashboard
+ * Auth records prefer AUTH_DB. USERS remains a fallback for previews and
+ * legacy session read-through during the D1 cutover.
  */
 
 import { getPkhfromPk, verifySignature } from '@taquito/utils';
@@ -13,10 +11,13 @@ import type { AuthIdentity } from '../../../src/lib/auth/types';
 import {
   IdentityConflictError,
   authJson,
+  hasAuthStorage,
   issueSession,
+  readAuthState,
   readSessionFromRequest,
   upsertUserForIdentity,
   withSessionCookie,
+  writeAuthState,
   type AuthEnv,
 } from './session';
 
@@ -61,7 +62,7 @@ function shortAddress(address: string): string {
 }
 
 export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!env.USERS) {
+  if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
 
@@ -101,7 +102,7 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
     return authJson({ ok: false, reason: 'bad-nonce' }, { status: 400 });
   }
   const nonceKey = `${NONCE_PREFIX}${nonce}`;
-  if (await env.USERS.get(nonceKey)) {
+  if (await readAuthState<string>(env, nonceKey)) {
     return authJson({ ok: false, reason: 'replayed-message' }, { status: 409 });
   }
 
@@ -124,7 +125,7 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
   if (!isValidSignature) {
     return authJson({ ok: false, reason: 'invalid-signature' }, { status: 401 });
   }
-  await env.USERS.put(nonceKey, address, { expirationTtl: Math.ceil(MESSAGE_TTL_MS / 1000) });
+  await writeAuthState(env, nonceKey, address, Math.ceil(MESSAGE_TTL_MS / 1000));
 
   const current = await readSessionFromRequest(request, env);
   const identity: AuthIdentity = {
