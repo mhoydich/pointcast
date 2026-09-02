@@ -1,5 +1,18 @@
 # Kennel Club signing afternoon
 
+## Mainnet first (Mike, 2026-09-02)
+
+Mike: "can test right on mainnet, ghostnet on tezos seems not to work well." Ghostnet is skipped. Shadownet is optional and only for a script dry run. The mainnet-first sequence replaces any testnet-then-mainnet ordering below:
+
+1. Pin, verify every CID resolves from two gateways.
+2. Originate on mainnet with `paused = true`, admin = Mike's Kukai, treasury = Mike's Kukai (TzSafe multisig later via `set_treasury`).
+3. Admin smoke test while paused: `set_window` for sittings 01–02 (late start), `set_price`, read the views on TzKT.
+4. Unpause, mint one token from a second wallet, confirm the transfer and the treasury credit.
+5. Register the KT1 in the tezos skill and `src/data`, flip block 0583 to type MINT, deploy.
+
+Every knob is admin-adjustable after origination, so a wrong window or price is a one-signature fix, not a redeploy.
+
+
 Date: 2026-09-02
 
 Status: prepared; no files pinned and no contract originated
