@@ -55,7 +55,7 @@ export const onRequestGet: PagesFunction<ShopifyEnv> = async ({ request, env }) 
   }
 
   const state = randomUrlSafeString();
-  const returnTo = safeReturnTo(url.searchParams.get('returnTo'), '/dashboard#broadcast');
+  const returnTo = safeReturnTo(url.searchParams.get('returnTo'), '/me');
   const stateRecord: ShopifyStateRecord = {
     shop,
     returnTo,

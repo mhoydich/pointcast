@@ -25,6 +25,14 @@ import {
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|mp3|mp4|webm)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
+const RETIRED_PROFILE_ROUTES = new Map([
+  ['/profile', '/me'],
+  ['/profile/', '/me'],
+  ['/minted', '/me#holdings'],
+  ['/minted/', '/me#holdings'],
+  ['/dashboard', '/me'],
+  ['/dashboard/', '/me'],
+]);
 
 function injectTezosSessionBridge(response: Response): Response {
   if (response.headers.get(TEZOS_BRIDGE_HEADER) === '1') return response;
@@ -183,6 +191,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (url.hostname === 'www.pointcast.xyz') {
     const target = new URL(url.pathname + url.search, 'https://pointcast.xyz');
     return Response.redirect(target.toString(), 301);
+  }
+
+  const retiredProfileTarget = RETIRED_PROFILE_ROUTES.get(url.pathname);
+  if (isGet && retiredProfileTarget) {
+    return Response.redirect(new URL(retiredProfileTarget, url.origin).toString(), 301);
   }
 
   // Keep older Nouns Nation Battler deep links alive. CF Pages handles the

@@ -28,7 +28,7 @@ const STATE_PREFIX = 'oauth-state:google:';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const GOOGLE_JWKS_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/certs';
 
-function errorRedirect(request: Request, reason: string, returnTo = '/dashboard'): Response {
+function errorRedirect(request: Request, reason: string, returnTo = '/me'): Response {
   const target = appendResult(safeReturnTo(returnTo), 'auth_error', reason);
   return Response.redirect(new URL(target, request.url).toString(), 302);
 }

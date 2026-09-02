@@ -45,7 +45,7 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
   const state = randomUrlSafeString();
   const stateRecord: OAuthStateRecord = {
     nonce: randomUrlSafeString(),
-    returnTo: safeReturnTo(url.searchParams.get('returnTo'), '/dashboard#broadcast'),
+    returnTo: safeReturnTo(url.searchParams.get('returnTo'), '/me'),
     currentUserId: current.user.userId,
     createdAt: new Date().toISOString(),
   };

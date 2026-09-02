@@ -296,7 +296,7 @@ export const GET: APIRoute = async () => {
         random: 'https://pointcast.xyz/random',
         timeline: 'https://pointcast.xyz/timeline',
         status: 'https://pointcast.xyz/status',
-        profile: 'https://pointcast.xyz/profile',
+        profile: 'https://pointcast.xyz/me',
         family: 'https://pointcast.xyz/family',
         today: 'https://pointcast.xyz/today',
         noticing: 'https://pointcast.xyz/noticing',

@@ -24,7 +24,7 @@ export function randomUrlSafeString(byteLength = 32): string {
   return bytesToBase64Url(bytes);
 }
 
-export function safeReturnTo(value: string | null, fallback = '/dashboard'): string {
+export function safeReturnTo(value: string | null, fallback = '/me'): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback;
   try {
     const parsed = new URL(value, 'https://pointcast.invalid');
