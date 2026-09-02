@@ -39,7 +39,7 @@ const SHRINE_ITEMS = [
     path: '/',
     title: 'PointCast',
     description: 'The living broadcast: latest blocks, rooms, games, agent surfaces, and local signal in one front door.',
-    image: '/images/og/og-home-v2.png',
+    image: '/images/og/og-home-v4.png',
     kind: 'home',
     audience: 'first-time visitors, launch posts, general social shares',
     ritual: 'Use when the ask is simply: come see what PointCast is.',
