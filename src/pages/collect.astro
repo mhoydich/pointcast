@@ -1,185 +1,266 @@
 ---
-/**
- * /collect — the PointCast marketplace.
- *
- * Shows Mike's full Tezos token inventory (pulled from objkt GraphQL into
- * src/data/market.json by scripts/fetch-market.mjs). Each card links to
- * a token detail page at /collect/[tokenId].
- *
- * No live API calls at render time — everything's baked from the cached
- * snapshot. Re-run `node scripts/fetch-market.mjs` when inventory changes.
- */
-
 import BaseLayout from '../layouts/BaseLayout.astro';
-import WalletConnect from '../components/WalletConnect.astro';
-import market from '../data/market.json';
+import { collectSitting, kennelGrid } from '../lib/collect-desk';
 
-const { tokens, updatedAt, count } = market as {
-  updatedAt: string;
-  contract: string;
-  count: number;
-  tokens: Array<{
-    tokenId: string;
-    contract: string;
-    name: string;
-    description: string;
-    imageDisplay: string;
-    imageThumb: string;
-    supply: number;
-    mintedAt: string | null;
-    artist: { alias: string; address: string };
-    priceXtz: number | null;
-    listed: boolean;
-    objktUrl: string;
-  }>;
-};
-
-const listedTokens = tokens.filter((t) => t.listed);
-const listedCount = listedTokens.length;
-
-function fmtPrice(xtz: number | null): string {
-  if (xtz === null) return '';
-  if (xtz === 0) return 'free';
-  if (xtz < 1) return `${xtz.toFixed(2)} ꜩ`;
-  return `${xtz.toFixed(1)} ꜩ`;
-}
-
-function fmtSupply(s: number): string {
-  if (s >= 1000) return `${(s / 1000).toFixed(s % 1000 === 0 ? 0 : 1)}k`;
-  return String(s);
-}
-
-const updatedStr = new Date(updatedAt).toLocaleDateString('en-US', {
-  month: 'short', day: 'numeric', year: 'numeric',
-}).toUpperCase();
+const today = collectSitting();
+const grid = kennelGrid();
+const title = 'Collect · A dog a day';
+const description = 'Collect one free Kennel Club dog each day in September. Email is the easy way in; a PointCast session holds the claim until a wallet is ready.';
 ---
 
-<BaseLayout
-  title="Collect"
-  description="Collect PointCast tokens on Tezos. CC0-flavored editorial art, broadcast cards, and visit nouns — mint directly with your Kukai wallet."
-  image="/images/og-collect.png"
->
-  <div class="max-w-[60rem] mx-auto px-4 pt-6 md:pt-10 pb-20">
+<BaseLayout title={title} description={description} image={today.image.png} hideAds>
+  <main class="desk" data-collect-desk data-today-token={today.tokenId}>
+    <nav class="desk__nav" aria-label="Collecting desk">
+      <a href="/">PointCast</a><span>/</span><strong>Collect</strong>
+      <a href="/collect.json">JSON</a><a href="/collect/shelf">Objkt shelf</a>
+    </nav>
 
-    <!-- Masthead band — same treatment as homepage, plus wallet -->
-    <div class="-mx-4 px-4 py-2.5 border-y border-rule/50 flex items-center justify-between gap-3 mb-4">
-      <div class="flex items-center gap-3">
-        <a href="/" class="font-mono text-sm md:text-base font-bold tracking-[0.28em] uppercase text-ink leading-none hover:text-warm transition-colors no-underline">
-          PointCast
-        </a>
-        <span class="font-mono text-[0.58rem] tracking-[0.22em] uppercase text-warm">/ collect</span>
-      </div>
-      <WalletConnect />
-    </div>
+    <section class="hero" aria-labelledby="collect-title">
+      <figure><img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" /></figure>
+      <div class="hero__copy">
+        <p class="eyebrow">Sitting {String(today.day).padStart(2, '0')} · {today.name} · free today</p>
+        <h1 id="collect-title">Collect a dog a day. <em>Free.</em></h1>
+        <p class="hero__dek">Today’s plate arrives here at midnight Pacific. Confirm one email, stay signed in, and we’ll hold each claim until your Tezos wallet is ready.</p>
 
-    <!-- Page header -->
-    <header class="mb-10">
-      <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
-        <div>
-          <h1 class="font-serif italic text-[2.2rem] md:text-[2.8rem] text-ink font-medium leading-[1.05] mb-2">
-            Collect
-          </h1>
-          <p class="text-[0.95rem] text-ink/70 leading-relaxed max-w-[36rem]">
-            Editorial art on Tezos. Photographs, writing, signature moments.
-            All minted to one FA2 contract — connect a Kukai wallet and the
-            mint signs on-chain in a few seconds. Gas: fractions of a tez.
-          </p>
+        <form class="promise" data-subscribe-form>
+          <label for="collect-email">We’ll email you when tomorrow’s dog is ready</label>
+          <div><input id="collect-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required /><button type="submit">Email me tomorrow’s dog</button></div>
+          <p data-subscribe-status aria-live="polite">Double opt-in. One dog note a day. Unsubscribe in every email.</p>
+        </form>
+
+        <div class="signin" aria-label="Other sign-in options">
+          <button type="button" data-auth="google">Continue with Google</button>
+          <button type="button" data-auth="passkey">Use a passkey</button>
+          <span data-auth-status aria-live="polite"></span>
         </div>
-        <div class="font-mono text-[0.54rem] tracking-[0.18em] uppercase text-ink-soft/60 leading-relaxed text-right shrink-0">
-          <p>{count} tokens · {listedCount} listed</p>
-          <p class="mt-1">updated {updatedStr}</p>
-        </div>
+
+        <button class="claim" type="button" data-claim-today hidden>Claim {today.name} — free</button>
+        <p class="claim__status" data-claim-status aria-live="polite"></p>
       </div>
+    </section>
 
-      <!-- Kukai helper line for first-timers -->
-      <p class="font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/50 border-t border-rule/30 pt-4">
-        new to tezos? grab
-        <a href="https://wallet.kukai.app" target="_blank" rel="noopener" class="text-warm hover:underline">kukai wallet</a>
-        &middot; fund it with ~5 ꜩ via any exchange (kraken, bitvavo, etc.)
-        &middot; you're in.
-      </p>
-    </header>
-
-    <!-- Token grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-      {tokens.map((t) => (
-        <a
-          href={`/collect/${t.tokenId}`}
-          class="group flex flex-col rounded-xl overflow-hidden border border-rule/30 bg-card hover:bg-card-hover hover:border-warm/40 transition-colors"
-        >
-          <div class="aspect-square bg-paper overflow-hidden relative">
-            <img
-              src={t.imageThumb || t.imageDisplay}
-              alt={t.name}
-              class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300 token-img"
-              loading="lazy"
-              data-fallback={t.imageDisplay.replace('/display', '/artifact')}
-            />
-            <!-- Subtle inset rule so light-on-paper artworks have a visible frame -->
-            <div class="absolute inset-0 ring-1 ring-inset ring-rule/50 pointer-events-none"></div>
-          </div>
-          <div class="p-4">
-            <div class="flex items-start justify-between gap-3 mb-1">
-              <h3 class="font-serif italic text-[1.05rem] text-ink leading-tight group-hover:text-warm transition-colors">
-                {t.name}
-              </h3>
-              {t.listed && t.priceXtz !== null && (
-                <span class="font-mono text-[0.6rem] tracking-[0.14em] uppercase text-warm shrink-0 pt-1">
-                  {fmtPrice(t.priceXtz)}
-                </span>
-              )}
-            </div>
-            <p class="font-mono text-[0.52rem] tracking-[0.16em] uppercase text-ink-soft/60 mb-2">
-              #{t.tokenId} &middot; {fmtSupply(t.supply)} editions
-              {t.listed ? ' · listed' : ' · unlisted'}
-            </p>
-            {t.description && (
-              <p class="text-[0.85rem] text-ink-soft/80 leading-snug line-clamp-2">
-                {t.description}
-              </p>
-            )}
-          </div>
-        </a>
-      ))}
-    </div>
-
-    <!-- Contract footer -->
-    <footer class="mt-16 pt-6 border-t border-rule/40">
-      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-mono text-[0.54rem] tracking-[0.16em] uppercase text-ink-soft/50">
-        <div>
-          contract:
-          <a
-            href={`https://tzkt.io/${market.contract}/operations`}
-            target="_blank"
-            rel="noopener"
-            class="hover:text-warm transition-colors break-all"
-          >
-            {market.contract}
-          </a>
-        </div>
-        <a href="/" class="hover:text-warm transition-colors">&larr; back to broadcast</a>
+    <section class="collector" data-collector-panel aria-labelledby="collection-title">
+      <header>
+        <div><p class="eyebrow">Your September</p><h2 id="collection-title">Thirty sittings. One honest grid.</h2></div>
+        <p data-collector-state>Sign in to reveal the plates you hold.</p>
+      </header>
+      <div class="stats" data-collect-stats hidden>
+        <a data-handle href="/me"><span>Handle</span><strong>Claim yours</strong></a>
+        <div><span>Streak</span><strong data-streak>0 days</strong></div>
+        <div><span>Seals</span><strong data-seals>0 earned</strong></div>
+        <div><span>Mugs / Nouns</span><strong data-objects>0 / 0</strong></div>
       </div>
-    </footer>
-
-  </div>
+      <ol class="tiles" aria-label="The thirty September sittings">
+        {grid.map((sitting) => (
+          <li class:list={['tile', sitting.day === today.day && 'tile--today']} data-day={sitting.day} data-token-id={sitting.tokenId}>
+            <a href={sitting.href} aria-label={`Sitting ${sitting.day}: ${sitting.name}`}>
+              <span class="tile__missing">{String(sitting.day).padStart(2, '0')}</span>
+              <img src={sitting.image} alt={sitting.name} width="1024" height="1280" loading="lazy" />
+              <small>{sitting.name}</small>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <footer><strong data-completion>0 / 30</strong><span>Complete September to earn the September Sitting seal.</span></footer>
+    </section>
+    <script id="collect-calendar" type="application/json" set:html={JSON.stringify(grid)} />
+  </main>
 </BaseLayout>
 
 <script>
-  // Fallback to the /artifact CDN variant if /display 404s on any tile.
-  document.querySelectorAll<HTMLImageElement>('img.token-img').forEach((img) => {
-    img.addEventListener('error', () => {
-      const fallback = img.dataset.fallback;
-      if (fallback && img.src !== fallback) img.src = fallback;
-    }, { once: true });
+  import { getSession, loginWithGoogle, loginWithPasskey } from '../lib/auth/client';
+  import { claimKennelClubSitting } from '../lib/collect-client';
+
+  type CollectPayload = {
+    signedIn: boolean;
+    subscription: { status: string };
+    claimedDays: number[];
+    streak: number;
+    completion: { claimed: number; total: number; promise: string };
+    handle: { status: string; handle?: string; label?: string; href: string };
+    objects: { sealsEarned: number; mugsHeld: number; nounsHeld: number };
+    today: { tokenId: number; name: string };
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-collect-desk]');
+  const subscribeForm = root?.querySelector<HTMLFormElement>('[data-subscribe-form]');
+  const subscribeStatus = root?.querySelector<HTMLElement>('[data-subscribe-status]');
+  const authStatus = root?.querySelector<HTMLElement>('[data-auth-status]');
+  const claimButton = root?.querySelector<HTMLButtonElement>('[data-claim-today]');
+  const claimStatus = root?.querySelector<HTMLElement>('[data-claim-status]');
+  let collectionPayload: CollectPayload | null = null;
+
+  function message(target: HTMLElement | null | undefined, value: string) {
+    if (target) target.textContent = value;
+  }
+
+  function showCollection(payload: CollectPayload) {
+    if (!root) return;
+    collectionPayload = payload;
+    const claimed = new Set(payload.claimedDays);
+    root.querySelectorAll<HTMLElement>('[data-day]').forEach((tile) => {
+      tile.classList.toggle('tile--claimed', claimed.has(Number(tile.dataset.day)));
+    });
+    const state = root.querySelector<HTMLElement>('[data-collector-state]');
+    message(state, payload.claimedDays.length ? `${payload.claimedDays.length} plates held across your linked wallets.` : 'Signed in. Your first claim can be held before a wallet is linked.');
+    const stats = root.querySelector<HTMLElement>('[data-collect-stats]');
+    stats?.removeAttribute('hidden');
+    const handle = root.querySelector<HTMLAnchorElement>('[data-handle]');
+    if (handle) {
+      handle.href = payload.handle.href;
+      message(handle.querySelector('strong'), payload.handle.handle ? `@${payload.handle.handle}` : payload.handle.label || 'Claim yours');
+    }
+    message(root.querySelector('[data-streak]'), `${payload.streak} day${payload.streak === 1 ? '' : 's'}`);
+    message(root.querySelector('[data-seals]'), `${payload.objects.sealsEarned} earned`);
+    message(root.querySelector('[data-objects]'), `${payload.objects.mugsHeld} / ${payload.objects.nounsHeld}`);
+    message(root.querySelector('[data-completion]'), `${payload.completion.claimed} / ${payload.completion.total}`);
+    if (payload.subscription.status === 'confirmed') message(subscribeStatus, 'Dog-a-day delivery confirmed. Tomorrow is automatic.');
+    if (!payload.claimedDays.includes(payload.today.tokenId + 1)) {
+      if (claimButton) claimButton.textContent = `Claim ${payload.today.name} — free`;
+      claimButton?.removeAttribute('hidden');
+    } else if (claimButton) {
+      claimButton.hidden = true;
+      message(claimStatus, `${payload.today.name} is already on your shelf.`);
+    }
+  }
+
+  async function loadCollection(): Promise<CollectPayload | null> {
+    const response = await fetch('/api/collect/me', { credentials: 'include', cache: 'no-store' });
+    if (response.status === 401) return null;
+    const payload = await response.json() as CollectPayload & { reason?: string };
+    if (!response.ok) throw new Error(payload.reason || `collect-${response.status}`);
+    showCollection(payload);
+    return payload;
+  }
+
+  async function claimToday(payload?: CollectPayload | null) {
+    const tokenId = payload?.today.tokenId ?? Number(root?.dataset.todayToken || 0);
+    if (!claimButton || claimButton.disabled) return;
+    claimButton.disabled = true;
+    message(claimStatus, 'Claiming today’s sitting…');
+    try {
+      const result = await claimKennelClubSitting(tokenId);
+      message(claimStatus, result.heldUntilWallet ? 'Claim held. Link a Tezos wallet whenever you’re ready.' : 'Claim accepted. Today’s dog is yours.');
+      claimButton.hidden = true;
+      await loadCollection();
+    } catch (error) {
+      message(claimStatus, error instanceof Error ? error.message : 'Claim unavailable. Try again.');
+      claimButton.disabled = false;
+    }
+  }
+
+  subscribeForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(subscribeForm);
+    const email = String(data.get('email') || '');
+    const button = subscribeForm.querySelector<HTMLButtonElement>('button');
+    if (button) button.disabled = true;
+    message(subscribeStatus, 'Sending your confirmation link…');
+    try {
+      const response = await fetch('/api/collect/subscribe', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      });
+      const result = await response.json() as { message?: string; reason?: string };
+      if (!response.ok) throw new Error(result.reason || `subscribe-${response.status}`);
+      subscribeForm.reset();
+      message(subscribeStatus, result.message || 'Check your email to confirm.');
+    } catch (error) {
+      message(subscribeStatus, error instanceof Error ? error.message : 'Could not send confirmation.');
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
+
+  root?.querySelectorAll<HTMLButtonElement>('[data-auth]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      message(authStatus, button.dataset.auth === 'google' ? 'Opening Google…' : 'Checking this device…');
+      try {
+        const user = button.dataset.auth === 'google' ? await loginWithGoogle() : await loginWithPasskey();
+        if (user) {
+          message(authStatus, 'Signed in. Your desk is ready.');
+          await loadCollection();
+        }
+      } catch (error) {
+        message(authStatus, error instanceof Error ? error.message : 'Sign-in did not finish.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  claimButton?.addEventListener('click', () => void claimToday(collectionPayload));
+
+  async function initialize() {
+    try {
+      const user = await getSession();
+      if (!user) return;
+      const payload = await loadCollection();
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('confirmed') === '1') message(subscribeStatus, 'Confirmed. You are signed in and tomorrow is automatic.');
+      if (params.get('claim') === '1') {
+        params.delete('claim');
+        params.delete('t');
+        history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}${location.hash}`);
+        await claimToday(payload);
+      }
+    } catch (error) {
+      message(authStatus, error instanceof Error ? error.message : 'Your desk could not load.');
+    }
+  }
+  void initialize();
 </script>
 
 <style>
-  /* Tailwind v4 doesn't ship line-clamp utilities by default here */
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+  .desk { --club:#8a2432; --paper:#f6efe5; width:min(1180px,calc(100vw - 24px)); margin:0 auto; padding:18px 0 90px; color:#171717; }
+  .desk__nav,.eyebrow,.promise label,.promise p,.signin,.claim,.collector header>p,.stats span,.tiles small,.collector footer { font-family:var(--pc-font-mono); letter-spacing:.09em; text-transform:uppercase; }
+  .desk__nav { display:flex; gap:8px; align-items:center; padding:10px 0; border-bottom:2px solid #171717; font-size:10px; }
+  .desk__nav a:nth-last-child(2) { margin-left:auto; }
+  .hero { display:grid; grid-template-columns:minmax(280px,.82fr) minmax(0,1.18fr); border:1.5px solid #171717; border-top:0; background:#fff; }
+  .hero figure { margin:0; min-height:620px; background:var(--club); overflow:hidden; }
+  .hero figure img { width:100%; height:100%; object-fit:cover; }
+  .hero__copy { display:flex; flex-direction:column; padding:clamp(26px,5vw,68px); border-left:1.5px solid #171717; }
+  .eyebrow { margin:0 0 14px; color:var(--club); font-size:10px; }
+  h1,h2 { margin:0; font-weight:500; letter-spacing:-.06em; line-height:.88; }
+  h1 { max-width:690px; font-size:clamp(58px,8vw,112px); } h1 em { color:var(--club); font-style:normal; }
+  .hero__dek { max-width:620px; margin:24px 0 30px; color:#53504c; font-size:17px; line-height:1.5; }
+  .promise { margin-top:auto; padding-top:20px; border-top:2px solid #171717; }
+  .promise label { display:block; margin-bottom:9px; font-size:9px; }
+  .promise>div { display:grid; grid-template-columns:1fr auto; }
+  .promise input,.promise button,.signin button,.claim { min-height:48px; border:1px solid #171717; border-radius:0; font:500 12px var(--pc-font-mono); }
+  .promise input { min-width:0; padding:0 13px; background:#fff; }
+  .promise button,.claim { padding:0 16px; background:var(--club); color:#fff; cursor:pointer; }
+  button:disabled { cursor:wait; opacity:.58; }
+  .promise p { margin:9px 0 0; color:#6c6862; font-size:8px; line-height:1.5; }
+  .signin { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:10px; font-size:8px; }
+  .signin button { min-height:36px; padding:0 11px; background:var(--paper); cursor:pointer; }
+  .signin span { flex-basis:100%; min-height:1em; color:#67625d; }
+  .claim { margin-top:18px; min-height:50px; }
+  .claim__status { min-height:1.4em; margin:8px 0 0; color:var(--club); font-size:13px; }
+  .collector { margin-top:34px; border:1.5px solid #171717; background:#fff; }
+  .collector>header { display:grid; grid-template-columns:1.2fr .8fr; gap:24px; align-items:end; padding:24px; border-bottom:1.5px solid #171717; }
+  h2 { font-size:clamp(38px,6vw,76px); }
+  .collector header>p { margin:0; color:#666; font-size:9px; text-align:right; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1.5px solid #171717; }
+  .stats>* { display:grid; gap:7px; padding:13px; border-right:1px solid #171717; text-decoration:none; }
+  .stats>*:last-child { border-right:0; } .stats span { color:#777; font-size:8px; } .stats strong { font-size:16px; font-weight:500; }
+  .tiles { display:grid; grid-template-columns:repeat(6,1fr); margin:0; padding:0; list-style:none; }
+  .tile { position:relative; min-height:184px; border-right:1px solid #171717; border-bottom:1px solid #171717; background:var(--paper); }
+  .tile:nth-child(6n) { border-right:0; }
+  .tile a { display:grid; width:100%; height:100%; min-height:184px; place-items:center; color:#171717; text-decoration:none; overflow:hidden; }
+  .tile__missing { font-size:36px; font-weight:500; letter-spacing:-.05em; }
+  .tile img,.tile small { display:none; }
+  .tile--claimed img { display:block; width:100%; height:184px; object-fit:cover; }
+  .tile--claimed .tile__missing { display:none; }
+  .tile--claimed small { position:absolute; right:5px; bottom:5px; left:5px; display:block; padding:5px; background:rgba(255,255,255,.92); font-size:7px; }
+  .tile--today { box-shadow:inset 0 0 0 5px var(--club); z-index:1; }
+  .tile--today::after { content:'today'; position:absolute; top:7px; left:7px; padding:4px 6px; background:var(--club); color:#fff; font:500 8px var(--pc-font-mono); letter-spacing:.1em; text-transform:uppercase; }
+  .collector footer { display:flex; justify-content:space-between; gap:16px; padding:14px; color:#5f5a55; font-size:9px; }
+  .collector footer strong { color:var(--club); }
+  [hidden] { display:none!important; }
+  @media(max-width:760px){ .hero { grid-template-columns:1fr; } .hero figure { min-height:min(122vw,620px); } .hero__copy { border-left:0; border-top:1.5px solid #171717; } .collector>header { grid-template-columns:1fr; } .collector header>p { text-align:left; } .stats { grid-template-columns:1fr 1fr; } .stats>*:nth-child(2){border-right:0}.stats>*:nth-child(-n+2){border-bottom:1px solid #171717}.tiles{grid-template-columns:repeat(3,1fr)}.tile:nth-child(6n){border-right:1px solid #171717}.tile:nth-child(3n){border-right:0}.tile,.tile a{min-height:150px}.tile--claimed img{height:150px} }
+  @media(max-width:520px){ .desk{width:min(100% - 16px,1180px)} .promise>div{grid-template-columns:1fr}.promise button{min-height:44px}.collector footer{flex-direction:column}.desk__nav{flex-wrap:wrap}.desk__nav a:nth-last-child(2){margin-left:0} }
 </style>
