@@ -1,5 +1,6 @@
 const TZKT_MAINNET = 'https://api.tzkt.io/v1';
 const HANDLE_PATTERN = /^[a-z0-9-]{3,24}$/;
+const profilePageReads = new Map();
 
 export function encodeProfileBytes(value) {
   return Array.from(new TextEncoder().encode(String(value ?? '')))
@@ -56,7 +57,13 @@ export function encodeProfileLink(label, url) {
 
 async function readBigMap(contract, name, fetchImpl) {
   const url = `${TZKT_MAINNET}/contracts/${encodeURIComponent(contract)}/bigmaps/${encodeURIComponent(name)}/keys?active=true&limit=10000`;
-  const response = await fetchImpl(url, { headers: { accept: 'application/json' } });
+  let response;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    response = await fetchImpl(url, { headers: { accept: 'application/json' } });
+    if (response.status !== 429) break;
+    const retryAfter = Number(response.headers?.get?.('retry-after') || 0);
+    await new Promise((resolve) => setTimeout(resolve, Math.max(300, retryAfter * 1000, 300 * (attempt + 1))));
+  }
   if (!response.ok) throw new Error(`TzKT ${name} read failed (${response.status})`);
   const payload = await response.json();
   if (!Array.isArray(payload)) throw new Error(`TzKT ${name} response was not an array.`);
@@ -121,7 +128,20 @@ function profileRecord(contract, tokenId, handle, owner, page) {
   };
 }
 
-export async function listProfilePages(contract, fetchImpl = fetch) {
+export async function listProfilePages(contract, fetchImpl = fetch, useCache = true) {
+  const cacheable = useCache && fetchImpl === globalThis.fetch;
+  if (cacheable) {
+    const existing = profilePageReads.get(contract);
+    if (existing) return existing;
+    const loading = listProfilePages(contract, fetchImpl, false);
+    profilePageReads.set(contract, loading);
+    try {
+      return await loading;
+    } catch (error) {
+      profilePageReads.delete(contract);
+      throw error;
+    }
+  }
   if (!isProfileContractConfigured(contract)) return [];
   const [handles, pages, ledger] = await Promise.all([
     readBigMap(contract, 'handles', fetchImpl),
