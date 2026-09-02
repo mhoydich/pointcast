@@ -256,15 +256,15 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     <section class="dashboard-band dashboard-connections" id="connections" aria-labelledby="connections-title">
       <div class="dashboard-section-head">
         <div>
-          <p class="dashboard-kicker">SUPER AUTH</p>
-          <h2 id="connections-title">Super Auth switchboard</h2>
+          <p class="dashboard-kicker">ACCOUNT</p>
+          <h2 id="connections-title">Account and connections</h2>
         </div>
-        <a href="/auth">Open the full switchboard →</a>
+        <a href="/auth">Manage your account →</a>
       </div>
       <a class="super-auth-callout" href="/auth">
-        <span>AUTH / SIGNAL PASSPORT</span>
-        <strong>Google names it. Spotify sounds it. Shopify stocks it. Tezos makes it an object.</strong>
-        <em>Connect only what you want →</em>
+        <span>POINTCAST ACCOUNT</span>
+        <strong>Sign in, review linked identities, link a wallet, or sign out.</strong>
+        <em>Open account →</em>
       </a>
       <div class="connection-grid">
         <article>
@@ -287,33 +287,54 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
           <div><strong>Connected sites</strong><small>pointcast.xyz · first party</small></div>
           <a href="/federation/preview">Network →</a>
         </article>
-        <article data-dashboard-spotify>
-          <span class="connection-grid__mark connection-grid__mark--spotify" aria-hidden="true">SP</span>
+      </div>
+
+      <div class="broadcaster-desk" id="broadcast">
+        <div class="dashboard-section-head broadcaster-desk__head">
           <div>
-            <strong>Spotify broadcast</strong>
-            <small data-dashboard-spotify-state>Checking the signal…</small>
+            <p class="dashboard-kicker">PRIVATE</p>
+            <h2>Broadcaster panel</h2>
           </div>
-          <span class="connection-grid__actions">
-            <a href="/api/spotify/auth" data-dashboard-spotify-action>Connect →</a>
-            <button type="button" data-dashboard-spotify-disconnect hidden>Disconnect</button>
-          </span>
-        </article>
-        <article data-dashboard-shopify>
-          <span class="connection-grid__mark connection-grid__mark--shopify" aria-hidden="true">SH</span>
-          <div>
-            <strong>Shopify catalog</strong>
-            <small data-dashboard-shopify-state>Checking the shelf…</small>
-          </div>
-          <span class="connection-grid__actions">
-            <a href="/auth#shopify" data-dashboard-shopify-action>Connect →</a>
-            <button type="button" data-dashboard-shopify-disconnect hidden>Disconnect</button>
-          </span>
-        </article>
+        </div>
+        <p class="broadcaster-desk__state" data-dashboard-broadcaster-state aria-live="polite">
+          Checking access…
+        </p>
+        <div class="connection-grid broadcaster-desk__panel" data-dashboard-broadcaster-panel hidden>
+          <article data-dashboard-spotify>
+            <span class="connection-grid__mark connection-grid__mark--spotify" aria-hidden="true">SP</span>
+            <div>
+              <strong>Spotify now playing</strong>
+              <small data-dashboard-spotify-state>Checking the live feed…</small>
+            </div>
+            <span class="connection-grid__actions">
+              <a href="/api/spotify/auth?returnTo=/dashboard%23broadcast" data-dashboard-spotify-action>Connect →</a>
+              <button type="button" data-dashboard-spotify-disconnect hidden>Disconnect</button>
+            </span>
+          </article>
+          <article data-dashboard-shopify>
+            <span class="connection-grid__mark connection-grid__mark--shopify" aria-hidden="true">SH</span>
+            <div>
+              <strong>Shopify catalog</strong>
+              <small data-dashboard-shopify-state>Checking the shelf…</small>
+            </div>
+            <span class="connection-grid__actions">
+              <form data-dashboard-shopify-form>
+                <label>
+                  <span class="sr-only">Shop domain</span>
+                  <input name="shop" inputmode="url" autocomplete="url" placeholder="store.myshopify.com" required />
+                </label>
+                <button type="submit" data-dashboard-shopify-action>Connect →</button>
+              </form>
+              <button type="button" data-dashboard-shopify-disconnect hidden>Disconnect</button>
+            </span>
+          </article>
+        </div>
       </div>
     </section>
   </main>
 
   <script>
+    import { getSession } from '../lib/auth/client';
     import {
       clearDockActivity,
       formatDockAge,
@@ -508,11 +529,6 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
       root.querySelector<HTMLButtonElement>('[data-dashboard-open-account]')?.addEventListener('click', () => {
         window.dispatchEvent(new CustomEvent('pc:open-auth-menu'));
       });
-      window.addEventListener('pc:auth-change', (event) => {
-        const user = (event as CustomEvent<{ user?: { preferredName?: string } | null }>).detail?.user;
-        const state = root.querySelector<HTMLElement>('[data-dashboard-account-state]');
-        if (state) state.textContent = user?.preferredName || 'Visitor mode';
-      });
       window.addEventListener('pc:dock-state-change', () => {
         renderRecents();
         renderActivity();
@@ -534,44 +550,45 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
       const spotifyState = spotifyCard?.querySelector<HTMLElement>('[data-dashboard-spotify-state]');
       const spotifyAction = spotifyCard?.querySelector<HTMLAnchorElement>('[data-dashboard-spotify-action]');
       const spotifyDisconnect = spotifyCard?.querySelector<HTMLButtonElement>('[data-dashboard-spotify-disconnect]');
-      void fetch('/api/spotify/broadcast', {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then(async (response) => {
-        if (!response.ok) throw new Error('spotify-status-unavailable');
-        return response.json() as Promise<{
-          configured?: boolean;
-          connected?: boolean;
-          canManage?: boolean;
-          nowPlaying?: { title?: string; artist?: string; live?: boolean };
-        }>;
-      }).then((spotify) => {
-        const title = spotify.nowPlaying?.title;
-        const artist = spotify.nowPlaying?.artist;
-        if (spotifyState) {
-          spotifyState.textContent = spotify.connected
-            ? `${spotify.nowPlaying?.live ? 'Live' : 'Ready'} · ${title ?? 'waiting'}${artist ? ` · ${artist}` : ''}`
-            : spotify.configured
-              ? 'Ready for broadcaster authorization'
-              : 'Provider setup required';
-        }
-        if (spotifyAction) {
-          if (spotify.connected && !spotify.canManage) {
-            spotifyAction.href = '/now-playing.json';
-            spotifyAction.textContent = 'Signal →';
-          } else {
-            spotifyAction.textContent = spotify.connected ? 'Reconnect →' : 'Connect →';
+
+      async function refreshSpotify(): Promise<void> {
+        try {
+          const response = await fetch('/api/spotify/broadcast', {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!response.ok) throw new Error('spotify-status-unavailable');
+          const spotify = await response.json() as {
+            configured?: boolean;
+            connected?: boolean;
+            canManage?: boolean;
+            nowPlaying?: { title?: string; artist?: string; live?: boolean };
+          };
+          const title = spotify.nowPlaying?.title;
+          const artist = spotify.nowPlaying?.artist;
+          if (spotifyState) {
+            spotifyState.textContent = spotify.connected
+              ? `${spotify.nowPlaying?.live ? 'Live' : 'Ready'} · ${title ?? 'waiting'}${artist ? ` · ${artist}` : ''}`
+              : spotify.configured
+                ? 'Ready for authorization'
+                : 'Provider setup required';
           }
+          if (spotifyAction) {
+            spotifyAction.href = '/api/spotify/auth?returnTo=/dashboard%23broadcast';
+            spotifyAction.textContent = spotify.connected ? 'Reauthorize →' : 'Connect →';
+          }
+          if (spotifyDisconnect) {
+            spotifyDisconnect.hidden = !(spotify.connected && spotify.canManage);
+            spotifyDisconnect.disabled = false;
+          }
+        } catch {
+          if (spotifyState) spotifyState.textContent = 'Spotify status unavailable';
         }
-        if (spotifyDisconnect) {
-          spotifyDisconnect.hidden = !(spotify.connected && spotify.canManage);
-        }
-      }).catch(() => {
-        if (spotifyState) spotifyState.textContent = 'Signal status unavailable';
-      });
+      }
+
       spotifyDisconnect?.addEventListener('click', async () => {
         const confirmed = window.confirm(
-          'Disconnect Spotify from PointCast? This immediately removes the stored Spotify credentials and live track signal.',
+          'Disconnect Spotify from PointCast? This immediately removes the stored Spotify credentials and cached now-playing item.',
         );
         if (!confirmed) return;
         spotifyDisconnect.disabled = true;
@@ -582,12 +599,7 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
             cache: 'no-store',
           });
           if (!response.ok) throw new Error('spotify-disconnect-failed');
-          spotifyDisconnect.hidden = true;
-          if (spotifyState) spotifyState.textContent = 'Ready for broadcaster authorization';
-          if (spotifyAction) {
-            spotifyAction.href = '/api/spotify/auth';
-            spotifyAction.textContent = 'Connect →';
-          }
+          await refreshSpotify();
         } catch {
           spotifyDisconnect.disabled = false;
           if (spotifyState) spotifyState.textContent = 'Could not disconnect · try again';
@@ -596,40 +608,62 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
 
       const shopifyCard = root.querySelector<HTMLElement>('[data-dashboard-shopify]');
       const shopifyState = shopifyCard?.querySelector<HTMLElement>('[data-dashboard-shopify-state]');
-      const shopifyAction = shopifyCard?.querySelector<HTMLAnchorElement>('[data-dashboard-shopify-action]');
+      const shopifyAction = shopifyCard?.querySelector<HTMLButtonElement>('[data-dashboard-shopify-action]');
+      const shopifyForm = shopifyCard?.querySelector<HTMLFormElement>('[data-dashboard-shopify-form]');
+      const shopifyInput = shopifyForm?.elements.namedItem('shop');
       const shopifyDisconnect = shopifyCard?.querySelector<HTMLButtonElement>('[data-dashboard-shopify-disconnect]');
-      void fetch('/api/shopify/connection', {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then(async (response) => {
-        if (!response.ok) throw new Error('shopify-status-unavailable');
-        return response.json() as Promise<{
-          configured?: boolean;
-          connected?: boolean;
-          canManage?: boolean;
-          connection?: { shop?: string };
-        }>;
-      }).then((shopify) => {
-        if (shopifyState) {
-          shopifyState.textContent = shopify.connected
-            ? shopify.connection?.shop
-              ? `Connected · ${shopify.connection.shop}`
-              : 'Catalog signal connected'
-            : shopify.configured
-              ? shopify.canManage
+
+      async function refreshShopify(): Promise<void> {
+        try {
+          const response = await fetch('/api/shopify/connection', {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!response.ok) throw new Error('shopify-status-unavailable');
+          const shopify = await response.json() as {
+            configured?: boolean;
+            connected?: boolean;
+            canManage?: boolean;
+            connection?: { shop?: string };
+          };
+          if (shopifyState) {
+            shopifyState.textContent = shopify.connected
+              ? shopify.connection?.shop
+                ? `Connected · ${shopify.connection.shop}`
+                : 'Catalog connected'
+              : shopify.configured
                 ? 'Ready for catalog authorization'
-                : 'Broadcaster authorization only'
-              : 'Provider setup required';
+                : 'Provider setup required';
+          }
+          if (shopifyAction) {
+            shopifyAction.textContent = shopify.connected ? 'Reauthorize →' : 'Connect →';
+            shopifyAction.disabled = !shopify.configured;
+          }
+          if (shopifyInput instanceof HTMLInputElement && shopify.connection?.shop) {
+            shopifyInput.value = shopify.connection.shop;
+          }
+          if (shopifyDisconnect) {
+            shopifyDisconnect.hidden = !(shopify.connected && shopify.canManage);
+            shopifyDisconnect.disabled = false;
+          }
+        } catch {
+          if (shopifyState) shopifyState.textContent = 'Catalog status unavailable';
         }
-        if (shopifyAction) {
-          shopifyAction.textContent = shopify.connected ? 'Manage →' : 'Connect →';
+      }
+
+      shopifyForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const shop = shopifyInput instanceof HTMLInputElement ? shopifyInput.value.trim() : '';
+        if (!shop) {
+          if (shopifyState) shopifyState.textContent = 'Enter a store name or myshopify.com domain.';
+          return;
         }
-        if (shopifyDisconnect) {
-          shopifyDisconnect.hidden = !(shopify.connected && shopify.canManage);
-        }
-      }).catch(() => {
-        if (shopifyState) shopifyState.textContent = 'Catalog status unavailable';
+        const destination = new URL('/api/shopify/auth', window.location.origin);
+        destination.searchParams.set('shop', shop);
+        destination.searchParams.set('returnTo', '/dashboard#broadcast');
+        window.location.assign(destination.toString());
       });
+
       shopifyDisconnect?.addEventListener('click', async () => {
         const confirmed = window.confirm(
           'Disconnect Shopify from PointCast? This immediately removes the encrypted catalog credential.',
@@ -643,14 +677,38 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
             cache: 'no-store',
           });
           if (!response.ok) throw new Error('shopify-disconnect-failed');
-          shopifyDisconnect.hidden = true;
-          if (shopifyState) shopifyState.textContent = 'Ready for catalog authorization';
-          if (shopifyAction) shopifyAction.textContent = 'Connect →';
+          await refreshShopify();
         } catch {
           shopifyDisconnect.disabled = false;
           if (shopifyState) shopifyState.textContent = 'Could not disconnect · try again';
         }
       });
+
+      const broadcasterState = root.querySelector<HTMLElement>('[data-dashboard-broadcaster-state]');
+      const broadcasterPanel = root.querySelector<HTMLElement>('[data-dashboard-broadcaster-panel]');
+
+      function renderSessionAccess(user: { preferredName?: string; roles?: string[] } | null): void {
+        const accountState = root.querySelector<HTMLElement>('[data-dashboard-account-state]');
+        if (accountState) accountState.textContent = user?.preferredName || 'Visitor mode';
+        const canBroadcast = Boolean(user?.roles?.includes('broadcaster'));
+        if (broadcasterPanel) broadcasterPanel.hidden = !canBroadcast;
+        if (broadcasterState) {
+          broadcasterState.hidden = canBroadcast;
+          broadcasterState.textContent = 'This desk belongs to the broadcaster.';
+        }
+        if (canBroadcast) void Promise.all([refreshSpotify(), refreshShopify()]);
+      }
+
+      window.addEventListener('pc:auth-change', (event) => {
+        const user = (event as CustomEvent<{
+          user?: { preferredName?: string; roles?: string[] } | null;
+        }>).detail?.user ?? null;
+        renderSessionAccess(user);
+      });
+
+      void getSession()
+        .then((user) => renderSessionAccess(user))
+        .catch(() => renderSessionAccess(null));
 
       syncPetCareActivity();
       renderRecents();
@@ -848,6 +906,14 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
   .connection-grid__actions button[data-dashboard-shopify-disconnect] { color: #9c3440; }
   .connection-grid__actions button:disabled { cursor: wait; opacity: 0.55; }
   .connection-grid__actions button[hidden] { display: none; }
+  .broadcaster-desk { margin-top: 34px; padding-top: 24px; border-top: 2px solid #181a1d; }
+  .broadcaster-desk__head { margin-bottom: 12px; }
+  .broadcaster-desk__state { margin: 0; padding: 16px; border: 1px solid #cdd2d7; border-radius: 6px; background: #fff; color: #626c76; font: 700 9px/1.4 var(--pc-font-mono, ui-monospace, monospace); text-transform: uppercase; }
+  .broadcaster-desk__panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .broadcaster-desk__panel[hidden] { display: none; }
+  .connection-grid__actions form { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
+  .connection-grid__actions input { width: min(190px, 18vw); min-height: 32px; padding: 6px 8px; border: 1px solid #b7bec5; border-radius: 3px; font: 8px/1 var(--pc-font-mono, ui-monospace, monospace); }
+  .connection-grid__actions input:focus { outline: 2px solid #145aa4; outline-offset: 1px; }
 
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
@@ -889,6 +955,8 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .super-auth-callout strong { grid-column: 1 / -1; grid-row: 2; }
     .super-auth-callout em { grid-column: 2; grid-row: 1; }
     .connection-grid { grid-template-columns: 1fr; }
+    .broadcaster-desk__panel { grid-template-columns: 1fr; }
+    .connection-grid__actions input { width: min(240px, 42vw); }
   }
 
   @media (max-width: 480px) {
@@ -910,6 +978,10 @@ const todayLabel = new Intl.DateTimeFormat('en-US', {
     .dashboard-pet__stats div:last-child { min-height: 58px; padding: 10px 8px; border-bottom: 0; }
     .dashboard-pet__stats div:last-child { border-right: 0; }
     .dashboard-pet__stats dd { font-size: 8px; }
+    .connection-grid article { grid-template-columns: 32px minmax(0, 1fr); }
+    .connection-grid__actions { grid-column: 1 / -1; align-items: stretch; }
+    .connection-grid__actions form { justify-content: stretch; }
+    .connection-grid__actions input { width: 100%; }
   }
 
   @media (prefers-reduced-motion: reduce) {
