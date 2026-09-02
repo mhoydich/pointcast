@@ -17,6 +17,7 @@
  * client-side with the build-time value as the fallback.
  */
 import { getCollection } from 'astro:content';
+import { existsSync } from 'node:fs';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import HomePlayFirst from '../components/HomePlayFirst.astro';
 import HomeStartHere from '../components/HomeStartHere.astro';
@@ -61,7 +62,6 @@ const PINNED = {
   x402Receipts: 0,           // GET /api/x402/receipt?list=1 total_count (2026-09-01)
   tugPulls: { human: 1, machine: 1 }, // GET /api/tug (2026-09-01)
   benchSitsToday: 0,         // GET /api/bench (2026-09-01)
-  contractsLive: 3,          // src/data/contracts.json: Visit Nouns, Coffee Mugs, Marketplace v3.1 on mainnet
 };
 
 // ---------- blocks: computed, never typed ----------
@@ -144,7 +144,10 @@ for (let round = 0; catalogPool.length < 30; round++) {
     const d = block.data;
     const channel = getChannel(d.channel);
     const media = d.media as { kind?: string; src?: string; thumbnail?: string; alt?: string } | undefined;
-    const image = media?.kind === 'image' && media.src ? (media.thumbnail ?? media.src) : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`;
+    // Prefer the block's own OG card (~13 KB) over the full-size social card; a declared thumbnail wins,
+    // and a block whose card has not been generated yet falls back to its Noun.
+    const ogCard = `/images/og/b/${d.id}.png`;
+    const image = media?.thumbnail ?? (existsSync(`public${ogCard}`) ? ogCard : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`);
     catalogPool.push({
       id: d.id,
       title: d.title,
@@ -180,7 +183,7 @@ const covers = [
   { title: '25 FOR REASONS — Board 000', href: '/25', dek: 'A college-football Top 25 with receipts: one case, one doubt, and one next proof for every ranked team.', kicker: 'Board 000 · 25 teams · $25 season ticket', image: '/images/pointcast-25/board-000.png', imageAlt: '25 for Reasons board 000', channel: 'SPN', date: '2026-07-27', blockId: '0510' },
   { title: 'Beach Commons', href: '/beach-commons', dek: 'Eighteen field studies for making public life at the edge of Dockweiler, from fire rings to a 25-mile atlas.', kicker: '18 volumes · 5 paths · 23 wire blocks', image: '/images/front-door/beach-commons.jpg', imageAlt: 'Beach Commons series card', channel: 'GDN', date: '2026-07-26', blockId: '0506' },
   { title: 'The Animal After the Internet', href: '/digital-pets', dek: 'A future book on why the next AI product is a creature, not an assistant, and why its memory should be yours.', kicker: 'Future Book 001 · 12 positions · 6 rooms', image: '/images/digital-pets/plate-01-cover.webp', imageAlt: 'The Animal After the Internet, plate one', channel: 'FD', date: '2026-07-27', blockId: '0514' },
-  { title: 'The first computer that can waddle', href: '/digital-pets/microduck', dek: 'A full review of Microduck, its open software stack, and how to program a duck’s behavior with agents.', kicker: 'Digital Pets desk · newest · № 0579', image: '/images/front-door/microduck.jpg', imageAlt: 'Microduck review card', channel: 'FD', date: '2026-08-31', blockId: '0579' },
+  { title: 'The first computer that can waddle', href: '/digital-pets/microduck', dek: 'A full review of Microduck, its open software stack, and how to program a duck’s behavior with agents.', kicker: 'Digital Pets desk · review · № 0579', image: '/images/front-door/microduck.jpg', imageAlt: 'Microduck review card', channel: 'FD', date: '2026-08-31', blockId: '0579' },
   { title: 'AI income — where the money actually is', href: '/ai-income', dek: 'A field guide to getting paid in the AI economy: 29 routes across 7 lanes, honest tiers, no course to sell.', kicker: '29 routes · 7 lanes · № 0576', image: '/images/og/b/0576.png', imageAlt: 'AI Income block card', channel: 'FD', date: '2026-08-31', blockId: '0576' },
   { title: 'The Saturday Atlas', href: '/25/directory', dek: 'Every Division I program in one honest place: 138 FBS, 128 FCS, official links, and a private shortlist.', kicker: '266 programs · 138 FBS · 128 FCS', image: '/images/pointcast-d1-directory/social-card.png', imageAlt: 'The Saturday Atlas directory card', channel: 'SPN', date: '2026-08-12', blockId: '0570' },
   { title: 'Next Models', href: '/next-models', dek: 'A sourced field guide to the model horizon: frontier systems, Chinese open weights, moving-image stacks.', kicker: '9 models · 3 lanes · researched 2026-08-31', image: '/images/front-door/next-models.jpg', imageAlt: 'Next Models desk card', channel: 'FD', date: '2026-08-31', blockId: '' },
@@ -288,7 +291,7 @@ const rooms = [
   { title: 'Potters Field', href: '/potters-field', dek: 'The rooms that closed, kept on the record.', tag: 'LEDGER', noun: 503, color: '#5F5E5A' },
   { title: 'The Yard', href: '/yard', dek: 'Agents pull a permit, build on their own hosting, and the town cuts a ribbon. Night-shift chores for the rest.', tag: 'AGENTS', noun: 497, color: '#185FA5' },
   { title: 'Network El Segundo', href: '/network-el-segundo', dek: 'A city of 100 windows. Every verified Tezos wallet turns on one public light; the wall shows a count, never the addresses.', tag: 'ESC', noun: 486, color: '#0B3E73' },
-  { title: 'Local Star Commons', href: '/local-star-commons', dek: 'Useful things, governed in common. Six local-first objects and a contribution-governed founding movement.', tag: 'ESC', noun: 490, color: '#0B3E73' },
+  { title: 'Local Star Commons', href: '/local-star-commons', dek: 'Useful things, governed in common. Six local-first objects, governed by contribution.', tag: 'ESC', noun: 490, color: '#0B3E73' },
   { title: 'Sunset Switchboard', href: '/sunset-switchboard', dek: 'Route one good signal before dark. Choose a sky, tune a band, set the reach, and leave no tracking trail.', tag: 'ESC', noun: 487, color: '#0B3E73' },
   { title: 'PointCast Field', href: '/field', dek: 'Take today’s field prompt. No account, private by default.', tag: 'FIELD', noun: 512, color: '#3B6D11' },
   { title: 'Crystal Ball Pass', href: '/crystal-ball-pass', dek: 'A five-minute forest expedition, then Afterlight. The map is damp, but hopeful.', tag: 'WALK', noun: 550, color: '#3B6D11' },
@@ -298,12 +301,12 @@ const rooms = [
   { title: 'The polls', href: '/polls', dek: 'Schelling-point polls for the town, with a zeitgeist map.', tag: 'ROOM', noun: 1001, color: '#185FA5' },
   { title: 'The cake', href: '/cake', dek: 'Birthdays celebrated on PointCast: one block per person per year, one Noun per person forever.', tag: 'BDY', noun: 3, color: '#993C1D' },
   { title: 'The bath', href: '/bath', dek: 'A warm room to soak in.', tag: 'QUIET', noun: 42, color: '#185FA5' },
-  { title: 'The taproom', href: '/taproom', dek: 'Eight breweries, 27 beers, updated April 24. The one brewed-here beer everyone asks about.', tag: 'ESC', noun: 276, color: '#7a4b1c' },
+  { title: 'The taproom', href: '/taproom', dek: 'Eight breweries, twenty-seven beers, updated April 24. The one brewed-here beer everyone asks about.', tag: 'ESC', noun: 276, color: '#7a4b1c' },
   { title: 'TV', href: '/tv', dek: 'Fifteen geo-stations, each with its own weather feed.', tag: 'TV', noun: 15, color: '#0B3E73' },
   { title: 'Local · 100 miles', href: '/local', dek: 'A 100-mile lens on the areas, the university, the honey league, the paddle exchange, the meetups.', tag: 'LOCAL', noun: 100, color: '#3B6D11' },
   { title: 'The race', href: '/race', dek: 'A short race at the front door. One race so far, resolved April 25. It is due another.', tag: 'RACE', noun: 271, color: '#993C1D' },
   { title: 'The passport', href: '/passport', dek: 'A dual-ledger passport: private ritual stamps, public Tezos visas, one optional wallet signature.', tag: 'PASSPORT', noun: 470, color: '#0B3E73' },
-  { title: 'The play layer', href: '/play', dek: 'Fifteen local-first surfaces on one hub: passport, quests, walk, routes, builders, civic, pet, and more.', tag: 'PLAY', noun: 404, color: '#993C1D' },
+  { title: 'The play layer', href: '/play', dek: 'Fifteen local-first surfaces on one hub: passport, quests, walk, routes, builders, civic, pet.', tag: 'PLAY', noun: 404, color: '#993C1D' },
   { title: 'Every door', href: '/explore', dek: `Every top-level surface in the town, on one street. ${doorCount} doors, sorted.`, tag: 'INDEX', noun: 395, color: '#5F5E5A' },
   { title: 'Everything', href: '/everything', dek: 'The census. Every door in town, counted.', tag: 'INDEX', noun: 1199, color: '#5F5E5A' },
 ];
@@ -335,7 +338,6 @@ const contracts = [
 
 // ---------- 5. the agent desk ----------
 const agentSurfaces = [
-  { label: 'For agents', href: '/for-agents', note: 'the manifest in prose · start here' },
   { label: 'agents.json', href: '/agents.json', note: '21 endpoint groups · regenerated each deploy' },
   { label: 'MCP connector', href: '/connectors', note: 'https://pointcast.xyz/api/mcp-v2 · 50 tools · 22 resources · no auth' },
   { label: 'agent-kit.md', href: '/agent-kit.md', note: '4 KB · four client setups' },
@@ -358,7 +360,7 @@ const agentSurfaces = [
   { label: 'Native shell', href: '/app', note: 'installable home screen' },
   { label: 'Atlas · Ask', href: '/atlas', note: 'UMAP of every block · local RAG at /ask' },
   { label: 'Visit channel', href: '/c/visit', note: '31 visit-log blocks · all by residents' },
-  { label: 'Agent value', href: '/agent-value', note: 'value the loop the agent can finish' },
+  { label: 'Agent value', href: '/agent-value', note: 'what an agent can finish here, and what it is worth' },
 ];
 const vstCount = allBlocks.filter((b) => b.data.channel === 'VST').length;
 const evidence = {
@@ -374,7 +376,7 @@ const evidence = {
   benchSitsToday: PINNED.benchSitsToday,
   countedAt: PINNED.countedAt,
 };
-const residents = RESIDENTS.map((r) => ({ name: r.name, role: r.role, status: r.status }));
+const residents = RESIDENTS.map((r) => ({ name: r.name, role: r.role, status: r.status, slug: r.slug }));
 
 // ---------- 6. the ship log ----------
 const milestones = [
@@ -392,12 +394,12 @@ const milestones = [
   { date: '2026-07-07', title: 'The arcade day: six Win95 games and a match-3 trio', href: 'https://github.com/mhoydich/pointcast/pull/754', blockId: '' },
   { date: '2026-07-18', title: 'The prayer wing opens: five rooms, sixty pieces', href: '/b/0471', blockId: '0471' },
   { date: '2026-07-26', title: 'The Yard opens; the satellites get a register', href: '/b/0497', blockId: '0497' },
-  { date: '2026-07-27', title: '25 FOR REASONS launches; 56 PRs in two days', href: '/b/0510', blockId: '0510' },
+  { date: '2026-07-27', title: '25 FOR REASONS opens; 56 PRs in two days', href: '/b/0510', blockId: '0510' },
   { date: '2026-07-30', title: 'Git history flattened; the repo restarts at 79 commits', href: 'https://github.com/mhoydich/pointcast/commits/main', blockId: '' },
   { date: '2026-08-08', title: 'Haptic Dreams: Saturday Kingdom', href: '/b/0567', blockId: '0567' },
   { date: '2026-08-17', title: 'The register, the scoreboard, and x402', href: '/b/0574', blockId: '0574' },
   { date: '2026-08-31', title: 'Rosebud, the September Pass, the Hearst File, Microduck', href: '/b/0577', blockId: '0577' },
-  { date: '2026-09-01', title: 'The front door rebuilt to carry the whole town', href: '/', blockId: '' },
+  { date: '2026-09-01', title: 'The front door rebuilt to carry the whole town', href: '/b/0580', blockId: '0580' },
 ];
 const shipTotals = [
   { label: 'merged pull requests', value: PINNED.mergedPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged' },
@@ -410,12 +412,12 @@ const shipTotals = [
 const glance = [
   { label: 'blocks', value: blockCount.toLocaleString('en-US'), href: '/archive', note: `since ${sinceLabel} · newest № ${latestId}` },
   { label: 'channels', value: String(CHANNEL_LIST.length), href: '#channels', note: 'ten lanes, one grammar' },
-  { label: 'doors', value: doorCount.toLocaleString('en-US'), href: '/explore', note: 'top-level pages, every one live' },
+  { label: 'doors', value: doorCount.toLocaleString('en-US'), href: '/explore', note: 'top-level pages, sorted' },
   { label: 'apps', value: String(appCount), href: '/apps', note: 'rooms, tools, satellites, two MCP connectors' },
-  { label: 'drum pages', value: String(drumPages), href: '/drum', note: `${PINNED.drumDoors} doors · 7 wings` },
+  { label: 'drum pages', value: String(drumPages), href: '/drum-directory', note: `${PINNED.drumDoors} doors · 7 wings` },
   { label: 'drum hits', value: PINNED.drumTaps.toLocaleString('en-US'), href: '/drum', note: 'every visitor, since April 17', live: true, id: 'drum-taps' },
   { label: 'satellites', value: String(satellites.length), href: '/constellation', note: 'sibling sites, all answering' },
-  { label: 'contracts', value: String(PINNED.contractsLive), href: '#constellation', note: 'live on Tezos mainnet · 1 pending' },
+  { label: 'contracts', value: String(contracts.filter((c) => c.status === 'live').length), href: '#constellation-chain', note: `${contracts.filter((c) => c.kt1).length} with a KT1 · ${contracts.filter((c) => c.status === 'pending').length} pending` },
   { label: 'merged PRs', value: PINNED.mergedPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged', note: `repo opened 2026-04-14` },
   { label: 'residents', value: `${residentCounts.resident}+${residentCounts.director}`, href: '/residents', note: `${residentCounts.open} rooms open for plus-ones` },
   { label: 'MCP tools', value: String(PINNED.mcpTools), href: '/connectors', note: 'no auth, one URL' },
@@ -508,7 +510,7 @@ const alternates = [
       <nav class="masthead__utility" aria-label="Quick exits">
         <span class="masthead__wallet"><WalletChip /></span>
         <a href="/now">Now</a>
-        <a href="/auth#spotify" title="Spotify broadcast authorization and Super Auth controls">Spotify auth</a>
+        <a href="/rooms">Rooms</a>
         <a href="/archive">Archive</a>
         <a href="/for-agents">For agents</a>
       </nav>
@@ -545,11 +547,11 @@ const alternates = [
         <div>
           <p class="shelf__kicker">Channels · {CHANNEL_LIST.length} codes · {CHANNEL_LIST.length} colors · {CHANNEL_LIST.length} feeds</p>
           <h2 class="shelf__title" id="channels-title">Ten lanes, <em>one grammar.</em></h2>
-          <p class="shelf__dek">Front Door for agent-era thinking. Garden for quiet noticing. Court for pickleball, Spinning for music, El Segundo for the town itself. Each has a code, a color, and an RSS feed. No eleventh without Mike.</p>
+          <p class="shelf__dek">Front Door for agent-era thinking, Garden for quiet noticing. Court for pickleball, Spinning for music, El Segundo for the town itself. Each has a code, a color, and an RSS feed. No eleventh without Mike.</p>
         </div>
         <div class="shelf__actions">
-          <a href="/archive">Open full archive</a>
           <a href="/moods">Moods</a>
+          <a href="/random">A random door</a>
         </div>
       </div>
       <nav class="channels__grid" aria-label="PointCast channels">
@@ -584,6 +586,7 @@ const alternates = [
         <li><a href="/register.json">/register.json</a><span>the experiment register</span></li>
         <li><a href="/now.json">/now.json</a><span>right now, as JSON</span></li>
         <li><a href="/signals.json">/signals.json</a><span>the four field signals, as JSON</span></li>
+        <li><a href="/auth#spotify" title="Spotify broadcast authorization and Super Auth controls">Spotify auth</a><span>/auth · the booth’s authorization</span></li>
       </ul>
       <p class="shelf__foot">
         <span>A garden is slow on purpose. A broadcast is too.</span>
@@ -628,8 +631,18 @@ const alternates = [
       const el = root.querySelector(`[data-glance="${id}"]`);
       if (el && typeof value === 'number') el.textContent = value.toLocaleString('en-US');
     };
-    fetch('/api/drum', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => j && setGlance('drum-taps', j.globalTotal)).catch(() => {});
-    fetch('/api/visit', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => j && setGlance('visits', j.count)).catch(() => {});
+    // One request per endpoint for the whole page; sections listen for the event instead of fetching again.
+    fetch('/api/drum', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!j || typeof j.globalTotal !== 'number') return;
+      setGlance('drum-taps', j.globalTotal);
+      root.querySelectorAll('[data-drum-taps], [data-drum-global]').forEach((el) => { el.textContent = j.globalTotal.toLocaleString('en-US'); });
+      document.dispatchEvent(new CustomEvent('pc:drum', { detail: j }));
+    }).catch(() => {});
+    fetch('/api/visit', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!j || typeof j.count !== 'number') return;
+      setGlance('visits', j.count);
+      document.dispatchEvent(new CustomEvent('pc:visit', { detail: j }));
+    }).catch(() => {});
   })();
 </script>
 
@@ -658,7 +671,7 @@ const alternates = [
   .machine__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
   .machine__list li { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 14px; border-right: 1px solid rgba(0,0,0,.18); border-bottom: 1px solid rgba(0,0,0,.18); overflow-wrap: anywhere; }
   .machine__list li:nth-child(4n) { border-right: 0; }
-  .machine__list li:nth-child(n+9) { border-bottom: 0; }
+  .machine .shelf__foot { border-top: 0; }
   .machine__list a { font: 700 11px var(--pc-font-mono); letter-spacing: .04em; color: #185FA5; }
   .machine__list span { font-size: 11.5px; color: rgba(0,0,0,.72); }
 
@@ -673,13 +686,11 @@ const alternates = [
     .machine__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .machine__list li:nth-child(4n) { border-right: 1px solid rgba(0,0,0,.18); }
     .machine__list li:nth-child(2n) { border-right: 0; }
-    .machine__list li:nth-child(n+9) { border-bottom: 1px solid rgba(0,0,0,.18); }
-    .machine__list li:nth-child(n+11) { border-bottom: 0; }
   }
   @media (max-width: 560px) {
     .masthead { grid-template-columns: 1fr; }
     .channels__grid, .machine__list { grid-template-columns: 1fr; }
     .channels__cell, .machine__list li { border-right: 0 !important; border-bottom: 1px solid rgba(0,0,0,.18) !important; }
-    .channels__cell:last-child, .machine__list li:last-child { border-bottom: 0 !important; }
+    .channels__cell:last-child { border-bottom: 0 !important; }
   }
 </style>

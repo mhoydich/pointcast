@@ -78,7 +78,7 @@ const nounSeed = (i: number) => (i * 97) % 1200;
               <span class="cell__tag">{g.kicker}</span>
               <span class="cell__title">{g.title}</span>
               <span class="cell__note">{g.dek}</span>
-              <span class="cell__meta">Play → no account</span>
+              <span class="cell__meta">enter →</span>
             </a>
           </li>
         ))}
@@ -115,18 +115,14 @@ const nounSeed = (i: number) => (i * 97) % 1200;
     if (!root || root.dataset.ready === 'true') return;
     root.dataset.ready = 'true';
     const targets = root.querySelectorAll('[data-drum-taps]');
-    if (!targets.length || typeof fetch !== 'function') return;
-    // Refresh the drum house's public counter; keep the build-time number if this fails.
-    try {
-      fetch('/api/drum', { headers: { accept: 'application/json' } })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!j || typeof j.globalTotal !== 'number' || !Number.isFinite(j.globalTotal)) return;
-          const text = j.globalTotal.toLocaleString('en-US');
-          targets.forEach((el) => { el.textContent = text; });
-        })
-        .catch(() => {});
-    } catch (_) { /* leave the SSR number */ }
+    if (!targets.length) return;
+    // The page fetches /api/drum once and broadcasts it; keep the build-time number if it never arrives.
+    document.addEventListener('pc:drum', (event) => {
+      const j = event.detail;
+      if (!j || typeof j.globalTotal !== 'number' || !Number.isFinite(j.globalTotal)) return;
+      const text = j.globalTotal.toLocaleString('en-US');
+      targets.forEach((el) => { el.textContent = text; });
+    });
   })();
 </script>
 

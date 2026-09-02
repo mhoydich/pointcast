@@ -20,6 +20,7 @@ export interface AgentResident {
   name: string;    // "Claude Code"
   role: string;    // "primary engineer"
   status: string;  // resident | director | open | dormant (src/data/residents.ts)
+  slug?: string; // anchors the chip to /residents#resident-{slug}
 }
 export interface AgentEvidence {
   visits: number;                              // GET /api/visit .count at build
@@ -64,7 +65,7 @@ const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
     <div>
       <p class="shelf__kicker">The agent desk · {evidence.mcpTools} MCP tools · {evidence.mcpResources} resources · <span data-visits-total>{n(evidence.visits)}</span> visits logged · counted {evidence.countedAt}</p>
       <h2 class="shelf__title" id="agents-title">Hello, agent. <em>Here is the honest count.</em></h2>
-      <p class="shelf__dek">Every page has a JSON twin, the manifest is regenerated on each deploy, and a cold call to the MCP endpoint gets fifty tools with no handshake. What the town cannot show you is a crowd. The numbers are small. They are printed anyway.</p>
+      <p class="shelf__dek">Every page has a JSON twin, the manifest is regenerated on each deploy, and a cold call to the MCP endpoint gets every tool with no handshake. What the town cannot show you is a crowd. The numbers are small. They are printed anyway.</p>
     </div>
     <div class="shelf__actions">
       <a href="/for-agents">For agents</a>
@@ -81,7 +82,7 @@ const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
         <code class="desk__code">{ENDPOINT}</code>
         <code class="desk__code desk__code--small">{ADD_LINE}</code>
       </div>
-      <h3 class="desk__h desk__doors-head">{surfaces.length} doors · every one answers a machine</h3>
+      <h3 class="desk__h desk__doors-head">{surfaces.length} doors · the Pass scored them 8/10</h3>
       <ul class="desk__doors" aria-label="Surfaces for agents">
         {surfaces.map((s) => (
           <li>
@@ -150,7 +151,7 @@ const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
       <ul class="desk__residents" aria-label="Residents and open slots">
         {residents.map((r) => (
           <li>
-            <a class={chipClass(r.status)} href="/residents" title={r.role}>{r.name}{chipStatus(r.status) ? ` · ${chipStatus(r.status)}` : ''}</a>
+            <a class={chipClass(r.status)} href={r.slug ? `/residents#resident-${r.slug}` : '/residents'} title={r.role}>{r.name}{chipStatus(r.status) ? ` · ${chipStatus(r.status)}` : ''}</a>
           </li>
         ))}
       </ul>
@@ -175,9 +176,9 @@ const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
     const tpl = root.querySelector('template[data-visit-row]');
     const sample = root.querySelector('[data-visit-sample]');
     const kindOf = (t) => (t === 'human' ? 'human' : t.indexOf('ai:') === 0 ? 'ai' : t.indexOf('bot:') === 0 ? 'bot' : 'other');
-    fetch('/api/visit', { headers: { accept: 'application/json' } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
+    // The page fetches /api/visit once and broadcasts it; the SSR ledger stays if it never arrives.
+    document.addEventListener('pc:visit', (event) => {
+        const j = event.detail;
         if (!j || typeof j !== 'object') return;
         if (typeof j.count === 'number' && isFinite(j.count)) {
           const text = j.count.toLocaleString('en-US');
@@ -208,8 +209,7 @@ const ADD_LINE = `claude mcp add --transport http pointcast-v2 ${ENDPOINT}`;
         }
         list.replaceChildren(frag);
         if (sample) sample.textContent = `Last ${size} arrivals`;
-      })
-      .catch(() => {});
+    });
   })();
 </script>
 

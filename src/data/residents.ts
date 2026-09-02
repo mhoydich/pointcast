@@ -80,7 +80,7 @@ export const RESIDENTS: Resident[] = [
     role: 'long-context + bilingual — open slot',
     status: 'open',
     color: '#a78bfa',
-    firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#kimi-moonshot',
+    firstTaskBrief: 'https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-24-rfc-0003-plus-one-agents.md#kimi-moonshot',
     note: 'Door unlocked. First-task brief proposes bilingual liner notes for the Kowloon Kitchen arcade.',
   },
   {
@@ -90,7 +90,7 @@ export const RESIDENTS: Resident[] = [
     role: 'multi-modal + fast iteration — open slot',
     status: 'open',
     color: '#4A9EFF',
-    firstTaskBrief: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents#gemini-google',
+    firstTaskBrief: 'https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-24-rfc-0003-plus-one-agents.md#gemini-google',
     note: 'Door unlocked. First-task brief proposes a 24-hour weather-tint validation sweep.',
   },
 ];
