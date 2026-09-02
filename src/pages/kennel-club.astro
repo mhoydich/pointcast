@@ -1,5 +1,7 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
+import KennelClubClaim from '../components/KennelClubClaim.astro';
+import KennelClubMint from '../components/KennelClubMint.astro';
 import {
   KENNEL_CLUB,
   KENNEL_CLUB_CANONICAL,
@@ -7,18 +9,13 @@ import {
   imageUrl,
   losAngelesDate,
   sittingOfTheDay,
-  sittingStatus,
 } from '../lib/kennel-club';
-import KennelClubMint from '../components/KennelClubMint.astro';
 
 const todayDate = losAngelesDate();
 const today = sittingOfTheDay(todayDate);
-const yesterday = KENNEL_CLUB.sittings.find((sitting) => sitting.day === today.day - 1);
-const tomorrow = KENNEL_CLUB.sittings.find((sitting) => sitting.day === today.day + 1);
 const days = calendar(todayDate);
-const lateStart = todayDate >= '2026-09-01' && todayDate <= '2026-09-02';
 const title = 'Kennel Club · The September Sitting';
-const description = 'Thirty original dog portrait sittings, one for each day of September 2026. The daily Tezos mint is live at 1 tez per sitting.';
+const description = 'Claim today’s original Kennel Club dog free with a PointCast account. No Tezos wallet is required; PointCast can hold it until you link one.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -27,120 +24,211 @@ const jsonLd = {
   description,
   image: imageUrl(today, 'png'),
   numberOfItems: KENNEL_CLUB.sittings.length,
-  hasPart: KENNEL_CLUB.sittings.map((sitting) => ({ '@type': 'VisualArtwork', name: sitting.tokenMetadata.name, image: imageUrl(sitting, 'png'), url: `${KENNEL_CLUB_CANONICAL}/${sitting.slug}` })),
+  hasPart: KENNEL_CLUB.sittings.map((sitting) => ({
+    '@type': 'VisualArtwork',
+    name: sitting.tokenMetadata.name,
+    image: imageUrl(sitting, 'png'),
+    url: `${KENNEL_CLUB_CANONICAL}/${sitting.slug}`,
+  })),
 };
 ---
 
 <BlockLayout title={title} description={description} image={today.image.png} imageWidth={1024} imageHeight={1280} themeColor="#8A2432" jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/kennel-club.json', title: 'Kennel Club calendar JSON' }]}>
   <main class="kennel" data-kennel-club data-today={todayDate}>
-    <nav class="crumb" aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><span>Kennel Club</span><a href="/kennel-club.json">JSON</a></nav>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span>/</span><span>Kennel Club</span><a href="/kennel-club.json">JSON</a>
+    </nav>
+
     <header class="mast">
-      <p class="kicker">Kennel Club · September 2026 · 30 daily portrait sittings</p>
-      <h1>The September <em>Sitting.</em></h1>
-      <p>One dog, one calendar day. Original plates from El Segundo. Each sitting is a 1 tez open-edition Tezos mint during its Los Angeles window.</p>
+      <p class="kicker">Kennel Club · September 2026 · one free dog each day</p>
+      <h1>Today&apos;s dog.<br /><em>Yours to claim.</em></h1>
+      <p>Thirty original portrait plates from El Segundo. The club opened two days late; the first two dogs were already waiting. Sign in, claim today’s sitting, and keep moving—we pay the 1 ꜩ mint and the gas.</p>
     </header>
 
-    {lateStart && <p class="late-note">The club opened two days late; the first two dogs were already waiting.</p>}
-
-    <section class="sitting" aria-labelledby="today-title">
-      <div class="sitting__label"><span>Sitting of the day</span><time datetime={today.mintDate}>{today.mintDate} · America/Los_Angeles</time></div>
-      <div class="sitting__cards">
-        {yesterday ? <a class="sitting__side sitting__side--past" href={`/kennel-club/${yesterday.slug}`} aria-label={`Yesterday: ${yesterday.name}`}><img src={yesterday.image.webp} alt="" width="1024" height="1280" /><span>Yesterday · {yesterday.name}</span></a> : <div class="sitting__side sitting__side--empty"><span>September begins here</span></div>}
-        <article class="sitting__today">
-          <img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" />
-          <div class="sitting__copy">
-            <p>Sitting {String(today.day).padStart(2, '0')} · Token {today.tokenId}</p>
-            <h2 id="today-title">{today.name}</h2>
-            <strong>{today.breed}</strong>
-            <span>{today.title}</span>
-            <small>{today.wardrobe}</small>
-            <a href={`/kennel-club/${today.slug}`}>Open this sitting →</a>
-          </div>
-        </article>
-        {tomorrow ? <div class="sitting__side sitting__side--future" aria-label={`Tomorrow: Sitting ${String(tomorrow.day).padStart(2, '0')}`}><span>Tomorrow</span><b>{String(tomorrow.day).padStart(2, '0')}</b><small>Plate held until {tomorrow.mintDate}</small></div> : <div class="sitting__side sitting__side--empty"><span>The final sitting</span></div>}
+    <section class="hero" aria-labelledby="today-title">
+      <figure class="hero__plate">
+        <img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" />
+        <figcaption>Sitting {String(today.day).padStart(2, '0')} · {today.mintDate} · America/Los_Angeles</figcaption>
+      </figure>
+      <div class="hero__desk">
+        <p class="kicker">Today · token {today.tokenId}</p>
+        <h2 id="today-title">{today.name}</h2>
+        <p class="hero__breed">{today.breed}</p>
+        <p class="hero__title">{today.title}</p>
+        <p class="hero__wardrobe">{today.wardrobe}</p>
+        <div class="hero__claim">
+          <KennelClubClaim tokenId={today.tokenId} sitting={today.name} />
+        </div>
+        <div class="hero__wallet-mint">
+          <KennelClubMint tokenId={today.tokenId} label="I have a Tezos wallet · mint for 1 ꜩ" />
+        </div>
+        <p class="hero__kukai">Want to hold it yourself? <a href="/me?link=wallet">Kukai gives you a wallet with your Google login →</a></p>
+        <a class="hero__open" href={`/kennel-club/${today.slug}`}>Open {today.name}’s full sitting →</a>
       </div>
-      <div class="mint-note"><span>Tezos mint · 1 ꜩ · open edition</span><KennelClubMint tokenId={today.tokenId} /><a href="/send/kennel-club">Send the one-sheet →</a></div>
     </section>
 
     <section class="calendar" aria-labelledby="calendar-title">
-      <div class="calendar__head"><div><p class="kicker">Calendar true · September 2026</p><h2 id="calendar-title">Thirty plates, <em>one at a time.</em></h2></div><a href="/kennel-club.json">Calendar JSON →</a></div>
+      <div class="calendar__head">
+        <div><p class="kicker">The September Sitting</p><h2 id="calendar-title">Thirty plates, <em>one at a time.</em></h2></div>
+        <a href="/k/today">/k/today →</a>
+      </div>
       <ol class="calendar__grid" aria-label="September 2026 Kennel Club calendar">
         {days.map((day) => (
           <li class:list={['calendar__day', `calendar__day--${day.status}`]} data-sitting-date={day.date}>
-            <a href={`/kennel-club/${day.slug}`}><img src={day.image.webp.replace('https://pointcast.xyz', '')} alt={day.status === 'today' ? day.image.alt : ''} width="1024" height="1280" loading={day.status === 'today' ? 'eager' : 'lazy'} /><span><b>{String(day.day).padStart(2, '0')}</b><em>Today</em></span></a>
+            <a href={`/kennel-club/${day.slug}`}>
+              <img src={day.image.webp.replace('https://pointcast.xyz', '')} alt={day.status === 'today' ? day.image.alt : ''} width="1024" height="1280" loading={day.status === 'today' ? 'eager' : 'lazy'} />
+              <span><b>{String(day.day).padStart(2, '0')}</b><em>Today</em></span>
+            </a>
             <span class="calendar__future"><b>{String(day.day).padStart(2, '0')}</b><small>Held</small></span>
           </li>
         ))}
       </ol>
     </section>
+
+    <section class="club-live" aria-labelledby="live-title">
+      <header class="club-live__head">
+        <div><p class="kicker">Live claim desk</p><h2 id="live-title">The room is <em>bringing dogs home.</em></h2></div>
+        <a href="/api/kennel-club/mint">Live JSON →</a>
+      </header>
+      <dl class="club-live__counts">
+        <div><dt>Free claims today</dt><dd data-claim-count>—</dd></div>
+        <div><dt>On-chain minted today</dt><dd data-minted-count>—</dd></div>
+        <div><dt>Free spots left</dt><dd data-remaining-count>—</dd></div>
+      </dl>
+      <div class="ticker">
+        <p class="kicker">Last 10 claims · dog + first name only</p>
+        <ol data-claim-ticker><li>Waiting for the claim desk…</li></ol>
+      </div>
+    </section>
   </main>
 </BlockLayout>
 
-<script is:inline>
-  (() => {
-    const root = document.querySelector('[data-kennel-club]');
-    if (!root) return;
+<script>
+  type LiveClaim = { sitting: string; firstName: string };
+  type LiveState = {
+    today: { minted: number };
+    claims: { claimed: number; remaining: number; recent: LiveClaim[] };
+  };
+
+  async function refreshKennelLive(root: HTMLElement): Promise<void> {
+    try {
+      const response = await fetch('/api/kennel-club/mint', { cache: 'no-store' });
+      if (!response.ok) throw new Error('live-state');
+      const state = await response.json() as LiveState;
+      const claimed = root.querySelector<HTMLElement>('[data-claim-count]');
+      const minted = root.querySelector<HTMLElement>('[data-minted-count]');
+      const remaining = root.querySelector<HTMLElement>('[data-remaining-count]');
+      if (claimed) claimed.textContent = String(state.claims.claimed);
+      if (minted) minted.textContent = String(state.today.minted);
+      if (remaining) remaining.textContent = String(state.claims.remaining);
+      const ticker = root.querySelector<HTMLOListElement>('[data-claim-ticker]');
+      if (ticker) {
+        const entries = state.claims.recent.map((claim) => {
+          const row = document.createElement('li');
+          const dog = document.createElement('strong');
+          const person = document.createElement('span');
+          dog.textContent = claim.sitting;
+          person.textContent = claim.firstName;
+          row.append(dog, person);
+          return row;
+        });
+        if (!entries.length) {
+          const empty = document.createElement('li');
+          empty.textContent = 'The first free claim is waiting.';
+          entries.push(empty);
+        }
+        ticker.replaceChildren(...entries);
+      }
+    } catch {
+      const ticker = root.querySelector<HTMLOListElement>('[data-claim-ticker]');
+      if (ticker) ticker.replaceChildren(Object.assign(document.createElement('li'), { textContent: 'Live counts are taking a breath.' }));
+    }
+  }
+
+  function initializeKennel(root: HTMLElement): void {
     const la = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    root.querySelectorAll('[data-sitting-date]').forEach((cell) => {
-      if (!(cell instanceof HTMLElement)) return;
+    root.querySelectorAll<HTMLElement>('[data-sitting-date]').forEach((cell) => {
       const date = cell.dataset.sittingDate || '';
       cell.classList.toggle('calendar__day--past', date < la);
       cell.classList.toggle('calendar__day--today', date === la);
       cell.classList.toggle('calendar__day--future', date > la);
     });
-  })();
+    void refreshKennelLive(root);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-kennel-club]').forEach(initializeKennel);
+  document.addEventListener('astro:page-load', () => document.querySelectorAll<HTMLElement>('[data-kennel-club]').forEach(initializeKennel));
+  window.addEventListener('pc:kennel-claim', () => document.querySelectorAll<HTMLElement>('[data-kennel-club]').forEach((root) => void refreshKennelLive(root)));
 </script>
 
 <style>
-  .kennel { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; --club: #8A2432; --club-wash: #fbf1f1; }
-  .crumb, .kicker, .sitting__label, .sitting__copy p, .mint-note, .calendar__future, .calendar__day span { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .kennel { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; --club: #8a2432; --club-wash: #fbf1f1; }
+  .crumb, .kicker, figcaption, .hero__open, .hero__kukai, .calendar__future, .calendar__day span, .club-live dt, .ticker { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
   .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
   .crumb a:last-child { margin-left: auto; }
-  .mast { border-top: 2px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); padding: 22px 0 26px; }
+  .mast { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .55fr); gap: 24px; align-items: end; border-top: 2px solid var(--pc-ink); padding: 20px 0 26px; }
   .kicker { margin: 0 0 10px; color: var(--club); }
-  h1, h2 { margin: 0; font-weight: 400; letter-spacing: -.05em; line-height: .88; }
-  h1 { font-size: clamp(54px, 10vw, 128px); }
+  h1, h2 { margin: 0; font-weight: 400; letter-spacing: -.055em; line-height: .88; }
+  h1 { grid-column: 1; font-size: clamp(52px, 9vw, 116px); }
   h1 em, h2 em { color: var(--club); font-style: normal; }
-  .mast > p:last-child { max-width: 640px; margin: 18px 0 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
-  .late-note { margin: 12px 0; border-left: 4px solid var(--club); background: var(--club-wash); padding: 11px 13px; font-size: 13px; }
-  .sitting { margin-top: 24px; border-top: 2px solid var(--pc-ink); }
-  .sitting__label { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; color: var(--pc-ink-muted); }
-  .sitting__cards { display: grid; grid-template-columns: minmax(120px, .45fr) minmax(0, 1.2fr) minmax(120px, .45fr); border: 1px solid var(--pc-ink); }
-  .sitting__side { min-height: 100%; background: var(--club-wash); color: var(--pc-ink); text-decoration: none; }
-  .sitting__side img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(.8); opacity: .34; }
-  .sitting__side--past { position: relative; overflow: hidden; }
-  .sitting__side--past span { position: absolute; right: 8px; bottom: 8px; left: 8px; background: #fff; padding: 7px; font: 400 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
-  .sitting__side--future, .sitting__side--empty { display: grid; place-content: center; gap: 10px; padding: 16px; text-align: center; border-left: 1px solid var(--pc-ink); }
-  .sitting__side--future b { font-size: clamp(34px, 5vw, 68px); font-weight: 400; line-height: .8; color: var(--club); }
-  .sitting__side--future small, .sitting__side--empty { font: 400 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--pc-ink-muted); }
-  .sitting__today { position: relative; min-height: 570px; overflow: hidden; background: var(--club); }
-  .sitting__today > img { width: 100%; height: 100%; object-fit: cover; }
-  .sitting__copy { position: absolute; right: 14px; bottom: 14px; left: 14px; padding: 16px; background: rgba(255,255,255,.94); border-left: 4px solid var(--club); }
-  .sitting__copy p { margin: 0 0 6px; color: var(--club); }
-  .sitting__copy h2 { font-size: clamp(38px, 6vw, 68px); }
-  .sitting__copy strong, .sitting__copy span, .sitting__copy small { display: block; margin-top: 6px; }
-  .sitting__copy strong { font-size: 16px; font-weight: 500; }
-  .sitting__copy span { font-size: 14px; color: var(--club); }
-  .sitting__copy small { max-width: 50ch; color: var(--pc-ink-soft); line-height: 1.4; }
-  .sitting__copy a { display: inline-block; margin-top: 12px; color: var(--club); font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
-  .mint-note { display: grid; grid-template-columns: minmax(130px, .45fr) minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--pc-ink); }
-  .mint-note span { color: var(--club); font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; } .mint-note a { color: var(--club); font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
-  .calendar { margin-top: 42px; }
-  .calendar__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--pc-ink); }
-  .calendar__head h2 { font-size: clamp(34px, 6vw, 72px); }
-  .calendar__head > a { flex: 0 0 auto; font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--club); }
+  .mast > p:last-child { grid-column: 2; margin: 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(330px, .82fr); border: 1.5px solid var(--pc-ink); }
+  .hero__plate { position: relative; min-height: 680px; margin: 0; background: var(--club); }
+  .hero__plate img { width: 100%; height: 100%; object-fit: cover; }
+  .hero__plate figcaption { position: absolute; right: 10px; bottom: 10px; left: 10px; padding: 7px 9px; background: rgba(255,255,255,.94); }
+  .hero__desk { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: clamp(24px, 5vw, 60px); border-left: 1.5px solid var(--pc-ink); background: var(--club); color: #fff; }
+  .hero__desk .kicker { color: rgba(255,255,255,.72); }
+  .hero__desk h2 { font-size: clamp(56px, 8vw, 100px); }
+  .hero__breed { margin: 16px 0 0; font-size: 18px; font-weight: 500; }
+  .hero__title { margin: 8px 0 0; font-size: 26px; letter-spacing: -.03em; }
+  .hero__wardrobe { max-width: 44ch; margin: 12px 0 0; color: rgba(255,255,255,.76); font-size: 13px; line-height: 1.45; }
+  .hero__claim { margin-top: 28px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.36); }
+  .hero__wallet-mint { margin-top: 12px; }
+  .hero__wallet-mint :global(.kennel-mint) { margin: 0; padding: 0; border: 0; }
+  .hero__wallet-mint :global(.kennel-mint__button) { border-color: rgba(255,255,255,.62); background: transparent; color: #fff; }
+  .hero__wallet-mint :global(.kennel-mint__state), .hero__wallet-mint :global(.kennel-mint__state a) { color: rgba(255,255,255,.72); }
+  .hero__wallet-mint :global(.kennel-mint__wallet) { border-color: rgba(255,255,255,.4); color: #fff; }
+  .hero__kukai { margin: 14px 0 0; color: rgba(255,255,255,.72); line-height: 1.5; text-transform: none; letter-spacing: .02em; }
+  .hero__kukai a, .hero__open { color: #fff; }
+  .hero__open { margin-top: 18px; }
+  .calendar { margin-top: 46px; }
+  .calendar__head, .club-live__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--pc-ink); }
+  .calendar__head h2, .club-live__head h2 { font-size: clamp(38px, 6vw, 72px); }
+  .calendar__head > a, .club-live__head > a { flex: 0 0 auto; color: var(--club); font: 400 10px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
   .calendar__grid { display: grid; grid-template-columns: repeat(6, 1fr); margin: 0; padding: 0; list-style: none; border-left: 1px solid var(--pc-ink); }
-  .calendar__day { position: relative; min-height: 146px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); overflow: hidden; }
+  .calendar__day { position: relative; min-height: 146px; overflow: hidden; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); }
   .calendar__day a { display: block; height: 100%; color: var(--pc-ink); }
   .calendar__day img { width: 100%; height: 100%; object-fit: cover; }
-  .calendar__day span { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; align-items: center; background: #fff; padding: 3px 5px; color: var(--pc-ink); }
-  .calendar__day span b { font-weight: 400; } .calendar__day span em { color: var(--club); font-style: normal; }
-  .calendar__day--today { box-shadow: inset 0 0 0 4px var(--club); z-index: 1; }
-  .calendar__day--today img { filter: none; }
-  .calendar__day--future a { display: none; } .calendar__day:not(.calendar__day--future) .calendar__future { display: none; }
-  .calendar__future { display: grid; height: 100%; place-content: center; gap: 7px; background: #fff; color: var(--pc-ink-muted); text-align: center; }
-  .calendar__future b { color: var(--pc-ink); font-size: 25px; font-weight: 400; }
-  @media (max-width: 760px) { .sitting__cards { grid-template-columns: 1fr; } .sitting__side { display: none; } .sitting__today { min-height: min(135vw, 620px); } .calendar__grid { grid-template-columns: repeat(4, 1fr); } .calendar__day { min-height: 120px; } }
-  @media (max-width: 760px) { .mint-note { grid-template-columns: 1fr; align-items: start; } }
-  @media (max-width: 480px) { .kennel { width: min(100% - 20px, 1180px); } .calendar__grid { grid-template-columns: repeat(3, 1fr); } .calendar__day { min-height: 128px; } }
+  .calendar__day span { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; align-items: center; padding: 3px 5px; background: #fff; color: var(--pc-ink); }
+  .calendar__day span b { font-weight: 400; }
+  .calendar__day span em { color: var(--club); font-style: normal; }
+  .calendar__day--today { z-index: 1; box-shadow: inset 0 0 0 4px var(--club); }
+  .calendar__day--future a { display: none; }
+  .calendar__day:not(.calendar__day--future) .calendar__future { display: none; }
+  .calendar__future { display: grid !important; height: 100%; place-content: center; gap: 7px; background: #fff; color: var(--pc-ink-muted); text-align: center; }
+  .calendar__future b { color: var(--pc-ink); font-size: 25px; }
+  .club-live { margin-top: 46px; }
+  .club-live__counts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border-left: 1px solid var(--pc-ink); }
+  .club-live__counts div { min-height: 128px; padding: 14px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); background: var(--club-wash); }
+  .club-live dt { color: var(--club); }
+  .club-live dd { margin: 20px 0 0; font-size: 54px; line-height: 1; }
+  .ticker { padding: 18px 0; border-bottom: 1px solid var(--pc-ink); }
+  .ticker ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .ticker li { display: flex; gap: 7px; padding: 7px 9px; border: 1px solid #d5b8bd; background: #fff; }
+  .ticker strong { color: var(--club); font-weight: 500; }
+  .ticker span::before { content: '→ '; color: var(--pc-ink-muted); }
+  @media (max-width: 760px) {
+    .kennel { width: min(100% - 20px, 1180px); }
+    .mast { grid-template-columns: 1fr; }
+    .mast > p:last-child { grid-column: 1; }
+    .hero { grid-template-columns: 1fr; }
+    .hero__plate { min-height: min(128vw, 620px); }
+    .hero__desk { border-top: 1.5px solid var(--pc-ink); border-left: 0; }
+    .calendar__grid { grid-template-columns: repeat(3, 1fr); }
+    .calendar__day { min-height: 128px; }
+    .club-live__head { align-items: start; flex-direction: column; }
+    .club-live__counts { grid-template-columns: 1fr; }
+    .club-live__counts div { min-height: 92px; }
+    .club-live dd { margin-top: 10px; font-size: 42px; }
+  }
 </style>

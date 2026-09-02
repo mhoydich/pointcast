@@ -21,6 +21,20 @@ export const GET: APIRoute = async () => {
     today: { date, ...sittingPayload(today) },
     lateStartNote: 'The club opened two days late; the first two dogs were already waiting.',
     mint,
+    claims: {
+      liveUrl: KENNEL_CLUB_MINT_LIVE_URL,
+      snapshotAt,
+      unavailable: true,
+      note: 'Claim counts are session-backed D1 state and are read live from mint.liveUrl.',
+      cap: null,
+      capUsed: null,
+      remaining: null,
+      claimed: null,
+      held: null,
+      delivered: null,
+      failed: null,
+      recent: [],
+    },
     calendar: calendar(date),
   }, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300, s-maxage=3600', 'Access-Control-Allow-Origin': '*' } });
 };

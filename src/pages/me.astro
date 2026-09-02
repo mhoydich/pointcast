@@ -114,6 +114,17 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
         </article>
       </section>
 
+      <section class="me-dogs" aria-label="Your Kennel Club dogs">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">KENNEL CLUB · CLAIM LEDGER</p>
+            <h2>Your dogs</h2>
+          </div>
+          <a class="me-dogs__club" href="/kennel-club">Visit the club →</a>
+        </header>
+        <div class="me-dogs__rows" data-me-dogs></div>
+      </section>
+
       <section
         class="me-claim"
         data-me-claim
@@ -230,6 +241,15 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     user: PointCastUser;
     wallets: Wallet[];
     collections: Array<Pick<Collection, 'slug' | 'name' | 'href' | 'contract' | 'symbol'>>;
+    dogs: Array<{
+      id: string;
+      tokenId: number;
+      sitting: string;
+      status: 'held' | 'delivered' | 'failed';
+      opHash: string | null;
+      deliveredTo: string | null;
+      createdAt: string;
+    }>;
     generatedAt: string;
     cacheTtlSeconds: number;
   };
@@ -397,6 +417,53 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     }));
   }
 
+  function renderDogs(root: HTMLElement, payload: HoldingsPayload): void {
+    const rows = root.querySelector<HTMLElement>('[data-me-dogs]');
+    if (!rows) return;
+    if (!payload.dogs.length) {
+      const empty = create('div', 'me-empty');
+      empty.append(
+        create('strong', '', 'No September Sitting claims yet.'),
+        create('p', '', 'Claim today’s dog free at the Kennel Club. You do not need a wallet first.'),
+      );
+      rows.replaceChildren(empty);
+      return;
+    }
+
+    rows.replaceChildren(...payload.dogs.map((dog) => {
+      const row = create('article', `me-dog me-dog--${dog.status}`);
+      const art = create('img', 'me-dog__art');
+      const sitting = String(dog.tokenId + 1).padStart(2, '0');
+      art.src = `/images/kennel-club/september-sitting/${sitting}-${dog.sitting.toLowerCase()}.webp`;
+      art.alt = dog.sitting;
+      art.width = 64;
+      art.height = 80;
+      const copy = create('span', 'me-dog__copy');
+      copy.append(
+        create('strong', '', `${sitting} · ${dog.sitting}`),
+        create('small', '', dog.status === 'held'
+          ? 'held for you — link a wallet to take it home'
+          : dog.status === 'delivered'
+            ? `delivered${dog.deliveredTo ? ` · ${shortAddress(dog.deliveredTo)}` : ''}`
+            : 'delivery stopped — retry from the Kennel Club'),
+      );
+      row.append(art, copy);
+      if (dog.status === 'held') {
+        const link = create('a', 'me-dog__action', 'Link wallet →');
+        link.href = '/me?link=wallet';
+        link.dataset.meAction = 'link';
+        row.append(link);
+      } else if (dog.opHash) {
+        const receipt = create('a', 'me-dog__action', 'Receipt ↗');
+        receipt.href = `https://tzkt.io/${dog.opHash}`;
+        receipt.target = '_blank';
+        receipt.rel = 'noopener';
+        row.append(receipt);
+      }
+      return row;
+    }));
+  }
+
   function renderCollections(root: HTMLElement, payload: HoldingsPayload): void {
     const container = root.querySelector<HTMLElement>('[data-me-collections]');
     if (!container) return;
@@ -501,6 +568,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     }
     if (updated) updated.textContent = `updated ${new Date(payload.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     renderIdentities(root, payload.user.identities);
+    renderDogs(root, payload);
     renderWallets(root, payload.wallets);
     renderCollections(root, payload);
     renderClaimDoor(root, payload.wallets);
@@ -510,6 +578,9 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
       window.requestAnimationFrame(() => {
         root.querySelector<HTMLElement>('[data-me-holdings]')?.scrollIntoView({ block: 'start' });
       });
+    }
+    if (new URLSearchParams(window.location.search).get('link') === 'wallet') {
+      window.requestAnimationFrame(() => window.dispatchEvent(new Event('pc:open-auth-menu')));
     }
   }
 
@@ -759,8 +830,17 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-companion__body span { font-size: 10px; }
   .me-summary__card--companion > a { position: absolute; right: 14px; bottom: 12px; color: inherit; font: 500 9px/1 var(--pc-font-mono); text-transform: uppercase; }
 
-  .me-wallets, .me-holdings { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
+  .me-wallets, .me-holdings, .me-dogs { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
   .me-holdings { border-color: var(--me-amber); }
+  .me-dogs { border-color: #8a2432; }
+  .me-dogs__club { color: #8a2432; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-dogs__rows { display: grid; gap: 6px; }
+  .me-dog { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 68px; padding: 7px; border: 1px solid #d8b7bd; background: #fff7f8; }
+  .me-dog__art { width: 52px; height: 64px; object-fit: cover; background: #eadde0; }
+  .me-dog__copy { display: grid; gap: 4px; min-width: 0; }
+  .me-dog__copy strong { font-size: 15px; font-weight: 500; }
+  .me-dog__copy small { color: #715b60; font: 400 9px/1.45 var(--pc-font-mono); text-transform: uppercase; }
+  .me-dog__action { color: #8a2432; font: 500 9px/1.3 var(--pc-font-mono); text-transform: uppercase; }
   .me-holdings-anchor { position: relative; top: -10px; display: block; visibility: hidden; }
   .me-section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
   .me-section-head h2 { margin: 0; font: 500 clamp(28px, 4vw, 44px)/1 var(--pc-font-sans); letter-spacing: -.035em; }

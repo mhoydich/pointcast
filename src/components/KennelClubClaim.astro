@@ -1,0 +1,218 @@
+---
+interface Props { tokenId: number; sitting: string; }
+const { tokenId, sitting } = Astro.props;
+---
+
+<section class="kennel-claim" data-kennel-claim data-token-id={tokenId} data-sitting={sitting}>
+  <button type="button" class="kennel-claim__button" data-kennel-claim-button>
+    Claim today&apos;s dog — free
+  </button>
+  <p class="kennel-claim__state" data-kennel-claim-state role="status" aria-live="polite">
+    Checking your PointCast session…
+  </p>
+  <p class="kennel-claim__door" data-kennel-claim-door hidden>
+    Sign in with Google to claim. No wallet needed; we hold it for you.
+  </p>
+</section>
+
+<script>
+  import type { PointCastUser } from '../lib/auth/types';
+  import { getSession } from '../lib/auth/client';
+
+  type ClaimState = {
+    paused: boolean;
+    live?: boolean;
+    today: { tokenId: number; windowOpen: boolean; minted: number };
+    claims?: { configured: boolean; remaining: number; claimed: number };
+  };
+  type ClaimResponse = {
+    ok: boolean;
+    configured?: boolean;
+    reason?: string;
+    claim?: {
+      tokenId: number;
+      sitting: string;
+      status: 'held' | 'delivered';
+      opHash: string;
+      deliveredTo: string | null;
+    };
+  };
+
+  const roots = (): HTMLElement[] => Array.from(document.querySelectorAll('[data-kennel-claim]'));
+
+  function status(root: HTMLElement, message: string, receipt?: string): void {
+    const node = root.querySelector<HTMLElement>('[data-kennel-claim-state]');
+    if (!node) return;
+    if (!receipt) {
+      node.replaceChildren(message);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = `https://tzkt.io/${receipt}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'receipt ↗';
+    node.replaceChildren(message, ' · ', link);
+  }
+
+  function firstName(user: PointCastUser): string {
+    const candidate = (user.preferredName || 'Member').trim().split(/\s+/)[0];
+    return candidate && !candidate.includes('@') && !candidate.startsWith('tz') ? candidate.slice(0, 30) : 'Member';
+  }
+
+  async function readClaimState(root: HTMLElement): Promise<ClaimState> {
+    const response = await fetch('/api/kennel-club/mint', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`claim-state-${response.status}`);
+    const payload = await response.json() as ClaimState;
+    if (payload.today.tokenId !== Number(root.dataset.tokenId)) throw new Error('wrong-sitting');
+    return payload;
+  }
+
+  function signedOut(root: HTMLElement): void {
+    root.dataset.claimSession = 'signed-out';
+    root.querySelector<HTMLElement>('[data-kennel-claim-door]')?.removeAttribute('hidden');
+    const button = root.querySelector<HTMLButtonElement>('[data-kennel-claim-button]');
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Claim today’s dog — free';
+    }
+    status(root, 'Google sign-in is the claim ticket.');
+  }
+
+  async function signedIn(root: HTMLElement, user: PointCastUser): Promise<void> {
+    root.dataset.claimSession = 'signed-in';
+    root.dataset.claimFirstName = firstName(user);
+    root.querySelector<HTMLElement>('[data-kennel-claim-door]')?.setAttribute('hidden', '');
+    const button = root.querySelector<HTMLButtonElement>('[data-kennel-claim-button]');
+    if (!button) return;
+    try {
+      const live = await readClaimState(root);
+      if (!live.claims?.configured) {
+        button.disabled = true;
+        button.textContent = 'Claims open soon';
+        status(root, 'Free claims open soon. The claim wallet is not configured yet.');
+        return;
+      }
+      if (live.paused || !live.today.windowOpen) {
+        button.disabled = true;
+        status(root, live.paused ? 'The sitting is paused.' : 'Today’s claim window is closed.');
+        return;
+      }
+      if (live.claims.remaining <= 0) {
+        button.disabled = true;
+        status(root, 'Today’s free claims are all spoken for.');
+        return;
+      }
+      button.disabled = false;
+      button.textContent = 'Claim today’s dog — free';
+      status(root, `${live.claims.claimed} free claim${live.claims.claimed === 1 ? '' : 's'} today · ${live.claims.remaining} left`);
+    } catch {
+      button.disabled = true;
+      status(root, 'Claim desk unavailable — try again shortly.');
+    }
+  }
+
+  async function emitClaimBurst(root: HTMLElement, claim: NonNullable<ClaimResponse['claim']>): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const response = await fetch('/api/burst', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'claim',
+            clientId: `claim:${claim.opHash}`,
+            by: { handle: root.dataset.claimFirstName || 'Member' },
+            meta: {
+              opHash: claim.opHash,
+              tokenId: claim.tokenId,
+              label: claim.sitting,
+              color: '#8a2432',
+            },
+          }),
+        });
+        if (response.ok) return;
+        if (response.status !== 409 && response.status !== 503) return;
+      } catch {
+        // The on-chain claim is complete; the room pulse can retry quietly.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+    }
+  }
+
+  function reasonMessage(reason: string | undefined): string {
+    if (reason === 'already-claimed') return 'You already claimed today’s dog.';
+    if (reason === 'claim-in-progress') return 'Your claim is already in progress. Check your shelf in a moment.';
+    if (reason === 'daily-cap-reached') return 'Today’s free claims are all spoken for.';
+    if (reason === 'claim-wallet-low-balance') return 'Claims are paused while the club wallet is refilled.';
+    if (reason === 'claim-wallet-not-configured') return 'Free claims open soon.';
+    if (reason === 'mint-failed') return 'The chain did not accept this claim. Try again shortly.';
+    return 'The claim could not be completed. Try again shortly.';
+  }
+
+  async function claim(root: HTMLElement): Promise<void> {
+    const button = root.querySelector<HTMLButtonElement>('[data-kennel-claim-button]');
+    if (!button || button.disabled) return;
+    if (root.dataset.claimSession !== 'signed-in') {
+      window.location.assign(`/api/auth/google?returnTo=${encodeURIComponent('/kennel-club')}`);
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Bringing your dog home…';
+    status(root, 'PointCast is paying the mint and gas. This can take one Tezos block.');
+    try {
+      const response = await fetch('/api/kennel-club/claim', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      const payload = await response.json() as ClaimResponse;
+      if (!response.ok || !payload.ok || !payload.claim) {
+        button.textContent = payload.reason === 'already-claimed' ? 'Already claimed' : 'Claim today’s dog — free';
+        button.disabled = payload.reason === 'already-claimed' || payload.reason === 'daily-cap-reached';
+        status(root, reasonMessage(payload.reason));
+        return;
+      }
+      button.textContent = 'Claimed';
+      root.dataset.claimComplete = 'true';
+      status(
+        root,
+        payload.claim.status === 'held'
+          ? `${payload.claim.sitting} is held for you — link a wallet to take it home`
+          : `${payload.claim.sitting} is in your linked wallet`,
+        payload.claim.opHash,
+      );
+      void emitClaimBurst(root, payload.claim);
+      window.dispatchEvent(new CustomEvent('pc:kennel-claim', { detail: payload.claim }));
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Claim today’s dog — free';
+      status(root, 'The claim desk lost the connection. Check your shelf before trying again.');
+    }
+  }
+
+  async function initialize(root: HTMLElement): Promise<void> {
+    if (root.dataset.claimReady === 'true') return;
+    root.dataset.claimReady = 'true';
+    const user = await getSession().catch(() => null);
+    if (user) await signedIn(root, user);
+    else signedOut(root);
+  }
+
+  roots().forEach((root) => void initialize(root));
+  document.addEventListener('astro:page-load', () => roots().forEach((root) => void initialize(root)));
+  document.addEventListener('click', (event) => {
+    const button = (event.target as Element | null)?.closest('[data-kennel-claim-button]');
+    const root = button?.closest<HTMLElement>('[data-kennel-claim]');
+    if (root) void claim(root);
+  });
+</script>
+
+<style>
+  .kennel-claim { display: grid; gap: 10px; }
+  .kennel-claim__button { width: 100%; min-height: 58px; border: 1.5px solid #fff; border-radius: 2px; background: #fff; color: var(--club, #8a2432); padding: 15px 18px; cursor: pointer; font: 500 14px var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; box-shadow: 5px 5px 0 rgba(0,0,0,.22); }
+  .kennel-claim__button:disabled { cursor: not-allowed; opacity: .62; box-shadow: none; }
+  .kennel-claim__state, .kennel-claim__door { margin: 0; font-size: 12px; line-height: 1.45; }
+  .kennel-claim__state { color: #fff; }
+  .kennel-claim__state a { color: #fff; }
+  .kennel-claim__door { color: rgba(255,255,255,.82); }
+</style>
