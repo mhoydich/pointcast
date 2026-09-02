@@ -6,6 +6,7 @@ import {
   readSessionFromRequest,
   type AuthEnv,
 } from '../auth/session';
+import { getUserKennelClaims } from '../kennel-club/_claims';
 
 const TZKT_API = 'https://api.tzkt.io/v1';
 const CACHE_TTL_SECONDS = 60;
@@ -72,6 +73,7 @@ export type MeHoldingsPayload = {
   user: PointCastUser;
   wallets: MeWalletHoldings[];
   collections: CollectionDescriptor[];
+  dogs: Awaited<ReturnType<typeof getUserKennelClaims>>;
   generatedAt: string;
   cacheTtlSeconds: number;
 };
@@ -289,7 +291,11 @@ export async function getWalletHoldings(
 
 export async function getMeHoldingsPayload(
   user: PointCastUser,
-  options: { fetcher?: Fetcher; cache?: CacheLike | null } = {},
+  options: {
+    fetcher?: Fetcher;
+    cache?: CacheLike | null;
+    dogs?: Awaited<ReturnType<typeof getUserKennelClaims>>;
+  } = {},
 ): Promise<MeHoldingsPayload> {
   const collections = pointCastCollections();
   const addresses = tezosIdentities(user.identities);
@@ -303,6 +309,7 @@ export async function getMeHoldingsPayload(
     user,
     wallets,
     collections,
+    dogs: options.dogs ?? [],
     generatedAt: new Date().toISOString(),
     cacheTtlSeconds: CACHE_TTL_SECONDS,
   };
@@ -321,7 +328,8 @@ export async function meHoldingsResponse(
   }
 
   const cache = typeof caches === 'undefined' ? null : caches.default;
-  const payload = await getMeHoldingsPayload(current.user, { cache });
+  const dogs = await getUserKennelClaims(env.AUTH_DB, current.user.userId);
+  const payload = await getMeHoldingsPayload(current.user, { cache, dogs });
   return authJson(payload, {
     headers: {
       'Cache-Control': 'private, no-store',
