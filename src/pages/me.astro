@@ -125,6 +125,17 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
         <div class="me-dogs__rows" data-me-dogs></div>
       </section>
 
+      <section class="me-seals" aria-label="Your PointCast seals">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">SOULBOUND · CHAIN ATTESTATIONS</p>
+            <h2>Your seals</h2>
+          </div>
+          <a class="me-seals__contract" href={`https://tzkt.io/${contracts.seal_soulbound.mainnet}/tokens`} rel="noopener">Contract ↗</a>
+        </header>
+        <div class="me-seals__rows" data-me-seals></div>
+      </section>
+
       <section
         class="me-claim"
         data-me-claim
@@ -158,9 +169,9 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
                 />
               </span>
             </label>
-            <button type="submit">Check claim readiness →</button>
+            <button type="submit" data-me-claim-submit>Claim with wallet →</button>
             <output class="me-claim__result" data-me-claim-result aria-live="polite">
-              One handle, one owned object. This door checks the handle; the paused contract submits nothing yet.
+              Type a handle to check mainnet availability. Claiming is free; your wallet pays only Tezos gas.
             </output>
           </form>
         ) : (
@@ -169,6 +180,28 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
             reserved here and no wallet is substituted while that address is unset.
           </p>
         )}
+        <form class="me-editor" data-me-editor hidden novalidate>
+          <input type="hidden" name="tokenId" />
+          <div class="me-editor__owned">
+            <img src="https://noun.pics/404.svg" alt="" width="96" height="96" data-me-editor-noun />
+            <div>
+              <p class="me__kicker" data-me-editor-handle>@handle is yours</p>
+              <h3>Edit your page</h3>
+              <a data-me-editor-page href="/p">Open public page ↗</a>
+              <select data-me-editor-select aria-label="Owned handle" hidden></select>
+            </div>
+          </div>
+          <label><span>Name</span><input name="name" type="text" maxlength="64" autocomplete="name" /></label>
+          <label><span>Bio <b data-me-bio-count>0 / 280</b></span><textarea name="bio" maxlength="280" rows="5"></textarea></label>
+          <fieldset data-me-editor-links>
+            <legend>Links · up to 8</legend>
+            <div data-me-link-rows></div>
+            <button type="button" data-me-action="add-link">Add link</button>
+          </fieldset>
+          <label class="me-editor__noun"><span>Noun seed</span><input name="nounSeed" type="number" min="0" max="1199" inputmode="numeric" /></label>
+          <button type="submit" data-me-editor-submit>Save page with wallet →</button>
+          <output data-me-editor-status aria-live="polite"></output>
+        </form>
       </section>
 
       <section class="me-wallets" aria-label="Linked Tezos wallets">
@@ -209,6 +242,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     type PasskeySummary,
   } from '../lib/auth/client';
   import { readPetSnapshot } from '../lib/pet-state';
+  import { decodeProfileBytes, decodeProfileLink } from '../lib/profile-object.mjs';
 
   type HoldingToken = {
     tokenId: string;
@@ -233,8 +267,23 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     totalTokenBalanceCount: number;
     everythingElseCount: number;
     collections: Collection[];
+    seals: Array<{
+      tokenId: string;
+      kind: string;
+      evidence: string;
+      issuedAt: string;
+      issuer: string;
+      revoked: boolean;
+      tzktUrl: string;
+    }>;
     cache: 'hit' | 'miss' | 'unavailable';
     error?: string;
+  };
+  type OwnedProfile = {
+    tokenId: number;
+    handle: string;
+    owner: string;
+    page: { name: string; bio: string; links: Array<{ label: string; url: string }>; nounSeed: number };
   };
   type HoldingsPayload = {
     ok: true;
@@ -261,6 +310,135 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   const shortAddress = (address: string): string => (
     address.length > 14 ? `${address.slice(0, 7)}…${address.slice(-5)}` : address
   );
+  const ownedProfilesByRoot = new WeakMap<HTMLElement, OwnedProfile[]>();
+  const claimCheckSequence = new WeakMap<HTMLElement, number>();
+
+  async function tzktBigMapKey(contract: string, map: string, key: string): Promise<any | null> {
+    const response = await fetch(`https://api.tzkt.io/v1/contracts/${encodeURIComponent(contract)}/bigmaps/${map}/keys/${encodeURIComponent(key)}`, {
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (response.status === 204 || response.status === 404) return null;
+    if (!response.ok) throw new Error(`TzKT read stopped (${response.status}).`);
+    return response.json();
+  }
+
+  function utf8Hex(value: string): string {
+    return Array.from(new TextEncoder().encode(value))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  async function readProfile(contract: string, handle: string): Promise<OwnedProfile | null> {
+    const token = await tzktBigMapKey(contract, 'tokens_by_handle', utf8Hex(handle));
+    if (!token) return null;
+    const tokenId = Number(token.value);
+    const [owner, page] = await Promise.all([
+      tzktBigMapKey(contract, 'ledger', String(tokenId)),
+      tzktBigMapKey(contract, 'pages', String(tokenId)),
+    ]);
+    if (!owner || !page) return null;
+    return {
+      tokenId,
+      handle,
+      owner: String(owner.value || ''),
+      page: {
+        name: decodeProfileBytes(page.value?.name),
+        bio: decodeProfileBytes(page.value?.bio),
+        links: Array.isArray(page.value?.links) ? page.value.links.map(decodeProfileLink) : [],
+        nounSeed: Number(page.value?.noun_seed || 0),
+      },
+    };
+  }
+
+  function profileTokens(wallets: Wallet[]): Array<{ tokenId: number; owner: string }> {
+    return wallets.flatMap((wallet) => {
+      const profiles = wallet.collections.find((collection) => collection.slug === 'profile_objects');
+      return (profiles?.tokens || []).flatMap((token) => {
+        const tokenId = Number(token.tokenId);
+        return Number.isSafeInteger(tokenId) ? [{ tokenId, owner: wallet.address }] : [];
+      });
+    });
+  }
+
+  async function readOwnedProfiles(contract: string, wallets: Wallet[]): Promise<OwnedProfile[]> {
+    return (await Promise.all(profileTokens(wallets).map(async ({ tokenId, owner }) => {
+      const [handle, page] = await Promise.all([
+        tzktBigMapKey(contract, 'handles', String(tokenId)),
+        tzktBigMapKey(contract, 'pages', String(tokenId)),
+      ]);
+      const name = decodeProfileBytes(handle?.value);
+      if (!name || !page) return null;
+      return {
+        tokenId,
+        handle: name,
+        owner,
+        page: {
+          name: decodeProfileBytes(page.value?.name),
+          bio: decodeProfileBytes(page.value?.bio),
+          links: Array.isArray(page.value?.links) ? page.value.links.map(decodeProfileLink) : [],
+          nounSeed: Number(page.value?.noun_seed || 0),
+        },
+      } satisfies OwnedProfile;
+    }))).filter((profile): profile is OwnedProfile => profile !== null);
+  }
+
+  function addLinkRow(container: HTMLElement, link: { label?: string; url?: string } = {}): void {
+    if (container.childElementCount >= 8) return;
+    const row = create('div', 'me-editor__link');
+    const label = create('input');
+    label.name = 'linkLabel';
+    label.placeholder = 'Label';
+    label.maxLength = 80;
+    label.value = link.label || '';
+    const url = create('input');
+    url.name = 'linkUrl';
+    url.type = 'url';
+    url.placeholder = 'https://…';
+    url.maxLength = 180;
+    url.value = link.url || '';
+    const remove = create('button', '', 'Remove');
+    remove.type = 'button';
+    remove.dataset.meAction = 'remove-link';
+    row.append(label, url, remove);
+    container.append(row);
+  }
+
+  function renderEditor(root: HTMLElement, profile: OwnedProfile): void {
+    const editor = root.querySelector<HTMLFormElement>('[data-me-editor]');
+    if (!editor) return;
+    editor.hidden = false;
+    const token = editor.elements.namedItem('tokenId');
+    const name = editor.elements.namedItem('name');
+    const bio = editor.elements.namedItem('bio');
+    const noun = editor.elements.namedItem('nounSeed');
+    if (token instanceof HTMLInputElement) token.value = String(profile.tokenId);
+    if (name instanceof HTMLInputElement) name.value = profile.page.name;
+    if (bio instanceof HTMLTextAreaElement) bio.value = profile.page.bio;
+    if (noun instanceof HTMLInputElement) noun.value = String(profile.page.nounSeed || readNounId(root));
+    const handle = editor.querySelector<HTMLElement>('[data-me-editor-handle]');
+    if (handle) handle.textContent = `@${profile.handle} is yours`;
+    const pageLink = editor.querySelector<HTMLAnchorElement>('[data-me-editor-page]');
+    if (pageLink) pageLink.href = `/p/@${profile.handle}`;
+    const art = editor.querySelector<HTMLImageElement>('[data-me-editor-noun]');
+    if (art) art.src = `https://noun.pics/${profile.page.nounSeed || readNounId(root)}.svg`;
+    const count = editor.querySelector<HTMLElement>('[data-me-bio-count]');
+    if (count) count.textContent = `${profile.page.bio.length} / 280`;
+    const rows = editor.querySelector<HTMLElement>('[data-me-link-rows]');
+    if (rows) {
+      rows.replaceChildren();
+      (profile.page.links.length ? profile.page.links : [{}]).slice(0, 8).forEach((link) => addLinkRow(rows, link));
+    }
+  }
+
+  function walletError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error || 'Wallet operation stopped.');
+    if (/aborted|rejected|declined|closed/i.test(message)) return 'The wallet request was rejected. Nothing was submitted.';
+    if (/HANDLE_TAKEN/i.test(message)) return 'That handle was claimed before your operation landed.';
+    if (/INVALID_HANDLE|TOO_(SHORT|LONG)/i.test(message)) return 'Use 3–24 lowercase letters, numbers, or hyphens.';
+    if (/NOT_OWNER/i.test(message)) return 'The connected wallet does not own this handle.';
+    return message;
+  }
 
   function create<K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -464,6 +642,33 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     }));
   }
 
+  function renderSeals(root: HTMLElement, wallets: Wallet[]): void {
+    const rows = root.querySelector<HTMLElement>('[data-me-seals]');
+    if (!rows) return;
+    const seals = wallets.flatMap((wallet) => wallet.seals.map((seal) => ({ ...seal, holder: wallet.address })));
+    if (!seals.length) {
+      const empty = create('div', 'me-empty');
+      empty.append(create('strong', '', 'No seals on linked wallets yet.'), create('p', '', 'Seals are issuer-attested, soulbound records read directly from Tezos.'));
+      rows.replaceChildren(empty);
+      return;
+    }
+    rows.replaceChildren(...seals.map((seal) => {
+      const card = create('article', `me-seal${seal.revoked ? ' me-seal--revoked' : ''}`);
+      const copy = create('span', 'me-seal__copy');
+      copy.append(
+        create('strong', '', seal.kind || `Seal ${seal.tokenId}`),
+        create('small', '', `${seal.revoked ? 'revoked' : 'issued'} ${seal.issuedAt ? new Date(seal.issuedAt).toLocaleDateString() : 'on-chain'} · ${shortAddress(seal.holder)}`),
+        create('p', '', seal.evidence || 'No public evidence note.'),
+      );
+      const link = create('a', 'me-seal__link', 'Receipt ↗');
+      link.href = seal.tzktUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      card.append(copy, link);
+      return card;
+    }));
+  }
+
   function renderCollections(root: HTMLElement, payload: HoldingsPayload): void {
     const container = root.querySelector<HTMLElement>('[data-me-collections]');
     if (!container) return;
@@ -532,10 +737,56 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     }));
   }
 
-  function renderClaimDoor(root: HTMLElement, wallets: Wallet[]): void {
+  async function renderClaimDoor(root: HTMLElement, wallets: Wallet[]): Promise<void> {
     const door = root.querySelector<HTMLElement>('[data-me-claim]');
     if (!door) return;
-    door.dataset.meClaimAddress = wallets[0]?.address || '';
+    door.dataset.meClaimAddresses = wallets.map((wallet) => wallet.address).join(',');
+    const contract = door.dataset.meClaimContract || '';
+    if (!contract || !wallets.length) return;
+    try {
+      const profiles = await readOwnedProfiles(contract, wallets);
+      ownedProfilesByRoot.set(root, profiles);
+      if (profiles[0]) renderEditor(root, profiles[0]);
+      const select = root.querySelector<HTMLSelectElement>('[data-me-editor-select]');
+      if (select && profiles.length > 1) {
+        select.replaceChildren(...profiles.map((profile) => {
+          const option = document.createElement('option');
+          option.value = String(profile.tokenId);
+          option.textContent = `@${profile.handle}`;
+          return option;
+        }));
+        select.hidden = false;
+      }
+    } catch {
+      const result = door.querySelector<HTMLOutputElement>('[data-me-claim-result]');
+      if (result) result.textContent = 'Your shelf loaded, but live profile records could not be read from TzKT.';
+    }
+  }
+
+  async function checkHandle(root: HTMLElement, handle: string): Promise<OwnedProfile | null> {
+    const door = root.querySelector<HTMLElement>('[data-me-claim]');
+    const result = door?.querySelector<HTMLOutputElement>('[data-me-claim-result]');
+    if (!door || !result) return null;
+    const sequence = (claimCheckSequence.get(root) || 0) + 1;
+    claimCheckSequence.set(root, sequence);
+    result.textContent = `Checking @${handle} on Tezos…`;
+    const profile = await readProfile(door.dataset.meClaimContract || '', handle);
+    if (claimCheckSequence.get(root) !== sequence) return profile;
+    if (!profile) {
+      result.textContent = `@${handle} is available · claim is free, gas only.`;
+      return null;
+    }
+    const linked = new Set((door.dataset.meClaimAddresses || '').split(',').filter(Boolean));
+    if (linked.has(profile.owner)) {
+      result.textContent = `@${handle} is yours · edit your page below.`;
+      const profiles = ownedProfilesByRoot.get(root) || [];
+      if (!profiles.some((item) => item.tokenId === profile.tokenId)) profiles.push(profile);
+      ownedProfilesByRoot.set(root, profiles);
+      renderEditor(root, profile);
+    } else {
+      result.textContent = `@${handle} is already taken.`;
+    }
+    return profile;
   }
 
   function showSignedOut(root: HTMLElement): void {
@@ -571,7 +822,8 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     renderDogs(root, payload);
     renderWallets(root, payload.wallets);
     renderCollections(root, payload);
-    renderClaimDoor(root, payload.wallets);
+    renderSeals(root, payload.wallets);
+    void renderClaimDoor(root, payload.wallets);
     renderLocalState(root);
     void refreshPasskeys(root);
     if (window.location.hash === '#holdings') {
@@ -581,6 +833,12 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     }
     if (new URLSearchParams(window.location.search).get('link') === 'wallet') {
       window.requestAnimationFrame(() => window.dispatchEvent(new Event('pc:open-auth-menu')));
+    }
+    const requestedHandle = new URLSearchParams(window.location.search).get('handle')?.toLowerCase() || '';
+    if (/^[a-z0-9-]{3,24}$/.test(requestedHandle)) {
+      const field = root.querySelector<HTMLInputElement>('[data-me-claim-form] input[name="handle"]');
+      if (field) field.value = requestedHandle;
+      void checkHandle(root, requestedHandle).catch(() => {});
     }
   }
 
@@ -662,7 +920,48 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
             actionElement.removeAttribute('aria-disabled');
             if (status) status.textContent = error instanceof Error ? error.message : 'Could not remove passkey.';
           });
+      } else if (action === 'add-link') {
+        event.preventDefault();
+        const rows = actionElement.closest<HTMLFormElement>('[data-me-editor]')?.querySelector<HTMLElement>('[data-me-link-rows]');
+        if (rows) addLinkRow(rows);
+      } else if (action === 'remove-link') {
+        event.preventDefault();
+        actionElement.closest('.me-editor__link')?.remove();
       }
+    }, { signal: controller.signal });
+
+    let handleTimer = 0;
+    document.addEventListener('input', (event) => {
+      const field = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement ? event.target : null;
+      if (!field) return;
+      const root = field.closest<HTMLElement>('[data-me-root]');
+      if (!root) return;
+      if (field.name === 'handle') {
+        window.clearTimeout(handleTimer);
+        const handle = field.value.trim().toLowerCase();
+        const result = root.querySelector<HTMLOutputElement>('[data-me-claim-result]');
+        if (!/^[a-z0-9-]{3,24}$/.test(handle)) {
+          if (result) result.textContent = handle ? 'Use 3–24 lowercase letters, numbers, or hyphens.' : 'Type a handle to check mainnet availability.';
+          return;
+        }
+        handleTimer = window.setTimeout(() => void checkHandle(root, handle).catch((error) => {
+          if (result) result.textContent = walletError(error);
+        }), 350);
+      } else if (field.name === 'bio') {
+        const count = root.querySelector<HTMLElement>('[data-me-bio-count]');
+        if (count) count.textContent = `${field.value.length} / 280`;
+      } else if (field.name === 'nounSeed') {
+        const art = root.querySelector<HTMLImageElement>('[data-me-editor-noun]');
+        const seed = Number(field.value);
+        if (art && Number.isInteger(seed) && seed >= 0 && seed < 1200) art.src = `https://noun.pics/${seed}.svg`;
+      }
+    }, { signal: controller.signal });
+
+    document.addEventListener('change', (event) => {
+      const select = event.target instanceof HTMLSelectElement ? event.target.closest<HTMLSelectElement>('[data-me-editor-select]') : null;
+      const root = select?.closest<HTMLElement>('[data-me-root]');
+      const profile = root ? ownedProfilesByRoot.get(root)?.find((item) => item.tokenId === Number(select?.value)) : null;
+      if (root && profile) renderEditor(root, profile);
     }, { signal: controller.signal });
 
     document.addEventListener('submit', (event) => {
@@ -693,27 +992,91 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
         return;
       }
 
+      const editor = target?.closest<HTMLFormElement>('[data-me-editor]');
+      if (editor) {
+        event.preventDefault();
+        const root = editor.closest<HTMLElement>('[data-me-root]');
+        const status = editor.querySelector<HTMLOutputElement>('[data-me-editor-status]');
+        const button = editor.querySelector<HTMLButtonElement>('[data-me-editor-submit]');
+        const token = Number((editor.elements.namedItem('tokenId') as HTMLInputElement | null)?.value);
+        const profile = ownedProfilesByRoot.get(root!)?.find((item) => item.tokenId === token);
+        const name = (editor.elements.namedItem('name') as HTMLInputElement | null)?.value.trim() || '';
+        const bio = (editor.elements.namedItem('bio') as HTMLTextAreaElement | null)?.value || '';
+        const nounSeed = Number((editor.elements.namedItem('nounSeed') as HTMLInputElement | null)?.value);
+        const labelFields = Array.from(editor.querySelectorAll<HTMLInputElement>('input[name="linkLabel"]'));
+        const urlFields = Array.from(editor.querySelectorAll<HTMLInputElement>('input[name="linkUrl"]'));
+        const links = urlFields.map((field, index) => ({ label: labelFields[index]?.value.trim() || field.value.trim(), url: field.value.trim() })).filter((link) => link.url);
+        if (!root || !profile || bio.length > 280 || links.length > 8 || !Number.isInteger(nounSeed) || nounSeed < 0 || nounSeed >= 1200) {
+          if (status) status.textContent = 'Check the bio, link count, and Noun seed before saving.';
+          return;
+        }
+        if (links.some((link) => { try { return !/^https?:$/.test(new URL(link.url).protocol); } catch { return true; } })) {
+          if (status) status.textContent = 'Every link needs a complete http:// or https:// URL.';
+          return;
+        }
+        if (button) button.disabled = true;
+        if (status) status.textContent = 'Confirm the page update in your wallet…';
+        void import('../lib/tezos').then(async ({ setProfilePage }) => {
+          const operation = await setProfilePage({ contract: root.querySelector<HTMLElement>('[data-me-claim]')?.dataset.meClaimContract || '', tokenId: token, name, bio, links, nounSeed });
+          profile.page = { name, bio, links, nounSeed };
+          renderEditor(root, profile);
+          const receipt = create('a', '', 'View on TzKT ↗');
+          receipt.href = `https://tzkt.io/${operation.opHash}`;
+          receipt.target = '_blank';
+          receipt.rel = 'noopener';
+          status?.replaceChildren('Broadcast · optimistic page preview is ready · ', receipt);
+          await operation.confirmation;
+          status?.replaceChildren(`Confirmed · @${profile.handle} is live on-chain · `, receipt);
+        }).catch((error) => {
+          if (status) status.textContent = walletError(error);
+        }).finally(() => { if (button) button.disabled = false; });
+        return;
+      }
+
       const form = target?.closest<HTMLFormElement>('[data-me-claim-form]');
       if (!form) return;
       event.preventDefault();
+      const root = form.closest<HTMLElement>('[data-me-root]');
       const door = form.closest<HTMLElement>('[data-me-claim]');
       const result = form.querySelector<HTMLOutputElement>('[data-me-claim-result]');
+      const button = form.querySelector<HTMLButtonElement>('[data-me-claim-submit]');
       const field = form.elements.namedItem('handle');
       const handle = (field instanceof HTMLInputElement ? field.value : '').trim().toLowerCase();
-      if (!/^[a-z0-9-]{3,24}$/.test(handle)) {
+      if (!root || !door || !/^[a-z0-9-]{3,24}$/.test(handle)) {
         result?.replaceChildren('Use 3–24 lowercase letters, numbers, or hyphens.');
         return;
       }
-      if (!door?.dataset.meClaimAddress) {
-        result?.replaceChildren('Link a Tezos wallet below before claiming. This door never assumes a wallet for you.');
+      if (!door.dataset.meClaimAddresses) {
+        result?.replaceChildren('Link a Tezos wallet before claiming. This door never assumes a wallet for you.');
         return;
       }
-      const preview = create('a', 'me-claim__preview', `Preview /p/${handle} →`);
-      preview.href = `/p/${handle}`;
-      result?.replaceChildren(
-        `@${handle} is a valid handle for ${shortAddress(door.dataset.meClaimAddress)}. Origination is paused, so nothing was submitted. `,
-        preview,
-      );
+      if (button) button.disabled = true;
+      void checkHandle(root, handle).then(async (existing) => {
+        if (existing) return;
+        if (result) result.textContent = 'Confirm the free claim in your wallet…';
+        const { claimProfileHandle } = await import('../lib/tezos');
+        const operation = await claimProfileHandle({ contract: door.dataset.meClaimContract || '', handle });
+        door.dataset.meClaimAddresses = [...new Set([...door.dataset.meClaimAddresses!.split(','), operation.address])].join(',');
+        const receipt = create('a', '', 'View on TzKT ↗');
+        receipt.href = `https://tzkt.io/${operation.opHash}`;
+        receipt.target = '_blank';
+        receipt.rel = 'noopener';
+        result?.replaceChildren('Broadcast · waiting for 1 confirmation · ', receipt);
+        await operation.confirmation;
+        result?.replaceChildren(`Confirmed · @${handle} is yours · `, receipt);
+        let profile: OwnedProfile | null = null;
+        for (let attempt = 0; attempt < 8 && !profile; attempt += 1) {
+          profile = await readProfile(door.dataset.meClaimContract || '', handle);
+          if (!profile) await new Promise((resolve) => window.setTimeout(resolve, 1250));
+        }
+        profile ||= { tokenId: -1, handle, owner: operation.address, page: { name: handle, bio: '', links: [], nounSeed: readNounId(root) } };
+        const profiles = ownedProfilesByRoot.get(root) || [];
+        profiles.push(profile);
+        ownedProfilesByRoot.set(root, profiles);
+        renderEditor(root, profile);
+      }).catch((error) => {
+        if (result) result.textContent = walletError(error);
+      }).finally(() => { if (button) button.disabled = false; });
     }, { signal: controller.signal });
 
     document.addEventListener('error', (event) => {
@@ -830,7 +1193,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-companion__body span { font-size: 10px; }
   .me-summary__card--companion > a { position: absolute; right: 14px; bottom: 12px; color: inherit; font: 500 9px/1 var(--pc-font-mono); text-transform: uppercase; }
 
-  .me-wallets, .me-holdings, .me-dogs { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
+  .me-wallets, .me-holdings, .me-dogs, .me-seals { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
   .me-holdings { border-color: var(--me-amber); }
   .me-dogs { border-color: #8a2432; }
   .me-dogs__club { color: #8a2432; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -841,6 +1204,15 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-dog__copy strong { font-size: 15px; font-weight: 500; }
   .me-dog__copy small { color: #715b60; font: 400 9px/1.45 var(--pc-font-mono); text-transform: uppercase; }
   .me-dog__action { color: #8a2432; font: 500 9px/1.3 var(--pc-font-mono); text-transform: uppercase; }
+  .me-seals { border-color: #7152a4; background: #fbf8ff; }
+  .me-seals__contract { color: #7152a4; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-seals__rows { display: grid; gap: 6px; }
+  .me-seal { display: flex; justify-content: space-between; gap: 18px; padding: 12px; border: 1px solid #cbbbe2; background: #fff; }
+  .me-seal--revoked { opacity: .58; }
+  .me-seal__copy { display: grid; gap: 4px; }
+  .me-seal__copy strong { color: #5b398c; font-size: 15px; text-transform: capitalize; }
+  .me-seal__copy small, .me-seal__link { color: #7152a4; font: 500 8px/1.4 var(--pc-font-mono); text-transform: uppercase; }
+  .me-seal__copy p { margin: 3px 0 0; font-size: 12px; }
   .me-holdings-anchor { position: relative; top: -10px; display: block; visibility: hidden; }
   .me-section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
   .me-section-head h2 { margin: 0; font: 500 clamp(28px, 4vw, 44px)/1 var(--pc-font-sans); letter-spacing: -.035em; }
@@ -884,10 +1256,26 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-claim__field b { padding-left: 10px; font-weight: 500; }
   .me-claim__field input { width: min(340px, 60vw); padding: 11px 10px 11px 4px; border: 0; outline: 0; background: transparent; color: var(--me-ink); font: 400 16px/1 var(--pc-font-mono); }
   .me-claim__form button { padding: 11px 14px; border: 0; background: var(--me-blue); color: #fff; cursor: pointer; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-claim button:disabled { cursor: wait; opacity: .55; }
   .me-claim__result { display: block; max-width: 62ch; color: var(--me-ink); font-size: 12px; line-height: 1.5; }
   .me-claim__preview { color: var(--me-blue); }
   .me-claim__closed { max-width: 62ch; margin: 0; color: var(--me-ink); font-size: 12px; line-height: 1.5; }
   .me-claim__closed code { font-family: var(--pc-font-mono); }
+  .me-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; padding-top: 18px; border-top: 1.5px solid var(--me-blue); color: var(--me-ink); }
+  .me-editor__owned { grid-column: 1 / -1; display: flex; gap: 14px; align-items: center; }
+  .me-editor__owned img { width: 82px; height: 82px; border: 1.5px solid var(--me-blue); background: #fff; }
+  .me-editor__owned h3 { margin: 0 0 5px; font: 500 30px/1 var(--pc-font-sans); letter-spacing: -.04em; }
+  .me-editor__owned a { color: var(--me-blue); font: 500 9px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-editor__owned select { display: block; margin-top: 8px; padding: 6px; border: 1px solid var(--me-blue); background: #fff; font: 500 9px/1 var(--pc-font-mono); }
+  .me-editor > label, .me-editor fieldset { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; font: 500 9px/1.3 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .me-editor > label:nth-of-type(2), .me-editor fieldset { grid-column: 1 / -1; }
+  .me-editor label span { display: flex; justify-content: space-between; }
+  .me-editor label b { color: #63717d; font-weight: 400; }
+  .me-editor input, .me-editor textarea { width: 100%; padding: 10px; border: 1px solid #9bb7d2; background: #fff; color: var(--me-ink); font: 400 13px/1.4 var(--pc-font-mono); text-transform: none; }
+  .me-editor__link { display: grid; grid-template-columns: minmax(120px, .4fr) minmax(180px, 1fr) auto; gap: 6px; margin-bottom: 6px; }
+  .me-editor button { justify-self: start; padding: 10px 12px; border: 1px solid var(--me-blue); background: var(--me-blue); color: #fff; font: 500 8px/1 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .me-editor__link button, .me-editor fieldset > button { background: #fff; color: var(--me-blue); }
+  .me-editor > output { align-self: center; font: 400 10px/1.5 var(--pc-font-mono); }
 
   @media (max-width: 760px) {
     .me { padding-inline: 10px; }
@@ -899,6 +1287,9 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     .me-head__actions { grid-row: 3; }
     .me-identities { grid-column: 1; }
     .me-summary { grid-template-columns: 1fr; }
+    .me-editor { grid-template-columns: 1fr; }
+    .me-editor > label, .me-editor fieldset { grid-column: 1; }
+    .me-editor__link { grid-template-columns: 1fr; }
     .me-collection__head { grid-template-columns: 1fr auto; }
     .me-collection__contract { grid-column: 1 / -1; }
   }
