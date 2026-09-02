@@ -1,4 +1,11 @@
-import { authJson, readSessionFromRequest, type AuthEnv } from './session';
+import {
+  authJson,
+  consumeAuthState,
+  hasAuthStorage,
+  readSessionFromRequest,
+  writeAuthState,
+  type AuthEnv,
+} from './session';
 
 const TICKET_PREFIX = 'project-ticket:';
 const TICKET_TTL_SECONDS = 120;
@@ -28,7 +35,7 @@ function validReturnTo(target: string, returnTo: string): string | null {
 }
 
 export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!env.USERS) return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
+  if (!hasAuthStorage(env)) return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   const current = await readSessionFromRequest(request, env);
   if (!current) return authJson({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
@@ -54,14 +61,14 @@ export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) =>
 
   const code = `pct_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
   const ticket: Ticket = { target, address: identity.id, issuedAt: new Date().toISOString() };
-  await env.USERS.put(`${TICKET_PREFIX}${code}`, JSON.stringify(ticket), { expirationTtl: TICKET_TTL_SECONDS });
+  await writeAuthState(env, `${TICKET_PREFIX}${code}`, ticket, TICKET_TTL_SECONDS);
   const destination = new URL(returnTo);
   destination.searchParams.set('pointcast_code', code);
   return authJson({ ok: true, destination: destination.toString() });
 };
 
 export const onRequestDelete: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!env.USERS) return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
+  if (!hasAuthStorage(env)) return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   let body: { code?: unknown; target?: unknown };
   try {
     body = await request.json() as typeof body;
@@ -74,15 +81,8 @@ export const onRequestDelete: PagesFunction<AuthEnv> = async ({ request, env }) 
     return authJson({ ok: false, reason: 'bad-ticket' }, { status: 400 });
   }
   const key = `${TICKET_PREFIX}${code}`;
-  const raw = await env.USERS.get(key);
-  if (!raw) return authJson({ ok: false, reason: 'ticket-expired-or-used' }, { status: 401 });
-  await env.USERS.delete(key);
-  let ticket: Ticket;
-  try {
-    ticket = JSON.parse(raw) as Ticket;
-  } catch {
-    return authJson({ ok: false, reason: 'bad-ticket' }, { status: 400 });
-  }
+  const ticket = await consumeAuthState<Ticket>(env, key);
+  if (!ticket) return authJson({ ok: false, reason: 'ticket-expired-or-used' }, { status: 401 });
   if (ticket.target !== target || Date.now() - Date.parse(ticket.issuedAt) > TICKET_TTL_SECONDS * 1000) {
     return authJson({ ok: false, reason: 'ticket-expired-or-used' }, { status: 401 });
   }

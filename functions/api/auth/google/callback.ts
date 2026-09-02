@@ -10,6 +10,8 @@ import {
 import {
   IdentityConflictError,
   authJson,
+  consumeAuthState,
+  hasAuthStorage,
   issueSession,
   upsertUserForIdentity,
   withSessionCookie,
@@ -32,7 +34,7 @@ function errorRedirect(request: Request, reason: string, returnTo = '/dashboard'
 }
 
 export const onRequestGet: PagesFunction<GoogleCallbackEnv> = async ({ request, env }) => {
-  if (!env.USERS) {
+  if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
   }
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
@@ -48,9 +50,8 @@ export const onRequestGet: PagesFunction<GoogleCallbackEnv> = async ({ request, 
   if (!code || !state) return errorRedirect(request, 'google-missing-callback');
 
   const stateKey = `${STATE_PREFIX}${state}`;
-  const stateRecord = await env.USERS.get<OAuthStateRecord>(stateKey, 'json');
+  const stateRecord = await consumeAuthState<OAuthStateRecord>(env, stateKey);
   if (!stateRecord) return errorRedirect(request, 'google-state-expired');
-  await env.USERS.delete(stateKey);
 
   const redirectUri = `${url.origin}/api/auth/google/callback`;
   let tokenResponse: Response;

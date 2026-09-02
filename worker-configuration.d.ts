@@ -4,6 +4,7 @@ interface __BaseEnv_Env {
 	VISITS: KVNamespace;
 	PC_ANALYTICS_KV: KVNamespace;
 	USERS: KVNamespace;
+	AUTH_DB: D1Database;
 	PC_PING_KV: KVNamespace;
 	PC_QUEUE_KV: KVNamespace;
 	PC_DROP_KV: KVNamespace;
