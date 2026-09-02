@@ -61,7 +61,7 @@ test('the human page is playable, sequenced, responsive, and motion-safe', async
   assert.match(page, /playlist\.participation\.actions/);
   assert.match(data, /Follow on this device/);
   assert.match(data, /Send PointCast a ping/);
-  assert.match(data, /Bring a signal passport/);
+  assert.match(data, /Sign in to PointCast/);
   assert.doesNotMatch(page, /type="email"/);
   assert.doesNotMatch(page, /\bfetch\(/);
 });
