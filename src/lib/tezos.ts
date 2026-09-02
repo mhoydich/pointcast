@@ -13,6 +13,9 @@
 import { TezosToolkit, MichelsonMap } from '@taquito/taquito';
 import { BeaconWallet } from '@taquito/beacon-wallet';
 import { getPkhfromPk, stringToBytes, verifySignature } from '@taquito/utils';
+import { claimProfileHandleWith, setProfilePageWith, utf8ToHex } from './profile-operations.mjs';
+
+export { utf8ToHex } from './profile-operations.mjs';
 
 // Public mainnet RPC. ECAD's mainnet.api.tez.ie was retired in 2026 (browser 'Failed to fetch'); rpc.tzkt.io answers with CORS from pointcast.xyz.
 const RPC_URL = 'https://rpc.tzkt.io/mainnet';
@@ -330,4 +333,32 @@ export async function mintKennelClubSitting(params: {
     mutez: true,
   });
   return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
+}
+
+export async function claimProfileHandle(params: {
+  contract: string;
+  handle: string;
+}): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
+  if (!params.contract.startsWith('KT1')) throw new Error('Profile contract is not configured.');
+  const { tezos, wallet } = getToolkit();
+  return claimProfileHandleWith(params, {
+    connect: () => ensurePointCastPermissions(wallet),
+    at: (address: string) => tezos.wallet.at(address),
+  });
+}
+
+export async function setProfilePage(params: {
+  contract: string;
+  tokenId: number;
+  name: string;
+  bio: string;
+  links: Array<{ label: string; url: string }>;
+  nounSeed: number;
+}): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
+  if (!params.contract.startsWith('KT1')) throw new Error('Profile contract is not configured.');
+  const { tezos, wallet } = getToolkit();
+  return setProfilePageWith(params, {
+    connect: () => ensurePointCastPermissions(wallet),
+    at: (address: string) => tezos.wallet.at(address),
+  });
 }
