@@ -1,8 +1,12 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import AuthMenu from '../components/AuthMenu.astro';
+import contracts from '../data/contracts.json';
+import { isProfileContractConfigured } from '../lib/profile-object.mjs';
 
 const description = 'Your private PointCast identity and Tezos holdings, keyed only to wallets linked to this signed session.';
+const profileContract = contracts.profile_objects.mainnet;
+const profileClaimOpen = isProfileContractConfigured(profileContract);
 ---
 
 <BlockLayout title="Me" description={description}>
@@ -89,6 +93,52 @@ const description = 'Your private PointCast identity and Tezos holdings, keyed o
           </span>
           <a href="/pet">Visit companion →</a>
         </article>
+      </section>
+
+      <section
+        class="me-claim"
+        data-me-claim
+        data-me-claim-contract={profileContract}
+        data-me-claim-open={String(profileClaimOpen)}
+        aria-label="Profile object claim"
+      >
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">PROFILE OBJECT · OWNED HANDLE</p>
+            <h2>Claim your handle</h2>
+          </div>
+          <a class="me-claim__browse" href="/p">Browse profile objects →</a>
+        </header>
+        {profileClaimOpen ? (
+          <form class="me-claim__form" data-me-claim-form novalidate>
+            <label class="me-claim__label">
+              <span>Handle</span>
+              <span class="me-claim__field">
+                <b aria-hidden="true">@</b>
+                <input
+                  name="handle"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="nickname"
+                  minlength="3"
+                  maxlength="24"
+                  pattern={'[a-z0-9-]{3,24}'}
+                  placeholder="your-handle"
+                  required
+                />
+              </span>
+            </label>
+            <button type="submit">Check claim readiness →</button>
+            <output class="me-claim__result" data-me-claim-result aria-live="polite">
+              One handle, one owned object. This door checks the handle; the paused contract submits nothing yet.
+            </output>
+          </form>
+        ) : (
+          <p class="me-claim__closed" data-me-claim-closed>
+            Claims open when the contract lands. <code>profile_objects.mainnet</code> is still empty, so no handle can be
+            reserved here and no wallet is substituted while that address is unset.
+          </p>
+        )}
       </section>
 
       <section class="me-wallets" aria-label="Linked Tezos wallets">
@@ -353,6 +403,12 @@ const description = 'Your private PointCast identity and Tezos holdings, keyed o
     }));
   }
 
+  function renderClaimDoor(root: HTMLElement, wallets: Wallet[]): void {
+    const door = root.querySelector<HTMLElement>('[data-me-claim]');
+    if (!door) return;
+    door.dataset.meClaimAddress = wallets[0]?.address || '';
+  }
+
   function showSignedOut(root: HTMLElement): void {
     root.dataset.meState = 'signed-out';
     const loading = root.querySelector<HTMLElement>('[data-me-loading]');
@@ -385,6 +441,7 @@ const description = 'Your private PointCast identity and Tezos holdings, keyed o
     renderIdentities(root, payload.user.identities);
     renderWallets(root, payload.wallets);
     renderCollections(root, payload);
+    renderClaimDoor(root, payload.wallets);
     renderLocalState(root);
     if (window.location.hash === '#holdings') {
       window.requestAnimationFrame(() => {
@@ -454,6 +511,31 @@ const description = 'Your private PointCast identity and Tezos holdings, keyed o
         event.preventDefault();
         roots.forEach((root) => void loadRoot(root, controller.signal));
       }
+    }, { signal: controller.signal });
+
+    document.addEventListener('submit', (event) => {
+      const form = (event.target instanceof Element ? event.target : null)
+        ?.closest<HTMLFormElement>('[data-me-claim-form]');
+      if (!form) return;
+      event.preventDefault();
+      const door = form.closest<HTMLElement>('[data-me-claim]');
+      const result = form.querySelector<HTMLOutputElement>('[data-me-claim-result]');
+      const field = form.elements.namedItem('handle');
+      const handle = (field instanceof HTMLInputElement ? field.value : '').trim().toLowerCase();
+      if (!/^[a-z0-9-]{3,24}$/.test(handle)) {
+        result?.replaceChildren('Use 3–24 lowercase letters, numbers, or hyphens.');
+        return;
+      }
+      if (!door?.dataset.meClaimAddress) {
+        result?.replaceChildren('Link a Tezos wallet below before claiming. This door never assumes a wallet for you.');
+        return;
+      }
+      const preview = create('a', 'me-claim__preview', `Preview /p/${handle} →`);
+      preview.href = `/p/${handle}`;
+      result?.replaceChildren(
+        `@${handle} is a valid handle for ${shortAddress(door.dataset.meClaimAddress)}. Origination is paused, so nothing was submitted. `,
+        preview,
+      );
     }, { signal: controller.signal });
 
     document.addEventListener('error', (event) => {
@@ -590,6 +672,20 @@ const description = 'Your private PointCast identity and Tezos holdings, keyed o
   .me-token__balance { position: absolute; right: 4px; bottom: 4px; padding: 3px 5px; background: var(--me-ink); color: #fff; font: 500 8px/1 var(--pc-font-mono); }
   .me-token__name { margin-top: 7px; overflow: hidden; font-size: 11px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
   .me-token small { margin-top: 3px; color: #6c747b; font: 400 8px/1.2 var(--pc-font-mono); text-transform: uppercase; }
+
+  .me-claim { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-blue); background: #eef5fc; color: var(--me-blue); }
+  .me-claim .me-section-head { margin: 0 0 14px; }
+  .me-claim__browse { color: inherit; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-claim__form { display: grid; gap: 12px; justify-items: start; }
+  .me-claim__label { display: grid; gap: 6px; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-claim__field { display: flex; align-items: center; border: 1.5px solid var(--me-blue); background: #fff; }
+  .me-claim__field b { padding-left: 10px; font-weight: 500; }
+  .me-claim__field input { width: min(340px, 60vw); padding: 11px 10px 11px 4px; border: 0; outline: 0; background: transparent; color: var(--me-ink); font: 400 16px/1 var(--pc-font-mono); }
+  .me-claim__form button { padding: 11px 14px; border: 0; background: var(--me-blue); color: #fff; cursor: pointer; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-claim__result { display: block; max-width: 62ch; color: var(--me-ink); font-size: 12px; line-height: 1.5; }
+  .me-claim__preview { color: var(--me-blue); }
+  .me-claim__closed { max-width: 62ch; margin: 0; color: var(--me-ink); font-size: 12px; line-height: 1.5; }
+  .me-claim__closed code { font-family: var(--pc-font-mono); }
 
   @media (max-width: 760px) {
     .me { padding-inline: 10px; }
