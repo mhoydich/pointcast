@@ -298,8 +298,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   if (isGet && !looksLikeAsset && !isApiRoute && wantsHtml && env.VISITS) {
     // Humans: skip — let the JS widget on the page handle their log entry.
-    // Non-humans: auto-log with a random noun so they show up in the feed.
-    if (type !== 'human' && type !== 'unknown') {
+    // Non-humans: auto-log with a random noun so they show up in the feed —
+    // except the anonymous crawler flood. On 2026-09-01 the last 100 log
+    // entries were 90 bot:other + 6 bot:seo in 82 minutes: ~1,700 hits/day,
+    // 2–3 KV puts each, which alone exceeds the 1,000 writes/day the free
+    // plan allows and is what left the bench, PING and the votives unable
+    // to write on 2026-08-31. Named AI agents, search engines and social
+    // unfurlers are still logged; generic crawlers and SEO scrapers only
+    // count toward the total and are not written to KV.
+    const QUIET_BOTS = new Set(['bot:other', 'bot:seo']);
+    if (type !== 'human' && type !== 'unknown' && !QUIET_BOTS.has(type)) {
       const nounId = Math.floor(Math.random() * NOUN_ID_RANGE);
       waitUntil(
         recordVisit({
