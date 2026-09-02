@@ -85,6 +85,8 @@ const COLLECTION_LABELS: Record<string, { name: string; href: string }> = {
   visit_nouns: { name: 'Visit Nouns', href: '/visit-nouns' },
   coffee_mugs: { name: 'Coffee Mugs', href: '/coffee' },
   kennel_club: { name: 'Kennel Club', href: '/kennel-club' },
+  profile_objects: { name: 'Profile Objects', href: '/me' },
+  seal_soulbound: { name: 'Soulbound Seals', href: '/townsfolk' },
   passport_stamps: { name: 'Passport Stamps', href: '/passport' },
   seals: { name: 'Passport Seals', href: '/townsfolk' },
   signal_stamps: { name: 'Signal Stamps', href: '/25/collect/signal-stamps' },
