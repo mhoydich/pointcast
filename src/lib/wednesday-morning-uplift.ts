@@ -54,7 +54,7 @@ export const WEDNESDAY_MORNING_UPLIFT = {
     actions: [
       { label: 'Follow on this device', href: '/super-follow' },
       { label: 'Send PointCast a ping', href: '/ping' },
-      { label: 'Bring a signal passport', href: '/auth' },
+      { label: 'Sign in to PointCast', href: '/auth' },
     ],
   },
 } as const;

@@ -1,27 +1,24 @@
 import type { APIRoute } from 'astro';
 
-import { SUPER_AUTH_NEXT, SUPER_AUTH_PROVIDERS } from '../data/super-auth';
+import { ACCOUNT_PROVIDERS } from '../data/super-auth';
 
 export const prerender = true;
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
-  name: 'PointCast Super Auth',
+  name: 'PointCast Account',
   canonical: 'https://pointcast.xyz/auth',
-  version: 1,
-  principle: 'An authorization should create a narrow, legible signal—not a silent data vacuum.',
-  providers: SUPER_AUTH_PROVIDERS,
-  next: SUPER_AUTH_NEXT,
-  liveEndpoints: {
+  version: 2,
+  purpose: 'Sign in, review linked identities, link a wallet, or sign out.',
+  providers: ACCOUNT_PROVIDERS,
+  endpoints: {
     session: '/api/auth/session',
-    spotify: '/api/spotify/broadcast',
-    shopify: '/api/shopify/connection',
     machineContract: '/auth.json',
   },
   boundaries: [
     'Looking around PointCast requires no account.',
-    'Spotify is a single authorized broadcaster signal, not visitor tracking.',
-    'Shopify requests read_products only; customers, orders, checkout, and payments stay out.',
+    'Linked identities are shown by provider name without exposing their identifiers here.',
     'Wallet operations remain explicit and require wallet approval.',
+    'Music and shop administration live in the private dashboard panel.',
   ],
 }, null, 2), {
   headers: {
