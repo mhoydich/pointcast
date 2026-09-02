@@ -1,0 +1,19 @@
+import type { APIRoute } from 'astro';
+import { KENNEL_CLUB, KENNEL_CLUB_CANONICAL, calendar, losAngelesDate, sittingOfTheDay, sittingPayload } from '../lib/kennel-club';
+
+export const GET: APIRoute = () => {
+  const date = losAngelesDate();
+  const today = sittingOfTheDay(date);
+  return new Response(JSON.stringify({
+    spec: 'pointcast.kennel-club-calendar/v1',
+    canonical: KENNEL_CLUB_CANONICAL,
+    title: 'Kennel Club · The September Sitting',
+    timeZone: 'America/Los_Angeles',
+    calendarMonth: '2026-09',
+    status: KENNEL_CLUB.status,
+    today: { date, ...sittingPayload(today) },
+    lateStartNote: 'The club opened two days late; the first two dogs were already waiting.',
+    mint: { ...KENNEL_CLUB.mint, status: 'contract-pending', note: 'Mint window opens when the contract lands.' },
+    calendar: calendar(date),
+  }, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300, s-maxage=3600', 'Access-Control-Allow-Origin': '*' } });
+};
