@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * score-live.mjs — refresh .score-live.json for score-projects.mjs.
- * 1) counts pageviews per path from PC_ANALYTICS_KV (`pv:` keys, 90-day TTL) via the CF REST API
+ * 1) counts weighted pageviews from PC_ANALYTICS_KV's ten-second batches (90-day TTL) via the CF REST API
  *    (uses wrangler's OAuth token, or CLOUDFLARE_API_TOKEN). Paths starting with /_ are ignored (smoke tests).
  * 2) merges the public room counters (drum hits, prayers, votives, …)
  * Usage: node scripts/score-live.mjs   (needs a wrangler login on this machine)
@@ -18,11 +18,23 @@ if (NS && TOKEN) {
   let cursor = '';
   let pages = 0;
   do {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/storage/kv/namespaces/${NS}/keys?limit=1000&prefix=pv:${cursor ? `&cursor=${cursor}` : ''}`;
+    const url = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/storage/kv/namespaces/${NS}/keys?limit=1000&prefix=analytics-batch:${cursor ? `&cursor=${cursor}` : ''}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
     const data = await res.json();
     if (!data.success) { console.error('kv list failed', JSON.stringify(data.errors)); break; }
-    for (const k of data.result) { const path = k.name.slice(3).replace(/:\d{4}-\d{2}-\d{2}T.*$/, ''); if (path.startsWith('/_')) continue; live.pageviews[path] = (live.pageviews[path] || 0) + 1; }
+    for (const k of data.result) {
+      const valueUrl = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/storage/kv/namespaces/${NS}/values/${encodeURIComponent(k.name)}`;
+      const valueRes = await fetch(valueUrl, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      if (!valueRes.ok) continue;
+      let records; try { records = await valueRes.json(); } catch { continue; }
+      if (!Array.isArray(records)) continue;
+      for (const record of records) {
+        const path = typeof record?.meta?.path === 'string' ? record.meta.path : '';
+        if ((record?.event !== 'pageview' && record?.event !== 'page_view') || !path || path.startsWith('/_')) continue;
+        const weight = Number.isFinite(record.sampled) && record.sampled > 0 ? record.sampled : 1;
+        live.pageviews[path] = (live.pageviews[path] || 0) + weight;
+      }
+    }
     cursor = data.result_info?.cursor || '';
     pages += 1;
   } while (cursor && pages < 200);

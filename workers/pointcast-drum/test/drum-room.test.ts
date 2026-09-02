@@ -104,3 +104,45 @@ describe("drum room protocol", () => {
     for (const client of clients) client.socket.close(1000, "load-complete");
   });
 });
+
+describe("drum counter KV mirror", () => {
+  it("coalesces the legacy KV mirror until 50 taps", async () => {
+    await env.VISITS.put("drum:total", "5");
+    const stub = env.DRUM_COUNTER.getByName("global");
+    const post = (delta: number) => stub.fetch("https://pointcast.test/?session=0123456789abcdef", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta, leaderboardHash: "01234567", nounId: 22 }),
+    });
+    expect(await (await post(1)).json()).toMatchObject({ ok: true, globalTotal: 6, yourTotal: 1 });
+    expect(await env.VISITS.get("drum:total")).toBe("5");
+    expect(await (await post(49)).json()).toMatchObject({ ok: true, globalTotal: 55, yourTotal: 50 });
+    expect(await env.VISITS.get("drum:total")).toBe("55");
+    expect(await env.VISITS.get("drum:session:0123456789abcdef")).toBe("50");
+  });
+
+  it("keeps fresh DO totals authoritative and never lowers a newer KV mirror", async () => {
+    await env.VISITS.put("drum:total", "0");
+    const stub = env.DRUM_COUNTER.getByName("fresh-counter-test");
+    const post = (delta: number) => stub.fetch("https://pointcast.test/?session=fedcba9876543210", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta, leaderboardHash: "fedcba98", nounId: 44 }),
+    });
+
+    expect(await (await post(1)).json()).toMatchObject({ ok: true, globalTotal: 1, yourTotal: 1 });
+    expect(await env.VISITS.get("drum:total")).toBe("0");
+
+    // Simulate another flushing isolate having already mirrored a later count.
+    await env.VISITS.put("drum:total", "999");
+    await env.VISITS.put("drum:top", JSON.stringify([{ hash: "legacy00", nounId: 7, count: 400 }]));
+    expect(await (await post(49)).json()).toMatchObject({ ok: true, globalTotal: 50, yourTotal: 50 });
+    expect(await env.VISITS.get("drum:total")).toBe("999");
+
+    const top = await (await stub.fetch("https://pointcast.test/?top=1")).json<{ entries: Array<{ hash: string; nounId: number; count: number; rank: number }> }>();
+    expect(top.entries).toEqual([
+      { rank: 1, hash: "legacy00", nounId: 7, count: 400 },
+      { rank: 2, hash: "fedcba98", nounId: 44, count: 50 },
+    ]);
+  });
+});
