@@ -1,7 +1,9 @@
 # Kennel Club free claim: PointCast pays, held until wallet
 
-**Date:** 2026-09-02  
-**Status:** implementation ready for review; not deployed or configured  
+**Date:** 2026-09-02
+
+**Status:** implementation ready for review; not deployed or configured
+
 **Contract:** `KT1JWNAKyiWVsbfNrHBQuuBDaGRBYqfehwdq` on Tezos mainnet
 
 ## Decision

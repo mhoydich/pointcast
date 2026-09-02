@@ -250,8 +250,9 @@ test('passkey migration, pinned libraries, UI, and binding configuration are exp
   assert.doesNotMatch(menu, /\sid=/);
   assert.match(me, /Add a passkey to this device/);
   assert.match(me, /data-me-passkey-list/);
-  assert.match(config, /\[\[send_email\]\]\s+name = "SEND_EMAIL"/);
-  assert.match(config, /Email Routing \+ Email Sending/);
+  assert.doesNotMatch(config, /^\[\[send_email\]\]/m);
+  assert.match(config, /Pages config files do NOT accept a/);
+  assert.match(config, /Email → name SEND_EMAIL/);
 });
 
 test('passkey registration and discoverable login consume challenges once and reject expiry', async () => {

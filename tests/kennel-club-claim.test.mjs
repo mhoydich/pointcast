@@ -214,7 +214,7 @@ function claimRequest(token, ip = '203.0.113.9') {
 }
 
 test('claim migration enforces the one-user-per-sitting ledger and approved states', async () => {
-  const migration = await readFile(new URL('migrations/auth/0003_kennel_club_claims.sql', root), 'utf8');
+  const migration = await readFile(new URL('migrations/auth/0004_kennel_club_claims.sql', root), 'utf8');
   assert.match(migration, /UNIQUE \(user_id, token_id\)/);
   assert.match(migration, /status IN \('held', 'delivered', 'failed'\)/);
   assert.match(migration, /FOREIGN KEY \(user_id\) REFERENCES users\(id\) ON DELETE CASCADE/);
