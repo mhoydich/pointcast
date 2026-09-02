@@ -19,7 +19,7 @@ import signerPkg from '@taquito/signer';
 const { TezosToolkit } = taquitoPkg;
 const { InMemorySigner } = signerPkg;
 
-const RPC = 'https://mainnet.api.tez.ie';
+const RPC = 'https://mainnet.smartpy.io';
 const TZKT = 'https://tzkt.io';
 const SIGNER_PATH = '/tmp/pointcast-mainnet-signer.json';
 const KT1_PATH = '/tmp/pointcast-visit-nouns-mainnet-kt1.txt';

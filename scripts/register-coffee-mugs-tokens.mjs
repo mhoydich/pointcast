@@ -30,7 +30,7 @@ import michelsonEncoderPkg from '@taquito/michelson-encoder';
 const { TezosToolkit, MichelsonMap } = taquitoPkg;
 const { InMemorySigner } = signerPkg;
 
-const RPC = 'https://mainnet.api.tez.ie';
+const RPC = 'https://mainnet.smartpy.io';
 const TZKT_BASE = 'https://tzkt.io';
 
 const KT1_PATH = '/tmp/pointcast-coffee-mugs-mainnet-kt1.txt';

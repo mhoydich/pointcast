@@ -18,7 +18,7 @@ import signerPkg from '@taquito/signer';
 const { TezosToolkit } = taquitoPkg;
 const { InMemorySigner } = signerPkg;
 
-const RPC = 'https://mainnet.api.tez.ie';
+const RPC = 'https://mainnet.smartpy.io';
 const TZKT_BASE = 'https://tzkt.io';
 const TZKT_API = 'https://api.tzkt.io/v1';
 
