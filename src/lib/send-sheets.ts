@@ -249,7 +249,7 @@ const DESK_SECTIONS: SendSection[] = [
       tool('model studies', 'Qwen', 'Three model studies: /qwen-weather, /qwen-silver-letter, /qwen-good-intelligence. Outputs are pre-rendered static media.', 'runs on a QwenCloud Personal Token Plan; price not stated here', '/qwen-weather'),
       tool('reader', 'Firecrawl', 'The open-source web reader for pages without a clean machine surface. Field guide at /firecrawl, setup at /connectors.', 'open source (core AGPL-3.0, MCP server MIT); the smoke test needs no account', '/firecrawl'),
       tool('rail', 'Stripe', 'Hosted checkout for the $25 season ticket at /25. Stripe Link receipts in the /money ledger.', 'sells the $25 ticket; fees not stated here', '/25'),
-      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /minted. Taquito 25.0 with Beacon wallet operations.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
+      tool('rail', 'Tezos · Taquito + Beacon', 'Wallet connect and on-chain mints: Coffee Mugs at /coffee, Visit Nouns at /me#holdings. Taquito 25.0 with Beacon wallet operations.', 'free mainnet FA2 per /stack; wallet fees not stated here', '/stack'),
       tool('runtime', 'Cloudflare Pages + KV', 'Static hosting, Pages Functions, and KV for presence, reactions, and drum taps.', NOT_STATED, '/stack'),
       tool('runtime', 'Astro 6.1', 'The static-site framework: islands, file routing, content collections for blocks.', NOT_STATED, '/stack'),
     ],
@@ -298,7 +298,7 @@ const AI_TOOLS_SHEET: SendSheet = {
 /* 03 · Ways to make capital with AI contributions.                    */
 /* Sources: src/pages/ai-income.json.ts LANES + ROUTES (researched      */
 /* 2026-08-31; pay lines verbatim), the three rails from /25, /x402,    */
-/* /minted with numbers read 2026-09-01, and block 0576.                */
+/* /me#holdings with numbers read 2026-09-01, and block 0576.           */
 /* ------------------------------------------------------------------ */
 
 // source: src/pages/ai-income.json.ts `tiers`
@@ -397,11 +397,11 @@ const RAILS_SECTION: SendSection = {
     },
     {
       // source: TzKT, Visit Nouns KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh (17 token ids, 20 editions, last mint 2026-04-28); Coffee Mugs KT1JQ3AjzFvMnjZ9mGqrM13aj8LQBx9JpoXt (2 token ids, 3 editions)
-      tag: 'tezos · /minted',
+      tag: 'tezos · /me#holdings',
       title: 'Tezos editions',
       note: 'Visit Nouns FA2: 20 editions across 17 token ids, last mint 2026-04-28. Coffee Mugs FA2: 3 editions across 2 token ids.',
       meta: 'mainnet · per TzKT · blocks 0229 and 0364',
-      href: '/minted',
+      href: '/me#holdings',
     },
   ],
 };
@@ -426,7 +426,7 @@ const AI_CAPITAL_SHEET: SendSheet = {
   ],
   // source: src/content/blocks/0576.json body
   close: 'The rails are live and the money is thin.',
-  sources: ['/ai-income', '/ai-income.json', '/25', '/x402', '/minted', '/b/0576'],
+  sources: ['/ai-income', '/ai-income.json', '/25', '/x402', '/me#holdings', '/b/0576'],
 };
 
 /* ------------------------------------------------------------------ */

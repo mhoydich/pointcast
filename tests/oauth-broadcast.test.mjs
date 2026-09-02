@@ -63,10 +63,10 @@ test('broadcaster connections stay private to the dashboard and expose only a sa
   assert.match(dashboard, /destination\.searchParams\.set\('returnTo', '\/dashboard#broadcast'\)/);
   assert.match(dashboard, /method: 'DELETE'/);
   assert.match(dashboard, /immediately removes the stored Spotify credentials and cached now-playing item/);
-  assert.match(auth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/dashboard#broadcast'\)/);
-  assert.match(callback, /returnTo = '\/dashboard#broadcast'/);
-  assert.match(shopifyAuth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/dashboard#broadcast'\)/);
-  assert.match(shopifyCallback, /safeReturnTo\(returnTo, '\/dashboard#broadcast'\)/);
+  assert.match(auth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/me'\)/);
+  assert.match(callback, /returnTo = '\/me'/);
+  assert.match(shopifyAuth, /safeReturnTo\(url\.searchParams\.get\('returnTo'\), '\/me'\)/);
+  assert.match(shopifyCallback, /safeReturnTo\(returnTo, '\/me'\)/);
 });
 
 test('privacy policy states the narrow Google, Spotify, and Shopify data boundaries', async () => {

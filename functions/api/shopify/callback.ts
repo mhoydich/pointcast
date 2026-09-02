@@ -40,7 +40,7 @@ function redirectWithResult(
   key: string,
   value: string,
 ): Response {
-  const target = appendResult(safeReturnTo(returnTo, '/dashboard#broadcast'), key, value);
+  const target = appendResult(safeReturnTo(returnTo, '/me'), key, value);
   return new Response(null, {
     status: 302,
     headers: {
@@ -66,7 +66,7 @@ export const onRequestGet: PagesFunction<ShopifyEnv> = async ({ request, env }) 
     ? await env.USERS.get<ShopifyStateRecord>(stateKey, 'json')
     : null;
   if (!stateRecord) {
-    return redirectWithResult(request, '/dashboard#broadcast', 'auth_error', 'shopify-state-expired');
+    return redirectWithResult(request, '/me', 'auth_error', 'shopify-state-expired');
   }
   await env.USERS.delete(stateKey);
 

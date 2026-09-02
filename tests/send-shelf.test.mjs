@@ -148,7 +148,7 @@ test('the AI capital sheet carries the seven lanes, the honest tiers, the three 
   assert.match(lib, /close: 'The rails are live and the money is thin\.'/);
   const block = JSON.parse(await read('src/content/blocks/0576.json'));
   assert.ok(block.body.includes('The rails are live and the money is thin'));
-  assert.match(lib, /sources: \['\/ai-income', '\/ai-income\.json', '\/25', '\/x402', '\/minted', '\/b\/0576'\]/);
+  assert.match(lib, /sources: \['\/ai-income', '\/ai-income\.json', '\/25', '\/x402', '\/me#holdings', '\/b\/0576'\]/);
 });
 
 test('every sheet ends with the dated stamp naming its source pages', async () => {
@@ -187,7 +187,7 @@ test('built twins render the recipes, the stamp, and the send line (needs dist/)
   assert.match(mcp, /PointCast · one-sheet · 2026-09-01 · source pages: \/connectors, \/connectors\.json, \/agent-kit\.md/);
   const capital = await read('dist/send/ai-capital.txt');
   assert.match(capital, /The rails are live and the money is thin\./);
-  assert.match(capital, /source pages: \/ai-income, \/ai-income\.json, \/25, \/x402, \/minted, \/b\/0576/);
+  assert.match(capital, /source pages: \/ai-income, \/ai-income\.json, \/25, \/x402, \/me#holdings, \/b\/0576/);
   const tools = await read('dist/send/ai-tools.txt');
   assert.match(tools, /cost not stated here/);
   const hubJson = JSON.parse(await read('dist/send.json'));

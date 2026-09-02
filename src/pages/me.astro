@@ -1,0 +1,607 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import AuthMenu from '../components/AuthMenu.astro';
+
+const description = 'Your private PointCast identity and Tezos holdings, keyed only to wallets linked to this signed session.';
+---
+
+<BlockLayout title="Me" description={description}>
+  <main class="me" data-me-root data-me-noun-default="404" data-me-state="loading">
+    <nav class="me__crumb" aria-label="Breadcrumb">
+      <a href="/">← PointCast</a>
+      <span aria-hidden="true">/</span>
+      <span>me</span>
+      <a class="me__json-link" href="/me.json">JSON twin ↗</a>
+    </nav>
+
+    <section class="me__loading" data-me-loading aria-live="polite">
+      <p class="me__kicker">PRIVATE CHANNEL · SESSION CHECK</p>
+      <p>Reading your PointCast session…</p>
+    </section>
+
+    <section class="me-door" data-me-signed-out hidden aria-label="PointCast sign-in">
+      <div class="me-door__signal" aria-hidden="true">
+        <span>PC</span>
+        <i></i><i></i><i></i>
+      </div>
+      <div class="me-door__copy">
+        <p class="me__kicker">PRIVATE CHANNEL · SIGN-IN REQUIRED</p>
+        <h1>Your shelf starts with your session.</h1>
+        <p>
+          Sign in to see the identities and Tezos wallets you linked to PointCast.
+          Nothing on this page falls back to another person’s wallet.
+        </p>
+        <AuthMenu autoOpen={true} />
+        <p class="me-door__privacy">The session cookie is HttpOnly. Holdings are public-chain data fetched only after this session is accepted.</p>
+      </div>
+    </section>
+
+    <div data-me-private hidden>
+      <header class="me-head">
+        <div class="me-head__identity">
+          <img
+            class="me-head__noun"
+            src="https://noun.pics/404.svg"
+            alt="Your PointCast companion Noun"
+            width="120"
+            height="120"
+            data-me-noun
+          />
+          <div>
+            <p class="me__kicker">CH.ME · PRIVATE · D1 SESSION</p>
+            <h1 data-me-name>PointCast member</h1>
+            <p class="me-head__dek">One account. Every identity you deliberately linked. Every PointCast object those Tezos wallets hold.</p>
+          </div>
+        </div>
+
+        <div class="me-head__actions">
+          <button type="button" data-me-action="link">Link another</button>
+          <button type="button" class="me-head__signout" data-me-action="signout">Sign out</button>
+          <div class="me-auth-bridge" aria-label="Link another identity">
+            <AuthMenu />
+          </div>
+        </div>
+
+        <ul class="me-identities" data-me-identities aria-label="Linked identities"></ul>
+      </header>
+
+      <section class="me-summary" aria-label="Your PointCast utilities">
+        <a class="me-summary__card me-summary__card--passport" href="/passport">
+          <span class="me-summary__code">01 · PASSPORT</span>
+          <strong>Carry the journey</strong>
+          <span data-me-stamp-count>Browser-local stamps · count unavailable</span>
+          <b aria-hidden="true">→</b>
+        </a>
+        <a class="me-summary__card me-summary__card--seals" href="/townsfolk">
+          <span class="me-summary__code">02 · SEALS</span>
+          <strong>See the townsfolk</strong>
+          <span>Published wallet-signed passports</span>
+          <b aria-hidden="true">→</b>
+        </a>
+        <article class="me-summary__card me-summary__card--companion" data-me-companion>
+          <span class="me-summary__code">03 · COMPANION</span>
+          <span class="me-companion__body">
+            <img src="https://noun.pics/404.svg" alt="" width="48" height="48" data-me-pet-image />
+            <span>
+              <strong data-me-pet-name>Signal Pup</strong>
+              <span data-me-pet-state>sleepy signal · no care yet</span>
+            </span>
+          </span>
+          <a href="/pet">Visit companion →</a>
+        </article>
+      </section>
+
+      <section class="me-wallets" aria-label="Linked Tezos wallets">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">LINKED TEZOS IDENTITIES</p>
+            <h2>Wallets in this session</h2>
+          </div>
+          <span data-me-wallet-count>0 wallets</span>
+        </header>
+        <div class="me-wallets__grid" data-me-wallets></div>
+      </section>
+
+      <a name="holdings" class="me-holdings-anchor" data-me-holdings-anchor aria-hidden="true"></a>
+      <section class="me-holdings" data-me-holdings aria-label="PointCast holdings">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">HOLDINGS · LIVE FROM TZKT</p>
+            <h2>PointCast collections</h2>
+          </div>
+          <span data-me-updated>Waiting for session…</span>
+        </header>
+        <div class="me-holdings__status" data-me-status aria-live="polite">Loading the linked shelves…</div>
+        <div class="me-collections" data-me-collections></div>
+      </section>
+    </div>
+  </main>
+</BlockLayout>
+
+<script>
+  import type { AuthIdentity, PointCastUser } from '../lib/auth/types';
+  import { getSession, logout } from '../lib/auth/client';
+  import { readPetSnapshot } from '../lib/pet-state';
+
+  type HoldingToken = {
+    tokenId: string;
+    balance: string;
+    name: string;
+    thumbnailUrl: string;
+    objktUrl: string;
+  };
+  type Collection = {
+    slug: string;
+    name: string;
+    href: string;
+    contract: string;
+    symbol: string;
+    tokenBalanceCount: number;
+    unitBalance: string;
+    tokens: HoldingToken[];
+  };
+  type Wallet = {
+    address: string;
+    tzktUrl: string;
+    totalTokenBalanceCount: number;
+    everythingElseCount: number;
+    collections: Collection[];
+    cache: 'hit' | 'miss' | 'unavailable';
+    error?: string;
+  };
+  type HoldingsPayload = {
+    ok: true;
+    user: PointCastUser;
+    wallets: Wallet[];
+    collections: Array<Pick<Collection, 'slug' | 'name' | 'href' | 'contract' | 'symbol'>>;
+    generatedAt: string;
+    cacheTtlSeconds: number;
+  };
+  type MeWindow = Window & {
+    __pointCastMeAbort?: AbortController;
+    __pointCastMePageLoadInstalled?: boolean;
+  };
+
+  const shortAddress = (address: string): string => (
+    address.length > 14 ? `${address.slice(0, 7)}…${address.slice(-5)}` : address
+  );
+
+  function create<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className?: string,
+    text?: string,
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function readNounId(root: HTMLElement): number {
+    let value = Number(root.dataset.meNounDefault || '404');
+    try {
+      const stored = Number(window.localStorage.getItem('pc:visitor:noun'));
+      if (Number.isInteger(stored) && stored >= 0 && stored < 10000) value = stored;
+    } catch {
+      // The default remains available in storage-restricted browsers.
+    }
+    return value;
+  }
+
+  function stampCount(): number {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem('pc:passport:stamps') || '{}');
+      if (Array.isArray(parsed)) return parsed.length;
+      return parsed && typeof parsed === 'object' ? Object.keys(parsed).length : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function renderLocalState(root: HTMLElement): void {
+    const nounId = readNounId(root);
+    root.querySelectorAll<HTMLImageElement>('[data-me-noun]').forEach((image) => {
+      image.src = `https://noun.pics/${nounId}.svg`;
+      image.alt = `Your PointCast companion, Noun ${nounId}`;
+    });
+    const stampLabel = root.querySelector<HTMLElement>('[data-me-stamp-count]');
+    if (stampLabel) {
+      const count = stampCount();
+      stampLabel.textContent = `${count} browser-local stamp${count === 1 ? '' : 's'} · open passport`;
+    }
+
+    const pet = readPetSnapshot();
+    const petImage = root.querySelector<HTMLImageElement>('[data-me-pet-image]');
+    const petName = root.querySelector<HTMLElement>('[data-me-pet-name]');
+    const petState = root.querySelector<HTMLElement>('[data-me-pet-state]');
+    if (petImage) petImage.src = `https://noun.pics/${pet.nounId}.svg`;
+    if (petName) petName.textContent = pet.name;
+    if (petState) {
+      petState.textContent = `${pet.state} · ${pet.careCount} care receipt${pet.careCount === 1 ? '' : 's'}`;
+    }
+  }
+
+  function renderIdentities(root: HTMLElement, identities: AuthIdentity[]): void {
+    const list = root.querySelector<HTMLElement>('[data-me-identities]');
+    if (!list) return;
+    const nodes = identities.map((identity) => {
+      const item = create('li', 'me-identity');
+      if (identity.avatar) {
+        const avatar = create('img', 'me-identity__avatar');
+        avatar.src = identity.avatar;
+        avatar.alt = '';
+        avatar.width = 28;
+        avatar.height = 28;
+        item.append(avatar);
+      } else {
+        item.append(create('span', 'me-identity__provider', identity.provider.slice(0, 3)));
+      }
+      const copy = create('span', 'me-identity__copy');
+      copy.append(
+        create('strong', '', identity.name || shortAddress(identity.id)),
+        create('small', '', `${identity.provider} · ${shortAddress(identity.id)}`),
+      );
+      item.append(copy);
+      return item;
+    });
+    list.replaceChildren(...nodes);
+  }
+
+  function renderWallets(root: HTMLElement, wallets: Wallet[]): void {
+    const grid = root.querySelector<HTMLElement>('[data-me-wallets]');
+    const count = root.querySelector<HTMLElement>('[data-me-wallet-count]');
+    if (count) count.textContent = `${wallets.length} linked wallet${wallets.length === 1 ? '' : 's'}`;
+    if (!grid) return;
+    if (!wallets.length) {
+      const empty = create('div', 'me-empty');
+      empty.append(
+        create('strong', '', 'No Tezos identity linked yet.'),
+        create('p', '', 'Use “Link another” and choose Kukai. This shelf never reads a browser-only or sample wallet.'),
+      );
+      grid.replaceChildren(empty);
+      return;
+    }
+
+    grid.replaceChildren(...wallets.map((wallet, index) => {
+      const card = create('article', 'me-wallet');
+      const head = create('div', 'me-wallet__head');
+      head.append(
+        create('span', 'me-wallet__number', String(index + 1).padStart(2, '0')),
+        create('strong', '', shortAddress(wallet.address)),
+      );
+      const address = create('code', 'me-wallet__address', wallet.address);
+      const facts = create('div', 'me-wallet__facts');
+      facts.append(
+        create('span', '', `${wallet.totalTokenBalanceCount} token balance${wallet.totalTokenBalanceCount === 1 ? '' : 's'}`),
+        create('span', '', `${wallet.everythingElseCount} outside PointCast`),
+      );
+      const link = create('a', 'me-wallet__link', 'Everything else on TzKT ↗');
+      link.href = wallet.tzktUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      card.append(head, address, facts, link);
+      if (wallet.error) card.append(create('p', 'me-wallet__error', 'TzKT is temporarily unavailable for this wallet.'));
+      return card;
+    }));
+  }
+
+  function renderCollections(root: HTMLElement, payload: HoldingsPayload): void {
+    const container = root.querySelector<HTMLElement>('[data-me-collections]');
+    if (!container) return;
+    if (!payload.wallets.length) {
+      container.replaceChildren();
+      return;
+    }
+
+    container.replaceChildren(...payload.collections.map((descriptor) => {
+      const section = create('section', 'me-collection');
+      section.dataset.collection = descriptor.slug;
+      const header = create('header', 'me-collection__head');
+      const titleLink = create('a', 'me-collection__title', descriptor.name);
+      titleLink.href = descriptor.href;
+      const contractLink = create('a', 'me-collection__contract', `${descriptor.symbol || 'FA2'} · ${shortAddress(descriptor.contract)} ↗`);
+      contractLink.href = `https://tzkt.io/${descriptor.contract}/tokens`;
+      contractLink.target = '_blank';
+      contractLink.rel = 'noopener';
+      const totalTokens = payload.wallets.reduce((sum, wallet) => {
+        const collection = wallet.collections.find((item) => item.slug === descriptor.slug);
+        return sum + (collection?.tokenBalanceCount ?? 0);
+      }, 0);
+      header.append(titleLink, create('span', 'me-collection__count', `${totalTokens} object${totalTokens === 1 ? '' : 's'}`), contractLink);
+      section.append(header);
+
+      const walletLanes = create('div', 'me-collection__wallets');
+      payload.wallets.forEach((wallet) => {
+        const holdings = wallet.collections.find((item) => item.slug === descriptor.slug);
+        const lane = create('div', 'me-lane');
+        const laneHead = create('div', 'me-lane__head');
+        laneHead.append(
+          create('span', '', shortAddress(wallet.address)),
+          create('span', '', holdings ? `${holdings.unitBalance} held` : '0 held'),
+        );
+        lane.append(laneHead);
+
+        if (!holdings?.tokens.length) {
+          lane.append(create('p', 'me-lane__empty', wallet.error ? 'TzKT read unavailable.' : 'Nothing from this collection yet.'));
+        } else {
+          const tokenGrid = create('div', 'me-token-grid');
+          tokenGrid.append(...holdings.tokens.map((token) => {
+            const link = create('a', 'me-token');
+            link.href = token.objktUrl;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            const art = create('span', 'me-token__art');
+            const image = create('img');
+            image.src = token.thumbnailUrl;
+            image.alt = token.name;
+            image.loading = 'lazy';
+            image.dataset.meImageFallback = `https://assets.objkt.media/file/assets-003/${descriptor.contract}/${encodeURIComponent(token.tokenId)}/thumb400`;
+            art.append(image, create('b', 'me-token__balance', `×${token.balance}`));
+            link.append(
+              art,
+              create('strong', 'me-token__name', token.name),
+              create('small', '', `№${token.tokenId} · objkt ↗`),
+            );
+            return link;
+          }));
+          lane.append(tokenGrid);
+        }
+        walletLanes.append(lane);
+      });
+      section.append(walletLanes);
+      return section;
+    }));
+  }
+
+  function showSignedOut(root: HTMLElement): void {
+    root.dataset.meState = 'signed-out';
+    const loading = root.querySelector<HTMLElement>('[data-me-loading]');
+    const door = root.querySelector<HTMLElement>('[data-me-signed-out]');
+    const privateView = root.querySelector<HTMLElement>('[data-me-private]');
+    if (loading) loading.hidden = true;
+    if (door) door.hidden = false;
+    if (privateView) privateView.hidden = true;
+  }
+
+  function showSignedIn(root: HTMLElement, payload: HoldingsPayload): void {
+    root.dataset.meState = 'signed-in';
+    const loading = root.querySelector<HTMLElement>('[data-me-loading]');
+    const door = root.querySelector<HTMLElement>('[data-me-signed-out]');
+    const privateView = root.querySelector<HTMLElement>('[data-me-private]');
+    const name = root.querySelector<HTMLElement>('[data-me-name]');
+    const status = root.querySelector<HTMLElement>('[data-me-status]');
+    const updated = root.querySelector<HTMLElement>('[data-me-updated]');
+    if (loading) loading.hidden = true;
+    if (door) door.hidden = true;
+    if (privateView) privateView.hidden = false;
+    if (name) name.textContent = payload.user.preferredName || 'PointCast member';
+    if (status) {
+      const failed = payload.wallets.filter((wallet) => wallet.error).length;
+      status.textContent = failed
+        ? `${failed} wallet read${failed === 1 ? '' : 's'} unavailable · use the direct TzKT links to inspect them.`
+        : `${payload.wallets.length} linked Tezos wallet${payload.wallets.length === 1 ? '' : 's'} · 60-second edge snapshots.`;
+    }
+    if (updated) updated.textContent = `updated ${new Date(payload.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    renderIdentities(root, payload.user.identities);
+    renderWallets(root, payload.wallets);
+    renderCollections(root, payload);
+    renderLocalState(root);
+    if (window.location.hash === '#holdings') {
+      window.requestAnimationFrame(() => {
+        root.querySelector<HTMLElement>('[data-me-holdings]')?.scrollIntoView({ block: 'start' });
+      });
+    }
+  }
+
+  async function loadRoot(root: HTMLElement, signal: AbortSignal): Promise<void> {
+    const user = await getSession().catch(() => null);
+    if (signal.aborted) return;
+    if (!user) {
+      showSignedOut(root);
+      return;
+    }
+    const response = await fetch('/api/me/holdings', {
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+    });
+    if (signal.aborted) return;
+    if (response.status === 401) {
+      showSignedOut(root);
+      return;
+    }
+    if (!response.ok) throw new Error(`holdings-${response.status}`);
+    showSignedIn(root, await response.json() as HoldingsPayload);
+  }
+
+  function initializeMePages(): void {
+    const meWindow = window as MeWindow;
+    meWindow.__pointCastMeAbort?.abort();
+    const controller = new AbortController();
+    meWindow.__pointCastMeAbort = controller;
+    const roots = Array.from(document.querySelectorAll<HTMLElement>('[data-me-root]'));
+    if (!roots.length) return;
+
+    roots.forEach((root) => {
+      renderLocalState(root);
+      void loadRoot(root, controller.signal).catch((error) => {
+        if (controller.signal.aborted) return;
+        const loading = root.querySelector<HTMLElement>('[data-me-loading]');
+        if (loading) {
+          loading.replaceChildren(
+            create('p', 'me__kicker', 'PRIVATE CHANNEL · CONNECTION STOPPED'),
+            create('p', '', error instanceof Error ? error.message : 'Could not load this profile.'),
+          );
+          const retry = create('button', 'me-retry', 'Try again');
+          retry.type = 'button';
+          retry.dataset.meAction = 'retry';
+          loading.append(retry);
+        }
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const action = target?.closest<HTMLElement>('[data-me-action]')?.dataset.meAction;
+      if (!action) return;
+      if (action === 'link') {
+        event.preventDefault();
+        window.dispatchEvent(new Event('pc:open-auth-menu'));
+      } else if (action === 'signout') {
+        event.preventDefault();
+        void logout().then(() => roots.forEach(showSignedOut));
+      } else if (action === 'retry') {
+        event.preventDefault();
+        roots.forEach((root) => void loadRoot(root, controller.signal));
+      }
+    }, { signal: controller.signal });
+
+    document.addEventListener('error', (event) => {
+      const image = event.target instanceof HTMLImageElement ? event.target : null;
+      const fallback = image?.dataset.meImageFallback;
+      if (!image || !fallback || image.src === fallback) return;
+      image.src = fallback;
+    }, { capture: true, signal: controller.signal });
+
+    window.addEventListener('pc:auth-change', (event) => {
+      const user = (event as CustomEvent<{ user?: PointCastUser | null }>).detail?.user;
+      if (!user) {
+        roots.forEach(showSignedOut);
+        return;
+      }
+      roots.forEach((root) => void loadRoot(root, controller.signal));
+    }, { signal: controller.signal });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'pc:visitor:noun' || event.key === 'pc:passport:stamps' || event.key?.startsWith('pc:pet:')) {
+        roots.forEach(renderLocalState);
+      }
+    }, { signal: controller.signal });
+  }
+
+  const meWindow = window as MeWindow;
+  if (!meWindow.__pointCastMePageLoadInstalled) {
+    meWindow.__pointCastMePageLoadInstalled = true;
+    document.addEventListener('astro:page-load', initializeMePages);
+  }
+  initializeMePages();
+</script>
+
+<style is:global>
+  .me {
+    --me-blue: #185fa5;
+    --me-green: #0f6e56;
+    --me-amber: #ba7517;
+    --me-paper: #f3efe6;
+    --me-ink: #181b1e;
+    min-height: calc(100vh - 42px);
+    padding: 22px max(16px, calc((100vw - 1180px) / 2)) 92px;
+    background:
+      linear-gradient(rgba(24, 95, 165, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(24, 95, 165, 0.055) 1px, transparent 1px),
+      var(--me-paper);
+    background-size: 24px 24px;
+    color: var(--me-ink);
+  }
+  .me [hidden] { display: none !important; }
+  .me__crumb { display: flex; gap: 9px; align-items: center; margin-bottom: 12px; font: 500 10px/1.3 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me__crumb a { color: var(--me-blue); }
+  .me__json-link { margin-left: auto; }
+  .me__kicker { margin: 0 0 9px; font: 500 10px/1.35 var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  .me__loading { min-height: 55vh; display: grid; place-content: center; border: 1.5px solid var(--me-blue); background: #fff; text-align: center; }
+  .me-retry { justify-self: center; padding: 9px 12px; border: 1px solid currentColor; border-radius: 2px; background: transparent; font: inherit; cursor: pointer; }
+
+  .me-door { min-height: 64vh; display: grid; grid-template-columns: minmax(200px, .75fr) minmax(280px, 1.25fr); border: 1.5px solid var(--me-blue); background: #fff; }
+  .me-door__signal { display: grid; grid-template-columns: 1fr 15px 15px 15px; align-items: end; gap: 9px; padding: 32px; background: var(--me-blue); color: #fff; }
+  .me-door__signal span { align-self: start; font: 500 clamp(52px, 9vw, 112px)/.8 var(--pc-font-sans); letter-spacing: -.08em; }
+  .me-door__signal i { display: block; height: 20%; background: #fff; }
+  .me-door__signal i:nth-child(3) { height: 46%; }
+  .me-door__signal i:nth-child(4) { height: 78%; }
+  .me-door__copy { display: grid; align-content: center; justify-items: start; padding: clamp(28px, 6vw, 72px); }
+  .me-door h1 { max-width: 650px; margin: 0; font: 500 clamp(38px, 6vw, 74px)/.92 var(--pc-font-sans); letter-spacing: -.055em; }
+  .me-door__copy > p:not(.me__kicker) { max-width: 600px; font-size: 16px; line-height: 1.55; }
+  .me-door__privacy { color: #667078; font: 400 10px/1.5 var(--pc-font-mono) !important; }
+
+  .me-head { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 18px; border: 1.5px solid var(--me-blue); background: #fff; }
+  .me-head__identity { display: flex; gap: 18px; align-items: center; min-width: 0; }
+  .me-head__noun { width: 108px; height: 108px; border: 1.5px solid var(--me-blue); background: #d9ebff; image-rendering: pixelated; }
+  .me-head h1 { margin: 0; font: 500 clamp(38px, 7vw, 76px)/.9 var(--pc-font-sans); letter-spacing: -.055em; overflow-wrap: anywhere; }
+  .me-head__dek { max-width: 730px; margin: 12px 0 0; line-height: 1.45; }
+  .me-head__actions { position: relative; display: flex; gap: 7px; align-items: flex-start; }
+  .me-head__actions > button { padding: 9px 11px; border: 1px solid var(--me-ink); border-radius: 2px; background: #fff; color: var(--me-ink); font: 500 9px/1 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .me-head__actions > .me-head__signout { background: var(--me-ink); color: #fff; }
+  .me-auth-bridge { position: absolute; top: 38px; right: 0; z-index: 4; }
+  .me-auth-bridge .auth-menu__trigger { display: none; }
+  .me-identities { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 14px 0 0; border-top: 1px solid #d9dde2; list-style: none; }
+  .me-identity { display: flex; align-items: center; gap: 8px; min-width: 180px; padding: 7px 9px; border: 1px solid #c9d0d6; background: #f7f9fa; }
+  .me-identity__provider, .me-identity__avatar { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #b8c1c9; border-radius: 2px; object-fit: cover; font: 500 8px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-identity__copy { display: grid; min-width: 0; }
+  .me-identity__copy strong { font-size: 12px; font-weight: 500; }
+  .me-identity__copy small { max-width: 230px; overflow: hidden; color: #65717b; font: 400 8px/1.4 var(--pc-font-mono); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+
+  .me-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .me-summary__card { position: relative; min-height: 132px; padding: 14px; border: 1.5px solid currentColor; border-radius: 0; color: var(--me-ink); text-decoration: none; }
+  .me-summary__card--passport { background: #fff3da; color: #795016; }
+  .me-summary__card--seals { background: #dff3ed; color: #0f5b49; }
+  .me-summary__card--companion { background: #e4effa; color: #164f82; }
+  .me-summary__code { display: block; margin-bottom: 22px; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; }
+  .me-summary__card > strong { display: block; margin-bottom: 5px; font: 500 20px/1.1 var(--pc-font-sans); }
+  .me-summary__card > span:not(.me-summary__code) { font-size: 12px; }
+  .me-summary__card > b { position: absolute; right: 14px; bottom: 12px; font-weight: 400; }
+  .me-companion__body { display: flex; gap: 10px; align-items: center; }
+  .me-companion__body img { border: 1px solid currentColor; background: #fff; image-rendering: pixelated; }
+  .me-companion__body > span { display: grid; }
+  .me-companion__body strong { font-size: 17px; font-weight: 500; }
+  .me-companion__body span { font-size: 10px; }
+  .me-summary__card--companion > a { position: absolute; right: 14px; bottom: 12px; color: inherit; font: 500 9px/1 var(--pc-font-mono); text-transform: uppercase; }
+
+  .me-wallets, .me-holdings { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
+  .me-holdings { border-color: var(--me-amber); }
+  .me-holdings-anchor { position: relative; top: -10px; display: block; visibility: hidden; }
+  .me-section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .me-section-head h2 { margin: 0; font: 500 clamp(28px, 4vw, 44px)/1 var(--pc-font-sans); letter-spacing: -.035em; }
+  .me-section-head > span { color: #667078; font: 400 9px/1.4 var(--pc-font-mono); text-transform: uppercase; }
+  .me-wallets__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }
+  .me-wallet { min-width: 0; padding: 12px; border: 1px solid #a8c8bb; background: #eff8f4; }
+  .me-wallet__head { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+  .me-wallet__number { color: var(--me-green); font: 500 9px/1 var(--pc-font-mono); }
+  .me-wallet__address { display: block; margin: 12px 0; overflow: hidden; color: #4a5a53; font: 400 9px/1.4 var(--pc-font-mono); text-overflow: ellipsis; }
+  .me-wallet__facts { display: flex; flex-wrap: wrap; gap: 5px; }
+  .me-wallet__facts span { padding: 4px 6px; border: 1px solid #b9cec5; font: 400 8px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-wallet__link { display: inline-block; margin-top: 12px; color: var(--me-green); font: 500 9px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-wallet__error { color: #8a2432; font-size: 11px; }
+  .me-empty { grid-column: 1 / -1; padding: 18px; border: 1px dashed #9aa4ac; }
+  .me-empty p { margin-bottom: 0; }
+  .me-holdings__status { margin: -2px 0 12px; color: #626b73; font: 400 9px/1.4 var(--pc-font-mono); text-transform: uppercase; }
+  .me-collections { display: grid; gap: 8px; }
+  .me-collection { border: 1px solid #d0b071; }
+  .me-collection__head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 46px; padding: 9px 11px; border-bottom: 1px solid #d0b071; background: #fff7e8; }
+  .me-collection__title { color: #633d0c; font: 500 19px/1.1 var(--pc-font-sans); }
+  .me-collection__count, .me-collection__contract { color: #715b38; font: 400 8px/1.3 var(--pc-font-mono); text-transform: uppercase; }
+  .me-collection__wallets { display: grid; gap: 1px; background: #dedbd5; }
+  .me-lane { padding: 10px; background: #fff; }
+  .me-lane__head { display: flex; justify-content: space-between; margin-bottom: 8px; color: #626b73; font: 400 8px/1 var(--pc-font-mono); text-transform: uppercase; }
+  .me-lane__empty { margin: 0; padding: 14px; border: 1px dashed #c6c9cc; color: #70777d; font: 400 10px/1.4 var(--pc-font-mono); }
+  .me-token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 7px; }
+  .me-token { display: grid; align-content: start; min-width: 0; padding: 7px; border: 1px solid #d7d7d3; color: var(--me-ink); text-decoration: none; }
+  .me-token:hover { border-color: var(--me-amber); background: #fffbf3; }
+  .me-token__art { position: relative; display: block; aspect-ratio: 1; overflow: hidden; background: #e7e3da; }
+  .me-token__art img { width: 100%; height: 100%; object-fit: cover; }
+  .me-token__balance { position: absolute; right: 4px; bottom: 4px; padding: 3px 5px; background: var(--me-ink); color: #fff; font: 500 8px/1 var(--pc-font-mono); }
+  .me-token__name { margin-top: 7px; overflow: hidden; font-size: 11px; font-weight: 500; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+  .me-token small { margin-top: 3px; color: #6c747b; font: 400 8px/1.2 var(--pc-font-mono); text-transform: uppercase; }
+
+  @media (max-width: 760px) {
+    .me { padding-inline: 10px; }
+    .me-door { grid-template-columns: 1fr; }
+    .me-door__signal { min-height: 170px; }
+    .me-head { grid-template-columns: 1fr; }
+    .me-head__identity { align-items: flex-start; }
+    .me-head__noun { width: 72px; height: 72px; flex: 0 0 auto; }
+    .me-head__actions { grid-row: 3; }
+    .me-identities { grid-column: 1; }
+    .me-summary { grid-template-columns: 1fr; }
+    .me-collection__head { grid-template-columns: 1fr auto; }
+    .me-collection__contract { grid-column: 1 / -1; }
+  }
+</style>

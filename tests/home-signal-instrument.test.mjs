@@ -51,13 +51,13 @@ test('signal tuner retains reduced-motion and mobile treatments', () => {
   assert.match(styleSource, /fresh-signal-tuner__presets/);
 });
 
-test('front door points private connections to the dashboard and keeps the current field edition bright', () => {
-  assert.match(indexSource, /href="\/dashboard#broadcast"[^>]*>Broadcaster panel<\/a>/);
-  assert.match(indexSource, /title="Private Spotify and Shopify controls"/);
+test('front door points private identity to /me and keeps the current field edition bright', () => {
+  assert.match(indexSource, /href="\/me"[^>]*>Your profile<\/a>/);
+  assert.match(indexSource, /title="Private PointCast identity and holdings"/);
   assert.match(indexSource, /href: '\/reviews\/tone-bloom'/);
   assert.match(indexSource, /href: '\/beach-commons\/v18'/);
   assert.match(indexSource, /href: '\/beach-commons\/v11'/);
-  assert.match(indexSource, /\/dashboard · private connections/);
+  assert.match(indexSource, /\/me · linked identities \+ holdings/);
   assert.match(styleSource, /\.fresh-field-card--tone/);
   assert.match(styleSource, /\.fresh-field-card--beach/);
 });
