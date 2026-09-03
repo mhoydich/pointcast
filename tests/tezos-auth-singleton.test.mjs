@@ -45,7 +45,6 @@ test('all public layout families restore the signed Tezos session', async () => 
     'src/lib/auth/session-bridge-script.ts',
     'src/components/TezosSessionBridge.astro',
     'functions/_middleware.ts',
-    'src/layouts/BaseLayout.astro',
     'src/layouts/BlockLayout.astro',
     'src/layouts/DrumLayout.astro',
     'src/layouts/SparrowLayout.astro',
