@@ -289,7 +289,9 @@ test('listening-room.json.ts does not echo arbitrary query data', async () => {
 // ─── CursorRoom room-key override ─────────────────────────────────
 
 test('CursorRoom.astro supports data-room-key opt-in prop', async () => {
-  const src = await read('src/components/CursorRoom.astro');
+  const component = await read('src/components/CursorRoom.astro');
+  const runtime = await read('src/scripts/chrome/cursor-room.ts');
+  const src = `${component}\n${runtime}`;
 
   // Props interface with roomKey
   assert.match(src, /roomKey\?:\s*string/);

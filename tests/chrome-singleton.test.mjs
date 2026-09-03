@@ -8,6 +8,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const pagesRoot = join(repoRoot, 'src/pages');
 const layoutsRoot = join(repoRoot, 'src/layouts');
 const componentsRoot = join(repoRoot, 'src/components');
+const scriptsRoot = join(repoRoot, 'src/scripts');
 
 function filesUnder(root, extension = '.astro') {
   const files = [];
@@ -64,12 +65,15 @@ test('BlockLayout is the only owner of the dock, room client, burst layer, and t
 
 test('the shared chrome can instantiate at most one room presence client per page', () => {
   const block = readFileSync(join(layoutsRoot, 'BlockLayout.astro'), 'utf8');
-  const room = readFileSync(join(componentsRoot, 'CursorRoom.astro'), 'utf8');
+  const room = readFileSync(join(scriptsRoot, 'chrome/cursor-room.ts'), 'utf8');
+  const chrome = readFileSync(join(scriptsRoot, 'chrome.ts'), 'utf8');
 
   assert.equal(occurrences(block, /<CursorRoom\b/g), 1);
   assert.equal(occurrences(room, /['"]\/api\/room\?/g), 1, 'one room WebSocket endpoint');
   assert.equal(occurrences(room, /['"]\/api\/burst\?/g), 1, 'one burst WebSocket endpoint');
   assert.doesNotMatch(room, /\/api\/presence(?:\?|['"])/, 'shared chrome must not revive the legacy global presence client');
+  assert.match(chrome, /document\.querySelector<HTMLElement>\('\.cursor-room'\)/);
+  assert.doesNotMatch(chrome, /querySelectorAll<HTMLElement>\('\.cursor-room'\)/);
 
   for (const path of filesUnder(pagesRoot)) {
     const source = readFileSync(path, 'utf8');

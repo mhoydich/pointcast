@@ -36,14 +36,15 @@ test('PointCast publishes one canonical now-playing record and SPN block', async
 });
 
 test('the PointCast dock and reciprocal widget read the canonical record', async () => {
-  const [footer, receipt, widget] = await Promise.all([
+  const [footer, dockRuntime, receipt, widget] = await Promise.all([
     readFile(new URL('src/components/FooterBar.astro', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/footer-bar.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
     readFile(new URL('public/open-ad-network.js', root), 'utf8'),
   ]);
 
   assert.match(footer, /NOW_PLAYING/);
-  assert.match(footer, /window\.PC_NOW_PLAYING/);
+  assert.match(dockRuntime, /NOW_PLAYING/);
   assert.match(footer, /Open the current track in Spotify/);
   assert.match(receipt, /nowPlaying: NOW_PLAYING/);
   assert.match(widget, /feed\.nowPlaying/);

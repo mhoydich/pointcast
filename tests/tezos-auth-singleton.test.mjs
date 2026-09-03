@@ -85,7 +85,10 @@ test('Tezos login challenge is short-lived and single-use', async () => {
 test('PointCast issues bounded one-use Tezos project tickets', async () => {
   const route = await readFile(new URL('functions/api/auth/project-ticket.ts', root), 'utf8');
   const page = await readFile(new URL('src/pages/auth/project.astro', root), 'utf8');
-  const authMenu = await readFile(new URL('src/components/AuthMenu.astro', root), 'utf8');
+  const authMenu = (await Promise.all([
+    readFile(new URL('src/components/AuthMenu.astro', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/auth-menu.ts', root), 'utf8'),
+  ])).join('\n');
   const popupFallback = await readFile(
     new URL('src/lib/auth/wallet-popup-fallback.ts', root),
     'utf8',
@@ -138,26 +141,25 @@ test('embedded Network El Segundo receives a fresh PointCast project ticket', as
 test('wallet and auth menus rebind after Astro route transitions', async () => {
   const [walletChip, authMenu] = await Promise.all([
     readFile(new URL('src/components/WalletChip.astro', root), 'utf8'),
-    readFile(new URL('src/components/AuthMenu.astro', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/auth-menu.ts', root), 'utf8'),
   ]);
   assert.match(walletChip, /initWalletChip/);
   assert.match(walletChip, /astro:page-load/);
   assert.match(walletChip, /__pointCastWalletChipAbort/);
   assert.match(walletChip, /loginWithKukai\(\{ force: true \}\)/);
-  assert.match(authMenu, /initializeAuthMenus/);
-  assert.match(authMenu, /astro:page-load/);
-  assert.match(authMenu, /__pointCastAuthMenuAbort/);
+  assert.match(authMenu, /mountAuthMenus/);
+  assert.match(authMenu, /scope\.signal/);
   assert.match(authMenu, /renderSession\(root as HTMLElement, detail\?\.user \?\? null, false\)/);
 });
 
 test('dock identity updates immediately for both sign-in and sign-out auth events', async () => {
   const [footer, dock] = await Promise.all([
-    readFile(new URL('src/components/FooterBar.astro', root), 'utf8'),
-    readFile(new URL('src/components/DockLauncher.astro', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/footer-bar.ts', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/dock-launcher.ts', root), 'utf8'),
   ]);
-  assert.match(footer, /window\.addEventListener\('pc:auth-change'/);
+  assert.match(footer, /on\(window, 'pc:auth-change'/);
   assert.match(footer, /if \(!user\) \{\s*refreshWalletUI\(\);/);
-  assert.match(dock, /window\.addEventListener\('pc:auth-change'/);
+  assert.match(dock, /on\(window, 'pc:auth-change'/);
   assert.match(dock, /name\) name\.textContent = 'Visitor mode'/);
   assert.match(dock, /name\) name\.textContent = user\.preferredName/);
 });

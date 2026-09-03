@@ -36,7 +36,7 @@ test('broadcaster connections stay private to the dashboard and expose only a sa
     readFile(new URL('functions/api/spotify/_broadcast.ts', root), 'utf8'),
     readFile(new URL('functions/now-playing.json.ts', root), 'utf8'),
     readFile(new URL('src/pages/index.astro', root), 'utf8'),
-    readFile(new URL('src/components/FooterBar.astro', root), 'utf8'),
+    readFile(new URL('src/scripts/chrome/footer-bar.ts', root), 'utf8'),
     readFile(new URL('src/pages/dashboard.astro', root), 'utf8'),
     readFile(new URL('functions/api/shopify/auth.ts', root), 'utf8'),
     readFile(new URL('functions/api/shopify/callback.ts', root), 'utf8'),
