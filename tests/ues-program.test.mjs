@@ -43,7 +43,10 @@ test('School navigation opens distinct makers and preserves a visible modal exit
 test('Global navigation affordances remain clickable and clear of the initial cursor', async () => {
   const [footer, cursor] = await Promise.all([
     read('../src/components/FooterBar.astro'),
-    read('../src/components/CursorRoom.astro'),
+    Promise.all([
+      read('../src/components/CursorRoom.astro'),
+      read('../src/scripts/chrome/cursor-room.ts'),
+    ]).then((parts) => parts.join('\n')),
   ]);
   assert.match(footer, /\.fb__menu-close \{[\s\S]*?z-index: 100/);
   assert.match(cursor, /state\.hasMouse && !window\.matchMedia/);

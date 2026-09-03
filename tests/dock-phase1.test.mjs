@@ -6,29 +6,31 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('the visible strip is six live stamps and workbench keeps 04/05 reachable', async () => {
-  const [footer, kit] = await Promise.all([read('src/components/FooterBar.astro'), read('src/data/dock-kit.ts')]);
+  const [footer, runtime, kit] = await Promise.all([
+    read('src/components/FooterBar.astro'), read('src/scripts/chrome/footer-bar.ts'), read('src/data/dock-kit.ts'),
+  ]);
   assert.match(footer, /STRIP_DOCK_KIT\.map/);
   assert.match(footer, /WORKBENCH · COMING/);
-  assert.match(footer, /Number\(item\.number\) === Number\(e\.key\)/, 'shortcuts follow stable stamp numbers, not visible array indexes');
+  assert.match(runtime, /Number\(item\.number\) === Number\(e\.key\)/, 'shortcuts follow stable stamp numbers, not visible array indexes');
   assert.match(kit, /id: 'fed'[\s\S]*?placement: 'workbench'[\s\S]*?status: 'coming'/);
   assert.match(kit, /id: 'broadcast'[\s\S]*?placement: 'workbench'[\s\S]*?status: 'coming'/);
 });
 
 test('CursorRoom waits for the server id before logging a connected local chat', async () => {
-  const source = await read('src/components/CursorRoom.astro');
+  const source = await read('src/scripts/chrome/cursor-room.ts');
   assert.match(source, /entry\.id \? \('id:' \+ entry\.id\)/);
   assert.match(source, /if \(state\.wsState === 'open' && state\.ws\) \{[\s\S]*?state\.ws\.send[\s\S]*?\} else \{[\s\S]*?pushLocalLogEntry\(entry\)/);
   assert.doesNotMatch(source, /pushLocalLogEntry\(entry\);\s*renderLog\(\);\s*\/\/ Forward to server/);
 });
 
 test('only explicit CAST bursts depend on ROOM while caused utility bursts still post', async () => {
-  const source = await read('src/components/CursorRoom.astro');
+  const source = await read('src/scripts/chrome/cursor-room.ts');
   assert.match(source, /function postBurst\(detail\) \{\s*if \(!detail \|\| !detail\.kind\) return/);
   assert.match(source, /pc:spell:cast[\s\S]*?if \(!state\.on\) return;[\s\S]*?detail\.source !== 'magic-word'/);
 });
 
 test('idle controls gate tug polling and seismo animation', async () => {
-  const [tug, footer] = await Promise.all([read('src/components/TugRope.astro'), read('src/components/FooterBar.astro')]);
+  const [tug, footer] = await Promise.all([read('src/scripts/chrome/tug-rope.ts'), read('src/scripts/chrome/footer-bar.ts')]);
   assert.match(tug, /IntersectionObserver/);
   assert.match(tug, /HIDDEN_POLL_MS = 30000/);
   assert.match(tug, /if \(!inViewport\) return/);
@@ -37,7 +39,7 @@ test('idle controls gate tug polling and seismo animation', async () => {
 
 test('dock analytics are full-weight non-pageview events and the scorer registers /dock', async () => {
   const [ticker, analytics, live, scorer] = await Promise.all([
-    read('src/components/DockBurstTicker.astro'), read('functions/api/analytics.ts'),
+    read('src/scripts/chrome/dock-burst-ticker.ts'), read('functions/api/analytics.ts'),
     read('scripts/score-live.mjs'), read('scripts/score-projects.mjs'),
   ]);
   for (const action of ['tray_open', 'stamp_action', 'burst_seen', 'say_sent']) assert.match(ticker, new RegExp(action));
@@ -47,11 +49,17 @@ test('dock analytics are full-weight non-pageview events and the scorer register
   assert.match(scorer, /\['\/dock','PointCast Dock'\]/);
 });
 
-test('FooterBar inline JS stays at or below the measured baseline', async () => {
-  const source = await read('src/components/FooterBar.astro');
-  const scripts = [...source.matchAll(/<script\b[^>]*is:inline[^>]*>([\s\S]*?)<\/script>/g)];
-  const bytes = scripts.reduce((sum, match) => sum + Buffer.byteLength(match[1]), 0);
-  assert.ok(bytes <= 74_369, `FooterBar inline JS grew: ${bytes} > 74369`);
+test('shared chrome has one bundled layout entry and no static element ids', async () => {
+  const [layout, chrome, ...components] = await Promise.all([
+    read('src/layouts/BlockLayout.astro'),
+    read('src/scripts/chrome.ts'),
+    ...['FooterBar', 'DockLauncher', 'CursorRoom', 'TugRope', 'SpellLayer'].map((name) => read(`src/components/${name}.astro`)),
+  ]);
+  assert.match(layout, /import '\.\.\/scripts\/chrome'/);
+  assert.equal((layout.match(/import '\.\.\/scripts\/chrome'/g) || []).length, 1);
+  assert.match(chrome, /astro:page-load/);
+  assert.match(chrome, /pageScope\?\.abort\(\)/);
+  for (const component of components) assert.doesNotMatch(component, /<[^>]+\sid=/);
 });
 
 test('mint bursts require an applied Kennel Club mint returned by TzKT', async () => {

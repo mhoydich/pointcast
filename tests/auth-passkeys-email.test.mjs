@@ -232,7 +232,10 @@ test('passkey migration, pinned libraries, UI, and binding configuration are exp
   const [migration, pkg, menu, me, config] = await Promise.all([
     readFile(new URL('migrations/auth/0003_passkeys.sql', root), 'utf8'),
     readFile(new URL('package.json', root), 'utf8'),
-    readFile(new URL('src/components/AuthMenu.astro', root), 'utf8'),
+    Promise.all([
+      readFile(new URL('src/components/AuthMenu.astro', root), 'utf8'),
+      readFile(new URL('src/scripts/chrome/auth-menu.ts', root), 'utf8'),
+    ]).then((parts) => parts.join('\n')),
     readFile(new URL('src/pages/me.astro', root), 'utf8'),
     readFile(new URL('wrangler.toml', root), 'utf8'),
   ]);
@@ -246,7 +249,7 @@ test('passkey migration, pinned libraries, UI, and binding configuration are exp
   assert.match(menu, /Face ID \/ Touch ID/);
   assert.match(menu, /Email me a link/);
   assert.match(menu, /data-auth-email-form/);
-  assert.match(menu, /root\.addEventListener\('click'/);
+  assert.match(menu, /root\.addEventListener\('click'|scope\.on\(root, 'click'/);
   assert.doesNotMatch(menu, /\sid=/);
   assert.match(me, /Add a passkey to this device/);
   assert.match(me, /data-me-passkey-list/);
