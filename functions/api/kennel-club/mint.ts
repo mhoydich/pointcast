@@ -40,12 +40,22 @@ function json(body: unknown, init?: ResponseInit): Response {
   });
 }
 
-export const onRequestOptions: PagesFunction = () => new Response(null, {
-  status: 204,
-  headers: { ...JSON_HEADERS, 'Access-Control-Max-Age': '86400' },
-});
+export interface KennelClubLiveState {
+  /** The sitting for the Los Angeles date of *this request*, never the build. */
+  date: string;
+  today: ReturnType<typeof sittingOfTheDay>;
+  mint: Awaited<ReturnType<typeof getKennelClubMintSnapshot>>;
+  claims: Awaited<ReturnType<typeof getPublicKennelClaims>>;
+  live: boolean;
+}
 
-export const onRequestGet: PagesFunction<KennelClaimEnv> = async ({ env = {} }) => {
+/**
+ * One request-time read of "what is today, and what has the chain seen".
+ *
+ * /api/kennel-club/mint and /api/kennel-club/today are two views of this same
+ * answer; keeping the read here is what stops the two doors from disagreeing.
+ */
+export async function readKennelClubLiveState(env: KennelClaimEnv = {}): Promise<KennelClubLiveState> {
   const date = losAngelesDate();
   const today = sittingOfTheDay(date);
   const cap = claimDailyCap(env.KENNEL_CLUB_CLAIM_DAILY_CAP);
@@ -56,18 +66,30 @@ export const onRequestGet: PagesFunction<KennelClaimEnv> = async ({ env = {} }) 
       getPublicKennelClaims(env.AUTH_DB, today.tokenId, { cap, configured })
         .catch(() => emptyPublicKennelClaims(cap, configured)),
     ]);
-    return json({
-      ...mint,
-      claims,
-      live: true,
-      updatedAt: new Date().toISOString(),
-    });
+    return { date, today, mint, claims, live: true };
   } catch {
-    return json({
-      ...unavailableKennelClubMintSnapshot(today.tokenId),
+    return {
+      date,
+      today,
+      mint: unavailableKennelClubMintSnapshot(today.tokenId),
       claims: emptyPublicKennelClaims(cap, configured),
       live: false,
-      updatedAt: new Date().toISOString(),
-    }, { headers: NO_STORE_JSON_HEADERS });
+    };
   }
+}
+
+export const onRequestOptions: PagesFunction = () => new Response(null, {
+  status: 204,
+  headers: { ...JSON_HEADERS, 'Access-Control-Max-Age': '86400' },
+});
+
+export const onRequestGet: PagesFunction<KennelClaimEnv> = async ({ env = {} }) => {
+  const state = await readKennelClubLiveState(env);
+  const body = {
+    ...state.mint,
+    claims: state.claims,
+    live: state.live,
+    updatedAt: new Date().toISOString(),
+  };
+  return state.live ? json(body) : json(body, { headers: NO_STORE_JSON_HEADERS });
 };
