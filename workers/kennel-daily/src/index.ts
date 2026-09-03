@@ -28,6 +28,11 @@ export type DailyRunResult = {
   attempted: number;
   sent: number;
   failed: number;
+  postOffice: {
+    newAliases: number;
+    renewedAliases: number;
+    blockLine: string;
+  };
 };
 
 type OptionalDailyEnv = Env & {
@@ -41,6 +46,32 @@ function hasMail(env: OptionalDailyEnv): boolean {
 
 function log(event: Record<string, unknown>): void {
   console.log(JSON.stringify(event));
+}
+
+async function postOfficeLine(db: D1Database, now: Date): Promise<DailyRunResult['postOffice']> {
+  const end = now.toISOString();
+  const start = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  let newAliases = 0;
+  let renewedAliases = 0;
+  try {
+    const row = await db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN action IN ('created', 'reclaimed') THEN 1 ELSE 0 END), 0) AS new_aliases,
+        COALESCE(SUM(CASE WHEN action = 'renewed' THEN 1 ELSE 0 END), 0) AS renewed_aliases
+      FROM alias_receipts
+      WHERE event_at >= ? AND event_at < ?
+    `).bind(start, end).first<{ new_aliases: number; renewed_aliases: number }>();
+    newAliases = Number(row?.new_aliases) || 0;
+    renewedAliases = Number(row?.renewed_aliases) || 0;
+  } catch (error) {
+    // Preserve the established daily run while migration 0007 rolls out.
+    console.warn('Post Office daily count unavailable', error);
+  }
+  return {
+    newAliases,
+    renewedAliases,
+    blockLine: `post office · ${newAliases} new · ${renewedAliases} renewed`,
+  };
 }
 
 async function writeRun(
@@ -87,6 +118,7 @@ async function publishDailyBurst(env: OptionalDailyEnv, result: DailyRunResult, 
           sitting: result.sitting,
           name,
           sent: result.sent,
+          postOffice: result.postOffice,
           href: '/collect',
         },
       }),
@@ -112,6 +144,9 @@ export async function runKennelDaily(
   const sitting = collectSitting(now);
   const dryRun = options.dryRun ?? String(env.KENNEL_DAILY_DRY_RUN) === 'true';
   const configured = Boolean(env.AUTH_DB && hasMail(env));
+  const postOffice = env.AUTH_DB
+    ? await postOfficeLine(env.AUTH_DB, now)
+    : { newAliases: 0, renewedAliases: 0, blockLine: 'post office · 0 new · 0 renewed' };
   const result: DailyRunResult = {
     ok: true,
     day,
@@ -121,6 +156,7 @@ export async function runKennelDaily(
     attempted: 0,
     sent: 0,
     failed: 0,
+    postOffice,
   };
 
   if (!env.AUTH_DB) {

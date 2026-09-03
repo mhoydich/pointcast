@@ -62,6 +62,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/firecrawl', 'weekly', '0.98'],
   ['https://pointcast.xyz/firecrawl.json', 'weekly', '0.94'],
   ['https://pointcast.xyz/agents.json', 'daily', '0.9'],
+  ['https://pointcast.xyz/post-office', 'daily', '0.9'],
+  ['https://pointcast.xyz/post-office.json', 'daily', '0.88'],
   ['https://pointcast.xyz/afterimage', 'weekly', '0.9'],
   ['https://pointcast.xyz/afterimage.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/sound-garden', 'weekly', '0.9'],

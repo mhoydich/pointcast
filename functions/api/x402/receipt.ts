@@ -110,8 +110,16 @@ async function readBoundedText(response: Response) {
   return text + decoder.decode();
 }
 
-function requirements(env: Cloudflare.Env) {
-  const amount = env.X402_PRICE_UNITS || X402_DEFAULT_PRICE_UNITS;
+export interface X402ReceiptProduct {
+  priceUnits?: string;
+  resourceDescription?: string;
+  merchantUrl?: string;
+  loop?: string;
+  context?: string;
+}
+
+function requirements(env: Cloudflare.Env, product: X402ReceiptProduct = {}) {
+  const amount = product.priceUnits || env.X402_PRICE_UNITS || X402_DEFAULT_PRICE_UNITS;
   return {
     scheme: X402_SCHEME,
     network: X402_NETWORK,
@@ -123,12 +131,12 @@ function requirements(env: Cloudflare.Env) {
   };
 }
 
-function paymentRequired(env: Cloudflare.Env, url: string) {
+function paymentRequired(env: Cloudflare.Env, url: string, product: X402ReceiptProduct = {}) {
   return {
     x402Version: X402_VERSION,
-    accepts: [requirements(env)],
+    accepts: [requirements(env, product)],
     resource: {
-      description: 'PointCast countersigned spend receipt (pointcast.agent-payments/v1) — proof you paid PointCast on Etherlink.',
+      description: product.resourceDescription || 'PointCast countersigned spend receipt (pointcast.agent-payments/v1) — proof you paid PointCast on Etherlink.',
       mimeType: 'application/json',
       url,
     },
@@ -150,13 +158,14 @@ export async function handleReceiptRequest(
   request: Request,
   env: Cloudflare.Env,
   expectedPublicKey = X402_TREASURY_PUBLIC_KEY,
+  product: X402ReceiptProduct = {},
 ) {
   const url = new URL(request.url);
   if (url.searchParams.get('list')) return listRecent(env);
 
   const facilitator = (env.X402_FACILITATOR_URL || X402_DEFAULT_FACILITATOR).replace(/\/$/, '');
   const resourceUrl = `${url.origin}${url.pathname}`;
-  const required = requirements(env);
+  const required = requirements(env, product);
   const header = request.headers.get('Payment-Signature') || request.headers.get('payment-signature');
 
   if (!header) {
@@ -172,7 +181,7 @@ export async function handleReceiptRequest(
         how: 'https://pointcast.xyz/x402',
       },
       402,
-      { 'Payment-Required': encodeBase64Json(paymentRequired(env, resourceUrl)), 'X-Facilitator-Url': facilitator },
+      { 'Payment-Required': encodeBase64Json(paymentRequired(env, resourceUrl, product)), 'X-Facilitator-Url': facilitator },
     );
   }
 
@@ -258,17 +267,17 @@ export async function handleReceiptRequest(
   const spend: JsonRecord = {
     agent: 'external',
     agent_id: null,
-    loop: 'x402',
+    loop: product.loop || 'x402',
     amount_usd: Number(required.amount) / 1e6,
     currency: 'usd',
     merchant: 'pointcast.xyz',
-    merchant_url: 'https://pointcast.xyz/x402',
+    merchant_url: product.merchantUrl || 'https://pointcast.xyz/x402',
     payee_agent: 'pointcast',
     payee_agent_id: X402_TREASURY_AGENT_ID,
     mode: env.X402_MODE === 'test' ? 'test' : 'live',
     status: 'settled',
     credential_type: 'onchain-permit2',
-    context: 'x402 v2 payment on Etherlink settled through the TZ APAC facilitator; PointCast countersigns this receipt so the payer can prove the spend anywhere.',
+    context: product.context || 'x402 v2 payment on Etherlink settled through the TZ APAC facilitator; PointCast countersigns this receipt so the payer can prove the spend anywhere.',
   };
   const spendManifest = buildSpendManifest(spend, blockId, timestamp);
   const spendSignature = await signCanonicalPayload(spendManifest, signingKey);
