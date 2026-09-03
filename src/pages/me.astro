@@ -120,6 +120,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
             <p class="me__kicker">KENNEL CLUB · CLAIM LEDGER</p>
             <h2>Your dogs</h2>
           </div>
+          <span class="me-dogs__progress" data-me-dog-progress>0-day streak · next seal at 7</span>
           <a class="me-dogs__club" href="/kennel-club">Visit the club →</a>
         </header>
         <div class="me-dogs__rows" data-me-dogs></div>
@@ -298,7 +299,14 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
       opHash: string | null;
       deliveredTo: string | null;
       createdAt: string;
+      seal: {
+        kind: 'showed-up';
+        status: 'pending_wallet' | 'pending' | 'submitting' | 'submitted' | 'attested' | 'failed' | null;
+        opHash: string | null;
+      };
     }>;
+    streak: number;
+    nextSealAt: 7 | 30 | null;
     generatedAt: string;
     cacheTtlSeconds: number;
   };
@@ -597,6 +605,8 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
 
   function renderDogs(root: HTMLElement, payload: HoldingsPayload): void {
     const rows = root.querySelector<HTMLElement>('[data-me-dogs]');
+    const progress = root.querySelector<HTMLElement>('[data-me-dog-progress]');
+    if (progress) progress.textContent = `${payload.streak}-day streak · ${payload.nextSealAt === null ? 'all milestones complete' : `next seal at ${payload.nextSealAt}`}`;
     if (!rows) return;
     if (!payload.dogs.length) {
       const empty = create('div', 'me-empty');
@@ -625,6 +635,13 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
             ? `delivered${dog.deliveredTo ? ` · ${shortAddress(dog.deliveredTo)}` : ''}`
             : 'delivery stopped — retry from the Kennel Club'),
       );
+      if (dog.seal?.status === 'pending_wallet') {
+        copy.append(create('small', 'me-dog__seal', 'seal pending wallet'));
+      } else if (dog.seal?.status === 'pending' || dog.seal?.status === 'submitting' || dog.seal?.status === 'submitted') {
+        copy.append(create('small', 'me-dog__seal', 'showed-up seal queued'));
+      } else if (dog.seal?.status === 'attested') {
+        copy.append(create('small', 'me-dog__seal', 'showed-up seal attested'));
+      }
       row.append(art, copy);
       if (dog.status === 'held') {
         const link = create('a', 'me-dog__action', 'Link wallet →');
@@ -1196,6 +1213,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-wallets, .me-holdings, .me-dogs, .me-seals { margin-top: 8px; padding: 16px; border: 1.5px solid var(--me-green); background: #fff; }
   .me-holdings { border-color: var(--me-amber); }
   .me-dogs { border-color: #8a2432; }
+  .me-dogs__progress { color: #8a2432; font: 500 9px/1.35 var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; }
   .me-dogs__club { color: #8a2432; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
   .me-dogs__rows { display: grid; gap: 6px; }
   .me-dog { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 68px; padding: 7px; border: 1px solid #d8b7bd; background: #fff7f8; }
@@ -1203,6 +1221,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-dog__copy { display: grid; gap: 4px; min-width: 0; }
   .me-dog__copy strong { font-size: 15px; font-weight: 500; }
   .me-dog__copy small { color: #715b60; font: 400 9px/1.45 var(--pc-font-mono); text-transform: uppercase; }
+  .me-dog__copy .me-dog__seal { color: #7152a4; }
   .me-dog__action { color: #8a2432; font: 500 9px/1.3 var(--pc-font-mono); text-transform: uppercase; }
   .me-seals { border-color: #7152a4; background: #fbf8ff; }
   .me-seals__contract { color: #7152a4; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }

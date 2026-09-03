@@ -1,4 +1,4 @@
-import { collectSitting, claimedStreak, kennelGrid } from '../../../src/lib/collect-desk.ts';
+import { collectSitting, claimedStreak, kennelGrid, nextSealAt } from '../../../src/lib/collect-desk.ts';
 import { listProfilePages } from '../../../src/lib/profile-object.mjs';
 import contracts from '../../../src/data/contracts.json';
 import {
@@ -11,6 +11,7 @@ import {
   type MeCollectionHoldings,
 } from '../me/_holdings.ts';
 import { requireCollectDb, type CollectEnv } from './_shared.ts';
+import { getUserKennelClaims } from '../kennel-club/_claims.ts';
 
 function allCollections(wallets: Awaited<ReturnType<typeof getMeHoldingsPayload>>['wallets']): MeCollectionHoldings[] {
   return wallets.flatMap((wallet) => wallet.collections);
@@ -27,13 +28,18 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
   if (!current) return authJson({ ok: false, signedIn: false, reason: 'unauthorized' }, { status: 401 });
 
   const cache = typeof caches === 'undefined' ? null : caches.default;
-  const holdings = await getMeHoldingsPayload(current.user, { cache });
+  const db = requireCollectDb(env);
+  const dogs = await getUserKennelClaims(db ?? undefined, current.user.userId);
+  const holdings = await getMeHoldingsPayload(current.user, { cache, dogs });
   const collections = allCollections(holdings.wallets);
   const kennelTokenIds = uniqueTokenIds(collections, 'kennel_club');
-  const claimedDays = kennelTokenIds
+  const chainClaimedDays = kennelTokenIds
     .map((tokenId) => Number(tokenId) + 1)
     .filter((day) => Number.isSafeInteger(day) && day >= 1 && day <= 30)
-    .sort((a, b) => a - b);
+  const ledgerClaimedDays = dogs
+    .filter((dog) => dog.status === 'held' || dog.status === 'delivered')
+    .map((dog) => dog.tokenId + 1);
+  const claimedDays = [...new Set([...chainClaimedDays, ...ledgerClaimedDays])].sort((a, b) => a - b);
   const sitting = collectSitting();
   const addresses = tezosIdentities(current.user.identities);
   let profile: Awaited<ReturnType<typeof listProfilePages>>[number] | null = null;
@@ -44,7 +50,6 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
     // The profile contract is an enhancement; the private collection still renders.
   }
   let emailStatus: 'none' | 'pending' | 'confirmed' | 'unsubscribed' = 'none';
-  const db = requireCollectDb(env);
   if (db) {
     const row = await db.prepare(`
       SELECT status FROM subscribers
@@ -74,6 +79,7 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
     calendar: kennelGrid(),
     claimedDays,
     streak: claimedStreak(claimedDays, sitting.day),
+    nextSealAt: nextSealAt(claimedDays),
     completion: {
       claimed: claimedDays.length,
       total: 30,
@@ -89,7 +95,7 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
       href: '/me',
     },
     objects: {
-      sealsEarned: uniqueTokenIds(collections, 'seal_soulbound').length,
+      sealsEarned: new Set(holdings.wallets.flatMap((wallet) => wallet.seals.map((seal) => seal.tokenId))).size,
       mugsHeld: uniqueTokenIds(collections, 'coffee_mugs').length,
       nounsHeld: uniqueTokenIds(collections, 'visit_nouns').length,
     },
@@ -99,4 +105,3 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
     headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' },
   });
 };
-

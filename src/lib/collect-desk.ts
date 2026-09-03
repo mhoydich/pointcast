@@ -33,3 +33,24 @@ export function claimedStreak(claimedDays: number[], todayDay: number): number {
   }
   return streak;
 }
+
+export function longestClaimedStreak(claimedDays: number[]): number {
+  const days = [...new Set(claimedDays)]
+    .filter((day) => Number.isSafeInteger(day) && day >= 1 && day <= 30)
+    .sort((a, b) => a - b);
+  let longest = 0;
+  let current = 0;
+  let previous = 0;
+  for (const day of days) {
+    current = day === previous + 1 ? current + 1 : 1;
+    longest = Math.max(longest, current);
+    previous = day;
+  }
+  return longest;
+}
+
+/** Next milestone threshold; null means the full 30-sitting run is complete. */
+export function nextSealAt(claimedDays: number[]): 7 | 30 | null {
+  if (longestClaimedStreak(claimedDays) < 7) return 7;
+  return new Set(claimedDays.filter((day) => day >= 1 && day <= 30)).size < 30 ? 30 : null;
+}

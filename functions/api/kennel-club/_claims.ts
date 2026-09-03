@@ -25,6 +25,8 @@ export interface KennelClaimRow {
   op_hash: string | null;
   delivered_to: string | null;
   created_at: string;
+  seal_status?: 'pending_wallet' | 'pending' | 'submitting' | 'submitted' | 'attested' | 'failed' | null;
+  seal_op_hash?: string | null;
 }
 
 interface CountRow {
@@ -185,13 +187,20 @@ export async function getUserKennelClaims(
   opHash: string | null;
   deliveredTo: string | null;
   createdAt: string;
+  seal: {
+    kind: 'showed-up';
+    status: 'pending_wallet' | 'pending' | 'submitting' | 'submitted' | 'attested' | 'failed' | null;
+    opHash: string | null;
+  };
 }>> {
   if (!db) return [];
   const result = await db.prepare(`
-    SELECT id, user_id, token_id, status, op_hash, delivered_to, created_at
-    FROM claims
-    WHERE user_id = ?
-    ORDER BY token_id ASC
+    SELECT c.id, c.user_id, c.token_id, c.status, c.op_hash, c.delivered_to, c.created_at,
+           r.status AS seal_status, r.op_hash AS seal_op_hash
+    FROM claims c
+    LEFT JOIN seal_receipts r ON r.claim_id = c.id AND r.kind = 'showed-up'
+    WHERE c.user_id = ?
+    ORDER BY c.token_id ASC
   `).bind(userId).all<KennelClaimRow>();
   return result.results.map((row) => ({
     id: row.id,
@@ -201,6 +210,11 @@ export async function getUserKennelClaims(
     opHash: row.op_hash,
     deliveredTo: row.delivered_to,
     createdAt: row.created_at,
+    seal: {
+      kind: 'showed-up',
+      status: row.seal_status ?? null,
+      opHash: row.seal_op_hash ?? null,
+    },
   }));
 }
 
