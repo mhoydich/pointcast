@@ -18,12 +18,13 @@ import {
   type EmailAuthEnv,
   type EmailMagicState,
 } from './_shared.ts';
+import { sendMail } from '../../../_lib/mail.ts';
 
 export const onRequestPost: PagesFunction<EmailAuthEnv> = async ({ request, env }) => {
   if (!hasAuthStorage(env)) {
     return authJson({ ok: false, provider: 'email', reason: 'auth-storage-not-configured' }, { status: 503 });
   }
-  if (!env.SEND_EMAIL) {
+  if (!env.RESEND_API_KEY && !env.SEND_EMAIL) {
     return authJson({
       ok: false,
       provider: 'email',
@@ -64,13 +65,13 @@ export const onRequestPost: PagesFunction<EmailAuthEnv> = async ({ request, env 
   const link = magicLink(token);
   const content = magicEmail(link);
   try {
-    await env.SEND_EMAIL.send({
+    await sendMail({
       to: email,
-      from: { email: EMAIL_FROM, name: 'PointCast' },
+      from: `PointCast <${EMAIL_FROM}>`,
       subject: content.subject,
       text: content.text,
       html: content.html,
-    });
+    }, env);
   } catch (error) {
     await consumeAuthState(env, key);
     console.error(JSON.stringify({
