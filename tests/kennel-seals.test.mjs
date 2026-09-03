@@ -371,6 +371,56 @@ test('v2 origination prepares paused seeded storage and rejects ungated executio
   );
 });
 
+test('v2 storage builder seeds Mike, the cc wallet, and the claim wallet as issuers', async () => {
+  const { SEAL_V2_ADMIN, SEAL_V2_ISSUERS } = await import('../scripts/seal-v2-originate.mjs');
+  const MIKE_KUKAI = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
+  const CC_WALLET = 'tz1PTUzbDzkddTh2uXMuxrGtRL6ty8aoeysY';
+  const CLAIM_WALLET = 'tz1UvNjifVKhP6Hm3ytVfWtmTiCxKozcYsSG';
+  assert.equal(SEAL_V2_ADMIN, MIKE_KUKAI);
+  assert.deepEqual(SEAL_V2_ISSUERS, [MIKE_KUKAI, CC_WALLET, CLAIM_WALLET]);
+
+  const storageJson = await readFile(
+    new URL('contracts/build/seal_soulbound_v2/step_003_cont_0_storage.json', root),
+    'utf8',
+  );
+  for (const issuer of SEAL_V2_ISSUERS) {
+    assert.match(storageJson, new RegExp(`"${issuer}"`), `compiled storage must seed issuer ${issuer}`);
+  }
+
+  // Regression guard for the undefined-storage crash: validation must run against
+  // the storage object itself (both in preparation and before any mainnet
+  // broadcast), never against `result.storage`, which is absent once execution
+  // completes. A storage object missing an issuer must fail with the intended
+  // "missing seeded issuer" error, not a TypeError on `.includes`.
+  const { prepareProfileOrigination } = await import('../scripts/profile-contract-origination.mjs');
+  function assertSeededIssuers(storage) {
+    const encoded = JSON.stringify(storage);
+    for (const issuer of SEAL_V2_ISSUERS) {
+      if (!encoded.includes(`"${issuer}"`)) {
+        throw new Error(`Compiled v2 storage is missing seeded issuer ${issuer}.`);
+      }
+    }
+  }
+  const okResult = await prepareProfileOrigination({
+    label: 'test',
+    buildDirectory: 'seal_soulbound_v2',
+    argv: [],
+    validateStorage: assertSeededIssuers,
+  });
+  assert.equal(okResult.executed, false);
+  await assert.rejects(
+    prepareProfileOrigination({
+      label: 'test',
+      buildDirectory: 'seal_soulbound_v2',
+      argv: [],
+      validateStorage: () => {
+        throw new Error('Compiled v2 storage is missing seeded issuer tz1bogus.');
+      },
+    }),
+    /missing seeded issuer tz1bogus/,
+  );
+});
+
 test('migration, APIs, Worker config, presence bus, and v2 path are explicit', async () => {
   const [migration, config, worker, v1Contract, v2Contract, v2Code, v2Storage, originate, gateway, presence, decision, collectApi, holdingsApi, collectPage, mePage] = await Promise.all([
     readFile(new URL('migrations/auth/0005_seal_receipts.sql', root), 'utf8'),

@@ -68,7 +68,7 @@ function digest(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-export async function prepareProfileOrigination({ label, buildDirectory, argv = process.argv.slice(2), environment = process.env }) {
+export async function prepareProfileOrigination({ label, buildDirectory, argv = process.argv.slice(2), environment = process.env, validateStorage }) {
   const options = parseOriginationArgs(argv);
   if (options.help) return { help: true, options };
 
@@ -86,6 +86,10 @@ export async function prepareProfileOrigination({ label, buildDirectory, argv = 
   }
   assertContractValid(code);
   assertDataValid(storage, storageType);
+  // Run caller-supplied storage validation (e.g. seeded-issuer checks) before any
+  // preparation output or mainnet broadcast, so a failure here always precedes
+  // origination — it must never fire only after the contract is already live.
+  if (typeof validateStorage === 'function') validateStorage(storage);
 
   const prepared = {
     label,
