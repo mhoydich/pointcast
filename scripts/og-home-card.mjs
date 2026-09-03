@@ -1,13 +1,13 @@
 /**
- * The homepage unfurl card (og-home-v4) — the whole-town front door.
+ * The homepage unfurl card (og-home-v5) — September's role-aware front door.
  *
- * Mirrors block 0580's front-door card (/images/front-door/front-door-card.svg)
- * as a still: register grammar from src/styles/home-shelf.css — white ground,
- * 2px ink borders, a channel-colour offset shadow — with the twelve shelves
- * of src/pages/index.astro laid out as chips. Rasterised by
- * scripts/generate-og-images.mjs into public/images/og/og-home-v4.png.
+ * The request-time homepage metadata points at /og/kennel-club/today.png so
+ * unfurls get the live plate. This static fallback carries the same September
+ * landing promise while keeping the twelve-shelf town register beneath it.
+ * Rasterised by scripts/generate-og-images.mjs into
+ * public/images/og/og-home-v5.png.
  *
- * Bump the version suffix (v4 → v5) whenever the art changes: X, iMessage
+ * Bump the version suffix whenever the art changes: X, iMessage
  * and Slack cache unfurl images by URL for days, and a new filename is the
  * only reliable bust.
  */
@@ -17,7 +17,7 @@ const H = 630;
 
 const INK = '#12110E';
 const BLUE = '#185FA5';   // CH.FD
-const RED = '#E53F47';    // the "Still on." red from the front-door card
+const RED = '#8A2432';    // Kennel Club wine
 const BODY = '#38373A';
 const FAINT = '#5F5E5A';
 
@@ -82,17 +82,17 @@ export function homeCard({ blockCount, doors = 395, satellites = 22, mcpTools = 
     'POINTCAST.XYZ',
   ].join(' · ');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="PointCast, the whole town on one page. Still experimental. Still on.">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="PointCast. Today’s dog is sitting, with the whole town below.">
     <rect width="${W}" height="${H}" fill="#FFFFFF" />
     <!-- register card: ink border with the Front Door blue offset shadow -->
     <rect x="34" y="34" width="1142" height="572" fill="${BLUE}" />
     <rect x="24" y="24" width="1142" height="572" fill="#FFFFFF" stroke="${INK}" stroke-width="3" />
 
-    <text x="64" y="88" font-family="${MONO}" font-size="17" font-weight="700" letter-spacing="3" fill="${BLUE}">POINTCAST · CH.FD · THE FRONT DOOR · EL SEGUNDO, CALIFORNIA</text>
+    <text x="64" y="88" font-family="${MONO}" font-size="17" font-weight="700" letter-spacing="3" fill="${BLUE}">POINTCAST · CH.FD · TODAY’S SITTING · EL SEGUNDO, CALIFORNIA</text>
 
-    <text x="60" y="184" font-family="${SANS}" font-size="92" font-weight="800" letter-spacing="-4" fill="${INK}">Still experimental.</text>
-    <text x="60" y="278" font-family="${SANS}" font-size="92" font-weight="800" letter-spacing="-4" fill="${RED}">Still on.</text>
-    <text x="64" y="326" font-family="${SANS}" font-size="25" font-weight="400" fill="${BODY}">A small internet town, broadcasting from El Segundo. The whole town on one page.</text>
+    <text x="60" y="184" font-family="${SANS}" font-size="92" font-weight="800" letter-spacing="-4" fill="${INK}">Today’s dog.</text>
+    <text x="60" y="278" font-family="${SANS}" font-size="92" font-weight="800" letter-spacing="-4" fill="${RED}">Yours to claim.</text>
+    <text x="64" y="326" font-family="${SANS}" font-size="25" font-weight="400" fill="${BODY}">One new plate every day in September. Free claim for people. A penny door for agents.</text>
 
     ${chips}
 
